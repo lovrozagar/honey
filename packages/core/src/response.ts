@@ -1,6 +1,7 @@
 import type { CookieOptions } from "./cookie.ts";
 import { serializeCookie } from "./cookie.ts";
 import type { HoneyError } from "./error.ts";
+import { createHoneyResponse } from "./honey-response.ts";
 import type { StatusKey } from "./types.ts";
 import { statusKeyToCode } from "./types.ts";
 
@@ -50,6 +51,24 @@ function applyResponseOptions(headers: Headers, opts?: ResponseOptions): void {
 	}
 }
 
+function applyPlainOptions(
+	headers: Record<string, string | string[]>,
+	opts?: ResponseOptions,
+): void {
+	if (opts?.headers) {
+		for (const [k, v] of Object.entries(opts.headers)) {
+			headers[k.toLowerCase()] = v;
+		}
+	}
+	if (opts?.cookies) {
+		const cookies: string[] = [];
+		for (const [name, cookieOpts] of Object.entries(opts.cookies)) {
+			cookies.push(serializeCookie(name, cookieOpts));
+		}
+		headers["set-cookie"] = cookies;
+	}
+}
+
 /* phantom brands — exist only at type level, never assigned at runtime */
 declare const CONTENT_TYPE: unique symbol;
 declare const STATUS_KEY: unique symbol;
@@ -86,30 +105,41 @@ const CSV_HEADERS = { "content-type": "text/csv; charset=utf-8" };
 const BINARY_HEADERS = { "content-type": "application/octet-stream" };
 
 export class HoneyRes {
+	protected readonly _nodeOut: boolean;
+
+	constructor(nodeOut = false) {
+		this._nodeOut = nodeOut;
+	}
+
+	private _known<CT extends string, SK extends string>(
+		status: number,
+		headers: Record<string, string>,
+		raw: string | Uint8Array,
+		opts?: ResponseOptions,
+	): TypedResponse<CT, SK> {
+		if (this._nodeOut) {
+			if (!opts?.headers && !opts?.cookies) {
+				return typed(createHoneyResponse({ headers, raw, status }));
+			}
+			const plain: Record<string, string | string[]> = { ...headers };
+			applyPlainOptions(plain, opts);
+			return typed(createHoneyResponse({ headers: plain, raw, status }));
+		}
+		if (!opts?.headers && !opts?.cookies) {
+			return typed(withRawBody(new Response(raw as BodyInit, { headers, status }), raw));
+		}
+		const native = new Headers(headers);
+		applyResponseOptions(native, opts);
+		return typed(withRawBody(new Response(raw as BodyInit, { headers: native, status }), raw));
+	}
+
 	binary<SK extends StatusKey>(
 		statusKey: SK,
 		body: ArrayBuffer | Uint8Array<ArrayBuffer>,
 		opts?: ResponseOptions,
 	): TypedResponse<"application/octet-stream", SK> {
-		if (!opts?.headers && !opts?.cookies) {
-			return typed(
-				withRawBody(
-					new Response(body, {
-						headers: BINARY_HEADERS,
-						status: statusKeyToCode[statusKey],
-					}),
-					body instanceof Uint8Array ? body : new Uint8Array(body),
-				),
-			);
-		}
-		const headers = new Headers({ "content-type": "application/octet-stream" });
-		applyResponseOptions(headers, opts);
-		return typed(
-			withRawBody(
-				new Response(body, { headers, status: statusKeyToCode[statusKey] }),
-				body instanceof Uint8Array ? body : new Uint8Array(body),
-			),
-		);
+		const raw = body instanceof Uint8Array ? body : new Uint8Array(body);
+		return this._known(statusKeyToCode[statusKey], BINARY_HEADERS, raw, opts);
 	}
 
 	csv<SK extends StatusKey>(
@@ -117,22 +147,7 @@ export class HoneyRes {
 		body: string,
 		opts?: ResponseOptions,
 	): TypedResponse<"text/csv", SK> {
-		if (!opts?.headers && !opts?.cookies) {
-			return typed(
-				withRawBody(
-					new Response(body, {
-						headers: CSV_HEADERS,
-						status: statusKeyToCode[statusKey],
-					}),
-					body,
-				),
-			);
-		}
-		const headers = new Headers({ "content-type": "text/csv; charset=utf-8" });
-		applyResponseOptions(headers, opts);
-		return typed(
-			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
-		);
+		return this._known(statusKeyToCode[statusKey], CSV_HEADERS, body, opts);
 	}
 
 	html<SK extends StatusKey>(
@@ -140,22 +155,7 @@ export class HoneyRes {
 		body: string,
 		opts?: ResponseOptions,
 	): TypedResponse<"text/html", SK> {
-		if (!opts?.headers && !opts?.cookies) {
-			return typed(
-				withRawBody(
-					new Response(body, {
-						headers: HTML_HEADERS,
-						status: statusKeyToCode[statusKey],
-					}),
-					body,
-				),
-			);
-		}
-		const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
-		applyResponseOptions(headers, opts);
-		return typed(
-			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
-		);
+		return this._known(statusKeyToCode[statusKey], HTML_HEADERS, body, opts);
 	}
 
 	json<SK extends StatusKey>(
@@ -163,33 +163,15 @@ export class HoneyRes {
 		data: unknown,
 		opts?: ResponseOptions,
 	): TypedResponse<"application/json", SK> {
-		/* fast path — no custom headers or cookies, skip Headers allocation */
-		const payload = JSON.stringify(data);
-		if (!opts?.headers && !opts?.cookies) {
-			return typed(
-				withRawBody(
-					new Response(payload, {
-						headers: JSON_HEADERS,
-						status: statusKeyToCode[statusKey],
-					}),
-					payload,
-				),
-			);
-		}
-		const headers = new Headers({ "content-type": "application/json" });
-		applyResponseOptions(headers, opts);
-		return typed(
-			withRawBody(
-				new Response(payload, {
-					headers,
-					status: statusKeyToCode[statusKey],
-				}),
-				payload,
-			),
-		);
+		return this._known(statusKeyToCode[statusKey], JSON_HEADERS, JSON.stringify(data), opts);
 	}
 
 	noContent(opts?: ResponseOptions): TypedResponse<"none", "no_content"> {
+		if (this._nodeOut) {
+			const headers: Record<string, string | string[]> = {};
+			applyPlainOptions(headers, opts);
+			return typed(createHoneyResponse({ headers, raw: null, status: 204 }));
+		}
 		const headers = new Headers();
 		applyResponseOptions(headers, opts);
 		return typed(new Response(null, { headers, status: 204 }));
@@ -203,6 +185,11 @@ export class HoneyRes {
 		url: string,
 		opts?: ResponseOptions,
 	): TypedResponse<"none", "found"> {
+		if (this._nodeOut) {
+			const headers: Record<string, string | string[]> = { location: url };
+			applyPlainOptions(headers, opts);
+			return typed(createHoneyResponse({ headers, raw: null, status: opts?.status ?? 302 }));
+		}
 		const headers = new Headers({ location: url });
 		applyResponseOptions(headers, opts);
 		return typed(new Response(null, { headers, status: opts?.status ?? 302 }));
@@ -355,24 +342,7 @@ export class HoneyRes {
 		body: string,
 		opts?: ResponseOptions,
 	): TypedResponse<"text/plain", SK> {
-		if (!opts?.headers && !opts?.cookies) {
-			return typed(
-				withRawBody(
-					new Response(body, {
-						headers: TEXT_HEADERS,
-						status: statusKeyToCode[statusKey],
-					}),
-					body,
-				),
-			);
-		}
-		const headers = new Headers({
-			"content-type": "text/plain; charset=utf-8",
-		});
-		applyResponseOptions(headers, opts);
-		return typed(
-			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
-		);
+		return this._known(statusKeyToCode[statusKey], TEXT_HEADERS, body, opts);
 	}
 
 	xml<SK extends StatusKey>(
@@ -380,11 +350,7 @@ export class HoneyRes {
 		body: string,
 		opts?: ResponseOptions,
 	): TypedResponse<"application/xml", SK> {
-		const headers = new Headers({ "content-type": "application/xml" });
-		applyResponseOptions(headers, opts);
-		return typed(
-			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
-		);
+		return this._known(statusKeyToCode[statusKey], { "content-type": "application/xml" }, body, opts);
 	}
 }
 

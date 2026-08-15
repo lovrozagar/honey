@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http"
 import { Readable } from "node:stream"
+import { NODE_OUTBOUND } from "./honey-response.ts"
 
 /** bodyLimit uses this to swap the inbound stream without `new Request(req)`. */
 export const REPLACE_BODY = Symbol.for("honey.replaceBody")
@@ -87,6 +88,7 @@ export class NodeHeaders {
  * until a body method needs the real Fetch object (formData / blob / clone).
  */
 export class NodeRequest {
+	readonly [NODE_OUTBOUND] = true
 	readonly cache = "default" as RequestCache
 	readonly credentials = "same-origin" as RequestCredentials
 	readonly destination = "" as RequestDestination

@@ -1,3 +1,4 @@
+import { replaceResponse } from "./honey-response.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 type PrettyJsonOptions = {
@@ -27,7 +28,8 @@ export function prettyJson(options?: PrettyJsonOptions): MiddlewareFn<{ req: Req
 		const parsed: unknown = JSON.parse(text)
 		const formatted = JSON.stringify(parsed, null, space)
 
-		return new Response(formatted, {
+		return replaceResponse(response, {
+			body: formatted,
 			headers: response.headers,
 			status: response.status,
 		})

@@ -1,3 +1,4 @@
+import { isNodeOutbound } from "./honey-response.ts";
 import type { SSEOptions, SSEStream, TypedResponse } from "./response.ts";
 import { HoneyRes } from "./response.ts";
 import type { PendingTap } from "./types.ts";
@@ -13,7 +14,7 @@ class ContextRes extends HoneyRes {
 	private _lastEventId: string | undefined | false = false;
 
 	constructor(req: Request) {
-		super();
+		super(isNodeOutbound(req));
 		this._req = req;
 	}
 

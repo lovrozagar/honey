@@ -3,6 +3,7 @@ import { createServer } from "node:http"
 import { Readable, type Duplex } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import type { Honey } from "./index.ts"
+import { isHoneyResponse } from "./honey-response.ts"
 import { incomingToNodeRequest } from "./node-request.ts"
 
 type ServeOptions<TEnv> = {
@@ -62,6 +63,29 @@ function rawBodyOf(response: Response): string | Uint8Array | undefined {
 }
 
 async function responseToNode(response: Response, res: ServerResponse): Promise<void> {
+	if (isHoneyResponse(response)) {
+		const raw = response.rawBody
+		if (typeof raw === "string" || raw instanceof Uint8Array) {
+			const byteLength = typeof raw === "string" ? Buffer.byteLength(raw) : raw.byteLength
+			res.writeHead(response.status, { ...response.plainHeaders, "content-length": String(byteLength) })
+			res.end(raw)
+			return
+		}
+		const stream = response.body
+		if (stream === null) {
+			res.writeHead(response.status, response.plainHeaders)
+			res.end()
+			return
+		}
+		res.writeHead(response.status, response.plainHeaders)
+		try {
+			await pipeline(Readable.fromWeb(stream as import("node:stream/web").ReadableStream), res)
+		} catch {
+			if (!res.destroyed) res.destroy()
+		}
+		return
+	}
+
 	const raw = rawBodyOf(response)
 	if (typeof raw === "string" || raw instanceof Uint8Array) {
 		const byteLength = typeof raw === "string" ? Buffer.byteLength(raw) : raw.byteLength

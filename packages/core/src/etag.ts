@@ -1,3 +1,4 @@
+import { replaceResponse } from "./honey-response.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 type ETagOptions = {
@@ -54,14 +55,16 @@ export function etag(options?: ETagOptions): MiddlewareFn<{ req: Request }, {}> 
 		/* check If-None-Match — supports comma-separated list and wildcard per RFC 7232 */
 		const ifNoneMatch = ctx.req.headers.get("if-none-match")
 		if (ifNoneMatch === "*" || ifNoneMatch?.split(",").some((v) => v.trim() === etagValue)) {
-			return new Response(null, {
+			return replaceResponse(response, {
+				body: null,
 				headers,
 				status: 304,
 			})
 		}
 
 		/* return response with ETag header and reconstituted body */
-		return new Response(body, {
+		return replaceResponse(response, {
+			body,
 			headers,
 			status: response.status,
 		})

@@ -1,3 +1,4 @@
+import { replaceResponse } from "./honey-response.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 export type CORSOptions = {
@@ -85,7 +86,7 @@ export function cors(options?: CORSOptions): MiddlewareFn<{ req: Request }, {}> 
 		if (needsVary) {
 			headers.append("vary", "Origin")
 		}
-		return new Response(response.body, {
+		return replaceResponse(response, {
 			headers,
 			status: response.status,
 		})
