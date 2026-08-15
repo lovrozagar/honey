@@ -16,7 +16,7 @@ function isReady(name: "i18n" | "openapi" | "serve"): boolean {
 /** Opaque so bun/esbuild do not follow unused feature entries into a fetch-only bundle. */
 export async function loadHoneyFeature(name: "i18n" | "openapi" | "serve"): Promise<void> {
 	if (isReady(name)) return
-	const mod = (await import(["honey", name].join("/"))) as Record<string, unknown>
+	const mod = (await import(["@lovrozagar/honey", name].join("/"))) as Record<string, unknown>
 	const enable = { i18n: "enableI18n", openapi: "enableOpenApi", serve: "enableServe" }[name]
 	const fn = mod[enable]
 	if (typeof fn === "function") fn()

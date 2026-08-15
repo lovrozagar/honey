@@ -156,7 +156,7 @@ describe("createBuildPlugin", () => {
 	describe("node adapter", () => {
 		it("imports serve from honey/node", () => {
 			const entry = getEntry(makePlugin("node"))
-			expect(entry).toContain('import { serve } from "honey/node"')
+			expect(entry).toContain('import { serve } from "@lovrozagar/honey/node"')
 		})
 
 		it("calls serve with app, env, hostname, port", () => {

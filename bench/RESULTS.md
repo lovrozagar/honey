@@ -16,7 +16,7 @@ Listen path differs by env:
 
 | Framework | Bun | Node |
 |---|---|---|
-| Honey | `Bun.serve({ fetch })` | `app.serve({ runtime: "node" })` + `import "honey/serve"` |
+| Honey | `Bun.serve({ fetch })` | `app.serve({ runtime: "node" })` + `import "@lovrozagar/honey/serve"` |
 | Hono | `Bun.serve({ fetch })` | `@hono/node-server` |
 | Elysia | `app.listen()` (Bun) | `@elysia/node` adapter |
 | Express | `app.listen()` | same |

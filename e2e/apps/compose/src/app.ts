@@ -1,6 +1,6 @@
-import type { WSAdapter } from "honey"
-import { createMiddleware, defineErrors, honey } from "honey"
-import "honey/openapi"
+import type { WSAdapter } from "@lovrozagar/honey"
+import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
+import "@lovrozagar/honey/openapi"
 import * as z from "zod"
 
 type Env = { JWT_SECRET: string; REDIS_URL: string }

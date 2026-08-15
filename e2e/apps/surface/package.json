@@ -12,7 +12,7 @@
 		"type:check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"honey": "workspace:*",
+		"@lovrozagar/honey": "workspace:*",
 		"zod": "catalog:"
 	},
 	"devDependencies": {

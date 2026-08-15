@@ -12,7 +12,7 @@ function writeTempApp(dir: string, opts?: { named?: boolean }): string {
 	mkdirSync(srcDir, { recursive: true })
 	const exportStyle = opts?.named ? "export const app = honey()" : "export default honey()"
 	const code = [
-		'import { honey } from "honey"',
+		'import { honey } from "@lovrozagar/honey"',
 		'import * as z from "zod"',
 		"",
 		exportStyle,
@@ -87,15 +87,15 @@ describe("honeyVitePlugin", () => {
 	it("transform injects feature entries when the app uses them", () => {
 		const plugin = getCodegenPlugin({ app: "src/app.ts" })
 		const src = [
-			'import { honey } from "honey"',
+			'import { honey } from "@lovrozagar/honey"',
 			"const app = honey().get(\"/h\").handler((ctx) => ctx.res.text(\"ok\", \"ok\"))",
 			"app.openapi({ title: \"T\", version: \"1\" })",
 			"await app.serve({ port: 3000 })",
 		].join("\n")
 		const out = plugin.transform(src, "/app/src/app.ts")
-		expect(out?.code).toContain('from "honey/openapi"')
+		expect(out?.code).toContain('from "@lovrozagar/honey/openapi"')
 		expect(out?.code).toContain("enableOpenApi()")
-		expect(out?.code).toContain('from "honey/serve"')
+		expect(out?.code).toContain('from "@lovrozagar/honey/serve"')
 		expect(out?.code).toContain("enableServe()")
 		expect(plugin.transform('Bun.serve({ fetch() {} })', "/app/src/server.ts")).toBeUndefined()
 	})

@@ -11,7 +11,7 @@
 		"type:check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"honey": "workspace:*",
+		"@lovrozagar/honey": "workspace:*",
 		"@honey/e2e-compose": "workspace:*",
 		"@honey/e2e-defaults": "workspace:*",
 		"@honey/e2e-gateway": "workspace:*",

@@ -11,7 +11,7 @@ function writeProject(dir: string, health = "ok"): void {
 	writeFileSync(
 		join(dir, "src/app.ts"),
 		[
-			'import { honey } from "honey"',
+			'import { honey } from "@lovrozagar/honey"',
 			"",
 			"export const app = honey()",
 			`  .get("/health").handler((ctx) => ctx.res.text("ok", ${JSON.stringify(health)}))`,
@@ -22,7 +22,7 @@ function writeProject(dir: string, health = "ok"): void {
 	writeFileSync(
 		join(dir, "vite.config.ts"),
 		[
-			'import { honey } from "honey/plugin"',
+			'import { honey } from "@lovrozagar/honey/plugin"',
 			"",
 			"export default {",
 			"  plugins: [",
@@ -150,7 +150,7 @@ describe("honey generate CLI", () => {
 		writeFileSync(
 			join(TEMP_ROOT, "src/app.ts"),
 			[
-				'import { honey } from "honey"',
+				'import { honey } from "@lovrozagar/honey"',
 				"",
 				"export const app = honey()",
 				'  .get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',

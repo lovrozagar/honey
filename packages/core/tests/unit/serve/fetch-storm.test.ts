@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
-import "honey/openapi"
+import "@lovrozagar/honey/openapi"
 import { createMiddleware, defineErrors, honey } from "../../../src/index.ts"
 import { cors } from "../../../src/cors.ts"
 

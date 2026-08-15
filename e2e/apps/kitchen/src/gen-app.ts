@@ -1,4 +1,4 @@
-import type { WSAdapter } from "honey"
+import type { WSAdapter } from "@lovrozagar/honey"
 import { createApp } from "./app.ts"
 
 const stubWs: WSAdapter = {

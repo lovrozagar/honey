@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import "honey/serve"
+import "@lovrozagar/honey/serve"
 import { honey } from "../../../src/index.ts"
 
 describe("Honey.serve()", () => {

@@ -1,5 +1,5 @@
-import { honey } from "honey"
-import "honey/openapi"
+import { honey } from "@lovrozagar/honey"
+import "@lovrozagar/honey/openapi"
 
 export const app = honey()
 	.get("/health")

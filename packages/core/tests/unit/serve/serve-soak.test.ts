@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import "honey/serve"
+import "@lovrozagar/honey/serve"
 import { detectRuntime, honey } from "../../../src/index.ts"
 
 const RUNNER = resolve(import.meta.dirname, "./soak-runner.ts")

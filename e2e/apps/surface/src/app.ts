@@ -1,7 +1,7 @@
-import type { WSAdapter } from "honey"
-import { createMiddleware, defineErrors, honey } from "honey"
-import { readableStream } from "honey/input"
-import "honey/openapi"
+import type { WSAdapter } from "@lovrozagar/honey"
+import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
+import { readableStream } from "@lovrozagar/honey/input"
+import "@lovrozagar/honey/openapi"
 import * as z from "zod"
 
 type Env = { API_KEY: string; DATABASE_URL: string }

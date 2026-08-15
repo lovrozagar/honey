@@ -1,6 +1,6 @@
-import type { WSAdapter } from "honey"
-import { honey } from "honey"
-import "honey/openapi"
+import type { WSAdapter } from "@lovrozagar/honey"
+import { honey } from "@lovrozagar/honey"
+import "@lovrozagar/honey/openapi"
 import * as z from "zod"
 
 /** No basePath, no CORS, no i18n, default trailingSlash ("ignore"). */

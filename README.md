@@ -2,7 +2,7 @@
 
 Type-safe API framework on Web Standards. Builder-pattern DX, precompiled radix-tree router, OpenAPI, and generated clients for TypeScript, Python, Go, and Rust.
 
-This repo is the source of the [`honey`](https://www.npmjs.com/package/honey) npm package.
+This repo is the source of the [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) npm package. The CLI binary is still `honey`.
 
 ## Table of contents
 
@@ -41,13 +41,13 @@ This repo is the source of the [`honey`](https://www.npmjs.com/package/honey) np
 ## Start
 
 ```bash
-bun add honey
+bun add @lovrozagar/honey
 honey init
 bun run dev
 ```
 
 ```ts
-import { honey } from "honey"
+import { honey } from "@lovrozagar/honey"
 
 export const app = honey()
   .get("/health")
@@ -95,11 +95,11 @@ Honey is not Express with types bolted on. There is no `req.body` parser stack. 
 Requires [Bun](https://bun.sh) 1.3+ to develop this repo. Consumers can run the published `honey` package on Bun, Node, Deno, or Workers.
 
 ```bash
-bun add honey
+bun add @lovrozagar/honey
 # or
-npm add honey
+npm add @lovrozagar/honey
 # or
-pnpm add honey
+pnpm add @lovrozagar/honey
 ```
 
 The CLI ships with the package (`honey` in `package.json` `bin`). After install:
@@ -118,7 +118,7 @@ Peer-free runtime: the published package depends only on `jiti` for generate/wat
 ```bash
 mkdir my-api && cd my-api
 bun init -y
-bun add honey
+bun add @lovrozagar/honey
 honey init
 bun run dev
 ```
@@ -175,7 +175,7 @@ Jiti loads the app and the Vite config with `fsCache` and `moduleCache` off, so 
 Typical plugin config:
 
 ```ts
-import { honey } from "honey/plugin"
+import { honey } from "@lovrozagar/honey/plugin"
 
 export default {
   plugins: [
@@ -189,7 +189,7 @@ export default {
 ## Builder
 
 ```ts
-import { honey } from "honey"
+import { honey } from "@lovrozagar/honey"
 import * as z from "zod"
 
 const app = honey<{ DATABASE_URL: string }>()
@@ -292,7 +292,7 @@ app
 ### Errors
 
 ```ts
-import { defineErrors, HoneyError, honey } from "honey"
+import { defineErrors, HoneyError, honey } from "@lovrozagar/honey"
 
 const errors = defineErrors({
   unauthorized: "unauthorized",
@@ -314,15 +314,15 @@ const app = honey()
 
 Throw `ctx.errors.org_slug_taken({ vars: { slug } })` from a handler. The JSON body includes `error_key`, `status`, `status_key`, `message`, and optional `fields` / `vars`.
 
-`.errorI18n({ errors, resolveLocale })` translates messages. That feature is loaded when you call it (or `import "honey/i18n"`).
+`.errorI18n({ errors, resolveLocale })` translates messages. That feature is loaded when you call it (or `import "@lovrozagar/honey/i18n"`).
 
 ### Middleware
 
 ```ts
-import { createMiddleware } from "honey"
-import { cors } from "honey/cors"
-import { bodyLimit } from "honey/body-limit"
-import { requestId } from "honey/request-id"
+import { createMiddleware } from "@lovrozagar/honey"
+import { cors } from "@lovrozagar/honey/cors"
+import { bodyLimit } from "@lovrozagar/honey/body-limit"
+import { requestId } from "@lovrozagar/honey/request-id"
 
 const withAuth = createMiddleware(async (ctx, next) => {
   const token = ctx.req.headers.get("authorization")
@@ -377,7 +377,7 @@ On Node, import `honey/serve` (or call `app.serve()`, which loads it) so the lis
 ### Cloudflare Workers
 
 ```ts
-import { cfWebSocket } from "honey/ws/cloudflare"
+import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"
 import { app } from "./app.ts"
 
 app.wsAdapter(cfWebSocket())
@@ -395,11 +395,11 @@ export default {
 
 | Call or import | Loads |
 |---|---|
-| `app.serve()` or `import "honey/serve"` | Listen adapters |
-| `app.openapi()` or `import "honey/openapi"` | Spec + docs |
-| `app.errorI18n()` or `import "honey/i18n"` | Error i18n |
+| `app.serve()` or `import "@lovrozagar/honey/serve"` | Listen adapters |
+| `app.openapi()` or `import "@lovrozagar/honey/openapi"` | Spec + docs |
+| `app.errorI18n()` or `import "@lovrozagar/honey/i18n"` | Error i18n |
 
-Production bundles that only call `app.fetch` do not pull listen, OpenAPI, or i18n code. The load uses an opaque `import(["honey", name].join("/"))` so bundlers do not follow unused feature entries.
+Production bundles that only call `app.fetch` do not pull listen, OpenAPI, or i18n code. The load uses an opaque `import(["@lovrozagar/honey", name].join("/"))` so bundlers do not follow unused feature entries.
 
 ## OpenAPI, docs, and manifest
 
@@ -477,7 +477,7 @@ Use them in tests and in hand-written clients when you are not generating an SDK
 
 ## Package exports
 
-Import features from their path. Do not expect `import { cors } from "honey"` — cors lives at `honey/cors`.
+Import features from their path. Do not expect `import { cors } from "@lovrozagar/honey"` — cors lives at `honey/cors`.
 
 | Export | Purpose |
 |---|---|

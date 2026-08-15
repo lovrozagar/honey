@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import "honey/openapi"
+import "@lovrozagar/honey/openapi"
 import { honey } from "../../../src/index.ts"
 import { cors } from "../../../src/cors.ts"
 

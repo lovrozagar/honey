@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { HoneyError } from "../../../src/error.ts";
 import { defineErrors } from "../../../src/errors.ts";
 import { createMiddleware, honey } from "../../../src/index.ts";
-import "honey/i18n"
+import "@lovrozagar/honey/i18n"
 
 /**
  * Middleware that sets a custom header on every response (simulates secureHeaders/poweredBy).

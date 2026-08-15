@@ -1,4 +1,4 @@
-/** Slot for runtime spec/manifest generation. Filled by `import "honey/openapi"`. */
+/** Slot for runtime spec/manifest generation. Filled by `import "@lovrozagar/honey/openapi"`. */
 
 export type OpenApiGenerate = (
 	app: unknown,
@@ -28,7 +28,7 @@ export type OpenApiRuntime = {
 }
 
 const MISSING =
-	'Runtime OpenAPI/manifest generation requires `import "honey/openapi"` in the app entry.'
+	'Runtime OpenAPI/manifest generation requires `import "@lovrozagar/honey/openapi"` in the app entry.'
 
 let runtime: OpenApiRuntime | undefined
 

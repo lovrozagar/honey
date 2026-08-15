@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import "honey/serve"
+import "@lovrozagar/honey/serve"
 
 const TEMP_ROOT = resolve(import.meta.dirname, "../../../.tmp-cli-init-test")
 const CLI = resolve(import.meta.dirname, "../../../src/cli.ts")
@@ -45,7 +45,7 @@ describe("honey init CLI", () => {
 		expect(stdout).toMatch(/honey: initialized/)
 
 		const app = readFileSync(join(TEMP_ROOT, "src/app.ts"), "utf-8")
-		expect(app).toContain('from "honey"')
+		expect(app).toContain('from "@lovrozagar/honey"')
 		expect(app).toContain('get("/health")')
 		expect(app).toContain("openapi({")
 		expect(app).toContain('docs: "scalar"')
@@ -55,7 +55,7 @@ describe("honey init CLI", () => {
 		expect(server).toContain("app.serve(")
 
 		const vite = readFileSync(join(TEMP_ROOT, "vite.config.ts"), "utf-8")
-		expect(vite).toContain('from "honey/plugin"')
+		expect(vite).toContain('from "@lovrozagar/honey/plugin"')
 		expect(vite).toContain('app: "src/app.ts"')
 
 		const pkg = JSON.parse(readFileSync(join(TEMP_ROOT, "package.json"), "utf-8")) as {
@@ -82,7 +82,7 @@ describe("honey init CLI", () => {
 		const { exitCode } = await runCli(TEMP_ROOT, ["init", "--force"])
 		expect(exitCode).toBe(0)
 		const app = readFileSync(join(TEMP_ROOT, "src/app.ts"), "utf-8")
-		expect(app).toContain('from "honey"')
+		expect(app).toContain('from "@lovrozagar/honey"')
 		expect(app).not.toContain("null")
 	})
 

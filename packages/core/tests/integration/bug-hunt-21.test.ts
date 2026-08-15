@@ -12,7 +12,7 @@ import { requestId } from "../../src/request-id.ts"
 import { serverTiming } from "../../src/server-timing.ts"
 import { otelAdapter } from "../../src/telemetry/otel.ts"
 import { testClient } from "../../src/testing.ts"
-import "honey/i18n"
+import "@lovrozagar/honey/i18n"
 
 function request(
 	port: number,

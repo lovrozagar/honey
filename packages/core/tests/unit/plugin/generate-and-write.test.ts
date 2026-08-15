@@ -13,7 +13,7 @@ function writeApp(dir: string, extraRoute = false): void {
 	writeFileSync(
 		join(dir, "src/app.ts"),
 		[
-			'import { honey } from "honey"',
+			'import { honey } from "@lovrozagar/honey"',
 			'import * as z from "zod"',
 			"",
 			"export const app = honey()",

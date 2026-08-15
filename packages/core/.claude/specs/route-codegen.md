@@ -60,7 +60,7 @@ class OrgService {
 ```ts
 /* src/honey.gen.d.ts — auto-generated, do not edit */
 
-import type { HoneyContext } from "honey"
+import type { HoneyContext } from "@lovrozagar/honey"
 
 /* ---- env ---- */
 export type Env = { DB: D1Database; SECRET: string }
@@ -141,7 +141,7 @@ Options:
 Multiple apps via config file (`honey.config.ts`):
 
 ```ts
-import { defineConfig } from "honey/config"
+import { defineConfig } from "@lovrozagar/honey/config"
 
 export default defineConfig({
 	apps: [
@@ -199,7 +199,7 @@ At runtime, `handler.mw` has the middleware functions but not their type signatu
 
 ```ts
 /* generated */
-import type { InferCtx } from "honey"
+import type { InferCtx } from "@lovrozagar/honey"
 import type { base } from "./context"
 
 export type BaseCtx = InferCtx<typeof base>

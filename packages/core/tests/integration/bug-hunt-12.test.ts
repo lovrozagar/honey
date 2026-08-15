@@ -6,7 +6,7 @@ import { etag } from "../../src/etag.ts"
 import { honey } from "../../src/index.ts"
 import { createMiddleware } from "../../src/middleware.ts"
 import { type HoneyServer, serve } from "../../src/node.ts"
-import "honey/i18n"
+import "@lovrozagar/honey/i18n"
 
 function request(
 	port: number,

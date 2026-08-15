@@ -1,6 +1,6 @@
-import type { WSAdapter } from "honey"
-import { honey } from "honey"
-import "honey/openapi"
+import type { WSAdapter } from "@lovrozagar/honey"
+import { honey } from "@lovrozagar/honey"
+import "@lovrozagar/honey/openapi"
 
 /**
  * Reverse-proxy style: public prefix /app is stripped, trailing slashes are required,

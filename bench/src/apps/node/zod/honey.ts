@@ -1,5 +1,5 @@
-import { createMiddleware, honey } from "honey"
-import "honey/serve"
+import { createMiddleware, honey } from "@lovrozagar/honey"
+import "@lovrozagar/honey/serve"
 import * as z from "zod"
 
 const body = z.object({ age: z.number(), name: z.string() })

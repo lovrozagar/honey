@@ -739,17 +739,17 @@ export function honey(config: HoneyVitePluginConfig) {
 		transform(code: string, id: string): { code: string; map: null } | undefined {
 			if (id.includes("\0") || id.includes("node_modules")) return undefined
 			const inject: string[] = []
-			if (/\.openapi\s*\(|\.manifest\s*\(/.test(code) && !code.includes("honey/openapi")) {
-				inject.push('import { enableOpenApi } from "honey/openapi"', "enableOpenApi()")
+			if (/\.openapi\s*\(|\.manifest\s*\(/.test(code) && !code.includes("@lovrozagar/honey/openapi")) {
+				inject.push('import { enableOpenApi } from "@lovrozagar/honey/openapi"', "enableOpenApi()")
 			}
 			if (
 				/(?<!Bun)(?<!Deno)\.serve\s*\(/.test(code) &&
-				!code.includes("honey/serve")
+				!code.includes("@lovrozagar/honey/serve")
 			) {
-				inject.push('import { enableServe } from "honey/serve"', "enableServe()")
+				inject.push('import { enableServe } from "@lovrozagar/honey/serve"', "enableServe()")
 			}
-			if (/\.errorI18n\s*\(/.test(code) && !code.includes("honey/i18n")) {
-				inject.push('import { enableI18n } from "honey/i18n"', "enableI18n()")
+			if (/\.errorI18n\s*\(/.test(code) && !code.includes("@lovrozagar/honey/i18n")) {
+				inject.push('import { enableI18n } from "@lovrozagar/honey/i18n"', "enableI18n()")
 			}
 			if (inject.length === 0) return undefined
 			return { code: `${inject.join("\n")}\n${code}`, map: null }

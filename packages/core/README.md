@@ -5,13 +5,13 @@ Type-safe API framework on Web Standards. Builder-pattern DX, precompiled radix-
 ## Start
 
 ```bash
-bun add honey
+bun add @lovrozagar/honey
 honey init
 bun run dev
 ```
 
 ```ts
-import { honey } from "honey"
+import { honey } from "@lovrozagar/honey"
 
 export const app = honey()
   .get("/health")

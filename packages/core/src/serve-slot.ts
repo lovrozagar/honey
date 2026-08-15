@@ -2,7 +2,7 @@ import type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 
 export type ServeStart = (app: unknown, options?: HoneyServeOptions) => Promise<ServeHandle>
 
-const MISSING = 'Honey.serve() requires `import "honey/serve"` in the app entry.'
+const MISSING = 'Honey.serve() requires `import "@lovrozagar/honey/serve"` in the app entry.'
 
 let runtime: ServeStart | undefined
 

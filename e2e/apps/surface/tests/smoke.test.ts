@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { WSAdapter } from "honey"
+import type { WSAdapter } from "@lovrozagar/honey"
 import { createApp } from "../src/app.ts"
 
 const stubWs: WSAdapter = {

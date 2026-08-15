@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { honey } from "honey"
+import { honey } from "@lovrozagar/honey"
 import { nodeWebSocket } from "../../src/ws/node.ts"
 
 type User = {

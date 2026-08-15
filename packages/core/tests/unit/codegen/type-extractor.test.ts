@@ -25,7 +25,7 @@ describe("extractBaseCtx", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey } from "honey"',
+				'import { honey } from "@lovrozagar/honey"',
 				"type Env = { DB: string; SECRET: string }",
 				"export const app = honey<Env>()",
 			].join("\n"),
@@ -41,7 +41,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "honey"', "export const app = honey<{}>()"].join("\n"),
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{}>()"].join("\n"),
 		)
 
 		const result = await extractBaseCtx({ entryPath, exportName: "app" })
@@ -54,7 +54,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "honey"', "export const app = honey()"].join("\n"),
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey()"].join("\n"),
 		)
 
 		await expect(extractBaseCtx({ entryPath, exportName: "nonexistent" })).rejects.toThrow(
@@ -66,7 +66,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "honey"', "export const app = honey()"].join("\n"),
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey()"].join("\n"),
 		)
 
 		const result = await extractBaseCtx({ entryPath, exportName: "app" })
@@ -79,8 +79,8 @@ describe("extractBaseCtx", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey } from "honey"',
-				'import type { Honey, HoneyCtx } from "honey"',
+				'import { honey } from "@lovrozagar/honey"',
+				'import type { Honey, HoneyCtx } from "@lovrozagar/honey"',
 				"",
 				"type MwAdds = { userId: string; role: string }",
 				"export const app: Honey<{}, HoneyCtx & MwAdds> = honey<{}>() as never",
@@ -97,7 +97,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "honey"', "export const myApp = honey<{ KEY: string }>()"].join(
+			['import { honey } from "@lovrozagar/honey"', "export const myApp = honey<{ KEY: string }>()"].join(
 				"\n",
 			),
 		)
@@ -110,7 +110,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "honey"', "export const app = honey<{}>()"].join("\n"),
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{}>()"].join("\n"),
 		)
 
 		const result = await extractBaseCtx({ entryPath, exportName: "app" })
@@ -122,7 +122,7 @@ describe("extractBaseCtx", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey } from "honey"',
+				'import { honey } from "@lovrozagar/honey"',
 				"type MyTaps = { audit: { action: string; resource: string } }",
 				"export const app = honey<{}>().taps<MyTaps>()",
 			].join("\n"),
@@ -140,7 +140,7 @@ describe("extractBaseCtx", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey } from "honey"',
+				'import { honey } from "@lovrozagar/honey"',
 				'type Payload = { action: "create" | "delete"; id: string }',
 				"type Taps = { audit: Payload }",
 				"export const app = honey<{}>().taps<Taps>()",
@@ -162,7 +162,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "honey"', "export const app = honey<{ X: number }>()"].join(
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{ X: number }>()"].join(
 				"\n",
 			),
 		)
@@ -191,7 +191,7 @@ describe("extractChainTypes", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey, createMiddleware } from "honey"',
+				'import { honey, createMiddleware } from "@lovrozagar/honey"',
 				"",
 				"type AuthData = { sub: string }",
 				"const withAuth = createMiddleware(async (_ctx, next) => next({ auth: { sub: 'test' } as AuthData }))",
@@ -217,7 +217,7 @@ describe("extractChainTypes", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey, createMiddleware } from "honey"',
+				'import { honey, createMiddleware } from "@lovrozagar/honey"',
 				"",
 				"const withAuth = createMiddleware(async (_ctx, next) => next({ auth: { sub: 'x' } }))",
 				"const withAdmin = createMiddleware(async (_ctx, next) => next({ admin: { level: 1 } }))",
@@ -246,7 +246,7 @@ describe("extractChainTypes", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey, createMiddleware } from "honey"',
+				'import { honey, createMiddleware } from "@lovrozagar/honey"',
 				"",
 				"const withAuth = createMiddleware(async (_ctx, next) => next({ auth: 'x' }))",
 				"",
@@ -263,7 +263,7 @@ describe("extractChainTypes", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "honey"', "export const app = honey<{ DB: string }>()"].join(
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{ DB: string }>()"].join(
 				"\n",
 			),
 		)
@@ -280,7 +280,7 @@ describe("extractChainTypes", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey } from "honey"',
+				'import { honey } from "@lovrozagar/honey"',
 				"type MyTaps = { audit: { action: string } }",
 				"export const app = honey<{}>().taps<MyTaps>()",
 			].join("\n"),
@@ -311,7 +311,7 @@ describe("extractChainTypes", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey, createMiddleware } from "honey"',
+				'import { honey, createMiddleware } from "@lovrozagar/honey"',
 				'import type { DbClient } from "./db-types"',
 				"",
 				"const withDb = createMiddleware((_ctx: { env: { DB: string } }, next) => {",
@@ -348,7 +348,7 @@ describe("extractChainTypes", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey, createMiddleware } from "honey"',
+				'import { honey, createMiddleware } from "@lovrozagar/honey"',
 				'import type { DbClient } from "./db-types"',
 				"",
 				"const withDb = createMiddleware((_ctx: { env: { DB: string } }, next) => {",
@@ -384,7 +384,7 @@ describe("extractChainTypes", () => {
 			TEMP_ROOT,
 			"app.ts",
 			[
-				'import { honey, createMiddleware } from "honey"',
+				'import { honey, createMiddleware } from "@lovrozagar/honey"',
 				'import type { SessionDb } from "./session-types"',
 				"",
 				"const withSession = createMiddleware((_ctx: { env: {} }, next) => {",

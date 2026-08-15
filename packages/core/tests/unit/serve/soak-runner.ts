@@ -3,7 +3,7 @@
  * Usage: bun soak-runner.ts bun
  *        deno run --allow-net --allow-read --allow-env soak-runner.ts deno
  */
-import "honey/serve"
+import "@lovrozagar/honey/serve"
 import { honey } from "../../../src/index.ts"
 
 const runtimeArg = (typeof Deno !== "undefined" ? Deno.args[0] : process.argv[2]) as

@@ -1,5 +1,5 @@
-import { createMiddleware, honey } from "honey"
-import "honey/serve"
+import { createMiddleware, honey } from "@lovrozagar/honey"
+import "@lovrozagar/honey/serve"
 
 const withTiming = createMiddleware(async (_ctx, next) => {
 	const start = performance.now()

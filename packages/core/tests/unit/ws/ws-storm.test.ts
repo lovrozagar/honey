@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import WebSocket from "ws"
-import "honey/serve"
+import "@lovrozagar/honey/serve"
 import { honey } from "../../../src/index.ts"
 
 const N = 80

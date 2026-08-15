@@ -15,7 +15,7 @@ type PackageJson = {
 	type?: string
 }
 
-const APP_TS = `import { honey } from "honey"
+const APP_TS = `import { honey } from "@lovrozagar/honey"
 
 export const app = honey()
 	.get("/health")
@@ -29,7 +29,7 @@ const port = Number(process.env.PORT ?? 3000)
 await app.serve({ port })
 `
 
-const VITE_CONFIG_TS = `import { honey } from "honey/plugin"
+const VITE_CONFIG_TS = `import { honey } from "@lovrozagar/honey/plugin"
 
 export default {
 	plugins: [
@@ -40,7 +40,7 @@ export default {
 }
 `
 
-const WORKER_TS = `import { cfWebSocket } from "honey/ws/cloudflare"
+const WORKER_TS = `import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"
 import { app } from "./app.ts"
 
 app.wsAdapter(cfWebSocket())

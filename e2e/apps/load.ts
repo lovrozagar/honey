@@ -1,4 +1,4 @@
-import type { WSAdapter } from "honey"
+import type { WSAdapter } from "@lovrozagar/honey"
 import { createApp as createCompose } from "@honey/e2e-compose"
 import { createApp as createDefaults } from "@honey/e2e-defaults"
 import { createApp as createGateway } from "@honey/e2e-gateway"

@@ -1,4 +1,4 @@
-import { honey, type InferCtx, type MiddlewareFn } from "honey"
+import { honey, type InferCtx, type MiddlewareFn } from "@lovrozagar/honey"
 
 type Env = Record<string, unknown>
 

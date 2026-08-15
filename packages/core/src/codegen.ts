@@ -1860,7 +1860,7 @@ function toTsLiteral(v: unknown): string {
 
 export function generateRouteTree(routes: RouteConfig[]): string {
 	const lines: string[] = []
-	lines.push('import type { TreeNode, RouteHandler, RouteTree } from "honey/tree"')
+	lines.push('import type { TreeNode, RouteHandler, RouteTree } from "@lovrozagar/honey/tree"')
 	lines.push("")
 	lines.push("const E = Object.create(null) as Record<string, TreeNode>")
 	lines.push("")
@@ -2243,7 +2243,7 @@ export function generateTypes<TEnv, TCtx>(
 
 	const importParts = ["HoneyContext", "WithOutput"]
 	if (hasErrors) importParts.push("HoneyError")
-	lines.push(`import type { ${importParts.join(", ")} } from "honey"`)
+	lines.push(`import type { ${importParts.join(", ")} } from "@lovrozagar/honey"`)
 	lines.push("")
 
 	const envType = options.inlineEnvType ?? "Record<string, unknown>"

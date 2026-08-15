@@ -1,6 +1,6 @@
 {
-	"name": "honey",
-	"version": "0.0.1",
+	"name": "@lovrozagar/honey",
+	"version": "0.1.0",
 	"description": "Type-safe API framework built on Web Standards. Builder-pattern DX, precompiled radix tree in production.",
 	"keywords": [
 		"api",

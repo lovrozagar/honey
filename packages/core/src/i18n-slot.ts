@@ -2,7 +2,7 @@ export type I18nRuntime = {
 	interpolate: (template: string, vars: Record<string, unknown>, locale?: string) => string
 }
 
-const MISSING = 'Honey.errorI18n() requires `import "honey/i18n"` in the app entry.'
+const MISSING = 'Honey.errorI18n() requires `import "@lovrozagar/honey/i18n"` in the app entry.'
 
 let runtime: I18nRuntime | undefined
 

@@ -45,7 +45,7 @@ DO NOT write code before confirming RED. DO NOT skip consumer tests. DO NOT be l
 **API:**
 
 ```ts
-import { bodyLimit } from "honey"
+import { bodyLimit } from "@lovrozagar/honey"
 
 app.use(bodyLimit({ maxSize: 1024 * 1024 }))
 ```
@@ -85,7 +85,7 @@ app.use(bodyLimit({ maxSize: 1024 * 1024 }))
 **API:**
 
 ```ts
-import { timeout } from "honey"
+import { timeout } from "@lovrozagar/honey"
 
 app.use(timeout({ duration: 30_000 }))
 app.use(timeout({ duration: 5_000, status: "bad_gateway" }))
@@ -134,7 +134,7 @@ No client keys. No tokens. Browser is both the attack vector and the enforcement
 **API:**
 
 ```ts
-import { csrf } from "honey"
+import { csrf } from "@lovrozagar/honey"
 
 app.use(csrf()) /* default: same-origin only */
 app.use(csrf({ origin: "https://myapp.com" }))
@@ -246,7 +246,7 @@ app.use(csrf({ origin: (o) => o.endsWith(".myapp.com") }))
 **API:**
 
 ```ts
-import { secureHeaders } from "honey"
+import { secureHeaders } from "@lovrozagar/honey"
 
 app.use(secureHeaders())
 app.use(
@@ -305,7 +305,7 @@ app.use(
 **API:**
 
 ```ts
-import { sign, verify } from "honey/cookie"
+import { sign, verify } from "@lovrozagar/honey/cookie"
 
 const signed = await sign("user-123", secret)
 /* "user-123.dGhpcyBpcyBhIHNpZ25hdHVyZQ" */
@@ -347,7 +347,7 @@ const value = await verify(signed, [currentSecret, oldSecret])
 **API:**
 
 ```ts
-import { requestId } from "honey"
+import { requestId } from "@lovrozagar/honey"
 
 app.use(requestId())
 app.use(

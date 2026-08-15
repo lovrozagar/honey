@@ -59,7 +59,7 @@ function assertBalancedBrackets(types: string): void {
 function assertValidStructure(types: string): void {
 	expect(types).toContain("export type Routes = {")
 	expect(types).toContain("import type {")
-	expect(types).toContain('from "honey"')
+	expect(types).toContain('from "@lovrozagar/honey"')
 	assertBalancedBrackets(types)
 }
 
@@ -816,7 +816,7 @@ describe("generated types validity - complex real-world apps", () => {
 		const types = generateTypes(app, { appExport: "app", appImport: "./app" })
 
 		expect(types).toContain("export type Routes = {")
-		expect(types).toContain('from "honey"')
+		expect(types).toContain('from "@lovrozagar/honey"')
 		/* all routes present */
 		expect(types).toContain('"/health"')
 		expect(types).toContain('"/v1/auth/register"')

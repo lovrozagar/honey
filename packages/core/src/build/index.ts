@@ -30,13 +30,13 @@ type BuildAdapterDef = {
 function featurePrelude(appSource: string): string {
 	const lines: string[] = []
 	if (/\.openapi\s*\(|\.manifest\s*\(/.test(appSource)) {
-		lines.push('import { enableOpenApi } from "honey/openapi"', "enableOpenApi()")
+		lines.push('import { enableOpenApi } from "@lovrozagar/honey/openapi"', "enableOpenApi()")
 	}
 	if (/\.errorI18n\s*\(/.test(appSource)) {
-		lines.push('import { enableI18n } from "honey/i18n"', "enableI18n()")
+		lines.push('import { enableI18n } from "@lovrozagar/honey/i18n"', "enableI18n()")
 	}
 	if (/(?<!Bun)(?<!Deno)\.serve\s*\(/.test(appSource)) {
-		lines.push('import { enableServe } from "honey/serve"', "enableServe()")
+		lines.push('import { enableServe } from "@lovrozagar/honey/serve"', "enableServe()")
 	}
 	return lines.length > 0 ? `${lines.join("\n")}\n` : ""
 }
@@ -90,7 +90,7 @@ const adapters: Record<HoneyBuildConfig["target"], BuildAdapterDef> = {
 	node: {
 		entry(config) {
 			return [
-				'import { serve } from "honey/node"',
+				'import { serve } from "@lovrozagar/honey/node"',
 				importApp(config.entry, config.export),
 				"",
 				`const port = Number(process.env.PORT ?? ${config.port})`,

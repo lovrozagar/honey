@@ -1,4 +1,4 @@
-import { cfWebSocket } from "honey/ws/cloudflare"
+import { cfWebSocket } from "@lovrozagar/honey/ws/cloudflare"
 import { loadE2eApp } from "../../apps/load.ts"
 
 type WorkerEnv = Record<string, unknown> & { HONEY_E2E_APP?: string }

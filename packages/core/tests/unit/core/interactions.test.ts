@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import * as z from "zod"
 import { createMiddleware, defineErrors, honey } from "../../../src/index.ts"
-import "honey/i18n"
+import "@lovrozagar/honey/i18n"
 
 describe("feature interactions", () => {
 	describe("input validation + output validation + error handling", () => {
