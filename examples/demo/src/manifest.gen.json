@@ -1,0 +1,124 @@
+{
+  "errors": [
+    {
+      "errorKey": "internal_server_error",
+      "status": 500,
+      "statusKey": "internal_server_error"
+    },
+    {
+      "errorKey": "validation_failed",
+      "status": 400,
+      "statusKey": "bad_request"
+    },
+    {
+      "errorKey": "org_slug_taken",
+      "status": 409,
+      "statusKey": "conflict"
+    },
+    {
+      "errorKey": "org_limit_reached",
+      "status": 403,
+      "statusKey": "forbidden"
+    },
+    {
+      "errorKey": "not_found",
+      "status": 404,
+      "statusKey": "not_found"
+    }
+  ],
+  "routes": [
+    {
+      "errors": [
+        "internal_server_error",
+        "validation_failed"
+      ],
+      "meta": {
+        "auth": "required",
+        "openApi": {
+          "operationId": "listOrgs",
+          "summary": "List organizations",
+          "tags": [
+            "Organization"
+          ]
+        },
+        "rateLimit": "strict"
+      },
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/orgs",
+      "input": {
+        "search": {
+          "vendor": "zod",
+          "version": 1
+        }
+      },
+      "output": {
+        "application/json": {
+          "ok": {
+            "vendor": "zod",
+            "version": 1
+          }
+        }
+      }
+    },
+    {
+      "errors": [
+        "internal_server_error",
+        "validation_failed",
+        "org_slug_taken",
+        "org_limit_reached"
+      ],
+      "meta": {
+        "auth": "required",
+        "openApi": {
+          "summary": "Create organization",
+          "tags": [
+            "Organization"
+          ]
+        }
+      },
+      "method": "POST",
+      "middleware": [
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/orgs",
+      "input": {
+        "json": {
+          "vendor": "zod",
+          "version": 1
+        }
+      }
+    },
+    {
+      "errors": [
+        "internal_server_error",
+        "validation_failed",
+        "not_found"
+      ],
+      "meta": {
+        "auth": "required",
+        "openApi": {
+          "summary": "Get organization by ID",
+          "tags": [
+            "Organization"
+          ]
+        }
+      },
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [
+        "orgId"
+      ],
+      "path": "/orgs/:orgId"
+    }
+  ]
+}

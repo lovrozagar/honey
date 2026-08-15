@@ -1,0 +1,79 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Go CLI Enums", "version": "1.0.0" },
+  "paths": {
+    "/posts": {
+      "get": {
+        "operationId": "posts.list",
+        "summary": "List posts filtered by status",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": { "type": "string", "enum": ["active", "archived"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "posts.create",
+        "summary": "Create a post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "tier"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "tier": { "type": "string", "enum": ["free", "pro"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": { "schema": { "type": "object" } }
+            }
+          }
+        }
+      }
+    },
+    "/posts/tag": {
+      "get": {
+        "operationId": "posts.tag",
+        "summary": "Empty enum param (edge case)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": { "type": "string", "enum": [] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "type": "object" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

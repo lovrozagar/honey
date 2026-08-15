@@ -1,0 +1,14 @@
+{
+	"name": "@honey/demo",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@ecomet/honey": "workspace:*",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"typescript": "catalog:",
+		"vite": "catalog:"
+	}
+}

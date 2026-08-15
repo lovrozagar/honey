@@ -1,0 +1,23 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Nested Object", "version": "1.0.0" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Definition": {
+        "type": "object",
+        "required": ["filters"],
+        "properties": {
+          "filters": {
+            "type": "object",
+            "required": ["limit"],
+            "properties": {
+              "limit": { "type": "integer" },
+              "search": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+	"name": "@honey/e2e-app",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/app.ts"
+	},
+	"dependencies": {
+		"@ecomet/honey": "workspace:*",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@playwright/test": "catalog:",
+		"typescript": "catalog:"
+	}
+}

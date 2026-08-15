@@ -1,0 +1,46 @@
+{
+	"errors": [
+		{
+			"errorKey": "product_error",
+			"status": 500,
+			"statusKey": "internal_server_error"
+		},
+		{
+			"errorKey": "not_found",
+			"status": 404,
+			"statusKey": "not_found"
+		}
+	],
+	"routes": [
+		{
+			"errors": ["product_error", "not_found"],
+			"meta": {},
+			"method": "GET",
+			"middleware": ["anonymous"],
+			"params": ["id"],
+			"path": "/product/:id",
+			"input": {
+				"params": {
+					"vendor": "zod",
+					"version": 1
+				}
+			},
+			"output": {
+				"application/json": {
+					"ok": {
+						"vendor": "zod",
+						"version": 1
+					}
+				}
+			}
+		},
+		{
+			"errors": ["product_error"],
+			"meta": {},
+			"method": "GET",
+			"middleware": ["anonymous"],
+			"params": [],
+			"path": "/crash"
+		}
+	]
+}

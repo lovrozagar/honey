@@ -1,0 +1,19 @@
+{
+	"name": "@honey/demo-2",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/app.ts"
+	},
+	"scripts": {
+		"generate": "honey generate"
+	},
+	"dependencies": {
+		"@ecomet/honey": "workspace:*",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"typescript": "catalog:"
+	}
+}

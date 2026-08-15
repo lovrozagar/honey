@@ -1,0 +1,86 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Go Reserved Keywords", "version": "1.0.0" },
+  "components": {
+    "schemas": {
+      "GoKeywordFields": {
+        "type": "object",
+        "required": ["chan", "go", "select", "func"],
+        "properties": {
+          "chan":        { "type": "string" },
+          "go":         { "type": "string" },
+          "select":     { "type": "string" },
+          "func":       { "type": "string" },
+          "map":        { "type": "string" },
+          "range":      { "type": "string" },
+          "type":       { "type": "string" },
+          "interface":  { "type": "string" },
+          "struct":     { "type": "string" },
+          "defer":      { "type": "string" },
+          "fallthrough":{ "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/go-keywords": {
+      "get": {
+        "operationId": "goKeywords.get",
+        "summary": "Returns object with all Go reserved word field names",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GoKeywordFields" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "goKeywords.create",
+        "summary": "Creates object with Go reserved word field names",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GoKeywordFields" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GoKeywordFields" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/go-keywords/{type}": {
+      "get": {
+        "operationId": "goKeywords.getByType",
+        "summary": "Path param named 'type' — Go keyword",
+        "parameters": [
+          { "in": "path", "name": "type", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "select", "required": false, "schema": { "type": "string" } },
+          { "in": "query", "name": "range", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GoKeywordFields" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+# dependencies
+node_modules
+**/node_modules
+
+# build
+**/dist/
+**/*.tsbuildinfo
+**/.wrangler/
+**/.honey
+
+# testing
+**/coverage/
+**/test-results/
+**/playwright-report/
+**/.ruff_cache/
+
+# python
+**/__pycache__/
+**/*.pyc
+
+# editor / os
+.DS_Store
+*.swp
+*.log
+
+# local
+.local
+*.local
+.tmp
+.temp

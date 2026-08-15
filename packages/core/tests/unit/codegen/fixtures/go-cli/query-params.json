@@ -1,0 +1,54 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Go CLI Query Params", "version": "1.0.0" },
+  "paths": {
+    "/search": {
+      "get": {
+        "operationId": "search.run",
+        "summary": "Search with mixed-type query params",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": { "type": "integer", "format": "int64", "default": 20 }
+          },
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": { "type": "boolean" }
+          },
+          {
+            "in": "query",
+            "name": "score_min",
+            "required": false,
+            "schema": { "type": "number" }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": { "type": "array", "items": { "type": "string" } }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

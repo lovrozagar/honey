@@ -1,0 +1,105 @@
+{
+	"name": "@ecomet/honey",
+	"version": "0.0.1",
+	"description": "Type-safe API framework built on Web Standards. Builder-pattern DX, precompiled radix tree in production.",
+	"keywords": [
+		"api",
+		"framework",
+		"honey",
+		"radix-tree",
+		"router",
+		"type-safe",
+		"web-standards"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/lovrozagar/honey"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"bin": {
+		"honey": "./src/cli.ts"
+	},
+	"files": [
+		"src"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": "./src/index.ts",
+		"./accepts": "./src/accepts.ts",
+		"./body-limit": "./src/body-limit.ts",
+		"./build": "./src/build/index.ts",
+		"./cli": "./src/cli.ts",
+		"./client": "./src/client/index.ts",
+		"./client/sdk": "./src/client/sdk.ts",
+		"./codegen": "./src/codegen.ts",
+		"./codegen-go-cli": "./src/codegen-go-cli.ts",
+		"./codegen/extract": "./src/type-extractor.ts",
+		"./cookie": "./src/cookie.ts",
+		"./cookie-sign": "./src/cookie-sign.ts",
+		"./cors": "./src/cors.ts",
+		"./crypto": "./src/crypto.ts",
+		"./curl-logger": "./src/curl-logger.ts",
+		"./csrf": "./src/csrf.ts",
+		"./errors": "./src/errors.ts",
+		"./etag": "./src/etag.ts",
+		"./i18n": "./src/i18n.ts",
+		"./input": "./src/input.ts",
+		"./ip-restrict": "./src/ip-restrict.ts",
+		"./logger": "./src/logger.ts",
+		"./node": "./src/node.ts",
+		"./openapi": "./src/openapi/spec.ts",
+		"./openapi/scalar": "./src/openapi/scalar.ts",
+		"./openapi/swagger": "./src/openapi/swagger.ts",
+		"./plugin": "./src/plugin.ts",
+		"./powered-by": "./src/powered-by.ts",
+		"./pretty-json": "./src/pretty-json.ts",
+		"./proxy": "./src/proxy.ts",
+		"./request-to-curl": "./src/request-to-curl.ts",
+		"./request-id": "./src/request-id.ts",
+		"./secure-headers": "./src/secure-headers.ts",
+		"./server-timing": "./src/server-timing.ts",
+		"./static": "./src/static.ts",
+		"./telemetry/otel": "./src/telemetry/otel.ts",
+		"./testing": "./src/testing.ts",
+		"./timeout": "./src/timeout.ts",
+		"./tree": "./src/tree.ts",
+		"./ws/bun": "./src/ws/bun.ts",
+		"./ws/cloudflare": "./src/ws/cloudflare.ts",
+		"./ws/deno": "./src/ws/deno.ts",
+		"./ws/node": "./src/ws/node.ts"
+	},
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"type:check": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit"
+	},
+	"dependencies": {
+		"jiti": "2.7.0"
+	},
+	"devDependencies": {
+		"@honey/demo-2": "workspace:*",
+		"@honey/e2e-app": "workspace:*",
+		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@total-typescript/ts-reset": "catalog:",
+		"arktype": "catalog:",
+		"effect": "catalog:",
+		"ts-morph": "catalog:",
+		"typescript": "catalog:",
+		"valibot": "catalog:",
+		"vitest": "catalog:",
+		"yup": "catalog:",
+		"zod": "catalog:"
+	},
+	"peerDependencies": {
+		"ts-morph": ">=25.0.0"
+	},
+	"peerDependenciesMeta": {
+		"ts-morph": {
+			"optional": true
+		}
+	}
+}

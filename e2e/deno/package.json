@@ -1,0 +1,18 @@
+{
+	"name": "@honey/e2e-deno",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "playwright test",
+		"test:prod": "TEST_MODE=prod playwright test"
+	},
+	"dependencies": {
+		"@ecomet/honey": "workspace:*",
+		"@honey/e2e-app": "workspace:*"
+	},
+	"devDependencies": {
+		"@playwright/test": "catalog:",
+		"typescript": "catalog:"
+	}
+}

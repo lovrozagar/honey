@@ -1,0 +1,1691 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`python-emitter byte-equivalence > crud client + types stable > crud client.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+import threading
+import httpx
+from urllib.parse import quote
+from typing import Any
+from ._runtime import (
+    ClientConfig,
+    _build_headers,
+    _build_url,
+    _do_request_async,
+    _do_request_sync,
+    _parse_body,
+    _raise_for_status,
+)
+from ._invalidation import _StaleTracker, _StaleTrackerSync, interpolate_path
+from .types import User, UserCreateInput, UserPatchInput
+
+_INVALIDATION_MAP: dict[str, dict[str, Any]] = {
+}
+
+class _UsersResource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def create(self, body: UserCreateInput,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Create user
+
+        Raises:
+            BadRequestError: HTTP 400
+            UnprocessableEntityError: HTTP 422
+        """
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "POST " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "POST",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "POST", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="POST /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "POST",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    async def delete(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> None:
+        """Delete user
+
+        Raises:
+            NotFoundError: HTTP 404
+        """
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "DELETE " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "DELETE",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "DELETE", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="DELETE /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "DELETE",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    async def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Get user by id
+
+        Raises:
+            NotFoundError: HTTP 404
+        """
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    async def list(self,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> list[User]:
+        """List users"""
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    async def update(self, id: str, body: UserPatchInput,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Patch user
+
+        Raises:
+            BadRequestError: HTTP 400
+            NotFoundError: HTTP 404
+        """
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "PATCH " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "PATCH",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "PATCH", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="PATCH /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "PATCH",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _SyncUsersResource:
+    def __init__(self, _client: "SDK") -> None:
+        self._client = _client
+
+    def create(self, body: UserCreateInput,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Create user
+
+        Raises:
+            BadRequestError: HTTP 400
+            UnprocessableEntityError: HTTP 422
+        """
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "POST " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "POST",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "POST", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="POST /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "POST",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    def delete(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> None:
+        """Delete user
+
+        Raises:
+            NotFoundError: HTTP 404
+        """
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "DELETE " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "DELETE",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "DELETE", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="DELETE /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "DELETE",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Get user by id
+
+        Raises:
+            NotFoundError: HTTP 404
+        """
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    def list(self,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> list[User]:
+        """List users"""
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    def update(self, id: str, body: UserPatchInput,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Patch user
+
+        Raises:
+            BadRequestError: HTTP 400
+            NotFoundError: HTTP 404
+        """
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "PATCH " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "PATCH",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "PATCH", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="PATCH /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "PATCH",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class SDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._sync_client = httpx.Client(
+            transport=config.sync_transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTrackerSync(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.users = _SyncUsersResource(self)
+
+    def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return self._stale_tracker.is_stale(method, path)
+
+
+class AsyncSDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._async_client = httpx.AsyncClient(
+            transport=config.transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTracker(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.users = _UsersResource(self)
+
+    async def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return await self._stale_tracker.is_stale(method, path)
+"
+`;
+
+exports[`python-emitter byte-equivalence > crud client + types stable > crud types.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+from typing import Literal, NotRequired, TypedDict
+
+class ErrorEnvelope(TypedDict, total=False):
+    error_key: str
+    fields: dict[str, list[str]]
+    message: str
+    status: int
+    status_key: str
+    success: Literal[False]
+
+class User(TypedDict, total=False):
+    email: str
+    id: str
+    name: str
+
+class UserCreateInput(TypedDict, total=False):
+    email: str
+    name: str
+
+class UserPatchInput(TypedDict, total=False):
+    email: NotRequired[str]
+    name: NotRequired[str]
+
+__all__ = ["ErrorEnvelope", "User", "UserCreateInput", "UserPatchInput"]"
+`;
+
+exports[`python-emitter byte-equivalence > discriminated client + types stable > discriminated client.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+import threading
+import httpx
+from urllib.parse import quote
+from typing import Any
+from ._runtime import (
+    ClientConfig,
+    _build_headers,
+    _build_url,
+    _do_request_async,
+    _do_request_sync,
+    _parse_body,
+    _raise_for_status,
+)
+from ._invalidation import _StaleTracker, _StaleTrackerSync, interpolate_path
+from .types import Animal
+
+_INVALIDATION_MAP: dict[str, dict[str, Any]] = {
+}
+
+class _AnimalsResource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> Animal:
+        """Get animal"""
+        url = _build_url(self._client._config.base_url, f"/animals/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/animals/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /animals/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    async def list(self,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> list[Animal]:
+        """List animals"""
+        url = _build_url(self._client._config.base_url, "/animals")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/animals", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /animals",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _SyncAnimalsResource:
+    def __init__(self, _client: "SDK") -> None:
+        self._client = _client
+
+    def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> Animal:
+        """Get animal"""
+        url = _build_url(self._client._config.base_url, f"/animals/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/animals/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /animals/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    def list(self,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> list[Animal]:
+        """List animals"""
+        url = _build_url(self._client._config.base_url, "/animals")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/animals", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /animals",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class SDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._sync_client = httpx.Client(
+            transport=config.sync_transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTrackerSync(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.animals = _SyncAnimalsResource(self)
+
+    def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return self._stale_tracker.is_stale(method, path)
+
+
+class AsyncSDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._async_client = httpx.AsyncClient(
+            transport=config.transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTracker(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.animals = _AnimalsResource(self)
+
+    async def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return await self._stale_tracker.is_stale(method, path)
+"
+`;
+
+exports[`python-emitter byte-equivalence > discriminated client + types stable > discriminated types.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+from typing import Any, Literal, NewType, TypedDict
+
+Animal = NewType("Animal", Any)  # type: ignore[misc]
+
+class Cat(TypedDict, total=False):
+    indoor: bool
+    kind: Literal["cat"]
+
+class Dog(TypedDict, total=False):
+    breed: str
+    kind: Literal["dog"]
+
+__all__ = ["Animal", "Cat", "Dog"]"
+`;
+
+exports[`python-emitter byte-equivalence > invalidation client + types stable > invalidation client.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+import threading
+import httpx
+from urllib.parse import quote
+from typing import Any
+from ._runtime import (
+    ClientConfig,
+    _build_headers,
+    _build_url,
+    _do_request_async,
+    _do_request_sync,
+    _parse_body,
+    _raise_for_status,
+)
+from ._invalidation import _StaleTracker, _StaleTrackerSync, interpolate_path
+from .types import User, UserCreateInput
+
+_INVALIDATION_MAP: dict[str, dict[str, Any]] = {
+    "users.create": {
+        "method": "POST",
+        "path": "/users",
+        "invalidate": ["GET /users", "GET /users/:id"],
+    },
+}
+
+class _UsersResource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def create(self, body: UserCreateInput,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Create user"""
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "POST " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "POST",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "POST", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="POST /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                ["GET /users", "GET /users/:id"], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "POST",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    async def get_by_id(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Get user by id"""
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    async def list(self,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> list[User]:
+        """List users"""
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _SyncUsersResource:
+    def __init__(self, _client: "SDK") -> None:
+        self._client = _client
+
+    def create(self, body: UserCreateInput,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Create user"""
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "POST " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "POST",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "POST", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="POST /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                ["GET /users", "GET /users/:id"], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "POST",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    def get_by_id(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Get user by id"""
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+    def list(self,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> list[User]:
+        """List users"""
+        url = _build_url(self._client._config.base_url, "/users")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/users", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class SDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._sync_client = httpx.Client(
+            transport=config.sync_transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTrackerSync(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.users = _SyncUsersResource(self)
+
+    def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return self._stale_tracker.is_stale(method, path)
+
+
+class AsyncSDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._async_client = httpx.AsyncClient(
+            transport=config.transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTracker(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.users = _UsersResource(self)
+
+    async def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return await self._stale_tracker.is_stale(method, path)
+"
+`;
+
+exports[`python-emitter byte-equivalence > invalidation client + types stable > invalidation types.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+from typing import TypedDict
+
+class User(TypedDict, total=False):
+    email: str
+    id: str
+
+class UserCreateInput(TypedDict, total=False):
+    email: str
+
+__all__ = ["User", "UserCreateInput"]"
+`;
+
+exports[`python-emitter byte-equivalence > refs client + types stable > refs client.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+import threading
+import httpx
+from urllib.parse import quote
+from typing import Any
+from ._runtime import (
+    ClientConfig,
+    _build_headers,
+    _build_url,
+    _do_request_async,
+    _do_request_sync,
+    _parse_body,
+    _raise_for_status,
+)
+from ._invalidation import _StaleTracker, _StaleTrackerSync, interpolate_path
+from .types import User, Comment
+
+_INVALIDATION_MAP: dict[str, dict[str, Any]] = {
+}
+
+class _CommentsResource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> Comment:
+        """Get comment with self-ref parent"""
+        url = _build_url(self._client._config.base_url, f"/comments/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/comments/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /comments/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _UsersResource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Get user with comments"""
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _SyncCommentsResource:
+    def __init__(self, _client: "SDK") -> None:
+        self._client = _client
+
+    def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> Comment:
+        """Get comment with self-ref parent"""
+        url = _build_url(self._client._config.base_url, f"/comments/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/comments/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /comments/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _SyncUsersResource:
+    def __init__(self, _client: "SDK") -> None:
+        self._client = _client
+
+    def get(self, id: str,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> User:
+        """Get user with comments"""
+        url = _build_url(self._client._config.base_url, f"/users/{quote(id, safe='')}")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = {"id": id}
+        _concrete_path = interpolate_path("/users/{id}", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /users/{id}",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class SDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._sync_client = httpx.Client(
+            transport=config.sync_transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTrackerSync(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.comments = _SyncCommentsResource(self)
+        self.users = _SyncUsersResource(self)
+
+    def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return self._stale_tracker.is_stale(method, path)
+
+
+class AsyncSDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._async_client = httpx.AsyncClient(
+            transport=config.transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTracker(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.comments = _CommentsResource(self)
+        self.users = _UsersResource(self)
+
+    async def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return await self._stale_tracker.is_stale(method, path)
+"
+`;
+
+exports[`python-emitter byte-equivalence > refs client + types stable > refs types.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+from typing import NotRequired, TypedDict
+
+class Comment(TypedDict, total=False):
+    author: NotRequired[User]
+    body: str
+    id: str
+    parent: NotRequired[Comment]
+
+class User(TypedDict, total=False):
+    comments: NotRequired[list[Comment]]
+    email: str
+    id: str
+
+__all__ = ["Comment", "User"]"
+`;
+
+exports[`python-emitter byte-equivalence > reserved-words client + types stable > reserved-words client.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+import threading
+import httpx
+from typing import Any
+from ._runtime import (
+    ClientConfig,
+    _build_headers,
+    _build_url,
+    _do_request_async,
+    _do_request_sync,
+    _parse_body,
+    _raise_for_status,
+)
+from ._invalidation import _StaleTracker, _StaleTrackerSync, interpolate_path
+
+_INVALIDATION_MAP: dict[str, dict[str, Any]] = {
+}
+
+class _Await_Resource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def yield_(self, body: Any,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> dict[str, Any]:
+        """More reserved words as resource and action"""
+        url = _build_url(self._client._config.base_url, "/await/yield")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/await/yield", _path_params)
+        _concrete_selector = "POST " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "POST",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "POST", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="POST /await/yield",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "POST",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _Class_Resource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def from_(self,
+        *,
+        return_: str | None = None,
+        async_: bool | None = None,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> str:
+        """Both parts are Python reserved words"""
+        url = _build_url(self._client._config.base_url, "/class/from")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {"return": return_, "async": async_}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/class/from", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = await self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = await _do_request_async(
+            self._client._async_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /class/from",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            await self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                await self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _SyncAwait_Resource:
+    def __init__(self, _client: "SDK") -> None:
+        self._client = _client
+
+    def yield_(self, body: Any,
+        *,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> dict[str, Any]:
+        """More reserved words as resource and action"""
+        url = _build_url(self._client._config.base_url, "/await/yield")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/await/yield", _path_params)
+        _concrete_selector = "POST " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "POST",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "POST", url,
+            headers=_headers, json=body, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="POST /await/yield",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "POST",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class _SyncClass_Resource:
+    def __init__(self, _client: "SDK") -> None:
+        self._client = _client
+
+    def from_(self,
+        *,
+        return_: str | None = None,
+        async_: bool | None = None,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+        cancel_token: "threading.Event | None" = None
+    ) -> str:
+        """Both parts are Python reserved words"""
+        url = _build_url(self._client._config.base_url, "/class/from")
+        _headers = _build_headers(self._client._config, extra=headers)
+        _params: dict[str, Any] = {"return": return_, "async": async_}
+        _path_params: dict[str, str] | None = None
+        _concrete_path = interpolate_path("/class/from", _path_params)
+        _concrete_selector = "GET " + _concrete_path
+        _request_meta = self._client._stale_tracker.build_request_meta(
+            _concrete_selector, _concrete_path, "GET",
+        )
+        _response = _do_request_sync(
+            self._client._sync_client, self._client._config, "GET", url,
+            headers=_headers, json=None, params=_params, timeout=timeout,
+            cancel_token=cancel_token, operation="GET /class/from",
+            request_meta=_request_meta,
+        )
+        if _response.status_code < 400:
+            self._client._stale_tracker.mark_stale(
+                [], _path_params, _concrete_selector,
+            )
+            if _request_meta is not None and _request_meta.is_stale:
+                self._client._stale_tracker.clear_stale(
+                    _concrete_selector, _concrete_path, "GET",
+                    _request_meta.seq_snapshot,
+                )
+        _raise_for_status(_response)
+        return _parse_body(_response)
+
+
+class SDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._sync_client = httpx.Client(
+            transport=config.sync_transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTrackerSync(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.await_ = _SyncAwait_Resource(self)
+        self.class_ = _SyncClass_Resource(self)
+
+    def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return self._stale_tracker.is_stale(method, path)
+
+
+class AsyncSDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._async_client = httpx.AsyncClient(
+            transport=config.transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTracker(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.await_ = _Await_Resource(self)
+        self.class_ = _Class_Resource(self)
+
+    async def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return await self._stale_tracker.is_stale(method, path)
+"
+`;
+
+exports[`python-emitter byte-equivalence > reserved-words client + types stable > reserved-words types.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+__all__: list[str] = []"
+`;
+
+exports[`python-emitter byte-equivalence > sse client + types stable > sse client.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+import httpx
+from typing import Any, AsyncIterator
+from ._runtime import ClientConfig, _build_headers, _build_url, _raise_for_status
+from ._invalidation import _StaleTracker, _StaleTrackerSync
+from ._sse import SSEEvent, parse_sse_stream
+
+_INVALIDATION_MAP: dict[str, dict[str, Any]] = {
+}
+
+class _EventsResource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    async def stream(self,
+        *,
+        last_event_id: str | None = None,
+        topic: str | None = None
+    ) -> AsyncIterator[SSEEvent]:
+        """Stream events"""
+        url = _build_url(self._client._config.base_url, "/events/stream")
+        _headers = _build_headers(self._client._config, extra={"Accept": "text/event-stream"})
+        if last_event_id is not None: _headers["Last-Event-ID"] = last_event_id
+        _params: dict[str, Any] = {"topic": topic}
+        async with self._client._async_client.stream(
+            "GET", url, headers=_headers,
+            params={k: v for k, v in _params.items() if v is not None} or None,
+        ) as _response:
+            _raise_for_status(_response)
+            async for _event in parse_sse_stream(_response):
+                yield _event
+
+
+class SDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._sync_client = httpx.Client(
+            transport=config.sync_transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTrackerSync(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.events = _SyncEventsResource(self)
+
+    def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return self._stale_tracker.is_stale(method, path)
+
+
+class AsyncSDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._async_client = httpx.AsyncClient(
+            transport=config.transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTracker(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.events = _EventsResource(self)
+
+    async def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return await self._stale_tracker.is_stale(method, path)
+"
+`;
+
+exports[`python-emitter byte-equivalence > sse client + types stable > sse types.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+__all__: list[str] = []"
+`;
+
+exports[`python-emitter byte-equivalence > ws client + types stable > ws client.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+import httpx
+from typing import Any
+from ._runtime import ClientConfig, _build_headers, _build_url
+from ._invalidation import _StaleTracker, _StaleTrackerSync
+from ._ws import _TypedWebSocket
+
+_INVALIDATION_MAP: dict[str, dict[str, Any]] = {
+}
+
+class _RealtimeResource:
+    def __init__(self, _client: "AsyncSDK") -> None:
+        self._client = _client
+
+    def subscribe(self, channel: str,
+        *,
+        protocols: list[str] | None = None,
+        reconnect_token: str | None = None
+    ) -> _TypedWebSocket:
+        """Subscribe to realtime updates"""
+        url = _build_url(self._client._config.base_url, "/realtime/subscribe")
+        _headers = _build_headers(self._client._config, extra=None)
+        _params: dict[str, Any] = {"reconnect_token": reconnect_token, "channel": channel}
+        ws_url = url.replace("https://", "wss://").replace("http://", "ws://")
+        if reconnect_token is not None:
+            _params["reconnect_token"] = reconnect_token
+        if _params:
+            from urllib.parse import urlencode
+            ws_url = f"{ws_url}?{urlencode({k: v for k, v in _params.items() if v is not None})}"
+        return _TypedWebSocket(ws_url, protocols=protocols, extra_headers=_headers)
+
+
+class SDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._sync_client = httpx.Client(
+            transport=config.sync_transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTrackerSync(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.realtime = _SyncRealtimeResource(self)
+
+    def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return self._stale_tracker.is_stale(method, path)
+
+
+class AsyncSDK:
+    def __init__(self, config: ClientConfig) -> None:
+        self._config = config
+        self._async_client = httpx.AsyncClient(
+            transport=config.transport,
+        )
+        _inv = config.invalidation
+        self._stale_tracker = _StaleTracker(
+            stale_time=_inv.stale_time if _inv is not None else 0.0,
+            stale_max_entries=(
+                _inv.stale_max_entries if _inv is not None else 1000
+            ),
+            max_sources_per_target=(
+                _inv.max_sources_per_target if _inv is not None else 16
+            ),
+        )
+        self.realtime = _RealtimeResource(self)
+
+    async def is_stale(self, method: str, path: str) -> bool:
+        """Returns True when (method, path) sits inside an active stale window."""
+        return await self._stale_tracker.is_stale(method, path)
+"
+`;
+
+exports[`python-emitter byte-equivalence > ws client + types stable > ws types.py 1`] = `
+"# ruff: noqa: E501
+from __future__ import annotations
+
+__all__: list[str] = []"
+`;

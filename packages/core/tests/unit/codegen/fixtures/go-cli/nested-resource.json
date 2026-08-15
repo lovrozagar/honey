@@ -1,0 +1,64 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Go CLI Nested Resource", "version": "1.0.0" },
+  "paths": {
+    "/foo": {
+      "get": {
+        "operationId": "foo.list",
+        "summary": "List foos",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/foo/bar/baz": {
+      "get": {
+        "operationId": "foo.bar.baz",
+        "summary": "Deep nested op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "type": "object" } }
+            }
+          }
+        }
+      }
+    },
+    "/foo/a/b/c": {
+      "get": {
+        "operationId": "foo.a.b.c",
+        "summary": "4-segment op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "type": "object" } }
+            }
+          }
+        }
+      }
+    },
+    "/batch/download.csv": {
+      "get": {
+        "operationId": "batch.download.csv",
+        "summary": "Download CSV batch",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "type": "object" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

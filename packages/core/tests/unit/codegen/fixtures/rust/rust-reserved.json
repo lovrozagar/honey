@@ -1,0 +1,155 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Rust Reserved Keywords", "version": "1.0.0" },
+  "components": {
+    "schemas": {
+      "RustKeywordFields": {
+        "type": "object",
+        "required": ["type", "fn", "mod", "move", "crate", "self"],
+        "properties": {
+          "type":   { "type": "string" },
+          "fn":     { "type": "string" },
+          "mod":    { "type": "string" },
+          "move":   { "type": "string" },
+          "crate":  { "type": "string" },
+          "self":   { "type": "string" },
+          "match":  { "type": "string" },
+          "impl":   { "type": "string" },
+          "trait":  { "type": "string" },
+          "use":    { "type": "string" },
+          "where":  { "type": "string" }
+        }
+      },
+      "TypeCreateInput": {
+        "type": "object",
+        "required": ["fn", "mod"],
+        "properties": {
+          "fn":  { "type": "string" },
+          "mod": { "type": "string" }
+        }
+      },
+      "MatchResult": {
+        "type": "object",
+        "required": ["match"],
+        "properties": {
+          "match": { "type": "string" },
+          "type":  { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/types": {
+      "post": {
+        "operationId": "type.create",
+        "summary": "Creates object with Rust reserved field names",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TypeCreateInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RustKeywordFields" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/matches": {
+      "get": {
+        "operationId": "match.find",
+        "summary": "Find matches",
+        "parameters": [
+          { "in": "query", "name": "type", "required": false, "schema": { "type": "string" } },
+          { "in": "query", "name": "fn", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MatchResult" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/fn/run": {
+      "post": {
+        "operationId": "fn.run",
+        "summary": "Run a function",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mod/list": {
+      "get": {
+        "operationId": "mod.list",
+        "summary": "List modules",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/move/exec": {
+      "post": {
+        "operationId": "move.exec",
+        "summary": "Execute a move",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/types/{type}": {
+      "get": {
+        "operationId": "type.getByType",
+        "summary": "Get type by path param also named 'type'",
+        "parameters": [
+          { "in": "path", "name": "type", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "match", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RustKeywordFields" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

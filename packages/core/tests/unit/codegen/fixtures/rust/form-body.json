@@ -1,0 +1,68 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Rust Form Body", "version": "1.0.0" },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "auth.login",
+        "summary": "Login with credentials",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "token": { "type": "string" } }, "required": ["token"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/avatar": {
+      "post": {
+        "operationId": "users.uploadAvatar",
+        "summary": "Upload user avatar",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "alt_text": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "url": { "type": "string" } }, "required": ["url"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

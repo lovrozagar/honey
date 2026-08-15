@@ -1,0 +1,133 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Rust Error Keys", "version": "1.0.0" },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["id", "email"],
+        "properties": {
+          "id": { "type": "string" },
+          "email": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/users": {
+      "post": {
+        "operationId": "users.create",
+        "summary": "Create user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "status", "status_key", "message", "error_key", "fields"],
+                  "properties": {
+                    "success": { "type": "boolean", "const": false },
+                    "status": { "type": "integer", "enum": [400] },
+                    "status_key": { "type": "string" },
+                    "message": { "type": "string" },
+                    "error_key": {
+                      "type": "string",
+                      "enum": ["email_taken", "invalid_password"]
+                    },
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": ["error_key", "message", "path"],
+                          "properties": {
+                            "error_key": { "type": "string" },
+                            "message": { "type": "string" },
+                            "path": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "status", "status_key", "message", "error_key", "fields"],
+                  "properties": {
+                    "success": { "type": "boolean", "const": false },
+                    "status": { "type": "integer", "enum": [404] },
+                    "status_key": { "type": "string" },
+                    "message": { "type": "string" },
+                    "error_key": {
+                      "type": "string",
+                      "enum": ["user_not_found"]
+                    },
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": ["error_key", "message", "path"],
+                          "properties": {
+                            "error_key": { "type": "string" },
+                            "message": { "type": "string" },
+                            "path": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

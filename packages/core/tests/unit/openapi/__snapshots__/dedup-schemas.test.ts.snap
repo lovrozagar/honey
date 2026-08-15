@@ -1,0 +1,75 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`characterization — current behavior > generateSDK produces stable types for multi-endpoint spec with shared errors 1`] = `
+"type _ErrField = { error_key: string; message: string; path: string }
+type _ErrEnvelope<TStatus extends number, TKey extends string> = {
+	error_key: TKey
+	fields: Record<string, _ErrField[]>
+	message: string
+	status: TStatus
+	status_key: string
+	success: false
+}
+
+type _Errs0 = { 404: _ErrEnvelope<404, "not_found"> }
+
+type _ExpandShallow<T> = T extends object ? { [K in keyof T]: T[K] } & {} : T
+type _Expand<T> = T extends object ? { [K in keyof T]: _ExpandShallow<T[K]> } & {} : T
+type _Inp0 = { params: { id: string } }
+
+export type SDKResult<T, TErrorsByStatus = never> =
+	| { data: T; error: null; response: Response; status: number }
+	| ([TErrorsByStatus] extends [never]
+		? { data: null; error: unknown; response: Response; status: number }
+		: { [S in keyof TErrorsByStatus & number]: { data: null; error: TErrorsByStatus[S]; response: Response; status: S } }[keyof TErrorsByStatus & number])
+
+export type TypedWebSocket = {
+	close(code?: number, reason?: string): void
+	off(event: "close" | "error" | "message" | "open", handler: (...args: never[]) => void): void
+	on(event: "close", handler: (code: number, reason: string) => void): void
+	on(event: "error", handler: (error: unknown) => void): void
+	on(event: "message", handler: (data: string) => void): void
+	on(event: "open", handler: () => void): void
+	readonly readyState: number
+	send(data: ArrayBuffer | ArrayBufferView | object | string): void
+}
+
+export type SDKConfig<TThrow extends boolean = false> = {
+	baseURL: string
+	buildSearchParams?: (query: Record<string, unknown>) => URLSearchParams
+	credentials?: RequestCredentials
+	fetch?: typeof fetch
+	headers?: Record<string, string> | ((ctx: { method: string; path: string }) => Record<string, string | undefined> | Promise<Record<string, string | undefined>>)
+	invalidation?: { maxSourcesPerTarget?: number; staleMaxEntries?: number; staleTime: number }
+	maxErrorMessageChars?: number
+	mode?: RequestMode
+	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
+	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	sortSearchParams?: boolean
+	sseMaxBufferChars?: number
+	state?: Record<string, unknown>
+	throwOnError?: TThrow
+	timeout?: number
+}
+
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
+
+export interface SDK<TThrow extends boolean = false> {
+	state: Record<string, unknown>
+	dispose(): void
+	items: {
+		get(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; title: string }> : Promise<SDKResult<{ id: string; title: string }, _Expand<_Errs0>>>
+	}
+	orgs: {
+		get(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; slug: string }> : Promise<SDKResult<{ id: string; slug: string }, _Expand<_Errs0>>>
+	}
+	users: {
+		get(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; name: string }> : Promise<SDKResult<{ id: string; name: string }, _Expand<_Errs0>>>
+	}
+}
+"
+`;
+
+exports[`characterization — current behavior > jsonSchemaToTS converts the patched error envelope correctly 1`] = `"{ error_key: "not_found"; fields: Record<string, { error_key: string; message: string; path: string }[]>; message: string; status: 404; status_key: string; success: false }"`;

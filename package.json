@@ -1,0 +1,40 @@
+{
+	"name": "honey-monorepo",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"packageManager": "bun@1.3.11",
+	"workspaces": {
+		"packages": [
+			"packages/*",
+			"examples/*",
+			"e2e/*",
+			"bench"
+		],
+		"catalog": {
+			"@cloudflare/workers-types": "5.20260710.1",
+			"@playwright/test": "1.61.1",
+			"@total-typescript/ts-reset": "0.6.1",
+			"@types/node": "26.1.1",
+			"arktype": "2.2.3",
+			"bun-types": "1.3.14",
+			"effect": "3.21.4",
+			"hono": "4.12.29",
+			"ts-morph": "28.0.0",
+			"tsx": "4.23.0",
+			"typescript": "7.0.2",
+			"valibot": "1.4.2",
+			"vite": "8.1.4",
+			"vitest": "4.1.10",
+			"wrangler": "4.110.0",
+			"ws": "8.21.0",
+			"yup": "1.7.1",
+			"zod": "4.3.6"
+		}
+	},
+	"scripts": {
+		"test": "bun run --filter @ecomet/honey test",
+		"test:watch": "bun run --filter @ecomet/honey test:watch",
+		"typecheck": "bun run --filter @ecomet/honey type:check"
+	}
+}

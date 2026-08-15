@@ -1,0 +1,67 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Reserved Words", "version": "1.0.0" },
+  "paths": {
+    "/class/from": {
+      "get": {
+        "operationId": "class.from",
+        "summary": "Both parts are Python reserved words",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "return",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "async",
+            "required": false,
+            "schema": { "type": "boolean" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/await/yield": {
+      "post": {
+        "operationId": "await.yield",
+        "summary": "More reserved words as resource and action",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["import"],
+                "properties": {
+                  "import": { "type": "string" },
+                  "lambda": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

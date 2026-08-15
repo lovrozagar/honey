@@ -1,0 +1,432 @@
+{
+  "info": {
+    "title": "Demo API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/orgs": {
+      "get": {
+        "summary": "List organizations",
+        "tags": [
+          "Organization"
+        ],
+        "operationId": "listOrgs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "description": "ok"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "validation_failed"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        400
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "internal_server_error"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        500
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "internal_server_error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create organization",
+        "tags": [
+          "Organization"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "slug"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "validation_failed"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        400
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "org_limit_reached"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        403
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "org_limit_reached"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "org_slug_taken"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        409
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "org_slug_taken"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "internal_server_error"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        500
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "internal_server_error"
+          }
+        }
+      }
+    },
+    "/orgs/{orgId}": {
+      "get": {
+        "summary": "Get organization by ID",
+        "tags": [
+          "Organization"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "validation_failed"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        400
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "validation_failed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "not_found"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        404
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error_key": {
+                      "enum": [
+                        "internal_server_error"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        500
+                      ],
+                      "type": "integer"
+                    },
+                    "success": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "error_key",
+                    "status",
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "internal_server_error"
+          }
+        }
+      }
+    }
+  }
+}
