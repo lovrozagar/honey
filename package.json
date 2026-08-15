@@ -49,6 +49,14 @@
 		"test:harness:rust": "bun run --filter @lovrozagar/honey test:harness:rust",
 		"test:watch": "bun run --filter @lovrozagar/honey test:watch",
 		"typecheck": "bun run --filter @lovrozagar/honey type:check",
-		"typecheck:consumers": "bun run --filter './e2e/apps/*' type:check"
+		"typecheck:consumers": "bun run --filter './e2e/apps/*' type:check",
+		"lint": "oxlint",
+		"lint:fix": "oxlint --fix",
+		"fmt": "oxfmt",
+		"fmt:check": "oxfmt --check"
+	},
+	"devDependencies": {
+		"oxfmt": "^0.63.0",
+		"oxlint": "^1.78.0"
 	}
 }

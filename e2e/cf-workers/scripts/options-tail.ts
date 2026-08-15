@@ -51,11 +51,16 @@ await Promise.all(Array.from({ length: Math.min(CONC, N) }, () => worker()))
 
 const ok = samples.filter((s) => s.status === 204)
 const bad = samples.filter((s) => s.status !== 204)
-const ms = [...ok.map((s) => s.ms)].sort((a, b) => a - b)
+const ms = ok.map((s) => s.ms).sort((a, b) => a - b)
 const p = (q: number) => (ms.length ? ms[Math.min(ms.length - 1, Math.floor((q / 100) * ms.length))] : 0)
 const slow = [...samples].sort((a, b) => b.ms - a.ms).slice(0, 10)
 
 console.log(`ok204=${ok.length} other=${bad.length} p50=${p(50)?.toFixed(0)} p95=${p(95)?.toFixed(0)} p99=${p(99)?.toFixed(0)} max=${(ms.at(-1) ?? 0).toFixed(0)}`)
-if (bad.length) console.log("non-204", Object.fromEntries([...new Map(bad.map((s) => [String(s.status), bad.filter((x) => x.status === s.status).length]))]))
+if (bad.length) {
+	console.log(
+		"non-204",
+		Object.fromEntries(new Map(bad.map((s) => [String(s.status), bad.filter((x) => x.status === s.status).length]))),
+	)
+}
 console.log("slowest", slow.map((s) => `${s.status}@${s.ms.toFixed(0)}ms`).join(" "))
 if (bad.length > 0) process.exit(1)

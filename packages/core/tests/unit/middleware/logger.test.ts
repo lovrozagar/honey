@@ -169,7 +169,8 @@ describe("logger middleware", () => {
 			.use(logger({ instance }))
 
 		app.get("/users").handler((c) => {
-			(c as Record<string, unknown>).log && ((c as Record<string, unknown>).log as LoggerInstance).info("handler work")
+			const log = (c as Record<string, unknown>).log as LoggerInstance | undefined
+			log?.info("handler work")
 			return c.res.json("ok", { users: [] })
 		})
 

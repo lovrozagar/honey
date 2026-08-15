@@ -15,6 +15,14 @@ function jsonSchema(
 	return resolveSchema(spec, responses[status]?.content?.["application/json"]?.schema)
 }
 
+function schemaProps(schema: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+	return schema?.properties as Record<string, unknown> | undefined
+}
+
+function schemaEnum(schema: Record<string, unknown> | undefined, key: string): string[] | undefined {
+	return (schemaProps(schema)?.[key] as { enum?: string[] } | undefined)?.enum
+}
+
 describe("OpenAPI: custom schema errors", () => {
 	it("standard errors use base error schema with constrained enums", async () => {
 		const errors = defineErrors({
@@ -67,10 +75,10 @@ describe("OpenAPI: custom schema errors", () => {
 		const schema = jsonSchema(spec, responses, "404")
 
 		/* should be the custom schema, not the default error shape */
-		expect((schema?.properties as Record<string, unknown>).reason).toBeDefined()
-		expect((schema?.properties as Record<string, unknown>).suggestions).toBeDefined()
-		expect((schema?.properties as Record<string, unknown>).error_key).toBeUndefined()
-		expect((schema?.properties as Record<string, unknown>).success).toBeUndefined()
+		expect(schemaProps(schema)?.reason).toBeDefined()
+		expect(schemaProps(schema)?.suggestions).toBeDefined()
+		expect(schemaProps(schema)?.error_key).toBeUndefined()
+		expect(schemaProps(schema)?.success).toBeUndefined()
 	})
 
 	it("mixed standard + custom at same status code uses oneOf", async () => {
@@ -105,9 +113,7 @@ describe("OpenAPI: custom schema errors", () => {
 		/* one should be the standard error shape with constrained enum */
 		const stdSchema = oneOf.find((s) => (s.properties as Record<string, unknown> | undefined)?.error_key)
 		expect(stdSchema).toBeDefined()
-		expect(
-			((stdSchema?.properties as Record<string, { enum?: string[] }>)?.error_key).enum,
-		).toEqual(["user_not_found"])
+		expect(schemaEnum(stdSchema, "error_key")).toEqual(["user_not_found"])
 
 		/* other should be the custom schema */
 		const customSchema = oneOf.find((s) => (s.properties as Record<string, unknown> | undefined)?.reason)
@@ -171,11 +177,11 @@ describe("OpenAPI: custom schema errors", () => {
 
 		/* 404 should have custom schema */
 		const schema404 = jsonSchema(spec, responses, "404")
-		expect((schema404?.properties as Record<string, unknown>).reason).toBeDefined()
+		expect(schemaProps(schema404)?.reason).toBeDefined()
 
 		/* 429 should have custom schema */
 		const schema429 = jsonSchema(spec, responses, "429")
-		expect((schema429?.properties as Record<string, unknown>).retry_after).toBeDefined()
+		expect(schemaProps(schema429)?.retry_after).toBeDefined()
 	})
 
 	it("output 2xx responses still work alongside custom error responses", async () => {
@@ -205,13 +211,13 @@ describe("OpenAPI: custom schema errors", () => {
 		/* 200 output */
 		expect(responses["200"]).toBeDefined()
 		const okSchema = jsonSchema(spec, responses, "200")
-		expect((okSchema?.properties as Record<string, unknown>).id).toBeDefined()
-		expect((okSchema?.properties as Record<string, unknown>).name).toBeDefined()
+		expect(schemaProps(okSchema)?.id).toBeDefined()
+		expect(schemaProps(okSchema)?.name).toBeDefined()
 
 		/* 404 custom error */
 		expect(responses["404"]).toBeDefined()
 		const errSchema = jsonSchema(spec, responses, "404")
-		expect((errSchema?.properties as Record<string, unknown>).reason).toBeDefined()
+		expect(schemaProps(errSchema)?.reason).toBeDefined()
 	})
 
 	it("description includes all error keys at same status", async () => {
@@ -259,16 +265,12 @@ describe("OpenAPI: regression — standard errors unchanged", () => {
 		/* 401 */
 		expect(responses["401"]).toBeDefined()
 		const schema401 = jsonSchema(spec, responses, "401")
-		expect(
-			((schema401?.properties as Record<string, { enum?: string[] }>)?.error_key).enum,
-		).toEqual(["unauthorized"])
-		expect((schema401?.properties as Record<string, unknown>).success).toEqual({ const: false })
+		expect(schemaEnum(schema401, "error_key")).toEqual(["unauthorized"])
+		expect(schemaProps(schema401)?.success).toEqual({ const: false })
 
 		/* 403 */
 		expect(responses["403"]).toBeDefined()
 		const schema403 = jsonSchema(spec, responses, "403")
-		expect(
-			((schema403?.properties as Record<string, { enum?: string[] }>)?.error_key).enum,
-		).toEqual(["forbidden"])
+		expect(schemaEnum(schema403, "error_key")).toEqual(["forbidden"])
 	})
 })

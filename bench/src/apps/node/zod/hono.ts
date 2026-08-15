@@ -5,7 +5,7 @@ import * as z from "zod"
 
 const body = z.object({ age: z.number(), name: z.string() })
 
-const app = new Hono()
+const app = new Hono<{ Variables: { startedAt: number } }>()
 
 app.get("/json", (c) => c.json({ message: "Hello, World!" }))
 
@@ -22,7 +22,7 @@ app.use("/middleware", async (c, next) => {
 	await next()
 })
 app.get("/middleware", (c) => {
-	const start = c.get("startedAt") as number
+	const start = c.get("startedAt")
 	return c.json({ elapsed: performance.now() - start })
 })
 

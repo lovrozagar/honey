@@ -16,6 +16,11 @@ type ServeOptions<TEnv> = {
 const BUFFER_BODY_MAX = 256 * 1024
 const RAW_BODY = Symbol.for("honey.rawBody")
 
+// Node's `Readable.fromWeb` wants `node:stream/web` streams; DOM/Bun brands do not overlap.
+function asNodeWebStream(stream: ReadableStream<Uint8Array>): import("node:stream/web").ReadableStream {
+	return stream as unknown as import("node:stream/web").ReadableStream
+}
+
 function incomingToRequest(req: IncomingMessage): Request {
 	return incomingToNodeRequest(req)
 }
@@ -79,7 +84,7 @@ async function responseToNode(response: Response, res: ServerResponse): Promise<
 		}
 		res.writeHead(response.status, response.plainHeaders)
 		try {
-			await pipeline(Readable.fromWeb(stream as import("node:stream/web").ReadableStream), res)
+			await pipeline(Readable.fromWeb(asNodeWebStream(stream)), res)
 		} catch {
 			if (!res.destroyed) res.destroy()
 		}
@@ -114,7 +119,7 @@ async function responseToNode(response: Response, res: ServerResponse): Promise<
 
 	res.writeHead(response.status, collectNodeHeaders(response))
 	try {
-		await pipeline(Readable.fromWeb(body as import("node:stream/web").ReadableStream), res)
+		await pipeline(Readable.fromWeb(asNodeWebStream(body)), res)
 	} catch {
 		if (!res.destroyed) res.destroy()
 	}

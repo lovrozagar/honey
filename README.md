@@ -525,6 +525,10 @@ bun run test:e2e:cf     # same matrix against local wrangler / workerd
 bun run test:e2e:all    # bun + node + deno + local cf × every e2e app
 bun run typecheck            # core src (TypeScript 7)
 bun run typecheck:consumers  # every e2e app + generated types
+bun run lint                 # oxlint
+bun run lint:fix             # oxlint --fix
+bun run fmt                  # oxfmt
+bun run fmt:check            # oxfmt --check
 ```
 
 Opt-in locally (CI `harness` job runs the first one):

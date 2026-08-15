@@ -121,7 +121,8 @@ export class NodeRequest {
 	get body(): ReadableStream<Uint8Array> | null {
 		if (!this.#hasBody) return null
 		if (this.#webBody === undefined) {
-			this.#webBody = Readable.toWeb(this.#incoming) as ReadableStream<Uint8Array>
+			// Node's web stream and the DOM/Bun ReadableStream brands do not overlap.
+			this.#webBody = Readable.toWeb(this.#incoming) as unknown as ReadableStream<Uint8Array>
 		}
 		return this.#webBody
 	}
