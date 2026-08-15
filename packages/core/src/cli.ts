@@ -160,6 +160,7 @@ async function main() {
 	await generate()
 
 	if (flags.watch) {
+		if (!resolved.app) throw new Error("watch mode requires --app or a vite honey() config")
 		const srcDir = dirname(resolve(cwd, resolved.app))
 		let debounceTimer: ReturnType<typeof setTimeout> | undefined
 

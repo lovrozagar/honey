@@ -82,7 +82,7 @@ function emitObject(ir: Extract<IRSchema, { kind: "object" }>, depth: number): s
 	const { fields, additional } = ir
 
 	if (fields.length === 0) {
-		if (additional && additional !== false) {
+		if (additional) {
 			return `Record<string, ${irToTs(additional, depth + 1)}>`
 		}
 		return "Record<string, unknown>"
@@ -98,7 +98,7 @@ function emitObject(ir: Extract<IRSchema, { kind: "object" }>, depth: number): s
 		return `${key}${opt}: ${irToTs(field.schema, depth + 1)}`
 	})
 
-	if (additional && additional !== false) {
+	if (additional) {
 		entries.push(`[k: string]: ${irToTs(additional, depth + 1)}`)
 	}
 

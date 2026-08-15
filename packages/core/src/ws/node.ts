@@ -56,8 +56,8 @@ export function nodeWebSocket(opts?: { keepalive?: KeepaliveConfig }): WSAdapter
 	const ensureWss = async (): Promise<WssInstance> => {
 		if (wss) return wss
 		if (!wssReady) {
-			wssReady = import("ws").then((mod: unknown) => {
-				const wsModule = mod as WsModule
+			wssReady = import("ws").then((mod) => {
+				const wsModule = mod as unknown as WsModule
 				wss = new wsModule.WebSocketServer({ noServer: true, perMessageDeflate: false })
 			})
 		}

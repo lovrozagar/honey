@@ -23,7 +23,7 @@ export function createTypedWebSocket(
 	/* map user handlers → wrapped listeners for proper removal */
 	const listenerMap = new WeakMap<(...args: never[]) => void, EventListener>()
 	/* buffer sends until OPEN */
-	const sendBuffer: Array<ArrayBuffer | ArrayBufferView | string> = []
+	const sendBuffer: Array<string | Uint8Array<ArrayBuffer>> = []
 	let buffering = true
 
 	ws.addEventListener("open", () => {
@@ -78,15 +78,19 @@ export function createTypedWebSocket(
 		}
 	}
 
+	function toWsData(data: ArrayBuffer | ArrayBufferView | string): string | Uint8Array<ArrayBuffer> {
+		if (typeof data === "string") return data
+		const view = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+		const copy = new Uint8Array(view.byteLength)
+		copy.set(view)
+		return copy
+	}
+
 	function send(data: ArrayBuffer | ArrayBufferView | object | string) {
-		let payload: ArrayBuffer | ArrayBufferView | string
-		if (typeof data === "string") {
-			payload = data
-		} else if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
-			payload = data
-		} else {
-			payload = JSON.stringify(data)
-		}
+		const payload =
+			typeof data === "string" || data instanceof ArrayBuffer || ArrayBuffer.isView(data)
+				? toWsData(data)
+				: JSON.stringify(data)
 
 		if (buffering) {
 			sendBuffer.push(payload)

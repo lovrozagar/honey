@@ -367,7 +367,7 @@ export function irRenderTopLevelRust(
 			l.push(`\tpub ${fieldIdent}: ${finalType},`)
 		}
 
-		if (additional && additional !== false) {
+		if (additional) {
 			const valType = irRenderUseRust(additional, {
 				circularRefs,
 				decls,

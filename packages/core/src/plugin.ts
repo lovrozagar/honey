@@ -11,7 +11,7 @@ import {
 	prepareCodegen,
 	sanitizeOpenApiSpec,
 } from "./codegen.ts";
-import type { OpenApiRouteInfo, OpenApiSanitizeOptions } from "./codegen.ts";
+import type { OpenApiRouteInfo, OpenApiSanitizeOptions, OpenApiSpecInput } from "./codegen.ts";
 import type { Honey } from "./index.ts";
 import type { ExtractedChainTypes } from "./type-extractor.ts";
 
@@ -387,7 +387,7 @@ export async function generateAndWrite(
 	const sdkHasSpecs = cg.sdk && cg.sdk.specs && cg.sdk.specs.length > 0
 	const needsApp = cg.types || cg.manifest || cg.openApi || (cg.sdk && !sdkHasSpecs) || cg.cli;
 
-	let app: unknown
+	let app: HoneyApp | undefined
 	let appPath: string | undefined
 	if (needsApp) {
 		if (!config.app) {
@@ -403,12 +403,14 @@ export async function generateAndWrite(
 
 	/* manifest */
 	if (cg.manifest) {
+		if (!app) throw new Error("Manifest generation requires a configured app")
 		const manifest = generateManifest(app);
 		writeGenJsonFile(resolve(root, cg.manifest), manifest, "honey");
 	}
 
 	/* openapi */
 	if (cg.openApi) {
+		if (!app) throw new Error("OpenAPI generation requires a configured app")
 		for (const entry of cg.openApi) {
 			let spec = await generateOpenApi(app, {
 				filterRoutes: entry.filterRoutes,
@@ -458,6 +460,7 @@ export async function generateAndWrite(
 			});
 		}
 
+		if (!app) throw new Error("Type generation requires a configured app")
 		const typesCode = generateTypes(app, {
 			baseCtxName: cg.types.baseCtxName,
 			inlineEnvType: extracted.base.envType,
@@ -475,14 +478,15 @@ export async function generateAndWrite(
 			"./codegen.ts"
 		);
 
-		let spec: Record<string, unknown>
+		let spec: OpenApiSpecInput
 		if (cg.sdk.specs && cg.sdk.specs.length > 0) {
 			const specs = cg.sdk.specs.map((s) => {
 				const abs = resolve(root, s)
-				return JSON.parse(readFileSync(abs, "utf-8"))
+				return JSON.parse(readFileSync(abs, "utf-8")) as OpenApiSpecInput
 			})
 			spec = mergeSpecs(...specs)
 		} else {
+			if (!app) throw new Error("SDK generation requires a configured app or specs")
 			const primaryOA = cg.openApi && cg.openApi.length > 0 ? cg.openApi[0] : null
 			const info = primaryOA
 				? { title: primaryOA.title, version: primaryOA.version }
@@ -546,6 +550,7 @@ export async function generateAndWrite(
 		const info = primaryOA
 			? { title: primaryOA.title, version: primaryOA.version }
 			: { title: "API", version: "1.0.0" }
+		if (!app) throw new Error("CLI generation requires a configured app")
 		const spec = await generateOpenApi(app, { info })
 
 		const { files } = generateGoCLI(spec, {
@@ -641,9 +646,12 @@ export function honey(config: HoneyVitePluginConfig) {
 			id: string,
 		): Promise<{ code: string; moduleType: string } | undefined> {
 			if (id === RESOLVED_ROUTES) {
+				if (!resolved.codegen.mergeTree && !config.app) {
+					throw new Error("Route tree virtual module requires app or mergeTree")
+				}
 				const treeSrc = resolved.codegen.mergeTree
 					? resolve(root, resolved.codegen.mergeTree)
-					: resolve(root, config.app);
+					: resolve(root, config.app ?? "");
 				const exported = await loadDefaultWithJiti(treeSrc);
 				let code: string;
 				if (isHoneyApp(exported)) {
@@ -656,6 +664,7 @@ export function honey(config: HoneyVitePluginConfig) {
 				return { code, moduleType: "js" };
 			}
 			if (id === RESOLVED_MANIFEST && resolved.codegen.manifest) {
+				if (!config.app) throw new Error("Manifest virtual module requires app")
 				const appPath = resolve(root, config.app);
 				const exported = await loadDefaultWithJiti(appPath);
 				if (isHoneyApp(exported)) {
@@ -668,6 +677,7 @@ export function honey(config: HoneyVitePluginConfig) {
 			}
 			if (id === RESOLVED_OPENAPI && resolved.codegen.openApi) {
 				const primary = resolved.codegen.openApi[0]
+				if (!config.app) throw new Error("OpenAPI virtual module requires app")
 				const appPath = resolve(root, config.app);
 				const exported = await loadDefaultWithJiti(appPath);
 				if (isHoneyApp(exported)) {

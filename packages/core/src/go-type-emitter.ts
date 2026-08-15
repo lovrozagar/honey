@@ -183,7 +183,7 @@ export function irRenderUse(ir: IRSchema, ctx: RenderUseCtx, depth = 0): string 
 			const { fields, additional } = ir
 
 			if (fields.length === 0) {
-				if (additional && additional !== false) {
+				if (additional) {
 					const valType = irRenderUse(additional, ctx, depth + 1)
 					return `map[string]${valType}`
 				}
@@ -311,7 +311,7 @@ export function irRenderTopLevel(
 	if (ir.kind === "object") {
 		const { fields, additional } = ir
 
-		if (fields.length === 0 && additional && additional !== false) {
+		if (fields.length === 0 && additional) {
 			const valType = irRenderUse(additional, {
 				circularRefs,
 				decls,
@@ -347,7 +347,7 @@ export function irRenderTopLevel(
 			l.push(`\t${fieldGoName} ${finalType} ${goTag(field.name, !field.required)}`)
 		}
 
-		if (additional && additional !== false) {
+		if (additional) {
 			const valType = irRenderUse(additional, {
 				circularRefs,
 				decls,

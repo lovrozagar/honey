@@ -44,7 +44,7 @@ function emitObjectPy(ir: Extract<IRSchema, { kind: "object" }>, depth: number):
 	const { fields, additional } = ir
 
 	if (fields.length === 0) {
-		if (additional && additional !== false) {
+		if (additional) {
 			return `dict[str, ${irToPython(additional, depth + 1)}]`
 		}
 		return "dict[str, Any]"

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
+import type { ts } from "ts-morph";
 
 export type ExtractedBaseCtx = {
 	envType: string;
@@ -55,16 +56,16 @@ export async function extractBaseCtx(options: {
 	function bridge<T>(value: unknown): T {
 		return value as T;
 	}
-	const checker: import("typescript").TypeChecker = bridge(
+	const checker: ts.TypeChecker = bridge(
 		project.getTypeChecker().compilerObject,
 	);
-	const node: import("typescript").Node = bridge(varDecl.compilerNode);
-	const tsLib: typeof import("typescript") = bridge(ts);
+	const node: ts.Node = bridge(varDecl.compilerNode);
+	const tsLib: typeof ts = bridge(ts);
 
 	function getType(
 		sym: ReturnType<typeof type.getProperty>,
-	): import("typescript").Type {
-		const s: import("typescript").Symbol = bridge(sym?.compilerSymbol);
+	): ts.Type {
+		const s: ts.Symbol = bridge(sym?.compilerSymbol);
 		return checker.getTypeOfSymbolAtLocation(s, node);
 	}
 
@@ -126,16 +127,17 @@ const HONEY_CTX_PROPS = new Set([
 
 /** Resolve an import() reference from a declaration's type annotation */
 function resolveTypeRefFromDecl(
-	decl: import("typescript").Declaration | undefined,
-	checker: import("typescript").TypeChecker,
-	ts: typeof import("typescript"),
+	decl: ts.Declaration | undefined,
+	checker: ts.TypeChecker,
+	compiler: typeof ts,
 ): string | undefined {
 	if (!decl) return undefined
-	const typeRef = (decl as { type?: import("typescript").TypeNode }).type
-	if (!typeRef || !ts.isTypeReferenceNode(typeRef)) return undefined
+	const typeRef = (decl as { type?: ts.TypeNode }).type
+	if (!typeRef || !compiler.isTypeReferenceNode(typeRef)) return undefined
+	const typeName = (typeRef as ts.TypeReferenceNode).typeName
 
-	let refSym = checker.getSymbolAtLocation(typeRef.typeName)
-	while (refSym && (refSym.flags & ts.SymbolFlags.Alias)) {
+	let refSym = checker.getSymbolAtLocation(typeName)
+	while (refSym && (refSym.flags & compiler.SymbolFlags.Alias)) {
 		refSym = checker.getAliasedSymbol(refSym)
 	}
 	if (!refSym) return undefined
@@ -152,10 +154,10 @@ function resolveTypeRefFromDecl(
 type MwPropEntry = { name: string; opt: boolean; type: string }
 
 function extractMiddlewareProps(
-	ctxType: import("typescript").Type,
-	checker: import("typescript").TypeChecker,
-	node: import("typescript").Node,
-	ts: typeof import("typescript"),
+	ctxType: ts.Type,
+	checker: ts.TypeChecker,
+	node: ts.Node,
+	compiler: typeof ts,
 ): MwPropEntry[] {
 	const allProps = ctxType.getProperties();
 	const mwProps = allProps.filter((p) => {
@@ -168,33 +170,36 @@ function extractMiddlewareProps(
 
 	return mwProps.map((p) => {
 		const t = checker.getTypeOfSymbolAtLocation(p, p.valueDeclaration ?? node);
-		const opt = (p.flags & ts.SymbolFlags.Optional) !== 0;
+		const opt = (p.flags & compiler.SymbolFlags.Optional) !== 0;
 
 		/* 1. try declaration-site TypeReference (explicit annotation on property or variable) */
 		let typeStr: string | undefined;
 		const mwDecl = p.valueDeclaration ?? p.declarations?.[0];
-		typeStr = resolveTypeRefFromDecl(mwDecl, checker, ts);
+		typeStr = resolveTypeRefFromDecl(mwDecl, checker, compiler);
 
 		/* 1b. shorthand property — trace to the underlying variable's type annotation */
-		if (!typeStr && mwDecl && ts.isShorthandPropertyAssignment(mwDecl)) {
+		if (!typeStr && mwDecl && compiler.isShorthandPropertyAssignment(mwDecl)) {
 			const varSym = checker.getShorthandAssignmentValueSymbol(mwDecl);
 			if (varSym) {
 				const varDecl = varSym.valueDeclaration ?? varSym.declarations?.[0];
-				typeStr = resolveTypeRefFromDecl(varDecl, checker, ts);
+				typeStr = resolveTypeRefFromDecl(varDecl, checker, compiler);
 
 				/* 1c. destructured binding (e.g. const { shardDb } = openShardSession(...))
 				 * — trace through the function return type to find the original type annotation */
-				if (!typeStr && varDecl && ts.isBindingElement(varDecl)) {
-					let parent: import("typescript").Node = varDecl.parent;
-					while (parent && !ts.isVariableDeclaration(parent)) parent = parent.parent;
-					if (parent && ts.isVariableDeclaration(parent) && parent.initializer) {
-						const initType = checker.getTypeAtLocation(parent.initializer);
-						const retProp = initType.getProperty(p.getName());
-						if (retProp?.valueDeclaration && ts.isShorthandPropertyAssignment(retProp.valueDeclaration)) {
-							const innerSym = checker.getShorthandAssignmentValueSymbol(retProp.valueDeclaration);
-							if (innerSym) {
-								const innerDecl = innerSym.valueDeclaration ?? innerSym.declarations?.[0];
-								typeStr = resolveTypeRefFromDecl(innerDecl, checker, ts);
+				if (!typeStr && varDecl && compiler.isBindingElement(varDecl)) {
+					let parent: ts.Node = varDecl.parent;
+					while (parent && !compiler.isVariableDeclaration(parent)) parent = parent.parent;
+					if (parent && compiler.isVariableDeclaration(parent)) {
+						const initializer = (parent as ts.VariableDeclaration).initializer
+						if (initializer) {
+							const initType = checker.getTypeAtLocation(initializer);
+							const retProp = initType.getProperty(p.getName());
+							if (retProp?.valueDeclaration && compiler.isShorthandPropertyAssignment(retProp.valueDeclaration)) {
+								const innerSym = checker.getShorthandAssignmentValueSymbol(retProp.valueDeclaration);
+								if (innerSym) {
+									const innerDecl = innerSym.valueDeclaration ?? innerSym.declarations?.[0];
+									typeStr = resolveTypeRefFromDecl(innerDecl, checker, compiler);
+								}
 							}
 						}
 					}
@@ -204,12 +209,12 @@ function extractMiddlewareProps(
 
 		/* 2. try resolved type as named import reference */
 		if (!typeStr) {
-			typeStr = serializeAsRef(t, checker, node, ts) ?? undefined;
+			typeStr = serializeAsRef(t, checker, node, compiler) ?? undefined;
 		}
 
 		/* 3. structural fallback */
 		if (!typeStr) {
-			typeStr = serialize(t, checker, node, ts);
+			typeStr = serialize(t, checker, node, compiler);
 		}
 
 		return { name: p.getName(), opt, type: typeStr };
@@ -217,12 +222,12 @@ function extractMiddlewareProps(
 }
 
 function extractMiddleware(
-	ctxType: import("typescript").Type,
-	checker: import("typescript").TypeChecker,
-	node: import("typescript").Node,
-	ts: typeof import("typescript"),
+	ctxType: ts.Type,
+	checker: ts.TypeChecker,
+	node: ts.Node,
+	compiler: typeof ts,
 ): string | null {
-	const props = extractMiddlewareProps(ctxType, checker, node, ts);
+	const props = extractMiddlewareProps(ctxType, checker, node, compiler);
 	if (props.length === 0) return null;
 	const entries = props.map((p) => `${p.name}${p.opt ? "?" : ""}: ${p.type}`);
 	return `{ ${entries.join("; ")} }`;
@@ -230,9 +235,9 @@ function extractMiddleware(
 
 /** Check if a symbol is exported from its source file */
 function isExportedFromFile(
-	sym: import("typescript").Symbol,
-	sf: import("typescript").SourceFile,
-	checker: import("typescript").TypeChecker,
+	sym: ts.Symbol,
+	sf: ts.SourceFile,
+	checker: ts.TypeChecker,
 ): boolean {
 	/* .d.ts module types are always accessible */
 	if (sf.isDeclarationFile) return true;
@@ -252,21 +257,21 @@ function isExportedFromFile(
  * - globals (Promise, Map, etc.) are skipped — handled by serialize()
  */
 function serializeAsRef(
-	type: import("typescript").Type,
-	checker: import("typescript").TypeChecker,
-	node: import("typescript").Node,
-	ts: typeof import("typescript"),
+	type: ts.Type,
+	checker: ts.TypeChecker,
+	node: ts.Node,
+	compiler: typeof ts,
 	depth = 0,
 ): string | null {
 	if (depth > 6) return null;
 
 	/* union with never members (from intersection narrowing) — simplify first */
 	if (type.isUnion()) {
-		const nonNever = (type as import("typescript").UnionType).types.filter(
-			(t) => !(t.flags & ts.TypeFlags.Never),
+		const nonNever = (type as ts.UnionType).types.filter(
+			(t) => !(t.flags & compiler.TypeFlags.Never),
 		);
 		if (nonNever.length === 1) {
-			return serializeAsRef(nonNever[0], checker, node, ts, depth);
+			return serializeAsRef(nonNever[0], checker, node, compiler, depth);
 		}
 	}
 
@@ -287,8 +292,8 @@ function serializeAsRef(
 
 	const isDts = sf.isDeclarationFile;
 	const isTypeAlias =
-		(sym.flags & ts.SymbolFlags.TypeAlias) !== 0 ||
-		decls.some((d) => ts.isTypeAliasDeclaration(d));
+		(sym.flags & compiler.SymbolFlags.TypeAlias) !== 0 ||
+		decls.some((d) => compiler.isTypeAliasDeclaration(d));
 
 	/* only reference .d.ts symbols or explicit type aliases from .ts files */
 	if (!isDts && !isTypeAlias) return null;
@@ -303,12 +308,12 @@ function serializeAsRef(
 	if (!isExportedFromFile(sym, sf, checker)) return null;
 
 	/* build type arguments if present */
-	const ref = type as import("typescript").TypeReference;
+	const ref = type as ts.TypeReference;
 	const typeArgs = ref.typeArguments ?? type.aliasTypeArguments;
 	if (typeArgs?.length) {
 		const args = typeArgs.map((arg) => {
-			const argRef = serializeAsRef(arg, checker, node, ts, depth + 1);
-			return argRef ?? serialize(arg, checker, node, ts);
+			const argRef = serializeAsRef(arg, checker, node, compiler, depth + 1);
+			return argRef ?? serialize(arg, checker, node, compiler);
 		});
 		return `import("${fileName}").${name}<${args.join(", ")}>`;
 	}
@@ -317,35 +322,35 @@ function serializeAsRef(
 }
 
 function serialize(
-	type: import("typescript").Type,
-	checker: import("typescript").TypeChecker,
-	node: import("typescript").Node,
-	ts: typeof import("typescript"),
+	type: ts.Type,
+	checker: ts.TypeChecker,
+	node: ts.Node,
+	compiler: typeof ts,
 	depth = 0,
 ): string {
 	if (depth > 8) return "unknown";
 
-	const next = (t: import("typescript").Type) =>
-		serialize(t, checker, node, ts, depth + 1);
+	const next = (t: ts.Type) =>
+		serialize(t, checker, node, compiler, depth + 1);
 
 	/* primitives */
-	if (type.flags & ts.TypeFlags.String) return "string";
-	if (type.flags & ts.TypeFlags.Number) return "number";
-	if (type.flags & ts.TypeFlags.Boolean) return "boolean";
-	if (type.flags & ts.TypeFlags.BigInt) return "bigint";
-	if (type.flags & ts.TypeFlags.ESSymbol) return "symbol";
-	if (type.flags & ts.TypeFlags.Void) return "void";
-	if (type.flags & ts.TypeFlags.Undefined) return "undefined";
-	if (type.flags & ts.TypeFlags.Null) return "null";
-	if (type.flags & ts.TypeFlags.Never) return "never";
-	if (type.flags & ts.TypeFlags.Unknown) return "unknown";
-	if (type.flags & ts.TypeFlags.Any) return "unknown";
+	if (type.flags & compiler.TypeFlags.String) return "string";
+	if (type.flags & compiler.TypeFlags.Number) return "number";
+	if (type.flags & compiler.TypeFlags.Boolean) return "boolean";
+	if (type.flags & compiler.TypeFlags.BigInt) return "bigint";
+	if (type.flags & compiler.TypeFlags.ESSymbol) return "symbol";
+	if (type.flags & compiler.TypeFlags.Void) return "void";
+	if (type.flags & compiler.TypeFlags.Undefined) return "undefined";
+	if (type.flags & compiler.TypeFlags.Null) return "null";
+	if (type.flags & compiler.TypeFlags.Never) return "never";
+	if (type.flags & compiler.TypeFlags.Unknown) return "unknown";
+	if (type.flags & compiler.TypeFlags.Any) return "unknown";
 
 	/* literals */
 	if (type.isStringLiteral())
-		return `"${(type as import("typescript").StringLiteralType).value}"`;
+		return `"${(type as ts.StringLiteralType).value}"`;
 	if (type.isNumberLiteral())
-		return `${(type as import("typescript").NumberLiteralType).value}`;
+		return `${(type as ts.NumberLiteralType).value}`;
 
 	/* union */
 	if (type.isUnion()) {
@@ -364,7 +369,7 @@ function serialize(
 	/* array */
 	if (checker.isArrayType(type)) {
 		const args = checker.getTypeArguments(
-			type as import("typescript").TypeReference,
+			type as ts.TypeReference,
 		);
 		if (args.length > 0) {
 			const el = next(args[0]);
@@ -376,7 +381,7 @@ function serialize(
 	/* tuple */
 	if (checker.isTupleType(type)) {
 		const args = checker.getTypeArguments(
-			type as import("typescript").TypeReference,
+			type as ts.TypeReference,
 		);
 		return `[${args.map(next).join(", ")}]`;
 	}
@@ -393,8 +398,8 @@ function serialize(
 			const decl = p.valueDeclaration;
 			const isRest =
 				decl !== undefined &&
-				ts.isParameter(decl) &&
-				decl.dotDotDotToken !== undefined;
+				compiler.isParameter(decl) &&
+				(decl as ts.ParameterDeclaration).dotDotDotToken !== undefined;
 			return `${isRest ? "..." : ""}${p.getName()}: ${next(pt)}`;
 		});
 		const ret = checker.getReturnTypeOfSignature(sig);
@@ -432,7 +437,7 @@ function serialize(
 			"WritableStream",
 		]);
 		if (globals.has(name)) {
-			const ref = type as import("typescript").TypeReference;
+			const ref = type as ts.TypeReference;
 			if (ref.typeArguments?.length) {
 				return `${name}<${ref.typeArguments.map(next).join(", ")}>`;
 			}
@@ -441,7 +446,7 @@ function serialize(
 
 		/* named types — prefer import() reference over structural expansion */
 		if (name && !name.startsWith("__") && name !== "Object") {
-			const ref = serializeAsRef(type, checker, node, ts, 0);
+			const ref = serializeAsRef(type, checker, node, compiler, 0);
 			if (ref) return ref;
 
 			/* fallback: typeToString for .d.ts types without clean ref */
@@ -452,8 +457,8 @@ function serialize(
 					return checker.typeToString(
 						type,
 						node,
-						ts.TypeFormatFlags.UseFullyQualifiedType |
-							ts.TypeFormatFlags.NoTruncation,
+						compiler.TypeFormatFlags.UseFullyQualifiedType |
+							compiler.TypeFormatFlags.NoTruncation,
 					);
 				}
 			}
@@ -469,23 +474,23 @@ function serialize(
 	/* object — expand to structural form */
 	const props = type.getProperties();
 	if (props.length > 50) {
-		return checker.typeToString(type, node, ts.TypeFormatFlags.NoTruncation);
+		return checker.typeToString(type, node, compiler.TypeFormatFlags.NoTruncation);
 	}
 	if (props.length > 0) {
 		const entries: string[] = [];
 		for (const p of props) {
 			const decls = p.getDeclarations();
 			if (decls?.length) {
-				const flags = ts.getCombinedModifierFlags(decls[0]);
-				if (flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected))
+				const flags = compiler.getCombinedModifierFlags(decls[0]);
+				if (flags & (compiler.ModifierFlags.Private | compiler.ModifierFlags.Protected))
 					continue;
 			}
 			const pt = checker.getTypeOfSymbolAtLocation(p, decls?.[0] ?? node);
-			const opt = (p.flags & ts.SymbolFlags.Optional) !== 0;
+			const opt = (p.flags & compiler.SymbolFlags.Optional) !== 0;
 			const ro =
 				decls?.some(
 					(d) =>
-						(ts.getCombinedModifierFlags(d) & ts.ModifierFlags.Readonly) !== 0,
+						(compiler.getCombinedModifierFlags(d) & compiler.ModifierFlags.Readonly) !== 0,
 				) ?? false;
 			entries.push(
 				`${ro ? "readonly " : ""}${p.getName()}${opt ? "?" : ""}: ${next(pt)}`,
@@ -495,7 +500,7 @@ function serialize(
 	}
 
 	/* fallback */
-	return checker.typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation);
+	return checker.typeToString(type, undefined, compiler.TypeFormatFlags.NoTruncation);
 }
 
 /**
@@ -572,25 +577,25 @@ export async function extractChainTypes(options: {
 	function bridge<T>(value: unknown): T {
 		return value as T;
 	}
-	const checker: import("typescript").TypeChecker = bridge(
+	const checker: ts.TypeChecker = bridge(
 		project.getTypeChecker().compilerObject,
 	);
-	const baseNode: import("typescript").Node = bridge(
+	const baseNode: ts.Node = bridge(
 		baseVarDecl.compilerNode,
 	);
-	const tsLib: typeof import("typescript") = bridge(ts);
+	const tsLib: typeof ts = bridge(ts);
 
 	function getCtxType(
-		tsType: import("typescript").Type,
-		locationNode?: import("typescript").Node,
-	): import("typescript").Type | null {
+		tsType: ts.Type,
+		locationNode?: ts.Node,
+	): ts.Type | null {
 		const sym = tsType.getProperty("$ctx");
 		if (!sym) return null;
 		return checker.getTypeOfSymbolAtLocation(sym, locationNode ?? sym.valueDeclaration ?? baseNode);
 	}
 
 	/* extract base ctx */
-	const baseType = bridge<import("typescript").Type>(
+	const baseType = bridge<ts.Type>(
 		baseVarDecl.getType().compilerType,
 	);
 	let envType = "Record<string, unknown>";
@@ -634,11 +639,11 @@ export async function extractChainTypes(options: {
 	/* scan for route-defining calls: <expr>.<httpMethod>(<pathLiteral>) */
 	const routeMiddleware: Record<string, string> = {};
 	const routeMiddlewareProps: Record<string, Array<{ name: string; opt: boolean; type: string }>> = {};
-	const compilerSourceFile: import("typescript").SourceFile = bridge(
+	const compilerSourceFile: ts.SourceFile = bridge(
 		sourceFile.compilerNode,
 	);
 
-	function visitNode(node: import("typescript").Node): void {
+	function visitNode(node: ts.Node): void {
 		if (
 			tsLib.isCallExpression(node) &&
 			tsLib.isPropertyAccessExpression(node.expression)
@@ -660,7 +665,7 @@ export async function extractChainTypes(options: {
 						const extraEntries: MwPropEntry[] = [];
 						const dupeNames = new Set<string>();
 						const members = ctxType.isIntersection()
-							? (ctxType as import("typescript").IntersectionType).types
+							? (ctxType as ts.IntersectionType).types
 							: [ctxType];
 						for (const member of members) {
 							const memberProps = extractMiddlewareProps(member, checker, baseNode, tsLib);

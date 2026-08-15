@@ -98,14 +98,14 @@ export type IR = {
 export function methodsOf(ns: IRNamespace): Array<[string, IROperation]> {
 	return [...ns.entries.entries()]
 		.filter((e): e is [string, Extract<IRTreeEntry, { kind: "method" }>] => e[1].kind === "method")
-		.map(([k, v]) => [k, v.op])
+		.map(([k, v]): [string, IROperation] => [k, v.op])
 		.sort(([a], [b]) => a.localeCompare(b))
 }
 
 export function namespacesOf(ns: IRNamespace): Array<[string, IRNamespace]> {
 	return [...ns.entries.entries()]
 		.filter((e): e is [string, Extract<IRTreeEntry, { kind: "namespace" }>] => e[1].kind === "namespace")
-		.map(([k, v]) => [k, v.ns])
+		.map(([k, v]): [string, IRNamespace] => [k, v.ns])
 		.sort(([a], [b]) => a.localeCompare(b))
 }
 

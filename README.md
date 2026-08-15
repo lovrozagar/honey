@@ -24,7 +24,7 @@ Requires [Bun](https://bun.sh) 1.3+.
 bun install
 bun run test            # core unit + in-process integration (default CI)
 bun run test:consumers  # e2e-app imports honey like a real app
-bun run typecheck       # core src only — not green yet on this extract
+bun run typecheck       # core src (TypeScript 7)
 ```
 
 Opt-in:

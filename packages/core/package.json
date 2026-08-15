@@ -89,6 +89,7 @@
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@total-typescript/ts-reset": "catalog:",
 		"@types/node": "catalog:",
+		"@types/ws": "catalog:",
 		"arktype": "catalog:",
 		"effect": "catalog:",
 		"ts-morph": "catalog:",

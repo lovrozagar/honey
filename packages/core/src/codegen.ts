@@ -727,7 +727,12 @@ function rewritePathsToRefs(
 		const name = slotNames.get(slot)
 		if (name)
 			lookup.set(
-				ctxKey(slot.pathKey, slot.context.method, slot.context.role, slot.context.status),
+				ctxKey(
+					slot.pathKey,
+					slot.context.method,
+					slot.context.role,
+					slot.context.role === "response" ? slot.context.status : undefined,
+				),
 				name,
 			)
 	}
@@ -1220,13 +1225,13 @@ export function generateManifest<TEnv, TCtx>(
 
 /* ---- OpenAPI generation ---- */
 
-export type OpenApiRouteInfo<TMeta = Record<string, unknown> | null> = {
+export type OpenApiRouteInfo<TMeta = unknown> = {
 	meta: TMeta
 	method: string
 	path: string
 }
 
-export async function generateOpenApi<TEnv, TCtx, TMeta = Record<string, unknown> | null>(
+export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 	app: Honey<TEnv, TCtx, unknown, TMeta, unknown, string, string>,
 	options: {
 		filterRoutes?: (route: OpenApiRouteInfo<TMeta>) => boolean
