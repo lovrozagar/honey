@@ -1,4 +1,4 @@
-import { defineErrors, honey } from "@ecomet/honey"
+import { defineErrors, honey } from "honey"
 import * as z from "zod"
 
 const app = honey()

@@ -1,4 +1,4 @@
-import { honey } from "@ecomet/honey/plugin"
+import { honey } from "honey/plugin"
 
 export default {
 	plugins: [

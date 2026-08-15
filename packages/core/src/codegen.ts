@@ -1736,7 +1736,7 @@ function toTsLiteral(v: unknown): string {
 
 export function generateRouteTree(routes: RouteConfig[]): string {
 	const lines: string[] = []
-	lines.push('import type { TreeNode, RouteHandler, RouteTree } from "@ecomet/honey/tree"')
+	lines.push('import type { TreeNode, RouteHandler, RouteTree } from "honey/tree"')
 	lines.push("")
 	lines.push("const E = Object.create(null) as Record<string, TreeNode>")
 	lines.push("")
@@ -2119,7 +2119,7 @@ export function generateTypes<TEnv, TCtx>(
 
 	const importParts = ["HoneyContext"]
 	if (hasErrors) importParts.push("HoneyError")
-	lines.push(`import type { ${importParts.join(", ")} } from "@ecomet/honey"`)
+	lines.push(`import type { ${importParts.join(", ")} } from "honey"`)
 	lines.push("")
 
 	const envType = options.inlineEnvType ?? "Record<string, unknown>"
@@ -2158,7 +2158,7 @@ export function generateTypes<TEnv, TCtx>(
 		const sorted = [...selectors].sort()
 		lines.push(`export type RouteSelector = ${sorted.map((s) => JSON.stringify(s)).join(" | ")}`)
 		lines.push("")
-		lines.push('declare module "@ecomet/honey" {')
+		lines.push('declare module "honey" {')
 		lines.push("\tinterface HoneyCodegen {")
 		lines.push(`\t\trouteSelector: RouteSelector`)
 		lines.push("\t}")

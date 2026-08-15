@@ -10,7 +10,7 @@
 		"test:prod": "bun run dev:kill && TEST_MODE=prod playwright test"
 	},
 	"dependencies": {
-		"@ecomet/honey": "workspace:*",
+		"honey": "workspace:*",
 		"@honey/e2e-app": "workspace:*",
 		"ws": "catalog:"
 	},

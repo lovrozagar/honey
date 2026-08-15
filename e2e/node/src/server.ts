@@ -1,6 +1,6 @@
 import { createApp } from "@honey/e2e-app"
-import { serve } from "@ecomet/honey/node"
-import { nodeWebSocket } from "@ecomet/honey/ws/node"
+import { serve } from "honey/node"
+import { nodeWebSocket } from "honey/ws/node"
 
 const app = createApp(nodeWebSocket())
 const port = Number(process.env.PORT ?? 4101)

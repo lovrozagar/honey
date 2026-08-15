@@ -112,7 +112,7 @@ Where `TCtx` is the RouteBuilder's accumulated context at handler registration t
 
 ```typescript
 /* base.ts */
-import { honey, type InferContext } from "@ecomet/honey"
+import { honey, type InferContext } from "honey"
 export const base = honey<Env>().use(authMiddleware).use(dbMiddleware)
 export type AppCtx = InferContext<typeof base>
 

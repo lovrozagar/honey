@@ -74,7 +74,7 @@ const adapters: Record<HoneyBuildConfig["target"], BuildAdapterDef> = {
 	node: {
 		entry(config) {
 			return [
-				'import { serve } from "@ecomet/honey/node"',
+				'import { serve } from "honey/node"',
 				importApp(config.entry, config.export),
 				"",
 				`const port = Number(process.env.PORT ?? ${config.port})`,

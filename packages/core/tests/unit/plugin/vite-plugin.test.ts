@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { HoneyVitePluginConfig } from "../../../src/plugin.ts"
 import { honey as honeyVitePlugin, resolveHoneyConfig } from "../../../src/plugin.ts"
 
-/* temp dir inside core so @ecomet/honey resolves via workspace */
+/* temp dir inside core so honey resolves via workspace */
 const TEMP_ROOT = resolve(import.meta.dirname, "../../../.tmp-vite-test")
 
 function writeTempApp(dir: string, opts?: { named?: boolean }): string {
@@ -12,7 +12,7 @@ function writeTempApp(dir: string, opts?: { named?: boolean }): string {
 	mkdirSync(srcDir, { recursive: true })
 	const exportStyle = opts?.named ? "export const app = honey()" : "export default honey()"
 	const code = [
-		'import { honey } from "@ecomet/honey"',
+		'import { honey } from "honey"',
 		'import * as z from "zod"',
 		"",
 		exportStyle,

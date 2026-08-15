@@ -324,7 +324,7 @@ describe("generateTypes emits HoneyCodegen module augmentation", () => {
 			appExport: "app",
 			appImport: "./app",
 		})
-		expect(code).toContain('declare module "@ecomet/honey"')
+		expect(code).toContain('declare module "honey"')
 		expect(code).toContain("interface HoneyCodegen")
 		expect(code).toContain("routeSelector:")
 		expect(code).toContain('"GET /v1/users"')

@@ -1,5 +1,5 @@
-import { createMiddleware, defineErrors, honey } from "@ecomet/honey"
-import { readableStream } from "@ecomet/honey/input"
+import { createMiddleware, defineErrors, honey } from "honey"
+import { readableStream } from "honey/input"
 import * as z from "zod"
 
 /**

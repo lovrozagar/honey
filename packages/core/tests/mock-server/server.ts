@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { honey } from "@ecomet/honey"
+import { honey } from "honey"
 import { nodeWebSocket } from "../../src/ws/node.ts"
 
 type User = {

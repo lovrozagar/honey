@@ -89,7 +89,7 @@ const gateway = honey<{}>().routeTree(merged)
 
 ```typescript
 /* honey.routes.gen.ts */
-import type { TreeNode, RouteHandler, RouteTree } from "@ecomet/honey/tree"
+import type { TreeNode, RouteHandler, RouteTree } from "honey/tree"
 
 const E = Object.create(null) as Record<string, TreeNode>
 

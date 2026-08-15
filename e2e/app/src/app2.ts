@@ -8,7 +8,7 @@ import type {
 	InferRouteOutput,
 	InferRoutePaths,
 	InferRoutes,
-} from "@ecomet/honey"
+} from "honey"
 import * as z from "zod"
 import { base } from "./context"
 import { Service } from "./service"

@@ -14,7 +14,7 @@
 	},
 	"dependencies": {
 		"@hono/zod-validator": "0.8.0",
-		"@ecomet/honey": "workspace:*",
+		"honey": "workspace:*",
 		"elysia": "1.4.29",
 		"hono": "catalog:",
 		"zod": "catalog:"

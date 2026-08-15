@@ -60,7 +60,7 @@ class OrgService {
 ```ts
 /* src/honey.gen.d.ts — auto-generated, do not edit */
 
-import type { HoneyContext } from "@ecomet/honey"
+import type { HoneyContext } from "honey"
 
 /* ---- env ---- */
 export type Env = { DB: D1Database; SECRET: string }
@@ -116,12 +116,12 @@ export type OrgsOrgIdDeleteCtx = Routes["/orgs/:orgId"]["delete"]["ctx"]
 
 ### Package structure
 
-Lives in core as entry points — same pattern as `@ecomet/honey/cors`, `@ecomet/honey/codegen`:
+Lives in core as entry points — same pattern as `honey/cors`, `honey/codegen`:
 
 ```
-src/cli.ts           → @ecomet/honey/cli (bin entry)
-src/codegen.ts       → @ecomet/honey/codegen (extend with type emitter)
-src/plugin.ts        → @ecomet/honey/plugin (extend vite plugin)
+src/cli.ts           → honey/cli (bin entry)
+src/codegen.ts       → honey/codegen (extend with type emitter)
+src/plugin.ts        → honey/plugin (extend vite plugin)
 src/type-emitter.ts  → internal (schema → type string walker)
 ```
 
@@ -141,7 +141,7 @@ Options:
 Multiple apps via config file (`honey.config.ts`):
 
 ```ts
-import { defineConfig } from "@ecomet/honey/config"
+import { defineConfig } from "honey/config"
 
 export default defineConfig({
 	apps: [
@@ -199,7 +199,7 @@ At runtime, `handler.mw` has the middleware functions but not their type signatu
 
 ```ts
 /* generated */
-import type { InferCtx } from "@ecomet/honey"
+import type { InferCtx } from "honey"
 import type { base } from "./context"
 
 export type BaseCtx = InferCtx<typeof base>
@@ -369,7 +369,7 @@ function aliasName(path: string, method: string): string {
 
 ### Phase 5: Config file support
 
-1. Add `defineConfig()` export from `@ecomet/honey/config`
+1. Add `defineConfig()` export from `honey/config`
 2. CLI reads `honey.config.ts` if no --entry flag
 3. Support multiple apps in config
 4. Test: multi-app config generates separate type files

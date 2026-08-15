@@ -1,4 +1,4 @@
-import { createClient, isClientError, parseSSEStream } from "@ecomet/honey/client"
+import { createClient, isClientError, parseSSEStream } from "honey/client"
 import type { app } from "./app"
 
 /* ================================================================

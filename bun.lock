@@ -9,9 +9,9 @@
       "name": "@honey/bench",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
         "@hono/zod-validator": "0.8.0",
         "elysia": "1.4.29",
+        "honey": "workspace:*",
         "hono": "catalog:",
         "zod": "catalog:",
       },
@@ -24,7 +24,7 @@
       "name": "@honey/e2e-app",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
+        "honey": "workspace:*",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -36,8 +36,8 @@
       "name": "@honey/e2e-bun",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
         "@honey/e2e-app": "workspace:*",
+        "honey": "workspace:*",
       },
       "devDependencies": {
         "@playwright/test": "catalog:",
@@ -49,8 +49,8 @@
       "name": "@honey/e2e-cf-workers",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
         "@honey/e2e-app": "workspace:*",
+        "honey": "workspace:*",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
@@ -63,8 +63,8 @@
       "name": "@honey/e2e-deno",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
         "@honey/e2e-app": "workspace:*",
+        "honey": "workspace:*",
       },
       "devDependencies": {
         "@playwright/test": "catalog:",
@@ -75,8 +75,8 @@
       "name": "@honey/e2e-node",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
         "@honey/e2e-app": "workspace:*",
+        "honey": "workspace:*",
         "ws": "catalog:",
       },
       "devDependencies": {
@@ -90,7 +90,7 @@
       "name": "@honey/cf",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
+        "honey": "workspace:*",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
@@ -102,7 +102,7 @@
       "name": "@honey/demo",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
+        "honey": "workspace:*",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -114,7 +114,7 @@
       "name": "@honey/demo-1",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
+        "honey": "workspace:*",
       },
       "devDependencies": {
         "typescript": "catalog:",
@@ -124,7 +124,7 @@
       "name": "@honey/demo-2",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
+        "honey": "workspace:*",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -135,7 +135,7 @@
       "name": "@honey/demo-3",
       "version": "0.0.1",
       "dependencies": {
-        "@ecomet/honey": "workspace:*",
+        "honey": "workspace:*",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -143,7 +143,7 @@
       },
     },
     "packages/core": {
-      "name": "@ecomet/honey",
+      "name": "honey",
       "version": "0.0.1",
       "bin": {
         "honey": "./src/cli.ts",
@@ -217,8 +217,6 @@
     "@cloudflare/workers-types": ["@cloudflare/workers-types@5.20260710.1", "", {}, "sha512-4ooaY2Pb5XGwDn8Fzm6jnTAJkIX0R5LBvL9euQpp2T58sQItlAQd9yivAlkwGhpY5cM1u81/9HaXwKAjXwtyzA=="],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
-
-    "@ecomet/honey": ["@ecomet/honey@workspace:packages/core"],
 
     "@emnapi/core": ["@emnapi/core@1.11.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ=="],
 
@@ -609,6 +607,8 @@
     "has-symbols": ["has-symbols@1.1.0", "", {}, "sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ=="],
 
     "hasown": ["hasown@2.0.4", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A=="],
+
+    "honey": ["honey@workspace:packages/core"],
 
     "hono": ["hono@4.12.29", "", {}, "sha512-1hNiRjawYrLq/4m3DQQjPGFg0VZkk4RjQJDff/excI6Dm9BiL75qxGrd7/c6YOxPdq6AscP3LiXhQ6fKFC1Waw=="],
 

@@ -1,10 +1,10 @@
-import type { InferCtx, MiddlewareFn, WSAdapter } from "@ecomet/honey"
-import { defineErrors, HoneyError, honey } from "@ecomet/honey"
-import { generateManifest, generateOpenApi } from "@ecomet/honey/codegen"
-import { cors } from "@ecomet/honey/cors"
-import { createLogger, logger } from "@ecomet/honey/logger"
-import { generateFromApp } from "@ecomet/honey/plugin"
-import { requestId } from "@ecomet/honey/request-id"
+import type { InferCtx, MiddlewareFn, WSAdapter } from "honey"
+import { defineErrors, HoneyError, honey } from "honey"
+import { generateManifest, generateOpenApi } from "honey/codegen"
+import { cors } from "honey/cors"
+import { createLogger, logger } from "honey/logger"
+import { generateFromApp } from "honey/plugin"
+import { requestId } from "honey/request-id"
 import * as z from "zod"
 
 /* ---- types ---- */

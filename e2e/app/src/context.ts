@@ -1,4 +1,4 @@
-import { honey, type InferCtx, type MiddlewareFn } from "@ecomet/honey"
+import { honey, type InferCtx, type MiddlewareFn } from "honey"
 
 type Env = Record<string, unknown>
 

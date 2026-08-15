@@ -1,4 +1,4 @@
-import { createMiddleware, defineErrors, honey } from "@ecomet/honey"
+import { createMiddleware, defineErrors, honey } from "honey"
 import * as z from "zod"
 import { OrgService } from "./services"
 

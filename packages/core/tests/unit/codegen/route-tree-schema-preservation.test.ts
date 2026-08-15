@@ -47,12 +47,12 @@ function resolveRef(
 	return (openApiSpec.components?.schemas?.[name] ?? refOrSchema) as Record<string, unknown>
 }
 
-/* esbuild strips types and rewrites the @ecomet/honey/tree import to an absolute path
+/* esbuild strips types and rewrites the honey/tree import to an absolute path
  * so the emitted module can be evaluated at test time without tsc. */
 async function evalTreeModule(code: string): Promise<{ routeTree: RouteTree }> {
 	const { transform } = await import("esbuild")
 	const rewritten = code.replace(
-		/from\s+"@repo\/honey\/tree"/g,
+		/from\s+"honey\/tree"/g,
 		`from ${JSON.stringify(new URL("../../../src/tree.ts", import.meta.url).pathname)}`,
 	)
 	const { code: js } = await transform(rewritten, {

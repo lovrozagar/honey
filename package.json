@@ -33,8 +33,8 @@
 		}
 	},
 	"scripts": {
-		"test": "bun run --filter @ecomet/honey test",
-		"test:watch": "bun run --filter @ecomet/honey test:watch",
-		"typecheck": "bun run --filter @ecomet/honey type:check"
+		"test": "bun run --filter honey test",
+		"test:watch": "bun run --filter honey test:watch",
+		"typecheck": "bun run --filter honey type:check"
 	}
 }

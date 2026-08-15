@@ -7,7 +7,7 @@
 		".": "./src/app.ts"
 	},
 	"dependencies": {
-		"@ecomet/honey": "workspace:*",
+		"honey": "workspace:*",
 		"zod": "catalog:"
 	},
 	"devDependencies": {

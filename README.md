@@ -2,12 +2,12 @@
 
 Type-safe API framework on Web Standards. Builder-pattern DX, precompiled radix-tree router, OpenAPI and multi-language SDK codegen.
 
-This repo is the source of the `@ecomet/honey` npm package.
+This repo is the source of the `honey` npm package.
 
 ## Layout
 
 ```
-packages/core     published package (@ecomet/honey)
+packages/core     published package (honey)
 examples/*        consumer apps used while iterating
 e2e/app           shared e2e app
 e2e/*             runtime harnesses (bun, node, deno, cf-workers)
@@ -33,10 +33,10 @@ bun run typecheck
 
 ## Package
 
-Consumers import `@ecomet/honey` and its subpath exports (`/client`, `/codegen`, `/plugin`, `/node`, `/ws/bun`, …). The `honey` CLI lives on the same package.
+Consumers import `honey` and its subpath exports (`/client`, `/codegen`, `/plugin`, `/node`, `/ws/bun`, …). The `honey` CLI lives on the same package.
 
 ```ts
-import { honey, defineErrors } from "@ecomet/honey"
+import { honey, defineErrors } from "honey"
 ```
 
 ## License

@@ -36,7 +36,7 @@ All new features MUST be separate exports for tree-shaking. Nothing goes in `ind
 **API:**
 
 ```ts
-import { etag } from "@ecomet/honey/etag"
+import { etag } from "honey/etag"
 
 app.use(etag())
 app.use(etag({ weak: true })) /* default: weak validator */
@@ -78,7 +78,7 @@ Each entry: `name;dur=milliseconds` optionally with `;desc="description"`.
 **API:**
 
 ```ts
-import { serverTiming } from "@ecomet/honey/server-timing"
+import { serverTiming } from "honey/server-timing"
 
 app.use(serverTiming())
 
@@ -207,7 +207,7 @@ ctx.res.generate(
 **API:**
 
 ```ts
-import { accepts } from "@ecomet/honey/accepts"
+import { accepts } from "honey/accepts"
 
 app.get("/data").handler((ctx) => {
 	const type = accepts(ctx.req, ["application/json", "text/csv", "text/html"])

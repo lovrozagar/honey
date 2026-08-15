@@ -1,4 +1,4 @@
-import { createMiddleware, honey } from "@ecomet/honey"
+import { createMiddleware, honey } from "honey"
 import * as z from "zod"
 
 const withTiming = createMiddleware(async ({ next }) => {

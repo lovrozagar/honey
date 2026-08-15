@@ -8,7 +8,7 @@
 		"test:prod": "TEST_MODE=prod playwright test"
 	},
 	"dependencies": {
-		"@ecomet/honey": "workspace:*",
+		"honey": "workspace:*",
 		"@honey/e2e-app": "workspace:*"
 	},
 	"devDependencies": {

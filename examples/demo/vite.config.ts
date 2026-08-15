@@ -1,4 +1,4 @@
-import { honey } from "@ecomet/honey/plugin"
+import { honey } from "honey/plugin"
 import { defineConfig } from "vite"
 
 export default defineConfig({

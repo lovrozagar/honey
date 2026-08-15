@@ -216,7 +216,7 @@ Admin panels, webhook endpoints, internal APIs need IP filtering. Without it, de
 ### Design
 
 ```typescript
-import { ipRestrict } from "@ecomet/honey/ip-restrict"
+import { ipRestrict } from "honey/ip-restrict"
 
 app.use(
 	ipRestrict({

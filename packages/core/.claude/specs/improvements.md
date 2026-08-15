@@ -42,7 +42,7 @@ const orgs = await client["/orgs"].get({ search: { limit: 10, offset: 0 } })
 - Error types narrowed per route (see #1)
 - Params extracted from path string, interpolated into URL
 - Standard `fetch` under the hood, configurable headers/interceptors
-- Export from `@ecomet/honey/client`
+- Export from `honey/client`
 
 ## 3. Consolidate RouteBuilder Generics
 

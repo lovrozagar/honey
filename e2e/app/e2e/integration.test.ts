@@ -302,8 +302,8 @@ test.describe("generated route tree", () => {
 		const res = await request.get("/api/generated-tree")
 		expect(res.status()).toBe(200)
 		const code = await res.text()
-		/* generated code should import from @ecomet/honey/tree */
-		expect(code).toContain('import type { TreeNode, RouteHandler } from "@ecomet/honey/tree"')
+		/* generated code should import from honey/tree */
+		expect(code).toContain('import type { TreeNode, RouteHandler } from "honey/tree"')
 		/* should export a tree constant */
 		expect(code).toContain("export const tree: TreeNode")
 		/* should contain handler definitions */

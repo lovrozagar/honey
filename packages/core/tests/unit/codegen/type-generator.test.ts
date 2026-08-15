@@ -96,7 +96,7 @@ describe("generateTypes", () => {
 			.get("/health")
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 		const result = generateTypes(app, {})
-		expect(result).toContain('import type { HoneyContext } from "@ecomet/honey"')
+		expect(result).toContain('import type { HoneyContext } from "honey"')
 		expect(result).toContain("export type BaseCtx = HoneyContext<Record<string, unknown>>")
 		expect(result).not.toContain("InferCtx")
 	})
@@ -120,7 +120,7 @@ describe("generateTypes", () => {
 			inlineEnvType: "{ DB: D1Database; KV: KVNamespace }",
 			inlineMiddlewareType: "{ user: { id: string; role: string } }",
 		})
-		expect(result).toContain('import type { HoneyContext } from "@ecomet/honey"')
+		expect(result).toContain('import type { HoneyContext } from "honey"')
 		expect(result).toContain(
 			"export type BaseCtx = HoneyContext<{ DB: D1Database; KV: KVNamespace }> & { user: { id: string; role: string } }",
 		)

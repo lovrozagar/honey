@@ -1,5 +1,5 @@
 import { createApp } from "@honey/e2e-app"
-import { bunWebSocket } from "@ecomet/honey/ws/bun"
+import { bunWebSocket } from "honey/ws/bun"
 
 const bunWs = bunWebSocket()
 const app = createApp(bunWs)
