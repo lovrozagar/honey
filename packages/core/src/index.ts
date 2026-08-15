@@ -279,16 +279,22 @@ type FetchCtx<TEnv> = {
 
 function requestWithHeaders(req: Request, headers: Headers): Request {
 	return new Proxy(req, {
-		get(target, prop, receiver) {
+		get(target, prop) {
 			if (prop === "headers") return headers
-			const value = Reflect.get(target, prop, receiver)
+			const value = Reflect.get(target, prop, target)
 			return typeof value === "function" ? (value as (...args: never[]) => unknown).bind(target) : value
 		},
 	})
 }
 
 function ctxRequest(fc: FetchCtx<unknown>): Request {
-	return fc.headerSnap ? requestWithHeaders(fc.request, fc.headerSnap) : fc.request
+	if (!fc.headerSnap) return fc.request
+	try {
+		void fc.request.headers.get("upgrade")
+		return fc.request
+	} catch {
+		return requestWithHeaders(fc.request, fc.headerSnap)
+	}
 }
 
 function defaultErrorFormatter(
