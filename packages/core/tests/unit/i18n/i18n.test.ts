@@ -1,11 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import type { ExtractICUVars } from "../../../src/i18n.ts"
-import {
-	interpolate,
-	resolveFieldName,
-	resolveTranslation,
-	TranslationRegistry,
-} from "../../../src/i18n.ts"
+import { interpolate, resolveFieldName, resolveTranslation, TranslationRegistry } from "../../../src/i18n.ts"
 
 describe("ExtractICUVars — type-level", () => {
 	it("{field} is required → { field: string | number }", () => {
@@ -130,9 +125,7 @@ describe("interpolate", () => {
 	})
 
 	it("unicode in template text", () => {
-		expect(interpolate("Fehler: {msg} \u{1F525}", { msg: "kaputt" })).toBe(
-			"Fehler: kaputt \u{1F525}",
-		)
+		expect(interpolate("Fehler: {msg} \u{1F525}", { msg: "kaputt" })).toBe("Fehler: kaputt \u{1F525}")
 	})
 
 	it("var at very start of template", () => {
@@ -320,9 +313,7 @@ describe("resolveFieldName", () => {
 		const registry = new TranslationRegistry({
 			en: { "json.address.billing.zip": "Billing ZIP Code" },
 		})
-		expect(await resolveFieldName(registry, "en", "json.address.billing.zip")).toBe(
-			"Billing ZIP Code",
-		)
+		expect(await resolveFieldName(registry, "en", "json.address.billing.zip")).toBe("Billing ZIP Code")
 	})
 
 	it("unknown locale → raw field path", async () => {

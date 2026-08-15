@@ -39,14 +39,20 @@ export function resolveInvalidationTargets(
 ): string[] {
 	const resolved: string[] = []
 	for (const target of targets) {
-		if (!params || !target.includes(":")) { resolved.push(target); continue }
+		if (!params || !target.includes(":")) {
+			resolved.push(target)
+			continue
+		}
 		const spaceIdx = target.indexOf(" ")
 		const targetMethod = target.slice(0, spaceIdx)
 		const targetPath = target.slice(spaceIdx + 1)
 		let hasUnresolved = false
 		const replaced = targetPath.replace(/:(\w+)/g, (match, key: string) => {
 			const val = params[key]
-			if (val === undefined) { hasUnresolved = true; return match }
+			if (val === undefined) {
+				hasUnresolved = true
+				return match
+			}
 			return encodeURIComponent(val)
 		})
 		if (hasUnresolved) continue
@@ -64,9 +70,7 @@ export function pathMatchesPattern(concretePath: string, pattern: string): boole
 	if (!re) {
 		/* split on :param placeholders, escape each literal segment's metachars, rejoin with [^/]+ */
 		const parts = pattern.split(/:[^/]+/g)
-		const escaped = parts
-			.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-			.join("[^/]+")
+		const escaped = parts.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^/]+")
 		re = new RegExp(`^${escaped}$`)
 		patternRegexCache.set(pattern, re)
 	}
@@ -75,12 +79,12 @@ export function pathMatchesPattern(concretePath: string, pattern: string): boole
 
 /* two-tier stale lookup: exact concrete match, then pattern fallback; sweeps expired entries in one pass */
 export function lookupStale(
-	staleMap: Map<string, { by: string[], seq: number, until: number }>,
+	staleMap: Map<string, { by: string[]; seq: number; until: number }>,
 	concreteSelector: string,
 	concretePath: string,
 	method: string,
 	now: number,
-): { by: string[], isStale: boolean } {
+): { by: string[]; isStale: boolean } {
 	const allBy: string[] = []
 	const expired: string[] = []
 
@@ -89,7 +93,10 @@ export function lookupStale(
 	else if (exact) expired.push(concreteSelector)
 
 	for (const [key, entry] of staleMap) {
-		if (entry.until <= now) { expired.push(key); continue }
+		if (entry.until <= now) {
+			expired.push(key)
+			continue
+		}
 		if (!key.includes(":")) continue
 		const spaceIdx = key.indexOf(" ")
 		const keyMethod = key.slice(0, spaceIdx)
@@ -111,9 +118,7 @@ export function createSDK<T = Record<string, Record<string, (...args: unknown[])
 	const http = new HTTPClient(config)
 	const staleTime = config.invalidation?.staleTime ?? 0
 	const hasInvalidation = staleTime > 0
-	const staleUntil = hasInvalidation
-		? new Map<string, { by: string[], seq: number, until: number }>()
-		: null
+	const staleUntil = hasInvalidation ? new Map<string, { by: string[]; seq: number; until: number }>() : null
 
 	let invalidationSeq = 0
 
@@ -156,14 +161,16 @@ export function createSDK<T = Record<string, Record<string, (...args: unknown[])
 					requestMeta = { invalidatedBy: by, isStale, selector: concreteSelector, seqSnapshot: invalidationSeq }
 				}
 
-				const result = config.throwOnError === true
-					? await http.request(method, path, opts, requestMeta)
-					: await http.requestSafe(method, path, opts, requestMeta)
+				const result =
+					config.throwOnError === true
+						? await http.request(method, path, opts, requestMeta)
+						: await http.requestSafe(method, path, opts, requestMeta)
 
 				if (staleUntil) {
-					const isSuccess = config.throwOnError === true
-						? true
-						: ((result as { status: number }).status >= 200 && (result as { status: number }).status < 300)
+					const isSuccess =
+						config.throwOnError === true
+							? true
+							: (result as { status: number }).status >= 200 && (result as { status: number }).status < 300
 
 					if (isSuccess) {
 						if (entry.invalidate && entry.invalidate.length > 0) {

@@ -128,16 +128,7 @@ describe("compileChain", () => {
 	})
 
 	describe("reserved keys", () => {
-		const reservedKeys = [
-			"background",
-			"cookies",
-			"env",
-			"headers",
-			"params",
-			"req",
-			"res",
-			"search",
-		]
+		const reservedKeys = ["background", "cookies", "env", "headers", "params", "req", "res", "search"]
 
 		for (const key of reservedKeys) {
 			it(`"${key}" is NOT merged into context`, async () => {
@@ -215,9 +206,7 @@ describe("executeChain", () => {
 			await next()
 			return null as unknown as Response
 		}
-		await expect(executeChain([mw], {}, () => ok())).rejects.toThrow(
-			"middleware must return a Response",
-		)
+		await expect(executeChain([mw], {}, () => ok())).rejects.toThrow("middleware must return a Response")
 	})
 
 	it("reserved keys are NOT merged in general path", async () => {

@@ -64,16 +64,16 @@ describe("Honey.manifest()", () => {
 		app.get("/a").handler((ctx) => ctx.res.text("ok", "ok"))
 		app.manifest()
 
-		const first = (await (
-			await app.fetch(new Request("http://x/manifest.json"), {})
-		).json()) as { routes: Array<{ path: string }> }
+		const first = (await (await app.fetch(new Request("http://x/manifest.json"), {})).json()) as {
+			routes: Array<{ path: string }>
+		}
 		expect(first.routes.some((r) => r.path === "/a")).toBe(true)
 		expect(first.routes.some((r) => r.path === "/b")).toBe(false)
 
 		app.get("/b").handler((ctx) => ctx.res.text("ok", "ok"))
-		const second = (await (
-			await app.fetch(new Request("http://x/manifest.json"), {})
-		).json()) as { routes: Array<{ path: string }> }
+		const second = (await (await app.fetch(new Request("http://x/manifest.json"), {})).json()) as {
+			routes: Array<{ path: string }>
+		}
 		expect(second.routes.some((r) => r.path === "/a")).toBe(true)
 		expect(second.routes.some((r) => r.path === "/b")).toBe(true)
 	})

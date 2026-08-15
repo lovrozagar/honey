@@ -43,9 +43,7 @@ type ErrorFactoryResult<TMap extends Record<string, ErrorDef>, TTranslations ext
 export function defineErrors<
 	TMap extends Record<string, ErrorDef>,
 	TTranslations extends Record<string, string> = Record<string, string>,
->(
-	map: TMap,
-): ErrorFactoryResult<TMap, TTranslations> {
+>(map: TMap): ErrorFactoryResult<TMap, TTranslations> {
 	const result = Object.create(null) as Record<string, unknown>
 	const meta = Object.create(null) as Record<string, ErrorMetaEntry>
 

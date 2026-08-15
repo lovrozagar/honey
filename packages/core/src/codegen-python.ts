@@ -53,7 +53,15 @@ interface ParamInfo {
 }
 
 const PYTHON_FUTURE = "from __future__ import annotations"
-const STATIC_FILE_NAMES = ["_runtime.py", "_errors.py", "_invalidation.py", "_sse.py", "_ws.py", "_transport.py", "_realtime.py"] as const
+const STATIC_FILE_NAMES = [
+	"_runtime.py",
+	"_errors.py",
+	"_invalidation.py",
+	"_sse.py",
+	"_ws.py",
+	"_transport.py",
+	"_realtime.py",
+] as const
 const RUNTIME_TEMPLATE_CACHE = new Map<string, string>()
 const WS_EXTENSION = "x-websocket"
 const REALTIME_EXTENSION = "x-realtime"
@@ -100,10 +108,7 @@ function resolveSchema(
 	return cur as Record<string, unknown> | undefined
 }
 
-function getSuccessType(
-	spec: Record<string, unknown>,
-	operation: Record<string, unknown>,
-): string {
+function getSuccessType(spec: Record<string, unknown>, operation: Record<string, unknown>): string {
 	const responses = operation.responses as Record<string, Record<string, unknown>> | undefined
 	if (!responses) return "None"
 	const successCodes = ["200", "201", "202", "204"]
@@ -193,7 +198,12 @@ function collectOperations(spec: Record<string, unknown>): OperationInfo[] {
 				isWS: !isRealtime && operation[WS_EXTENSION] === true,
 				method: httpMethod.toUpperCase(),
 				operationId,
-				parameters: rawParams as Array<{ in: string; name: string; required: boolean; schema: Record<string, unknown> }>,
+				parameters: rawParams as Array<{
+					in: string
+					name: string
+					required: boolean
+					schema: Record<string, unknown>
+				}>,
 				path,
 				pathParams,
 				queryParams,
@@ -207,10 +217,12 @@ function collectOperations(spec: Record<string, unknown>): OperationInfo[] {
 }
 
 function nestedClassName(path: string[]): string {
-	const pascal = path.map((seg) => {
-		const safe = pyIdent(seg)
-		return safe.charAt(0).toUpperCase() + safe.slice(1)
-	}).join("")
+	const pascal = path
+		.map((seg) => {
+			const safe = pyIdent(seg)
+			return safe.charAt(0).toUpperCase() + safe.slice(1)
+		})
+		.join("")
 	return `_${pascal}Resource`
 }
 
@@ -392,10 +404,7 @@ function buildUrlLine(op: OperationInfo, isTopLevel: boolean): string {
 
 function buildResponseLines(throwOnError: boolean): string[] {
 	if (throwOnError) {
-		return [
-			`        _raise_for_status(_response)`,
-			`        return _parse_body(_response)`,
-		]
+		return [`        _raise_for_status(_response)`, `        return _parse_body(_response)`]
 	}
 	return [
 		`        _body = _parse_body(_response)`,
@@ -461,7 +470,9 @@ function buildAsyncMethodBody(op: OperationInfo, throwOnError: boolean, isTopLev
 	} else if (op.isWS) {
 		lines.push(`        _headers = _build_headers(${configRef}, extra=None)`)
 	} else if (op.bodyIsStream) {
-		lines.push(`        _headers = _build_headers(${configRef}, extra={"Content-Type": "application/octet-stream", **(headers or {})})`)
+		lines.push(
+			`        _headers = _build_headers(${configRef}, extra={"Content-Type": "application/octet-stream", **(headers or {})})`,
+		)
 	} else {
 		lines.push(`        _headers = _build_headers(${configRef}, extra=headers)`)
 	}
@@ -585,7 +596,8 @@ function buildSyncMethodBody(op: OperationInfo, throwOnError: boolean, isTopLeve
 
 function buildPyTypes(spec: Record<string, unknown>): string {
 	const schemas = (spec.components as Record<string, unknown> | undefined)?.schemas as
-		Record<string, Record<string, unknown>> | undefined
+		| Record<string, Record<string, unknown>>
+		| undefined
 
 	const body: string[] = []
 	const allNames: string[] = []
@@ -656,13 +668,13 @@ function buildPyClient(
 	const { opsByOpId, topLevel, tree } = collectSDKMethods(spec)
 
 	const schemas = (spec.components as Record<string, unknown> | undefined)?.schemas as
-		Record<string, Record<string, unknown>> | undefined
+		| Record<string, Record<string, unknown>>
+		| undefined
 	const schemaNames = schemas ? Object.keys(schemas) : []
 
 	const body: string[] = []
 
-	const invEntries = Object.entries(serviceMap)
-		.filter(([, v]) => v.invalidate && v.invalidate.length > 0)
+	const invEntries = Object.entries(serviceMap).filter(([, v]) => v.invalidate && v.invalidate.length > 0)
 
 	body.push("_INVALIDATION_MAP: dict[str, dict[str, Any]] = {")
 	for (const [opId, entry] of invEntries) {
@@ -779,7 +791,7 @@ function buildPyClient(
 	}
 	body.push("")
 	body.push("    def is_stale(self, method: str, path: str) -> bool:")
-	body.push("        \"\"\"Returns True when (method, path) sits inside an active stale window.\"\"\"")
+	body.push('        """Returns True when (method, path) sits inside an active stale window."""')
 	body.push("        return self._stale_tracker.is_stale(method, path)")
 	body.push("")
 
@@ -816,7 +828,7 @@ function buildPyClient(
 	}
 	body.push("")
 	body.push("    async def is_stale(self, method: str, path: str) -> bool:")
-	body.push("        \"\"\"Returns True when (method, path) sits inside an active stale window.\"\"\"")
+	body.push('        """Returns True when (method, path) sits inside an active stale window."""')
 	body.push("        return await self._stale_tracker.is_stale(method, path)")
 	body.push("")
 
@@ -845,7 +857,17 @@ function buildPyClient(
 	if (typingUsed.length > 0) imports.push(`from typing import ${typingUsed.join(", ")}`)
 
 	const runtimeUsed: string[] = []
-	for (const sym of ["ClientConfig", "InvalidationConfig", "SDKResult", "_build_headers", "_build_url", "_do_request_async", "_do_request_sync", "_parse_body", "_raise_for_status"]) {
+	for (const sym of [
+		"ClientConfig",
+		"InvalidationConfig",
+		"SDKResult",
+		"_build_headers",
+		"_build_url",
+		"_do_request_async",
+		"_do_request_sync",
+		"_parse_body",
+		"_raise_for_status",
+	]) {
 		if (new RegExp(`\\b${sym}\\b`).test(bodyText)) runtimeUsed.push(sym)
 	}
 	if (runtimeUsed.length > 0) {
@@ -972,7 +994,8 @@ function buildPyInit(spec: Record<string, unknown>): string {
 	l.push(")")
 
 	const schemas = (spec.components as Record<string, unknown> | undefined)?.schemas as
-		Record<string, Record<string, unknown>> | undefined
+		| Record<string, Record<string, unknown>>
+		| undefined
 	const schemaNames = schemas ? Object.keys(schemas).sort() : []
 	if (schemaNames.length > 0) {
 		l.push("from .types import (")
@@ -1007,10 +1030,7 @@ function buildServiceMap(spec: Record<string, unknown>): Record<string, ServiceM
 	return result
 }
 
-export function generatePythonSDK(
-	spec: Record<string, unknown>,
-	options: PySDKOptions = {},
-): PySDKResult {
+export function generatePythonSDK(spec: Record<string, unknown>, options: PySDKOptions = {}): PySDKResult {
 	const templates = loadPythonRuntimeTemplates()
 	const serviceMap = buildServiceMap(spec)
 

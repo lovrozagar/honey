@@ -4,7 +4,7 @@
 	"main": "src/worker.ts",
 	"name": "honey-cf-e2e",
 	"vars": {
-		"HONEY_E2E_APP": "kitchen"
+		"HONEY_E2E_APP": "kitchen",
 	},
-	"workers_dev": true
+	"workers_dev": true,
 }

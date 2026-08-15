@@ -5,30 +5,27 @@ export {
 	type WSPreUpgrade,
 	WSContextImpl,
 	type WSHandler,
-} from "./cloudflare.ts";
+} from "./cloudflare.ts"
 
-import type { WSAdapter, WSHandler, WSPreUpgrade } from "./cloudflare.ts";
-import { WSContextImpl } from "./cloudflare.ts";
+import type { WSAdapter, WSHandler, WSPreUpgrade } from "./cloudflare.ts"
+import { WSContextImpl } from "./cloudflare.ts"
 
 type DenoNs = {
 	Deno: {
 		upgradeWebSocket(req: Request): {
-			response: Response;
+			response: Response
 			socket: {
-				addEventListener(
-					type: string,
-					listener: (...args: never[]) => void,
-				): void;
-			} & DenoRawSocket;
-		};
-	};
-};
+				addEventListener(type: string, listener: (...args: never[]) => void): void
+			} & DenoRawSocket
+		}
+	}
+}
 
 type DenoRawSocket = {
-	close(code?: number, reason?: string): void;
-	readyState: number;
-	send(data: ArrayBuffer | Uint8Array | string): void;
-};
+	close(code?: number, reason?: string): void
+	readyState: number
+	send(data: ArrayBuffer | Uint8Array | string): void
+}
 
 type DenoSocket = {
 	addEventListener(type: string, listener: (...args: never[]) => void): void
@@ -36,23 +33,17 @@ type DenoSocket = {
 
 function bindHandlers(rawSocket: DenoSocket, socket: WSContextImpl<DenoRawSocket>, handler: WSHandler<unknown>): void {
 	rawSocket.addEventListener("open", () => {
-		handler.onOpen?.(undefined, socket);
-	});
-	rawSocket.addEventListener(
-		"message",
-		(evt: { data: ArrayBuffer | string }) => {
-			handler.onMessage?.(undefined, socket, evt.data);
-		},
-	);
-	rawSocket.addEventListener(
-		"close",
-		(evt: { code: number; reason: string }) => {
-			handler.onClose?.(undefined, socket, evt.code, evt.reason);
-		},
-	);
+		handler.onOpen?.(undefined, socket)
+	})
+	rawSocket.addEventListener("message", (evt: { data: ArrayBuffer | string }) => {
+		handler.onMessage?.(undefined, socket, evt.data)
+	})
+	rawSocket.addEventListener("close", (evt: { code: number; reason: string }) => {
+		handler.onClose?.(undefined, socket, evt.code, evt.reason)
+	})
 	rawSocket.addEventListener("error", (evt: unknown) => {
-		handler.onError?.(undefined, socket, evt);
-	});
+		handler.onError?.(undefined, socket, evt)
+	})
 }
 
 /**
@@ -69,9 +60,9 @@ export function denoWebSocket(): WSAdapter {
 
 	return {
 		preUpgrade(req: Request): WSPreUpgrade {
-			const denoNs = globalThis as unknown as DenoNs;
-			const { response, socket: rawSocket } = denoNs.Deno.upgradeWebSocket(req);
-			const socket = new WSContextImpl(rawSocket as DenoRawSocket);
+			const denoNs = globalThis as unknown as DenoNs
+			const { response, socket: rawSocket } = denoNs.Deno.upgradeWebSocket(req)
+			const socket = new WSContextImpl(rawSocket as DenoRawSocket)
 			const pre: WSPreUpgrade = {
 				response,
 				socket,
@@ -99,11 +90,11 @@ export function denoWebSocket(): WSAdapter {
 			}
 
 			/* globalThis cast: Deno namespace only exists at runtime on Deno — no way to type it statically */
-			const denoNs = globalThis as unknown as DenoNs;
-			const { response, socket: rawSocket } = denoNs.Deno.upgradeWebSocket(req);
-			const socket = new WSContextImpl(rawSocket as DenoRawSocket);
+			const denoNs = globalThis as unknown as DenoNs
+			const { response, socket: rawSocket } = denoNs.Deno.upgradeWebSocket(req)
+			const socket = new WSContextImpl(rawSocket as DenoRawSocket)
 			bindHandlers(rawSocket, socket, handler)
-			return { response, socket };
+			return { response, socket }
 		},
-	};
+	}
 }

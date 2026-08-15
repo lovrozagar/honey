@@ -1,9 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { createRealtimeHandlers } from "../../../src/cloudflare/realtime.ts"
-import type {
-	RealtimeHandlerConfig,
-	RealtimeHandlers,
-} from "../../../src/cloudflare/realtime.ts"
+import type { RealtimeHandlerConfig, RealtimeHandlers } from "../../../src/cloudflare/realtime.ts"
 
 /* ------------------------------------------------------------------ */
 /*  CF primitive mocks                                                 */
@@ -21,9 +18,13 @@ function mockDOContext() {
 		getWebSockets: vi.fn<() => ReturnType<typeof mockWebSocket>[]>(() => [...webSockets.keys()]),
 		id: { toString: () => "test-do-id" },
 		storage: {
-			deleteAlarm: vi.fn<() => Promise<void>>(async () => { alarms.length = 0 }),
+			deleteAlarm: vi.fn<() => Promise<void>>(async () => {
+				alarms.length = 0
+			}),
 			getAlarm: vi.fn<() => Promise<number | null>>(async () => alarms[0] ?? null),
-			setAlarm: vi.fn<(time: number) => Promise<void>>(async (time) => { alarms.push(time) }),
+			setAlarm: vi.fn<(time: number) => Promise<void>>(async (time) => {
+				alarms.push(time)
+			}),
 		},
 	}
 }
@@ -37,7 +38,9 @@ function mockWebSocket() {
 		deserializeAttachment: vi.fn<() => string | null>(() => ws._attachment ?? null),
 		readyState: 1,
 		send: vi.fn<(data: string) => void>(),
-		serializeAttachment: vi.fn<(data: string) => void>((data) => { ws._attachment = data }),
+		serializeAttachment: vi.fn<(data: string) => void>((data) => {
+			ws._attachment = data
+		}),
 	}
 	return ws
 }
@@ -149,16 +152,16 @@ describe("createRealtimeHandlers -- factory", () => {
 
 	it("accepts optional onAuth callback", () => {
 		expect(() =>
-			createRealtimeHandlers(createConfig({
-				onAuth: (req) => req.headers.get("X-User-Id"),
-			})),
+			createRealtimeHandlers(
+				createConfig({
+					onAuth: (req) => req.headers.get("X-User-Id"),
+				}),
+			),
 		).not.toThrow()
 	})
 
 	it("accepts optional reconnectBuffer size", () => {
-		expect(() =>
-			createRealtimeHandlers(createConfig({ reconnectBuffer: 500 })),
-		).not.toThrow()
+		expect(() => createRealtimeHandlers(createConfig({ reconnectBuffer: 500 }))).not.toThrow()
 	})
 })
 
@@ -333,7 +336,9 @@ describe("message handler -- wire protocol", () => {
 			env: {},
 			routes: {
 				"/": (_c, conn) => {
-					conn.on("message", (payload) => { receivedPayloads.push(payload) })
+					conn.on("message", (payload) => {
+						receivedPayloads.push(payload)
+					})
 				},
 			},
 		})
@@ -353,7 +358,10 @@ describe("message handler -- wire protocol", () => {
 			reconnectBuffer: 100,
 		})
 
-		await handlers.message(ws as unknown as WebSocket, JSON.stringify({ lastId: 0, reconnectToken: token, t: "resume" }))
+		await handlers.message(
+			ws as unknown as WebSocket,
+			JSON.stringify({ lastId: 0, reconnectToken: token, t: "resume" }),
+		)
 
 		const frames = sentFrames(ws)
 		const readyFrame = frames.find(
@@ -371,7 +379,10 @@ describe("message handler -- wire protocol", () => {
 			env: {},
 			reconnectBuffer: 100,
 		})
-		await handlers.message(ws as unknown as WebSocket, JSON.stringify({ lastId: 5, reconnectToken: "wrong-token", t: "resume" }))
+		await handlers.message(
+			ws as unknown as WebSocket,
+			JSON.stringify({ lastId: 5, reconnectToken: "wrong-token", t: "resume" }),
+		)
 
 		const frames = sentFrames(ws)
 		const byeFrame = frames.find(
@@ -390,9 +401,7 @@ describe("message handler -- wire protocol", () => {
 			env: {},
 		})
 
-		await expect(
-			handlers.message(ws as unknown as WebSocket, "not valid json {{{"),
-		).resolves.not.toThrow()
+		await expect(handlers.message(ws as unknown as WebSocket, "not valid json {{{")).resolves.not.toThrow()
 
 		expect(ws.send).not.toHaveBeenCalled()
 	})
@@ -407,9 +416,7 @@ describe("message handler -- wire protocol", () => {
 		})
 
 		const buffer = new ArrayBuffer(8)
-		await expect(
-			handlers.message(ws as unknown as WebSocket, buffer),
-		).resolves.not.toThrow()
+		await expect(handlers.message(ws as unknown as WebSocket, buffer)).resolves.not.toThrow()
 	})
 })
 
@@ -428,7 +435,9 @@ describe("close handler", () => {
 			env: {},
 			routes: {
 				"/": (_c, conn) => {
-					conn.on("close", (reason) => { closeReasons.push({ code: 1000, reason }) })
+					conn.on("close", (reason) => {
+						closeReasons.push({ code: 1000, reason })
+					})
 				},
 			},
 		})
@@ -446,9 +455,7 @@ describe("close handler", () => {
 			env: {},
 		})
 
-		await expect(
-			handlers.close(ws as unknown as WebSocket, 1000, "going away", true),
-		).resolves.not.toThrow()
+		await expect(handlers.close(ws as unknown as WebSocket, 1000, "going away", true)).resolves.not.toThrow()
 	})
 
 	it("starts reconnect buffer disconnect TTL", async () => {
@@ -474,9 +481,7 @@ describe("close handler", () => {
 			env: {},
 		})
 
-		await expect(
-			handlers.close(ws as unknown as WebSocket, 1006, "", false),
-		).resolves.not.toThrow()
+		await expect(handlers.close(ws as unknown as WebSocket, 1006, "", false)).resolves.not.toThrow()
 	})
 })
 
@@ -494,9 +499,7 @@ describe("error handler", () => {
 			env: {},
 		})
 
-		await expect(
-			handlers.error(ws as unknown as WebSocket, new Error("network failure")),
-		).resolves.not.toThrow()
+		await expect(handlers.error(ws as unknown as WebSocket, new Error("network failure"))).resolves.not.toThrow()
 	})
 
 	it("cleans up the connection on error", async () => {
@@ -571,10 +574,7 @@ describe("reconnect buffer", () => {
 		})
 
 		for (let i = 0; i < 7; i++) {
-			await handlers.message(
-				ws as unknown as WebSocket,
-				JSON.stringify({ data: { idx: i }, t: "msg" }),
-			)
+			await handlers.message(ws as unknown as WebSocket, JSON.stringify({ data: { idx: i }, t: "msg" }))
 		}
 
 		const resumeWs = wsWithAttachment(DEFAULT_ATTACHMENT)
@@ -636,10 +636,7 @@ describe("reconnect buffer", () => {
 		})
 
 		for (let i = 0; i < 10; i++) {
-			await handlers.message(
-				ws as unknown as WebSocket,
-				JSON.stringify({ data: { idx: i }, t: "msg" }),
-			)
+			await handlers.message(ws as unknown as WebSocket, JSON.stringify({ data: { idx: i }, t: "msg" }))
 		}
 
 		const resumeWs = wsWithAttachment(DEFAULT_ATTACHMENT)
@@ -793,9 +790,7 @@ describe("edge cases", () => {
 			env: {},
 		})
 
-		await expect(
-			handlers.message(ws as unknown as WebSocket, JSON.stringify({ t: "ping" })),
-		).resolves.not.toThrow()
+		await expect(handlers.message(ws as unknown as WebSocket, JSON.stringify({ t: "ping" }))).resolves.not.toThrow()
 	})
 
 	it("close handler with null attachment does not crash", async () => {
@@ -809,9 +804,7 @@ describe("edge cases", () => {
 			env: {},
 		})
 
-		await expect(
-			handlers.close(ws as unknown as WebSocket, 1000, "normal", true),
-		).resolves.not.toThrow()
+		await expect(handlers.close(ws as unknown as WebSocket, 1000, "normal", true)).resolves.not.toThrow()
 	})
 
 	it("concurrent message calls do not corrupt state", async () => {
@@ -844,9 +837,7 @@ describe("edge cases", () => {
 			env: {},
 		})
 
-		await expect(
-			handlers.message(ws as unknown as WebSocket, ""),
-		).resolves.not.toThrow()
+		await expect(handlers.message(ws as unknown as WebSocket, "")).resolves.not.toThrow()
 	})
 
 	it("fetch with request that has no upgrade header returns 426", async () => {

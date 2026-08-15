@@ -103,9 +103,7 @@ describe("route tree schema preservation", () => {
 			info: { title: "T", version: "1" },
 		})
 
-		const op = spec.paths["/v1/projects/{project_id}/suggest-schema"]?.post as
-			| Record<string, unknown>
-			| undefined
+		const op = spec.paths["/v1/projects/{project_id}/suggest-schema"]?.post as Record<string, unknown> | undefined
 		expect(op).toBeDefined()
 
 		const responses = op?.responses as Record<string, Record<string, unknown>>

@@ -112,18 +112,12 @@ function splitSegments(path: string): string[] {
 	return path.split("/").filter((s) => s.length > 0)
 }
 
-export function insertRoute(
-	root: TreeNode,
-	method: HttpMethod | "ALL",
-	path: string,
-	handler: RouteHandler,
-): void {
+export function insertRoute(root: TreeNode, method: HttpMethod | "ALL", path: string, handler: RouteHandler): void {
 	bumpGeneration(root)
 	const segments = splitSegments(path)
 	let node = root
 
 	for (const seg of segments) {
-
 		if (seg.startsWith("*")) {
 			const name = seg.length > 1 ? seg.slice(1) : "*"
 			if (node.w !== null && node.w.n !== name) {
@@ -145,9 +139,7 @@ export function insertRoute(
 		if (seg.startsWith(":")) {
 			const name = seg.endsWith("?") ? seg.slice(1, -1) : seg.slice(1)
 			if (node.d !== null && node.d.n !== name) {
-				throw new Error(
-					`Route "${path}": param name conflict — expected ":${node.d.n}" but got ":${name}"`,
-				)
+				throw new Error(`Route "${path}": param name conflict — expected ":${node.d.n}" but got ":${name}"`)
 			}
 			if (node.d === null) {
 				node.d = { c: createNode(), n: name }
@@ -270,7 +262,6 @@ export function insertWsRoute(root: TreeNode, path: string, handler: WSRouteHand
 	let node = root
 
 	for (const seg of segments) {
-
 		if (seg.startsWith("*")) {
 			throw new Error("Wildcard segments not supported for WebSocket routes")
 		}
@@ -278,9 +269,7 @@ export function insertWsRoute(root: TreeNode, path: string, handler: WSRouteHand
 		if (seg.startsWith(":")) {
 			const name = seg.slice(1)
 			if (node.d !== null && node.d.n !== name) {
-				throw new Error(
-					`Route "${path}": param name conflict — expected ":${node.d.n}" but got ":${name}"`,
-				)
+				throw new Error(`Route "${path}": param name conflict — expected ":${node.d.n}" but got ":${name}"`)
 			}
 			if (node.d === null) {
 				node.d = { c: createNode(), n: name }
@@ -364,13 +353,13 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	}
 
 	/* merge static children — shallow-copy s to avoid mutating shared empty objects */
-		if (source.s && Object.keys(source.s).length > 0) {
-			let detached = false
-			for (const [seg, child] of Object.entries(source.s)) {
-				const targetChild = target.s[seg]
-				if (targetChild !== undefined) {
-					mergeNodes(targetChild, child, `${path}/${seg}`)
-				} else {
+	if (source.s && Object.keys(source.s).length > 0) {
+		let detached = false
+		for (const [seg, child] of Object.entries(source.s)) {
+			const targetChild = target.s[seg]
+			if (targetChild !== undefined) {
+				mergeNodes(targetChild, child, `${path}/${seg}`)
+			} else {
 				if (!detached) {
 					target.s = Object.assign(Object.create(null) as Record<string, TreeNode>, target.s)
 					detached = true
@@ -384,9 +373,7 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	if (source.d !== null && source.d !== undefined) {
 		if (target.d !== null && target.d !== undefined) {
 			if (target.d.n !== source.d.n) {
-				throw new Error(
-					`Merge conflict: param name mismatch at ${path}: "${target.d.n}" vs "${source.d.n}"`,
-				)
+				throw new Error(`Merge conflict: param name mismatch at ${path}: "${target.d.n}" vs "${source.d.n}"`)
 			}
 			mergeNodes(target.d.c, source.d.c, `${path}/:${target.d.n}`)
 		} else {
@@ -398,9 +385,7 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	if (source.w !== null && source.w !== undefined) {
 		if (target.w !== null && target.w !== undefined) {
 			if (target.w.n !== source.w.n) {
-				throw new Error(
-					`Merge conflict: wildcard name mismatch at ${path}: "${target.w.n}" vs "${source.w.n}"`,
-				)
+				throw new Error(`Merge conflict: wildcard name mismatch at ${path}: "${target.w.n}" vs "${source.w.n}"`)
 			}
 			for (const [method, handler] of Object.entries(source.w.m)) {
 				if (method in target.w.m) {

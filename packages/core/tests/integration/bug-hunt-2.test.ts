@@ -218,9 +218,7 @@ describe("bug-hunt-2: ETag middleware with streaming responses", () => {
 describe("bug-hunt-2: CORS Vary header handling", () => {
 	it("CORS + handler setting Vary → no duplicate Vary: Origin", async () => {
 		const app = honey<{}>().use(cors({ origin: "http://app.com" }))
-		app
-			.get("/api")
-			.handler((ctx) => ctx.res.json("ok", {}, { headers: { vary: "Accept-Encoding" } }))
+		app.get("/api").handler((ctx) => ctx.res.json("ok", {}, { headers: { vary: "Accept-Encoding" } }))
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
@@ -588,10 +586,7 @@ describe("bug-hunt-2: wildcard route + method not allowed", () => {
 		const app = honey<{}>()
 		app.get("/files/*path").handler((ctx) => ctx.res.json("ok", { path: ctx.params.path }))
 
-		const res = await app.fetch(
-			new Request("http://localhost/files/docs/readme.md", { method: "DELETE" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/files/docs/readme.md", { method: "DELETE" }), {})
 		expect(res.status).toBe(405)
 	})
 })
@@ -711,9 +706,7 @@ describe("bug-hunt-2: Node adapter multiple Set-Cookie headers", () => {
 
 		const cookies = res.headers["set-cookie"]
 		expect(cookies).toBeTruthy()
-		const cookieArr = Array.isArray(cookies)
-			? cookies
-			: ([cookies as string | undefined].filter(Boolean) as string[])
+		const cookieArr = Array.isArray(cookies) ? cookies : ([cookies as string | undefined].filter(Boolean) as string[])
 		expect(cookieArr.length).toBe(2)
 		const joined = cookieArr.join("; ")
 		expect(joined).toContain("session=s-123")

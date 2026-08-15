@@ -55,9 +55,7 @@ describe("ctx.executionCtx", () => {
 		const executionCtx = {
 			waitUntil(p: Promise<unknown>): void {
 				if (this !== executionCtx) {
-					throw new TypeError(
-						"Illegal invocation: function called with incorrect `this` reference.",
-					)
+					throw new TypeError("Illegal invocation: function called with incorrect `this` reference.")
 				}
 				captured.push(p)
 			},
@@ -68,11 +66,7 @@ describe("ctx.executionCtx", () => {
 			return ctx.res.text("ok", "ok")
 		})
 
-		const res = await app.fetch(
-			new Request("http://localhost/test"),
-			{},
-			executionCtx,
-		)
+		const res = await app.fetch(new Request("http://localhost/test"), {}, executionCtx)
 		expect(res.status).toBe(200)
 		expect(captured).toHaveLength(1)
 	})
@@ -89,9 +83,7 @@ describe("ctx.executionCtx", () => {
 		const executionCtx = {
 			waitUntil(p: Promise<unknown>): void {
 				if (this !== executionCtx) {
-					throw new TypeError(
-						"Illegal invocation: function called with incorrect `this` reference.",
-					)
+					throw new TypeError("Illegal invocation: function called with incorrect `this` reference.")
 				}
 				captured.push(p)
 			},
@@ -102,11 +94,7 @@ describe("ctx.executionCtx", () => {
 			throw new Error("boom")
 		})
 
-		const res = await app.fetch(
-			new Request("http://localhost/boom"),
-			{},
-			executionCtx,
-		)
+		const res = await app.fetch(new Request("http://localhost/boom"), {}, executionCtx)
 		expect(res.status).toBe(500)
 		expect(captured).toHaveLength(1)
 	})
@@ -121,9 +109,7 @@ describe("ctx.executionCtx", () => {
 		const executionCtx = {
 			waitUntil(p: Promise<unknown>): void {
 				if (this !== executionCtx) {
-					throw new TypeError(
-						"Illegal invocation: function called with incorrect `this` reference.",
-					)
+					throw new TypeError("Illegal invocation: function called with incorrect `this` reference.")
 				}
 				captured.push(p)
 			},
@@ -134,11 +120,7 @@ describe("ctx.executionCtx", () => {
 			return next()
 		})
 
-		const res = await app.fetch(
-			new Request("http://localhost/does-not-exist"),
-			{},
-			executionCtx,
-		)
+		const res = await app.fetch(new Request("http://localhost/does-not-exist"), {}, executionCtx)
 		expect(res.status).toBe(404)
 		expect(captured).toHaveLength(1)
 	})

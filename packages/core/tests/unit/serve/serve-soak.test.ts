@@ -70,7 +70,9 @@ describe("Honey.serve() soak — node", () => {
 	}, 15_000)
 
 	it("cors: true still answers preflight after a soak cycle", async () => {
-		const app = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+		const app = honey()
+			.get("/health")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
 		const handle = await app.serve({
 			cors: true,
 			hostname: "127.0.0.1",
@@ -101,19 +103,23 @@ describe("Honey.serve() soak — bun / deno", () => {
 		expect(stdout).toContain('"runtime":"bun"')
 	}, 15_000)
 
-	it.skipIf(!hasCmd("deno"))("deno runner bind/abort/close/rebind", async () => {
-		const { exitCode, stderr, stdout } = await run("deno", [
-			"run",
-			"--allow-env",
-			"--allow-net",
-			"--allow-read",
-			RUNNER,
-			"deno",
-		])
-		expect(exitCode, `${stdout}\n${stderr}`).toBe(0)
-		expect(stdout).toContain('"ok":true')
-		expect(stdout).toContain('"runtime":"deno"')
-	}, 20_000)
+	it.skipIf(!hasCmd("deno"))(
+		"deno runner bind/abort/close/rebind",
+		async () => {
+			const { exitCode, stderr, stdout } = await run("deno", [
+				"run",
+				"--allow-env",
+				"--allow-net",
+				"--allow-read",
+				RUNNER,
+				"deno",
+			])
+			expect(exitCode, `${stdout}\n${stderr}`).toBe(0)
+			expect(stdout).toContain('"ok":true')
+			expect(stdout).toContain('"runtime":"deno"')
+		},
+		20_000,
+	)
 })
 
 describe("Honey.serve() cloudflare is not a listen", () => {

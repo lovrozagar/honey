@@ -40,11 +40,7 @@ function connectWs(path: string): {
 		waitForMessages(count: number, timeout = 5000) {
 			return new Promise((resolve, reject) => {
 				const timer = setTimeout(() => {
-					reject(
-						new Error(
-							`Timeout: expected ${count} messages, got ${messages.length}: ${JSON.stringify(messages)}`,
-						),
-					)
+					reject(new Error(`Timeout: expected ${count} messages, got ${messages.length}: ${JSON.stringify(messages)}`))
 				}, timeout)
 				const check = () => {
 					if (messages.length >= count) {
@@ -126,7 +122,7 @@ test.describe("input sources", () => {
 	test("PUT /in/all/:resourceId combo", async ({ request }) => {
 		const res = await request.put("/in/all/r1?version=2", {
 			data: { data: { k: "v" } },
-			headers: { "if-match": "W/\"1\"" },
+			headers: { "if-match": 'W/"1"' },
 		})
 		expect(res.status()).toBe(200)
 		expect(await res.json()).toEqual({ etag: 'W/"abc"', version: 2 })

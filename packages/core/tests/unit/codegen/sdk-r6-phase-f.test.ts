@@ -51,7 +51,7 @@ describe("#R6-4 actionCache — emitter Layer B' regression strings", () => {
 		expect(files.client).toContain("actionCache")
 	})
 
-	it("Layer B': files.client contains Object.defineProperty(fn, \"name\" (debug-name emission)", () => {
+	it('Layer B\': files.client contains Object.defineProperty(fn, "name" (debug-name emission)', () => {
 		const { files } = generateSDK(phaseFixtureSpec, { name: "TestSDK" })
 		expect(files.client).toContain(`Object.defineProperty(fn, "name"`)
 	})

@@ -807,10 +807,7 @@ describe("i18n: form validation field paths", () => {
 		const fd = new FormData()
 		fd.append("title", "ab")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: fd, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: fd, method: "POST" }), {})
 		expect(res.status).toBe(400)
 		const data = (await res.json()) as Record<string, unknown>
 		const fields = data.fields as Record<string, Array<Record<string, string>>>

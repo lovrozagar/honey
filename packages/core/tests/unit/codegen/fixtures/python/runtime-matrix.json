@@ -1,151 +1,149 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Runtime Matrix", "version": "1.0.0" },
-  "components": {
-    "schemas": {
-      "User": {
-        "type": "object",
-        "required": ["id", "email"],
-        "properties": {
-          "id": { "type": "string" },
-          "email": { "type": "string" }
-        }
-      },
-      "UserCreateInput": {
-        "type": "object",
-        "required": ["email"],
-        "properties": {
-          "email": { "type": "string" }
-        }
-      },
-      "ErrorEnvelope": {
-        "type": "object",
-        "required": ["error_key", "message", "status", "success"],
-        "properties": {
-          "error_key": { "type": "string" },
-          "message": { "type": "string" },
-          "status": { "type": "integer" },
-          "success": { "const": false, "type": "boolean" }
-        }
-      }
-    }
-  },
-  "paths": {
-    "/users": {
-      "get": {
-        "operationId": "users.list",
-        "summary": "List users",
-        "parameters": [
-          { "in": "query", "name": "page", "required": false, "schema": { "type": "integer" } },
-          { "in": "query", "name": "q", "required": false, "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "users.create",
-        "summary": "Create user",
-        "x-invalidate": ["GET /users", "GET /users/:id"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/UserCreateInput" }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/User" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          }
-        }
-      }
-    },
-    "/users/{id}": {
-      "get": {
-        "operationId": "users.get",
-        "summary": "Get user by id",
-        "parameters": [
-          { "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/User" } }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          }
-        }
-      }
-    },
-    "/events/stream": {
-      "get": {
-        "operationId": "events.stream",
-        "summary": "Stream events via SSE",
-        "responses": {
-          "200": {
-            "description": "Event stream",
-            "content": {
-              "text/event-stream": {
-                "schema": { "type": "string" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/class/from": {
-      "get": {
-        "operationId": "class.from",
-        "summary": "Reserved-word resource and action",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": { "type": "string" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Runtime Matrix", "version": "1.0.0" },
+	"components": {
+		"schemas": {
+			"User": {
+				"type": "object",
+				"required": ["id", "email"],
+				"properties": {
+					"id": { "type": "string" },
+					"email": { "type": "string" }
+				}
+			},
+			"UserCreateInput": {
+				"type": "object",
+				"required": ["email"],
+				"properties": {
+					"email": { "type": "string" }
+				}
+			},
+			"ErrorEnvelope": {
+				"type": "object",
+				"required": ["error_key", "message", "status", "success"],
+				"properties": {
+					"error_key": { "type": "string" },
+					"message": { "type": "string" },
+					"status": { "type": "integer" },
+					"success": { "const": false, "type": "boolean" }
+				}
+			}
+		}
+	},
+	"paths": {
+		"/users": {
+			"get": {
+				"operationId": "users.list",
+				"summary": "List users",
+				"parameters": [
+					{ "in": "query", "name": "page", "required": false, "schema": { "type": "integer" } },
+					{ "in": "query", "name": "q", "required": false, "schema": { "type": "string" } }
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"operationId": "users.create",
+				"summary": "Create user",
+				"x-invalidate": ["GET /users", "GET /users/:id"],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/UserCreateInput" }
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/User" }
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+						}
+					},
+					"500": {
+						"description": "Internal Server Error",
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+						}
+					}
+				}
+			}
+		},
+		"/users/{id}": {
+			"get": {
+				"operationId": "users.get",
+				"summary": "Get user by id",
+				"parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/User" } }
+						}
+					},
+					"404": {
+						"description": "Not Found",
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+						}
+					}
+				}
+			}
+		},
+		"/events/stream": {
+			"get": {
+				"operationId": "events.stream",
+				"summary": "Stream events via SSE",
+				"responses": {
+					"200": {
+						"description": "Event stream",
+						"content": {
+							"text/event-stream": {
+								"schema": { "type": "string" }
+							}
+						}
+					}
+				}
+			}
+		},
+		"/class/from": {
+			"get": {
+				"operationId": "class.from",
+				"summary": "Reserved-word resource and action",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": { "type": "string" }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

@@ -45,9 +45,10 @@ function createLogger(opts?: CreateLoggerOptions): LoggerInstance {
 
 	function emit(level: number, first: Record<string, unknown> | string, second?: string): void {
 		if (level < threshold) return
-		const obj = typeof first === "string"
-			? { ...base, level, msg: first, time: Date.now() }
-			: { ...base, ...first, level, msg: second ?? "", time: Date.now() }
+		const obj =
+			typeof first === "string"
+				? { ...base, level, msg: first, time: Date.now() }
+				: { ...base, ...first, level, msg: second ?? "", time: Date.now() }
 		write(JSON.stringify(obj))
 	}
 
@@ -95,9 +96,7 @@ function defaultLog(data: LogData): void {
 const noop = () => {}
 const noopLogger: LoggerInstance = createLogger({ level: "fatal", write: noop })
 
-function logger(
-	options?: LoggerOptions,
-): MiddlewareFn<{ path: string, req: Request }, { log: LoggerInstance }> {
+function logger(options?: LoggerOptions): MiddlewareFn<{ path: string; req: Request }, { log: LoggerInstance }> {
 	const log = options?.log ?? defaultLog
 	const skip = options?.skip
 	const instance = options?.instance
@@ -106,14 +105,14 @@ function logger(
 		const start = performance.now()
 		const method = ctx.req.method
 		const path = ctx.path
-		const rid = (ctx as Record<string, unknown>)["requestId"] as string | null ?? null
+		const rid = ((ctx as Record<string, unknown>)["requestId"] as string | null) ?? null
 
 		const child = instance
 			? instance.child({
-				method,
-				path,
-				...(rid ? { requestId: rid } : {}),
-			})
+					method,
+					path,
+					...(rid ? { requestId: rid } : {}),
+				})
 			: noopLogger
 
 		if (instance) {

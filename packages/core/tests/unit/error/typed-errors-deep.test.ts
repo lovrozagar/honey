@@ -219,11 +219,7 @@ describe("createErrorResponse: deep coverage", () => {
 
 	it("response status matches error status for both types", async () => {
 		const std = createErrorResponse(errors.email_taken(), identity, null)
-		const custom = createErrorResponse(
-			errors.rate_limited({ retry_after: 30 }),
-			identity,
-			null,
-		)
+		const custom = createErrorResponse(errors.rate_limited({ retry_after: 30 }), identity, null)
 
 		expect(std.status).toBe(409)
 		expect(custom.status).toBe(429)
@@ -427,11 +423,7 @@ describe("integration: customErrorFormatter via createErrorResponse", () => {
 
 		/* simulate what the framework does internally */
 		const err = appErrors.item_gone({ reason: "removed" })
-		const res = createErrorResponse(
-			err,
-			(e, s) => s, /* identity default formatter */
-			customFmt,
-		)
+		const res = createErrorResponse(err, (e, s) => s /* identity default formatter */, customFmt)
 		const body = await res.json()
 
 		expect(body.reason).toBe("removed")
@@ -488,9 +480,7 @@ describe("regression: standard error flow unchanged", () => {
 				})
 			})
 
-		const res = await fieldsApp.fetch(
-			new Request("http://localhost/validate", { method: "POST" }),
-		)
+		const res = await fieldsApp.fetch(new Request("http://localhost/validate", { method: "POST" }))
 		const body = await res.json()
 		expect(body.fields.email).toHaveLength(1)
 		expect(body.fields.email[0].error_key).toBe("field_invalid_email")

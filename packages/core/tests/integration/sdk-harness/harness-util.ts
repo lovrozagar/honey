@@ -2,9 +2,7 @@ import { readFileSync } from "node:fs"
 import { spawn, execSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
-export const MOCK_SERVER_START_PATH = fileURLToPath(
-	new URL("../../mock-server/start.ts", import.meta.url),
-)
+export const MOCK_SERVER_START_PATH = fileURLToPath(new URL("../../mock-server/start.ts", import.meta.url))
 
 export function loadMockSpec(): Record<string, unknown> {
 	const specPath = fileURLToPath(new URL("../../mock-server/spec.json", import.meta.url))
@@ -70,9 +68,7 @@ export function startMockServerSubprocess(): Promise<{ port: number; kill: () =>
 			clearTimeout(timeout)
 			if (code !== 0 && signal !== "SIGTERM") {
 				const stderr = Buffer.concat(stderrChunks).toString()
-				reject(
-					new Error(`Mock server subprocess exited early with code=${code} signal=${signal}. stderr: ${stderr}`),
-				)
+				reject(new Error(`Mock server subprocess exited early with code=${code} signal=${signal}. stderr: ${stderr}`))
 			}
 		})
 	})

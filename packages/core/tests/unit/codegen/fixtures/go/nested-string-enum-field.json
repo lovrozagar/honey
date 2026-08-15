@@ -1,19 +1,19 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Nested String Enum", "version": "1.0.0" },
-  "paths": {},
-  "components": {
-    "schemas": {
-      "Audience": {
-        "type": "object",
-        "required": ["engagement"],
-        "properties": {
-          "engagement": {
-            "type": "string",
-            "enum": ["all", "engaged_30d", "engaged_90d"]
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Nested String Enum", "version": "1.0.0" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Audience": {
+				"type": "object",
+				"required": ["engagement"],
+				"properties": {
+					"engagement": {
+						"type": "string",
+						"enum": ["all", "engaged_30d", "engaged_90d"]
+					}
+				}
+			}
+		}
+	}
 }

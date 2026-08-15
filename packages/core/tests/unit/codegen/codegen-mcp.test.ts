@@ -45,13 +45,7 @@ describe("generateMCPServer — output shape", () => {
 			},
 		})
 		const result = generateMCPServer(spec, BASE_OPTIONS)
-		const required = [
-			"src/_runtime.ts",
-			"src/server.ts",
-			"src/tools.gen.ts",
-			"src/types.ts",
-			"tsconfig.json",
-		]
+		const required = ["src/_runtime.ts", "src/server.ts", "src/tools.gen.ts", "src/types.ts", "tsconfig.json"]
 		for (const key of required) {
 			expect(typeof result.files[key]).toBe("string")
 			expect(result.files[key].length).toBeGreaterThan(0)
@@ -316,9 +310,7 @@ describe("generateMCPServer — output shape", () => {
 				},
 			},
 		})
-		expect(() => generateMCPServer(spec, BASE_OPTIONS)).toThrow(
-			/No operations marked x-mcp: true/,
-		)
+		expect(() => generateMCPServer(spec, BASE_OPTIONS)).toThrow(/No operations marked x-mcp: true/)
 	})
 
 	/* ---- T3.11 WS / realtime / SSE ops are skipped even if x-mcp: true ---- */
@@ -423,9 +415,7 @@ describe("generateMCPServer — N-segment operationId (T49–T52)", () => {
 		const toolsGen = files["src/tools.gen.ts"]
 		/* RED: current dispatch uses (sdk[resourceName] ?? {})[actionName] — 2-level only */
 		/* New dispatch must walk all segments: sdk["checkout"]["sessions"]["create"] or chained */
-		expect(toolsGen).toMatch(
-			/\["checkout"\][\s\S]*?\["sessions"\][\s\S]*?\["create"\]|checkout.*sessions.*create/,
-		)
+		expect(toolsGen).toMatch(/\["checkout"\][\s\S]*?\["sessions"\][\s\S]*?\["create"\]|checkout.*sessions.*create/)
 		/* must NOT use the old 2-level pattern with sessions.create as a single key */
 		expect(toolsGen).not.toContain(`["sessions.create"]`)
 	})

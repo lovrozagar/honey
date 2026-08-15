@@ -74,9 +74,9 @@ describe("HoneyResponse", () => {
 		app.get("/json").handler((ctx) => ctx.res.json("ok", { message: "Hello, World!" }))
 		app.get("/text").handler((ctx) => ctx.res.text("ok", "plain"))
 		app.get("/empty").handler((ctx) => ctx.res.noContent())
-		app.get("/cookie").handler((ctx) =>
-			ctx.res.json("ok", { ok: true }, { cookies: { sid: { httpOnly: true, value: "abc" } } }),
-		)
+		app
+			.get("/cookie")
+			.handler((ctx) => ctx.res.json("ok", { ok: true }, { cookies: { sid: { httpOnly: true, value: "abc" } } }))
 		const server = serve(app, { env: {}, port: 0 })
 		const port = (server.address() as { port: number }).port
 
@@ -106,7 +106,9 @@ describe("HoneyResponse", () => {
 	})
 
 	it("cors + etag keep the Node bag", async () => {
-		const app = honey<{}>().use(cors({ origin: "http://allowed.com" })).use(etag())
+		const app = honey<{}>()
+			.use(cors({ origin: "http://allowed.com" }))
+			.use(etag())
 		app.get("/json").handler((ctx) => ctx.res.json("ok", { message: "Hello, World!" }))
 		const server = serve(app, { env: {}, port: 0 })
 		const port = (server.address() as { port: number }).port

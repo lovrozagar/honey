@@ -38,9 +38,7 @@ function createUsersApp() {
 		.output({
 			"application/json": { ok: z.object({ email: z.string(), id: z.string(), name: z.string() }) },
 		})
-		.handler((ctx) =>
-			ctx.res.json("ok", { email: "alice@test.com", id: ctx.params.id, name: "Alice" }),
-		)
+		.handler((ctx) => ctx.res.json("ok", { email: "alice@test.com", id: ctx.params.id, name: "Alice" }))
 
 	app
 		.post("/users")

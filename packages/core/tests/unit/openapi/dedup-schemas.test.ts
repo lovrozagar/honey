@@ -209,9 +209,15 @@ describe("deduplication behavior", () => {
 		 * Old behavior expected Schema_ names; new behavior emits human-readable names. */
 		const errorSchema = structuredClone(PATCHED_404_ENVELOPE)
 		const spec = makeSpec({
-			"/a": { get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } } },
-			"/b": { get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } } },
-			"/c": { get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } } },
+			"/a": {
+				get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } },
+			},
+			"/b": {
+				get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } },
+			},
+			"/c": {
+				get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } },
+			},
 		})
 
 		const result = deduplicateSchemas(spec as Parameters<typeof deduplicateSchemas>[0])
@@ -235,9 +241,33 @@ describe("deduplication behavior", () => {
 		/* Amendment 2: ALL unique object schemas get Tier 1 operation-derived names.
 		 * Old behavior: unique schemas stayed inline. New: every schema becomes a $ref. */
 		const spec = makeSpec({
-			"/a": { get: { responses: { "200": { content: { "application/json": { schema: { properties: { id: { type: "string" } }, type: "object" } } } } } } },
-			"/b": { get: { responses: { "200": { content: { "application/json": { schema: { properties: { name: { type: "string" } }, type: "object" } } } } } } },
-			"/c": { get: { responses: { "200": { content: { "application/json": { schema: { properties: { slug: { type: "string" } }, type: "object" } } } } } } },
+			"/a": {
+				get: {
+					responses: {
+						"200": {
+							content: { "application/json": { schema: { properties: { id: { type: "string" } }, type: "object" } } },
+						},
+					},
+				},
+			},
+			"/b": {
+				get: {
+					responses: {
+						"200": {
+							content: { "application/json": { schema: { properties: { name: { type: "string" } }, type: "object" } } },
+						},
+					},
+				},
+			},
+			"/c": {
+				get: {
+					responses: {
+						"200": {
+							content: { "application/json": { schema: { properties: { slug: { type: "string" } }, type: "object" } } },
+						},
+					},
+				},
+			},
 		})
 
 		const result = deduplicateSchemas(spec as Parameters<typeof deduplicateSchemas>[0])
@@ -258,10 +288,15 @@ describe("deduplication behavior", () => {
 
 	it("deduplicateSchemas uses deterministic content-hash names", () => {
 		const errorSchema = structuredClone(PATCHED_404_ENVELOPE)
-		const makeTestSpec = () => makeSpec({
-			"/a": { get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } } },
-			"/b": { get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } } },
-		})
+		const makeTestSpec = () =>
+			makeSpec({
+				"/a": {
+					get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } },
+				},
+				"/b": {
+					get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } },
+				},
+			})
 
 		const result1 = deduplicateSchemas(makeTestSpec() as Parameters<typeof deduplicateSchemas>[0])
 		const result2 = deduplicateSchemas(makeTestSpec() as Parameters<typeof deduplicateSchemas>[0])
@@ -275,10 +310,42 @@ describe("deduplication behavior", () => {
 		/* Amendment 2: outer schema is unique per route → Tier 1 name, becomes $ref.
 		 * Nested oneOf members are not walked for hoisting (only `properties` fields are).
 		 * So the $ref is at the top-level response, not inside the oneOf array. */
-		const sharedSub = { properties: { code: { type: "string" }, msg: { type: "string" } }, required: ["code", "msg"], type: "object" }
+		const sharedSub = {
+			properties: { code: { type: "string" }, msg: { type: "string" } },
+			required: ["code", "msg"],
+			type: "object",
+		}
 		const spec = makeSpec({
-			"/a": { get: { responses: { "400": { content: { "application/json": { schema: { oneOf: [structuredClone(sharedSub), { properties: { x: { type: "number" } }, type: "object" }] } } } } } } },
-			"/b": { get: { responses: { "400": { content: { "application/json": { schema: { oneOf: [structuredClone(sharedSub), { properties: { y: { type: "number" } }, type: "object" }] } } } } } } },
+			"/a": {
+				get: {
+					responses: {
+						"400": {
+							content: {
+								"application/json": {
+									schema: {
+										oneOf: [structuredClone(sharedSub), { properties: { x: { type: "number" } }, type: "object" }],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/b": {
+				get: {
+					responses: {
+						"400": {
+							content: {
+								"application/json": {
+									schema: {
+										oneOf: [structuredClone(sharedSub), { properties: { y: { type: "number" } }, type: "object" }],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		})
 
 		const result = deduplicateSchemas(spec as Parameters<typeof deduplicateSchemas>[0])
@@ -301,8 +368,12 @@ describe("deduplication behavior", () => {
 			info: { title: "Test", version: "1.0" },
 			openapi: "3.1.0",
 			paths: {
-				"/a": { get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } } },
-				"/b": { get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } } },
+				"/a": {
+					get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } },
+				},
+				"/b": {
+					get: { responses: { "404": { content: { "application/json": { schema: structuredClone(errorSchema) } } } } },
+				},
 			},
 		} as Parameters<typeof deduplicateSchemas>[0]
 
@@ -322,8 +393,20 @@ describe("deduplication behavior", () => {
 		const storedSchema = structuredClone(PATCHED_404_ENVELOPE)
 		const spec = makeSpec(
 			{
-				"/a": { get: { responses: { "404": { content: { "application/json": { schema: { $ref: "#/components/schemas/Schema_abc" } } } } } } },
-				"/b": { get: { responses: { "404": { content: { "application/json": { schema: { $ref: "#/components/schemas/Schema_abc" } } } } } } },
+				"/a": {
+					get: {
+						responses: {
+							"404": { content: { "application/json": { schema: { $ref: "#/components/schemas/Schema_abc" } } } },
+						},
+					},
+				},
+				"/b": {
+					get: {
+						responses: {
+							"404": { content: { "application/json": { schema: { $ref: "#/components/schemas/Schema_abc" } } } },
+						},
+					},
+				},
 			},
 			{ schemas: { Schema_abc: storedSchema } },
 		)
@@ -364,7 +447,17 @@ describe("deduplication behavior", () => {
 				get: {
 					operationId: "items.get",
 					responses: {
-						"200": { content: { "application/json": { schema: { properties: { id: { type: "string" }, title: { type: "string" } }, required: ["id", "title"], type: "object" } } } },
+						"200": {
+							content: {
+								"application/json": {
+									schema: {
+										properties: { id: { type: "string" }, title: { type: "string" } },
+										required: ["id", "title"],
+										type: "object",
+									},
+								},
+							},
+						},
 						"404": { content: { "application/json": { schema: structuredClone(errorSchema) } } },
 					},
 				},
@@ -373,7 +466,17 @@ describe("deduplication behavior", () => {
 				get: {
 					operationId: "users.get",
 					responses: {
-						"200": { content: { "application/json": { schema: { properties: { id: { type: "string" }, name: { type: "string" } }, required: ["id", "name"], type: "object" } } } },
+						"200": {
+							content: {
+								"application/json": {
+									schema: {
+										properties: { id: { type: "string" }, name: { type: "string" } },
+										required: ["id", "name"],
+										type: "object",
+									},
+								},
+							},
+						},
 						"404": { content: { "application/json": { schema: structuredClone(errorSchema) } } },
 					},
 				},
@@ -392,7 +495,11 @@ describe("deduplication behavior", () => {
 	})
 
 	it("deduplicateSchemas handles schemas with different property order", () => {
-		const schemaA = { properties: { age: { type: "number" }, name: { type: "string" } }, required: ["name", "age"], type: "object" }
+		const schemaA = {
+			properties: { age: { type: "number" }, name: { type: "string" } },
+			required: ["name", "age"],
+			type: "object",
+		}
 		/* intentionally unsorted keys to test canonicalization */
 		const schemaB: Record<string, unknown> = {}
 		schemaB.required = ["name", "age"]
@@ -428,14 +535,8 @@ describe("deduplication behavior", () => {
 
 	it("mergeSpecs allows identical component schema names", () => {
 		const schema = { properties: { id: { type: "string" } }, type: "object" }
-		const a = makeSpec(
-			{ "/a": { get: { responses: {} } } },
-			{ schemas: { Shared: structuredClone(schema) } },
-		)
-		const b = makeSpec(
-			{ "/b": { get: { responses: {} } } },
-			{ schemas: { Shared: structuredClone(schema) } },
-		)
+		const a = makeSpec({ "/a": { get: { responses: {} } } }, { schemas: { Shared: structuredClone(schema) } })
+		const b = makeSpec({ "/b": { get: { responses: {} } } }, { schemas: { Shared: structuredClone(schema) } })
 
 		const merged = mergeSpecs(a, b)
 		expect(merged.components?.schemas?.Shared).toBeDefined()

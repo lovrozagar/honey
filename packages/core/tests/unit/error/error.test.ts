@@ -125,9 +125,12 @@ describe("error response headers", () => {
 		const { honey } = await import("../../../src/index.ts")
 		const errors = defineErrors({ broken: "internal_server_error" })
 		const app = honey<{}>().errorFactory(errors)
-		app.get("/fail").errors("broken").handler(() => {
-			throw errors.broken()
-		})
+		app
+			.get("/fail")
+			.errors("broken")
+			.handler(() => {
+				throw errors.broken()
+			})
 		const res = await app.fetch(new Request("http://localhost/fail"), {})
 		expect(res.status).toBe(500)
 		expect(res.headers.get("content-type")).toContain("application/json")
@@ -155,9 +158,12 @@ describe("error response headers", () => {
 		const { honey } = await import("../../../src/index.ts")
 		const errors = defineErrors({ rate_limited: "too_many_requests" })
 		const app = honey<{}>().errorFactory(errors)
-		app.get("/limited").errors("rate_limited").handler(() => {
-			throw errors.rate_limited({ headers: { "retry-after": "60" } })
-		})
+		app
+			.get("/limited")
+			.errors("rate_limited")
+			.handler(() => {
+				throw errors.rate_limited({ headers: { "retry-after": "60" } })
+			})
 		const res = await app.fetch(new Request("http://localhost/limited"), {})
 		expect(res.status).toBe(429)
 		expect(res.headers.get("retry-after")).toBe("60")
@@ -170,13 +176,16 @@ describe("error response headers", () => {
 		const app = honey<{}>()
 			.errorFactory(errors)
 			.defaultErrorFormatter((_err, shape) => ({ ...shape, custom: true }))
-		app.get("/limited").errors("rate_limited").handler(() => {
-			throw errors.rate_limited({ headers: { "retry-after": "30" } })
-		})
+		app
+			.get("/limited")
+			.errors("rate_limited")
+			.handler(() => {
+				throw errors.rate_limited({ headers: { "retry-after": "30" } })
+			})
 		const res = await app.fetch(new Request("http://localhost/limited"), {})
 		expect(res.status).toBe(429)
 		expect(res.headers.get("retry-after")).toBe("30")
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body.custom).toBe(true)
 	})
 })

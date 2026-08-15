@@ -97,12 +97,7 @@ describe("edge: interceptor chain ordering with retry", () => {
 
 		await api.get("/api/v1/organizations")
 
-		expect(log).toEqual([
-			"req:GET:attempt1",
-			"res:401:retry=false",
-			"req:GET:attempt2",
-			"res:200:retry=true",
-		])
+		expect(log).toEqual(["req:GET:attempt1", "res:401:retry=false", "req:GET:attempt2", "res:200:retry=true"])
 	})
 })
 
@@ -144,7 +139,9 @@ describe("edge: throw mode error shape matches tuple mode", () => {
 
 		expect(tupleResult.error).not.toBeNull()
 		expect(isClientError(throwError)).toBe(true)
-		expect((tupleResult.error as Record<string, unknown>)?.error_key).toBe((((throwError as ClientError).body) as Record<string, unknown>).error_key)
+		expect((tupleResult.error as Record<string, unknown>)?.error_key).toBe(
+			((throwError as ClientError).body as Record<string, unknown>).error_key,
+		)
 		expect(tupleResult.status).toBe((throwError as { status: number }).status)
 	})
 })
@@ -278,13 +275,17 @@ describe("edge: multiple error formats", () => {
 		/* validation error — has field-level errors */
 		const validation = await api.post("/api/v1/organizations", { json: {} })
 		expect((validation.error as Record<string, unknown>)?.error_key).toBe("invalid_input")
-		expect(Object.keys(((validation.error as Record<string, unknown>)?.fields as Record<string, unknown>) ?? {}).length).toBeGreaterThan(0)
+		expect(
+			Object.keys(((validation.error as Record<string, unknown>)?.fields as Record<string, unknown>) ?? {}).length,
+		).toBeGreaterThan(0)
 
 		/* not found — no fields */
 		const notFound = await api.get("/api/v1/organizations/:orgId", {
 			params: { orgId: "nope" },
 		})
 		expect(notFound.error).not.toBeNull()
-		expect(Object.keys(((notFound.error as Record<string, unknown>)?.fields as Record<string, unknown>) ?? {}).length).toBe(0)
+		expect(
+			Object.keys(((notFound.error as Record<string, unknown>)?.fields as Record<string, unknown>) ?? {}).length,
+		).toBe(0)
 	})
 })

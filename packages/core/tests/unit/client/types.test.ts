@@ -1,14 +1,7 @@
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
 import type { SSEEvent } from "../../../src/client/sse.ts"
-import type {
-	ClientInput,
-	InputFor,
-	IsSSE,
-	OutputFor,
-	PathsForMethod,
-	ReturnFor,
-} from "../../../src/client/types.ts"
+import type { ClientInput, InputFor, IsSSE, OutputFor, PathsForMethod, ReturnFor } from "../../../src/client/types.ts"
 import { honey } from "../../../src/index.ts"
 import { readableStream } from "../../../src/input.ts"
 
@@ -67,9 +60,7 @@ function buildFullApp() {
 			/* params only (from path) */
 			.get("/input/params/:userId")
 			.output({ "application/json": { ok: UserSchema } })
-			.handler((ctx) =>
-				ctx.res.json("ok", { email: "a@b.com", id: ctx.params.userId, name: "Test" }),
-			)
+			.handler((ctx) => ctx.res.json("ok", { email: "a@b.com", id: ctx.params.userId, name: "Test" }))
 
 			/* json + search + headers combined */
 			.put("/input/combined/:id")
@@ -144,9 +135,7 @@ function buildFullApp() {
 					created: OrgSchema,
 				},
 			})
-			.handler((ctx) =>
-				ctx.res.json("created", { id: "1", name: ctx.input.json.name, slug: "test" }),
-			)
+			.handler((ctx) => ctx.res.json("created", { id: "1", name: ctx.input.json.name, slug: "test" }))
 
 			/* text/plain */
 			.get("/output/text")

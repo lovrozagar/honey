@@ -6,10 +6,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { canonicalizeSchema, deduplicateSchemas } from "../../../src/codegen.ts"
-import {
-	EXPECTED_COMPONENT_COUNT_AFTER_REFACTOR,
-	getFixtureSpec,
-} from "./__fixtures__/schema-naming-routes.ts"
+import { EXPECTED_COMPONENT_COUNT_AFTER_REFACTOR, getFixtureSpec } from "./__fixtures__/schema-naming-routes.ts"
 
 /** Collect all $ref values recursively. */
 function collectRefs(obj: unknown): string[] {
@@ -56,7 +53,11 @@ describe("Group B — new behavior (expected RED against current code)", () => {
 		const schemas = processed.components?.schemas ?? {}
 
 		/* exactly ONE component with this canonical shape */
-		const xNumberCanonical = canonicalizeSchema({ properties: { x: { type: "number" } }, required: ["x"], type: "object" })
+		const xNumberCanonical = canonicalizeSchema({
+			properties: { x: { type: "number" } },
+			required: ["x"],
+			type: "object",
+		})
 		const matchingNames = Object.entries(schemas)
 			.filter(([, s]) => canonicalizeSchema(s as Record<string, unknown>) === xNumberCanonical)
 			.map(([n]) => n)
@@ -124,9 +125,7 @@ describe("Group B — new behavior (expected RED against current code)", () => {
 		const processed = deduplicateSchemas(spec)
 		const names = Object.keys(processed.components?.schemas ?? {})
 
-		const hoisted = names.filter(
-			(n) => !n.endsWith("Request") && !/Response\d{3}$/.test(n) && !HASH_SUFFIX_RE.test(n),
-		)
+		const hoisted = names.filter((n) => !n.endsWith("Request") && !/Response\d{3}$/.test(n) && !HASH_SUFFIX_RE.test(n))
 		expect(hoisted.length, "expected at least one hoisted nested schema").toBeGreaterThan(0)
 
 		for (const name of hoisted) {

@@ -42,11 +42,12 @@ describe("#R6-4 actionCache — Layer A invariants", () => {
 	})
 
 	it("calling sdk.users.list() returns a Promise that resolves with mocked response data", async () => {
-		const { fetcher } = captureFetch(() =>
-			new Response(JSON.stringify([{ id: 1 }]), {
-				headers: { "content-type": "application/json" },
-				status: 200,
-			}),
+		const { fetcher } = captureFetch(
+			() =>
+				new Response(JSON.stringify([{ id: 1 }]), {
+					headers: { "content-type": "application/json" },
+					status: 200,
+				}),
 		)
 		const sdk = createSDK<TestSDK>(serviceMap, {
 			baseURL: "http://api.example.com",

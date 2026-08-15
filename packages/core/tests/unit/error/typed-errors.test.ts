@@ -30,9 +30,7 @@ describe("defineErrors with custom schemas", () => {
 	})
 
 	it("custom schema error factory accepts typed payload as first arg", () => {
-		const err = errors.item_not_found(
-			{ reason: "No item with that ID", suggestions: ["/items/123"] },
-		)
+		const err = errors.item_not_found({ reason: "No item with that ID", suggestions: ["/items/123"] })
 		expect(err).toBeInstanceOf(HoneyError)
 		expect(err.errorKey).toBe("item_not_found")
 		expect(err.status).toBe(404)
@@ -45,18 +43,13 @@ describe("defineErrors with custom schemas", () => {
 
 	it("custom schema error factory accepts cause as second arg", () => {
 		const cause = new Error("db lookup failed")
-		const err = errors.item_not_found(
-			{ reason: "not found", suggestions: [] },
-			{ cause },
-		)
+		const err = errors.item_not_found({ reason: "not found", suggestions: [] }, { cause })
 		expect(err.cause).toBe(cause)
 		expect(err.data).toEqual({ reason: "not found", suggestions: [] })
 	})
 
 	it("custom schema error has no fields/vars (those are standard-only)", () => {
-		const err = errors.item_not_found(
-			{ reason: "gone", suggestions: [] },
-		)
+		const err = errors.item_not_found({ reason: "gone", suggestions: [] })
 		expect(err.fields).toEqual({})
 		expect(err.vars).toBeUndefined()
 	})
@@ -96,18 +89,12 @@ describe("HoneyError.data", () => {
 })
 
 describe("createErrorResponse with dual formatters", () => {
-	const defaultFormatter = (
-		_error: HoneyError,
-		defaultShape: Record<string, unknown>,
-	) => ({
+	const defaultFormatter = (_error: HoneyError, defaultShape: Record<string, unknown>) => ({
 		...defaultShape,
 		timestamp: 1234567890,
 	})
 
-	const customFormatter = (
-		_error: HoneyError,
-		data: Record<string, unknown>,
-	) => ({
+	const customFormatter = (_error: HoneyError, data: Record<string, unknown>) => ({
 		...data,
 		timestamp: 1234567890,
 	})

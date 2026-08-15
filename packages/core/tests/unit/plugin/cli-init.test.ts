@@ -7,7 +7,10 @@ import "@lovrozagar/honey/serve"
 const TEMP_ROOT = resolve(import.meta.dirname, "../../../.tmp-cli-init-test")
 const CLI = resolve(import.meta.dirname, "../../../src/cli.ts")
 
-function runCli(cwd: string, args: string[]): Promise<{
+function runCli(
+	cwd: string,
+	args: string[],
+): Promise<{
 	exitCode: number
 	stderr: string
 	stdout: string

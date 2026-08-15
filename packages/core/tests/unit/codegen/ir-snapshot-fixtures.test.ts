@@ -78,10 +78,7 @@ describe("IR snapshot — schema kinds", () => {
 					},
 					propertyName: "kind",
 				},
-				oneOf: [
-					{ $ref: "#/components/schemas/Dog" },
-					{ $ref: "#/components/schemas/Cat" },
-				],
+				oneOf: [{ $ref: "#/components/schemas/Dog" }, { $ref: "#/components/schemas/Cat" }],
 			}),
 		).toMatchInlineSnapshot(`
 			{
@@ -109,9 +106,7 @@ describe("IR snapshot — schema kinds", () => {
 
 	/* 4. anyOf with all-null variants stripped to single non-null */
 	it("anyOf null stripped to single non-null", () => {
-		expect(
-			schemaToIR({ anyOf: [{ type: "string" }, { type: "null" }] }),
-		).toMatchInlineSnapshot(`
+		expect(schemaToIR({ anyOf: [{ type: "string" }, { type: "null" }] })).toMatchInlineSnapshot(`
 			{
 			  "inner": {
 			    "kind": "scalar",
@@ -326,9 +321,7 @@ describe("IR snapshot — schema kinds", () => {
 
 	/* 9. Multi-type-no-null type: ["string","number","boolean"] */
 	it("multi-type no-null union", () => {
-		expect(
-			schemaToIR({ type: ["string", "number", "boolean"] }),
-		).toMatchInlineSnapshot(`
+		expect(schemaToIR({ type: ["string", "number", "boolean"] })).toMatchInlineSnapshot(`
 			{
 			  "kind": "union",
 			  "variants": [
@@ -351,9 +344,7 @@ describe("IR snapshot — schema kinds", () => {
 
 	/* 10. Multi-type-with-null type: ["string","integer","null"] */
 	it("multi-type with null → nullable union", () => {
-		expect(
-			schemaToIR({ type: ["string", "integer", "null"] }),
-		).toMatchInlineSnapshot(`
+		expect(schemaToIR({ type: ["string", "integer", "null"] })).toMatchInlineSnapshot(`
 			{
 			  "inner": {
 			    "kind": "union",
@@ -430,9 +421,7 @@ describe("IR snapshot — schema kinds", () => {
 
 	/* 13. Object with additionalProperties: true */
 	it("object with additionalProperties true", () => {
-		expect(
-			schemaToIR({ additionalProperties: true, type: "object" }),
-		).toMatchInlineSnapshot(`
+		expect(schemaToIR({ additionalProperties: true, type: "object" })).toMatchInlineSnapshot(`
 			{
 			  "additional": {
 			    "kind": "unknown",
@@ -445,9 +434,7 @@ describe("IR snapshot — schema kinds", () => {
 
 	/* 14. Object with additionalProperties: { type: "string" } */
 	it("object with additionalProperties string schema", () => {
-		expect(
-			schemaToIR({ additionalProperties: { type: "string" }, type: "object" }),
-		).toMatchInlineSnapshot(`
+		expect(schemaToIR({ additionalProperties: { type: "string" }, type: "object" })).toMatchInlineSnapshot(`
 			{
 			  "additional": {
 			    "kind": "scalar",
@@ -651,9 +638,8 @@ describe("IR snapshot — schema kinds", () => {
 describe("IR snapshot — operation extensions", () => {
 	/* 25. Operation with x-websocket extension */
 	it("x-websocket extension", () => {
-		expect(
-			toIR(spec({ operationId: "wsOp", responses: {}, "x-websocket": true })).operations[0],
-		).toMatchInlineSnapshot(`
+		expect(toIR(spec({ operationId: "wsOp", responses: {}, "x-websocket": true })).operations[0])
+			.toMatchInlineSnapshot(`
 			{
 			  "extensions": {
 			    "websocket": true,
@@ -673,9 +659,7 @@ describe("IR snapshot — operation extensions", () => {
 
 	/* 26. Operation with x-realtime extension */
 	it("x-realtime extension", () => {
-		expect(
-			toIR(spec({ operationId: "rtOp", responses: {}, "x-realtime": true })).operations[0],
-		).toMatchInlineSnapshot(`
+		expect(toIR(spec({ operationId: "rtOp", responses: {}, "x-realtime": true })).operations[0]).toMatchInlineSnapshot(`
 			{
 			  "extensions": {
 			    "realtime": true,
@@ -727,10 +711,8 @@ describe("IR snapshot — operation extensions", () => {
 
 	/* 27b. Operation with x-idempotency-key extension */
 	it("x-idempotency-key extension", () => {
-		expect(
-			toIR(spec({ operationId: "idemOp", responses: {}, "x-idempotency-key": true }))
-				.operations[0],
-		).toMatchInlineSnapshot(`
+		expect(toIR(spec({ operationId: "idemOp", responses: {}, "x-idempotency-key": true })).operations[0])
+			.toMatchInlineSnapshot(`
 			{
 			  "extensions": {
 			    "idempotencyKey": true,

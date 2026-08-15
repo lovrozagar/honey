@@ -148,11 +148,7 @@ function tokenize(message: string): ParsedToken[] {
 	return tokens
 }
 
-function resolveToken(
-	token: ParsedToken,
-	values: Record<string, unknown>,
-	locale?: string,
-): string {
+function resolveToken(token: ParsedToken, values: Record<string, unknown>, locale?: string): string {
 	if (typeof token === "string") return token
 
 	if (token.type === "simple") {
@@ -177,8 +173,7 @@ function resolveToken(
 		const num = Number(val ?? 0)
 		const exactKey = `=${num}`
 		const category = getPluralCategory(num)
-		const template =
-			token.branches[exactKey] ?? token.branches[category] ?? token.branches["other"] ?? ""
+		const template = token.branches[exactKey] ?? token.branches[category] ?? token.branches["other"] ?? ""
 		const resolved = template.replace(/#/g, String(num))
 		return interpolate(resolved, values, locale)
 	}
@@ -193,11 +188,7 @@ function resolveToken(
  * ICU MessageFormat interpolation.
  * Supports: {var}, {var, plural, one{...} other{...}}, {var, select, ...}, {var, number}
  */
-export function interpolate(
-	template: string,
-	vars: Record<string, unknown>,
-	locale?: string,
-): string {
+export function interpolate(template: string, vars: Record<string, unknown>, locale?: string): string {
 	if (!template) return template
 	const tokens = tokenize(template)
 	return tokens.map((t) => resolveToken(t, vars, locale)).join("")

@@ -25,10 +25,7 @@ function incomingToRequest(req: IncomingMessage): Request {
 	return incomingToNodeRequest(req)
 }
 
-function collectNodeHeaders(
-	response: Response,
-	extra?: Record<string, string>,
-): Record<string, string | string[]> {
+function collectNodeHeaders(response: Response, extra?: Record<string, string>): Record<string, string | string[]> {
 	const headerObj: Record<string, string | string[]> = {}
 	let hasSetCookie = false
 	response.headers.forEach((value, key) => {
@@ -109,10 +106,7 @@ async function responseToNode(response: Response, res: ServerResponse): Promise<
 	if (shouldBufferBody(response)) {
 		const buf = Buffer.from(await response.arrayBuffer())
 		if (res.destroyed) return
-		res.writeHead(
-			response.status,
-			collectNodeHeaders(response, { "content-length": String(buf.byteLength) }),
-		)
+		res.writeHead(response.status, collectNodeHeaders(response, { "content-length": String(buf.byteLength) }))
 		res.end(buf)
 		return
 	}

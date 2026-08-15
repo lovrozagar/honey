@@ -16,10 +16,7 @@ const FIXTURES = [
 describe("ts-emitter byte-equivalence", () => {
 	for (const f of FIXTURES) {
 		const spec = JSON.parse(
-			readFileSync(
-				fileURLToPath(new URL(`./fixtures/python/${f.file}`, import.meta.url)),
-				"utf-8",
-			),
+			readFileSync(fileURLToPath(new URL(`./fixtures/python/${f.file}`, import.meta.url)), "utf-8"),
 		)
 		const out = generateSDK(spec, { name: "TestSDK" })
 

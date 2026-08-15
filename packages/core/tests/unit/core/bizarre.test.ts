@@ -210,9 +210,7 @@ describe("bizarre: env edge cases", () => {
 describe("bizarre: handler that modifies its own response headers", () => {
 	it("response headers set in handler survive to client", async () => {
 		const app = honey<{}>()
-		app
-			.get("/test")
-			.handler((ctx) => ctx.res.json("ok", {}, { headers: { "x-request-id": "abc-123" } }))
+		app.get("/test").handler((ctx) => ctx.res.json("ok", {}, { headers: { "x-request-id": "abc-123" } }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		expect(res.headers.get("x-request-id")).toBe("abc-123")
@@ -225,10 +223,7 @@ describe("bizarre: params that look like path traversal", () => {
 		const app = honey<{}>()
 		app.get("/files/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
 
-		const res = await app.fetch(
-			new Request(`http://localhost/files/${encodeURIComponent("../etc/passwd")}`),
-			{},
-		)
+		const res = await app.fetch(new Request(`http://localhost/files/${encodeURIComponent("../etc/passwd")}`), {})
 		expect(res.status).toBe(200)
 		const body = (await res.json()) as Record<string, unknown>
 		/* param is decoded but treated as a value, not a path */

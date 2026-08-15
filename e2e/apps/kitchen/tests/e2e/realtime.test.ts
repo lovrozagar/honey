@@ -61,11 +61,7 @@ function connectRealtime(path: string): {
 		waitForFrames(count: number, timeout = 5000) {
 			return new Promise((resolve, reject) => {
 				const timer = setTimeout(() => {
-					reject(
-						new Error(
-							`Timeout: expected ${count} frames, got ${frames.length}: ${JSON.stringify(frames)}`,
-						),
-					)
+					reject(new Error(`Timeout: expected ${count} frames, got ${frames.length}: ${JSON.stringify(frames)}`))
 				}, timeout)
 
 				const check = () => {

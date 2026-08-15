@@ -35,9 +35,7 @@ export function etag(options?: ETagOptions): MiddlewareFn<{ req: Request }, {}> 
 		/* skip streaming responses — can't hash without buffering entire stream */
 		if (
 			response.headers.get("transfer-encoding") === "chunked" ||
-			(response.body !== null &&
-				!response.headers.has("content-length") &&
-				!response.headers.has("content-type"))
+			(response.body !== null && !response.headers.has("content-length") && !response.headers.has("content-type"))
 		) {
 			return response
 		}

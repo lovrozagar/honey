@@ -7,9 +7,7 @@ type Env = { DB: string }
 type Db = { db: { query: (sql: string) => unknown[] } }
 type Auth = { orgId: string; userId: string }
 
-const withDb = createMiddleware(async (_ctx, next) =>
-	next({ db: { query: (_sql: string) => [] as unknown[] } }),
-)
+const withDb = createMiddleware(async (_ctx, next) => next({ db: { query: (_sql: string) => [] as unknown[] } }))
 const withAuth = createMiddleware(async (_ctx, next) => next({ orgId: "o", userId: "u" }))
 const withTrace = createMiddleware(async (_ctx, next) => next({ traceId: "t-1" }))
 
@@ -37,9 +35,7 @@ const routed = base
 		return ctx.res.text("ok", ctx.traceId)
 	})
 
-type _RoutedCtx = Expect<
-	Extends<InferRouteCtx<typeof routed, "/traced", "get">, Db & Auth & { traceId: string }>
->
+type _RoutedCtx = Expect<Extends<InferRouteCtx<typeof routed, "/traced", "get">, Db & Auth & { traceId: string }>>
 
 /* ── scoped .use(path, mw) ── */
 

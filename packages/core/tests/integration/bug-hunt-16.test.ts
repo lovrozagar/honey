@@ -127,9 +127,7 @@ describe("bug-hunt-16: emitSchemaType — zod compound types", () => {
 	})
 
 	it("literal multiple values → union", () => {
-		expect(emitSchemaType(zodSchema("literal", { values: ["a", "b", "c"] }))).toBe(
-			'"a" | "b" | "c"',
-		)
+		expect(emitSchemaType(zodSchema("literal", { values: ["a", "b", "c"] }))).toBe('"a" | "b" | "c"')
 	})
 
 	it("enum → union of string literals", () => {
@@ -141,9 +139,7 @@ describe("bug-hunt-16: emitSchemaType — zod compound types", () => {
 	it("object → { key: type }", () => {
 		const nameSchema = zodSchema("string")
 		const ageSchema = zodSchema("number")
-		const result = emitSchemaType(
-			zodSchema("object", { shape: { age: ageSchema, name: nameSchema } }),
-		)
+		const result = emitSchemaType(zodSchema("object", { shape: { age: ageSchema, name: nameSchema } }))
 		expect(result).toContain("name: string")
 		expect(result).toContain("age: number")
 	})
@@ -188,9 +184,7 @@ describe("bug-hunt-16: emitSchemaType — zod compound types", () => {
 	it("record → 'Record<K, V>'", () => {
 		const keyType = zodSchema("string")
 		const valueType = zodSchema("number")
-		expect(emitSchemaType(zodSchema("record", { keyType, valueType }))).toBe(
-			"Partial<Record<string, number>>",
-		)
+		expect(emitSchemaType(zodSchema("record", { keyType, valueType }))).toBe("Partial<Record<string, number>>")
 	})
 
 	it("tuple → '[type1, type2]'", () => {
@@ -529,16 +523,13 @@ describe("bug-hunt-16: Node adapter — binary response", () => {
 		const addr = server.address() as { port: number }
 
 		const res = await new Promise<{ body: Buffer; status: number }>((resolve, reject) => {
-			const req = http.request(
-				{ hostname: "127.0.0.1", method: "GET", path: "/bin", port: addr.port },
-				(r) => {
-					const chunks: Buffer[] = []
-					r.on("data", (c) => chunks.push(c))
-					r.on("end", () => {
-						resolve({ body: Buffer.concat(chunks), status: r.statusCode ?? 0 })
-					})
-				},
-			)
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/bin", port: addr.port }, (r) => {
+				const chunks: Buffer[] = []
+				r.on("data", (c) => chunks.push(c))
+				r.on("end", () => {
+					resolve({ body: Buffer.concat(chunks), status: r.statusCode ?? 0 })
+				})
+			})
 			req.on("error", reject)
 			req.end()
 		})

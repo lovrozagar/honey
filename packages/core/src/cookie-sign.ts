@@ -1,13 +1,10 @@
 const encoder = new TextEncoder()
 
 function importKey(secret: string): Promise<CryptoKey> {
-	return crypto.subtle.importKey(
-		"raw",
-		encoder.encode(secret),
-		{ hash: "SHA-256", name: "HMAC" },
-		false,
-		["sign", "verify"],
-	)
+	return crypto.subtle.importKey("raw", encoder.encode(secret), { hash: "SHA-256", name: "HMAC" }, false, [
+		"sign",
+		"verify",
+	])
 }
 
 function toBase64Url(buffer: ArrayBuffer): string {
@@ -45,12 +42,7 @@ export async function verify(signed: string, secrets: string[]): Promise<string 
 
 	for (const secret of secrets) {
 		const key = await importKey(secret)
-		const valid = await crypto.subtle.verify(
-			"HMAC",
-			key,
-			sig.buffer as ArrayBuffer,
-			encoder.encode(value),
-		)
+		const valid = await crypto.subtle.verify("HMAC", key, sig.buffer as ArrayBuffer, encoder.encode(value))
 		if (valid) return value
 	}
 

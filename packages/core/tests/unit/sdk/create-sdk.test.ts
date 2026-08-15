@@ -164,19 +164,13 @@ describe("createSDK", () => {
 	})
 
 	it("accessing non-existent resource → undefined", () => {
-		const sdk = createSDK(
-			{ users: { list: { method: "GET", path: "/users" } } },
-			{ baseURL: "http://localhost" },
-		)
+		const sdk = createSDK({ users: { list: { method: "GET", path: "/users" } } }, { baseURL: "http://localhost" })
 
 		expect((sdk as Record<string, unknown>).nonexistent).toBeUndefined()
 	})
 
 	it("accessing non-existent action → undefined", () => {
-		const sdk = createSDK(
-			{ users: { list: { method: "GET", path: "/users" } } },
-			{ baseURL: "http://localhost" },
-		)
+		const sdk = createSDK({ users: { list: { method: "GET", path: "/users" } } }, { baseURL: "http://localhost" })
 
 		expect((sdk.users as Record<string, unknown>).nonexistent).toBeUndefined()
 	})

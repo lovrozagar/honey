@@ -90,10 +90,7 @@ describe("scoped middleware — runtime tests", () => {
 			.get("/administration")
 			.handler((ctx) => ctx.res.text("ok", "admin2"))
 
-		const res = await app.fetch(
-			new Request("http://localhost/administration"),
-			{}
-		)
+		const res = await app.fetch(new Request("http://localhost/administration"), {})
 		expect(res.status).toBe(200)
 		expect(calls.length).toBe(0)
 	})
@@ -170,16 +167,10 @@ describe("scoped middleware — runtime tests", () => {
 				throw errors.forbidden()
 			})
 
-		const adminRes = await app.fetch(
-			new Request("http://localhost/admin/x"),
-			{}
-		)
+		const adminRes = await app.fetch(new Request("http://localhost/admin/x"), {})
 		expect(adminRes.status).toBe(403)
 
-		const publicRes = await app.fetch(
-			new Request("http://localhost/public"),
-			{}
-		)
+		const publicRes = await app.fetch(new Request("http://localhost/public"), {})
 		expect(publicRes.status).toBe(500)
 	})
 
@@ -190,10 +181,7 @@ describe("scoped middleware — runtime tests", () => {
 			.get("/admin/x")
 			.handler((ctx) => ctx.res.text("ok", "x"))
 
-		const res = await app.fetch(
-			new Request("http://localhost/admin/missing"),
-			{}
-		)
+		const res = await app.fetch(new Request("http://localhost/admin/missing"), {})
 		expect(res.status).toBe(404)
 		expect(calls.length).toBe(0)
 	})
@@ -205,10 +193,7 @@ describe("scoped middleware — runtime tests", () => {
 			.get("/admin/x")
 			.handler((ctx) => ctx.res.text("ok", "x"))
 
-		const res = await app.fetch(
-			new Request("http://localhost/admin/x", { method: "POST" }),
-			{}
-		)
+		const res = await app.fetch(new Request("http://localhost/admin/x", { method: "POST" }), {})
 		expect(res.status).toBe(405)
 		expect(calls.length).toBe(0)
 	})
@@ -219,9 +204,7 @@ describe("scoped middleware — runtime tests", () => {
 			.get("/admin/x")
 			.handler((ctx) => ctx.res.text("ok", "x"))
 
-		const app = honey<{}>()
-			.use("/admin", parentSpy)
-			.route(sub)
+		const app = honey<{}>().use("/admin", parentSpy).route(sub)
 
 		await app.fetch(new Request("http://localhost/admin/x"), {})
 		expect(parentCalls.length).toBe(1)
@@ -259,9 +242,7 @@ describe("scoped middleware — runtime tests", () => {
 				return ctx.res.text("ok", "y")
 			})
 
-		const app = honey<{}>()
-			.use("/admin", parentMw)
-			.route(sub)
+		const app = honey<{}>().use("/admin", parentMw).route(sub)
 
 		await app.fetch(new Request("http://localhost/admin/y"), {})
 		expect(order).toEqual(["parent", "sub", "handler"])
@@ -289,9 +270,7 @@ describe("scoped middleware — runtime tests", () => {
 			.get("/admin/x")
 			.handler((ctx) => ctx.res.text("ok", "x"))
 
-		const app = honey<{}>()
-			.route(sub)
-			.use("/admin", lateSpy)
+		const app = honey<{}>().route(sub).use("/admin", lateSpy)
 
 		await app.fetch(new Request("http://localhost/admin/x"), {})
 		expect(lateCalls.length).toBe(1)
@@ -315,7 +294,7 @@ describe("scoped middleware — runtime tests", () => {
 			new Request("http://localhost/rooms/abc", {
 				headers: { upgrade: "websocket" },
 			}),
-			{}
+			{},
 		)
 		expect(res.status).toBe(101)
 		expect(calls.length).toBe(1)
@@ -340,7 +319,7 @@ describe("scoped middleware — runtime tests", () => {
 			new Request("http://localhost/other", {
 				headers: { upgrade: "websocket" },
 			}),
-			{}
+			{},
 		)
 		expect(res.status).toBe(101)
 		expect(calls.length).toBe(0)
@@ -389,12 +368,10 @@ describe("scoped middleware — runtime tests", () => {
 	it("21. scoped mw receives next()'s previous chain additions", async () => {
 		let sawDb = false
 		const dbMw = createMiddleware(async (_c, next) => next({ db: "connected" }))
-		const useDbMw = createMiddleware(
-			async (c: { db: string }, next) => {
-				sawDb = c.db === "connected"
-				return next()
-			}
-		)
+		const useDbMw = createMiddleware(async (c: { db: string }, next) => {
+			sawDb = c.db === "connected"
+			return next()
+		})
 
 		const app = honey<{}>()
 			.use(dbMw)
@@ -495,7 +472,9 @@ describe("scoped middleware — runtime tests", () => {
 	})
 
 	it("27. empty _scopedMiddlewares keeps fast path intact", async () => {
-		const app = honey<{}>().get("/test").handler((ctx) => ctx.res.text("ok", "test"))
+		const app = honey<{}>()
+			.get("/test")
+			.handler((ctx) => ctx.res.text("ok", "test"))
 
 		const res1 = await app.fetch(new Request("http://localhost/test"), {})
 		const res2 = await app.fetch(new Request("http://localhost/test"), {})
@@ -511,7 +490,10 @@ describe("scoped middleware — runtime tests", () => {
 		const { mw: spy2, calls: calls2 } = makeSpy()
 
 		const a = honey<{}>().use("/admin", spy1)
-		const b = a.basePath("/api").get("/admin/x").handler((ctx) => ctx.res.text("ok", "x"))
+		const b = a
+			.basePath("/api")
+			.get("/admin/x")
+			.handler((ctx) => ctx.res.text("ok", "x"))
 
 		await b.fetch(new Request("http://localhost/api/admin/x"), {})
 		expect(calls1.length).toBe(0)
@@ -526,7 +508,10 @@ describe("scoped middleware — runtime tests", () => {
 	it("29. .context() preserves _scopedMiddlewares", async () => {
 		const { mw: spy, calls } = makeSpy()
 		const a = honey<{}>().use("/admin", spy)
-		const b = a.context({ foo: 1 }).get("/admin/x").handler((ctx) => ctx.res.text("ok", "x"))
+		const b = a
+			.context({ foo: 1 })
+			.get("/admin/x")
+			.handler((ctx) => ctx.res.text("ok", "x"))
 
 		await b.fetch(new Request("http://localhost/admin/x"), {})
 		expect(calls.length).toBe(1)
@@ -535,7 +520,10 @@ describe("scoped middleware — runtime tests", () => {
 	it("30. .meta() (chain-level) preserves _scopedMiddlewares", async () => {
 		const { mw: spy, calls } = makeSpy()
 		const a = honey<{}>().use("/admin", spy)
-		const b = a.meta({ x: 1 }).get("/admin/x").handler((ctx) => ctx.res.text("ok", "x"))
+		const b = a
+			.meta({ x: 1 })
+			.get("/admin/x")
+			.handler((ctx) => ctx.res.text("ok", "x"))
 
 		await b.fetch(new Request("http://localhost/admin/x"), {})
 		expect(calls.length).toBe(1)

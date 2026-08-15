@@ -46,15 +46,12 @@ describe("Rust SDK codegen — nested operationId support (T39–T44)", () => {
 		expect(resourcesMod).toContain("pub mod users")
 
 		/* checkout namespace must declare sessions sub-mod */
-		const checkoutMod =
-			files["src/resources/checkout/mod.rs"] ?? files["src/resources/checkout.rs"]
+		const checkoutMod = files["src/resources/checkout/mod.rs"] ?? files["src/resources/checkout.rs"]
 		expect(checkoutMod).toBeDefined()
 		expect(checkoutMod).toMatch(/pub mod sessions|pub struct CheckoutResource/)
 
 		/* sessions resource must expose create method */
-		const sessionsMod =
-			files["src/resources/checkout/sessions.rs"] ??
-			files["src/resources/checkout_sessions.rs"]
+		const sessionsMod = files["src/resources/checkout/sessions.rs"] ?? files["src/resources/checkout_sessions.rs"]
 		expect(sessionsMod).toBeDefined()
 		expect(sessionsMod).toMatch(/pub fn create\s*\(|pub async fn create\s*\(/)
 	})
@@ -66,8 +63,7 @@ describe("Rust SDK codegen — nested operationId support (T39–T44)", () => {
 		const files = result.files
 
 		/* RED: flat codegen has no profile accessor on UsersResource */
-		const usersMod =
-			files["src/resources/users/mod.rs"] ?? files["src/resources/users.rs"]
+		const usersMod = files["src/resources/users/mod.rs"] ?? files["src/resources/users.rs"]
 		expect(usersMod).toBeDefined()
 		/* list method directly on UsersResource */
 		expect(usersMod).toMatch(/pub fn list\s*\(|pub async fn list\s*\(/)

@@ -18,12 +18,7 @@ type TelemetryAdapter = {
 	onNotFound?(ctx: { method: string; path: string; req: Request }): void
 	onRequest?(ctx: { env: unknown; req: Request }): void
 	onResponse?(ctx: { duration: number; req: Request; status: number }): void
-	onRoute?(ctx: {
-		method: string
-		params: Record<string, string>
-		path: string
-		req: Request
-	}): void
+	onRoute?(ctx: { method: string; params: Record<string, string>; path: string; req: Request }): void
 }
 
 export function otelAdapter(options: { tracer: Tracer }): TelemetryAdapter {

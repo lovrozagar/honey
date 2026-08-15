@@ -2,17 +2,36 @@ import { schemaToIR } from "./codegen-ir.ts"
 import type { IRSchema } from "./codegen-ir.ts"
 
 export const GO_KEYWORDS = new Set([
-	"break", "case", "chan", "const", "continue", "default", "defer",
-	"else", "fallthrough", "for", "func", "go", "goto", "if", "import",
-	"interface", "map", "package", "range", "return", "select", "struct",
-	"switch", "type", "var",
+	"break",
+	"case",
+	"chan",
+	"const",
+	"continue",
+	"default",
+	"defer",
+	"else",
+	"fallthrough",
+	"for",
+	"func",
+	"go",
+	"goto",
+	"if",
+	"import",
+	"interface",
+	"map",
+	"package",
+	"range",
+	"return",
+	"select",
+	"struct",
+	"switch",
+	"type",
+	"var",
 ])
 
 /** Converts a string to PascalCase from kebab-case, snake_case, dotted, or camelCase. */
 export function goPascal(name: string): string {
-	return name
-		.replace(/[-_.](.)/g, (_, c: string) => c.toUpperCase())
-		.replace(/^(.)/, (_, c: string) => c.toUpperCase())
+	return name.replace(/[-_.](.)/g, (_, c: string) => c.toUpperCase()).replace(/^(.)/, (_, c: string) => c.toUpperCase())
 }
 
 /**
@@ -101,11 +120,16 @@ function renderHoistedIntEnum(typeName: string, enumVals: unknown[]): string {
 
 function primitiveFor(t: string | undefined): string | null {
 	switch (t) {
-		case "string": return "string"
-		case "integer": return "int64"
-		case "number": return "float64"
-		case "boolean": return "bool"
-		default: return null
+		case "string":
+			return "string"
+		case "integer":
+			return "int64"
+		case "number":
+			return "float64"
+		case "boolean":
+			return "bool"
+		default:
+			return null
 	}
 }
 
@@ -140,7 +164,8 @@ export function irRenderUse(ir: IRSchema, ctx: RenderUseCtx, depth = 0): string 
 				innerStr.startsWith("*") ||
 				innerStr.startsWith("[]") ||
 				innerStr.startsWith("map[")
-			) return innerStr
+			)
+				return innerStr
 			return `*${innerStr}`
 		}
 
@@ -209,11 +234,7 @@ export function irRenderUse(ir: IRSchema, ctx: RenderUseCtx, depth = 0): string 
 	}
 }
 
-function irRenderAnonStruct(
-	ir: Extract<IRSchema, { kind: "object" }>,
-	ctx: RenderUseCtx,
-	depth: number,
-): string {
+function irRenderAnonStruct(ir: Extract<IRSchema, { kind: "object" }>, ctx: RenderUseCtx, depth: number): string {
 	const sorted = ir.fields.slice().sort((a, b) => a.name.localeCompare(b.name))
 	const lines: string[] = []
 	lines.push(`struct {`)
@@ -228,10 +249,7 @@ function irRenderAnonStruct(
 			parentName: childParent,
 		}
 		const fieldType = irRenderUse(field.schema, childCtx, depth + 1)
-		const alreadyNilable =
-			fieldType.startsWith("*") ||
-			fieldType.startsWith("[]") ||
-			fieldType.startsWith("map[")
+		const alreadyNilable = fieldType.startsWith("*") || fieldType.startsWith("[]") || fieldType.startsWith("map[")
 		const finalType = !field.required && !alreadyNilable ? `*${fieldType}` : fieldType
 		const tag = goTag(field.name, !field.required)
 		lines.push(`\t${fieldGoName} ${finalType} ${tag}`)
@@ -264,10 +282,7 @@ export function irRenderTopLevel(
 		const rawType = raw?.type as string | undefined
 		const base = rawType ? (primitiveFor(rawType) ?? "string") : constBaseType(ir.value)
 		const val = typeof ir.value === "string" ? JSON.stringify(ir.value) : String(ir.value)
-		return [
-			`type ${typeName} ${base}`,
-			`const ${typeName}Value ${typeName} = ${val}`,
-		].join("\n")
+		return [`type ${typeName} ${base}`, `const ${typeName}Value ${typeName} = ${val}`].join("\n")
 	}
 
 	if (ir.kind === "allOf") {
@@ -288,8 +303,7 @@ export function irRenderTopLevel(
 					fieldName: field.name,
 					parentName: typeName,
 				})
-				const alreadyNilable =
-					ft.startsWith("*") || ft.startsWith("[]") || ft.startsWith("map[")
+				const alreadyNilable = ft.startsWith("*") || ft.startsWith("[]") || ft.startsWith("map[")
 				const finalType = !field.required && !alreadyNilable ? `*${ft}` : ft
 				l.push(`\t${fieldGoName} ${finalType} ${goTag(field.name, !field.required)}`)
 			}
@@ -337,8 +351,7 @@ export function irRenderTopLevel(
 				fieldName: field.name,
 				parentName: typeName,
 			})
-			const alreadyNilable =
-				ft.startsWith("*") || ft.startsWith("[]") || ft.startsWith("map[")
+			const alreadyNilable = ft.startsWith("*") || ft.startsWith("[]") || ft.startsWith("map[")
 			let finalType = !field.required && !alreadyNilable ? `*${ft}` : ft
 			/* self-ref → pointer (circular) */
 			if (circularRefs.has(ft.replace(/^\*/, "")) && !finalType.startsWith("*")) {
@@ -387,18 +400,10 @@ export function irRenderTopLevel(
 	return `type ${typeName} = ${aliased}`
 }
 
-export function renderUse(
-	schema: Record<string, unknown> | undefined,
-	ctx: RenderUseCtx,
-): string {
+export function renderUse(schema: Record<string, unknown> | undefined, ctx: RenderUseCtx): string {
 	return irRenderUse(schemaToIR(schema), ctx, ctx.depth ?? 0)
 }
 
-export function renderTopLevel(
-	name: string,
-	schema: Record<string, unknown>,
-	decls: Map<string, string>,
-): string {
+export function renderTopLevel(name: string, schema: Record<string, unknown>, decls: Map<string, string>): string {
 	return irRenderTopLevel(name, schemaToIR(schema), decls, schema)
 }
-

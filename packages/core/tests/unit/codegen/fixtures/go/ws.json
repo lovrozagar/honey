@@ -1,32 +1,32 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Go WebSocket", "version": "1.0.0" },
-  "paths": {
-    "/realtime/subscribe": {
-      "get": {
-        "operationId": "realtime.subscribe",
-        "summary": "Subscribe to realtime updates",
-        "x-websocket": true,
-        "parameters": [
-          {
-            "in": "query",
-            "name": "reconnect_token",
-            "required": false,
-            "schema": { "type": "string" }
-          },
-          {
-            "in": "query",
-            "name": "channel",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "101": {
-            "description": "Switching Protocols"
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Go WebSocket", "version": "1.0.0" },
+	"paths": {
+		"/realtime/subscribe": {
+			"get": {
+				"operationId": "realtime.subscribe",
+				"summary": "Subscribe to realtime updates",
+				"x-websocket": true,
+				"parameters": [
+					{
+						"in": "query",
+						"name": "reconnect_token",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"in": "query",
+						"name": "channel",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"101": {
+						"description": "Switching Protocols"
+					}
+				}
+			}
+		}
+	}
 }

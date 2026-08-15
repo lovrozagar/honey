@@ -8,7 +8,7 @@ import type { OpenApiMeta } from "../../../src/types.ts"
  * OpenApiMeta gains `mcp?: boolean` field. */
 
 /* ---- T2.1 meta.mcp: true → operation["x-mcp"] === true ---- */
-describe("T2.1 meta.mcp: true → operation[\"x-mcp\"] === true", () => {
+describe('T2.1 meta.mcp: true → operation["x-mcp"] === true', () => {
 	it("emits x-mcp: true on OpenAPI operation when meta.mcp === true", async () => {
 		const app = honey()
 			.post("/x")

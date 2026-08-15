@@ -536,31 +536,28 @@ describe("generateTypes with arktype schemas", () => {
 /* ---- Mixed vendor ---- */
 
 describe("mixed vendor schemas", () => {
-	it.skipIf(!hasZodJsonSchema)(
-		"app with zod input + valibot output produces valid OpenAPI",
-		async () => {
-			const h = honey<{}>()
-			h.post("/items")
-				.input({ json: z.object({ name: z.string() }) })
-				.output({ "application/json": { ok: v.object({ id: v.string(), name: v.string() }) } })
-				.handler((ctx) => ctx.res.json("ok", { id: "1", name: "test" }))
+	it.skipIf(!hasZodJsonSchema)("app with zod input + valibot output produces valid OpenAPI", async () => {
+		const h = honey<{}>()
+		h.post("/items")
+			.input({ json: z.object({ name: z.string() }) })
+			.output({ "application/json": { ok: v.object({ id: v.string(), name: v.string() }) } })
+			.handler((ctx) => ctx.res.json("ok", { id: "1", name: "test" }))
 
-			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const op = spec.paths["/items"]?.post as Record<string, unknown>
-			/* input: zod JSON Schema */
-			const body = op.requestBody as Record<string, unknown>
-			const bodyContent = body.content as Record<string, Record<string, unknown>>
-			const inputSchema = resolveSchema(spec, bodyContent["application/json"].schema as Record<string, unknown>)
-			expect(inputSchema.type).toBe("object")
-			/* output: valibot JSON Schema */
-			const responses = op.responses as Record<string, Record<string, unknown>>
-			const outContent = responses["200"].content as Record<string, Record<string, unknown>>
-			const outputSchema = resolveSchema(spec, outContent["application/json"].schema as Record<string, unknown>)
-			expect(outputSchema.type).toBe("object")
-			const outProps = outputSchema.properties as Record<string, Record<string, string>>
-			expect(outProps.id.type).toBe("string")
-		},
-	)
+		const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
+		const op = spec.paths["/items"]?.post as Record<string, unknown>
+		/* input: zod JSON Schema */
+		const body = op.requestBody as Record<string, unknown>
+		const bodyContent = body.content as Record<string, Record<string, unknown>>
+		const inputSchema = resolveSchema(spec, bodyContent["application/json"].schema as Record<string, unknown>)
+		expect(inputSchema.type).toBe("object")
+		/* output: valibot JSON Schema */
+		const responses = op.responses as Record<string, Record<string, unknown>>
+		const outContent = responses["200"].content as Record<string, Record<string, unknown>>
+		const outputSchema = resolveSchema(spec, outContent["application/json"].schema as Record<string, unknown>)
+		expect(outputSchema.type).toBe("object")
+		const outProps = outputSchema.properties as Record<string, Record<string, string>>
+		expect(outProps.id.type).toBe("string")
+	})
 
 	it("generateTypes with mixed vendors emits proper types", () => {
 		const h = honey<{}>()
@@ -702,26 +699,29 @@ describe("OpenAPI route-level filter", () => {
 /* ---- x-internal field filtering ---- */
 
 describe("OpenAPI x-internal field filtering", () => {
-	it.skipIf(!hasZodJsonSchema)("json body properties with x-internal are stripped from request body schema", async () => {
-		const h = honey<{}>()
-		h.post("/login")
-			.input({
-				json: z.object({
-					email: z.email(),
-					internal_trace: z.string().optional().meta({ "x-internal": true }),
-				}),
-			})
-			.handler((ctx) => ctx.res.text("ok", "ok"))
+	it.skipIf(!hasZodJsonSchema)(
+		"json body properties with x-internal are stripped from request body schema",
+		async () => {
+			const h = honey<{}>()
+			h.post("/login")
+				.input({
+					json: z.object({
+						email: z.email(),
+						internal_trace: z.string().optional().meta({ "x-internal": true }),
+					}),
+				})
+				.handler((ctx) => ctx.res.text("ok", "ok"))
 
-		const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-		const op = spec.paths["/login"]?.post as Record<string, unknown>
-		const body = op.requestBody as Record<string, unknown>
-		const content = body.content as Record<string, Record<string, unknown>>
-		const schema = resolveSchema(spec, content["application/json"].schema as Record<string, unknown>)
-		const props = schema.properties as Record<string, unknown>
-		expect(props.email).toBeDefined()
-		expect(props.internal_trace).toBeUndefined()
-	})
+			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
+			const op = spec.paths["/login"]?.post as Record<string, unknown>
+			const body = op.requestBody as Record<string, unknown>
+			const content = body.content as Record<string, Record<string, unknown>>
+			const schema = resolveSchema(spec, content["application/json"].schema as Record<string, unknown>)
+			const props = schema.properties as Record<string, unknown>
+			expect(props.email).toBeDefined()
+			expect(props.internal_trace).toBeUndefined()
+		},
+	)
 
 	it.skipIf(!hasZodJsonSchema)("query params with x-internal are excluded from parameters", async () => {
 		const h = honey<{}>()
@@ -777,16 +777,11 @@ describe("normalizeSecurity", () => {
 	})
 
 	it("single nested string array returns single AND group", () => {
-		expect(normalizeSecurity([["iaKey", "iaDomain", "iaActor"]])).toEqual([
-			{ iaActor: [], iaDomain: [], iaKey: [] },
-		])
+		expect(normalizeSecurity([["iaKey", "iaDomain", "iaActor"]])).toEqual([{ iaActor: [], iaDomain: [], iaKey: [] }])
 	})
 
 	it("multiple nested string arrays return OR-of-AND", () => {
-		expect(normalizeSecurity([["iaKey", "iaDomain"], ["jwt"]])).toEqual([
-			{ iaDomain: [], iaKey: [] },
-			{ jwt: [] },
-		])
+		expect(normalizeSecurity([["iaKey", "iaDomain"], ["jwt"]])).toEqual([{ iaDomain: [], iaKey: [] }, { jwt: [] }])
 	})
 
 	it("legacy object array passthrough", () => {

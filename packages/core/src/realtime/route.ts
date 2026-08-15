@@ -91,7 +91,7 @@ export function createConnContext(opts: {
 
 	Object.defineProperty(conn, "on", {
 		enumerable: true,
-		value(event: "message" | "close", handler: ((...args: unknown[]) => void)) {
+		value(event: "message" | "close", handler: (...args: unknown[]) => void) {
 			if (event === "message") {
 				handlers.message = handler as (payload: unknown) => void
 			} else {

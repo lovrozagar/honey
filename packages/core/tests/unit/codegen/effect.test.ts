@@ -134,10 +134,7 @@ describe("effect — OpenAPI JSON Schema", () => {
 		const op = spec.paths["/items"]?.post as Record<string, unknown>
 		const body = op.requestBody as Record<string, unknown>
 		const content = body.content as Record<string, Record<string, unknown>>
-		const schema = resolveSchema(
-			spec,
-			content["application/json"].schema as Record<string, unknown>,
-		)
+		const schema = resolveSchema(spec, content["application/json"].schema as Record<string, unknown>)
 		expect(schema?.type).toBe("object")
 		expect(schema?.properties).toBeDefined()
 		const props = schema?.properties as Record<string, Record<string, string>>
@@ -175,10 +172,7 @@ describe("effect — OpenAPI JSON Schema", () => {
 		const op = spec.paths["/items"]?.get as Record<string, unknown>
 		const responses = op.responses as Record<string, Record<string, unknown>>
 		const content = responses["200"].content as Record<string, Record<string, unknown>>
-		const schema = resolveSchema(
-			spec,
-			content["application/json"].schema as Record<string, unknown>,
-		)
+		const schema = resolveSchema(spec, content["application/json"].schema as Record<string, unknown>)
 		expect(schema?.type).toBe("object")
 		const props = schema?.properties as Record<string, Record<string, string>>
 		expect(props.id.type).toBe("string")

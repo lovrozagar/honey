@@ -1,26 +1,26 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Map Value Nested Object", "version": "1.0.0" },
-  "paths": {},
-  "components": {
-    "schemas": {
-      "Registry": {
-        "type": "object",
-        "required": ["entries"],
-        "properties": {
-          "entries": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "object",
-              "required": ["version"],
-              "properties": {
-                "version": { "type": "string" },
-                "active": { "type": "boolean" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Map Value Nested Object", "version": "1.0.0" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Registry": {
+				"type": "object",
+				"required": ["entries"],
+				"properties": {
+					"entries": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "object",
+							"required": ["version"],
+							"properties": {
+								"version": { "type": "string" },
+								"active": { "type": "boolean" }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

@@ -94,11 +94,7 @@ export class HoneyRes {
 	}
 
 	/** Binary — application/octet-stream */
-	binary(
-		statusKey: StatusKey,
-		body: ArrayBuffer | Uint8Array,
-		opts?: ResponseOptions,
-	): HoneyResponse {
+	binary(statusKey: StatusKey, body: ArrayBuffer | Uint8Array, opts?: ResponseOptions): HoneyResponse {
 		const headers = new Headers({ "content-type": "application/octet-stream" })
 		applyResponseOptions(headers, opts)
 		return new HoneyResponse(body, { headers, status: statusKeyToCode[statusKey] })
@@ -110,10 +106,7 @@ export class HoneyRes {
 	}
 
 	/** Raw streaming — no automatic content-type (always 200, customizable) */
-	stream(
-		callback: (writable: WritableStream) => Promise<void>,
-		opts?: ResponseOptions,
-	): HoneyResponse {
+	stream(callback: (writable: WritableStream) => Promise<void>, opts?: ResponseOptions): HoneyResponse {
 		/* same implementation as current ctx.stream(), returns HoneyResponse */
 	}
 
@@ -283,18 +276,12 @@ type ApplyOutput<TCtx, TOutput> = [keyof TOutput] extends [never]
 					("application/json" extends keyof TOutput
 						? ConstrainBodyMethod<TRes, TOutput, "application/json", "json">
 						: {}) &
-					("text/plain" extends keyof TOutput
-						? ConstrainBodyMethod<TRes, TOutput, "text/plain", "text">
-						: {}) &
-					("text/html" extends keyof TOutput
-						? ConstrainBodyMethod<TRes, TOutput, "text/html", "html">
-						: {}) &
+					("text/plain" extends keyof TOutput ? ConstrainBodyMethod<TRes, TOutput, "text/plain", "text"> : {}) &
+					("text/html" extends keyof TOutput ? ConstrainBodyMethod<TRes, TOutput, "text/html", "html"> : {}) &
 					("application/xml" extends keyof TOutput
 						? ConstrainBodyMethod<TRes, TOutput, "application/xml", "xml">
 						: {}) &
-					("text/csv" extends keyof TOutput
-						? ConstrainBodyMethod<TRes, TOutput, "text/csv", "csv">
-						: {}) &
+					("text/csv" extends keyof TOutput ? ConstrainBodyMethod<TRes, TOutput, "text/csv", "csv"> : {}) &
 					("application/octet-stream" extends keyof TOutput
 						? ConstrainBodyMethod<TRes, TOutput, "application/octet-stream", "binary">
 						: {}) &

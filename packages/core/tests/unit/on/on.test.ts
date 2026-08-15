@@ -20,9 +20,7 @@ describe(".on() multi-method routing", () => {
 	})
 
 	it("returns 405 for methods not in the list", async () => {
-		const app = new Honey()
-			.on(["GET", "POST"], "/users")
-			.handler((ctx) => ctx.res.json("ok", { ok: true }))
+		const app = new Honey().on(["GET", "POST"], "/users").handler((ctx) => ctx.res.json("ok", { ok: true }))
 
 		const res = await app.fetch(makeRequest("DELETE", "/users"), {} as never)
 		expect(res.status).toBe(405)

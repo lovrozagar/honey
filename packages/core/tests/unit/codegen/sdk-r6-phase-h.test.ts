@@ -314,7 +314,7 @@ describe("#R6-27 _call promotion — Layer B' regression types", () => {
 })
 
 describe("#R6-27 _call promotion — Layer B' regression client strings", () => {
-	it("Layer B' post-fix: files.client contains the _call promotion guard (actions.length === 1 && actions[0] === \"_call\")", () => {
+	it('Layer B\' post-fix: files.client contains the _call promotion guard (actions.length === 1 && actions[0] === "_call")', () => {
 		const { files } = generateSDK(phaseHFixtureSpec, { name: "TestSDK" })
 		expect(files.client).toContain(`nodeKeys.length === 1 && nodeKeys[0] === "_call"`)
 	})

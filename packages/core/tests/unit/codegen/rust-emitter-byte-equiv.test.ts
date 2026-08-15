@@ -8,10 +8,7 @@ const FIXTURES = ["crud", "discriminated", "invalidation", "ws", "sse", "refs", 
 /** Keys whose content varies per fixture (types, client, resource modules). */
 function variantKeys(files: Record<string, string>): string[] {
 	return Object.keys(files).filter(
-		(k) =>
-			k === "src/types.rs" ||
-			k === "src/client.rs" ||
-			k.startsWith("src/resources/"),
+		(k) => k === "src/types.rs" || k === "src/client.rs" || k.startsWith("src/resources/"),
 	)
 }
 

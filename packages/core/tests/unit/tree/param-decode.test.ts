@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { HttpMethod, RouteHandler, WSRouteHandler } from "../../../src/tree.ts"
-import {
-	createNode,
-	insertRoute,
-	insertWsRoute,
-	matchRoute,
-	matchWsRoute,
-} from "../../../src/tree.ts"
+import { createNode, insertRoute, insertWsRoute, matchRoute, matchWsRoute } from "../../../src/tree.ts"
 
 function makeHandler(): RouteHandler {
 	return {

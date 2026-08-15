@@ -351,7 +351,11 @@ describe("MCP integration harness (subprocess + JSON-RPC)", () => {
 			}
 			writeFileSync(
 				join(sdkVendorDir, "package.json"),
-				JSON.stringify({ main: "./mock.index.gen.ts", name: "@repo/mock-sdk", type: "module", version: "0.0.0" }, null, 2),
+				JSON.stringify(
+					{ main: "./mock.index.gen.ts", name: "@repo/mock-sdk", type: "module", version: "0.0.0" },
+					null,
+					2,
+				),
 				"utf8",
 			)
 			writeFileSync(join(dir, "package.json"), buildHarnessPackageJson(), "utf8")
@@ -380,7 +384,10 @@ describe("MCP integration harness (subprocess + JSON-RPC)", () => {
 						try {
 							const parsed = JSON.parse(line) as JsonRpcResponse
 							const resolver = pending.get(parsed.id)
-							if (resolver) { pending.delete(parsed.id); resolver(parsed) }
+							if (resolver) {
+								pending.delete(parsed.id)
+								resolver(parsed)
+							}
 						} catch {
 							/* non-JSON log line */
 						}
@@ -397,7 +404,10 @@ describe("MCP integration harness (subprocess + JSON-RPC)", () => {
 						pending.delete(req.id)
 						reject(new Error(`timeout id=${req.id} stderr: ${Buffer.concat(stderrChunks).toString()}`))
 					}, 8_000)
-					pending.set(req.id, (r) => { clearTimeout(t); resolve(r) })
+					pending.set(req.id, (r) => {
+						clearTimeout(t)
+						resolve(r)
+					})
 					spawned.stdin.write(`${JSON.stringify(req)}\n`)
 				})
 			}

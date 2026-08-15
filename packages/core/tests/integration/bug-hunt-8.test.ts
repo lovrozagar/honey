@@ -160,9 +160,7 @@ describe("bug-hunt-8: response opts.headers overwrite", () => {
 
 	it("custom header added alongside generated headers", async () => {
 		const app = honey<{}>()
-		app
-			.get("/api")
-			.handler((ctx) => ctx.res.json("ok", {}, { headers: { "x-powered-by": "honey" } }))
+		app.get("/api").handler((ctx) => ctx.res.json("ok", {}, { headers: { "x-powered-by": "honey" } }))
 
 		const res = await app.fetch(new Request("http://localhost/api"), {})
 		expect(res.headers.get("content-type")).toBe("application/json")
@@ -274,9 +272,7 @@ describe("bug-hunt-8: route precedence — static > dynamic > wildcard", () => {
 	it("static wins over dynamic at same level", async () => {
 		const app = honey<{}>()
 		app.get("/files/readme").handler((ctx) => ctx.res.json("ok", { match: "static" }))
-		app
-			.get("/files/:name")
-			.handler((ctx) => ctx.res.json("ok", { match: "dynamic", name: ctx.params.name }))
+		app.get("/files/:name").handler((ctx) => ctx.res.json("ok", { match: "dynamic", name: ctx.params.name }))
 
 		/* static wins */
 		const r1 = await app.fetch(new Request("http://localhost/files/readme"), {})
@@ -290,9 +286,7 @@ describe("bug-hunt-8: route precedence — static > dynamic > wildcard", () => {
 	it("wildcard catches multi-segment when no dynamic param present", async () => {
 		const app = honey<{}>()
 		app.get("/static/readme").handler((ctx) => ctx.res.json("ok", { match: "static" }))
-		app
-			.get("/static/*path")
-			.handler((ctx) => ctx.res.json("ok", { match: "wildcard", path: ctx.params.path }))
+		app.get("/static/*path").handler((ctx) => ctx.res.json("ok", { match: "wildcard", path: ctx.params.path }))
 
 		const r1 = await app.fetch(new Request("http://localhost/static/readme"), {})
 		expect(((await r1.json()) as Record<string, string>).match).toBe("static")
@@ -303,12 +297,8 @@ describe("bug-hunt-8: route precedence — static > dynamic > wildcard", () => {
 
 	it("dynamic + wildcard: dynamic takes single, wildcard unreachable for multi-segment", async () => {
 		const app = honey<{}>()
-		app
-			.get("/files/:name")
-			.handler((ctx) => ctx.res.json("ok", { match: "dynamic", name: ctx.params.name }))
-		app
-			.get("/files/*path")
-			.handler((ctx) => ctx.res.json("ok", { match: "wildcard", path: ctx.params.path }))
+		app.get("/files/:name").handler((ctx) => ctx.res.json("ok", { match: "dynamic", name: ctx.params.name }))
+		app.get("/files/*path").handler((ctx) => ctx.res.json("ok", { match: "wildcard", path: ctx.params.path }))
 
 		/* single segment → dynamic wins */
 		const r1 = await app.fetch(new Request("http://localhost/files/doc.txt"), {})

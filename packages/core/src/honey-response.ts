@@ -306,9 +306,7 @@ export function replaceResponse(
 	})
 }
 
-function headersToInit(
-	headers: Headers | HoneyOutHeaders | Record<string, string | string[]>,
-): HeadersInit {
+function headersToInit(headers: Headers | HoneyOutHeaders | Record<string, string | string[]>): HeadersInit {
 	if (headers instanceof HoneyOutHeaders) return headers.toRecord() as HeadersInit
 	if (headers instanceof Headers) return headers
 	return headers as HeadersInit

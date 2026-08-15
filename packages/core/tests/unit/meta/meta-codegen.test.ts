@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
-import {
-	generateManifest,
-	generateOpenApi,
-	generateRouteTreeFromApp,
-	generateTypes,
-} from "../../../src/codegen.ts"
+import { generateManifest, generateOpenApi, generateRouteTreeFromApp, generateTypes } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
 
 /* ---- fixtures ---- */

@@ -12,10 +12,7 @@ export async function loadToJSONSchema(): Promise<
 		const id = "zod"
 		const zod = await import(id)
 		if (typeof zod.toJSONSchema === "function") {
-			toJSONSchemaFn = zod.toJSONSchema as (
-				schema: unknown,
-				opts?: { io?: "input" | "output" },
-			) => unknown
+			toJSONSchemaFn = zod.toJSONSchema as (schema: unknown, opts?: { io?: "input" | "output" }) => unknown
 		}
 	} catch {
 		/* zod not available */

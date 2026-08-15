@@ -1,26 +1,26 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Array Of Nested Object", "version": "1.0.0" },
-  "paths": {},
-  "components": {
-    "schemas": {
-      "Feed": {
-        "type": "object",
-        "required": ["items"],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["id"],
-              "properties": {
-                "id": { "type": "string" },
-                "score": { "type": "number" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Array Of Nested Object", "version": "1.0.0" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Feed": {
+				"type": "object",
+				"required": ["items"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": ["id"],
+							"properties": {
+								"id": { "type": "string" },
+								"score": { "type": "number" }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

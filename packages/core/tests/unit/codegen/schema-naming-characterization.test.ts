@@ -46,10 +46,7 @@ function extractInlineSchema(
 }
 
 /** Recursively resolve all $refs in a node using the processed spec's components. */
-function deepResolveRefs(
-	node: unknown,
-	components: Record<string, Record<string, unknown>>,
-): unknown {
+function deepResolveRefs(node: unknown, components: Record<string, Record<string, unknown>>): unknown {
 	if (node === null || typeof node !== "object") return node
 	if (Array.isArray(node)) return node.map((n) => deepResolveRefs(n, components))
 	const obj = node as Record<string, unknown>
@@ -128,10 +125,9 @@ describe("Group A — characterization (must pass against current code)", () => 
 				`no resolved schema for ${method.toUpperCase()} ${path} ${role} ${status ?? ""}`,
 			).toBeDefined()
 			if (!resolvedSchema) throw new Error(`no resolved schema for ${method.toUpperCase()} ${path} ${role}`)
-			expect(
-				canonicalizeSchema(resolvedSchema),
-				`canonical mismatch for ${method.toUpperCase()} ${path} ${role}`,
-			).toBe(canonicalizeSchema(originalSchema))
+			expect(canonicalizeSchema(resolvedSchema), `canonical mismatch for ${method.toUpperCase()} ${path} ${role}`).toBe(
+				canonicalizeSchema(originalSchema),
+			)
 		}
 	})
 
@@ -155,9 +151,9 @@ describe("Group A — characterization (must pass against current code)", () => 
 		/* find the {ok:boolean} schema component — current code emits it since count>=2 */
 		const okSchema = { properties: { ok: { type: "boolean" } }, required: ["ok"], type: "object" }
 		const canonical = canonicalizeSchema(okSchema)
-		const matchingNames = Object.entries(schemas).filter(
-			([, s]) => canonicalizeSchema(s as Record<string, unknown>) === canonical,
-		).map(([name]) => name)
+		const matchingNames = Object.entries(schemas)
+			.filter(([, s]) => canonicalizeSchema(s as Record<string, unknown>) === canonical)
+			.map(([name]) => name)
 
 		/* current code emits exactly ONE entry per distinct canonical shape */
 		expect(matchingNames.length).toBe(1)
@@ -167,8 +163,12 @@ describe("Group A — characterization (must pass against current code)", () => 
 		const stripeOp = processed.paths["/v1/webhooks/stripe"]?.post as Record<string, unknown>
 		const githubResp = (githubOp?.responses as Record<string, unknown>)?.["200"]
 		const stripeResp = (stripeOp?.responses as Record<string, unknown>)?.["200"]
-		const githubSchema = ((githubResp as Record<string, unknown>)?.content as Record<string, Record<string, unknown>>)?.["application/json"]?.schema
-		const stripeSchema = ((stripeResp as Record<string, unknown>)?.content as Record<string, Record<string, unknown>>)?.["application/json"]?.schema
+		const githubSchema = (
+			(githubResp as Record<string, unknown>)?.content as Record<string, Record<string, unknown>>
+		)?.["application/json"]?.schema
+		const stripeSchema = (
+			(stripeResp as Record<string, unknown>)?.content as Record<string, Record<string, unknown>>
+		)?.["application/json"]?.schema
 		expect((githubSchema as Record<string, unknown>)?.$ref).toBeDefined()
 		expect((stripeSchema as Record<string, unknown>)?.$ref).toBeDefined()
 		expect((githubSchema as Record<string, unknown>).$ref).toBe((stripeSchema as Record<string, unknown>).$ref)

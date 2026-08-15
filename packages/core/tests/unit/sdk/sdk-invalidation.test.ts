@@ -34,13 +34,15 @@ describe("marks collection stale after successful mutation", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -67,13 +69,15 @@ describe("instance-level: only stales the mutated resource", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -105,13 +109,15 @@ describe("instance mutation also stales collection", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -155,13 +161,15 @@ describe("pattern-level fallback: create stales all instances", () => {
 				baseURL: "http://localhost",
 				fetch: fetcher,
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -190,13 +198,15 @@ describe("one-shot: cleared after successful read", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -237,13 +247,15 @@ describe("NOT cleared after failed read", () => {
 				baseURL: "http://localhost",
 				fetch: fetcher,
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -272,13 +284,15 @@ describe("staleTime expiry clears staleness", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 50 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -306,13 +320,15 @@ describe("onRequest receives correct invalidatedBy", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -339,14 +355,16 @@ describe("onResponse receives isStale and invalidatedBy", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onResponse: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-					return undefined
-				}],
+				onResponse: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+						return undefined
+					},
+				],
 			},
 		)
 
@@ -373,9 +391,11 @@ describe("selector field uses concrete interpolated path", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({ selector: ctx.selector })
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({ selector: ctx.selector })
+					},
+				],
 			},
 		)
 
@@ -402,13 +422,15 @@ describe("multiple mutations accumulate invalidatedBy", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -435,9 +457,11 @@ describe("no overhead when invalidation not configured", () => {
 			{
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
-				onRequest: [(ctx) => {
-					captured.push({ ...ctx })
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({ ...ctx })
+					},
+				],
 			},
 		)
 
@@ -477,13 +501,15 @@ describe("mutation failure does not mark targets stale", () => {
 				baseURL: "http://localhost",
 				fetch: fetcher,
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -509,13 +535,15 @@ describe("isStale false for non-stale reads", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 
@@ -542,13 +570,15 @@ describe("pattern-level one-shot clears for all instances", () => {
 				baseURL: "http://localhost",
 				fetch: mockFetch(200, {}),
 				invalidation: { staleTime: 5_000 },
-				onRequest: [(ctx) => {
-					captured.push({
-						invalidatedBy: ctx.invalidatedBy,
-						isStale: ctx.isStale,
-						selector: ctx.selector,
-					})
-				}],
+				onRequest: [
+					(ctx) => {
+						captured.push({
+							invalidatedBy: ctx.invalidatedBy,
+							isStale: ctx.isStale,
+							selector: ctx.selector,
+						})
+					},
+				],
 			},
 		)
 

@@ -7,13 +7,9 @@ type AppMeta = { security?: string; tags?: string }
 
 describe("chain-level .meta(values) — runtime", () => {
 	it("chain meta accessible via ctx.meta in handler", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" })
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		expect(res.status).toBe(200)
@@ -22,16 +18,12 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("route-level .meta() merges with chain meta", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" })
 
 		app
 			.get("/test")
 			.meta({ tags: "Auth" })
-			.handler((ctx) =>
-				ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-			)
+			.handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -40,16 +32,12 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("route-level .meta() overrides chain meta on conflict", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt", tags: "Default" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt", tags: "Default" })
 
 		app
 			.get("/test")
 			.meta({ tags: "Override" })
-			.handler((ctx) =>
-				ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-			)
+			.handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -58,14 +46,9 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("multiple .meta(values) calls on chain accumulate", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.meta({ tags: "Auth" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).meta({ tags: "Auth" })
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -74,14 +57,9 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("chain meta propagates through .basePath()", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.basePath("/api")
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).basePath("/api")
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security }))
 
 		const res = await app.fetch(new Request("http://localhost/api/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -90,14 +68,9 @@ describe("chain-level .meta(values) — runtime", () => {
 
 	it("chain meta propagates through .use()", async () => {
 		const mw = createMiddleware(async (_ctx, next) => next({ added: true }))
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.use(mw)
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).use(mw)
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { added: ctx.added, sec: ctx.meta.security }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { added: ctx.added, sec: ctx.meta.security }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -106,14 +79,9 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("chain meta propagates through .context()", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.context({ region: "eu" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).context({ region: "eu" })
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { region: ctx.region, sec: ctx.meta.security }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { region: ctx.region, sec: ctx.meta.security }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -122,13 +90,9 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("routes without route-level .meta() still get chain meta", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt", tags: "Default" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt", tags: "Default" })
 
-		app.get("/bare").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-		)
+		app.get("/bare").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
 
 		const res = await app.fetch(new Request("http://localhost/bare"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -141,12 +105,8 @@ describe("chain-level .meta(values) — runtime", () => {
 		const auth = base.meta({ security: "jwt", tags: "Auth" })
 		const pub = base.meta({ tags: "Public" })
 
-		auth.get("/authed").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-		)
-		pub.get("/public").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-		)
+		auth.get("/authed").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
+		pub.get("/public").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
 
 		const r1 = await base.fetch(new Request("http://localhost/authed"), {})
 		const b1 = (await r1.json()) as Record<string, unknown>
@@ -162,9 +122,7 @@ describe("chain-level .meta(values) — runtime", () => {
 	it("works without phantom .meta<T>() — uses DefaultMeta", async () => {
 		const app = honey<{}>().meta({ summary: "default summary" })
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { summary: ctx.meta.summary }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { summary: ctx.meta.summary }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -172,22 +130,15 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("chain meta with .on() multi-method routes", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" })
 
-		app
-			.on(["GET", "POST"], "/multi")
-			.handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security }))
+		app.on(["GET", "POST"], "/multi").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security }))
 
 		const r1 = await app.fetch(new Request("http://localhost/multi"), {})
 		const b1 = (await r1.json()) as Record<string, unknown>
 		expect(b1.sec).toBe("jwt")
 
-		const r2 = await app.fetch(
-			new Request("http://localhost/multi", { method: "POST" }),
-			{},
-		)
+		const r2 = await app.fetch(new Request("http://localhost/multi", { method: "POST" }), {})
 		const b2 = (await r2.json()) as Record<string, unknown>
 		expect(b2.sec).toBe("jwt")
 	})
@@ -195,11 +146,7 @@ describe("chain-level .meta(values) — runtime", () => {
 	it("chain meta + context + middleware all compose", async () => {
 		const mw = createMiddleware(async (_ctx, next) => next({ userId: "u-1" }))
 
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.context({ region: "eu" })
-			.use(mw)
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).context({ region: "eu" }).use(mw)
 
 		app.get("/full").handler((ctx) =>
 			ctx.res.json("ok", {
@@ -217,22 +164,13 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("sub-app via .route() keeps its own chain meta", async () => {
-		const sub = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "apikey", tags: "Sub" })
-			.basePath("/sub")
+		const sub = honey<{}>().meta<AppMeta>().meta({ security: "apikey", tags: "Sub" }).basePath("/sub")
 
-		sub.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-		)
+		sub.get("/test").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
 
-		const parent = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt", tags: "Parent" })
+		const parent = honey<{}>().meta<AppMeta>().meta({ security: "jwt", tags: "Parent" })
 
-		parent.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }),
-		)
+		parent.get("/test").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security, tags: ctx.meta.tags }))
 		parent.route(sub)
 
 		const r1 = await parent.fetch(new Request("http://localhost/test"), {})
@@ -240,19 +178,14 @@ describe("chain-level .meta(values) — runtime", () => {
 		expect(b1.sec).toBe("jwt")
 		expect(b1.tags).toBe("Parent")
 
-		const r2 = await parent.fetch(
-			new Request("http://localhost/sub/test"),
-			{},
-		)
+		const r2 = await parent.fetch(new Request("http://localhost/sub/test"), {})
 		const b2 = (await r2.json()) as Record<string, unknown>
 		expect(b2.sec).toBe("apikey")
 		expect(b2.tags).toBe("Sub")
 	})
 
 	it("chain meta with input + output + errors compose", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt", tags: "Items" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt", tags: "Items" })
 
 		app
 			.post("/items")
@@ -275,14 +208,9 @@ describe("chain-level .meta(values) — runtime", () => {
 	})
 
 	it("later chain .meta() overrides earlier on same key", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "basic" })
-			.meta({ security: "jwt" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "basic" }).meta({ security: "jwt" })
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -302,9 +230,7 @@ describe("chain-level .meta(values) — compile-time type safety", () => {
 		type M = InferMeta<typeof app>
 		expectTypeOf<M>().toEqualTypeOf<AppMeta>()
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { sec: ctx.meta.security }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { sec: ctx.meta.security }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -312,46 +238,32 @@ describe("chain-level .meta(values) — compile-time type safety", () => {
 	})
 
 	it("chain .meta(values) preserves TMeta constraint", () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" })
 		type M = InferMeta<typeof app>
 		expectTypeOf<M>().toEqualTypeOf<AppMeta>()
 	})
 
 	it("multiple chain .meta(values) all preserve TMeta", () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.meta({ tags: "Auth" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).meta({ tags: "Auth" })
 		type M = InferMeta<typeof app>
 		expectTypeOf<M>().toEqualTypeOf<AppMeta>()
 	})
 
 	it("TMeta preserved through .use() after chain meta", () => {
 		const mw = createMiddleware(async (_ctx, next) => next({ x: 1 }))
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.use(mw)
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).use(mw)
 		type M = InferMeta<typeof app>
 		expectTypeOf<M>().toEqualTypeOf<AppMeta>()
 	})
 
 	it("TMeta preserved through .basePath() after chain meta", () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.basePath("/api")
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).basePath("/api")
 		type M = InferMeta<typeof app>
 		expectTypeOf<M>().toEqualTypeOf<AppMeta>()
 	})
 
 	it("TMeta preserved through .context() after chain meta", () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.context({ db: "sqlite" })
+		const app = honey<{}>().meta<AppMeta>().meta({ security: "jwt" }).context({ db: "sqlite" })
 		type M = InferMeta<typeof app>
 		expectTypeOf<M>().toEqualTypeOf<AppMeta>()
 	})
@@ -363,9 +275,7 @@ describe("chain-level .meta(values) — compile-time type safety", () => {
 			.get("/test")
 			.meta({ tags: "Auth" })
 			.handler((ctx) => {
-				expectTypeOf(ctx.meta).toMatchTypeOf<
-					Readonly<{ security?: string; tags?: string }>
-				>()
+				expectTypeOf(ctx.meta).toMatchTypeOf<Readonly<{ security?: string; tags?: string }>>()
 				return ctx.res.text("ok", "ok")
 			})
 	})
@@ -395,18 +305,14 @@ describe("chain-level .meta(values) — compile-time type safety", () => {
 	})
 
 	it("InferCtx unaffected by chain meta", () => {
-		const app = honey<{ SECRET: string }>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<{ SECRET: string }>().meta<AppMeta>().meta({ security: "jwt" })
 		type Ctx = InferCtx<typeof app>
 		expectTypeOf<Ctx>().toMatchTypeOf<{ env: { SECRET: string } }>()
 	})
 
 	it("env type preserved through chain meta", () => {
 		type TestEnv = { DB: string; SECRET: string }
-		const app = honey<TestEnv>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<TestEnv>().meta<AppMeta>().meta({ security: "jwt" })
 		type Env = InferEnv<typeof app>
 		expectTypeOf<Env>().toEqualTypeOf<TestEnv>()
 	})
@@ -420,34 +326,24 @@ describe("chain-level .meta(values) — compile-time type safety", () => {
 
 	it("InferCtx unaffected by chain meta", () => {
 		const mw = createMiddleware(async (_ctx, next) => next({ x: 1 }))
-		const app = honey<{ SECRET: string }>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
-			.use(mw)
+		const app = honey<{ SECRET: string }>().meta<AppMeta>().meta({ security: "jwt" }).use(mw)
 		type Ctx = InferCtx<typeof app>
 		expectTypeOf<Ctx>().toMatchTypeOf<{ env: { SECRET: string }; x: number }>()
 	})
 
 	it("InferBasePath unaffected by chain meta", () => {
-		const app = honey<{}>()
-			.basePath("/api")
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<{}>().basePath("/api").meta<AppMeta>().meta({ security: "jwt" })
 		expectTypeOf<InferBasePath<typeof app>>().toEqualTypeOf<"/api">()
 	})
 
 	it("InferEnv unaffected by chain meta", () => {
 		type E = { DB: string }
-		const app = honey<E>()
-			.meta<AppMeta>()
-			.meta({ security: "jwt" })
+		const app = honey<E>().meta<AppMeta>().meta({ security: "jwt" })
 		expectTypeOf<InferEnv<typeof app>>().toEqualTypeOf<E>()
 	})
 
 	it("ctx.meta + ctx.context + ctx.middleware all typed in handler", () => {
-		const mw = createMiddleware(async (_ctx, next) =>
-			next({ traceId: "t-1" }),
-		)
+		const mw = createMiddleware(async (_ctx, next) => next({ traceId: "t-1" }))
 
 		honey<{ SECRET: string }>()
 			.meta<AppMeta>()

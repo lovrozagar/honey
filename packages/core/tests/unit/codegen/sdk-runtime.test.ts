@@ -17,7 +17,9 @@ function loadFixture(name: string): Record<string, unknown> {
 
 type SDKModule = {
 	ClientError: new (...args: unknown[]) => { body: unknown; message: string; status: number }
-	MatrixSDK: new (config: Record<string, unknown>) => Record<string, Record<string, (input?: Record<string, unknown>) => unknown>>
+	MatrixSDK: new (
+		config: Record<string, unknown>,
+	) => Record<string, Record<string, (input?: Record<string, unknown>) => unknown>>
 	isClientError: (e: unknown) => boolean
 }
 
@@ -25,9 +27,7 @@ async function loadSDK(spec: Record<string, unknown>): Promise<SDKModule> {
 	const { files } = generateSDK(spec, { name: "MatrixSDK", stem: "sdk" })
 
 	/* strip the 2 relative import lines; map is inlined before the client body */
-	const clientBody = files.client
-		.replace(/^import type \{[^\n]+\n/, "")
-		.replace(/^import \{[^\n]+\n/, "")
+	const clientBody = files.client.replace(/^import type \{[^\n]+\n/, "").replace(/^import \{[^\n]+\n/, "")
 
 	const merged = `${files.map}\n${clientBody}`
 
@@ -428,7 +428,9 @@ describe("#14 timeout: config timeout wired to AbortSignal", () => {
 		/* fetch that never resolves — SDK should abort it via signal */
 		stub.mockImplementationOnce((_url: string, init: RequestInit) => {
 			return new Promise<Response>((_resolve, reject) => {
-				init.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted", "AbortError")))
+				init.signal?.addEventListener("abort", () =>
+					reject(new DOMException("The operation was aborted", "AbortError")),
+				)
 			})
 		})
 

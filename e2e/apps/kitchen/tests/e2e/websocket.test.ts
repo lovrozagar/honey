@@ -56,11 +56,7 @@ function connectWs(url: string): {
 		waitForMessages(count: number, timeout = 5000) {
 			return new Promise((resolve, reject) => {
 				const timer = setTimeout(() => {
-					reject(
-						new Error(
-							`Timeout: expected ${count} messages, got ${messages.length}: ${JSON.stringify(messages)}`,
-						),
-					)
+					reject(new Error(`Timeout: expected ${count} messages, got ${messages.length}: ${JSON.stringify(messages)}`))
 				}, timeout)
 
 				const check = () => {

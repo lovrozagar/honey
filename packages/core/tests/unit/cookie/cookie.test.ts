@@ -178,9 +178,7 @@ describe("serializeCookie — __Secure- prefix", () => {
 	})
 
 	it("rejects __Secure- without secure", () => {
-		expect(() => serializeCookie("__Secure-sid", { value: "tok" })).toThrow(
-			"__Secure- cookies require secure: true",
-		)
+		expect(() => serializeCookie("__Secure-sid", { value: "tok" })).toThrow("__Secure- cookies require secure: true")
 	})
 })
 
@@ -289,15 +287,11 @@ describe("serializeCookie — Max-Age validation", () => {
 	})
 
 	it("rejects Infinity Max-Age", () => {
-		expect(() => serializeCookie("x", { maxAge: Infinity, value: "v" })).toThrow(
-			"Invalid cookie Max-Age",
-		)
+		expect(() => serializeCookie("x", { maxAge: Infinity, value: "v" })).toThrow("Invalid cookie Max-Age")
 	})
 
 	it("rejects NaN Max-Age", () => {
-		expect(() => serializeCookie("x", { maxAge: NaN, value: "v" })).toThrow(
-			"Invalid cookie Max-Age",
-		)
+		expect(() => serializeCookie("x", { maxAge: NaN, value: "v" })).toThrow("Invalid cookie Max-Age")
 	})
 })
 

@@ -1,19 +1,19 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Integer Enum Status", "version": "1.0.0" },
-  "paths": {},
-  "components": {
-    "schemas": {
-      "Response": {
-        "type": "object",
-        "required": ["status"],
-        "properties": {
-          "status": {
-            "type": "integer",
-            "enum": [200, 400, 404]
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Integer Enum Status", "version": "1.0.0" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Response": {
+				"type": "object",
+				"required": ["status"],
+				"properties": {
+					"status": {
+						"type": "integer",
+						"enum": [200, 400, 404]
+					}
+				}
+			}
+		}
+	}
 }

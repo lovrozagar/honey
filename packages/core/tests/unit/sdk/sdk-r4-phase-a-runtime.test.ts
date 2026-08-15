@@ -4,18 +4,14 @@ import { createSDK } from "../../../src/client/sdk.ts"
 /* ── helpers ── */
 
 function mockFetch204() {
-	return vi.fn<typeof fetch>(() =>
-		Promise.resolve(new Response(null, { status: 204 })),
-	) as unknown as typeof fetch
+	return vi.fn<typeof fetch>(() => Promise.resolve(new Response(null, { status: 204 }))) as unknown as typeof fetch
 }
 
 /**
  * Returns a fetch mock that cycles through the provided responses in order.
  * Each entry is [status, body, contentType].
  */
-function mockFetchSequence(
-	responses: Array<[number, string | null, string]>,
-): typeof fetch {
+function mockFetchSequence(responses: Array<[number, string | null, string]>): typeof fetch {
 	let call = 0
 	return vi.fn<typeof fetch>(() => {
 		const entry = responses[call] ?? responses[responses.length - 1]
@@ -79,9 +75,11 @@ describe("#2 204 invalidation — runtime: stale marking fires on 204 mutation",
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => {
-				singleInstanceCtx.push({ ...ctx })
-			}],
+			onRequest: [
+				(ctx) => {
+					singleInstanceCtx.push({ ...ctx })
+				},
+			],
 		})
 
 		/* first call: POST mutation → 204 */
@@ -107,9 +105,11 @@ describe("#2 204 invalidation — runtime: stale marking fires on 204 mutation",
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => {
-				singleInstanceCtx.push({ ...ctx })
-			}],
+			onRequest: [
+				(ctx) => {
+					singleInstanceCtx.push({ ...ctx })
+				},
+			],
 		})
 
 		await sdk.users.create({ json: { name: "Bob" } })

@@ -6,11 +6,7 @@
 import "@lovrozagar/honey/serve"
 import { honey } from "../../../src/index.ts"
 
-const runtimeArg = (typeof Deno !== "undefined" ? Deno.args[0] : process.argv[2]) as
-	| "bun"
-	| "deno"
-	| "node"
-	| undefined
+const runtimeArg = (typeof Deno !== "undefined" ? Deno.args[0] : process.argv[2]) as "bun" | "deno" | "node" | undefined
 const runtime = runtimeArg ?? "node"
 
 function fail(msg: string): never {

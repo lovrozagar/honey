@@ -14,10 +14,7 @@ export const harness = [
  * Rust-only subset of `harness`. `test:harness:rust` still exists for a cargo-only run.
  * Cargo artifacts go to the workspace `.cache/cargo-target`, not /tmp.
  */
-export const harnessRust = [
-	"tests/unit/codegen/rust-sdk.test.ts",
-	"tests/integration/sdk-harness/rust-harness.test.ts",
-]
+export const harnessRust = ["tests/unit/codegen/rust-sdk.test.ts", "tests/integration/sdk-harness/rust-harness.test.ts"]
 
 /** Empty — leftover extract reds have been restored. */
 export const stale: string[] = []

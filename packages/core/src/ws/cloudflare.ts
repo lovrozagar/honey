@@ -87,13 +87,10 @@ export class WSContextImpl<T extends RawSocket = RawSocket> implements WSContext
  * Uses WebSocketPair + server.accept() + addEventListener.
  */
 export function cfWebSocket(): WSAdapter {
-		return {
-			upgrade(_req: Request, _env: unknown, handler: WSHandler<unknown>) {
-				type CFWebSocket = RawSocket & { accept(): void }
-				const Ctor = (globalThis as Record<string, unknown>)["WebSocketPair"] as new () => [
-					CFWebSocket,
-					CFWebSocket,
-				]
+	return {
+		upgrade(_req: Request, _env: unknown, handler: WSHandler<unknown>) {
+			type CFWebSocket = RawSocket & { accept(): void }
+			const Ctor = (globalThis as Record<string, unknown>)["WebSocketPair"] as new () => [CFWebSocket, CFWebSocket]
 			const [client, server] = new Ctor()
 			server.accept()
 			const socket = new WSContextImpl(server)
@@ -120,14 +117,14 @@ export function cfWebSocket(): WSAdapter {
 			}
 			handler.onOpen?.(undefined, socket)
 
-				return {
-					response: new Response(null, {
-						headers: { upgrade: "websocket" },
-						status: 101,
-						webSocket: client,
-					} as unknown as ResponseInit),
-					socket,
-				}
-			},
+			return {
+				response: new Response(null, {
+					headers: { upgrade: "websocket" },
+					status: 101,
+					webSocket: client,
+				} as unknown as ResponseInit),
+				socket,
+			}
+		},
 	}
 }

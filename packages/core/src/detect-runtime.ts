@@ -13,7 +13,5 @@ export function detectRuntime(g: DetectGlobal = globalThis): ServeRuntime {
 	const ua = g.navigator?.userAgent ?? ""
 	if (ua.includes("Cloudflare-Workers") || ua.includes("workerd")) return "cloudflare"
 	if (g.process?.versions?.node) return "node"
-	throw new Error(
-		'Honey.serve() could not detect a runtime. Pass runtime: "bun" | "node" | "deno".',
-	)
+	throw new Error('Honey.serve() could not detect a runtime. Pass runtime: "bun" | "node" | "deno".')
 }

@@ -8,8 +8,7 @@ type AppMeta = { security?: string; tags?: string }
 
 describe("x-internal routes — runtime", () => {
 	it("internal route still responds to HTTP requests", async () => {
-		const app = honey<{}>()
-			.meta<AppMeta>()
+		const app = honey<{}>().meta<AppMeta>()
 
 		app
 			.get("/health")
@@ -28,9 +27,7 @@ describe("x-internal routes — runtime", () => {
 		app
 			.get("/health")
 			.meta({ internal: true })
-			.handler((ctx) =>
-				ctx.res.json("ok", { internal: ctx.meta.internal }),
-			)
+			.handler((ctx) => ctx.res.json("ok", { internal: ctx.meta.internal }))
 
 		const res = await app.fetch(new Request("http://localhost/health"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -38,32 +35,16 @@ describe("x-internal routes — runtime", () => {
 	})
 
 	it("chain-level x-internal applies to all downstream routes", async () => {
-		const internal = honey<{}>()
-			.meta<AppMeta>()
-			.meta({ internal: true })
+		const internal = honey<{}>().meta<AppMeta>().meta({ internal: true })
 
-		internal
-			.get("/metrics")
-			.handler((ctx) =>
-				ctx.res.json("ok", { internal: ctx.meta.internal }),
-			)
-		internal
-			.get("/debug")
-			.handler((ctx) =>
-				ctx.res.json("ok", { internal: ctx.meta.internal }),
-			)
+		internal.get("/metrics").handler((ctx) => ctx.res.json("ok", { internal: ctx.meta.internal }))
+		internal.get("/debug").handler((ctx) => ctx.res.json("ok", { internal: ctx.meta.internal }))
 
-		const r1 = await internal.fetch(
-			new Request("http://localhost/metrics"),
-			{},
-		)
-		expect((await r1.json() as Record<string, unknown>).internal).toBe(true)
+		const r1 = await internal.fetch(new Request("http://localhost/metrics"), {})
+		expect(((await r1.json()) as Record<string, unknown>).internal).toBe(true)
 
-		const r2 = await internal.fetch(
-			new Request("http://localhost/debug"),
-			{},
-		)
-		expect((await r2.json() as Record<string, unknown>).internal).toBe(true)
+		const r2 = await internal.fetch(new Request("http://localhost/debug"), {})
+		expect(((await r2.json()) as Record<string, unknown>).internal).toBe(true)
 	})
 
 	it("public and internal routes coexist on same app", async () => {
@@ -79,16 +60,10 @@ describe("x-internal routes — runtime", () => {
 			.meta({ internal: true })
 			.handler((ctx) => ctx.res.json("ok", { ok: true }))
 
-		const r1 = await app.fetch(
-			new Request("http://localhost/api/users"),
-			{},
-		)
+		const r1 = await app.fetch(new Request("http://localhost/api/users"), {})
 		expect(r1.status).toBe(200)
 
-		const r2 = await app.fetch(
-			new Request("http://localhost/health"),
-			{},
-		)
+		const r2 = await app.fetch(new Request("http://localhost/health"), {})
 		expect(r2.status).toBe(200)
 	})
 })
@@ -132,13 +107,9 @@ describe("x-internal routes — type exclusion", () => {
 
 		const internal = base.meta({ internal: true })
 
-		const step2 = internal
-			.get("/metrics")
-			.handler((ctx) => ctx.res.json("ok", {}))
+		const step2 = internal.get("/metrics").handler((ctx) => ctx.res.json("ok", {}))
 
-		const step3 = step2
-			.get("/debug")
-			.handler((ctx) => ctx.res.json("ok", {}))
+		const step3 = step2.get("/debug").handler((ctx) => ctx.res.json("ok", {}))
 
 		type Routes = InferRoutes<typeof step3>
 
@@ -244,9 +215,7 @@ describe("x-internal routes — codegen inclusion", () => {
 	it("generateTypes INCLUDES chain-level x-internal routes", () => {
 		const app = honey<{}>().meta<AppMeta>()
 
-		app
-			.get("/api/users")
-			.handler((ctx) => ctx.res.json("ok", {}))
+		app.get("/api/users").handler((ctx) => ctx.res.json("ok", {}))
 
 		const internal = app.meta({ internal: true })
 		internal.get("/metrics").handler((ctx) => ctx.res.json("ok", {}))

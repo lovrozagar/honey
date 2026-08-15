@@ -48,7 +48,7 @@ export type IRBody =
 			contentType: "multipart/form-data"
 			parts: IRMultipartPart[]
 			required: boolean
-		}
+	  }
 
 export type IRResponse = {
 	status: string /* "200" | "204" | "default" | ... — preserved verbatim */
@@ -81,9 +81,7 @@ export type IROperation = {
 	extensions: IROperationExtensions
 }
 
-export type IRTreeEntry =
-	| { kind: "method"; op: IROperation }
-	| { kind: "namespace"; ns: IRNamespace }
+export type IRTreeEntry = { kind: "method"; op: IROperation } | { kind: "namespace"; ns: IRNamespace }
 
 export type IRNamespace = {
 	entries: Map<string, IRTreeEntry>
@@ -132,7 +130,7 @@ export function buildResourceTree(operations: IROperation[]): IRNamespace {
 				if (existing.kind === "method") {
 					throw new Error(
 						`operationId conflict: "${existing.op.id}" is callable but also a namespace prefix of "${op.id}".\n` +
-						`Rename one. Suggested: "${existing.op.id}" → "${existing.op.id}One" or drop "${op.id}".`,
+							`Rename one. Suggested: "${existing.op.id}" → "${existing.op.id}One" or drop "${op.id}".`,
 					)
 				}
 				cur = existing.ns
@@ -149,7 +147,7 @@ export function buildResourceTree(operations: IROperation[]): IRNamespace {
 			const otherId = firstDescendantId(existing.ns)
 			throw new Error(
 				`operationId conflict: "${op.id}" is callable but also a namespace prefix of "${otherId}".\n` +
-				`Rename one. Suggested: "${op.id}" → "${op.id}One" or drop "${otherId}".`,
+					`Rename one. Suggested: "${op.id}" → "${op.id}One" or drop "${otherId}".`,
 			)
 		}
 		cur.entries.set(leafName, { kind: "method", op })
@@ -281,7 +279,10 @@ export function schemaToIR(schema: Record<string, unknown> | undefined): IRSchem
 		if (isStringEnum(schema)) return { enum: enumVals, kind: "scalar", type: "string" }
 		if (isIntEnum(schema)) return { enum: enumVals, kind: "scalar", type: "integer" }
 		/* mixed enum (string + number values) — emit as union of const literals */
-		if (enumVals.length > 0 && enumVals.every((v) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")) {
+		if (
+			enumVals.length > 0 &&
+			enumVals.every((v) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+		) {
 			return { kind: "union", variants: enumVals.map((v) => ({ kind: "const" as const, value: v })) }
 		}
 	}
@@ -299,11 +300,7 @@ export function schemaToIR(schema: Record<string, unknown> | undefined): IRSchem
 		return { items, kind: "array" }
 	}
 
-	if (
-		schema.type === "object" ||
-		schema.properties !== undefined ||
-		schema.additionalProperties !== undefined
-	) {
+	if (schema.type === "object" || schema.properties !== undefined || schema.additionalProperties !== undefined) {
 		const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>
 		const requiredKeys = new Set((schema.required as string[] | undefined) ?? [])
 		const fields: IRField[] = Object.entries(props).map(([name, propSchema]) => {
@@ -363,28 +360,20 @@ function hasBinaryMultipartPart(mediaType: Record<string, unknown> | undefined):
 }
 
 /** Normalise a multipart/form-data object schema into typed parts. */
-function extractMultipartParts(
-	mediaType: Record<string, unknown> | undefined,
-): IRMultipartPart[] {
+function extractMultipartParts(mediaType: Record<string, unknown> | undefined): IRMultipartPart[] {
 	const schema = mediaType?.schema as Record<string, unknown> | undefined
 	const props = schema?.properties as Record<string, Record<string, unknown>> | undefined
 	if (!props) return []
 	const parts: IRMultipartPart[] = []
 	for (const [name, propSchema] of Object.entries(props)) {
 		const ir = schemaToIR(propSchema)
-		const isBinary =
-			ir.kind === "binary" || (ir.kind === "array" && ir.items.kind === "binary")
+		const isBinary = ir.kind === "binary" || (ir.kind === "array" && ir.items.kind === "binary")
 		parts.push({ name, schema: ir, type: isBinary ? "file" : "text" })
 	}
 	return parts
 }
 
-function buildOperation(
-	id: string,
-	method: string,
-	path: string,
-	op: Record<string, unknown>,
-): IROperation {
+function buildOperation(id: string, method: string, path: string, op: Record<string, unknown>): IROperation {
 	const upperMethod = method.toUpperCase()
 
 	const declaredParams = (op.parameters as Record<string, unknown>[] | undefined) ?? []
@@ -396,7 +385,9 @@ function buildOperation(
 	for (const p of declaredParams) {
 		const pIn = p.in as string
 		const pName = p.name as string
-		const pSchema = p.schema ? schemaToIR(p.schema as Record<string, unknown>) : { kind: "scalar" as const, type: "string" as const }
+		const pSchema = p.schema
+			? schemaToIR(p.schema as Record<string, unknown>)
+			: { kind: "scalar" as const, type: "string" as const }
 		const param: IRParam = { name: pName, schema: pSchema }
 		if (typeof p.description === "string") param.description = p.description
 		if (pIn === "path") {
@@ -458,9 +449,7 @@ function buildOperation(
 				/* SSE detected by response content-type, not a request extension */
 				if (firstCt === "text/event-stream") extensions.sse = true
 				const mediaType = content[firstCt]
-				const respSchema = mediaType?.schema
-					? schemaToIR(mediaType.schema as Record<string, unknown>)
-					: undefined
+				const respSchema = mediaType?.schema ? schemaToIR(mediaType.schema as Record<string, unknown>) : undefined
 				const resp: IRResponse = { contentType: firstCt, status }
 				if (respSchema !== undefined) resp.schema = respSchema
 				responses[status] = resp

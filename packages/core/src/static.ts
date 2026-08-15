@@ -9,9 +9,7 @@ type StaticConfig<TCtx> = {
 
 const TRAVERSAL = /(?:^|\/)\.\.\//
 
-export function staticFiles<TCtx extends { req: Request }>(
-	config: StaticConfig<TCtx>,
-): MiddlewareFn<TCtx, {}> {
+export function staticFiles<TCtx extends { req: Request }>(config: StaticConfig<TCtx>): MiddlewareFn<TCtx, {}> {
 	const prefix = config.prefix ?? "/"
 
 	const mw: MiddlewareFn<TCtx, {}> = async (ctx, next) => {

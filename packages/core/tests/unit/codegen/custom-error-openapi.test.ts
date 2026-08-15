@@ -132,10 +132,7 @@ describe("OpenAPI: custom schema errors", () => {
 		const app = honey()
 			.errorFactory(errors)
 			.defaultBoundary("api_error")
-			.customErrorFormatter(
-				z.object({ timestamp: z.number() }),
-				(_err, data) => ({ ...data, timestamp: Date.now() }),
-			)
+			.customErrorFormatter(z.object({ timestamp: z.number() }), (_err, data) => ({ ...data, timestamp: Date.now() }))
 			.get("/items/:id")
 			.errors("item_not_found")
 			.handler((c) => c.res.json("ok", {}))

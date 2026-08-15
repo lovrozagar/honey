@@ -49,8 +49,7 @@ describe("irToTs — equivalence with jsonSchemaToTS (Layer A inputs)", () => {
 	it("{ type: 'array', items: oneOf string|number } → '(string | number)[]'", () =>
 		eq({ items: { oneOf: [{ type: "string" }, { type: "number" }] }, type: "array" }))
 
-	it("{ type: 'object' } (no props) → 'Record<string, unknown>'", () =>
-		eq({ type: "object" }))
+	it("{ type: 'object' } (no props) → 'Record<string, unknown>'", () => eq({ type: "object" }))
 
 	it("object with required prop 'a: string' → '{ a: string }'", () =>
 		eq({ properties: { a: { type: "string" } }, required: ["a"], type: "object" }))
@@ -61,11 +60,9 @@ describe("irToTs — equivalence with jsonSchemaToTS (Layer A inputs)", () => {
 	it("{ additionalProperties: { type: 'string' } } → 'Record<string, string>'", () =>
 		eq({ additionalProperties: { type: "string" }, type: "object" }))
 
-	it("{ oneOf: [string, number] } → 'string | number'", () =>
-		eq({ oneOf: [{ type: "string" }, { type: "number" }] }))
+	it("{ oneOf: [string, number] } → 'string | number'", () => eq({ oneOf: [{ type: "string" }, { type: "number" }] }))
 
-	it("{ anyOf: [string, number] } → 'string | number'", () =>
-		eq({ anyOf: [{ type: "string" }, { type: "number" }] }))
+	it("{ anyOf: [string, number] } → 'string | number'", () => eq({ anyOf: [{ type: "string" }, { type: "number" }] }))
 
 	it("allOf two objects → contains '&'", () => {
 		const input = {

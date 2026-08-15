@@ -64,11 +64,7 @@ export function parseCookies(header: string): Record<string, string> {
 		let value = trimmed.slice(eqIdx + 1)
 		if (value.indexOf("%") !== -1) value = tryDecodeCookieValue(value)
 		/* RFC 6265: strip surrounding double quotes */
-		if (
-			value.length >= 2 &&
-			value.charCodeAt(0) === 34 &&
-			value.charCodeAt(value.length - 1) === 34
-		) {
+		if (value.length >= 2 && value.charCodeAt(0) === 34 && value.charCodeAt(value.length - 1) === 34) {
 			value = value.slice(1, -1)
 		}
 		result[name] = value
@@ -96,10 +92,7 @@ function extractVendorCode(issue: StandardSchemaIssue, vendor: string): string {
 	return "unknown"
 }
 
-export function normalizeIssues(
-	issues: ReadonlyArray<StandardSchemaIssue>,
-	vendor: string,
-): NormalizedIssue[] {
+export function normalizeIssues(issues: ReadonlyArray<StandardSchemaIssue>, vendor: string): NormalizedIssue[] {
 	return issues.map((issue) => {
 		const path = issue.path ? issue.path.map(toPropertyKey) : []
 		return {
@@ -113,10 +106,7 @@ export function normalizeIssues(
 	})
 }
 
-export function issuesToFieldErrors(
-	issues: NormalizedIssue[],
-	prefix: string,
-): Record<string, FieldError[]> {
+export function issuesToFieldErrors(issues: NormalizedIssue[], prefix: string): Record<string, FieldError[]> {
 	const fields: Record<string, FieldError[]> = {}
 	for (const issue of issues) {
 		const fieldName = issue.path.at(-1)?.toString() ?? "unknown"
@@ -134,11 +124,7 @@ export function issuesToFieldErrors(
 	return fields
 }
 
-async function runSchema(
-	schema: StandardSchemaLike,
-	data: unknown,
-	prefix: string,
-): Promise<unknown> {
+async function runSchema(schema: StandardSchemaLike, data: unknown, prefix: string): Promise<unknown> {
 	const result = await schema["~standard"].validate(data)
 	if (result.issues) {
 		const normalized = normalizeIssues(result.issues, schema["~standard"].vendor)
@@ -234,8 +220,7 @@ export async function validateInput(
 	if (schemas.headers) {
 		const { mode, schema } = resolveSchema(schemas.headers)
 		const headerRecord = headersToRecord(req.headers)
-		result.headers =
-			mode === "readableStream" ? headerRecord : await runSchema(schema, headerRecord, "headers")
+		result.headers = mode === "readableStream" ? headerRecord : await runSchema(schema, headerRecord, "headers")
 	}
 
 	/* cookies */
@@ -247,11 +232,7 @@ export async function validateInput(
 	}
 
 	/* body-based: json or form — skip for methods without a request body */
-	const hasBody =
-		req.method !== "DELETE" &&
-		req.method !== "GET" &&
-		req.method !== "HEAD" &&
-		req.method !== "OPTIONS"
+	const hasBody = req.method !== "DELETE" && req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS"
 	if (hasBody && (schemas.json || schemas.form)) {
 		const contentType = req.headers.get("content-type")
 		const parser = selectParser(contentType)
@@ -284,11 +265,7 @@ export async function validateInput(
 	return result
 }
 
-export async function validateOutput(
-	schema: StandardSchemaLike,
-	statusKey: string,
-	data: unknown,
-): Promise<void> {
+export async function validateOutput(schema: StandardSchemaLike, statusKey: string, data: unknown): Promise<void> {
 	const result = await schema["~standard"].validate(data)
 	if (result.issues) {
 		throw new HoneyError({

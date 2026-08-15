@@ -47,7 +47,16 @@ let runtimeCache: Map<string, string> | null = null
 export function loadGoRuntimeTemplates(): Map<string, string> {
 	if (runtimeCache) return runtimeCache
 
-	const names = ["result.go", "errors.go", "runtime.go", "invalidation.go", "sse.go", "ws.go", "transport.go", "realtime.go"]
+	const names = [
+		"result.go",
+		"errors.go",
+		"runtime.go",
+		"invalidation.go",
+		"sse.go",
+		"ws.go",
+		"transport.go",
+		"realtime.go",
+	]
 	const cache = new Map<string, string>()
 	for (const name of names) {
 		const filePath = fileURLToPath(new URL(`./client-go/${name}`, import.meta.url))
@@ -304,14 +313,7 @@ function buildGoTypes(spec: OpenApiSpec): string {
 
 function buildGoMod(modulePath?: string): string {
 	const mod = modulePath ?? "example.com/sdk"
-	return [
-		`module ${mod}`,
-		``,
-		`go 1.23`,
-		``,
-		`require nhooyr.io/websocket v1.8.17`,
-		``,
-	].join("\n")
+	return [`module ${mod}`, ``, `go 1.23`, ``, `require nhooyr.io/websocket v1.8.17`, ``].join("\n")
 }
 
 /* ── buildGoDoc ── */
@@ -366,10 +368,7 @@ type MethodInfo = {
 }
 
 /** Build a MethodInfo from an IROperation + the raw spec op object. */
-function methodInfoFromIROp(
-	irOp: IROperation,
-	rawOp: Record<string, unknown>,
-): MethodInfo {
+function methodInfoFromIROp(irOp: IROperation, rawOp: Record<string, unknown>): MethodInfo {
 	const segments = irOp.id.split(".")
 	const isTopLevel = segments.length === 1
 	const resource = segments[0] ?? irOp.id
@@ -401,10 +400,7 @@ function methodInfoFromIROp(
 }
 
 /** Walk the IR tree and collect all MethodInfos, pairing with raw spec ops. */
-function collectMethodsFromIR(
-	ns: IRNamespace,
-	spec: OpenApiSpec,
-): MethodInfo[] {
+function collectMethodsFromIR(ns: IRNamespace, spec: OpenApiSpec): MethodInfo[] {
 	const rawOpById = new Map<string, Record<string, unknown>>()
 	for (const [, pathMethods] of Object.entries(spec.paths ?? {})) {
 		for (const [, operation] of Object.entries(pathMethods)) {
@@ -473,16 +469,17 @@ function buildGoClient(spec: OpenApiSpec, options: GoSDKOptions): string {
 	body.push(`var invalidationMap = map[string]map[string]serviceEntry{`)
 	for (const [resource, actions] of Object.entries(serviceMap).sort(([a], [b]) => a.localeCompare(b))) {
 		body.push(`\t"${resource}": {`)
-		for (const [action, entry] of Object.entries(actions as Record<string, Record<string, unknown>>).sort(([a], [b]) => a.localeCompare(b))) {
+		for (const [action, entry] of Object.entries(actions as Record<string, Record<string, unknown>>).sort(([a], [b]) =>
+			a.localeCompare(b),
+		)) {
 			const inv = entry.invalidate as string[] | undefined
-			const invStr = inv && inv.length > 0
-				? `[]string{${inv.map((s) => JSON.stringify(s)).join(", ")}}`
-				: `nil`
+			const invStr = inv && inv.length > 0 ? `[]string{${inv.map((s) => JSON.stringify(s)).join(", ")}}` : `nil`
 			const params = entry.params as string[] | undefined
-			const paramsStr = params && params.length > 0
-				? `[]string{${params.map((s) => JSON.stringify(s)).join(", ")}}`
-				: `nil`
-			body.push(`\t\t"${action}": {Method: ${JSON.stringify(String(entry.method))}, Path: ${JSON.stringify(String(entry.path))}, Params: ${paramsStr}, SSE: ${entry.sse === true}, WS: ${entry.ws === true}, Invalidate: ${invStr}},`)
+			const paramsStr =
+				params && params.length > 0 ? `[]string{${params.map((s) => JSON.stringify(s)).join(", ")}}` : `nil`
+			body.push(
+				`\t\t"${action}": {Method: ${JSON.stringify(String(entry.method))}, Path: ${JSON.stringify(String(entry.path))}, Params: ${paramsStr}, SSE: ${entry.sse === true}, WS: ${entry.ws === true}, Invalidate: ${invStr}},`,
+			)
 		}
 		body.push(`\t},`)
 	}
@@ -570,7 +567,11 @@ function buildGoClient(spec: OpenApiSpec, options: GoSDKOptions): string {
 
 		/* direct methods on this struct */
 		for (const [, op] of methodsOf(ns)) {
-			const raw = (methods.find((m) => m.opId === op.id)) ?? (() => { throw new Error(`missing MethodInfo for ${op.id}`) })()
+			const raw =
+				methods.find((m) => m.opId === op.id) ??
+				(() => {
+					throw new Error(`missing MethodInfo for ${op.id}`)
+				})()
 			body.push(...emitMethod(raw, recvName, `*${structName}`, throwOnError))
 		}
 
@@ -613,9 +614,7 @@ function buildGoClient(spec: OpenApiSpec, options: GoSDKOptions): string {
 		{ line: `var _ = sync.Mutex{}`, symbol: "sync." },
 		{ line: `var _ = time.Second`, symbol: "time." },
 	]
-	const suppressionLines = suppressions
-		.filter((s) => !bodyStr.includes(s.symbol))
-		.map((s) => s.line)
+	const suppressionLines = suppressions.filter((s) => !bodyStr.includes(s.symbol)).map((s) => s.line)
 
 	const out: string[] = []
 	/* blank line after generator header detaches it from package-doc on pkg.go.dev */
@@ -772,16 +771,19 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 			for (const qp of sseQueryParams) {
 				const fieldName = goPascal(qp.name)
 				if (qp.required) {
-					l.push(`\t\tif opts != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`opts.${fieldName}`, qp.schema)}) }`)
+					l.push(
+						`\t\tif opts != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`opts.${fieldName}`, qp.schema)}) }`,
+					)
 				} else {
-					l.push(`\t\tif opts != nil && opts.${fieldName} != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`*opts.${fieldName}`, qp.schema)}) }`)
+					l.push(
+						`\t\tif opts != nil && opts.${fieldName} != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`*opts.${fieldName}`, qp.schema)}) }`,
+					)
 				}
 			}
 		}
 		const urlExpr = pathToGoExpr(pathStr)
-		const sseURLExpr = sseQueryParams.length > 0
-			? `${cfgAccess}.BaseURL+${urlExpr}+"?"+q.Encode()`
-			: `${cfgAccess}.BaseURL+${urlExpr}`
+		const sseURLExpr =
+			sseQueryParams.length > 0 ? `${cfgAccess}.BaseURL+${urlExpr}+"?"+q.Encode()` : `${cfgAccess}.BaseURL+${urlExpr}`
 		l.push(`\t\tcallHeaders := map[string]string{"Accept": "text/event-stream"}`)
 		l.push(`\t\tif opts != nil && opts.LastEventID != "" {`)
 		l.push(`\t\t\tcallHeaders["Last-Event-ID"] = opts.LastEventID`)
@@ -793,7 +795,9 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 		l.push(`\t\tif err != nil { yield(SSEEvent{}, err); return }`)
 		l.push(`\t\tfor k, v := range ${cfgAccess}.Headers { req.Header.Set(k, v) }`)
 		l.push(`\t\tfor k, v := range callHeaders { req.Header.Set(k, v) }`)
-		l.push(`\t\tif ${cfgAccess}.BearerToken != "" { req.Header.Set(${cfgAccess}.AuthHeaderName, ${cfgAccess}.AuthHeaderPrefix+${cfgAccess}.BearerToken) }`)
+		l.push(
+			`\t\tif ${cfgAccess}.BearerToken != "" { req.Header.Set(${cfgAccess}.AuthHeaderName, ${cfgAccess}.AuthHeaderPrefix+${cfgAccess}.BearerToken) }`,
+		)
 		l.push(`\t\tresp, err := ${cfgAccess}.HTTPClient.Do(req)`)
 		l.push(`\t\tif err != nil { yield(SSEEvent{}, err); return }`)
 		l.push(`\t\tfor ev, err := range parseSSEStream(ctx, resp) {`)
@@ -812,9 +816,13 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 			if (qp.name === "reconnect_token") continue
 			const fieldName = goPascal(qp.name)
 			if (qp.required) {
-				l.push(`\tif opts != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`opts.${fieldName}`, qp.schema)}) }`)
+				l.push(
+					`\tif opts != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`opts.${fieldName}`, qp.schema)}) }`,
+				)
 			} else {
-				l.push(`\tif opts != nil && opts.${fieldName} != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`*opts.${fieldName}`, qp.schema)}) }`)
+				l.push(
+					`\tif opts != nil && opts.${fieldName} != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`*opts.${fieldName}`, qp.schema)}) }`,
+				)
 			}
 		}
 		l.push(`\tif opts != nil && opts.ReconnectToken != "" { q.Set("reconnect_token", opts.ReconnectToken) }`)
@@ -841,7 +849,9 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 		if (qp.required) {
 			l.push(`\tif opts != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`opts.${fieldName}`, qp.schema)}) }`)
 		} else {
-			l.push(`\tif opts != nil && opts.${fieldName} != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`*opts.${fieldName}`, qp.schema)}) }`)
+			l.push(
+				`\tif opts != nil && opts.${fieldName} != nil { q.Set(${JSON.stringify(qp.name)}, ${qpStringExpr(`*opts.${fieldName}`, qp.schema)}) }`,
+			)
 		}
 	}
 
@@ -881,21 +891,26 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 	 * so consumer can flip cfg.Invalidation on/off without regen; tracker's
 	 * BuildRequestMeta short-circuits to nil when disabled. */
 	const hasInvalidate = Array.isArray(m.op["x-invalidate"]) && (m.op["x-invalidate"] as unknown[]).length > 0
-	const pathParamsMapExpr = m.pathParams.length > 0
-		? `map[string]string{${m.pathParams.map((p) => `${JSON.stringify(p)}: ${p}`).join(", ")}}`
-		: `map[string]string(nil)`
+	const pathParamsMapExpr =
+		m.pathParams.length > 0
+			? `map[string]string{${m.pathParams.map((p) => `${JSON.stringify(p)}: ${p}`).join(", ")}}`
+			: `map[string]string(nil)`
 	if (hasInvalidate) {
 		l.push(`\t_pathParamsMap := ${pathParamsMapExpr}`)
 		l.push(`\t_concretePath, _ := interpolatePath(${JSON.stringify(pathStr)}, _pathParamsMap)`)
 		l.push(`\t_concreteSelector := ${JSON.stringify(`${httpMethodStr} `)} + _concretePath`)
 		l.push(`\tvar _requestMeta *RequestMeta`)
-		l.push(`\tif ${staleAccess} != nil { _requestMeta = ${staleAccess}.BuildRequestMeta(_concreteSelector, _concretePath, ${JSON.stringify(httpMethodStr)}) }`)
+		l.push(
+			`\tif ${staleAccess} != nil { _requestMeta = ${staleAccess}.BuildRequestMeta(_concreteSelector, _concretePath, ${JSON.stringify(httpMethodStr)}) }`,
+		)
 	}
 
 	const resultBind = m.responseType === "" ? "_, err" : "result, err"
 	const operationStr = JSON.stringify(`${httpMethodStr} ${pathStr}`)
 	const requestMetaArg = hasInvalidate ? "_requestMeta" : "nil"
-	l.push(`\t${resultBind} := doRequest(ctx, ${cfgAccess}, "${httpMethodStr}", ${urlExpr}, q, ${bodyArg}, ${bodyReaderArg}, ${contentTypeArg}, callHeaders, ${operationStr}, ${requestMetaArg})`)
+	l.push(
+		`\t${resultBind} := doRequest(ctx, ${cfgAccess}, "${httpMethodStr}", ${urlExpr}, q, ${bodyArg}, ${bodyReaderArg}, ${contentTypeArg}, callHeaders, ${operationStr}, ${requestMetaArg})`,
+	)
 	l.push(`\tif err != nil {`)
 
 	if (throwOnError) {
@@ -912,7 +927,9 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 			l.push(`\t\tif apiErr, ok := err.(APIError); ok {`)
 			l.push(`\t\t\treturn SDKResult[${m.responseType}]{Err: apiErr, Status: 0, Response: nil}, nil`)
 			l.push(`\t\t}`)
-			l.push(`\t\treturn SDKResult[${m.responseType}]{Err: &StatusError{StatusCode: 0, Message: err.Error()}, Status: 0, Response: nil}, nil`)
+			l.push(
+				`\t\treturn SDKResult[${m.responseType}]{Err: &StatusError{StatusCode: 0, Message: err.Error()}, Status: 0, Response: nil}, nil`,
+			)
 		} else {
 			l.push(`\t\treturn err`)
 		}
@@ -925,9 +942,13 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 	 * mutation completed (seq-bounded to avoid clobbering newer invalidations). */
 	if (hasInvalidate) {
 		l.push(`\tif ${staleAccess} != nil {`)
-		l.push(`\t\t${staleAccess}.MarkStale(invalidationMap["${m.resource}"]["${m.action}"].Invalidate, _pathParamsMap, _concreteSelector)`)
+		l.push(
+			`\t\t${staleAccess}.MarkStale(invalidationMap["${m.resource}"]["${m.action}"].Invalidate, _pathParamsMap, _concreteSelector)`,
+		)
 		l.push(`\t\tif _requestMeta != nil && _requestMeta.IsStale {`)
-		l.push(`\t\t\t${staleAccess}.ClearStale(_concreteSelector, _concretePath, ${JSON.stringify(httpMethodStr)}, _requestMeta.SeqSnapshot)`)
+		l.push(
+			`\t\t\t${staleAccess}.ClearStale(_concreteSelector, _concretePath, ${JSON.stringify(httpMethodStr)}, _requestMeta.SeqSnapshot)`,
+		)
 		l.push(`\t\t}`)
 		l.push(`\t}`)
 	}
@@ -949,7 +970,9 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
 		l.push(`\tvar out ${m.responseType}`)
 		l.push(`\tif len(result.body) > 0 {`)
 		l.push(`\t\tif err := json.Unmarshal(result.body, &out); err != nil {`)
-		l.push(`\t\t\treturn SDKResult[${m.responseType}]{Err: &StatusError{StatusCode: result.status, Body: result.body, Response: result.resp, Message: err.Error()}, Status: result.status, Response: result.resp}, nil`)
+		l.push(
+			`\t\t\treturn SDKResult[${m.responseType}]{Err: &StatusError{StatusCode: result.status, Body: result.body, Response: result.resp, Message: err.Error()}, Status: result.status, Response: result.resp}, nil`,
+		)
 		l.push(`\t\t}`)
 		l.push(`\t}`)
 		l.push(`\treturn SDKResult[${m.responseType}]{Data: &out, Status: result.status, Response: result.resp}, nil`)
@@ -966,10 +989,7 @@ function emitMethod(m: MethodInfo, recv: string, recvType: string, throwOnError:
  * Generates a complete Go SDK module from an OpenAPI 3.1 spec.
  * Returns a file map (filename → content) ready to write to disk as a Go module.
  */
-export function generateGoSDK(
-	spec: Record<string, unknown>,
-	options: GoSDKOptions = {},
-): GeneratedGoSDK {
+export function generateGoSDK(spec: Record<string, unknown>, options: GoSDKOptions = {}): GeneratedGoSDK {
 	const resolved = resolveRefs(spec as Parameters<typeof resolveRefs>[0]) as unknown as OpenApiSpec
 
 	const { serviceMap } = collectSDKMethods(spec as Parameters<typeof resolveRefs>[0])

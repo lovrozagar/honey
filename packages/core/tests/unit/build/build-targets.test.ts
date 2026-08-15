@@ -76,12 +76,7 @@ async function smokeHttp(base: string): Promise<void> {
 	expect(spec.paths["/health"]).toBeDefined()
 }
 
-function start(
-	cmd: string,
-	args: string[],
-	env: NodeJS.ProcessEnv,
-	cwd?: string,
-): ChildProcess {
+function start(cmd: string, args: string[], env: NodeJS.ProcessEnv, cwd?: string): ChildProcess {
 	const child = spawn(cmd, args, {
 		cwd,
 		env: { ...process.env, ...env },

@@ -18,9 +18,10 @@ describe("DEBUG: Zod 4.3.6 _def deep inspection", () => {
 		const schema = z.object({ id: z.string(), name: z.string() })
 		const _def = (schema as unknown as Record<string, Record<string, unknown>>)._def
 		console.log("\n=== object shape ===")
-		const shapeResult = (
-			typeof _def.shape === "function" ? (_def.shape as () => unknown)() : _def.shape
-		) as Record<string, unknown>
+		const shapeResult = (typeof _def.shape === "function" ? (_def.shape as () => unknown)() : _def.shape) as Record<
+			string,
+			unknown
+		>
 		console.log("shape result keys:", Object.keys(shapeResult))
 		console.log("shape.id type:", typeof shapeResult.id)
 		console.log(
@@ -36,14 +37,9 @@ describe("DEBUG: Zod 4.3.6 _def deep inspection", () => {
 		console.log("options type:", typeof _def.options)
 		console.log("options length:", (((_def.options as unknown[]) || []) as unknown[]).length)
 		if (Array.isArray(_def.options)) {
-			;(_def.options as Record<string, unknown>[]).forEach(
-				(opt: Record<string, unknown>, i: number) => {
-					console.log(
-						`options[${i}]._def.typeName:`,
-						(opt?._def as Record<string, unknown>)?.typeName,
-					)
-				},
-			)
+			;(_def.options as Record<string, unknown>[]).forEach((opt: Record<string, unknown>, i: number) => {
+				console.log(`options[${i}]._def.typeName:`, (opt?._def as Record<string, unknown>)?.typeName)
+			})
 		}
 	})
 

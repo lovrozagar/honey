@@ -17,7 +17,7 @@ describe("requestToCurl", () => {
 		expect(curl).toBe(
 			"curl -X POST -H 'content-type: application/json' -H 'x-test: it'\\''s-set' --data-raw '{\"name\":\"O'\\''Reilly\"}' 'https://example.com/api/users?active=true'",
 		)
-		expect(await request.text()).toBe("{\"name\":\"O'Reilly\"}")
+		expect(await request.text()).toBe('{"name":"O\'Reilly"}')
 	})
 
 	it("supports caller-defined header filtering", async () => {

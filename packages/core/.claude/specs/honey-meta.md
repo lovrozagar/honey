@@ -141,11 +141,8 @@ export type Routes = {
 
 ```typescript
 /* Extract meta type for a specific route */
-export type InferRouteMeta<
-	T,
-	TPath extends InferRoutePaths<T>,
-	TMethod extends InferRouteMethods<T, TPath>,
-> = RouteLookup<T, TPath, TMethod> extends { meta: infer M } ? M : never
+export type InferRouteMeta<T, TPath extends InferRoutePaths<T>, TMethod extends InferRouteMethods<T, TPath>> =
+	RouteLookup<T, TPath, TMethod> extends { meta: infer M } ? M : never
 
 /* Extract the TMeta generic from a Honey instance */
 export type InferMeta<T> = T extends { readonly $meta: infer M } ? M : never

@@ -64,15 +64,13 @@ describe("generated code structure — imports", () => {
 
 	it("types file has no import statements", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		const importLines = files.types
-			.split("\n").filter((l) => l.startsWith("import"))
+		const importLines = files.types.split("\n").filter((l) => l.startsWith("import"))
 		expect(importLines).toHaveLength(0)
 	})
 
 	it("map file has no import statements", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		const importLines = files.map
-			.split("\n").filter((l) => l.startsWith("import"))
+		const importLines = files.map.split("\n").filter((l) => l.startsWith("import"))
 		expect(importLines).toHaveLength(0)
 	})
 
@@ -119,7 +117,9 @@ describe("generated code structure — config type shape", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		expect(files.types).toContain("baseURL: string")
 		expect(files.types).toContain("fetch?: typeof fetch")
-		expect(files.types).toContain("invalidation?: { maxSourcesPerTarget?: number; staleMaxEntries?: number; staleTime: number }")
+		expect(files.types).toContain(
+			"invalidation?: { maxSourcesPerTarget?: number; staleMaxEntries?: number; staleTime: number }",
+		)
 		expect(files.types).toContain("onRequest?:")
 		expect(files.types).toContain("onResponse?:")
 	})
@@ -250,8 +250,7 @@ describe("runtime — GET request flow", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.get({ params: { id: "42" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.get({ params: { id: "42" } })
 
 		expect(fetcher).toHaveBeenCalledOnce()
 		const [url, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
@@ -265,8 +264,12 @@ describe("runtime — GET request flow", () => {
 			{ baseURL: "http://api.example.com", fetch: mockFetch(200, [{ id: 1 }]) },
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { data: unknown; error: unknown; response: Response; status: number }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			data: unknown
+			error: unknown
+			response: Response
+			status: number
+		}
 
 		expect(result.data).toEqual([{ id: 1 }])
 		expect(result.error).toBeNull()
@@ -283,8 +286,9 @@ describe("runtime — POST / mutation request flow", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.create({ json: { name: "Bob" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.create({
+			json: { name: "Bob" },
+		})
 
 		const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
 		expect(init.method).toBe("POST")
@@ -300,8 +304,10 @@ describe("runtime — POST / mutation request flow", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.items.replace({ json: { name: "x" }, params: { id: "5" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).items.replace({
+			json: { name: "x" },
+			params: { id: "5" },
+		})
 
 		const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
 		expect(init.method).toBe("PUT")
@@ -314,8 +320,9 @@ describe("runtime — POST / mutation request flow", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.remove({ params: { id: "7" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.remove({
+			params: { id: "7" },
+		})
 
 		const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
 		expect(init.method).toBe("DELETE")
@@ -330,8 +337,9 @@ describe("runtime — path interpolation", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.get({ params: { id: "a b/c" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.get({
+			params: { id: "a b/c" },
+		})
 
 		const [url] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string]
 		expect(url).toContain(encodeURIComponent("a b/c"))
@@ -344,8 +352,9 @@ describe("runtime — path interpolation", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.posts.comment({ params: { postId: "99", userId: "1" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).posts.comment({
+			params: { postId: "99", userId: "1" },
+		})
 
 		const [url] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string]
 		expect(url).toBe("http://api.example.com/users/1/posts/99")
@@ -360,8 +369,9 @@ describe("runtime — query/search parameter serialization", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.search({ search: { limit: 10, q: "alice" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.search({
+			search: { limit: 10, q: "alice" },
+		})
 
 		const [url] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string]
 		expect(url).toContain("q=alice")
@@ -375,8 +385,9 @@ describe("runtime — query/search parameter serialization", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.items.list({ search: { active: true, skip: null, top: undefined } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).items.list({
+			search: { active: true, skip: null, top: undefined },
+		})
 
 		const [url] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string]
 		expect(url).toContain("active=true")
@@ -391,8 +402,9 @@ describe("runtime — query/search parameter serialization", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.tags.filter({ search: { ids: ["1", "2", "3"] } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).tags.filter({
+			search: { ids: ["1", "2", "3"] },
+		})
 
 		const [url] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string]
 		expect(url).toContain("ids=1")
@@ -423,9 +435,10 @@ describe("runtime — header building", () => {
 
 	it("function headers are resolved with method and path context", async () => {
 		const fetcher = mockFetch(200, {})
-		const headerFn = vi.fn<(_ctx: { method: string; path: string }) => Record<string, string>>(
-			(_ctx) => ({ "x-method": _ctx.method, "x-path": _ctx.path }),
-		)
+		const headerFn = vi.fn<(_ctx: { method: string; path: string }) => Record<string, string>>((_ctx) => ({
+			"x-method": _ctx.method,
+			"x-path": _ctx.path,
+		}))
 		const sdk = createSDK(
 			{ users: { list: { method: "GET", path: "/users" } } },
 			{
@@ -451,8 +464,9 @@ describe("runtime — header building", () => {
 			},
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.list({ headers: { "x-version": "2" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.list({
+			headers: { "x-version": "2" },
+		})
 
 		const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
 		const headers = init.headers as Headers
@@ -466,8 +480,9 @@ describe("runtime — header building", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.list({ cookies: { session: "abc123", user: "alice" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.list({
+			cookies: { session: "abc123", user: "alice" },
+		})
 
 		const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
 		const headers = init.headers as Headers
@@ -485,8 +500,9 @@ describe("runtime — body serialization", () => {
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.forms.submit({ form: { age: "30", name: "Alice" } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).forms.submit({
+			form: { age: "30", name: "Alice" },
+		})
 
 		const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
 		const headers = init.headers as Headers
@@ -518,8 +534,9 @@ describe("runtime — response parsing", () => {
 			{ baseURL: "http://api.example.com", fetch: mockFetch(200, { items: [1, 2] }) },
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { data: unknown }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			data: unknown
+		}
 
 		expect(result.data).toEqual({ items: [1, 2] })
 	})
@@ -530,8 +547,9 @@ describe("runtime — response parsing", () => {
 			{ baseURL: "http://api.example.com", fetch: mockFetchRaw(200, "ok", "text/plain") },
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.health.check() as { data: unknown }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).health.check()) as {
+			data: unknown
+		}
 
 		expect(result.data).toBe("ok")
 	})
@@ -547,8 +565,9 @@ describe("runtime — response parsing", () => {
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.remove({ params: { id: "1" } }) as { data: unknown; error: unknown; status: number }
+		const result = (await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.remove({
+			params: { id: "1" },
+		})) as { data: unknown; error: unknown; status: number }
 
 		expect(result.data).toBeNull()
 		expect(result.error).toBeNull()
@@ -566,8 +585,9 @@ describe("runtime — error responses", () => {
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.users.get({ params: { id: "999" } }) as { data: unknown; error: unknown; status: number }
+		const result = (await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.get({
+			params: { id: "999" },
+		})) as { data: unknown; error: unknown; status: number }
 
 		expect(result.data).toBeNull()
 		expect(result.error).toEqual({ message: "Not found" })
@@ -583,8 +603,11 @@ describe("runtime — error responses", () => {
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { data: unknown; error: unknown; status: number }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			data: unknown
+			error: unknown
+			status: number
+		}
 
 		expect(result.data).toBeNull()
 		expect(result.error).toEqual({ message: "Server error" })
@@ -600,8 +623,10 @@ describe("runtime — error responses", () => {
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { response: Response; status: number }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			response: Response
+			status: number
+		}
 
 		expect(result.response).toBeInstanceOf(Response)
 		expect(result.status).toBe(403)
@@ -616,8 +641,10 @@ describe("runtime — error responses", () => {
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { data: unknown; error: unknown }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			data: unknown
+			error: unknown
+		}
 
 		expect(result.data).toBeNull()
 		/* Non-JSON error body: _parseErrorBody tries JSON.parse, fails, returns undefined */
@@ -633,7 +660,11 @@ describe("runtime — onRequest hook", () => {
 			{
 				baseURL: "http://api.example.com",
 				fetch: mockFetch(200, []),
-				onRequest: [(ctx) => { captured.push({ ...ctx }) }],
+				onRequest: [
+					(ctx) => {
+						captured.push({ ...ctx })
+					},
+				],
 			},
 		)
 
@@ -654,7 +685,11 @@ describe("runtime — onRequest hook", () => {
 			{
 				baseURL: "http://api.example.com",
 				fetch: fetcher,
-				onRequest: [(ctx) => { ctx.headers.set("x-custom", "injected") }],
+				onRequest: [
+					(ctx) => {
+						ctx.headers.set("x-custom", "injected")
+					},
+				],
 			},
 		)
 
@@ -673,9 +708,15 @@ describe("runtime — onRequest hook", () => {
 				baseURL: "http://api.example.com",
 				fetch: mockFetch(200, []),
 				onRequest: [
-					() => { order.push(1) },
-					() => { order.push(2) },
-					() => { order.push(3) },
+					() => {
+						order.push(1)
+					},
+					() => {
+						order.push(2)
+					},
+					() => {
+						order.push(3)
+					},
 				],
 			},
 		)
@@ -694,10 +735,12 @@ describe("runtime — onResponse hook", () => {
 			{
 				baseURL: "http://api.example.com",
 				fetch: mockFetch(200, []),
-				onResponse: [(ctx) => {
-					captured.push({ isRetry: ctx.isRetry, method: ctx.method, path: ctx.path })
-					return undefined
-				}],
+				onResponse: [
+					(ctx) => {
+						captured.push({ isRetry: ctx.isRetry, method: ctx.method, path: ctx.path })
+						return undefined
+					},
+				],
 			},
 		)
 
@@ -716,17 +759,20 @@ describe("runtime — onResponse hook", () => {
 			{
 				baseURL: "http://api.example.com",
 				fetch: mockFetch(200, { original: true }),
-				onResponse: [(_ctx) => {
-					return new Response(JSON.stringify({ replaced: true }), {
-						headers: { "content-type": "application/json" },
-						status: 200,
-					})
-				}],
+				onResponse: [
+					(_ctx) => {
+						return new Response(JSON.stringify({ replaced: true }), {
+							headers: { "content-type": "application/json" },
+							status: 200,
+						})
+					},
+				],
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { data: unknown }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			data: unknown
+		}
 
 		expect(result.data).toEqual({ replaced: true })
 	})
@@ -739,7 +785,10 @@ describe("runtime — onResponse hook", () => {
 				baseURL: "http://api.example.com",
 				fetch: mockFetch(200, {}),
 				onResponse: [
-					(_ctx) => { order.push(1); return undefined },
+					(_ctx) => {
+						order.push(1)
+						return undefined
+					},
 					(_ctx) => {
 						order.push(2)
 						return new Response(JSON.stringify({ replaced: 2 }), {
@@ -751,8 +800,9 @@ describe("runtime — onResponse hook", () => {
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { data: unknown }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			data: unknown
+		}
 
 		expect(order).toEqual([1, 2])
 		expect(result.data).toEqual({ replaced: 2 })
@@ -771,8 +821,7 @@ describe("edge cases — missing path param throws", () => {
 		)
 
 		await expect(
-			(sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-				.users.get({ params: {} })
+			(sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).users.get({ params: {} }),
 		).rejects.toThrow("Missing path param: id")
 	})
 })
@@ -876,8 +925,9 @@ describe("edge cases — form with null/undefined values skips those keys", () =
 			{ baseURL: "http://api.example.com", fetch: fetcher },
 		)
 
-		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>)
-			.forms.submit({ form: { keep: "yes", remove1: null, remove2: undefined } })
+		await (sdk as Record<string, Record<string, (i: unknown) => Promise<unknown>>>).forms.submit({
+			form: { keep: "yes", remove1: null, remove2: undefined },
+		})
 
 		const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
 		expect(init.body as string).toContain("keep=yes")
@@ -921,8 +971,9 @@ describe("edge cases — onResponse returning undefined does not change response
 			},
 		)
 
-		const result = await (sdk as Record<string, Record<string, () => Promise<unknown>>>)
-			.users.list() as { data: unknown }
+		const result = (await (sdk as Record<string, Record<string, () => Promise<unknown>>>).users.list()) as {
+			data: unknown
+		}
 
 		expect(result.data).toEqual({ original: true })
 	})
@@ -965,14 +1016,20 @@ describe("type contracts — generateSDK return type", () => {
 		expectTypeOf(result.files.map).toEqualTypeOf<string>()
 		expectTypeOf(result.files.types).toEqualTypeOf<string>()
 		expectTypeOf(result.serviceMap).toEqualTypeOf<
-			Record<string, Record<string, {
-				invalidate?: string[]
-				method: string
-				params?: string[]
-				path: string
-				sse?: boolean
-				ws?: boolean
-			}>>
+			Record<
+				string,
+				Record<
+					string,
+					{
+						invalidate?: string[]
+						method: string
+						params?: string[]
+						path: string
+						sse?: boolean
+						ws?: boolean
+					}
+				>
+			>
 		>()
 	})
 
@@ -1202,7 +1259,11 @@ describe("bugfix — #clearStale collects keys before deleting", () => {
 				baseURL: "http://api.example.com",
 				fetch: fetcher,
 				invalidation: { staleTime: 60000 },
-				onRequest: [(ctx) => { captured.push({ isStale: ctx.isStale, selector: ctx.selector }) }],
+				onRequest: [
+					(ctx) => {
+						captured.push({ isStale: ctx.isStale, selector: ctx.selector })
+					},
+				],
 			},
 		)
 
@@ -1275,9 +1336,7 @@ describe("bugfix — #doSSE reqCtx type includes optional invalidation fields", 
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
 		const sseBody = files.client.slice(sseStart, sseStart + 2000)
-		const reqCtxLine = sseBody
-			.split("\n")
-			.find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
+		const reqCtxLine = sseBody.split("\n").find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
 		expect(reqCtxLine).toBeDefined()
 		expect(reqCtxLine).toContain("invalidatedBy?: string[]")
 	})
@@ -1286,9 +1345,7 @@ describe("bugfix — #doSSE reqCtx type includes optional invalidation fields", 
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
 		const sseBody = files.client.slice(sseStart, sseStart + 2000)
-		const reqCtxLine = sseBody
-			.split("\n")
-			.find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
+		const reqCtxLine = sseBody.split("\n").find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
 		expect(reqCtxLine).toBeDefined()
 		expect(reqCtxLine).toContain("isStale?: boolean")
 	})
@@ -1297,9 +1354,7 @@ describe("bugfix — #doSSE reqCtx type includes optional invalidation fields", 
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
 		const sseBody = files.client.slice(sseStart, sseStart + 2000)
-		const reqCtxLine = sseBody
-			.split("\n")
-			.find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
+		const reqCtxLine = sseBody.split("\n").find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
 		expect(reqCtxLine).toBeDefined()
 		expect(reqCtxLine).toContain("selector?: string")
 	})
@@ -1310,9 +1365,7 @@ describe("bugfix — #doSSE resCtx type includes optional invalidation fields", 
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
 		const sseBody = files.client.slice(sseStart, sseStart + 2000)
-		const resCtxLine = sseBody
-			.split("\n")
-			.find((l) => l.includes("resCtx:") && l.includes("isRetry: boolean"))
+		const resCtxLine = sseBody.split("\n").find((l) => l.includes("resCtx:") && l.includes("isRetry: boolean"))
 		expect(resCtxLine).toBeDefined()
 		expect(resCtxLine).toContain("invalidatedBy?: string[]")
 	})
@@ -1321,9 +1374,7 @@ describe("bugfix — #doSSE resCtx type includes optional invalidation fields", 
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
 		const sseBody = files.client.slice(sseStart, sseStart + 2000)
-		const resCtxLine = sseBody
-			.split("\n")
-			.find((l) => l.includes("resCtx:") && l.includes("isRetry: boolean"))
+		const resCtxLine = sseBody.split("\n").find((l) => l.includes("resCtx:") && l.includes("isRetry: boolean"))
 		expect(resCtxLine).toBeDefined()
 		expect(resCtxLine).toContain("selector?: string")
 	})
@@ -1443,9 +1494,7 @@ const ssePathParamSpec = {
 		"/v1/streams/{channel}/events": {
 			get: {
 				operationId: "streams.events",
-				parameters: [
-					{ in: "path", name: "channel", required: true, schema: { type: "string" } },
-				],
+				parameters: [{ in: "path", name: "channel", required: true, schema: { type: "string" } }],
 				responses: {},
 				"x-sse": true,
 			},
@@ -1453,9 +1502,7 @@ const ssePathParamSpec = {
 		"/v1/ws/{room}/connect": {
 			get: {
 				operationId: "ws.connect",
-				parameters: [
-					{ in: "path", name: "room", required: true, schema: { type: "string" } },
-				],
+				parameters: [{ in: "path", name: "room", required: true, schema: { type: "string" } }],
 				responses: {},
 				"x-ws": true,
 			},
@@ -1497,7 +1544,9 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 		 */
 		const proxyStart = files.client.indexOf("get(target, key)")
 		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
-		const toColonBeforeWS = /const entryPath = target\.#toColonParams\(entry\.path\)[\s\S]*?if \(entry\.ws\)/.test(proxyBody)
+		const toColonBeforeWS = /const entryPath = target\.#toColonParams\(entry\.path\)[\s\S]*?if \(entry\.ws\)/.test(
+			proxyBody,
+		)
 		expect(toColonBeforeWS).toBe(true)
 	})
 
@@ -1506,7 +1555,10 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 		const proxyStart = files.client.indexOf("get(target, key)")
 		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
 		const wsSection = proxyBody.slice(proxyBody.indexOf("entry.ws"))
-		const wsBranchBody = wsSection.slice(0, wsSection.indexOf("entry.sse") !== -1 ? wsSection.indexOf("entry.sse") : 300)
+		const wsBranchBody = wsSection.slice(
+			0,
+			wsSection.indexOf("entry.sse") !== -1 ? wsSection.indexOf("entry.sse") : 300,
+		)
 		expect(wsBranchBody).not.toContain("entry.path")
 	})
 
@@ -1550,9 +1602,7 @@ describe("round3 bugfix — #clearStale guarded by requestMeta?.isStale", () => 
 		const requestBody = files.client.slice(requestStart, requestStart + 4000)
 
 		/* Any line with #clearStale must be preceded on same logical line by isStale guard */
-		const lines = requestBody
-			.split("\n")
-			.filter((l) => l.includes("this.#clearStale("))
+		const lines = requestBody.split("\n").filter((l) => l.includes("this.#clearStale("))
 		expect(lines.length).toBeGreaterThan(0)
 		for (const line of lines) {
 			expect(line).toContain("requestMeta?.isStale")
@@ -1572,7 +1622,7 @@ describe("round3 bugfix — SSE abort handler removed", () => {
 		expect(sseBody).not.toContain("abortHandler")
 	})
 
-	it("generated #doSSE does NOT contain addEventListener(\"abort\"", () => {
+	it('generated #doSSE does NOT contain addEventListener("abort"', () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
 		const sseBody = files.client.slice(sseStart, sseStart + 3000)
@@ -1580,7 +1630,7 @@ describe("round3 bugfix — SSE abort handler removed", () => {
 		expect(sseBody).not.toContain(`addEventListener("abort"`)
 	})
 
-	it("generated #doSSE does NOT contain removeEventListener(\"abort\"", () => {
+	it('generated #doSSE does NOT contain removeEventListener("abort"', () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
 		const sseBody = files.client.slice(sseStart, sseStart + 3000)
@@ -1619,9 +1669,7 @@ describe("round3 bugfix — path param types from schema via jsonSchemaToTS", ()
 				"/v1/users/{id}": {
 					get: {
 						operationId: "users.get",
-						parameters: [
-							{ in: "path", name: "id", required: true, schema: { type: "string" } },
-						],
+						parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
 						responses: {},
 					},
 				},

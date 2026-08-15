@@ -261,9 +261,7 @@ describe("WS tree operations", () => {
 
 	it("throws on wildcard segments", () => {
 		const root = createNode()
-		expect(() => insertWsRoute(root, "/ws/*rest", makeWsHandler())).toThrow(
-			"Wildcard segments not supported",
-		)
+		expect(() => insertWsRoute(root, "/ws/*rest", makeWsHandler())).toThrow("Wildcard segments not supported")
 	})
 })
 
@@ -342,10 +340,7 @@ describe("Honey .ws() integration", () => {
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 		app.ws("/ws").handler({ onOpen: vi.fn() })
 
-		const res = await app.fetch(
-			new Request("http://localhost/health", { headers: { upgrade: "websocket" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/health", { headers: { upgrade: "websocket" } }), {})
 		expect(preCount).toBe(0)
 		expect(res.status).not.toBe(101)
 	})
@@ -366,10 +361,7 @@ describe("Honey .ws() integration", () => {
 		const app = honey().wsAdapter(adapter)
 		app.ws("/ws").handler({ onOpen: vi.fn() })
 
-		const res = await app.fetch(
-			new Request("http://localhost/ws", { headers: { upgrade: "websocket" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/ws", { headers: { upgrade: "websocket" } }), {})
 		expect(preCount).toBe(1)
 		expect(res.status).toBe(101)
 	})

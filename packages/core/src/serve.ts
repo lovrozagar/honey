@@ -87,25 +87,16 @@ export async function startHoneyServer(
 			}
 		).Deno
 		const ac = new AbortController()
-		const server = DenoNs.serve(
-			{ hostname, port, signal: ac.signal },
-			(req) => listening.fetch(req, env),
-		)
+		const server = DenoNs.serve({ hostname, port, signal: ac.signal }, (req) => listening.fetch(req, env))
 		const bound = server.addr?.port ?? port
 		return {
 			async close() {
 				ac.abort()
 				if (server.shutdown) {
-					await Promise.race([
-						server.shutdown(),
-						new Promise<void>((r) => setTimeout(r, 1_000)),
-					])
+					await Promise.race([server.shutdown(), new Promise<void>((r) => setTimeout(r, 1_000))])
 					return
 				}
-				await Promise.race([
-					server.finished ?? Promise.resolve(),
-					new Promise<void>((r) => setTimeout(r, 1_000)),
-				])
+				await Promise.race([server.finished ?? Promise.resolve(), new Promise<void>((r) => setTimeout(r, 1_000))])
 			},
 			hostname,
 			port: bound,

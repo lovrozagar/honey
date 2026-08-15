@@ -6,7 +6,15 @@ import { collectSDKMethods, isSSEOperation, isStandardErrEnvelope } from "./code
 import { detectAuthScheme } from "./codegen-go.ts"
 import { methodsOf, namespacesOf, toIR } from "./codegen-ir.ts"
 import type { IRNamespace, IROperation } from "./codegen-ir.ts"
-import { RUST_KEYWORDS, renderTopLevelRust, renderUseRust, rustIdent, rustMethodIdent, rustPascal, rustSnake } from "./rust-type-emitter.ts"
+import {
+	RUST_KEYWORDS,
+	renderTopLevelRust,
+	renderUseRust,
+	rustIdent,
+	rustMethodIdent,
+	rustPascal,
+	rustSnake,
+} from "./rust-type-emitter.ts"
 
 export type RustSDKOptions = {
 	crateName?: string
@@ -37,7 +45,17 @@ let runtimeCache: Map<string, string> | null = null
 export function loadRustRuntimeTemplates(): Map<string, string> {
 	if (runtimeCache) return runtimeCache
 
-	const names = ["errors.rs", "result.rs", "runtime.rs", "invalidation.rs", "invalidation_sync.rs", "sse.rs", "ws.rs", "realtime.rs", "runtime_sync.rs"]
+	const names = [
+		"errors.rs",
+		"result.rs",
+		"runtime.rs",
+		"invalidation.rs",
+		"invalidation_sync.rs",
+		"sse.rs",
+		"ws.rs",
+		"realtime.rs",
+		"runtime_sync.rs",
+	]
 	const cache = new Map<string, string>()
 	for (const name of names) {
 		const filePath = fileURLToPath(new URL(`./client-rust/${name}`, import.meta.url))
@@ -56,9 +74,7 @@ export function loadRustRuntimeTemplates(): Map<string, string> {
 /** Validates and normalises a crate name. Throws if invalid per cargo rules. */
 export function validateCrateName(name: string): string {
 	if (!/^[a-z][a-z0-9_-]*$/.test(name)) {
-		throw new Error(
-			`Invalid crate name: ${JSON.stringify(name)}. Must match ^[a-z][a-z0-9_-]*$`,
-		)
+		throw new Error(`Invalid crate name: ${JSON.stringify(name)}. Must match ^[a-z][a-z0-9_-]*$`)
 	}
 	return name
 }
@@ -271,10 +287,7 @@ function invalidatesOf(irOp: IROperation, rawOp: Record<string, unknown>): strin
 	return []
 }
 
-function methodInfoFromIROp(
-	irOp: IROperation,
-	rawOp: Record<string, unknown>,
-): MethodInfo {
+function methodInfoFromIROp(irOp: IROperation, rawOp: Record<string, unknown>): MethodInfo {
 	const segments = irOp.id.split(".")
 	const isTopLevel = segments.length === 1
 	const resource = segments[0] ?? irOp.id
@@ -448,7 +461,9 @@ function emitSSEMethod(
 		if (qp.required) {
 			l.push(`\tquery.push((${JSON.stringify(qp.name)}.to_string(), ${fieldIdent}_owned.clone()));`)
 		} else {
-			l.push(`\tif let Some(ref v) = ${fieldIdent}_owned { query.push((${JSON.stringify(qp.name)}.to_string(), v.clone())); }`)
+			l.push(
+				`\tif let Some(ref v) = ${fieldIdent}_owned { query.push((${JSON.stringify(qp.name)}.to_string(), v.clone())); }`,
+			)
 		}
 	}
 	l.push(`\tlet cfg_clone = ${cfgAccess}.clone();`)
@@ -504,7 +519,9 @@ function emitWSMethod(
 		const fieldIdent = rustIdent(qp.name)
 		if (qp.required) {
 			l.push(`\tif !query_str.is_empty() { query_str.push('&'); }`)
-			l.push(`\tquery_str.push_str(&format!("{}={}", ${JSON.stringify(qp.name)}, urlencoding::encode(&opts.${fieldIdent})));`)
+			l.push(
+				`\tquery_str.push_str(&format!("{}={}", ${JSON.stringify(qp.name)}, urlencoding::encode(&opts.${fieldIdent})));`,
+			)
 		} else {
 			l.push(`\tif let Some(ref v) = opts.${fieldIdent} {`)
 			l.push(`\t\tif !query_str.is_empty() { query_str.push('&'); }`)
@@ -530,7 +547,9 @@ function emitWSMethod(
 	l.push(`\t\tif !protos.is_empty() {`)
 	l.push(`\t\t\treq.headers_mut().insert(`)
 	l.push(`\t\t\t\t"Sec-WebSocket-Protocol",`)
-	l.push(`\t\t\t\tprotos.join(", ").parse().map_err(|e: tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue| Error::Other(e.to_string()))?,`)
+	l.push(
+		`\t\t\t\tprotos.join(", ").parse().map_err(|e: tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue| Error::Other(e.to_string()))?,`,
+	)
 	l.push(`\t\t\t);`)
 	l.push(`\t\t}`)
 	l.push(`\t}`)
@@ -548,11 +567,7 @@ function buildAccessors(selfAccess: "self" | "self.client"): { cfg: string; stal
 		: { cfg: "self.client.cfg", stale: "self.client.stale", httpClient: "self.client.http_client" }
 }
 
-function emitMethod(
-	m: MethodInfo,
-	selfAccess: "self" | "self.client",
-	throwOnError: boolean,
-): string[] {
+function emitMethod(m: MethodInfo, selfAccess: "self" | "self.client", throwOnError: boolean): string[] {
 	const l: string[] = []
 	const actionFn = rustMethodIdent(m.action === "_call" ? m.resource : m.methodAction)
 	const optsName = optsStructName(m)
@@ -582,9 +597,7 @@ function emitMethod(
 	} else if (bi.kind === "stream") {
 		/* octet-stream body: generic over any `Stream<Item = Result<Bytes, reqwest::Error>>`
 		 * (reqwest::Body::wrap_stream bound). Owned body, single-shot, non-retryable on 401. */
-		asyncGenerics.push(
-			`S: futures::Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + Sync + 'static`,
-		)
+		asyncGenerics.push(`S: futures::Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + Sync + 'static`)
 		params.push(`body: S`)
 	}
 
@@ -612,7 +625,9 @@ function emitMethod(
 			if (qp.required) {
 				l.push(`\tquery.push((${JSON.stringify(qp.name)}.to_string(), ${fieldIdent}_owned.clone()));`)
 			} else {
-				l.push(`\tif let Some(ref v) = ${fieldIdent}_owned { query.push((${JSON.stringify(qp.name)}.to_string(), v.clone())); }`)
+				l.push(
+					`\tif let Some(ref v) = ${fieldIdent}_owned { query.push((${JSON.stringify(qp.name)}.to_string(), v.clone())); }`,
+				)
 			}
 		}
 		l.push(`\tlet cfg_clone = ${cfgAccess}.clone();`)
@@ -661,7 +676,9 @@ function emitMethod(
 			const fieldIdent = rustIdent(qp.name)
 			if (qp.required) {
 				l.push(`\tif !query_str.is_empty() { query_str.push('&'); }`)
-				l.push(`\tquery_str.push_str(&format!("{}={}", ${JSON.stringify(qp.name)}, urlencoding::encode(&opts.${fieldIdent})));`)
+				l.push(
+					`\tquery_str.push_str(&format!("{}={}", ${JSON.stringify(qp.name)}, urlencoding::encode(&opts.${fieldIdent})));`,
+				)
 			} else {
 				l.push(`\tif let Some(ref v) = opts.${fieldIdent} {`)
 				l.push(`\t\tif !query_str.is_empty() { query_str.push('&'); }`)
@@ -687,7 +704,9 @@ function emitMethod(
 		l.push(`\t\tif !protos.is_empty() {`)
 		l.push(`\t\t\treq.headers_mut().insert(`)
 		l.push(`\t\t\t\t"Sec-WebSocket-Protocol",`)
-		l.push(`\t\t\t\tprotos.join(", ").parse().map_err(|e: tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue| Error::Other(e.to_string()))?,`)
+		l.push(
+			`\t\t\t\tprotos.join(", ").parse().map_err(|e: tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue| Error::Other(e.to_string()))?,`,
+		)
 		l.push(`\t\t\t);`)
 		l.push(`\t\t}`)
 		l.push(`\t}`)
@@ -741,14 +760,19 @@ function emitMethod(
 	 * with x-invalidate; BuildRequestMeta short-circuits to None when disabled. */
 	const hasInvalidate = m.invalidates.length > 0
 	if (hasInvalidate) {
-		const pathParamsMapExpr = m.pathParams.length > 0
-			? `std::collections::HashMap::from([${m.pathParams.map((p) => `(${JSON.stringify(p)}.to_string(), ${rustSnake(p)}.to_string())`).join(", ")}])`
-			: `std::collections::HashMap::<String, String>::new()`
+		const pathParamsMapExpr =
+			m.pathParams.length > 0
+				? `std::collections::HashMap::from([${m.pathParams.map((p) => `(${JSON.stringify(p)}.to_string(), ${rustSnake(p)}.to_string())`).join(", ")}])`
+				: `std::collections::HashMap::<String, String>::new()`
 		l.push(`\tlet _path_params_map: std::collections::HashMap<String, String> = ${pathParamsMapExpr};`)
-		l.push(`\tlet _concrete_path = crate::invalidation::interpolate_path(${JSON.stringify(m.path)}, &_path_params_map).unwrap_or_else(|_| ${JSON.stringify(m.path)}.to_string());`)
+		l.push(
+			`\tlet _concrete_path = crate::invalidation::interpolate_path(${JSON.stringify(m.path)}, &_path_params_map).unwrap_or_else(|_| ${JSON.stringify(m.path)}.to_string());`,
+		)
 		l.push(`\tlet _concrete_selector = format!("${httpMethod} {}", _concrete_path);`)
 		l.push(`\tlet _request_meta: Option<crate::invalidation::RequestMeta> = match ${staleAccess} {`)
-		l.push(`\t\tSome(ref s) => s.build_request_meta(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}).await,`)
+		l.push(
+			`\t\tSome(ref s) => s.build_request_meta(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}).await,`,
+		)
 		l.push(`\t\tNone => None,`)
 		l.push(`\t};`)
 	}
@@ -761,7 +785,9 @@ function emitMethod(
 	 * Matches TS/Python/Go emitter semantics (9.a.2 / 9.a.3 / 9.a.4). */
 	const emitIdem = m.isIdempotent && !m.isSSE && !m.isWS && !m.isRealtime
 	if (emitIdem) {
-		l.push(`\tlet mut _call_headers: std::collections::HashMap<String, String> = opts.headers.clone().unwrap_or_default();`)
+		l.push(
+			`\tlet mut _call_headers: std::collections::HashMap<String, String> = opts.headers.clone().unwrap_or_default();`,
+		)
 		l.push(`\tlet _has_idem = _call_headers.keys().any(|k| k.eq_ignore_ascii_case("Idempotency-Key"));`)
 		l.push(`\tif !_has_idem {`)
 		l.push(`\t\tlet _k = opts.idempotency_key.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());`)
@@ -800,7 +826,9 @@ function emitMethod(
 		l.push(`\t\t}`)
 		l.push(`\t\tif let Some(ref meta) = _request_meta {`)
 		l.push(`\t\t\tif meta.is_stale {`)
-		l.push(`\t\t\t\tstale.clear_stale(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}, meta.seq_snapshot).await;`)
+		l.push(
+			`\t\t\t\tstale.clear_stale(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}, meta.seq_snapshot).await;`,
+		)
 		l.push(`\t\t\t}`)
 		l.push(`\t\t}`)
 		l.push(`\t}`)
@@ -818,7 +846,9 @@ function emitMethod(
 		l.push(`\tOk(out)`)
 	} else {
 		l.push(`\tlet out: ${m.responseType} = serde_json::from_slice(&result.body)?;`)
-		l.push(`\tOk(SdkResult { data: Some(out), error: None, status: result.status, response: crate::runtime::ResponseMeta { status: result.status, headers: result.headers.clone(), url: result.url.clone(), body: result.body.clone() } })`)
+		l.push(
+			`\tOk(SdkResult { data: Some(out), error: None, status: result.status, response: crate::runtime::ResponseMeta { status: result.status, headers: result.headers.clone(), url: result.url.clone(), body: result.body.clone() } })`,
+		)
 	}
 
 	l.push(`}`)
@@ -827,11 +857,7 @@ function emitMethod(
 }
 
 /** emitSyncMethod is the blocking twin of emitMethod — no async, calls do_request_blocking. */
-function emitSyncMethod(
-	m: MethodInfo,
-	selfAccess: "self" | "self.client",
-	throwOnError: boolean,
-): string[] {
+function emitSyncMethod(m: MethodInfo, selfAccess: "self" | "self.client", throwOnError: boolean): string[] {
 	/* SSE and WS operations have no sync variant */
 	if (m.isSSE || m.isWS) return []
 
@@ -902,14 +928,19 @@ function emitSyncMethod(
 	/* invalidation pre-flight (sync) — same shape as async, no .await. */
 	const hasInvalidate = m.invalidates.length > 0
 	if (hasInvalidate) {
-		const pathParamsMapExpr = m.pathParams.length > 0
-			? `std::collections::HashMap::from([${m.pathParams.map((p) => `(${JSON.stringify(p)}.to_string(), ${rustSnake(p)}.to_string())`).join(", ")}])`
-			: `std::collections::HashMap::<String, String>::new()`
+		const pathParamsMapExpr =
+			m.pathParams.length > 0
+				? `std::collections::HashMap::from([${m.pathParams.map((p) => `(${JSON.stringify(p)}.to_string(), ${rustSnake(p)}.to_string())`).join(", ")}])`
+				: `std::collections::HashMap::<String, String>::new()`
 		l.push(`\tlet _path_params_map: std::collections::HashMap<String, String> = ${pathParamsMapExpr};`)
-		l.push(`\tlet _concrete_path = crate::invalidation::interpolate_path(${JSON.stringify(m.path)}, &_path_params_map).unwrap_or_else(|_| ${JSON.stringify(m.path)}.to_string());`)
+		l.push(
+			`\tlet _concrete_path = crate::invalidation::interpolate_path(${JSON.stringify(m.path)}, &_path_params_map).unwrap_or_else(|_| ${JSON.stringify(m.path)}.to_string());`,
+		)
 		l.push(`\tlet _concrete_selector = format!("${httpMethod} {}", _concrete_path);`)
 		l.push(`\tlet _request_meta: Option<crate::invalidation::RequestMeta> = match ${staleAccess} {`)
-		l.push(`\t\tSome(ref s) => s.build_request_meta(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}),`)
+		l.push(
+			`\t\tSome(ref s) => s.build_request_meta(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}),`,
+		)
 		l.push(`\t\tNone => None,`)
 		l.push(`\t};`)
 	}
@@ -917,7 +948,9 @@ function emitSyncMethod(
 	/* idempotency-key auto-injection (sync mirror of async path — same semantics). */
 	const emitIdem = m.isIdempotent && !m.isSSE && !m.isWS && !m.isRealtime
 	if (emitIdem) {
-		l.push(`\tlet mut _call_headers: std::collections::HashMap<String, String> = opts.headers.clone().unwrap_or_default();`)
+		l.push(
+			`\tlet mut _call_headers: std::collections::HashMap<String, String> = opts.headers.clone().unwrap_or_default();`,
+		)
 		l.push(`\tlet _has_idem = _call_headers.keys().any(|k| k.eq_ignore_ascii_case("Idempotency-Key"));`)
 		l.push(`\tif !_has_idem {`)
 		l.push(`\t\tlet _k = opts.idempotency_key.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());`)
@@ -952,7 +985,9 @@ function emitSyncMethod(
 		l.push(`\t\t}`)
 		l.push(`\t\tif let Some(ref meta) = _request_meta {`)
 		l.push(`\t\t\tif meta.is_stale {`)
-		l.push(`\t\t\t\tstale.clear_stale(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}, meta.seq_snapshot);`)
+		l.push(
+			`\t\t\t\tstale.clear_stale(&_concrete_selector, &_concrete_path, ${JSON.stringify(httpMethod)}, meta.seq_snapshot);`,
+		)
 		l.push(`\t\t\t}`)
 		l.push(`\t\t}`)
 		l.push(`\t}`)
@@ -970,7 +1005,9 @@ function emitSyncMethod(
 		l.push(`\tOk(out)`)
 	} else {
 		l.push(`\tlet out: ${m.responseType} = serde_json::from_slice(&result.body)?;`)
-		l.push(`\tOk(SdkResult { data: Some(out), error: None, status: result.status, response: crate::runtime::ResponseMeta { status: result.status, headers: result.headers.clone(), url: result.url.clone(), body: result.body.clone() } })`)
+		l.push(
+			`\tOk(SdkResult { data: Some(out), error: None, status: result.status, response: crate::runtime::ResponseMeta { status: result.status, headers: result.headers.clone(), url: result.url.clone(), body: result.body.clone() } })`,
+		)
 	}
 
 	l.push(`}`)
@@ -1006,7 +1043,9 @@ function emitQueryParamLoop(qps: QueryParam[], l: string[]): void {
 			l.push(`\tquery.push((${JSON.stringify(qp.name)}.to_string(), ${expr}));`)
 		} else {
 			const expr = rustQueryValueToString(qp.schema, `v`)
-			l.push(`\tif let Some(ref v) = opts.${fieldIdent} { query.push((${JSON.stringify(qp.name)}.to_string(), ${expr})); }`)
+			l.push(
+				`\tif let Some(ref v) = opts.${fieldIdent} { query.push((${JSON.stringify(qp.name)}.to_string(), ${expr})); }`,
+			)
 		}
 	}
 }
@@ -1093,7 +1132,10 @@ function buildRustTypes(spec: OpenApiSpec): string {
 	return l.join("\n")
 }
 
-function buildCargoToml(crateName: string, meta: { version: string; description?: string; homepage?: string; repository?: string; license?: string }): string {
+function buildCargoToml(
+	crateName: string,
+	meta: { version: string; description?: string; homepage?: string; repository?: string; license?: string },
+): string {
 	const pkgLines = [
 		`[package]`,
 		`name = "${crateName}"`,
@@ -1186,23 +1228,25 @@ function buildRustClient(spec: OpenApiSpec, options: RustSDKOptions, ir: ReturnT
 	body.push(`}`)
 	body.push(``)
 
-	body.push(`pub(crate) static INVALIDATION_MAP: once_cell::sync::Lazy<std::collections::HashMap<&'static str, std::collections::HashMap<&'static str, ServiceEntry>>> =`)
+	body.push(
+		`pub(crate) static INVALIDATION_MAP: once_cell::sync::Lazy<std::collections::HashMap<&'static str, std::collections::HashMap<&'static str, ServiceEntry>>> =`,
+	)
 	body.push(`\tonce_cell::sync::Lazy::new(|| {`)
 	body.push(`\t\tlet mut map = std::collections::HashMap::new();`)
 	for (const [resource, actions] of Object.entries(serviceMap).sort(([a], [b]) => a.localeCompare(b))) {
 		body.push(`\t\t{`)
 		body.push(`\t\t\tlet mut resource_map = std::collections::HashMap::new();`)
-		for (const [action, entry] of Object.entries(actions as Record<string, Record<string, unknown>>).sort(([a], [b]) => a.localeCompare(b))) {
+		for (const [action, entry] of Object.entries(actions as Record<string, Record<string, unknown>>).sort(([a], [b]) =>
+			a.localeCompare(b),
+		)) {
 			const inv = entry.invalidate as string[] | undefined
-			const invStr = inv && inv.length > 0
-				? `&[${inv.map((s) => JSON.stringify(s)).join(", ")}]`
-				: `&[]`
+			const invStr = inv && inv.length > 0 ? `&[${inv.map((s) => JSON.stringify(s)).join(", ")}]` : `&[]`
 			const params = entry.params as string[] | undefined
-			const paramsStr = params && params.length > 0
-				? `&[${params.map((s) => JSON.stringify(s)).join(", ")}]`
-				: `&[]`
+			const paramsStr = params && params.length > 0 ? `&[${params.map((s) => JSON.stringify(s)).join(", ")}]` : `&[]`
 			const isRealtime = realtimeLookup.get(`${resource}.${action}`) ?? false
-			body.push(`\t\t\tresource_map.insert(${JSON.stringify(action)}, ServiceEntry { method: ${JSON.stringify(String(entry.method))}, path: ${JSON.stringify(String(entry.path))}, params: ${paramsStr}, sse: ${entry.sse === true}, ws: ${entry.ws === true}, realtime: ${isRealtime}, invalidate: ${invStr} });`)
+			body.push(
+				`\t\t\tresource_map.insert(${JSON.stringify(action)}, ServiceEntry { method: ${JSON.stringify(String(entry.method))}, path: ${JSON.stringify(String(entry.path))}, params: ${paramsStr}, sse: ${entry.sse === true}, ws: ${entry.ws === true}, realtime: ${isRealtime}, invalidate: ${invStr} });`,
+			)
 		}
 		body.push(`\t\t\tmap.insert(${JSON.stringify(resource)}, resource_map);`)
 		body.push(`\t\t}`)
@@ -1256,7 +1300,9 @@ function buildRustClient(spec: OpenApiSpec, options: RustSDKOptions, ir: ReturnT
 	body.push(`\t\tClient {`)
 	for (const [seg] of namespacesOf(ir.tree)) {
 		const safeName = safeResourceName(seg)
-		body.push(`\t\t\t${rustSnake(safeName)}: crate::resources::${rustSnake(safeName)}::new_${rustSnake(safeName)}_resource(&inner),`)
+		body.push(
+			`\t\t\t${rustSnake(safeName)}: crate::resources::${rustSnake(safeName)}::new_${rustSnake(safeName)}_resource(&inner),`,
+		)
 	}
 	body.push(`\t\t\tinner,`)
 	body.push(`\t\t}`)
@@ -1353,13 +1399,14 @@ function buildRustClient(spec: OpenApiSpec, options: RustSDKOptions, ir: ReturnT
 	body.push(`\t\tSyncClient {`)
 	for (const seg of syncNsSegs) {
 		const safeName = safeResourceName(seg)
-		body.push(`\t\t\t${rustSnake(safeName)}: ${rustPascal(safeName)}ResourceSync { client: std::sync::Arc::clone(&inner) },`)
+		body.push(
+			`\t\t\t${rustSnake(safeName)}: ${rustPascal(safeName)}ResourceSync { client: std::sync::Arc::clone(&inner) },`,
+		)
 	}
 	body.push(`\t\t\tinner,`)
 	body.push(`\t\t}`)
 	body.push(`\t}`)
 	body.push(``)
-
 
 	for (const seg of syncNsSegs) {
 		const safeName = safeResourceName(seg)
@@ -1539,7 +1586,9 @@ function buildRustResources(
 
 		/* constructor free-fn used by Client::new / parent resource constructors */
 		const constructorFn = `new_${safePath.map(rustSnake).join("_")}_resource`
-		fileLines.push(`pub(crate) fn ${constructorFn}(client: &std::sync::Arc<crate::client::ClientInner>) -> ${structName} {`)
+		fileLines.push(
+			`pub(crate) fn ${constructorFn}(client: &std::sync::Arc<crate::client::ClientInner>) -> ${structName} {`,
+		)
 		fileLines.push(`\t${structName} {`)
 		fileLines.push(`\t\tclient: std::sync::Arc::clone(client),`)
 		for (const childSeg of childSegs) {
@@ -1585,9 +1634,7 @@ function buildRustResources(
 
 		/* determine file path: namespace with children → dir/mod.rs, leaf → dir.rs */
 		const dirPath = safePath.map(rustSnake).join("/")
-		const filePath = hasChildren
-			? `src/resources/${dirPath}/mod.rs`
-			: `src/resources/${dirPath}.rs`
+		const filePath = hasChildren ? `src/resources/${dirPath}/mod.rs` : `src/resources/${dirPath}.rs`
 		files.set(filePath, fileLines.join("\n"))
 
 		/* recurse into children */
@@ -1603,10 +1650,7 @@ function buildRustResources(
 	return files
 }
 
-export function generateRustSDK(
-	spec: Record<string, unknown>,
-	options: RustSDKOptions = {},
-): GeneratedRustSDK {
+export function generateRustSDK(spec: Record<string, unknown>, options: RustSDKOptions = {}): GeneratedRustSDK {
 	const crateName = validateCrateName(options.crateName ?? "honey-sdk")
 
 	/* toIR validates operationId collisions — throws before any codegen runs */

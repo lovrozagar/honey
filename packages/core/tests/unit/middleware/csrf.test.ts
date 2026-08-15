@@ -20,37 +20,25 @@ function formPost(url: string, headers: Record<string, string> = {}) {
 describe("csrf middleware — internal", () => {
 	it("POST with Sec-Fetch-Site: cross-site + form content-type → 403", async () => {
 		const app = makeApp()
-		const res = await app.fetch(
-			formPost("http://localhost/action", { "sec-fetch-site": "cross-site" }),
-			{},
-		)
+		const res = await app.fetch(formPost("http://localhost/action", { "sec-fetch-site": "cross-site" }), {})
 		expect(res.status).toBe(403)
 	})
 
 	it("POST with Sec-Fetch-Site: same-origin → allowed", async () => {
 		const app = makeApp()
-		const res = await app.fetch(
-			formPost("http://localhost/action", { "sec-fetch-site": "same-origin" }),
-			{},
-		)
+		const res = await app.fetch(formPost("http://localhost/action", { "sec-fetch-site": "same-origin" }), {})
 		expect(res.status).toBe(200)
 	})
 
 	it("POST with no Sec-Fetch-Site but matching Origin → allowed", async () => {
 		const app = makeApp({ origin: "http://localhost" })
-		const res = await app.fetch(
-			formPost("http://localhost/action", { origin: "http://localhost" }),
-			{},
-		)
+		const res = await app.fetch(formPost("http://localhost/action", { origin: "http://localhost" }), {})
 		expect(res.status).toBe(200)
 	})
 
 	it("POST with no Sec-Fetch-Site and wrong Origin → 403", async () => {
 		const app = makeApp({ origin: "http://localhost" })
-		const res = await app.fetch(
-			formPost("http://localhost/action", { origin: "http://evil.com" }),
-			{},
-		)
+		const res = await app.fetch(formPost("http://localhost/action", { origin: "http://evil.com" }), {})
 		expect(res.status).toBe(403)
 	})
 
@@ -144,10 +132,7 @@ describe("csrf middleware — internal", () => {
 
 	it("origin as function → called with origin string", async () => {
 		const app = makeApp({ origin: (o) => o.endsWith(".myapp.com") })
-		const res = await app.fetch(
-			formPost("http://localhost/action", { origin: "http://admin.myapp.com" }),
-			{},
-		)
+		const res = await app.fetch(formPost("http://localhost/action", { origin: "http://admin.myapp.com" }), {})
 		expect(res.status).toBe(200)
 	})
 
@@ -161,10 +146,7 @@ describe("csrf middleware — internal", () => {
 describe("csrf middleware — consumer", () => {
 	it("cross-origin form POST → 403 with forbidden error_key", async () => {
 		const app = makeApp()
-		const res = await app.fetch(
-			formPost("http://localhost/action", { "sec-fetch-site": "cross-site" }),
-			{},
-		)
+		const res = await app.fetch(formPost("http://localhost/action", { "sec-fetch-site": "cross-site" }), {})
 		expect(res.status).toBe(403)
 		const body = (await res.json()) as Record<string, unknown>
 		expect(body.error_key).toBe("forbidden")
@@ -172,10 +154,7 @@ describe("csrf middleware — consumer", () => {
 
 	it("same-origin form POST → allowed", async () => {
 		const app = makeApp()
-		const res = await app.fetch(
-			formPost("http://localhost/action", { "sec-fetch-site": "same-origin" }),
-			{},
-		)
+		const res = await app.fetch(formPost("http://localhost/action", { "sec-fetch-site": "same-origin" }), {})
 		expect(res.status).toBe(200)
 		const body = (await res.json()) as Record<string, unknown>
 		expect(body.done).toBe(true)

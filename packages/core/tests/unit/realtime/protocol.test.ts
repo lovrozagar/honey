@@ -1,13 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
-import {
-	createProtocol,
-	decodeClientFrame,
-	encodeServerFrame,
-} from "../../../src/realtime/protocol.ts"
-import type {
-	ClientFrame,
-	ServerFrame,
-} from "../../../src/realtime/protocol.ts"
+import { createProtocol, decodeClientFrame, encodeServerFrame } from "../../../src/realtime/protocol.ts"
+import type { ClientFrame, ServerFrame } from "../../../src/realtime/protocol.ts"
 
 /* ------------------------------------------------------------------ */
 /*  Envelope encoding                                                 */
@@ -67,16 +60,12 @@ describe("decodeClientFrame", () => {
 	})
 
 	it("decodes a msg frame from JSON string", () => {
-		const result = decodeClientFrame(
-			JSON.stringify({ data: { action: "click" }, t: "msg" }),
-		)
+		const result = decodeClientFrame(JSON.stringify({ data: { action: "click" }, t: "msg" }))
 		expect(result).toEqual({ data: { action: "click" }, t: "msg" })
 	})
 
 	it("decodes a resume frame from JSON string", () => {
-		const result = decodeClientFrame(
-			JSON.stringify({ lastId: 42, reconnectToken: "tok-x", t: "resume" }),
-		)
+		const result = decodeClientFrame(JSON.stringify({ lastId: 42, reconnectToken: "tok-x", t: "resume" }))
 		expect(result).toEqual({
 			lastId: 42,
 			reconnectToken: "tok-x",
@@ -102,9 +91,7 @@ describe("decodeClientFrame", () => {
 
 	it("returns null when required fields are missing from resume frame", () => {
 		/* resume frame requires lastId and reconnectToken */
-		const result = decodeClientFrame(
-			JSON.stringify({ lastId: 5, t: "resume" }),
-		)
+		const result = decodeClientFrame(JSON.stringify({ lastId: 5, t: "resume" }))
 		expect(result).toBeNull()
 	})
 
@@ -296,18 +283,14 @@ describe("Protocol.handleClientFrame", () => {
 
 	it("returns null for unknown frame type", () => {
 		const proto = createProtocol()
-		const result = proto.handleClientFrame(
-			JSON.stringify({ t: "doesnotexist" }),
-		)
+		const result = proto.handleClientFrame(JSON.stringify({ t: "doesnotexist" }))
 
 		expect(result).toBeNull()
 	})
 
 	it("returns null for msg frame (server does not echo back)", () => {
 		const proto = createProtocol()
-		const result = proto.handleClientFrame(
-			JSON.stringify({ data: "hi", t: "msg" }),
-		)
+		const result = proto.handleClientFrame(JSON.stringify({ data: "hi", t: "msg" }))
 
 		/*
 		 * Client msg frames are dispatched to the application handler,

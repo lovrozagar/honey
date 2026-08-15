@@ -121,9 +121,7 @@ describe("#1 input-type suffix — signal, headers, cookies", () => {
 		/* The list method should use optional input */
 		expect(files.types).toContain("input?: _HttpOpts")
 		/* must NOT have a required input for the param-less GET */
-		const listLine = files.types
-			.split("\n")
-			.find((l) => l.includes("list("))
+		const listLine = files.types.split("\n").find((l) => l.includes("list("))
 		expect(listLine).toBeDefined()
 		expect(listLine).not.toMatch(/list\(input: \{/)
 	})
@@ -136,7 +134,10 @@ describe("#1 input-type suffix — signal, headers, cookies", () => {
 		 * never has a matching <. Strip lines containing => before the structural
 		 * check so the angle-bracket count is meaningful.
 		 */
-		const stripped = files.types.split("\n").filter((l) => !l.includes("=>")).join("\n")
+		const stripped = files.types
+			.split("\n")
+			.filter((l) => !l.includes("=>"))
+			.join("\n")
 		assertBalancedBrackets(stripped)
 	})
 })
@@ -147,16 +148,19 @@ describe("#1 input-type suffix — signal, headers, cookies", () => {
 
 describe("#2 204 invalidation — emitter string", () => {
 	it("files.client gates safe-branch invalidation on HTTP 2xx status (not on parse success)", () => {
-		const { files } = generateSDK(makeSpec({
-			"/v1/users": {
-				get: { operationId: "users.list", responses: {} },
-				post: {
-					operationId: "users.create",
-					responses: {},
-					"x-invalidate": ["GET /v1/users"],
+		const { files } = generateSDK(
+			makeSpec({
+				"/v1/users": {
+					get: { operationId: "users.list", responses: {} },
+					post: {
+						operationId: "users.create",
+						responses: {},
+						"x-invalidate": ["GET /v1/users"],
+					},
 				},
-			},
-		}), { name: "TestSDK" })
+			}),
+			{ name: "TestSDK" },
+		)
 
 		/* Phase F #R6-3 replaces the R4 `r.error === null` gate with an HTTP 2xx status check,
 		   so parse errors on otherwise-successful responses no longer skip invalidation. */
@@ -337,36 +341,28 @@ describe("#4 binary / non-JSON response types", () => {
 	it("application/octet-stream response type is SDKResult<ArrayBuffer", () => {
 		const { files } = generateSDK(responseTypeSpec, { name: "TestSDK" })
 		/* binary method must contain ArrayBuffer in return type */
-		const binaryLine = files.types
-			.split("\n")
-			.find((l) => l.includes("binary("))
+		const binaryLine = files.types.split("\n").find((l) => l.includes("binary("))
 		expect(binaryLine).toBeDefined()
 		expect(binaryLine).toContain("SDKResult<ArrayBuffer")
 	})
 
 	it("text/csv response type is SDKResult<string", () => {
 		const { files } = generateSDK(responseTypeSpec, { name: "TestSDK" })
-		const csvLine = files.types
-			.split("\n")
-			.find((l) => l.includes("csv("))
+		const csvLine = files.types.split("\n").find((l) => l.includes("csv("))
 		expect(csvLine).toBeDefined()
 		expect(csvLine).toContain("SDKResult<string")
 	})
 
 	it("text/plain response type is SDKResult<string", () => {
 		const { files } = generateSDK(responseTypeSpec, { name: "TestSDK" })
-		const textLine = files.types
-			.split("\n")
-			.find((l) => l.includes("text("))
+		const textLine = files.types.split("\n").find((l) => l.includes("text("))
 		expect(textLine).toBeDefined()
 		expect(textLine).toContain("SDKResult<string")
 	})
 
 	it("204 no-content response type is SDKResult<null not SDKResult<void", () => {
 		const { files } = generateSDK(responseTypeSpec, { name: "TestSDK" })
-		const deleteLine = files.types
-			.split("\n")
-			.find((l) => l.includes("delete") && l.includes("SDKResult"))
+		const deleteLine = files.types.split("\n").find((l) => l.includes("delete") && l.includes("SDKResult"))
 		expect(deleteLine).toBeDefined()
 		expect(deleteLine).toContain("SDKResult<null")
 		expect(deleteLine).not.toContain("SDKResult<void")
@@ -374,9 +370,7 @@ describe("#4 binary / non-JSON response types", () => {
 
 	it("application/pdf (unknown content-type) falls back to SDKResult<ArrayBuffer", () => {
 		const { files } = generateSDK(responseTypeSpec, { name: "TestSDK" })
-		const pdfLine = files.types
-			.split("\n")
-			.find((l) => l.includes("pdf("))
+		const pdfLine = files.types.split("\n").find((l) => l.includes("pdf("))
 		expect(pdfLine).toBeDefined()
 		expect(pdfLine).toContain("SDKResult<ArrayBuffer")
 	})
@@ -388,23 +382,32 @@ describe("#4 binary / non-JSON response types", () => {
 
 describe("#5 config mutation — constructor emits shallow clone", () => {
 	it("files.client does NOT contain this.#config.state = this.state", () => {
-		const { files } = generateSDK(makeSpec({
-			"/users": { get: { operationId: "users.list", responses: {} } },
-		}), { name: "TestSDK" })
+		const { files } = generateSDK(
+			makeSpec({
+				"/users": { get: { operationId: "users.list", responses: {} } },
+			}),
+			{ name: "TestSDK" },
+		)
 		expect(files.client).not.toContain("this.#config.state = this.state")
 	})
 
 	it("files.client constructor contains shallow-clone pattern { ...config, state:", () => {
-		const { files } = generateSDK(makeSpec({
-			"/users": { get: { operationId: "users.list", responses: {} } },
-		}), { name: "TestSDK" })
+		const { files } = generateSDK(
+			makeSpec({
+				"/users": { get: { operationId: "users.list", responses: {} } },
+			}),
+			{ name: "TestSDK" },
+		)
 		expect(files.client).toContain("{ ...config, state:")
 	})
 
 	it("files.client constructor contains const ownState = config.state ?? {}", () => {
-		const { files } = generateSDK(makeSpec({
-			"/users": { get: { operationId: "users.list", responses: {} } },
-		}), { name: "TestSDK" })
+		const { files } = generateSDK(
+			makeSpec({
+				"/users": { get: { operationId: "users.list", responses: {} } },
+			}),
+			{ name: "TestSDK" },
+		)
 		expect(files.client).toContain("const ownState = config.state ?? {}")
 	})
 })
@@ -544,7 +547,10 @@ describe("#6 string escaping — const with embedded double-quotes", () => {
 		 * types (e.g. handler: () => void, retry: () => Promise<...>) contribute
 		 * an unmatched > that the naive character-count algorithm cannot handle.
 		 */
-		const stripped = files.types.split("\n").filter((l) => !l.includes("=>")).join("\n")
+		const stripped = files.types
+			.split("\n")
+			.filter((l) => !l.includes("=>"))
+			.join("\n")
 		assertBalancedBrackets(stripped)
 	})
 })
@@ -555,16 +561,22 @@ describe("#6 string escaping — const with embedded double-quotes", () => {
 
 describe("#24 error message hygiene — #parseAsClientError emits safe message", () => {
 	it("files.client #parseAsClientError contains .slice(0, 512) truncation", () => {
-		const { files } = generateSDK(makeSpec({
-			"/users": { get: { operationId: "users.list", responses: {} } },
-		}), { name: "TestSDK" })
+		const { files } = generateSDK(
+			makeSpec({
+				"/users": { get: { operationId: "users.list", responses: {} } },
+			}),
+			{ name: "TestSDK" },
+		)
 		expect(files.client).toContain(".slice(0, this.#maxErrorMessageChars)")
 	})
 
 	it("files.client #parseAsClientError contains control-char strip regex [\\x00-\\x1f]", () => {
-		const { files } = generateSDK(makeSpec({
-			"/users": { get: { operationId: "users.list", responses: {} } },
-		}), { name: "TestSDK" })
+		const { files } = generateSDK(
+			makeSpec({
+				"/users": { get: { operationId: "users.list", responses: {} } },
+			}),
+			{ name: "TestSDK" },
+		)
 		/*
 		 * The emitted source will contain the literal characters \x00-\x1f
 		 * as a regex character class. In the JS string we look for the
@@ -574,9 +586,12 @@ describe("#24 error message hygiene — #parseAsClientError emits safe message",
 	})
 
 	it("files.client #parseAsClientError still passes body into new _ClientError({ body,", () => {
-		const { files } = generateSDK(makeSpec({
-			"/users": { get: { operationId: "users.list", responses: {} } },
-		}), { name: "TestSDK" })
+		const { files } = generateSDK(
+			makeSpec({
+				"/users": { get: { operationId: "users.list", responses: {} } },
+			}),
+			{ name: "TestSDK" },
+		)
 		expect(files.client).toContain("body,")
 		/* body is passed into the status-mapped ClientError constructor */
 		const clientErrorIdx = files.client.indexOf("new Cls({")

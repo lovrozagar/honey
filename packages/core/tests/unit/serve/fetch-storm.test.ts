@@ -92,10 +92,15 @@ describe("fetch storm", () => {
 	it("route() + scoped use stay correct; 404+CORS on the corsed instance", async () => {
 		const withId = createMiddleware(async (_c, next) => next({ rid: "r1" }))
 		const parent = honey().use(cors({ origin: "*" }))
-		const child = parent.use("/admin", withId).get("/admin/x").handler((ctx) => {
-			return ctx.res.json("ok", { rid: ctx.rid })
-		})
-		const extra = honey().get("/extra").handler((ctx) => ctx.res.text("ok", "extra"))
+		const child = parent
+			.use("/admin", withId)
+			.get("/admin/x")
+			.handler((ctx) => {
+				return ctx.res.json("ok", { rid: ctx.rid })
+			})
+		const extra = honey()
+			.get("/extra")
+			.handler((ctx) => ctx.res.text("ok", "extra"))
 		const app = child.route(extra)
 
 		const jobs = [

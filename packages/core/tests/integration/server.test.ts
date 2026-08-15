@@ -114,9 +114,7 @@ describe("integration: real HTTP server with all middleware", () => {
 
 		/* request ID generated */
 		expect(res.headers["x-request-id"]).toBeTruthy()
-		expect(res.headers["x-request-id"]).toMatch(
-			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-		)
+		expect(res.headers["x-request-id"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
 
 		/* server-timing present */
 		expect(res.headers["server-timing"]).toContain("total;dur=")
@@ -466,9 +464,7 @@ describe("integration: output validation over real HTTP", () => {
 
 		const res = await request(addr.port, "/bad")
 		expect(res.status).toBe(500)
-		expect((JSON.parse(res.body) as Record<string, unknown>).error_key).toBe(
-			"output_validation_failed",
-		)
+		expect((JSON.parse(res.body) as Record<string, unknown>).error_key).toBe("output_validation_failed")
 	})
 })
 
@@ -483,9 +479,7 @@ describe("integration: error handling over real HTTP", () => {
 
 		const res = await request(addr.port, "/crash")
 		expect(res.status).toBe(500)
-		expect((JSON.parse(res.body) as Record<string, unknown>).error_key).toBe(
-			"internal_server_error",
-		)
+		expect((JSON.parse(res.body) as Record<string, unknown>).error_key).toBe("internal_server_error")
 	})
 
 	it("scoped error keys enforced over HTTP", async () => {
@@ -506,9 +500,7 @@ describe("integration: error handling over real HTTP", () => {
 		const res = await request(addr.port, "/strict")
 		/* not_allowed is not in route's error scope → becomes internal_server_error */
 		expect(res.status).toBe(500)
-		expect((JSON.parse(res.body) as Record<string, unknown>).error_key).toBe(
-			"internal_server_error",
-		)
+		expect((JSON.parse(res.body) as Record<string, unknown>).error_key).toBe("internal_server_error")
 	})
 })
 
@@ -604,19 +596,14 @@ describe("integration: trailing slash redirect over HTTP", () => {
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
-		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>(
-			(resolve, reject) => {
-				const req = http.request(
-					{ hostname: "127.0.0.1", method: "GET", path: "/users/", port: addr.port },
-					(res) => {
-						resolve({ headers: res.headers, status: res.statusCode ?? 0 })
-						res.resume()
-					},
-				)
-				req.on("error", reject)
-				req.end()
-			},
-		)
+		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>((resolve, reject) => {
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/users/", port: addr.port }, (res) => {
+				resolve({ headers: res.headers, status: res.statusCode ?? 0 })
+				res.resume()
+			})
+			req.on("error", reject)
+			req.end()
+		})
 		expect(res.status).toBe(308)
 		expect(res.headers.location).toContain("/users")
 		expect(res.headers.location).not.toContain("/users/")
@@ -686,9 +673,7 @@ describe("integration: app.context() over real HTTP", () => {
 
 		const app = honey<Env>().context({ region: "eu-west" }).use(addUser)
 
-		app
-			.get("/whoami")
-			.handler((ctx) => ctx.res.json("ok", { region: ctx.region, user: ctx.userId }))
+		app.get("/whoami").handler((ctx) => ctx.res.json("ok", { region: ctx.region, user: ctx.userId }))
 		server = serve(app, { env: { SECRET: "s" }, port: 0 })
 		const addr = server.address() as { port: number }
 
@@ -733,9 +718,7 @@ describe("integration: chain-level .meta() over real HTTP", () => {
 	})
 
 	it("route meta overrides chain meta over HTTP", async () => {
-		const app = honey<Env>()
-			.meta<{ security?: string; tags?: string }>()
-			.meta({ security: "jwt", tags: "Default" })
+		const app = honey<Env>().meta<{ security?: string; tags?: string }>().meta({ security: "jwt", tags: "Default" })
 
 		app
 			.get("/override")
@@ -756,9 +739,7 @@ describe("integration: chain meta in OpenAPI spec", () => {
 	it("chain meta appears in generated OpenAPI spec", async () => {
 		const { generateOpenApi } = await import("../../src/codegen.ts")
 
-		const app = honey<{}>()
-			.meta<{ security?: string; tags?: string }>()
-			.meta({ security: "bearer", tags: "Auth" })
+		const app = honey<{}>().meta<{ security?: string; tags?: string }>().meta({ security: "bearer", tags: "Auth" })
 
 		app.get("/users").handler((ctx) => ctx.res.json("ok", {}))
 		app
@@ -789,9 +770,7 @@ describe("integration: chain meta in generateTypes", () => {
 	it("chain meta reflected in generated type declarations", async () => {
 		const { generateTypes } = await import("../../src/codegen.ts")
 
-		const app = honey<{}>()
-			.meta<{ security?: string; tags?: string }>()
-			.meta({ security: "jwt", tags: "Auth" })
+		const app = honey<{}>().meta<{ security?: string; tags?: string }>().meta({ security: "jwt", tags: "Auth" })
 
 		app.get("/test").handler((ctx) => ctx.res.json("ok", {}))
 		app

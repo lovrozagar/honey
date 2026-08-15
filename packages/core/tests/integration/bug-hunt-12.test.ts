@@ -212,9 +212,7 @@ describe("bug-hunt-12: wildcard vs static — insertion order", () => {
 	it("wildcard registered BEFORE static → static still wins", async () => {
 		const app = honey<{}>()
 		/* wildcard first */
-		app
-			.get("/files/*path")
-			.handler((ctx) => ctx.res.json("ok", { match: "wildcard", path: ctx.params.path }))
+		app.get("/files/*path").handler((ctx) => ctx.res.json("ok", { match: "wildcard", path: ctx.params.path }))
 		/* static second */
 		app.get("/files/readme").handler((ctx) => ctx.res.json("ok", { match: "static" }))
 
@@ -280,10 +278,7 @@ describe("bug-hunt-12: use() preserves all settings", () => {
 		const authed = app.use(createMiddleware(async (_ctx, next) => next()))
 		authed.get("/resource").handler((ctx) => ctx.res.json("ok", {}))
 
-		const res = await authed.fetch(
-			new Request("http://localhost/resource", { method: "DELETE" }),
-			{},
-		)
+		const res = await authed.fetch(new Request("http://localhost/resource", { method: "DELETE" }), {})
 		expect(res.status).toBe(405)
 		expect(await res.text()).toBe("custom 405")
 	})
@@ -419,15 +414,12 @@ describe("bug-hunt-12: Node adapter — socket destroyed mid-stream", () => {
 
 		/* start a large response then abort early */
 		await new Promise<void>((resolve) => {
-			const req = http.request(
-				{ hostname: "127.0.0.1", method: "GET", path: "/big", port: addr.port },
-				(res) => {
-					res.once("data", () => {
-						res.destroy()
-						resolve()
-					})
-				},
-			)
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/big", port: addr.port }, (res) => {
+				res.once("data", () => {
+					res.destroy()
+					resolve()
+				})
+			})
 			req.end()
 		})
 

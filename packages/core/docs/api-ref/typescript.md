@@ -7,20 +7,20 @@ run `bun run public/honey/core/scripts/gen-api-ref.ts` to regenerate.
 
 Every operation's error channel surfaces one of:
 
-| Canonical | Status | Lang symbol | Notes |
-| --------- | ------ | ----------- | ----- |
-| `BadRequest` | 400 | `BadRequest` | invalid request payload |
-| `Unauthorized` | 401 | `Unauthorized` | missing/invalid auth; triggers onAuthExpired + 1 retry |
-| `Forbidden` | 403 | `Forbidden` | authenticated but not permitted |
-| `NotFound` | 404 | `NotFound` | resource does not exist |
-| `Conflict` | 409 | `Conflict` | state conflict / unique violation |
-| `UnprocessableEntity` | 422 | `UnprocessableEntity` | schema-valid but semantically rejected |
-| `TooManyRequests` | 429 | `TooManyRequests` | rate-limited; consumer handles backoff via hooks |
-| `InternalServerError` | 500 | `InternalServerError` | server crash |
-| `BadGateway` | 502 | `BadGateway` | upstream failure |
-| `ServiceUnavailable` | 503 | `ServiceUnavailable` | server temporarily unavailable |
-| `GatewayTimeout` | 504 | `GatewayTimeout` | upstream timeout |
-| `StatusError` | * | `StatusError` | fallback for undeclared/other statuses |
+| Canonical             | Status | Lang symbol           | Notes                                                  |
+| --------------------- | ------ | --------------------- | ------------------------------------------------------ |
+| `BadRequest`          | 400    | `BadRequest`          | invalid request payload                                |
+| `Unauthorized`        | 401    | `Unauthorized`        | missing/invalid auth; triggers onAuthExpired + 1 retry |
+| `Forbidden`           | 403    | `Forbidden`           | authenticated but not permitted                        |
+| `NotFound`            | 404    | `NotFound`            | resource does not exist                                |
+| `Conflict`            | 409    | `Conflict`            | state conflict / unique violation                      |
+| `UnprocessableEntity` | 422    | `UnprocessableEntity` | schema-valid but semantically rejected                 |
+| `TooManyRequests`     | 429    | `TooManyRequests`     | rate-limited; consumer handles backoff via hooks       |
+| `InternalServerError` | 500    | `InternalServerError` | server crash                                           |
+| `BadGateway`          | 502    | `BadGateway`          | upstream failure                                       |
+| `ServiceUnavailable`  | 503    | `ServiceUnavailable`  | server temporarily unavailable                         |
+| `GatewayTimeout`      | 504    | `GatewayTimeout`      | upstream timeout                                       |
+| `StatusError`         | *      | `StatusError`         | fallback for undeclared/other statuses                 |
 
 Operations with declared `responses: { 4xx: { schema } }` parse the response body into the error's typed `data` field.
 
@@ -44,10 +44,10 @@ refreshToken(body: { refresh_token: string }): Promise<{ access_token: string; e
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `{ access_token: string; expires_in: number }` |
-| `401` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type       | Type                                           |
+| ------ | ------------------ | ---------------------------------------------- |
+| `200`  | `application/json` | `{ access_token: string; expires_in: number }` |
+| `401`  | `application/json` | `{ status: number; message: string }`          |
 
 ---
 
@@ -63,16 +63,16 @@ getDeclaredError(status: string): Promise<void>
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name     | Type     |
+| -------- | -------- |
 | `status` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `400` | `application/json` | `{ status: number; message: string }` |
-| `404` | `application/json` | `{ status: number; message: string }` |
+| Status    | Content-type       | Type                                  |
+| --------- | ------------------ | ------------------------------------- |
+| `400`     | `application/json` | `{ status: number; message: string }` |
+| `404`     | `application/json` | `{ status: number; message: string }` |
 | `default` | `application/json` | `{ status: number; message: string }` |
 
 ---
@@ -89,14 +89,14 @@ getError(status: number): Promise<void>
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name     | Type     |
+| -------- | -------- |
 | `status` | `number` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
+| Status    | Content-type       | Type                                  |
+| --------- | ------------------ | ------------------------------------- |
 | `default` | `application/json` | `{ status: number; message: string }` |
 
 ---
@@ -113,9 +113,9 @@ idempotentCreate(): Promise<{ idempotencyKey: string }>
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `{ idempotencyKey: string }` |
+| Status | Content-type       | Type                         |
+| ------ | ------------------ | ---------------------------- |
+| `200`  | `application/json` | `{ idempotencyKey: string }` |
 
 **Extensions**
 
@@ -135,15 +135,15 @@ connectRealtime(reconnect_token: string): ResumableConnection
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name              | Type     |
+| ----------------- | -------- |
 | `reconnect_token` | `string` |
 
 **Responses**
 
 | Status | Content-type | Type |
 | ------ | ------------ | ---- |
-| `101` | `—` | — |
+| `101`  | `—`          | —    |
 
 **Extensions**
 
@@ -163,15 +163,15 @@ slow(ms: number): Promise<{ ok: boolean }>
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `ms` | `number` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `{ ok: boolean }` |
+| Status | Content-type       | Type              |
+| ------ | ------------------ | ----------------- |
+| `200`  | `application/json` | `{ ok: boolean }` |
 
 ---
 
@@ -187,16 +187,16 @@ streamEvents(Last-Event-ID: string): AsyncIterable<{ event?: string; data?: stri
 
 **Header params**
 
-| Name | Type |
-| ---- | ---- |
+| Name            | Type     |
+| --------------- | -------- |
 | `Last-Event-ID` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `text/event-stream` | `{ event?: string; data?: string; id?: string }` |
-| `401` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type        | Type                                             |
+| ------ | ------------------- | ------------------------------------------------ |
+| `200`  | `text/event-stream` | `{ event?: string; data?: string; id?: string }` |
+| `401`  | `application/json`  | `{ status: number; message: string }`            |
 
 **Extensions**
 
@@ -222,10 +222,10 @@ uploadBlob(body: ReadableStream | Blob): Promise<{ size: number; hash: string }>
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `{ size: number; hash: string }` |
-| `401` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type       | Type                                  |
+| ------ | ------------------ | ------------------------------------- |
+| `200`  | `application/json` | `{ size: number; hash: string }`      |
+| `401`  | `application/json` | `{ status: number; message: string }` |
 
 ---
 
@@ -241,10 +241,10 @@ listUsers(): Promise<{ items: { id: string; name: string; email: string }[]; tot
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `{ items: { id: string; name: string; email: string }[]; total: number }` |
-| `401` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type       | Type                                                                      |
+| ------ | ------------------ | ------------------------------------------------------------------------- |
+| `200`  | `application/json` | `{ items: { id: string; name: string; email: string }[]; total: number }` |
+| `401`  | `application/json` | `{ status: number; message: string }`                                     |
 
 ---
 
@@ -266,11 +266,11 @@ createUser(body: { name: string; email: string }): Promise<{ id: string; name: s
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `201` | `application/json` | `{ id: string; name: string; email: string }` |
-| `401` | `application/json` | `{ status: number; message: string }` |
-| `422` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type       | Type                                          |
+| ------ | ------------------ | --------------------------------------------- |
+| `201`  | `application/json` | `{ id: string; name: string; email: string }` |
+| `401`  | `application/json` | `{ status: number; message: string }`         |
+| `422`  | `application/json` | `{ status: number; message: string }`         |
 
 **Extensions**
 
@@ -290,17 +290,17 @@ deleteUser(id: string): Promise<void>
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `204` | `—` | — |
-| `401` | `application/json` | `{ status: number; message: string }` |
-| `404` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type       | Type                                  |
+| ------ | ------------------ | ------------------------------------- |
+| `204`  | `—`                | —                                     |
+| `401`  | `application/json` | `{ status: number; message: string }` |
+| `404`  | `application/json` | `{ status: number; message: string }` |
 
 **Extensions**
 
@@ -320,17 +320,17 @@ getUser(id: string): Promise<{ id: string; name: string; email: string }>
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `{ id: string; name: string; email: string }` |
-| `401` | `application/json` | `{ status: number; message: string }` |
-| `404` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type       | Type                                          |
+| ------ | ------------------ | --------------------------------------------- |
+| `200`  | `application/json` | `{ id: string; name: string; email: string }` |
+| `401`  | `application/json` | `{ status: number; message: string }`         |
+| `404`  | `application/json` | `{ status: number; message: string }`         |
 
 ---
 
@@ -346,8 +346,8 @@ updateUser(id: string, body: { name?: string; email?: string }): Promise<{ id: s
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `string` |
 
 **Request body**
@@ -358,11 +358,11 @@ updateUser(id: string, body: { name?: string; email?: string }): Promise<{ id: s
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `{ id: string; name: string; email: string }` |
-| `401` | `application/json` | `{ status: number; message: string }` |
-| `404` | `application/json` | `{ status: number; message: string }` |
+| Status | Content-type       | Type                                          |
+| ------ | ------------------ | --------------------------------------------- |
+| `200`  | `application/json` | `{ id: string; name: string; email: string }` |
+| `401`  | `application/json` | `{ status: number; message: string }`         |
+| `404`  | `application/json` | `{ status: number; message: string }`         |
 
 **Extensions**
 
@@ -382,15 +382,15 @@ connectWs(token: string): ResumableConnection
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name    | Type     |
+| ------- | -------- |
 | `token` | `string` |
 
 **Responses**
 
 | Status | Content-type | Type |
 | ------ | ------------ | ---- |
-| `101` | `—` | — |
+| `101`  | `—`          | —    |
 
 **Extensions**
 

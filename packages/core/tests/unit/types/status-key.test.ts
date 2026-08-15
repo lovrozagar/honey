@@ -1,11 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
-import type {
-	FieldError,
-	HttpMethod,
-	NormalizedIssue,
-	StatusKey,
-	WSReadyState,
-} from "../../../src/types.ts"
+import type { FieldError, HttpMethod, NormalizedIssue, StatusKey, WSReadyState } from "../../../src/types.ts"
 import { codeToStatusKey, statusKeyToCode } from "../../../src/types.ts"
 
 describe("StatusKey ↔ code mapping", () => {
@@ -129,12 +123,8 @@ describe("type-level tests", () => {
 	})
 
 	it("HttpMethod is exactly 7 members", () => {
-		expectTypeOf<HttpMethod>().toMatchTypeOf<
-			"DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT"
-		>()
-		expectTypeOf<
-			"DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT"
-		>().toMatchTypeOf<HttpMethod>()
+		expectTypeOf<HttpMethod>().toMatchTypeOf<"DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT">()
+		expectTypeOf<"DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT">().toMatchTypeOf<HttpMethod>()
 	})
 
 	it("WSReadyState is 0 | 1 | 2 | 3", () => {

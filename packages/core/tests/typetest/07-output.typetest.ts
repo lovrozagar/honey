@@ -3,9 +3,7 @@ import { createMiddleware, honey } from "../../src/index.ts"
 import type { InferCtx } from "../../src/index.ts"
 import type { Expect, Extends } from "./_assert.ts"
 
-const withDb = createMiddleware(async (_ctx, next) =>
-	next({ db: { query: (_sql: string) => [] as unknown[] } }),
-)
+const withDb = createMiddleware(async (_ctx, next) => next({ db: { query: (_sql: string) => [] as unknown[] } }))
 
 /* ── declared JSON: status key + body shape enforced ── */
 

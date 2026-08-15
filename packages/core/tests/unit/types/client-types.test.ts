@@ -123,12 +123,8 @@ describe("ClientInput", () => {
 
 describe("ReturnFor", () => {
 	it("SSE routes return AsyncIterable regardless of throw mode", () => {
-		expectTypeOf<ReturnFor<Routes, "/events", "get", true>>().toEqualTypeOf<
-			AsyncIterable<SSEEvent>
-		>()
-		expectTypeOf<ReturnFor<Routes, "/events", "get", false>>().toEqualTypeOf<
-			AsyncIterable<SSEEvent>
-		>()
+		expectTypeOf<ReturnFor<Routes, "/events", "get", true>>().toEqualTypeOf<AsyncIterable<SSEEvent>>()
+		expectTypeOf<ReturnFor<Routes, "/events", "get", false>>().toEqualTypeOf<AsyncIterable<SSEEvent>>()
 	})
 
 	it("throw mode returns Promise<data>", () => {
@@ -138,9 +134,7 @@ describe("ReturnFor", () => {
 
 	it("safe mode returns Promise<ClientResult<data, errorsByStatus>>", () => {
 		type R = ReturnFor<Routes, "/users/:id", "get", false>
-		expectTypeOf<R>().toEqualTypeOf<
-			Promise<ClientResult<{ id: string; name: string }, { 404: null }>>
-		>()
+		expectTypeOf<R>().toEqualTypeOf<Promise<ClientResult<{ id: string; name: string }, { 404: null }>>>()
 	})
 })
 

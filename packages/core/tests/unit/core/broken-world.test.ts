@@ -250,9 +250,7 @@ describe("broken world: extremely rapid route chaining", () => {
 	it("50 chained .get().handler() calls → all routes work", async () => {
 		let app = honey<{}>() as ReturnType<typeof honey>
 		for (let i = 0; i < 50; i++) {
-			app = app
-				.get(`/r${i}`)
-				.handler((ctx) => ctx.res.json("ok", { route: ctx.path })) as ReturnType<typeof honey>
+			app = app.get(`/r${i}`).handler((ctx) => ctx.res.json("ok", { route: ctx.path })) as ReturnType<typeof honey>
 		}
 
 		for (const i of [0, 25, 49]) {

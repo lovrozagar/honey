@@ -1,23 +1,23 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Minimal", "version": "1.0.0" },
-  "paths": {
-    "/ping": {
-      "get": {
-        "operationId": "ping",
-        "summary": "Health check",
-        "description": "Returns a pong string",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": { "type": "string" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Minimal", "version": "1.0.0" },
+	"paths": {
+		"/ping": {
+			"get": {
+				"operationId": "ping",
+				"summary": "Health check",
+				"description": "Returns a pong string",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": { "type": "string" }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

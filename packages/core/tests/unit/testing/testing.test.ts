@@ -74,9 +74,7 @@ describe("testClient", () => {
 
 	it("custom headers", async () => {
 		const h = honey<{}>()
-		h.get("/headers").handler((ctx) =>
-			ctx.res.json("ok", { auth: ctx.req.headers.get("authorization") }),
-		)
+		h.get("/headers").handler((ctx) => ctx.res.json("ok", { auth: ctx.req.headers.get("authorization") }))
 		const client = testClient(h, { env: {} })
 		const res = await client.get("/headers", { headers: { authorization: "Bearer tok" } })
 		const body = (await res.json()) as Record<string, unknown>

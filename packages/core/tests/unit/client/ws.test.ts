@@ -57,11 +57,7 @@ class MockWebSocket {
 
 describe("createTypedWebSocket", () => {
 	it("wraps WebSocket with typed interface", () => {
-		const ws = createTypedWebSocket(
-			"ws://test/echo",
-			undefined,
-			MockWebSocket as unknown as typeof WebSocket,
-		)
+		const ws = createTypedWebSocket("ws://test/echo", undefined, MockWebSocket as unknown as typeof WebSocket)
 		expect(ws).toBeDefined()
 		expect(typeof ws.send).toBe("function")
 		expect(typeof ws.on).toBe("function")
@@ -69,11 +65,7 @@ describe("createTypedWebSocket", () => {
 	})
 
 	it("sends string messages", async () => {
-		const ws = createTypedWebSocket(
-			"ws://test/echo",
-			undefined,
-			MockWebSocket as unknown as typeof WebSocket,
-		)
+		const ws = createTypedWebSocket("ws://test/echo", undefined, MockWebSocket as unknown as typeof WebSocket)
 		await new Promise((r) => setTimeout(r, 10))
 		ws.send("hello")
 
@@ -82,11 +74,7 @@ describe("createTypedWebSocket", () => {
 	})
 
 	it("auto-stringifies objects", async () => {
-		const ws = createTypedWebSocket(
-			"ws://test/echo",
-			undefined,
-			MockWebSocket as unknown as typeof WebSocket,
-		)
+		const ws = createTypedWebSocket("ws://test/echo", undefined, MockWebSocket as unknown as typeof WebSocket)
 		await new Promise((r) => setTimeout(r, 10))
 		ws.send({ msg: "hi" } as unknown as string)
 
@@ -95,11 +83,7 @@ describe("createTypedWebSocket", () => {
 	})
 
 	it("receives messages via on()", async () => {
-		const ws = createTypedWebSocket(
-			"ws://test/echo",
-			undefined,
-			MockWebSocket as unknown as typeof WebSocket,
-		)
+		const ws = createTypedWebSocket("ws://test/echo", undefined, MockWebSocket as unknown as typeof WebSocket)
 		const messages: string[] = []
 		ws.on("message", (data) => messages.push(data))
 
@@ -111,11 +95,7 @@ describe("createTypedWebSocket", () => {
 
 	it("fires open event", async () => {
 		const opened = vi.fn()
-		const ws = createTypedWebSocket(
-			"ws://test/echo",
-			undefined,
-			MockWebSocket as unknown as typeof WebSocket,
-		)
+		const ws = createTypedWebSocket("ws://test/echo", undefined, MockWebSocket as unknown as typeof WebSocket)
 		ws.on("open", opened)
 		await new Promise((r) => setTimeout(r, 10))
 		expect(opened).toHaveBeenCalledOnce()
@@ -123,11 +103,7 @@ describe("createTypedWebSocket", () => {
 
 	it("fires close event", async () => {
 		const closed = vi.fn()
-		const ws = createTypedWebSocket(
-			"ws://test/echo",
-			undefined,
-			MockWebSocket as unknown as typeof WebSocket,
-		)
+		const ws = createTypedWebSocket("ws://test/echo", undefined, MockWebSocket as unknown as typeof WebSocket)
 		ws.on("close", closed)
 		await new Promise((r) => setTimeout(r, 10))
 		ws.close(1000, "done")
@@ -135,11 +111,7 @@ describe("createTypedWebSocket", () => {
 	})
 
 	it("exposes readyState", async () => {
-		const ws = createTypedWebSocket(
-			"ws://test/echo",
-			undefined,
-			MockWebSocket as unknown as typeof WebSocket,
-		)
+		const ws = createTypedWebSocket("ws://test/echo", undefined, MockWebSocket as unknown as typeof WebSocket)
 		await new Promise((r) => setTimeout(r, 10))
 		expect(ws.readyState).toBe(MockWebSocket.OPEN)
 	})

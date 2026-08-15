@@ -42,7 +42,7 @@ Add `invalidate` to Honey base meta:
 
 ```ts
 type InvalidateMeta = {
-  invalidate?: readonly string[] | null
+	invalidate?: readonly string[] | null
 }
 ```
 
@@ -112,7 +112,7 @@ This is intentional. `invalidate` should not be artificially limited to `GET`. I
 Each selector must be:
 
 ```ts
-`${Uppercase<HttpMethod>} ${RoutePattern}`
+;`${Uppercase<HttpMethod>} ${RoutePattern}`
 ```
 
 Examples:
@@ -141,9 +141,9 @@ Illustrative generated type:
 
 ```ts
 type GeneratedInvalidateRoute =
-  | "GET /v1/organizations/:organization_id/projects"
-  | "GET /v1/organizations/:organization_id/projects/:project_id"
-  | "POST /v1/organizations/:organization_id/projects/search"
+	| "GET /v1/organizations/:organization_id/projects"
+	| "GET /v1/organizations/:organization_id/projects/:project_id"
+	| "POST /v1/organizations/:organization_id/projects/search"
 ```
 
 Then the generated meta type becomes effectively:
@@ -166,14 +166,14 @@ Conceptually:
 
 ```ts
 type OpenApiMeta<TInvalidate extends readonly string[] | null = readonly string[] | null> = {
-  internal?: boolean
-  deprecated?: boolean
-  description?: string
-  invalidate?: TInvalidate
-  operationId?: string
-  security?: Array<Record<string, string[]>> | string | string[]
-  summary?: string
-  tags?: string | string[]
+	internal?: boolean
+	deprecated?: boolean
+	description?: string
+	invalidate?: TInvalidate
+	operationId?: string
+	security?: Array<Record<string, string[]>> | string | string[]
+	summary?: string
+	tags?: string | string[]
 }
 ```
 

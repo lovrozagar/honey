@@ -14,10 +14,7 @@ describe("input: cookie validation", () => {
 			.input({ cookies: z.object({ session: z.string().min(5) }) })
 			.handler((ctx) => ctx.res.json("ok", { session: ctx.input.cookies.session }))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { cookie: "session=tok-12345" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { cookie: "session=tok-12345" } }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.session).toBe("tok-12345")
@@ -30,10 +27,7 @@ describe("input: cookie validation", () => {
 			.input({ cookies: z.object({ session: z.string().min(10) }) })
 			.handler((ctx) => ctx.res.json("ok", ctx.input))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { cookie: "session=short" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { cookie: "session=short" } }), {})
 		expect(res.status).toBe(400)
 	})
 
@@ -100,10 +94,7 @@ describe("input: header validation", () => {
 			})
 			.handler((ctx) => ctx.res.json("ok", ctx.input))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { authorization: "Basic abc" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { authorization: "Basic abc" } }), {})
 		expect(res.status).toBe(400)
 	})
 
@@ -135,10 +126,7 @@ describe("input: header validation", () => {
 				}),
 			)
 
-		const res = await app.fetch(
-			new Request("http://localhost/api?page=3", { headers: { "x-api-key": "key-123" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api?page=3", { headers: { "x-api-key": "key-123" } }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.key).toBe("key-123")

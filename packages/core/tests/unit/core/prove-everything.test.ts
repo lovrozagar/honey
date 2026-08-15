@@ -98,8 +98,7 @@ describe("prove: proxy to a live upstream", () => {
 		const edge = honey()
 			.all("/proxy/*")
 			.proxy({
-				destination: (ctx, url, init) =>
-					upstream.fetch(new Request(`http://up${url}`, init), ctx.env),
+				destination: (ctx, url, init) => upstream.fetch(new Request(`http://up${url}`, init), ctx.env),
 				requestHeaders: (_ctx, headers) => {
 					headers.set("x-fwd", "yes")
 				},
@@ -149,17 +148,11 @@ describe("prove: signed cookie HTTP round trip", () => {
 		const sid = setCookie?.split(";")[0]?.slice("sid=".length)
 		expect(sid).toBeTruthy()
 
-		const me = await app.fetch(
-			new Request("http://x/me", { headers: { cookie: `sid=${sid}` } }),
-			{},
-		)
+		const me = await app.fetch(new Request("http://x/me", { headers: { cookie: `sid=${sid}` } }), {})
 		expect(me.status).toBe(200)
 		expect(await me.text()).toBe("user-42")
 
-		const bad = await app.fetch(
-			new Request("http://x/me", { headers: { cookie: "sid=user-42.forged" } }),
-			{},
-		)
+		const bad = await app.fetch(new Request("http://x/me", { headers: { cookie: "sid=user-42.forged" } }), {})
 		expect(bad.status).toBe(401)
 	})
 })
@@ -293,18 +286,12 @@ describe("prove: route() compose taps + i18n + ws", () => {
 		expect(boom.status).toBe(404)
 		expect(await boom.text()).toMatch(/missing 0/)
 
-		const upgrade = await app.fetch(
-			new Request("http://x/api/echo", { headers: { upgrade: "websocket" } }),
-			{},
-		)
+		const upgrade = await app.fetch(new Request("http://x/api/echo", { headers: { upgrade: "websocket" } }), {})
 		expect(upgrade.status).toBe(101)
 		expect(ws.inbox.length).toBeGreaterThanOrEqual(0)
 
 		await new Promise((r) => setTimeout(r, 10))
-		expect(taps).toEqual([
-			{ action: "get" },
-			{ action: "ok", id: "7" },
-		])
+		expect(taps).toEqual([{ action: "get" }, { action: "ok", id: "7" }])
 	})
 })
 
@@ -384,10 +371,7 @@ describe("prove: REST publish reaches a realtime subscriber", () => {
 				return ctx.res.json("ok", { published: true })
 			})
 
-		const upgrade = await app.fetch(
-			new Request("http://x/rt/lobby", { headers: { upgrade: "websocket" } }),
-			{},
-		)
+		const upgrade = await app.fetch(new Request("http://x/rt/lobby", { headers: { upgrade: "websocket" } }), {})
 		expect(upgrade.status).toBe(101)
 		expect(ws.inbox.some((m) => m.includes("joined"))).toBe(true)
 
@@ -460,9 +444,7 @@ describe("prove: middleware suite on one app", () => {
 			.use(bodyLimit({ maxSize: 1_000 }))
 			.use(ipRestrict({ allowList: ["127.0.0.1"], trustProxy: true }))
 			.post("/ping")
-			.handler((ctx) =>
-				ctx.res.json("ok", { id: ctx.req.headers.get("x-request-id") ?? "ok" }),
-			)
+			.handler((ctx) => ctx.res.json("ok", { id: ctx.req.headers.get("x-request-id") ?? "ok" }))
 
 		const res = await app.fetch(
 			new Request("http://x/ping", {

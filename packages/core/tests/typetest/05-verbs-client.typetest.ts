@@ -59,9 +59,7 @@ const app = honey()
 
 type Routes = InferRoutes<typeof app>
 
-type _GetPaths = Expect<
-	Eq<PathsForMethod<Routes, "get">, "/events" | "/health" | "/users">
->
+type _GetPaths = Expect<Eq<PathsForMethod<Routes, "get">, "/events" | "/health" | "/users">>
 type _PostPaths = Expect<Eq<PathsForMethod<Routes, "post">, "/users">>
 type _ClientIn = Expect<Eq<InputFor<Routes, "/users", "post">, { json: { name: string } }>>
 type _ClientEmpty = Expect<Eq<InputFor<Routes, "/health", "get">, {}>>

@@ -146,9 +146,7 @@ describe("WS: SDK generation", () => {
 				"/ws/chat/{channelId}": {
 					get: {
 						operationId: "ws.chat",
-						parameters: [
-							{ in: "path", name: "channelId", required: true, schema: { type: "string" } },
-						],
+						parameters: [{ in: "path", name: "channelId", required: true, schema: { type: "string" } }],
 						responses: {},
 						"x-websocket": true,
 					},

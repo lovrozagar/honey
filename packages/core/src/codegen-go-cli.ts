@@ -82,11 +82,11 @@ type BodyShape =
 	| { kind: "json-flat"; scalars: BodyScalarInfo[]; required: boolean }
 	| { kind: "json-complex"; required: boolean }
 	| {
-		kind: "multipart"
-		binaryFields: { name: string; required: boolean }[]
-		scalarFields: BodyScalarInfo[]
-		useGenericFileFlag: boolean
-	}
+			kind: "multipart"
+			binaryFields: { name: string; required: boolean }[]
+			scalarFields: BodyScalarInfo[]
+			useGenericFileFlag: boolean
+	  }
 
 type CommandInfo = {
 	opId: string
@@ -163,16 +163,7 @@ let runtimeCache: Map<string, string> | null = null
 /** Reads static .go runtime files from ./cli-go/ and caches them. */
 export function loadGoCliRuntimeTemplates(): Map<string, string> {
 	if (runtimeCache) return runtimeCache
-	const names = [
-		"config.go",
-		"auth.go",
-		"output.go",
-		"errors.go",
-		"stream.go",
-		"multipart.go",
-		"version.go",
-		"root.go",
-	]
+	const names = ["config.go", "auth.go", "output.go", "errors.go", "stream.go", "multipart.go", "version.go", "root.go"]
 	const cache = new Map<string, string>()
 	for (const name of names) {
 		const filePath = fileURLToPath(new URL(`./cli-go/${name}`, import.meta.url))
@@ -190,10 +181,7 @@ export function loadGoCliRuntimeTemplates(): Map<string, string> {
 
 /* ── param + body helpers ── */
 
-function getPathParams(
-	op: Record<string, unknown>,
-	rawPath: string,
-): ParamInfo[] {
+function getPathParams(op: Record<string, unknown>, rawPath: string): ParamInfo[] {
 	const declared = extractOpenApiPathParams(rawPath)
 	const byName = new Map<string, Record<string, unknown>>()
 	const parameters = (op.parameters as Array<Record<string, unknown>> | undefined) ?? []
@@ -333,9 +321,11 @@ function hasJsonResponse(op: Record<string, unknown>): boolean {
 
 /* ── command collection ── */
 
-function collectCLIMethods(
-	spec: Record<string, unknown>,
-): { groups: Map<string, ResourceGroup>; skipped: string[]; serviceMap: Record<string, Record<string, unknown>> } {
+function collectCLIMethods(spec: Record<string, unknown>): {
+	groups: Map<string, ResourceGroup>
+	skipped: string[]
+	serviceMap: Record<string, Record<string, unknown>>
+} {
 	toIR(spec as Parameters<typeof toIR>[0])
 	const { serviceMap } = collectSDKMethods(spec as Parameters<typeof collectSDKMethods>[0])
 	const resolved = resolveRefs(spec as Parameters<typeof resolveRefs>[0]) as unknown as OpenApiSpec
@@ -609,12 +599,7 @@ function emitResourceFile(group: ResourceGroup, options: GoCLIOptions): string {
 }
 
 /** Emits var declarations for every flag-backing Go variable + the cobra.Command literal. */
-function emitCommand(
-	l: string[],
-	group: ResourceGroup,
-	cmd: CommandInfo,
-	options: GoCLIOptions,
-): void {
+function emitCommand(l: string[], group: ResourceGroup, cmd: CommandInfo, options: GoCLIOptions): void {
 	/* flag-backing vars */
 	for (const p of cmd.pathParams) {
 		l.push(`var ${cmd.cmdVarName}${goPascal(p.name)}Var string`)
@@ -689,7 +674,9 @@ function emitFlagRegistrations(l: string[], cmd: CommandInfo): void {
 		const v = `${cmd.cmdVarName}${goPascal(p.name)}Var`
 		/* flag docstring references original param name for discoverability */
 		l.push(`\t/* Path flag — Use: ${JSON.stringify(p.name)} */`)
-		l.push(`\t${cmd.cmdVarName}.Flags().StringVar(&${v}, ${JSON.stringify(p.flagName)}, "", ${JSON.stringify(`Path parameter ${p.name}`)})`)
+		l.push(
+			`\t${cmd.cmdVarName}.Flags().StringVar(&${v}, ${JSON.stringify(p.flagName)}, "", ${JSON.stringify(`Path parameter ${p.name}`)})`,
+		)
 		l.push(`\t${cmd.cmdVarName}.MarkFlagRequired(${JSON.stringify(p.flagName)})`)
 	}
 	for (const q of cmd.queryParams) {
@@ -697,7 +684,9 @@ function emitFlagRegistrations(l: string[], cmd: CommandInfo): void {
 		emitQueryFlag(l, cmd, q)
 	}
 	if (cmd.body.kind === "json-flat" || cmd.body.kind === "json-complex") {
-		l.push(`\t${cmd.cmdVarName}.Flags().StringVar(&${cmd.cmdVarName}DataVar, "data", "", "Request body: JSON literal, @file, or - for stdin")`)
+		l.push(
+			`\t${cmd.cmdVarName}.Flags().StringVar(&${cmd.cmdVarName}DataVar, "data", "", "Request body: JSON literal, @file, or - for stdin")`,
+		)
 	}
 	if (cmd.body.kind === "json-flat") {
 		for (const s of cmd.body.scalars) {
@@ -717,7 +706,9 @@ function emitFlagRegistrations(l: string[], cmd: CommandInfo): void {
 		} else {
 			for (const f of cmd.body.binaryFields) {
 				const v = `${cmd.cmdVarName}${goPascal(f.name)}Var`
-				l.push(`\t${cmd.cmdVarName}.Flags().StringVar(&${v}, ${JSON.stringify(toFlagName(f.name))}, "", ${JSON.stringify(`Path to ${f.name} file`)})`)
+				l.push(
+					`\t${cmd.cmdVarName}.Flags().StringVar(&${v}, ${JSON.stringify(toFlagName(f.name))}, "", ${JSON.stringify(`Path to ${f.name} file`)})`,
+				)
 				if (f.required) {
 					l.push(`\t${cmd.cmdVarName}.MarkFlagRequired(${JSON.stringify(toFlagName(f.name))})`)
 				}
@@ -725,16 +716,17 @@ function emitFlagRegistrations(l: string[], cmd: CommandInfo): void {
 		}
 	}
 	if (cmd.hasLastEventId) {
-		l.push(`\t${cmd.cmdVarName}.Flags().StringVar(&${cmd.cmdVarName}LastEventIDVar, "last-event-id", "", "SSE Last-Event-ID resume token")`)
+		l.push(
+			`\t${cmd.cmdVarName}.Flags().StringVar(&${cmd.cmdVarName}LastEventIDVar, "last-event-id", "", "SSE Last-Event-ID resume token")`,
+		)
 	}
 }
 
 function emitQueryFlag(l: string[], cmd: CommandInfo, q: ParamInfo): void {
 	const v = `${cmd.cmdVarName}${goPascal(q.name)}Var`
 	const t = q.schema.type
-	const help = q.enumValues.length > 0
-		? `Query param ${q.name} (one of: ${q.enumValues.join(", ")})`
-		: `Query param ${q.name}`
+	const help =
+		q.enumValues.length > 0 ? `Query param ${q.name} (one of: ${q.enumValues.join(", ")})` : `Query param ${q.name}`
 	const helpStr = JSON.stringify(help)
 
 	if (t === "integer") {
@@ -745,14 +737,18 @@ function emitQueryFlag(l: string[], cmd: CommandInfo, q: ParamInfo): void {
 		l.push(`\t${cmd.cmdVarName}.Flags().Float64Var(&${v}, ${JSON.stringify(q.flagName)}, ${def}, ${helpStr})`)
 	} else if (t === "boolean") {
 		const def = q.defaultValue === true
-		l.push(`\t${cmd.cmdVarName}.Flags().BoolVar(&${v}, ${JSON.stringify(q.flagName)}, ${def ? "true" : "false"}, ${helpStr})`)
+		l.push(
+			`\t${cmd.cmdVarName}.Flags().BoolVar(&${v}, ${JSON.stringify(q.flagName)}, ${def ? "true" : "false"}, ${helpStr})`,
+		)
 	} else if (t === "array") {
 		const defArr = Array.isArray(q.defaultValue) ? q.defaultValue : []
 		const defStr = `[]string{${defArr.map((x) => JSON.stringify(String(x))).join(", ")}}`
 		l.push(`\t${cmd.cmdVarName}.Flags().StringSliceVar(&${v}, ${JSON.stringify(q.flagName)}, ${defStr}, ${helpStr})`)
 	} else {
 		const def = typeof q.defaultValue === "string" ? q.defaultValue : ""
-		l.push(`\t${cmd.cmdVarName}.Flags().StringVar(&${v}, ${JSON.stringify(q.flagName)}, ${JSON.stringify(def)}, ${helpStr})`)
+		l.push(
+			`\t${cmd.cmdVarName}.Flags().StringVar(&${v}, ${JSON.stringify(q.flagName)}, ${JSON.stringify(def)}, ${helpStr})`,
+		)
 	}
 	if (q.required) {
 		l.push(`\t${cmd.cmdVarName}.MarkFlagRequired(${JSON.stringify(q.flagName)})`)
@@ -761,9 +757,10 @@ function emitQueryFlag(l: string[], cmd: CommandInfo, q: ParamInfo): void {
 
 function emitBodyScalarFlag(l: string[], cmd: CommandInfo, s: BodyScalarInfo): void {
 	const v = `${cmd.cmdVarName}${goPascal(s.propName)}Var`
-	const help = s.enumValues.length > 0
-		? `Body field ${s.propName} (one of: ${s.enumValues.join(", ")})`
-		: `Body field ${s.propName}`
+	const help =
+		s.enumValues.length > 0
+			? `Body field ${s.propName} (one of: ${s.enumValues.join(", ")})`
+			: `Body field ${s.propName}`
 	const helpStr = JSON.stringify(help)
 	if (s.schemaType === "integer") {
 		l.push(`\t${cmd.cmdVarName}.Flags().Int64Var(&${v}, ${JSON.stringify(s.flagName)}, 0, ${helpStr})`)
@@ -809,7 +806,9 @@ function emitPreRunE(cmd: CommandInfo): string[] {
 			if (s.schemaType !== "string") continue
 			const v = `${cmd.cmdVarName}${goPascal(s.propName)}Var`
 			const values = s.enumValues.map((x) => JSON.stringify(x)).join(", ")
-			lines.push(`if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) && !slices.Contains([]string{${values}}, ${v}) {`)
+			lines.push(
+				`if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) && !slices.Contains([]string{${values}}, ${v}) {`,
+			)
 			lines.push(`\treturn fmt.Errorf("--${s.flagName} must be one of: ${s.enumValues.join(", ")}")`)
 			lines.push(`}`)
 		}
@@ -858,12 +857,16 @@ function emitRunE(l: string[], cmd: CommandInfo, _options: GoCLIOptions): void {
 		l.push(`${ind}\tdataBytes, derr := cli.ReadDataFlag(${cmd.cmdVarName}DataVar)`)
 		l.push(`${ind}\tif derr != nil { return derr }`)
 		l.push(`${ind}\tif len(dataBytes) > 0 {`)
-		l.push(`${ind}\t\tif jerr := json.Unmarshal(dataBytes, &merged); jerr != nil { return fmt.Errorf("parse --data: %w", jerr) }`)
+		l.push(
+			`${ind}\t\tif jerr := json.Unmarshal(dataBytes, &merged); jerr != nil { return fmt.Errorf("parse --data: %w", jerr) }`,
+		)
 		l.push(`${ind}\t}`)
 		l.push(`${ind}}`)
 		for (const s of cmd.body.scalars) {
 			const v = `${cmd.cmdVarName}${goPascal(s.propName)}Var`
-			l.push(`${ind}if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) { merged[${JSON.stringify(s.propName)}] = ${v} }`)
+			l.push(
+				`${ind}if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) { merged[${JSON.stringify(s.propName)}] = ${v} }`,
+			)
 		}
 		l.push(`${ind}bodyBytes, merr := json.Marshal(merged)`)
 		l.push(`${ind}if merr != nil { return merr }`)
@@ -879,15 +882,21 @@ function emitRunE(l: string[], cmd: CommandInfo, _options: GoCLIOptions): void {
 		for (const s of cmd.body.scalarFields) {
 			const v = `${cmd.cmdVarName}${goPascal(s.propName)}Var`
 			if (s.schemaType === "string") {
-				l.push(`${ind}if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) { fields[${JSON.stringify(s.propName)}] = ${v} }`)
+				l.push(
+					`${ind}if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) { fields[${JSON.stringify(s.propName)}] = ${v} }`,
+				)
 			} else {
-				l.push(`${ind}if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) { fields[${JSON.stringify(s.propName)}] = fmt.Sprint(${v}) }`)
+				l.push(
+					`${ind}if cmd.Flags().Changed(${JSON.stringify(s.flagName)}) { fields[${JSON.stringify(s.propName)}] = fmt.Sprint(${v}) }`,
+				)
 			}
 		}
 		l.push(`${ind}files := map[string]string{}`)
 		if (cmd.body.useGenericFileFlag) {
 			const bin = cmd.body.binaryFields[0]
-			l.push(`${ind}if ${cmd.cmdVarName}FileVar != "" { files[${JSON.stringify(bin.name)}] = ${cmd.cmdVarName}FileVar }`)
+			l.push(
+				`${ind}if ${cmd.cmdVarName}FileVar != "" { files[${JSON.stringify(bin.name)}] = ${cmd.cmdVarName}FileVar }`,
+			)
 		} else {
 			for (const f of cmd.body.binaryFields) {
 				const v = `${cmd.cmdVarName}${goPascal(f.name)}Var`
@@ -908,7 +917,9 @@ function emitRunE(l: string[], cmd: CommandInfo, _options: GoCLIOptions): void {
 		l.push(`${ind}req.Header.Set("Accept", "text/event-stream")`)
 		l.push(`${ind}if apiKey != "" { req.Header.Set("Authorization", "Bearer "+apiKey) }`)
 		if (cmd.hasLastEventId) {
-			l.push(`${ind}if ${cmd.cmdVarName}LastEventIDVar != "" { req.Header.Set("Last-Event-ID", ${cmd.cmdVarName}LastEventIDVar) }`)
+			l.push(
+				`${ind}if ${cmd.cmdVarName}LastEventIDVar != "" { req.Header.Set("Last-Event-ID", ${cmd.cmdVarName}LastEventIDVar) }`,
+			)
 		}
 		l.push(`${ind}resp, herr := httpClient.Do(req)`)
 		l.push(`${ind}if herr != nil { return herr }`)
@@ -941,7 +952,9 @@ function emitRunE(l: string[], cmd: CommandInfo, _options: GoCLIOptions): void {
 	l.push(`${ind}body, berr := io.ReadAll(resp.Body)`)
 	l.push(`${ind}if berr != nil { return berr }`)
 	l.push(`${ind}if resp.StatusCode >= 400 {`)
-	l.push(`${ind}\treturn &sdk.StatusError{StatusCode: resp.StatusCode, Body: body, Response: resp, Message: string(body)}`)
+	l.push(
+		`${ind}\treturn &sdk.StatusError{StatusCode: resp.StatusCode, Body: body, Response: resp, Message: string(body)}`,
+	)
 	l.push(`${ind}}`)
 	if (cmd.has204) {
 		l.push(`${ind}if resp.StatusCode == http.StatusNoContent { return nil }`)
@@ -970,11 +983,16 @@ function buildPathExpr(cmd: CommandInfo): string {
 function querySetStmt(q: ParamInfo, v: string): string {
 	const name = JSON.stringify(q.name)
 	switch (q.schema.type) {
-		case "integer": return `q.Set(${name}, fmt.Sprintf("%d", ${v}))`
-		case "number": return `q.Set(${name}, fmt.Sprintf("%g", ${v}))`
-		case "boolean": return `q.Set(${name}, fmt.Sprintf("%t", ${v}))`
-		case "array": return `for _, v := range ${v} { q.Add(${name}, v) }`
-		default: return `q.Set(${name}, ${v})`
+		case "integer":
+			return `q.Set(${name}, fmt.Sprintf("%d", ${v}))`
+		case "number":
+			return `q.Set(${name}, fmt.Sprintf("%g", ${v}))`
+		case "boolean":
+			return `q.Set(${name}, fmt.Sprintf("%t", ${v}))`
+		case "array":
+			return `for _, v := range ${v} { q.Add(${name}, v) }`
+		default:
+			return `q.Set(${name}, ${v})`
 	}
 }
 
@@ -1087,11 +1105,7 @@ function emitReadme(spec: OpenApiSpec, options: GoCLIOptions): string {
 
 /* ── embedded SDK copy ── */
 
-function copyEmbeddedSDK(
-	spec: Record<string, unknown>,
-	options: GoCLIOptions,
-	outFiles: Record<string, string>,
-): void {
+function copyEmbeddedSDK(spec: Record<string, unknown>, options: GoCLIOptions, outFiles: Record<string, string>): void {
 	const sdkModule = `${resolveModulePath(options)}/internal/sdk`
 	const sdkGen = generateGoSDK(spec, { modulePath: sdkModule })
 	for (const [name, content] of Object.entries(sdkGen.files)) {
@@ -1107,11 +1121,7 @@ function copyEmbeddedSDK(
  *   When embedding, add a small sse_export.go into internal/sdk/.
  *   When using external SDK, we still need the same symbol — emit an adapter file. */
 
-function emitSSEExportShim(
-	options: GoCLIOptions,
-	files: Record<string, string>,
-	hasEmbedded: boolean,
-): void {
+function emitSSEExportShim(options: GoCLIOptions, files: Record<string, string>, hasEmbedded: boolean): void {
 	const shim = [
 		`// Code generated by honey. DO NOT EDIT.`,
 		`package sdk`,
@@ -1137,10 +1147,7 @@ function emitSSEExportShim(
 
 /* ── public entrypoint ── */
 
-export function generateGoCLI(
-	spec: Record<string, unknown>,
-	options: GoCLIOptions,
-): GeneratedGoCLI {
+export function generateGoCLI(spec: Record<string, unknown>, options: GoCLIOptions): GeneratedGoCLI {
 	const resolved = resolveRefs(spec as Parameters<typeof resolveRefs>[0]) as unknown as OpenApiSpec
 	const { groups, skipped, serviceMap } = collectCLIMethods(spec)
 

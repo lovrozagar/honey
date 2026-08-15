@@ -1,62 +1,44 @@
-import { HoneyContext } from "./context.ts";
-import { HoneyError } from "./error.ts";
-import { ERROR_META } from "./errors.ts";
-import type { MiddlewareFn, RuntimeMiddleware } from "./middleware.ts";
-import { compileChain, executeChain } from "./middleware.ts";
-import type { ProxyConfig } from "./proxy.ts";
-import { createProxyHandler } from "./proxy.ts";
+import { HoneyContext } from "./context.ts"
+import { HoneyError } from "./error.ts"
+import { ERROR_META } from "./errors.ts"
+import type { MiddlewareFn, RuntimeMiddleware } from "./middleware.ts"
+import { compileChain, executeChain } from "./middleware.ts"
+import type { ProxyConfig } from "./proxy.ts"
+import { createProxyHandler } from "./proxy.ts"
+import type { CustomErrorFormatter, ErrorFormatter, ResponseOptions, TypedResponse } from "./response.ts"
+import { createErrorResponse, type HoneyRes } from "./response.ts"
+import type { OutputValidator, RouteHandler, RouteTree, TreeNode, WSRouteHandler } from "./tree.ts"
+import { createNode, insertRoute, insertWsRoute, matchRoute, matchWsRoute, mergeInto } from "./tree.ts"
+import { createBus } from "./realtime/bus.ts"
+import type { RealtimeBus } from "./realtime/bus.ts"
+import { createConnContext } from "./realtime/route.ts"
+import type { RealtimeRouteOpts } from "./realtime/route.ts"
 import type {
-	CustomErrorFormatter,
-	ErrorFormatter,
-	ResponseOptions,
-	TypedResponse,
-} from "./response.ts";
-import { createErrorResponse, type HoneyRes } from "./response.ts";
-import type {
-	OutputValidator,
-	RouteHandler,
-	RouteTree,
-	TreeNode,
-	WSRouteHandler,
-} from "./tree.ts";
-import {
-	createNode,
-	insertRoute,
-	insertWsRoute,
-	matchRoute,
-	matchWsRoute,
-	mergeInto,
-} from "./tree.ts";
-import { createBus } from "./realtime/bus.ts";
-import type { RealtimeBus } from "./realtime/bus.ts";
-import { createConnContext } from "./realtime/route.ts";
-import type { RealtimeRouteOpts } from "./realtime/route.ts";
-	import type {
-		ComputeErrorsByStatus,
-		DefaultMeta,
+	ComputeErrorsByStatus,
+	DefaultMeta,
 	ExtractSchemas,
 	HttpMethod,
-		InferInputMap,
-		InferOutput,
-		InputSchemasDef,
-		MergePath,
-		MergeRoute,
-		OutputSchemaDef,
-		ParamsFromPath,
-		StandardSchemaLike,
-		StatusKey,
+	InferInputMap,
+	InferOutput,
+	InputSchemasDef,
+	MergePath,
+	MergeRoute,
+	OutputSchemaDef,
+	ParamsFromPath,
+	StandardSchemaLike,
+	StatusKey,
 	TapContext,
-} from "./types.ts";
-import { codeToStatusKey, EK, EMPTY_OBJ, SK } from "./types.ts";
-import { validateInput, validateOutput } from "./validation.ts";
-import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts";
-import { loadHoneyFeature } from "./feature-load.ts";
-import { getI18nRuntime } from "./i18n-slot.ts";
-import { getOpenApiRuntime } from "./openapi/spec-factory.ts";
-import { getServeRuntime } from "./serve-slot.ts";
-import type { HoneyServeOptions, ServeHandle } from "./serve.ts";
+} from "./types.ts"
+import { codeToStatusKey, EK, EMPTY_OBJ, SK } from "./types.ts"
+import { validateInput, validateOutput } from "./validation.ts"
+import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts"
+import { loadHoneyFeature } from "./feature-load.ts"
+import { getI18nRuntime } from "./i18n-slot.ts"
+import { getOpenApiRuntime } from "./openapi/spec-factory.ts"
+import { getServeRuntime } from "./serve-slot.ts"
+import type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 
-export { HoneyContext } from "./context.ts";
+export { HoneyContext } from "./context.ts"
 /** HoneyContext without internal backing fields — use this for consumer-facing types */
 export type HoneyCtx<TEnv = Record<string, unknown>> = Omit<
 	import("./context.ts").HoneyContext<TEnv>,
@@ -68,14 +50,14 @@ export type HoneyCtx<TEnv = Record<string, unknown>> = Omit<
 	| "_lzSearchAll"
 	| "_lzUrlFn"
 	| "_setErrors"
->;
-export { HoneyError } from "./error.ts";
-export { defineErrors, ERROR_META } from "./errors.ts";
-export type { ErrorMetaEntry } from "./errors.ts";
-export type { MiddlewareFn } from "./middleware.ts";
-export { createMiddleware, defineMiddleware } from "./middleware.ts";
-export type { ProxyConfig } from "./proxy.ts";
-export type { PendingTap, TapContext, TapHandler } from "./types.ts";
+>
+export { HoneyError } from "./error.ts"
+export { defineErrors, ERROR_META } from "./errors.ts"
+export type { ErrorMetaEntry } from "./errors.ts"
+export type { MiddlewareFn } from "./middleware.ts"
+export { createMiddleware, defineMiddleware } from "./middleware.ts"
+export type { ProxyConfig } from "./proxy.ts"
+export type { PendingTap, TapContext, TapHandler } from "./types.ts"
 export type {
 	CookieOptions,
 	CustomErrorFormatter,
@@ -85,9 +67,9 @@ export type {
 	SSEOptions,
 	SSEStream,
 	TypedResponse,
-} from "./response.ts";
-export { createErrorResponse, HoneyRes } from "./response.ts";
-export { mergeTree } from "./tree.ts";
+} from "./response.ts"
+export { createErrorResponse, HoneyRes } from "./response.ts"
+export { mergeTree } from "./tree.ts"
 export type {
 	DefaultMeta,
 	HoneyCodegen,
@@ -118,91 +100,71 @@ export type {
 	StandardSchemaLike,
 	StatusKey,
 	SuccessStatusKey,
-} from "./types.ts";
-export type { WSAdapter, WSContext, WSHandler, WSPreUpgrade } from "./ws/cloudflare.ts";
-export type { ConnContext, RealtimeRouteOpts } from "./realtime/route.ts";
-export type { RealtimeBus } from "./realtime/bus.ts";
-export type { HoneyServeOptions, ServeHandle } from "./serve.ts";
-export type { ServeRuntime } from "./detect-runtime.ts";
-export { detectRuntime } from "./detect-runtime.ts";
+} from "./types.ts"
+export type { WSAdapter, WSContext, WSHandler, WSPreUpgrade } from "./ws/cloudflare.ts"
+export type { ConnContext, RealtimeRouteOpts } from "./realtime/route.ts"
+export type { RealtimeBus } from "./realtime/bus.ts"
+export type { HoneyServeOptions, ServeHandle } from "./serve.ts"
+export type { ServeRuntime } from "./detect-runtime.ts"
+export { detectRuntime } from "./detect-runtime.ts"
 
 /** Type predicate for incoming wire-protocol msg frames from the realtime client. */
 function isMsgFrame(value: unknown): value is { data: unknown; t: "msg" } {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-	if (!("t" in value) || !("data" in value)) return false;
-	return value.t === "msg";
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+	if (!("t" in value) || !("data" in value)) return false
+	return value.t === "msg"
 }
 
 type TelemetryAdapter = {
-	onError?(ctx: {
-		duration: number;
-		error: HoneyError;
-		method: string;
-		path: string;
-	}): void;
-	onHandler?(ctx: {
-		duration: number;
-		method: string;
-		path: string;
-		status: number;
-	}): void;
-	onMethodNotAllowed?(ctx: {
-		allowed: string[];
-		method: string;
-		path: string;
-		req: Request;
-	}): void;
-	onMiddleware?(ctx: { duration: number; error?: unknown; name: string }): void;
-	onNotFound?(ctx: { method: string; path: string; req: Request }): void;
-	onRequest?(ctx: { env: unknown; req: Request }): void;
-	onResponse?(ctx: { duration: number; req: Request; status: number }): void;
-	onRoute?(ctx: {
-		method: string;
-		params: Record<string, string>;
-		path: string;
-		req: Request;
-	}): void;
-};
+	onError?(ctx: { duration: number; error: HoneyError; method: string; path: string }): void
+	onHandler?(ctx: { duration: number; method: string; path: string; status: number }): void
+	onMethodNotAllowed?(ctx: { allowed: string[]; method: string; path: string; req: Request }): void
+	onMiddleware?(ctx: { duration: number; error?: unknown; name: string }): void
+	onNotFound?(ctx: { method: string; path: string; req: Request }): void
+	onRequest?(ctx: { env: unknown; req: Request }): void
+	onResponse?(ctx: { duration: number; req: Request; status: number }): void
+	onRoute?(ctx: { method: string; params: Record<string, string>; path: string; req: Request }): void
+}
 
 type ErrorI18nConfig<TEnv> = {
-	errors?: Record<string, Record<string, string>>;
-	fieldNames?: Record<string, Record<string, string>>;
+	errors?: Record<string, Record<string, string>>
+	fieldNames?: Record<string, Record<string, string>>
 	resolveLocale: (ctx: {
-		cookies: Record<string, string>;
-		env: TEnv;
-		headers: Record<string, string>;
-		params: Record<string, string>;
-		req: Request;
-		search: Record<string, string>;
-	}) => string | Promise<string>;
-};
+		cookies: Record<string, string>
+		env: TEnv
+		headers: Record<string, string>
+		params: Record<string, string>
+		req: Request
+		search: Record<string, string>
+	}) => string | Promise<string>
+}
 
 type Logger = {
-	warn?(msg: string, ...args: unknown[]): void;
-};
+	warn?(msg: string, ...args: unknown[]): void
+}
 
 function mergePath(base: string, path: string): string {
-	if (base === "/") return path;
-	if (path === "/") return base;
-	return `${base}${path}`;
+	if (base === "/") return path
+	if (path === "/") return base
+	return `${base}${path}`
 }
 
 /** Normalize a scope prefix: ensure leading slash, strip trailing slash (except "/"). */
 function normalizeScopePath(raw: string): string {
-	let p = raw;
-	if (p.length === 0) return "/";
-	if (p.charCodeAt(0) !== 47) p = `/${p}`;
-	if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
-	return p;
+	let p = raw
+	if (p.length === 0) return "/"
+	if (p.charCodeAt(0) !== 47) p = `/${p}`
+	if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1)
+	return p
 }
 
 /** Check whether fullPath falls under scope prefix — exact match or next char is '/'. */
 function scopeMatches(prefix: string, fullPath: string): boolean {
-	if (prefix === "/") return true;
-	if (fullPath === prefix) return true;
-	if (fullPath.length <= prefix.length) return false;
-	if (fullPath.charCodeAt(prefix.length) !== 47) return false;
-	return fullPath.startsWith(prefix);
+	if (prefix === "/") return true
+	if (fullPath === prefix) return true
+	if (fullPath.length <= prefix.length) return false
+	if (fullPath.charCodeAt(prefix.length) !== 47) return false
+	return fullPath.startsWith(prefix)
 }
 
 type HoneyGraph = {
@@ -212,20 +174,16 @@ type HoneyGraph = {
 	root: TreeNode
 }
 
-function walkTreeHandlers(
-	root: TreeNode,
-	cb: (h: RouteHandler) => void,
-	wsCb?: (h: WSRouteHandler) => void,
-): void {
+function walkTreeHandlers(root: TreeNode, cb: (h: RouteHandler) => void, wsCb?: (h: WSRouteHandler) => void): void {
 	if (root.m) {
-		for (const h of Object.values(root.m) as RouteHandler[]) cb(h);
+		for (const h of Object.values(root.m) as RouteHandler[]) cb(h)
 	}
 	if (root.w) {
-		for (const h of Object.values(root.w.m) as RouteHandler[]) cb(h);
+		for (const h of Object.values(root.w.m) as RouteHandler[]) cb(h)
 	}
-	if (root.ws && wsCb) wsCb(root.ws);
-	for (const child of Object.values(root.s)) walkTreeHandlers(child, cb, wsCb);
-	if (root.d) walkTreeHandlers(root.d.c, cb, wsCb);
+	if (root.ws && wsCb) wsCb(root.ws)
+	for (const child of Object.values(root.s)) walkTreeHandlers(child, cb, wsCb)
+	if (root.d) walkTreeHandlers(root.d.c, cb, wsCb)
 }
 
 const EMPTY_PARAMS = EMPTY_OBJ as Record<string, string>
@@ -233,49 +191,49 @@ const EMPTY_MW: RuntimeMiddleware[] = []
 
 function requestIsWsUpgrade(request: Request): boolean {
 	try {
-		return request.headers.get("upgrade")?.toLowerCase() === "websocket";
+		return request.headers.get("upgrade")?.toLowerCase() === "websocket"
 	} catch {
 		/* Deno closes the Request after upgradeWebSocket */
-		return false;
+		return false
 	}
 }
 
 /** Find first '?' or '#' in url starting from pos */
 function findSearchOrHash(url: string, pos: number): number {
 	for (let i = pos; i < url.length; i++) {
-		const c = url.charCodeAt(i);
-		if (c === 63 || c === 35) return i;
+		const c = url.charCodeAt(i)
+		if (c === 63 || c === 35) return i
 	}
-	return -1;
+	return -1
 }
 
 function safeFire(fn: (() => unknown) | undefined, logger?: Logger): void {
-	if (fn === undefined) return;
+	if (fn === undefined) return
 	try {
-		const result = fn();
+		const result = fn()
 		if (result && typeof result === "object" && "catch" in result) {
-			(result as Promise<unknown>).catch((e: unknown) => {
-				logger?.warn?.("telemetry callback failed", e);
-			});
+			;(result as Promise<unknown>).catch((e: unknown) => {
+				logger?.warn?.("telemetry callback failed", e)
+			})
 		}
 	} catch (e) {
-		logger?.warn?.("telemetry callback failed", e);
+		logger?.warn?.("telemetry callback failed", e)
 	}
 }
 
 /** Internal context shared across extracted fetch sub-methods */
 type FetchCtx<TEnv> = {
-	env: TEnv;
-	executionCtx: { waitUntil?: (p: Promise<unknown>) => void } | undefined;
-	log: Logger | undefined;
-	request: Request;
-	startTime: number;
-	url: () => URL;
+	env: TEnv
+	executionCtx: { waitUntil?: (p: Promise<unknown>) => void } | undefined
+	log: Logger | undefined
+	request: Request
+	startTime: number
+	url: () => URL
 	/** Already known from fetch() before Deno.upgradeWebSocket consumes the request. */
-	wsUpgrade?: boolean;
+	wsUpgrade?: boolean
 	/** Headers copied before Deno.upgradeWebSocket closes the Request. */
-	headerSnap?: Headers;
-};
+	headerSnap?: Headers
+}
 
 function requestWithHeaders(req: Request, headers: Headers): Request {
 	return new Proxy(req, {
@@ -297,25 +255,13 @@ function ctxRequest(fc: FetchCtx<unknown>): Request {
 	}
 }
 
-function defaultErrorFormatter(
-	_error: HoneyError,
-	defaultShape: Record<string, unknown>,
-): Record<string, unknown> {
-	return defaultShape;
+function defaultErrorFormatter(_error: HoneyError, defaultShape: Record<string, unknown>): Record<string, unknown> {
+	return defaultShape
 }
 
-type ErrorFormatterFn = ErrorFormatter;
+type ErrorFormatterFn = ErrorFormatter
 
-const STATIC_CTX_RESERVED = new Set([
-	"background",
-	"cookies",
-	"env",
-	"headers",
-	"params",
-	"req",
-	"res",
-	"search",
-]);
+const STATIC_CTX_RESERVED = new Set(["background", "cookies", "env", "headers", "params", "req", "res", "search"])
 
 /* errorKeys the framework throws on its own behalf — input/output validation, content negotiation,
  * routing. Always passes the boundary check; users never declare these via .errors(). */
@@ -331,7 +277,7 @@ const FRAMEWORK_EKS = new Set<(typeof EK)[keyof typeof EK]>([
 	EK.request_timeout,
 	EK.gateway_timeout,
 	EK.bad_gateway,
-]);
+])
 
 export class Honey<
 	TEnv,
@@ -344,171 +290,167 @@ export class Honey<
 	TTaps extends Record<string, unknown> = {},
 	TScopedMw extends readonly ScopedMwEntry[] = [],
 > {
-	declare readonly $basePath: TBasePath;
-	declare readonly $ctx: TCtx;
-	declare readonly $env: TEnv;
-	declare readonly $errorFactory: TErrorFactory;
-	declare readonly $meta: TMeta;
-	declare readonly $routes: TRoutes;
-	declare readonly $taps: TTaps;
-	private _basePath: string;
-	private _defaultBoundaryKey: string | null;
-	private _defaultErrorKeys: Set<string>;
-	private _errorFactory: unknown;
-	private _errorSchema: StandardSchemaLike | null;
-	private _customErrorFormatter: CustomErrorFormatter | null;
-	private _customErrorSchema: StandardSchemaLike | null;
-	private _chainMeta: Record<string, unknown> | null;
-	private _chainMiddlewares: RuntimeMiddleware[];
-	private _scopedMiddlewares: ScopedEntry[];
-	private _contextValues: Record<string, unknown> | null;
-	private _errorFormatter: ErrorFormatterFn;
-	private _errorI18n: ErrorI18nConfig<TEnv> | null;
-	private _globalMiddlewares: RuntimeMiddleware[];
-	private _graph: HoneyGraph;
-	private _hasWsRoutes: boolean;
-	private _logger: Logger | null;
-	private _outputValidation: "always" | "dev" | "off";
-	private _staticRoutes: { map: Record<string, RouteHandler> | null };
-	private _stripPrefix: string | null;
-	private _trailingSlash: "enforce" | "ignore" | "strip";
-	private _wsAdapter: WSAdapter | null;
-	private _openApiCache: { epoch: number; value: Promise<unknown> } | null;
-	private _openApiYamlCache: { epoch: number; value: Promise<string> } | null;
-	private _manifestCache: { epoch: number; value: Promise<unknown> } | null;
+	declare readonly $basePath: TBasePath
+	declare readonly $ctx: TCtx
+	declare readonly $env: TEnv
+	declare readonly $errorFactory: TErrorFactory
+	declare readonly $meta: TMeta
+	declare readonly $routes: TRoutes
+	declare readonly $taps: TTaps
+	private _basePath: string
+	private _defaultBoundaryKey: string | null
+	private _defaultErrorKeys: Set<string>
+	private _errorFactory: unknown
+	private _errorSchema: StandardSchemaLike | null
+	private _customErrorFormatter: CustomErrorFormatter | null
+	private _customErrorSchema: StandardSchemaLike | null
+	private _chainMeta: Record<string, unknown> | null
+	private _chainMiddlewares: RuntimeMiddleware[]
+	private _scopedMiddlewares: ScopedEntry[]
+	private _contextValues: Record<string, unknown> | null
+	private _errorFormatter: ErrorFormatterFn
+	private _errorI18n: ErrorI18nConfig<TEnv> | null
+	private _globalMiddlewares: RuntimeMiddleware[]
+	private _graph: HoneyGraph
+	private _hasWsRoutes: boolean
+	private _logger: Logger | null
+	private _outputValidation: "always" | "dev" | "off"
+	private _staticRoutes: { map: Record<string, RouteHandler> | null }
+	private _stripPrefix: string | null
+	private _trailingSlash: "enforce" | "ignore" | "strip"
+	private _wsAdapter: WSAdapter | null
+	private _openApiCache: { epoch: number; value: Promise<unknown> } | null
+	private _openApiYamlCache: { epoch: number; value: Promise<string> } | null
+	private _manifestCache: { epoch: number; value: Promise<unknown> } | null
 	private _onError:
 		| ((
 				error: unknown,
 				ctx: {
-					env: TEnv;
-					jsonFromError: (err: HoneyError) => Response;
-					req: Request;
+					env: TEnv
+					jsonFromError: (err: HoneyError) => Response
+					req: Request
 				},
 		  ) => HoneyError | Response | Promise<HoneyError | Response | undefined | void> | undefined | void)
-		| null;
+		| null
 	private _onMethodNotAllowed:
 		| ((ctx: {
-				allowed: string[];
-				env: TEnv;
-				jsonFromError: (err: HoneyError) => Response;
-				req: Request;
+				allowed: string[]
+				env: TEnv
+				jsonFromError: (err: HoneyError) => Response
+				req: Request
 		  }) => Response | Promise<Response>)
-		| null;
+		| null
 	private _onNotFound:
-		| ((ctx: {
-				env: TEnv;
-				jsonFromError: (err: HoneyError) => Response;
-				req: Request;
-		  }) => Response | Promise<Response>)
-		| null;
-	private _taps: Map<
+		| ((ctx: { env: TEnv; jsonFromError: (err: HoneyError) => Response; req: Request }) => Response | Promise<Response>)
+		| null
+	private _taps: Map<string, (ctx: TapContext<TEnv>, payload: unknown) => void | Promise<void>> | null
+	private _telemetry: TelemetryAdapter | null
+	private _realtimeRoutes: Map<
 		string,
-		(ctx: TapContext<TEnv>, payload: unknown) => void | Promise<void>
-	> | null;
-	private _telemetry: TelemetryAdapter | null;
-	private _realtimeRoutes: Map<string, { handler: RealtimeRouteOpts["handler"]; middlewares?: RealtimeRouteOpts["use"]; reconnectBuffer?: number }>;
+		{ handler: RealtimeRouteOpts["handler"]; middlewares?: RealtimeRouteOpts["use"]; reconnectBuffer?: number }
+	>
 
 	constructor(opts?: {
-		chainMiddlewares?: RuntimeMiddleware[];
-		defaultErrorKeys?: Set<string>;
-		globalMiddlewares?: RuntimeMiddleware[];
-		graph?: HoneyGraph;
-		handlerMap?: Record<string, RouteHandler> | null;
-		root?: TreeNode;
-		scopedMiddlewares?: ScopedEntry[];
+		chainMiddlewares?: RuntimeMiddleware[]
+		defaultErrorKeys?: Set<string>
+		globalMiddlewares?: RuntimeMiddleware[]
+		graph?: HoneyGraph
+		handlerMap?: Record<string, RouteHandler> | null
+		root?: TreeNode
+		scopedMiddlewares?: ScopedEntry[]
 	}) {
-		this._basePath = "/";
+		this._basePath = "/"
 		this._graph = opts?.graph ?? {
 			handlerMap: opts?.handlerMap ?? null,
 			hasRouteTree: false,
 			realtimeBus: null,
 			root: opts?.root ?? createNode(),
-		};
-		this._globalMiddlewares = opts?.globalMiddlewares ?? [];
-		this._scopedMiddlewares = opts?.scopedMiddlewares ?? [];
-		this._chainMeta = null;
-		this._chainMiddlewares = opts?.chainMiddlewares ?? [];
-		this._contextValues = null;
-		this._defaultBoundaryKey = null;
-		this._defaultErrorKeys = opts?.defaultErrorKeys ?? new Set();
-		this._errorFactory = null;
-		this._errorSchema = null;
-		this._customErrorFormatter = null;
-		this._customErrorSchema = null;
-		this._errorFormatter = defaultErrorFormatter;
-		this._errorI18n = null;
-		this._hasWsRoutes = false;
-		this._logger = null;
-		this._outputValidation = "off";
-		this._staticRoutes = { map: null };
-		this._stripPrefix = null;
-		this._trailingSlash = "ignore";
-		this._wsAdapter = null;
-		this._openApiCache = null;
-		this._openApiYamlCache = null;
-		this._manifestCache = null;
-		this._onError = null;
-		this._onNotFound = null;
-		this._onMethodNotAllowed = null;
-		this._taps = null;
-		this._telemetry = null;
-		this._realtimeRoutes = new Map();
+		}
+		this._globalMiddlewares = opts?.globalMiddlewares ?? []
+		this._scopedMiddlewares = opts?.scopedMiddlewares ?? []
+		this._chainMeta = null
+		this._chainMiddlewares = opts?.chainMiddlewares ?? []
+		this._contextValues = null
+		this._defaultBoundaryKey = null
+		this._defaultErrorKeys = opts?.defaultErrorKeys ?? new Set()
+		this._errorFactory = null
+		this._errorSchema = null
+		this._customErrorFormatter = null
+		this._customErrorSchema = null
+		this._errorFormatter = defaultErrorFormatter
+		this._errorI18n = null
+		this._hasWsRoutes = false
+		this._logger = null
+		this._outputValidation = "off"
+		this._staticRoutes = { map: null }
+		this._stripPrefix = null
+		this._trailingSlash = "ignore"
+		this._wsAdapter = null
+		this._openApiCache = null
+		this._openApiYamlCache = null
+		this._manifestCache = null
+		this._onError = null
+		this._onNotFound = null
+		this._onMethodNotAllowed = null
+		this._taps = null
+		this._telemetry = null
+		this._realtimeRoutes = new Map()
 	}
 
 	private get _handlerMap(): Record<string, RouteHandler> | null {
-		return this._graph.handlerMap;
+		return this._graph.handlerMap
 	}
 	private set _handlerMap(value: Record<string, RouteHandler> | null) {
-		this._graph.handlerMap = value;
+		this._graph.handlerMap = value
 	}
 
 	private get _hasRouteTree(): boolean {
-		return this._graph.hasRouteTree;
+		return this._graph.hasRouteTree
 	}
 	private set _hasRouteTree(value: boolean) {
-		this._graph.hasRouteTree = value;
+		this._graph.hasRouteTree = value
 	}
 
 	private get _root(): TreeNode {
-		return this._graph.root;
+		return this._graph.root
 	}
 	private set _root(value: TreeNode) {
-		this._graph.root = value;
+		this._graph.root = value
 	}
 
 	/** @internal — used by codegen */
 	private get _tree(): TreeNode {
-		return this._root;
+		return this._root
 	}
 
 	private get _realtimeBus(): RealtimeBus | null {
-		return this._graph.realtimeBus;
+		return this._graph.realtimeBus
 	}
 	private set _realtimeBus(value: RealtimeBus | null) {
-		this._graph.realtimeBus = value;
+		this._graph.realtimeBus = value
 	}
 
 	/** @internal — mark that this app has WS routes */
 	_markWsRoutes(): void {
-		this._hasWsRoutes = true;
+		this._hasWsRoutes = true
 	}
 
 	/** @internal — register a static route for O(1) lookup */
 	_registerStatic(key: string, handler: RouteHandler): void {
 		if (this._staticRoutes.map === null) {
-			this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>;
+			this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>
 		}
-		this._staticRoutes.map[key] = handler;
+		this._staticRoutes.map[key] = handler
 	}
 
 	/** @internal — used by RouteBuilder for pre-filtered error factory */
 	get _factory(): unknown {
-		return this._errorFactory;
+		return this._errorFactory
 	}
 
 	/** @internal — used by runtime error boundary */
 	get _boundaryKey(): string | null {
-		return this._defaultBoundaryKey;
+		return this._defaultBoundaryKey
 	}
 
 	/** Convert unknown thrown value to error Response — used in WS, 404, 405 catch blocks */
@@ -520,78 +462,75 @@ export class Honey<
 						cause: thrown,
 						errorKey: EK.internal_server_error,
 						status: SK.internal_server_error,
-					});
-		return createErrorResponse(error, this._errorFormatter, this._customErrorFormatter);
+					})
+		return createErrorResponse(error, this._errorFormatter, this._customErrorFormatter)
 	}
 
 	private _createBoundaryError(errorKey: string, cause: unknown): HoneyError {
 		const factory = this._errorFactory as Record<
 			string,
 			((opts?: { cause?: unknown }) => HoneyError) | undefined
-		> | null;
-		const factoryFn = factory?.[errorKey];
+		> | null
+		const factoryFn = factory?.[errorKey]
 		if (factoryFn) {
 			/* check if this is a custom schema error via ERROR_META — boundary must use standard errors only */
-			const meta = (factory as Record<symbol, Record<string, { schema: unknown }>>)?.[ERROR_META];
+			const meta = (factory as Record<symbol, Record<string, { schema: unknown }>>)?.[ERROR_META]
 			if (meta?.[errorKey]?.schema) {
 				/* custom schema error — cannot be used as boundary, fall through to manual construction */
 			} else {
-				return factoryFn({ cause });
+				return factoryFn({ cause })
 			}
 		}
 		return new HoneyError({
 			cause,
 			errorKey,
 			status: SK.internal_server_error,
-		});
+		})
 	}
 
 	private _createError(errorKey: string, statusKey: StatusKey): HoneyError {
-		const factory = this._errorFactory as Record<
-			string,
-			(() => HoneyError) | undefined
-		> | null;
-		const factoryFn = factory?.[errorKey];
+		const factory = this._errorFactory as Record<string, (() => HoneyError) | undefined> | null
+		const factoryFn = factory?.[errorKey]
 		if (factoryFn) {
-			return factoryFn();
+			return factoryFn()
 		}
-		return new HoneyError({ errorKey, status: statusKey });
+		return new HoneyError({ errorKey, status: statusKey })
 	}
 
 	/** Apply error keys from a single scoped entry to every matching handler currently in the tree */
 	private _applyScopedEntryErrors(entry: ScopedEntry): void {
-		const errors = entry.errors;
-		if (!errors || errors.length === 0) return;
+		const errors = entry.errors
+		if (!errors || errors.length === 0) return
 		walkTreeHandlers(
 			this._root,
 			(h) => {
 				if (scopeMatches(entry.prefix, h.rp)) {
-					for (const k of errors) h.ek.add(k);
+					for (const k of errors) h.ek.add(k)
 				}
 			},
 			(wh) => {
 				if (scopeMatches(entry.prefix, wh.rp)) {
-					for (const k of errors) wh.ek.add(k);
+					for (const k of errors) wh.ek.add(k)
 				}
 			},
-		);
+		)
 	}
 
 	/** Apply error keys from every scoped entry on this chain to every matching handler in the tree */
 	private _applyAllScopedErrors(): void {
 		for (const entry of this._scopedMiddlewares) {
-			this._applyScopedEntryErrors(entry);
+			this._applyScopedEntryErrors(entry)
 		}
 	}
 
 	/** Return scoped middleware functions that match the given route path */
 	private _filterScopedForPath(routePath: string): RuntimeMiddleware[] {
-		if (this._scopedMiddlewares.length === 0) return EMPTY_MW;
-		const out: RuntimeMiddleware[] = [];
+		if (this._scopedMiddlewares.length === 0) return EMPTY_MW
+		const out: RuntimeMiddleware[] = []
 		for (const s of this._scopedMiddlewares) {
-			if (scopeMatches(s.prefix, routePath)) out.push(s.mw);
+			if (scopeMatches(s.prefix, routePath)) out.push(s.mw)
 		}
-		return out;
+		return out
 	}
 
 	/** Mutates `honeyError.message` in-place with the i18n-resolved template for its errorKey.
@@ -603,7 +542,7 @@ export class Honey<
 		request: Request,
 		log?: Logger,
 	): Promise<void> {
-		if (!this._errorI18n) return;
+		if (!this._errorI18n) return
 		try {
 			const locale = await this._errorI18n.resolveLocale({
 				cookies: ctx.cookies,
@@ -612,39 +551,36 @@ export class Honey<
 				params: ctx.params,
 				req: request,
 				search: ctx.search,
-			});
-			const translations = this._errorI18n.errors?.[locale];
+			})
+			const translations = this._errorI18n.errors?.[locale]
 			if (translations) {
-				const template = translations[honeyError.errorKey];
+				const template = translations[honeyError.errorKey]
 				if (template) {
 					await loadHoneyFeature("i18n")
-					honeyError.message = getI18nRuntime().interpolate(
-						template,
-						honeyError.vars ?? {},
-					);
+					honeyError.message = getI18nRuntime().interpolate(template, honeyError.vars ?? {})
 				}
 			}
 
-			const fieldTranslations = this._errorI18n.fieldNames?.[locale];
+			const fieldTranslations = this._errorI18n.fieldNames?.[locale]
 			if (fieldTranslations && Object.keys(honeyError.fields).length > 0) {
 				for (const fieldErrors of Object.values(honeyError.fields)) {
 					for (const fe of fieldErrors) {
-						let candidate = fe.path;
+						let candidate = fe.path
 						while (candidate) {
-							const translated = fieldTranslations[candidate];
+							const translated = fieldTranslations[candidate]
 							if (translated) {
-								fe.path = translated;
-								break;
+								fe.path = translated
+								break
 							}
-							const dotIdx = candidate.indexOf(".");
-							if (dotIdx === -1) break;
-							candidate = candidate.slice(dotIdx + 1);
+							const dotIdx = candidate.indexOf(".")
+							if (dotIdx === -1) break
+							candidate = candidate.slice(dotIdx + 1)
 						}
 					}
 				}
 			}
 		} catch (e) {
-			log?.warn?.("i18n resolution failed", e);
+			log?.warn?.("i18n resolution failed", e)
 		}
 	}
 
@@ -661,51 +597,51 @@ export class Honey<
 		path: string,
 		ctx: HoneyContext<TEnv>,
 	): Promise<Response> {
-		const { env, log, request, startTime } = fc;
-		let honeyError: HoneyError;
-		const boundaryKey = handler.bek ?? this._defaultBoundaryKey;
+		const { env, log, request, startTime } = fc
+		let honeyError: HoneyError
+		const boundaryKey = handler.bek ?? this._defaultBoundaryKey
 
 		if (thrown instanceof HoneyError) {
 			/* framework-managed errorKeys (input/output validation, content negotiation, etc.) are always allowed
 			 * regardless of handler.ek — users never declare them, the framework owns them. */
-			const isFrameworkEk = FRAMEWORK_EKS.has(thrown.errorKey as (typeof EK)[keyof typeof EK]);
+			const isFrameworkEk = FRAMEWORK_EKS.has(thrown.errorKey as (typeof EK)[keyof typeof EK])
 			if (!isFrameworkEk && handler.ek.size > 0 && !handler.ek.has(thrown.errorKey)) {
 				if (boundaryKey) {
-					honeyError = this._createBoundaryError(boundaryKey, thrown);
+					honeyError = this._createBoundaryError(boundaryKey, thrown)
 				} else {
 					honeyError = new HoneyError({
 						cause: thrown,
 						errorKey: EK.internal_server_error,
 						status: SK.internal_server_error,
-					});
+					})
 				}
 			} else {
-				honeyError = thrown;
+				honeyError = thrown
 			}
 		} else {
 			if (boundaryKey) {
-				honeyError = this._createBoundaryError(boundaryKey, thrown);
+				honeyError = this._createBoundaryError(boundaryKey, thrown)
 			} else {
 				honeyError = new HoneyError({
 					cause: thrown,
 					errorKey: EK.internal_server_error,
 					status: SK.internal_server_error,
-				});
+				})
 			}
 		}
 
-		await this._resolveI18n(honeyError, ctx, env, request, log);
+		await this._resolveI18n(honeyError, ctx, env, request, log)
 
 		/* onError handler */
 		if (this._onError) {
 			try {
-				const customResult = await this._onError(thrown, this._makeErrorCtx(fc));
+				const customResult = await this._onError(thrown, this._makeErrorCtx(fc))
 				if (customResult instanceof HoneyError) {
 					/* user-mapped boundary error — re-run i18n against new errorKey,
 					 * then fall through to default response path so telemetry +
 					 * jsonFromError run exactly once. */
-					honeyError = customResult;
-					await this._resolveI18n(honeyError, ctx, env, request, log);
+					honeyError = customResult
+					await this._resolveI18n(honeyError, ctx, env, request, log)
 				} else if (customResult) {
 					safeFire(
 						() =>
@@ -716,7 +652,7 @@ export class Honey<
 								path,
 							}),
 						log,
-					);
+					)
 					safeFire(
 						() =>
 							this._telemetry?.onResponse?.({
@@ -725,9 +661,9 @@ export class Honey<
 								status: customResult.status,
 							}),
 						log,
-					);
-					ctx._isErrorResponse = true;
-					return customResult;
+					)
+					ctx._isErrorResponse = true
+					return customResult
 				}
 				/* customResult === undefined | void → fall through to default path */
 			} catch {
@@ -745,8 +681,8 @@ export class Honey<
 					path,
 				}),
 			log,
-		);
-		const res = this._makeErrorCtx(fc).jsonFromError(honeyError);
+		)
+		const res = this._makeErrorCtx(fc).jsonFromError(honeyError)
 		safeFire(
 			() =>
 				this._telemetry?.onResponse?.({
@@ -755,24 +691,14 @@ export class Honey<
 					status: res.status,
 				}),
 			log,
-		);
-		ctx._isErrorResponse = true;
-		return res;
+		)
+		ctx._isErrorResponse = true
+		return res
 	}
 
 	basePath<P extends string>(
 		prefix: P,
-	): Honey<
-		TEnv,
-		TCtx,
-		TRoutes,
-		TMeta,
-		TErrorFactory,
-		TDefaultErrors,
-		MergePath<TBasePath, P>,
-		TTaps,
-		TScopedMw
-	> {
+	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, MergePath<TBasePath, P>, TTaps, TScopedMw> {
 		const next = new Honey<
 			TEnv,
 			TCtx,
@@ -789,32 +715,32 @@ export class Honey<
 			globalMiddlewares: this._globalMiddlewares,
 			graph: this._graph,
 			scopedMiddlewares: this._scopedMiddlewares,
-		});
-		next._basePath = mergePath(this._basePath, prefix);
-		next._defaultBoundaryKey = this._defaultBoundaryKey;
-		next._errorFactory = this._errorFactory;
-		next._errorSchema = this._errorSchema;
-		next._customErrorFormatter = this._customErrorFormatter;
-		next._customErrorSchema = this._customErrorSchema;
-		next._errorFormatter = this._errorFormatter;
-		next._errorI18n = this._errorI18n;
-		next._logger = this._logger;
-		next._outputValidation = this._outputValidation;
-		next._stripPrefix = this._stripPrefix;
-		next._trailingSlash = this._trailingSlash;
-		next._wsAdapter = this._wsAdapter;
-		next._onError = this._onError;
-		next._onNotFound = this._onNotFound;
-		next._onMethodNotAllowed = this._onMethodNotAllowed;
-		next._chainMeta = this._chainMeta;
-		next._contextValues = this._contextValues;
-		next._taps = this._taps;
-		next._telemetry = this._telemetry;
-		next._realtimeBus = this._realtimeBus;
-		next._realtimeRoutes = this._realtimeRoutes;
-		next._staticRoutes = this._staticRoutes;
-		next._hasRouteTree = this._hasRouteTree;
-		next._hasWsRoutes = this._hasWsRoutes;
+		})
+		next._basePath = mergePath(this._basePath, prefix)
+		next._defaultBoundaryKey = this._defaultBoundaryKey
+		next._errorFactory = this._errorFactory
+		next._errorSchema = this._errorSchema
+		next._customErrorFormatter = this._customErrorFormatter
+		next._customErrorSchema = this._customErrorSchema
+		next._errorFormatter = this._errorFormatter
+		next._errorI18n = this._errorI18n
+		next._logger = this._logger
+		next._outputValidation = this._outputValidation
+		next._stripPrefix = this._stripPrefix
+		next._trailingSlash = this._trailingSlash
+		next._wsAdapter = this._wsAdapter
+		next._onError = this._onError
+		next._onNotFound = this._onNotFound
+		next._onMethodNotAllowed = this._onMethodNotAllowed
+		next._chainMeta = this._chainMeta
+		next._contextValues = this._contextValues
+		next._taps = this._taps
+		next._telemetry = this._telemetry
+		next._realtimeBus = this._realtimeBus
+		next._realtimeRoutes = this._realtimeRoutes
+		next._staticRoutes = this._staticRoutes
+		next._hasRouteTree = this._hasRouteTree
+		next._hasWsRoutes = this._hasWsRoutes
 		return next as unknown as Honey<
 			TEnv,
 			TCtx,
@@ -825,22 +751,12 @@ export class Honey<
 			MergePath<TBasePath, P>,
 			TTaps,
 			TScopedMw
-		>;
+		>
 	}
 
 	context<TAdds extends Record<string, unknown>>(
 		values: TAdds,
-	): Honey<
-		TEnv,
-		TCtx & Readonly<TAdds>,
-		TRoutes,
-		TMeta,
-		TErrorFactory,
-		TDefaultErrors,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	> {
+	): Honey<TEnv, TCtx & Readonly<TAdds>, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
 		for (const key in values) {
 			if (STATIC_CTX_RESERVED.has(key)) {
 				throw new Error(`context() cannot set reserved key "${key}"`)
@@ -862,65 +778,73 @@ export class Honey<
 			globalMiddlewares: this._globalMiddlewares,
 			graph: this._graph,
 			scopedMiddlewares: this._scopedMiddlewares,
-		});
-		next._basePath = this._basePath;
-		next._chainMeta = this._chainMeta;
-		next._contextValues = this._contextValues
-			? { ...this._contextValues, ...values }
-			: { ...values };
-		next._defaultBoundaryKey = this._defaultBoundaryKey;
-		next._errorFactory = this._errorFactory;
-		next._errorSchema = this._errorSchema;
-		next._customErrorFormatter = this._customErrorFormatter;
-		next._customErrorSchema = this._customErrorSchema;
-		next._errorFormatter = this._errorFormatter;
-		next._errorI18n = this._errorI18n;
-		next._logger = this._logger;
-		next._outputValidation = this._outputValidation;
-		next._stripPrefix = this._stripPrefix;
-		next._trailingSlash = this._trailingSlash;
-		next._wsAdapter = this._wsAdapter;
-		next._onError = this._onError;
-		next._onNotFound = this._onNotFound;
-		next._onMethodNotAllowed = this._onMethodNotAllowed;
-		next._taps = this._taps;
-		next._telemetry = this._telemetry;
-		next._realtimeBus = this._realtimeBus;
-		next._realtimeRoutes = this._realtimeRoutes;
-		next._staticRoutes = this._staticRoutes;
-		next._hasRouteTree = this._hasRouteTree;
-		next._hasWsRoutes = this._hasWsRoutes;
-		return next as unknown as Honey<TEnv, TCtx & Readonly<TAdds>, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>;
+		})
+		next._basePath = this._basePath
+		next._chainMeta = this._chainMeta
+		next._contextValues = this._contextValues ? { ...this._contextValues, ...values } : { ...values }
+		next._defaultBoundaryKey = this._defaultBoundaryKey
+		next._errorFactory = this._errorFactory
+		next._errorSchema = this._errorSchema
+		next._customErrorFormatter = this._customErrorFormatter
+		next._customErrorSchema = this._customErrorSchema
+		next._errorFormatter = this._errorFormatter
+		next._errorI18n = this._errorI18n
+		next._logger = this._logger
+		next._outputValidation = this._outputValidation
+		next._stripPrefix = this._stripPrefix
+		next._trailingSlash = this._trailingSlash
+		next._wsAdapter = this._wsAdapter
+		next._onError = this._onError
+		next._onNotFound = this._onNotFound
+		next._onMethodNotAllowed = this._onMethodNotAllowed
+		next._taps = this._taps
+		next._telemetry = this._telemetry
+		next._realtimeBus = this._realtimeBus
+		next._realtimeRoutes = this._realtimeRoutes
+		next._staticRoutes = this._staticRoutes
+		next._hasRouteTree = this._hasRouteTree
+		next._hasWsRoutes = this._hasWsRoutes
+		return next as unknown as Honey<
+			TEnv,
+			TCtx & Readonly<TAdds>,
+			TRoutes,
+			TMeta,
+			TErrorFactory,
+			TDefaultErrors,
+			TBasePath,
+			TTaps,
+			TScopedMw
+		>
 	}
 
 	logger(logger: Logger): this {
-		this._logger = logger;
-		return this;
+		this._logger = logger
+		return this
 	}
 
 	outputValidation(mode: "always" | "dev" | "off"): this {
-		this._outputValidation = mode;
-		return this;
+		this._outputValidation = mode
+		return this
 	}
 
 	trailingSlash(mode: "enforce" | "ignore" | "strip"): this {
-		this._trailingSlash = mode;
-		return this;
+		this._trailingSlash = mode
+		return this
 	}
 
 	/** Strip a URL path prefix before route matching — boundary-safe (won't strip partial segments), paths without the prefix pass through unchanged */
 	stripPrefix(prefix: string): this {
-		let normalized = prefix.replace(/\/+$/, "");
+		let normalized = prefix.replace(/\/+$/, "")
 		if (normalized.length > 0 && normalized.charCodeAt(0) !== 47) {
-			normalized = `/${normalized}`;
+			normalized = `/${normalized}`
 		}
-		this._stripPrefix = normalized === "" || normalized === "/" ? null : normalized;
-		return this;
+		this._stripPrefix = normalized === "" || normalized === "/" ? null : normalized
+		return this
 	}
 
 	wsAdapter(adapter: WSAdapter): this {
-		this._wsAdapter = adapter;
-		return this;
+		this._wsAdapter = adapter
+		return this
 	}
 
 	openapi(options: {
@@ -976,12 +900,8 @@ export class Honey<
 			return pending
 		}
 		this._mountInternalGet(`${stem}.json`, async (ctx) => ctx.res.json("ok", await loadJson()))
-		this._mountInternalGet(`${stem}.yml`, async (ctx) =>
-			ctx.res.text("ok", await loadYaml(), yamlHeaders),
-		)
-		this._mountInternalGet(`${stem}.yaml`, async (ctx) =>
-			ctx.res.text("ok", await loadYaml(), yamlHeaders),
-		)
+		this._mountInternalGet(`${stem}.yml`, async (ctx) => ctx.res.text("ok", await loadYaml(), yamlHeaders))
+		this._mountInternalGet(`${stem}.yaml`, async (ctx) => ctx.res.text("ok", await loadYaml(), yamlHeaders))
 		if (options.docs) {
 			const specUrl = mergePath(this._basePath, `${stem}.json`)
 			const docs = options.docs
@@ -999,9 +919,7 @@ export class Honey<
 				}
 			}
 			if (!mounted) {
-				throw new Error(
-					`Honey.openapi({ docs }) cannot mount at ${preferred}: already registered. Pass docsPath.`,
-				)
+				throw new Error(`Honey.openapi({ docs }) cannot mount at ${preferred}: already registered. Pass docsPath.`)
 			}
 		}
 		return this
@@ -1042,10 +960,7 @@ export class Honey<
 	}
 
 	/** Mount an internal GET. Returns false when a user route already owns the path. */
-	private _mountInternalGet(
-		path: string,
-		fn: (ctx: { res: HoneyRes }) => Response | Promise<Response>,
-	): boolean {
+	private _mountInternalGet(path: string, fn: (ctx: { res: HoneyRes }) => Response | Promise<Response>): boolean {
 		const fullPath = mergePath(this._basePath, path)
 		const existing = this._lookupGet(fullPath)
 		if (existing) return existing._skip === true
@@ -1072,114 +987,111 @@ export class Honey<
 	defaultErrorFormatter<TSchema extends StandardSchemaLike>(
 		schema: TSchema,
 		fn: (error: HoneyError) => InferOutput<TSchema>,
-	): this;
-	defaultErrorFormatter(fn: ErrorFormatterFn): this;
+	): this
+	defaultErrorFormatter(fn: ErrorFormatterFn): this
 	defaultErrorFormatter(
 		schemaOrFn: ErrorFormatterFn | StandardSchemaLike,
 		maybeFn?: (error: HoneyError) => unknown,
 	): this {
 		if (typeof schemaOrFn === "function") {
-			this._errorSchema = null;
-			this._errorFormatter = schemaOrFn;
+			this._errorSchema = null
+			this._errorFormatter = schemaOrFn
 		} else {
-			this._errorSchema = schemaOrFn;
-			const mapper = maybeFn as (error: HoneyError) => Record<string, unknown>;
-			this._errorFormatter = (error) => mapper(error);
+			this._errorSchema = schemaOrFn
+			const mapper = maybeFn as (error: HoneyError) => Record<string, unknown>
+			this._errorFormatter = (error) => mapper(error)
 		}
-		return this;
+		return this
 	}
 
 	customErrorFormatter<TSchema extends StandardSchemaLike>(
 		schema: TSchema,
 		fn: (error: HoneyError, data: Record<string, unknown>) => InferOutput<TSchema>,
-	): this;
-	customErrorFormatter(fn: CustomErrorFormatter): this;
+	): this
+	customErrorFormatter(fn: CustomErrorFormatter): this
 	customErrorFormatter(
 		schemaOrFn: CustomErrorFormatter | StandardSchemaLike,
 		maybeFn?: (error: HoneyError, data: Record<string, unknown>) => unknown,
 	): this {
 		if (typeof schemaOrFn === "function") {
-			this._customErrorSchema = null;
-			this._customErrorFormatter = schemaOrFn;
+			this._customErrorSchema = null
+			this._customErrorFormatter = schemaOrFn
 		} else {
-			this._customErrorSchema = schemaOrFn;
-			const mapper = maybeFn as (error: HoneyError, data: Record<string, unknown>) => Record<string, unknown>;
-			this._customErrorFormatter = (error, data) => mapper(error, data);
+			this._customErrorSchema = schemaOrFn
+			const mapper = maybeFn as (error: HoneyError, data: Record<string, unknown>) => Record<string, unknown>
+			this._customErrorFormatter = (error, data) => mapper(error, data)
 		}
-		return this;
+		return this
 	}
 
 	errorI18n(config: ErrorI18nConfig<TEnv>): this {
-		this._errorI18n = config;
-		return this;
+		this._errorI18n = config
+		return this
 	}
 
 	onError(
 		handler: (
 			error: unknown,
 			ctx: {
-				env: TEnv;
-				jsonFromError: (err: HoneyError) => Response;
-				req: Request;
+				env: TEnv
+				jsonFromError: (err: HoneyError) => Response
+				req: Request
 			},
 		) => HoneyError | Response | Promise<HoneyError | Response | undefined | void> | undefined | void,
 	): this {
-		this._onError = handler;
-		return this;
+		this._onError = handler
+		return this
 	}
 
 	onMethodNotAllowed(
 		handler: (ctx: {
-			allowed: string[];
-			env: TEnv;
-			jsonFromError: (err: HoneyError) => Response;
-			req: Request;
+			allowed: string[]
+			env: TEnv
+			jsonFromError: (err: HoneyError) => Response
+			req: Request
 		}) => Response | Promise<Response>,
 	): this {
-		this._onMethodNotAllowed = handler;
-		return this;
+		this._onMethodNotAllowed = handler
+		return this
 	}
 
 	onNotFound(
 		handler: (ctx: {
-			env: TEnv;
-			jsonFromError: (err: HoneyError) => Response;
-			req: Request;
+			env: TEnv
+			jsonFromError: (err: HoneyError) => Response
+			req: Request
 		}) => Response | Promise<Response>,
 	): this {
-		this._onNotFound = handler;
-		return this;
+		this._onNotFound = handler
+		return this
 	}
 
 	/** Register a tap handler keyed by name — fires after successful handler response */
 	tap<K extends string>(
 		key: K,
-		handler: (
-			ctx: TapContext<TEnv>,
-			payload: K extends keyof TTaps ? TTaps[K] : unknown,
-		) => void | Promise<void>,
+		handler: (ctx: TapContext<TEnv>, payload: K extends keyof TTaps ? TTaps[K] : unknown) => void | Promise<void>,
 	): this {
 		if (this._taps === null) {
-			this._taps = new Map();
+			this._taps = new Map()
 		}
-		this._taps.set(key, handler as (ctx: TapContext<TEnv>, payload: unknown) => void | Promise<void>);
-		return this;
+		this._taps.set(key, handler as (ctx: TapContext<TEnv>, payload: unknown) => void | Promise<void>)
+		return this
 	}
 
 	telemetry(adapter: TelemetryAdapter): this {
-		this._telemetry = adapter;
-		return this;
+		this._telemetry = adapter
+		return this
 	}
 
 	routeTree(tree: RouteTree): this {
-		this._root = tree.root;
-		this._handlerMap = tree.handlers ?? null;
-		this._hasRouteTree = true;
-		return this;
+		this._root = tree.root
+		this._handlerMap = tree.handlers ?? null
+		this._hasRouteTree = true
+		return this
 	}
 
 	toRouteTree(): RouteTree {
-		return { meta: {}, root: this._root };
+		return { meta: {}, root: this._root }
 	}
 
 	errorFactory<TFactory extends Record<string, (...args: never[]) => unknown>>(
@@ -1195,28 +1107,14 @@ export class Honey<
 			TBasePath,
 			TTaps,
 			TScopedMw
-		>;
-		next._errorFactory = factory;
-		return next;
+		>
+		next._errorFactory = factory
+		return next
 	}
 
-	defaultErrors<
-		TKeys extends [TErrorFactory] extends [never]
-			? never
-			: keyof TErrorFactory & string,
-	>(
+	defaultErrors<TKeys extends ([TErrorFactory] extends [never] ? never : keyof TErrorFactory & string)>(
 		...keys: TKeys[]
-	): Honey<
-		TEnv,
-		TCtx,
-		TRoutes,
-		TMeta,
-		TErrorFactory,
-		TDefaultErrors | TKeys,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	> {
+	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors | TKeys, TBasePath, TTaps, TScopedMw> {
 		const next = this as unknown as Honey<
 			TEnv,
 			TCtx,
@@ -1227,28 +1125,16 @@ export class Honey<
 			TBasePath,
 			TTaps,
 			TScopedMw
-		>;
+		>
 		for (const k of keys) {
-			next._defaultErrorKeys.add(k);
+			next._defaultErrorKeys.add(k)
 		}
-		return next;
+		return next
 	}
 
-	defaultBoundary<
-		TKey extends [TErrorFactory] extends [never]
-			? never
-			: keyof TErrorFactory & string,
-	>(key: TKey): Honey<
-		TEnv,
-		TCtx,
-		TRoutes,
-		TMeta,
-		TErrorFactory,
-		TDefaultErrors | TKey,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	> {
+	defaultBoundary<TKey extends ([TErrorFactory] extends [never] ? never : keyof TErrorFactory & string)>(
+		key: TKey,
+	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors | TKey, TBasePath, TTaps, TScopedMw> {
 		const next = this as unknown as Honey<
 			TEnv,
 			TCtx,
@@ -1259,10 +1145,10 @@ export class Honey<
 			TBasePath,
 			TTaps,
 			TScopedMw
-		>;
-		next._defaultBoundaryKey = key;
-		next._defaultErrorKeys.add(key);
-		return next;
+		>
+		next._defaultBoundaryKey = key
+		next._defaultErrorKeys.add(key)
+		return next
 	}
 
 	/** Phantom overload — constrains what route-level .meta() accepts */
@@ -1276,102 +1162,56 @@ export class Honey<
 		TBasePath,
 		TTaps,
 		TScopedMw
-	>;
+	>
 	/** Typed chain-level default meta — constrains route meta and sets runtime defaults in one call */
-	meta<
-		TNewMeta extends Record<string, unknown>,
-		TValues extends Partial<DefaultMeta> & Partial<TNewMeta>,
-	>(
+	meta<TNewMeta extends Record<string, unknown>, TValues extends Partial<DefaultMeta> & Partial<TNewMeta>>(
 		values: TValues,
-	): Honey<
-		TEnv,
-		TCtx,
-		TRoutes,
-		TNewMeta,
-		TErrorFactory,
-		TDefaultErrors,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	>;
+	): Honey<TEnv, TCtx, TRoutes, TNewMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 	/** Chain-level default meta — merged into every route registered on this chain */
-	meta<
-		TValues extends Partial<DefaultMeta> &
-		([TMeta] extends [never] ? {} : Partial<TMeta>),
-	>(
+	meta<TValues extends Partial<DefaultMeta> & ([TMeta] extends [never] ? {} : Partial<TMeta>)>(
 		values: TValues,
-	): Honey<
-		TEnv,
-		TCtx,
-		TRoutes,
-		TMeta,
-		TErrorFactory,
-		TDefaultErrors,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	>;
-	meta(values?: Record<string, unknown>): Honey<
-		TEnv,
-		TCtx,
-		TRoutes,
-		unknown,
-		TErrorFactory,
-		TDefaultErrors,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	> {
+	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
+	meta(
+		values?: Record<string, unknown>,
+	): Honey<TEnv, TCtx, TRoutes, unknown, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
 		if (values === undefined) {
 			/* phantom overload — type-only, no runtime effect */
-			return this as Honey<TEnv, TCtx, TRoutes, unknown, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>;
+			return this as Honey<TEnv, TCtx, TRoutes, unknown, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 		}
 		/* chain-level meta — copy-on-write */
-		const next = new Honey<
-			TEnv,
-			TCtx,
-			TRoutes,
-			unknown,
-			TErrorFactory,
-			TDefaultErrors,
-			TBasePath,
-			TTaps,
-			TScopedMw
-		>({
+		const next = new Honey<TEnv, TCtx, TRoutes, unknown, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>({
 			chainMiddlewares: this._chainMiddlewares,
 			defaultErrorKeys: this._defaultErrorKeys,
 			globalMiddlewares: this._globalMiddlewares,
 			graph: this._graph,
 			scopedMiddlewares: this._scopedMiddlewares,
-		});
-		next._basePath = this._basePath;
-		next._chainMeta = this._chainMeta
-			? { ...this._chainMeta, ...values }
-			: { ...values };
-		next._contextValues = this._contextValues;
-		next._defaultBoundaryKey = this._defaultBoundaryKey;
-		next._errorFactory = this._errorFactory;
-		next._errorSchema = this._errorSchema;
-		next._customErrorFormatter = this._customErrorFormatter;
-		next._customErrorSchema = this._customErrorSchema;
-		next._errorFormatter = this._errorFormatter;
-		next._errorI18n = this._errorI18n;
-		next._logger = this._logger;
-		next._outputValidation = this._outputValidation;
-		next._stripPrefix = this._stripPrefix;
-		next._trailingSlash = this._trailingSlash;
-		next._wsAdapter = this._wsAdapter;
-		next._onError = this._onError;
-		next._onNotFound = this._onNotFound;
-		next._onMethodNotAllowed = this._onMethodNotAllowed;
-		next._taps = this._taps;
-		next._telemetry = this._telemetry;
-		next._realtimeBus = this._realtimeBus;
-		next._realtimeRoutes = this._realtimeRoutes;
-		next._staticRoutes = this._staticRoutes;
-		next._hasRouteTree = this._hasRouteTree;
-		next._hasWsRoutes = this._hasWsRoutes;
-		return next;
+		})
+		next._basePath = this._basePath
+		next._chainMeta = this._chainMeta ? { ...this._chainMeta, ...values } : { ...values }
+		next._contextValues = this._contextValues
+		next._defaultBoundaryKey = this._defaultBoundaryKey
+		next._errorFactory = this._errorFactory
+		next._errorSchema = this._errorSchema
+		next._customErrorFormatter = this._customErrorFormatter
+		next._customErrorSchema = this._customErrorSchema
+		next._errorFormatter = this._errorFormatter
+		next._errorI18n = this._errorI18n
+		next._logger = this._logger
+		next._outputValidation = this._outputValidation
+		next._stripPrefix = this._stripPrefix
+		next._trailingSlash = this._trailingSlash
+		next._wsAdapter = this._wsAdapter
+		next._onError = this._onError
+		next._onNotFound = this._onNotFound
+		next._onMethodNotAllowed = this._onMethodNotAllowed
+		next._taps = this._taps
+		next._telemetry = this._telemetry
+		next._realtimeBus = this._realtimeBus
+		next._realtimeRoutes = this._realtimeRoutes
+		next._staticRoutes = this._staticRoutes
+		next._hasRouteTree = this._hasRouteTree
+		next._hasWsRoutes = this._hasWsRoutes
+		return next
 	}
 
 	/** Declare tap payload types — auto-extends meta with Partial<T> for meta-driven taps */
@@ -1396,12 +1236,12 @@ export class Honey<
 			TBasePath,
 			TNewTaps,
 			TScopedMw
-		>;
+		>
 	}
 
 	use<TAdds>(
 		mw: MiddlewareFn<TCtx, TAdds>,
-	): Honey<TEnv, TCtx & TAdds, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>;
+	): Honey<TEnv, TCtx & TAdds, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 
 	use<const TPath extends string, TAdds>(
 		path: TPath,
@@ -1416,153 +1256,129 @@ export class Honey<
 		TBasePath,
 		TTaps,
 		readonly [...TScopedMw, { readonly path: MergePath<TBasePath, TPath>; readonly adds: TAdds }]
-	>;
+	>
 
 	/* oxlint-disable-next-line typescript/no-explicit-any -- overload impl requires erased types */
 	use(pathOrMw: string | MiddlewareFn<any, any>, maybeMw?: MiddlewareFn<any, any>): any {
 		if (typeof pathOrMw !== "string") {
-			const mw = pathOrMw as RuntimeMiddleware;
+			const mw = pathOrMw as RuntimeMiddleware
 			const newChain = new Honey<TEnv>({
 				chainMiddlewares: [...this._chainMiddlewares, mw],
 				defaultErrorKeys: this._defaultErrorKeys,
 				globalMiddlewares: this._globalMiddlewares,
 				graph: this._graph,
 				scopedMiddlewares: this._scopedMiddlewares,
-			});
-			newChain._basePath = this._basePath;
-			newChain._chainMeta = this._chainMeta;
-			newChain._contextValues = this._contextValues;
-			newChain._defaultBoundaryKey = this._defaultBoundaryKey;
-			newChain._errorFactory = this._errorFactory;
-			newChain._errorSchema = this._errorSchema;
-			newChain._customErrorFormatter = this._customErrorFormatter;
-			newChain._customErrorSchema = this._customErrorSchema;
-			newChain._errorFormatter = this._errorFormatter;
-			newChain._errorI18n = this._errorI18n;
-			newChain._logger = this._logger;
-			newChain._outputValidation = this._outputValidation;
-			newChain._stripPrefix = this._stripPrefix;
-			newChain._trailingSlash = this._trailingSlash;
-			newChain._wsAdapter = this._wsAdapter;
-			newChain._onError = this._onError;
-			newChain._onNotFound = this._onNotFound;
-			newChain._onMethodNotAllowed = this._onMethodNotAllowed;
-			newChain._taps = this._taps;
-			newChain._telemetry = this._telemetry;
-			newChain._realtimeBus = this._realtimeBus;
-			newChain._realtimeRoutes = this._realtimeRoutes;
-			newChain._staticRoutes = this._staticRoutes;
-			newChain._hasRouteTree = this._hasRouteTree;
-			newChain._hasWsRoutes = this._hasWsRoutes;
-			return newChain;
+			})
+			newChain._basePath = this._basePath
+			newChain._chainMeta = this._chainMeta
+			newChain._contextValues = this._contextValues
+			newChain._defaultBoundaryKey = this._defaultBoundaryKey
+			newChain._errorFactory = this._errorFactory
+			newChain._errorSchema = this._errorSchema
+			newChain._customErrorFormatter = this._customErrorFormatter
+			newChain._customErrorSchema = this._customErrorSchema
+			newChain._errorFormatter = this._errorFormatter
+			newChain._errorI18n = this._errorI18n
+			newChain._logger = this._logger
+			newChain._outputValidation = this._outputValidation
+			newChain._stripPrefix = this._stripPrefix
+			newChain._trailingSlash = this._trailingSlash
+			newChain._wsAdapter = this._wsAdapter
+			newChain._onError = this._onError
+			newChain._onNotFound = this._onNotFound
+			newChain._onMethodNotAllowed = this._onMethodNotAllowed
+			newChain._taps = this._taps
+			newChain._telemetry = this._telemetry
+			newChain._realtimeBus = this._realtimeBus
+			newChain._realtimeRoutes = this._realtimeRoutes
+			newChain._staticRoutes = this._staticRoutes
+			newChain._hasRouteTree = this._hasRouteTree
+			newChain._hasWsRoutes = this._hasWsRoutes
+			return newChain
 		}
 
 		/* scoped path */
-		const normalizedPrefix = normalizeScopePath(pathOrMw);
-		const fullPrefix = mergePath(this._basePath, normalizedPrefix);
-		const mw = maybeMw as RuntimeMiddleware;
-		const mwWithErrors = maybeMw as MiddlewareFn<unknown, unknown>;
+		const normalizedPrefix = normalizeScopePath(pathOrMw)
+		const fullPrefix = mergePath(this._basePath, normalizedPrefix)
+		const mw = maybeMw as RuntimeMiddleware
+		const mwWithErrors = maybeMw as MiddlewareFn<unknown, unknown>
 		const entry: ScopedEntry = {
 			errors: mwWithErrors.errors ? [...mwWithErrors.errors] : undefined,
 			mw,
 			prefix: fullPrefix,
-		};
-		this._scopedMiddlewares.push(entry);
+		}
+		this._scopedMiddlewares.push(entry)
 		const newChain = new Honey<TEnv>({
 			chainMiddlewares: this._chainMiddlewares,
 			defaultErrorKeys: this._defaultErrorKeys,
 			globalMiddlewares: this._globalMiddlewares,
 			graph: this._graph,
 			scopedMiddlewares: this._scopedMiddlewares,
-		});
-		newChain._basePath = this._basePath;
-		newChain._chainMeta = this._chainMeta;
-		newChain._contextValues = this._contextValues;
-		newChain._defaultBoundaryKey = this._defaultBoundaryKey;
-		newChain._errorFactory = this._errorFactory;
-		newChain._errorSchema = this._errorSchema;
-		newChain._customErrorFormatter = this._customErrorFormatter;
-		newChain._customErrorSchema = this._customErrorSchema;
-		newChain._errorFormatter = this._errorFormatter;
-		newChain._errorI18n = this._errorI18n;
-		newChain._logger = this._logger;
-		newChain._outputValidation = this._outputValidation;
-		newChain._stripPrefix = this._stripPrefix;
-		newChain._trailingSlash = this._trailingSlash;
-		newChain._wsAdapter = this._wsAdapter;
-		newChain._onError = this._onError;
-		newChain._onNotFound = this._onNotFound;
-		newChain._onMethodNotAllowed = this._onMethodNotAllowed;
-		newChain._taps = this._taps;
-		newChain._telemetry = this._telemetry;
-		newChain._realtimeBus = this._realtimeBus;
-		newChain._realtimeRoutes = this._realtimeRoutes;
-		newChain._staticRoutes = this._staticRoutes;
-		newChain._hasRouteTree = this._hasRouteTree;
-		newChain._hasWsRoutes = this._hasWsRoutes;
-		newChain._applyScopedEntryErrors(entry);
-		return newChain;
+		})
+		newChain._basePath = this._basePath
+		newChain._chainMeta = this._chainMeta
+		newChain._contextValues = this._contextValues
+		newChain._defaultBoundaryKey = this._defaultBoundaryKey
+		newChain._errorFactory = this._errorFactory
+		newChain._errorSchema = this._errorSchema
+		newChain._customErrorFormatter = this._customErrorFormatter
+		newChain._customErrorSchema = this._customErrorSchema
+		newChain._errorFormatter = this._errorFormatter
+		newChain._errorI18n = this._errorI18n
+		newChain._logger = this._logger
+		newChain._outputValidation = this._outputValidation
+		newChain._stripPrefix = this._stripPrefix
+		newChain._trailingSlash = this._trailingSlash
+		newChain._wsAdapter = this._wsAdapter
+		newChain._onError = this._onError
+		newChain._onNotFound = this._onNotFound
+		newChain._onMethodNotAllowed = this._onMethodNotAllowed
+		newChain._taps = this._taps
+		newChain._telemetry = this._telemetry
+		newChain._realtimeBus = this._realtimeBus
+		newChain._realtimeRoutes = this._realtimeRoutes
+		newChain._staticRoutes = this._staticRoutes
+		newChain._hasRouteTree = this._hasRouteTree
+		newChain._hasWsRoutes = this._hasWsRoutes
+		newChain._applyScopedEntryErrors(entry)
+		return newChain
 	}
 
-	route<
-		TSubRoutes,
-		TSubMeta,
-		TSubErrorFactory,
-		TSubDefaultErrors extends string,
-		TSubBasePath extends string,
-	>(
-		sub: Honey<
-			TEnv,
-			TCtx,
-			TSubRoutes,
-			TSubMeta,
-			TSubErrorFactory,
-			TSubDefaultErrors,
-			TSubBasePath
-		>,
-	): Honey<
-		TEnv,
-		TCtx,
-		TRoutes & TSubRoutes,
-		TMeta,
-		TErrorFactory,
-		TDefaultErrors,
-		TBasePath,
-		TTaps,
-		TScopedMw
-	> {
+	route<TSubRoutes, TSubMeta, TSubErrorFactory, TSubDefaultErrors extends string, TSubBasePath extends string>(
+		sub: Honey<TEnv, TCtx, TSubRoutes, TSubMeta, TSubErrorFactory, TSubDefaultErrors, TSubBasePath>,
+	): Honey<TEnv, TCtx, TRoutes & TSubRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
 		/* skip self-merge: .handler() already inserted into shared _root */
 		if (sub._tree !== this._root) {
-			mergeInto(this._root, sub._tree);
-			if (sub._hasWsRoutes) this._hasWsRoutes = true;
-			if (sub._hasRouteTree) this._hasRouteTree = true;
+			mergeInto(this._root, sub._tree)
+			if (sub._hasWsRoutes) this._hasWsRoutes = true
+			if (sub._hasRouteTree) this._hasRouteTree = true
 			/* carry sub's scoped mw entries into parent's runtime list (parent scopes run first) */
 			for (const entry of sub._scopedMiddlewares) {
-				this._scopedMiddlewares.push(entry);
+				this._scopedMiddlewares.push(entry)
 			}
 			if (sub._staticRoutes.map !== null) {
 				if (this._staticRoutes.map === null) {
-					this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>;
+					this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>
 				}
-				Object.assign(this._staticRoutes.map, sub._staticRoutes.map);
+				Object.assign(this._staticRoutes.map, sub._staticRoutes.map)
 			}
 			for (const [path, cfg] of sub._realtimeRoutes) {
 				if (this._realtimeRoutes.has(path)) {
-					throw new Error(`Duplicate realtime route: ${path}`);
+					throw new Error(`Duplicate realtime route: ${path}`)
 				}
-				this._realtimeRoutes.set(path, cfg);
+				this._realtimeRoutes.set(path, cfg)
 			}
 			if (!this._realtimeBus && sub._realtimeBus) {
-				this._realtimeBus = sub._realtimeBus;
+				this._realtimeBus = sub._realtimeBus
 			}
 			if (sub._taps !== null) {
-				if (this._taps === null) this._taps = new Map();
+				if (this._taps === null) this._taps = new Map()
 				for (const [key, fn] of sub._taps) {
-					if (!this._taps.has(key)) this._taps.set(key, fn);
+					if (!this._taps.has(key)) this._taps.set(key, fn)
 				}
 			}
 			/* walk tree and apply all scoped error keys to matching handlers */
-			this._applyAllScopedErrors();
+			this._applyAllScopedErrors()
 		}
 		return this as unknown as Honey<
 			TEnv,
@@ -1574,13 +1390,10 @@ export class Honey<
 			TBasePath,
 			TTaps,
 			TScopedMw
-		>;
+		>
 	}
 
-	private _registerRoute<
-		TPath extends string,
-		TMethod extends HttpMethod | "ALL",
-	>(
+	private _registerRoute<TPath extends string, TMethod extends HttpMethod | "ALL">(
 		method: TMethod,
 		path: TPath,
 		extraMethods?: (HttpMethod | "ALL")[],
@@ -1603,11 +1416,11 @@ export class Honey<
 		TTaps,
 		TScopedMw
 	> {
-		const fullPath = mergePath(this._basePath, path);
-		const errorKeys = new Set(this._defaultErrorKeys);
+		const fullPath = mergePath(this._basePath, path)
+		const errorKeys = new Set(this._defaultErrorKeys)
 		for (const entry of this._scopedMiddlewares) {
 			if (entry.errors && scopeMatches(entry.prefix, fullPath)) {
-				for (const k of entry.errors) errorKeys.add(k);
+				for (const k of entry.errors) errorKeys.add(k)
 			}
 		}
 		return new RouteBuilder<
@@ -1660,15 +1473,12 @@ export class Honey<
 			TBasePath,
 			TTaps,
 			TScopedMw
-		>;
+		>
 	}
 
-		on<
-			const TPath extends string,
-			const TMethods extends readonly [HttpMethod | "ALL", ...(HttpMethod | "ALL")[]],
-		>(
-			methods: TMethods,
-			path: TPath,
+	on<const TPath extends string, const TMethods extends readonly [HttpMethod | "ALL", ...(HttpMethod | "ALL")[]]>(
+		methods: TMethods,
+		path: TPath,
 	): BuilderChain<
 		TEnv,
 		TCtx & ApplyScoped<TScopedMw, MergePath<TBasePath, TPath>>,
@@ -1688,37 +1498,37 @@ export class Honey<
 		TTaps,
 		TScopedMw
 	> {
-		const [first, ...rest] = methods;
+		const [first, ...rest] = methods
 		return this._registerRoute<TPath, TMethods[number]>(
 			first,
 			path,
 			rest.length > 0 ? (rest as (HttpMethod | "ALL")[]) : undefined,
-		);
+		)
 	}
 
 	all<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "ALL">("ALL", path);
+		return this._registerRoute<TPath, "ALL">("ALL", path)
 	}
 	delete<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "DELETE">("DELETE", path);
+		return this._registerRoute<TPath, "DELETE">("DELETE", path)
 	}
 	get<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "GET">("GET", path);
+		return this._registerRoute<TPath, "GET">("GET", path)
 	}
 	head<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "HEAD">("HEAD", path);
+		return this._registerRoute<TPath, "HEAD">("HEAD", path)
 	}
 	options<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "OPTIONS">("OPTIONS", path);
+		return this._registerRoute<TPath, "OPTIONS">("OPTIONS", path)
 	}
 	patch<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "PATCH">("PATCH", path);
+		return this._registerRoute<TPath, "PATCH">("PATCH", path)
 	}
 	post<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "POST">("POST", path);
+		return this._registerRoute<TPath, "POST">("POST", path)
 	}
 	put<const TPath extends string>(path: TPath) {
-		return this._registerRoute<TPath, "PUT">("PUT", path);
+		return this._registerRoute<TPath, "PUT">("PUT", path)
 	}
 
 	ws<const TPath extends string>(
@@ -1735,17 +1545,7 @@ export class Honey<
 			TCtx & ApplyScoped<TScopedMw, MergePath<TBasePath, TPath>>,
 			{},
 			never,
-			Honey<
-				TEnv,
-				TCtx,
-				TRoutes,
-				TMeta,
-				TErrorFactory,
-				TDefaultErrors,
-				TBasePath,
-				TTaps,
-				TScopedMw
-			>
+			Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 		>({
 			boundaryErrorKey: this._defaultBoundaryKey,
 			errorKeys: new Set(),
@@ -1756,30 +1556,30 @@ export class Honey<
 			parentMiddlewares: this._chainMiddlewares,
 			path: mergePath(this._basePath, path),
 			root: this._root,
-		});
+		})
 	}
 
 	realtime(path: string, opts: RealtimeRouteOpts): this {
-		const fullPath = mergePath(this._basePath, path) || "/";
+		const fullPath = mergePath(this._basePath, path) || "/"
 
 		if (!this._realtimeBus) {
-			this._realtimeBus = createBus();
+			this._realtimeBus = createBus()
 		}
 
 		if (this._realtimeRoutes.has(fullPath)) {
-			throw new Error(`Duplicate realtime route: ${fullPath}`);
+			throw new Error(`Duplicate realtime route: ${fullPath}`)
 		}
 
 		this._realtimeRoutes.set(fullPath, {
 			handler: opts.handler,
 			middlewares: opts.use,
 			reconnectBuffer: opts.reconnectBuffer,
-		});
+		})
 
-		const mw: RuntimeMiddleware[] = [];
+		const mw: RuntimeMiddleware[] = []
 		if (opts.use) {
 			for (const fn of opts.use) {
-				mw.push(fn as RuntimeMiddleware);
+				mw.push(fn as RuntimeMiddleware)
 			}
 		}
 
@@ -1791,10 +1591,10 @@ export class Honey<
 			mt: null,
 			mw: [...this._chainMiddlewares, ...mw],
 			rp: fullPath,
-		});
+		})
 
-		this._hasWsRoutes = true;
-		return this;
+		this._hasWsRoutes = true
+		return this
 	}
 
 	/**
@@ -1808,7 +1608,7 @@ export class Honey<
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
 	): Response | Promise<Response> {
 		if (this._wsAdapter === null && !this._hasWsRoutes) {
-			return this._doFetch(request, env, executionCtx);
+			return this._doFetch(request, env, executionCtx)
 		}
 		const isWsUpgrade = request.headers.get("upgrade")?.toLowerCase() === "websocket"
 		const headerSnap = isWsUpgrade ? new Headers(request.headers) : undefined
@@ -1886,31 +1686,30 @@ export class Honey<
 		knownWsUpgrade = false,
 		headerSnap?: Headers,
 	): Response | Promise<Response> {
-		const startTime = performance.now();
+		const startTime = performance.now()
 
 		/* fast path extraction — avoids expensive new URL() allocation */
-		const rawUrl = request.url;
-		const protoEnd = rawUrl.indexOf("//");
-		const pathStart = protoEnd === -1 ? 0 : rawUrl.indexOf("/", protoEnd + 2);
-		const searchOrHash =
-			pathStart === -1 ? -1 : findSearchOrHash(rawUrl, pathStart);
-		let path: string;
+		const rawUrl = request.url
+		const protoEnd = rawUrl.indexOf("//")
+		const pathStart = protoEnd === -1 ? 0 : rawUrl.indexOf("/", protoEnd + 2)
+		const searchOrHash = pathStart === -1 ? -1 : findSearchOrHash(rawUrl, pathStart)
+		let path: string
 		if (pathStart === -1) {
-			path = "/";
+			path = "/"
 		} else if (searchOrHash === -1) {
-			path = rawUrl.substring(pathStart);
+			path = rawUrl.substring(pathStart)
 		} else {
-			path = rawUrl.substring(pathStart, searchOrHash);
+			path = rawUrl.substring(pathStart, searchOrHash)
 		}
 
 		/* lazily create URL only when actually needed (search params, redirects) */
-		let _url: URL | undefined;
+		let _url: URL | undefined
 		const getUrl = (): URL => {
-			if (_url === undefined) _url = new URL(rawUrl);
-			return _url;
-		};
+			if (_url === undefined) _url = new URL(rawUrl)
+			return _url
+		}
 
-		const log = this._logger ?? undefined;
+		const log = this._logger ?? undefined
 		const fc: FetchCtx<TEnv> = {
 			env,
 			executionCtx,
@@ -1920,109 +1719,94 @@ export class Honey<
 			url: getUrl,
 			wsUpgrade: knownWsUpgrade,
 			headerSnap,
-		};
+		}
 
 		if (this._telemetry !== null) {
-			safeFire(() => this._telemetry?.onRequest?.({ env, req: request }), log);
+			safeFire(() => this._telemetry?.onRequest?.({ env, req: request }), log)
 		}
 
 		/* trailing slash handling */
 		if (path.length > 1) {
 			if (this._trailingSlash === "strip" && path.endsWith("/")) {
-				const redirectUrl = getUrl();
-				redirectUrl.pathname = path.slice(0, -1);
+				const redirectUrl = getUrl()
+				redirectUrl.pathname = path.slice(0, -1)
 				return new Response(null, {
 					headers: { location: redirectUrl.toString() },
 					status: 308,
-				});
+				})
 			}
 			if (this._trailingSlash === "enforce" && !path.endsWith("/")) {
-				const redirectUrl = getUrl();
-				redirectUrl.pathname = `${path}/`;
+				const redirectUrl = getUrl()
+				redirectUrl.pathname = `${path}/`
 				return new Response(null, {
 					headers: { location: redirectUrl.toString() },
 					status: 308,
-				});
+				})
 			}
 		}
 
 		/* prefix stripping — must run AFTER trailing slash so redirects preserve the full prefixed URL */
 		if (this._stripPrefix !== null) {
 			if (path === this._stripPrefix) {
-				path = "/";
-			} else if (
-				path.startsWith(this._stripPrefix) &&
-				path.charCodeAt(this._stripPrefix.length) === 47
-			) {
-				path = path.slice(this._stripPrefix.length);
+				path = "/"
+			} else if (path.startsWith(this._stripPrefix) && path.charCodeAt(this._stripPrefix.length) === 47) {
+				path = path.slice(this._stripPrefix.length)
 			}
 		}
 
 		/* WebSocket route check — do not re-read headers after Deno.upgradeWebSocket */
-		const isWsUpgrade = knownWsUpgrade || requestIsWsUpgrade(request);
+		const isWsUpgrade = knownWsUpgrade || requestIsWsUpgrade(request)
 		if (isWsUpgrade) {
-			const wsMatch = matchWsRoute(this._root, path);
+			const wsMatch = matchWsRoute(this._root, path)
 			if (wsMatch !== null) {
-				return this._handleWs(fc, wsMatch);
+				return this._handleWs(fc, wsMatch)
 			}
 		} else if (this._realtimeRoutes.size > 0) {
 			/* Non-upgrade request hitting a realtime-only path → 426 Upgrade Required */
-			const wsMatch = matchWsRoute(this._root, path);
+			const wsMatch = matchWsRoute(this._root, path)
 			if (wsMatch !== null && this._realtimeRoutes.has(wsMatch.handler.rp)) {
-				return new Response(null, { headers: { upgrade: "websocket" }, status: 426 });
+				return new Response(null, { headers: { upgrade: "websocket" }, status: 426 })
 			}
 		}
 
-		const method = request.method.toUpperCase() as HttpMethod;
+		const method = request.method.toUpperCase() as HttpMethod
 
 		/* fn:null fallthrough — tree match sets meta, catch-all dispatches */
-		let fnNullMeta: Record<string, unknown> | null = null;
-		let fnNullParams: Record<string, string> | null = null;
-		let fnNullHit = false;
+		let fnNullMeta: Record<string, unknown> | null = null
+		let fnNullParams: Record<string, string> | null = null
+		let fnNullHit = false
 
 		/* Tier 2: O(1) static route lookup — checks both precompiled and runtime maps */
-		const smap = this._staticRoutes.map ?? this._handlerMap;
+		const smap = this._staticRoutes.map ?? this._handlerMap
 		if (smap !== null) {
-			const key = `${method} ${path}`;
-			const staticHandler = smap[key];
+			const key = `${method} ${path}`
+			const staticHandler = smap[key]
 			if (staticHandler) {
 				if (staticHandler.fn === null) {
-					fnNullMeta = staticHandler.mt;
-					fnNullParams = EMPTY_PARAMS;
-					fnNullHit = true;
+					fnNullMeta = staticHandler.mt
+					fnNullParams = EMPTY_PARAMS
+					fnNullHit = true
 				} else {
-					return this._handleMatched(
-						fc,
-						method,
-						path,
-						staticHandler,
-						EMPTY_PARAMS,
-					);
+					return this._handleMatched(fc, method, path, staticHandler, EMPTY_PARAMS)
 				}
 			}
 			/* HEAD falls back to GET */
 			if (!fnNullHit && method === "HEAD") {
-				const getHandler = smap[`GET ${path}`];
+				const getHandler = smap[`GET ${path}`]
 				if (getHandler) {
 					if (getHandler.fn === null) {
-						fnNullMeta = getHandler.mt;
-						fnNullParams = EMPTY_PARAMS;
-						fnNullHit = true;
+						fnNullMeta = getHandler.mt
+						fnNullParams = EMPTY_PARAMS
+						fnNullHit = true
 					} else {
-						return this._handleMatched(
-							fc,
-							method,
-							path,
-							getHandler,
-							EMPTY_PARAMS,
-						);
+						return this._handleMatched(fc, method, path, getHandler, EMPTY_PARAMS)
 					}
 				}
 			}
 		}
 
 		if (!fnNullHit) {
-			const result = matchRoute(this._root, method, path);
+			const result = matchRoute(this._root, method, path)
 
 			if (result?.matched) {
 				/*
@@ -2034,41 +1818,34 @@ export class Honey<
 					this._hasRouteTree &&
 					this._root.w !== null &&
 					result.handler.fn !== null &&
-					(this._root.w.m[method] === result.handler ||
-						this._root.w.m["ALL"] === result.handler);
+					(this._root.w.m[method] === result.handler || this._root.w.m["ALL"] === result.handler)
 
 				if (isWildcardCatchAll) {
 					/* path not in routeTree — 404 */
-					return this._handle404(fc, method, path);
+					return this._handle404(fc, method, path)
 				}
 
 				if (result.handler.fn === null) {
-					fnNullMeta = result.handler.mt;
-					fnNullParams = result.params;
-					fnNullHit = true;
+					fnNullMeta = result.handler.mt
+					fnNullParams = result.params
+					fnNullHit = true
 				} else {
-					return this._handleMatched(
-						fc,
-						method,
-						path,
-						result.handler,
-						result.params,
-					);
+					return this._handleMatched(fc, method, path, result.handler, result.params)
 				}
 			}
 
 			if (!fnNullHit) {
 				if (result === null) {
 					if (!isWsUpgrade) {
-						const wsMatch = matchWsRoute(this._root, path);
+						const wsMatch = matchWsRoute(this._root, path)
 						if (wsMatch !== null) {
 							return new Response("Upgrade Required", {
 								headers: { connection: "Upgrade", upgrade: "websocket" },
 								status: 426,
-							});
+							})
 						}
 					}
-					return this._handle404(fc, method, path);
+					return this._handle404(fc, method, path)
 				}
 
 				if (!result.matched) {
@@ -2077,47 +1854,33 @@ export class Honey<
 						fc.request.headers.has("access-control-request-method") &&
 						result.allowed.length > 0
 					) {
-						const fallback = this._preflightFallbackMethod(result.allowed);
-						const retry = matchRoute(this._root, fallback, path);
+						const fallback = this._preflightFallbackMethod(result.allowed)
+						const retry = matchRoute(this._root, fallback, path)
 						if (retry?.matched && retry.handler.fn !== null) {
-							return this._handleCorsPreflight(
-								fc,
-								path,
-								retry.handler,
-								retry.params,
-								result.allowed,
-							);
+							return this._handleCorsPreflight(fc, path, retry.handler, retry.params, result.allowed)
 						}
 					}
-					return this._handle405(fc, method, path, result.allowed);
+					return this._handle405(fc, method, path, result.allowed)
 				}
 			}
 		}
 
 		/* fn:null hit — find catch-all/wildcard to dispatch with stashed meta */
-		const wildcardResult = matchRoute(this._root, method, "/*");
+		const wildcardResult = matchRoute(this._root, method, "/*")
 		if (wildcardResult?.matched && wildcardResult.handler.fn !== null) {
-			return this._handleMatched(
-				fc,
-				method,
-				path,
-				wildcardResult.handler,
-				fnNullParams ?? EMPTY_PARAMS,
-				fnNullMeta,
-			);
+			return this._handleMatched(fc, method, path, wildcardResult.handler, fnNullParams ?? EMPTY_PARAMS, fnNullMeta)
 		}
 
-		return this._handle404(fc, method, path);
+		return this._handle404(fc, method, path)
 	}
 
 	private _makeErrorCtx(fc: FetchCtx<TEnv>, allowed?: string[]) {
 		return {
 			env: fc.env,
-			jsonFromError: (err: HoneyError) =>
-				createErrorResponse(err, this._errorFormatter, this._customErrorFormatter),
+			jsonFromError: (err: HoneyError) => createErrorResponse(err, this._errorFormatter, this._customErrorFormatter),
 			req: fc.request,
 			...(allowed ? { allowed } : {}),
-		};
+		}
 	}
 
 	private async _handleWs(
@@ -2125,27 +1888,27 @@ export class Honey<
 		wsMatch: { handler: WSRouteHandler; params: Record<string, string> },
 	): Promise<Response> {
 		/* Dispatch to realtime handler if this path is registered as a realtime route */
-		const realtimeConfig = this._realtimeRoutes.get(wsMatch.handler.rp);
+		const realtimeConfig = this._realtimeRoutes.get(wsMatch.handler.rp)
 		if (realtimeConfig) {
-			return this._handleRealtime(fc, wsMatch, realtimeConfig);
+			return this._handleRealtime(fc, wsMatch, realtimeConfig)
 		}
 
-		const isUpgrade = fc.wsUpgrade === true || requestIsWsUpgrade(fc.request);
+		const isUpgrade = fc.wsUpgrade === true || requestIsWsUpgrade(fc.request)
 		if (!isUpgrade) {
 			return new Response(null, {
 				headers: { upgrade: "websocket" },
 				status: 426,
-			});
+			})
 		}
 
-		const wsAdapter = this._wsAdapter;
+		const wsAdapter = this._wsAdapter
 		if (!wsAdapter) {
-			fc.log?.warn?.("WebSocket adapter not configured — call .wsAdapter()");
+			fc.log?.warn?.("WebSocket adapter not configured — call .wsAdapter()")
 			return createErrorResponse(
 				this._createError(EK.internal_server_error, SK.internal_server_error),
 				this._errorFormatter,
 				this._customErrorFormatter,
-			);
+			)
 		}
 
 		const wsCtx = new HoneyContext({
@@ -2154,43 +1917,39 @@ export class Honey<
 			params: wsMatch.params,
 			req: ctxRequest(fc),
 			urlFn: fc.url,
-		});
-		if (this._contextValues) Object.assign(wsCtx, this._contextValues);
+		})
+		if (this._contextValues) Object.assign(wsCtx, this._contextValues)
 
 		/*
 		 * WS ordering: [global → scoped → chain+handler-route-specific]
 		 * WS bakes chain mw into handler.mw at registration, so scoped runs before chain.
 		 * This is an unavoidable inconsistency vs HTTP (where chain runs before scoped).
 		 */
-		const scopedForPath = this._filterScopedForPath(wsMatch.handler.rp);
-		const allWsMw: RuntimeMiddleware[] = [
-			...this._globalMiddlewares,
-			...scopedForPath,
-			...wsMatch.handler.mw,
-		];
+		const scopedForPath = this._filterScopedForPath(wsMatch.handler.rp)
+		const allWsMw: RuntimeMiddleware[] = [...this._globalMiddlewares, ...scopedForPath, ...wsMatch.handler.mw]
 
 		try {
 			return await executeChain(allWsMw, wsCtx, async (finalCtx) => {
-				const userHandler = wsMatch.handler.fn;
-				let messageQueue: Promise<void> = Promise.resolve();
+				const userHandler = wsMatch.handler.fn
+				let messageQueue: Promise<void> = Promise.resolve()
 
-				const onOpenFn = userHandler.onOpen;
-				const onMsgFn = userHandler.onMessage;
-				const onCloseFn = userHandler.onClose;
-				const onErrorFn = userHandler.onError;
-				const onReconnectFn = userHandler.onReconnect;
-				const reconnectToken = fc.url().searchParams.get("reconnect_token");
+				const onOpenFn = userHandler.onOpen
+				const onMsgFn = userHandler.onMessage
+				const onCloseFn = userHandler.onClose
+				const onErrorFn = userHandler.onError
+				const onReconnectFn = userHandler.onReconnect
+				const reconnectToken = fc.url().searchParams.get("reconnect_token")
 
-				const wrappedHandler: WSHandler<unknown> = {};
+				const wrappedHandler: WSHandler<unknown> = {}
 
 				if (reconnectToken && onReconnectFn) {
 					wrappedHandler.onOpen = (_ctx, ws) => {
-						onReconnectFn(finalCtx, ws, reconnectToken);
-					};
+						onReconnectFn(finalCtx, ws, reconnectToken)
+					}
 				} else if (onOpenFn) {
 					wrappedHandler.onOpen = (_ctx, ws) => {
-						onOpenFn(finalCtx, ws);
-					};
+						onOpenFn(finalCtx, ws)
+					}
 				}
 
 				if (onMsgFn) {
@@ -2198,32 +1957,28 @@ export class Honey<
 						messageQueue = messageQueue
 							.then(() => onMsgFn(finalCtx, ws, data))
 							.catch((err: unknown) => {
-								onErrorFn?.(finalCtx, ws, err);
-							});
-					};
+								onErrorFn?.(finalCtx, ws, err)
+							})
+					}
 				}
 
 				if (onCloseFn) {
 					wrappedHandler.onClose = (_ctx, ws, code, reason) => {
-						onCloseFn(finalCtx, ws, code, reason);
-					};
+						onCloseFn(finalCtx, ws, code, reason)
+					}
 				}
 
 				if (onErrorFn) {
 					wrappedHandler.onError = (_ctx, ws, error) => {
-						onErrorFn(finalCtx, ws, error);
-					};
+						onErrorFn(finalCtx, ws, error)
+					}
 				}
 
-				const upgradeResult = await wsAdapter.upgrade(
-					fc.request,
-					fc.env,
-					wrappedHandler,
-				);
-				return upgradeResult.response;
-			});
+				const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, wrappedHandler)
+				return upgradeResult.response
+			})
 		} catch (thrown) {
-			return this._toErrorResponse(thrown);
+			return this._toErrorResponse(thrown)
 		}
 	}
 
@@ -2232,29 +1987,29 @@ export class Honey<
 		wsMatch: { handler: WSRouteHandler; params: Record<string, string> },
 		config: { handler: RealtimeRouteOpts["handler"]; middlewares?: RealtimeRouteOpts["use"]; reconnectBuffer?: number },
 	): Promise<Response> {
-		const isUpgrade = fc.wsUpgrade === true || requestIsWsUpgrade(fc.request);
+		const isUpgrade = fc.wsUpgrade === true || requestIsWsUpgrade(fc.request)
 		if (!isUpgrade) {
 			return new Response(null, {
 				headers: { upgrade: "websocket" },
 				status: 426,
-			});
+			})
 		}
 
-		const wsAdapter = this._wsAdapter;
+		const wsAdapter = this._wsAdapter
 		if (!wsAdapter) {
-			fc.log?.warn?.("WebSocket adapter not configured — call .wsAdapter()");
+			fc.log?.warn?.("WebSocket adapter not configured — call .wsAdapter()")
 			return createErrorResponse(
 				this._createError(EK.internal_server_error, SK.internal_server_error),
 				this._errorFormatter,
 				this._customErrorFormatter,
-			);
+			)
 		}
 
 		/* Lazily create bus if not yet initialized (happens when realtime() was called on a child chain) */
 		if (!this._realtimeBus) {
-			this._realtimeBus = createBus();
+			this._realtimeBus = createBus()
 		}
-		const bus = this._realtimeBus;
+		const bus = this._realtimeBus
 
 		const ctx = new HoneyContext({
 			env: fc.env,
@@ -2262,25 +2017,21 @@ export class Honey<
 			params: wsMatch.params,
 			req: ctxRequest(fc),
 			urlFn: fc.url,
-		});
-		if (this._contextValues) Object.assign(ctx, this._contextValues);
+		})
+		if (this._contextValues) Object.assign(ctx, this._contextValues)
 		Object.assign(ctx, {
 			realtime: { publish: (topic: string, data: unknown) => bus.publish(topic, data) },
-		});
+		})
 
-		const scopedForPath = this._filterScopedForPath(wsMatch.handler.rp);
-		const allMw: RuntimeMiddleware[] = [
-			...this._globalMiddlewares,
-			...scopedForPath,
-			...wsMatch.handler.mw,
-		];
+		const scopedForPath = this._filterScopedForPath(wsMatch.handler.rp)
+		const allMw: RuntimeMiddleware[] = [...this._globalMiddlewares, ...scopedForPath, ...wsMatch.handler.mw]
 
 		try {
 			return await executeChain(allMw, ctx, async (finalCtx) => {
-				const connId = crypto.randomUUID();
+				const connId = crypto.randomUUID()
 
-				let socket: WSContext<unknown> | null = null;
-				let conn: ReturnType<typeof createConnContext> | null = null;
+				let socket: WSContext<unknown> | null = null
+				let conn: ReturnType<typeof createConnContext> | null = null
 
 				/*
 				 * initConn creates the ConnContext and calls the user handler.
@@ -2288,88 +2039,82 @@ export class Honey<
 				 * or inline after upgrade (for Node/CF where socket is immediate).
 				 */
 				const initConn = (ws: WSContext<unknown>) => {
-					socket = ws;
+					socket = ws
 					conn = createConnContext({
 						bus,
 						closeFn: (reason) => {
-							if (socket) socket.close(1000, reason);
+							if (socket) socket.close(1000, reason)
 						},
 						id: connId,
 						sendFn: (payload) => {
-							if (socket) socket.send(typeof payload === "object" && payload !== null ? JSON.stringify(payload) : String(payload));
+							if (socket)
+								socket.send(typeof payload === "object" && payload !== null ? JSON.stringify(payload) : String(payload))
 						},
 						transport: "ws",
 						userId: null,
-					});
+					})
 
 					bus.onMessage(connId, (data) => {
 						if (socket) {
-							socket.send(typeof data === "object" && data !== null ? JSON.stringify(data) : String(data));
+							socket.send(typeof data === "object" && data !== null ? JSON.stringify(data) : String(data))
 						}
-					});
+					})
 
-					config.handler(finalCtx, conn);
-				};
+					config.handler(finalCtx, conn)
+				}
 
 				const wrappedHandler: WSHandler<unknown> = {
 					onClose: (_ctx, _ws, _code, reason) => {
-						if (!conn) return;
-						const handlers = conn._handlers;
+						if (!conn) return
+						const handlers = conn._handlers
 						if (handlers.close) {
-							handlers.close(reason || "normal");
+							handlers.close(reason || "normal")
 						}
-						bus.unsubscribeAll(connId);
-						bus.removeHandler(connId);
+						bus.unsubscribeAll(connId)
+						bus.removeHandler(connId)
 					},
 					onMessage: (_ctx, _ws, data) => {
-						if (!conn) return;
-						const handlers = conn._handlers;
+						if (!conn) return
+						const handlers = conn._handlers
 						if (handlers.message && typeof data === "string") {
 							try {
-								const parsed: unknown = JSON.parse(data);
+								const parsed: unknown = JSON.parse(data)
 								if (isMsgFrame(parsed)) {
-									handlers.message(parsed.data);
+									handlers.message(parsed.data)
 								}
-							} catch { /* ignore malformed frames */ }
+							} catch {
+								/* ignore malformed frames */
+							}
 						}
 					},
 					onOpen: (_ctx, ws) => {
-						if (!socket) initConn(ws);
+						if (!socket) initConn(ws)
 					},
-				};
+				}
 
-				const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, wrappedHandler);
+				const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, wrappedHandler)
 
 				/* Node/CF adapters return the socket from upgrade(); Bun returns undefined (socket comes via onOpen).
 				 * Deno pre-upgrade may still be CONNECTING — wait for onOpen so the first send is not dropped. */
 				if (upgradeResult.socket && !socket && upgradeResult.socket.readyState === 1) {
-					initConn(upgradeResult.socket);
+					initConn(upgradeResult.socket)
 				}
 
-				return upgradeResult.response;
-			});
+				return upgradeResult.response
+			})
 		} catch (thrown) {
-			return this._toErrorResponse(thrown);
+			return this._toErrorResponse(thrown)
 		}
 	}
 
-	private async _handle404(
-		fc: FetchCtx<TEnv>,
-		method: string,
-		path: string,
-	): Promise<Response> {
-		safeFire(
-			() => this._telemetry?.onNotFound?.({ method, path, req: fc.request }),
-			fc.log,
-		);
+	private async _handle404(fc: FetchCtx<TEnv>, method: string, path: string): Promise<Response> {
+		safeFire(() => this._telemetry?.onNotFound?.({ method, path, req: fc.request }), fc.log)
 		const make404 = () => {
 			if (this._onNotFound) {
-				return this._onNotFound(this._makeErrorCtx(fc));
+				return this._onNotFound(this._makeErrorCtx(fc))
 			}
-			return this._makeErrorCtx(fc).jsonFromError(
-				this._createError(EK.not_found, SK.not_found),
-			);
-		};
+			return this._makeErrorCtx(fc).jsonFromError(this._createError(EK.not_found, SK.not_found))
+		}
 		try {
 			const ctx404 = new HoneyContext({
 				env: fc.env,
@@ -2377,12 +2122,12 @@ export class Honey<
 				params: {},
 				req: fc.request,
 				urlFn: fc.url,
-			});
-			if (this._contextValues) Object.assign(ctx404, this._contextValues);
+			})
+			if (this._contextValues) Object.assign(ctx404, this._contextValues)
 			const res =
 				this._chainMiddlewares.length > 0
 					? await executeChain(this._chainMiddlewares, ctx404, make404)
-					: await make404();
+					: await make404()
 			safeFire(
 				() =>
 					this._telemetry?.onResponse?.({
@@ -2391,18 +2136,18 @@ export class Honey<
 						status: res.status,
 					}),
 				fc.log,
-			);
-			return res;
+			)
+			return res
 		} catch (thrown) {
-			return this._toErrorResponse(thrown);
+			return this._toErrorResponse(thrown)
 		}
 	}
 
 	private _preflightFallbackMethod(allowed: string[]): HttpMethod {
-		if (allowed.includes("GET")) return "GET";
-		if (allowed.includes("HEAD")) return "HEAD";
-		if (allowed.includes("POST")) return "POST";
-		return allowed[0] as HttpMethod;
+		if (allowed.includes("GET")) return "GET"
+		if (allowed.includes("HEAD")) return "HEAD"
+		if (allowed.includes("POST")) return "POST"
+		return allowed[0] as HttpMethod
 	}
 
 	/** Run the existing method's middleware for a CORS preflight. Do not invoke the route handler. */
@@ -2422,25 +2167,18 @@ export class Honey<
 			req: fc.request,
 			routePattern: handler.rp,
 			urlFn: fc.url,
-		});
-		if (this._contextValues) Object.assign(ctx, this._contextValues);
+		})
+		if (this._contextValues) Object.assign(ctx, this._contextValues)
 		try {
-			return await executeChain(
-				[...this._globalMiddlewares, ...handler.mw],
-				ctx,
-				() => this._handle405(fc, "OPTIONS", path, allowed),
-			);
+			return await executeChain([...this._globalMiddlewares, ...handler.mw], ctx, () =>
+				this._handle405(fc, "OPTIONS", path, allowed),
+			)
 		} catch (thrown) {
-			return this._toErrorResponse(thrown);
+			return this._toErrorResponse(thrown)
 		}
 	}
 
-	private async _handle405(
-		fc: FetchCtx<TEnv>,
-		method: string,
-		path: string,
-		allowed: string[],
-	): Promise<Response> {
+	private async _handle405(fc: FetchCtx<TEnv>, method: string, path: string, allowed: string[]): Promise<Response> {
 		safeFire(
 			() =>
 				this._telemetry?.onMethodNotAllowed?.({
@@ -2450,36 +2188,33 @@ export class Honey<
 					req: fc.request,
 				}),
 			fc.log,
-		);
+		)
 		const make405 = async () => {
 			if (this._onMethodNotAllowed) {
 				const res = await this._onMethodNotAllowed(
 					this._makeErrorCtx(fc, allowed) as {
-						allowed: string[];
-						env: TEnv;
-						jsonFromError: (err: HoneyError) => Response;
-						req: Request;
+						allowed: string[]
+						env: TEnv
+						jsonFromError: (err: HoneyError) => Response
+						req: Request
 					},
-				);
-				const responseHeaders = new Headers(res.headers);
-				responseHeaders.set("allow", allowed.join(", "));
+				)
+				const responseHeaders = new Headers(res.headers)
+				responseHeaders.set("allow", allowed.join(", "))
 				return new Response(res.body, {
 					headers: responseHeaders,
 					status: res.status,
-				});
+				})
 			}
-			const err = this._createError(
-				EK.method_not_allowed,
-				SK.method_not_allowed,
-			);
-			const res = this._makeErrorCtx(fc).jsonFromError(err);
-			const responseHeaders = new Headers(res.headers);
-			responseHeaders.set("allow", allowed.join(", "));
+			const err = this._createError(EK.method_not_allowed, SK.method_not_allowed)
+			const res = this._makeErrorCtx(fc).jsonFromError(err)
+			const responseHeaders = new Headers(res.headers)
+			responseHeaders.set("allow", allowed.join(", "))
 			return new Response(res.body, {
 				headers: responseHeaders,
 				status: res.status,
-			});
-		};
+			})
+		}
 		try {
 			const ctx405 = new HoneyContext({
 				env: fc.env,
@@ -2487,12 +2222,12 @@ export class Honey<
 				params: {},
 				req: fc.request,
 				urlFn: fc.url,
-			});
-			if (this._contextValues) Object.assign(ctx405, this._contextValues);
+			})
+			if (this._contextValues) Object.assign(ctx405, this._contextValues)
 			const finalRes =
 				this._chainMiddlewares.length > 0
 					? await executeChain(this._chainMiddlewares, ctx405, make405)
-					: await make405();
+					: await make405()
 			safeFire(
 				() =>
 					this._telemetry?.onResponse?.({
@@ -2501,10 +2236,10 @@ export class Honey<
 						status: finalRes.status,
 					}),
 				fc.log,
-			);
-			return finalRes;
+			)
+			return finalRes
 		} catch (thrown) {
-			return this._toErrorResponse(thrown);
+			return this._toErrorResponse(thrown)
 		}
 	}
 
@@ -2516,38 +2251,29 @@ export class Honey<
 		params: Record<string, string>,
 		stashedMeta?: Record<string, unknown> | null,
 	): Response | Promise<Response> {
-		const { env, executionCtx, log, request } = fc;
+		const { env, executionCtx, log, request } = fc
 
 		/* resolve error factory — pre-computed ef preferred, else build/use global */
-		let errors: Record<string, (...args: never[]) => unknown> | undefined;
+		let errors: Record<string, (...args: never[]) => unknown> | undefined
 		if (handler.ef !== null) {
-			errors = handler.ef;
+			errors = handler.ef
 		} else if (this._errorFactory !== null) {
 			if (handler.ek.size > 0) {
-				const factory = this._errorFactory as Record<
-					string,
-					(...args: never[]) => unknown
-				>;
-				const subset = Object.create(null) as Record<string, unknown>;
+				const factory = this._errorFactory as Record<string, (...args: never[]) => unknown>
+				const subset = Object.create(null) as Record<string, unknown>
 				for (const key of handler.ek) {
 					if (key in factory) {
-						subset[key] = factory[key];
+						subset[key] = factory[key]
 					}
 				}
-				errors = Object.freeze(subset) as Record<
-					string,
-					(...args: never[]) => unknown
-				>;
+				errors = Object.freeze(subset) as Record<string, (...args: never[]) => unknown>
 			} else {
-				errors = this._errorFactory as Record<
-					string,
-					(...args: never[]) => unknown
-				>;
+				errors = this._errorFactory as Record<string, (...args: never[]) => unknown>
 			}
 		}
 
 		/* meta: stashed meta from fn:null tree match takes priority over handler meta */
-		const resolvedMeta = stashedMeta ?? handler.mt;
+		const resolvedMeta = stashedMeta ?? handler.mt
 
 		const ctx = new HoneyContext({
 			env,
@@ -2558,21 +2284,21 @@ export class Honey<
 			req: request,
 			routePattern: handler.rp,
 			urlFn: fc.url,
-		});
-		if (this._contextValues) Object.assign(ctx, this._contextValues);
+		})
+		if (this._contextValues) Object.assign(ctx, this._contextValues)
 		if (this._realtimeBus) {
-			const rtBus = this._realtimeBus;
+			const rtBus = this._realtimeBus
 			Object.assign(ctx, {
 				realtime: { publish: (topic: string, data: unknown) => rtBus.publish(topic, data) },
-			});
+			})
 		}
 		if (errors) {
-			ctx._setErrors(errors);
+			ctx._setErrors(errors)
 		}
 
 		if (this._telemetry !== null) {
 			try {
-				this._telemetry.onRoute?.({ method, params, path, req: request });
+				this._telemetry.onRoute?.({ method, params, path, req: request })
 			} catch {
 				/* telemetry must not crash request */
 			}
@@ -2585,69 +2311,65 @@ export class Honey<
 		 * scoped middleware is in play (scoped mw cannot be baked into the compiled cache
 		 * because each route may match a different subset).
 		 */
-		const hasTelemetryMw = this._telemetry?.onMiddleware !== undefined;
-		const hasInputValidation = handler.iv !== null;
+		const hasTelemetryMw = this._telemetry?.onMiddleware !== undefined
+		const hasInputValidation = handler.iv !== null
 
 		/*
 		 * Error resolver — stored on ctx so the cached handler wrapper can read it.
 		 * Converts handler errors into error Responses inside the middleware chain,
 		 * allowing all post-next() middleware code (headers, logging, timing) to run.
 		 */
-		ctx._errorToResponse = (thrown: unknown) =>
-			this._resolveErrorResponse(thrown, handler, fc, method, path, ctx);
+		ctx._errorToResponse = (thrown: unknown) => this._resolveErrorResponse(thrown, handler, fc, method, path, ctx)
 
 		const onError = (thrown: unknown): Response | Promise<Response> => {
-			if (ctx._errorToResponse) return ctx._errorToResponse(thrown);
-			return this._toErrorResponse(thrown);
-		};
+			if (ctx._errorToResponse) return ctx._errorToResponse(thrown)
+			return this._toErrorResponse(thrown)
+		}
 
 		const after = (response: Response): Response | Promise<Response> => {
 			try {
-				const done = this._afterMatched(fc, method, path, handler, ctx, response);
-				if (done instanceof Promise) return done.catch(onError);
-				return done;
+				const done = this._afterMatched(fc, method, path, handler, ctx, response)
+				if (done instanceof Promise) return done.catch(onError)
+				return done
 			} catch (thrown) {
-				return onError(thrown);
+				return onError(thrown)
 			}
-		};
+		}
 
 		try {
 			if (!hasTelemetryMw && !hasInputValidation && this._scopedMiddlewares.length === 0) {
 				if (!handler._compiled) {
-					const chainMw = this._chainMiddlewares;
-					const handlerHasChain =
-						chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw);
+					const chainMw = this._chainMiddlewares
+					const handlerHasChain = chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw)
 					const allMw = handlerHasChain
 						? [...this._globalMiddlewares, ...handler.mw]
-						: [...this._globalMiddlewares, ...chainMw, ...handler.mw];
+						: [...this._globalMiddlewares, ...chainMw, ...handler.mw]
 					handler._compiled = compileChain(allMw, (c) => {
 						try {
-							const result = handler.fn(c);
+							const result = handler.fn(c)
 							if (result instanceof Promise) {
 								return result.catch((thrown: unknown) => {
-									const hCtx = c as HoneyContext<TEnv>;
-									if (hCtx._errorToResponse)
-										return hCtx._errorToResponse(thrown);
-									throw thrown;
-								});
+									const hCtx = c as HoneyContext<TEnv>
+									if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown)
+									throw thrown
+								})
 							}
-							return result;
+							return result
 						} catch (thrown) {
-							const hCtx = c as HoneyContext<TEnv>;
-							if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown);
-							throw thrown;
+							const hCtx = c as HoneyContext<TEnv>
+							if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown)
+							throw thrown
 						}
-					});
+					})
 				}
-				const result = handler._compiled(ctx);
-				if (result instanceof Promise) return result.then(after, onError);
-				return after(result);
+				const result = handler._compiled(ctx)
+				if (result instanceof Promise) return result.then(after, onError)
+				return after(result)
 			}
 
-			const scopedForPath = this._filterScopedForPath(handler.rp);
-			const chainMw = this._chainMiddlewares;
-			const handlerHasChain =
-				chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw);
+			const scopedForPath = this._filterScopedForPath(handler.rp)
+			const chainMw = this._chainMiddlewares
+			const handlerHasChain = chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw)
 			/*
 			 * Ordering: [global → chain → scoped → handler-route-specific]
 			 * When handlerHasChain, handler.mw = [chain..., routeSpecific...].
@@ -2660,22 +2382,19 @@ export class Honey<
 						...scopedForPath,
 						...handler.mw.slice(chainMw.length),
 					]
-				: [...this._globalMiddlewares, ...chainMw, ...scopedForPath, ...handler.mw];
+				: [...this._globalMiddlewares, ...chainMw, ...scopedForPath, ...handler.mw]
 
 			if (hasTelemetryMw) {
-				const onMw = this._telemetry?.onMiddleware;
+				const onMw = this._telemetry?.onMiddleware
 				if (onMw) {
 					allMiddlewares = allMiddlewares.map((mw) => {
-						const name = mw.name || "anonymous";
+						const name = mw.name || "anonymous"
 						const wrapped: RuntimeMiddleware = async (wCtx, wNext) => {
-							const mwStart = performance.now();
+							const mwStart = performance.now()
 							try {
-								const res = await mw(wCtx, wNext);
-								safeFire(
-									() => onMw({ duration: performance.now() - mwStart, name }),
-									log,
-								);
-								return res;
+								const res = await mw(wCtx, wNext)
+								safeFire(() => onMw({ duration: performance.now() - mwStart, name }), log)
+								return res
 							} catch (error) {
 								safeFire(
 									() =>
@@ -2685,50 +2404,46 @@ export class Honey<
 											name,
 										}),
 									log,
-								);
-								throw error;
+								)
+								throw error
 							}
-						};
-						return wrapped;
-					});
+						}
+						return wrapped
+					})
 				}
 			}
 
 			if (hasInputValidation) {
-				const schemas = handler.iv;
+				const schemas = handler.iv
 				if (schemas) {
 					const inputMw: RuntimeMiddleware = async (inputCtx, inputNext) => {
-							const validated = await validateInput(
-								schemas,
-								inputCtx["req"] as Request,
-								params,
-							);
-						return inputNext({ input: validated });
-					};
-					allMiddlewares.push(inputMw);
+						const validated = await validateInput(schemas, inputCtx["req"] as Request, params)
+						return inputNext({ input: validated })
+					}
+					allMiddlewares.push(inputMw)
 				}
 			}
 
 			return executeChain(allMiddlewares, ctx, (finalCtx) => {
 				try {
-					const result = handler.fn(finalCtx);
+					const result = handler.fn(finalCtx)
 					if (result instanceof Promise) {
 						return result.catch((thrown: unknown) => {
-							const hCtx = finalCtx as HoneyContext<TEnv>;
-							if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown);
-							throw thrown;
-						});
+							const hCtx = finalCtx as HoneyContext<TEnv>
+							if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown)
+							throw thrown
+						})
 					}
-					return result;
+					return result
 				} catch (thrown) {
-					const hCtx = finalCtx as HoneyContext<TEnv>;
-					if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown);
-					throw thrown;
+					const hCtx = finalCtx as HoneyContext<TEnv>
+					if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown)
+					throw thrown
 				}
-			}).then(after, onError);
+			}).then(after, onError)
 		} catch (thrown) {
 			/* safety net — middleware-level errors (input validation, middleware crash) */
-			return onError(thrown);
+			return onError(thrown)
 		}
 	}
 
@@ -2743,17 +2458,11 @@ export class Honey<
 		const validateOut =
 			this._outputValidation === "always" ||
 			(this._outputValidation === "dev" &&
-				(globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
-					?.NODE_ENV !== "production")
-		if (
-			handler.os &&
-			validateOut &&
-			response.body !== null &&
-			!ctx._isErrorResponse
-		) {
-			return this._validateThenFinish(fc, method, path, handler, ctx, response);
+				(globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV !== "production")
+		if (handler.os && validateOut && response.body !== null && !ctx._isErrorResponse) {
+			return this._validateThenFinish(fc, method, path, handler, ctx, response)
 		}
-		return this._finishMatched(fc, method, path, handler, ctx, response);
+		return this._finishMatched(fc, method, path, handler, ctx, response)
 	}
 
 	private async _validateThenFinish(
@@ -2764,31 +2473,31 @@ export class Honey<
 		ctx: HoneyContext<TEnv>,
 		response: Response,
 	): Promise<Response> {
-		const ct = response.headers.get("content-type");
+		const ct = response.headers.get("content-type")
 
 		/* content-type mismatch check */
 		if (ct && handler.os) {
-			const declaredTypes = Object.keys(handler.os);
-			const matches = declaredTypes.some((t) => ct.startsWith(t));
+			const declaredTypes = Object.keys(handler.os)
+			const matches = declaredTypes.some((t) => ct.startsWith(t))
 			if (!matches) {
 				throw new HoneyError({
 					errorKey: EK.output_content_type_mismatch,
 					status: SK.internal_server_error,
-				});
+				})
 			}
 		}
 
 		/* JSON schema validation — read original, return clone (Bun clone() drains original) */
 		if (ct?.startsWith("application/json") && handler.ov) {
-			const sk = codeToStatusKey[response.status];
+			const sk = codeToStatusKey[response.status]
 			if (sk) {
-				const forReturn = response.clone();
-				const data: unknown = await response.json();
-				await handler.ov(sk, data);
-				response = forReturn;
+				const forReturn = response.clone()
+				const data: unknown = await response.json()
+				await handler.ov(sk, data)
+				response = forReturn
 			}
 		}
-		return this._finishMatched(fc, method, path, handler, ctx, response);
+		return this._finishMatched(fc, method, path, handler, ctx, response)
 	}
 
 	private _finishMatched(
@@ -2801,19 +2510,19 @@ export class Honey<
 	): Response {
 		/* taps — fire after successful handler, non-blocking */
 		if (this._taps !== null && !ctx._isErrorResponse) {
-			const taps = this._taps;
-			const log = fc.log;
+			const taps = this._taps
+			const log = fc.log
 
 			/* meta-driven taps — fire for each registered key found in route meta */
 			if (handler.mt !== null) {
 				for (const [key, tapFn] of taps) {
-					const metaValue = handler.mt[key];
+					const metaValue = handler.mt[key]
 					if (metaValue !== undefined) {
 						ctx.background(
 							Promise.resolve()
 								.then(() => tapFn(ctx, metaValue))
 								.catch((e) => log?.warn?.("tap failed", key, e)),
-						);
+						)
 					}
 				}
 			}
@@ -2821,33 +2530,33 @@ export class Honey<
 			/* dynamic taps — fire for each c.tap() call */
 			if (ctx._pendingTaps !== null) {
 				for (const pending of ctx._pendingTaps) {
-					const tapFn = taps.get(pending.key);
+					const tapFn = taps.get(pending.key)
 					if (tapFn !== undefined) {
 						ctx.background(
 							Promise.resolve()
 								.then(() => tapFn(ctx, pending.payload))
 								.catch((e) => log?.warn?.("tap failed", pending.key, e)),
-						);
+						)
 					}
 				}
-				ctx._pendingTaps = null;
+				ctx._pendingTaps = null
 			}
 		}
 
 		if (this._telemetry !== null) {
 			try {
-				const duration = performance.now() - fc.startTime;
+				const duration = performance.now() - fc.startTime
 				this._telemetry.onHandler?.({
 					duration,
 					method,
 					path,
 					status: response.status,
-				});
+				})
 				this._telemetry.onResponse?.({
 					duration,
 					req: fc.request,
 					status: response.status,
-				});
+				})
 			} catch {
 				/* telemetry must never crash the response path */
 			}
@@ -2857,9 +2566,9 @@ export class Honey<
 			return new Response(null, {
 				headers: response.headers,
 				status: response.status,
-			});
+			})
 		}
-		return response;
+		return response
 	}
 }
 
@@ -2875,19 +2584,9 @@ export class Honey<
  * Narrowed methods return TypedResponse<CT, K> for compile-time CT+SK safety.
  */
 /** Resolve body type: schema → InferOutput, plain type → use as-is */
-type ResolveBody<T, TBody> = TBody extends "infer"
-	? T extends StandardSchemaLike
-		? InferOutput<T>
-		: T
-	: TBody;
+type ResolveBody<T, TBody> = TBody extends "infer" ? (T extends StandardSchemaLike ? InferOutput<T> : T) : TBody
 
-type NarrowMethod<
-	TRes,
-	TSchemas,
-	Method extends string,
-	CT extends string,
-	TBody,
-> = [TSchemas] extends [never]
+type NarrowMethod<TRes, TSchemas, Method extends string, CT extends string, TBody> = [TSchemas] extends [never]
 	? Omit<TRes, Method>
 	: TSchemas extends Record<string, unknown>
 		? Omit<TRes, Method> & {
@@ -2895,22 +2594,18 @@ type NarrowMethod<
 					statusKey: K,
 					body: ResolveBody<TSchemas[K], TBody>,
 					opts?: ResponseOptions,
-				) => TypedResponse<CT, K>;
+				) => TypedResponse<CT, K>
 			}
-		: Omit<TRes, Method>;
+		: Omit<TRes, Method>
 
 /**
  * SSE uses a callback signature, not statusKey+body like other methods.
  * Gate presence on text/event-stream declaration, preserve original signature.
  */
-type NarrowSSE<TOutput> = [
-	ExtractSchemas<TOutput, "text/event-stream">,
-] extends [never]
-	? {}
-	: { sse: HoneyRes["sse"] };
+type NarrowSSE<TOutput> = [ExtractSchemas<TOutput, "text/event-stream">] extends [never] ? {} : { sse: HoneyRes["sse"] }
 
 /** Universal methods — always available, not gated by output declaration */
-type UniversalRes = Pick<HoneyRes, "noContent" | "raw" | "redirect" | "stream">;
+type UniversalRes = Pick<HoneyRes, "noContent" | "raw" | "redirect" | "stream">
 
 /**
  * Constrain ctx.res when output schemas are declared.
@@ -2923,41 +2618,11 @@ type ApplyOutput<TCtx, TOutput> = [keyof TOutput] extends [never]
 	? TCtx
 	: Omit<TCtx, "res"> & {
 			readonly res: UniversalRes &
-				NarrowMethod<
-					{},
-					ExtractSchemas<TOutput, "application/json">,
-					"json",
-					"application/json",
-					"infer"
-				> &
-				NarrowMethod<
-					{},
-					ExtractSchemas<TOutput, "text/plain">,
-					"text",
-					"text/plain",
-					string
-				> &
-				NarrowMethod<
-					{},
-					ExtractSchemas<TOutput, "text/html">,
-					"html",
-					"text/html",
-					string
-				> &
-				NarrowMethod<
-					{},
-					ExtractSchemas<TOutput, "application/xml">,
-					"xml",
-					"application/xml",
-					string
-				> &
-				NarrowMethod<
-					{},
-					ExtractSchemas<TOutput, "text/csv">,
-					"csv",
-					"text/csv",
-					string
-				> &
+				NarrowMethod<{}, ExtractSchemas<TOutput, "application/json">, "json", "application/json", "infer"> &
+				NarrowMethod<{}, ExtractSchemas<TOutput, "text/plain">, "text", "text/plain", string> &
+				NarrowMethod<{}, ExtractSchemas<TOutput, "text/html">, "html", "text/html", string> &
+				NarrowMethod<{}, ExtractSchemas<TOutput, "application/xml">, "xml", "application/xml", string> &
+				NarrowMethod<{}, ExtractSchemas<TOutput, "text/csv">, "csv", "text/csv", string> &
 				NarrowMethod<
 					{},
 					ExtractSchemas<TOutput, "application/octet-stream">,
@@ -2965,11 +2630,11 @@ type ApplyOutput<TCtx, TOutput> = [keyof TOutput] extends [never]
 					"application/octet-stream",
 					ArrayBuffer | Uint8Array<ArrayBuffer>
 				> &
-				NarrowSSE<TOutput>;
-		};
+				NarrowSSE<TOutput>
+		}
 
 /** Public alias for codegen — applies output schema constraints to a context type */
-export type WithOutput<TCtx, TOutput> = ApplyOutput<TCtx, TOutput>;
+export type WithOutput<TCtx, TOutput> = ApplyOutput<TCtx, TOutput>
 
 /** @internal — tuple entry describing a scoped middleware at the type level */
 type ScopedMwEntry = { readonly path: string; readonly adds: unknown }
@@ -2982,10 +2647,7 @@ type ScopedMwEntry = { readonly path: string; readonly adds: unknown }
  * the user passes a widened variable), skip the entry via `string extends Head["path"] ? {}`.
  * This prevents the always-true `'/anywhere' extends string` from polluting every route.
  */
-type ApplyScoped<
-	TScopedMw extends readonly ScopedMwEntry[],
-	TFullPath extends string,
-> = TScopedMw extends readonly [
+type ApplyScoped<TScopedMw extends readonly ScopedMwEntry[], TFullPath extends string> = TScopedMw extends readonly [
 	infer Head extends ScopedMwEntry,
 	...infer Rest extends readonly ScopedMwEntry[],
 ]
@@ -2996,7 +2658,7 @@ type ApplyScoped<
 				: TFullPath extends `${Head["path"] & string}/${string}`
 					? Head["adds"]
 					: {}) &
-		ApplyScoped<Rest, TFullPath>
+			ApplyScoped<Rest, TFullPath>
 	: {}
 
 /** @internal — runtime entry for a scoped middleware */
@@ -3013,13 +2675,12 @@ type ApplyParams<TCtx, TParams> = [keyof TParams] extends [string]
 	? string extends keyof TParams
 		? TCtx
 		: TCtx & { readonly params: TParams }
-	: TCtx;
+	: TCtx
 
 /** Typed tap method — constrained to registered tap keys when TTaps is non-empty */
-type TypedTap<TTaps extends Record<string, unknown>> =
-	[keyof TTaps] extends [never]
-		? { tap(key: string, payload: unknown): void }
-		: { tap<K extends string & keyof TTaps>(key: K, payload: TTaps[K]): void };
+type TypedTap<TTaps extends Record<string, unknown>> = [keyof TTaps] extends [never]
+	? { tap(key: string, payload: unknown): void }
+	: { tap<K extends string & keyof TTaps>(key: K, payload: TTaps[K]): void }
 
 /** Build the full handler context: base ctx + params + input + meta + errors + taps + output-constrained methods */
 type HandlerCtx<
@@ -3033,48 +2694,42 @@ type HandlerCtx<
 	TPath extends string = string,
 	TTaps extends Record<string, unknown> = {},
 > = ApplyOutput<
-	ApplyParams<
-		[keyof TInput] extends [never] ? TCtx : TCtx & { input: TInput },
-		TParams
-	> & {
-		readonly meta: Readonly<Omit<TAccMeta, "openApi">>;
-		readonly routePattern: TPath;
+	ApplyParams<[keyof TInput] extends [never] ? TCtx : TCtx & { input: TInput }, TParams> & {
+		readonly meta: Readonly<Omit<TAccMeta, "openApi">>
+		readonly routePattern: TPath
 	} & ([TErrorFactory] extends [never]
 			? {}
 			: [TErrorKeys] extends [never]
 				? { readonly errors: TErrorFactory }
 				: {
-						readonly errors: Pick<
-							TErrorFactory,
-							TErrorKeys & keyof TErrorFactory
-						>;
-					})
-	& TypedTap<TTaps>,
+						readonly errors: Pick<TErrorFactory, TErrorKeys & keyof TErrorFactory>
+					}) &
+		TypedTap<TTaps>,
 	TOutput
->;
+>
 
 /** @internal — exposes private Honey members for RouteBuilder/WSRouteBuilder access */
 type HoneyInternal = {
-	_factory: unknown;
-	_markWsRoutes(): void;
-	_registerStatic(key: string, handler: RouteHandler): void;
-};
+	_factory: unknown
+	_markWsRoutes(): void
+	_registerStatic(key: string, handler: RouteHandler): void
+}
 
 type RouteBuilderState<TParent> = {
-	boundaryErrorKey: string | null;
-	errorKeys: Set<string>;
-	extraMethods: (HttpMethod | "ALL")[] | null;
-	handlerMap: Record<string, RouteHandler> | null;
-	inputSchemas: InputSchemasDef | null;
-	meta: Record<string, unknown> | null;
-	method: HttpMethod | "ALL";
-	middlewares: RuntimeMiddleware[];
-	outputSchemas: OutputSchemaDef | null;
-	parent: TParent;
-	parentMiddlewares: RuntimeMiddleware[];
-	path: string;
-	root: TreeNode;
-};
+	boundaryErrorKey: string | null
+	errorKeys: Set<string>
+	extraMethods: (HttpMethod | "ALL")[] | null
+	handlerMap: Record<string, RouteHandler> | null
+	inputSchemas: InputSchemasDef | null
+	meta: Record<string, unknown> | null
+	method: HttpMethod | "ALL"
+	middlewares: RuntimeMiddleware[]
+	outputSchemas: OutputSchemaDef | null
+	parent: TParent
+	parentMiddlewares: RuntimeMiddleware[]
+	path: string
+	root: TreeNode
+}
 
 /** Honey.TMeta defaults to never; never & X is never, so start acc meta at {}. */
 type InitAccMeta<TMeta> = [TMeta] extends [never] ? {} : TMeta
@@ -3136,9 +2791,9 @@ type HandlerReturn<
 	TBasePath,
 	TTaps,
 	TScopedMw
->;
+>
 
-type OneShotKey = "boundary" | "errors" | "input" | "meta" | "output";
+type OneShotKey = "boundary" | "errors" | "input" | "meta" | "output"
 
 type BuilderChain<
 	TEnv,
@@ -3160,12 +2815,26 @@ type BuilderChain<
 	TScopedMw extends readonly ScopedMwEntry[] = [],
 > = Omit<
 	RouteBuilder<
-		TEnv, TCtx, TInput, TErrorKeys, TOutput, TPath, TMethod,
-		TRoutes, TUsed, TBaseCtx, TMeta, TAccMeta, TErrorFactory,
-		TDefaultErrors, TBasePath, TTaps, TScopedMw
+		TEnv,
+		TCtx,
+		TInput,
+		TErrorKeys,
+		TOutput,
+		TPath,
+		TMethod,
+		TRoutes,
+		TUsed,
+		TBaseCtx,
+		TMeta,
+		TAccMeta,
+		TErrorFactory,
+		TDefaultErrors,
+		TBasePath,
+		TTaps,
+		TScopedMw
 	>,
 	TUsed & OneShotKey
->;
+>
 
 class RouteBuilder<
 	TEnv,
@@ -3187,35 +2856,15 @@ class RouteBuilder<
 	TScopedMw extends readonly ScopedMwEntry[] = [],
 > {
 	private _s: RouteBuilderState<
-		Honey<
-			TEnv,
-			TBaseCtx,
-			TRoutes,
-			TMeta,
-			TErrorFactory,
-			TDefaultErrors,
-			TBasePath,
-			TTaps,
-			TScopedMw
-		>
-	>;
+		Honey<TEnv, TBaseCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
+	>
 
 	constructor(
 		state: RouteBuilderState<
-			Honey<
-				TEnv,
-				TBaseCtx,
-				TRoutes,
-				TMeta,
-				TErrorFactory,
-				TDefaultErrors,
-				TBasePath,
-				TTaps,
-				TScopedMw
-			>
+			Honey<TEnv, TBaseCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 		>,
 	) {
-		this._s = state;
+		this._s = state
 	}
 
 	errors<
@@ -3242,11 +2891,9 @@ class RouteBuilder<
 		TBasePath,
 		TTaps,
 		TScopedMw
-	>;
+	>
 	errors<
-		TKeys extends [TErrorFactory] extends [never]
-			? never
-			: Exclude<keyof TErrorFactory & string, TDefaultErrors>,
+		TKeys extends ([TErrorFactory] extends [never] ? never : Exclude<keyof TErrorFactory & string, TDefaultErrors>),
 	>(
 		...keys: TKeys[]
 	): BuilderChain<
@@ -3267,7 +2914,7 @@ class RouteBuilder<
 		TBasePath,
 		TTaps,
 		TScopedMw
-	>;
+	>
 	errors(
 		...args: unknown[]
 	): BuilderChain<
@@ -3289,12 +2936,9 @@ class RouteBuilder<
 		TTaps,
 		TScopedMw
 	> {
-		const keys =
-			typeof args[0] === "object" && args[0] !== null
-				? (args.slice(1) as string[])
-				: (args as string[]);
+		const keys = typeof args[0] === "object" && args[0] !== null ? (args.slice(1) as string[]) : (args as string[])
 		for (const k of keys) {
-			this._s.errorKeys.add(k);
+			this._s.errorKeys.add(k)
 		}
 		return new RouteBuilder<
 			TEnv,
@@ -3317,13 +2961,11 @@ class RouteBuilder<
 		>({
 			...this._s,
 			errorKeys: this._s.errorKeys,
-		});
+		})
 	}
 
 	boundary<
-		TKey extends [TErrorFactory] extends [never]
-			? never
-			: Exclude<keyof TErrorFactory & string, TDefaultErrors>,
+		TKey extends ([TErrorFactory] extends [never] ? never : Exclude<keyof TErrorFactory & string, TDefaultErrors>),
 	>(
 		key: TKey,
 	): BuilderChain<
@@ -3345,8 +2987,8 @@ class RouteBuilder<
 		TTaps,
 		TScopedMw
 	> {
-		this._s.boundaryErrorKey = key;
-		this._s.errorKeys.add(key);
+		this._s.boundaryErrorKey = key
+		this._s.errorKeys.add(key)
 		return new RouteBuilder<
 			TEnv,
 			TCtx,
@@ -3369,7 +3011,7 @@ class RouteBuilder<
 			...this._s,
 			boundaryErrorKey: key,
 			errorKeys: this._s.errorKeys,
-		});
+		})
 	}
 
 	handler(
@@ -3404,17 +3046,17 @@ class RouteBuilder<
 		TTaps,
 		TScopedMw
 	> {
-		let ov: OutputValidator | null = null;
-		const outputSchemas = this._s.outputSchemas;
+		let ov: OutputValidator | null = null
+		const outputSchemas = this._s.outputSchemas
 		if (outputSchemas) {
-			const jsonSchemas = outputSchemas["application/json"];
+			const jsonSchemas = outputSchemas["application/json"]
 			if (jsonSchemas) {
 				ov = async (statusKey: string, data: unknown) => {
-					const schema = jsonSchemas[statusKey as keyof typeof jsonSchemas];
+					const schema = jsonSchemas[statusKey as keyof typeof jsonSchemas]
 					if (schema) {
-						await validateOutput(schema, statusKey, data);
+						await validateOutput(schema, statusKey, data)
 					}
-				};
+				}
 			}
 		}
 
@@ -3435,34 +3077,31 @@ class RouteBuilder<
 			os: this._s.outputSchemas,
 			ov,
 			rp: this._s.path,
-		};
+		}
 
 		/* patch mode: if handler map has this route, patch existing handler instead of insertRoute */
-		const handlerMap = this._s.handlerMap;
+		const handlerMap = this._s.handlerMap
 		if (handlerMap) {
-			const key = `${this._s.method} ${this._s.path}`;
-			const existing = handlerMap[key];
+			const key = `${this._s.method} ${this._s.path}`
+			const existing = handlerMap[key]
 			if (existing) {
-				existing.fn = routeHandler.fn;
-				existing.mw = routeHandler.mw;
-				existing.iv = routeHandler.iv;
-				existing.os = routeHandler.os;
-				existing.ov = routeHandler.ov;
+				existing.fn = routeHandler.fn
+				existing.mw = routeHandler.mw
+				existing.iv = routeHandler.iv
+				existing.os = routeHandler.os
+				existing.ov = routeHandler.ov
 				/* pre-compute filtered error factory */
-				const factory = (this._s.parent as unknown as HoneyInternal)._factory;
+				const factory = (this._s.parent as unknown as HoneyInternal)._factory
 				if (factory !== null && existing.ek.size > 0) {
-					const ef = Object.create(null) as Record<
-						string,
-						(...args: never[]) => unknown
-					>;
-					const fac = factory as Record<string, (...args: never[]) => unknown>;
-						for (const k of existing.ek) {
-							const factoryFn = fac[k]
-							if (factoryFn !== undefined) {
-								ef[k] = factoryFn
-							}
+					const ef = Object.create(null) as Record<string, (...args: never[]) => unknown>
+					const fac = factory as Record<string, (...args: never[]) => unknown>
+					for (const k of existing.ek) {
+						const factoryFn = fac[k]
+						if (factoryFn !== undefined) {
+							ef[k] = factoryFn
 						}
-					existing.ef = Object.freeze(ef);
+					}
+					existing.ef = Object.freeze(ef)
 				}
 				return this._s.parent as HandlerReturn<
 					TEnv,
@@ -3481,28 +3120,25 @@ class RouteBuilder<
 					TBasePath,
 					TTaps,
 					TScopedMw
-				>;
+				>
 			}
 		}
 
-		insertRoute(this._s.root, this._s.method, this._s.path, routeHandler);
+		insertRoute(this._s.root, this._s.method, this._s.path, routeHandler)
 
 		/* .on() extra methods — insert same handler for each additional method */
 		if (this._s.extraMethods) {
 			for (const m of this._s.extraMethods) {
-				insertRoute(this._s.root, m, this._s.path, routeHandler);
+				insertRoute(this._s.root, m, this._s.path, routeHandler)
 				if (!this._s.path.includes(":") && !this._s.path.includes("*")) {
-					(this._s.parent as unknown as HoneyInternal)._registerStatic(`${m} ${this._s.path}`, routeHandler);
+					;(this._s.parent as unknown as HoneyInternal)._registerStatic(`${m} ${this._s.path}`, routeHandler)
 				}
 			}
 		}
 
 		/* populate static route map for O(1) lookup on non-parameterized routes */
 		if (!this._s.path.includes(":") && !this._s.path.includes("*")) {
-			(this._s.parent as unknown as HoneyInternal)._registerStatic(
-				`${this._s.method} ${this._s.path}`,
-				routeHandler,
-			);
+			;(this._s.parent as unknown as HoneyInternal)._registerStatic(`${this._s.method} ${this._s.path}`, routeHandler)
 		}
 		return this._s.parent as HandlerReturn<
 			TEnv,
@@ -3521,7 +3157,7 @@ class RouteBuilder<
 			TBasePath,
 			TTaps,
 			TScopedMw
-		>;
+		>
 	}
 
 	proxy(
@@ -3556,7 +3192,7 @@ class RouteBuilder<
 		TTaps,
 		TScopedMw
 	> {
-		const proxyHandler = createProxyHandler(config);
+		const proxyHandler = createProxyHandler(config)
 		return this.handler(
 			proxyHandler as (
 				ctx: HandlerCtx<
@@ -3571,7 +3207,7 @@ class RouteBuilder<
 					TTaps
 				>,
 			) => Promise<TypedResponse>,
-		);
+		)
 	}
 
 	input<TSchemas extends InputSchemasDef>(
@@ -3616,13 +3252,10 @@ class RouteBuilder<
 		>({
 			...this._s,
 			inputSchemas: schemas,
-		});
+		})
 	}
 
-	meta<
-		TRouteMeta extends Partial<DefaultMeta> &
-			([TMeta] extends [never] ? {} : TMeta),
-	>(
+	meta<TRouteMeta extends Partial<DefaultMeta> & ([TMeta] extends [never] ? {} : TMeta)>(
 		meta: TRouteMeta,
 	): BuilderChain<
 		TEnv,
@@ -3671,7 +3304,7 @@ class RouteBuilder<
 				}
 				return merged
 			})(),
-		});
+		})
 	}
 
 	output<TOutputSchemas extends OutputSchemaDef>(
@@ -3716,7 +3349,7 @@ class RouteBuilder<
 		>({
 			...this._s,
 			outputSchemas: _schemas,
-		});
+		})
 	}
 
 	use<TAdds>(
@@ -3742,7 +3375,7 @@ class RouteBuilder<
 	> {
 		if (mw.errors) {
 			for (const k of mw.errors) {
-				this._s.errorKeys.add(k);
+				this._s.errorKeys.add(k)
 			}
 		}
 		return new RouteBuilder<
@@ -3766,21 +3399,21 @@ class RouteBuilder<
 		>({
 			...this._s,
 			middlewares: [...this._s.middlewares, mw as RuntimeMiddleware],
-		});
+		})
 	}
 }
 
 type WSRouteBuilderState<TParent> = {
-	boundaryErrorKey: string | null;
-	errorKeys: Set<string>;
-	inputSchemas: InputSchemasDef | null;
-	meta: Record<string, unknown> | null;
-	middlewares: RuntimeMiddleware[];
-	parent: TParent;
-	parentMiddlewares: RuntimeMiddleware[];
-	path: string;
-	root: TreeNode;
-};
+	boundaryErrorKey: string | null
+	errorKeys: Set<string>
+	inputSchemas: InputSchemasDef | null
+	meta: Record<string, unknown> | null
+	middlewares: RuntimeMiddleware[]
+	parent: TParent
+	parentMiddlewares: RuntimeMiddleware[]
+	path: string
+	root: TreeNode
+}
 
 class WSRouteBuilder<
 	TEnv,
@@ -3789,36 +3422,24 @@ class WSRouteBuilder<
 	_TErrorKeys extends string = never,
 	TParent extends { _markWsRoutes(): void } = { _markWsRoutes(): void },
 > {
-	private _s: WSRouteBuilderState<TParent>;
+	private _s: WSRouteBuilderState<TParent>
 
 	constructor(state: WSRouteBuilderState<TParent>) {
-		this._s = state;
+		this._s = state
 	}
 
 	errors<TFactory extends Record<string, (...args: never[]) => unknown>>(
 		factory: TFactory,
 		...keys: Array<keyof TFactory & string>
-	): WSRouteBuilder<
-		TEnv,
-		TCtx,
-		TInput,
-		_TErrorKeys | (keyof TFactory & string),
-		TParent
-	> {
-		void factory;
+	): WSRouteBuilder<TEnv, TCtx, TInput, _TErrorKeys | (keyof TFactory & string), TParent> {
+		void factory
 		for (const k of keys) {
-			this._s.errorKeys.add(k);
+			this._s.errorKeys.add(k)
 		}
-		return new WSRouteBuilder<
-			TEnv,
-			TCtx,
-			TInput,
-			_TErrorKeys | (keyof TFactory & string),
-			TParent
-		>({
+		return new WSRouteBuilder<TEnv, TCtx, TInput, _TErrorKeys | (keyof TFactory & string), TParent>({
 			...this._s,
 			errorKeys: this._s.errorKeys,
-		});
+		})
 	}
 
 	handler(wsHandler: WSHandler<TCtx>): TParent {
@@ -3830,57 +3451,39 @@ class WSRouteBuilder<
 			mt: this._s.meta ? Object.freeze(this._s.meta) : null,
 			mw: [...this._s.parentMiddlewares, ...this._s.middlewares],
 			rp: this._s.path,
-		};
-		insertWsRoute(this._s.root, this._s.path, routeHandler);
-		;(this._s.parent as unknown as HoneyInternal)._markWsRoutes();
-		return this._s.parent;
+		}
+		insertWsRoute(this._s.root, this._s.path, routeHandler)
+		;(this._s.parent as unknown as HoneyInternal)._markWsRoutes()
+		return this._s.parent
 	}
 
-	input<
-		TSchemas extends Pick<InputSchemasDef, "cookies" | "headers" | "search">,
-	>(
+	input<TSchemas extends Pick<InputSchemasDef, "cookies" | "headers" | "search">>(
 		schemas: TSchemas,
-	): WSRouteBuilder<
-		TEnv,
-		TCtx,
-		TInput & InferInputMap<TSchemas>,
-		_TErrorKeys,
-		TParent
-	> {
-		return new WSRouteBuilder<
-			TEnv,
-			TCtx,
-			TInput & InferInputMap<TSchemas>,
-			_TErrorKeys,
-			TParent
-		>({
+	): WSRouteBuilder<TEnv, TCtx, TInput & InferInputMap<TSchemas>, _TErrorKeys, TParent> {
+		return new WSRouteBuilder<TEnv, TCtx, TInput & InferInputMap<TSchemas>, _TErrorKeys, TParent>({
 			...this._s,
 			inputSchemas: schemas,
-		});
+		})
 	}
 
 	meta(meta: Record<string, unknown>): this {
-		this._s.meta = meta;
-		return this;
+		this._s.meta = meta
+		return this
 	}
 
-	use<TAdds>(
-		mw: MiddlewareFn<TCtx, TAdds>,
-	): WSRouteBuilder<TEnv, TCtx & TAdds, TInput, _TErrorKeys, TParent> {
+	use<TAdds>(mw: MiddlewareFn<TCtx, TAdds>): WSRouteBuilder<TEnv, TCtx & TAdds, TInput, _TErrorKeys, TParent> {
 		if (mw.errors) {
 			for (const k of mw.errors) {
-				this._s.errorKeys.add(k);
+				this._s.errorKeys.add(k)
 			}
 		}
-		return new WSRouteBuilder<TEnv, TCtx & TAdds, TInput, _TErrorKeys, TParent>(
-			{
-				...this._s,
-				middlewares: [...this._s.middlewares, mw as RuntimeMiddleware],
-			},
-		);
+		return new WSRouteBuilder<TEnv, TCtx & TAdds, TInput, _TErrorKeys, TParent>({
+			...this._s,
+			middlewares: [...this._s.middlewares, mw as RuntimeMiddleware],
+		})
 	}
 }
 
 export function honey<TEnv>(): Honey<TEnv> {
-	return new Honey<TEnv>();
+	return new Honey<TEnv>()
 }

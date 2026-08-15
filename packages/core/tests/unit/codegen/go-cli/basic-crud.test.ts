@@ -113,7 +113,7 @@ describe("go-cli codegen — Tier 1: scaffold", () => {
 		expect(root).toContain("rootCmd.AddCommand(usersCmd)")
 	})
 
-	it("[#6] cmd/users.go declares usersCmd cobra Command with Use: \"users\" and a Short description", () => {
+	it('[#6] cmd/users.go declares usersCmd cobra Command with Use: "users" and a Short description', () => {
 		const result = generateGoCLI(crudSpec, { binaryName: "acme" })
 		const users = result.files["cmd/users.go"]
 		expect(users).toContain("var usersCmd = &cobra.Command{")

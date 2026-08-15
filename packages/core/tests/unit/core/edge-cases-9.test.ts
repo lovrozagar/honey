@@ -11,9 +11,7 @@ import { validateInput } from "../../../src/validation.ts"
 describe("route params: dangerous names", () => {
 	it(":constructor param → value captured, no pollution", async () => {
 		const app = honey<{}>()
-		app
-			.get("/items/:constructor")
-			.handler((ctx) => ctx.res.json("ok", { val: ctx.params.constructor }))
+		app.get("/items/:constructor").handler((ctx) => ctx.res.json("ok", { val: ctx.params.constructor }))
 
 		const res = await app.fetch(new Request("http://localhost/items/test-val"), {})
 		expect(res.status).toBe(200)
@@ -316,10 +314,7 @@ describe("header: numeric coercion with zod", () => {
 				}),
 			)
 
-		const res = await app.fetch(
-			new Request("http://localhost/items", { headers: { "x-page": "5" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/items", { headers: { "x-page": "5" } }), {})
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.page).toBe(5)
 		expect(data.isNum).toBe(true)

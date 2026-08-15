@@ -13,10 +13,7 @@ describe("cors: origin array", () => {
 		const app = honey<{}>().use(cors({ origin: ["http://a.com", "http://b.com"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { origin: "http://b.com" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { origin: "http://b.com" } }), {})
 		expect(res.headers.get("access-control-allow-origin")).toBe("http://b.com")
 	})
 
@@ -24,10 +21,7 @@ describe("cors: origin array", () => {
 		const app = honey<{}>().use(cors({ origin: ["http://a.com", "http://b.com"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { origin: "http://evil.com" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { origin: "http://evil.com" } }), {})
 		expect(res.headers.get("access-control-allow-origin")).toBeNull()
 	})
 })
@@ -48,10 +42,7 @@ describe("cors: dynamic origin function", () => {
 		const app = honey<{}>().use(cors({ origin: (o) => o.endsWith(".example.com") }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { origin: "http://evil.com" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { origin: "http://evil.com" } }), {})
 		expect(res.headers.get("access-control-allow-origin")).toBeNull()
 	})
 })
@@ -61,10 +52,7 @@ describe("cors: wildcard origin", () => {
 		const app = honey<{}>().use(cors({ origin: "*" }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { origin: "http://anything.com" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { origin: "http://anything.com" } }), {})
 		expect(res.headers.get("access-control-allow-origin")).toBe("*")
 	})
 })
@@ -160,10 +148,7 @@ describe("csrf: origin checks", () => {
 		const app = honey<{}>().use(csrf({ origin: "http://app.com" }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
-		const res = await app.fetch(
-			new Request("http://localhost/api", { headers: { origin: "http://evil.com" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/api", { headers: { origin: "http://evil.com" } }), {})
 		expect(res.status).toBe(200)
 	})
 
@@ -269,10 +254,7 @@ describe("input: params coercion", () => {
 			.input({ params: z.object({ id: z.string().uuid() }) })
 			.handler((ctx) => ctx.res.json("ok", ctx.input))
 
-		const validRes = await app.fetch(
-			new Request("http://localhost/items/550e8400-e29b-41d4-a716-446655440000"),
-			{},
-		)
+		const validRes = await app.fetch(new Request("http://localhost/items/550e8400-e29b-41d4-a716-446655440000"), {})
 		expect(validRes.status).toBe(200)
 
 		const invalidRes = await app.fetch(new Request("http://localhost/items/not-a-uuid"), {})

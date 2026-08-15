@@ -307,16 +307,14 @@ describe("bunWebSocket adapter", () => {
 describe("nodeWebSocket: keepalive config parsing", () => {
 	it("nodeWebSocket accepts keepalive options without crashing", () => {
 		/* just verify the factory doesn't throw — actual WS behavior requires ws module */
-		const { nodeWebSocket } =
-			require("../../../src/ws/node.ts") as typeof import("../../../src/ws/node.ts")
+		const { nodeWebSocket } = require("../../../src/ws/node.ts") as typeof import("../../../src/ws/node.ts")
 		const adapter = nodeWebSocket({ keepalive: { interval: 30000, timeout: 5000 } })
 		expect(adapter).toBeDefined()
 		expect(typeof adapter.upgrade).toBe("function")
 	})
 
 	it("nodeWebSocket without keepalive options", () => {
-		const { nodeWebSocket } =
-			require("../../../src/ws/node.ts") as typeof import("../../../src/ws/node.ts")
+		const { nodeWebSocket } = require("../../../src/ws/node.ts") as typeof import("../../../src/ws/node.ts")
 		const adapter = nodeWebSocket()
 		expect(adapter).toBeDefined()
 	})

@@ -18,12 +18,7 @@ type TestClient = {
 	request(method: string, path: string, opts?: TestRequestOptions): Promise<Response>
 }
 
-function buildRequest(
-	method: string,
-	path: string,
-	baseUrl: string,
-	opts?: TestRequestOptions,
-): Request {
+function buildRequest(method: string, path: string, baseUrl: string, opts?: TestRequestOptions): Request {
 	const url = new URL(path, baseUrl)
 
 	if (opts?.search) {
@@ -70,11 +65,7 @@ export function testClient<TEnv>(
 	const baseUrl = "http://localhost"
 	const jar = new Map<string, string>()
 
-	async function doRequest(
-		method: string,
-		path: string,
-		opts?: TestRequestOptions,
-	): Promise<Response> {
+	async function doRequest(method: string, path: string, opts?: TestRequestOptions): Promise<Response> {
 		const mergedHeaders = { ...opts?.headers }
 
 		if (options.cookies && jar.size > 0) {

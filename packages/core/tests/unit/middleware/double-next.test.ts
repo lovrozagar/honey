@@ -67,9 +67,7 @@ describe("middleware double next() guard", () => {
 		})
 
 		const chain = h.use(mw)
-		chain
-			.get("/test")
-			.handler((ctx) => ctx.res.json("ok", { hasJson: typeof ctx.res.json === "function" }))
+		chain.get("/test").handler((ctx) => ctx.res.json("ok", { hasJson: typeof ctx.res.json === "function" }))
 
 		const res = await h.fetch(new Request("http://localhost/test"), {})
 		expect(res.status).toBe(200)

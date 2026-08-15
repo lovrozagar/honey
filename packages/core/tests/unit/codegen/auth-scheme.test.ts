@@ -132,7 +132,7 @@ describe("Tier AS2: runtime.go Config + buildHeaders honor auth fields", () => {
 		expect(src).toMatch(/AuthHeaderPrefix\s+string/)
 	})
 
-	it("[#10] mergeHeaders uses cfg.AuthHeaderName with fallback to \"Authorization\"", () => {
+	it('[#10] mergeHeaders uses cfg.AuthHeaderName with fallback to "Authorization"', () => {
 		const src = readRuntimeGo()
 		const start = src.indexOf("func mergeHeaders(")
 		expect(start, "mergeHeaders func missing").toBeGreaterThan(-1)
@@ -141,7 +141,7 @@ describe("Tier AS2: runtime.go Config + buildHeaders honor auth fields", () => {
 		expect(body).toContain(`"Authorization"`)
 	})
 
-	it("[#11] mergeHeaders uses cfg.AuthHeaderPrefix with fallback to \"Bearer \"", () => {
+	it('[#11] mergeHeaders uses cfg.AuthHeaderPrefix with fallback to "Bearer "', () => {
 		const src = readRuntimeGo()
 		const start = src.indexOf("func mergeHeaders(")
 		expect(start).toBeGreaterThan(-1)
@@ -182,7 +182,7 @@ describe("Tier AS3: backwards compat", () => {
 		expect(newClientBody).toContain(`AuthHeaderPrefix`)
 	})
 
-	it("[#14] default Bearer path still emits AuthHeaderPrefix: \"Bearer \" for http/bearer specs", () => {
+	it('[#14] default Bearer path still emits AuthHeaderPrefix: "Bearer " for http/bearer specs', () => {
 		const spec = specWith({ type: "http", scheme: "bearer" })
 		const { files } = generateGoSDK(spec)
 		const client = files["client.go"]

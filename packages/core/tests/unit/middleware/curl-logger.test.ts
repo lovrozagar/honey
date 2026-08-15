@@ -25,7 +25,7 @@ describe("buildCurlLogData", () => {
 		expect(data.curl).toBe(
 			"curl -X POST -H 'authorization: [redacted]' -H 'content-type: application/json' 'https://example.com/users?page=1'",
 		)
-		expect(await request.text()).toBe("{\"ok\":true}")
+		expect(await request.text()).toBe('{"ok":true}')
 	})
 
 	it("includes bounded body for allowed text content types", async () => {
@@ -121,9 +121,7 @@ describe("buildCurlLogData", () => {
 
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("disabled")
-		expect(data.curl).toBe(
-			"curl -X POST -H 'content-type: application/json' 'https://example.com/users'",
-		)
+		expect(data.curl).toBe("curl -X POST -H 'content-type: application/json' 'https://example.com/users'")
 	})
 
 	it("reports missing body when body logging is enabled but request has no body", async () => {
@@ -138,9 +136,7 @@ describe("buildCurlLogData", () => {
 
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("missing")
-		expect(data.curl).toBe(
-			"curl -X POST -H 'content-type: application/json' 'https://example.com/users'",
-		)
+		expect(data.curl).toBe("curl -X POST -H 'content-type: application/json' 'https://example.com/users'")
 	})
 
 	it("omits body when a streaming request exceeds maxBytes without content-length", async () => {
@@ -163,9 +159,7 @@ describe("buildCurlLogData", () => {
 
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("too-large")
-		expect(data.curl).toBe(
-			"curl -X POST -H 'content-type: application/json' 'https://example.com/users'",
-		)
+		expect(data.curl).toBe("curl -X POST -H 'content-type: application/json' 'https://example.com/users'")
 	})
 })
 
@@ -192,8 +186,7 @@ describe("curlLogger middleware", () => {
 		const lines: string[] = []
 		const instance = createLogger({ write: (line) => lines.push(line) })
 
-		const app = honey<{}>()
-			.use(curlLogger({ instance }))
+		const app = honey<{}>().use(curlLogger({ instance }))
 
 		app.get("/users").handler((c) => c.res.json("ok", { users: [] }))
 
@@ -208,11 +201,12 @@ describe("curlLogger middleware", () => {
 
 	it("supports skip", async () => {
 		const logged: CurlLogData[] = []
-		const app = honey<{}>()
-			.use(curlLogger({
+		const app = honey<{}>().use(
+			curlLogger({
 				log: (data) => logged.push(data),
 				skip: (data) => data.path === "/health",
-			}))
+			}),
+		)
 
 		app.get("/health").handler((c) => c.res.text("ok", "ok"))
 		app.get("/users").handler((c) => c.res.json("ok", { users: [] }))
@@ -242,7 +236,7 @@ describe("curlLogger middleware", () => {
 			)
 
 		app.post("/users").handler(async (c) => {
-			const body = await c.req.json() as Record<string, unknown>
+			const body = (await c.req.json()) as Record<string, unknown>
 			return c.res.json("ok", body)
 		})
 

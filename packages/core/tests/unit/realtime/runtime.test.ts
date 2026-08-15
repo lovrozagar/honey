@@ -36,12 +36,24 @@ function createMockTransport(opts?: {
 
 			const conn: TransportConnection = {
 				close: vi.fn<() => void>(),
-				get onClose() { return onClose },
-				set onClose(fn) { onClose = fn },
-				get onError() { return onError },
-				set onError(fn) { onError = fn },
-				get onFrame() { return onFrame },
-				set onFrame(fn) { onFrame = fn },
+				get onClose() {
+					return onClose
+				},
+				set onClose(fn) {
+					onClose = fn
+				},
+				get onError() {
+					return onError
+				},
+				set onError(fn) {
+					onError = fn
+				},
+				get onFrame() {
+					return onFrame
+				},
+				set onFrame(fn) {
+					onFrame = fn
+				},
 				send: vi.fn<(data: string) => void>(),
 			}
 
@@ -594,7 +606,11 @@ describe("createResumableConnection — state machine", () => {
 		conn.close()
 		/* Resolve the pending next() */
 		await vi.advanceTimersByTimeAsync(0)
-		try { await nextPromise } catch { /* expected after close */ }
+		try {
+			await nextPromise
+		} catch {
+			/* expected after close */
+		}
 	})
 
 	it("after ready frame, transitions to connected", async () => {
@@ -616,7 +632,11 @@ describe("createResumableConnection — state machine", () => {
 
 		conn.close()
 		await vi.advanceTimersByTimeAsync(0)
-		try { await nextPromise } catch { /* expected */ }
+		try {
+			await nextPromise
+		} catch {
+			/* expected */
+		}
 	})
 
 	it("after close(), transitions to closed", () => {
@@ -656,7 +676,11 @@ describe("createResumableConnection — state machine", () => {
 
 		expect(conn.state).toBe("closed")
 
-		try { await nextPromise } catch { /* expected RealtimeAbortError */ }
+		try {
+			await nextPromise
+		} catch {
+			/* expected RealtimeAbortError */
+		}
 	})
 
 	it("state is readable at any time without throwing", () => {
@@ -793,7 +817,11 @@ describe("createResumableConnection — reconnection", () => {
 
 		conn.close()
 		await vi.advanceTimersByTimeAsync(0)
-		try { await nextPromise } catch { /* expected */ }
+		try {
+			await nextPromise
+		} catch {
+			/* expected */
+		}
 	})
 
 	it("accepts onReconnected callback", () => {

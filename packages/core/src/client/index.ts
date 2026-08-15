@@ -30,9 +30,7 @@ export { createTypedWebSocket } from "./ws.ts"
 
 const HTTP_METHODS = new Set(["delete", "get", "patch", "post", "put"])
 
-export function createClient<T>(
-	config: ClientConfig & { throwOnError: true },
-): HoneyClient<InferRoutes<T>, true>
+export function createClient<T>(config: ClientConfig & { throwOnError: true }): HoneyClient<InferRoutes<T>, true>
 export function createClient<T>(
 	config: Omit<ClientConfig, "throwOnError"> & { throwOnError?: false },
 ): HoneyClient<InferRoutes<T>, false>
@@ -49,17 +47,13 @@ export function createClient<T, TThrow extends boolean = false>(
 			if (prop === "$isClientError") return isClientError
 
 			if (prop === "$url") {
-				return (
-					path: string,
-					input?: { params?: Record<string, string>; search?: Record<string, unknown> },
-				) => http.buildUrl(path, input ?? {})
+				return (path: string, input?: { params?: Record<string, string>; search?: Record<string, unknown> }) =>
+					http.buildUrl(path, input ?? {})
 			}
 
 			if (prop === "$path") {
-				return (
-					path: string,
-					input?: { params?: Record<string, string>; search?: Record<string, unknown> },
-				) => http.buildPath(path, input ?? {})
+				return (path: string, input?: { params?: Record<string, string>; search?: Record<string, unknown> }) =>
+					http.buildPath(path, input ?? {})
 			}
 
 			if (prop === "ws") {
@@ -97,9 +91,7 @@ export function createClient<T, TThrow extends boolean = false>(
 					let restPromise: Promise<unknown> | undefined
 					const lazyRest = (): Promise<unknown> => {
 						if (!restPromise) {
-							restPromise = shouldThrow
-								? http.request(method, path, opts)
-								: http.requestSafe(method, path, opts)
+							restPromise = shouldThrow ? http.request(method, path, opts) : http.requestSafe(method, path, opts)
 						}
 						return restPromise
 					}

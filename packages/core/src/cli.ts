@@ -6,8 +6,7 @@ import type { HoneyGoCliConfig, HoneyVitePluginConfig } from "./plugin.ts"
 import { generateAndWrite, type getLastHoneyConfig, resolveHoneyConfig } from "./plugin.ts"
 
 const USAGE =
-	"Usage: honey generate [--watch] [--config <path>] [--app <path>] [flags]\n" +
-	"       honey init [--cf] [--force]"
+	"Usage: honey generate [--watch] [--config <path>] [--app <path>] [flags]\n" + "       honey init [--cf] [--force]"
 
 type CliFlags = {
 	app?: string

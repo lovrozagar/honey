@@ -53,9 +53,7 @@ type _Methods = Expect<Eq<Methods, "get" | "post">>
 /* InferRouteCtx — handler context for path+method */
 type HelloCtx = InferRouteCtx<typeof app, "/hello", "get">
 type _HelloCtx = Expect<
-	HelloCtx extends { db: { query: (sql: string) => unknown[] }; input: { search: { q: string } } }
-		? true
-		: false
+	HelloCtx extends { db: { query: (sql: string) => unknown[] }; input: { search: { q: string } } } ? true : false
 >
 
 /* InferRouteInput — input schema for path+method */

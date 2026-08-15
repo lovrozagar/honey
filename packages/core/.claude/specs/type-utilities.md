@@ -67,13 +67,7 @@ export type InferRouteOutput<T, TPath extends string, TMethod extends string = "
 Current `RouteRecord` stores `{ input, output }`. To support `InferRouteCtx`, also store `ctx`:
 
 ```typescript
-export type RouteRecord<
-	TMethod extends string,
-	TPath extends string,
-	TInput,
-	TOutput,
-	TCtx = unknown,
-> = {
+export type RouteRecord<TMethod extends string, TPath extends string, TInput, TOutput, TCtx = unknown> = {
 	[P in TPath]: {
 		[M in Lowercase<TMethod>]: {
 			ctx: TCtx

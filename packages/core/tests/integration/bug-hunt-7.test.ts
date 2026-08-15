@@ -169,19 +169,14 @@ describe("bug-hunt-7: response method — redirect", () => {
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
-		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>(
-			(resolve, reject) => {
-				const req = http.request(
-					{ hostname: "127.0.0.1", method: "GET", path: "/login", port: addr.port },
-					(r) => {
-						resolve({ headers: r.headers, status: r.statusCode ?? 0 })
-						r.resume()
-					},
-				)
-				req.on("error", reject)
-				req.end()
-			},
-		)
+		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>((resolve, reject) => {
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/login", port: addr.port }, (r) => {
+				resolve({ headers: r.headers, status: r.statusCode ?? 0 })
+				r.resume()
+			})
+			req.on("error", reject)
+			req.end()
+		})
 		expect(res.status).toBe(302)
 		expect(res.headers.location).toBe("/dashboard")
 		const cookies = res.headers["set-cookie"]
@@ -373,9 +368,7 @@ describe("bug-hunt-7: Node adapter — response with multiple headers of same ty
 		expect(res.status).toBe(200)
 		const cookies = res.headers["set-cookie"]
 		expect(cookies).toBeTruthy()
-		const cookieArr = Array.isArray(cookies)
-			? cookies
-			: ([cookies as string | undefined].filter(Boolean) as string[])
+		const cookieArr = Array.isArray(cookies) ? cookies : ([cookies as string | undefined].filter(Boolean) as string[])
 		expect(cookieArr.length).toBe(3)
 	})
 })
@@ -592,9 +585,7 @@ describe("bug-hunt-7: duplicate route registration", () => {
 	it("same method + path twice → throws", () => {
 		const app = honey<{}>()
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
-		expect(() => app.get("/api").handler((ctx) => ctx.res.json("ok", {}))).toThrow(
-			"Duplicate route",
-		)
+		expect(() => app.get("/api").handler((ctx) => ctx.res.json("ok", {}))).toThrow("Duplicate route")
 	})
 
 	it("different methods on same path → allowed", () => {
@@ -612,9 +603,7 @@ describe("bug-hunt-7: wildcard name conflict on insertRoute", () => {
 	it("different wildcard names at same node → throws", () => {
 		const app = honey<{}>()
 		app.get("/files/*path").handler((ctx) => ctx.res.json("ok", {}))
-		expect(() => app.get("/files/*filepath").handler((ctx) => ctx.res.json("ok", {}))).toThrow(
-			"Wildcard name conflict",
-		)
+		expect(() => app.get("/files/*filepath").handler((ctx) => ctx.res.json("ok", {}))).toThrow("Wildcard name conflict")
 	})
 })
 
@@ -626,9 +615,7 @@ describe("bug-hunt-7: param name conflict on insertRoute", () => {
 	it("different param names at same position → throws", () => {
 		const app = honey<{}>()
 		app.get("/users/:userId").handler((ctx) => ctx.res.json("ok", {}))
-		expect(() => app.post("/users/:id").handler((ctx) => ctx.res.json("created", {}))).toThrow(
-			"param name conflict",
-		)
+		expect(() => app.post("/users/:id").handler((ctx) => ctx.res.json("created", {}))).toThrow("param name conflict")
 	})
 })
 

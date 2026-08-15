@@ -7,20 +7,20 @@ run `bun run public/honey/core/scripts/gen-api-ref.ts` to regenerate.
 
 Every operation's error channel surfaces one of:
 
-| Canonical | Status | Lang symbol | Notes |
-| --------- | ------ | ----------- | ----- |
-| `BadRequest` | 400 | `Error::BadRequest` | invalid request payload |
-| `Unauthorized` | 401 | `Error::Unauthorized` | missing/invalid auth; triggers onAuthExpired + 1 retry |
-| `Forbidden` | 403 | `Error::Forbidden` | authenticated but not permitted |
-| `NotFound` | 404 | `Error::NotFound` | resource does not exist |
-| `Conflict` | 409 | `Error::Conflict` | state conflict / unique violation |
-| `UnprocessableEntity` | 422 | `Error::UnprocessableEntity` | schema-valid but semantically rejected |
-| `TooManyRequests` | 429 | `Error::TooManyRequests` | rate-limited; consumer handles backoff via hooks |
-| `InternalServerError` | 500 | `Error::InternalServerError` | server crash |
-| `BadGateway` | 502 | `Error::BadGateway` | upstream failure |
-| `ServiceUnavailable` | 503 | `Error::ServiceUnavailable` | server temporarily unavailable |
-| `GatewayTimeout` | 504 | `Error::GatewayTimeout` | upstream timeout |
-| `StatusError` | * | `Error::StatusError` | fallback for undeclared/other statuses |
+| Canonical             | Status | Lang symbol                  | Notes                                                  |
+| --------------------- | ------ | ---------------------------- | ------------------------------------------------------ |
+| `BadRequest`          | 400    | `Error::BadRequest`          | invalid request payload                                |
+| `Unauthorized`        | 401    | `Error::Unauthorized`        | missing/invalid auth; triggers onAuthExpired + 1 retry |
+| `Forbidden`           | 403    | `Error::Forbidden`           | authenticated but not permitted                        |
+| `NotFound`            | 404    | `Error::NotFound`            | resource does not exist                                |
+| `Conflict`            | 409    | `Error::Conflict`            | state conflict / unique violation                      |
+| `UnprocessableEntity` | 422    | `Error::UnprocessableEntity` | schema-valid but semantically rejected                 |
+| `TooManyRequests`     | 429    | `Error::TooManyRequests`     | rate-limited; consumer handles backoff via hooks       |
+| `InternalServerError` | 500    | `Error::InternalServerError` | server crash                                           |
+| `BadGateway`          | 502    | `Error::BadGateway`          | upstream failure                                       |
+| `ServiceUnavailable`  | 503    | `Error::ServiceUnavailable`  | server temporarily unavailable                         |
+| `GatewayTimeout`      | 504    | `Error::GatewayTimeout`      | upstream timeout                                       |
+| `StatusError`         | *      | `Error::StatusError`         | fallback for undeclared/other statuses                 |
 
 Operations with declared `responses: { 4xx: { schema } }` parse the response body into the error's typed `data` field.
 
@@ -44,10 +44,10 @@ pub async fn refresh_token(&self, body: struct { refresh_token: String }) -> Res
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { access_token: String, expires_in: i64 }` |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type       | Type                                               |
+| ------ | ------------------ | -------------------------------------------------- |
+| `200`  | `application/json` | `struct { access_token: String, expires_in: i64 }` |
+| `401`  | `application/json` | `struct { status: i64, message: String }`          |
 
 ---
 
@@ -63,16 +63,16 @@ pub async fn get_declared_error(&self, status: String) -> Result<(), Error>
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name     | Type     |
+| -------- | -------- |
 | `status` | `String` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `400` | `application/json` | `struct { status: i64, message: String }` |
-| `404` | `application/json` | `struct { status: i64, message: String }` |
+| Status    | Content-type       | Type                                      |
+| --------- | ------------------ | ----------------------------------------- |
+| `400`     | `application/json` | `struct { status: i64, message: String }` |
+| `404`     | `application/json` | `struct { status: i64, message: String }` |
 | `default` | `application/json` | `struct { status: i64, message: String }` |
 
 ---
@@ -89,14 +89,14 @@ pub async fn get_error(&self, status: i64) -> Result<(), Error>
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name     | Type  |
+| -------- | ----- |
 | `status` | `i64` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
+| Status    | Content-type       | Type                                      |
+| --------- | ------------------ | ----------------------------------------- |
 | `default` | `application/json` | `struct { status: i64, message: String }` |
 
 ---
@@ -113,9 +113,9 @@ pub async fn idempotent_create(&self) -> Result<struct { idempotency_key: String
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { idempotency_key: String }` |
+| Status | Content-type       | Type                                 |
+| ------ | ------------------ | ------------------------------------ |
+| `200`  | `application/json` | `struct { idempotency_key: String }` |
 
 **Extensions**
 
@@ -135,15 +135,15 @@ pub async fn connect_realtime(&self, reconnect_token: String) -> Result<Resumabl
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name              | Type     |
+| ----------------- | -------- |
 | `reconnect_token` | `String` |
 
 **Responses**
 
 | Status | Content-type | Type |
 | ------ | ------------ | ---- |
-| `101` | `—` | — |
+| `101`  | `—`          | —    |
 
 **Extensions**
 
@@ -163,15 +163,15 @@ pub async fn slow(&self, ms: i64) -> Result<struct { ok: bool }, Error>
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type  |
+| ---- | ----- |
 | `ms` | `i64` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { ok: bool }` |
+| Status | Content-type       | Type                  |
+| ------ | ------------------ | --------------------- |
+| `200`  | `application/json` | `struct { ok: bool }` |
 
 ---
 
@@ -187,16 +187,16 @@ pub async fn stream_events(&self, last_event_id: String) -> Result<impl Stream<I
 
 **Header params**
 
-| Name | Type |
-| ---- | ---- |
+| Name            | Type     |
+| --------------- | -------- |
 | `Last-Event-ID` | `String` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `text/event-stream` | `struct { event: Option<String>, data: Option<String>, id: Option<String> }` |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type        | Type                                                                         |
+| ------ | ------------------- | ---------------------------------------------------------------------------- |
+| `200`  | `text/event-stream` | `struct { event: Option<String>, data: Option<String>, id: Option<String> }` |
+| `401`  | `application/json`  | `struct { status: i64, message: String }`                                    |
 
 **Extensions**
 
@@ -222,10 +222,10 @@ pub async fn upload_blob(&self, body: impl Stream<Item = Bytes>) -> Result<struc
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { size: i64, hash: String }` |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type       | Type                                      |
+| ------ | ------------------ | ----------------------------------------- |
+| `200`  | `application/json` | `struct { size: i64, hash: String }`      |
+| `401`  | `application/json` | `struct { status: i64, message: String }` |
 
 ---
 
@@ -241,10 +241,10 @@ pub async fn list_users(&self) -> Result<struct { items: Vec<struct { id: String
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { items: Vec<struct { id: String, name: String, email: String }>, total: i64 }` |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type       | Type                                                                                    |
+| ------ | ------------------ | --------------------------------------------------------------------------------------- |
+| `200`  | `application/json` | `struct { items: Vec<struct { id: String, name: String, email: String }>, total: i64 }` |
+| `401`  | `application/json` | `struct { status: i64, message: String }`                                               |
 
 ---
 
@@ -266,11 +266,11 @@ pub async fn create_user(&self, body: struct { name: String, email: String }) ->
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `201` | `application/json` | `struct { id: String, name: String, email: String }` |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
-| `422` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type       | Type                                                 |
+| ------ | ------------------ | ---------------------------------------------------- |
+| `201`  | `application/json` | `struct { id: String, name: String, email: String }` |
+| `401`  | `application/json` | `struct { status: i64, message: String }`            |
+| `422`  | `application/json` | `struct { status: i64, message: String }`            |
 
 **Extensions**
 
@@ -290,17 +290,17 @@ pub async fn delete_user(&self, id: String) -> Result<(), Error>
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `String` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `204` | `—` | — |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
-| `404` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type       | Type                                      |
+| ------ | ------------------ | ----------------------------------------- |
+| `204`  | `—`                | —                                         |
+| `401`  | `application/json` | `struct { status: i64, message: String }` |
+| `404`  | `application/json` | `struct { status: i64, message: String }` |
 
 **Extensions**
 
@@ -320,17 +320,17 @@ pub async fn get_user(&self, id: String) -> Result<struct { id: String, name: St
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `String` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { id: String, name: String, email: String }` |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
-| `404` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type       | Type                                                 |
+| ------ | ------------------ | ---------------------------------------------------- |
+| `200`  | `application/json` | `struct { id: String, name: String, email: String }` |
+| `401`  | `application/json` | `struct { status: i64, message: String }`            |
+| `404`  | `application/json` | `struct { status: i64, message: String }`            |
 
 ---
 
@@ -346,8 +346,8 @@ pub async fn update_user(&self, id: String, body: struct { name: Option<String>,
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `String` |
 
 **Request body**
@@ -358,11 +358,11 @@ pub async fn update_user(&self, id: String, body: struct { name: Option<String>,
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { id: String, name: String, email: String }` |
-| `401` | `application/json` | `struct { status: i64, message: String }` |
-| `404` | `application/json` | `struct { status: i64, message: String }` |
+| Status | Content-type       | Type                                                 |
+| ------ | ------------------ | ---------------------------------------------------- |
+| `200`  | `application/json` | `struct { id: String, name: String, email: String }` |
+| `401`  | `application/json` | `struct { status: i64, message: String }`            |
+| `404`  | `application/json` | `struct { status: i64, message: String }`            |
 
 **Extensions**
 
@@ -382,15 +382,15 @@ pub async fn connect_ws(&self, token: String) -> Result<ResumableConnection, Err
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name    | Type     |
+| ------- | -------- |
 | `token` | `String` |
 
 **Responses**
 
 | Status | Content-type | Type |
 | ------ | ------------ | ---- |
-| `101` | `—` | — |
+| `101`  | `—`          | —    |
 
 **Extensions**
 

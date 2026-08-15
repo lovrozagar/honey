@@ -23,11 +23,7 @@ function assertNoSchemaUnknowns(types: string): void {
 
 		/* "unknown" should not appear in schema-derived type positions */
 		const trimmed = line.trim()
-		if (
-			trimmed.startsWith("input:") ||
-			trimmed.startsWith("output:") ||
-			trimmed.startsWith("ctx:")
-		) {
+		if (trimmed.startsWith("input:") || trimmed.startsWith("output:") || trimmed.startsWith("ctx:")) {
 			expect(trimmed).not.toContain("unknown")
 		}
 	}

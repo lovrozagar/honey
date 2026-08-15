@@ -61,18 +61,12 @@ const search = honey<Env>()
 	.output({ "application/json": { ok: z.object({ q: z.string() }) } })
 	.handler((ctx) => ctx.res.json("ok", { q: ctx.input.search.q }))
 
-type _SearchIn = Expect<
-	Eq<InferRouteInput<typeof search, "/search", "get">, { search: { limit: string; q: string } }>
->
+type _SearchIn = Expect<Eq<InferRouteInput<typeof search, "/search", "get">, { search: { limit: string; q: string } }>>
 type _SearchOut = Expect<
 	Extends<InferRouteOutput<typeof search, "/search", "get">, { "application/json": { ok: unknown } }>
 >
-type _SearchCtx = Expect<
-	Extends<InferRouteCtx<typeof search, "/search", "get">, { input: { search: { q: string } } }>
->
-type _SearchNotUnknown = Expect<
-	Eq<IsUnknown<InferRouteInput<typeof search, "/search", "get">>, false>
->
+type _SearchCtx = Expect<Extends<InferRouteCtx<typeof search, "/search", "get">, { input: { search: { q: string } } }>>
+type _SearchNotUnknown = Expect<Eq<IsUnknown<InferRouteInput<typeof search, "/search", "get">>, false>>
 
 /* ── 4. GET + POST on the same path (no .meta()) ── */
 
@@ -89,18 +83,10 @@ const hello = honey<Env>()
 type _HelloPaths = Expect<Eq<InferRoutePaths<typeof hello>, "/hello">>
 type _HelloMethods = Expect<Eq<InferMethods<typeof hello>, "get" | "post">>
 type _HelloVerbs = Expect<Eq<InferRouteMethods<typeof hello, "/hello">, "get" | "post">>
-type _HelloGetIn = Expect<
-	Eq<InferRouteInput<typeof hello, "/hello", "get">, { search: { q: string } }>
->
-type _HelloPostIn = Expect<
-	Eq<InferRouteInput<typeof hello, "/hello", "post">, { json: { q: string } }>
->
-type _HelloGetCtx = Expect<
-	Extends<InferRouteCtx<typeof hello, "/hello", "get">, { input: { search: { q: string } } }>
->
-type _HelloPostCtx = Expect<
-	Extends<InferRouteCtx<typeof hello, "/hello", "post">, { input: { json: { q: string } } }>
->
+type _HelloGetIn = Expect<Eq<InferRouteInput<typeof hello, "/hello", "get">, { search: { q: string } }>>
+type _HelloPostIn = Expect<Eq<InferRouteInput<typeof hello, "/hello", "post">, { json: { q: string } }>>
+type _HelloGetCtx = Expect<Extends<InferRouteCtx<typeof hello, "/hello", "get">, { input: { search: { q: string } } }>>
+type _HelloPostCtx = Expect<Extends<InferRouteCtx<typeof hello, "/hello", "post">, { input: { json: { q: string } } }>>
 
 /* @ts-expect-error — POST is not registered on /search */
 type _NoPost = InferRouteInput<typeof search, "/search", "post">
@@ -122,9 +108,7 @@ const many = honey<Env>()
 	.delete("/r5")
 	.handler((c) => c.res.text("ok", "5"))
 
-type _ManyPaths = Expect<
-	Eq<InferRoutePaths<typeof many>, "/r1" | "/r2" | "/r3" | "/r4" | "/r5">
->
+type _ManyPaths = Expect<Eq<InferRoutePaths<typeof many>, "/r1" | "/r2" | "/r3" | "/r4" | "/r5">>
 type _ManyMethods = Expect<Eq<InferMethods<typeof many>, "delete" | "get" | "post">>
 type _ManyR4 = Expect<Eq<InferRouteInput<typeof many, "/r4", "post">, { json: { x: string } }>>
 type _ManyR1 = Expect<Eq<InferRouteInput<typeof many, "/r1", "get">, {}>>

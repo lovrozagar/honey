@@ -108,10 +108,7 @@ const RESOLVED_BUILD_ENTRY = `\0${VIRTUAL_BUILD_ENTRY}`
 
 /* ---- Build plugin factory ---- */
 
-export function createBuildPlugin(
-	buildConfig: HoneyBuildConfig,
-	shared: { entry: string; export: string },
-) {
+export function createBuildPlugin(buildConfig: HoneyBuildConfig, shared: { entry: string; export: string }) {
 	const adapter = adapters[buildConfig.target]
 	const resolvedConfig: ResolvedBuildConfig = {
 		entry: shared.entry,
@@ -131,11 +128,7 @@ export function createBuildPlugin(
 					minify: buildConfig.minify ?? true,
 					outDir: buildConfig.outDir ?? "./dist",
 					rolldownOptions: {
-						external: [
-							...builtinModules,
-							...builtinModules.map((m) => `node:${m}`),
-							...(buildConfig.external ?? []),
-						],
+						external: [...builtinModules, ...builtinModules.map((m) => `node:${m}`), ...(buildConfig.external ?? [])],
 						input: VIRTUAL_BUILD_ENTRY,
 						output: { entryFileNames: "index.js" },
 					},

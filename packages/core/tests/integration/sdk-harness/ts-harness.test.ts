@@ -388,7 +388,7 @@ for (const c of cases) {
 }
 process.stdout.write(JSON.stringify(results) + "\\n")
 `
-		const results = await runErrorHarnessScript(spec, testRunner) as Array<{
+		const results = (await runErrorHarnessScript(spec, testRunner)) as Array<{
 			status: number
 			name: string
 			isSubclass: boolean
@@ -438,7 +438,7 @@ try {
 }
 process.stdout.write(JSON.stringify(result) + "\\n")
 `
-		const result = await runErrorHarnessScript(spec, testRunner) as {
+		const result = (await runErrorHarnessScript(spec, testRunner)) as {
 			errName: string
 			isClientError: boolean
 			isExactClientError: boolean
@@ -505,7 +505,7 @@ try {
 }
 process.stdout.write(JSON.stringify(result) + "\\n")
 `
-		const result = await runErrorHarnessScript(spec, testRunner) as {
+		const result = (await runErrorHarnessScript(spec, testRunner)) as {
 			threw: boolean
 			name: string
 			status: number
@@ -720,7 +720,7 @@ try {
 }
 process.stdout.write(JSON.stringify(result) + "\\n")
 `
-		const result = await runErrorHarnessScript(spec, testRunner) as {
+		const result = (await runErrorHarnessScript(spec, testRunner)) as {
 			isClientErr: boolean
 			isSubclass: boolean
 			status: number
@@ -1159,7 +1159,7 @@ ws.on("message", (data: string) => { received.push(data); if (received.length ==
 await new Promise<void>((resolve) => { ws.on("close", () => resolve()); ws.send("hello") })
 process.stdout.write(JSON.stringify({ received }) + "\\n")
 `
-		const result = await runWsScript(testRunner) as { received: string[] }
+		const result = (await runWsScript(testRunner)) as { received: string[] }
 		expect(result.received).toEqual(["hello"])
 	})
 
@@ -1176,7 +1176,7 @@ const closeInfo = await new Promise<{ code: number; reason: string }>((resolve) 
 })
 process.stdout.write(JSON.stringify(closeInfo) + "\\n")
 `
-		const result = await runWsScript(testRunner) as { code: number; reason: string }
+		const result = (await runWsScript(testRunner)) as { code: number; reason: string }
 		/* client-initiated close: bun WebSocket surfaces code (1000) on close event.
 		 * `reason` is not reliably round-tripped across all WS impls (server's echo
 		 * is optional per RFC 6455 §5.5.1) — assert code only. */
@@ -1196,7 +1196,7 @@ const closeInfo = await new Promise<{ code: number; reason: string }>((resolve) 
 })
 process.stdout.write(JSON.stringify(closeInfo) + "\\n")
 `
-		const result = await runWsScript(testRunner) as { code: number; reason: string }
+		const result = (await runWsScript(testRunner)) as { code: number; reason: string }
 		expect(result.code).toBe(1000)
 		expect(result.reason).toBe("server-initiated")
 	})
@@ -1223,7 +1223,7 @@ const ok = await runCase("valid-token")
 const bad = await runCase("bogus-token")
 process.stdout.write(JSON.stringify({ ok, bad }) + "\\n")
 `
-		const result = await runWsScript(testRunner) as {
+		const result = (await runWsScript(testRunner)) as {
 			ok: { token: string; closeCode: number; echoed: string[] }
 			bad: { token: string; closeCode: number; echoed: string[] }
 		}

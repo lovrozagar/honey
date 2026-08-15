@@ -48,9 +48,7 @@ describe("generateSDK", () => {
 		})
 
 		const result = generateSDK(spec)
-		expect(Object.keys(result.serviceMap.users)).toEqual(
-			expect.arrayContaining(["list", "create", "get", "delete"]),
-		)
+		expect(Object.keys(result.serviceMap.users)).toEqual(expect.arrayContaining(["list", "create", "get", "delete"]))
 		expect(result.serviceMap.users.get.path).toBe("/users/{id}")
 		expect(result.serviceMap.users.delete.method).toBe("DELETE")
 	})

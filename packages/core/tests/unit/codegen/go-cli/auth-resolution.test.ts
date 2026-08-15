@@ -26,13 +26,13 @@ describe("go-cli codegen — Tier 9: auth resolution", () => {
 		expect(config).toMatch(/XDG_CONFIG_HOME/i)
 	})
 
-	it("[#56] LoadConfig reads --api-key first: source contains `if flags.Changed(\"api-key\")`", () => {
+	it('[#56] LoadConfig reads --api-key first: source contains `if flags.Changed("api-key")`', () => {
 		const result = generateGoCLI(crudSpec, { binaryName: "acme" })
 		const config = pickRuntime(result.files, "config.go")
 		expect(config).toContain(`flags.Changed("api-key")`)
 	})
 
-	it("[#57] env-var fallback uses envPrefix+\"_API_KEY\" via os.Getenv", () => {
+	it('[#57] env-var fallback uses envPrefix+"_API_KEY" via os.Getenv', () => {
 		const result = generateGoCLI(crudSpec, { binaryName: "acme" })
 		const config = pickRuntime(result.files, "config.go")
 		expect(config).toMatch(/os\.Getenv\([^)]*envPrefix[^)]*"_API_KEY"/)

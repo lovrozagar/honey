@@ -68,9 +68,7 @@ describe("Go SDK codegen — nested operationId support (T33–T38)", () => {
 		const client = result.files["client.go"]
 		/* RED: NewClient only sets single-level fields currently */
 		/* Must initialize CheckoutResource with Sessions sub-field */
-		expect(client).toMatch(
-			/CheckoutSessionsResource|newCheckoutSessionsResource|CheckoutSessions/,
-		)
+		expect(client).toMatch(/CheckoutSessionsResource|newCheckoutSessionsResource|CheckoutSessions/)
 		/* NewClient must reference CheckoutResource initialization */
 		expect(client).toMatch(/func NewClient[\s\S]*?Checkout/)
 	})

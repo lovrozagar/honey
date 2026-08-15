@@ -5,10 +5,7 @@
  * Defaults are a real storm, not a handshake. Override with:
  *   HONEY_CF_STORM=20000 HONEY_CF_WS=80 HONEY_CF_CONCURRENCY=400
  */
-const BASE = (process.env.HONEY_CF_LIVE_URL ?? "https://honey-cf-e2e.lovro-zagar5.workers.dev").replace(
-	/\/$/,
-	"",
-)
+const BASE = (process.env.HONEY_CF_LIVE_URL ?? "https://honey-cf-e2e.lovro-zagar5.workers.dev").replace(/\/$/, "")
 const STORM = Number(process.env.HONEY_CF_STORM ?? 8_000)
 const SPEC = Math.max(200, Math.floor(STORM / 10))
 const PRE = Math.max(100, Math.floor(STORM / 40))
@@ -192,6 +189,6 @@ for (let i = 0; i < WS_N; i += wsBatch) {
 	const slice = Math.min(wsBatch, WS_N - i)
 	await Promise.all(Array.from({ length: slice }, (_, j) => echoOnce(`ws-${i + j}`)))
 }
-console.log(`ws echo n=${WS_N} ${ (performance.now() - wsT0).toFixed(0) }ms`)
+console.log(`ws echo n=${WS_N} ${(performance.now() - wsT0).toFixed(0)}ms`)
 
 console.log(JSON.stringify({ base: BASE, ok: true, http: STORM + SPEC + PRE, ws: WS_N }))

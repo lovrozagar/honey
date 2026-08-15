@@ -253,10 +253,7 @@ describe("insertRoute", () => {
 		}
 
 		for (const [method, path] of routes) {
-			const testPath = path
-				.replace(":orgId", "org-1")
-				.replace(":memberId", "m-1")
-				.replace("*path", "a/b.txt")
+			const testPath = path.replace(":orgId", "org-1").replace(":memberId", "m-1").replace("*path", "a/b.txt")
 			const result = matchRoute(root, method, testPath)
 			expect(result?.matched, `${method} ${testPath}`).toBe(true)
 		}
@@ -287,10 +284,7 @@ describe("mergeTree", () => {
 	it("merges metadata records", () => {
 		const root1 = buildTree([["GET", "/a"]])
 		const root2 = buildTree([["GET", "/b"]])
-		const merged = mergeTree(
-			{ meta: { "GET /a": {} }, root: root1 },
-			{ meta: { "GET /b": {} }, root: root2 },
-		)
+		const merged = mergeTree({ meta: { "GET /a": {} }, root: root1 }, { meta: { "GET /b": {} }, root: root2 })
 		expect(merged.meta).toHaveProperty("GET /a")
 		expect(merged.meta).toHaveProperty("GET /b")
 	})
@@ -329,10 +323,7 @@ describe("mergeTree", () => {
 		h.mt = {}
 		insertRoute(root2, "GET", "/b", h)
 
-		const merged = mergeTree({ meta: {}, root: root1 }, [
-			{ meta: {}, root: root2 },
-			{ worker: "svc" },
-		])
+		const merged = mergeTree({ meta: {}, root: root1 }, [{ meta: {}, root: root2 }, { worker: "svc" }])
 		expect(matchRoute(merged.root, "GET", "/a")?.matched).toBe(true)
 		const r = matchRoute(merged.root, "GET", "/b")
 		expect(r?.matched && r.handler.mt).toEqual({ worker: "svc" })

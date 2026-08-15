@@ -171,10 +171,7 @@ export type FieldError = {
 }
 
 /* shared frozen empty objects — avoid per-call {} allocations */
-export const EMPTY_OBJ: Record<string, never> = Object.freeze(Object.create(null)) as Record<
-	string,
-	never
->
+export const EMPTY_OBJ: Record<string, never> = Object.freeze(Object.create(null)) as Record<string, never>
 export const EMPTY_FIELDS: Record<string, FieldError[]> = EMPTY_OBJ as Record<string, FieldError[]>
 
 export type NormalizedIssue = {
@@ -233,9 +230,7 @@ export type InferOutput<T> = T extends {
 
 /** Map input schema definitions to their inferred output types, dropping undefined keys */
 export type InferInputMap<T> = {
-	[K in keyof T as T[K] extends undefined | null ? never : K]-?: InferOutput<
-		UnwrapInputSchema<NonNullable<T[K]>>
-	>
+	[K in keyof T as T[K] extends undefined | null ? never : K]-?: InferOutput<UnwrapInputSchema<NonNullable<T[K]>>>
 }
 
 /**
@@ -326,7 +321,7 @@ export type OutputSchemaDef = {
 	"application/octet-stream"?: StatusSchemaMap
 	"application/pdf"?: StatusSchemaMap
 	"application/xml"?: StatusSchemaMap
-	"redirect"?: RedirectSchemaMap
+	redirect?: RedirectSchemaMap
 	"text/csv"?: StatusSchemaMap
 	"text/event-stream"?: StatusSchemaMap
 	"text/html"?: StatusSchemaMap
@@ -386,14 +381,13 @@ export type DefaultMeta = OpenApiMeta
 /** Augmented by generated code per-app to narrow invalidate selectors */
 export interface HoneyCodegen {}
 
-type ResolveSelector = HoneyCodegen extends { routeSelector: infer R }
-	? R extends string ? R : string
-	: string
+type ResolveSelector = HoneyCodegen extends { routeSelector: infer R } ? (R extends string ? R : string) : string
 
 /** Utility: merges built-in meta, custom meta T, and type-safe invalidate from codegen */
-export type HoneyMeta<T = {}> = DefaultMeta & T & {
-	invalidate?: readonly ResolveSelector[] | null
-}
+export type HoneyMeta<T = {}> = DefaultMeta &
+	T & {
+		invalidate?: readonly ResolveSelector[] | null
+	}
 
 /** Accumulated route schema entry for RPC client generation */
 export type RouteRecord<
@@ -450,17 +444,15 @@ export type InferCtx<T> = T extends { readonly $ctx: infer TCtx } ? Omit<TCtx, "
 export type InferEnv<T> = T extends { readonly $env: infer TEnv } ? TEnv : never
 
 /** All HTTP methods used across all routes */
-export type InferMethods<T> =
-	InferRoutes<T> extends infer R ? { [P in keyof R]: keyof R[P] & string }[keyof R] : never
+export type InferMethods<T> = InferRoutes<T> extends infer R ? { [P in keyof R]: keyof R[P] & string }[keyof R] : never
 
 /** Available route paths registered on a Honey instance */
 export type InferRoutePaths<T> = keyof InferRoutes<T> & string
 
 /** Available methods for a given path ("get", "post", etc.) */
-export type InferRouteMethods<
-	T,
-	TPath extends InferRoutePaths<T>,
-> = InferRoutes<T>[TPath] extends infer M ? keyof M & string : never
+export type InferRouteMethods<T, TPath extends InferRoutePaths<T>> = InferRoutes<T>[TPath] extends infer M
+	? keyof M & string
+	: never
 
 /** Lookup a specific route's record from the accumulated route map */
 type RouteLookup<T, TPath extends string, TMethod extends string> =
@@ -478,39 +470,24 @@ type RouteLookup<T, TPath extends string, TMethod extends string> =
 export type InferMeta<T> = T extends { readonly $meta: infer M } ? M : never
 
 /** Extract the full handler context type for a specific route */
-export type InferRouteCtx<
-	T,
-	TPath extends InferRoutePaths<T>,
-	TMethod extends InferRouteMethods<T, TPath>,
-> = RouteLookup<T, TPath, TMethod> extends { ctx: infer C } ? C : never
+export type InferRouteCtx<T, TPath extends InferRoutePaths<T>, TMethod extends InferRouteMethods<T, TPath>> =
+	RouteLookup<T, TPath, TMethod> extends { ctx: infer C } ? C : never
 
 /** Extract input type for a specific route */
-export type InferRouteInput<
-	T,
-	TPath extends InferRoutePaths<T>,
-	TMethod extends InferRouteMethods<T, TPath>,
-> = RouteLookup<T, TPath, TMethod> extends { input: infer I } ? I : never
+export type InferRouteInput<T, TPath extends InferRoutePaths<T>, TMethod extends InferRouteMethods<T, TPath>> =
+	RouteLookup<T, TPath, TMethod> extends { input: infer I } ? I : never
 
 /** Extract meta type for a specific route */
-export type InferRouteMeta<
-	T,
-	TPath extends InferRoutePaths<T>,
-	TMethod extends InferRouteMethods<T, TPath>,
-> = RouteLookup<T, TPath, TMethod> extends { meta: infer M } ? M : never
+export type InferRouteMeta<T, TPath extends InferRoutePaths<T>, TMethod extends InferRouteMethods<T, TPath>> =
+	RouteLookup<T, TPath, TMethod> extends { meta: infer M } ? M : never
 
 /** Extract output type for a specific route */
-export type InferRouteOutput<
-	T,
-	TPath extends InferRoutePaths<T>,
-	TMethod extends InferRouteMethods<T, TPath>,
-> = RouteLookup<T, TPath, TMethod> extends { output: infer O } ? O : never
+export type InferRouteOutput<T, TPath extends InferRoutePaths<T>, TMethod extends InferRouteMethods<T, TPath>> =
+	RouteLookup<T, TPath, TMethod> extends { output: infer O } ? O : never
 
 /** Extract error keys for a specific route */
-export type InferRouteErrors<
-	T,
-	TPath extends InferRoutePaths<T>,
-	TMethod extends InferRouteMethods<T, TPath>,
-> = RouteLookup<T, TPath, TMethod> extends { errors: infer E } ? E : never
+export type InferRouteErrors<T, TPath extends InferRoutePaths<T>, TMethod extends InferRouteMethods<T, TPath>> =
+	RouteLookup<T, TPath, TMethod> extends { errors: infer E } ? E : never
 
 /** Extract the error factory type from a Honey instance */
 export type InferErrorFactory<T> = T extends { readonly $errorFactory: infer F } ? F : never
@@ -519,26 +496,17 @@ export type InferErrorFactory<T> = T extends { readonly $errorFactory: infer F }
  * Compute errorsByStatus from error factory + declared error keys.
  * Maps status codes to body shapes for client-side discrimination.
  */
-export type ComputeErrorsByStatus<
-	TFactory,
-	TErrorKeys extends string,
-	TMetaSymbol extends symbol,
-> = TFactory extends { readonly [K in TMetaSymbol]: infer TMeta }
+export type ComputeErrorsByStatus<TFactory, TErrorKeys extends string, TMetaSymbol extends symbol> = TFactory extends {
+	readonly [K in TMetaSymbol]: infer TMeta
+}
 	? TMeta extends Record<string, { schema: infer _S; statusKey: infer _SK }>
 		? _BuildByStatus<TMeta, TErrorKeys>
 		: never
 	: never
 
 /** Internal: build { [statusCode]: bodyShape } from meta + error keys */
-type _BuildByStatus<
-	TMeta extends Record<string, { schema: unknown; statusKey: unknown }>,
-	TKeys extends string,
-> = {
-	[SK in _UsedStatusKeys<TMeta, TKeys> & StatusKey as StatusKeyToCodeType<SK>]: _ShapesForStatus<
-		TMeta,
-		TKeys,
-		SK
-	>
+type _BuildByStatus<TMeta extends Record<string, { schema: unknown; statusKey: unknown }>, TKeys extends string> = {
+	[SK in _UsedStatusKeys<TMeta, TKeys> & StatusKey as StatusKeyToCodeType<SK>]: _ShapesForStatus<TMeta, TKeys, SK>
 }
 
 /** Internal: collect all statusKeys used by the declared error keys */
@@ -607,11 +575,7 @@ type StatusKeyToCodeType<SK extends StatusKey> = SK extends "ok"
 export type InferBasePath<T> = T extends { readonly $basePath: infer P } ? P : never
 
 /** Merge two path segments — "/" is identity */
-export type MergePath<A extends string, B extends string> = A extends "/"
-	? B
-	: B extends "/"
-		? A
-		: `${A}${B}`
+export type MergePath<A extends string, B extends string> = A extends "/" ? B : B extends "/" ? A : `${A}${B}`
 
 /* ── Tap types ── */
 
@@ -619,10 +583,7 @@ export type MergePath<A extends string, B extends string> = A extends "/"
 export type PendingTap = { key: string; payload: unknown }
 
 /** Handler registered via app.tap(key, handler) — receives context + payload */
-export type TapHandler<TEnv = unknown> = (
-	ctx: TapContext<TEnv>,
-	payload: unknown,
-) => void | Promise<void>
+export type TapHandler<TEnv = unknown> = (ctx: TapContext<TEnv>, payload: unknown) => void | Promise<void>
 
 /** Subset of HoneyContext exposed to tap handlers — no res, no recursive tap */
 export type TapContext<TEnv = unknown> = {

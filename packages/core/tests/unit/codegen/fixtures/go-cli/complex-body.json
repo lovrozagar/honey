@@ -1,84 +1,84 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Go CLI Complex Body", "version": "1.0.0" },
-  "paths": {
-    "/orders": {
-      "post": {
-        "operationId": "orders.create",
-        "summary": "Create order with nested address object",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["customer", "address"],
-                "properties": {
-                  "customer": { "type": "string" },
-                  "address": {
-                    "type": "object",
-                    "required": ["street", "city"],
-                    "properties": {
-                      "street": { "type": "string" },
-                      "city": { "type": "string" },
-                      "zip": { "type": "string" }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": { "schema": { "type": "object" } }
-            }
-          }
-        }
-      }
-    },
-    "/events": {
-      "post": {
-        "operationId": "events.create",
-        "summary": "Create event with oneOf payload",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "required": ["kind", "message"],
-                    "properties": {
-                      "kind": { "const": "log" },
-                      "message": { "type": "string" }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "required": ["kind", "count"],
-                    "properties": {
-                      "kind": { "const": "metric" },
-                      "count": { "type": "integer" }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": { "schema": { "type": "object" } }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Go CLI Complex Body", "version": "1.0.0" },
+	"paths": {
+		"/orders": {
+			"post": {
+				"operationId": "orders.create",
+				"summary": "Create order with nested address object",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["customer", "address"],
+								"properties": {
+									"customer": { "type": "string" },
+									"address": {
+										"type": "object",
+										"required": ["street", "city"],
+										"properties": {
+											"street": { "type": "string" },
+											"city": { "type": "string" },
+											"zip": { "type": "string" }
+										}
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": { "schema": { "type": "object" } }
+						}
+					}
+				}
+			}
+		},
+		"/events": {
+			"post": {
+				"operationId": "events.create",
+				"summary": "Create event with oneOf payload",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"oneOf": [
+									{
+										"type": "object",
+										"required": ["kind", "message"],
+										"properties": {
+											"kind": { "const": "log" },
+											"message": { "type": "string" }
+										}
+									},
+									{
+										"type": "object",
+										"required": ["kind", "count"],
+										"properties": {
+											"kind": { "const": "metric" },
+											"count": { "type": "integer" }
+										}
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": { "schema": { "type": "object" } }
+						}
+					}
+				}
+			}
+		}
+	}
 }

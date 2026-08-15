@@ -42,7 +42,10 @@ function writeProject(dir: string, health = "ok"): void {
 	)
 }
 
-function runGenerate(cwd: string, args: string[] = ["generate"]): Promise<{
+function runGenerate(
+	cwd: string,
+	args: string[] = ["generate"],
+): Promise<{
 	exitCode: number
 	stderr: string
 	stdout: string
@@ -95,27 +98,20 @@ describe("honey generate CLI", () => {
 
 		const tree = readFileSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"), "utf-8")
 		expect(tree).toContain("health")
-		const spec = JSON.parse(
-			readFileSync(join(TEMP_ROOT, "src/_gen/openapi.gen.json"), "utf-8"),
-		) as { info: { title: string } }
+		const spec = JSON.parse(readFileSync(join(TEMP_ROOT, "src/_gen/openapi.gen.json"), "utf-8")) as {
+			info: { title: string }
+		}
 		expect(spec.info.title).toBe("CLI Gen")
-		expect(readFileSync(join(TEMP_ROOT, "src/_gen/openapi.gen.yaml"), "utf-8")).toContain(
-			"CLI Gen",
-		)
-		const manifest = JSON.parse(
-			readFileSync(join(TEMP_ROOT, "src/_gen/manifest.gen.json"), "utf-8"),
-		) as { routes: unknown[] }
+		expect(readFileSync(join(TEMP_ROOT, "src/_gen/openapi.gen.yaml"), "utf-8")).toContain("CLI Gen")
+		const manifest = JSON.parse(readFileSync(join(TEMP_ROOT, "src/_gen/manifest.gen.json"), "utf-8")) as {
+			routes: unknown[]
+		}
 		expect(manifest.routes.length).toBeGreaterThan(0)
 	})
 
 	it("accepts --app without a vite config", async () => {
 		rmSync(join(TEMP_ROOT, "vite.config.ts"))
-		const { exitCode, stdout } = await runGenerate(TEMP_ROOT, [
-			"generate",
-			"--app",
-			"src/app.ts",
-			"--tree",
-		])
+		const { exitCode, stdout } = await runGenerate(TEMP_ROOT, ["generate", "--app", "src/app.ts", "--tree"])
 		expect(exitCode).toBe(0)
 		expect(stdout).toContain("honey: generated")
 		expect(readFileSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"), "utf-8")).toContain("health")

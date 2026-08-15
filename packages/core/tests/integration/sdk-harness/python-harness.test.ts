@@ -1531,7 +1531,7 @@ async def main():
 
 print(json.dumps(asyncio.run(main())))
 `
-		const result = await runWsCase(body) as { received: string[] }
+		const result = (await runWsCase(body)) as { received: string[] }
 		expect(result.received).toEqual(["hello"])
 	}, 30_000)
 
@@ -1547,7 +1547,7 @@ async def main():
 
 print(json.dumps(asyncio.run(main())))
 `
-		const result = await runWsCase(body) as { close_code: number }
+		const result = (await runWsCase(body)) as { close_code: number }
 		expect(result.close_code).toBe(1000)
 	}, 30_000)
 
@@ -1567,7 +1567,7 @@ async def main():
 
 print(json.dumps(asyncio.run(main())))
 `
-		const result = await runWsCase(body) as { code: number | null; reason: string | null }
+		const result = (await runWsCase(body)) as { code: number | null; reason: string | null }
 		expect(result.code).toBe(1000)
 		expect(result.reason).toBe("server-initiated")
 	}, 30_000)
@@ -1596,7 +1596,7 @@ async def main():
 
 print(json.dumps(asyncio.run(main())))
 `
-		const result = await runWsCase(body) as {
+		const result = (await runWsCase(body)) as {
 			ok: { token: string; code: number | null; echoed: string[] }
 			bad: { token: string; code: number | null; echoed: string[] }
 		}

@@ -285,9 +285,7 @@ describe("bug-hunt-21: testClient — production workflow", () => {
 
 		app
 			.post("/auth/logout")
-			.handler((ctx) =>
-				ctx.res.json("ok", {}, { cookies: { token: { maxAge: 0, path: "/", value: "" } } }),
-			)
+			.handler((ctx) => ctx.res.json("ok", {}, { cookies: { token: { maxAge: 0, path: "/", value: "" } } }))
 
 		const client = testClient(app, { cookies: true, env: {} })
 

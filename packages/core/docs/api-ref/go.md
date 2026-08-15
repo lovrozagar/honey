@@ -7,20 +7,20 @@ run `bun run public/honey/core/scripts/gen-api-ref.ts` to regenerate.
 
 Every operation's error channel surfaces one of:
 
-| Canonical | Status | Lang symbol | Notes |
-| --------- | ------ | ----------- | ----- |
-| `BadRequest` | 400 | `ErrBadRequest` | invalid request payload |
-| `Unauthorized` | 401 | `ErrUnauthorized` | missing/invalid auth; triggers onAuthExpired + 1 retry |
-| `Forbidden` | 403 | `ErrForbidden` | authenticated but not permitted |
-| `NotFound` | 404 | `ErrNotFound` | resource does not exist |
-| `Conflict` | 409 | `ErrConflict` | state conflict / unique violation |
-| `UnprocessableEntity` | 422 | `ErrUnprocessableEntity` | schema-valid but semantically rejected |
-| `TooManyRequests` | 429 | `ErrTooManyRequests` | rate-limited; consumer handles backoff via hooks |
-| `InternalServerError` | 500 | `ErrInternalServerError` | server crash |
-| `BadGateway` | 502 | `ErrBadGateway` | upstream failure |
-| `ServiceUnavailable` | 503 | `ErrServiceUnavailable` | server temporarily unavailable |
-| `GatewayTimeout` | 504 | `ErrGatewayTimeout` | upstream timeout |
-| `StatusError` | * | `ErrStatusError` | fallback for undeclared/other statuses |
+| Canonical             | Status | Lang symbol              | Notes                                                  |
+| --------------------- | ------ | ------------------------ | ------------------------------------------------------ |
+| `BadRequest`          | 400    | `ErrBadRequest`          | invalid request payload                                |
+| `Unauthorized`        | 401    | `ErrUnauthorized`        | missing/invalid auth; triggers onAuthExpired + 1 retry |
+| `Forbidden`           | 403    | `ErrForbidden`           | authenticated but not permitted                        |
+| `NotFound`            | 404    | `ErrNotFound`            | resource does not exist                                |
+| `Conflict`            | 409    | `ErrConflict`            | state conflict / unique violation                      |
+| `UnprocessableEntity` | 422    | `ErrUnprocessableEntity` | schema-valid but semantically rejected                 |
+| `TooManyRequests`     | 429    | `ErrTooManyRequests`     | rate-limited; consumer handles backoff via hooks       |
+| `InternalServerError` | 500    | `ErrInternalServerError` | server crash                                           |
+| `BadGateway`          | 502    | `ErrBadGateway`          | upstream failure                                       |
+| `ServiceUnavailable`  | 503    | `ErrServiceUnavailable`  | server temporarily unavailable                         |
+| `GatewayTimeout`      | 504    | `ErrGatewayTimeout`      | upstream timeout                                       |
+| `StatusError`         | *      | `ErrStatusError`         | fallback for undeclared/other statuses                 |
 
 Operations with declared `responses: { 4xx: { schema } }` parse the response body into the error's typed `data` field.
 
@@ -44,10 +44,10 @@ func (c *Client) RefreshToken(ctx context.Context, body struct { RefreshToken st
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { AccessToken string; ExpiresIn int }` |
-| `401` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type       | Type                                           |
+| ------ | ------------------ | ---------------------------------------------- |
+| `200`  | `application/json` | `struct { AccessToken string; ExpiresIn int }` |
+| `401`  | `application/json` | `struct { Status int; Message string }`        |
 
 ---
 
@@ -63,16 +63,16 @@ func (c *Client) GetDeclaredError(ctx context.Context, Status string) (struct{},
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name     | Type     |
+| -------- | -------- |
 | `status` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `400` | `application/json` | `struct { Status int; Message string }` |
-| `404` | `application/json` | `struct { Status int; Message string }` |
+| Status    | Content-type       | Type                                    |
+| --------- | ------------------ | --------------------------------------- |
+| `400`     | `application/json` | `struct { Status int; Message string }` |
+| `404`     | `application/json` | `struct { Status int; Message string }` |
 | `default` | `application/json` | `struct { Status int; Message string }` |
 
 ---
@@ -89,14 +89,14 @@ func (c *Client) GetError(ctx context.Context, Status int) (struct{}, error)
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name     | Type  |
+| -------- | ----- |
 | `status` | `int` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
+| Status    | Content-type       | Type                                    |
+| --------- | ------------------ | --------------------------------------- |
 | `default` | `application/json` | `struct { Status int; Message string }` |
 
 ---
@@ -113,9 +113,9 @@ func (c *Client) IdempotentCreate(ctx context.Context) (struct { IdempotencyKey 
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { IdempotencyKey string }` |
+| Status | Content-type       | Type                               |
+| ------ | ------------------ | ---------------------------------- |
+| `200`  | `application/json` | `struct { IdempotencyKey string }` |
 
 **Extensions**
 
@@ -135,15 +135,15 @@ func (c *Client) ConnectRealtime(ctx context.Context, ReconnectToken string) (*R
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name              | Type     |
+| ----------------- | -------- |
 | `reconnect_token` | `string` |
 
 **Responses**
 
 | Status | Content-type | Type |
 | ------ | ------------ | ---- |
-| `101` | `—` | — |
+| `101`  | `—`          | —    |
 
 **Extensions**
 
@@ -163,15 +163,15 @@ func (c *Client) Slow(ctx context.Context, Ms int) (struct { Ok bool }, error)
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type  |
+| ---- | ----- |
 | `ms` | `int` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { Ok bool }` |
+| Status | Content-type       | Type                 |
+| ------ | ------------------ | -------------------- |
+| `200`  | `application/json` | `struct { Ok bool }` |
 
 ---
 
@@ -187,16 +187,16 @@ func (c *Client) StreamEvents(ctx context.Context, LastEventID string) (<-chan s
 
 **Header params**
 
-| Name | Type |
-| ---- | ---- |
+| Name            | Type     |
+| --------------- | -------- |
 | `Last-Event-ID` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `text/event-stream` | `struct { Event *string; Data *string; Id *string }` |
-| `401` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type        | Type                                                 |
+| ------ | ------------------- | ---------------------------------------------------- |
+| `200`  | `text/event-stream` | `struct { Event *string; Data *string; Id *string }` |
+| `401`  | `application/json`  | `struct { Status int; Message string }`              |
 
 **Extensions**
 
@@ -222,10 +222,10 @@ func (c *Client) UploadBlob(ctx context.Context, body io.Reader) (struct { Size 
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { Size int; Hash string }` |
-| `401` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type       | Type                                    |
+| ------ | ------------------ | --------------------------------------- |
+| `200`  | `application/json` | `struct { Size int; Hash string }`      |
+| `401`  | `application/json` | `struct { Status int; Message string }` |
 
 ---
 
@@ -241,10 +241,10 @@ func (c *Client) ListUsers(ctx context.Context) (struct { Items []struct { Id st
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { Items []struct { Id string; Name string; Email string }; Total int }` |
-| `401` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type       | Type                                                                            |
+| ------ | ------------------ | ------------------------------------------------------------------------------- |
+| `200`  | `application/json` | `struct { Items []struct { Id string; Name string; Email string }; Total int }` |
+| `401`  | `application/json` | `struct { Status int; Message string }`                                         |
 
 ---
 
@@ -266,11 +266,11 @@ func (c *Client) CreateUser(ctx context.Context, body struct { Name string; Emai
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `201` | `application/json` | `struct { Id string; Name string; Email string }` |
-| `401` | `application/json` | `struct { Status int; Message string }` |
-| `422` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type       | Type                                              |
+| ------ | ------------------ | ------------------------------------------------- |
+| `201`  | `application/json` | `struct { Id string; Name string; Email string }` |
+| `401`  | `application/json` | `struct { Status int; Message string }`           |
+| `422`  | `application/json` | `struct { Status int; Message string }`           |
 
 **Extensions**
 
@@ -290,17 +290,17 @@ func (c *Client) DeleteUser(ctx context.Context, Id string) (struct{}, error)
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `204` | `—` | — |
-| `401` | `application/json` | `struct { Status int; Message string }` |
-| `404` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type       | Type                                    |
+| ------ | ------------------ | --------------------------------------- |
+| `204`  | `—`                | —                                       |
+| `401`  | `application/json` | `struct { Status int; Message string }` |
+| `404`  | `application/json` | `struct { Status int; Message string }` |
 
 **Extensions**
 
@@ -320,17 +320,17 @@ func (c *Client) GetUser(ctx context.Context, Id string) (struct { Id string; Na
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `string` |
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { Id string; Name string; Email string }` |
-| `401` | `application/json` | `struct { Status int; Message string }` |
-| `404` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type       | Type                                              |
+| ------ | ------------------ | ------------------------------------------------- |
+| `200`  | `application/json` | `struct { Id string; Name string; Email string }` |
+| `401`  | `application/json` | `struct { Status int; Message string }`           |
+| `404`  | `application/json` | `struct { Status int; Message string }`           |
 
 ---
 
@@ -346,8 +346,8 @@ func (c *Client) UpdateUser(ctx context.Context, Id string, body struct { Name *
 
 **Path params**
 
-| Name | Type |
-| ---- | ---- |
+| Name | Type     |
+| ---- | -------- |
 | `id` | `string` |
 
 **Request body**
@@ -358,11 +358,11 @@ func (c *Client) UpdateUser(ctx context.Context, Id string, body struct { Name *
 
 **Responses**
 
-| Status | Content-type | Type |
-| ------ | ------------ | ---- |
-| `200` | `application/json` | `struct { Id string; Name string; Email string }` |
-| `401` | `application/json` | `struct { Status int; Message string }` |
-| `404` | `application/json` | `struct { Status int; Message string }` |
+| Status | Content-type       | Type                                              |
+| ------ | ------------------ | ------------------------------------------------- |
+| `200`  | `application/json` | `struct { Id string; Name string; Email string }` |
+| `401`  | `application/json` | `struct { Status int; Message string }`           |
+| `404`  | `application/json` | `struct { Status int; Message string }`           |
 
 **Extensions**
 
@@ -382,15 +382,15 @@ func (c *Client) ConnectWs(ctx context.Context, Token string) (*ResumableConnect
 
 **Query params**
 
-| Name | Type |
-| ---- | ---- |
+| Name    | Type     |
+| ------- | -------- |
 | `token` | `string` |
 
 **Responses**
 
 | Status | Content-type | Type |
 | ------ | ------------ | ---- |
-| `101` | `—` | — |
+| `101`  | `—`          | —    |
 
 **Extensions**
 

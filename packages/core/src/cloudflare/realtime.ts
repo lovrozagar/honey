@@ -42,9 +42,7 @@ type Attachment = {
 const DEFAULT_BUFFER_SIZE = 100
 const BUFFER_TTL_MS = 30_000
 
-export function createRealtimeHandlers<TEnv = unknown>(
-	config: RealtimeHandlerConfig<TEnv>,
-): RealtimeHandlers {
+export function createRealtimeHandlers<TEnv = unknown>(config: RealtimeHandlerConfig<TEnv>): RealtimeHandlers {
 	const bufferSize = config.reconnectBuffer ?? DEFAULT_BUFFER_SIZE
 	const buffer = new ReconnectBuffer({ size: bufferSize })
 	const bus = createBus()
@@ -70,7 +68,7 @@ export function createRealtimeHandlers<TEnv = unknown>(
 	}
 
 	function sendFrame(ws: WebSocket, frame: ServerFrame): void {
-		(ws as unknown as { send(data: string): void }).send(encodeServerFrame(frame))
+		;(ws as unknown as { send(data: string): void }).send(encodeServerFrame(frame))
 	}
 
 	function getRouteHandler(): ((c: unknown, conn: ConnContext) => void | Promise<void>) | null {
@@ -85,7 +83,7 @@ export function createRealtimeHandlers<TEnv = unknown>(
 		return createConnContext({
 			bus,
 			closeFn: (reason) => {
-				(ws as unknown as { close(code?: number, reason?: string): void }).close(1000, reason ?? "")
+				;(ws as unknown as { close(code?: number, reason?: string): void }).close(1000, reason ?? "")
 			},
 			id: attachment.connId,
 			sendFn: (payload) => {
@@ -109,7 +107,9 @@ export function createRealtimeHandlers<TEnv = unknown>(
 			userId = await config.onAuth(req)
 		}
 
-		const pair = new (globalThis as unknown as { WebSocketPair: new () => { 0: WebSocket; 1: WebSocket } }).WebSocketPair()
+		const pair = new (
+			globalThis as unknown as { WebSocketPair: new () => { 0: WebSocket; 1: WebSocket } }
+		).WebSocketPair()
 		const client = pair[0]
 		const server = pair[1]
 
@@ -120,9 +120,7 @@ export function createRealtimeHandlers<TEnv = unknown>(
 		knownTokens.add(reconnectToken)
 
 		const attachment: Attachment = { connId, reconnectToken, userId }
-		;(server as unknown as { serializeAttachment(data: string): void }).serializeAttachment(
-			JSON.stringify(attachment),
-		)
+		;(server as unknown as { serializeAttachment(data: string): void }).serializeAttachment(JSON.stringify(attachment))
 
 		sendFrame(server, { reconnectToken, t: "ready" })
 
@@ -215,7 +213,7 @@ export function createRealtimeHandlers<TEnv = unknown>(
 
 	function handleError(ws: WebSocket, _err: unknown): Promise<void> {
 		try {
-			(ws as unknown as { close(code?: number, reason?: string): void }).close(1011, "internal error")
+			;(ws as unknown as { close(code?: number, reason?: string): void }).close(1011, "internal error")
 		} catch {
 			/* swallow — ws may already be closed */
 		}

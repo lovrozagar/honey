@@ -246,12 +246,10 @@ describe("middleware with dependency chain typing", () => {
 			return next({ cache: new Map<string, string>() })
 		})
 
-		const withCachedUser = createMiddleware<CacheCtx & { req: Request }, { cachedName: string }>(
-			async (ctx, next) => {
-				void ctx.cache
-				return next({ cachedName: "cached" })
-			},
-		)
+		const withCachedUser = createMiddleware<CacheCtx & { req: Request }, { cachedName: string }>(async (ctx, next) => {
+			void ctx.cache
+			return next({ cachedName: "cached" })
+		})
 
 		honey<{}>()
 			.use(withCache)
@@ -337,9 +335,7 @@ describe("parameter annotation createMiddleware", () => {
 
 	it("full chain: next() return types propagate through .use() correctly", () => {
 		const withDb = createMiddleware(async (_ctx, next) => next({ db: "pg" as const }))
-		const withCache = createMiddleware(async (_ctx, next) =>
-			next({ cache: new Map<string, string>() }),
-		)
+		const withCache = createMiddleware(async (_ctx, next) => next({ cache: new Map<string, string>() }))
 		const withUser = createMiddleware(async (ctx: { db: "pg" }, next) => {
 			void ctx.db
 			return next({ userId: "u-1", role: "admin" as "admin" | "user" })

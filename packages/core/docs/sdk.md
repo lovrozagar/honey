@@ -19,24 +19,24 @@ The rest of this page is the capability matrix and "how to do X" snippets. All s
 
 ## Capability matrix
 
-| §   | Capability                                             | TS  | Python | Go  | Rust |
-| --- | ------------------------------------------------------ | --- | ------ | --- | ---- |
-| 1   | Typed operations (request, response, params, bodies)   | ✓   | ✓      | ✓   | ✓    |
-| 2   | Typed error hierarchy + `.data` typed payload          | ✓   | ✓      | ✓   | ✓    |
-| 3   | `onAuthExpired` callback + 1x 401 retry                | ✓   | ✓      | ✓   | ✓    |
-| 4   | Cancellation (idiomatic per lang)                      | ✓   | ✓      | ✓   | ✓    |
-| 5   | Per-call timeout override                              | ✓   | ✓      | ✓   | ✓    |
-| 6   | Per-call headers merge                                 | ✓   | ✓      | ✓   | ✓    |
-| 7   | `onRequest` / `onResponse` hook chain                  | ✓   | ✓      | ✓   | ✓    |
-| 8   | Invalidation + `isStale`                               | ✓   | ✓      | ✓   | ✓    |
-| 9   | SSE iteration                                          | ✓   | ✓      | ✓   | ✓    |
-| 10  | Realtime (`x-realtime`) + `TransportAdapter` fallback  | ✓   | ✓      | ✓   | ✓    |
-| 11  | WebSocket (`x-websocket`) bidi                         | ✓   | ✓      | ✓   | ✓    |
-| 12  | Streaming request body                                 | ✓   | ✓      | ✓   | ✓    |
-| 13  | Sync runtime                                           | —   | ✓      | —   | ✓    |
-| 14  | `onLog` lifecycle hook                                 | ✓   | ✓      | ✓   | ✓    |
-| 15  | `x-deprecated`                                         | ✓   | ✓      | ✓   | ✓    |
-| 16  | `x-idempotency-key`                                    | ✓   | ✓      | ✓   | ✓    |
+| §   | Capability                                            | TS  | Python | Go  | Rust |
+| --- | ----------------------------------------------------- | --- | ------ | --- | ---- |
+| 1   | Typed operations (request, response, params, bodies)  | ✓   | ✓      | ✓   | ✓    |
+| 2   | Typed error hierarchy + `.data` typed payload         | ✓   | ✓      | ✓   | ✓    |
+| 3   | `onAuthExpired` callback + 1x 401 retry               | ✓   | ✓      | ✓   | ✓    |
+| 4   | Cancellation (idiomatic per lang)                     | ✓   | ✓      | ✓   | ✓    |
+| 5   | Per-call timeout override                             | ✓   | ✓      | ✓   | ✓    |
+| 6   | Per-call headers merge                                | ✓   | ✓      | ✓   | ✓    |
+| 7   | `onRequest` / `onResponse` hook chain                 | ✓   | ✓      | ✓   | ✓    |
+| 8   | Invalidation + `isStale`                              | ✓   | ✓      | ✓   | ✓    |
+| 9   | SSE iteration                                         | ✓   | ✓      | ✓   | ✓    |
+| 10  | Realtime (`x-realtime`) + `TransportAdapter` fallback | ✓   | ✓      | ✓   | ✓    |
+| 11  | WebSocket (`x-websocket`) bidi                        | ✓   | ✓      | ✓   | ✓    |
+| 12  | Streaming request body                                | ✓   | ✓      | ✓   | ✓    |
+| 13  | Sync runtime                                          | —   | ✓      | —   | ✓    |
+| 14  | `onLog` lifecycle hook                                | ✓   | ✓      | ✓   | ✓    |
+| 15  | `x-deprecated`                                        | ✓   | ✓      | ✓   | ✓    |
+| 16  | `x-idempotency-key`                                   | ✓   | ✓      | ✓   | ✓    |
 
 Sync runtime is not idiomatic in TS (no sync HTTP in browsers or workerd) or Go (goroutines + `context.Context` are the async model). Python and Rust ship dual async + sync generation.
 
@@ -50,14 +50,14 @@ Config is mechanism, not policy. You pick retry, logging, auth refresh, and inva
 
 ```ts
 const sdk = new MockSDK({
-  baseURL: BASE_URL,
-  headers: { Authorization: "Bearer expired-token" },
-  onAuthExpired: () => Promise.resolve("valid-token"),
-  onLog: (entry) => console.debug(entry.event, entry.operation, entry.duration_ms, entry.status),
-  onRequest: [addTrace, addApp],
-  onResponse: [inspect5xx],
-  throwOnError: true,
-  timeout: 10_000,
+	baseURL: BASE_URL,
+	headers: { Authorization: "Bearer expired-token" },
+	onAuthExpired: () => Promise.resolve("valid-token"),
+	onLog: (entry) => console.debug(entry.event, entry.operation, entry.duration_ms, entry.status),
+	onRequest: [addTrace, addApp],
+	onResponse: [inspect5xx],
+	throwOnError: true,
+	timeout: 10_000,
 })
 ```
 
@@ -138,15 +138,15 @@ Every SDK emits the unified taxonomy: `BadRequestError`, `UnauthorizedError`, `N
 
 ```ts
 try {
-  await sdk.createUser({ json: input })
+	await sdk.createUser({ json: input })
 } catch (e) {
-  if (e instanceof BadRequestError) console.error("400", e.status)
-  else if (e instanceof UnauthorizedError) console.error("401")
-  else if (e instanceof NotFoundError) console.error("404")
-  else if (e instanceof RateLimitError) console.error("429")
-  else if (e instanceof InternalServerError) console.error("500")
-  else if (isClientError(e)) console.error("unknown:", e.status)
-  else throw e
+	if (e instanceof BadRequestError) console.error("400", e.status)
+	else if (e instanceof UnauthorizedError) console.error("401")
+	else if (e instanceof NotFoundError) console.error("404")
+	else if (e instanceof RateLimitError) console.error("429")
+	else if (e instanceof InternalServerError) console.error("500")
+	else if (isClientError(e)) console.error("unknown:", e.status)
+	else throw e
 }
 ```
 
@@ -203,11 +203,11 @@ When an operation declares a `4xx` response schema in OpenAPI, the parsed payloa
 
 ```ts
 try {
-  await sdk.createUser({ json: bad })
+	await sdk.createUser({ json: bad })
 } catch (e) {
-  if (e instanceof BadRequestError) {
-    console.error("400 data:", e.data, "body:", e.body)
-  }
+	if (e instanceof BadRequestError) {
+		console.error("400 data:", e.data, "body:", e.body)
+	}
 }
 ```
 
@@ -266,9 +266,9 @@ Each SDK uses the language's native cancellation primitive. Cancellation propaga
 const ctrl = new AbortController()
 setTimeout(() => ctrl.abort(), 25)
 try {
-  await sdk.slow({ search: { ms: 500 }, signal: ctrl.signal })
+	await sdk.slow({ search: { ms: 500 }, signal: ctrl.signal })
 } catch (e) {
-  console.error("cancelled:", (e as Error).name)
+	console.error("cancelled:", (e as Error).name)
 }
 ```
 
@@ -335,8 +335,8 @@ Per-call headers merge over config headers; per-call wins per key. Useful for re
 
 ```ts
 await sdk.getUser({
-  headers: { "X-Both": "call-wins" },
-  params: { id: "u1" },
+	headers: { "X-Both": "call-wins" },
+	params: { id: "u1" },
 })
 ```
 
@@ -478,8 +478,8 @@ Operations with `produces: text/event-stream` return a typed async iterable of e
 
 ```ts
 for await (const ev of sdk.streamEvents()) {
-  console.log("sse event:", ev)
-  break
+	console.log("sse event:", ev)
+	break
 }
 ```
 
@@ -513,10 +513,12 @@ Operations with `x-websocket: true` yield a typed bidirectional channel: `Send` 
 
 ```ts
 const ws = sdk.connectWs()
-await new Promise<void>((resolve) => { ws.on("open", () => resolve()) })
+await new Promise<void>((resolve) => {
+	ws.on("open", () => resolve())
+})
 ws.on("message", (data: string) => {
-  console.log("ws recv:", data)
-  ws.close(1000, "done")
+	console.log("ws recv:", data)
+	ws.close(1000, "done")
 })
 ws.send("hello")
 ```
@@ -555,27 +557,36 @@ ws.close(1000, "done").await?;
 
 ```ts
 function makeCustomAdapter(): TransportAdapter {
-  return {
-    connect(_url, _opts): TransportConnection {
-      let onFrame: (f: ServerFrame) => void = () => {}
-      const conn: TransportConnection = {
-        close() {},
-        onClose: () => {}, onError: () => {},
-        get onFrame() { return onFrame }, set onFrame(cb) { onFrame = cb },
-        send(_data) {},
-      }
-      queueMicrotask(() => onFrame({ data: { kind: "tick" }, id: 1, t: "msg" }))
-      return conn
-    },
-  }
+	return {
+		connect(_url, _opts): TransportConnection {
+			let onFrame: (f: ServerFrame) => void = () => {}
+			const conn: TransportConnection = {
+				close() {},
+				onClose: () => {},
+				onError: () => {},
+				get onFrame() {
+					return onFrame
+				},
+				set onFrame(cb) {
+					onFrame = cb
+				},
+				send(_data) {},
+			}
+			queueMicrotask(() => onFrame({ data: { kind: "tick" }, id: 1, t: "msg" }))
+			return conn
+		},
+	}
 }
 const rc = createResumableConnection({
-  maxReconnectAttempts: 5,
-  reconnectDelayMs: 100,
-  transports: [makeCustomAdapter()],
-  url: `${BASE_URL}/rt`,
+	maxReconnectAttempts: 5,
+	reconnectDelayMs: 100,
+	transports: [makeCustomAdapter()],
+	url: `${BASE_URL}/rt`,
 })
-for await (const ev of rc) { console.log("rt:", ev); break }
+for await (const ev of rc) {
+	console.log("rt:", ev)
+	break
+}
 rc.close()
 ```
 
@@ -632,12 +643,15 @@ Binary or multipart uploads flow as a stream. No buffering — the SDK pipes the
 
 ```ts
 const stream = new ReadableStream<Uint8Array>({
-  pull(controller) {
-    if (sent >= TOTAL) { controller.close(); return }
-    const chunk = new Uint8Array(Math.min(CHUNK, TOTAL - sent))
-    sent += chunk.length
-    controller.enqueue(chunk)
-  },
+	pull(controller) {
+		if (sent >= TOTAL) {
+			controller.close()
+			return
+		}
+		const chunk = new Uint8Array(Math.min(CHUNK, TOTAL - sent))
+		sent += chunk.length
+		controller.enqueue(chunk)
+	},
 })
 const uploaded = await sdk.uploadBlob({ body: stream })
 console.log("uploaded:", uploaded.size, uploaded.hash)
@@ -671,8 +685,8 @@ println!("uploaded: {} {}", uploaded.size, uploaded.hash);
 Operations marked `x-idempotency-key: true` auto-send an `Idempotency-Key` header with a UUID when the caller doesn't supply one. Precedence: `headers["Idempotency-Key"]` wins over the explicit opts field, which wins over the auto UUID.
 
 ```ts
-const auto      = await sdk.idempotentCreate()
-const explicit  = await sdk.idempotentCreate({ idempotencyKey: "user-supplied-123" })
+const auto = await sdk.idempotentCreate()
+const explicit = await sdk.idempotentCreate({ idempotencyKey: "user-supplied-123" })
 const viaHeader = await sdk.idempotentCreate({ headers: { "Idempotency-Key": "header-wins-456" } })
 ```
 

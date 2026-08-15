@@ -380,10 +380,7 @@ describe("payload: multipart form bodies", () => {
 		form.set("name", "Alice")
 		form.set("email", "alice@test.com")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, string>
 		expect(data.name).toBe("Alice")
@@ -408,10 +405,7 @@ describe("payload: multipart form bodies", () => {
 		const blob = new Blob(["hello world image data"], { type: "image/png" })
 		form.set("avatar", blob, "avatar.png")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.size).toBeGreaterThanOrEqual(21)
@@ -434,10 +428,7 @@ describe("payload: multipart form bodies", () => {
 		form.append("docs", new Blob(["doc2 content longer"], { type: "text/plain" }), "doc2.txt")
 		form.append("docs", new Blob(["d3"], { type: "text/plain" }), "doc3.txt")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.count).toBe(3)
@@ -461,10 +452,7 @@ describe("payload: multipart form bodies", () => {
 		form.set("description", "A beautiful sunset 🌅")
 		form.set("photo", new Blob(["binary-image-data-here"], { type: "image/jpeg" }), "sunset.jpg")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.title).toBe("My Photo")
@@ -491,10 +479,7 @@ describe("payload: multipart form bodies", () => {
 		}
 		form.set("big", new Blob([bigData], { type: "application/octet-stream" }), "big.bin")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, number>
 		expect(data.size).toBe(1024 * 1024)
@@ -519,10 +504,7 @@ describe("payload: multipart form bodies", () => {
 		const form = new FormData()
 		form.set("data", new Blob([original], { type: "application/octet-stream" }), "data.bin")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, number>
 		expect(data.size).toBe(8)
@@ -752,19 +734,14 @@ describe("payload: response content types over HTTP", () => {
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
-		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>(
-			(resolve, reject) => {
-				const req = http.request(
-					{ hostname: "127.0.0.1", method: "GET", path: "/old", port: addr.port },
-					(r) => {
-						resolve({ headers: r.headers, status: r.statusCode ?? 0 })
-						r.resume()
-					},
-				)
-				req.on("error", reject)
-				req.end()
-			},
-		)
+		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>((resolve, reject) => {
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/old", port: addr.port }, (r) => {
+				resolve({ headers: r.headers, status: r.statusCode ?? 0 })
+				r.resume()
+			})
+			req.on("error", reject)
+			req.end()
+		})
 		expect(res.status).toBe(307)
 		expect(res.headers.location).toBe("/new?foo=bar&baz=qux")
 	})
@@ -1197,9 +1174,7 @@ describe("payload: testClient roundtrip", () => {
 
 	it("search params roundtrip → params accessible", async () => {
 		const app = honey<{}>()
-		app
-			.get("/search")
-			.handler((ctx) => ctx.res.json("ok", { page: ctx.search.page, q: ctx.search.q }))
+		app.get("/search").handler((ctx) => ctx.res.json("ok", { page: ctx.search.page, q: ctx.search.q }))
 
 		const client = testClient(app, { env: {} })
 		const res = await client.get("/search", { search: { page: "2", q: "hello world" } })
@@ -1582,10 +1557,7 @@ describe("payload: HTTP methods and body handling", () => {
 			return ctx.res.noContent()
 		})
 
-		const res = await app.fetch(
-			new Request("http://localhost/resource/42", { method: "DELETE" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/resource/42", { method: "DELETE" }), {})
 		expect(res.status).toBe(204)
 	})
 
@@ -1600,9 +1572,7 @@ describe("payload: HTTP methods and body handling", () => {
 
 	it("OPTIONS request → response works", async () => {
 		const app = honey<{}>()
-		app
-			.options("/data")
-			.handler((ctx) => ctx.res.noContent({ headers: { allow: "GET, POST, OPTIONS" } }))
+		app.options("/data").handler((ctx) => ctx.res.noContent({ headers: { allow: "GET, POST, OPTIONS" } }))
 
 		const res = await app.fetch(new Request("http://localhost/data", { method: "OPTIONS" }), {})
 		expect(res.status).toBe(204)
@@ -1713,9 +1683,7 @@ describe("payload: request→response content type combinations over HTTP", () =
 		const app = honey<{}>()
 		app.post("/export").handler(async (ctx) => {
 			const body = (await ctx.req.json()) as Record<string, unknown[]>
-			const rows = (body.items as Array<Record<string, string>>)
-				.map((item) => `${item.name},${item.value}`)
-				.join("\n")
+			const rows = (body.items as Array<Record<string, string>>).map((item) => `${item.name},${item.value}`).join("\n")
 			return ctx.res.csv("ok", `name,value\n${rows}`)
 		})
 		server = serve(app, { env: {}, port: 0 })
@@ -2090,10 +2058,7 @@ describe("payload: insane — extreme multipart", () => {
 			)
 		}
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, number>
 		expect(data.count).toBe(50)
@@ -2122,10 +2087,7 @@ describe("payload: insane — extreme multipart", () => {
 		const form = new FormData()
 		form.set("big", new Blob([bigData], { type: "application/octet-stream" }), "huge.bin")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, number>
 		expect(data.size).toBe(size)
@@ -2150,23 +2112,12 @@ describe("payload: insane — extreme multipart", () => {
 
 		const form = new FormData()
 		form.set("textField", "just a string")
-		form.set(
-			"binaryFile",
-			new Blob([new Uint8Array([0, 255, 128])], { type: "application/octet-stream" }),
-			"data.bin",
-		)
+		form.set("binaryFile", new Blob([new Uint8Array([0, 255, 128])], { type: "application/octet-stream" }), "data.bin")
 		form.set("emptyFile", new Blob([], { type: "text/plain" }), "empty.txt")
 		form.set("imageFile", new Blob(["fake png header"], { type: "image/png" }), "photo.png")
-		form.set(
-			"jsonFile",
-			new Blob([JSON.stringify({ nested: true })], { type: "application/json" }),
-			"config.json",
-		)
+		form.set("jsonFile", new Blob([JSON.stringify({ nested: true })], { type: "application/json" }), "config.json")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, { size: number; type: string }>
 		expect(data.textField.type).toBe("text")
@@ -2192,10 +2143,7 @@ describe("payload: insane — extreme multipart", () => {
 		form.set("nombre", "Juan")
 		form.set("nombre_archivo", "test")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, string[]>
 		expect(data.keys).toContain("nombre")
@@ -2331,8 +2279,7 @@ describe("payload: insane — extreme text encodings", () => {
 			return ctx.res.json("ok", body)
 		})
 
-		const astral =
-			"\ud83d\ude80\ud83c\udf0d\ud83d\udd25\ud83c\udf89\ud83e\udd21\ud83d\udc7d\ud83c\udf08\ud83d\udca9"
+		const astral = "\ud83d\ude80\ud83c\udf0d\ud83d\udd25\ud83c\udf89\ud83e\udd21\ud83d\udc7d\ud83c\udf08\ud83d\udca9"
 
 		const res = await app.fetch(
 			new Request("http://localhost/json", {
@@ -2467,10 +2414,7 @@ describe("payload: insane — body limit with extreme sizes", () => {
 		form.append("f", new Blob(["x".repeat(500)], { type: "text/plain" }), "a.txt")
 		form.append("f", new Blob(["y".repeat(500)], { type: "text/plain" }), "b.txt")
 
-		const res = await app.fetch(
-			new Request("http://localhost/upload", { body: form, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
 		expect(res.status).toBe(413)
 	})
 

@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { honey } from "../../src/index.ts"
-import {
-	issuesToFieldErrors,
-	mapNormalizedCode,
-	normalizeIssues,
-	parseCookies,
-} from "../../src/validation.ts"
+import { issuesToFieldErrors, mapNormalizedCode, normalizeIssues, parseCookies } from "../../src/validation.ts"
 
 /* ══════════════════════════════════════════════
  * 1. DECODE — malformed URI fallback in route params
@@ -147,9 +142,7 @@ describe("bug-hunt-13: issuesToFieldErrors edge cases", () => {
 	})
 
 	it("issue with no path → field name is 'unknown'", () => {
-		const normalized = [
-			{ code: "required", message: "Required", meta: {}, path: [] as PropertyKey[] },
-		]
+		const normalized = [{ code: "required", message: "Required", meta: {}, path: [] as PropertyKey[] }]
 		const fields = issuesToFieldErrors(normalized, "json")
 		expect(fields.unknown).toHaveLength(1)
 		expect(fields.unknown[0].path).toBe("json.")

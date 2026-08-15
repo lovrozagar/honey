@@ -163,9 +163,7 @@ describe("LongPollHandler.poll — common cases", () => {
 		opts.buffer.push(token, { kind: "chat", text: "world" })
 
 		const handler = createLongPollHandler(opts)
-		const res = await handler.poll(
-			pollRequest({ lastId: "0", reconnectToken: token, wait: "25" }),
-		)
+		const res = await handler.poll(pollRequest({ lastId: "0", reconnectToken: token, wait: "25" }))
 
 		const body = await parseJsonResponse<ServerFrame[]>(res)
 		expect(body).toHaveLength(2)
@@ -181,9 +179,7 @@ describe("LongPollHandler.poll — common cases", () => {
 		opts.buffer.push(token, "msg-3")
 
 		const handler = createLongPollHandler(opts)
-		const res = await handler.poll(
-			pollRequest({ lastId: "2", reconnectToken: token, wait: "25" }),
-		)
+		const res = await handler.poll(pollRequest({ lastId: "2", reconnectToken: token, wait: "25" }))
 
 		const body = await parseJsonResponse<ServerFrame[]>(res)
 		expect(body).toHaveLength(1)
@@ -194,9 +190,7 @@ describe("LongPollHandler.poll — common cases", () => {
 		const opts = makeOpts()
 		const handler = createLongPollHandler(opts)
 
-		const res = await handler.poll(
-			pollRequest({ lastId: "0", reconnectToken: "nonexistent-token", wait: "5" }),
-		)
+		const res = await handler.poll(pollRequest({ lastId: "0", reconnectToken: "nonexistent-token", wait: "5" }))
 
 		expect(res.status).toBe(404)
 	})
@@ -206,9 +200,7 @@ describe("LongPollHandler.poll — common cases", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ lastId: "0", reconnectToken: token, wait: "25" }),
-		)
+		const promise = handler.poll(pollRequest({ lastId: "0", reconnectToken: token, wait: "25" }))
 
 		/*
 		 * Simulate a message arriving 500ms into the wait. The bus emits
@@ -233,9 +225,7 @@ describe("LongPollHandler.poll — common cases", () => {
 		opts.buffer.push(token, "x")
 
 		const handler = createLongPollHandler(opts)
-		const res = await handler.poll(
-			pollRequest({ lastId: "0", reconnectToken: token, wait: "1" }),
-		)
+		const res = await handler.poll(pollRequest({ lastId: "0", reconnectToken: token, wait: "1" }))
 
 		expect(res.headers.get("content-type")).toContain("application/json")
 	})
@@ -259,9 +249,7 @@ describe("LongPollHandler.poll — wait parameter", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "3" }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token, wait: "3" }))
 
 		/* at 2s, should still be pending */
 		vi.advanceTimersByTime(2_000)
@@ -279,9 +267,7 @@ describe("LongPollHandler.poll — wait parameter", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "60" }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token, wait: "60" }))
 
 		/* should resolve at maxWait (10s), not at 60s */
 		vi.advanceTimersByTime(10_000)
@@ -296,9 +282,7 @@ describe("LongPollHandler.poll — wait parameter", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token }))
 
 		/* at 24s, should still be pending — advance but don't resolve */
 		vi.advanceTimersByTime(24_000)
@@ -317,9 +301,7 @@ describe("LongPollHandler.poll — wait parameter", () => {
 		const handler = createLongPollHandler(opts)
 
 		/* request a wait of 100s — should be capped at 30 */
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "100" }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token, wait: "100" }))
 
 		vi.advanceTimersByTime(30_000)
 
@@ -333,9 +315,7 @@ describe("LongPollHandler.poll — wait parameter", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token }))
 
 		vi.advanceTimersByTime(5_000)
 
@@ -358,9 +338,7 @@ describe("LongPollHandler.send — common cases", () => {
 		opts.bus.onMessage(token, vi.fn<(payload: unknown) => void>())
 
 		const handler = createLongPollHandler(opts)
-		const res = await handler.send(
-			sendRequest({ data: { text: "hi" }, reconnectToken: token }),
-		)
+		const res = await handler.send(sendRequest({ data: { text: "hi" }, reconnectToken: token }))
 
 		expect(res.status).toBe(200)
 	})
@@ -369,9 +347,7 @@ describe("LongPollHandler.send — common cases", () => {
 		const opts = makeOpts()
 		const handler = createLongPollHandler(opts)
 
-		const res = await handler.send(
-			sendRequest({ data: "hello", reconnectToken: "unknown-token" }),
-		)
+		const res = await handler.send(sendRequest({ data: "hello", reconnectToken: "unknown-token" }))
 
 		expect(res.status).toBe(404)
 	})
@@ -380,9 +356,7 @@ describe("LongPollHandler.send — common cases", () => {
 		const opts = makeOpts()
 		const handler = createLongPollHandler(opts)
 
-		const res = await handler.send(
-			sendRequest({ data: "hello" }),
-		)
+		const res = await handler.send(sendRequest({ data: "hello" }))
 
 		expect(res.status).toBe(400)
 	})
@@ -392,9 +366,7 @@ describe("LongPollHandler.send — common cases", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const res = await handler.send(
-			sendRequest({ reconnectToken: token }),
-		)
+		const res = await handler.send(sendRequest({ reconnectToken: token }))
 
 		expect(res.status).toBe(400)
 	})
@@ -406,9 +378,7 @@ describe("LongPollHandler.send — common cases", () => {
 		opts.bus.onMessage(token, messageHandler)
 
 		const handler = createLongPollHandler(opts)
-		await handler.send(
-			sendRequest({ data: { text: "hello from POST" }, reconnectToken: token }),
-		)
+		await handler.send(sendRequest({ data: { text: "hello from POST" }, reconnectToken: token }))
 
 		expect(messageHandler).toHaveBeenCalledOnce()
 		expect(messageHandler).toHaveBeenCalledWith({ text: "hello from POST" })
@@ -434,9 +404,7 @@ describe("LongPollHandler.poll — resume semantics", () => {
 		 * Should get msg-2 and msg-3 replayed from buffer.
 		 */
 		const handler = createLongPollHandler(opts)
-		const res = await handler.poll(
-			pollRequest({ lastId: "1", reconnectToken: token, wait: "1" }),
-		)
+		const res = await handler.poll(pollRequest({ lastId: "1", reconnectToken: token, wait: "1" }))
 
 		const body = await parseJsonResponse<ServerFrame[]>(res)
 		expect(body).toHaveLength(2)
@@ -453,9 +421,7 @@ describe("LongPollHandler.poll — resume semantics", () => {
 		opts.buffer._expire(token)
 
 		const handler = createLongPollHandler(opts)
-		const res = await handler.poll(
-			pollRequest({ lastId: "0", reconnectToken: token, wait: "5" }),
-		)
+		const res = await handler.poll(pollRequest({ lastId: "0", reconnectToken: token, wait: "5" }))
 
 		const body = await parseJsonResponse<ServerFrame[]>(res)
 		expect(body).toHaveLength(1)
@@ -482,9 +448,7 @@ describe("LongPollHandler.poll — edge cases", () => {
 		const handler = createLongPollHandler(opts)
 
 		const controller = new AbortController()
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "25" }, { signal: controller.signal }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token, wait: "25" }, { signal: controller.signal }))
 
 		/* abort after 1s instead of waiting 25s */
 		setTimeout(() => controller.abort(), 1_000)
@@ -500,12 +464,8 @@ describe("LongPollHandler.poll — edge cases", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise1 = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "5" }),
-		)
-		const promise2 = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "5" }),
-		)
+		const promise1 = handler.poll(pollRequest({ reconnectToken: token, wait: "5" }))
+		const promise2 = handler.poll(pollRequest({ reconnectToken: token, wait: "5" }))
 
 		vi.advanceTimersByTime(5_000)
 
@@ -523,9 +483,7 @@ describe("LongPollHandler.poll — edge cases", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "25" }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token, wait: "25" }))
 
 		/* server pushes a bye frame during the wait */
 		setTimeout(() => {
@@ -544,9 +502,7 @@ describe("LongPollHandler.poll — edge cases", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "invalid" }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token, wait: "invalid" }))
 
 		/* default is 25s */
 		vi.advanceTimersByTime(25_000)
@@ -561,9 +517,7 @@ describe("LongPollHandler.poll — edge cases", () => {
 		const token = opts.buffer.create()
 		const handler = createLongPollHandler(opts)
 
-		const promise = handler.poll(
-			pollRequest({ reconnectToken: token, wait: "-5" }),
-		)
+		const promise = handler.poll(pollRequest({ reconnectToken: token, wait: "-5" }))
 
 		/* should resolve nearly immediately */
 		vi.advanceTimersByTime(0)

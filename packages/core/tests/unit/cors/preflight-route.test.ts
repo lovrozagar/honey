@@ -28,10 +28,7 @@ describe("CORS preflight on method-specific routes", () => {
 		const app = honey().use(cors({ origin: "*" }))
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 		await app.fetch(preflight("/health"), {})
-		const res = await app.fetch(
-			new Request("http://x/health", { headers: { origin: "http://app.example" } }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://x/health", { headers: { origin: "http://app.example" } }), {})
 		expect(res.status).toBe(200)
 		expect(await res.text()).toBe("ok")
 	})
@@ -105,7 +102,9 @@ describe("CORS preflight on method-specific routes", () => {
 	})
 
 	it("preflight respects basePath", async () => {
-		const app = honey().basePath("/api").use(cors({ origin: "*" }))
+		const app = honey()
+			.basePath("/api")
+			.use(cors({ origin: "*" }))
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 		const res = await app.fetch(preflight("/api/health"), {})
 		expect(res.status).toBe(204)

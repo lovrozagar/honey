@@ -2,11 +2,41 @@ import { schemaToIR } from "./codegen-ir.ts"
 import type { IRField, IRSchema } from "./codegen-ir.ts"
 
 const PY_RESERVED = new Set([
-	"False", "None", "True", "and", "as", "assert", "async", "await",
-	"break", "class", "continue", "def", "del", "elif", "else", "except",
-	"finally", "for", "from", "global", "if", "import", "in", "is",
-	"lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
-	"while", "with", "yield",
+	"False",
+	"None",
+	"True",
+	"and",
+	"as",
+	"assert",
+	"async",
+	"await",
+	"break",
+	"class",
+	"continue",
+	"def",
+	"del",
+	"elif",
+	"else",
+	"except",
+	"finally",
+	"for",
+	"from",
+	"global",
+	"if",
+	"import",
+	"in",
+	"is",
+	"lambda",
+	"nonlocal",
+	"not",
+	"or",
+	"pass",
+	"raise",
+	"return",
+	"try",
+	"while",
+	"with",
+	"yield",
 ])
 
 /** Suffix reserved words with `_` per PEP 8 convention. */
@@ -32,9 +62,7 @@ function formatConstPy(v: string | number | boolean): string {
 
 function emitScalarPy(ir: Extract<IRSchema, { kind: "scalar" }>): string {
 	if (ir.enum) {
-		const members = ir.enum
-			.map((v) => (typeof v === "string" ? JSON.stringify(v) : String(v)))
-			.join(", ")
+		const members = ir.enum.map((v) => (typeof v === "string" ? JSON.stringify(v) : String(v))).join(", ")
 		return `Literal[${members}]`
 	}
 	return primitiveToPy(ir.type)
@@ -135,10 +163,7 @@ export function irToPython(ir: IRSchema, depth = 0): string {
 }
 
 /** Thin shim — delegates to irToPython(schemaToIR(schema), depth). */
-export function jsonSchemaToPy(
-	schema: Record<string, unknown> | undefined,
-	depth = 0,
-): string {
+export function jsonSchemaToPy(schema: Record<string, unknown> | undefined, depth = 0): string {
 	if (!schema || depth > 8) return "Any"
 	return irToPython(schemaToIR(schema), depth)
 }

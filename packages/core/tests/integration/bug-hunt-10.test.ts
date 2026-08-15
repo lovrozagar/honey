@@ -86,10 +86,7 @@ describe("bug-hunt-10: handler returning nothing", () => {
 
 describe("bug-hunt-10: middleware returning nothing", () => {
 	it("middleware that calls next() but doesn't return it → 500", async () => {
-		const badMw = createMiddleware((async (
-			_ctx: Record<string, unknown>,
-			next: (a: {}) => Promise<Response>,
-		) => {
+		const badMw = createMiddleware((async (_ctx: Record<string, unknown>, next: (a: {}) => Promise<Response>) => {
 			await next()
 			/* forgot to return */
 		}) as never)
@@ -457,9 +454,7 @@ describe("bug-hunt-10: multiple apps merged", () => {
 
 		const postsApp = honey<{}>()
 		postsApp.get("/posts").handler((ctx) => ctx.res.json("ok", { route: "posts" }))
-		postsApp
-			.get("/posts/:id")
-			.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "post" }))
+		postsApp.get("/posts/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "post" }))
 
 		const merged = mergeTree(usersApp.toRouteTree(), postsApp.toRouteTree())
 		const app = honey<{}>()

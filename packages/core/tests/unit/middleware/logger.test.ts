@@ -79,8 +79,7 @@ describe("createLogger", () => {
 describe("logger middleware", () => {
 	it("calls log with method, path, status, duration", async () => {
 		const logged: LogData[] = []
-		const app = honey<{}>()
-			.use(logger({ log: (data) => logged.push(data) }))
+		const app = honey<{}>().use(logger({ log: (data) => logged.push(data) }))
 
 		app.get("/users").handler((c) => c.res.json("ok", { users: [] }))
 
@@ -109,11 +108,12 @@ describe("logger middleware", () => {
 
 	it("skip function prevents logging", async () => {
 		const logged: LogData[] = []
-		const app = honey<{}>()
-			.use(logger({
+		const app = honey<{}>().use(
+			logger({
 				log: (data) => logged.push(data),
 				skip: (data) => data.path === "/health",
-			}))
+			}),
+		)
 
 		app.get("/health").handler((c) => c.res.text("ok", "ok"))
 		app.get("/users").handler((c) => c.res.json("ok", { users: [] }))
@@ -127,8 +127,7 @@ describe("logger middleware", () => {
 
 	it("strips query string from path", async () => {
 		const logged: LogData[] = []
-		const app = honey<{}>()
-			.use(logger({ log: (data) => logged.push(data) }))
+		const app = honey<{}>().use(logger({ log: (data) => logged.push(data) }))
 
 		app.get("/users").handler((c) => c.res.json("ok", { users: [] }))
 
@@ -141,8 +140,7 @@ describe("logger middleware", () => {
 		const lines: string[] = []
 		const instance = createLogger({ write: (line) => lines.push(line) })
 
-		const app = honey<{}>()
-			.use(logger({ instance }))
+		const app = honey<{}>().use(logger({ instance }))
 
 		app.get("/users").handler((c) => c.res.json("ok", { users: [] }))
 
@@ -185,14 +183,13 @@ describe("logger middleware", () => {
 	})
 
 	it("does not mutate response", async () => {
-		const app = honey<{}>()
-			.use(logger())
+		const app = honey<{}>().use(logger())
 
 		app.get("/users").handler((c) => c.res.json("ok", { users: [] }))
 
 		const res = await app.fetch(new Request("http://localhost/users"), {})
 		expect(res.status).toBe(200)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body).toEqual({ users: [] })
 	})
 })

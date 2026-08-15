@@ -44,8 +44,7 @@ describe("proxy", () => {
 		const app = createTestApp()
 			.all("/api/*")
 			.proxy({
-				destination: (_ctx, _url, init) =>
-					new Response(init.body === undefined ? "no-body" : "has-body"),
+				destination: (_ctx, _url, init) => new Response(init.body === undefined ? "no-body" : "has-body"),
 			})
 
 		const res = await app.fetch(makeRequest("GET", "/api/test"), {} as never)
@@ -75,9 +74,7 @@ describe("proxy", () => {
 			.proxy({
 				destination: (_ctx, _url, init) => {
 					const h = init.headers as Headers
-					return new Response(
-						JSON.stringify({ source: h.get("x-source"), version: h.get("x-api-version") }),
-					)
+					return new Response(JSON.stringify({ source: h.get("x-source"), version: h.get("x-api-version") }))
 				},
 				requestHeaders: { "x-api-version": "2", "x-source": "gateway" },
 			})

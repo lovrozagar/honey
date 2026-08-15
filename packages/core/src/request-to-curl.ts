@@ -10,10 +10,7 @@ function shellEscape(value: string): string {
  * Convert a native Request into a curl command string.
  * The request is cloned so reading the body does not consume the original stream.
  */
-export async function requestToCurl(
-	request: Request,
-	options?: RequestToCurlOptions,
-): Promise<string> {
+export async function requestToCurl(request: Request, options?: RequestToCurlOptions): Promise<string> {
 	const clonedRequest = request.clone()
 	const parts: string[] = [`curl -X ${clonedRequest.method}`]
 

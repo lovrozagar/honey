@@ -14,8 +14,9 @@ const appErrors = defineErrors({
 	},
 })
 
-const fetchAdapter = (app: { fetch: (req: Request) => Promise<Response> }) =>
-	(input: RequestInfo | URL, init?: RequestInit) => app.fetch(new Request(input, init))
+const fetchAdapter =
+	(app: { fetch: (req: Request) => Promise<Response> }) => (input: RequestInfo | URL, init?: RequestInit) =>
+		app.fetch(new Request(input, init))
 
 /* ── defaultErrorFormatter builder method ── */
 
@@ -30,7 +31,9 @@ describe("defaultErrorFormatter builder method", () => {
 			}))
 			.get("/fail")
 			.errors("email_taken")
-			.handler(() => { throw appErrors.email_taken() })
+			.handler(() => {
+				throw appErrors.email_taken()
+			})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		const body = await res.json()
@@ -55,7 +58,9 @@ describe("defaultErrorFormatter builder method", () => {
 			}))
 			.get("/fail")
 			.errors("email_taken")
-			.handler(() => { throw appErrors.email_taken() })
+			.handler(() => {
+				throw appErrors.email_taken()
+			})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		const body = await res.json()
@@ -73,7 +78,9 @@ describe("defaultErrorFormatter builder method", () => {
 			}))
 			.get("/custom")
 			.errors("item_not_found")
-			.handler(() => { throw appErrors.item_not_found({ reason: "gone" }) })
+			.handler(() => {
+				throw appErrors.item_not_found({ reason: "gone" })
+			})
 
 		const res = await app.fetch(new Request("http://localhost/custom"))
 		const body = await res.json()
@@ -88,7 +95,9 @@ describe("defaultErrorFormatter builder method", () => {
 			.defaultErrorFormatter((_err, shape) => ({ ...shape, compat: true }))
 			.get("/fail")
 			.errors("email_taken")
-			.handler(() => { throw appErrors.email_taken() })
+			.handler(() => {
+				throw appErrors.email_taken()
+			})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		const body = await res.json()
@@ -109,7 +118,9 @@ describe("customErrorFormatter builder method", () => {
 			}))
 			.get("/custom")
 			.errors("item_not_found")
-			.handler(() => { throw appErrors.item_not_found({ reason: "deleted" }) })
+			.handler(() => {
+				throw appErrors.item_not_found({ reason: "deleted" })
+			})
 
 		const res = await app.fetch(new Request("http://localhost/custom"))
 		const body = await res.json()
@@ -127,7 +138,9 @@ describe("customErrorFormatter builder method", () => {
 			}))
 			.get("/std")
 			.errors("email_taken")
-			.handler(() => { throw appErrors.email_taken() })
+			.handler(() => {
+				throw appErrors.email_taken()
+			})
 
 		const res = await app.fetch(new Request("http://localhost/std"))
 		const body = await res.json()
@@ -146,7 +159,9 @@ describe("customErrorFormatter builder method", () => {
 			}))
 			.get("/custom")
 			.errors("item_not_found")
-			.handler(() => { throw appErrors.item_not_found({ reason: "x" }) })
+			.handler(() => {
+				throw appErrors.item_not_found({ reason: "x" })
+			})
 
 		const res = await app.fetch(new Request("http://localhost/custom"))
 		const body = await res.json()
@@ -158,10 +173,14 @@ describe("customErrorFormatter builder method", () => {
 		const app = honey()
 			.errorFactory(appErrors)
 			.defaultBoundary("api_error")
-			.customErrorFormatter(() => { throw new Error("boom") })
+			.customErrorFormatter(() => {
+				throw new Error("boom")
+			})
 			.get("/custom")
 			.errors("item_not_found")
-			.handler(() => { throw appErrors.item_not_found({ reason: "safe" }) })
+			.handler(() => {
+				throw appErrors.item_not_found({ reason: "safe" })
+			})
 
 		const res = await app.fetch(new Request("http://localhost/custom"))
 		const body = await res.json()
@@ -180,11 +199,15 @@ describe("both formatters configured simultaneously", () => {
 
 		.get("/std")
 		.errors("email_taken")
-		.handler(() => { throw appErrors.email_taken() })
+		.handler(() => {
+			throw appErrors.email_taken()
+		})
 
 		.get("/custom")
 		.errors("item_not_found")
-		.handler(() => { throw appErrors.item_not_found({ reason: "gone" }) })
+		.handler(() => {
+			throw appErrors.item_not_found({ reason: "gone" })
+		})
 
 	it("standard error gets default formatter", async () => {
 		const res = await app.fetch(new Request("http://localhost/std"))
@@ -215,7 +238,9 @@ describe("formatter propagation through basePath and use", () => {
 			.basePath("/api")
 			.get("/fail")
 			.errors("email_taken")
-			.handler(() => { throw appErrors.email_taken() })
+			.handler(() => {
+				throw appErrors.email_taken()
+			})
 
 		const res = await sub.fetch(new Request("http://localhost/api/fail"))
 		const body = await res.json()
@@ -231,7 +256,9 @@ describe("formatter propagation through basePath and use", () => {
 			.basePath("/api")
 			.get("/custom-fail")
 			.errors("item_not_found")
-			.handler(() => { throw appErrors.item_not_found({ reason: "x" }) })
+			.handler(() => {
+				throw appErrors.item_not_found({ reason: "x" })
+			})
 
 		const res = await app.fetch(new Request("http://localhost/api/custom-fail"))
 		expect(res.status).toBe(404)
@@ -288,11 +315,15 @@ describe("client e2e: both formatters flow through to client", () => {
 
 		.get("/std-err")
 		.errors("email_taken")
-		.handler(() => { throw appErrors.email_taken() })
+		.handler(() => {
+			throw appErrors.email_taken()
+		})
 
 		.get("/custom-err")
 		.errors("item_not_found")
-		.handler(() => { throw appErrors.item_not_found({ reason: "nope" }) })
+		.handler(() => {
+			throw appErrors.item_not_found({ reason: "nope" })
+		})
 
 		.get("/ok")
 		.output({ "application/json": { ok: z.object({ id: z.string() }) } })

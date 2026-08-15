@@ -257,9 +257,7 @@ describe("error formatter receives correct error shape", () => {
 describe("onNotFound custom handler", () => {
 	it("custom 404 handler returns custom response", async () => {
 		const app = honey<{}>()
-		app.onNotFound((ctx) =>
-			ctx.jsonFromError(new HoneyError({ errorKey: "custom_not_found", status: "not_found" })),
-		)
+		app.onNotFound((ctx) => ctx.jsonFromError(new HoneyError({ errorKey: "custom_not_found", status: "not_found" })))
 		app.get("/exists").handler((ctx) => ctx.res.text("ok", "ok"))
 
 		const res = await app.fetch(new Request("http://localhost/missing"), {})

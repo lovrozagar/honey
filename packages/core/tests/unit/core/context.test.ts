@@ -34,9 +34,7 @@ describe("app.context() — static type-safe context", () => {
 	it("multiple .context() calls accumulate", async () => {
 		const app = honey<{}>().context({ a: 1 }).context({ b: 2 })
 
-		app
-			.get("/test")
-			.handler((ctx) => ctx.res.json("ok", { a: ctx.a, b: ctx.b }))
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { a: ctx.a, b: ctx.b }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -47,10 +45,7 @@ describe("app.context() — static type-safe context", () => {
 	it("rejects reserved context keys", () => {
 		const reserved = ["background", "cookies", "env", "headers", "params", "req", "res", "search"]
 		for (const key of reserved) {
-			expect(
-				() => honey<{}>().context({ [key]: "nope" }),
-				`expected .context({ ${key} }) to throw`,
-			).toThrow()
+			expect(() => honey<{}>().context({ [key]: "nope" }), `expected .context({ ${key} }) to throw`).toThrow()
 		}
 	})
 
@@ -59,9 +54,7 @@ describe("app.context() — static type-safe context", () => {
 
 		const app = honey<{}>().context({ static: "fromCtx" }).use(mw)
 
-		app.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { added: ctx.added, static: ctx.static }),
-		)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { added: ctx.added, static: ctx.static }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -89,10 +82,7 @@ describe("app.context() — static type-safe context", () => {
 
 		sub.get("/test").handler((ctx) => ctx.res.json("ok", { v: ctx.version }))
 
-		const res = await sub.fetch(
-			new Request("http://localhost/api/test"),
-			{},
-		)
+		const res = await sub.fetch(new Request("http://localhost/api/test"), {})
 		expect(res.status).toBe(200)
 		const body = (await res.json()) as Record<string, unknown>
 		expect(body.v).toBe("v1")
@@ -135,9 +125,7 @@ describe("app.context() — static type-safe context", () => {
 		app
 			.get("/test")
 			.use(routeMw)
-			.handler((ctx) =>
-				ctx.res.json("ok", { checked: ctx.checked, db: ctx.db }),
-			)
+			.handler((ctx) => ctx.res.json("ok", { checked: ctx.checked, db: ctx.db }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -180,11 +168,7 @@ describe("app.context() — static type-safe context", () => {
 	it("context with path params both accessible", async () => {
 		const app = honey<{}>().context({ prefix: "org" })
 
-		app
-			.get("/items/:id")
-			.handler((ctx) =>
-				ctx.res.json("ok", { id: ctx.params.id, prefix: ctx.prefix }),
-			)
+		app.get("/items/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, prefix: ctx.prefix }))
 
 		const res = await app.fetch(new Request("http://localhost/items/42"), {})
 		const body = (await res.json()) as Record<string, unknown>
@@ -198,14 +182,10 @@ describe("app.context() — static type-safe context", () => {
 		   the parent's context applies, not the sub-app's.
 		   Use middleware for per-sub-app values that need to survive .route(). */
 		const sub = honey<{}>().context({ subVal: "from-sub" }).basePath("/sub")
-		sub.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { v: ctx.parentVal }),
-		)
+		sub.get("/test").handler((ctx) => ctx.res.json("ok", { v: ctx.parentVal }))
 
 		const parent = honey<{}>().context({ parentVal: "from-parent" })
-		parent.get("/test").handler((ctx) =>
-			ctx.res.json("ok", { v: ctx.parentVal }),
-		)
+		parent.get("/test").handler((ctx) => ctx.res.json("ok", { v: ctx.parentVal }))
 		parent.route(sub)
 
 		const r1 = await parent.fetch(new Request("http://localhost/test"), {})
@@ -222,11 +202,7 @@ describe("app.context() — static type-safe context", () => {
 		type TestEnv = { SECRET: string }
 		const app = honey<TestEnv>().context({ appName: "test" })
 
-		app
-			.get("/test")
-			.handler((ctx) =>
-				ctx.res.json("ok", { app: ctx.appName, secret: ctx.env.SECRET }),
-			)
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { app: ctx.appName, secret: ctx.env.SECRET }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {
 			SECRET: "s3cr3t",
@@ -245,10 +221,7 @@ describe("app.context() — compile-time type safety", () => {
 	})
 
 	it("multiple .context() calls accumulate types", () => {
-		const app = honey<{}>()
-			.context({ a: 1 })
-			.context({ b: "two" })
-			.context({ c: true })
+		const app = honey<{}>().context({ a: 1 }).context({ b: "two" }).context({ c: true })
 		type Ctx = InferCtx<typeof app>
 		expectTypeOf<Ctx>().toMatchTypeOf<{
 			readonly a: number
@@ -277,9 +250,7 @@ describe("app.context() — compile-time type safety", () => {
 	})
 
 	it(".context() + .use() types accumulate together", () => {
-		const mw = createMiddleware(async (_ctx, next) =>
-			next({ userId: "u-1" }),
-		)
+		const mw = createMiddleware(async (_ctx, next) => next({ userId: "u-1" }))
 		const app = honey<{}>().context({ region: "eu" }).use(mw)
 		type Ctx = InferCtx<typeof app>
 		expectTypeOf<Ctx>().toMatchTypeOf<{
@@ -300,9 +271,7 @@ describe("app.context() — compile-time type safety", () => {
 	})
 
 	it("context + middleware types both visible in handler", () => {
-		const mw = createMiddleware(async (_ctx, next) =>
-			next({ traceId: "t-1" }),
-		)
+		const mw = createMiddleware(async (_ctx, next) => next({ traceId: "t-1" }))
 
 		honey<{}>()
 			.context({ config: { timeout: 5000 } })
@@ -329,12 +298,10 @@ describe("app.context() — compile-time type safety", () => {
 	})
 
 	it("middleware with TReqs depending on context — types compose", () => {
-		const mw = createMiddleware<{ db: string }, { queried: boolean }>(
-			async (ctx, next) => {
-				expectTypeOf(ctx.db).toEqualTypeOf<string>()
-				return next({ queried: true })
-			},
-		)
+		const mw = createMiddleware<{ db: string }, { queried: boolean }>(async (ctx, next) => {
+			expectTypeOf(ctx.db).toEqualTypeOf<string>()
+			return next({ queried: true })
+		})
 
 		const app = honey<{}>().context({ db: "sqlite" }).use(mw)
 		type Ctx = InferCtx<typeof app>
@@ -345,9 +312,7 @@ describe("app.context() — compile-time type safety", () => {
 	})
 
 	it("context + input + middleware + params all typed in handler", () => {
-		const mw = createMiddleware(async (_ctx, next) =>
-			next({ userId: "u-1" }),
-		)
+		const mw = createMiddleware(async (_ctx, next) => next({ userId: "u-1" }))
 
 		honey<{ SECRET: string }>()
 			.context({ region: "eu" })
@@ -375,18 +340,13 @@ describe("app.context() — compile-time type safety", () => {
 
 	it("context does not affect InferMeta", () => {
 		type AppMeta = { tags?: string }
-		const app = honey<{}>()
-			.meta<AppMeta>()
-			.context({ db: "sqlite" })
+		const app = honey<{}>().meta<AppMeta>().context({ db: "sqlite" })
 		type M = InferMeta<typeof app>
 		expectTypeOf<M>().toEqualTypeOf<AppMeta>()
 	})
 
 	it("route-level .use() sees context types in TReqs", () => {
-		const routeMw = createMiddleware<
-			{ config: { timeout: number } },
-			{ validated: true }
-		>(async (ctx, next) => {
+		const routeMw = createMiddleware<{ config: { timeout: number } }, { validated: true }>(async (ctx, next) => {
 			expectTypeOf(ctx.config.timeout).toEqualTypeOf<number>()
 			return next({ validated: true as const })
 		})

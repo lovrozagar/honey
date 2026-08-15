@@ -348,8 +348,7 @@ test.describe("manifest", () => {
 		const res = await request.get("/api/manifest.json")
 		const manifest = await res.json()
 		const postOrg = manifest.routes.find(
-			(r: { method: string; path: string }) =>
-				r.path === "/api/v1/organizations" && r.method === "POST",
+			(r: { method: string; path: string }) => r.path === "/api/v1/organizations" && r.method === "POST",
 		)
 		expect(postOrg).toBeDefined()
 		expect(postOrg.errors).toContain("org_slug_taken")
@@ -362,9 +361,7 @@ test.describe("generated route tree", () => {
 		expect(res.status()).toBe(200)
 		const code = await res.text()
 		/* generated code should import from honey/tree */
-		expect(code).toContain(
-			'import type { TreeNode, RouteHandler, RouteTree } from "@lovrozagar/honey/tree"',
-		)
+		expect(code).toContain('import type { TreeNode, RouteHandler, RouteTree } from "@lovrozagar/honey/tree"')
 		/* should export a tree constant */
 		expect(code).toContain("export const tree: TreeNode")
 		/* should contain handler definitions */

@@ -1,19 +1,10 @@
-export {
-	type RawSocket,
-	type WSAdapter,
-	type WSContext,
-	WSContextImpl,
-	type WSHandler,
-} from "./cloudflare.ts"
+export { type RawSocket, type WSAdapter, type WSContext, WSContextImpl, type WSHandler } from "./cloudflare.ts"
 
 import type { WSAdapter, WSHandler } from "./cloudflare.ts"
 import { WSContextImpl } from "./cloudflare.ts"
 
 type WsModule = {
-	WebSocketServer: new (opts: {
-		noServer: true
-		perMessageDeflate: boolean
-	}) => {
+	WebSocketServer: new (opts: { noServer: true; perMessageDeflate: boolean }) => {
 		handleUpgrade(req: unknown, socket: unknown, head: unknown, cb: (ws: NodeWS) => void): void
 	}
 }
@@ -88,20 +79,14 @@ export function nodeWebSocket(opts?: { keepalive?: KeepaliveConfig }): WSAdapter
 								handler.onMessage?.(
 									undefined,
 									socket,
-									data.buffer.slice(
-										data.byteOffset,
-										data.byteOffset + data.byteLength,
-									) as ArrayBuffer,
+									data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
 								)
 							} else if (Array.isArray(data)) {
 								const merged = Buffer.concat(data)
 								handler.onMessage?.(
 									undefined,
 									socket,
-									merged.buffer.slice(
-										merged.byteOffset,
-										merged.byteOffset + merged.byteLength,
-									) as ArrayBuffer,
+									merged.buffer.slice(merged.byteOffset, merged.byteOffset + merged.byteLength) as ArrayBuffer,
 								)
 							} else {
 								handler.onMessage?.(undefined, socket, data)

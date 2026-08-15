@@ -142,19 +142,16 @@ describe("serve", () => {
 
 		/* slow client: read with pauses */
 		const result = await new Promise<string>((resolve, reject) => {
-			const req = http.request(
-				{ hostname: "127.0.0.1", method: "GET", path: "/bp", port: addr.port },
-				(res) => {
-					let data = ""
-					res.on("data", (chunk) => {
-						data += chunk
-						/* simulate slow client by pausing briefly */
-						res.pause()
-						setTimeout(() => res.resume(), 1)
-					})
-					res.on("end", () => resolve(data))
-				},
-			)
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/bp", port: addr.port }, (res) => {
+				let data = ""
+				res.on("data", (chunk) => {
+					data += chunk
+					/* simulate slow client by pausing briefly */
+					res.pause()
+					setTimeout(() => res.resume(), 1)
+				})
+				res.on("end", () => resolve(data))
+			})
 			req.on("error", reject)
 			req.end()
 		})

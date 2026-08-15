@@ -479,9 +479,7 @@ describe("bug-hunt-6: i18n field name translation", () => {
 describe("bug-hunt-6: ctx.executionCtx", () => {
 	it("executionCtx available when provided", async () => {
 		const app = honey<{}>()
-		app
-			.get("/test")
-			.handler((ctx) => ctx.res.json("ok", { hasCtx: ctx.executionCtx !== undefined }))
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { hasCtx: ctx.executionCtx !== undefined }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {}, { waitUntil: () => {} })
 		expect(res.status).toBe(200)
@@ -491,9 +489,7 @@ describe("bug-hunt-6: ctx.executionCtx", () => {
 
 	it("executionCtx undefined when not provided", async () => {
 		const app = honey<{}>()
-		app
-			.get("/test")
-			.handler((ctx) => ctx.res.json("ok", { hasCtx: ctx.executionCtx !== undefined }))
+		app.get("/test").handler((ctx) => ctx.res.json("ok", { hasCtx: ctx.executionCtx !== undefined }))
 
 		const res = await app.fetch(new Request("http://localhost/test"), {})
 		expect(res.status).toBe(200)
@@ -687,9 +683,7 @@ describe("bug-hunt-6: route tree — static + dynamic + nested", () => {
 	it("static /users/me/settings doesn't collide with /users/:id/posts", async () => {
 		const app = honey<{}>()
 		app.get("/users/me/settings").handler((ctx) => ctx.res.json("ok", { route: "settings" }))
-		app
-			.get("/users/:id/posts")
-			.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "posts" }))
+		app.get("/users/:id/posts").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "posts" }))
 
 		const settingsRes = await app.fetch(new Request("http://localhost/users/me/settings"), {})
 		expect(settingsRes.status).toBe(200)
@@ -706,9 +700,7 @@ describe("bug-hunt-6: route tree — static + dynamic + nested", () => {
 	it("static /users/me/posts uses STATIC me, not DYNAMIC :id", async () => {
 		const app = honey<{}>()
 		app.get("/users/me/posts").handler((ctx) => ctx.res.json("ok", { route: "me-posts" }))
-		app
-			.get("/users/:id/posts")
-			.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "dynamic-posts" }))
+		app.get("/users/:id/posts").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "dynamic-posts" }))
 
 		const res = await app.fetch(new Request("http://localhost/users/me/posts"), {})
 		expect(res.status).toBe(200)
@@ -753,10 +745,7 @@ describe("bug-hunt-6: mergeTree wildcard conflict", () => {
 		const getRes = await app.fetch(new Request("http://localhost/files/doc.txt"), {})
 		expect(getRes.status).toBe(200)
 
-		const postRes = await app.fetch(
-			new Request("http://localhost/files/doc.txt", { method: "POST" }),
-			{},
-		)
+		const postRes = await app.fetch(new Request("http://localhost/files/doc.txt", { method: "POST" }), {})
 		expect(postRes.status).toBe(201)
 	})
 })

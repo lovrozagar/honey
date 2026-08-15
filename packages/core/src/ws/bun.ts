@@ -1,10 +1,4 @@
-export {
-	type RawSocket,
-	type WSAdapter,
-	type WSContext,
-	WSContextImpl,
-	type WSHandler,
-} from "./cloudflare.ts"
+export { type RawSocket, type WSAdapter, type WSContext, WSContextImpl, type WSHandler } from "./cloudflare.ts"
 
 import type { WSAdapter, WSContext, WSHandler } from "./cloudflare.ts"
 import { WSContextImpl } from "./cloudflare.ts"
@@ -76,8 +70,7 @@ export function bunWebSocket(): BunWSAdapter {
 			message(ws: BunRawSocket, data: ArrayBufferView | string) {
 				if (!ws.data.socket) ws.data.socket = new WSContextImpl(ws)
 				/* Bun passes Buffer (Uint8Array) for binary — normalize to ArrayBuffer for WSHandler */
-				const normalized =
-					typeof data === "string" ? data : ((data as Uint8Array).buffer as ArrayBuffer)
+				const normalized = typeof data === "string" ? data : ((data as Uint8Array).buffer as ArrayBuffer)
 				ws.data.handler.onMessage?.(undefined, ws.data.socket, normalized)
 			},
 			open(ws: BunRawSocket) {

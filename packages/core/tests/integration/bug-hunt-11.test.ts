@@ -511,9 +511,7 @@ describe("bug-hunt-11: ETag response reconstruction preserves Set-Cookie", () =>
 		/* cookies must survive the response reconstruction */
 		const cookies = res.headers["set-cookie"]
 		expect(cookies).toBeTruthy()
-		const cookieArr = Array.isArray(cookies)
-			? cookies
-			: ([cookies as string | undefined].filter(Boolean) as string[])
+		const cookieArr = Array.isArray(cookies) ? cookies : ([cookies as string | undefined].filter(Boolean) as string[])
 		expect(cookieArr.length).toBe(2)
 		const allCookies = cookieArr.join("; ")
 		expect(allCookies).toContain("session=tok-1")
@@ -709,9 +707,7 @@ describe("bug-hunt-11: route tree round-trip", () => {
 	it("export tree → import → all routes accessible", async () => {
 		const original = honey<{}>()
 		original.get("/users").handler((ctx) => ctx.res.json("ok", { route: "list" }))
-		original
-			.get("/users/:id")
-			.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "detail" }))
+		original.get("/users/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "detail" }))
 		original.post("/users").handler((ctx) => ctx.res.json("created", { route: "create" }))
 
 		const tree = original.toRouteTree()

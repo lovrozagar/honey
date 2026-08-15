@@ -1,12 +1,7 @@
-import { describe, expectTypeOf, it } from "vitest";
-import * as z from "zod";
-import type {
-	ErrorsFor,
-	InputFor,
-	OutputFor,
-	PathsForMethod,
-} from "../../../src/client/types.ts";
-import { defineErrors, honey } from "../../../src/index.ts";
+import { describe, expectTypeOf, it } from "vitest"
+import * as z from "zod"
+import type { ErrorsFor, InputFor, OutputFor, PathsForMethod } from "../../../src/client/types.ts"
+import { defineErrors, honey } from "../../../src/index.ts"
 import type {
 	InferRouteCtx,
 	InferRouteErrors,
@@ -15,18 +10,11 @@ import type {
 	InferRouteOutput,
 	InferRoutes,
 	MergeRoute,
-} from "../../../src/types.ts";
+} from "../../../src/types.ts"
 
 /* ---- helpers ---- */
 
-type R<P extends string, M extends string, I = {}, O = {}> = MergeRoute<
-	{},
-	P,
-	M,
-	I,
-	O,
-	unknown
->;
+type R<P extends string, M extends string, I = {}, O = {}> = MergeRoute<{}, P, M, I, O, unknown>
 
 type Chain10 = MergeRoute<
 	MergeRoute<
@@ -36,14 +24,7 @@ type Chain10 = MergeRoute<
 					MergeRoute<
 						MergeRoute<
 							MergeRoute<
-								MergeRoute<
-									MergeRoute<{}, "/r1", "GET", {}, { n: 1 }, unknown>,
-									"/r2",
-									"GET",
-									{},
-									{ n: 2 },
-									unknown
-								>,
+								MergeRoute<MergeRoute<{}, "/r1", "GET", {}, { n: 1 }, unknown>, "/r2", "GET", {}, { n: 2 }, unknown>,
 								"/r3",
 								"GET",
 								{},
@@ -91,7 +72,7 @@ type Chain10 = MergeRoute<
 	{},
 	{ n: 10 },
 	unknown
->;
+>
 
 type Chain20 = MergeRoute<
 	MergeRoute<
@@ -156,7 +137,7 @@ type Chain20 = MergeRoute<
 	{},
 	{ n: 20 },
 	unknown
->;
+>
 
 type Chain30 = MergeRoute<
 	MergeRoute<
@@ -221,51 +202,51 @@ type Chain30 = MergeRoute<
 	{},
 	{ n: 30 },
 	unknown
->;
+>
 
 /* ---- depth stress tests ---- */
 
 describe("MergeRoute depth: 10 routes", () => {
 	it("first route accessible", () => {
-		expectTypeOf<Chain10["/r1"]["get"]["output"]>().toEqualTypeOf<{ n: 1 }>();
-	});
+		expectTypeOf<Chain10["/r1"]["get"]["output"]>().toEqualTypeOf<{ n: 1 }>()
+	})
 
 	it("last route accessible", () => {
-		expectTypeOf<Chain10["/r10"]["get"]["output"]>().toEqualTypeOf<{ n: 10 }>();
-	});
+		expectTypeOf<Chain10["/r10"]["get"]["output"]>().toEqualTypeOf<{ n: 10 }>()
+	})
 
 	it("middle route accessible", () => {
-		expectTypeOf<Chain10["/r5"]["get"]["output"]>().toEqualTypeOf<{ n: 5 }>();
-	});
-});
+		expectTypeOf<Chain10["/r5"]["get"]["output"]>().toEqualTypeOf<{ n: 5 }>()
+	})
+})
 
 describe("MergeRoute depth: 20 routes", () => {
 	it("first route accessible", () => {
-		expectTypeOf<Chain20["/r1"]["get"]["output"]>().toEqualTypeOf<{ n: 1 }>();
-	});
+		expectTypeOf<Chain20["/r1"]["get"]["output"]>().toEqualTypeOf<{ n: 1 }>()
+	})
 
 	it("route 15 accessible", () => {
-		expectTypeOf<Chain20["/r15"]["get"]["output"]>().toEqualTypeOf<{ n: 15 }>();
-	});
+		expectTypeOf<Chain20["/r15"]["get"]["output"]>().toEqualTypeOf<{ n: 15 }>()
+	})
 
 	it("last route accessible", () => {
-		expectTypeOf<Chain20["/r20"]["get"]["output"]>().toEqualTypeOf<{ n: 20 }>();
-	});
-});
+		expectTypeOf<Chain20["/r20"]["get"]["output"]>().toEqualTypeOf<{ n: 20 }>()
+	})
+})
 
 describe("MergeRoute depth: 30 routes", () => {
 	it("first route accessible", () => {
-		expectTypeOf<Chain30["/r1"]["get"]["output"]>().toEqualTypeOf<{ n: 1 }>();
-	});
+		expectTypeOf<Chain30["/r1"]["get"]["output"]>().toEqualTypeOf<{ n: 1 }>()
+	})
 
 	it("route 25 accessible", () => {
-		expectTypeOf<Chain30["/r25"]["get"]["output"]>().toEqualTypeOf<{ n: 25 }>();
-	});
+		expectTypeOf<Chain30["/r25"]["get"]["output"]>().toEqualTypeOf<{ n: 25 }>()
+	})
 
 	it("last route accessible", () => {
-		expectTypeOf<Chain30["/r30"]["get"]["output"]>().toEqualTypeOf<{ n: 30 }>();
-	});
-});
+		expectTypeOf<Chain30["/r30"]["get"]["output"]>().toEqualTypeOf<{ n: 30 }>()
+	})
+})
 
 /* ---- same path, different methods ---- */
 
@@ -284,29 +265,29 @@ describe("MergeRoute same path different methods", () => {
 		{},
 		{ deleted: true },
 		unknown
-	>;
+	>
 
 	it("GET method accessible", () => {
 		expectTypeOf<Multi["/users"]["get"]["output"]>().toEqualTypeOf<{
-			list: true;
-		}>();
-	});
+			list: true
+		}>()
+	})
 
 	it("POST method accessible", () => {
 		expectTypeOf<Multi["/users"]["post"]["output"]>().toEqualTypeOf<{
-			created: true;
-		}>();
+			created: true
+		}>()
 		expectTypeOf<Multi["/users"]["post"]["input"]>().toEqualTypeOf<{
-			json: { name: string };
-		}>();
-	});
+			json: { name: string }
+		}>()
+	})
 
 	it("DELETE method accessible", () => {
 		expectTypeOf<Multi["/users"]["delete"]["output"]>().toEqualTypeOf<{
-			deleted: true;
-		}>();
-	});
-});
+			deleted: true
+		}>()
+	})
+})
 
 /* ---- full honey() builder chain with 20+ routes ---- */
 
@@ -355,35 +336,35 @@ describe("honey() builder chain with 20+ routes", () => {
 		.handler((ctx) => ctx.res.text("ok", "20"))
 		.get("/r21")
 		.output({ "application/json": { ok: z.object({ id: z.string() }) } })
-		.handler((ctx) => ctx.res.json("ok", { id: "1" }));
+		.handler((ctx) => ctx.res.json("ok", { id: "1" }))
 
-	type Routes = InferRoutes<typeof app>;
+	type Routes = InferRoutes<typeof app>
 
 	it("InferRoutes resolves", () => {
-		expectTypeOf<Routes>().toHaveProperty("/r1");
-		expectTypeOf<Routes>().toHaveProperty("/r21");
-	});
+		expectTypeOf<Routes>().toHaveProperty("/r1")
+		expectTypeOf<Routes>().toHaveProperty("/r21")
+	})
 
 	it("InferRouteInput works", () => {
-		type Input = InferRouteInput<typeof app, "/r11", "post">;
-		expectTypeOf<Input>().toMatchTypeOf<{ json: { x: string } }>();
-	});
+		type Input = InferRouteInput<typeof app, "/r11", "post">
+		expectTypeOf<Input>().toMatchTypeOf<{ json: { x: string } }>()
+	})
 
 	it("InferRouteOutput works", () => {
-		type Output = InferRouteOutput<typeof app, "/r21", "get">;
-		expectTypeOf<Output>().toHaveProperty("application/json");
-	});
+		type Output = InferRouteOutput<typeof app, "/r21", "get">
+		expectTypeOf<Output>().toHaveProperty("application/json")
+	})
 
 	it("InferRouteCtx works", () => {
-		type Ctx = InferRouteCtx<typeof app, "/r1", "get">;
-		expectTypeOf<Ctx>().toMatchTypeOf<{ req: Request }>();
-	});
+		type Ctx = InferRouteCtx<typeof app, "/r1", "get">
+		expectTypeOf<Ctx>().toMatchTypeOf<{ req: Request }>()
+	})
 
 	it("InferRouteErrors works on route without errors", () => {
-		type Errors = InferRouteErrors<typeof app, "/r1", "get">;
-		expectTypeOf<Errors>().toBeNever();
-	});
-});
+		type Errors = InferRouteErrors<typeof app, "/r1", "get">
+		expectTypeOf<Errors>().toBeNever()
+	})
+})
 
 /* ---- client types with 20+ routes ---- */
 
@@ -429,26 +410,26 @@ describe("client types with 20+ routes", () => {
 		.handler((ctx) => ctx.res.text("ok", "19"))
 		.post("/c20")
 		.input({ json: z.object({ name: z.string() }) })
-		.handler((ctx) => ctx.res.json("created", { name: ctx.input.json.name }));
+		.handler((ctx) => ctx.res.json("created", { name: ctx.input.json.name }))
 
-	type Routes = InferRoutes<typeof app>;
+	type Routes = InferRoutes<typeof app>
 
 	it("PathsForMethod resolves", () => {
-		type GetPaths = PathsForMethod<Routes, "get">;
-		expectTypeOf<"/c1">().toMatchTypeOf<GetPaths>();
-		expectTypeOf<"/c19">().toMatchTypeOf<GetPaths>();
-	});
+		type GetPaths = PathsForMethod<Routes, "get">
+		expectTypeOf<"/c1">().toMatchTypeOf<GetPaths>()
+		expectTypeOf<"/c19">().toMatchTypeOf<GetPaths>()
+	})
 
 	it("InputFor works", () => {
-		type Input = InputFor<Routes, "/c20", "post">;
-		expectTypeOf<Input>().toEqualTypeOf<{ json: { name: string } }>();
-	});
+		type Input = InputFor<Routes, "/c20", "post">
+		expectTypeOf<Input>().toEqualTypeOf<{ json: { name: string } }>()
+	})
 
 	it("ErrorsFor works", () => {
-		type E = ErrorsFor<Routes, "/c1", "get">;
-		expectTypeOf<E>().toBeNever();
-	});
-});
+		type E = ErrorsFor<Routes, "/c1", "get">
+		expectTypeOf<E>().toBeNever()
+	})
+})
 
 /* ---- .route() composition still works ---- */
 
@@ -459,23 +440,21 @@ describe(".route() composition after change", () => {
 			.output({
 				"application/json": { ok: z.object({ id: z.string() }).array() },
 			})
-			.handler((ctx) => ctx.res.json("ok", [{ id: "1" }]));
+			.handler((ctx) => ctx.res.json("ok", [{ id: "1" }]))
 
 		const posts = honey<{}>()
 			.get("/posts")
 			.output({
 				"application/json": { ok: z.object({ title: z.string() }).array() },
 			})
-			.handler((ctx) => ctx.res.json("ok", [{ title: "hi" }]));
+			.handler((ctx) => ctx.res.json("ok", [{ title: "hi" }]))
 
-		const app = honey<{}>().route(users).route(posts);
-		type Routes = InferRoutes<typeof app>;
+		const app = honey<{}>().route(users).route(posts)
+		type Routes = InferRoutes<typeof app>
 
-		expectTypeOf<PathsForMethod<Routes, "get">>().toMatchTypeOf<
-			"/posts" | "/users"
-		>();
-	});
-});
+		expectTypeOf<PathsForMethod<Routes, "get">>().toMatchTypeOf<"/posts" | "/users">()
+	})
+})
 
 /* ---- meta preserved across many routes ---- */
 
@@ -494,18 +473,18 @@ describe("meta preserved across routes", () => {
 			.handler((ctx) => ctx.res.text("ok", "5"))
 			.get("/r6")
 			.meta({ summary: "Route 6", tags: ["test"] })
-			.handler((ctx) => ctx.res.text("ok", "6"));
+			.handler((ctx) => ctx.res.text("ok", "6"))
 
-		type Meta = InferRouteMeta<typeof app, "/r6", "get">;
+		type Meta = InferRouteMeta<typeof app, "/r6", "get">
 		/* meta is stored at route-builder level, not in route record — returns never */
-		expectTypeOf<Meta>().toBeNever();
-	});
-});
+		expectTypeOf<Meta>().toBeNever()
+	})
+})
 
 /* ---- 60+ route builder chain mirrors real app — meta, input, output, errors, handler ---- */
 
 describe("honey() builder with 60+ routes (real-world pattern)", () => {
-	const errs = defineErrors({ forbidden: "forbidden", not_found: "not_found" });
+	const errs = defineErrors({ forbidden: "forbidden", not_found: "not_found" })
 
 	const bigApp = honey<{}>()
 		.meta<{ auth: boolean }>()
@@ -845,43 +824,43 @@ describe("honey() builder with 60+ routes (real-world pattern)", () => {
 		.post("/v1/api-keys/last-used")
 		.meta({ auth: true })
 		.input({ json: z.object({ ids: z.string().array() }) })
-		.handler((c) => c.res.json("ok", {}));
+		.handler((c) => c.res.json("ok", {}))
 
-	type BigRoutes = InferRoutes<typeof bigApp>;
+	type BigRoutes = InferRoutes<typeof bigApp>
 
 	it("app is not any", () => {
-		expectTypeOf(bigApp).not.toBeAny();
-	});
+		expectTypeOf(bigApp).not.toBeAny()
+	})
 
 	it("InferRoutes is not any/never", () => {
-		expectTypeOf<BigRoutes>().not.toBeAny();
-		expectTypeOf<BigRoutes>().not.toBeNever();
-	});
+		expectTypeOf<BigRoutes>().not.toBeAny()
+		expectTypeOf<BigRoutes>().not.toBeNever()
+	})
 
 	it("first route accessible", () => {
-		expectTypeOf<BigRoutes>().toHaveProperty("/v1/auth/register");
-	});
+		expectTypeOf<BigRoutes>().toHaveProperty("/v1/auth/register")
+	})
 
 	it("last route accessible", () => {
-		expectTypeOf<BigRoutes>().toHaveProperty("/v1/api-keys/last-used");
-	});
+		expectTypeOf<BigRoutes>().toHaveProperty("/v1/api-keys/last-used")
+	})
 
 	it("PathsForMethod resolves GET and POST", () => {
-		type GetPaths = PathsForMethod<BigRoutes, "get">;
-		expectTypeOf<"/v1/auth/me">().toMatchTypeOf<GetPaths>();
-		type PostPaths = PathsForMethod<BigRoutes, "post">;
-		expectTypeOf<"/v1/auth/register">().toMatchTypeOf<PostPaths>();
-	});
+		type GetPaths = PathsForMethod<BigRoutes, "get">
+		expectTypeOf<"/v1/auth/me">().toMatchTypeOf<GetPaths>()
+		type PostPaths = PathsForMethod<BigRoutes, "post">
+		expectTypeOf<"/v1/auth/register">().toMatchTypeOf<PostPaths>()
+	})
 
 	it("InputFor extracts schemas", () => {
-		type Input = InputFor<BigRoutes, "/v1/auth/register", "post">;
+		type Input = InputFor<BigRoutes, "/v1/auth/register", "post">
 		expectTypeOf<Input>().toMatchTypeOf<{
-			json: { email: string; password: string };
-		}>();
-	});
+			json: { email: string; password: string }
+		}>()
+	})
 
 	it("ErrorsFor extracts route errors", () => {
-		type E = ErrorsFor<BigRoutes, "/v1/auth/me", "get">;
-		expectTypeOf<E>().toEqualTypeOf<"not_found">();
-	});
-});
+		type E = ErrorsFor<BigRoutes, "/v1/auth/me", "get">
+		expectTypeOf<E>().toEqualTypeOf<"not_found">()
+	})
+})

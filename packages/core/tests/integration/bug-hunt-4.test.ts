@@ -313,9 +313,7 @@ describe("bug-hunt-4: static vs dynamic route priority", () => {
 	it("/users/me matches static before /users/:id", async () => {
 		const app = honey<{}>()
 		app.get("/users/me").handler((ctx) => ctx.res.json("ok", { route: "me" }))
-		app
-			.get("/users/:id")
-			.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "dynamic" }))
+		app.get("/users/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, route: "dynamic" }))
 
 		const meRes = await app.fetch(new Request("http://localhost/users/me"), {})
 		expect(meRes.status).toBe(200)

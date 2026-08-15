@@ -97,9 +97,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "@lovrozagar/honey"', "export const myApp = honey<{ KEY: string }>()"].join(
-				"\n",
-			),
+			['import { honey } from "@lovrozagar/honey"', "export const myApp = honey<{ KEY: string }>()"].join("\n"),
 		)
 
 		const result = await extractBaseCtx({ entryPath, exportName: "myApp" })
@@ -162,9 +160,7 @@ describe("extractBaseCtx", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{ X: number }>()"].join(
-				"\n",
-			),
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{ X: number }>()"].join("\n"),
 		)
 
 		const result = await extractBaseCtx({
@@ -263,9 +259,7 @@ describe("extractChainTypes", () => {
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",
-			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{ DB: string }>()"].join(
-				"\n",
-			),
+			['import { honey } from "@lovrozagar/honey"', "export const app = honey<{ DB: string }>()"].join("\n"),
 		)
 
 		const result = await extractChainTypes({ entryPath, exportName: "app" })

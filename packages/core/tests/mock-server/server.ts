@@ -52,18 +52,21 @@ export function createMockServer() {
 	})
 
 	/* POST /users */
-	authMiddleware.post("/users").meta({ mcp: true }).handler(async (ctx) => {
-		const body = (await ctx.req.json()) as { email?: string; name?: string }
-		if (!body.name || !body.email) {
-			return ctx.res.json("unprocessable_entity", { message: "Missing name or email", status: 422 })
-		}
-		const id = `user-${nextId++}`
-		const user: User = { email: body.email, id, name: body.name }
-		users.set(id, user)
-		const response = ctx.res.json("created", user)
-		response.headers.set("x-invalidate", "GET /users")
-		return response
-	})
+	authMiddleware
+		.post("/users")
+		.meta({ mcp: true })
+		.handler(async (ctx) => {
+			const body = (await ctx.req.json()) as { email?: string; name?: string }
+			if (!body.name || !body.email) {
+				return ctx.res.json("unprocessable_entity", { message: "Missing name or email", status: 422 })
+			}
+			const id = `user-${nextId++}`
+			const user: User = { email: body.email, id, name: body.name }
+			users.set(id, user)
+			const response = ctx.res.json("created", user)
+			response.headers.set("x-invalidate", "GET /users")
+			return response
+		})
 
 	/* GET /users/:id */
 	authMiddleware.get("/users/:id").handler((ctx) => {

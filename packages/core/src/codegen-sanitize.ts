@@ -13,13 +13,7 @@ const SCHEMA_VALUE_KEYS = new Set([
 	"unevaluatedProperties",
 ])
 
-const SCHEMA_MAP_KEYS = new Set([
-	"$defs",
-	"definitions",
-	"dependentSchemas",
-	"patternProperties",
-	"properties",
-])
+const SCHEMA_MAP_KEYS = new Set(["$defs", "definitions", "dependentSchemas", "patternProperties", "properties"])
 
 const SCHEMA_ARRAY_KEYS = new Set(["allOf", "anyOf", "oneOf", "prefixItems"])
 

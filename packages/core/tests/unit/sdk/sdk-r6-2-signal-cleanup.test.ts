@@ -58,11 +58,12 @@ describe("#R6-2 signal cleanup — Layer A invariants", () => {
 	})
 
 	it("request completing before signal fires still resolves with mocked body", async () => {
-		const { fetcher } = captureFetch(() =>
-			new Response(JSON.stringify({ ok: true }), {
-				headers: { "content-type": "application/json" },
-				status: 200,
-			}),
+		const { fetcher } = captureFetch(
+			() =>
+				new Response(JSON.stringify({ ok: true }), {
+					headers: { "content-type": "application/json" },
+					status: 200,
+				}),
 		)
 		const sdk = createSDK<TestSDK>(serviceMap, {
 			baseURL: "http://api.example.com",

@@ -15,9 +15,7 @@ function loadFixture(lang: string, name: string): Record<string, unknown> {
 	return JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>
 }
 
-function minimalSpec(
-	overrides: Record<string, unknown> = {},
-): Parameters<typeof toIR>[0] {
+function minimalSpec(overrides: Record<string, unknown> = {}): Parameters<typeof toIR>[0] {
 	return {
 		info: { title: "T", version: "1" },
 		openapi: "3.0.0",
@@ -26,11 +24,7 @@ function minimalSpec(
 	} as Parameters<typeof toIR>[0]
 }
 
-function specWithOp(
-	path: string,
-	method: string,
-	op: Record<string, unknown>,
-): Parameters<typeof toIR>[0] {
+function specWithOp(path: string, method: string, op: Record<string, unknown>): Parameters<typeof toIR>[0] {
 	return minimalSpec({ paths: { [path]: { [method]: op } } })
 }
 
@@ -168,9 +162,7 @@ describe("schemaToIR", () => {
 	})
 
 	it("object with additionalProperties: schema", () => {
-		expect(
-			schemaToIR({ additionalProperties: { type: "string" }, type: "object" }),
-		).toEqual({
+		expect(schemaToIR({ additionalProperties: { type: "string" }, type: "object" })).toEqual({
 			additional: { kind: "scalar", type: "string" },
 			fields: [],
 			kind: "object",
@@ -221,16 +213,18 @@ describe("schemaToIR", () => {
 	})
 
 	it("array of refs", () => {
-		expect(
-			schemaToIR({ items: { $ref: "#/components/schemas/Foo" }, type: "array" }),
-		).toEqual({ items: { kind: "ref", name: "Foo" }, kind: "array" })
+		expect(schemaToIR({ items: { $ref: "#/components/schemas/Foo" }, type: "array" })).toEqual({
+			items: { kind: "ref", name: "Foo" },
+			kind: "array",
+		})
 	})
 
 	it("tuple", () => {
-		expect(
-			schemaToIR({ items: [{ type: "string" }, { type: "integer" }], type: "array" }),
-		).toEqual({
-			items: [{ kind: "scalar", type: "string" }, { kind: "scalar", type: "integer" }],
+		expect(schemaToIR({ items: [{ type: "string" }, { type: "integer" }], type: "array" })).toEqual({
+			items: [
+				{ kind: "scalar", type: "string" },
+				{ kind: "scalar", type: "integer" },
+			],
 			kind: "tuple",
 		})
 	})
@@ -251,9 +245,10 @@ describe("schemaToIR", () => {
 	})
 
 	it("anyOf with null variant, single non-null", () => {
-		expect(
-			schemaToIR({ anyOf: [{ type: "string" }, { type: "null" }] }),
-		).toEqual({ inner: { kind: "scalar", type: "string" }, kind: "nullable" })
+		expect(schemaToIR({ anyOf: [{ type: "string" }, { type: "null" }] })).toEqual({
+			inner: { kind: "scalar", type: "string" },
+			kind: "nullable",
+		})
 	})
 
 	it("anyOf with null variant, multiple non-null", () => {
@@ -263,7 +258,10 @@ describe("schemaToIR", () => {
 		expect(result).toEqual({
 			inner: {
 				kind: "union",
-				variants: [{ kind: "scalar", type: "string" }, { kind: "scalar", type: "integer" }],
+				variants: [
+					{ kind: "scalar", type: "string" },
+					{ kind: "scalar", type: "integer" },
+				],
 			},
 			kind: "nullable",
 		})
@@ -282,11 +280,12 @@ describe("schemaToIR", () => {
 
 	/* ---- union ---- */
 	it("oneOf without discriminator", () => {
-		expect(
-			schemaToIR({ oneOf: [{ type: "string" }, { type: "integer" }] }),
-		).toEqual({
+		expect(schemaToIR({ oneOf: [{ type: "string" }, { type: "integer" }] })).toEqual({
 			kind: "union",
-			variants: [{ kind: "scalar", type: "string" }, { kind: "scalar", type: "integer" }],
+			variants: [
+				{ kind: "scalar", type: "string" },
+				{ kind: "scalar", type: "integer" },
+			],
 		})
 	})
 
@@ -299,10 +298,7 @@ describe("schemaToIR", () => {
 				},
 				propertyName: "kind",
 			},
-			oneOf: [
-				{ $ref: "#/components/schemas/Dog" },
-				{ $ref: "#/components/schemas/Cat" },
-			],
+			oneOf: [{ $ref: "#/components/schemas/Dog" }, { $ref: "#/components/schemas/Cat" }],
 		})
 		expect(result).toEqual({
 			discriminator: {
@@ -310,16 +306,20 @@ describe("schemaToIR", () => {
 				propertyName: "kind",
 			},
 			kind: "union",
-			variants: [{ kind: "ref", name: "Dog" }, { kind: "ref", name: "Cat" }],
+			variants: [
+				{ kind: "ref", name: "Dog" },
+				{ kind: "ref", name: "Cat" },
+			],
 		})
 	})
 
 	it("anyOf without null variant", () => {
-		expect(
-			schemaToIR({ anyOf: [{ type: "string" }, { type: "integer" }] }),
-		).toEqual({
+		expect(schemaToIR({ anyOf: [{ type: "string" }, { type: "integer" }] })).toEqual({
 			kind: "union",
-			variants: [{ kind: "scalar", type: "string" }, { kind: "scalar", type: "integer" }],
+			variants: [
+				{ kind: "scalar", type: "string" },
+				{ kind: "scalar", type: "integer" },
+			],
 		})
 	})
 
@@ -331,7 +331,10 @@ describe("schemaToIR", () => {
 			}),
 		).toEqual({
 			kind: "allOf",
-			parts: [{ kind: "ref", name: "A" }, { kind: "ref", name: "B" }],
+			parts: [
+				{ kind: "ref", name: "A" },
+				{ kind: "ref", name: "B" },
+			],
 		})
 	})
 
@@ -352,10 +355,7 @@ describe("schemaToIR", () => {
 
 	it("allOf mixed ref + inline preserves order", () => {
 		const result = schemaToIR({
-			allOf: [
-				{ $ref: "#/components/schemas/Base" },
-				{ properties: { extra: { type: "string" } }, type: "object" },
-			],
+			allOf: [{ $ref: "#/components/schemas/Base" }, { properties: { extra: { type: "string" } }, type: "object" }],
 		})
 		expect(result.kind).toBe("allOf")
 		if (result.kind === "allOf") {
@@ -528,9 +528,7 @@ describe("toIR", () => {
 			required: false,
 		})
 		if (body?.kind === "multipart") {
-			expect(body.parts).toEqual([
-				{ name: "file", schema: { kind: "binary" }, type: "file" },
-			])
+			expect(body.parts).toEqual([{ name: "file", schema: { kind: "binary" }, type: "file" }])
 		}
 	})
 
@@ -759,7 +757,7 @@ describe("toIR", () => {
 		const spec = minimalSpec({
 			paths: {
 				"/items": {
-					get: { responses: {} }, /* no operationId */
+					get: { responses: {} } /* no operationId */,
 					post: { operationId: "createItem", responses: {} },
 				},
 			},
@@ -880,8 +878,7 @@ describe("toIR (fixture round-trip)", () => {
 	}
 
 	function countComponents(spec: Record<string, unknown>): number {
-		const schemas = (spec as { components?: { schemas?: Record<string, unknown> } }).components
-			?.schemas
+		const schemas = (spec as { components?: { schemas?: Record<string, unknown> } }).components?.schemas
 		return schemas ? Object.keys(schemas).length : 0
 	}
 

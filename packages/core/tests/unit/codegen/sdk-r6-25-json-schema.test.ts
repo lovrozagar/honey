@@ -68,15 +68,11 @@ describe("jsonSchemaToTS — Layer A invariants", () => {
 	})
 
 	it("Layer A: { type: 'object', additionalProperties: { type: 'string' } } -> 'Record<string, string>'", () => {
-		expect(
-			jsonSchemaToTS({ additionalProperties: { type: "string" }, type: "object" }),
-		).toBe("Record<string, string>")
+		expect(jsonSchemaToTS({ additionalProperties: { type: "string" }, type: "object" })).toBe("Record<string, string>")
 	})
 
 	it("Layer A: { oneOf: [string, number] } -> 'string | number'", () => {
-		expect(
-			jsonSchemaToTS({ oneOf: [{ type: "string" }, { type: "number" }] }),
-		).toBe("string | number")
+		expect(jsonSchemaToTS({ oneOf: [{ type: "string" }, { type: "number" }] })).toBe("string | number")
 	})
 
 	it("Layer A: allOf two objects -> result includes '&'", () => {
@@ -189,9 +185,9 @@ describe.runIf(PHASE_I_FIXED)("jsonSchemaToTS — Layer B' regression", () => {
 	})
 
 	it("Layer B' post-fix: { type: 'object', additionalProperties: string, nullable: true } -> 'Record<string, string> | null'", () => {
-		expect(
-			jsonSchemaToTS({ additionalProperties: { type: "string" }, nullable: true, type: "object" }),
-		).toBe("Record<string, string> | null")
+		expect(jsonSchemaToTS({ additionalProperties: { type: "string" }, nullable: true, type: "object" })).toBe(
+			"Record<string, string> | null",
+		)
 	})
 
 	it("Layer B' post-fix: { type: 'null' } stays 'null' (no double null appended)", () => {

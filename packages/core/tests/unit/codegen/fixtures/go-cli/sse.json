@@ -1,36 +1,36 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Go SSE", "version": "1.0.0" },
-  "paths": {
-    "/events/stream": {
-      "get": {
-        "operationId": "events.stream",
-        "summary": "Stream events",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "last-event-id",
-            "required": false,
-            "schema": { "type": "string" }
-          },
-          {
-            "in": "query",
-            "name": "topic",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Event stream",
-            "content": {
-              "text/event-stream": {
-                "schema": { "type": "string" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Go SSE", "version": "1.0.0" },
+	"paths": {
+		"/events/stream": {
+			"get": {
+				"operationId": "events.stream",
+				"summary": "Stream events",
+				"parameters": [
+					{
+						"in": "query",
+						"name": "last-event-id",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"in": "query",
+						"name": "topic",
+						"required": false,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Event stream",
+						"content": {
+							"text/event-stream": {
+								"schema": { "type": "string" }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

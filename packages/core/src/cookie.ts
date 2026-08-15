@@ -83,7 +83,6 @@ export function serializeCookie(name: string, opts: CookieOptions): string {
 	}
 	if (opts.httpOnly) cookie += "; HttpOnly"
 	if (secure) cookie += "; Secure"
-	if (opts.sameSite)
-		cookie += `; SameSite=${opts.sameSite.charAt(0).toUpperCase()}${opts.sameSite.slice(1)}`
+	if (opts.sameSite) cookie += `; SameSite=${opts.sameSite.charAt(0).toUpperCase()}${opts.sameSite.slice(1)}`
 	return cookie
 }

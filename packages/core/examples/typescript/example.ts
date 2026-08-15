@@ -49,11 +49,20 @@ const sdk = new MockSDK({
 	onLog: (entry) => console.debug(entry.event, entry.operation, entry.duration_ms, entry.status),
 	/* §6: hooks chain in declaration order, awaited in order, may mutate ctx. */
 	onRequest: [
-		(ctx) => { ctx.headers["X-Trace-Id"] = crypto.randomUUID(); return Promise.resolve() },
-		(ctx) => { ctx.headers["X-App"] = "example"; return Promise.resolve() },
+		(ctx) => {
+			ctx.headers["X-Trace-Id"] = crypto.randomUUID()
+			return Promise.resolve()
+		},
+		(ctx) => {
+			ctx.headers["X-App"] = "example"
+			return Promise.resolve()
+		},
 	],
 	onResponse: [
-		(ctx) => { if (ctx.status >= 500) console.warn("5xx:", ctx.status); return Promise.resolve() },
+		(ctx) => {
+			if (ctx.status >= 500) console.warn("5xx:", ctx.status)
+			return Promise.resolve()
+		},
 	],
 	throwOnError: true,
 	timeout: 10_000,
@@ -107,7 +116,9 @@ for await (const ev of sdk.streamEvents()) {
 /* §12: WebSocket — typed bidirectional channel. Client close returns code
  * 1000; server-initiated close surfaces a reason. */
 const ws = sdk.connectWs()
-await new Promise<void>((resolve) => { ws.on("open", () => resolve()) })
+await new Promise<void>((resolve) => {
+	ws.on("open", () => resolve())
+})
 ws.on("message", (data: string) => {
 	console.log("ws recv:", data)
 	ws.close(1000, "done")
@@ -125,12 +136,24 @@ function makeCustomAdapter(): TransportAdapter {
 			let onError: (e: unknown) => void = () => {}
 			const conn: TransportConnection = {
 				close() {},
-				get onClose() { return onClose },
-				set onClose(cb) { onClose = cb },
-				get onError() { return onError },
-				set onError(cb) { onError = cb },
-				get onFrame() { return onFrame },
-				set onFrame(cb) { onFrame = cb },
+				get onClose() {
+					return onClose
+				},
+				set onClose(cb) {
+					onClose = cb
+				},
+				get onError() {
+					return onError
+				},
+				set onError(cb) {
+					onError = cb
+				},
+				get onFrame() {
+					return onFrame
+				},
+				set onFrame(cb) {
+					onFrame = cb
+				},
 				send(_data) {},
 			}
 			queueMicrotask(() => {
@@ -162,7 +185,10 @@ const hasher = createHash("sha256")
 let sent = 0
 const stream = new ReadableStream<Uint8Array>({
 	pull(controller) {
-		if (sent >= TOTAL) { controller.close(); return }
+		if (sent >= TOTAL) {
+			controller.close()
+			return
+		}
 		const len = Math.min(CHUNK, TOTAL - sent)
 		const chunk = new Uint8Array(len)
 		for (let i = 0; i < len; i++) chunk[i] = (sent + i) & 0xff

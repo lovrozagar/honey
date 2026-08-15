@@ -7,8 +7,7 @@ type CSRFOptions = {
 }
 
 const safeMethodRe = /^(GET|HEAD|OPTIONS)$/
-const formContentTypeRe =
-	/^\b(application\/x-www-form-urlencoded|multipart\/form-data|text\/plain)\b/i
+const formContentTypeRe = /^\b(application\/x-www-form-urlencoded|multipart\/form-data|text\/plain)\b/i
 
 function matchOrigin(origin: string, config: CSRFOptions["origin"]): boolean {
 	if (config === undefined) return false

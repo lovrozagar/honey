@@ -156,12 +156,8 @@ export function createApp(wsAdapter?: WSAdapter) {
 			if (!body.name || !body.slug) {
 				throw errors.invalid_input({
 					fields: {
-						name: body.name
-							? []
-							: [{ error_key: "required", message: "Name is required", path: "name" }],
-						slug: body.slug
-							? []
-							: [{ error_key: "required", message: "Slug is required", path: "slug" }],
+						name: body.name ? [] : [{ error_key: "required", message: "Name is required", path: "name" }],
+						slug: body.slug ? [] : [{ error_key: "required", message: "Slug is required", path: "slug" }],
 					},
 				})
 			}

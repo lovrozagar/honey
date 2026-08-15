@@ -13,9 +13,7 @@ describe("accepts — internal", () => {
 	})
 
 	it("highest q wins", () => {
-		expect(
-			accepts(req("text/csv;q=1.0, application/json;q=0.9"), ["application/json", "text/csv"]),
-		).toBe("text/csv")
+		expect(accepts(req("text/csv;q=1.0, application/json;q=0.9"), ["application/json", "text/csv"])).toBe("text/csv")
 	})
 
 	it("no match → null", () => {
@@ -35,15 +33,11 @@ describe("accepts — internal", () => {
 	})
 
 	it("q=0 excluded from matching", () => {
-		expect(accepts(req("text/html;q=0, application/json"), ["text/html", "application/json"])).toBe(
-			"application/json",
-		)
+		expect(accepts(req("text/html;q=0, application/json"), ["text/html", "application/json"])).toBe("application/json")
 	})
 
 	it("same q → server preference (first in supported array)", () => {
-		expect(accepts(req("text/csv, application/json"), ["application/json", "text/csv"])).toBe(
-			"application/json",
-		)
+		expect(accepts(req("text/csv, application/json"), ["application/json", "text/csv"])).toBe("application/json")
 	})
 
 	it("malformed Accept header → first supported", () => {
@@ -69,9 +63,7 @@ describe("accepts — internal", () => {
 	})
 
 	it("mixed case in Accept matches lowercase supported", () => {
-		expect(
-			accepts(req("TEXT/CSV;q=1.0, application/json;q=0.5"), ["application/json", "text/csv"]),
-		).toBe("text/csv")
+		expect(accepts(req("TEXT/CSV;q=1.0, application/json;q=0.5"), ["application/json", "text/csv"])).toBe("text/csv")
 	})
 })
 

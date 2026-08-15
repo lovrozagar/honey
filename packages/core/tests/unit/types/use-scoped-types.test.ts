@@ -381,11 +381,7 @@ describe("scoped middleware — type regression tests", () => {
 	it("T24. .use(path, mw) return type preserves all OTHER chain generics unchanged", () => {
 		const errors = defineErrors({ err: "internal_server_error" })
 
-		const a = honey<Env>()
-			.basePath("/api")
-			.errorFactory(errors)
-			.defaultErrors("err")
-			.meta({ v: 1 })
+		const a = honey<Env>().basePath("/api").errorFactory(errors).defaultErrors("err").meta({ v: 1 })
 
 		const b = a.use("/admin", adminMw)
 
@@ -395,10 +391,13 @@ describe("scoped middleware — type regression tests", () => {
 	})
 
 	it("T25. .route(sub) — sub with scoped mw merged into parent — parent's own .get() after merge sees NO sub scoped adds", () => {
-		const sub = honey<Env>().use("/x", adminMw).get("/x/a").handler((c) => {
-			expectTypeOf(c.adminOnly).toEqualTypeOf<string>()
-			return c.res.text("ok", "a")
-		})
+		const sub = honey<Env>()
+			.use("/x", adminMw)
+			.get("/x/a")
+			.handler((c) => {
+				expectTypeOf(c.adminOnly).toEqualTypeOf<string>()
+				return c.res.text("ok", "a")
+			})
 
 		const parent = honey<Env>().route(sub)
 		parent.get("/x/b").handler((c) => {

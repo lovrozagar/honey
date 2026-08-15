@@ -27,8 +27,7 @@ export type OpenApiRuntime = {
 	toYaml: YamlGenerate
 }
 
-const MISSING =
-	'Runtime OpenAPI/manifest generation requires `import "@lovrozagar/honey/openapi"` in the app entry.'
+const MISSING = 'Runtime OpenAPI/manifest generation requires `import "@lovrozagar/honey/openapi"` in the app entry.'
 
 let runtime: OpenApiRuntime | undefined
 

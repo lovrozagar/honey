@@ -1,37 +1,37 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Rust Realtime SSE", "version": "1.0.0" },
-  "paths": {
-    "/events/subscribe": {
-      "get": {
-        "operationId": "events.subscribe",
-        "summary": "Subscribe to event stream",
-        "x-realtime": true,
-        "parameters": [
-          {
-            "in": "query",
-            "name": "channel",
-            "required": true,
-            "schema": { "type": "string" }
-          },
-          {
-            "in": "query",
-            "name": "last_event_id",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Event stream",
-            "content": {
-              "text/event-stream": {
-                "schema": { "type": "string" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Rust Realtime SSE", "version": "1.0.0" },
+	"paths": {
+		"/events/subscribe": {
+			"get": {
+				"operationId": "events.subscribe",
+				"summary": "Subscribe to event stream",
+				"x-realtime": true,
+				"parameters": [
+					{
+						"in": "query",
+						"name": "channel",
+						"required": true,
+						"schema": { "type": "string" }
+					},
+					{
+						"in": "query",
+						"name": "last_event_id",
+						"required": false,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Event stream",
+						"content": {
+							"text/event-stream": {
+								"schema": { "type": "string" }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

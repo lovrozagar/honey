@@ -1,81 +1,79 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Go Invalidation", "version": "1.0.0" },
-  "components": {
-    "schemas": {
-      "User": {
-        "type": "object",
-        "required": ["id", "email"],
-        "properties": {
-          "id": { "type": "string" },
-          "email": { "type": "string" }
-        }
-      },
-      "UserCreateInput": {
-        "type": "object",
-        "required": ["email"],
-        "properties": {
-          "email": { "type": "string" }
-        }
-      }
-    }
-  },
-  "paths": {
-    "/users": {
-      "get": {
-        "operationId": "users.list",
-        "summary": "List users",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "users.create",
-        "summary": "Create user",
-        "x-invalidate": ["GET /users", "GET /users/:id"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/UserCreateInput" }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/User" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/users/{id}": {
-      "get": {
-        "operationId": "users.getById",
-        "summary": "Get user by id",
-        "parameters": [
-          { "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/User" } }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Go Invalidation", "version": "1.0.0" },
+	"components": {
+		"schemas": {
+			"User": {
+				"type": "object",
+				"required": ["id", "email"],
+				"properties": {
+					"id": { "type": "string" },
+					"email": { "type": "string" }
+				}
+			},
+			"UserCreateInput": {
+				"type": "object",
+				"required": ["email"],
+				"properties": {
+					"email": { "type": "string" }
+				}
+			}
+		}
+	},
+	"paths": {
+		"/users": {
+			"get": {
+				"operationId": "users.list",
+				"summary": "List users",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"operationId": "users.create",
+				"summary": "Create user",
+				"x-invalidate": ["GET /users", "GET /users/:id"],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/UserCreateInput" }
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/User" }
+							}
+						}
+					}
+				}
+			}
+		},
+		"/users/{id}": {
+			"get": {
+				"operationId": "users.getById",
+				"summary": "Get user by id",
+				"parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string" } }],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/User" } }
+						}
+					}
+				}
+			}
+		}
+	}
 }

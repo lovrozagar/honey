@@ -5,14 +5,58 @@ import type { IRSchema } from "./codegen-ir.ts"
 import { goPascal } from "./go-type-emitter.ts"
 
 export const RUST_KEYWORDS = new Set([
-	"as", "break", "const", "continue", "crate", "else", "enum", "extern",
-	"false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod",
-	"move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct",
-	"super", "trait", "true", "type", "unsafe", "use", "where", "while",
-	"async", "await", "dyn",
+	"as",
+	"break",
+	"const",
+	"continue",
+	"crate",
+	"else",
+	"enum",
+	"extern",
+	"false",
+	"fn",
+	"for",
+	"if",
+	"impl",
+	"in",
+	"let",
+	"loop",
+	"match",
+	"mod",
+	"move",
+	"mut",
+	"pub",
+	"ref",
+	"return",
+	"self",
+	"Self",
+	"static",
+	"struct",
+	"super",
+	"trait",
+	"true",
+	"type",
+	"unsafe",
+	"use",
+	"where",
+	"while",
+	"async",
+	"await",
+	"dyn",
 	/* reserved / future */
-	"abstract", "become", "box", "do", "final", "macro", "override", "priv",
-	"typeof", "unsized", "virtual", "yield", "try",
+	"abstract",
+	"become",
+	"box",
+	"do",
+	"final",
+	"macro",
+	"override",
+	"priv",
+	"typeof",
+	"unsized",
+	"virtual",
+	"yield",
+	"try",
 ])
 
 export function rustPascal(name: string): string {
@@ -97,11 +141,16 @@ function hoistEnumName(parentName: string, fieldName: string): string {
 
 function primitiveFor(t: string | undefined): string | null {
 	switch (t) {
-		case "string": return "String"
-		case "integer": return "i64"
-		case "number": return "f64"
-		case "boolean": return "bool"
-		default: return null
+		case "string":
+			return "String"
+		case "integer":
+			return "i64"
+		case "number":
+			return "f64"
+		case "boolean":
+			return "bool"
+		default:
+			return null
 	}
 }
 
@@ -231,10 +280,9 @@ export function irRenderTopLevelRust(
 	if (ir.kind === "const") {
 		const rawType = raw?.type as string | undefined
 		const base = rawType ? (primitiveFor(rawType) ?? "String") : constBaseType(ir.value)
-		return [
-			`#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]`,
-			`pub struct ${typeName}(pub ${base});`,
-		].join("\n")
+		return [`#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]`, `pub struct ${typeName}(pub ${base});`].join(
+			"\n",
+		)
 	}
 
 	if (ir.kind === "allOf") {
@@ -396,17 +444,10 @@ export function irRenderTopLevelRust(
  * Render a schema as a Rust type expression for a struct field position.
  * Mutates `ctx.decls` when hoisting enums or anonymous structs.
  */
-export function renderUseRust(
-	schema: Record<string, unknown> | undefined,
-	ctx: RustRenderUseCtx,
-): string {
+export function renderUseRust(schema: Record<string, unknown> | undefined, ctx: RustRenderUseCtx): string {
 	return irRenderUseRust(schemaToIR(schema), ctx, ctx.depth ?? 0)
 }
 
-export function renderTopLevelRust(
-	name: string,
-	schema: Record<string, unknown>,
-	decls: Map<string, string>,
-): string {
+export function renderTopLevelRust(name: string, schema: Record<string, unknown>, decls: Map<string, string>): string {
 	return irRenderTopLevelRust(name, schemaToIR(schema), decls, schema)
 }

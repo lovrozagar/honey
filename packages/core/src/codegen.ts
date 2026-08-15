@@ -1,16 +1,6 @@
-import {
-	deriveErrorEnvelopeName,
-	deriveSchemaName,
-	isErrorEnvelope,
-	shortHash,
-} from "./codegen-schema-naming.ts"
+import { deriveErrorEnvelopeName, deriveSchemaName, isErrorEnvelope, shortHash } from "./codegen-schema-naming.ts"
 import type { SchemaNameContext } from "./codegen-schema-naming.ts"
-import {
-	effectJsonSchemaFn,
-	loadEffectJsonSchema,
-	loadToJSONSchema,
-	toJSONSchemaFn,
-} from "./codegen-loaders.ts"
+import { effectJsonSchemaFn, loadEffectJsonSchema, loadToJSONSchema, toJSONSchemaFn } from "./codegen-loaders.ts"
 import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
 import { methodsOf, namespacesOf, schemaToIR, toIR } from "./codegen-ir.ts"
 import type { IRNamespace } from "./codegen-ir.ts"
@@ -21,12 +11,7 @@ import type { Honey } from "./index.ts"
 import type { RouteHandler, TreeNode } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
 import { emitSchemaType } from "./type-emitter.ts"
-import type {
-	InputSchemaEntry,
-	InputSchemasDef,
-	OutputSchemaDef,
-	StandardSchemaLike,
-} from "./types.ts"
+import type { InputSchemaEntry, InputSchemasDef, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
 
 export { prepareCodegen } from "./codegen-loaders.ts"
@@ -314,12 +299,7 @@ function isMetaInternal(handler: RouteHandler): boolean {
 	return (handler.mt as { internal?: boolean } | null)?.internal === true
 }
 
-function walkTree(
-	node: TreeNode,
-	currentPath: string,
-	routes: CollectedRoute[],
-	includeSkipped?: boolean,
-): void {
+function walkTree(node: TreeNode, currentPath: string, routes: CollectedRoute[], includeSkipped?: boolean): void {
 	if (node.m !== null) {
 		for (const [method, handler] of Object.entries(node.m)) {
 			if (handler._skip && !includeSkipped) continue
@@ -362,10 +342,7 @@ function walkWSRoutes(node: TreeNode, currentPath: string, routes: CollectedWSRo
 
 type ErrorInfo = { errorKey: string; status: number; statusKey: string }
 
-function resolveErrorInfo(
-	errorKey: string,
-	factory: Record<string, () => HoneyError> | null,
-): ErrorInfo {
+function resolveErrorInfo(errorKey: string, factory: Record<string, () => HoneyError> | null): ErrorInfo {
 	if (factory?.[errorKey]) {
 		try {
 			const err = factory[errorKey]()
@@ -380,8 +357,7 @@ function resolveErrorInfo(
 function getErrorFactory<TEnv, TCtx>(
 	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
 ): Record<string, () => HoneyError> | null {
-	return (app as unknown as { _errorFactory: Record<string, () => HoneyError> | null })
-		._errorFactory
+	return (app as unknown as { _errorFactory: Record<string, () => HoneyError> | null })._errorFactory
 }
 
 export const DEFAULT_ERROR_JSON_SCHEMA: Record<string, unknown> = {
@@ -423,9 +399,7 @@ function getCustomErrorSchema<TEnv, TCtx>(
 	return (app as unknown as { _customErrorSchema: StandardSchemaLike | null })._customErrorSchema
 }
 
-function getErrorMeta(
-	factory: Record<string, () => HoneyError> | null,
-): Record<string, ErrorMetaEntry> | null {
+function getErrorMeta(factory: Record<string, () => HoneyError> | null): Record<string, ErrorMetaEntry> | null {
 	if (!factory) return null
 	return (factory as Record<symbol, Record<string, ErrorMetaEntry>>)[ERROR_META] ?? null
 }
@@ -455,9 +429,7 @@ export function normalizeSecurity(raw: unknown): Record<string, string[]>[] {
 		return raw.map((entry) => ({ [entry]: [] }))
 	}
 	if (raw.every((entry) => Array.isArray(entry))) {
-		return (raw as string[][]).map((group) =>
-			Object.fromEntries(group.map((s) => [s, []])),
-		)
+		return (raw as string[][]).map((group) => Object.fromEntries(group.map((s) => [s, []])))
 	}
 	if (raw.every((entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry))) {
 		return raw as Record<string, string[]>[]
@@ -486,9 +458,7 @@ function stripInternalProps(schema: Record<string, unknown>): Record<string, unk
 export function canonicalizeSchema(schema: Record<string, unknown>): string {
 	return JSON.stringify(schema, (_, value) => {
 		if (value && typeof value === "object" && !Array.isArray(value)) {
-			return Object.fromEntries(
-				Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
-			)
+			return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
 		}
 		return value
 	})
@@ -509,9 +479,7 @@ function isObjectSchema(schema: unknown): schema is Record<string, unknown> {
 	return s.type === "object" || (typeof s.properties === "object" && s.properties !== null)
 }
 
-function collectSchemaSlots(
-	paths: Record<string, Record<string, Record<string, unknown>>>,
-): SchemaSlot[] {
+function collectSchemaSlots(paths: Record<string, Record<string, Record<string, unknown>>>): SchemaSlot[] {
 	const slots: SchemaSlot[] = []
 
 	for (const [pathKey, methods] of Object.entries(paths)) {
@@ -615,8 +583,7 @@ function collectHoistedSchemas(
 		const slotName = slotNames.get(slot)
 		/* Mark slots whose schema is an error envelope — their nested objects (e.g. `fields`)
 		 * are env-specific and must not be named after the parent envelope's owner slot. */
-		if (slotName)
-			walkNestedObjects(slot.schema, slotName, [], nestedMap, isErrorEnvelope(slot.schema))
+		if (slotName) walkNestedObjects(slot.schema, slotName, [], nestedMap, isErrorEnvelope(slot.schema))
 	}
 
 	const schemas: Record<string, Record<string, unknown>> = {}
@@ -825,8 +792,7 @@ export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 		if (groupSlots.length === 1) {
 			name = deriveSchemaName(firstSlot.context)
 		} else if (isErrorEnvelope(firstSlot.schema)) {
-			const fallbackStatus =
-				firstSlot.context.role === "response" ? firstSlot.context.status : undefined
+			const fallbackStatus = firstSlot.context.role === "response" ? firstSlot.context.status : undefined
 			name = deriveErrorEnvelopeName(firstSlot.schema, fallbackStatus)
 		} else {
 			name = deriveSchemaName(firstSlot.context)
@@ -852,8 +818,11 @@ export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 	 * Error envelope slots (any tier) mark their nested schemas as envelope-owned so
 	 * envelope-exclusive nesting (e.g. `fields`) is not hoisted under a per-spec name. */
 	const allTopLevelNames = new Set(slotNames.values())
-	const { schemas: hoistedSchemas, canonicalToName: hoistedCanonicalToName } =
-		collectHoistedSchemas(slots, slotNames, allTopLevelNames)
+	const { schemas: hoistedSchemas, canonicalToName: hoistedCanonicalToName } = collectHoistedSchemas(
+		slots,
+		slotNames,
+		allTopLevelNames,
+	)
 
 	/* Build components map, rewriting nested fields → $refs where hoisted */
 	const extractedSchemas: Record<string, Record<string, unknown>> = {}
@@ -863,9 +832,7 @@ export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 		if (name && !seenNames.has(name)) {
 			seenNames.add(name)
 			extractedSchemas[name] =
-				hoistedCanonicalToName.size > 0
-					? rewriteNestedRefs(slot.schema, hoistedCanonicalToName)
-					: slot.schema
+				hoistedCanonicalToName.size > 0 ? rewriteNestedRefs(slot.schema, hoistedCanonicalToName) : slot.schema
 		}
 	}
 	Object.assign(extractedSchemas, hoistedSchemas)
@@ -894,10 +861,7 @@ export type OpenApiSanitizeOptions = {
 	stripXExtensions?: boolean | string[]
 }
 
-export function sanitizeOpenApiSpec(
-	spec: OpenApiSpec,
-	options: OpenApiSanitizeOptions,
-): OpenApiSpec {
+export function sanitizeOpenApiSpec(spec: OpenApiSpec, options: OpenApiSanitizeOptions): OpenApiSpec {
 	const result = cloneJson(spec)
 
 	if (options.stripSecuritySchemes?.length && result.components?.securitySchemes) {
@@ -989,8 +953,16 @@ function resolveSchemaDeep(
 		}
 	}
 	/* resolve additionalProperties */
-	if (schema.additionalProperties && typeof schema.additionalProperties === "object" && !Array.isArray(schema.additionalProperties)) {
-		schema.additionalProperties = resolveSchema(schema.additionalProperties as Record<string, unknown>, schemas, visited)
+	if (
+		schema.additionalProperties &&
+		typeof schema.additionalProperties === "object" &&
+		!Array.isArray(schema.additionalProperties)
+	) {
+		schema.additionalProperties = resolveSchema(
+			schema.additionalProperties as Record<string, unknown>,
+			schemas,
+			visited,
+		)
 	}
 	return schema
 }
@@ -1088,7 +1060,11 @@ function applyZodBag(schema: unknown, json: Record<string, unknown>): Record<str
 }
 
 function zodDefOf(schema: unknown): Record<string, unknown> | undefined {
-	const s = schema as { _def?: Record<string, unknown>; def?: Record<string, unknown>; _zod?: { def?: Record<string, unknown> } }
+	const s = schema as {
+		_def?: Record<string, unknown>
+		def?: Record<string, unknown>
+		_zod?: { def?: Record<string, unknown> }
+	}
 	return s._def ?? s.def ?? s._zod?.def
 }
 
@@ -1242,8 +1218,7 @@ function schemaToJsonSchema(schema: StandardSchemaLike, io: "input" | "output" =
 			}
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err)
-			const defType =
-				(schema as { _zod?: { def?: { type?: string } } })?._zod?.def?.type ?? "unknown"
+			const defType = (schema as { _zod?: { def?: { type?: string } } })?._zod?.def?.type ?? "unknown"
 			console.warn(
 				`[honey:codegen] schemaToJsonSchema failed for zod/${defType} (io=${io}): ${msg}. Falling back to metadata-only introspection.`,
 			)
@@ -1425,9 +1400,7 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 			for (const [source, entry] of Object.entries(handler.iv)) {
 				if (entry === undefined) continue
 				const unwrapped =
-					"~standard" in (entry as object)
-						? unwrapEntry(entry as InputSchemaEntry)
-						: (entry as Record<string, unknown>)
+					"~standard" in (entry as object) ? unwrapEntry(entry as InputSchemaEntry) : (entry as Record<string, unknown>)
 				const jsonSchema = asJsonSchema(unwrapped, "input")
 
 				if (source === "json" || source === "form") {
@@ -1540,9 +1513,7 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 			for (const [status, entries] of byStatus) {
 				if (responses[String(status)] === undefined) {
 					const standardKeys = entries.filter((e) => !e.schema).map((e) => e.key)
-					const customSchemas = entries
-						.filter((e) => e.schema)
-						.map((e) => e.schema as Record<string, unknown>)
+					const customSchemas = entries.filter((e) => e.schema).map((e) => e.schema as Record<string, unknown>)
 
 					let schema: Record<string, unknown>
 
@@ -1635,17 +1606,10 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 				"_tag" in searchEntry
 					? (searchEntry as { schema: StandardSchemaLike }).schema
 					: (searchEntry as StandardSchemaLike)
-			const jsonSchema = asJsonSchema(
-				searchSchema as StandardSchemaLike | Record<string, unknown>,
-				"input",
-			)
+			const jsonSchema = asJsonSchema(searchSchema as StandardSchemaLike | Record<string, unknown>, "input")
 			if (jsonSchema && typeof jsonSchema === "object") {
-				const props = (jsonSchema as Record<string, unknown>).properties as
-					| Record<string, unknown>
-					| undefined
-				const required = new Set(
-					((jsonSchema as Record<string, unknown>).required ?? []) as string[],
-				)
+				const props = (jsonSchema as Record<string, unknown>).properties as Record<string, unknown> | undefined
+				const required = new Set(((jsonSchema as Record<string, unknown>).required ?? []) as string[])
 				if (props) {
 					for (const [name, schema] of Object.entries(props)) {
 						parameters.push({
@@ -1738,9 +1702,7 @@ type RouteConfig = {
 	path: string
 }
 
-function serializeInputSchemas(
-	iv: InputSchemasDef | null,
-): Record<string, Record<string, unknown>> | null {
+function serializeInputSchemas(iv: InputSchemasDef | null): Record<string, Record<string, unknown>> | null {
 	if (!iv) return null
 	const result: Record<string, Record<string, unknown>> = {}
 	for (const [source, entry] of Object.entries(iv)) {
@@ -1751,9 +1713,7 @@ function serializeInputSchemas(
 	return Object.keys(result).length > 0 ? result : null
 }
 
-function serializeOutputSchemas(
-	os: OutputSchemaDef | null,
-): Record<string, Record<string, unknown>> | null {
+function serializeOutputSchemas(os: OutputSchemaDef | null): Record<string, Record<string, unknown>> | null {
 	if (!os) return null
 	const result: Record<string, Record<string, unknown>> = {}
 	for (const [contentType, schemas] of Object.entries(os)) {
@@ -1840,9 +1800,7 @@ function serializeNode(node: TreeBuild): string {
 		: "null"
 
 	const mExpr =
-		node.handlers.length > 0
-			? `{ ${node.handlers.map((h) => `${h.method}: ${h.handler}`).join(", ")} }`
-			: "null"
+		node.handlers.length > 0 ? `{ ${node.handlers.map((h) => `${h.method}: ${h.handler}`).join(", ")} }` : "null"
 
 	return `{ s: ${sExpr}, d: ${dExpr}, w: ${wExpr}, m: ${mExpr}, ws: null }`
 }
@@ -1874,19 +1832,13 @@ export function generateRouteTree(routes: RouteConfig[]): string {
 	/* emit handler configs with pre-built ek and mt */
 	for (const { index, route } of handlerEntries) {
 		const mwList = "[]"
-		const bekExpr =
-			route.boundaryErrorKey !== null ? JSON.stringify(route.boundaryErrorKey) : "null"
-		const ekSet =
-			route.errorKeys.length > 0 ? `new Set(${JSON.stringify(route.errorKeys)})` : "new Set()"
+		const bekExpr = route.boundaryErrorKey !== null ? JSON.stringify(route.boundaryErrorKey) : "null"
+		const ekSet = route.errorKeys.length > 0 ? `new Set(${JSON.stringify(route.errorKeys)})` : "new Set()"
 		const mtExpr = route.meta !== null ? JSON.stringify(route.meta) : "null"
 		const ivExpr =
-			route.inputSchemas !== null
-				? `${JSON.stringify(route.inputSchemas)} as unknown as RouteHandler["iv"]`
-				: "null"
+			route.inputSchemas !== null ? `${JSON.stringify(route.inputSchemas)} as unknown as RouteHandler["iv"]` : "null"
 		const osExpr =
-			route.outputSchemas !== null
-				? `${JSON.stringify(route.outputSchemas)} as unknown as RouteHandler["os"]`
-				: "null"
+			route.outputSchemas !== null ? `${JSON.stringify(route.outputSchemas)} as unknown as RouteHandler["os"]` : "null"
 		lines.push(
 			`const H${index}: RouteHandler = { bek: ${bekExpr}, ef: null, fn: null as unknown as RouteHandler["fn"], mw: ${mwList}, ek: ${ekSet}, iv: ${ivExpr}, os: ${osExpr}, mt: ${mtExpr}, ov: null, rp: "" }`,
 		)
@@ -1952,9 +1904,7 @@ export function generateRouteTree(routes: RouteConfig[]): string {
 	const handlerMapEntries = handlerEntries.map(
 		({ index, route }) => `\t${JSON.stringify(`${route.method} ${route.path}`)}: H${index}`,
 	)
-	lines.push(
-		`export const handlers: Record<string, RouteHandler> = {\n${handlerMapEntries.join(",\n")}\n}`,
-	)
+	lines.push(`export const handlers: Record<string, RouteHandler> = {\n${handlerMapEntries.join(",\n")}\n}`)
 	lines.push("")
 
 	return lines.join("\n")
@@ -2020,8 +1970,7 @@ function generateFromTreeRoot(root: TreeNode): string {
 	}
 
 	if (metaEntries.length > 0) {
-		const metaType =
-			allKeys.size > 0 ? "Record<string, MetaShape>" : "Record<string, Record<string, unknown>>"
+		const metaType = allKeys.size > 0 ? "Record<string, MetaShape>" : "Record<string, Record<string, unknown>>"
 		code += `export const meta: ${metaType} = {\n${metaEntries.join(",\n")}\n}\n`
 	}
 
@@ -2135,10 +2084,7 @@ function emitErrorType(handler: RouteHandler): string {
 		.join(" | ")
 }
 
-function emitErrorShapes(
-	handler: RouteHandler,
-	meta: Record<string, ErrorMetaEntry> | null,
-): string | null {
+function emitErrorShapes(handler: RouteHandler, meta: Record<string, ErrorMetaEntry> | null): string | null {
 	if (handler.ek.size === 0) return null
 	const entries: string[] = []
 	for (const key of Array.from(handler.ek).sort()) {
@@ -2252,12 +2198,8 @@ export function generateTypes<TEnv, TCtx>(
 		lines.push(`type TapMap = ${options.inlineTapsType}`)
 		lines.push("")
 	}
-	const ctxBase = options.inlineTapsType
-		? `Omit<HoneyContext<${envType}>, "tap">`
-		: `HoneyContext<${envType}>`
-	const tapPart = options.inlineTapsType
-		? " & { tap<K extends keyof TapMap>(key: K, payload: TapMap[K]): void }"
-		: ""
+	const ctxBase = options.inlineTapsType ? `Omit<HoneyContext<${envType}>, "tap">` : `HoneyContext<${envType}>`
+	const tapPart = options.inlineTapsType ? " & { tap<K extends keyof TapMap>(key: K, payload: TapMap[K]): void }" : ""
 	lines.push(`export type ${baseCtxName} = ${ctxBase}${mwPart}${tapPart}`)
 	lines.push("")
 
@@ -2372,8 +2314,7 @@ export function generateTypes<TEnv, TCtx>(
 			}
 			const errorsCtx = emitErrorsCtxType(handler)
 			if (errorsCtx) additions.push(errorsCtx)
-			const ctxType =
-				additions.length === 0 ? basePart : `${basePart} & { ${additions.join("; ")} }`
+			const ctxType = additions.length === 0 ? basePart : `${basePart} & { ${additions.join("; ")} }`
 			const errorType = emitErrorType(handler)
 			const metaType = emitMetaType(handler)
 			const outputType = emitOutputType(handler)
@@ -2620,10 +2561,7 @@ export function jsonSchemaToTS(schema: Record<string, unknown> | undefined, dept
 }
 
 /* extract input type for an operation */
-function emitSDKInputType(
-	op: Record<string, unknown>,
-	path: string,
-): { hasMandatory: boolean; type: string } {
+function emitSDKInputType(op: Record<string, unknown>, path: string): { hasMandatory: boolean; type: string } {
 	const mandatoryParts: string[] = []
 	const optionalParts: string[] = []
 
@@ -2657,7 +2595,7 @@ function emitSDKInputType(
 					const schema = p.schema as Record<string, unknown> | undefined
 					const tsType = jsonSchemaToTS(schema)
 					const safeQueryName = sdkSafeName(name)
-				return `${safeQueryName}${required ? "" : "?"}: ${tsType}`
+					return `${safeQueryName}${required ? "" : "?"}: ${tsType}`
 				})
 			const searchEntry = `search: { ${entries.join("; ")} }`
 			if (hasRequired) {
@@ -2693,8 +2631,7 @@ function emitSDKInputType(
 					optionalParts.push(entry)
 				}
 			}
-			const formContent =
-				content["multipart/form-data"] ?? content["application/x-www-form-urlencoded"]
+			const formContent = content["multipart/form-data"] ?? content["application/x-www-form-urlencoded"]
 			if (formContent?.schema) {
 				const entry = `form: ${jsonSchemaToTS(formContent.schema as Record<string, unknown>)}`
 				if (required) {
@@ -2738,9 +2675,7 @@ function emitSDKResponseType(op: Record<string, unknown>): string {
 			continue
 		}
 		if (content["application/json"]?.schema) {
-			successTypes.push(
-				jsonSchemaToTS(content["application/json"].schema as Record<string, unknown>),
-			)
+			successTypes.push(jsonSchemaToTS(content["application/json"].schema as Record<string, unknown>))
 		} else if ("application/octet-stream" in content) {
 			successTypes.push("ArrayBuffer")
 		} else {
@@ -2760,9 +2695,7 @@ function emitSDKResponseType(op: Record<string, unknown>): string {
 }
 
 /* detect whether a JSON schema matches the standard error envelope shape */
-export function isStandardErrEnvelope(
-	schema: Record<string, unknown>,
-): { keys: string[]; status: number } | null {
+export function isStandardErrEnvelope(schema: Record<string, unknown>): { keys: string[]; status: number } | null {
 	const props = schema.properties as Record<string, Record<string, unknown>> | undefined
 	if (!props) return null
 
@@ -2862,8 +2795,7 @@ function buildMethodSig(
 	else if (m.sse) returnType = m.responseType
 	else if (resolvedErr)
 		returnType = `TThrow extends true ? Promise<${resolvedRes}> : Promise<SDKResult<${resolvedRes}, ${resolvedErr}>>`
-	else
-		returnType = `TThrow extends true ? Promise<${resolvedRes}> : Promise<SDKResult<${resolvedRes}>>`
+	else returnType = `TThrow extends true ? Promise<${resolvedRes}> : Promise<SDKResult<${resolvedRes}>>`
 	return { inputArg, returnType }
 }
 
@@ -2889,16 +2821,75 @@ function buildTypeAliases(
 
 /* TS reserved words that must be quoted when used as object/interface property keys */
 const SDK_TS_RESERVED = new Set([
-	"break", "case", "catch", "class", "const", "continue", "debugger",
-	"default", "delete", "do", "else", "enum", "export", "extends", "false",
-	"finally", "for", "function", "if", "import", "in", "instanceof", "new",
-	"null", "return", "super", "switch", "this", "throw", "true", "try",
-	"typeof", "var", "void", "while", "with", "yield", "let", "static",
-	"implements", "interface", "package", "private", "protected", "public",
-	"abstract", "as", "async", "await", "constructor", "declare", "from",
-	"get", "infer", "is", "keyof", "module", "namespace", "never", "of",
-	"readonly", "require", "set", "satisfies", "symbol", "type", "unique",
-	"unknown", "override",
+	"break",
+	"case",
+	"catch",
+	"class",
+	"const",
+	"continue",
+	"debugger",
+	"default",
+	"delete",
+	"do",
+	"else",
+	"enum",
+	"export",
+	"extends",
+	"false",
+	"finally",
+	"for",
+	"function",
+	"if",
+	"import",
+	"in",
+	"instanceof",
+	"new",
+	"null",
+	"return",
+	"super",
+	"switch",
+	"this",
+	"throw",
+	"true",
+	"try",
+	"typeof",
+	"var",
+	"void",
+	"while",
+	"with",
+	"yield",
+	"let",
+	"static",
+	"implements",
+	"interface",
+	"package",
+	"private",
+	"protected",
+	"public",
+	"abstract",
+	"as",
+	"async",
+	"await",
+	"constructor",
+	"declare",
+	"from",
+	"get",
+	"infer",
+	"is",
+	"keyof",
+	"module",
+	"namespace",
+	"never",
+	"of",
+	"readonly",
+	"require",
+	"set",
+	"satisfies",
+	"symbol",
+	"type",
+	"unique",
+	"unknown",
+	"override",
 ])
 
 function sdkSafeName(name: string): string {
@@ -2947,16 +2938,12 @@ function buildSDKTypes(
 	 * single literal is long enough (>200 chars) to dominate the line.
 	 */
 	const { aliases: resAliases, lines: resLines } = buildTypeAliases(
-		sdkMethods
-			.filter((m) => !m.ws && !m.sse && isHoistableResponseType(m.responseType))
-			.map((m) => m.responseType),
+		sdkMethods.filter((m) => !m.ws && !m.sse && isHoistableResponseType(m.responseType)).map((m) => m.responseType),
 		"_Res",
 		2,
 	)
 	const { aliases: inpAliases, lines: inpLines } = buildTypeAliases(
-		sdkMethods
-			.filter((m) => m.inputType !== "{}" && isHoistableResponseType(m.inputType))
-			.map((m) => m.inputType),
+		sdkMethods.filter((m) => m.inputType !== "{}" && isHoistableResponseType(m.inputType)).map((m) => m.inputType),
 		"_Inp",
 		2,
 	)
@@ -2991,9 +2978,7 @@ function buildSDKTypes(
 	/* TypedWebSocket */
 	l.push("export type TypedWebSocket = {")
 	l.push("\tclose(code?: number, reason?: string): void")
-	l.push(
-		'\toff(event: "close" | "error" | "message" | "open", handler: (...args: never[]) => void): void',
-	)
+	l.push('\toff(event: "close" | "error" | "message" | "open", handler: (...args: never[]) => void): void')
 	l.push('\ton(event: "close", handler: (code: number, reason: string) => void): void')
 	l.push('\ton(event: "error", handler: (error: unknown) => void): void')
 	l.push('\ton(event: "message", handler: (data: string) => void): void')
@@ -3012,9 +2997,7 @@ function buildSDKTypes(
 	l.push(
 		`\theaders?: Record<string, string> | ((ctx: { method: string; path: string }) => Record<string, string | undefined> | Promise<Record<string, string | undefined>>)`,
 	)
-	l.push(
-		"\tinvalidation?: { maxSourcesPerTarget?: number; staleMaxEntries?: number; staleTime: number }",
-	)
+	l.push("\tinvalidation?: { maxSourcesPerTarget?: number; staleMaxEntries?: number; staleTime: number }")
 	l.push("\tmaxErrorMessageChars?: number")
 	l.push("\tmode?: RequestMode")
 	l.push(
@@ -3091,10 +3074,7 @@ function buildSDKTypes(
 function emitNestedMapNode(node: NestedServiceNode, indent: string): string[] {
 	if (node.kind === "leaf") {
 		const entry = node.entry
-		const parts = [
-			`method: ${JSON.stringify(entry.method)}`,
-			`path: ${JSON.stringify(entry.path)}`,
-		]
+		const parts = [`method: ${JSON.stringify(entry.method)}`, `path: ${JSON.stringify(entry.path)}`]
 		if (entry.params) parts.push(`params: ${JSON.stringify(entry.params)}`)
 		if (entry.sse) parts.push("sse: true")
 		if (entry.ws) parts.push("ws: true")
@@ -3840,14 +3820,11 @@ type _RequestMeta = {
 }
 
 function sdkClientClientError(): string {
-	const subclassDecls = STATUS_ERROR_CLASSES
-		.map(({ name }) =>
+	const subclassDecls = STATUS_ERROR_CLASSES.map(
+		({ name }) =>
 			`class _${name} extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "${name}" } }`,
-		)
-		.join("\n")
-	const mapEntries = STATUS_ERROR_CLASSES
-		.map(({ name, status }) => `\t${status}: _${name},`)
-		.join("\n")
+	).join("\n")
+	const mapEntries = STATUS_ERROR_CLASSES.map(({ name, status }) => `\t${status}: _${name},`).join("\n")
 	return `
 class _ClientError extends Error {
 \treadonly body: unknown
@@ -4891,7 +4868,7 @@ export function collectSDKMethods(spec: OpenApiSpecInput): {
 
 			const segments = operationId.split(".")
 			const isTopLevel = segments.length === 1
-			const resource = isTopLevel ? operationId : segments[0] ?? operationId
+			const resource = isTopLevel ? operationId : (segments[0] ?? operationId)
 			const action = isTopLevel ? "_call" : segments.slice(1).join(".")
 
 			if (serviceMap[resource] === undefined) {
@@ -4934,11 +4911,7 @@ export function collectSDKMethods(spec: OpenApiSpecInput): {
 	return { methods, nestedMap, serviceMap }
 }
 
-function buildServiceEntryForOp(
-	op: Record<string, unknown>,
-	path: string,
-	method: string,
-): ServiceEntry {
+function buildServiceEntryForOp(op: Record<string, unknown>, path: string, method: string): ServiceEntry {
 	const params = extractOpenApiPathParams(path)
 	const entry: ServiceEntry = { method: method.toUpperCase(), path }
 	if (params.length > 0) entry.params = params
@@ -4985,10 +4958,7 @@ function buildNestedServiceMap(
 	return walkNs(ns)
 }
 
-export function generateSDK(
-	spec: OpenApiSpecInput,
-	options?: { name?: string; stem?: string },
-): GeneratedSDK {
+export function generateSDK(spec: OpenApiSpecInput, options?: { name?: string; stem?: string }): GeneratedSDK {
 	const sdkName = options?.name ?? "SDK"
 	const stem = options?.stem ?? "sdk"
 	const { methods: sdkMethods, nestedMap, serviceMap } = collectSDKMethods(spec)

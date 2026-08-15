@@ -18,9 +18,7 @@ import type { Eq, Expect, Extends, IsNever, IsUnknown } from "./_assert.ts"
 type Env = { SECRET: string }
 type Db = { db: { query: (sql: string) => unknown[] } }
 
-const withDb = createMiddleware(async (_ctx, next) =>
-	next({ db: { query: (_sql: string) => [] as unknown[] } }),
-)
+const withDb = createMiddleware(async (_ctx, next) => next({ db: { query: (_sql: string) => [] as unknown[] } }))
 const withRequestId = createMiddleware(async (_ctx, next) => next({ requestId: "r-1" }))
 const adminOnly = createMiddleware(async (_ctx, next) => next({ role: "admin" as const }))
 
@@ -67,24 +65,16 @@ const adminApi = base
 const app = honey<Env>().route(publicApi).route(adminApi)
 
 type Paths = InferRoutePaths<typeof app>
-type _Paths = Expect<
-	Eq<Paths, "/admin/stats" | "/api/health" | "/api/hello" | "/api/orgs" | "/api/orgs/:orgId">
->
+type _Paths = Expect<Eq<Paths, "/admin/stats" | "/api/health" | "/api/hello" | "/api/orgs" | "/api/orgs/:orgId">>
 type _Methods = Expect<Eq<InferMethods<typeof app>, "get" | "post">>
 type _HelloVerbs = Expect<Eq<InferRouteMethods<typeof app, "/api/hello">, "get" | "post">>
 
-type _GetHello = Expect<
-	Eq<InferRouteInput<typeof app, "/api/hello", "get">, { search: { q: string } }>
->
-type _PostHello = Expect<
-	Eq<InferRouteInput<typeof app, "/api/hello", "post">, { json: { q: string } }>
->
+type _GetHello = Expect<Eq<InferRouteInput<typeof app, "/api/hello", "get">, { search: { q: string } }>>
+type _PostHello = Expect<Eq<InferRouteInput<typeof app, "/api/hello", "post">, { json: { q: string } }>>
 type _NotUnknown = Expect<Eq<IsUnknown<InferRouteInput<typeof app, "/api/hello", "get">>, false>>
 type _NotNever = Expect<Eq<IsNever<InferRoutes<typeof app>>, false>>
 
-type _OrgIn = Expect<
-	Eq<InferRouteInput<typeof app, "/api/orgs", "post">, { json: { slug: string } }>
->
+type _OrgIn = Expect<Eq<InferRouteInput<typeof app, "/api/orgs", "post">, { json: { slug: string } }>>
 type _OrgGetErr = Expect<Eq<InferRouteErrors<typeof app, "/api/orgs/:orgId", "get">, "not_found">>
 type _OrgPostErr = Expect<Eq<InferRouteErrors<typeof app, "/api/orgs", "post">, "slug_taken">>
 
@@ -98,10 +88,7 @@ type _OrgCtx = Expect<
 	>
 >
 type _HelloCtx = Expect<
-	Extends<
-		InferRouteCtx<typeof app, "/api/hello", "get">,
-		Db & { input: { search: { q: string } }; requestId: string }
-	>
+	Extends<InferRouteCtx<typeof app, "/api/hello", "get">, Db & { input: { search: { q: string } }; requestId: string }>
 >
 
 type _Env = Expect<Eq<InferEnv<typeof app>, Env>>

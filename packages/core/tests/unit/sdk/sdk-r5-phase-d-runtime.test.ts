@@ -8,11 +8,7 @@ import { createSDK } from "../../../src/client/sdk.ts"
  * supplied status and content-type. Used to validate that safe-mode handles
  * parse failures without throwing.
  */
-function mockFetchMalformedJson(
-	status: number,
-	body: string,
-	contentType: string,
-): typeof fetch {
+function mockFetchMalformedJson(status: number, body: string, contentType: string): typeof fetch {
 	return vi.fn<typeof fetch>(() =>
 		Promise.resolve(
 			new Response(body, {

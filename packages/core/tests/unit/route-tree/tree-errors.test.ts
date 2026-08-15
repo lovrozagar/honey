@@ -32,25 +32,19 @@ describe("tree — error paths", () => {
 	it("duplicate wildcard route throws", () => {
 		const root = createNode()
 		insertRoute(root, "GET", "/*path", stubHandler("/*path"))
-		expect(() => insertRoute(root, "GET", "/*path", stubHandler("/*path"))).toThrow(
-			"Duplicate route",
-		)
+		expect(() => insertRoute(root, "GET", "/*path", stubHandler("/*path"))).toThrow("Duplicate route")
 	})
 
 	it("duplicate optional param route throws", () => {
 		const root = createNode()
 		insertRoute(root, "GET", "/users/:id?", stubHandler("/users/:id?"))
-		expect(() => insertRoute(root, "GET", "/users/:id?", stubHandler("/users/:id?"))).toThrow(
-			"Duplicate route",
-		)
+		expect(() => insertRoute(root, "GET", "/users/:id?", stubHandler("/users/:id?"))).toThrow("Duplicate route")
 	})
 
 	it("wildcard name conflict throws", () => {
 		const root = createNode()
 		insertRoute(root, "GET", "/*foo", stubHandler("/*foo"))
-		expect(() => insertRoute(root, "POST", "/*bar", stubHandler("/*bar"))).toThrow(
-			"Wildcard name conflict",
-		)
+		expect(() => insertRoute(root, "POST", "/*bar", stubHandler("/*bar"))).toThrow("Wildcard name conflict")
 	})
 
 	it("mergeInto with param name mismatch throws", () => {

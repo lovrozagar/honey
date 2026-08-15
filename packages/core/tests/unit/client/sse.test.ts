@@ -68,9 +68,7 @@ describe("parseSSEStream", () => {
 	})
 
 	it("skips heartbeat comments", async () => {
-		const stream = createStream([
-			": heartbeat\n\nevent: message\ndata: real\n\n: another comment\n\n",
-		])
+		const stream = createStream([": heartbeat\n\nevent: message\ndata: real\n\n: another comment\n\n"])
 		const events = await collectEvents(parseSSEStream(stream))
 
 		expect(events).toEqual([{ data: "real", event: "message" }])

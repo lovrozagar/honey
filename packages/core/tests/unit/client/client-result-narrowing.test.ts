@@ -109,7 +109,9 @@ describe("ClientResult runtime with createClient", () => {
 			.defaultBoundary("api_error")
 			.get("/fail")
 			.errors("item_not_found")
-			.handler(() => { throw appErrors.item_not_found({ reason: "deleted" }) })
+			.handler(() => {
+				throw appErrors.item_not_found({ reason: "deleted" })
+			})
 
 		const failClient = createClient<typeof appFail>({
 			baseURL: "http://localhost",
@@ -128,7 +130,9 @@ describe("ClientResult runtime with createClient", () => {
 			.defaultBoundary("api_error")
 			.post("/fail")
 			.errors("email_taken")
-			.handler(() => { throw appErrors.email_taken() })
+			.handler(() => {
+				throw appErrors.email_taken()
+			})
 
 		const failClient = createClient<typeof appFail>({
 			baseURL: "http://localhost",

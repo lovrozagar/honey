@@ -5,8 +5,9 @@ import { HoneyError } from "../../../src/error.ts"
 import { createClient } from "../../../src/client/index.ts"
 import "@lovrozagar/honey/i18n"
 
-const fetchAdapter = (app: { fetch: (req: Request) => Promise<Response> }) =>
-	(input: RequestInfo | URL, init?: RequestInit) => app.fetch(new Request(input, init))
+const fetchAdapter =
+	(app: { fetch: (req: Request) => Promise<Response> }) => (input: RequestInfo | URL, init?: RequestInit) =>
+		app.fetch(new Request(input, init))
 
 /* ── onError returning HoneyError — i18n re-run + default response path ── */
 
@@ -19,24 +20,29 @@ describe("onError returning HoneyError re-runs i18n + falls through to default p
 			})
 			.onError(() => new HoneyError({ errorKey: "internal_server_error", status: "internal_server_error" }))
 
-		app.get("/fail").handler(() => { throw new Error("raw") })
+		app.get("/fail").handler(() => {
+			throw new Error("raw")
+		})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		expect(res.status).toBe(500)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body["error_key"]).toBe("internal_server_error")
 		expect(body["message"]).toBe("Server boom")
 	})
 
 	it("i18n NOT configured → returned HoneyError message stays as errorKey", async () => {
-		const app = honey()
-			.onError(() => new HoneyError({ errorKey: "internal_server_error", status: "internal_server_error" }))
+		const app = honey().onError(
+			() => new HoneyError({ errorKey: "internal_server_error", status: "internal_server_error" }),
+		)
 
-		app.get("/fail").handler(() => { throw new Error("raw") })
+		app.get("/fail").handler(() => {
+			throw new Error("raw")
+		})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		expect(res.status).toBe(500)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body["error_key"]).toBe("internal_server_error")
 		expect(body["message"]).toBe("internal_server_error")
 	})
@@ -49,11 +55,13 @@ describe("onError returning HoneyError re-runs i18n + falls through to default p
 			})
 			.onError(async () => new HoneyError({ errorKey: "internal_server_error", status: "internal_server_error" }))
 
-		app.get("/fail").handler(() => { throw new Error("raw") })
+		app.get("/fail").handler(() => {
+			throw new Error("raw")
+		})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		expect(res.status).toBe(500)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body["message"]).toBe("Async boom")
 	})
 
@@ -70,38 +78,42 @@ describe("onError returning HoneyError re-runs i18n + falls through to default p
 			})
 			.onError(() => errors.item_gone({ reason: "x" }))
 
-		app.get("/fail").handler(() => { throw new Error("raw") })
+		app.get("/fail").handler(() => {
+			throw new Error("raw")
+		})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		expect(res.status).toBe(410)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body["reason"]).toBe("x")
 		expect(body["message"]).toBeUndefined()
 	})
 
 	it("returned Response still works (regression)", async () => {
-		const app = honey()
-			.onError((_err, ctx) =>
-				ctx.jsonFromError(new HoneyError({ errorKey: "custom_error", status: "bad_request" })),
-			)
+		const app = honey().onError((_err, ctx) =>
+			ctx.jsonFromError(new HoneyError({ errorKey: "custom_error", status: "bad_request" })),
+		)
 
-		app.get("/fail").handler(() => { throw new Error("oops") })
+		app.get("/fail").handler(() => {
+			throw new Error("oops")
+		})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		expect(res.status).toBe(400)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body["error_key"]).toBe("custom_error")
 	})
 
 	it("returned undefined falls through to default boundary path (regression)", async () => {
-		const app = honey()
-			.onError(() => undefined)
+		const app = honey().onError(() => undefined)
 
-		app.get("/fail").handler(() => { throw new Error("oops") })
+		app.get("/fail").handler(() => {
+			throw new Error("oops")
+		})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		expect(res.status).toBe(500)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body["error_key"]).toBe("internal_server_error")
 	})
 
@@ -113,11 +125,13 @@ describe("onError returning HoneyError re-runs i18n + falls through to default p
 			})
 			.onError(() => new HoneyError({ errorKey: "custom_replacement", status: "bad_request" }))
 
-		app.get("/fail").handler(() => { throw new Error("original") })
+		app.get("/fail").handler(() => {
+			throw new Error("original")
+		})
 
 		const res = await app.fetch(new Request("http://localhost/fail"))
 		expect(res.status).toBe(400)
-		const body = await res.json() as Record<string, unknown>
+		const body = (await res.json()) as Record<string, unknown>
 		expect(body["error_key"]).toBe("custom_replacement")
 		expect(body["message"]).toBe("Replaced!")
 	})

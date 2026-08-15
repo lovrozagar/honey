@@ -150,8 +150,6 @@ describe("otelAdapter", () => {
 			},
 		}
 		const adapter = otelAdapter({ tracer: throwingTracer })
-		expect(() =>
-			adapter.onRequest?.({ env: {}, req: new Request("http://localhost/test") }),
-		).not.toThrow()
+		expect(() => adapter.onRequest?.({ env: {}, req: new Request("http://localhost/test") })).not.toThrow()
 	})
 })

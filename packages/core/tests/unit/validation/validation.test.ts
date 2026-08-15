@@ -133,9 +133,7 @@ describe("issuesToFieldErrors", () => {
 	})
 
 	it("deeply nested path", () => {
-		const issues: NormalizedIssue[] = [
-			{ code: "required", message: "Required", meta: {}, path: ["address", "city"] },
-		]
+		const issues: NormalizedIssue[] = [{ code: "required", message: "Required", meta: {}, path: ["address", "city"] }]
 		const result = issuesToFieldErrors(issues, "json")
 		expect(result.city).toHaveLength(1)
 		expect(result.city[0].path).toBe("json.address.city")

@@ -27,9 +27,7 @@ describe("interpolate: ICU keyword as var name", () => {
 	})
 
 	it("select branch value that looks like ICU keyword", () => {
-		expect(interpolate("{x, select, plural {matched plural} other {nope}}", { x: "plural" })).toBe(
-			"matched plural",
-		)
+		expect(interpolate("{x, select, plural {matched plural} other {nope}}", { x: "plural" })).toBe("matched plural")
 	})
 })
 
@@ -57,9 +55,7 @@ describe("interpolate: recursive var reference", () => {
 	})
 
 	it("select with same var referenced in branch", () => {
-		expect(
-			interpolate("{x, select, a {{x, select, a {{x}} other {no}}} other {no}}", { x: "a" }),
-		).toBe("a")
+		expect(interpolate("{x, select, a {{x, select, a {{x}} other {no}}} other {no}}", { x: "a" })).toBe("a")
 	})
 })
 
@@ -69,9 +65,7 @@ describe("interpolate: recursive var reference", () => {
 
 describe("interpolate: # interaction with nested vars", () => {
 	it("nested var value containing # → # in value preserved as literal", () => {
-		expect(interpolate("{n, plural, other {{label} #}}", { label: "item #", n: 5 })).toBe(
-			"item # 5",
-		)
+		expect(interpolate("{n, plural, other {{label} #}}", { label: "item #", n: 5 })).toBe("item # 5")
 	})
 
 	it("# only replaced in plural branch, not in simple var", () => {
@@ -101,9 +95,7 @@ describe("interpolate: branch content edge cases", () => {
 	})
 
 	it("branch with special chars (parens, brackets, etc.)", () => {
-		expect(interpolate("{x, select, a {[value] (ok) <done>} other {no}}", { x: "a" })).toBe(
-			"[value] (ok) <done>",
-		)
+		expect(interpolate("{x, select, a {[value] (ok) <done>} other {no}}", { x: "a" })).toBe("[value] (ok) <done>")
 	})
 
 	it("branch with URL", () => {
@@ -115,15 +107,13 @@ describe("interpolate: branch content edge cases", () => {
 	})
 
 	it("branch with JSON-like content", () => {
-		expect(interpolate('{x, select, json {value: "test"} other {no}}', { x: "json" })).toBe(
-			'value: "test"',
-		)
+		expect(interpolate('{x, select, json {value: "test"} other {no}}', { x: "json" })).toBe('value: "test"')
 	})
 
 	it("branch with emoji", () => {
-		expect(
-			interpolate("{x, select, fire {\u{1F525}\u{1F525}\u{1F525}} other {meh}}", { x: "fire" }),
-		).toBe("\u{1F525}\u{1F525}\u{1F525}")
+		expect(interpolate("{x, select, fire {\u{1F525}\u{1F525}\u{1F525}} other {meh}}", { x: "fire" })).toBe(
+			"\u{1F525}\u{1F525}\u{1F525}",
+		)
 	})
 })
 
@@ -176,9 +166,9 @@ describe("interpolate: stress tests", () => {
 
 describe("interpolate: consecutive mixed format types", () => {
 	it("simple + number + plural consecutive", () => {
-		expect(
-			interpolate("{a}{b, number}{c, plural, one {#} other {#s}}", { a: "X", b: 1000, c: 2 }, "en"),
-		).toBe("X1,0002s")
+		expect(interpolate("{a}{b, number}{c, plural, one {#} other {#s}}", { a: "X", b: 1000, c: 2 }, "en")).toBe(
+			"X1,0002s",
+		)
 	})
 
 	it("number + select + plural", () => {
@@ -275,9 +265,7 @@ describe("interpolate: multilingual messages", () => {
 	})
 
 	it("Chinese with plural (no distinction)", () => {
-		expect(interpolate("{count, plural, other {{count}个错误}}已修复", { count: 3 })).toBe(
-			"3个错误已修复",
-		)
+		expect(interpolate("{count, plural, other {{count}个错误}}已修复", { count: 3 })).toBe("3个错误已修复")
 	})
 
 	it("Korean with select", () => {
@@ -290,10 +278,10 @@ describe("interpolate: multilingual messages", () => {
 
 	it("German compound error", () => {
 		expect(
-			interpolate(
-				"{count, plural, one {# Validierungsfehler} other {# Validierungsfehler}} in {field}",
-				{ count: 3, field: "E-Mail-Adresse" },
-			),
+			interpolate("{count, plural, one {# Validierungsfehler} other {# Validierungsfehler}} in {field}", {
+				count: 3,
+				field: "E-Mail-Adresse",
+			}),
 		).toBe("3 Validierungsfehler in E-Mail-Adresse")
 	})
 })

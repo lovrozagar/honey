@@ -20,10 +20,7 @@ describe("FormData duplicate keys", () => {
 		fd.append("name", "first")
 		fd.append("name", "second")
 
-		const res = await app.fetch(
-			new Request("http://localhost/form", { body: fd, method: "POST" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/form", { body: fd, method: "POST" }), {})
 		expect(res.status).toBe(201)
 		const data = (await res.json()) as Record<string, Record<string, string>>
 		expect(data.form.name).toBe("second")

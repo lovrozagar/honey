@@ -144,10 +144,7 @@ describe("createBuildPlugin", () => {
 		})
 
 		it("uses default import for default export", () => {
-			const plugin = createBuildPlugin(
-				{ target: "node" },
-				{ entry: "src/app.ts", export: "default" },
-			)
+			const plugin = createBuildPlugin({ target: "node" }, { entry: "src/app.ts", export: "default" })
 			const entry = getEntry(plugin)
 			expect(entry).toContain('import app from "./src/app.ts"')
 		})

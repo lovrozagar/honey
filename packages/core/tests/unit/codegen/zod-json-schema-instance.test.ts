@@ -5,11 +5,9 @@ import { generateOpenApi } from "../../../src/codegen.ts"
 import { resetCodegenJsonSchemaLoadersForTests } from "../../../src/codegen-loaders.ts"
 import { honey } from "../../../src/index.ts"
 
-describe("zod JSON Schema without import(\"zod\")", () => {
+describe('zod JSON Schema without import("zod")', () => {
 	it("does not export the test loader reset from codegen.ts", () => {
-		expect(
-			Object.hasOwn(codegenPublic, "resetCodegenJsonSchemaLoadersForTests"),
-		).toBe(false)
+		expect(Object.hasOwn(codegenPublic, "resetCodegenJsonSchemaLoadersForTests")).toBe(false)
 	})
 
 	it("emits object properties via ~standard.jsonSchema when the module loader is empty", async () => {

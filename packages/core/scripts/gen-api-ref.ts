@@ -174,10 +174,7 @@ function unknownFor(lang: Lang): string {
 	}
 }
 
-function inlineObjectFor(
-	schema: Extract<IRSchema, { kind: "object" }>,
-	lang: Lang,
-): string {
+function inlineObjectFor(schema: Extract<IRSchema, { kind: "object" }>, lang: Lang): string {
 	const fields = schema.fields.map((f) => {
 		const t = renderSchema(f.schema, lang)
 		const opt = !f.required
@@ -240,12 +237,7 @@ function renderParamTable(title: string, params: IRParam[], lang: Lang): string[
 function renderResponses(op: IROperation, lang: Lang): string[] {
 	const statuses = Object.keys(op.responses)
 	if (statuses.length === 0) return []
-	const lines: string[] = [
-		"**Responses**",
-		"",
-		"| Status | Content-type | Type |",
-		"| ------ | ------------ | ---- |",
-	]
+	const lines: string[] = ["**Responses**", "", "| Status | Content-type | Type |", "| ------ | ------------ | ---- |"]
 	for (const status of statuses) {
 		const r = op.responses[status]
 		if (!r) continue
@@ -319,11 +311,7 @@ function voidFor(lang: Lang): string {
 	}
 }
 
-function specialReturn(
-	lang: Lang,
-	baseType: string,
-	ext: { ws?: true; realtime?: true; sse?: true },
-): string {
+function specialReturn(lang: Lang, baseType: string, ext: { ws?: true; realtime?: true; sse?: true }): string {
 	if (ext.realtime || ext.ws) {
 		switch (lang) {
 			case "typescript":
@@ -449,9 +437,7 @@ function renderTypedErrors(lang: Lang): string[] {
 		"| --------- | ------ | ----------- | ----- |",
 	]
 	for (const row of ERROR_ROWS) {
-		lines.push(
-			`| \`${row.name}\` | ${row.status} | \`${renderErrorClassName(row.name, lang)}\` | ${row.note} |`,
-		)
+		lines.push(`| \`${row.name}\` | ${row.status} | \`${renderErrorClassName(row.name, lang)}\` | ${row.note} |`)
 	}
 	lines.push("")
 	lines.push(
@@ -465,12 +451,7 @@ function renderTypedErrors(lang: Lang): string[] {
 
 function renderOperation(op: IROperation, lang: Lang): string[] {
 	const name = methodName(lang, op.id)
-	const lines: string[] = [
-		`### ${name}`,
-		"",
-		`\`${op.method} ${op.path}\``,
-		"",
-	]
+	const lines: string[] = [`### ${name}`, "", `\`${op.method} ${op.path}\``, ""]
 	if (op.description) {
 		lines.push(op.description, "")
 	}

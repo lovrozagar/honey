@@ -49,9 +49,7 @@ describe("gen-api-ref", () => {
 			for (const op of ir.operations) {
 				const heading = `### ${expectedName(lang, op.id)}`
 				expect(text, `${lang} missing ${heading}`).toContain(heading)
-				expect(text, `${lang} missing method+path for ${op.id}`).toContain(
-					`\`${op.method} ${op.path}\``,
-				)
+				expect(text, `${lang} missing method+path for ${op.id}`).toContain(`\`${op.method} ${op.path}\``)
 			}
 		}
 	})

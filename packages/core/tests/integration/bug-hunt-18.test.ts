@@ -492,10 +492,7 @@ describe("bug-hunt-18: SSE + regular requests concurrent", () => {
 		const addr = server.address() as { port: number }
 
 		/* start SSE and regular request concurrently */
-		const [sseRes, apiRes] = await Promise.all([
-			request(addr.port, "/events"),
-			request(addr.port, "/api"),
-		])
+		const [sseRes, apiRes] = await Promise.all([request(addr.port, "/events"), request(addr.port, "/api")])
 
 		expect(sseRes.status).toBe(200)
 		expect(sseRes.body).toContain("data: hello")

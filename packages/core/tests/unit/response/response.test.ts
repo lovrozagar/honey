@@ -326,9 +326,7 @@ describe("HoneyRes", () => {
 		})
 
 		it("domain with CRLF → throws", () => {
-			expect(() =>
-				serializeCookie("s", { domain: "evil.com\r\nX-Injected: yes", value: "x" }),
-			).toThrow()
+			expect(() => serializeCookie("s", { domain: "evil.com\r\nX-Injected: yes", value: "x" })).toThrow()
 		})
 
 		it("path with normal value → no error", () => {
@@ -342,9 +340,7 @@ describe("HoneyRes", () => {
 
 	describe("cookie prefix validation", () => {
 		it("__Host- with secure + path=/ → valid", () => {
-			expect(() =>
-				serializeCookie("__Host-session", { path: "/", secure: true, value: "abc" }),
-			).not.toThrow()
+			expect(() => serializeCookie("__Host-session", { path: "/", secure: true, value: "abc" })).not.toThrow()
 		})
 
 		it("__Host- without secure → throws", () => {
@@ -362,9 +358,7 @@ describe("HoneyRes", () => {
 		})
 
 		it("__Host- with path=/api → throws", () => {
-			expect(() =>
-				serializeCookie("__Host-session", { path: "/api", secure: true, value: "abc" }),
-			).toThrow("__Host-")
+			expect(() => serializeCookie("__Host-session", { path: "/api", secure: true, value: "abc" })).toThrow("__Host-")
 		})
 
 		it("__Host- with no path → auto-sets /", () => {

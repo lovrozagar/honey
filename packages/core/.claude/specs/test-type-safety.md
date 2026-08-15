@@ -28,11 +28,7 @@ Zero `tsc --noEmit` errors across all source AND test files. Every test should c
 type HoneyVitePlugin = {
 	buildStart(): Promise<void>
 	configResolved(cfg: { root: string }): void
-	hotUpdate?(ctx: {
-		file: string
-		modules: unknown[]
-		server: { moduleGraph: { invalidateAll(): void } }
-	}): void
+	hotUpdate?(ctx: { file: string; modules: unknown[]; server: { moduleGraph: { invalidateAll(): void } } }): void
 	load?(id: string): string | undefined
 	name: string
 	resolveId?(id: string): string | undefined

@@ -22,9 +22,7 @@ const errs = defineErrors({
 /* ── factory + route errors ── */
 
 const withFactory = honey().errorFactory(errs)
-type _Factory = Expect<
-	Extends<InferErrorFactory<typeof withFactory>, { email_taken: unknown; not_found: unknown }>
->
+type _Factory = Expect<Extends<InferErrorFactory<typeof withFactory>, { email_taken: unknown; not_found: unknown }>>
 
 const erred = withFactory
 	.defaultErrors("not_allowed")
@@ -39,11 +37,11 @@ const erred = withFactory
 
 type _ErrA = Expect<Eq<InferRouteErrors<typeof erred, "/a", "get">, "not_allowed">>
 type _ErrB = Expect<Eq<InferRouteErrors<typeof erred, "/b", "get">, "email_taken" | "not_allowed">>
-type _ErrC = Expect<
-	Eq<InferRouteErrors<typeof erred, "/c", "get">, "email_taken" | "not_allowed" | "not_found">
->
+type _ErrC = Expect<Eq<InferRouteErrors<typeof erred, "/c", "get">, "email_taken" | "not_allowed" | "not_found">>
 
-const clean = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+const clean = honey()
+	.get("/health")
+	.handler((ctx) => ctx.res.text("ok", "ok"))
 type _NoErr = Expect<IsNever<InferRouteErrors<typeof clean, "/health", "get">>>
 type _NoMeta = Expect<Eq<InferRouteMeta<typeof clean, "/health", "get">, {}>>
 
@@ -84,9 +82,7 @@ const api = honey()
 type _Base = Expect<Eq<InferBasePath<typeof api>, "/api">>
 type _Prefixed = Expect<Eq<InferRoutePaths<typeof api>, "/api/users">>
 type _PrefixedVerbs = Expect<Eq<InferRouteMethods<typeof api, "/api/users">, "get" | "post">>
-type _PrefixedIn = Expect<
-	Eq<InferRouteInput<typeof api, "/api/users", "post">, { json: { name: string } }>
->
+type _PrefixedIn = Expect<Eq<InferRouteInput<typeof api, "/api/users", "post">, { json: { name: string } }>>
 
 const nested = honey().basePath("/v1").basePath("/api")
 type _NestedBase = Expect<Eq<InferBasePath<typeof nested>, "/v1/api">>

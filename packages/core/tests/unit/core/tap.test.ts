@@ -333,9 +333,13 @@ describe("tap: error isolation", () => {
 			return ctx.res.json("ok", {})
 		})
 
-		const res = await app.fetch(new Request("http://localhost/test"), {}, {
-			waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
-		})
+		const res = await app.fetch(
+			new Request("http://localhost/test"),
+			{},
+			{
+				waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
+			},
+		)
 		expect(res.status).toBe(200)
 		expect(onErrorCalled).not.toHaveBeenCalled()
 
@@ -410,10 +414,7 @@ describe("tap: no fire on error", () => {
 
 		app.get("/test").handler((ctx) => ctx.res.json("ok", {}))
 
-		const res = await app.fetch(
-			new Request("http://localhost/test", { method: "DELETE" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/test", { method: "DELETE" }), {})
 		expect(res.status).toBe(405)
 		expect(received).toHaveLength(0)
 	})
@@ -552,9 +553,13 @@ describe("tap: non-blocking", () => {
 			return ctx.res.json("ok", {})
 		})
 
-		await app.fetch(new Request("http://localhost/test"), {}, {
-			waitUntil: (p: Promise<unknown>) => waitUntilPromises.push(p),
-		})
+		await app.fetch(
+			new Request("http://localhost/test"),
+			{},
+			{
+				waitUntil: (p: Promise<unknown>) => waitUntilPromises.push(p),
+			},
+		)
 
 		/* taps should have been scheduled via waitUntil */
 		expect(waitUntilPromises.length).toBeGreaterThan(0)
@@ -660,9 +665,7 @@ describe("tap: edge cases", () => {
 			return ctx.res.json("ok", {})
 		})
 
-		const promises = Array.from({ length: 10 }, (_, i) =>
-			app.fetch(new Request(`http://localhost/test/${i}`), {}),
-		)
+		const promises = Array.from({ length: 10 }, (_, i) => app.fetch(new Request(`http://localhost/test/${i}`), {}))
 		await Promise.all(promises)
 
 		expect(received).toHaveLength(10)
@@ -759,9 +762,13 @@ describe("tap: deep meta-driven scenarios", () => {
 				return ctx.res.json("ok", {})
 			})
 
-		await app.fetch(new Request("http://localhost/test"), {}, {
-			waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
-		})
+		await app.fetch(
+			new Request("http://localhost/test"),
+			{},
+			{
+				waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
+			},
+		)
 		await Promise.allSettled(bgPromises)
 
 		expect(received).toHaveLength(2)
@@ -889,11 +896,7 @@ describe("tap: multiple methods same path", () => {
 		await app.fetch(new Request("http://localhost/items", { method: "DELETE" }), {})
 
 		expect(received).toHaveLength(3)
-		expect(received.map((r) => (r as Record<string, string>).method)).toEqual([
-			"GET",
-			"POST",
-			"DELETE",
-		])
+		expect(received.map((r) => (r as Record<string, string>).method)).toEqual(["GET", "POST", "DELETE"])
 	})
 })
 
@@ -950,9 +953,13 @@ describe("tap: payload independence", () => {
 		})
 
 		const bgPromises: Promise<unknown>[] = []
-		await app.fetch(new Request("http://localhost/test"), {}, {
-			waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
-		})
+		await app.fetch(
+			new Request("http://localhost/test"),
+			{},
+			{
+				waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
+			},
+		)
 		await Promise.allSettled(bgPromises)
 
 		/* both received same ref (shallow), mutation visible */
@@ -982,9 +989,13 @@ describe("tap: stress", () => {
 		})
 
 		const bgPromises: Promise<unknown>[] = []
-		await app.fetch(new Request("http://localhost/test"), {}, {
-			waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
-		})
+		await app.fetch(
+			new Request("http://localhost/test"),
+			{},
+			{
+				waitUntil: (p: Promise<unknown>) => bgPromises.push(p),
+			},
+		)
 		await Promise.allSettled(bgPromises)
 
 		expect(received).toHaveLength(100)

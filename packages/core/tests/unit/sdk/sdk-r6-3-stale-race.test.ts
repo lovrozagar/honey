@@ -28,12 +28,22 @@ const serviceMap = {
 
 type UserSDK = {
 	users: {
-		get: (input: { params: { id: string } }) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
-		update: (input: { json?: unknown; params: { id: string } }) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+		get: (input: {
+			params: { id: string }
+		}) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+		update: (input: {
+			json?: unknown
+			params: { id: string }
+		}) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
 	}
 	posts: {
-		get: (input: { params: { id: string } }) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
-		update: (input: { json?: unknown; params: { id: string } }) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+		get: (input: {
+			params: { id: string }
+		}) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+		update: (input: {
+			json?: unknown
+			params: { id: string }
+		}) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
 	}
 }
 
@@ -50,11 +60,7 @@ function jsonOk(body: unknown = {}) {
  * calling resolveCall — the SDK invokes fetch inside an async function, so the
  * fetch invocation is a microtask that must be flushed first.
  */
-function resolveCall(
-	calls: Array<{ resolve: (r: Response) => void }>,
-	idx: number,
-	r: Response,
-): void {
+function resolveCall(calls: Array<{ resolve: (r: Response) => void }>, idx: number, r: Response): void {
 	const call = calls[idx]
 	if (!call) throw new Error(`deferredFetch: no call at index ${idx} (have ${calls.length})`)
 	call.resolve(r)
@@ -73,7 +79,11 @@ describe("#R6-3 stale race — Layer A invariants", () => {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => { captured.push({ isStale: ctx.isStale, method: ctx.method }) }],
+			onRequest: [
+				(ctx) => {
+					captured.push({ isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const getPromise = sdk.users.get({ params: { id: "1" } })
@@ -104,7 +114,11 @@ describe("#R6-3 stale race — Layer A invariants", () => {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => { captured.push({ isStale: ctx.isStale, method: ctx.method }) }],
+			onRequest: [
+				(ctx) => {
+					captured.push({ isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const patchPromise = sdk.users.update({ json: {}, params: { id: "2" } })
@@ -129,9 +143,11 @@ describe("#R6-3 stale race — Layer A invariants", () => {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => {
-				captured.push({ isStale: ctx.isStale, method: ctx.method, selector: ctx.selector })
-			}],
+			onRequest: [
+				(ctx) => {
+					captured.push({ isStale: ctx.isStale, method: ctx.method, selector: ctx.selector })
+				},
+			],
 		})
 
 		const p1 = sdk.users.update({ json: {}, params: { id: "1" } })
@@ -168,7 +184,11 @@ describe("#R6-3 stale race — Layer A invariants", () => {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => { captured.push({ isStale: ctx.isStale, method: ctx.method }) }],
+			onRequest: [
+				(ctx) => {
+					captured.push({ isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const p1 = sdk.users.update({ json: {}, params: { id: "3" } })
@@ -214,7 +234,11 @@ describe.skipIf(PHASE_F_FIXED)("#R6-3 — Layer B bug witness (pre-fix)", () => 
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => { captured.push({ isStale: ctx.isStale, method: ctx.method }) }],
+			onRequest: [
+				(ctx) => {
+					captured.push({ isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const rPromise = sdk.users.get({ params: { id: "4" } })
@@ -257,9 +281,11 @@ describe.skipIf(PHASE_F_FIXED)("#R6-3 — Layer B bug witness (pre-fix)", () => 
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => {
-				captured.push({ invalidatedBy: ctx.invalidatedBy, isStale: ctx.isStale, method: ctx.method })
-			}],
+			onRequest: [
+				(ctx) => {
+					captured.push({ invalidatedBy: ctx.invalidatedBy, isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const m0 = sdk.users.update({ json: {}, params: { id: "5" } })
@@ -304,9 +330,11 @@ describe.runIf(PHASE_F_FIXED)("#R6-3 — Layer B' regression (post-fix)", () => 
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => {
-				captured.push({ invalidatedBy: ctx.invalidatedBy, isStale: ctx.isStale, method: ctx.method })
-			}],
+			onRequest: [
+				(ctx) => {
+					captured.push({ invalidatedBy: ctx.invalidatedBy, isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const m0 = sdk.users.update({ json: {}, params: { id: "6" } })
@@ -344,7 +372,11 @@ describe.runIf(PHASE_F_FIXED)("#R6-3 — Layer B' regression (post-fix)", () => 
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => { captured.push({ isStale: ctx.isStale, method: ctx.method }) }],
+			onRequest: [
+				(ctx) => {
+					captured.push({ isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const rPromise = sdk.users.get({ params: { id: "7" } })
@@ -385,7 +417,9 @@ describe.runIf(PHASE_F_FIXED)("#R6-3 — Layer B' regression (post-fix)", () => 
 		type SafeSDK = {
 			users: {
 				get: () => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
-				update: (input?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+				update: (
+					input?: Record<string, unknown>,
+				) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
 			}
 		}
 
@@ -408,7 +442,11 @@ describe.runIf(PHASE_F_FIXED)("#R6-3 — Layer B' regression (post-fix)", () => 
 			baseURL: "http://api.example.com",
 			fetch: mockFetch as typeof fetch,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => { captured.push({ isStale: ctx.isStale, method: ctx.method }) }],
+			onRequest: [
+				(ctx) => {
+					captured.push({ isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		const patchResult = await sdk.users.update({ json: {} })
@@ -429,9 +467,11 @@ describe.runIf(PHASE_F_FIXED)("#R6-3 — Layer B' regression (post-fix)", () => 
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			invalidation: { staleTime: 60_000 },
-			onRequest: [(ctx) => {
-				captured.push({ invalidatedBy: ctx.invalidatedBy, isStale: ctx.isStale, method: ctx.method })
-			}],
+			onRequest: [
+				(ctx) => {
+					captured.push({ invalidatedBy: ctx.invalidatedBy, isStale: ctx.isStale, method: ctx.method })
+				},
+			],
 		})
 
 		for (let i = 0; i < 5; i++) {

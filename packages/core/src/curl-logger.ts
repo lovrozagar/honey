@@ -1,12 +1,7 @@
 import type { MiddlewareFn } from "./middleware.ts"
 import type { LoggerInstance } from "./logger.ts"
 
-type BodyOmittedReason =
-	| "content-type"
-	| "disabled"
-	| "missing"
-	| "read-error"
-	| "too-large"
+type BodyOmittedReason = "content-type" | "disabled" | "missing" | "read-error" | "too-large"
 
 type CurlLogData = {
 	bodyIncluded: boolean
@@ -33,12 +28,7 @@ type CurlLoggerOptions = {
 	skip?: (data: CurlLogData) => boolean
 }
 
-const DEFAULT_BODY_CONTENT_TYPES = [
-	"application/json",
-	"application/x-www-form-urlencoded",
-	"application/xml",
-	"text/",
-]
+const DEFAULT_BODY_CONTENT_TYPES = ["application/json", "application/x-www-form-urlencoded", "application/xml", "text/"]
 
 const DEFAULT_MAX_BODY_BYTES = 16_384
 
@@ -70,7 +60,10 @@ function redactUrl(url: URL, redactQueryParam?: (name: string, value: string) =>
 	return redacted.toString()
 }
 
-async function readBodyWithinLimit(request: Request, maxBytes: number): Promise<{
+async function readBodyWithinLimit(
+	request: Request,
+	maxBytes: number,
+): Promise<{
 	body: string | null
 	omittedReason: BodyOmittedReason | null
 }> {
@@ -131,9 +124,7 @@ async function buildCurlLogData(
 	const parts: string[] = [`curl -X ${request.method}`]
 
 	for (const [name, value] of request.headers.entries()) {
-		const redactedValue = options?.redactHeader !== undefined
-			? options.redactHeader(name, value)
-			: value
+		const redactedValue = options?.redactHeader !== undefined ? options.redactHeader(name, value) : value
 		if (redactedValue === null) continue
 		parts.push(`-H '${shellEscape(name)}: ${shellEscape(redactedValue)}'`)
 	}
@@ -149,10 +140,7 @@ async function buildCurlLogData(
 		if (shouldIncludeBody(contentType, allowContentTypes) === false) {
 			bodyOmittedReason = request.body === null ? "missing" : "content-type"
 		} else {
-			const result = await readBodyWithinLimit(
-				request,
-				bodyOptions.maxBytes ?? DEFAULT_MAX_BODY_BYTES,
-			)
+			const result = await readBodyWithinLimit(request, bodyOptions.maxBytes ?? DEFAULT_MAX_BODY_BYTES)
 
 			if (result.body === null) {
 				bodyOmittedReason = result.omittedReason
@@ -174,9 +162,7 @@ async function buildCurlLogData(
 	}
 }
 
-function curlLogger(
-	options?: CurlLoggerOptions,
-): MiddlewareFn<{ path: string, req: Request }, {}> {
+function curlLogger(options?: CurlLoggerOptions): MiddlewareFn<{ path: string; req: Request }, {}> {
 	const log = options?.log ?? defaultLog
 	const skip = options?.skip
 
@@ -184,7 +170,7 @@ function curlLogger(
 		const start = performance.now()
 		const method = ctx.req.method
 		const path = ctx.path
-		const rid = (ctx as Record<string, unknown>)["requestId"] as string | null ?? null
+		const rid = ((ctx as Record<string, unknown>)["requestId"] as string | null) ?? null
 		const curlDataPromise = buildCurlLogData(ctx.req, options)
 
 		const response = await next()
@@ -227,9 +213,4 @@ function curlLogger(
 }
 
 export { buildCurlLogData, curlLogger }
-export type {
-	BodyOmittedReason,
-	CurlLogData,
-	CurlLoggerBodyOptions,
-	CurlLoggerOptions,
-}
+export type { BodyOmittedReason, CurlLogData, CurlLoggerBodyOptions, CurlLoggerOptions }

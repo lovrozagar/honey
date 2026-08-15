@@ -29,11 +29,9 @@ function writeTempApp(dir: string, opts?: { named?: boolean }): string {
 function writeMergeTreeFile(dir: string, appRelPath: string): string {
 	const srcDir = join(dir, "src")
 	mkdirSync(srcDir, { recursive: true })
-	const code = [
-		`import app from "./${appRelPath.replace(/\.ts$/, "")}"`,
-		"",
-		"export default app.toRouteTree()",
-	].join("\n")
+	const code = [`import app from "./${appRelPath.replace(/\.ts$/, "")}"`, "", "export default app.toRouteTree()"].join(
+		"\n",
+	)
 	const filePath = join(srcDir, "routes.ts")
 	writeFileSync(filePath, code, "utf-8")
 	return filePath
@@ -88,8 +86,8 @@ describe("honeyVitePlugin", () => {
 		const plugin = getCodegenPlugin({ app: "src/app.ts" })
 		const src = [
 			'import { honey } from "@lovrozagar/honey"',
-			"const app = honey().get(\"/h\").handler((ctx) => ctx.res.text(\"ok\", \"ok\"))",
-			"app.openapi({ title: \"T\", version: \"1\" })",
+			'const app = honey().get("/h").handler((ctx) => ctx.res.text("ok", "ok"))',
+			'app.openapi({ title: "T", version: "1" })',
 			"await app.serve({ port: 3000 })",
 		].join("\n")
 		const out = plugin.transform(src, "/app/src/app.ts")
@@ -97,7 +95,7 @@ describe("honeyVitePlugin", () => {
 		expect(out?.code).toContain("enableOpenApi()")
 		expect(out?.code).toContain('from "@lovrozagar/honey/serve"')
 		expect(out?.code).toContain("enableServe()")
-		expect(plugin.transform('Bun.serve({ fetch() {} })', "/app/src/server.ts")).toBeUndefined()
+		expect(plugin.transform("Bun.serve({ fetch() {} })", "/app/src/server.ts")).toBeUndefined()
 	})
 
 	it("resolveId handles virtual modules", () => {
@@ -144,18 +142,18 @@ describe("honeyVitePlugin", () => {
 		plugin.configResolved({ root: outDir })
 		await plugin.buildStart()
 
-		const spec = JSON.parse(
-			readFileSync(join(outDir, "src/_gen/openapi.gen.json"), "utf-8"),
-		) as Record<string, Record<string, unknown>>
+		const spec = JSON.parse(readFileSync(join(outDir, "src/_gen/openapi.gen.json"), "utf-8")) as Record<
+			string,
+			Record<string, unknown>
+		>
 		expect(spec.openapi).toBe("3.1.0")
 		expect((spec.info as Record<string, unknown>).title).toBe("Test")
 		expect(
-			(spec.paths as Record<string, Record<string, Record<string, unknown>>>)["/items"].post
-				.requestBody,
+			(spec.paths as Record<string, Record<string, Record<string, unknown>>>)["/items"].post.requestBody,
 		).toBeDefined()
 
 		const yaml = readFileSync(join(outDir, "src/_gen/openapi.gen.yaml"), "utf-8")
-		expect(yaml).toContain("openapi: \"3.1.0\"")
+		expect(yaml).toContain('openapi: "3.1.0"')
 		expect(yaml).toContain("title: Test")
 		expect(yaml).toContain("/items:")
 	})
@@ -166,9 +164,7 @@ describe("honeyVitePlugin", () => {
 		plugin.configResolved({ root: outDir })
 		await plugin.buildStart()
 
-		const manifest = JSON.parse(
-			readFileSync(join(outDir, "src/_gen/manifest.gen.json"), "utf-8"),
-		) as {
+		const manifest = JSON.parse(readFileSync(join(outDir, "src/_gen/manifest.gen.json"), "utf-8")) as {
 			routes: unknown[]
 		}
 		expect(manifest.routes).toHaveLength(2)

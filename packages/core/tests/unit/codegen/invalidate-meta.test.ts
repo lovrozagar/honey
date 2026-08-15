@@ -1,10 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
-import {
-	generateManifest,
-	generateOpenApi,
-	generateRouteTreeFromApp,
-	generateTypes,
-} from "../../../src/codegen.ts"
+import { generateManifest, generateOpenApi, generateRouteTreeFromApp, generateTypes } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
 
 /* ---- Test 1: OpenApiMeta includes invalidate field ---- */
@@ -73,11 +68,7 @@ describe("invalidate accepts multiple selectors", () => {
 
 		const manifest = generateManifest(app)
 		const route = manifest.routes.find((r) => r.path === "/v1/users" && r.method === "POST")
-		expect(route?.meta.invalidate).toEqual([
-			"GET /v1/users",
-			"GET /v1/users/:id",
-			"POST /v1/search",
-		])
+		expect(route?.meta.invalidate).toEqual(["GET /v1/users", "GET /v1/users/:id", "POST /v1/search"])
 	})
 })
 

@@ -76,10 +76,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as { created: { name: string; id: string }; fetched: { id: string } }
@@ -190,10 +189,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -305,10 +303,9 @@ fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -413,10 +410,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -557,10 +553,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -663,10 +658,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as Array<{
@@ -776,10 +770,9 @@ fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as Array<{
@@ -912,10 +905,9 @@ fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -1028,10 +1020,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -1145,10 +1136,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -1589,10 +1579,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const parsed = JSON.parse(stdout.trim()) as {
@@ -1750,10 +1739,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const parsed = JSON.parse(stdout.trim()) as {
@@ -1844,10 +1832,9 @@ async fn main() {
 				})
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
-				throw new Error(
-					`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
-					{ cause: err },
-				)
+				throw new Error(`cargo run failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`, {
+					cause: err,
+				})
 			}
 
 			const result = JSON.parse(stdout.trim()) as {
@@ -1928,7 +1915,7 @@ async fn main() {
     println!("{}", serde_json::json!({ "received": received }));
 }
 `
-		const result = await runRustWsCase(mainRs, "") as { received: string }
+		const result = (await runRustWsCase(mainRs, "")) as { received: string }
 		/* Rust emits send via JSON-encode → "hello" becomes "\"hello\"" */
 		expect(JSON.parse(result.received)).toBe("hello")
 	}, 300_000)
@@ -1949,7 +1936,7 @@ async fn main() {
     println!("{}", serde_json::json!({ "err": err }));
 }
 `
-		const result = await runRustWsCase(mainRs, "") as { err: boolean }
+		const result = (await runRustWsCase(mainRs, "")) as { err: boolean }
 		expect(result.err).toBe(true)
 	}, 300_000)
 
@@ -1974,7 +1961,7 @@ async fn main() {
     println!("{}", serde_json::json!({ "code": code, "reason": reason }));
 }
 `
-		const result = await runRustWsCase(mainRs, "") as { code: number; reason: string }
+		const result = (await runRustWsCase(mainRs, "")) as { code: number; reason: string }
 		expect(result.code).toBe(1000)
 		expect(result.reason).toBe("server-initiated")
 	}, 300_000)
@@ -2012,7 +1999,7 @@ async fn main() {
     println!("{}", serde_json::json!({ "ok_received": ok_received, "bad_code": bad_code, "bad_reason": bad_reason }));
 }
 `
-		const result = await runRustWsCase(mainRs, "") as {
+		const result = (await runRustWsCase(mainRs, "")) as {
 			ok_received: string
 			bad_code: number
 			bad_reason: string

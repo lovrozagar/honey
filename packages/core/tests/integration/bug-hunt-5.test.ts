@@ -57,15 +57,13 @@ afterEach(() => {
 
 describe("bug-hunt-5: cookie serialization — __Host- prefix", () => {
 	it("__Host- cookie requires secure: true", () => {
-		expect(() => serializeCookie("__Host-session", { value: "abc" })).toThrow(
-			"__Host- cookies require secure: true",
-		)
+		expect(() => serializeCookie("__Host-session", { value: "abc" })).toThrow("__Host- cookies require secure: true")
 	})
 
 	it("__Host- cookie must not set domain", () => {
-		expect(() =>
-			serializeCookie("__Host-session", { domain: "example.com", secure: true, value: "abc" }),
-		).toThrow("__Host- cookies must not set domain")
+		expect(() => serializeCookie("__Host-session", { domain: "example.com", secure: true, value: "abc" })).toThrow(
+			"__Host- cookies must not set domain",
+		)
 	})
 
 	it("__Host- cookie auto-sets path to /", () => {
@@ -80,17 +78,15 @@ describe("bug-hunt-5: cookie serialization — __Host- prefix", () => {
 	})
 
 	it("__Host- cookie with path=/sub rejects", () => {
-		expect(() =>
-			serializeCookie("__Host-session", { path: "/sub", secure: true, value: "abc" }),
-		).toThrow("__Host- cookies must have path")
+		expect(() => serializeCookie("__Host-session", { path: "/sub", secure: true, value: "abc" })).toThrow(
+			"__Host- cookies must have path",
+		)
 	})
 })
 
 describe("bug-hunt-5: cookie serialization — __Secure- prefix", () => {
 	it("__Secure- cookie requires secure: true", () => {
-		expect(() => serializeCookie("__Secure-tok", { value: "abc" })).toThrow(
-			"__Secure- cookies require secure: true",
-		)
+		expect(() => serializeCookie("__Secure-tok", { value: "abc" })).toThrow("__Secure- cookies require secure: true")
 	})
 
 	it("__Secure- cookie with secure: true works", () => {
@@ -135,21 +131,15 @@ describe("bug-hunt-5: cookie serialization — special values", () => {
 	})
 
 	it("maxAge Infinity throws", () => {
-		expect(() => serializeCookie("test", { maxAge: Infinity, value: "x" })).toThrow(
-			"Invalid cookie Max-Age",
-		)
+		expect(() => serializeCookie("test", { maxAge: Infinity, value: "x" })).toThrow("Invalid cookie Max-Age")
 	})
 
 	it("maxAge NaN throws", () => {
-		expect(() => serializeCookie("test", { maxAge: NaN, value: "x" })).toThrow(
-			"Invalid cookie Max-Age",
-		)
+		expect(() => serializeCookie("test", { maxAge: NaN, value: "x" })).toThrow("Invalid cookie Max-Age")
 	})
 
 	it("maxAge negative throws", () => {
-		expect(() => serializeCookie("test", { maxAge: -1, value: "x" })).toThrow(
-			"Invalid cookie Max-Age",
-		)
+		expect(() => serializeCookie("test", { maxAge: -1, value: "x" })).toThrow("Invalid cookie Max-Age")
 	})
 
 	it("expires date serialized", () => {
@@ -839,9 +829,7 @@ describe("bug-hunt-5: output content-type mismatch detection", () => {
 			.get("/api")
 			.output({ "application/json": { ok: okSchema() } })
 			.handler((ctx) =>
-				ctx.res.raw(
-					new Response("plain text", { headers: { "content-type": "text/plain" }, status: 200 }),
-				),
+				ctx.res.raw(new Response("plain text", { headers: { "content-type": "text/plain" }, status: 200 })),
 			)
 
 		const res = await app.fetch(new Request("http://localhost/api"), {})

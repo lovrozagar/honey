@@ -125,10 +125,7 @@ describe("Regression: serde trait imports in resource files", () => {
 	test("resource files import Serialize and Deserialize traits, not bare serde", () => {
 		const { files } = generateRustSDK(minimalSpecWithEnumOpts, { crateName: "test" })
 		const resourceFiles = Object.entries(files).filter(
-			([p]) =>
-				p.startsWith("src/resources/") &&
-				p.endsWith(".rs") &&
-				p !== "src/resources/mod.rs",
+			([p]) => p.startsWith("src/resources/") && p.endsWith(".rs") && p !== "src/resources/mod.rs",
 		)
 		expect(resourceFiles.length).toBeGreaterThan(0)
 		for (const [, body] of resourceFiles) {
@@ -154,15 +151,13 @@ describe("Regression: Cargo.toml version threading", () => {
 
 describe("Regression: reserved-word method names escaped with r# prefix", () => {
 	/* Rust reserved keywords must never appear as bare fn names — use raw-identifier syntax. */
-	const RESERVED_BARE_FN = /\bpub\s+(?:async\s+)?fn\s+(as|box|break|const|continue|crate|do|dyn|else|enum|extern|false|final|fn|for|if|impl|in|let|loop|match|mod|move|mut|override|priv|pub|ref|return|self|Self|static|struct|super|trait|true|try|type|typeof|union|unsafe|unsized|use|virtual|where|while|yield|abstract|async|await|become|macro)\b/
+	const RESERVED_BARE_FN =
+		/\bpub\s+(?:async\s+)?fn\s+(as|box|break|const|continue|crate|do|dyn|else|enum|extern|false|final|fn|for|if|impl|in|let|loop|match|mod|move|mut|override|priv|pub|ref|return|self|Self|static|struct|super|trait|true|try|type|typeof|union|unsafe|unsized|use|virtual|where|while|yield|abstract|async|await|become|macro)\b/
 
 	test("no resource file emits a bare reserved keyword as a fn name", () => {
 		const { files } = generateRustSDK(specWithKeywordMethod, { crateName: "test" })
 		const resourceFiles = Object.entries(files).filter(
-			([p]) =>
-				p.startsWith("src/resources/") &&
-				p.endsWith(".rs") &&
-				p !== "src/resources/mod.rs",
+			([p]) => p.startsWith("src/resources/") && p.endsWith(".rs") && p !== "src/resources/mod.rs",
 		)
 		expect(resourceFiles.length).toBeGreaterThan(0)
 		for (const [path, body] of resourceFiles) {
@@ -174,10 +169,7 @@ describe("Regression: reserved-word method names escaped with r# prefix", () => 
 	test("op with id ending in 'use' emits fn r#use", () => {
 		const { files } = generateRustSDK(specWithKeywordMethod, { crateName: "test" })
 		const resourceFiles = Object.entries(files).filter(
-			([p]) =>
-				p.startsWith("src/resources/") &&
-				p.endsWith(".rs") &&
-				p !== "src/resources/mod.rs",
+			([p]) => p.startsWith("src/resources/") && p.endsWith(".rs") && p !== "src/resources/mod.rs",
 		)
 		const allBodies = resourceFiles.map(([, body]) => body).join("\n")
 		expect(allBodies).toMatch(/\bpub\s+(?:async\s+)?fn\s+r#use\b/)
@@ -190,10 +182,7 @@ describe("Regression: opts struct Default derive consistent with enum fields", (
 	test("required enum field in opts struct satisfies Default constraint", () => {
 		const { files } = generateRustSDK(specWithRequiredEnumOpts, { crateName: "test" })
 		const resourceFiles = Object.entries(files).filter(
-			([p]) =>
-				p.startsWith("src/resources/") &&
-				p.endsWith(".rs") &&
-				p !== "src/resources/mod.rs",
+			([p]) => p.startsWith("src/resources/") && p.endsWith(".rs") && p !== "src/resources/mod.rs",
 		)
 		expect(resourceFiles.length).toBeGreaterThan(0)
 
@@ -219,9 +208,7 @@ describe("Regression: opts struct Default derive consistent with enum fields", (
 					const hasDefaultDerive = new RegExp(
 						`#\\[derive\\([^\\]]*Default[^\\]]*\\)\\]\\s*pub enum ${fieldType}\\b`,
 					).test(body)
-					const hasImplDefault = new RegExp(
-						`impl Default for ${fieldType}\\b`,
-					).test(body)
+					const hasImplDefault = new RegExp(`impl Default for ${fieldType}\\b`).test(body)
 
 					const satisfiesDefault = hasDefaultDerive || hasImplDefault
 					expect(

@@ -22,10 +22,7 @@ describe("#R6-5 pathMatchesPattern — Layer A invariants", () => {
 	})
 
 	it("multi-param path matches multi-param pattern", () => {
-		expect(pathMatchesPattern(
-			"GET /v1/users/123/comments/456",
-			"GET /v1/users/:id/comments/:cid",
-		)).toBe(true)
+		expect(pathMatchesPattern("GET /v1/users/123/comments/456", "GET /v1/users/:id/comments/:cid")).toBe(true)
 	})
 })
 

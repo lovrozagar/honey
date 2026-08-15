@@ -25,8 +25,7 @@ export function cors(options?: CORSOptions): MiddlewareFn<{ req: Request }, {}> 
 	const opts = options ?? {}
 
 	/* credentials + wildcard is a CORS spec violation — auto-narrow to echo origin */
-	const credentialWildcard =
-		opts.credentials === true && (opts.origin === undefined || opts.origin === "*")
+	const credentialWildcard = opts.credentials === true && (opts.origin === undefined || opts.origin === "*")
 
 	const mw: MiddlewareFn<{ req: Request }, {}> = async (ctx, next) => {
 		const req = ctx.req
@@ -37,9 +36,7 @@ export function cors(options?: CORSOptions): MiddlewareFn<{ req: Request }, {}> 
 			return next()
 		}
 
-		const allowedOrigin = credentialWildcard
-			? requestOrigin
-			: matchOrigin(requestOrigin, opts.origin)
+		const allowedOrigin = credentialWildcard ? requestOrigin : matchOrigin(requestOrigin, opts.origin)
 
 		/* origin not allowed */
 		if (allowedOrigin === null) {

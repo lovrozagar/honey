@@ -52,7 +52,7 @@ describe("go-cli codegen — Tier 5: JSON body", () => {
 		expect(allSrc).toMatch(/==\s*"-"/)
 	})
 
-	it("[#33] --data '{\"foo\":\"bar\"}' → emitted helper passes literal JSON through untouched", () => {
+	it('[#33] --data \'{"foo":"bar"}\' → emitted helper passes literal JSON through untouched', () => {
 		const result = generateGoCLI(crudSpec, { binaryName: "acme" })
 		const allSrc = Object.values(result.files).join("\n")
 		expect(allSrc).toMatch(/return\s*\[\]byte\(val\)|\[\]byte\(val\),\s*nil/)

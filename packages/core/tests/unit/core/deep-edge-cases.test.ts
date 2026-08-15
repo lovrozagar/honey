@@ -26,10 +26,7 @@ describe("unicode paths and params", () => {
 		const app = honey<{}>()
 		app.get("/emoji/:e").handler((ctx) => ctx.res.json("ok", { e: ctx.params.e }))
 
-		const res = await app.fetch(
-			new Request(`http://localhost/emoji/${encodeURIComponent("🔥")}`),
-			{},
-		)
+		const res = await app.fetch(new Request(`http://localhost/emoji/${encodeURIComponent("🔥")}`), {})
 		const body = (await res.json()) as Record<string, unknown>
 		expect(body.e).toBe("🔥")
 	})
@@ -50,10 +47,7 @@ describe("405 vs 404 precedence", () => {
 		const app = honey<{}>()
 		app.get("/users/:id").handler((ctx) => ctx.res.text("ok", "ok"))
 
-		const res = await app.fetch(
-			new Request("http://localhost/unknown/path", { method: "DELETE" }),
-			{},
-		)
+		const res = await app.fetch(new Request("http://localhost/unknown/path", { method: "DELETE" }), {})
 		expect(res.status).toBe(404)
 	})
 })
@@ -114,9 +108,7 @@ describe("concurrent shared middleware state", () => {
 				return ctx.res.json("ok", { count: counter })
 			})
 
-		const promises = Array.from({ length: 20 }, () =>
-			app.fetch(new Request("http://localhost/test"), {}),
-		)
+		const promises = Array.from({ length: 20 }, () => app.fetch(new Request("http://localhost/test"), {}))
 		await Promise.all(promises)
 		expect(counter).toBe(20)
 	})

@@ -114,7 +114,8 @@ export function deriveErrorEnvelopeName(schema: Record<string, unknown>, fallbac
 	const statusProp = props.status
 	let status: number | undefined
 	if (typeof statusProp.const === "number") status = statusProp.const
-	else if (Array.isArray(statusProp.enum) && statusProp.enum.length === 1 && typeof statusProp.enum[0] === "number") status = statusProp.enum[0]
+	else if (Array.isArray(statusProp.enum) && statusProp.enum.length === 1 && typeof statusProp.enum[0] === "number")
+		status = statusProp.enum[0]
 	else if (fallbackStatus !== undefined) status = fallbackStatus
 	else throw new Error("deriveErrorEnvelopeName: no status")
 
@@ -125,7 +126,12 @@ export function deriveErrorEnvelopeName(schema: Record<string, unknown>, fallbac
 
 	if (keys.length === 0) return `Err${status}`
 	const keysPascal = keys
-		.map((k) => k.split(/[_-]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(""))
+		.map((k) =>
+			k
+				.split(/[_-]/)
+				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+				.join(""),
+		)
 		.join("")
 	return `Err${status}${keysPascal}`
 }

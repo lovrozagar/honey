@@ -153,10 +153,7 @@ export function createKeepaliveLoop(opts: {
 
 const DEFAULT_FALLBACK_TIMEOUT = 3000
 
-export function createFallbackChain(opts: {
-	transports: TransportAdapter[]
-	timeout?: number
-}): {
+export function createFallbackChain(opts: { transports: TransportAdapter[]; timeout?: number }): {
 	connect(url: string, transportOpts: TransportOpts): Promise<{ conn: TransportConnection; transport: Transport }>
 	readonly provenTransport: Transport | null
 } {
@@ -222,7 +219,6 @@ export function createFallbackChain(opts: {
 		transportOpts: TransportOpts,
 		transports: TransportAdapter[],
 	): Promise<{ conn: TransportConnection; transport: Transport }> {
-
 		/* If we have a proven transport, try it first (it's at a specific index) */
 		if (proven !== null) {
 			/* proven refers to index position — try that adapter directly */
@@ -280,10 +276,7 @@ export type ResumableConnectionOpts = {
 	keepaliveInterval?: number
 }
 
-type QueueEntry =
-	| { type: "value"; value: unknown }
-	| { type: "done" }
-	| { type: "error"; error: unknown }
+type QueueEntry = { type: "value"; value: unknown } | { type: "done" } | { type: "error"; error: unknown }
 
 export function createResumableConnection(opts: ResumableConnectionOpts): {
 	readonly state: ConnectionState
@@ -350,9 +343,13 @@ export function createResumableConnection(opts: ResumableConnectionOpts): {
 
 	/* Listen for abort signal */
 	if (opts.signal && !opts.signal.aborted) {
-		opts.signal.addEventListener("abort", () => {
-			handleAbort()
-		}, { once: true })
+		opts.signal.addEventListener(
+			"abort",
+			() => {
+				handleAbort()
+			},
+			{ once: true },
+		)
 	}
 
 	function startConnection(): void {

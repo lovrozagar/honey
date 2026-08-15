@@ -11,10 +11,7 @@
 /* eslint-disable @typescript-eslint/no-deprecated */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import {
-	CallToolRequestSchema,
-	ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js"
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import type { Tool, ToolResult } from "./types.ts"
 
 type ServerError = Error & { status?: number; body?: unknown; data?: unknown }

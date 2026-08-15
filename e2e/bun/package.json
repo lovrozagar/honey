@@ -11,12 +11,12 @@
 		"type:check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@lovrozagar/honey": "workspace:*",
 		"@honey/e2e-compose": "workspace:*",
 		"@honey/e2e-defaults": "workspace:*",
 		"@honey/e2e-gateway": "workspace:*",
 		"@honey/e2e-kitchen": "workspace:*",
-		"@honey/e2e-surface": "workspace:*"
+		"@honey/e2e-surface": "workspace:*",
+		"@lovrozagar/honey": "workspace:*"
 	},
 	"devDependencies": {
 		"@playwright/test": "catalog:",

@@ -57,9 +57,7 @@ export type ProxyConfig<TCtx> = {
  * compatibility with { path, req }. At runtime ctx is always HoneyContext
  * which has both fields — we access them via property access on the object.
  */
-export function createProxyHandler<TCtx>(
-	config: ProxyConfig<TCtx>,
-): (ctx: TCtx) => Promise<Response> {
+export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<Response> {
 	const timeoutOpt = config.timeout ?? 30_000
 
 	return async (ctx: TCtx) => {

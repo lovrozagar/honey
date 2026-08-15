@@ -137,9 +137,6 @@ describe("generateSDK preserves multiple invalidation targets", () => {
 			info: { title: "Test", version: "1" },
 		})
 		const { serviceMap } = generateSDK(spec)
-		expect(serviceMap.users.create.invalidate).toEqual([
-			"GET /v1/users",
-			"GET /v1/users/:id",
-		])
+		expect(serviceMap.users.create.invalidate).toEqual(["GET /v1/users", "GET /v1/users/:id"])
 	})
 })

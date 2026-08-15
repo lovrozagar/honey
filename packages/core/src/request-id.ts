@@ -5,9 +5,7 @@ type RequestIdOptions = {
 	header?: string
 }
 
-export function requestId(
-	options?: RequestIdOptions,
-): MiddlewareFn<{ req: Request }, { requestId: string }> {
+export function requestId(options?: RequestIdOptions): MiddlewareFn<{ req: Request }, { requestId: string }> {
 	const headerName = options?.header ?? "x-request-id"
 	const generate = options?.generator ?? (() => crypto.randomUUID())
 

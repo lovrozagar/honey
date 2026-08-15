@@ -57,15 +57,11 @@ describe("interpolate: plural type coercion", () => {
 	})
 
 	it("boolean true in plural → coerced to 1 → matches one", () => {
-		expect(
-			interpolate("{n, plural, one {one} other {other}}", { n: true as unknown as number }),
-		).toBe("one")
+		expect(interpolate("{n, plural, one {one} other {other}}", { n: true as unknown as number })).toBe("one")
 	})
 
 	it("boolean false in plural → coerced to 0 → matches other", () => {
-		expect(
-			interpolate("{n, plural, one {one} other {other}}", { n: false as unknown as number }),
-		).toBe("other")
+		expect(interpolate("{n, plural, one {one} other {other}}", { n: false as unknown as number })).toBe("other")
 	})
 
 	it("string '1' in plural → coerced to 1 → matches one", () => {
@@ -77,15 +73,11 @@ describe("interpolate: plural type coercion", () => {
 	})
 
 	it("Infinity in plural → other category", () => {
-		expect(interpolate("{n, plural, one {one} other {# items}}", { n: Infinity })).toBe(
-			"Infinity items",
-		)
+		expect(interpolate("{n, plural, one {one} other {# items}}", { n: Infinity })).toBe("Infinity items")
 	})
 
 	it("-Infinity in plural → other category", () => {
-		expect(interpolate("{n, plural, one {one} other {# items}}", { n: -Infinity })).toBe(
-			"-Infinity items",
-		)
+		expect(interpolate("{n, plural, one {one} other {# items}}", { n: -Infinity })).toBe("-Infinity items")
 	})
 })
 
@@ -191,19 +183,23 @@ describe("interpolate: number locale formatting", () => {
 describe("interpolate: 4 levels of nesting", () => {
 	it("select 4 levels deep", () => {
 		expect(
-			interpolate(
-				"{a, select, x {{b, select, y {{c, select, z {{d}} other {?}}} other {?}}} other {?}}",
-				{ a: "x", b: "y", c: "z", d: "DEEP" },
-			),
+			interpolate("{a, select, x {{b, select, y {{c, select, z {{d}} other {?}}} other {?}}} other {?}}", {
+				a: "x",
+				b: "y",
+				c: "z",
+				d: "DEEP",
+			}),
 		).toBe("DEEP")
 	})
 
 	it("4 levels with wrong inner value → falls to other", () => {
 		expect(
-			interpolate(
-				"{a, select, x {{b, select, y {{c, select, z {{d}} other {fallback}}} other {?}}} other {?}}",
-				{ a: "x", b: "y", c: "wrong", d: "DEEP" },
-			),
+			interpolate("{a, select, x {{b, select, y {{c, select, z {{d}} other {fallback}}} other {?}}} other {?}}", {
+				a: "x",
+				b: "y",
+				c: "wrong",
+				d: "DEEP",
+			}),
 		).toBe("fallback")
 	})
 })
@@ -218,9 +214,7 @@ describe("interpolate: whitespace handling", () => {
 	})
 
 	it("extra spaces around commas", () => {
-		expect(interpolate("{  n  ,  plural  ,  one  {single}  other  {multi}  }", { n: 1 })).toBe(
-			"single",
-		)
+		expect(interpolate("{  n  ,  plural  ,  one  {single}  other  {multi}  }", { n: 1 })).toBe("single")
 	})
 
 	it("newlines in branch content", () => {
@@ -262,9 +256,7 @@ describe("interpolate: template structure", () => {
 	})
 
 	it("consecutive ICU blocks no space between", () => {
-		expect(
-			interpolate("{a, plural, one {#} other {#s}}{b, plural, one {#} other {#s}}", { a: 1, b: 2 }),
-		).toBe("12s")
+		expect(interpolate("{a, plural, one {#} other {#s}}{b, plural, one {#} other {#s}}", { a: 1, b: 2 })).toBe("12s")
 	})
 
 	it("trailing text after ICU block", () => {
@@ -287,19 +279,19 @@ describe("interpolate: template structure", () => {
 describe("interpolate: complex real-world messages", () => {
 	it("multi-entity deletion confirmation", () => {
 		expect(
-			interpolate(
-				"Are you sure you want to delete {count, plural, one {this {type}} other {these # {type}s}}?",
-				{ count: 5, type: "document" },
-			),
+			interpolate("Are you sure you want to delete {count, plural, one {this {type}} other {these # {type}s}}?", {
+				count: 5,
+				type: "document",
+			}),
 		).toBe("Are you sure you want to delete these 5 documents?")
 	})
 
 	it("multi-entity deletion singular", () => {
 		expect(
-			interpolate(
-				"Are you sure you want to delete {count, plural, one {this {type}} other {these # {type}s}}?",
-				{ count: 1, type: "file" },
-			),
+			interpolate("Are you sure you want to delete {count, plural, one {this {type}} other {these # {type}s}}?", {
+				count: 1,
+				type: "file",
+			}),
 		).toBe("Are you sure you want to delete this file?")
 	})
 
@@ -375,9 +367,7 @@ describe("interpolate: complex real-world messages", () => {
 describe("interpolate: concurrent calls (no shared state)", () => {
 	it("parallel calls with different vars don't interfere", () => {
 		const tpl = "{n, plural, one {# item for {name}} other {# items for {name}}}"
-		const results = Array.from({ length: 100 }, (_, i) =>
-			interpolate(tpl, { n: i, name: `user${i}` }),
-		)
+		const results = Array.from({ length: 100 }, (_, i) => interpolate(tpl, { n: i, name: `user${i}` }))
 		for (let i = 0; i < 100; i++) {
 			if (i === 1) {
 				expect(results[i]).toBe("1 item for user1")

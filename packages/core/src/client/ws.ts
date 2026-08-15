@@ -55,10 +55,7 @@ export function createTypedWebSocket(
 				break
 			case "close":
 				wrapped = (e: Event) =>
-					(handler as (code: number, reason: string) => void)(
-						(e as CloseEvent).code,
-						(e as CloseEvent).reason,
-					)
+					(handler as (code: number, reason: string) => void)((e as CloseEvent).code, (e as CloseEvent).reason)
 				break
 			case "error":
 				wrapped = (e: Event) => (handler as (error: unknown) => void)(e)
@@ -80,7 +77,8 @@ export function createTypedWebSocket(
 
 	function toWsData(data: ArrayBuffer | ArrayBufferView | string): string | Uint8Array<ArrayBuffer> {
 		if (typeof data === "string") return data
-		const view = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+		const view =
+			data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
 		const copy = new Uint8Array(view.byteLength)
 		copy.set(view)
 		return copy

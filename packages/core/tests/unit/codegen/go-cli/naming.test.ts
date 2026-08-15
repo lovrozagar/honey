@@ -46,7 +46,7 @@ describe("go-cli codegen — Tier 8: naming", () => {
 		expect(articles).toMatch(/Use:\s*"list-articles"/)
 	})
 
-	it("[#50] Go-keyword resource type → cmd Use stays \"type\", Go var is typeCmd-safe (type_Cmd)", () => {
+	it('[#50] Go-keyword resource type → cmd Use stays "type", Go var is typeCmd-safe (type_Cmd)', () => {
 		const reservedSpec = loadFixture("go-reserved")
 		const result = generateGoCLI(reservedSpec, { binaryName: "acme" })
 		const allSrc = Object.values(result.files).join("\n")

@@ -192,9 +192,7 @@ describe("R5-1 _ErrField shape — no recursive fields key", () => {
 		 * and must not confuse this check, so we assert strictly on the _ErrField alias
 		 * declaration.
 		 */
-		const errFieldLine = files.types
-			.split("\n")
-			.find((l) => l.trimStart().startsWith("type _ErrField ="))
+		const errFieldLine = files.types.split("\n").find((l) => l.trimStart().startsWith("type _ErrField ="))
 		expect(errFieldLine).toBeDefined()
 		/* must be flat — no nested fields key */
 		expect(errFieldLine).not.toMatch(/type _ErrField\s*=\s*\{[^}]*fields:/)
@@ -209,9 +207,7 @@ describe("R5-1 _ErrField shape — no recursive fields key", () => {
 		 * against current → RED. After fix, `{ error_key: string; message: string; path: string }`
 		 * is the whole body → substring found → GREEN.
 		 */
-		expect(files.types).toContain(
-			"{ error_key: string; message: string; path: string }",
-		)
+		expect(files.types).toContain("{ error_key: string; message: string; path: string }")
 	})
 
 	it("R5-1: _ErrField keys equal exactly (error_key | message | path) via inline replica", () => {
@@ -226,9 +222,7 @@ describe("R5-1 _ErrField shape — no recursive fields key", () => {
 		expectTypeOf<keyof ExpectedErrField>().toEqualTypeOf<"error_key" | "message" | "path">()
 
 		const { files } = generateSDK(dedupeResponseSpec, { name: "TestSDK" })
-		const errFieldLine = files.types
-			.split("\n")
-			.find((l) => l.trimStart().startsWith("type _ErrField ="))
+		const errFieldLine = files.types.split("\n").find((l) => l.trimStart().startsWith("type _ErrField ="))
 		if (!errFieldLine) {
 			throw new Error("_ErrField declaration not found in generated types")
 		}
@@ -429,18 +423,14 @@ describe("R5-5 WS/SSE suffix asymmetry", () => {
 	it("R5-5: WS method input types do NOT contain headers?: Record<string, string>", () => {
 		const { files } = generateSDK(streamingSpec, { name: "TestSDK" })
 		/* find the WS method line (returns TypedWebSocket) */
-		const wsLine = files.types
-			.split("\n")
-			.find((l) => l.includes("connect(") && l.includes("TypedWebSocket"))
+		const wsLine = files.types.split("\n").find((l) => l.includes("connect(") && l.includes("TypedWebSocket"))
 		expect(wsLine).toBeDefined()
 		expect(wsLine).not.toContain("headers?: Record<string, string>")
 	})
 
 	it("R5-5: SSE method input types contain cookies?: Record<string, string>", () => {
 		const { files } = generateSDK(streamingSpec, { name: "TestSDK" })
-		const sseLine = files.types
-			.split("\n")
-			.find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
+		const sseLine = files.types.split("\n").find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
 		expect(sseLine).toBeDefined()
 		expect(sseLine).toContain("_SseOpts")
 		expect(files.types).toContain(
@@ -450,9 +440,7 @@ describe("R5-5 WS/SSE suffix asymmetry", () => {
 
 	it("R5-5: SSE method input types still contain headers?, lastEventId?, signal? (non-regression)", () => {
 		const { files } = generateSDK(streamingSpec, { name: "TestSDK" })
-		const sseLine = files.types
-			.split("\n")
-			.find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
+		const sseLine = files.types.split("\n").find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
 		expect(sseLine).toBeDefined()
 		expect(sseLine).toContain("_SseOpts")
 		expect(files.types).toContain("headers?: Record<string, string>")
@@ -468,9 +456,7 @@ describe("R5-5 WS/SSE suffix asymmetry", () => {
 describe("R5-6 SSE return type — optional event, retry?: number", () => {
 	it("R5-6: SSE method return type declares event as optional (event?:)", () => {
 		const { files } = generateSDK(streamingSpec, { name: "TestSDK" })
-		const sseLine = files.types
-			.split("\n")
-			.find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
+		const sseLine = files.types.split("\n").find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
 		expect(sseLine).toBeDefined()
 		/*
 		 * Current buggy form emits `event: string` (required).
@@ -482,11 +468,8 @@ describe("R5-6 SSE return type — optional event, retry?: number", () => {
 
 	it("R5-6: SSE method return type declares retry?: number", () => {
 		const { files } = generateSDK(streamingSpec, { name: "TestSDK" })
-		const sseLine = files.types
-			.split("\n")
-			.find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
+		const sseLine = files.types.split("\n").find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
 		expect(sseLine).toBeDefined()
 		expect(sseLine).toMatch(/retry\?:\s*number/)
 	})
 })
-

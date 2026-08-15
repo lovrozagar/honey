@@ -12,7 +12,7 @@ function loadFixture(name: string): Record<string, unknown> {
 describe("go-cli codegen — Tier 4: enums", () => {
 	const enumsSpec = loadFixture("enums")
 
-	it("[#23] enum query param flag usage/help shows \"one of: active, archived\"", () => {
+	it('[#23] enum query param flag usage/help shows "one of: active, archived"', () => {
 		const result = generateGoCLI(enumsSpec, { binaryName: "acme" })
 		const posts = result.files["cmd/posts.go"]
 		expect(posts).toMatch(/one of:\s*active,\s*archived/)

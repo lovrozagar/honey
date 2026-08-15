@@ -351,9 +351,7 @@ describe("#R6-21 WS _ws property — Layer B' regression", () => {
 	it("Layer B' post-fix: files.client WS method ends with 'return typed' not inline object literal", () => {
 		const { files } = generateSDK(phaseISpec, { name: "TestSDK" })
 		expect(files.client).toContain("return typed")
-		expect(files.client).not.toContain(
-			"return { close, off, on, get readyState() { return ws.readyState }, send }",
-		)
+		expect(files.client).not.toContain("return { close, off, on, get readyState() { return ws.readyState }, send }")
 	})
 })
 

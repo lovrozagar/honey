@@ -172,9 +172,7 @@ describe("SDK: request body types", () => {
 	})
 
 	it("DELETE with params, no body", async () => {
-		const fetcher = vi.fn<typeof fetch>(
-			async () => new Response(null, { status: 204 }),
-		)
+		const fetcher = vi.fn<typeof fetch>(async () => new Response(null, { status: 204 }))
 
 		const sdk = createSDK(
 			{ users: { remove: { method: "DELETE", params: ["id"], path: "/users/:id" } } },
@@ -268,8 +266,7 @@ describe("SDK: error handling", () => {
 describe("SDK: headers", () => {
 	it("config headers sent on every request", async () => {
 		const fetcher = vi.fn<typeof fetch>(
-			async () =>
-				new Response("{}", { headers: { "content-type": "application/json" }, status: 200 }),
+			async () => new Response("{}", { headers: { "content-type": "application/json" }, status: 200 }),
 		)
 
 		const sdk = createSDK(
@@ -298,8 +295,7 @@ describe("SDK: headers", () => {
 describe("SDK: search params", () => {
 	it("search params appended to URL", async () => {
 		const fetcher = vi.fn<typeof fetch>(
-			async () =>
-				new Response("[]", { headers: { "content-type": "application/json" }, status: 200 }),
+			async () => new Response("[]", { headers: { "content-type": "application/json" }, status: 200 }),
 		)
 
 		const sdk = createSDK(
@@ -316,8 +312,7 @@ describe("SDK: search params", () => {
 
 	it("undefined/null search values excluded", async () => {
 		const fetcher = vi.fn<typeof fetch>(
-			async () =>
-				new Response("[]", { headers: { "content-type": "application/json" }, status: 200 }),
+			async () => new Response("[]", { headers: { "content-type": "application/json" }, status: 200 }),
 		)
 
 		const sdk = createSDK(
@@ -335,8 +330,7 @@ describe("SDK: search params", () => {
 describe("SDK: complex path params", () => {
 	it("deeply nested params from OpenAPI {param} format", async () => {
 		const fetcher = vi.fn<typeof fetch>(
-			async () =>
-				new Response("{}", { headers: { "content-type": "application/json" }, status: 200 }),
+			async () => new Response("{}", { headers: { "content-type": "application/json" }, status: 200 }),
 		)
 
 		const sdk = createSDK(
@@ -359,8 +353,7 @@ describe("SDK: complex path params", () => {
 
 	it("params with special chars → URL encoded", async () => {
 		const fetcher = vi.fn<typeof fetch>(
-			async () =>
-				new Response("{}", { headers: { "content-type": "application/json" }, status: 200 }),
+			async () => new Response("{}", { headers: { "content-type": "application/json" }, status: 200 }),
 		)
 
 		const sdk = createSDK(

@@ -22,9 +22,7 @@ const errors = defineErrors({
 	validation_error: "bad_request",
 })
 
-const withLogger = createMiddleware(async (_ctx, next) =>
-	next({ logger: { info: (_msg: string) => {} } }),
-)
+const withLogger = createMiddleware(async (_ctx, next) => next({ logger: { info: (_msg: string) => {} } }))
 
 const withAuth = createMiddleware(async (_ctx, next) =>
 	next({ user: { id: "u-1", role: "admin" as "admin" | "member" } }),
@@ -75,16 +73,12 @@ export function createApp(wsAdapter?: WSAdapter) {
 		.get("/in/cookies")
 		.input({ cookies: z.object({ locale: z.string(), sid: z.string() }) })
 		.output({ "application/json": { ok: z.object({ locale: z.string(), valid: z.boolean() }) } })
-		.handler((ctx) =>
-			ctx.res.json("ok", { locale: ctx.input.cookies.locale, valid: true }),
-		)
+		.handler((ctx) => ctx.res.json("ok", { locale: ctx.input.cookies.locale, valid: true }))
 
 		.get("/in/params/:orgId/members/:memberId")
 		.input({ params: z.object({ memberId: z.string().min(1), orgId: z.string().min(1) }) })
 		.output({ "application/json": { ok: z.object({ memberId: z.string(), orgId: z.string() }) } })
-		.handler((ctx) =>
-			ctx.res.json("ok", { memberId: ctx.input.params.memberId, orgId: ctx.input.params.orgId }),
-		)
+		.handler((ctx) => ctx.res.json("ok", { memberId: ctx.input.params.memberId, orgId: ctx.input.params.orgId }))
 
 		.get("/in/none")
 		.meta({ operationId: "input.none", tags: ["input"] })
@@ -94,9 +88,7 @@ export function createApp(wsAdapter?: WSAdapter) {
 		.post("/in/file")
 		.input({ form: z.object({ title: z.string(), upload: z.file() }) })
 		.output({ "application/json": { ok: z.object({ name: z.string(), title: z.string() }) } })
-		.handler((ctx) =>
-			ctx.res.json("ok", { name: ctx.input.form.upload.name, title: ctx.input.form.title }),
-		)
+		.handler((ctx) => ctx.res.json("ok", { name: ctx.input.form.upload.name, title: ctx.input.form.title }))
 
 		.put("/in/all/:resourceId")
 		.input({

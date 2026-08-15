@@ -50,12 +50,8 @@ describe("SDK codegen — nested operationId support (T13–T19)", () => {
 		const spec = loadFixture("sdk", "nested")
 		const { files } = generateSDK(spec, { name: "TestSDK" })
 		/* RED: flat codegen cannot produce nested profile namespace */
-		expect(files.map).toMatch(
-			/users\s*:\s*\{[^}]*list\s*:\s*\{[^}]*method\s*:\s*["']GET["']/s,
-		)
-		expect(files.map).toMatch(
-			/profile\s*:\s*\{[^}]*update\s*:\s*\{[^}]*method\s*:\s*["']PATCH["']/s,
-		)
+		expect(files.map).toMatch(/users\s*:\s*\{[^}]*list\s*:\s*\{[^}]*method\s*:\s*["']GET["']/s)
+		expect(files.map).toMatch(/profile\s*:\s*\{[^}]*update\s*:\s*\{[^}]*method\s*:\s*["']PATCH["']/s)
 	})
 
 	/* T15: single-segment top-level in serviceMap */
@@ -63,9 +59,7 @@ describe("SDK codegen — nested operationId support (T13–T19)", () => {
 		const spec = loadFixture("sdk", "nested")
 		const { files } = generateSDK(spec, { name: "TestSDK" })
 		/* RED: getStatus has no dot → must be a direct leaf at root, not nested under resource */
-		expect(files.map).toMatch(
-			/getStatus\s*:\s*\{[^}]*method\s*:\s*["']GET["']/s,
-		)
+		expect(files.map).toMatch(/getStatus\s*:\s*\{[^}]*method\s*:\s*["']GET["']/s)
 	})
 
 	/* T16: recursive interface emission — nested interface bodies */

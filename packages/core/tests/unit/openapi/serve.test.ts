@@ -146,9 +146,9 @@ describe("Honey.openapi()", () => {
 		const app = honey()
 			.get("/docs")
 			.handler((ctx) => ctx.res.text("ok", "user-docs"))
-		expect(() =>
-			app.openapi({ docs: "scalar", docsPath: "/docs", title: "Demo", version: "1" }),
-		).toThrow(/docsPath|already registered|\/docs/i)
+		expect(() => app.openapi({ docs: "scalar", docsPath: "/docs", title: "Demo", version: "1" })).toThrow(
+			/docsPath|already registered|\/docs/i,
+		)
 	})
 
 	it("route() of two apps that both called openapi() keeps one docs UI", async () => {

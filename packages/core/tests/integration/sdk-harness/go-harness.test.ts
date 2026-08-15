@@ -1774,7 +1774,7 @@ func main() {
 	fmt.Println(string(out))
 }
 `
-		const result = await runGoWsCase(mainGo) as { received: string }
+		const result = (await runGoWsCase(mainGo)) as { received: string }
 		expect(result.received).toBe("hello")
 	}, 90_000)
 
@@ -1807,7 +1807,7 @@ func main() {
 	fmt.Println(string(out))
 }
 `
-		const result = await runGoWsCase(mainGo) as { errNil: boolean; errStr: string }
+		const result = (await runGoWsCase(mainGo)) as { errNil: boolean; errStr: string }
 		expect(result.errNil).toBe(false)
 	}, 90_000)
 
@@ -1849,7 +1849,7 @@ func main() {
 	fmt.Println(string(out))
 }
 `
-		const result = await runGoWsCase(mainGo) as { code: number; reason: string }
+		const result = (await runGoWsCase(mainGo)) as { code: number; reason: string }
 		expect(result.code).toBe(1000)
 		expect(result.reason).toBe("server-initiated")
 	}, 90_000)
@@ -1902,7 +1902,7 @@ func main() {
 	fmt.Println(string(out))
 }
 `
-		const result = await runGoWsCase(mainGo) as {
+		const result = (await runGoWsCase(mainGo)) as {
 			ok: { echoed: string; code: number }
 			bad: { echoed: string; code: number }
 		}

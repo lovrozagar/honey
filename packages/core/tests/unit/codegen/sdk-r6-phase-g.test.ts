@@ -111,7 +111,16 @@ describe("#R6-6 isStandardErrEnvelope — Layer A invariants", () => {
 		const schema = {
 			properties: {
 				error_key: { enum: ["x"] },
-				fields: { additionalProperties: { items: { properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } }, type: "object" }, type: "array" }, type: "object" },
+				fields: {
+					additionalProperties: {
+						items: {
+							properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
+							type: "object",
+						},
+						type: "array",
+					},
+					type: "object",
+				},
 				message: { type: "string" },
 				status: { enum: [400] },
 				status_key: { type: "string" },
@@ -128,7 +137,16 @@ describe("#R6-6 isStandardErrEnvelope — Layer A invariants", () => {
 		const schema = {
 			properties: {
 				error_key: { enum: ["x"] },
-				fields: { additionalProperties: { items: { properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } }, type: "object" }, type: "array" }, type: "object" },
+				fields: {
+					additionalProperties: {
+						items: {
+							properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
+							type: "object",
+						},
+						type: "array",
+					},
+					type: "object",
+				},
 				message: { type: "number" },
 				status: { enum: [400] },
 				status_key: { type: "string" },
@@ -149,7 +167,16 @@ describe("#R6-6 isStandardErrEnvelope — Layer A invariants", () => {
 		const schema = {
 			properties: {
 				error_key: { enum: ["x"] },
-				fields: { additionalProperties: { items: { properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } }, type: "object" }, type: "array" }, type: "object" },
+				fields: {
+					additionalProperties: {
+						items: {
+							properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
+							type: "object",
+						},
+						type: "array",
+					},
+					type: "object",
+				},
 				message: { type: "string" },
 				status: { type: "number" },
 				status_key: { type: "string" },
@@ -163,7 +190,16 @@ describe("#R6-6 isStandardErrEnvelope — Layer A invariants", () => {
 		const schema = {
 			properties: {
 				error_key: { enum: ["x"] },
-				fields: { additionalProperties: { items: { properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } }, type: "object" }, type: "array" }, type: "object" },
+				fields: {
+					additionalProperties: {
+						items: {
+							properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
+							type: "object",
+						},
+						type: "array",
+					},
+					type: "object",
+				},
 				message: { type: "string" },
 				status: { enum: [400, 422] },
 				status_key: { type: "string" },
@@ -177,7 +213,16 @@ describe("#R6-6 isStandardErrEnvelope — Layer A invariants", () => {
 		const schema = {
 			properties: {
 				error_key: { enum: [42] },
-				fields: { additionalProperties: { items: { properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } }, type: "object" }, type: "array" }, type: "object" },
+				fields: {
+					additionalProperties: {
+						items: {
+							properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
+							type: "object",
+						},
+						type: "array",
+					},
+					type: "object",
+				},
 				message: { type: "string" },
 				status: { enum: [400] },
 				status_key: { type: "string" },
@@ -251,7 +296,7 @@ describe("#R6-6 isStandardErrEnvelope — emitter Layer B' regression strings", 
    ═══════════════════════════════════════════════════════════════════ */
 
 describe("#R6-7 parseAsClientError string guard — emitter Layer B' regression strings", () => {
-	it("post-fix: emitted #parseAsClientError uses typeof msgVal === \"string\" guard", () => {
+	it('post-fix: emitted #parseAsClientError uses typeof msgVal === "string" guard', () => {
 		const { files } = generateSDK(phaseGFixtureSpec, { name: "TestSDK" })
 		expect(files.client).toContain(`typeof msgVal === "string"`)
 	})
@@ -267,22 +312,22 @@ describe("#R6-7 parseAsClientError string guard — emitter Layer B' regression 
    ═══════════════════════════════════════════════════════════════════ */
 
 describe("#R6-8 parseBody MIME parsing — emitter Layer B' regression strings", () => {
-	it("post-fix: files.client uses rawCt.split(\";\")[0] to strip params", () => {
+	it('post-fix: files.client uses rawCt.split(";")[0] to strip params', () => {
 		const { files } = generateSDK(phaseGFixtureSpec, { name: "TestSDK" })
 		expect(files.client).toContain(`rawCt.split(";")[0]`)
 	})
 
-	it("post-fix: files.client uses ct.endsWith(\"+json\") for vendor JSON types", () => {
+	it('post-fix: files.client uses ct.endsWith("+json") for vendor JSON types', () => {
 		const { files } = generateSDK(phaseGFixtureSpec, { name: "TestSDK" })
 		expect(files.client).toContain(`ct.endsWith("+json")`)
 	})
 
-	it("post-fix: files.client uses ct.startsWith(\"text/\") for text types", () => {
+	it('post-fix: files.client uses ct.startsWith("text/") for text types', () => {
 		const { files } = generateSDK(phaseGFixtureSpec, { name: "TestSDK" })
 		expect(files.client).toContain(`ct.startsWith("text/")`)
 	})
 
-	it("post-fix: loose ct.includes(\"application/json\") packed-substring form is gone", () => {
+	it('post-fix: loose ct.includes("application/json") packed-substring form is gone', () => {
 		const { files } = generateSDK(phaseGFixtureSpec, { name: "TestSDK" })
 		expect(files.client).not.toContain(`ct.includes("application/json")`)
 	})

@@ -57,11 +57,7 @@ export type OutputFor<TRoutes, P extends string, M extends string> =
 
 /** Check if a route returns SSE (text/event-stream in output) */
 export type IsSSE<TRoutes, P extends string, M extends string> =
-	OutputDefFor<TRoutes, P, M> extends infer O
-		? O extends { "text/event-stream": unknown }
-			? true
-			: false
-		: false
+	OutputDefFor<TRoutes, P, M> extends infer O ? (O extends { "text/event-stream": unknown } ? true : false) : false
 
 /** Extract errorsByStatus from route record if available */
 type ErrorsByStatusFor<TRoutes, P extends string, M extends string> = P extends keyof TRoutes
@@ -109,8 +105,8 @@ type ErrorVariants<TErrorsByStatus> = {
 export type ClientResult<TData, TErrorsByStatus = never> =
 	| { data: TData; error: null; response: Response; status: number }
 	| (HasStatusErrors<TErrorsByStatus> extends false
-		? { data: null; error: unknown; response: Response; status: number }
-		: ErrorVariants<TErrorsByStatus>)
+			? { data: null; error: unknown; response: Response; status: number }
+			: ErrorVariants<TErrorsByStatus>)
 
 /** Resolve return type based on transport + throw mode */
 export type ReturnFor<TRoutes, P extends string, M extends string, TThrow extends boolean = true> =
@@ -121,8 +117,7 @@ export type ReturnFor<TRoutes, P extends string, M extends string, TThrow extend
 			: Promise<ClientResult<OutputFor<TRoutes, P, M>, ErrorsByStatusFor<TRoutes, P, M>>>
 
 /** Build the client input type — merge route input with params from path */
-export type ClientInput<TRoutes, P extends string, M extends string> = InputFor<TRoutes, P, M> &
-	ParamsInput<P>
+export type ClientInput<TRoutes, P extends string, M extends string> = InputFor<TRoutes, P, M> & ParamsInput<P>
 
 /** Extract params input if path has params */
 type ParamsInput<P extends string> =

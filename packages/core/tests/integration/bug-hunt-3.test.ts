@@ -487,9 +487,7 @@ describe("bug-hunt-3: testClient cookie jar", () => {
 				},
 			),
 		)
-		app
-			.get("/check")
-			.handler((ctx) => ctx.res.json("ok", { hasCookie: ctx.cookies.session !== undefined }))
+		app.get("/check").handler((ctx) => ctx.res.json("ok", { hasCookie: ctx.cookies.session !== undefined }))
 
 		const client = testClient(app, { cookies: false, env: {} })
 		await client.get("/login")

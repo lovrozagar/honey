@@ -22,9 +22,16 @@ const serviceMap = {
 
 type ItemSDK = {
 	items: {
-		get: (input: { params: { id: string } }) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
-		list: (input?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
-		update: (input: { json?: unknown; params: { id: string } }) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+		get: (input: {
+			params: { id: string }
+		}) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+		list: (
+			input?: Record<string, unknown>,
+		) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
+		update: (input: {
+			json?: unknown
+			params: { id: string }
+		}) => Promise<{ data: unknown; error: unknown; response: Response; status: number }>
 	}
 }
 
@@ -42,11 +49,7 @@ function ctResponse(body: string | ArrayBuffer, ct: string, status = 200): Respo
 	})
 }
 
-function resolveCall(
-	calls: Array<{ resolve: (r: Response) => void }>,
-	idx: number,
-	r: Response,
-): void {
+function resolveCall(calls: Array<{ resolve: (r: Response) => void }>, idx: number, r: Response): void {
 	const call = calls[idx]
 	if (!call) throw new Error(`deferredFetch: no call at index ${idx} (have ${calls.length})`)
 	call.resolve(r)
@@ -242,7 +245,11 @@ describe("#R6-11 onRequest ctx.body — Layer A invariants", () => {
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: () => Promise.resolve(jsonResponse({})),
-			onRequest: [(ctx) => { capturedBody = ctx.body }],
+			onRequest: [
+				(ctx) => {
+					capturedBody = ctx.body
+				},
+			],
 		})
 
 		await sdk.items.get({ params: { id: "1" } })
@@ -258,7 +265,11 @@ describe.skipIf(PHASE_G_FIXED)("#R6-11 onRequest ctx.body — Layer B bug witnes
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
-			onRequest: [(ctx) => { capturedBody = ctx.body }],
+			onRequest: [
+				(ctx) => {
+					capturedBody = ctx.body
+				},
+			],
 		})
 
 		const p = sdk.items.update({ json: { a: 1 }, params: { id: "1" } })
@@ -278,7 +289,11 @@ describe.runIf(PHASE_G_FIXED)("#R6-11 onRequest ctx.body — Layer B' regression
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
-			onRequest: [(ctx) => { capturedBody = ctx.body }],
+			onRequest: [
+				(ctx) => {
+					capturedBody = ctx.body
+				},
+			],
 		})
 
 		const p = sdk.items.update({ json: { a: 1 }, params: { id: "1" } })
@@ -295,7 +310,11 @@ describe.runIf(PHASE_G_FIXED)("#R6-11 onRequest ctx.body — Layer B' regression
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
-			onRequest: [(ctx) => { ctx.body = JSON.stringify({ a: 2 }) }],
+			onRequest: [
+				(ctx) => {
+					ctx.body = JSON.stringify({ a: 2 })
+				},
+			],
 		})
 
 		const p = sdk.items.update({ json: { a: 1 }, params: { id: "1" } })
@@ -320,12 +339,14 @@ describe("#R6-13 onResponse retry — Layer A invariants", () => {
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
-			onResponse: [async (ctx) => {
-				if (ctx.response.status === 429) {
-					retryResult = await ctx.retry()
-				}
-				return undefined
-			}],
+			onResponse: [
+				async (ctx) => {
+					if (ctx.response.status === 429) {
+						retryResult = await ctx.retry()
+					}
+					return undefined
+				},
+			],
 		})
 
 		const p = sdk.items.get({ params: { id: "1" } })
@@ -349,24 +370,40 @@ describe.skipIf(PHASE_G_FIXED)("#R6-13 onResponse retry — Layer B bug witness 
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
-			onResponse: [async (ctx) => {
-				if (ctx.response.status === 429) {
-					try {
-						await ctx.retry()
-					} catch (e) {
-						retryError = e
+			onResponse: [
+				async (ctx) => {
+					if (ctx.response.status === 429) {
+						try {
+							await ctx.retry()
+						} catch (e) {
+							retryError = e
+						}
 					}
-				}
-				return undefined
-			}],
+					return undefined
+				},
+			],
 		})
 
 		const p = sdk.items.get({ params: { id: "1" } })
 		await tick()
-		resolveCall(calls, 0, new Response(JSON.stringify({ message: "rate limited" }), { headers: { "content-type": "application/json" }, status: 429 }))
+		resolveCall(
+			calls,
+			0,
+			new Response(JSON.stringify({ message: "rate limited" }), {
+				headers: { "content-type": "application/json" },
+				status: 429,
+			}),
+		)
 		await tick()
 		await tick()
-		resolveCall(calls, 1, new Response(JSON.stringify({ message: "upstream failed" }), { headers: { "content-type": "application/json" }, status: 500 }))
+		resolveCall(
+			calls,
+			1,
+			new Response(JSON.stringify({ message: "upstream failed" }), {
+				headers: { "content-type": "application/json" },
+				status: 500,
+			}),
+		)
 		await p.catch(() => {})
 
 		expect(retryError).toBeUndefined()
@@ -381,24 +418,40 @@ describe.runIf(PHASE_G_FIXED)("#R6-13 onResponse retry — Layer B' regression (
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
-			onResponse: [async (ctx) => {
-				if (ctx.response.status === 429) {
-					try {
-						await ctx.retry()
-					} catch (e) {
-						retryError = e
+			onResponse: [
+				async (ctx) => {
+					if (ctx.response.status === 429) {
+						try {
+							await ctx.retry()
+						} catch (e) {
+							retryError = e
+						}
 					}
-				}
-				return undefined
-			}],
+					return undefined
+				},
+			],
 		})
 
 		const p = sdk.items.get({ params: { id: "1" } })
 		await tick()
-		resolveCall(calls, 0, new Response(JSON.stringify({ message: "rate limited" }), { headers: { "content-type": "application/json" }, status: 429 }))
+		resolveCall(
+			calls,
+			0,
+			new Response(JSON.stringify({ message: "rate limited" }), {
+				headers: { "content-type": "application/json" },
+				status: 429,
+			}),
+		)
 		await tick()
 		await tick()
-		resolveCall(calls, 1, new Response(JSON.stringify({ message: "upstream failed" }), { headers: { "content-type": "application/json" }, status: 500 }))
+		resolveCall(
+			calls,
+			1,
+			new Response(JSON.stringify({ message: "upstream failed" }), {
+				headers: { "content-type": "application/json" },
+				status: 500,
+			}),
+		)
 		await p.catch(() => {})
 
 		expect(retryError).toBeInstanceOf(ClientError)

@@ -345,19 +345,14 @@ describe("bug-hunt: secure-headers + various response types", () => {
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
-		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>(
-			(resolve, reject) => {
-				const req = http.request(
-					{ hostname: "127.0.0.1", method: "GET", path: "/old", port: addr.port },
-					(r) => {
-						resolve({ headers: r.headers, status: r.statusCode ?? 0 })
-						r.resume()
-					},
-				)
-				req.on("error", reject)
-				req.end()
-			},
-		)
+		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>((resolve, reject) => {
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/old", port: addr.port }, (r) => {
+				resolve({ headers: r.headers, status: r.statusCode ?? 0 })
+				r.resume()
+			})
+			req.on("error", reject)
+			req.end()
+		})
 		expect(res.status).toBe(302)
 		expect(res.headers.location).toBe("/new")
 		/* secure headers should still be applied to redirects */

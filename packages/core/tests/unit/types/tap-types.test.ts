@@ -157,9 +157,7 @@ describe("tap types: .taps() meta extension", () => {
 			.handler((c) => c.res.json("ok", {}))
 
 		/* valid — no tap keys in meta */
-		app
-			.get("/b")
-			.handler((c) => c.res.json("ok", {}))
+		app.get("/b").handler((c) => c.res.json("ok", {}))
 
 		/* valid — webhook only */
 		app
@@ -505,13 +503,13 @@ describe("tap types: sub-app route merging", () => {
 describe("tap types: $taps phantom type", () => {
 	it("$taps phantom carries the TTaps type", () => {
 		const app = honey<{}>().taps<AppTaps>()
-		type Taps = typeof app["$taps"]
+		type Taps = (typeof app)["$taps"]
 		expectTypeOf<Taps>().toEqualTypeOf<AppTaps>()
 	})
 
 	it("$taps is empty object when no .taps() called", () => {
 		const app = honey<{}>()
-		type Taps = typeof app["$taps"]
+		type Taps = (typeof app)["$taps"]
 		expectTypeOf<Taps>().toEqualTypeOf<{}>()
 	})
 })

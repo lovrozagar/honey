@@ -108,10 +108,7 @@ let cachedKey: CryptoKey | null = null
 
 async function getKey(): Promise<CryptoKey> {
 	if (cachedKey === null) {
-		cachedKey = await crypto.subtle.generateKey({ hash: "SHA-256", name: "HMAC" }, false, [
-			"sign",
-			"verify",
-		])
+		cachedKey = await crypto.subtle.generateKey({ hash: "SHA-256", name: "HMAC" }, false, ["sign", "verify"])
 	}
 	return cachedKey
 }
@@ -167,8 +164,7 @@ export function serializeCookie(name: string, opts: CookieOptions): string {
 	if (name.startsWith("__Host-")) {
 		if (!opts.secure) throw new Error("__Host- cookies require secure: true")
 		if (opts.domain) throw new Error("__Host- cookies must not set domain")
-		if (opts.path !== "/" && opts.path !== undefined)
-			throw new Error("__Host- cookies must have path: '/'")
+		if (opts.path !== "/" && opts.path !== undefined) throw new Error("__Host- cookies must have path: '/'")
 		secure = true
 		path = path ?? "/"
 	} else if (name.startsWith("__Secure-")) {

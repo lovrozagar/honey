@@ -4,10 +4,7 @@ let cachedKey: CryptoKey | null = null
 
 async function getKey(): Promise<CryptoKey> {
 	if (cachedKey === null) {
-		cachedKey = await crypto.subtle.generateKey({ hash: "SHA-256", name: "HMAC" }, false, [
-			"sign",
-			"verify",
-		])
+		cachedKey = await crypto.subtle.generateKey({ hash: "SHA-256", name: "HMAC" }, false, ["sign", "verify"])
 	}
 	return cachedKey
 }

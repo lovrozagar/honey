@@ -13,7 +13,7 @@ describe("go-cli codegen — Tier 2: path params", () => {
 	const crudSpec = loadFixture("crud")
 	const reservedSpec = loadFixture("go-reserved")
 
-	it("[#9] /users/{id} → usersGetCmd registers a StringVar flag named \"id\"", () => {
+	it('[#9] /users/{id} → usersGetCmd registers a StringVar flag named "id"', () => {
 		const result = generateGoCLI(crudSpec, { binaryName: "acme" })
 		const users = result.files["cmd/users.go"]
 		expect(users).toMatch(/usersGetCmd\.Flags\(\)\.StringVar\([^)]*"id"[^)]*\)/)
@@ -80,7 +80,7 @@ describe("go-cli codegen — Tier 2: path params", () => {
 		expect(tables).toContain("url.PathEscape(tableID)")
 	})
 
-	it("[#13] path/body field collision (both \"id\") → path flag wins, body prop becomes --body-id", () => {
+	it('[#13] path/body field collision (both "id") → path flag wins, body prop becomes --body-id', () => {
 		const spec = {
 			openapi: "3.1.0",
 			info: { title: "T", version: "1.0.0" },
@@ -88,9 +88,7 @@ describe("go-cli codegen — Tier 2: path params", () => {
 				"/things/{id}": {
 					put: {
 						operationId: "things.replace",
-						parameters: [
-							{ in: "path", name: "id", required: true, schema: { type: "string" } },
-						],
+						parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
 						requestBody: {
 							required: true,
 							content: {

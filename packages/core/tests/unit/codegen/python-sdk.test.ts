@@ -114,9 +114,7 @@ describe("Tier 1: scaffold + imports", () => {
 		const pyFiles = Object.entries(result.files).filter(([k]) => k.endsWith(".py"))
 		expect(pyFiles.length).toBeGreaterThan(0)
 		for (const [filename, content] of pyFiles) {
-			expect(content, `${filename} missing __future__ import`).toMatch(
-				/^from __future__ import annotations/m,
-			)
+			expect(content, `${filename} missing __future__ import`).toMatch(/^from __future__ import annotations/m)
 		}
 	})
 
@@ -174,12 +172,12 @@ describe("Tier 2: JSON Schema → Python type (jsonSchemaToPy)", () => {
 		expect(result).toBe("tuple[str, float]")
 	})
 
-	it("[#10] enum string → Literal[\"a\", \"b\"]", () => {
+	it('[#10] enum string → Literal["a", "b"]', () => {
 		const result = jsonSchemaToPy({ type: "string", enum: ["a", "b"] })
 		expect(result).toContain('Literal["a", "b"]')
 	})
 
-	it("[#11] const → Literal[\"admin\"]", () => {
+	it('[#11] const → Literal["admin"]', () => {
 		const result = jsonSchemaToPy({ const: "admin" })
 		expect(result).toContain('Literal["admin"]')
 	})
@@ -256,7 +254,40 @@ describe("Tier 2: JSON Schema → Python type (jsonSchemaToPy)", () => {
 	})
 
 	it("[#20] depth guard → Any beyond depth 8", () => {
-		const deep = { type: "object", properties: { a: { type: "object", properties: { b: { type: "object", properties: { c: { type: "object", properties: { d: { type: "object", properties: { e: { type: "object", properties: { f: { type: "object", properties: { g: { type: "object", properties: { h: { type: "string" } } } } } } } } } } } } } } } } }
+		const deep = {
+			type: "object",
+			properties: {
+				a: {
+					type: "object",
+					properties: {
+						b: {
+							type: "object",
+							properties: {
+								c: {
+									type: "object",
+									properties: {
+										d: {
+											type: "object",
+											properties: {
+												e: {
+													type: "object",
+													properties: {
+														f: {
+															type: "object",
+															properties: { g: { type: "object", properties: { h: { type: "string" } } } },
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
 		const result = jsonSchemaToPy(deep, 9)
 		expect(result).toBe("Any")
 	})

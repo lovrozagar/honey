@@ -25,7 +25,7 @@ describe("redirect output", () => {
 			.post("/login")
 			.output({
 				"application/json": { ok: z.object({ token: z.string() }) },
-				"redirect": { found: true },
+				redirect: { found: true },
 			})
 			.handler((c) => c.res.json("ok", { token: "abc" }))
 

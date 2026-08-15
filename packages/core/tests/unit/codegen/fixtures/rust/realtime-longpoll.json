@@ -1,46 +1,46 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Rust Realtime Longpoll", "version": "1.0.0" },
-  "paths": {
-    "/events/poll": {
-      "get": {
-        "operationId": "events.poll",
-        "summary": "Long-poll for events",
-        "x-realtime": true,
-        "parameters": [
-          {
-            "in": "query",
-            "name": "channel",
-            "required": true,
-            "schema": { "type": "string" }
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Polled events",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "events": {
-                      "type": "array",
-                      "items": { "type": "object" }
-                    },
-                    "cursor": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Rust Realtime Longpoll", "version": "1.0.0" },
+	"paths": {
+		"/events/poll": {
+			"get": {
+				"operationId": "events.poll",
+				"summary": "Long-poll for events",
+				"x-realtime": true,
+				"parameters": [
+					{
+						"in": "query",
+						"name": "channel",
+						"required": true,
+						"schema": { "type": "string" }
+					},
+					{
+						"in": "query",
+						"name": "cursor",
+						"required": false,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Polled events",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"events": {
+											"type": "array",
+											"items": { "type": "object" }
+										},
+										"cursor": { "type": "string" }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

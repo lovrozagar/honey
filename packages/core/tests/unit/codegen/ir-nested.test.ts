@@ -4,9 +4,7 @@ import { buildResourceTree, methodsOf, namespacesOf, toIR } from "../../../src/c
 
 /* ---- helpers ---- */
 
-function minimalSpec(
-	overrides: Record<string, unknown> = {},
-): Parameters<typeof toIR>[0] {
+function minimalSpec(overrides: Record<string, unknown> = {}): Parameters<typeof toIR>[0] {
 	return {
 		info: { title: "T", version: "1" },
 		openapi: "3.0.0",
@@ -15,9 +13,7 @@ function minimalSpec(
 	} as Parameters<typeof toIR>[0]
 }
 
-function specWithOps(
-	ops: Array<{ path: string; method: string; operationId: string }>,
-): Parameters<typeof toIR>[0] {
+function specWithOps(ops: Array<{ path: string; method: string; operationId: string }>): Parameters<typeof toIR>[0] {
 	const paths: Record<string, Record<string, unknown>> = {}
 	for (const { path, method, operationId } of ops) {
 		paths[path] ??= {}
@@ -68,9 +64,7 @@ describe("buildResourceTree — T1–T12", () => {
 
 	/* T3: 3-segment nested */
 	it("T3 3-segment checkout.sessions.create produces checkout→sessions→create chain", () => {
-		const spec = specWithOps([
-			{ method: "post", operationId: "checkout.sessions.create", path: "/checkout/sessions" },
-		])
+		const spec = specWithOps([{ method: "post", operationId: "checkout.sessions.create", path: "/checkout/sessions" }])
 		const ir = toIR(spec)
 		const tree = ir.tree
 
@@ -94,9 +88,7 @@ describe("buildResourceTree — T1–T12", () => {
 
 	/* T4: 4-segment deep */
 	it("T4 4-segment foo.a.b.c produces foo→a→b (all namespaces) →c (method)", () => {
-		const spec = specWithOps([
-			{ method: "get", operationId: "foo.a.b.c", path: "/foo/a/b/c" },
-		])
+		const spec = specWithOps([{ method: "get", operationId: "foo.a.b.c", path: "/foo/a/b/c" }])
 		const ir = toIR(spec)
 		const tree = ir.tree
 

@@ -14,9 +14,7 @@ type _P7 = Expect<IsNever<ParamKeys<"/">>>
 type _P8 = Expect<Eq<ParamKeys<"/a/:b/c/:d/e/:f">, "b" | "d" | "f">>
 
 type _M1 = Expect<Eq<ParamsFromPath<"/users/:id">, { id: string }>>
-type _M2 = Expect<
-	Eq<ParamsFromPath<"/users/:id/posts/:postId">, { id: string; postId: string }>
->
+type _M2 = Expect<Eq<ParamsFromPath<"/users/:id/posts/:postId">, { id: string; postId: string }>>
 type _M3 = Expect<Eq<ParamsFromPath<"/health">, Record<string, string>>>
 type _M4 = Expect<Eq<ParamsFromPath<"/files/*path">, { path: string }>>
 
@@ -43,21 +41,14 @@ const app = honey()
 		search: z.object({ draft: z.string() }),
 	})
 	.handler((ctx) => {
-		type _In = Expect<
-			Eq<typeof ctx.input, { json: { body: string }; search: { draft: string } }>
-		>
+		type _In = Expect<Eq<typeof ctx.input, { json: { body: string }; search: { draft: string } }>>
 		type _Param = Expect<Eq<typeof ctx.params.userId, string>>
 		return ctx.res.json("created", { body: ctx.input.json.body })
 	})
 
-type _Ctx = Expect<
-	Extends<InferRouteCtx<typeof app, "/users/:userId", "get">, { readonly params: { userId: string } }>
->
+type _Ctx = Expect<Extends<InferRouteCtx<typeof app, "/users/:userId", "get">, { readonly params: { userId: string } }>>
 type _NoteIn = Expect<
-	Eq<
-		InferRouteInput<typeof app, "/users/:userId/notes", "post">,
-		{ json: { body: string }; search: { draft: string } }
-	>
+	Eq<InferRouteInput<typeof app, "/users/:userId/notes", "post">, { json: { body: string }; search: { draft: string } }>
 >
 
 const sources = honey()

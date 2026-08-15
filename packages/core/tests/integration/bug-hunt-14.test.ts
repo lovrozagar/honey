@@ -76,10 +76,7 @@ describe("bug-hunt-14: concurrent SSE streams", () => {
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
-		const [r1, r2] = await Promise.all([
-			request(addr.port, "/events"),
-			request(addr.port, "/events"),
-		])
+		const [r1, r2] = await Promise.all([request(addr.port, "/events"), request(addr.port, "/events")])
 
 		expect(r1.status).toBe(200)
 		expect(r2.status).toBe(200)
@@ -416,9 +413,7 @@ describe("bug-hunt-14: full error pipeline", () => {
 		})
 		app.onError((_e, ctx) => {
 			events.push("onError")
-			return ctx.jsonFromError(
-				new HoneyError({ errorKey: "handled", status: "service_unavailable" }),
-			)
+			return ctx.jsonFromError(new HoneyError({ errorKey: "handled", status: "service_unavailable" }))
 		})
 
 		const mw = createMiddleware(async () => {
@@ -455,19 +450,14 @@ describe("bug-hunt-14: Node adapter — various response types", () => {
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
-		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>(
-			(resolve, reject) => {
-				const req = http.request(
-					{ hostname: "127.0.0.1", method: "GET", path: "/old", port: addr.port },
-					(r) => {
-						resolve({ headers: r.headers, status: r.statusCode ?? 0 })
-						r.resume()
-					},
-				)
-				req.on("error", reject)
-				req.end()
-			},
-		)
+		const res = await new Promise<{ headers: http.IncomingHttpHeaders; status: number }>((resolve, reject) => {
+			const req = http.request({ hostname: "127.0.0.1", method: "GET", path: "/old", port: addr.port }, (r) => {
+				resolve({ headers: r.headers, status: r.statusCode ?? 0 })
+				r.resume()
+			})
+			req.on("error", reject)
+			req.end()
+		})
 		expect(res.status).toBe(302)
 		expect(res.headers.location).toBe("/new")
 	})

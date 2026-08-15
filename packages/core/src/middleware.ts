@@ -1,27 +1,23 @@
 /** phantom wrapper — at runtime it's just Response, carries TAdds for inference */
 export type MiddlewareResult<TAdds = {}> = Response & {
-	readonly __adds?: TAdds;
-};
+	readonly __adds?: TAdds
+}
 
-export type MiddlewareFn<
-	TCtx = {},
-	TAdds = {},
-	TErrors extends string = string,
-> = ((
+export type MiddlewareFn<TCtx = {}, TAdds = {}, TErrors extends string = string> = ((
 	ctx: TCtx,
 	next: {
-		<T>(additions: T): Promise<MiddlewareResult<T>>;
-		(): Promise<MiddlewareResult<{}>>;
+		<T>(additions: T): Promise<MiddlewareResult<T>>
+		(): Promise<MiddlewareResult<{}>>
 	},
 ) => Promise<MiddlewareResult<TAdds>>) & {
-	errors?: readonly TErrors[];
-};
+	errors?: readonly TErrors[]
+}
 
 /** runtime type for stored middleware — erased generics, used internally */
 export type RuntimeMiddleware = (
 	ctx: Record<string, unknown>,
 	next: (additions?: Record<string, unknown>) => Promise<Response>,
-) => Promise<Response>;
+) => Promise<Response>
 
 /**
  * Create middleware with error keys constrained to a factory.
@@ -32,22 +28,19 @@ export function defineMiddleware<
 	TAdds,
 	TFactory extends Record<string, (...args: never[]) => unknown>,
 	TKeys extends keyof TFactory & string,
->(opts: {
-	errors?: [TFactory, ...TKeys[]];
-	fn: MiddlewareFn<TReqs, TAdds>;
-}): MiddlewareFn<TReqs, TAdds, TKeys> {
-	const fn = opts.fn as MiddlewareFn<TReqs, TAdds, TKeys>;
+>(opts: { errors?: [TFactory, ...TKeys[]]; fn: MiddlewareFn<TReqs, TAdds> }): MiddlewareFn<TReqs, TAdds, TKeys> {
+	const fn = opts.fn as MiddlewareFn<TReqs, TAdds, TKeys>
 	if (opts.errors) {
-		const [, ...keys] = opts.errors;
-		Object.defineProperty(fn, "errors", { value: keys });
+		const [, ...keys] = opts.errors
+		Object.defineProperty(fn, "errors", { value: keys })
 	}
-	return fn;
+	return fn
 }
 
 type NextFn = {
-	<T>(additions: T): Promise<MiddlewareResult<T>>;
-	(): Promise<MiddlewareResult<{}>>;
-};
+	<T>(additions: T): Promise<MiddlewareResult<T>>
+	(): Promise<MiddlewareResult<{}>>
+}
 
 /** Extract TAdds from callback return type — distributes over unions */
 type ExtractAdds<T> = T extends Promise<MiddlewareResult<infer A>> ? A : never
@@ -67,16 +60,7 @@ export function createMiddleware<TReqs = {}, TRet extends Promise<Response> = Pr
  * These are set by the framework during request construction.
  * TypeScript prevents this at compile time; this guard catches runtime bypasses.
  */
-const RESERVED_CTX_KEYS = new Set([
-	"background",
-	"cookies",
-	"env",
-	"headers",
-	"params",
-	"req",
-	"res",
-	"search",
-]);
+const RESERVED_CTX_KEYS = new Set(["background", "cookies", "env", "headers", "params", "req", "res", "search"])
 
 /**
  * Compile a middleware chain + handler into a single function at registration time.
@@ -89,66 +73,60 @@ export function compileChain(
 	if (middlewares.length === 0) {
 		/* sync fast path — avoids microtask overhead for sync handlers */
 		return (ctx) => {
-			const result = handler(ctx);
+			const result = handler(ctx)
 			if (result instanceof Promise) {
-				return result.then(validateResponse);
+				return result.then(validateResponse)
 			}
 			if (result === undefined || result === null) {
-				throw new Error(
-					"handler must return a Response — did you forget 'return ctx.res...()'?",
-				);
+				throw new Error("handler must return a Response — did you forget 'return ctx.res...()'?")
 			}
-			return result;
-		};
+			return result
+		}
 	}
 
 	if (middlewares.length === 1) {
-		const mw = middlewares[0];
+		const mw = middlewares[0]
 		if (!mw) {
-			throw new Error("middleware chain invariant violated");
+			throw new Error("middleware chain invariant violated")
 		}
 		return (ctx) => {
-			const mwCtx = ctx as Record<string, unknown>;
-			let called = false;
+			const mwCtx = ctx as Record<string, unknown>
+			let called = false
 			return Promise.resolve(
 				mw(mwCtx, (additions?: Record<string, unknown>) => {
-					if (called) throw new Error("next() called multiple times");
-					called = true;
-					if (additions) mergeAdditions(ctx, additions);
-					return Promise.resolve(handler(ctx)).then(validateResponse);
+					if (called) throw new Error("next() called multiple times")
+					called = true
+					if (additions) mergeAdditions(ctx, additions)
+					return Promise.resolve(handler(ctx)).then(validateResponse)
 				}),
-			).then(validateMiddlewareResponse);
-		};
+			).then(validateMiddlewareResponse)
+		}
 	}
 
 	/* general case — pre-bind middleware array, no per-request index tracking */
-	return (ctx) => executeChain(middlewares, ctx, handler);
+	return (ctx) => executeChain(middlewares, ctx, handler)
 }
 
 function mergeAdditions(ctx: object, additions: Record<string, unknown>): void {
 	for (const key in additions) {
 		if (!RESERVED_CTX_KEYS.has(key)) {
-			(ctx as Record<string, unknown>)[key] = additions[key];
+			;(ctx as Record<string, unknown>)[key] = additions[key]
 		}
 	}
 }
 
 function validateResponse(result: Response): Response {
 	if (result === undefined || result === null) {
-		throw new Error(
-			"handler must return a Response — did you forget 'return ctx.res...()'?",
-		);
+		throw new Error("handler must return a Response — did you forget 'return ctx.res...()'?")
 	}
-	return result;
+	return result
 }
 
 function validateMiddlewareResponse(result: Response): Response {
 	if (result === undefined || result === null) {
-		throw new Error(
-			"middleware must return a Response — did you forget 'return next(...)'?",
-		);
+		throw new Error("middleware must return a Response — did you forget 'return next(...)'?")
 	}
-	return result;
+	return result
 }
 
 export function executeChain(
@@ -156,44 +134,40 @@ export function executeChain(
 	ctx: object,
 	handler: (ctx: object) => Response | Promise<Response>,
 ): Promise<Response> {
-	let index = 0;
+	let index = 0
 	/* middleware runtime type uses Record<string, unknown> — object satisfies at runtime */
-	const mwCtx = ctx as Record<string, unknown>;
+	const mwCtx = ctx as Record<string, unknown>
 
 	function dispatch(): Promise<Response> {
 		if (index >= middlewares.length) {
 			return Promise.resolve(handler(ctx)).then((result) => {
 				if (result === undefined || result === null) {
-					throw new Error(
-						"handler must return a Response — did you forget 'return ctx.res...()'?",
-					);
+					throw new Error("handler must return a Response — did you forget 'return ctx.res...()'?")
 				}
-				return result;
-			});
+				return result
+			})
 		}
-		const mw = middlewares[index++];
+		const mw = middlewares[index++]
 		if (!mw) {
-			throw new Error("middleware chain invariant violated");
+			throw new Error("middleware chain invariant violated")
 		}
-		let called = false;
+		let called = false
 		return Promise.resolve(
 			mw(mwCtx, (additions?: Record<string, unknown>) => {
 				if (called) {
-					throw new Error("next() called multiple times");
+					throw new Error("next() called multiple times")
 				}
-				called = true;
-				if (additions) mergeAdditions(ctx, additions);
-				return dispatch();
+				called = true
+				if (additions) mergeAdditions(ctx, additions)
+				return dispatch()
 			}),
 		).then((result) => {
 			if (result === undefined || result === null) {
-				throw new Error(
-					"middleware must return a Response — did you forget 'return next(...)'?",
-				);
+				throw new Error("middleware must return a Response — did you forget 'return next(...)'?")
 			}
-			return result;
-		});
+			return result
+		})
 	}
 
-	return dispatch();
+	return dispatch()
 }

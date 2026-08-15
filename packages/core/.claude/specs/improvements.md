@@ -73,9 +73,7 @@ type BuilderState = {
 class RouteBuilder<S extends BuilderState> {
 	input<T>(
 		schemas: T,
-	): RouteBuilder<
-		Omit<S, "input" | "used"> & { input: S["input"] & InferInputMap<T>; used: S["used"] | "input" }
-	>
+	): RouteBuilder<Omit<S, "input" | "used"> & { input: S["input"] & InferInputMap<T>; used: S["used"] | "input" }>
 }
 ```
 

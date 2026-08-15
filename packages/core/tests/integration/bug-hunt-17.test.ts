@@ -93,10 +93,7 @@ describe("bug-hunt-17: codegen — no error factory", () => {
 		const app = honey<{}>()
 		app
 			.get("/test")
-			.errors(
-				{ custom_error: () => new HoneyError({ errorKey: "x", status: "bad_request" }) },
-				"custom_error",
-			)
+			.errors({ custom_error: () => new HoneyError({ errorKey: "x", status: "bad_request" }) }, "custom_error")
 			.handler((ctx) => ctx.res.json("ok", {}))
 
 		/* app has no .errorFactory() call, so _errorFactory is null */
@@ -357,9 +354,7 @@ describe("bug-hunt-17: URL with fragment", () => {
 describe("bug-hunt-17: very long query string", () => {
 	it("1000-char query string → doesn't crash routing", async () => {
 		const app = honey<{}>()
-		app
-			.get("/search")
-			.handler((ctx) => ctx.res.json("ok", { qLen: (ctx.search.q as string)?.length ?? 0 }))
+		app.get("/search").handler((ctx) => ctx.res.json("ok", { qLen: (ctx.search.q as string)?.length ?? 0 }))
 
 		const longQ = "x".repeat(1000)
 		const res = await app.fetch(new Request(`http://localhost/search?q=${longQ}`), {})

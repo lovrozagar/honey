@@ -39,7 +39,11 @@ describe("#R6-9 parseErrorAsClientError — Layer A invariants", () => {
 	it("string message is preserved as-is", async () => {
 		const client = makeClient(stubFetch({ message: "not found" }, 404))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		expect(caught).toBeInstanceOf(ClientError)
 		expect((caught as ClientError).message).toBe("not found")
 	})
@@ -47,28 +51,44 @@ describe("#R6-9 parseErrorAsClientError — Layer A invariants", () => {
 	it("thrown ClientError has status matching HTTP status code", async () => {
 		const client = makeClient(stubFetch({ message: "gone" }, 410))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		expect((caught as ClientError).status).toBe(410)
 	})
 
 	it("thrown ClientError body is the parsed JSON object", async () => {
 		const client = makeClient(stubFetch({ code: "ERR_GONE", message: "gone" }, 410))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		expect((caught as ClientError).body).toEqual({ code: "ERR_GONE", message: "gone" })
 	})
 
 	it("body without message field falls back to HTTP {status}", async () => {
 		const client = makeClient(stubFetch({ code: "ERR_X" }, 503))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		expect((caught as ClientError).message).toBe("HTTP 503")
 	})
 
 	it("non-JSON body falls back to HTTP {status}", async () => {
 		const client = makeClient(ctFetch("<html>oops</html>", "text/html", 500))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		expect((caught as ClientError).message).toBe("HTTP 500")
 	})
 })
@@ -77,7 +97,11 @@ describe.skipIf(PHASE_G_FIXED)("#R6-9 parseErrorAsClientError — Layer B bug wi
 	it("pre-fix: nested object message coerces to [object Object]", async () => {
 		const client = makeClient(stubFetch({ message: { nested: "x" } }, 500))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		expect(caught).toBeInstanceOf(ClientError)
 		expect((caught as ClientError).message).toBe("[object Object]")
 	})
@@ -87,7 +111,11 @@ describe.runIf(PHASE_G_FIXED)("#R6-9 parseErrorAsClientError — Layer B' regres
 	it("post-fix: nested object message falls back to HTTP 500", async () => {
 		const client = makeClient(stubFetch({ message: { nested: "x" } }, 500))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		expect(caught).toBeInstanceOf(ClientError)
 		expect((caught as ClientError).message).toBe("HTTP 500")
 	})
@@ -96,7 +124,11 @@ describe.runIf(PHASE_G_FIXED)("#R6-9 parseErrorAsClientError — Layer B' regres
 		const payload = { message: `${"x".repeat(10_000)}\u0001\u0002junk` }
 		const client = makeClient(stubFetch(payload, 500))
 		let caught: unknown
-		try { await client.request("GET", "/x", {}) } catch (e) { caught = e }
+		try {
+			await client.request("GET", "/x", {})
+		} catch (e) {
+			caught = e
+		}
 		const err = caught as ClientError
 		expect(err.message.length).toBeLessThanOrEqual(512)
 		const hasControl = [...err.message].some((c) => (c.codePointAt(0) ?? 32) < 32)
@@ -243,7 +275,11 @@ describe("#R6-11 OnRequestContext.body — Layer A invariants", () => {
 		const client = new HTTPClient({
 			baseURL: "http://api.example.com",
 			fetch: stubFetch({}),
-			onRequest: [(ctx) => { capturedBody = ctx.body }],
+			onRequest: [
+				(ctx) => {
+					capturedBody = ctx.body
+				},
+			],
 		})
 		await client.request("GET", "/x", {})
 		expect(capturedBody).toBeUndefined()
@@ -256,7 +292,11 @@ describe.skipIf(PHASE_G_FIXED)("#R6-11 OnRequestContext.body — Layer B bug wit
 		const client = new HTTPClient({
 			baseURL: "http://api.example.com",
 			fetch: stubFetch({}),
-			onRequest: [(ctx) => { capturedBody = ctx.body }],
+			onRequest: [
+				(ctx) => {
+					capturedBody = ctx.body
+				},
+			],
 		})
 		await client.request("POST", "/x", { json: { a: 1 } })
 		expect(capturedBody).toBeUndefined()
@@ -269,7 +309,11 @@ describe.runIf(PHASE_G_FIXED)("#R6-11 OnRequestContext.body — Layer B' regress
 		const client = new HTTPClient({
 			baseURL: "http://api.example.com",
 			fetch: stubFetch({}),
-			onRequest: [(ctx) => { capturedBody = ctx.body }],
+			onRequest: [
+				(ctx) => {
+					capturedBody = ctx.body
+				},
+			],
 		})
 		await client.request("POST", "/x", { json: { a: 1 } })
 		expect(capturedBody).toBe(JSON.stringify({ a: 1 }))
@@ -283,7 +327,11 @@ describe.runIf(PHASE_G_FIXED)("#R6-11 OnRequestContext.body — Layer B' regress
 				sentBody = init?.body
 				return Promise.resolve(new Response("{}", { headers: { "content-type": "application/json" }, status: 200 }))
 			}) as typeof fetch,
-			onRequest: [(ctx) => { ctx.body = JSON.stringify({ a: 2 }) }],
+			onRequest: [
+				(ctx) => {
+					ctx.body = JSON.stringify({ a: 2 })
+				},
+			],
 		})
 		await client.request("POST", "/x", { json: { a: 1 } })
 		expect(sentBody).toBe(JSON.stringify({ a: 2 }))
@@ -308,9 +356,10 @@ describe("#R6-12 resolveInvalidationTargets — Layer A invariants", () => {
 	})
 
 	it("mixed batch — both fully-resolved targets returned", () => {
-		expect(
-			resolveInvalidationTargets(["GET /v1/x", "GET /v1/y/:id"], { id: "7" }),
-		).toEqual(["GET /v1/x", "GET /v1/y/7"])
+		expect(resolveInvalidationTargets(["GET /v1/x", "GET /v1/y/:id"], { id: "7" })).toEqual([
+			"GET /v1/x",
+			"GET /v1/y/7",
+		])
 	})
 
 	it("mixed with partial miss — fully-resolved target kept, unresolved dropped (target behavior)", () => {
@@ -328,36 +377,24 @@ describe("#R6-12 resolveInvalidationTargets — Layer A invariants", () => {
 
 describe.skipIf(PHASE_G_FIXED)("#R6-12 resolveInvalidationTargets — Layer B bug witness (pre-fix)", () => {
 	it("pre-fix: unresolved :tenant_id param passes through as-is (not dropped)", () => {
-		const result = resolveInvalidationTargets(
-			["GET /v1/tenants/:tenant_id/rows"],
-			{ org_id: "x" },
-		)
+		const result = resolveInvalidationTargets(["GET /v1/tenants/:tenant_id/rows"], { org_id: "x" })
 		expect(result).toEqual(["GET /v1/tenants/:tenant_id/rows"])
 	})
 })
 
 describe.runIf(PHASE_G_FIXED)("#R6-12 resolveInvalidationTargets — Layer B' regression (post-fix)", () => {
 	it("post-fix: unresolved :tenant_id param causes target to be dropped (returns [])", () => {
-		const result = resolveInvalidationTargets(
-			["GET /v1/tenants/:tenant_id/rows"],
-			{ org_id: "x" },
-		)
+		const result = resolveInvalidationTargets(["GET /v1/tenants/:tenant_id/rows"], { org_id: "x" })
 		expect(result).toEqual([])
 	})
 
 	it("post-fix: multi-param target where one param unresolved — entire target dropped", () => {
-		const result = resolveInvalidationTargets(
-			["GET /v1/x/:a/:b"],
-			{ a: "1" },
-		)
+		const result = resolveInvalidationTargets(["GET /v1/x/:a/:b"], { a: "1" })
 		expect(result).toEqual([])
 	})
 
 	it("post-fix: multi-param target where all params resolved — target kept", () => {
-		const result = resolveInvalidationTargets(
-			["GET /v1/x/:a/:b"],
-			{ a: "1", b: "2" },
-		)
+		const result = resolveInvalidationTargets(["GET /v1/x/:a/:b"], { a: "1", b: "2" })
 		expect(result).toEqual(["GET /v1/x/1/2"])
 	})
 })

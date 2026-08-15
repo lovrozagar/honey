@@ -1,19 +1,19 @@
 {
-  "openapi": "3.1.0",
-  "info": { "title": "Nested Int Enum", "version": "1.0.0" },
-  "paths": {},
-  "components": {
-    "schemas": {
-      "Priority": {
-        "type": "object",
-        "required": ["level"],
-        "properties": {
-          "level": {
-            "type": "integer",
-            "enum": [1, 2, 3]
-          }
-        }
-      }
-    }
-  }
+	"openapi": "3.1.0",
+	"info": { "title": "Nested Int Enum", "version": "1.0.0" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Priority": {
+				"type": "object",
+				"required": ["level"],
+				"properties": {
+					"level": {
+						"type": "integer",
+						"enum": [1, 2, 3]
+					}
+				}
+			}
+		}
+	}
 }

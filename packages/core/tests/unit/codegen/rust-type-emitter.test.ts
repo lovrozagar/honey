@@ -52,27 +52,20 @@ describe("irRenderUseRust equivalence — const literal (use-position)", () => {
 })
 
 describe("irRenderUseRust equivalence — enums hoisted", () => {
-	it("string enum with type — hoists UserStatus", () => eqUse(
-		{ enum: ["a", "b"], type: "string" },
-		{ fieldName: "status", parentName: "User" },
-	))
-	it("string enum no type — heuristic hoist", () => eqUse(
-		{ enum: ["a", "b"] },
-		{ fieldName: "status", parentName: "User" },
-	))
-	it("int enum with type — hoists PostScore with repr(i64)", () => eqUse(
-		{ enum: [1, 2], type: "integer" },
-		{ fieldName: "score", parentName: "Post" },
-	))
-	it("string enum + nullable — Option<UserStatus>", () => eqUse(
-		{ enum: ["a", "b"], nullable: true, type: "string" },
-		{ fieldName: "status", parentName: "User" },
-	))
+	it("string enum with type — hoists UserStatus", () =>
+		eqUse({ enum: ["a", "b"], type: "string" }, { fieldName: "status", parentName: "User" }))
+	it("string enum no type — heuristic hoist", () =>
+		eqUse({ enum: ["a", "b"] }, { fieldName: "status", parentName: "User" }))
+	it("int enum with type — hoists PostScore with repr(i64)", () =>
+		eqUse({ enum: [1, 2], type: "integer" }, { fieldName: "score", parentName: "Post" }))
+	it("string enum + nullable — Option<UserStatus>", () =>
+		eqUse({ enum: ["a", "b"], nullable: true, type: "string" }, { fieldName: "status", parentName: "User" }))
 })
 
 describe("irRenderUseRust equivalence — array / tuple", () => {
 	it("array of strings", () => eqUse({ items: { type: "string" }, type: "array" }))
-	it("tuple items array — Vec<serde_json::Value>", () => eqUse({ items: [{ type: "string" }, { type: "number" }], type: "array" }))
+	it("tuple items array — Vec<serde_json::Value>", () =>
+		eqUse({ items: [{ type: "string" }, { type: "number" }], type: "array" }))
 	it("array of $ref", () => eqUse({ items: { $ref: "#/components/schemas/User" }, type: "array" }))
 	it("array of nullable string", () => eqUse({ items: { nullable: true, type: "string" }, type: "array" }))
 })
@@ -87,36 +80,38 @@ describe("irRenderUseRust equivalence — nullable", () => {
 
 describe("irRenderUseRust equivalence — oneOf / anyOf use-position", () => {
 	it("oneOf two types — serde_json::Value", () => eqUse({ oneOf: [{ type: "string" }, { type: "integer" }] }))
-	it("anyOf three with null — serde_json::Value (stripped multi)", () => eqUse({ anyOf: [{ type: "string" }, { type: "integer" }, { type: "null" }] }))
-	it("oneOf ref + null — Option<User>", () => eqUse({ oneOf: [{ $ref: "#/components/schemas/User" }, { type: "null" }] }))
+	it("anyOf three with null — serde_json::Value (stripped multi)", () =>
+		eqUse({ anyOf: [{ type: "string" }, { type: "integer" }, { type: "null" }] }))
+	it("oneOf ref + null — Option<User>", () =>
+		eqUse({ oneOf: [{ $ref: "#/components/schemas/User" }, { type: "null" }] }))
 	it("mixed enum — serde_json::Value", () => eqUse({ enum: ["active", 1] }))
 })
 
 describe("irRenderUseRust equivalence — allOf use-position", () => {
-	it("allOf first-$ref wins", () => eqUse({ allOf: [{ $ref: "#/components/schemas/Base" }, { properties: { x: { type: "string" } } }] }))
-	it("allOf no ref — serde_json::Value", () => eqUse({ allOf: [{ properties: { x: { type: "string" } } }, { properties: { y: { type: "string" } } }] }))
+	it("allOf first-$ref wins", () =>
+		eqUse({ allOf: [{ $ref: "#/components/schemas/Base" }, { properties: { x: { type: "string" } } }] }))
+	it("allOf no ref — serde_json::Value", () =>
+		eqUse({ allOf: [{ properties: { x: { type: "string" } } }, { properties: { y: { type: "string" } } }] }))
 })
 
 describe("irRenderUseRust equivalence — $ref", () => {
 	it("bare $ref", () => eqUse({ $ref: "#/components/schemas/User" }))
-	it("circular $ref — Box<Comment>", () => eqUse(
-		{ $ref: "#/components/schemas/Comment" },
-		{ circularRefs: new Set(["Comment"]) },
-	))
+	it("circular $ref — Box<Comment>", () =>
+		eqUse({ $ref: "#/components/schemas/Comment" }, { circularRefs: new Set(["Comment"]) }))
 })
 
 describe("irRenderUseRust equivalence — object use-position", () => {
 	it("empty object — HashMap<String, serde_json::Value>", () => eqUse({ type: "object" }))
 	it("additionalProperties: false — serde_json::Value", () => eqUse({ additionalProperties: false, type: "object" }))
-	it("additionalProperties typed — HashMap<String, i64>", () => eqUse({ additionalProperties: { type: "integer" }, type: "object" }))
-	it("object with props — hoists RootInner required", () => eqUse(
-		{ properties: { id: { type: "string" } }, required: ["id"], type: "object" },
-		{ fieldName: "inner", parentName: "Root" },
-	))
-	it("object with props — hoists RootInner optional", () => eqUse(
-		{ properties: { id: { type: "string" } }, type: "object" },
-		{ fieldName: "inner", parentName: "Root" },
-	))
+	it("additionalProperties typed — HashMap<String, i64>", () =>
+		eqUse({ additionalProperties: { type: "integer" }, type: "object" }))
+	it("object with props — hoists RootInner required", () =>
+		eqUse(
+			{ properties: { id: { type: "string" } }, required: ["id"], type: "object" },
+			{ fieldName: "inner", parentName: "Root" },
+		))
+	it("object with props — hoists RootInner optional", () =>
+		eqUse({ properties: { id: { type: "string" } }, type: "object" }, { fieldName: "inner", parentName: "Root" }))
 })
 
 describe("irRenderUseRust equivalence — depth cap", () => {
@@ -130,48 +125,55 @@ describe("irRenderTopLevelRust equivalence — top-level cases", () => {
 	it("top-level string enum Role", () => eqTop("Role", { enum: ["a", "b"], type: "string" }))
 	it("top-level int enum Kind", () => eqTop("Kind", { enum: [1, 2], type: "integer" }))
 	it("top-level const string — newtype", () => eqTop("Role", { const: "admin" }))
-	it("top-level const bool with declared type — bool newtype", () => eqTop("Success", { const: false, type: "boolean" }))
+	it("top-level const bool with declared type — bool newtype", () =>
+		eqTop("Success", { const: false, type: "boolean" }))
 	it("top-level const int with type:number — f64 newtype", () => eqTop("Mag", { const: 42, type: "number" }))
-	it("top-level allOf refs + inline props", () => eqTop("Ext", {
-		allOf: [
-			{ $ref: "#/components/schemas/Base" },
-			{ properties: { y: { type: "string" } } },
-		],
-	}))
-	it("top-level discriminated union", () => eqTop("Animal", {
-		discriminator: { propertyName: "kind" },
-		oneOf: [{ $ref: "#/components/schemas/Dog" }, { $ref: "#/components/schemas/Cat" }],
-	}))
-	it("top-level untagged union", () => eqTop("AB", {
-		oneOf: [{ $ref: "#/components/schemas/A" }, { $ref: "#/components/schemas/B" }],
-	}))
-	it("top-level object required + optional sorted", () => eqTop("User", {
-		properties: { email: { type: "string" }, name: { type: "string" } },
-		required: ["email"],
-		type: "object",
-	}))
+	it("top-level allOf refs + inline props", () =>
+		eqTop("Ext", {
+			allOf: [{ $ref: "#/components/schemas/Base" }, { properties: { y: { type: "string" } } }],
+		}))
+	it("top-level discriminated union", () =>
+		eqTop("Animal", {
+			discriminator: { propertyName: "kind" },
+			oneOf: [{ $ref: "#/components/schemas/Dog" }, { $ref: "#/components/schemas/Cat" }],
+		}))
+	it("top-level untagged union", () =>
+		eqTop("AB", {
+			oneOf: [{ $ref: "#/components/schemas/A" }, { $ref: "#/components/schemas/B" }],
+		}))
+	it("top-level object required + optional sorted", () =>
+		eqTop("User", {
+			properties: { email: { type: "string" }, name: { type: "string" } },
+			required: ["email"],
+			type: "object",
+		}))
 	it("top-level pure map", () => eqTop("Attrs", { additionalProperties: { type: "string" }, type: "object" }))
-	it("top-level empty-props addl:false — unit struct", () => eqTop("X", { additionalProperties: false, type: "object" }))
+	it("top-level empty-props addl:false — unit struct", () =>
+		eqTop("X", { additionalProperties: false, type: "object" }))
 	it("top-level empty-props no addl — HashMap alias", () => eqTop("X", { type: "object" }))
-	it("top-level object with props + additionalProperties — struct + extra flatten", () => eqTop("Mixed", {
-		additionalProperties: { type: "string" },
-		properties: { id: { type: "string" } },
-		required: ["id"],
-		type: "object",
-	}))
-	it("top-level self-ref circular", () => eqTop("Comment", {
-		properties: { parent: { $ref: "#/components/schemas/Comment" } },
-		type: "object",
-	}))
+	it("top-level object with props + additionalProperties — struct + extra flatten", () =>
+		eqTop("Mixed", {
+			additionalProperties: { type: "string" },
+			properties: { id: { type: "string" } },
+			required: ["id"],
+			type: "object",
+		}))
+	it("top-level self-ref circular", () =>
+		eqTop("Comment", {
+			properties: { parent: { $ref: "#/components/schemas/Comment" } },
+			type: "object",
+		}))
 	it("top-level array alias", () => eqTop("Names", { items: { type: "string" }, type: "array" }))
-	it("non-identifier prop key bad-key — serde rename", () => eqTop("Resp", {
-		properties: { "bad-key": { type: "string" } },
-		required: ["bad-key"],
-		type: "object",
-	}))
-	it("Rust reserved prop key type — type_ ident + serde rename", () => eqTop("Thing", {
-		properties: { type: { type: "string" } },
-		required: ["type"],
-		type: "object",
-	}))
+	it("non-identifier prop key bad-key — serde rename", () =>
+		eqTop("Resp", {
+			properties: { "bad-key": { type: "string" } },
+			required: ["bad-key"],
+			type: "object",
+		}))
+	it("Rust reserved prop key type — type_ ident + serde rename", () =>
+		eqTop("Thing", {
+			properties: { type: { type: "string" } },
+			required: ["type"],
+			type: "object",
+		}))
 })
