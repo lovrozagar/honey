@@ -6,7 +6,16 @@ export default {
 			app: "src/gen-app.ts",
 			codegen: {
 				manifest: true,
-				openApi: { title: "Honey Gateway", version: "0.0.1" },
+				/* two documents from one metaSpec policy — see src/app.ts */
+				openApi: [
+					{ title: "Honey Gateway", version: "0.0.1" },
+					{
+						path: "src/_gen/openapi.public.gen.json",
+						profile: "public",
+						title: "Honey Gateway (public)",
+						version: "0.0.1",
+					},
+				],
 				tree: true,
 				types: true,
 			},

@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:3d02bec320f3",
+  "_generated": "honey checksum:6ceef2bb5ab9",
   "errors": [],
   "routes": [
     {
@@ -9,6 +9,49 @@
       "middleware": [],
       "params": [],
       "path": "/ping"
+    },
+    {
+      "errors": [],
+      "meta": {
+        "tenant": "project_id",
+        "permissions": [
+          "articles.read"
+        ],
+        "summary": "List articles",
+        "worker": "origin"
+      },
+      "method": "GET",
+      "middleware": [
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/articles",
+      "input": {
+        "search": {
+          "vendor": "zod",
+          "version": 1
+        }
+      },
+      "output": {
+        "application/json": {
+          "ok": {
+            "vendor": "zod",
+            "version": 1
+          }
+        }
+      }
+    },
+    {
+      "errors": [],
+      "meta": {
+        "tenant": "project_id"
+      },
+      "method": "GET",
+      "middleware": [
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/articles/meta"
     }
   ]
 }

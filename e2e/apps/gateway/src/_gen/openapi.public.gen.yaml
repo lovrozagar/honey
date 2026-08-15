@@ -1,24 +1,14 @@
-_generated: honey checksum:ef77245af328
+_generated: honey checksum:61c540f0718f
 info:
   description: null
-  title: Honey Gateway
+  title: Honey Gateway (public)
   version: "0.0.1"
 openapi: "3.1.0"
 paths:
   /articles:
     get:
       summary: List articles
-      x-permissions:
-        - articles.read
-      x-tenant:
-        param: project_id
       x-entity: article
-      x-generated:
-        - id
-      x-immutable:
-        - id
-      x-soft-delete:
-        field: deletedAt
       x-query:
         filter:
           - title
@@ -42,8 +32,6 @@ paths:
           description: ok
   /articles/meta:
     get:
-      x-tenant:
-        param: project_id
       responses:
         "200":
           description: Success
