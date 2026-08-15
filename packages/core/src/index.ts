@@ -20,9 +20,11 @@ import type {
 	HttpMethod,
 	InferInputMap,
 	InferOutput,
+	HoneyMetaSpec,
 	InputSchemasDef,
 	MergePath,
 	MergeRoute,
+	MetaSpecConfig,
 	OutputSchemaDef,
 	ParamsFromPath,
 	StandardSchemaLike,
@@ -92,6 +94,18 @@ export type {
 	InferRoutes,
 	InputSchemasDef,
 	MergePath,
+	HoneyMetaSpec,
+	MetaSpecConfig,
+	MetaSpecContext,
+	MetaSpecEntry,
+	MetaSpecExpand,
+	MetaSpecProfile,
+	MetaSpecSchemaEntry,
+	MetaSpecSchemaSearch,
+	MetaSpecSchemaSource,
+	MetaSpecSingle,
+	MetaSpecStrictness,
+	MetaSpecTarget,
 	OpenApiMeta,
 	OutputSchemaDef,
 	Overwrite,
@@ -170,6 +184,8 @@ function scopeMatches(prefix: string, fullPath: string): boolean {
 type HoneyGraph = {
 	handlerMap: Record<string, RouteHandler> | null
 	hasRouteTree: boolean
+	/** Codegen-time meta → OpenAPI policy. Never read on the request path */
+	metaSpec: MetaSpecConfig | null
 	realtimeBus: RealtimeBus | null
 	root: TreeNode
 }
@@ -363,6 +379,7 @@ export class Honey<
 		this._graph = opts?.graph ?? {
 			handlerMap: opts?.handlerMap ?? null,
 			hasRouteTree: false,
+			metaSpec: null,
 			realtimeBus: null,
 			root: opts?.root ?? createNode(),
 		}
@@ -409,6 +426,14 @@ export class Honey<
 	}
 	private set _hasRouteTree(value: boolean) {
 		this._graph.hasRouteTree = value
+	}
+
+	/** @internal — read by codegen */
+	private get _metaSpec(): MetaSpecConfig | null {
+		return this._graph.metaSpec
+	}
+	private set _metaSpec(value: MetaSpecConfig | null) {
+		this._graph.metaSpec = value
 	}
 
 	private get _root(): TreeNode {
@@ -853,6 +878,8 @@ export class Honey<
 		docsPath?: string
 		filterRoutes?: (route: { meta: unknown; method: string; path: string }) => boolean
 		path?: string
+		/** Named metaSpec profile selecting which emitted keys this document carries */
+		profile?: string
 		securitySchemes?: Record<string, unknown>
 		title: string
 		version: string
@@ -874,6 +901,7 @@ export class Honey<
 							title: options.title,
 							version: options.version,
 						},
+						profile: options.profile,
 						securitySchemes: options.securitySchemes,
 					}),
 				)
@@ -1214,6 +1242,34 @@ export class Honey<
 		return next
 	}
 
+	/**
+	 * Declare what flows from route meta and route schemas into the OpenAPI document.
+	 * Codegen-time only — never consulted on the request path. See docs/meta-spec.md.
+	 */
+	metaSpec<TSpec extends HoneyMetaSpec<TMeta>>(spec: TSpec): this {
+		if (this._metaSpec !== null) {
+			throw new Error("metaSpec() was already declared on this app — declare the whole policy in one call")
+		}
+		this._metaSpec = spec as MetaSpecConfig
+		return this
+	}
+
+	/** Mounted sub-apps fill policy gaps; the parent's entries win on conflict. */
+	private _absorbMetaSpec(sub: MetaSpecConfig | null): void {
+		if (!sub) return
+		const own = this._metaSpec
+		if (!own) {
+			this._metaSpec = sub
+			return
+		}
+		this._metaSpec = {
+			meta: { ...sub.meta, ...own.meta },
+			profiles: { ...sub.profiles, ...own.profiles },
+			schema: { ...sub.schema, ...own.schema },
+			strict: own.strict ?? sub.strict,
+		}
+	}
+
 	/** Declare tap payload types — auto-extends meta with Partial<T> for meta-driven taps */
 	taps<TNewTaps extends Record<string, unknown>>(): Honey<
 		TEnv,
@@ -1350,6 +1406,7 @@ export class Honey<
 		/* skip self-merge: .handler() already inserted into shared _root */
 		if (sub._tree !== this._root) {
 			mergeInto(this._root, sub._tree)
+			this._absorbMetaSpec(sub._metaSpec)
 			if (sub._hasWsRoutes) this._hasWsRoutes = true
 			if (sub._hasRouteTree) this._hasRouteTree = true
 			/* carry sub's scoped mw entries into parent's runtime list (parent scopes run first) */

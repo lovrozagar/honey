@@ -5,6 +5,7 @@ export type OpenApiGenerate = (
 	options: {
 		filterRoutes?: (route: { meta: unknown; method: string; path: string }) => boolean
 		info: { description?: string; title: string; version: string }
+		profile?: string
 		securitySchemes?: Record<string, unknown>
 	},
 ) => Promise<unknown>

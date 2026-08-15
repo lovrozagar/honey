@@ -70,6 +70,8 @@ export interface HoneyOpenApiOutputConfig {
 	description?: string
 	filterRoutes?: (route: OpenApiRouteInfo) => boolean
 	path?: string
+	/** Named metaSpec profile selecting which emitted keys this document carries */
+	profile?: string
 	sanitize?: OpenApiSanitizeOptions
 	securitySchemes?: Record<string, unknown>
 	title: string
@@ -115,6 +117,8 @@ export type ResolvedOpenApiOutput = {
 	description?: string
 	filterRoutes?: (route: OpenApiRouteInfo) => boolean
 	path: string
+	/** Named metaSpec profile selecting which emitted keys this document carries */
+	profile?: string
 	sanitize?: OpenApiSanitizeOptions
 	securitySchemes?: Record<string, unknown>
 	title: string
@@ -221,6 +225,7 @@ export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyCon
 			description: entry.description,
 			filterRoutes: entry.filterRoutes,
 			path: entry.path ?? "src/_gen/openapi.gen.json",
+			profile: entry.profile,
 			sanitize: entry.sanitize,
 			securitySchemes: entry.securitySchemes,
 			title: entry.title,
@@ -427,6 +432,7 @@ export async function generateAndWrite(config: ResolvedHoneyConfig, root: string
 					title: entry.title,
 					version: entry.version,
 				},
+				profile: entry.profile,
 				securitySchemes: entry.securitySchemes,
 			})
 			if (entry.sanitize) {

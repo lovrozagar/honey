@@ -367,12 +367,127 @@ export type OpenApiMeta = {
 	internal?: boolean
 	deprecated?: boolean
 	description?: string
+	/** Escape hatch — emitted verbatim at the highest precedence. Prefer a `.metaSpec()` entry. */
+	extensions?: Record<`x-${string}`, unknown>
 	invalidate?: readonly string[] | null
 	mcp?: boolean
 	operationId?: string
 	security?: Array<Record<string, string[]>> | string | string[]
 	summary?: string
 	tags?: string | string[]
+}
+
+/* ---- Meta spec (codegen-time policy: meta → OpenAPI operation) ---- */
+
+/** Which operation kinds a policy entry applies to */
+export type MetaSpecTarget = "both" | "http" | "ws"
+
+/** Where a schema-derived policy entry reads its source key from */
+export type MetaSpecSchemaSource =
+	| "input.cookies"
+	| "input.form"
+	| "input.headers"
+	| "input.json"
+	| "input.search"
+	| "output"
+
+/** Passed to a policy entry's `map` / `expand` */
+export type MetaSpecContext = {
+	meta: Record<string, unknown>
+	method: string
+	path: string
+	profile: string
+	/** Where the source value came from — `"meta"`, or the schema source for schema entries */
+	source: "meta" | MetaSpecSchemaSource
+}
+
+type MetaSpecEntryBase = {
+	/** Which operation kinds this entry applies to. Default `"both"` */
+	on?: MetaSpecTarget
+	/** Restrict this entry to named profiles. Default: every profile */
+	profiles?: readonly string[]
+	/** Validates the produced value at codegen time. A failure is a build error */
+	schema?: StandardSchemaLike
+}
+
+/** Policy entry writing one operation key */
+export type MetaSpecSingle<TValue = unknown> = MetaSpecEntryBase & {
+	/** Target operation key — an `x-*` extension or an allowed standard field */
+	key: string
+	/** Transform the source value. Returning `undefined` omits the key for that operation */
+	map?: (value: TValue, ctx: MetaSpecContext) => unknown
+}
+
+/** Policy entry fanning one source value out to several operation keys */
+export type MetaSpecExpand<TValue = unknown> = MetaSpecEntryBase & {
+	/** Returns operation keys → values. `undefined` (returned or per key) omits */
+	expand: (value: TValue, ctx: MetaSpecContext) => Record<string, unknown> | undefined
+}
+
+/** One policy entry: hidden (`false`), verbatim (`"x-foo"`), single target, or fan-out */
+export type MetaSpecEntry<TValue = unknown> = false | MetaSpecExpand<TValue> | MetaSpecSingle<TValue> | string
+
+/**
+ * How deeply to look for a schema-metadata key.
+ * `"root"` reads the schema root, reading through one level of `items` for a bare array output.
+ * `"deep"` walks the schema (properties, items, composition members) and takes the shallowest
+ * match — for envelope shapes like `{ articles: [Article], nextCursor, count }`.
+ */
+export type MetaSpecSchemaSearch = "deep" | "root"
+
+/** Policy entry reading its source key off a route schema instead of route meta */
+export type MetaSpecSchemaEntry<TValue = unknown> = (MetaSpecExpand<TValue> | MetaSpecSingle<TValue>) & {
+	/** Schema sources to search, in order. First one carrying the key wins */
+	from?: readonly MetaSpecSchemaSource[]
+	/** Where in the schema to look. Default `"root"` */
+	search?: MetaSpecSchemaSearch
+}
+
+/** Per-document filter over emitted operation keys */
+export type MetaSpecProfile = {
+	/** Denylist of emitted keys */
+	exclude?: readonly string[]
+	/** Allowlist of emitted `x-*` keys — standard fields are always kept unless excluded */
+	include?: readonly string[]
+}
+
+/** How an unmapped meta key is reported at codegen time */
+export type MetaSpecStrictness = "error" | "off" | "warn"
+
+type MetaSpecSections<TMetaSection> = {
+	/** Route-meta entries, keyed by meta key */
+	meta?: TMetaSection
+	/** Named per-document filters. `"default"` filters nothing */
+	profiles?: Record<string, MetaSpecProfile>
+	/** Schema-derived entries, keyed by the key read off the schema's metadata */
+	schema?: Record<string, MetaSpecSchemaEntry<never>>
+	/** How to report a meta key with no entry. Default `"error"` */
+	strict?: MetaSpecStrictness
+}
+
+/** Built-in meta keys ship with a default policy — overriding them is optional */
+type MetaSpecOptionalKeys<TMeta> = {
+	[K in Extract<keyof TMeta, keyof OpenApiMeta>]?: MetaSpecEntry<Exclude<TMeta[K], undefined>>
+}
+
+/** Every app-defined meta key must have an entry — a missing key is a type error */
+type MetaSpecRequiredKeys<TMeta> = {
+	[K in Exclude<keyof TMeta, keyof OpenApiMeta>]-?: MetaSpecEntry<Exclude<TMeta[K], undefined>>
+}
+
+/** Declarative policy for what flows from route meta and route schemas into the document */
+export type HoneyMetaSpec<TMeta = unknown> = [TMeta] extends [never]
+	? MetaSpecSections<Record<string, MetaSpecEntry>>
+	: TMeta extends Record<string, unknown>
+		? MetaSpecSections<MetaSpecOptionalKeys<TMeta> & MetaSpecRequiredKeys<TMeta>>
+		: MetaSpecSections<Record<string, MetaSpecEntry>>
+
+/** Erased runtime shape of a resolved policy — what codegen consumes */
+export type MetaSpecConfig = {
+	meta?: Record<string, MetaSpecEntry>
+	profiles?: Record<string, MetaSpecProfile>
+	schema?: Record<string, MetaSpecSchemaEntry>
+	strict?: MetaSpecStrictness
 }
 
 /** Built-in meta shape — always available on .meta() */

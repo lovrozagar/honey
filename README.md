@@ -38,6 +38,7 @@ This README is the full usage manual. An agent that reads only this file should 
   - [Cloudflare Workers](#cloudflare-workers)
   - [Feature auto-load](#feature-auto-load)
 - [OpenAPI, docs, and manifest](#openapi-docs-and-manifest)
+  - [Meta spec](#meta-spec)
 - [WebSockets](#websockets)
 - [Realtime](#realtime)
 - [SSE and streaming](#sse-and-streaming)
@@ -1148,6 +1149,44 @@ Generate-time sanitize (plugin `codegen.openApi.sanitize`):
   stripXExtensions: true,          // or ["x-internal"]
 }
 ```
+
+### Meta spec
+
+`.metaSpec()` declares what flows from route meta and route schemas into the document. Without it, the built-in policy maps the eight fields above and drops everything else silently.
+
+```ts
+const app = honey<Env>()
+	.meta<HoneyMeta<AppRouteMeta>>()
+	.metaSpec({
+		strict: "error", // an app meta key with no entry fails the build
+		meta: {
+			permissions: "x-permissions", // verbatim
+			rateLimit: { key: "x-rate-limit", map: (v) => ({ category: v, rps: RPS[v] }) },
+			worker: false, // deliberately internal — never emitted
+			captcha: false,
+		},
+		schema: {
+			// read off `.meta({ entity })` stamped on the route's schemas, fan out to several tags
+			entity: {
+				from: ["output"],
+				search: "deep", // looks inside `{ articles: [Article], nextCursor }` envelopes
+				expand: (e) => ({
+					"x-entity": e.table,
+					"x-generated": e.generated,
+					"x-soft-delete": e.softDelete ? { field: e.softDelete } : undefined,
+				}),
+			},
+		},
+		profiles: {
+			// allowlist — a tag added later stays out of the public document until opted in
+			public: { include: ["x-entity", "x-query"] },
+		},
+	})
+```
+
+Every key of the app's meta type needs an entry — mapped, or `false` — enforced by the type of the `meta` section and again at codegen. Route meta beats schema-derived facts; `meta.extensions` (a record of `x-*` keys) is the escape hatch and outranks both. `profile` on `app.openapi()` or on a `codegen.openApi` entry emits several documents with different extension sets from one policy. Codegen-time only; nothing runs per request.
+
+Full reference, precedence rules, error taxonomy and migration path: [packages/core/docs/meta-spec.md](packages/core/docs/meta-spec.md).
 
 ## WebSockets
 

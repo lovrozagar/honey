@@ -5,13 +5,29 @@ import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
 import { methodsOf, namespacesOf, schemaToIR, toIR } from "./codegen-ir.ts"
 import type { IRNamespace } from "./codegen-ir.ts"
 import type { HoneyError } from "./error.ts"
+import {
+	applyMetaSpec,
+	compileMetaSpec,
+	type CompiledMetaSpec,
+	MetaSpecCollector,
+	resolveProfile,
+	type SchemaMetaHit,
+	type SchemaMetaLookup,
+} from "./meta-spec.ts"
 import { ERROR_META } from "./errors.ts"
 import type { ErrorMetaEntry } from "./errors.ts"
 import type { Honey } from "./index.ts"
 import type { RouteHandler, TreeNode } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
 import { emitSchemaType } from "./type-emitter.ts"
-import type { InputSchemaEntry, InputSchemasDef, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
+import type {
+	InputSchemaEntry,
+	InputSchemasDef,
+	MetaSpecConfig,
+	MetaSpecSchemaSource,
+	OutputSchemaDef,
+	StandardSchemaLike,
+} from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
 
 export { prepareCodegen } from "./codegen-loaders.ts"
@@ -420,23 +436,7 @@ function introspectSchema(schema: StandardSchemaLike): unknown {
 	}
 }
 
-/* Normalize security shorthand → standard OpenAPI security array */
-export function normalizeSecurity(raw: unknown): Record<string, string[]>[] {
-	if (typeof raw === "string") return [{ [raw]: [] }]
-	if (!Array.isArray(raw)) return []
-	if (raw.length === 0) return []
-	if (raw.every((entry) => typeof entry === "string")) {
-		return raw.map((entry) => ({ [entry]: [] }))
-	}
-	if (raw.every((entry) => Array.isArray(entry))) {
-		return (raw as string[][]).map((group) => Object.fromEntries(group.map((s) => [s, []])))
-	}
-	if (raw.every((entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry))) {
-		return raw as Record<string, string[]>[]
-	}
-	/* mixed shapes — refuse to guess */
-	return []
-}
+export { normalizeSecurity } from "./meta-spec.ts"
 
 /* Strip properties marked with x-internal from an object JSON schema */
 function stripInternalProps(schema: Record<string, unknown>): Record<string, unknown> {
@@ -1325,15 +1325,137 @@ export type OpenApiRouteInfo<TMeta = unknown> = {
 	path: string
 }
 
+function getMetaSpecConfig(app: unknown): MetaSpecConfig | null {
+	return (app as { _metaSpec?: MetaSpecConfig | null })._metaSpec ?? null
+}
+
+/** Lowest declared 2xx JSON output schema — the "output" schema-meta source */
+function primaryOutputSchema(handler: RouteHandler): StandardSchemaLike | null {
+	const json = handler.os?.["application/json"] as Record<string, unknown> | undefined
+	if (!json) return null
+	let best: { code: number; schema: StandardSchemaLike } | null = null
+	for (const [statusKey, schema] of Object.entries(json)) {
+		if (schema === undefined) continue
+		const code = statusKeyToCode[statusKey as keyof typeof statusKeyToCode]
+		if (!code || code < 200 || code > 299) continue
+		if (!best || code < best.code) best = { code, schema: schema as StandardSchemaLike }
+	}
+	return best?.schema ?? null
+}
+
+/**
+ * Reads app keys off the *root* of a route schema's JSON Schema. Vendor-neutral: Zod's
+ * `.meta({ … })` lands on the JSON Schema root, and so does every other validator honey
+ * supports that carries schema metadata.
+ */
+/** Child schema nodes a deep search descends into, in visit order */
+function schemaChildren(node: Record<string, unknown>): Record<string, unknown>[] {
+	const out: Record<string, unknown>[] = []
+	const push = (value: unknown): void => {
+		if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+			out.push(value as Record<string, unknown>)
+		}
+	}
+	const props = node.properties
+	if (props !== null && typeof props === "object" && !Array.isArray(props)) {
+		for (const child of Object.values(props as Record<string, unknown>)) push(child)
+	}
+	push(node.items)
+	for (const key of ["allOf", "anyOf", "oneOf", "prefixItems"]) {
+		const members = node[key]
+		if (Array.isArray(members)) {
+			for (const member of members) push(member)
+		}
+	}
+	return out
+}
+
+/** Bounded BFS — shallowest match wins; several distinct values at that depth is ambiguous */
+function searchSchemaKey(root: Record<string, unknown>, key: string, maxDepth: number): SchemaMetaHit {
+	let level = [root]
+	for (let depth = 0; depth <= maxDepth && level.length > 0; depth++) {
+		const matches: unknown[] = []
+		const seen = new Set<string>()
+		for (const node of level) {
+			if (!Object.hasOwn(node, key) || node[key] === undefined) continue
+			const fingerprint = JSON.stringify(node[key]) ?? "undefined"
+			if (seen.has(fingerprint)) continue
+			seen.add(fingerprint)
+			matches.push(node[key])
+		}
+		if (matches.length === 1) return { found: true, value: matches[0] }
+		if (matches.length > 1) return { found: "ambiguous", values: matches }
+		const next: Record<string, unknown>[] = []
+		for (const node of level) next.push(...schemaChildren(node))
+		level = next
+	}
+	return { found: false }
+}
+
+const DEEP_SEARCH_MAX_DEPTH = 6
+
+/**
+ * Resolves one schema-metadata key against one schema source. `"root"` reads the schema root,
+ * seeing through one level of `items` so a bare `array<Entity>` list output still finds the
+ * descriptor stamped on the item. `"deep"` walks the schema for envelope shapes.
+ */
+function makeSchemaMetaLookup(handler: RouteHandler): SchemaMetaLookup {
+	const cache = new Map<string, Record<string, unknown> | undefined>()
+
+	const rootOf = (source: MetaSpecSchemaSource): Record<string, unknown> | undefined => {
+		if (cache.has(source)) return cache.get(source)
+		let schema: StandardSchemaLike | null = null
+		let io: "input" | "output" = "output"
+		if (source === "output") {
+			schema = primaryOutputSchema(handler)
+		} else {
+			io = "input"
+			const key = source.slice("input.".length) as keyof InputSchemasDef
+			const entry = handler.iv?.[key]
+			schema = entry ? unwrapEntry(entry as InputSchemaEntry) : null
+		}
+		let root: Record<string, unknown> | undefined
+		if (schema) {
+			const converted = asJsonSchema(schema, io)
+			root = converted && typeof converted === "object" ? converted : undefined
+		}
+		cache.set(source, root)
+		return root
+	}
+
+	return (source, key, search) => {
+		const root = rootOf(source)
+		if (!root) return { found: false }
+		if (search === "deep") return searchSchemaKey(root, key, DEEP_SEARCH_MAX_DEPTH)
+		if (Object.hasOwn(root, key) && root[key] !== undefined) return { found: true, value: root[key] }
+		/* a list output is `array<Entity>` — the descriptor sits on the item */
+		if (root.type === "array") {
+			const items = root.items
+			if (items !== null && typeof items === "object" && !Array.isArray(items)) {
+				const itemRoot = items as Record<string, unknown>
+				if (Object.hasOwn(itemRoot, key) && itemRoot[key] !== undefined) {
+					return { found: true, value: itemRoot[key] }
+				}
+			}
+		}
+		return { found: false }
+	}
+}
+
 export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 	app: Honey<TEnv, TCtx, unknown, TMeta, unknown, string, string>,
 	options: {
 		filterRoutes?: (route: OpenApiRouteInfo<TMeta>) => boolean
 		info: OpenApiInfo
+		/** Named metaSpec profile — selects which emitted keys this document carries */
+		profile?: string
 		securitySchemes?: Record<string, unknown>
 	},
 ): Promise<OpenApiSpec> {
 	await Promise.all([loadToJSONSchema(), loadEffectJsonSchema()])
+	const collector = new MetaSpecCollector()
+	const metaSpec: CompiledMetaSpec = compileMetaSpec(getMetaSpecConfig(app), collector)
+	const { filter: profileFilter, name: profileName } = resolveProfile(metaSpec, options.profile, collector)
 	const factory = getErrorFactory(app)
 	const errorMeta = getErrorMeta(factory)
 
@@ -1371,17 +1493,19 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 		const responses: Record<string, unknown> = {}
 		const parameters: Array<Record<string, unknown>> = []
 
-		/* meta → openApi operation fields (flat on meta) */
-		const meta = handler.mt as Record<string, unknown> | null
-		if (meta?.summary) operation.summary = meta.summary
-		if (meta?.description) operation.description = meta.description
-		if (meta?.tags) operation.tags = typeof meta.tags === "string" ? [meta.tags] : meta.tags
-		if (meta?.deprecated) operation.deprecated = meta.deprecated
-		if (meta?.operationId) operation.operationId = meta.operationId
-		if (meta?.security) operation.security = normalizeSecurity(meta.security)
-		const inv = meta?.invalidate
-		if (Array.isArray(inv) && inv.length > 0) operation["x-invalidate"] = inv
-		if (meta?.mcp === true) operation["x-mcp"] = true
+		/* meta + schema meta → openApi operation fields, per the declared policy */
+		applyMetaSpec({
+			collector,
+			filter: profileFilter,
+			kind: "http",
+			meta: handler.mt as Record<string, unknown> | null,
+			method,
+			operation,
+			path,
+			profile: profileName,
+			schemaMeta: metaSpec.needsSchemas ? makeSchemaMetaLookup(handler) : undefined,
+			spec: metaSpec,
+		})
 
 		/* path params */
 		const params = extractParams(path)
@@ -1582,11 +1706,18 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 		const operation: Record<string, unknown> = { "x-websocket": true }
 		const parameters: Array<Record<string, unknown>> = []
 
-		const meta = handler.mt as Record<string, unknown> | null
-		if (meta?.summary) operation.summary = meta.summary
-		if (meta?.description) operation.description = meta.description
-		if (meta?.tags) operation.tags = typeof meta.tags === "string" ? [meta.tags] : meta.tags
-		if (meta?.operationId) operation.operationId = meta.operationId
+		applyMetaSpec({
+			collector,
+			filter: profileFilter,
+			kind: "ws",
+			meta: handler.mt as Record<string, unknown> | null,
+			method: "WS",
+			operation,
+			path,
+			profile: profileName,
+			schemaMeta: metaSpec.needsSchemas ? makeSchemaMetaLookup(handler as unknown as RouteHandler) : undefined,
+			spec: metaSpec,
+		})
 
 		/* path params */
 		const wsParams = extractParams(path)
@@ -1628,6 +1759,8 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 
 		paths[oaPath].get = operation
 	}
+
+	collector.flush()
 
 	const result: OpenApiSpec = {
 		info: options.info,

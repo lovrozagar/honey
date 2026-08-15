@@ -6,6 +6,8 @@ import type { TypedResponse } from "../response.ts"
 type SpecOptions<TMeta = Record<string, unknown> | null> = {
 	description?: string
 	filterRoutes?: (route: OpenApiRouteInfo<DefaultMeta & TMeta>) => boolean
+	/** Named metaSpec profile selecting which emitted keys this document carries */
+	profile?: string
 	securitySchemes?: Record<string, unknown>
 	title: string
 	version: string
@@ -23,6 +25,7 @@ export function spec<TMeta = Record<string, unknown> | null>(
 				? await generateOpenApi(desc.value, {
 						filterRoutes: options.filterRoutes,
 						info: options,
+						profile: options.profile,
 						securitySchemes: options.securitySchemes,
 					})
 				: {}
