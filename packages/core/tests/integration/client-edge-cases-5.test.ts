@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { WebSocket } from "ws"
-import { createApp } from "@honey/e2e-app"
+import { createApp } from "@honey/e2e-kitchen"
 import { ClientError, isClientError } from "../../src/client/error.ts"
 import { createClient } from "../../src/client/index.ts"
 import type { SSEEvent } from "../../src/client/sse.ts"

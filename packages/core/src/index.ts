@@ -208,6 +208,7 @@ function scopeMatches(prefix: string, fullPath: string): boolean {
 type HoneyGraph = {
 	handlerMap: Record<string, RouteHandler> | null
 	hasRouteTree: boolean
+	realtimeBus: RealtimeBus | null
 	root: TreeNode
 }
 
@@ -369,7 +370,6 @@ export class Honey<
 		(ctx: TapContext<TEnv>, payload: unknown) => void | Promise<void>
 	> | null;
 	private _telemetry: TelemetryAdapter | null;
-	private _realtimeBus: RealtimeBus | null;
 	private _realtimeRoutes: Map<string, { handler: RealtimeRouteOpts["handler"]; middlewares?: RealtimeRouteOpts["use"]; reconnectBuffer?: number }>;
 
 	constructor(opts?: {
@@ -385,6 +385,7 @@ export class Honey<
 		this._graph = opts?.graph ?? {
 			handlerMap: opts?.handlerMap ?? null,
 			hasRouteTree: false,
+			realtimeBus: null,
 			root: opts?.root ?? createNode(),
 		};
 		this._globalMiddlewares = opts?.globalMiddlewares ?? [];
@@ -415,7 +416,6 @@ export class Honey<
 		this._onMethodNotAllowed = null;
 		this._taps = null;
 		this._telemetry = null;
-		this._realtimeBus = null;
 		this._realtimeRoutes = new Map();
 	}
 
@@ -443,6 +443,13 @@ export class Honey<
 	/** @internal — used by codegen */
 	private get _tree(): TreeNode {
 		return this._root;
+	}
+
+	private get _realtimeBus(): RealtimeBus | null {
+		return this._graph.realtimeBus;
+	}
+	private set _realtimeBus(value: RealtimeBus | null) {
+		this._graph.realtimeBus = value;
 	}
 
 	/** @internal — mark that this app has WS routes */
@@ -2659,9 +2666,14 @@ export class Honey<
 			}
 
 			/* output validation — skip for error responses and when no body (204, 304, etc) */
+			const validateOut =
+				this._outputValidation === "always" ||
+				(this._outputValidation === "dev" &&
+					(globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+						?.NODE_ENV !== "production")
 			if (
 				handler.os &&
-				this._outputValidation !== "off" &&
+				validateOut &&
 				response.body !== null &&
 				!ctx._isErrorResponse
 			) {

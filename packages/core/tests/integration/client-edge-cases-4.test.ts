@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { createApp } from "@honey/e2e-app"
+import { createApp } from "@honey/e2e-kitchen"
 import type { ClientError } from "../../src/client/error.ts";
 import { HTTPClient } from "../../src/client/http.ts";
 import { createClient } from "../../src/client/index.ts";
@@ -269,7 +269,7 @@ describe("edge: large batch of concurrent requests", () => {
 	});
 });
 
-describe("edge: error i18n from e2e-app", () => {
+describe("edge: error i18n from kitchen e2e app", () => {
 	it("Accept-Language: de returns German error message", async () => {
 		const api = createClient({ baseURL });
 		const { error, response } = await api.get("/api/v1/organizations", {
@@ -277,7 +277,7 @@ describe("edge: error i18n from e2e-app", () => {
 		});
 		expect(error).not.toBeNull();
 		const body = (await response.json()) as Record<string, unknown>;
-		/* e2e-app translates "unauthorized" to German */
+		/* kitchen e2e app translates "unauthorized" to German */
 		expect(typeof body.message).toBe("string");
 	});
 });

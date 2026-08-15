@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApp } from "@honey/e2e-app"
+import { createApp } from "@honey/e2e-kitchen"
 import { createClient } from "../../src/client/index.ts";
 import type { SSEEvent } from "../../src/client/sse.ts";
 import { type HoneyServer, serve } from "../../src/node.ts";

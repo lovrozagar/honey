@@ -1,0 +1,12 @@
+_generated: honey checksum:af2e986698da
+info:
+  description: null
+  title: Honey Gateway
+  version: "0.0.1"
+openapi: "3.1.0"
+paths:
+  /ping:
+    get:
+      responses:
+        "200":
+          description: Success

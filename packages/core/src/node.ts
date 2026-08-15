@@ -1,6 +1,7 @@
 import type { IncomingMessage, Server, ServerResponse } from "node:http"
 import { createServer } from "node:http"
-import type { Duplex } from "node:stream"
+import { Readable, type Duplex } from "node:stream"
+import { pipeline } from "node:stream/promises"
 import type { Honey } from "./index.ts"
 
 type ServeOptions<TEnv> = {
@@ -9,85 +10,104 @@ type ServeOptions<TEnv> = {
 	port?: number
 }
 
+/** Buffer known-size bodies up to this many bytes, then `res.end(buf)`. */
+const BUFFER_BODY_MAX = 256 * 1024
+const RAW_BODY = Symbol.for("honey.rawBody")
+
 function incomingToRequest(req: IncomingMessage): Request {
-	const protocol = "http"
 	const host = req.headers.host ?? "localhost"
-	const url = `${protocol}://${host}${req.url ?? "/"}`
-
-	const headers = new Headers()
-	for (const [key, value] of Object.entries(req.headers)) {
-		if (value === undefined) continue
-		if (Array.isArray(value)) {
-			for (const v of value) headers.append(key, v)
-		} else {
-			headers.set(key, value)
-		}
-	}
-
+	const url = `http://${host}${req.url ?? "/"}`
 	const method = (req.method ?? "GET").toUpperCase()
 	const hasBody = method !== "GET" && method !== "HEAD"
 
+	const headers = req.headers as HeadersInit
+
+	if (!hasBody) {
+		return new Request(url, { headers, method })
+	}
+
 	return new Request(url, {
-		body: hasBody
-			? new ReadableStream({
-					pull() {
-						req.resume()
-					},
-					start(controller) {
-						req.pause()
-						req.on("data", (chunk: Buffer) => {
-							controller.enqueue(new Uint8Array(chunk))
-							if (controller.desiredSize !== null && controller.desiredSize <= 0) {
-								req.pause()
-							}
-						})
-						req.on("end", () => controller.close())
-						req.on("error", (err) => controller.error(err))
-					},
-				})
-			: null,
-		duplex: hasBody ? "half" : undefined,
+		body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
+		duplex: "half",
 		headers,
 		method,
 	} as RequestInit)
 }
 
-async function responseToNode(response: Response, res: ServerResponse): Promise<void> {
-	/* Object.fromEntries loses multiple Set-Cookie headers — handle separately */
+function collectNodeHeaders(
+	response: Response,
+	extra?: Record<string, string>,
+): Record<string, string | string[]> {
 	const headerObj: Record<string, string | string[]> = {}
+	let hasSetCookie = false
 	response.headers.forEach((value, key) => {
-		if (key === "set-cookie") return
+		if (key === "set-cookie") {
+			hasSetCookie = true
+			return
+		}
 		headerObj[key] = value
 	})
-	const setCookies = response.headers.getSetCookie()
-	if (setCookies.length > 0) {
-		headerObj["set-cookie"] = setCookies
+	if (hasSetCookie) {
+		const setCookies = response.headers.getSetCookie()
+		if (setCookies.length > 0) headerObj["set-cookie"] = setCookies
 	}
-	res.writeHead(response.status, headerObj)
+	if (extra) Object.assign(headerObj, extra)
+	return headerObj
+}
 
-	if (response.body === null) {
+function shouldBufferBody(response: Response): boolean {
+	const rawLen = response.headers.get("content-length")
+	if (rawLen !== null) {
+		const len = Number(rawLen)
+		return Number.isFinite(len) && len <= BUFFER_BODY_MAX
+	}
+	const ct = response.headers.get("content-type") ?? ""
+	if (ct.startsWith("text/event-stream")) return false
+	return (
+		ct.startsWith("application/json") ||
+		ct.startsWith("text/plain") ||
+		ct.startsWith("text/html") ||
+		ct.startsWith("text/csv") ||
+		ct.startsWith("application/xml")
+	)
+}
+
+function rawBodyOf(response: Response): string | Uint8Array | undefined {
+	return (response as Response & { [RAW_BODY]?: string | Uint8Array })[RAW_BODY]
+}
+
+async function responseToNode(response: Response, res: ServerResponse): Promise<void> {
+	const raw = rawBodyOf(response)
+	if (typeof raw === "string" || raw instanceof Uint8Array) {
+		const byteLength = typeof raw === "string" ? Buffer.byteLength(raw) : raw.byteLength
+		res.writeHead(response.status, collectNodeHeaders(response, { "content-length": String(byteLength) }))
+		res.end(raw)
+		return
+	}
+
+	const body = response.body
+	if (body === null) {
+		res.writeHead(response.status, collectNodeHeaders(response))
 		res.end()
 		return
 	}
 
-	const reader = response.body.getReader()
+	if (shouldBufferBody(response)) {
+		const buf = Buffer.from(await response.arrayBuffer())
+		if (res.destroyed) return
+		res.writeHead(
+			response.status,
+			collectNodeHeaders(response, { "content-length": String(buf.byteLength) }),
+		)
+		res.end(buf)
+		return
+	}
+
+	res.writeHead(response.status, collectNodeHeaders(response))
 	try {
-		while (true) {
-			const { done, value } = await reader.read()
-			if (done) break
-			if (res.destroyed) break
-			const ok = res.write(value)
-			if (!ok) {
-				await new Promise<void>((resolve) => {
-					res.once("drain", resolve)
-					res.once("close", resolve)
-					res.once("error", resolve)
-				})
-				if (res.destroyed) break
-			}
-		}
-	} finally {
-		res.end()
+		await pipeline(Readable.fromWeb(body as import("node:stream/web").ReadableStream), res)
+	} catch {
+		if (!res.destroyed) res.destroy()
 	}
 }
 
@@ -116,8 +136,12 @@ export function serve<TEnv>(
 			const response = await app.fetch(request, env)
 			await responseToNode(response, res)
 		} catch {
-			res.writeHead(500)
-			res.end("Internal Server Error")
+			if (!res.headersSent) {
+				res.writeHead(500)
+				res.end("Internal Server Error")
+			} else if (!res.destroyed) {
+				res.destroy()
+			}
 		} finally {
 			inflight--
 			if (draining && inflight === 0) {
@@ -134,11 +158,11 @@ export function serve<TEnv>(
 			const response = await app.fetch(request, envWithUpgrade)
 
 			if (response.status !== 101) {
-				const body = await response.text()
+				const text = await response.text()
 				socket.write(
 					`HTTP/1.1 ${response.status} ${response.statusText ?? "Error"}\r\n` +
 						"content-type: application/json\r\n" +
-						`\r\n${body}`,
+						`\r\n${text}`,
 				)
 				socket.destroy()
 			}

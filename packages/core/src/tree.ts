@@ -349,8 +349,8 @@ export function matchWsRoute(
 
 function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	/* merge method handlers */
-	if (source.m !== null) {
-		if (target.m === null) {
+	if (source.m !== null && source.m !== undefined) {
+		if (target.m === null || target.m === undefined) {
 			target.m = Object.create(null) as Record<HttpMethod | "ALL", RouteHandler>
 		}
 		for (const [method, handler] of Object.entries(source.m)) {
@@ -364,7 +364,7 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	}
 
 	/* merge static children — shallow-copy s to avoid mutating shared empty objects */
-		if (Object.keys(source.s).length > 0) {
+		if (source.s && Object.keys(source.s).length > 0) {
 			let detached = false
 			for (const [seg, child] of Object.entries(source.s)) {
 				const targetChild = target.s[seg]
@@ -381,8 +381,8 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	}
 
 	/* merge dynamic param */
-	if (source.d !== null) {
-		if (target.d !== null) {
+	if (source.d !== null && source.d !== undefined) {
+		if (target.d !== null && target.d !== undefined) {
 			if (target.d.n !== source.d.n) {
 				throw new Error(
 					`Merge conflict: param name mismatch at ${path}: "${target.d.n}" vs "${source.d.n}"`,
@@ -395,8 +395,8 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	}
 
 	/* merge wildcard */
-	if (source.w !== null) {
-		if (target.w !== null) {
+	if (source.w !== null && source.w !== undefined) {
+		if (target.w !== null && target.w !== undefined) {
 			if (target.w.n !== source.w.n) {
 				throw new Error(
 					`Merge conflict: wildcard name mismatch at ${path}: "${target.w.n}" vs "${source.w.n}"`,
@@ -414,8 +414,8 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	}
 
 	/* merge websocket */
-	if (source.ws !== null) {
-		if (target.ws !== null) {
+	if (source.ws !== null && source.ws !== undefined) {
+		if (target.ws !== null && target.ws !== undefined) {
 			throw new Error(`Merge conflict: duplicate WebSocket handler at ${path}`)
 		}
 		target.ws = source.ws

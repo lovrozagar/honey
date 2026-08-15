@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"target": "ES2022",
+		"types": ["bun-types"]
+	},
+	"include": ["src/apps/bun/**/*.ts", "src/apps/node/**/*.ts"]
+}

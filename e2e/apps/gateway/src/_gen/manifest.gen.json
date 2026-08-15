@@ -1,0 +1,14 @@
+{
+  "_generated": "honey checksum:3d02bec320f3",
+  "errors": [],
+  "routes": [
+    {
+      "errors": [],
+      "meta": {},
+      "method": "GET",
+      "middleware": [],
+      "params": [],
+      "path": "/ping"
+    }
+  ]
+}

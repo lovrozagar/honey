@@ -1,19 +1,20 @@
 import { describe, expect, it } from "vitest"
-import { app } from "@honey/demo-2"
+import { createApp } from "@honey/e2e-surface"
 import { createSDK } from "../../../src/client/sdk.ts"
 import { generateOpenApi, generateSDK } from "../../../src/codegen.ts"
 
 type SDKResult = { data: unknown; error: unknown; response: Response; status: number }
 
 /**
- * REAL consumer test using the actual demo-2 app.
+ * REAL consumer test using the surface e2e app.
  * No mocking — real routes, real handlers, real app.fetch().
  */
 
 const ENV = { API_KEY: "test-key", DATABASE_URL: "postgres://localhost/test" }
+const app = createApp()
 
-describe("SDK with real demo-2 app", () => {
-	it("generates SDK from demo-2 OpenAPI spec", async () => {
+describe("SDK with real surface app", () => {
+	it("generates SDK from surface OpenAPI spec", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -35,7 +36,7 @@ describe("SDK with real demo-2 app", () => {
 		expect(serviceMap.resources.delete).toBeDefined()
 	})
 
-	it("SDK calls demo-2 JSON input route via app.fetch", async () => {
+	it("SDK calls surface JSON input route via app.fetch", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -50,7 +51,7 @@ describe("SDK with real demo-2 app", () => {
 		expect((data as Record<string, string>).id).toBe("1")
 	})
 
-	it("SDK calls demo-2 no-input route", async () => {
+	it("SDK calls surface no-input route", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -63,7 +64,7 @@ describe("SDK with real demo-2 app", () => {
 		expect((data as Record<string, string>).ping).toBe("pong")
 	})
 
-	it("SDK calls demo-2 resources.list", async () => {
+	it("SDK calls surface resources.list", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -76,7 +77,7 @@ describe("SDK with real demo-2 app", () => {
 		expect((data as Record<string, unknown>).items).toEqual([])
 	})
 
-	it("SDK calls demo-2 resources.create with JSON body", async () => {
+	it("SDK calls surface resources.create with JSON body", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -91,7 +92,7 @@ describe("SDK with real demo-2 app", () => {
 		expect((data as Record<string, string>).id).toBe("1")
 	})
 
-	it("SDK calls demo-2 resources.update with params + JSON", async () => {
+	it("SDK calls surface resources.update with params + JSON", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -109,7 +110,7 @@ describe("SDK with real demo-2 app", () => {
 		expect(result.name).toBe("Updated")
 	})
 
-	it("SDK calls demo-2 resources.delete → 204", async () => {
+	it("SDK calls surface resources.delete → 204", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -123,7 +124,7 @@ describe("SDK with real demo-2 app", () => {
 		expect(result.error).toBeNull()
 	})
 
-	it("SDK calls demo-2 resources.patch", async () => {
+	it("SDK calls surface resources.patch", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -139,7 +140,7 @@ describe("SDK with real demo-2 app", () => {
 		expect((data as Record<string, string>).id).toBe("7")
 	})
 
-	it("SDK validation error from demo-2 → returns error in tuple", async () => {
+	it("SDK validation error from surface → returns error in tuple", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
@@ -157,7 +158,7 @@ describe("SDK with real demo-2 app", () => {
 		expect((result.error as Record<string, unknown>)?.error_key).toBe("validation_failed")
 	})
 
-	it("generated code contains demo-2 operations", async () => {
+	it("generated code contains surface operations", async () => {
 		const spec = await generateOpenApi(app, { info: { title: "Demo 2", version: "1.0" } })
 		const { files } = generateSDK(spec)
 

@@ -4369,7 +4369,7 @@ function sdkClientDoRequest(): string {
 
 \t\t\tif (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
 \t\t\t\tconst newToken = await this.#config.onAuthExpired()
-\t\t\t\tif (newToken != null) {
+\t\t\t\tif (newToken !== null && newToken !== undefined) {
 \t\t\t\t\tconst retryHeaders = new Headers(headers)
 \t\t\t\t\tconst authName = this.#config.authHeaderName ?? "Authorization"
 \t\t\t\t\tconst authPrefix = this.#config.authHeaderPrefix ?? "Bearer "

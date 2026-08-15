@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApp } from "@honey/e2e-app"
+import { createApp } from "@honey/e2e-kitchen"
 import { isClientError } from "../../src/client/error.ts";
 import { createClient } from "../../src/client/index.ts";
 import type { SSEEvent } from "../../src/client/sse.ts";
@@ -253,7 +253,7 @@ describe("edge: headers merging priority", () => {
 
 describe("edge: response content-type with charset", () => {
 	it("application/json; charset=utf-8 parsed as JSON", async () => {
-		/* e2e-app returns application/json — verify it works */
+		/* kitchen e2e app returns application/json — verify it works */
 		const api = createClient({ baseURL });
 		const { data, error } = await api.get("/api/echo");
 		expect(error).toBeNull();

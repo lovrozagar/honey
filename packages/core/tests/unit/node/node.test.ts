@@ -163,6 +163,19 @@ describe("serve", () => {
 		server.close()
 	})
 
+	it("JSON response with content-length is fully written", async () => {
+		const app = makeApp()
+		const server = serve(app, { env: {}, port: 0 })
+		const addr = server.address() as { port: number }
+
+		const res = await fetchFromServer(addr.port, "/health")
+		expect(res.status).toBe(200)
+		expect(res.headers["content-length"]).toBe(String(Buffer.byteLength(res.body)))
+		expect(JSON.parse(res.body)).toEqual({ status: "healthy" })
+
+		server.close()
+	})
+
 	it("env passed through to handler", async () => {
 		type Env = { SECRET: string }
 		const h = honey<Env>()

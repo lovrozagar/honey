@@ -1,6 +1,6 @@
-import { createApp } from "@honey/e2e-app"
+import { loadE2eApp } from "../../apps/load.ts"
 
-const app = createApp()
+const app = loadE2eApp(Deno.env.get("HONEY_E2E_APP") ?? undefined)
 const port = Number(Deno.env.get("PORT") ?? "4103")
 
 /* 127.0.0.1: Playwright's Node HTTP client prefers ::1 for `localhost`,

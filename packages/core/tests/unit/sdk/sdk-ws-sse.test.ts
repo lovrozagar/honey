@@ -3,7 +3,7 @@ import * as z from "zod"
 
 const hasZodJsonSchema = typeof (z as Record<string, unknown>).toJSONSchema === "function"
 
-import { app as demo2App } from "@honey/demo-2"
+import { createApp as createSurfaceApp } from "@honey/e2e-surface"
 import { createSDK } from "../../../src/client/sdk.ts"
 import { generateOpenApi, generateSDK } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
@@ -243,12 +243,14 @@ describe("WS: createSDK proxy", () => {
 })
 
 /* ═══════════════════════════════════════════
- * REAL APP: demo-2 WS in SDK pipeline
+ * REAL APP: surface WS in SDK pipeline
  * ═══════════════════════════════════════════ */
 
-describe("demo-2: WS routes in SDK", () => {
-	it("demo-2 WS routes appear in OpenAPI with x-websocket", async () => {
-		const spec = await generateOpenApi(demo2App, { info: { title: "Demo 2", version: "1.0" } })
+const surfaceApp = createSurfaceApp()
+
+describe("surface: WS routes in SDK", () => {
+	it("surface WS routes appear in OpenAPI with x-websocket", async () => {
+		const spec = await generateOpenApi(surfaceApp, { info: { title: "Surface", version: "1.0" } })
 
 		const wsRoutes = Object.entries(spec.paths)
 			.filter(([_, methods]) => {
@@ -263,8 +265,8 @@ describe("demo-2: WS routes in SDK", () => {
 		expect(wsRoutes).toContain("/ws/chat/{channelId}")
 	})
 
-	it("demo-2 WS routes in SDK serviceMap", async () => {
-		const spec = await generateOpenApi(demo2App, { info: { title: "Demo 2", version: "1.0" } })
+	it("surface WS routes in SDK serviceMap", async () => {
+		const spec = await generateOpenApi(surfaceApp, { info: { title: "Surface", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
 		expect(serviceMap.ws).toBeDefined()
@@ -277,8 +279,8 @@ describe("demo-2: WS routes in SDK", () => {
 		expect(serviceMap.ws.chat.params).toEqual(["channelId"])
 	})
 
-	it("demo-2 generated SDK code has WS types", async () => {
-		const spec = await generateOpenApi(demo2App, { info: { title: "Demo 2", version: "1.0" } })
+	it("surface generated SDK code has WS types", async () => {
+		const spec = await generateOpenApi(surfaceApp, { info: { title: "Surface", version: "1.0" } })
 		const { files } = generateSDK(spec)
 
 		/* Phase A (#1) adds WS suffix fields so echo now takes an optional input */
@@ -289,8 +291,8 @@ describe("demo-2: WS routes in SDK", () => {
 		expect(files.types).toContain("export type TypedWebSocket")
 	})
 
-	it("demo-2 SDK has HTTP + WS resources coexisting", async () => {
-		const spec = await generateOpenApi(demo2App, { info: { title: "Demo 2", version: "1.0" } })
+	it("surface SDK has HTTP + WS resources coexisting", async () => {
+		const spec = await generateOpenApi(surfaceApp, { info: { title: "Surface", version: "1.0" } })
 		const { serviceMap } = generateSDK(spec)
 
 		/* HTTP resources */

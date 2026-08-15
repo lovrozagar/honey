@@ -1,0 +1,36 @@
+_generated: honey checksum:4748c662e763
+info:
+  description: null
+  title: Honey Defaults
+  version: "0.0.1"
+openapi: "3.1.0"
+paths:
+  /echo:
+    post:
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateEchoResponse201"
+          description: created
+  /health:
+    get:
+      responses:
+        "200":
+          description: Success
+  /users/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+components:
+  schemas:
+    CreateEchoResponse201:
+      type: string

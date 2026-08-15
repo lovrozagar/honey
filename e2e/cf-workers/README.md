@@ -1,11 +1,11 @@
 # `@honey/e2e-cf-workers`
 
-Live Cloudflare proof of the shared e2e app (`e2e/app`) on workerd.
+Live Cloudflare proof of the kitchen e2e app (`e2e/apps/kitchen`) on workerd.
 
 **Worker:** `honey-cf-e2e`  
 **URL:** https://honey-cf-e2e.lovro-zagar5.workers.dev
 
-Same routes as bun / node / deno Playwright (`e2e/app/e2e`). Entry is `src/worker.ts`.
+Same routes as bun / node / deno Playwright (`e2e/apps/kitchen/tests/e2e`). Entry is `src/worker.ts`. Local `test:e2e:cf` can point the worker at another `e2e/apps/*` via `HONEY_E2E_APP`; the live worker stays kitchen.
 
 ## Smoke
 

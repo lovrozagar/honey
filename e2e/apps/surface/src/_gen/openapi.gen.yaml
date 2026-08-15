@@ -1,0 +1,1361 @@
+_generated: honey checksum:a899186ac591
+info:
+  description: null
+  title: Honey Surface
+  version: "1.0.0"
+openapi: "3.1.0"
+paths:
+  /in/all/{resourceId}:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplaceInAllRequest"
+        required: true
+      parameters:
+        - in: path
+          name: resourceId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: if-match
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: force
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: version
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplaceInAllResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/cookies:
+    get:
+      parameters:
+        - in: cookie
+          name: locale
+          required: true
+          schema:
+            type: string
+        - in: cookie
+          name: sid
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListInCookiesResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/file:
+    post:
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/CreateInFileRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInFileResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/form:
+    post:
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/CreateInFormRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInFormResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/headers:
+    get:
+      parameters:
+        - in: header
+          name: x-api-key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: x-request-id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListInHeadersResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/json:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInJsonRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInJsonResponse201"
+          description: created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/none:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListInNoneResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/params/{orgId}/members/{memberId}:
+    get:
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - in: path
+          name: memberId
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetInParamsMemberResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /in/search:
+    get:
+      parameters:
+        - in: query
+          name: limit
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: page
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListInSearchResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /methods/resource:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMethodsResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMethodRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInJsonResponse201"
+          description: created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /methods/resource/{id}:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMethodRequest"
+        required: true
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplaceMethodsResourceResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+    patch:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMethodsResourceRequest"
+        required: true
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInJsonResponse201"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+    delete:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /out/binary:
+    get:
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                $ref: "#/components/schemas/ListOutBinaryResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /out/csv:
+    get:
+      responses:
+        "200":
+          content:
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/ListOutCsvResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /out/html:
+    get:
+      responses:
+        "200":
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ListOutCsvResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /out/multi-status:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOutMultiStatuRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOutMultiStatuResponse201"
+          description: created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOutMultiStatuResponse409"
+          description: conflict
+  /out/no-content/{id}:
+    delete:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteOutNoContentResponse404"
+          description: not_found
+  /out/sse:
+    get:
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ListOutCsvResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /out/text:
+    get:
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ListOutCsvResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /out/xml:
+    get:
+      responses:
+        "200":
+          content:
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/ListOutCsvResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /rs/upload:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRsRequest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateRsResponse202"
+          description: accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /status/accepted:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStatuRequest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateStatuResponse202"
+          description: accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /status/created:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStatuRequest_aa6c2c"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInJsonResponse201"
+          description: created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /status/no-content:
+    delete:
+      responses:
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /status/ok:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStatusResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /stream/filtered:
+    get:
+      parameters:
+        - in: query
+          name: channel
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: since
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ListOutCsvResponse200"
+          description: ok
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err400ValidationError"
+          description: validation_error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+  /ws/echo:
+    get:
+      x-websocket: true
+      responses:
+        "101":
+          description: WebSocket upgrade
+  /ws/reconnect:
+    get:
+      x-websocket: true
+      responses:
+        "101":
+          description: WebSocket upgrade
+  /ws/room:
+    get:
+      x-websocket: true
+      parameters:
+        - in: query
+          name: roomId
+          required: true
+          schema:
+            type: string
+      responses:
+        "101":
+          description: WebSocket upgrade
+components:
+  schemas:
+    ReplaceInAllRequest:
+      type: object
+      properties:
+        data:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties: {}
+      required:
+        - data
+    ReplaceInAllResponse200:
+      type: object
+      properties:
+        etag:
+          type: string
+        version:
+          type: number
+      required:
+        - etag
+        - version
+      additionalProperties: false
+    Err400ValidationError:
+      properties:
+        error_key:
+          enum:
+            - validation_error
+          type: string
+        fields:
+          additionalProperties:
+            items:
+              properties:
+                error_key:
+                  type: string
+                message:
+                  type: string
+                path:
+                  type: string
+              required:
+                - error_key
+                - message
+                - path
+              type: object
+            type: array
+          type: object
+        message:
+          type: string
+        status:
+          enum:
+            - 400
+          type: integer
+        status_key:
+          type: string
+        success:
+          const: false
+      required:
+        - error_key
+        - fields
+        - message
+        - status
+        - status_key
+        - success
+      type: object
+    Err401Unauthorized:
+      properties:
+        error_key:
+          enum:
+            - unauthorized
+          type: string
+        fields:
+          additionalProperties:
+            items:
+              properties:
+                error_key:
+                  type: string
+                message:
+                  type: string
+                path:
+                  type: string
+              required:
+                - error_key
+                - message
+                - path
+              type: object
+            type: array
+          type: object
+        message:
+          type: string
+        status:
+          enum:
+            - 401
+          type: integer
+        status_key:
+          type: string
+        success:
+          const: false
+      required:
+        - error_key
+        - fields
+        - message
+        - status
+        - status_key
+        - success
+      type: object
+    ListInCookiesResponse200:
+      type: object
+      properties:
+        locale:
+          type: string
+        valid:
+          type: boolean
+      required:
+        - locale
+        - valid
+      additionalProperties: false
+    CreateInFileRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        upload:
+          type: string
+          format: binary
+          contentEncoding: binary
+      required:
+        - title
+        - upload
+    CreateInFileResponse200:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+      required:
+        - name
+        - title
+      additionalProperties: false
+    CreateInFormRequest:
+      type: object
+      properties:
+        password:
+          type: string
+        username:
+          type: string
+      required:
+        - password
+        - username
+    CreateInFormResponse200:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token
+      additionalProperties: false
+    ListInHeadersResponse200:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+      required:
+        - accepted
+      additionalProperties: false
+    CreateInJsonRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+      required:
+        - email
+        - name
+    CreateInJsonResponse201:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+        - id
+      additionalProperties: false
+    ListInNoneResponse200:
+      type: object
+      properties:
+        ping:
+          type: string
+          const: pong
+      required:
+        - ping
+      additionalProperties: false
+    GetInParamsMemberResponse200:
+      type: object
+      properties:
+        memberId:
+          type: string
+        orgId:
+          type: string
+      required:
+        - memberId
+        - orgId
+      additionalProperties: false
+    ListInSearchResponse200:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: string
+      required:
+        - results
+      additionalProperties: false
+    ListMethodsResponse200:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: string
+      required:
+        - items
+      additionalProperties: false
+    CreateMethodRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+    ReplaceMethodsResourceResponse200:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+      additionalProperties: false
+    UpdateMethodsResourceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+    ListOutBinaryResponse200:
+      types: null
+      vendor: zod
+      version: 1
+    ListOutCsvResponse200:
+      type: string
+    CreateOutMultiStatuRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+      required:
+        - slug
+    CreateOutMultiStatuResponse201:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+      required:
+        - id
+        - slug
+      additionalProperties: false
+    CreateOutMultiStatuResponse409:
+      type: object
+      properties:
+        existing:
+          type: string
+        message:
+          type: string
+      required:
+        - existing
+        - message
+      additionalProperties: false
+    DeleteOutNoContentResponse404:
+      properties:
+        error_key:
+          enum:
+            - not_found
+          type: string
+        fields:
+          additionalProperties:
+            items:
+              properties:
+                error_key:
+                  type: string
+                message:
+                  type: string
+                path:
+                  type: string
+              required:
+                - error_key
+                - message
+                - path
+              type: object
+            type: array
+          type: object
+        message:
+          type: string
+        status:
+          enum:
+            - 404
+          type: integer
+        status_key:
+          type: string
+        success:
+          const: false
+      required:
+        - error_key
+        - fields
+        - message
+        - status
+        - status_key
+        - success
+      type: object
+    CreateRsRequest:
+      _tag: readableStream
+      schema:
+        toJSONSchema: "(params) => {\n  const ctx = initializeContext({ ...params, processors });\n  process(schema, ctx);\n  extractDefs(ctx, schema);\n  return finalize(ctx, schema);\n}"
+        def:
+          type: object
+          shape:
+            chunks:
+              toJSONSchema: "(params) => {\n  const ctx = initializeContext({ ...params, processors });\n  process(schema, ctx);\n  extractDefs(ctx, schema);\n  return finalize(ctx, schema);\n}"
+              def:
+                type: number
+                checks: []
+              type: number
+              check: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
+              with: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
+              clone: "(def, params) => core.clone(inst, def, params)"
+              brand: "() => inst"
+              register: "(reg, meta) => {\n    reg.add(inst, meta);\n    return inst;\n  }"
+              parse: "(data, params) => parse.parse(inst, data, params, { callee: inst.parse })"
+              safeParse: "(data, params) => parse.safeParse(inst, data, params)"
+              parseAsync: "async (data, params) => parse.parseAsync(inst, data, params, { callee: inst.parseAsync })"
+              safeParseAsync: "async (data, params) => parse.safeParseAsync(inst, data, params)"
+              spa: "async (data, params) => parse.safeParseAsync(inst, data, params)"
+              encode: "(data, params) => parse.encode(inst, data, params)"
+              decode: "(data, params) => parse.decode(inst, data, params)"
+              encodeAsync: "async (data, params) => parse.encodeAsync(inst, data, params)"
+              decodeAsync: "async (data, params) => parse.decodeAsync(inst, data, params)"
+              safeEncode: "(data, params) => parse.safeEncode(inst, data, params)"
+              safeDecode: "(data, params) => parse.safeDecode(inst, data, params)"
+              safeEncodeAsync: "async (data, params) => parse.safeEncodeAsync(inst, data, params)"
+              safeDecodeAsync: "async (data, params) => parse.safeDecodeAsync(inst, data, params)"
+              refine: "(check, params) => inst.check(refine(check, params))"
+              superRefine: "(refinement) => inst.check(superRefine(refinement))"
+              overwrite: "(fn) => inst.check(checks.overwrite(fn))"
+              optional: "() => optional(inst)"
+              exactOptional: "() => exactOptional(inst)"
+              nullable: "() => nullable(inst)"
+              nullish: "() => optional(nullable(inst))"
+              nonoptional: "(params) => nonoptional(inst, params)"
+              array: "() => array(inst)"
+              or: "(arg) => union([inst, arg])"
+              and: "(arg) => intersection(inst, arg)"
+              transform: "(tx) => pipe(inst, transform(tx))"
+              default: "(def) => _default(inst, def)"
+              prefault: "(def) => prefault(inst, def)"
+              catch: "(params) => _catch(inst, params)"
+              pipe: "(target) => pipe(inst, target)"
+              readonly: "() => readonly(inst)"
+              describe: "(description) => {\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, { description });\n    return cl;\n  }"
+              meta: "(...args) => {\n    if (args.length === 0)\n      return core.globalRegistry.get(inst);\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, args[0]);\n    return cl;\n  }"
+              isOptional: "() => inst.safeParse(void 0).success"
+              isNullable: "() => inst.safeParse(null).success"
+              apply: "(fn) => fn(inst)"
+              gt: "(value, params) => inst.check(checks.gt(value, params))"
+              gte: "(value, params) => inst.check(checks.gte(value, params))"
+              min: "(value, params) => inst.check(checks.gte(value, params))"
+              lt: "(value, params) => inst.check(checks.lt(value, params))"
+              lte: "(value, params) => inst.check(checks.lte(value, params))"
+              max: "(value, params) => inst.check(checks.lte(value, params))"
+              int: "(params) => inst.check(int(params))"
+              safe: "(params) => inst.check(int(params))"
+              positive: "(params) => inst.check(checks.gt(0, params))"
+              nonnegative: "(params) => inst.check(checks.gte(0, params))"
+              negative: "(params) => inst.check(checks.lt(0, params))"
+              nonpositive: "(params) => inst.check(checks.lte(0, params))"
+              multipleOf: "(value, params) => inst.check(checks.multipleOf(value, params))"
+              step: "(value, params) => inst.check(checks.multipleOf(value, params))"
+              finite: "() => inst"
+              minValue: "-Infinity"
+              maxValue: "Infinity"
+              isInt: false
+              isFinite: true
+              format: null
+            fileName:
+              toJSONSchema: "(params) => {\n  const ctx = initializeContext({ ...params, processors });\n  process(schema, ctx);\n  extractDefs(ctx, schema);\n  return finalize(ctx, schema);\n}"
+              def:
+                type: string
+              type: string
+              check: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
+              with: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
+              clone: "(def, params) => core.clone(inst, def, params)"
+              brand: "() => inst"
+              register: "(reg, meta) => {\n    reg.add(inst, meta);\n    return inst;\n  }"
+              parse: "(data, params) => parse.parse(inst, data, params, { callee: inst.parse })"
+              safeParse: "(data, params) => parse.safeParse(inst, data, params)"
+              parseAsync: "async (data, params) => parse.parseAsync(inst, data, params, { callee: inst.parseAsync })"
+              safeParseAsync: "async (data, params) => parse.safeParseAsync(inst, data, params)"
+              spa: "async (data, params) => parse.safeParseAsync(inst, data, params)"
+              encode: "(data, params) => parse.encode(inst, data, params)"
+              decode: "(data, params) => parse.decode(inst, data, params)"
+              encodeAsync: "async (data, params) => parse.encodeAsync(inst, data, params)"
+              decodeAsync: "async (data, params) => parse.decodeAsync(inst, data, params)"
+              safeEncode: "(data, params) => parse.safeEncode(inst, data, params)"
+              safeDecode: "(data, params) => parse.safeDecode(inst, data, params)"
+              safeEncodeAsync: "async (data, params) => parse.safeEncodeAsync(inst, data, params)"
+              safeDecodeAsync: "async (data, params) => parse.safeDecodeAsync(inst, data, params)"
+              refine: "(check, params) => inst.check(refine(check, params))"
+              superRefine: "(refinement) => inst.check(superRefine(refinement))"
+              overwrite: "(fn) => inst.check(checks.overwrite(fn))"
+              optional: "() => optional(inst)"
+              exactOptional: "() => exactOptional(inst)"
+              nullable: "() => nullable(inst)"
+              nullish: "() => optional(nullable(inst))"
+              nonoptional: "(params) => nonoptional(inst, params)"
+              array: "() => array(inst)"
+              or: "(arg) => union([inst, arg])"
+              and: "(arg) => intersection(inst, arg)"
+              transform: "(tx) => pipe(inst, transform(tx))"
+              default: "(def) => _default(inst, def)"
+              prefault: "(def) => prefault(inst, def)"
+              catch: "(params) => _catch(inst, params)"
+              pipe: "(target) => pipe(inst, target)"
+              readonly: "() => readonly(inst)"
+              describe: "(description) => {\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, { description });\n    return cl;\n  }"
+              meta: "(...args) => {\n    if (args.length === 0)\n      return core.globalRegistry.get(inst);\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, args[0]);\n    return cl;\n  }"
+              isOptional: "() => inst.safeParse(void 0).success"
+              isNullable: "() => inst.safeParse(null).success"
+              apply: "(fn) => fn(inst)"
+              format: null
+              minLength: null
+              maxLength: null
+              regex: "(...args) => inst.check(checks.regex(...args))"
+              includes: "(...args) => inst.check(checks.includes(...args))"
+              startsWith: "(...args) => inst.check(checks.startsWith(...args))"
+              endsWith: "(...args) => inst.check(checks.endsWith(...args))"
+              min: "(...args) => inst.check(checks.minLength(...args))"
+              max: "(...args) => inst.check(checks.maxLength(...args))"
+              length: "(...args) => inst.check(checks.length(...args))"
+              nonempty: "(...args) => inst.check(checks.minLength(1, ...args))"
+              lowercase: "(params) => inst.check(checks.lowercase(params))"
+              uppercase: "(params) => inst.check(checks.uppercase(params))"
+              trim: "() => inst.check(checks.trim())"
+              normalize: "(...args) => inst.check(checks.normalize(...args))"
+              toLowerCase: "() => inst.check(checks.toLowerCase())"
+              toUpperCase: "() => inst.check(checks.toUpperCase())"
+              slugify: "() => inst.check(checks.slugify())"
+              email: "(params) => inst.check(core._email(ZodEmail, params))"
+              url: "(params) => inst.check(core._url(ZodURL, params))"
+              jwt: "(params) => inst.check(core._jwt(ZodJWT, params))"
+              emoji: "(params) => inst.check(core._emoji(ZodEmoji, params))"
+              guid: "(params) => inst.check(core._guid(ZodGUID, params))"
+              uuid: "(params) => inst.check(core._uuid(ZodUUID, params))"
+              uuidv4: "(params) => inst.check(core._uuidv4(ZodUUID, params))"
+              uuidv6: "(params) => inst.check(core._uuidv6(ZodUUID, params))"
+              uuidv7: "(params) => inst.check(core._uuidv7(ZodUUID, params))"
+              nanoid: "(params) => inst.check(core._nanoid(ZodNanoID, params))"
+              cuid: "(params) => inst.check(core._cuid(ZodCUID, params))"
+              cuid2: "(params) => inst.check(core._cuid2(ZodCUID2, params))"
+              ulid: "(params) => inst.check(core._ulid(ZodULID, params))"
+              base64: "(params) => inst.check(core._base64(ZodBase64, params))"
+              base64url: "(params) => inst.check(core._base64url(ZodBase64URL, params))"
+              xid: "(params) => inst.check(core._xid(ZodXID, params))"
+              ksuid: "(params) => inst.check(core._ksuid(ZodKSUID, params))"
+              ipv4: "(params) => inst.check(core._ipv4(ZodIPv4, params))"
+              ipv6: "(params) => inst.check(core._ipv6(ZodIPv6, params))"
+              cidrv4: "(params) => inst.check(core._cidrv4(ZodCIDRv4, params))"
+              cidrv6: "(params) => inst.check(core._cidrv6(ZodCIDRv6, params))"
+              e164: "(params) => inst.check(core._e164(ZodE164, params))"
+              datetime: "(params) => inst.check(iso.datetime(params))"
+              date: "(params) => inst.check(iso.date(params))"
+              time: "(params) => inst.check(iso.time(params))"
+              duration: "(params) => inst.check(iso.duration(params))"
+        type: object
+        check: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
+        with: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
+        clone: "(def, params) => core.clone(inst, def, params)"
+        brand: "() => inst"
+        register: "(reg, meta) => {\n    reg.add(inst, meta);\n    return inst;\n  }"
+        parse: "(data, params) => parse.parse(inst, data, params, { callee: inst.parse })"
+        safeParse: "(data, params) => parse.safeParse(inst, data, params)"
+        parseAsync: "async (data, params) => parse.parseAsync(inst, data, params, { callee: inst.parseAsync })"
+        safeParseAsync: "async (data, params) => parse.safeParseAsync(inst, data, params)"
+        spa: "async (data, params) => parse.safeParseAsync(inst, data, params)"
+        encode: "(data, params) => parse.encode(inst, data, params)"
+        decode: "(data, params) => parse.decode(inst, data, params)"
+        encodeAsync: "async (data, params) => parse.encodeAsync(inst, data, params)"
+        decodeAsync: "async (data, params) => parse.decodeAsync(inst, data, params)"
+        safeEncode: "(data, params) => parse.safeEncode(inst, data, params)"
+        safeDecode: "(data, params) => parse.safeDecode(inst, data, params)"
+        safeEncodeAsync: "async (data, params) => parse.safeEncodeAsync(inst, data, params)"
+        safeDecodeAsync: "async (data, params) => parse.safeDecodeAsync(inst, data, params)"
+        refine: "(check, params) => inst.check(refine(check, params))"
+        superRefine: "(refinement) => inst.check(superRefine(refinement))"
+        overwrite: "(fn) => inst.check(checks.overwrite(fn))"
+        optional: "() => optional(inst)"
+        exactOptional: "() => exactOptional(inst)"
+        nullable: "() => nullable(inst)"
+        nullish: "() => optional(nullable(inst))"
+        nonoptional: "(params) => nonoptional(inst, params)"
+        array: "() => array(inst)"
+        or: "(arg) => union([inst, arg])"
+        and: "(arg) => intersection(inst, arg)"
+        transform: "(tx) => pipe(inst, transform(tx))"
+        default: "(def) => _default(inst, def)"
+        prefault: "(def) => prefault(inst, def)"
+        catch: "(params) => _catch(inst, params)"
+        pipe: "(target) => pipe(inst, target)"
+        readonly: "() => readonly(inst)"
+        describe: "(description) => {\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, { description });\n    return cl;\n  }"
+        meta: "(...args) => {\n    if (args.length === 0)\n      return core.globalRegistry.get(inst);\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, args[0]);\n    return cl;\n  }"
+        isOptional: "() => inst.safeParse(void 0).success"
+        isNullable: "() => inst.safeParse(null).success"
+        apply: "(fn) => fn(inst)"
+        keyof: "() => _enum(Object.keys(inst._zod.def.shape))"
+        catchall: "(catchall) => inst.clone({ ...inst._zod.def, catchall })"
+        passthrough: "() => inst.clone({ ...inst._zod.def, catchall: unknown() })"
+        loose: "() => inst.clone({ ...inst._zod.def, catchall: unknown() })"
+        strict: "() => inst.clone({ ...inst._zod.def, catchall: never() })"
+        strip: "() => inst.clone({ ...inst._zod.def, catchall: void 0 })"
+        extend: "(incoming) => {\n    return util.extend(inst, incoming);\n  }"
+        safeExtend: "(incoming) => {\n    return util.safeExtend(inst, incoming);\n  }"
+        merge: "(other) => util.merge(inst, other)"
+        pick: "(mask) => util.pick(inst, mask)"
+        omit: "(mask) => util.omit(inst, mask)"
+        partial: "(...args) => util.partial(ZodOptional, inst, args[0])"
+        required: "(...args) => util.required(ZodNonOptional, inst, args[0])"
+    CreateRsResponse202:
+      type: object
+      properties:
+        uploadId:
+          type: string
+      required:
+        - uploadId
+      additionalProperties: false
+    CreateStatuRequest:
+      type: object
+      properties:
+        task:
+          type: string
+      required:
+        - task
+    CreateStatuResponse202:
+      type: object
+      properties:
+        jobId:
+          type: string
+      required:
+        - jobId
+      additionalProperties: false
+    CreateStatuRequest_aa6c2c:
+      type: object
+      properties:
+        x:
+          type: string
+      required:
+        - x
+    ListStatusResponse200:
+      type: object
+      properties:
+        v:
+          type: number
+      required:
+        - v
+      additionalProperties: false

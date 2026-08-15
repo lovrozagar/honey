@@ -1,0 +1,22 @@
+{
+	"name": "@honey/e2e-kitchen",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/app.ts"
+	},
+	"scripts": {
+		"generate": "honey generate",
+		"test": "bun test tests/smoke.test.ts",
+		"type:check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"honey": "workspace:*",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@playwright/test": "catalog:",
+		"typescript": "catalog:"
+	}
+}

@@ -12,7 +12,11 @@
 	},
 	"dependencies": {
 		"honey": "workspace:*",
-		"@honey/e2e-app": "workspace:*",
+		"@honey/e2e-compose": "workspace:*",
+		"@honey/e2e-defaults": "workspace:*",
+		"@honey/e2e-gateway": "workspace:*",
+		"@honey/e2e-kitchen": "workspace:*",
+		"@honey/e2e-surface": "workspace:*",
 		"ws": "catalog:"
 	},
 	"devDependencies": {

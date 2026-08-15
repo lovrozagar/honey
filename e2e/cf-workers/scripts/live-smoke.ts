@@ -126,32 +126,65 @@ if ((await (await fetch(`${BASE}/api/health`)).text()) !== "ok") fail("health af
 
 const wsUrl = `${BASE.replace("https://", "wss://")}/api/echo-ws`
 
-async function echoOnce(label: string): Promise<void> {
-	await new Promise<void>((resolve, reject) => {
-		const ws = new WebSocket(wsUrl)
-		const msgs: string[] = []
-		const timer = setTimeout(() => {
-			ws.close()
-			reject(new Error(`${label}: timeout msgs=${JSON.stringify(msgs)}`))
-		}, 10_000)
-		ws.addEventListener("message", (evt) => {
-			msgs.push(String(evt.data))
-			if (msgs.length === 1 && msgs[0] === "connected") {
-				ws.send("ping")
-				return
-			}
-			if (msgs[1] === "ping") {
+async function echoOnce(label: string, attempt = 0): Promise<void> {
+	try {
+		await new Promise<void>((resolve, reject) => {
+			const ws = new WebSocket(wsUrl)
+			const msgs: string[] = []
+			const timer = setTimeout(() => {
+				ws.close()
+				reject(new Error(`${label}: timeout msgs=${JSON.stringify(msgs)}`))
+			}, 10_000)
+			ws.addEventListener("message", (evt) => {
+				msgs.push(String(evt.data))
+				if (msgs.length === 1 && msgs[0] === "connected") {
+					ws.send("ping")
+					return
+				}
+				if (msgs[1] === "ping") {
+					clearTimeout(timer)
+					ws.close(1000, "done")
+					resolve()
+				}
+			})
+			ws.addEventListener("error", () => {
 				clearTimeout(timer)
-				ws.close(1000, "done")
-				resolve()
-			}
+				reject(new Error(`${label}: socket error`))
+			})
 		})
-		ws.addEventListener("error", () => {
-			clearTimeout(timer)
-			reject(new Error(`${label}: socket error`))
-		})
-	})
+	} catch (err) {
+		if (attempt >= 1) throw err
+		await new Promise((r) => setTimeout(r, 250))
+		await echoOnce(label, attempt + 1)
+	}
 }
+
+await new Promise<void>((resolve, reject) => {
+	const ws = new WebSocket(`${BASE.replace("https://", "wss://")}/api/realtime/echo`)
+	const timer = setTimeout(() => {
+		ws.close()
+		reject(new Error("realtime echo: timeout"))
+	}, 10_000)
+	ws.addEventListener("message", (evt) => {
+		let frame: unknown
+		try {
+			frame = JSON.parse(String(evt.data))
+		} catch {
+			frame = String(evt.data)
+		}
+		if (typeof frame === "object" && frame !== null && "event" in frame && frame.event === "connected") {
+			clearTimeout(timer)
+			ws.close(1000, "done")
+			resolve()
+		}
+	})
+	ws.addEventListener("error", () => {
+		clearTimeout(timer)
+		reject(new Error("realtime echo: socket error"))
+	})
+})
+console.log("realtime echo ok")
+await new Promise((r) => setTimeout(r, 400))
 
 const wsT0 = performance.now()
 const wsBatch = 20

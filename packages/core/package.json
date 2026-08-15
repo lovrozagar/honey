@@ -93,8 +93,8 @@
 		"jiti": "2.7.0"
 	},
 	"devDependencies": {
-		"@honey/demo-2": "workspace:*",
-		"@honey/e2e-app": "workspace:*",
+		"@honey/e2e-surface": "workspace:*",
+		"@honey/e2e-kitchen": "workspace:*",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@total-typescript/ts-reset": "catalog:",
 		"@types/node": "catalog:",

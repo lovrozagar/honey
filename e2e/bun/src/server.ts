@@ -1,7 +1,7 @@
-import { createApp } from "@honey/e2e-app"
+import { loadE2eApp } from "../../apps/load.ts"
 
-const app = createApp()
+const app = loadE2eApp(process.env.HONEY_E2E_APP)
 const port = Number(process.env.PORT ?? 4100)
 
 await app.serve({ hostname: "0.0.0.0", port })
-process.stdout.write(`Honey Bun E2E on :${port}\n`)
+process.stdout.write(`Honey Bun E2E (${process.env.HONEY_E2E_APP ?? "kitchen"}) on :${port}\n`)

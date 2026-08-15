@@ -46,21 +46,22 @@ Generated TypeScript, Python, Go, and Rust clients: [SDK index](packages/core/do
 
 ## Develop
 
-`packages/core` is the published package. Examples and `e2e/*` import `honey` over `workspace:*`.
+`packages/core` is the published package. `e2e/*` imports `honey` over `workspace:*`.
 
 Requires [Bun](https://bun.sh) 1.3+.
 
 ```bash
 bun install
-bun run generate        # honey generate for examples + e2e-app (OpenAPI JSON + YAML)
+bun run generate        # honey generate for every e2e app
 bun run test            # core unit + in-process integration (default CI)
-bun run test:consumers  # e2e-app imports honey like a real app
-bun run test:e2e        # Playwright against the bun runtime
-bun run test:e2e:node   # same suite against Node (tsx)
-bun run test:e2e:deno   # same suite against Deno
-bun run test:e2e:cf     # same suite against wrangler / workerd
+bun run test:consumers  # e2e apps import honey like a real app
+bun run test:e2e        # Playwright, bun × every e2e app
+bun run test:e2e:node   # same matrix against Node (tsx)
+bun run test:e2e:deno   # same matrix against Deno
+bun run test:e2e:cf     # same matrix against local wrangler / workerd
+bun run test:e2e:all    # bun + node + deno + local cf × every e2e app
 bun run typecheck            # core src (TypeScript 7)
-bun run typecheck:consumers  # examples + e2e-app + generated types
+bun run typecheck:consumers  # every e2e app + generated types
 ```
 
 Opt-in locally (CI `harness` job runs the first one):

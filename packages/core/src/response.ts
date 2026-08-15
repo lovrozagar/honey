@@ -70,6 +70,14 @@ function typed<CT extends string, SK extends string>(
 	return response as TypedResponse<CT, SK>;
 }
 
+/** Node adapter reads this to `res.end(payload)` without draining the Fetch body. */
+const RAW_BODY = Symbol.for("honey.rawBody");
+
+function withRawBody(response: Response, body: string | Uint8Array): Response {
+	Object.defineProperty(response, RAW_BODY, { value: body });
+	return response;
+}
+
 /* pre-allocated header objects — Bun optimizes plain objects better than Headers instances */
 const JSON_HEADERS = { "content-type": "application/json" };
 const TEXT_HEADERS = { "content-type": "text/plain; charset=utf-8" };
@@ -85,16 +93,22 @@ export class HoneyRes {
 	): TypedResponse<"application/octet-stream", SK> {
 		if (!opts?.headers && !opts?.cookies) {
 			return typed(
-				new Response(body, {
-					headers: BINARY_HEADERS,
-					status: statusKeyToCode[statusKey],
-				}),
+				withRawBody(
+					new Response(body, {
+						headers: BINARY_HEADERS,
+						status: statusKeyToCode[statusKey],
+					}),
+					body instanceof Uint8Array ? body : new Uint8Array(body),
+				),
 			);
 		}
 		const headers = new Headers({ "content-type": "application/octet-stream" });
 		applyResponseOptions(headers, opts);
 		return typed(
-			new Response(body, { headers, status: statusKeyToCode[statusKey] }),
+			withRawBody(
+				new Response(body, { headers, status: statusKeyToCode[statusKey] }),
+				body instanceof Uint8Array ? body : new Uint8Array(body),
+			),
 		);
 	}
 
@@ -105,16 +119,19 @@ export class HoneyRes {
 	): TypedResponse<"text/csv", SK> {
 		if (!opts?.headers && !opts?.cookies) {
 			return typed(
-				new Response(body, {
-					headers: CSV_HEADERS,
-					status: statusKeyToCode[statusKey],
-				}),
+				withRawBody(
+					new Response(body, {
+						headers: CSV_HEADERS,
+						status: statusKeyToCode[statusKey],
+					}),
+					body,
+				),
 			);
 		}
 		const headers = new Headers({ "content-type": "text/csv; charset=utf-8" });
 		applyResponseOptions(headers, opts);
 		return typed(
-			new Response(body, { headers, status: statusKeyToCode[statusKey] }),
+			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
 		);
 	}
 
@@ -125,16 +142,19 @@ export class HoneyRes {
 	): TypedResponse<"text/html", SK> {
 		if (!opts?.headers && !opts?.cookies) {
 			return typed(
-				new Response(body, {
-					headers: HTML_HEADERS,
-					status: statusKeyToCode[statusKey],
-				}),
+				withRawBody(
+					new Response(body, {
+						headers: HTML_HEADERS,
+						status: statusKeyToCode[statusKey],
+					}),
+					body,
+				),
 			);
 		}
 		const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
 		applyResponseOptions(headers, opts);
 		return typed(
-			new Response(body, { headers, status: statusKeyToCode[statusKey] }),
+			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
 		);
 	}
 
@@ -144,21 +164,28 @@ export class HoneyRes {
 		opts?: ResponseOptions,
 	): TypedResponse<"application/json", SK> {
 		/* fast path — no custom headers or cookies, skip Headers allocation */
+		const payload = JSON.stringify(data);
 		if (!opts?.headers && !opts?.cookies) {
 			return typed(
-				new Response(JSON.stringify(data), {
-					headers: JSON_HEADERS,
-					status: statusKeyToCode[statusKey],
-				}),
+				withRawBody(
+					new Response(payload, {
+						headers: JSON_HEADERS,
+						status: statusKeyToCode[statusKey],
+					}),
+					payload,
+				),
 			);
 		}
 		const headers = new Headers({ "content-type": "application/json" });
 		applyResponseOptions(headers, opts);
 		return typed(
-			new Response(JSON.stringify(data), {
-				headers,
-				status: statusKeyToCode[statusKey],
-			}),
+			withRawBody(
+				new Response(payload, {
+					headers,
+					status: statusKeyToCode[statusKey],
+				}),
+				payload,
+			),
 		);
 	}
 
@@ -330,10 +357,13 @@ export class HoneyRes {
 	): TypedResponse<"text/plain", SK> {
 		if (!opts?.headers && !opts?.cookies) {
 			return typed(
-				new Response(body, {
-					headers: TEXT_HEADERS,
-					status: statusKeyToCode[statusKey],
-				}),
+				withRawBody(
+					new Response(body, {
+						headers: TEXT_HEADERS,
+						status: statusKeyToCode[statusKey],
+					}),
+					body,
+				),
 			);
 		}
 		const headers = new Headers({
@@ -341,7 +371,7 @@ export class HoneyRes {
 		});
 		applyResponseOptions(headers, opts);
 		return typed(
-			new Response(body, { headers, status: statusKeyToCode[statusKey] }),
+			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
 		);
 	}
 
@@ -353,7 +383,7 @@ export class HoneyRes {
 		const headers = new Headers({ "content-type": "application/xml" });
 		applyResponseOptions(headers, opts);
 		return typed(
-			new Response(body, { headers, status: statusKeyToCode[statusKey] }),
+			withRawBody(new Response(body, { headers, status: statusKeyToCode[statusKey] }), body),
 		);
 	}
 }
@@ -407,8 +437,12 @@ export function createErrorResponse(
 			headers[k] = v
 		}
 	}
-	return new Response(JSON.stringify(body), {
-		headers,
-		status: error.status,
-	});
+	const payload = JSON.stringify(body);
+	return withRawBody(
+		new Response(payload, {
+			headers,
+			status: error.status,
+		}),
+		payload,
+	);
 }

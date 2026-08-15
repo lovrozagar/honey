@@ -4,25 +4,43 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"bench": "bash src/run.sh both",
-		"bench:dev": "BENCH_MODE=dev bash src/run.sh both",
-		"bench:naked": "bash src/run.sh naked",
-		"bench:zod": "bash src/run.sh zod",
-		"bench:json": "bash src/run.sh zod json",
-		"bench:middleware": "bash src/run.sh zod middleware",
-		"bench:params": "bash src/run.sh zod params",
-		"bench:validate": "bash src/run.sh zod validate",
-		"build": "bash src/build.sh both"
+		"bench": "bash src/run.sh bun both",
+		"bench:bun": "bash src/run.sh bun both",
+		"bench:node": "bash src/run.sh node both",
+		"bench:all": "bash src/run.sh all both",
+		"bench:dev": "BENCH_MODE=dev bash src/run.sh bun both",
+		"bench:naked": "bash src/run.sh bun naked",
+		"bench:zod": "bash src/run.sh bun zod",
+		"bench:json": "bash src/run.sh bun zod json",
+		"bench:middleware": "bash src/run.sh bun zod middleware",
+		"bench:params": "bash src/run.sh bun zod params",
+		"bench:validate": "bash src/run.sh bun zod validate",
+		"build": "bash src/build.sh bun both",
+		"build:bun": "bash src/build.sh bun both",
+		"build:node": "bash src/build.sh node both",
+		"build:all": "bash src/build.sh all both"
 	},
 	"dependencies": {
+		"@elysia/node": "1.4.6",
+		"@hono/node-server": "2.1.1",
 		"@hono/zod-validator": "0.8.0",
-		"honey": "workspace:*",
+		"@nestjs/common": "11.2.0",
+		"@nestjs/core": "11.2.0",
+		"@nestjs/platform-express": "11.2.0",
 		"elysia": "1.4.29",
+		"express": "5.2.1",
+		"honey": "workspace:*",
 		"hono": "catalog:",
+		"reflect-metadata": "0.2.2",
+		"rxjs": "7.8.2",
+		"ws": "8.21.3",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@types/express": "5.0.6",
+		"@types/ws": "8.18.1",
 		"bun-types": "catalog:",
+		"tsx": "4.23.12",
 		"typescript": "catalog:"
 	}
 }

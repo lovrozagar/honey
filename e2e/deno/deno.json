@@ -1,10 +1,17 @@
 {
 	"imports": {
-		"@honey/e2e-app": "../app/src/app.ts",
+		"@honey/e2e-compose": "../apps/compose/src/app.ts",
+		"@honey/e2e-defaults": "../apps/defaults/src/app.ts",
+		"@honey/e2e-gateway": "../apps/gateway/src/app.ts",
+		"@honey/e2e-kitchen": "../apps/kitchen/src/app.ts",
+		"@honey/e2e-surface": "../apps/surface/src/app.ts",
 		"honey": "../../packages/core/src/index.ts",
 		"honey/codegen": "../../packages/core/src/codegen.ts",
 		"honey/cors": "../../packages/core/src/cors.ts",
+		"honey/i18n": "../../packages/core/src/i18n.ts",
+		"honey/input": "../../packages/core/src/input.ts",
 		"honey/logger": "../../packages/core/src/logger.ts",
+		"honey/openapi": "../../packages/core/src/openapi/register.ts",
 		"honey/plugin": "../../packages/core/src/plugin.ts",
 		"honey/request-id": "../../packages/core/src/request-id.ts",
 		"honey/ws/deno": "../../packages/core/src/ws/deno.ts",

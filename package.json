@@ -7,8 +7,8 @@
 	"workspaces": {
 		"packages": [
 			"packages/*",
-			"examples/*",
 			"e2e/*",
+			"e2e/apps/*",
 			"bench"
 		],
 		"catalog": {
@@ -34,20 +34,21 @@
 		}
 	},
 	"scripts": {
-		"generate": "bun run --filter './examples/*' generate && bun run --filter @honey/e2e-app generate",
+		"generate": "bun run --filter './e2e/apps/*' generate",
 		"test": "bun run --filter honey test",
 		"test:all": "bun run --filter honey test:all",
-		"test:consumers": "bun test e2e/app/tests examples/demo-1/tests",
-		"test:e2e": "bun run --filter @honey/e2e-bun test",
-		"test:e2e:node": "bun run --filter @honey/e2e-node test",
-		"test:e2e:deno": "bun run --filter @honey/e2e-deno test",
-		"test:e2e:cf": "bun run --filter @honey/e2e-cf-workers test",
+		"test:consumers": "bun test e2e/apps/kitchen/tests/smoke.test.ts e2e/apps/defaults/tests/smoke.test.ts e2e/apps/compose/tests/smoke.test.ts e2e/apps/surface/tests/smoke.test.ts e2e/apps/gateway/tests/smoke.test.ts",
+		"test:e2e": "bun e2e/run.ts --env bun",
+		"test:e2e:node": "bun e2e/run.ts --env node",
+		"test:e2e:deno": "bun e2e/run.ts --env deno",
+		"test:e2e:cf": "bun e2e/run.ts --env cf",
+		"test:e2e:all": "bun e2e/run.ts --env all",
 		"deploy:e2e:cf": "bun run --filter @honey/e2e-cf-workers deploy",
 		"test:live:cf": "bun run --filter @honey/e2e-cf-workers test:live",
 		"test:harness": "bun run --filter honey test:harness",
 		"test:harness:rust": "bun run --filter honey test:harness:rust",
 		"test:watch": "bun run --filter honey test:watch",
 		"typecheck": "bun run --filter honey type:check",
-		"typecheck:consumers": "bun run --filter './examples/*' type:check && bun run --filter @honey/e2e-app type:check"
+		"typecheck:consumers": "bun run --filter './e2e/apps/*' type:check"
 	}
 }
