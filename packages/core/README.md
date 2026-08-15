@@ -44,6 +44,8 @@ honey generate --watch
 
 Honey emits TypeScript, Python, Go, and Rust SDKs from the same spec. See [the SDK index](./docs/sdk.md).
 
+Full framework guide (builder, serve, OpenAPI, WS, e2e, bench): the [repository README](https://github.com/lovrozagar/honey#table-of-contents).
+
 ## License
 
 MIT

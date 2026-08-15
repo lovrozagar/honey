@@ -23,6 +23,11 @@ node_modules
 *.swp
 *.log
 
+# secrets
+.env
+.env.*
+!.env.example
+
 # local
 .local
 *.local
