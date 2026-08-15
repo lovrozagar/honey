@@ -1328,7 +1328,7 @@ async def main():
     port = server.sockets[0].getsockname()[1]
     try:
         sdk = AsyncSDK(ClientConfig(base_url=f"http://127.0.0.1:{port}"))
-        ws = await sdk.realtime.subscribe(channel="updates", reconnect_token="tok")
+        ws = sdk.realtime.subscribe(channel="updates", reconnect_token="tok")
         async with ws as conn:
             await conn.send("hello")
             msg = await asyncio.wait_for(anext(conn.__aiter__()), timeout=2.0)

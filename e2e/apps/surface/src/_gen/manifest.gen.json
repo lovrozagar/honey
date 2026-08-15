@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:3724d30f4b40",
+  "_generated": "honey checksum:38a71bfa557e",
   "errors": [
     {
       "errorKey": "unauthorized",
@@ -28,7 +28,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "input.createJson",
+        "tags": [
+          "input"
+        ]
+      },
       "method": "POST",
       "middleware": [
         "anonymous",
@@ -56,7 +61,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "input.createForm",
+        "tags": [
+          "input"
+        ]
+      },
       "method": "POST",
       "middleware": [
         "anonymous",
@@ -84,7 +94,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "input.search",
+        "tags": [
+          "input"
+        ]
+      },
       "method": "GET",
       "middleware": [
         "anonymous",
@@ -199,7 +214,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "input.none",
+        "tags": [
+          "input"
+        ]
+      },
       "method": "GET",
       "middleware": [
         "anonymous",
@@ -469,7 +489,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "resources.list",
+        "tags": [
+          "methods"
+        ]
+      },
       "method": "GET",
       "middleware": [
         "anonymous",
@@ -491,7 +516,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "resources.create",
+        "tags": [
+          "methods"
+        ]
+      },
       "method": "POST",
       "middleware": [
         "anonymous",
@@ -519,7 +549,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "resources.update",
+        "tags": [
+          "methods"
+        ]
+      },
       "method": "PUT",
       "middleware": [
         "anonymous",
@@ -553,7 +588,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "resources.patch",
+        "tags": [
+          "methods"
+        ]
+      },
       "method": "PATCH",
       "middleware": [
         "anonymous",
@@ -587,7 +627,12 @@
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
+      "meta": {
+        "operationId": "resources.delete",
+        "tags": [
+          "methods"
+        ]
+      },
       "method": "DELETE",
       "middleware": [
         "anonymous",

@@ -485,7 +485,7 @@ Import features from their path. Do not expect `import { cors } from "@lovrozaga
 | `honey/serve` | Register Node/Bun/Deno listen |
 | `honey/openapi` | Register spec generation |
 | `honey/i18n` | Register error i18n |
-| `honey/plugin` | Vite plugin + `generateFromApp` |
+| `@lovrozagar/honey/plugin` | Vite plugin + `generateFromApp` |
 | `honey/client` / `honey/client/sdk` | Typed TS client runtime |
 | `honey/cors`, `honey/csrf`, `honey/body-limit`, `honey/logger`, `honey/etag`, `honey/timeout`, `honey/request-id`, `honey/secure-headers`, `honey/server-timing`, `honey/ip-restrict`, `honey/powered-by`, `honey/pretty-json`, `honey/static`, `honey/proxy`, `honey/curl-logger` | Middleware |
 | `honey/input` | `readableStream()` helper |

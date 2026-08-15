@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:a899186ac591",
+  "_generated": "honey checksum:49244b6690a1",
   "info": {
     "title": "Honey Surface",
     "version": "1.0.0"
@@ -188,6 +188,10 @@
     },
     "/in/form": {
       "post": {
+        "tags": [
+          "input"
+        ],
+        "operationId": "input.createForm",
         "requestBody": {
           "content": {
             "application/x-www-form-urlencoded": {
@@ -288,6 +292,10 @@
     },
     "/in/json": {
       "post": {
+        "tags": [
+          "input"
+        ],
+        "operationId": "input.createJson",
         "requestBody": {
           "content": {
             "application/json": {
@@ -334,6 +342,10 @@
     },
     "/in/none": {
       "get": {
+        "tags": [
+          "input"
+        ],
+        "operationId": "input.none",
         "responses": {
           "200": {
             "content": {
@@ -426,6 +438,10 @@
     },
     "/in/search": {
       "get": {
+        "tags": [
+          "input"
+        ],
+        "operationId": "input.search",
         "parameters": [
           {
             "in": "query",
@@ -488,6 +504,10 @@
     },
     "/methods/resource": {
       "get": {
+        "tags": [
+          "methods"
+        ],
+        "operationId": "resources.list",
         "responses": {
           "200": {
             "content": {
@@ -522,6 +542,10 @@
         }
       },
       "post": {
+        "tags": [
+          "methods"
+        ],
+        "operationId": "resources.create",
         "requestBody": {
           "content": {
             "application/json": {
@@ -568,6 +592,10 @@
     },
     "/methods/resource/{id}": {
       "put": {
+        "tags": [
+          "methods"
+        ],
+        "operationId": "resources.update",
         "requestBody": {
           "content": {
             "application/json": {
@@ -623,6 +651,10 @@
         }
       },
       "patch": {
+        "tags": [
+          "methods"
+        ],
+        "operationId": "resources.patch",
         "requestBody": {
           "content": {
             "application/json": {
@@ -678,6 +710,10 @@
         }
       },
       "delete": {
+        "tags": [
+          "methods"
+        ],
+        "operationId": "resources.delete",
         "parameters": [
           {
             "in": "path",
@@ -1284,9 +1320,37 @@
         }
       }
     },
+    "/ws/chat/{channelId}": {
+      "get": {
+        "x-websocket": true,
+        "tags": [
+          "websocket"
+        ],
+        "operationId": "ws.chat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channelId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket upgrade"
+          }
+        }
+      }
+    },
     "/ws/echo": {
       "get": {
         "x-websocket": true,
+        "tags": [
+          "websocket"
+        ],
+        "operationId": "ws.echo",
         "responses": {
           "101": {
             "description": "WebSocket upgrade"
@@ -1297,6 +1361,10 @@
     "/ws/reconnect": {
       "get": {
         "x-websocket": true,
+        "tags": [
+          "websocket"
+        ],
+        "operationId": "ws.reconnect",
         "responses": {
           "101": {
             "description": "WebSocket upgrade"
@@ -1307,6 +1375,10 @@
     "/ws/room": {
       "get": {
         "x-websocket": true,
+        "tags": [
+          "websocket"
+        ],
+        "operationId": "ws.joinRoom",
         "parameters": [
           {
             "in": "query",

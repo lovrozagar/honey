@@ -74,7 +74,7 @@ async function loadConfigFromVite(configPath: string): Promise<HoneyVitePluginCo
 	await jiti.import(configPath)
 
 	/* read stashed config from the same module graph */
-	const pluginMod = (await jiti.import("honey/plugin")) as Record<string, unknown>
+	const pluginMod = (await jiti.import("@lovrozagar/honey/plugin")) as Record<string, unknown>
 	const getter = pluginMod.getLastHoneyConfig as typeof getLastHoneyConfig | undefined
 	return getter?.()
 }
