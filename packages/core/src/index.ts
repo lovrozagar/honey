@@ -273,7 +273,23 @@ type FetchCtx<TEnv> = {
 	url: () => URL;
 	/** Already known from fetch() before Deno.upgradeWebSocket consumes the request. */
 	wsUpgrade?: boolean;
+	/** Headers copied before Deno.upgradeWebSocket closes the Request. */
+	headerSnap?: Headers;
 };
+
+function requestWithHeaders(req: Request, headers: Headers): Request {
+	return new Proxy(req, {
+		get(target, prop, receiver) {
+			if (prop === "headers") return headers
+			const value = Reflect.get(target, prop, receiver)
+			return typeof value === "function" ? (value as (...args: never[]) => unknown).bind(target) : value
+		},
+	})
+}
+
+function ctxRequest(fc: FetchCtx<unknown>): Request {
+	return fc.headerSnap ? requestWithHeaders(fc.request, fc.headerSnap) : fc.request
+}
 
 function defaultErrorFormatter(
 	_error: HoneyError,
@@ -1789,6 +1805,7 @@ export class Honey<
 			return this._doFetch(request, env, executionCtx);
 		}
 		const isWsUpgrade = request.headers.get("upgrade")?.toLowerCase() === "websocket"
+		const headerSnap = isWsUpgrade ? new Headers(request.headers) : undefined
 		const path = this.pathFromRequest(request)
 		const canPreUpgrade =
 			isWsUpgrade &&
@@ -1800,7 +1817,7 @@ export class Honey<
 		 * used to be boxed by async _doFetch; keep 101 returning either way. */
 		let work: Response | Promise<Response>
 		try {
-			work = this._doFetch(request, env, executionCtx, isWsUpgrade === true)
+			work = this._doFetch(request, env, executionCtx, isWsUpgrade === true, headerSnap)
 		} catch (err) {
 			work = Promise.reject(err)
 		}
@@ -1861,6 +1878,7 @@ export class Honey<
 		env: TEnv,
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
 		knownWsUpgrade = false,
+		headerSnap?: Headers,
 	): Response | Promise<Response> {
 		const startTime = performance.now();
 
@@ -1895,6 +1913,7 @@ export class Honey<
 			startTime,
 			url: getUrl,
 			wsUpgrade: knownWsUpgrade,
+			headerSnap,
 		};
 
 		if (this._telemetry !== null) {
@@ -2127,7 +2146,7 @@ export class Honey<
 			env: fc.env,
 			executionCtx: fc.executionCtx,
 			params: wsMatch.params,
-			req: fc.request,
+			req: ctxRequest(fc),
 			urlFn: fc.url,
 		});
 		if (this._contextValues) Object.assign(wsCtx, this._contextValues);
@@ -2235,7 +2254,7 @@ export class Honey<
 			env: fc.env,
 			executionCtx: fc.executionCtx,
 			params: wsMatch.params,
-			req: fc.request,
+			req: ctxRequest(fc),
 			urlFn: fc.url,
 		});
 		if (this._contextValues) Object.assign(ctx, this._contextValues);
