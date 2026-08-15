@@ -15,6 +15,20 @@ export type MiddlewareFn<TCtx = {}, TAdds = {}, TErrors extends string = string>
 	meta?: Readonly<Record<string, unknown>>
 }
 
+/**
+ * Stamp a stable name on a middleware closure.
+ *
+ * `Function.prototype.name` is inferred by whatever transpiled the module — jiti (used by
+ * `honey generate`) and rollup (used by `vite build`) disagree about a closure returned from
+ * a factory, which made the generated manifest differ between the two. Naming shipped
+ * middleware explicitly makes the manifest deterministic, and "cors" reads better than
+ * "anonymous" besides.
+ */
+export function namedMiddleware<T extends object>(name: string, fn: T): T {
+	Object.defineProperty(fn, "name", { configurable: true, value: name })
+	return fn
+}
+
 /** runtime type for stored middleware — erased generics, used internally */
 export type RuntimeMiddleware = (
 	ctx: Record<string, unknown>,

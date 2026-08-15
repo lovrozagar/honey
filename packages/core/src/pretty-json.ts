@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import { replaceResponse } from "./honey-response.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
@@ -35,5 +36,5 @@ export function prettyJson(options?: PrettyJsonOptions): MiddlewareFn<{ req: Req
 		})
 	}
 
-	return mw
+	return namedMiddleware("prettyJson", mw)
 }

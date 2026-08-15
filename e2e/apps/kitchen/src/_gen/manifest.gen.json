@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:989170f1c075",
+  "_generated": "honey checksum:915db7c846ce",
   "errors": [
     {
       "errorKey": "unauthorized",
@@ -43,8 +43,8 @@
       },
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger"
       ],
       "params": [],
       "path": "/api",
@@ -71,9 +71,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [],
       "path": "/api/health"
@@ -86,9 +86,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [],
       "path": "/api/events"
@@ -101,9 +101,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [],
       "path": "/api/events-live"
@@ -116,9 +116,9 @@
       "meta": {},
       "method": "ALL",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [],
       "path": "/api/echo"
@@ -131,9 +131,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous",
+        "requestId",
+        "logger",
+        "cors",
         "withDb",
         "withAuth"
       ],
@@ -151,9 +151,9 @@
       "meta": {},
       "method": "POST",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous",
+        "requestId",
+        "logger",
+        "cors",
         "withDb",
         "withAuth"
       ],
@@ -168,9 +168,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous",
+        "requestId",
+        "logger",
+        "cors",
         "withDb",
         "withAuth"
       ],
@@ -187,9 +187,9 @@
       "meta": {},
       "method": "DELETE",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous",
+        "requestId",
+        "logger",
+        "cors",
         "withDb",
         "withAuth"
       ],
@@ -206,9 +206,9 @@
       "meta": {},
       "method": "POST",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [
         "topic"
@@ -223,9 +223,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [],
       "path": "/api/boundary/default"
@@ -239,9 +239,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [],
       "path": "/api/boundary/custom"
@@ -254,9 +254,9 @@
       "meta": {},
       "method": "GET",
       "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
+        "requestId",
+        "logger",
+        "cors"
       ],
       "params": [],
       "path": "/api/generated-tree"

@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 type StaticConfig<TCtx> = {
@@ -54,5 +55,5 @@ export function staticFiles<TCtx extends { req: Request }>(config: StaticConfig<
 		return response
 	}
 
-	return mw
+	return namedMiddleware("staticFiles", mw)
 }

@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 type RequestIdOptions = {
@@ -17,5 +18,5 @@ export function requestId(options?: RequestIdOptions): MiddlewareFn<{ req: Reque
 		return response
 	}
 
-	return mw
+	return namedMiddleware("requestId", mw)
 }

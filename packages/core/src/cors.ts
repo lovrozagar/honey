@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import { replaceResponse } from "./honey-response.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
@@ -89,5 +90,5 @@ export function cors(options?: CORSOptions): MiddlewareFn<{ req: Request }, {}> 
 		})
 	}
 
-	return mw
+	return namedMiddleware("cors", mw)
 }

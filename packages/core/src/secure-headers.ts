@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 type SecureHeadersOptions = {
@@ -65,5 +66,5 @@ export function secureHeaders(options?: SecureHeadersOptions): MiddlewareFn<{}, 
 		return response
 	}
 
-	return mw
+	return namedMiddleware("secureHeaders", mw)
 }

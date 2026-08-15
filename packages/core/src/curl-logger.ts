@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 import type { LoggerInstance } from "./logger.ts"
 
@@ -166,7 +167,7 @@ function curlLogger(options?: CurlLoggerOptions): MiddlewareFn<{ path: string; r
 	const log = options?.log ?? defaultLog
 	const skip = options?.skip
 
-	return async (ctx, next) => {
+	return namedMiddleware("curlLogger", async (ctx, next) => {
 		const start = performance.now()
 		const method = ctx.req.method
 		const path = ctx.path
@@ -209,7 +210,7 @@ function curlLogger(options?: CurlLoggerOptions): MiddlewareFn<{ path: string; r
 		}
 
 		return response
-	}
+	})
 }
 
 export { buildCurlLogData, curlLogger }

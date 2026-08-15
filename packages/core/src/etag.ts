@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import { replaceResponse } from "./honey-response.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
@@ -68,5 +69,5 @@ export function etag(options?: ETagOptions): MiddlewareFn<{ req: Request }, {}> 
 		})
 	}
 
-	return mw
+	return namedMiddleware("etag", mw)
 }

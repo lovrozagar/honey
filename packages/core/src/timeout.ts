@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import { HoneyError } from "./error.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 import { EK, SK } from "./types.ts"
@@ -32,5 +33,5 @@ export function timeout(opts: TimeoutOptions): MiddlewareFn<{}, {}> {
 		})
 	}
 
-	return mw
+	return namedMiddleware("timeout", mw)
 }

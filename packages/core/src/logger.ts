@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 /* ── log levels (pino-compatible numeric values) ── */
@@ -101,7 +102,7 @@ function logger(options?: LoggerOptions): MiddlewareFn<{ path: string; req: Requ
 	const skip = options?.skip
 	const instance = options?.instance
 
-	return async (ctx, next) => {
+	return namedMiddleware("logger", async (ctx, next) => {
 		const start = performance.now()
 		const method = ctx.req.method
 		const path = ctx.path
@@ -141,7 +142,7 @@ function logger(options?: LoggerOptions): MiddlewareFn<{ path: string; req: Requ
 		}
 
 		return response
-	}
+	})
 }
 
 export { createLogger, logger }

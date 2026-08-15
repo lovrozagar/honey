@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 export type Timing = {
@@ -62,5 +63,5 @@ export function serverTiming(): MiddlewareFn<{}, { timing: Timing }> {
 		return response
 	}
 
-	return mw
+	return namedMiddleware("serverTiming", mw)
 }

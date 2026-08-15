@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import { HoneyError } from "./error.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 import { EK, SK } from "./types.ts"
@@ -96,5 +97,5 @@ export function bodyLimit(opts: BodyLimitOptions): MiddlewareFn<{ req: Request }
 		return next()
 	}
 
-	return mw
+	return namedMiddleware("bodyLimit", mw)
 }

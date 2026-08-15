@@ -1,3 +1,4 @@
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 type PoweredByOptions = {
@@ -13,5 +14,5 @@ export function poweredBy(options?: PoweredByOptions): MiddlewareFn<{}, {}> {
 		return response
 	}
 
-	return mw
+	return namedMiddleware("poweredBy", mw)
 }
