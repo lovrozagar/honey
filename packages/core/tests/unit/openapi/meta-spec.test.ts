@@ -255,6 +255,65 @@ describe("entry forms", () => {
 		expect(op(spec, "/live")).not.toHaveProperty("x-tenant")
 	})
 
+	it('`on: "ws"` restricts an entry to websocket operations', async () => {
+		const app = honey<{}>().meta<{ channel?: string }>()
+		app.metaSpec({ meta: { channel: { key: "x-channel", on: "ws" } } })
+		app
+			.get("/a")
+			.meta({ channel: "c" })
+			.handler((c) => c.res.json("ok", {}))
+		app
+			.ws("/live")
+			.meta({ channel: "c" } as never)
+			.handler({ message: () => {} })
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/a")).not.toHaveProperty("x-channel")
+		expect(op(spec, "/live")["x-channel"]).toBe("c")
+	})
+
+	it("an expand returning undefined contributes nothing", async () => {
+		const app = honey<{}>().meta<{ entity?: string }>()
+		app.metaSpec({ meta: { entity: { expand: (v) => (v === "skip" ? undefined : { "x-entity": v }) } } })
+		app
+			.get("/skip")
+			.meta({ entity: "skip" })
+			.handler((c) => c.res.json("ok", {}))
+		app
+			.get("/keep")
+			.meta({ entity: "user" })
+			.handler((c) => c.res.json("ok", {}))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/skip")).not.toHaveProperty("x-entity")
+		expect(op(spec, "/keep")["x-entity"]).toBe("user")
+	})
+
+	it("an expand producing an invalid target key fails the build", async () => {
+		const app = honey<{}>().meta<{ entity?: string }>()
+		app.metaSpec({ meta: { entity: { expand: (v) => ({ notAnExtension: v }) } } })
+		app
+			.get("/a")
+			.meta({ entity: "user" })
+			.handler((c) => c.res.json("ok", {}))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/UNKNOWN_FIELD/)
+	})
+
+	it("two expand entries writing one key at the same rank fail the build", async () => {
+		/* `expand` targets are only known once it runs, so this is caught per operation
+		   rather than at compile time — same verdict either way */
+		const app = honey<{}>().meta<{ a?: string; b?: string }>()
+		app.metaSpec({
+			meta: {
+				a: { expand: (v) => ({ "x-dup": v }) },
+				b: { expand: (v) => ({ "x-dup": v }) },
+			},
+		})
+		app
+			.get("/a")
+			.meta({ a: "one", b: "two" })
+			.handler((c) => c.res.json("ok", {}))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/DUPLICATE_TARGET/)
+	})
+
 	it("meta.extensions passes through verbatim and outranks policy entries", async () => {
 		const app = honey<{}>().meta<{ tenant?: string }>()
 		app.metaSpec({ meta: { tenant: "x-tenant" } })
@@ -265,6 +324,41 @@ describe("entry forms", () => {
 		const spec = await generateOpenApi(app as never, { info: INFO })
 		expect(op(spec, "/a")["x-tenant"]).toBe("override")
 		expect(op(spec, "/a")["x-vendor-new"]).toBe(1)
+	})
+})
+
+describe("meta.extensions guards", () => {
+	it("rejects a non-extension key", async () => {
+		const app = honey<{}>()
+		app.metaSpec({ meta: {} })
+		app
+			.get("/a")
+			.meta({ extensions: { summary: "sneaky" } as never })
+			.handler((c) => c.res.json("ok", {}))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/UNKNOWN_FIELD/)
+	})
+
+	it("skips undefined values", async () => {
+		const app = honey<{}>()
+		app.metaSpec({ meta: {} })
+		app
+			.get("/a")
+			.meta({ extensions: { "x-gone": undefined, "x-kept": 1 } })
+			.handler((c) => c.res.json("ok", {}))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/a")["x-kept"]).toBe(1)
+		expect(op(spec, "/a")).not.toHaveProperty("x-gone")
+	})
+
+	it("ignores a non-object extensions value rather than throwing", async () => {
+		const app = honey<{}>()
+		app.metaSpec({ meta: {} })
+		app
+			.get("/a")
+			.meta({ extensions: ["x-nope"] as never })
+			.handler((c) => c.res.json("ok", {}))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(Object.keys(op(spec, "/a"))).toEqual(["responses"])
 	})
 })
 
@@ -341,6 +435,25 @@ describe("profiles", () => {
 		expect(o).not.toHaveProperty("x-raw")
 	})
 
+	it("with both, include applies first and exclude still subtracts", async () => {
+		const app = honey<{}>().meta<{ cost?: string; permissions?: string[]; tenant?: string }>()
+		app.metaSpec({
+			meta: { cost: "x-cost", permissions: "x-permissions", tenant: "x-tenant" },
+			profiles: { mixed: { exclude: ["x-cost"], include: ["x-tenant", "x-cost"] } },
+		})
+		app
+			.get("/a")
+			.meta({ cost: "low", permissions: ["r"], tenant: "orgId" })
+			.handler((c) => c.res.json("ok", {}))
+		const spec = await generateOpenApi(app as never, { info: INFO, profile: "mixed" })
+		const o = op(spec, "/a")
+		expect(o["x-tenant"]).toBe("orgId")
+		/* not in include */
+		expect(o).not.toHaveProperty("x-permissions")
+		/* in include, but exclude wins */
+		expect(o).not.toHaveProperty("x-cost")
+	})
+
 	it("an undeclared profile fails the build", async () => {
 		await expect(generateOpenApi(profileApp() as never, { info: INFO, profile: "typo" })).rejects.toThrow(
 			/UNKNOWN_PROFILE/,
@@ -412,6 +525,28 @@ describe("schema-derived entries", () => {
 	it("reads a different key off the search schema", async () => {
 		const spec = await generateOpenApi(entityApp() as never, { info: INFO })
 		expect((op(spec, "/users")["x-query"] as Record<string, unknown>).sort).toEqual(["name"])
+	})
+
+	it("with no `from`, sources are searched in order and the first hit wins", async () => {
+		const Out = z.object({ id: z.string() }).meta({ owner: "from-output" })
+		const Search = z.object({ q: z.string().optional() }).meta({ owner: "from-search" })
+		const app = honey<{}>()
+		app.metaSpec({ schema: { owner: "x-owner" } })
+		/* output is searched before input.search */
+		app
+			.get("/both")
+			.input({ search: Search })
+			.output({ "application/json": { ok: Out } })
+			.handler((c) => c.res.json("ok", { id: "1" }))
+		/* falls through to input.search when the output does not carry it */
+		app
+			.get("/search-only")
+			.input({ search: Search })
+			.output({ "application/json": { ok: z.object({ id: z.string() }) } })
+			.handler((c) => c.res.json("ok", { id: "1" }))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/both")["x-owner"]).toBe("from-output")
+		expect(op(spec, "/search-only")["x-owner"]).toBe("from-search")
 	})
 
 	it("routes without the schema key are untouched", async () => {
@@ -685,6 +820,45 @@ describe("emitted-value validation", () => {
 		expect(op(spec, "/a")["x-rate-limit"]).toEqual({ category: "ai", rps: 3 })
 	})
 
+	it("an async output schema fails the build — codegen validation is synchronous", async () => {
+		/* a Standard Schema whose validate() returns a Promise; honey resolves values
+		   synchronously, so it refuses rather than emitting an unvalidated tag */
+		const asyncSchema = {
+			"~standard": {
+				validate: () => Promise.resolve({ value: undefined }),
+				vendor: "test",
+				version: 1,
+			},
+		}
+		const app = honey<{}>().meta<{ rateLimit?: string }>()
+		app.metaSpec({
+			meta: { rateLimit: { key: "x-rate-limit", schema: asyncSchema as never } },
+		})
+		app
+			.get("/a")
+			.meta({ rateLimit: "ai" })
+			.handler((c) => c.res.json("ok", {}))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/ASYNC_VALIDATION/)
+	})
+
+	it("validates the whole record for an expand entry, not one key", async () => {
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				entity: {
+					expand: (e: { name: string }) => ({ "x-a": e.name, "x-b": 1 }),
+					from: ["output"],
+					schema: z.object({ "x-a": z.string(), "x-b": z.string() }),
+				},
+			},
+		})
+		app
+			.get("/a")
+			.output({ "application/json": { ok: z.object({ id: z.string() }).meta({ entity: { name: "u" } }) } })
+			.handler((c) => c.res.json("ok", { id: "1" }))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/INVALID_VALUE/)
+	})
+
 	it("a malformed value fails the build instead of shipping", async () => {
 		await expect(generateOpenApi(validatedApp("three") as never, { info: INFO })).rejects.toThrow(/INVALID_VALUE/)
 	})
@@ -732,6 +906,38 @@ describe("policy errors", () => {
 			.meta({ summary: "s" })
 			.handler((c) => c.res.json("ok", {}))
 		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/MAP_THREW.*boom/s)
+	})
+
+	it("collapses one policy mistake repeated across many routes into a single error", async () => {
+		const app = honey<{}>().meta<{ entity?: string }>()
+		app.metaSpec({ meta: { entity: { expand: (v) => ({ notAnExtension: v }) } } })
+		for (const p of ["/a", "/b", "/c", "/d"]) {
+			app
+				.get(p)
+				.meta({ entity: "user" })
+				.handler((c) => c.res.json("ok", {}))
+		}
+		const err = (await generateOpenApi(app as never, { info: INFO }).catch((e: Error) => e)) as Error
+		expect(err.message).toMatch(/^\[honey:metaSpec\] 1 policy error/)
+	})
+
+	it("truncates a large error list rather than printing hundreds of lines", async () => {
+		const app = honey<{}>()
+		const meta: Record<string, unknown> = {}
+		const routeMeta: Record<string, unknown> = {}
+		for (let i = 0; i < 25; i++) {
+			meta[`k${i}`] = "notAField"
+			routeMeta[`k${i}`] = "v"
+		}
+		app.metaSpec({ meta })
+		app
+			.get("/a")
+			.meta(routeMeta as never)
+			.handler((c) => c.res.json("ok", {}))
+		const err = (await generateOpenApi(app as never, { info: INFO }).catch((e: Error) => e)) as Error
+		expect(err.message).toMatch(/25 policy error/)
+		expect(err.message).toMatch(/… and 5 more/)
+		expect(err.message.split("\n").length).toBeLessThan(25)
 	})
 
 	it("aggregates errors rather than failing on the first", async () => {

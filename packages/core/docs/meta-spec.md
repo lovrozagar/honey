@@ -186,7 +186,11 @@ covers "never, anywhere".
 extensions?: Record<`x-${string}`, unknown>
 ```
 
-emitted verbatim, at the highest precedence, and still subject to profile filtering. It exists so a
+emitted verbatim, at the highest precedence, and still subject to profile filtering. Runtime
+enforces the same contract the type states: only `x-*` keys are accepted, and anything else is an
+`UNKNOWN_FIELD` build error. Because passthrough outranks every policy entry and is untyped inside
+a `.meta()` call, letting it reach a standard field would let a stray key silently replace a
+route's own `summary`. It exists so a
 consumer that gains a tag before honey's policy is updated is not blocked. It is deliberately
 secondary: raw passthrough spreads stringly-typed keys across call sites, has no public/private
 separation, and fails on nothing.

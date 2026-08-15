@@ -176,6 +176,46 @@ describe("middleware-contributed meta", () => {
 		expect(op(spec, "/b")).not.toHaveProperty("x-tenant")
 	})
 
+	it("reaches websocket routes, via the chain and via route-level .use()", async () => {
+		const app = honey<{}>().meta<{ tenant?: string }>()
+		app.metaSpec({ meta: { tenant: { key: "x-tenant", map: (v) => ({ column: v }) } } })
+		app
+			.use(shard)
+			.ws("/chain-ws")
+			.handler({ message: () => {} })
+		app
+			.ws("/route-ws")
+			.use(shard as never)
+			.handler({ message: () => {} })
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/chain-ws")["x-tenant"]).toEqual({ column: "project_id" })
+		expect(op(spec, "/route-ws")["x-tenant"]).toEqual({ column: "project_id" })
+	})
+
+	it("a scoped middleware back-fills websocket routes too", async () => {
+		const app = honey<{}>().meta<{ tenant?: string }>()
+		app.metaSpec({ meta: { tenant: { key: "x-tenant", map: (v) => ({ column: v }) } } })
+		app.ws("/late/ws").handler({ message: () => {} })
+		app.use("/late", shard)
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/late/ws")["x-tenant"]).toEqual({ column: "project_id" })
+	})
+
+	it("contributes to a route that already has chain meta, without dropping either", async () => {
+		const app = honey<{}>().meta<{ permissions?: string[]; tenant?: string }>()
+		app.metaSpec({
+			meta: { permissions: "x-permissions", tenant: { key: "x-tenant", map: (v) => ({ column: v }) } },
+		})
+		app
+			.use(shard)
+			.meta({ permissions: ["chain"] })
+			.get("/a")
+			.handler((c) => c.res.json("ok", {}))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/a")["x-tenant"]).toEqual({ column: "project_id" })
+		expect(op(spec, "/a")["x-permissions"]).toEqual(["chain"])
+	})
+
 	it('rejects "internal" — a middleware must not remove routes from generated artifacts', () => {
 		expect(() => createMiddleware(async (_c, n) => n({}), { meta: { internal: true } })).toThrow(
 			/cannot set "internal"/,
