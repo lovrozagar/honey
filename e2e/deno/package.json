@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"test": "playwright test",
-		"test:prod": "TEST_MODE=prod playwright test"
+		"test:prod": "TEST_MODE=prod playwright test",
+		"type:check": "tsc --noEmit"
 	},
 	"dependencies": {
 		"honey": "workspace:*",

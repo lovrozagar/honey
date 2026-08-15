@@ -7,6 +7,9 @@
 		"honey": "workspace:*",
 		"zod": "catalog:"
 	},
+	"scripts": {
+		"type:check": "tsc --noEmit"
+	},
 	"devDependencies": {
 		"typescript": "catalog:",
 		"vite": "catalog:"

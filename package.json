@@ -34,6 +34,10 @@
 	},
 	"scripts": {
 		"test": "bun run --filter honey test",
+		"test:all": "bun run --filter honey test:all",
+		"test:consumers": "bun test e2e/app/tests",
+		"test:e2e": "bun run --filter @honey/e2e-bun test",
+		"test:harness": "bun run --filter honey test:harness",
 		"test:watch": "bun run --filter honey test:watch",
 		"typecheck": "bun run --filter honey type:check"
 	}

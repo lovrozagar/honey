@@ -6,6 +6,10 @@
 	"exports": {
 		".": "./src/app.ts"
 	},
+	"scripts": {
+		"test": "bun test tests",
+		"type:check": "tsc --noEmit"
+	},
 	"dependencies": {
 		"honey": "workspace:*",
 		"zod": "catalog:"

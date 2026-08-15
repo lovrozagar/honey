@@ -6,6 +6,9 @@
 	"dependencies": {
 		"honey": "workspace:*"
 	},
+	"scripts": {
+		"type:check": "tsc --noEmit"
+	},
 	"devDependencies": {
 		"typescript": "catalog:"
 	}

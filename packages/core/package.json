@@ -74,8 +74,11 @@
 	},
 	"scripts": {
 		"test": "vitest run",
+		"test:all": "vitest run --config vitest.all.config.ts",
+		"test:harness": "vitest run --config vitest.harness.config.ts",
 		"test:watch": "vitest",
-		"type:check": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit"
+		"type:check": "tsc --noEmit -p tsconfig.src.json",
+		"type:check:tests": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit"
 	},
 	"dependencies": {
 		"jiti": "2.7.0"
@@ -85,6 +88,7 @@
 		"@honey/e2e-app": "workspace:*",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@total-typescript/ts-reset": "catalog:",
+		"@types/node": "catalog:",
 		"arktype": "catalog:",
 		"effect": "catalog:",
 		"ts-morph": "catalog:",

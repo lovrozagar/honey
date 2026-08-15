@@ -7,7 +7,8 @@
 		"dev": "bun run dev:kill && bun run src/server.ts",
 		"dev:kill": "lsof -ti:4100 2>/dev/null | xargs -r kill -9 2>/dev/null || true",
 		"test": "bun run dev:kill && playwright test",
-		"test:prod": "bun run dev:kill && TEST_MODE=prod playwright test"
+		"test:prod": "bun run dev:kill && TEST_MODE=prod playwright test",
+		"type:check": "tsc --noEmit"
 	},
 	"dependencies": {
 		"honey": "workspace:*",

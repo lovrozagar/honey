@@ -7,6 +7,7 @@
 		"dev": "bun run dev:kill && honey generate --watch & bunx wrangler dev --port 0 --ip 0.0.0.0 --inspector-port 0",
 		"dev:kill": "pkill -f 'honey generate --watch' 2>/dev/null || true",
 		"generate": "honey generate",
+		"type:check": "tsc --noEmit",
 		"test": "bun run dev:kill && playwright test",
 		"test:prod": "bun run dev:kill && TEST_MODE=prod playwright test"
 	},

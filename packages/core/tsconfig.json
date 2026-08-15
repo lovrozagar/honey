@@ -11,7 +11,7 @@
 		"skipLibCheck": true,
 		"strict": true,
 		"target": "ESNext",
-		"types": ["@total-typescript/ts-reset"]
+		"types": ["@total-typescript/ts-reset", "node"]
 	},
 	"include": ["src/**/*", "tests/**/*"]
 }

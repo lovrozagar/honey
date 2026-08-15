@@ -14,7 +14,7 @@ e2e/*             runtime harnesses (bun, node, deno, cf-workers)
 bench             throughput benches vs hono / elysia
 ```
 
-`packages/core` is the only published workspace. Everything else exists to consume it the way a real app would.
+`packages/core` is the only published workspace. Examples and `e2e/*` are the consumer proof — they import `honey` over `workspace:*` the way a real app would.
 
 ## Develop
 
@@ -22,14 +22,20 @@ Requires [Bun](https://bun.sh) 1.3+.
 
 ```bash
 bun install
-bun test
+bun run test            # core unit + in-process integration (default CI)
+bun run test:consumers  # e2e-app imports honey like a real app
+bun run typecheck       # core src only — not green yet on this extract
 ```
 
-Python SDK harness tests need `httpx` on the host (`pip install httpx`). Rust/Go harnesses need `cargo` and `go`.
+Opt-in:
 
 ```bash
-bun run typecheck
+bun run test:harness  # Python / Go / Rust / MCP SDK harnesses
+bun run test:e2e      # Playwright against the bun runtime
+bun run test:all      # full vitest tree, including stale snapshots
 ```
+
+Python harnesses need `httpx` (`pip install httpx`). Rust/Go harnesses need `cargo` and `go`.
 
 ## Package
 
