@@ -33,7 +33,7 @@
 	},
 	"type": "module",
 	"scripts": {
-		"prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
+		"prepare": "git config --get core.hooksPath >/dev/null || git config core.hooksPath .githooks || true",
 		"generate": "bun run --filter './e2e/apps/*' generate",
 		"test": "bun run --filter @lovrozagar/honey test",
 		"test:all": "bun run --filter @lovrozagar/honey test:all",
