@@ -1,6 +1,6 @@
 {
 	"name": "@lovrozagar/honey",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Type-safe API framework built on Web Standards. Builder-pattern DX, precompiled radix tree in production.",
 	"keywords": [
 		"api",
@@ -11,10 +11,16 @@
 		"type-safe",
 		"web-standards"
 	],
+	"homepage": "https://github.com/lovrozagar/honey#readme",
+	"bugs": {
+		"url": "https://github.com/lovrozagar/honey/issues"
+	},
 	"license": "MIT",
+	"author": "lovrozagar",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/lovrozagar/honey"
+		"url": "git+https://github.com/lovrozagar/honey.git",
+		"directory": "packages/core"
 	},
 	"publishConfig": {
 		"access": "public"
