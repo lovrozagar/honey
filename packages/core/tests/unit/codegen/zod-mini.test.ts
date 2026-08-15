@@ -110,7 +110,9 @@ describe("zod mini — type emission", () => {
 
 	describe("records and tuples", () => {
 		it("record", () => {
-			expect(emitSchemaType(zm.record(zm.string(), zm.number()))).toBe("Record<string, number>")
+			expect(emitSchemaType(zm.record(zm.string(), zm.number()))).toBe(
+				"Partial<Record<string, number>>",
+			)
 		})
 
 		it("tuple", () => {

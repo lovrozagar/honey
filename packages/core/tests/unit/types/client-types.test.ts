@@ -1,6 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest"
 import * as z from "zod"
-import type { ClientError } from "../../../src/client/error.ts"
 import type { SSEEvent } from "../../../src/client/sse.ts"
 import type {
 	ClientInput,
@@ -137,9 +136,11 @@ describe("ReturnFor", () => {
 		expectTypeOf<R>().toEqualTypeOf<Promise<{ id: string; name: string }>>()
 	})
 
-	it("safe mode returns Promise<ClientResult<data>>", () => {
+	it("safe mode returns Promise<ClientResult<data, errorsByStatus>>", () => {
 		type R = ReturnFor<Routes, "/users/:id", "get", false>
-		expectTypeOf<R>().toEqualTypeOf<Promise<ClientResult<{ id: string; name: string }>>>()
+		expectTypeOf<R>().toEqualTypeOf<
+			Promise<ClientResult<{ id: string; name: string }, { 404: null }>>
+		>()
 	})
 })
 
@@ -300,11 +301,11 @@ describe("ClientResult discriminated union", () => {
 		}>()
 	})
 
-	it("error branch has null data and ClientError", () => {
+	it("error branch has null data and unknown body when no errorsByStatus", () => {
 		type Failure = Extract<ClientResult<{ id: string }>, { data: null }>
 		expectTypeOf<Failure>().toMatchTypeOf<{
 			data: null
-			error: ClientError
+			error: unknown
 			response: Response
 			status: number
 		}>()

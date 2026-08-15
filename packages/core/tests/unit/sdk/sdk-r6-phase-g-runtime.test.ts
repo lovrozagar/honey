@@ -3,7 +3,7 @@ import { ClientError } from "../../../src/client/error.ts"
 import { createSDK } from "../../../src/client/sdk.ts"
 import { deferredFetch, tick } from "./_helpers/phase-f.ts"
 
-const PHASE_G_FIXED = process.env["PHASE_G_FIXED"] === "1"
+const PHASE_G_FIXED = true
 
 /* ── service map fixture ── */
 

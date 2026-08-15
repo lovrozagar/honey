@@ -61,6 +61,7 @@ export function createApp(wsAdapter: WSAdapter) {
 		.use(requestId())
 		.use(logger({ instance: log }))
 		.errorFactory(errors)
+		.defaultErrors("unauthorized")
 		.defaultBoundary("api_error")
 		.onError((error, ctx) => {
 			if (error instanceof HoneyError && error.errorKey === "db_constraint") {
@@ -85,7 +86,7 @@ export function createApp(wsAdapter: WSAdapter) {
 		.input({ search: z.object({ id: z.string() }) })
 		.output({ "application/json": { ok: z.object({ id: z.string() }) } })
 		.errors(errors, "invalid_input")
-		.meta({ description: "Test route", openApi: { summary: "Root test route", tags: ["test"] } })
+		.meta({ description: "Test route", summary: "Root test route", tags: ["test"] })
 		.handler((ctx) => {
 			return ctx.res.json("ok", { id: ctx.input.search.id })
 		})
@@ -263,8 +264,8 @@ export function createApp(wsAdapter: WSAdapter) {
 
 	/* ---- codegen endpoints ---- */
 
-	corsed.get("/openapi.json").handler((ctx) => {
-		const spec = generateOpenApi(h, {
+	corsed.get("/openapi.json").handler(async (ctx) => {
+		const spec = await generateOpenApi(h, {
 			info: { description: "Honey E2E Test API", title: "Honey E2E", version: "1.0.0" },
 		})
 		return ctx.res.json("ok", spec)

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest"
 import { lookupStale, pathMatchesPattern } from "../../../src/client/sdk.ts"
 
-const PHASE_F_FIXED = process.env["PHASE_F_FIXED"] === "1"
+const PHASE_F_FIXED = true
 
 /* ═══════════════════════════════════════════════════════════════════
    #R6-5 — Layer A invariants: pathMatchesPattern (always GREEN)

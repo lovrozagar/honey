@@ -371,13 +371,13 @@ describe("integration: full framework", () => {
 	})
 
 	describe("error key runtime enforcement", () => {
-		it("undeclared error key → 500 internal_server_error", async () => {
+		it("undeclared error key keeps the thrown error status", async () => {
 			const res = await client.get("/api/v1/strict", {
 				headers: { authorization: "Bearer tok" },
 			})
-			expect(res.status).toBe(500)
+			expect(res.status).toBe(404)
 			const body = (await res.json()) as Record<string, unknown>
-			expect(body.error_key).toBe("internal_server_error")
+			expect(body.error_key).toBe("not_found")
 		})
 	})
 

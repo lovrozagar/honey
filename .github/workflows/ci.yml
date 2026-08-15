@@ -17,5 +17,6 @@ jobs:
       - run: bun run generate
       - run: bun run test
       - run: bun run test:consumers
+      - run: bun run test:e2e
       - run: bun run typecheck
       - run: bun run typecheck:consumers

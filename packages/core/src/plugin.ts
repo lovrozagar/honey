@@ -14,6 +14,7 @@ import {
 import type { OpenApiRouteInfo, OpenApiSanitizeOptions, OpenApiSpecInput } from "./codegen.ts";
 import type { Honey } from "./index.ts";
 import type { ExtractedChainTypes } from "./type-extractor.ts";
+import { toYaml, yamlSiblingPath } from "./yaml.ts";
 
 /* ---- generateFromApp (standalone utility) ---- */
 
@@ -28,6 +29,7 @@ type HoneyPluginOptions = {
 type GeneratedArtifacts = {
 	manifest?: string;
 	openApi?: string;
+	openApiYaml?: string;
 	routeTree: string;
 };
 
@@ -47,6 +49,7 @@ export async function generateFromApp<TEnv, TCtx>(
 	if (options?.openApi) {
 		const spec = await generateOpenApi(app, { info: options.openApi.info });
 		artifacts.openApi = JSON.stringify(spec, null, 2);
+		artifacts.openApiYaml = toYaml(spec);
 	}
 
 	return artifacts;
@@ -312,6 +315,23 @@ function writeGenJsonFile(filePath: string, data: unknown, generator: string): b
 	return true;
 }
 
+function writeGenYamlFile(filePath: string, data: unknown, generator: string): boolean {
+	const json = JSON.stringify(data, null, 2)
+	const hash = createHash("sha256").update(json).digest("hex").slice(0, 12)
+	const marker = `${generator} checksum:${hash}`
+	const output = { _generated: marker, ...(data as Record<string, unknown>) }
+	const yaml = toYaml(output)
+
+	if (existsSync(filePath)) {
+		const existing = readFileSync(filePath, "utf-8")
+		if (existing.includes(marker)) return false
+	}
+
+	mkdirSync(dirname(filePath), { recursive: true })
+	writeFileSync(filePath, yaml, "utf-8")
+	return true
+}
+
 /* ---- Loaders ---- */
 
 type HoneyApp = Honey<
@@ -424,7 +444,9 @@ export async function generateAndWrite(
 			if (entry.sanitize) {
 				spec = sanitizeOpenApiSpec(spec, entry.sanitize);
 			}
-			writeGenJsonFile(resolve(root, entry.path), spec, "honey");
+			const jsonPath = resolve(root, entry.path)
+			writeGenJsonFile(jsonPath, spec, "honey")
+			writeGenYamlFile(yamlSiblingPath(jsonPath), spec, "honey")
 		}
 	}
 

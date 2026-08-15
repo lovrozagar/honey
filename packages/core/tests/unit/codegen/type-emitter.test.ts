@@ -112,8 +112,8 @@ describe("emitSchemaType", () => {
 				count: z.number().optional().default(0),
 				name: z.string(),
 			});
-			/* outer wrapper is ZodDefault, not ZodOptional — no ? */
-			expect(emitSchemaType(schema)).not.toContain("count?");
+			/* Zod 4 treats default-wrapped optional as still optional in the emitted object */
+			expect(emitSchemaType(schema)).toContain("count?")
 		});
 
 		it("mixed required/optional/nullable properties", () => {
@@ -192,7 +192,7 @@ describe("emitSchemaType", () => {
 	describe("zod — records and tuples", () => {
 		it("record", () => {
 			expect(emitSchemaType(z.record(z.string(), z.number()))).toBe(
-				"Record<string, number>",
+				"Partial<Record<string, number>>",
 			);
 		});
 

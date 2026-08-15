@@ -136,6 +136,11 @@ describe("honeyVitePlugin", () => {
 			(spec.paths as Record<string, Record<string, Record<string, unknown>>>)["/items"].post
 				.requestBody,
 		).toBeDefined()
+
+		const yaml = readFileSync(join(outDir, "src/_gen/openapi.gen.yml"), "utf-8")
+		expect(yaml).toContain("openapi: \"3.1.0\"")
+		expect(yaml).toContain("title: Test")
+		expect(yaml).toContain("/items:")
 	})
 
 	it("buildStart writes manifest", async () => {
@@ -254,7 +259,7 @@ describe("honeyVitePlugin", () => {
 			expect(resolved.codegen.types.path).toBe("src/_gen/types.gen.d.ts")
 		}
 		if (resolved.codegen.sdk) {
-			expect(resolved.codegen.sdk.path).toBe("src/_gen/sdk.gen.ts")
+			expect(resolved.codegen.sdk.ports.typescript?.outDir).toBe("src/_gen")
 		}
 	})
 

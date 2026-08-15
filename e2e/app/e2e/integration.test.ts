@@ -228,18 +228,18 @@ test.describe("OpenAPI", () => {
 		const res = await request.get("/api/openapi.json")
 		const spec = await res.json()
 		/* root route (GET /) should be in spec */
-		expect(spec.paths["/"]).toBeDefined()
-		expect(spec.paths["/"].get).toBeDefined()
+		expect(spec.paths["/api"]).toBeDefined()
+		expect(spec.paths["/api"].get).toBeDefined()
 		/* organizations routes */
-		expect(spec.paths["/v1/organizations"]).toBeDefined()
-		expect(spec.paths["/v1/organizations"].get).toBeDefined()
-		expect(spec.paths["/v1/organizations"].post).toBeDefined()
+		expect(spec.paths["/api/v1/organizations"]).toBeDefined()
+		expect(spec.paths["/api/v1/organizations"].get).toBeDefined()
+		expect(spec.paths["/api/v1/organizations"].post).toBeDefined()
 	})
 
 	test("OpenAPI spec includes path parameters", async ({ request }) => {
 		const res = await request.get("/api/openapi.json")
 		const spec = await res.json()
-		const orgByIdPath = spec.paths["/v1/organizations/{orgId}"]
+		const orgByIdPath = spec.paths["/api/v1/organizations/{orgId}"]
 		expect(orgByIdPath).toBeDefined()
 		const getOp = orgByIdPath.get ?? orgByIdPath.delete
 		expect(getOp.parameters).toBeDefined()
@@ -250,7 +250,7 @@ test.describe("OpenAPI", () => {
 	test("OpenAPI spec includes response schemas from .output()", async ({ request }) => {
 		const res = await request.get("/api/openapi.json")
 		const spec = await res.json()
-		const rootGet = spec.paths["/"].get
+		const rootGet = spec.paths["/api"].get
 		expect(rootGet.responses["200"]).toBeDefined()
 		expect(rootGet.responses["200"].content["application/json"]).toBeDefined()
 	})
@@ -258,7 +258,7 @@ test.describe("OpenAPI", () => {
 	test("OpenAPI spec includes meta summary and tags", async ({ request }) => {
 		const res = await request.get("/api/openapi.json")
 		const spec = await res.json()
-		const rootGet = spec.paths["/"].get
+		const rootGet = spec.paths["/api"].get
 		expect(rootGet.summary).toBe("Root test route")
 		expect(rootGet.tags).toEqual(["test"])
 	})
@@ -271,7 +271,8 @@ test.describe("manifest", () => {
 		const manifest = await res.json()
 		expect(manifest.routes).toBeDefined()
 		expect(manifest.errors).toBeDefined()
-		expect(manifest.errors.defaults).toBeDefined()
+		expect(Array.isArray(manifest.errors)).toBe(true)
+		expect(manifest.errors.length).toBeGreaterThan(0)
 		expect(manifest.routes.length).toBeGreaterThan(0)
 	})
 
@@ -279,7 +280,7 @@ test.describe("manifest", () => {
 		const res = await request.get("/api/manifest.json")
 		const manifest = await res.json()
 		const healthRoute = manifest.routes.find(
-			(r: { method: string; path: string }) => r.path === "/health" && r.method === "GET",
+			(r: { method: string; path: string }) => r.path === "/api/health" && r.method === "GET",
 		)
 		expect(healthRoute).toBeDefined()
 		expect(healthRoute.middleware.length).toBeGreaterThan(0)
@@ -290,7 +291,7 @@ test.describe("manifest", () => {
 		const manifest = await res.json()
 		const postOrg = manifest.routes.find(
 			(r: { method: string; path: string }) =>
-				r.path === "/v1/organizations" && r.method === "POST",
+				r.path === "/api/v1/organizations" && r.method === "POST",
 		)
 		expect(postOrg).toBeDefined()
 		expect(postOrg.errors).toContain("org_slug_taken")
@@ -303,7 +304,9 @@ test.describe("generated route tree", () => {
 		expect(res.status()).toBe(200)
 		const code = await res.text()
 		/* generated code should import from honey/tree */
-		expect(code).toContain('import type { TreeNode, RouteHandler } from "honey/tree"')
+		expect(code).toContain(
+			'import type { TreeNode, RouteHandler, RouteTree } from "honey/tree"',
+		)
 		/* should export a tree constant */
 		expect(code).toContain("export const tree: TreeNode")
 		/* should contain handler definitions */

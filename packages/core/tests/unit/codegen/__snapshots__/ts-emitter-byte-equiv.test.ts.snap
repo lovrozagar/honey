@@ -18,6 +18,7 @@ type _TypedWebSocket = {
 }
 
 type _ServiceEntry = {
+	idempotent?: boolean
 	invalidate?: readonly string[]
 	method: string
 	params?: readonly string[]
@@ -26,12 +27,15 @@ type _ServiceEntry = {
 	ws?: boolean
 }
 
-type _ServiceMap = Record<string, Record<string, _ServiceEntry>>
+type _ServiceMapNode = _ServiceEntry | { [key: string]: _ServiceMapNode }
+type _ServiceMap = { [key: string]: _ServiceMapNode }
 
 type _RequestOptions = {
+	body?: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 	cookies?: Record<string, string>
 	form?: Record<string, unknown>
 	headers?: Record<string, string>
+	idempotencyKey?: string
 	json?: unknown
 	lastEventId?: string
 	params?: Record<string, string>
@@ -39,6 +43,7 @@ type _RequestOptions = {
 	reconnectToken?: string
 	search?: Record<string, unknown>
 	signal?: AbortSignal
+	timeout?: number
 }
 
 type _RequestMeta = {
@@ -50,17 +55,45 @@ type _RequestMeta = {
 
 class _ClientError extends Error {
 	readonly body: unknown
+	readonly data: unknown
 	readonly response: Response
 	readonly status: number
 
-	constructor(init: { body: unknown; message: string; response: Response; status: number }) {
+	constructor(init: { body: unknown; data: unknown; message: string; response: Response; status: number }) {
 		super(init.message)
 		;(Error as unknown as { captureStackTrace?: (t: object, c: Function) => void }).captureStackTrace?.(this, _ClientError)
 		this.name = "ClientError"
 		this.body = init.body
+		this.data = init.data
 		this.response = init.response
 		this.status = init.status
 	}
+}
+
+class _BadRequestError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadRequestError" } }
+class _UnauthorizedError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnauthorizedError" } }
+class _ForbiddenError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ForbiddenError" } }
+class _NotFoundError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "NotFoundError" } }
+class _ConflictError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ConflictError" } }
+class _UnprocessableEntityError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnprocessableEntityError" } }
+class _RateLimitError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "RateLimitError" } }
+class _InternalServerError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "InternalServerError" } }
+class _BadGatewayError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadGatewayError" } }
+class _ServiceUnavailableError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ServiceUnavailableError" } }
+class _GatewayTimeoutError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "GatewayTimeoutError" } }
+
+const _STATUS_ERROR_MAP: Record<number, new (init: ConstructorParameters<typeof _ClientError>[0]) => _ClientError> = {
+	400: _BadRequestError,
+	401: _UnauthorizedError,
+	403: _ForbiddenError,
+	404: _NotFoundError,
+	409: _ConflictError,
+	422: _UnprocessableEntityError,
+	429: _RateLimitError,
+	500: _InternalServerError,
+	502: _BadGatewayError,
+	503: _ServiceUnavailableError,
+	504: _GatewayTimeoutError,
 }
 
 export class TestSDK<TThrow extends boolean = false> {
@@ -95,63 +128,102 @@ export class TestSDK<TThrow extends boolean = false> {
 		this.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
 		this.#sseMaxBufferChars = config.sseMaxBufferChars ?? 1024 * 1024
 
-		return new Proxy(this, {
-			get: (target, resourceName: string | symbol) => {
-				if (typeof resourceName === "symbol") return Reflect.get(target, resourceName)
+		const self = this
+		function makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
+			const actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
+			const childCache = new Map<string, object>()
+			return new Proxy({} as Record<string, unknown>, {
+				get: (_, key: string | symbol) => {
+					if (typeof key === "symbol") return undefined
+					const child = (node as Record<string, unknown>)[key]
+					if (child === undefined) return undefined
 
-				const cached = target.#resourceCache.get(resourceName)
+					/* leaf: entry has a "method" string field */
+					if (typeof (child as Record<string, unknown>)["method"] === "string") {
+						const cached = actionCache.get(key)
+						if (cached) return cached
+						const entry = child as _ServiceEntry
+						const entryPath = self.#toColonParams(entry.path)
+						let fn: (input?: Record<string, unknown>) => unknown
+						if (entry.ws) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else if (entry.sse) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else {
+							fn = (input?: Record<string, unknown>) =>
+								self.#request(entry, input ?? {})
+						}
+						Object.defineProperty(fn, "name", { value: [...path, key].join(".") })
+						actionCache.set(key, fn)
+						return fn
+					}
+
+					/* namespace: recurse */
+					const cachedChild = childCache.get(key)
+					if (cachedChild) return cachedChild
+					const childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+					childCache.set(key, childProxy)
+					return childProxy
+				},
+			})
+		}
+
+		return new Proxy(this, {
+			get: (target, key: string | symbol) => {
+				if (typeof key === "symbol") return Reflect.get(target, key)
+
+				const cached = target.#resourceCache.get(key)
 				if (cached) return cached
 
-				const resource = (serviceMap as _ServiceMap)[resourceName]
-				if (!resource) return Reflect.get(target, resourceName)
+				const node = (serviceMap as _ServiceMap)[key]
+				if (node === undefined) return Reflect.get(target, key)
 
-				const actions = Object.keys(resource)
-				if (actions.length === 1 && actions[0] === "_call") {
-					const entry = resource["_call"]!
-					const path = target.#toColonParams(entry.path)
+				/* root-level leaf (single-segment operationId) */
+				if (typeof (node as Record<string, unknown>)["method"] === "string") {
+					const entry = node as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
 					let fn: (input?: Record<string, unknown>) => unknown
 					if (entry.ws) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else if (entry.sse) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else {
 						fn = (input?: Record<string, unknown>) =>
 							target.#request(entry, input ?? {})
 					}
-					Object.defineProperty(fn, "name", { value: resourceName })
-					target.#resourceCache.set(resourceName, fn as unknown as Record<string, unknown>)
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 					return fn
 				}
 
-				const actionCache: Record<string, (input?: Record<string, unknown>) => unknown> = {}
-				const proxy = new Proxy({}, {
-					get: (_t, actionName: string | symbol) => {
-						if (typeof actionName === "symbol") return undefined
-						const cached = actionCache[actionName]
-						if (cached) return cached
-						const entry = resource[actionName]
-						if (!entry) return undefined
+				/* namespace node — check for single _call promotion */
+				const nodeRecord = node as Record<string, unknown>
+				const nodeKeys = Object.keys(nodeRecord)
+				if (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
+					const entry = nodeRecord["_call"] as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
+					let fn: (input?: Record<string, unknown>) => unknown
+					if (entry.ws) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else if (entry.sse) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else {
+						fn = (input?: Record<string, unknown>) =>
+							target.#request(entry, input ?? {})
+					}
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
+					return fn
+				}
 
-						const path = target.#toColonParams(entry.path)
-						let fn: (input?: Record<string, unknown>) => unknown
-						if (entry.ws) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
-						} else if (entry.sse) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
-						} else {
-							fn = (input?: Record<string, unknown>) =>
-								target.#request(entry, input ?? {})
-						}
-						Object.defineProperty(fn, "name", { value: \`\${resourceName}.\${actionName}\` })
-						actionCache[actionName] = fn
-						return fn
-					},
-				})
-				target.#resourceCache.set(resourceName, proxy)
+				const proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+				target.#resourceCache.set(key, proxy as Record<string, unknown>)
 				return proxy
 			},
 		}) as TestSDK<TThrow>
@@ -380,13 +452,17 @@ export class TestSDK<TThrow extends boolean = false> {
 		const headers = await this.#buildHeaders(opts, { method, path })
 		let body: BodyInit | undefined
 
-		if (opts.json !== undefined) {
+		if (opts.body !== undefined) {
+			headers.set("content-type", "application/octet-stream")
+			body = opts.body as BodyInit
+		} else if (opts.json !== undefined) {
 			headers.set("content-type", "application/json")
 			try {
 				body = JSON.stringify(opts.json)
 			} catch (e) {
 				throw new _ClientError({
 					body: opts.json,
+					data: null,
 					message: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
 					response: new Response(null, { status: 0 }),
 					status: 0,
@@ -455,9 +531,32 @@ export class TestSDK<TThrow extends boolean = false> {
 		if (this.#config.credentials) init.credentials = this.#config.credentials
 		if (this.#config.mode) init.mode = this.#config.mode
 
+		const _logOp = \`\${method.toUpperCase()} \${path}\`
+		const _logStart = Date.now()
+		this.#config.onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation: _logOp })
+
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#fetchFn(url, init)
+
+			if (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
+				const newToken = await this.#config.onAuthExpired()
+				if (newToken != null) {
+					const retryHeaders = new Headers(headers)
+					const authName = this.#config.authHeaderName ?? "Authorization"
+					const authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+					retryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
+					response = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+				}
+			}
+
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				event: "response_received",
+				level: response.status >= 400 ? "warn" : "info",
+				operation: _logOp,
+				status: response.status,
+			})
 
 			if (this.#config.onResponse) {
 				const resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
@@ -492,6 +591,17 @@ export class TestSDK<TThrow extends boolean = false> {
 			}
 
 			return { response }
+		} catch (err) {
+			const _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				error: err,
+				event: "error",
+				level: "error",
+				operation: _logOp,
+				...(_errStatus !== undefined ? { status: _errStatus } : {}),
+			})
+			throw err
 		} finally {
 			cleanup()
 		}
@@ -531,17 +641,13 @@ export class TestSDK<TThrow extends boolean = false> {
 		const safeMsg = rawMsg !== null
 			? rawMsg.replace(/[\\x00-\\x1f]/g, "").slice(0, this.#maxErrorMessageChars)
 			: \`HTTP \${response.status}\`
-		return new _ClientError({
-			body,
-			message: safeMsg,
-			response: preserved,
-			status: response.status,
-		})
+		const Cls = _STATUS_ERROR_MAP[response.status] ?? _ClientError
+		return new Cls({ body, data: body, message: safeMsg, response: preserved, status: response.status })
 	}
 
 	#buildSignal(opts: _RequestOptions, isStream?: boolean): { cleanup: () => void; signal: AbortSignal } {
 		const userSignal = opts.signal
-		const timeout = isStream ? undefined : this.#config.timeout
+		const timeout = isStream ? undefined : (opts.timeout ?? this.#config.timeout)
 		if (!timeout && !userSignal) return { cleanup: () => {}, signal: this.#disposeCtrl.signal }
 		const ctrl = new AbortController()
 		let timer: ReturnType<typeof setTimeout> | undefined
@@ -631,12 +737,20 @@ export class TestSDK<TThrow extends boolean = false> {
 		const path = this.#toColonParams(entry.path)
 		const method = entry.method
 		const opts = input as _RequestOptions
+		if (entry.idempotent) {
+			const existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
+			if (existing === undefined) {
+				const key = opts.idempotencyKey ?? crypto.randomUUID()
+				opts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
+			}
+		}
 		const params = opts.params
 		if (entry.params) {
 			for (const p of entry.params) {
 				if (!params || params[p] === undefined) {
 					const err = new _ClientError({
 						body: null,
+						data: null,
 						message: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
 						response: new Response(null, { status: 0 }),
 						status: 0,
@@ -853,7 +967,20 @@ export class TestSDK<TThrow extends boolean = false> {
 	}
 }
 
-export { _ClientError as ClientError }
+export {
+	_ClientError as ClientError,
+	_BadRequestError as BadRequestError,
+	_UnauthorizedError as UnauthorizedError,
+	_ForbiddenError as ForbiddenError,
+	_NotFoundError as NotFoundError,
+	_ConflictError as ConflictError,
+	_UnprocessableEntityError as UnprocessableEntityError,
+	_RateLimitError as RateLimitError,
+	_InternalServerError as InternalServerError,
+	_BadGatewayError as BadGatewayError,
+	_ServiceUnavailableError as ServiceUnavailableError,
+	_GatewayTimeoutError as GatewayTimeoutError,
+}
 
 export function isClientError(e: unknown): e is _ClientError {
 	return e instanceof _ClientError
@@ -862,14 +989,14 @@ export function isClientError(e: unknown): e is _ClientError {
 `;
 
 exports[`ts-emitter byte-equivalence > crud — index file stable 1`] = `
-"import { TestSDK as _TestSDKImpl, ClientError, isClientError } from "./sdk.client.gen"
+"import { TestSDK as _TestSDKImpl, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError } from "./sdk.client.gen"
 import type { TestSDK as _TestSDKInterface } from "./sdk.types.gen"
 
 /* declaration merge: Proxy-based class acquires typed resource methods */
 class TestSDK<TThrow extends boolean = false> extends _TestSDKImpl<TThrow> {}
 interface TestSDK<TThrow extends boolean = false> extends _TestSDKInterface<TThrow> {}
 
-export { TestSDK, ClientError, isClientError }
+export { TestSDK, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError }
 export { serviceMap } from "./sdk.map.gen"
 export type { TestSDKConfig, SDKResult, TypedWebSocket } from "./sdk.types.gen"
 "
@@ -883,7 +1010,7 @@ exports[`ts-emitter byte-equivalence > crud — map file stable 1`] = `
 		get: { method: "GET", path: "/users/{id}", params: ["id"] },
 		list: { method: "GET", path: "/users" },
 		update: { method: "PATCH", path: "/users/{id}", params: ["id"] },
-	},
+		},
 } as const
 "
 `;
@@ -936,6 +1063,10 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -943,8 +1074,9 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface TestSDK<TThrow extends boolean = false> {
@@ -979,6 +1111,7 @@ type _TypedWebSocket = {
 }
 
 type _ServiceEntry = {
+	idempotent?: boolean
 	invalidate?: readonly string[]
 	method: string
 	params?: readonly string[]
@@ -987,12 +1120,15 @@ type _ServiceEntry = {
 	ws?: boolean
 }
 
-type _ServiceMap = Record<string, Record<string, _ServiceEntry>>
+type _ServiceMapNode = _ServiceEntry | { [key: string]: _ServiceMapNode }
+type _ServiceMap = { [key: string]: _ServiceMapNode }
 
 type _RequestOptions = {
+	body?: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 	cookies?: Record<string, string>
 	form?: Record<string, unknown>
 	headers?: Record<string, string>
+	idempotencyKey?: string
 	json?: unknown
 	lastEventId?: string
 	params?: Record<string, string>
@@ -1000,6 +1136,7 @@ type _RequestOptions = {
 	reconnectToken?: string
 	search?: Record<string, unknown>
 	signal?: AbortSignal
+	timeout?: number
 }
 
 type _RequestMeta = {
@@ -1011,17 +1148,45 @@ type _RequestMeta = {
 
 class _ClientError extends Error {
 	readonly body: unknown
+	readonly data: unknown
 	readonly response: Response
 	readonly status: number
 
-	constructor(init: { body: unknown; message: string; response: Response; status: number }) {
+	constructor(init: { body: unknown; data: unknown; message: string; response: Response; status: number }) {
 		super(init.message)
 		;(Error as unknown as { captureStackTrace?: (t: object, c: Function) => void }).captureStackTrace?.(this, _ClientError)
 		this.name = "ClientError"
 		this.body = init.body
+		this.data = init.data
 		this.response = init.response
 		this.status = init.status
 	}
+}
+
+class _BadRequestError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadRequestError" } }
+class _UnauthorizedError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnauthorizedError" } }
+class _ForbiddenError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ForbiddenError" } }
+class _NotFoundError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "NotFoundError" } }
+class _ConflictError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ConflictError" } }
+class _UnprocessableEntityError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnprocessableEntityError" } }
+class _RateLimitError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "RateLimitError" } }
+class _InternalServerError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "InternalServerError" } }
+class _BadGatewayError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadGatewayError" } }
+class _ServiceUnavailableError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ServiceUnavailableError" } }
+class _GatewayTimeoutError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "GatewayTimeoutError" } }
+
+const _STATUS_ERROR_MAP: Record<number, new (init: ConstructorParameters<typeof _ClientError>[0]) => _ClientError> = {
+	400: _BadRequestError,
+	401: _UnauthorizedError,
+	403: _ForbiddenError,
+	404: _NotFoundError,
+	409: _ConflictError,
+	422: _UnprocessableEntityError,
+	429: _RateLimitError,
+	500: _InternalServerError,
+	502: _BadGatewayError,
+	503: _ServiceUnavailableError,
+	504: _GatewayTimeoutError,
 }
 
 export class TestSDK<TThrow extends boolean = false> {
@@ -1056,63 +1221,102 @@ export class TestSDK<TThrow extends boolean = false> {
 		this.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
 		this.#sseMaxBufferChars = config.sseMaxBufferChars ?? 1024 * 1024
 
-		return new Proxy(this, {
-			get: (target, resourceName: string | symbol) => {
-				if (typeof resourceName === "symbol") return Reflect.get(target, resourceName)
+		const self = this
+		function makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
+			const actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
+			const childCache = new Map<string, object>()
+			return new Proxy({} as Record<string, unknown>, {
+				get: (_, key: string | symbol) => {
+					if (typeof key === "symbol") return undefined
+					const child = (node as Record<string, unknown>)[key]
+					if (child === undefined) return undefined
 
-				const cached = target.#resourceCache.get(resourceName)
+					/* leaf: entry has a "method" string field */
+					if (typeof (child as Record<string, unknown>)["method"] === "string") {
+						const cached = actionCache.get(key)
+						if (cached) return cached
+						const entry = child as _ServiceEntry
+						const entryPath = self.#toColonParams(entry.path)
+						let fn: (input?: Record<string, unknown>) => unknown
+						if (entry.ws) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else if (entry.sse) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else {
+							fn = (input?: Record<string, unknown>) =>
+								self.#request(entry, input ?? {})
+						}
+						Object.defineProperty(fn, "name", { value: [...path, key].join(".") })
+						actionCache.set(key, fn)
+						return fn
+					}
+
+					/* namespace: recurse */
+					const cachedChild = childCache.get(key)
+					if (cachedChild) return cachedChild
+					const childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+					childCache.set(key, childProxy)
+					return childProxy
+				},
+			})
+		}
+
+		return new Proxy(this, {
+			get: (target, key: string | symbol) => {
+				if (typeof key === "symbol") return Reflect.get(target, key)
+
+				const cached = target.#resourceCache.get(key)
 				if (cached) return cached
 
-				const resource = (serviceMap as _ServiceMap)[resourceName]
-				if (!resource) return Reflect.get(target, resourceName)
+				const node = (serviceMap as _ServiceMap)[key]
+				if (node === undefined) return Reflect.get(target, key)
 
-				const actions = Object.keys(resource)
-				if (actions.length === 1 && actions[0] === "_call") {
-					const entry = resource["_call"]!
-					const path = target.#toColonParams(entry.path)
+				/* root-level leaf (single-segment operationId) */
+				if (typeof (node as Record<string, unknown>)["method"] === "string") {
+					const entry = node as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
 					let fn: (input?: Record<string, unknown>) => unknown
 					if (entry.ws) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else if (entry.sse) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else {
 						fn = (input?: Record<string, unknown>) =>
 							target.#request(entry, input ?? {})
 					}
-					Object.defineProperty(fn, "name", { value: resourceName })
-					target.#resourceCache.set(resourceName, fn as unknown as Record<string, unknown>)
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 					return fn
 				}
 
-				const actionCache: Record<string, (input?: Record<string, unknown>) => unknown> = {}
-				const proxy = new Proxy({}, {
-					get: (_t, actionName: string | symbol) => {
-						if (typeof actionName === "symbol") return undefined
-						const cached = actionCache[actionName]
-						if (cached) return cached
-						const entry = resource[actionName]
-						if (!entry) return undefined
+				/* namespace node — check for single _call promotion */
+				const nodeRecord = node as Record<string, unknown>
+				const nodeKeys = Object.keys(nodeRecord)
+				if (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
+					const entry = nodeRecord["_call"] as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
+					let fn: (input?: Record<string, unknown>) => unknown
+					if (entry.ws) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else if (entry.sse) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else {
+						fn = (input?: Record<string, unknown>) =>
+							target.#request(entry, input ?? {})
+					}
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
+					return fn
+				}
 
-						const path = target.#toColonParams(entry.path)
-						let fn: (input?: Record<string, unknown>) => unknown
-						if (entry.ws) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
-						} else if (entry.sse) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
-						} else {
-							fn = (input?: Record<string, unknown>) =>
-								target.#request(entry, input ?? {})
-						}
-						Object.defineProperty(fn, "name", { value: \`\${resourceName}.\${actionName}\` })
-						actionCache[actionName] = fn
-						return fn
-					},
-				})
-				target.#resourceCache.set(resourceName, proxy)
+				const proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+				target.#resourceCache.set(key, proxy as Record<string, unknown>)
 				return proxy
 			},
 		}) as TestSDK<TThrow>
@@ -1341,13 +1545,17 @@ export class TestSDK<TThrow extends boolean = false> {
 		const headers = await this.#buildHeaders(opts, { method, path })
 		let body: BodyInit | undefined
 
-		if (opts.json !== undefined) {
+		if (opts.body !== undefined) {
+			headers.set("content-type", "application/octet-stream")
+			body = opts.body as BodyInit
+		} else if (opts.json !== undefined) {
 			headers.set("content-type", "application/json")
 			try {
 				body = JSON.stringify(opts.json)
 			} catch (e) {
 				throw new _ClientError({
 					body: opts.json,
+					data: null,
 					message: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
 					response: new Response(null, { status: 0 }),
 					status: 0,
@@ -1416,9 +1624,32 @@ export class TestSDK<TThrow extends boolean = false> {
 		if (this.#config.credentials) init.credentials = this.#config.credentials
 		if (this.#config.mode) init.mode = this.#config.mode
 
+		const _logOp = \`\${method.toUpperCase()} \${path}\`
+		const _logStart = Date.now()
+		this.#config.onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation: _logOp })
+
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#fetchFn(url, init)
+
+			if (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
+				const newToken = await this.#config.onAuthExpired()
+				if (newToken != null) {
+					const retryHeaders = new Headers(headers)
+					const authName = this.#config.authHeaderName ?? "Authorization"
+					const authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+					retryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
+					response = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+				}
+			}
+
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				event: "response_received",
+				level: response.status >= 400 ? "warn" : "info",
+				operation: _logOp,
+				status: response.status,
+			})
 
 			if (this.#config.onResponse) {
 				const resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
@@ -1453,6 +1684,17 @@ export class TestSDK<TThrow extends boolean = false> {
 			}
 
 			return { response }
+		} catch (err) {
+			const _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				error: err,
+				event: "error",
+				level: "error",
+				operation: _logOp,
+				...(_errStatus !== undefined ? { status: _errStatus } : {}),
+			})
+			throw err
 		} finally {
 			cleanup()
 		}
@@ -1492,17 +1734,13 @@ export class TestSDK<TThrow extends boolean = false> {
 		const safeMsg = rawMsg !== null
 			? rawMsg.replace(/[\\x00-\\x1f]/g, "").slice(0, this.#maxErrorMessageChars)
 			: \`HTTP \${response.status}\`
-		return new _ClientError({
-			body,
-			message: safeMsg,
-			response: preserved,
-			status: response.status,
-		})
+		const Cls = _STATUS_ERROR_MAP[response.status] ?? _ClientError
+		return new Cls({ body, data: body, message: safeMsg, response: preserved, status: response.status })
 	}
 
 	#buildSignal(opts: _RequestOptions, isStream?: boolean): { cleanup: () => void; signal: AbortSignal } {
 		const userSignal = opts.signal
-		const timeout = isStream ? undefined : this.#config.timeout
+		const timeout = isStream ? undefined : (opts.timeout ?? this.#config.timeout)
 		if (!timeout && !userSignal) return { cleanup: () => {}, signal: this.#disposeCtrl.signal }
 		const ctrl = new AbortController()
 		let timer: ReturnType<typeof setTimeout> | undefined
@@ -1592,12 +1830,20 @@ export class TestSDK<TThrow extends boolean = false> {
 		const path = this.#toColonParams(entry.path)
 		const method = entry.method
 		const opts = input as _RequestOptions
+		if (entry.idempotent) {
+			const existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
+			if (existing === undefined) {
+				const key = opts.idempotencyKey ?? crypto.randomUUID()
+				opts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
+			}
+		}
 		const params = opts.params
 		if (entry.params) {
 			for (const p of entry.params) {
 				if (!params || params[p] === undefined) {
 					const err = new _ClientError({
 						body: null,
+						data: null,
 						message: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
 						response: new Response(null, { status: 0 }),
 						status: 0,
@@ -1814,7 +2060,20 @@ export class TestSDK<TThrow extends boolean = false> {
 	}
 }
 
-export { _ClientError as ClientError }
+export {
+	_ClientError as ClientError,
+	_BadRequestError as BadRequestError,
+	_UnauthorizedError as UnauthorizedError,
+	_ForbiddenError as ForbiddenError,
+	_NotFoundError as NotFoundError,
+	_ConflictError as ConflictError,
+	_UnprocessableEntityError as UnprocessableEntityError,
+	_RateLimitError as RateLimitError,
+	_InternalServerError as InternalServerError,
+	_BadGatewayError as BadGatewayError,
+	_ServiceUnavailableError as ServiceUnavailableError,
+	_GatewayTimeoutError as GatewayTimeoutError,
+}
 
 export function isClientError(e: unknown): e is _ClientError {
 	return e instanceof _ClientError
@@ -1823,14 +2082,14 @@ export function isClientError(e: unknown): e is _ClientError {
 `;
 
 exports[`ts-emitter byte-equivalence > discriminated — index file stable 1`] = `
-"import { TestSDK as _TestSDKImpl, ClientError, isClientError } from "./sdk.client.gen"
+"import { TestSDK as _TestSDKImpl, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError } from "./sdk.client.gen"
 import type { TestSDK as _TestSDKInterface } from "./sdk.types.gen"
 
 /* declaration merge: Proxy-based class acquires typed resource methods */
 class TestSDK<TThrow extends boolean = false> extends _TestSDKImpl<TThrow> {}
 interface TestSDK<TThrow extends boolean = false> extends _TestSDKInterface<TThrow> {}
 
-export { TestSDK, ClientError, isClientError }
+export { TestSDK, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError }
 export { serviceMap } from "./sdk.map.gen"
 export type { TestSDKConfig, SDKResult, TypedWebSocket } from "./sdk.types.gen"
 "
@@ -1841,7 +2100,7 @@ exports[`ts-emitter byte-equivalence > discriminated — map file stable 1`] = `
 	animals: {
 		get: { method: "GET", path: "/animals/{id}", params: ["id"] },
 		list: { method: "GET", path: "/animals" },
-	},
+		},
 } as const
 "
 `;
@@ -1885,6 +2144,10 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -1892,8 +2155,9 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface TestSDK<TThrow extends boolean = false> {
@@ -1925,6 +2189,7 @@ type _TypedWebSocket = {
 }
 
 type _ServiceEntry = {
+	idempotent?: boolean
 	invalidate?: readonly string[]
 	method: string
 	params?: readonly string[]
@@ -1933,12 +2198,15 @@ type _ServiceEntry = {
 	ws?: boolean
 }
 
-type _ServiceMap = Record<string, Record<string, _ServiceEntry>>
+type _ServiceMapNode = _ServiceEntry | { [key: string]: _ServiceMapNode }
+type _ServiceMap = { [key: string]: _ServiceMapNode }
 
 type _RequestOptions = {
+	body?: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 	cookies?: Record<string, string>
 	form?: Record<string, unknown>
 	headers?: Record<string, string>
+	idempotencyKey?: string
 	json?: unknown
 	lastEventId?: string
 	params?: Record<string, string>
@@ -1946,6 +2214,7 @@ type _RequestOptions = {
 	reconnectToken?: string
 	search?: Record<string, unknown>
 	signal?: AbortSignal
+	timeout?: number
 }
 
 type _RequestMeta = {
@@ -1957,17 +2226,45 @@ type _RequestMeta = {
 
 class _ClientError extends Error {
 	readonly body: unknown
+	readonly data: unknown
 	readonly response: Response
 	readonly status: number
 
-	constructor(init: { body: unknown; message: string; response: Response; status: number }) {
+	constructor(init: { body: unknown; data: unknown; message: string; response: Response; status: number }) {
 		super(init.message)
 		;(Error as unknown as { captureStackTrace?: (t: object, c: Function) => void }).captureStackTrace?.(this, _ClientError)
 		this.name = "ClientError"
 		this.body = init.body
+		this.data = init.data
 		this.response = init.response
 		this.status = init.status
 	}
+}
+
+class _BadRequestError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadRequestError" } }
+class _UnauthorizedError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnauthorizedError" } }
+class _ForbiddenError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ForbiddenError" } }
+class _NotFoundError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "NotFoundError" } }
+class _ConflictError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ConflictError" } }
+class _UnprocessableEntityError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnprocessableEntityError" } }
+class _RateLimitError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "RateLimitError" } }
+class _InternalServerError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "InternalServerError" } }
+class _BadGatewayError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadGatewayError" } }
+class _ServiceUnavailableError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ServiceUnavailableError" } }
+class _GatewayTimeoutError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "GatewayTimeoutError" } }
+
+const _STATUS_ERROR_MAP: Record<number, new (init: ConstructorParameters<typeof _ClientError>[0]) => _ClientError> = {
+	400: _BadRequestError,
+	401: _UnauthorizedError,
+	403: _ForbiddenError,
+	404: _NotFoundError,
+	409: _ConflictError,
+	422: _UnprocessableEntityError,
+	429: _RateLimitError,
+	500: _InternalServerError,
+	502: _BadGatewayError,
+	503: _ServiceUnavailableError,
+	504: _GatewayTimeoutError,
 }
 
 export class TestSDK<TThrow extends boolean = false> {
@@ -2002,63 +2299,102 @@ export class TestSDK<TThrow extends boolean = false> {
 		this.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
 		this.#sseMaxBufferChars = config.sseMaxBufferChars ?? 1024 * 1024
 
-		return new Proxy(this, {
-			get: (target, resourceName: string | symbol) => {
-				if (typeof resourceName === "symbol") return Reflect.get(target, resourceName)
+		const self = this
+		function makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
+			const actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
+			const childCache = new Map<string, object>()
+			return new Proxy({} as Record<string, unknown>, {
+				get: (_, key: string | symbol) => {
+					if (typeof key === "symbol") return undefined
+					const child = (node as Record<string, unknown>)[key]
+					if (child === undefined) return undefined
 
-				const cached = target.#resourceCache.get(resourceName)
+					/* leaf: entry has a "method" string field */
+					if (typeof (child as Record<string, unknown>)["method"] === "string") {
+						const cached = actionCache.get(key)
+						if (cached) return cached
+						const entry = child as _ServiceEntry
+						const entryPath = self.#toColonParams(entry.path)
+						let fn: (input?: Record<string, unknown>) => unknown
+						if (entry.ws) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else if (entry.sse) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else {
+							fn = (input?: Record<string, unknown>) =>
+								self.#request(entry, input ?? {})
+						}
+						Object.defineProperty(fn, "name", { value: [...path, key].join(".") })
+						actionCache.set(key, fn)
+						return fn
+					}
+
+					/* namespace: recurse */
+					const cachedChild = childCache.get(key)
+					if (cachedChild) return cachedChild
+					const childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+					childCache.set(key, childProxy)
+					return childProxy
+				},
+			})
+		}
+
+		return new Proxy(this, {
+			get: (target, key: string | symbol) => {
+				if (typeof key === "symbol") return Reflect.get(target, key)
+
+				const cached = target.#resourceCache.get(key)
 				if (cached) return cached
 
-				const resource = (serviceMap as _ServiceMap)[resourceName]
-				if (!resource) return Reflect.get(target, resourceName)
+				const node = (serviceMap as _ServiceMap)[key]
+				if (node === undefined) return Reflect.get(target, key)
 
-				const actions = Object.keys(resource)
-				if (actions.length === 1 && actions[0] === "_call") {
-					const entry = resource["_call"]!
-					const path = target.#toColonParams(entry.path)
+				/* root-level leaf (single-segment operationId) */
+				if (typeof (node as Record<string, unknown>)["method"] === "string") {
+					const entry = node as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
 					let fn: (input?: Record<string, unknown>) => unknown
 					if (entry.ws) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else if (entry.sse) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else {
 						fn = (input?: Record<string, unknown>) =>
 							target.#request(entry, input ?? {})
 					}
-					Object.defineProperty(fn, "name", { value: resourceName })
-					target.#resourceCache.set(resourceName, fn as unknown as Record<string, unknown>)
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 					return fn
 				}
 
-				const actionCache: Record<string, (input?: Record<string, unknown>) => unknown> = {}
-				const proxy = new Proxy({}, {
-					get: (_t, actionName: string | symbol) => {
-						if (typeof actionName === "symbol") return undefined
-						const cached = actionCache[actionName]
-						if (cached) return cached
-						const entry = resource[actionName]
-						if (!entry) return undefined
+				/* namespace node — check for single _call promotion */
+				const nodeRecord = node as Record<string, unknown>
+				const nodeKeys = Object.keys(nodeRecord)
+				if (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
+					const entry = nodeRecord["_call"] as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
+					let fn: (input?: Record<string, unknown>) => unknown
+					if (entry.ws) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else if (entry.sse) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else {
+						fn = (input?: Record<string, unknown>) =>
+							target.#request(entry, input ?? {})
+					}
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
+					return fn
+				}
 
-						const path = target.#toColonParams(entry.path)
-						let fn: (input?: Record<string, unknown>) => unknown
-						if (entry.ws) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
-						} else if (entry.sse) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
-						} else {
-							fn = (input?: Record<string, unknown>) =>
-								target.#request(entry, input ?? {})
-						}
-						Object.defineProperty(fn, "name", { value: \`\${resourceName}.\${actionName}\` })
-						actionCache[actionName] = fn
-						return fn
-					},
-				})
-				target.#resourceCache.set(resourceName, proxy)
+				const proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+				target.#resourceCache.set(key, proxy as Record<string, unknown>)
 				return proxy
 			},
 		}) as TestSDK<TThrow>
@@ -2287,13 +2623,17 @@ export class TestSDK<TThrow extends boolean = false> {
 		const headers = await this.#buildHeaders(opts, { method, path })
 		let body: BodyInit | undefined
 
-		if (opts.json !== undefined) {
+		if (opts.body !== undefined) {
+			headers.set("content-type", "application/octet-stream")
+			body = opts.body as BodyInit
+		} else if (opts.json !== undefined) {
 			headers.set("content-type", "application/json")
 			try {
 				body = JSON.stringify(opts.json)
 			} catch (e) {
 				throw new _ClientError({
 					body: opts.json,
+					data: null,
 					message: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
 					response: new Response(null, { status: 0 }),
 					status: 0,
@@ -2362,9 +2702,32 @@ export class TestSDK<TThrow extends boolean = false> {
 		if (this.#config.credentials) init.credentials = this.#config.credentials
 		if (this.#config.mode) init.mode = this.#config.mode
 
+		const _logOp = \`\${method.toUpperCase()} \${path}\`
+		const _logStart = Date.now()
+		this.#config.onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation: _logOp })
+
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#fetchFn(url, init)
+
+			if (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
+				const newToken = await this.#config.onAuthExpired()
+				if (newToken != null) {
+					const retryHeaders = new Headers(headers)
+					const authName = this.#config.authHeaderName ?? "Authorization"
+					const authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+					retryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
+					response = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+				}
+			}
+
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				event: "response_received",
+				level: response.status >= 400 ? "warn" : "info",
+				operation: _logOp,
+				status: response.status,
+			})
 
 			if (this.#config.onResponse) {
 				const resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
@@ -2399,6 +2762,17 @@ export class TestSDK<TThrow extends boolean = false> {
 			}
 
 			return { response }
+		} catch (err) {
+			const _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				error: err,
+				event: "error",
+				level: "error",
+				operation: _logOp,
+				...(_errStatus !== undefined ? { status: _errStatus } : {}),
+			})
+			throw err
 		} finally {
 			cleanup()
 		}
@@ -2438,17 +2812,13 @@ export class TestSDK<TThrow extends boolean = false> {
 		const safeMsg = rawMsg !== null
 			? rawMsg.replace(/[\\x00-\\x1f]/g, "").slice(0, this.#maxErrorMessageChars)
 			: \`HTTP \${response.status}\`
-		return new _ClientError({
-			body,
-			message: safeMsg,
-			response: preserved,
-			status: response.status,
-		})
+		const Cls = _STATUS_ERROR_MAP[response.status] ?? _ClientError
+		return new Cls({ body, data: body, message: safeMsg, response: preserved, status: response.status })
 	}
 
 	#buildSignal(opts: _RequestOptions, isStream?: boolean): { cleanup: () => void; signal: AbortSignal } {
 		const userSignal = opts.signal
-		const timeout = isStream ? undefined : this.#config.timeout
+		const timeout = isStream ? undefined : (opts.timeout ?? this.#config.timeout)
 		if (!timeout && !userSignal) return { cleanup: () => {}, signal: this.#disposeCtrl.signal }
 		const ctrl = new AbortController()
 		let timer: ReturnType<typeof setTimeout> | undefined
@@ -2538,12 +2908,20 @@ export class TestSDK<TThrow extends boolean = false> {
 		const path = this.#toColonParams(entry.path)
 		const method = entry.method
 		const opts = input as _RequestOptions
+		if (entry.idempotent) {
+			const existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
+			if (existing === undefined) {
+				const key = opts.idempotencyKey ?? crypto.randomUUID()
+				opts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
+			}
+		}
 		const params = opts.params
 		if (entry.params) {
 			for (const p of entry.params) {
 				if (!params || params[p] === undefined) {
 					const err = new _ClientError({
 						body: null,
+						data: null,
 						message: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
 						response: new Response(null, { status: 0 }),
 						status: 0,
@@ -2760,7 +3138,20 @@ export class TestSDK<TThrow extends boolean = false> {
 	}
 }
 
-export { _ClientError as ClientError }
+export {
+	_ClientError as ClientError,
+	_BadRequestError as BadRequestError,
+	_UnauthorizedError as UnauthorizedError,
+	_ForbiddenError as ForbiddenError,
+	_NotFoundError as NotFoundError,
+	_ConflictError as ConflictError,
+	_UnprocessableEntityError as UnprocessableEntityError,
+	_RateLimitError as RateLimitError,
+	_InternalServerError as InternalServerError,
+	_BadGatewayError as BadGatewayError,
+	_ServiceUnavailableError as ServiceUnavailableError,
+	_GatewayTimeoutError as GatewayTimeoutError,
+}
 
 export function isClientError(e: unknown): e is _ClientError {
 	return e instanceof _ClientError
@@ -2769,14 +3160,14 @@ export function isClientError(e: unknown): e is _ClientError {
 `;
 
 exports[`ts-emitter byte-equivalence > invalidation — index file stable 1`] = `
-"import { TestSDK as _TestSDKImpl, ClientError, isClientError } from "./sdk.client.gen"
+"import { TestSDK as _TestSDKImpl, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError } from "./sdk.client.gen"
 import type { TestSDK as _TestSDKInterface } from "./sdk.types.gen"
 
 /* declaration merge: Proxy-based class acquires typed resource methods */
 class TestSDK<TThrow extends boolean = false> extends _TestSDKImpl<TThrow> {}
 interface TestSDK<TThrow extends boolean = false> extends _TestSDKInterface<TThrow> {}
 
-export { TestSDK, ClientError, isClientError }
+export { TestSDK, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError }
 export { serviceMap } from "./sdk.map.gen"
 export type { TestSDKConfig, SDKResult, TypedWebSocket } from "./sdk.types.gen"
 "
@@ -2788,7 +3179,7 @@ exports[`ts-emitter byte-equivalence > invalidation — map file stable 1`] = `
 		create: { method: "POST", path: "/users", invalidate: ["GET /users","GET /users/:id"] },
 		getById: { method: "GET", path: "/users/{id}", params: ["id"] },
 		list: { method: "GET", path: "/users" },
-	},
+		},
 } as const
 "
 `;
@@ -2836,6 +3227,10 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -2843,8 +3238,9 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface TestSDK<TThrow extends boolean = false> {
@@ -2877,6 +3273,7 @@ type _TypedWebSocket = {
 }
 
 type _ServiceEntry = {
+	idempotent?: boolean
 	invalidate?: readonly string[]
 	method: string
 	params?: readonly string[]
@@ -2885,12 +3282,15 @@ type _ServiceEntry = {
 	ws?: boolean
 }
 
-type _ServiceMap = Record<string, Record<string, _ServiceEntry>>
+type _ServiceMapNode = _ServiceEntry | { [key: string]: _ServiceMapNode }
+type _ServiceMap = { [key: string]: _ServiceMapNode }
 
 type _RequestOptions = {
+	body?: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 	cookies?: Record<string, string>
 	form?: Record<string, unknown>
 	headers?: Record<string, string>
+	idempotencyKey?: string
 	json?: unknown
 	lastEventId?: string
 	params?: Record<string, string>
@@ -2898,6 +3298,7 @@ type _RequestOptions = {
 	reconnectToken?: string
 	search?: Record<string, unknown>
 	signal?: AbortSignal
+	timeout?: number
 }
 
 type _RequestMeta = {
@@ -2909,17 +3310,45 @@ type _RequestMeta = {
 
 class _ClientError extends Error {
 	readonly body: unknown
+	readonly data: unknown
 	readonly response: Response
 	readonly status: number
 
-	constructor(init: { body: unknown; message: string; response: Response; status: number }) {
+	constructor(init: { body: unknown; data: unknown; message: string; response: Response; status: number }) {
 		super(init.message)
 		;(Error as unknown as { captureStackTrace?: (t: object, c: Function) => void }).captureStackTrace?.(this, _ClientError)
 		this.name = "ClientError"
 		this.body = init.body
+		this.data = init.data
 		this.response = init.response
 		this.status = init.status
 	}
+}
+
+class _BadRequestError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadRequestError" } }
+class _UnauthorizedError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnauthorizedError" } }
+class _ForbiddenError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ForbiddenError" } }
+class _NotFoundError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "NotFoundError" } }
+class _ConflictError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ConflictError" } }
+class _UnprocessableEntityError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnprocessableEntityError" } }
+class _RateLimitError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "RateLimitError" } }
+class _InternalServerError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "InternalServerError" } }
+class _BadGatewayError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadGatewayError" } }
+class _ServiceUnavailableError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ServiceUnavailableError" } }
+class _GatewayTimeoutError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "GatewayTimeoutError" } }
+
+const _STATUS_ERROR_MAP: Record<number, new (init: ConstructorParameters<typeof _ClientError>[0]) => _ClientError> = {
+	400: _BadRequestError,
+	401: _UnauthorizedError,
+	403: _ForbiddenError,
+	404: _NotFoundError,
+	409: _ConflictError,
+	422: _UnprocessableEntityError,
+	429: _RateLimitError,
+	500: _InternalServerError,
+	502: _BadGatewayError,
+	503: _ServiceUnavailableError,
+	504: _GatewayTimeoutError,
 }
 
 export class TestSDK<TThrow extends boolean = false> {
@@ -2954,63 +3383,102 @@ export class TestSDK<TThrow extends boolean = false> {
 		this.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
 		this.#sseMaxBufferChars = config.sseMaxBufferChars ?? 1024 * 1024
 
-		return new Proxy(this, {
-			get: (target, resourceName: string | symbol) => {
-				if (typeof resourceName === "symbol") return Reflect.get(target, resourceName)
+		const self = this
+		function makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
+			const actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
+			const childCache = new Map<string, object>()
+			return new Proxy({} as Record<string, unknown>, {
+				get: (_, key: string | symbol) => {
+					if (typeof key === "symbol") return undefined
+					const child = (node as Record<string, unknown>)[key]
+					if (child === undefined) return undefined
 
-				const cached = target.#resourceCache.get(resourceName)
+					/* leaf: entry has a "method" string field */
+					if (typeof (child as Record<string, unknown>)["method"] === "string") {
+						const cached = actionCache.get(key)
+						if (cached) return cached
+						const entry = child as _ServiceEntry
+						const entryPath = self.#toColonParams(entry.path)
+						let fn: (input?: Record<string, unknown>) => unknown
+						if (entry.ws) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else if (entry.sse) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else {
+							fn = (input?: Record<string, unknown>) =>
+								self.#request(entry, input ?? {})
+						}
+						Object.defineProperty(fn, "name", { value: [...path, key].join(".") })
+						actionCache.set(key, fn)
+						return fn
+					}
+
+					/* namespace: recurse */
+					const cachedChild = childCache.get(key)
+					if (cachedChild) return cachedChild
+					const childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+					childCache.set(key, childProxy)
+					return childProxy
+				},
+			})
+		}
+
+		return new Proxy(this, {
+			get: (target, key: string | symbol) => {
+				if (typeof key === "symbol") return Reflect.get(target, key)
+
+				const cached = target.#resourceCache.get(key)
 				if (cached) return cached
 
-				const resource = (serviceMap as _ServiceMap)[resourceName]
-				if (!resource) return Reflect.get(target, resourceName)
+				const node = (serviceMap as _ServiceMap)[key]
+				if (node === undefined) return Reflect.get(target, key)
 
-				const actions = Object.keys(resource)
-				if (actions.length === 1 && actions[0] === "_call") {
-					const entry = resource["_call"]!
-					const path = target.#toColonParams(entry.path)
+				/* root-level leaf (single-segment operationId) */
+				if (typeof (node as Record<string, unknown>)["method"] === "string") {
+					const entry = node as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
 					let fn: (input?: Record<string, unknown>) => unknown
 					if (entry.ws) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else if (entry.sse) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else {
 						fn = (input?: Record<string, unknown>) =>
 							target.#request(entry, input ?? {})
 					}
-					Object.defineProperty(fn, "name", { value: resourceName })
-					target.#resourceCache.set(resourceName, fn as unknown as Record<string, unknown>)
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 					return fn
 				}
 
-				const actionCache: Record<string, (input?: Record<string, unknown>) => unknown> = {}
-				const proxy = new Proxy({}, {
-					get: (_t, actionName: string | symbol) => {
-						if (typeof actionName === "symbol") return undefined
-						const cached = actionCache[actionName]
-						if (cached) return cached
-						const entry = resource[actionName]
-						if (!entry) return undefined
+				/* namespace node — check for single _call promotion */
+				const nodeRecord = node as Record<string, unknown>
+				const nodeKeys = Object.keys(nodeRecord)
+				if (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
+					const entry = nodeRecord["_call"] as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
+					let fn: (input?: Record<string, unknown>) => unknown
+					if (entry.ws) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else if (entry.sse) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else {
+						fn = (input?: Record<string, unknown>) =>
+							target.#request(entry, input ?? {})
+					}
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
+					return fn
+				}
 
-						const path = target.#toColonParams(entry.path)
-						let fn: (input?: Record<string, unknown>) => unknown
-						if (entry.ws) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
-						} else if (entry.sse) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
-						} else {
-							fn = (input?: Record<string, unknown>) =>
-								target.#request(entry, input ?? {})
-						}
-						Object.defineProperty(fn, "name", { value: \`\${resourceName}.\${actionName}\` })
-						actionCache[actionName] = fn
-						return fn
-					},
-				})
-				target.#resourceCache.set(resourceName, proxy)
+				const proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+				target.#resourceCache.set(key, proxy as Record<string, unknown>)
 				return proxy
 			},
 		}) as TestSDK<TThrow>
@@ -3239,13 +3707,17 @@ export class TestSDK<TThrow extends boolean = false> {
 		const headers = await this.#buildHeaders(opts, { method, path })
 		let body: BodyInit | undefined
 
-		if (opts.json !== undefined) {
+		if (opts.body !== undefined) {
+			headers.set("content-type", "application/octet-stream")
+			body = opts.body as BodyInit
+		} else if (opts.json !== undefined) {
 			headers.set("content-type", "application/json")
 			try {
 				body = JSON.stringify(opts.json)
 			} catch (e) {
 				throw new _ClientError({
 					body: opts.json,
+					data: null,
 					message: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
 					response: new Response(null, { status: 0 }),
 					status: 0,
@@ -3314,9 +3786,32 @@ export class TestSDK<TThrow extends boolean = false> {
 		if (this.#config.credentials) init.credentials = this.#config.credentials
 		if (this.#config.mode) init.mode = this.#config.mode
 
+		const _logOp = \`\${method.toUpperCase()} \${path}\`
+		const _logStart = Date.now()
+		this.#config.onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation: _logOp })
+
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#fetchFn(url, init)
+
+			if (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
+				const newToken = await this.#config.onAuthExpired()
+				if (newToken != null) {
+					const retryHeaders = new Headers(headers)
+					const authName = this.#config.authHeaderName ?? "Authorization"
+					const authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+					retryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
+					response = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+				}
+			}
+
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				event: "response_received",
+				level: response.status >= 400 ? "warn" : "info",
+				operation: _logOp,
+				status: response.status,
+			})
 
 			if (this.#config.onResponse) {
 				const resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
@@ -3351,6 +3846,17 @@ export class TestSDK<TThrow extends boolean = false> {
 			}
 
 			return { response }
+		} catch (err) {
+			const _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				error: err,
+				event: "error",
+				level: "error",
+				operation: _logOp,
+				...(_errStatus !== undefined ? { status: _errStatus } : {}),
+			})
+			throw err
 		} finally {
 			cleanup()
 		}
@@ -3390,17 +3896,13 @@ export class TestSDK<TThrow extends boolean = false> {
 		const safeMsg = rawMsg !== null
 			? rawMsg.replace(/[\\x00-\\x1f]/g, "").slice(0, this.#maxErrorMessageChars)
 			: \`HTTP \${response.status}\`
-		return new _ClientError({
-			body,
-			message: safeMsg,
-			response: preserved,
-			status: response.status,
-		})
+		const Cls = _STATUS_ERROR_MAP[response.status] ?? _ClientError
+		return new Cls({ body, data: body, message: safeMsg, response: preserved, status: response.status })
 	}
 
 	#buildSignal(opts: _RequestOptions, isStream?: boolean): { cleanup: () => void; signal: AbortSignal } {
 		const userSignal = opts.signal
-		const timeout = isStream ? undefined : this.#config.timeout
+		const timeout = isStream ? undefined : (opts.timeout ?? this.#config.timeout)
 		if (!timeout && !userSignal) return { cleanup: () => {}, signal: this.#disposeCtrl.signal }
 		const ctrl = new AbortController()
 		let timer: ReturnType<typeof setTimeout> | undefined
@@ -3490,12 +3992,20 @@ export class TestSDK<TThrow extends boolean = false> {
 		const path = this.#toColonParams(entry.path)
 		const method = entry.method
 		const opts = input as _RequestOptions
+		if (entry.idempotent) {
+			const existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
+			if (existing === undefined) {
+				const key = opts.idempotencyKey ?? crypto.randomUUID()
+				opts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
+			}
+		}
 		const params = opts.params
 		if (entry.params) {
 			for (const p of entry.params) {
 				if (!params || params[p] === undefined) {
 					const err = new _ClientError({
 						body: null,
+						data: null,
 						message: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
 						response: new Response(null, { status: 0 }),
 						status: 0,
@@ -3712,7 +4222,20 @@ export class TestSDK<TThrow extends boolean = false> {
 	}
 }
 
-export { _ClientError as ClientError }
+export {
+	_ClientError as ClientError,
+	_BadRequestError as BadRequestError,
+	_UnauthorizedError as UnauthorizedError,
+	_ForbiddenError as ForbiddenError,
+	_NotFoundError as NotFoundError,
+	_ConflictError as ConflictError,
+	_UnprocessableEntityError as UnprocessableEntityError,
+	_RateLimitError as RateLimitError,
+	_InternalServerError as InternalServerError,
+	_BadGatewayError as BadGatewayError,
+	_ServiceUnavailableError as ServiceUnavailableError,
+	_GatewayTimeoutError as GatewayTimeoutError,
+}
 
 export function isClientError(e: unknown): e is _ClientError {
 	return e instanceof _ClientError
@@ -3721,14 +4244,14 @@ export function isClientError(e: unknown): e is _ClientError {
 `;
 
 exports[`ts-emitter byte-equivalence > refs — index file stable 1`] = `
-"import { TestSDK as _TestSDKImpl, ClientError, isClientError } from "./sdk.client.gen"
+"import { TestSDK as _TestSDKImpl, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError } from "./sdk.client.gen"
 import type { TestSDK as _TestSDKInterface } from "./sdk.types.gen"
 
 /* declaration merge: Proxy-based class acquires typed resource methods */
 class TestSDK<TThrow extends boolean = false> extends _TestSDKImpl<TThrow> {}
 interface TestSDK<TThrow extends boolean = false> extends _TestSDKInterface<TThrow> {}
 
-export { TestSDK, ClientError, isClientError }
+export { TestSDK, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError }
 export { serviceMap } from "./sdk.map.gen"
 export type { TestSDKConfig, SDKResult, TypedWebSocket } from "./sdk.types.gen"
 "
@@ -3738,10 +4261,10 @@ exports[`ts-emitter byte-equivalence > refs — map file stable 1`] = `
 "export const serviceMap = {
 	comments: {
 		get: { method: "GET", path: "/comments/{id}", params: ["id"] },
-	},
+		},
 	users: {
 		get: { method: "GET", path: "/users/{id}", params: ["id"] },
-	},
+		},
 } as const
 "
 `;
@@ -3789,6 +4312,10 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -3796,8 +4323,9 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface TestSDK<TThrow extends boolean = false> {
@@ -3831,6 +4359,7 @@ type _TypedWebSocket = {
 }
 
 type _ServiceEntry = {
+	idempotent?: boolean
 	invalidate?: readonly string[]
 	method: string
 	params?: readonly string[]
@@ -3839,12 +4368,15 @@ type _ServiceEntry = {
 	ws?: boolean
 }
 
-type _ServiceMap = Record<string, Record<string, _ServiceEntry>>
+type _ServiceMapNode = _ServiceEntry | { [key: string]: _ServiceMapNode }
+type _ServiceMap = { [key: string]: _ServiceMapNode }
 
 type _RequestOptions = {
+	body?: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 	cookies?: Record<string, string>
 	form?: Record<string, unknown>
 	headers?: Record<string, string>
+	idempotencyKey?: string
 	json?: unknown
 	lastEventId?: string
 	params?: Record<string, string>
@@ -3852,6 +4384,7 @@ type _RequestOptions = {
 	reconnectToken?: string
 	search?: Record<string, unknown>
 	signal?: AbortSignal
+	timeout?: number
 }
 
 type _RequestMeta = {
@@ -3863,17 +4396,45 @@ type _RequestMeta = {
 
 class _ClientError extends Error {
 	readonly body: unknown
+	readonly data: unknown
 	readonly response: Response
 	readonly status: number
 
-	constructor(init: { body: unknown; message: string; response: Response; status: number }) {
+	constructor(init: { body: unknown; data: unknown; message: string; response: Response; status: number }) {
 		super(init.message)
 		;(Error as unknown as { captureStackTrace?: (t: object, c: Function) => void }).captureStackTrace?.(this, _ClientError)
 		this.name = "ClientError"
 		this.body = init.body
+		this.data = init.data
 		this.response = init.response
 		this.status = init.status
 	}
+}
+
+class _BadRequestError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadRequestError" } }
+class _UnauthorizedError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnauthorizedError" } }
+class _ForbiddenError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ForbiddenError" } }
+class _NotFoundError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "NotFoundError" } }
+class _ConflictError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ConflictError" } }
+class _UnprocessableEntityError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnprocessableEntityError" } }
+class _RateLimitError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "RateLimitError" } }
+class _InternalServerError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "InternalServerError" } }
+class _BadGatewayError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadGatewayError" } }
+class _ServiceUnavailableError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ServiceUnavailableError" } }
+class _GatewayTimeoutError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "GatewayTimeoutError" } }
+
+const _STATUS_ERROR_MAP: Record<number, new (init: ConstructorParameters<typeof _ClientError>[0]) => _ClientError> = {
+	400: _BadRequestError,
+	401: _UnauthorizedError,
+	403: _ForbiddenError,
+	404: _NotFoundError,
+	409: _ConflictError,
+	422: _UnprocessableEntityError,
+	429: _RateLimitError,
+	500: _InternalServerError,
+	502: _BadGatewayError,
+	503: _ServiceUnavailableError,
+	504: _GatewayTimeoutError,
 }
 
 export class TestSDK<TThrow extends boolean = false> {
@@ -3908,63 +4469,102 @@ export class TestSDK<TThrow extends boolean = false> {
 		this.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
 		this.#sseMaxBufferChars = config.sseMaxBufferChars ?? 1024 * 1024
 
-		return new Proxy(this, {
-			get: (target, resourceName: string | symbol) => {
-				if (typeof resourceName === "symbol") return Reflect.get(target, resourceName)
+		const self = this
+		function makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
+			const actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
+			const childCache = new Map<string, object>()
+			return new Proxy({} as Record<string, unknown>, {
+				get: (_, key: string | symbol) => {
+					if (typeof key === "symbol") return undefined
+					const child = (node as Record<string, unknown>)[key]
+					if (child === undefined) return undefined
 
-				const cached = target.#resourceCache.get(resourceName)
+					/* leaf: entry has a "method" string field */
+					if (typeof (child as Record<string, unknown>)["method"] === "string") {
+						const cached = actionCache.get(key)
+						if (cached) return cached
+						const entry = child as _ServiceEntry
+						const entryPath = self.#toColonParams(entry.path)
+						let fn: (input?: Record<string, unknown>) => unknown
+						if (entry.ws) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else if (entry.sse) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else {
+							fn = (input?: Record<string, unknown>) =>
+								self.#request(entry, input ?? {})
+						}
+						Object.defineProperty(fn, "name", { value: [...path, key].join(".") })
+						actionCache.set(key, fn)
+						return fn
+					}
+
+					/* namespace: recurse */
+					const cachedChild = childCache.get(key)
+					if (cachedChild) return cachedChild
+					const childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+					childCache.set(key, childProxy)
+					return childProxy
+				},
+			})
+		}
+
+		return new Proxy(this, {
+			get: (target, key: string | symbol) => {
+				if (typeof key === "symbol") return Reflect.get(target, key)
+
+				const cached = target.#resourceCache.get(key)
 				if (cached) return cached
 
-				const resource = (serviceMap as _ServiceMap)[resourceName]
-				if (!resource) return Reflect.get(target, resourceName)
+				const node = (serviceMap as _ServiceMap)[key]
+				if (node === undefined) return Reflect.get(target, key)
 
-				const actions = Object.keys(resource)
-				if (actions.length === 1 && actions[0] === "_call") {
-					const entry = resource["_call"]!
-					const path = target.#toColonParams(entry.path)
+				/* root-level leaf (single-segment operationId) */
+				if (typeof (node as Record<string, unknown>)["method"] === "string") {
+					const entry = node as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
 					let fn: (input?: Record<string, unknown>) => unknown
 					if (entry.ws) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else if (entry.sse) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else {
 						fn = (input?: Record<string, unknown>) =>
 							target.#request(entry, input ?? {})
 					}
-					Object.defineProperty(fn, "name", { value: resourceName })
-					target.#resourceCache.set(resourceName, fn as unknown as Record<string, unknown>)
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 					return fn
 				}
 
-				const actionCache: Record<string, (input?: Record<string, unknown>) => unknown> = {}
-				const proxy = new Proxy({}, {
-					get: (_t, actionName: string | symbol) => {
-						if (typeof actionName === "symbol") return undefined
-						const cached = actionCache[actionName]
-						if (cached) return cached
-						const entry = resource[actionName]
-						if (!entry) return undefined
+				/* namespace node — check for single _call promotion */
+				const nodeRecord = node as Record<string, unknown>
+				const nodeKeys = Object.keys(nodeRecord)
+				if (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
+					const entry = nodeRecord["_call"] as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
+					let fn: (input?: Record<string, unknown>) => unknown
+					if (entry.ws) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else if (entry.sse) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else {
+						fn = (input?: Record<string, unknown>) =>
+							target.#request(entry, input ?? {})
+					}
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
+					return fn
+				}
 
-						const path = target.#toColonParams(entry.path)
-						let fn: (input?: Record<string, unknown>) => unknown
-						if (entry.ws) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
-						} else if (entry.sse) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
-						} else {
-							fn = (input?: Record<string, unknown>) =>
-								target.#request(entry, input ?? {})
-						}
-						Object.defineProperty(fn, "name", { value: \`\${resourceName}.\${actionName}\` })
-						actionCache[actionName] = fn
-						return fn
-					},
-				})
-				target.#resourceCache.set(resourceName, proxy)
+				const proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+				target.#resourceCache.set(key, proxy as Record<string, unknown>)
 				return proxy
 			},
 		}) as TestSDK<TThrow>
@@ -4193,13 +4793,17 @@ export class TestSDK<TThrow extends boolean = false> {
 		const headers = await this.#buildHeaders(opts, { method, path })
 		let body: BodyInit | undefined
 
-		if (opts.json !== undefined) {
+		if (opts.body !== undefined) {
+			headers.set("content-type", "application/octet-stream")
+			body = opts.body as BodyInit
+		} else if (opts.json !== undefined) {
 			headers.set("content-type", "application/json")
 			try {
 				body = JSON.stringify(opts.json)
 			} catch (e) {
 				throw new _ClientError({
 					body: opts.json,
+					data: null,
 					message: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
 					response: new Response(null, { status: 0 }),
 					status: 0,
@@ -4268,9 +4872,32 @@ export class TestSDK<TThrow extends boolean = false> {
 		if (this.#config.credentials) init.credentials = this.#config.credentials
 		if (this.#config.mode) init.mode = this.#config.mode
 
+		const _logOp = \`\${method.toUpperCase()} \${path}\`
+		const _logStart = Date.now()
+		this.#config.onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation: _logOp })
+
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#fetchFn(url, init)
+
+			if (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
+				const newToken = await this.#config.onAuthExpired()
+				if (newToken != null) {
+					const retryHeaders = new Headers(headers)
+					const authName = this.#config.authHeaderName ?? "Authorization"
+					const authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+					retryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
+					response = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+				}
+			}
+
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				event: "response_received",
+				level: response.status >= 400 ? "warn" : "info",
+				operation: _logOp,
+				status: response.status,
+			})
 
 			if (this.#config.onResponse) {
 				const resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
@@ -4305,6 +4932,17 @@ export class TestSDK<TThrow extends boolean = false> {
 			}
 
 			return { response }
+		} catch (err) {
+			const _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				error: err,
+				event: "error",
+				level: "error",
+				operation: _logOp,
+				...(_errStatus !== undefined ? { status: _errStatus } : {}),
+			})
+			throw err
 		} finally {
 			cleanup()
 		}
@@ -4344,17 +4982,13 @@ export class TestSDK<TThrow extends boolean = false> {
 		const safeMsg = rawMsg !== null
 			? rawMsg.replace(/[\\x00-\\x1f]/g, "").slice(0, this.#maxErrorMessageChars)
 			: \`HTTP \${response.status}\`
-		return new _ClientError({
-			body,
-			message: safeMsg,
-			response: preserved,
-			status: response.status,
-		})
+		const Cls = _STATUS_ERROR_MAP[response.status] ?? _ClientError
+		return new Cls({ body, data: body, message: safeMsg, response: preserved, status: response.status })
 	}
 
 	#buildSignal(opts: _RequestOptions, isStream?: boolean): { cleanup: () => void; signal: AbortSignal } {
 		const userSignal = opts.signal
-		const timeout = isStream ? undefined : this.#config.timeout
+		const timeout = isStream ? undefined : (opts.timeout ?? this.#config.timeout)
 		if (!timeout && !userSignal) return { cleanup: () => {}, signal: this.#disposeCtrl.signal }
 		const ctrl = new AbortController()
 		let timer: ReturnType<typeof setTimeout> | undefined
@@ -4444,12 +5078,20 @@ export class TestSDK<TThrow extends boolean = false> {
 		const path = this.#toColonParams(entry.path)
 		const method = entry.method
 		const opts = input as _RequestOptions
+		if (entry.idempotent) {
+			const existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
+			if (existing === undefined) {
+				const key = opts.idempotencyKey ?? crypto.randomUUID()
+				opts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
+			}
+		}
 		const params = opts.params
 		if (entry.params) {
 			for (const p of entry.params) {
 				if (!params || params[p] === undefined) {
 					const err = new _ClientError({
 						body: null,
+						data: null,
 						message: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
 						response: new Response(null, { status: 0 }),
 						status: 0,
@@ -4666,7 +5308,20 @@ export class TestSDK<TThrow extends boolean = false> {
 	}
 }
 
-export { _ClientError as ClientError }
+export {
+	_ClientError as ClientError,
+	_BadRequestError as BadRequestError,
+	_UnauthorizedError as UnauthorizedError,
+	_ForbiddenError as ForbiddenError,
+	_NotFoundError as NotFoundError,
+	_ConflictError as ConflictError,
+	_UnprocessableEntityError as UnprocessableEntityError,
+	_RateLimitError as RateLimitError,
+	_InternalServerError as InternalServerError,
+	_BadGatewayError as BadGatewayError,
+	_ServiceUnavailableError as ServiceUnavailableError,
+	_GatewayTimeoutError as GatewayTimeoutError,
+}
 
 export function isClientError(e: unknown): e is _ClientError {
 	return e instanceof _ClientError
@@ -4675,14 +5330,14 @@ export function isClientError(e: unknown): e is _ClientError {
 `;
 
 exports[`ts-emitter byte-equivalence > reserved-words — index file stable 1`] = `
-"import { TestSDK as _TestSDKImpl, ClientError, isClientError } from "./sdk.client.gen"
+"import { TestSDK as _TestSDKImpl, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError } from "./sdk.client.gen"
 import type { TestSDK as _TestSDKInterface } from "./sdk.types.gen"
 
 /* declaration merge: Proxy-based class acquires typed resource methods */
 class TestSDK<TThrow extends boolean = false> extends _TestSDKImpl<TThrow> {}
 interface TestSDK<TThrow extends boolean = false> extends _TestSDKInterface<TThrow> {}
 
-export { TestSDK, ClientError, isClientError }
+export { TestSDK, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError }
 export { serviceMap } from "./sdk.map.gen"
 export type { TestSDKConfig, SDKResult, TypedWebSocket } from "./sdk.types.gen"
 "
@@ -4692,10 +5347,10 @@ exports[`ts-emitter byte-equivalence > reserved-words — map file stable 1`] = 
 "export const serviceMap = {
 	await: {
 		yield: { method: "POST", path: "/await/yield" },
-	},
+		},
 	class: {
 		from: { method: "GET", path: "/class/from" },
-	},
+		},
 } as const
 "
 `;
@@ -4739,6 +5394,10 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -4746,8 +5405,9 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface TestSDK<TThrow extends boolean = false> {
@@ -4781,6 +5441,7 @@ type _TypedWebSocket = {
 }
 
 type _ServiceEntry = {
+	idempotent?: boolean
 	invalidate?: readonly string[]
 	method: string
 	params?: readonly string[]
@@ -4789,12 +5450,15 @@ type _ServiceEntry = {
 	ws?: boolean
 }
 
-type _ServiceMap = Record<string, Record<string, _ServiceEntry>>
+type _ServiceMapNode = _ServiceEntry | { [key: string]: _ServiceMapNode }
+type _ServiceMap = { [key: string]: _ServiceMapNode }
 
 type _RequestOptions = {
+	body?: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 	cookies?: Record<string, string>
 	form?: Record<string, unknown>
 	headers?: Record<string, string>
+	idempotencyKey?: string
 	json?: unknown
 	lastEventId?: string
 	params?: Record<string, string>
@@ -4802,6 +5466,7 @@ type _RequestOptions = {
 	reconnectToken?: string
 	search?: Record<string, unknown>
 	signal?: AbortSignal
+	timeout?: number
 }
 
 type _RequestMeta = {
@@ -4813,17 +5478,45 @@ type _RequestMeta = {
 
 class _ClientError extends Error {
 	readonly body: unknown
+	readonly data: unknown
 	readonly response: Response
 	readonly status: number
 
-	constructor(init: { body: unknown; message: string; response: Response; status: number }) {
+	constructor(init: { body: unknown; data: unknown; message: string; response: Response; status: number }) {
 		super(init.message)
 		;(Error as unknown as { captureStackTrace?: (t: object, c: Function) => void }).captureStackTrace?.(this, _ClientError)
 		this.name = "ClientError"
 		this.body = init.body
+		this.data = init.data
 		this.response = init.response
 		this.status = init.status
 	}
+}
+
+class _BadRequestError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadRequestError" } }
+class _UnauthorizedError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnauthorizedError" } }
+class _ForbiddenError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ForbiddenError" } }
+class _NotFoundError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "NotFoundError" } }
+class _ConflictError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ConflictError" } }
+class _UnprocessableEntityError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnprocessableEntityError" } }
+class _RateLimitError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "RateLimitError" } }
+class _InternalServerError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "InternalServerError" } }
+class _BadGatewayError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadGatewayError" } }
+class _ServiceUnavailableError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ServiceUnavailableError" } }
+class _GatewayTimeoutError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "GatewayTimeoutError" } }
+
+const _STATUS_ERROR_MAP: Record<number, new (init: ConstructorParameters<typeof _ClientError>[0]) => _ClientError> = {
+	400: _BadRequestError,
+	401: _UnauthorizedError,
+	403: _ForbiddenError,
+	404: _NotFoundError,
+	409: _ConflictError,
+	422: _UnprocessableEntityError,
+	429: _RateLimitError,
+	500: _InternalServerError,
+	502: _BadGatewayError,
+	503: _ServiceUnavailableError,
+	504: _GatewayTimeoutError,
 }
 
 export class TestSDK<TThrow extends boolean = false> {
@@ -4858,63 +5551,102 @@ export class TestSDK<TThrow extends boolean = false> {
 		this.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
 		this.#sseMaxBufferChars = config.sseMaxBufferChars ?? 1024 * 1024
 
-		return new Proxy(this, {
-			get: (target, resourceName: string | symbol) => {
-				if (typeof resourceName === "symbol") return Reflect.get(target, resourceName)
+		const self = this
+		function makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
+			const actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
+			const childCache = new Map<string, object>()
+			return new Proxy({} as Record<string, unknown>, {
+				get: (_, key: string | symbol) => {
+					if (typeof key === "symbol") return undefined
+					const child = (node as Record<string, unknown>)[key]
+					if (child === undefined) return undefined
 
-				const cached = target.#resourceCache.get(resourceName)
+					/* leaf: entry has a "method" string field */
+					if (typeof (child as Record<string, unknown>)["method"] === "string") {
+						const cached = actionCache.get(key)
+						if (cached) return cached
+						const entry = child as _ServiceEntry
+						const entryPath = self.#toColonParams(entry.path)
+						let fn: (input?: Record<string, unknown>) => unknown
+						if (entry.ws) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else if (entry.sse) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else {
+							fn = (input?: Record<string, unknown>) =>
+								self.#request(entry, input ?? {})
+						}
+						Object.defineProperty(fn, "name", { value: [...path, key].join(".") })
+						actionCache.set(key, fn)
+						return fn
+					}
+
+					/* namespace: recurse */
+					const cachedChild = childCache.get(key)
+					if (cachedChild) return cachedChild
+					const childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+					childCache.set(key, childProxy)
+					return childProxy
+				},
+			})
+		}
+
+		return new Proxy(this, {
+			get: (target, key: string | symbol) => {
+				if (typeof key === "symbol") return Reflect.get(target, key)
+
+				const cached = target.#resourceCache.get(key)
 				if (cached) return cached
 
-				const resource = (serviceMap as _ServiceMap)[resourceName]
-				if (!resource) return Reflect.get(target, resourceName)
+				const node = (serviceMap as _ServiceMap)[key]
+				if (node === undefined) return Reflect.get(target, key)
 
-				const actions = Object.keys(resource)
-				if (actions.length === 1 && actions[0] === "_call") {
-					const entry = resource["_call"]!
-					const path = target.#toColonParams(entry.path)
+				/* root-level leaf (single-segment operationId) */
+				if (typeof (node as Record<string, unknown>)["method"] === "string") {
+					const entry = node as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
 					let fn: (input?: Record<string, unknown>) => unknown
 					if (entry.ws) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else if (entry.sse) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else {
 						fn = (input?: Record<string, unknown>) =>
 							target.#request(entry, input ?? {})
 					}
-					Object.defineProperty(fn, "name", { value: resourceName })
-					target.#resourceCache.set(resourceName, fn as unknown as Record<string, unknown>)
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 					return fn
 				}
 
-				const actionCache: Record<string, (input?: Record<string, unknown>) => unknown> = {}
-				const proxy = new Proxy({}, {
-					get: (_t, actionName: string | symbol) => {
-						if (typeof actionName === "symbol") return undefined
-						const cached = actionCache[actionName]
-						if (cached) return cached
-						const entry = resource[actionName]
-						if (!entry) return undefined
+				/* namespace node — check for single _call promotion */
+				const nodeRecord = node as Record<string, unknown>
+				const nodeKeys = Object.keys(nodeRecord)
+				if (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
+					const entry = nodeRecord["_call"] as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
+					let fn: (input?: Record<string, unknown>) => unknown
+					if (entry.ws) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else if (entry.sse) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else {
+						fn = (input?: Record<string, unknown>) =>
+							target.#request(entry, input ?? {})
+					}
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
+					return fn
+				}
 
-						const path = target.#toColonParams(entry.path)
-						let fn: (input?: Record<string, unknown>) => unknown
-						if (entry.ws) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
-						} else if (entry.sse) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
-						} else {
-							fn = (input?: Record<string, unknown>) =>
-								target.#request(entry, input ?? {})
-						}
-						Object.defineProperty(fn, "name", { value: \`\${resourceName}.\${actionName}\` })
-						actionCache[actionName] = fn
-						return fn
-					},
-				})
-				target.#resourceCache.set(resourceName, proxy)
+				const proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+				target.#resourceCache.set(key, proxy as Record<string, unknown>)
 				return proxy
 			},
 		}) as TestSDK<TThrow>
@@ -5143,13 +5875,17 @@ export class TestSDK<TThrow extends boolean = false> {
 		const headers = await this.#buildHeaders(opts, { method, path })
 		let body: BodyInit | undefined
 
-		if (opts.json !== undefined) {
+		if (opts.body !== undefined) {
+			headers.set("content-type", "application/octet-stream")
+			body = opts.body as BodyInit
+		} else if (opts.json !== undefined) {
 			headers.set("content-type", "application/json")
 			try {
 				body = JSON.stringify(opts.json)
 			} catch (e) {
 				throw new _ClientError({
 					body: opts.json,
+					data: null,
 					message: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
 					response: new Response(null, { status: 0 }),
 					status: 0,
@@ -5218,9 +5954,32 @@ export class TestSDK<TThrow extends boolean = false> {
 		if (this.#config.credentials) init.credentials = this.#config.credentials
 		if (this.#config.mode) init.mode = this.#config.mode
 
+		const _logOp = \`\${method.toUpperCase()} \${path}\`
+		const _logStart = Date.now()
+		this.#config.onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation: _logOp })
+
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#fetchFn(url, init)
+
+			if (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
+				const newToken = await this.#config.onAuthExpired()
+				if (newToken != null) {
+					const retryHeaders = new Headers(headers)
+					const authName = this.#config.authHeaderName ?? "Authorization"
+					const authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+					retryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
+					response = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+				}
+			}
+
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				event: "response_received",
+				level: response.status >= 400 ? "warn" : "info",
+				operation: _logOp,
+				status: response.status,
+			})
 
 			if (this.#config.onResponse) {
 				const resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
@@ -5255,6 +6014,17 @@ export class TestSDK<TThrow extends boolean = false> {
 			}
 
 			return { response }
+		} catch (err) {
+			const _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				error: err,
+				event: "error",
+				level: "error",
+				operation: _logOp,
+				...(_errStatus !== undefined ? { status: _errStatus } : {}),
+			})
+			throw err
 		} finally {
 			cleanup()
 		}
@@ -5294,17 +6064,13 @@ export class TestSDK<TThrow extends boolean = false> {
 		const safeMsg = rawMsg !== null
 			? rawMsg.replace(/[\\x00-\\x1f]/g, "").slice(0, this.#maxErrorMessageChars)
 			: \`HTTP \${response.status}\`
-		return new _ClientError({
-			body,
-			message: safeMsg,
-			response: preserved,
-			status: response.status,
-		})
+		const Cls = _STATUS_ERROR_MAP[response.status] ?? _ClientError
+		return new Cls({ body, data: body, message: safeMsg, response: preserved, status: response.status })
 	}
 
 	#buildSignal(opts: _RequestOptions, isStream?: boolean): { cleanup: () => void; signal: AbortSignal } {
 		const userSignal = opts.signal
-		const timeout = isStream ? undefined : this.#config.timeout
+		const timeout = isStream ? undefined : (opts.timeout ?? this.#config.timeout)
 		if (!timeout && !userSignal) return { cleanup: () => {}, signal: this.#disposeCtrl.signal }
 		const ctrl = new AbortController()
 		let timer: ReturnType<typeof setTimeout> | undefined
@@ -5394,12 +6160,20 @@ export class TestSDK<TThrow extends boolean = false> {
 		const path = this.#toColonParams(entry.path)
 		const method = entry.method
 		const opts = input as _RequestOptions
+		if (entry.idempotent) {
+			const existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
+			if (existing === undefined) {
+				const key = opts.idempotencyKey ?? crypto.randomUUID()
+				opts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
+			}
+		}
 		const params = opts.params
 		if (entry.params) {
 			for (const p of entry.params) {
 				if (!params || params[p] === undefined) {
 					const err = new _ClientError({
 						body: null,
+						data: null,
 						message: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
 						response: new Response(null, { status: 0 }),
 						status: 0,
@@ -5616,7 +6390,20 @@ export class TestSDK<TThrow extends boolean = false> {
 	}
 }
 
-export { _ClientError as ClientError }
+export {
+	_ClientError as ClientError,
+	_BadRequestError as BadRequestError,
+	_UnauthorizedError as UnauthorizedError,
+	_ForbiddenError as ForbiddenError,
+	_NotFoundError as NotFoundError,
+	_ConflictError as ConflictError,
+	_UnprocessableEntityError as UnprocessableEntityError,
+	_RateLimitError as RateLimitError,
+	_InternalServerError as InternalServerError,
+	_BadGatewayError as BadGatewayError,
+	_ServiceUnavailableError as ServiceUnavailableError,
+	_GatewayTimeoutError as GatewayTimeoutError,
+}
 
 export function isClientError(e: unknown): e is _ClientError {
 	return e instanceof _ClientError
@@ -5625,14 +6412,14 @@ export function isClientError(e: unknown): e is _ClientError {
 `;
 
 exports[`ts-emitter byte-equivalence > sse — index file stable 1`] = `
-"import { TestSDK as _TestSDKImpl, ClientError, isClientError } from "./sdk.client.gen"
+"import { TestSDK as _TestSDKImpl, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError } from "./sdk.client.gen"
 import type { TestSDK as _TestSDKInterface } from "./sdk.types.gen"
 
 /* declaration merge: Proxy-based class acquires typed resource methods */
 class TestSDK<TThrow extends boolean = false> extends _TestSDKImpl<TThrow> {}
 interface TestSDK<TThrow extends boolean = false> extends _TestSDKInterface<TThrow> {}
 
-export { TestSDK, ClientError, isClientError }
+export { TestSDK, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError }
 export { serviceMap } from "./sdk.map.gen"
 export type { TestSDKConfig, SDKResult, TypedWebSocket } from "./sdk.types.gen"
 "
@@ -5642,7 +6429,7 @@ exports[`ts-emitter byte-equivalence > sse — map file stable 1`] = `
 "export const serviceMap = {
 	events: {
 		stream: { method: "GET", path: "/events/stream", sse: true },
-	},
+		},
 } as const
 "
 `;
@@ -5686,6 +6473,10 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -5693,8 +6484,9 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface TestSDK<TThrow extends boolean = false> {
@@ -5725,6 +6517,7 @@ type _TypedWebSocket = {
 }
 
 type _ServiceEntry = {
+	idempotent?: boolean
 	invalidate?: readonly string[]
 	method: string
 	params?: readonly string[]
@@ -5733,12 +6526,15 @@ type _ServiceEntry = {
 	ws?: boolean
 }
 
-type _ServiceMap = Record<string, Record<string, _ServiceEntry>>
+type _ServiceMapNode = _ServiceEntry | { [key: string]: _ServiceMapNode }
+type _ServiceMap = { [key: string]: _ServiceMapNode }
 
 type _RequestOptions = {
+	body?: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array
 	cookies?: Record<string, string>
 	form?: Record<string, unknown>
 	headers?: Record<string, string>
+	idempotencyKey?: string
 	json?: unknown
 	lastEventId?: string
 	params?: Record<string, string>
@@ -5746,6 +6542,7 @@ type _RequestOptions = {
 	reconnectToken?: string
 	search?: Record<string, unknown>
 	signal?: AbortSignal
+	timeout?: number
 }
 
 type _RequestMeta = {
@@ -5757,17 +6554,45 @@ type _RequestMeta = {
 
 class _ClientError extends Error {
 	readonly body: unknown
+	readonly data: unknown
 	readonly response: Response
 	readonly status: number
 
-	constructor(init: { body: unknown; message: string; response: Response; status: number }) {
+	constructor(init: { body: unknown; data: unknown; message: string; response: Response; status: number }) {
 		super(init.message)
 		;(Error as unknown as { captureStackTrace?: (t: object, c: Function) => void }).captureStackTrace?.(this, _ClientError)
 		this.name = "ClientError"
 		this.body = init.body
+		this.data = init.data
 		this.response = init.response
 		this.status = init.status
 	}
+}
+
+class _BadRequestError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadRequestError" } }
+class _UnauthorizedError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnauthorizedError" } }
+class _ForbiddenError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ForbiddenError" } }
+class _NotFoundError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "NotFoundError" } }
+class _ConflictError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ConflictError" } }
+class _UnprocessableEntityError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "UnprocessableEntityError" } }
+class _RateLimitError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "RateLimitError" } }
+class _InternalServerError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "InternalServerError" } }
+class _BadGatewayError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "BadGatewayError" } }
+class _ServiceUnavailableError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "ServiceUnavailableError" } }
+class _GatewayTimeoutError extends _ClientError { constructor(init: ConstructorParameters<typeof _ClientError>[0]) { super(init); this.name = "GatewayTimeoutError" } }
+
+const _STATUS_ERROR_MAP: Record<number, new (init: ConstructorParameters<typeof _ClientError>[0]) => _ClientError> = {
+	400: _BadRequestError,
+	401: _UnauthorizedError,
+	403: _ForbiddenError,
+	404: _NotFoundError,
+	409: _ConflictError,
+	422: _UnprocessableEntityError,
+	429: _RateLimitError,
+	500: _InternalServerError,
+	502: _BadGatewayError,
+	503: _ServiceUnavailableError,
+	504: _GatewayTimeoutError,
 }
 
 export class TestSDK<TThrow extends boolean = false> {
@@ -5802,63 +6627,102 @@ export class TestSDK<TThrow extends boolean = false> {
 		this.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
 		this.#sseMaxBufferChars = config.sseMaxBufferChars ?? 1024 * 1024
 
-		return new Proxy(this, {
-			get: (target, resourceName: string | symbol) => {
-				if (typeof resourceName === "symbol") return Reflect.get(target, resourceName)
+		const self = this
+		function makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
+			const actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
+			const childCache = new Map<string, object>()
+			return new Proxy({} as Record<string, unknown>, {
+				get: (_, key: string | symbol) => {
+					if (typeof key === "symbol") return undefined
+					const child = (node as Record<string, unknown>)[key]
+					if (child === undefined) return undefined
 
-				const cached = target.#resourceCache.get(resourceName)
+					/* leaf: entry has a "method" string field */
+					if (typeof (child as Record<string, unknown>)["method"] === "string") {
+						const cached = actionCache.get(key)
+						if (cached) return cached
+						const entry = child as _ServiceEntry
+						const entryPath = self.#toColonParams(entry.path)
+						let fn: (input?: Record<string, unknown>) => unknown
+						if (entry.ws) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else if (entry.sse) {
+							fn = (input?: Record<string, unknown>) =>
+								self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+						} else {
+							fn = (input?: Record<string, unknown>) =>
+								self.#request(entry, input ?? {})
+						}
+						Object.defineProperty(fn, "name", { value: [...path, key].join(".") })
+						actionCache.set(key, fn)
+						return fn
+					}
+
+					/* namespace: recurse */
+					const cachedChild = childCache.get(key)
+					if (cachedChild) return cachedChild
+					const childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+					childCache.set(key, childProxy)
+					return childProxy
+				},
+			})
+		}
+
+		return new Proxy(this, {
+			get: (target, key: string | symbol) => {
+				if (typeof key === "symbol") return Reflect.get(target, key)
+
+				const cached = target.#resourceCache.get(key)
 				if (cached) return cached
 
-				const resource = (serviceMap as _ServiceMap)[resourceName]
-				if (!resource) return Reflect.get(target, resourceName)
+				const node = (serviceMap as _ServiceMap)[key]
+				if (node === undefined) return Reflect.get(target, key)
 
-				const actions = Object.keys(resource)
-				if (actions.length === 1 && actions[0] === "_call") {
-					const entry = resource["_call"]!
-					const path = target.#toColonParams(entry.path)
+				/* root-level leaf (single-segment operationId) */
+				if (typeof (node as Record<string, unknown>)["method"] === "string") {
+					const entry = node as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
 					let fn: (input?: Record<string, unknown>) => unknown
 					if (entry.ws) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else if (entry.sse) {
 						fn = (input?: Record<string, unknown>) =>
-							target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
 					} else {
 						fn = (input?: Record<string, unknown>) =>
 							target.#request(entry, input ?? {})
 					}
-					Object.defineProperty(fn, "name", { value: resourceName })
-					target.#resourceCache.set(resourceName, fn as unknown as Record<string, unknown>)
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 					return fn
 				}
 
-				const actionCache: Record<string, (input?: Record<string, unknown>) => unknown> = {}
-				const proxy = new Proxy({}, {
-					get: (_t, actionName: string | symbol) => {
-						if (typeof actionName === "symbol") return undefined
-						const cached = actionCache[actionName]
-						if (cached) return cached
-						const entry = resource[actionName]
-						if (!entry) return undefined
+				/* namespace node — check for single _call promotion */
+				const nodeRecord = node as Record<string, unknown>
+				const nodeKeys = Object.keys(nodeRecord)
+				if (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
+					const entry = nodeRecord["_call"] as _ServiceEntry
+					const entryPath = target.#toColonParams(entry.path)
+					let fn: (input?: Record<string, unknown>) => unknown
+					if (entry.ws) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else if (entry.sse) {
+						fn = (input?: Record<string, unknown>) =>
+							target.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+					} else {
+						fn = (input?: Record<string, unknown>) =>
+							target.#request(entry, input ?? {})
+					}
+					Object.defineProperty(fn, "name", { value: key })
+					target.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
+					return fn
+				}
 
-						const path = target.#toColonParams(entry.path)
-						let fn: (input?: Record<string, unknown>) => unknown
-						if (entry.ws) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#connectWS(entry, path, (input ?? {}) as _RequestOptions)
-						} else if (entry.sse) {
-							fn = (input?: Record<string, unknown>) =>
-								target.#requestSSE(entry, path, (input ?? {}) as _RequestOptions)
-						} else {
-							fn = (input?: Record<string, unknown>) =>
-								target.#request(entry, input ?? {})
-						}
-						Object.defineProperty(fn, "name", { value: \`\${resourceName}.\${actionName}\` })
-						actionCache[actionName] = fn
-						return fn
-					},
-				})
-				target.#resourceCache.set(resourceName, proxy)
+				const proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+				target.#resourceCache.set(key, proxy as Record<string, unknown>)
 				return proxy
 			},
 		}) as TestSDK<TThrow>
@@ -6087,13 +6951,17 @@ export class TestSDK<TThrow extends boolean = false> {
 		const headers = await this.#buildHeaders(opts, { method, path })
 		let body: BodyInit | undefined
 
-		if (opts.json !== undefined) {
+		if (opts.body !== undefined) {
+			headers.set("content-type", "application/octet-stream")
+			body = opts.body as BodyInit
+		} else if (opts.json !== undefined) {
 			headers.set("content-type", "application/json")
 			try {
 				body = JSON.stringify(opts.json)
 			} catch (e) {
 				throw new _ClientError({
 					body: opts.json,
+					data: null,
 					message: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
 					response: new Response(null, { status: 0 }),
 					status: 0,
@@ -6162,9 +7030,32 @@ export class TestSDK<TThrow extends boolean = false> {
 		if (this.#config.credentials) init.credentials = this.#config.credentials
 		if (this.#config.mode) init.mode = this.#config.mode
 
+		const _logOp = \`\${method.toUpperCase()} \${path}\`
+		const _logStart = Date.now()
+		this.#config.onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation: _logOp })
+
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#fetchFn(url, init)
+
+			if (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
+				const newToken = await this.#config.onAuthExpired()
+				if (newToken != null) {
+					const retryHeaders = new Headers(headers)
+					const authName = this.#config.authHeaderName ?? "Authorization"
+					const authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+					retryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
+					response = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+				}
+			}
+
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				event: "response_received",
+				level: response.status >= 400 ? "warn" : "info",
+				operation: _logOp,
+				status: response.status,
+			})
 
 			if (this.#config.onResponse) {
 				const resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
@@ -6199,6 +7090,17 @@ export class TestSDK<TThrow extends boolean = false> {
 			}
 
 			return { response }
+		} catch (err) {
+			const _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
+			this.#config.onLog?.({
+				duration_ms: Date.now() - _logStart,
+				error: err,
+				event: "error",
+				level: "error",
+				operation: _logOp,
+				...(_errStatus !== undefined ? { status: _errStatus } : {}),
+			})
+			throw err
 		} finally {
 			cleanup()
 		}
@@ -6238,17 +7140,13 @@ export class TestSDK<TThrow extends boolean = false> {
 		const safeMsg = rawMsg !== null
 			? rawMsg.replace(/[\\x00-\\x1f]/g, "").slice(0, this.#maxErrorMessageChars)
 			: \`HTTP \${response.status}\`
-		return new _ClientError({
-			body,
-			message: safeMsg,
-			response: preserved,
-			status: response.status,
-		})
+		const Cls = _STATUS_ERROR_MAP[response.status] ?? _ClientError
+		return new Cls({ body, data: body, message: safeMsg, response: preserved, status: response.status })
 	}
 
 	#buildSignal(opts: _RequestOptions, isStream?: boolean): { cleanup: () => void; signal: AbortSignal } {
 		const userSignal = opts.signal
-		const timeout = isStream ? undefined : this.#config.timeout
+		const timeout = isStream ? undefined : (opts.timeout ?? this.#config.timeout)
 		if (!timeout && !userSignal) return { cleanup: () => {}, signal: this.#disposeCtrl.signal }
 		const ctrl = new AbortController()
 		let timer: ReturnType<typeof setTimeout> | undefined
@@ -6338,12 +7236,20 @@ export class TestSDK<TThrow extends boolean = false> {
 		const path = this.#toColonParams(entry.path)
 		const method = entry.method
 		const opts = input as _RequestOptions
+		if (entry.idempotent) {
+			const existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
+			if (existing === undefined) {
+				const key = opts.idempotencyKey ?? crypto.randomUUID()
+				opts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
+			}
+		}
 		const params = opts.params
 		if (entry.params) {
 			for (const p of entry.params) {
 				if (!params || params[p] === undefined) {
 					const err = new _ClientError({
 						body: null,
+						data: null,
 						message: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
 						response: new Response(null, { status: 0 }),
 						status: 0,
@@ -6560,7 +7466,20 @@ export class TestSDK<TThrow extends boolean = false> {
 	}
 }
 
-export { _ClientError as ClientError }
+export {
+	_ClientError as ClientError,
+	_BadRequestError as BadRequestError,
+	_UnauthorizedError as UnauthorizedError,
+	_ForbiddenError as ForbiddenError,
+	_NotFoundError as NotFoundError,
+	_ConflictError as ConflictError,
+	_UnprocessableEntityError as UnprocessableEntityError,
+	_RateLimitError as RateLimitError,
+	_InternalServerError as InternalServerError,
+	_BadGatewayError as BadGatewayError,
+	_ServiceUnavailableError as ServiceUnavailableError,
+	_GatewayTimeoutError as GatewayTimeoutError,
+}
 
 export function isClientError(e: unknown): e is _ClientError {
 	return e instanceof _ClientError
@@ -6569,14 +7488,14 @@ export function isClientError(e: unknown): e is _ClientError {
 `;
 
 exports[`ts-emitter byte-equivalence > ws — index file stable 1`] = `
-"import { TestSDK as _TestSDKImpl, ClientError, isClientError } from "./sdk.client.gen"
+"import { TestSDK as _TestSDKImpl, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError } from "./sdk.client.gen"
 import type { TestSDK as _TestSDKInterface } from "./sdk.types.gen"
 
 /* declaration merge: Proxy-based class acquires typed resource methods */
 class TestSDK<TThrow extends boolean = false> extends _TestSDKImpl<TThrow> {}
 interface TestSDK<TThrow extends boolean = false> extends _TestSDKInterface<TThrow> {}
 
-export { TestSDK, ClientError, isClientError }
+export { TestSDK, ClientError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError, BadGatewayError, ServiceUnavailableError, GatewayTimeoutError, isClientError }
 export { serviceMap } from "./sdk.map.gen"
 export type { TestSDKConfig, SDKResult, TypedWebSocket } from "./sdk.types.gen"
 "
@@ -6586,7 +7505,7 @@ exports[`ts-emitter byte-equivalence > ws — map file stable 1`] = `
 "export const serviceMap = {
 	realtime: {
 		subscribe: { method: "GET", path: "/realtime/subscribe", ws: true },
-	},
+		},
 } as const
 "
 `;
@@ -6630,6 +7549,10 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -6637,8 +7560,9 @@ export type TestSDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface TestSDK<TThrow extends boolean = false> {

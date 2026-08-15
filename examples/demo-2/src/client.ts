@@ -36,23 +36,24 @@ const api = createClient<typeof app>({
 async function main() {
 	/* ================================================================
 	   TUPLE MODE (default) — { data, error, response, status }
+	   error is the parsed response body, not ClientError.
 	   ================================================================ */
 
 	/* success → data is typed, error is null */
 	const { data, error } = await api.get("/in/none")
 	if (error) {
-		console.log(error.errorKey, error.status)
+		console.log(error.error_key, error.status)
 		return
 	}
 	console.log(data.ping)
 	/*               ^ "pong" — narrowed after error check */
 
-	/* error → data is null, error is ClientError */
+	/* error → data is null, error is the parsed body (error_key, status, …) */
 	const result = await api.get("/in/headers", {
 		headers: { "x-api-key": "", "x-request-id": "" },
 	})
 	if (result.error) {
-		console.log(result.error.errorKey, result.error.fields)
+		console.log(result.error.error_key, result.error.fields)
 		console.log(result.status)
 		/*                 ^ number */
 
@@ -69,17 +70,26 @@ async function main() {
 	/*                  ^ 204 */
 
 	/* ================================================================
-	   $isClientError — on the client instance
+	   throwOnError — ClientError is thrown, not returned in the tuple
 	   ================================================================ */
 
-	const maybe = await api.get("/in/none")
-	if (api.$isClientError(maybe.error)) {
-		console.log(maybe.error.errorKey)
-	}
+	const throwing = createClient<typeof app>({
+		baseURL: "http://localhost:3000",
+		throwOnError: true,
+	})
 
-	/* standalone import works too */
-	if (isClientError(maybe.error)) {
-		console.log(maybe.error.status)
+	try {
+		await throwing.get("/in/headers", {
+			headers: { "x-api-key": "", "x-request-id": "" },
+		})
+	} catch (e) {
+		if (api.$isClientError(e)) {
+			console.log(e.status, e.message)
+			console.log(e.body)
+		}
+		if (isClientError(e)) {
+			console.log(e.status)
+		}
 	}
 
 	/* ================================================================
@@ -352,12 +362,12 @@ async function main() {
 	   ERROR HANDLING — tuple mode
 	   ================================================================ */
 
-	/* server error → { data: null, error: ClientError } */
+	/* server error → { data: null, error: parsed body } */
 	const bad = await api.post("/out/multi-status", { json: { slug: "" } })
 	if (bad.error) {
-		console.log(bad.error.errorKey)
+		console.log(bad.error.error_key)
 		console.log(bad.error.status)
-		console.log(bad.error.statusKey)
+		console.log(bad.error.status_key)
 		console.log(bad.error.message)
 		console.log(bad.error.fields)
 

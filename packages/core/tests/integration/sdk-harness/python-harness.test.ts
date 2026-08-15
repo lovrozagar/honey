@@ -8,7 +8,17 @@ import { hasBinary, loadMockSpec, startMockServerSubprocess } from "./harness-ut
 
 const hasPython3 = hasBinary("python3")
 
-describe.skipIf(!hasPython3)("Python SDK integration harness", () => {
+function hasHttpx(): boolean {
+	if (!hasPython3) return false
+	try {
+		execSync("python3 -c 'import httpx'", { stdio: "ignore" })
+		return true
+	} catch {
+		return false
+	}
+}
+
+describe.skipIf(!hasPython3 || !hasHttpx())("Python SDK integration harness", () => {
 	it("round-trip: createUser + getUser", async () => {
 		const spec = loadMockSpec()
 		const { files } = generatePythonSDK(spec)

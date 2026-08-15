@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { createSDK } from "../../../src/client/sdk.ts"
 import { captureFetch } from "./_helpers/phase-f.ts"
 
-const PHASE_I_FIXED = process.env["PHASE_I_FIXED"] === "1"
+const PHASE_I_FIXED = true
 
 /* ── service map fixture ── */
 

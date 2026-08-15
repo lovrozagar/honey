@@ -45,6 +45,10 @@ export type SDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
+	onAuthExpired?: () => Promise<string | null>
+	authHeaderName?: string
+	authHeaderPrefix?: string
+	onLog?: (entry: _LogEntry) => void
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
@@ -52,21 +56,22 @@ export type SDKConfig<TThrow extends boolean = false> = {
 	timeout?: number
 }
 
-export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; signal?: AbortSignal }
-export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal }
+export type _LogEntry = { level: "debug" | "info" | "warn" | "error"; event: "request_start" | "response_received" | "error" | "hook_executed"; operation: string; duration_ms: number; status?: number; error?: unknown }
+export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; idempotencyKey?: string; signal?: AbortSignal; timeout?: number }
+export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }
 export type _WsOpts = { protocols?: string | string[]; reconnectToken?: string }
 
 export interface SDK<TThrow extends boolean = false> {
 	state: Record<string, unknown>
 	dispose(): void
 	items: {
-		get(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; title: string }> : Promise<SDKResult<{ id: string; title: string }, _Expand<_Errs0>>>
+		"get"(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; title: string }> : Promise<SDKResult<{ id: string; title: string }, _Expand<_Errs0>>>
 	}
 	orgs: {
-		get(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; slug: string }> : Promise<SDKResult<{ id: string; slug: string }, _Expand<_Errs0>>>
+		"get"(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; slug: string }> : Promise<SDKResult<{ id: string; slug: string }, _Expand<_Errs0>>>
 	}
 	users: {
-		get(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; name: string }> : Promise<SDKResult<{ id: string; name: string }, _Expand<_Errs0>>>
+		"get"(input: _Expand<_Inp0> & _HttpOpts): TThrow extends true ? Promise<{ id: string; name: string }> : Promise<SDKResult<{ id: string; name: string }, _Expand<_Errs0>>>
 	}
 }
 "

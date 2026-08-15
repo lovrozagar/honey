@@ -21,6 +21,13 @@ export type ErrorMetaEntry = {
 	statusKey: StatusKey
 }
 
+/** Per-key meta — keeps schema + statusKey literals for ComputeErrorsByStatus */
+type ErrorMetaForDef<D extends ErrorDef> = D extends ErrorDefWithSchema
+	? { schema: D["schema"]; statusKey: D["status"] }
+	: D extends StatusKey
+		? { schema: null; statusKey: D }
+		: ErrorMetaEntry
+
 export const ERROR_META: unique symbol = Symbol.for("honey.error.meta")
 
 type ErrorFactoryResult<TMap extends Record<string, ErrorDef>, TTranslations extends Record<string, string>> = {
@@ -30,7 +37,7 @@ type ErrorFactoryResult<TMap extends Record<string, ErrorDef>, TTranslations ext
 			? (opts?: ErrorFactoryOpts<ExtractICUVars<TTranslations[K]>>) => HoneyError
 			: (opts?: ErrorFactoryOpts<Record<string, string | number>>) => HoneyError
 } & {
-	readonly [ERROR_META]: { [K in keyof TMap]: ErrorMetaEntry }
+	readonly [ERROR_META]: { [K in keyof TMap]: ErrorMetaForDef<TMap[K]> }
 }
 
 export function defineErrors<

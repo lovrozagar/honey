@@ -3,7 +3,7 @@ import { ClientError } from "../../../src/client/error.ts"
 import { HTTPClient } from "../../../src/client/http.ts"
 import { resolveInvalidationTargets } from "../../../src/client/sdk.ts"
 
-const PHASE_G_FIXED = process.env["PHASE_G_FIXED"] === "1"
+const PHASE_G_FIXED = true
 
 /* ── helpers ── */
 

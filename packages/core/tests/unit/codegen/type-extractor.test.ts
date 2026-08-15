@@ -45,8 +45,9 @@ describe("extractBaseCtx", () => {
 		)
 
 		const result = await extractBaseCtx({ entryPath, exportName: "app" })
-		/* framework props (path, routePattern, etc.) are filtered by HONEY_CTX_PROPS */
-		expect(result.middlewareType).toBeNull()
+		/* realtime is injected on every app; user middleware is still absent */
+		expect(result.middlewareType).toContain("realtime")
+		expect(result.middlewareType).not.toContain("auth")
 	})
 
 	it("throws when export not found", async () => {
@@ -205,7 +206,7 @@ describe("extractChainTypes", () => {
 		)
 
 		const result = await extractChainTypes({ entryPath, exportName: "app" })
-		expect(result.base.middlewareType).toBeNull()
+		expect(result.base.middlewareType).toContain("realtime")
 		expect(result.routeMiddleware["get /private"]).toBeDefined()
 		expect(result.routeMiddleware["get /private"]).toContain("auth")
 		expect(result.routeMiddleware["get /public"]).toBeUndefined()
@@ -269,7 +270,7 @@ describe("extractChainTypes", () => {
 
 		const result = await extractChainTypes({ entryPath, exportName: "app" })
 		expect(result.base.envType).toContain("DB")
-		expect(result.base.middlewareType).toBeNull()
+		expect(result.base.middlewareType).toContain("realtime")
 		expect(result.base.tapsType).toBeNull()
 		expect(Object.keys(result.routeMiddleware)).toHaveLength(0)
 	})

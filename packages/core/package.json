@@ -76,6 +76,7 @@
 		"test": "vitest run",
 		"test:all": "vitest run --config vitest.all.config.ts",
 		"test:harness": "vitest run --config vitest.harness.config.ts",
+		"test:harness:rust": "vitest run --config vitest.harness.rust.config.ts",
 		"test:watch": "vitest",
 		"type:check": "tsc --noEmit -p tsconfig.src.json",
 		"type:check:tests": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit"

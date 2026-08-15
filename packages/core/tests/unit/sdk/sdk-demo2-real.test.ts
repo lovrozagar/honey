@@ -153,8 +153,8 @@ describe("SDK with real demo-2 app", () => {
 		expect(result.data).toBeNull()
 		expect(result.error).not.toBeNull()
 		expect(result.status).toBe(400)
-		/* demo-2 uses .defaultBoundary("validation_error") */
-		expect((result.error as Record<string, unknown>)?.error_key).toBe("validation_error")
+		/* input validation uses the framework validation_failed key */
+		expect((result.error as Record<string, unknown>)?.error_key).toBe("validation_failed")
 	})
 
 	it("generated code contains demo-2 operations", async () => {

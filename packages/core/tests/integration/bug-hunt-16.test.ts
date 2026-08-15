@@ -189,7 +189,7 @@ describe("bug-hunt-16: emitSchemaType — zod compound types", () => {
 		const keyType = zodSchema("string")
 		const valueType = zodSchema("number")
 		expect(emitSchemaType(zodSchema("record", { keyType, valueType }))).toBe(
-			"Record<string, number>",
+			"Partial<Record<string, number>>",
 		)
 	})
 

@@ -40,6 +40,7 @@
 		"test:consumers": "bun test e2e/app/tests",
 		"test:e2e": "bun run --filter @honey/e2e-bun test",
 		"test:harness": "bun run --filter honey test:harness",
+		"test:harness:rust": "bun run --filter honey test:harness:rust",
 		"test:watch": "bun run --filter honey test:watch",
 		"typecheck": "bun run --filter honey type:check",
 		"typecheck:consumers": "bun run --filter './examples/*' type:check && bun run --filter @honey/e2e-app type:check"

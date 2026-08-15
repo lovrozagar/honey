@@ -2,11 +2,11 @@
 
 # state — honey
 
-  milestone  sdk-parity-v1
-  updated    2026-04-17
+  milestone  standalone-ready
+  updated    2026-08-13
 
 ## now
-  (milestone sdk-parity-v1 complete — all 53 steps [x])
+  4.a.2   Push `origin/main` (gated — wait for ask)
 
 ## next
-  (none — choose next milestone)
+  4.a.3   npm publish `honey` (gated — wait for ask)

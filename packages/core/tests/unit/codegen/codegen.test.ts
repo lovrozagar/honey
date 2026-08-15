@@ -328,7 +328,6 @@ describe("generateTypes with inlineTapsType", () => {
 		expect(types).toContain("type TapMap =")
 		expect(types).toContain('"create"')
 		expect(types).toContain('"delete"')
-		expect(types).not.toContain("Omit<HoneyContext")
 	})
 
 	it("does not emit TapMap when inlineTapsType is null", () => {

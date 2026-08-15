@@ -15,6 +15,7 @@ export { parseSSEStream } from "./sse.ts"
 export type {
 	ClientInput,
 	ClientResult,
+	ErrorEnvelope,
 	ErrorsFor,
 	HoneyClient,
 	InputFor,
@@ -29,6 +30,15 @@ export { createTypedWebSocket } from "./ws.ts"
 
 const HTTP_METHODS = new Set(["delete", "get", "patch", "post", "put"])
 
+export function createClient<T>(
+	config: ClientConfig & { throwOnError: true },
+): HoneyClient<InferRoutes<T>, true>
+export function createClient<T>(
+	config: Omit<ClientConfig, "throwOnError"> & { throwOnError?: false },
+): HoneyClient<InferRoutes<T>, false>
+export function createClient<T, TThrow extends boolean>(
+	config: ClientConfig & { throwOnError?: TThrow },
+): HoneyClient<InferRoutes<T>, TThrow>
 export function createClient<T, TThrow extends boolean = false>(
 	config: ClientConfig & { throwOnError?: TThrow },
 ): HoneyClient<InferRoutes<T>, TThrow> {

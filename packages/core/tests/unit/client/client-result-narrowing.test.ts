@@ -33,6 +33,36 @@ describe("ClientResult type narrowing", () => {
 		type Branch409 = Extract<R, { status: 409 }>
 		expectTypeOf<Branch409["error"]>().toMatchTypeOf<{ error_key: string; message: string }>()
 	})
+
+	it("null errorsByStatus maps to the default envelope so if (error) narrows", () => {
+		type R = ClientResult<{ ping: "pong" }, { 400: null; 401: null }>
+
+		function check(r: R) {
+			if (r.error) {
+				expectTypeOf(r.data).toEqualTypeOf<null>()
+				expectTypeOf(r.error.error_key).toEqualTypeOf<string>()
+				expectTypeOf(r.error.status).toEqualTypeOf<400 | 401>()
+				return
+			}
+			expectTypeOf(r.data).toEqualTypeOf<{ ping: "pong" }>()
+		}
+
+		void check
+	})
+
+	it("if (!error) narrows data when errorsByStatus is present", () => {
+		type R = ClientResult<{ id: string }, { 404: { reason: string } }>
+
+		function check(r: R) {
+			if (!r.error) {
+				expectTypeOf(r.data).toEqualTypeOf<{ id: string }>()
+				return
+			}
+			expectTypeOf(r.error).toEqualTypeOf<{ reason: string }>()
+		}
+
+		void check
+	})
 })
 
 describe("ClientResult runtime with createClient", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { createSDK } from "../../../src/client/sdk.ts"
 import { deferredFetch, tick } from "./_helpers/phase-f.ts"
 
-const PHASE_F_FIXED = process.env["PHASE_F_FIXED"] === "1"
+const PHASE_F_FIXED = true
 
 /* service map fixture from the spec — posts before users (sort-keys) */
 const serviceMap = {

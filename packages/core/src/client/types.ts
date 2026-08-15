@@ -1,4 +1,4 @@
-import type { InferOutput, ParamsFromPath, StandardSchemaLike } from "../types.ts"
+import type { FieldError, InferOutput, ParamsFromPath, StandardSchemaLike } from "../types.ts"
 import type { SSEEvent } from "./sse.ts"
 import type { TypedWebSocket } from "./ws.ts"
 
@@ -72,16 +72,45 @@ type ErrorsByStatusFor<TRoutes, P extends string, M extends string> = P extends 
 		: never
 	: never
 
-/** Result tuple for safe (non-throwing) mode — error is the raw parsed body, not wrapped */
+/** Default Honey error envelope — used when errorsByStatus lists `null` (standard errors) */
+export type ErrorEnvelope<TStatus extends number = number, TKey extends string = string> = {
+	error_key: TKey
+	fields: Record<string, FieldError[]>
+	message: string
+	status: TStatus
+	status_key: string
+	success: false
+}
+
+/** `null` in a route's errorsByStatus means the default envelope, not a null body */
+type ResolveErrorBody<S extends number, T> = T extends null ? ErrorEnvelope<S> : T
+
+/** Object keys of `{ 400: ... }` are `400` or `"400"` depending on TS version */
+type StatusCode<K> = K extends number ? K : K extends `${infer N extends number}` ? N : never
+
+type HasStatusErrors<T> = [StatusCode<keyof T>] extends [never] ? false : true
+
+type ErrorVariants<TErrorsByStatus> = {
+	[K in keyof TErrorsByStatus]: StatusCode<K> extends never
+		? never
+		: {
+				data: null
+				error: ResolveErrorBody<StatusCode<K>, TErrorsByStatus[K]>
+				response: Response
+				status: StatusCode<K>
+			}
+}[keyof TErrorsByStatus]
+
+/**
+ * Result tuple for safe (non-throwing) mode — error is the raw parsed body, not ClientError.
+ * When TErrorsByStatus is known, the typed branch covers every declared error status
+ * (no unknown fallback) so `if (error)` / `if (!error)` narrow.
+ */
 export type ClientResult<TData, TErrorsByStatus = never> =
 	| { data: TData; error: null; response: Response; status: number }
-	| ([TErrorsByStatus] extends [never]
+	| (HasStatusErrors<TErrorsByStatus> extends false
 		? { data: null; error: unknown; response: Response; status: number }
-		: { [S in keyof TErrorsByStatus & number]:
-			{ data: null; error: TErrorsByStatus[S]; response: Response; status: S }
-		}[keyof TErrorsByStatus & number]
-		| { data: null; error: unknown; response: Response; status: number }
-	)
+		: ErrorVariants<TErrorsByStatus>)
 
 /** Resolve return type based on transport + throw mode */
 export type ReturnFor<TRoutes, P extends string, M extends string, TThrow extends boolean = true> =

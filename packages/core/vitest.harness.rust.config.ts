@@ -1,10 +1,9 @@
 import { defineConfig } from "vitest/config"
-import { harness, harnessRust } from "./vitest.config.ts"
+import { harnessRust } from "./vitest.config.ts"
 
 export default defineConfig({
 	test: {
-		exclude: harnessRust,
-		include: harness,
+		include: harnessRust,
 		passWithNoTests: true,
 	},
 })

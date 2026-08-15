@@ -694,7 +694,7 @@ describe("Tier 9: sync facade + config", () => {
 		const result = generatePythonSDK(crudSpec, { name: "CrudSDK" })
 		const runtime = result.files["_runtime.py"]
 		expect(runtime).toMatch(/Authorization|bearer_token/)
-		expect(runtime).toMatch(/Bearer\s*\{|f"Bearer/)
+		expect(runtime).toMatch(/auth_header_prefix|Bearer /)
 	})
 
 	it("[#63] custom headers merged, per-call headers override config-level headers", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { jsonSchemaToTS } from "../../../src/codegen.ts"
 
-const PHASE_I_FIXED = process.env["PHASE_I_FIXED"] === "1"
+const PHASE_I_FIXED = true
 
 /* ═══════════════════════════════════════════════════════════════════
    Layer A — invariants that hold before AND after (always GREEN)

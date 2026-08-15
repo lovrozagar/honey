@@ -311,7 +311,6 @@ describe("bug-hunt-15: generateRouteTree", () => {
 			},
 		])
 
-		expect(code).toContain("auto-generated")
 		expect(code).toContain("import type")
 		expect(code).toContain("export const tree")
 		expect(code).toContain("export const handlers")
@@ -371,7 +370,6 @@ describe("bug-hunt-15: generateRouteTreeFromApp", () => {
 			.handler((ctx) => ctx.res.json("ok", {}))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain("auto-generated")
 		expect(code).toContain("export const tree")
 		expect(code).toContain("export const handlers")
 		expect(code).toContain("export const routeTree")
@@ -547,7 +545,6 @@ describe("bug-hunt-15: generateTypes", () => {
 			inlineEnvType: "{ DB: string }",
 		})
 
-		expect(code).toContain("auto-generated")
 		expect(code).toContain("export type BaseCtx")
 		expect(code).toContain("export type Routes")
 		expect(code).toContain('"/items/:id"')

@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:cd0a3720aafd",
+  "_generated": "honey checksum:bcb3a3ca2a88",
   "info": {
     "title": "Honey E2E",
     "version": "0.0.1"
@@ -8,7 +8,11 @@
   "paths": {
     "/api": {
       "get": {
+        "summary": "Root test route",
         "description": "Test route",
+        "tags": [
+          "test"
+        ],
         "parameters": [
           {
             "in": "query",
@@ -40,6 +44,16 @@
             },
             "description": "invalid_input"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -56,6 +70,16 @@
     "/api/boundary/custom": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -82,6 +106,16 @@
     "/api/boundary/default": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -98,6 +132,16 @@
     "/api/echo": {
       "all": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -124,6 +168,16 @@
     "/api/events": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -140,6 +194,16 @@
     "/api/events-live": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -156,6 +220,16 @@
     "/api/generated-tree": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -172,6 +246,16 @@
     "/api/health": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -188,6 +272,16 @@
     "/api/manifest.json": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -204,6 +298,16 @@
     "/api/openapi.json": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -230,6 +334,16 @@
           }
         ],
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -286,6 +400,16 @@
     "/api/v1/organizations": {
       "get": {
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -309,6 +433,16 @@
               }
             },
             "description": "invalid_input"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
           },
           "403": {
             "content": {
@@ -356,6 +490,16 @@
           }
         ],
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -380,6 +524,16 @@
           }
         ],
         "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Err401Unauthorized"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -457,6 +611,65 @@
           "status": {
             "enum": [
               400
+            ],
+            "type": "integer"
+          },
+          "status_key": {
+            "type": "string"
+          },
+          "success": {
+            "const": false
+          }
+        },
+        "required": [
+          "error_key",
+          "fields",
+          "message",
+          "status",
+          "status_key",
+          "success"
+        ],
+        "type": "object"
+      },
+      "Err401Unauthorized": {
+        "properties": {
+          "error_key": {
+            "enum": [
+              "unauthorized"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": {
+              "items": {
+                "properties": {
+                  "error_key": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "error_key",
+                  "message",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              401
             ],
             "type": "integer"
           },

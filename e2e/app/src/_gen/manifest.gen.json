@@ -1,6 +1,11 @@
 {
-  "_generated": "honey checksum:291f0ad31a7d",
+  "_generated": "honey checksum:e95a241f560a",
   "errors": [
+    {
+      "errorKey": "unauthorized",
+      "status": 401,
+      "statusKey": "unauthorized"
+    },
     {
       "errorKey": "api_error",
       "status": 500,
@@ -25,17 +30,16 @@
   "routes": [
     {
       "errors": [
+        "unauthorized",
         "api_error",
         "invalid_input"
       ],
       "meta": {
         "description": "Test route",
-        "openApi": {
-          "summary": "Root test route",
-          "tags": [
-            "test"
-          ]
-        }
+        "summary": "Root test route",
+        "tags": [
+          "test"
+        ]
       },
       "method": "GET",
       "middleware": [
@@ -61,6 +65,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -75,6 +80,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -89,6 +95,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -103,6 +110,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -117,6 +125,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -133,6 +142,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error",
         "org_slug_taken",
         "org_limit_reached",
@@ -152,6 +162,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -170,6 +181,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -188,6 +200,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -204,6 +217,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -218,6 +232,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error",
         "org_limit_reached"
       ],
@@ -233,6 +248,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -247,6 +263,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
@@ -261,6 +278,7 @@
     },
     {
       "errors": [
+        "unauthorized",
         "api_error"
       ],
       "meta": {},
