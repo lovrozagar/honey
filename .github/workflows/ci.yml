@@ -68,6 +68,25 @@ jobs:
       - run: bun run test:consumers
       - run: bun run test:e2e
 
+  build:
+    name: build (${{ matrix.runtime }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [node, bun]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run generate
+      # --check-generated: the checkout is clean here, so a build that rewrites a
+      # committed generated file means it is stale or codegen is not deterministic.
+      - run: bun e2e/run-build.ts --runtime ${{ matrix.runtime }} --check-generated
+
   e2e:
     name: e2e (${{ matrix.runtime }})
     runs-on: ubuntu-latest

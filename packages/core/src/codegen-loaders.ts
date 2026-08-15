@@ -9,8 +9,9 @@ export async function loadToJSONSchema(): Promise<
 	if (toJSONSchemaLoaded) return toJSONSchemaFn
 	toJSONSchemaLoaded = true
 	try {
-		const id = "zod"
-		const zod = await import(id)
+		/* opaque specifier — a plain `const id = "zod"` is constant-folded by rollup/esbuild,
+		   which pulls the whole optional dependency into webworker-target bundles */
+		const zod = await import(["z", "od"].join(""))
 		if (typeof zod.toJSONSchema === "function") {
 			toJSONSchemaFn = zod.toJSONSchema as (schema: unknown, opts?: { io?: "input" | "output" }) => unknown
 		}
@@ -27,8 +28,7 @@ export async function loadEffectJsonSchema(): Promise<((schema: unknown) => unkn
 	if (effectLoaded) return effectJsonSchemaFn
 	effectLoaded = true
 	try {
-		const id = "effect"
-		const effect = await import(id)
+		const effect = await import(["eff", "ect"].join(""))
 		if (effect.JSONSchema && typeof effect.JSONSchema.make === "function") {
 			effectJsonSchemaFn = effect.JSONSchema.make as (schema: unknown) => unknown
 		}

@@ -35,6 +35,12 @@ the e2e apps' generated clients are inputs to typecheck and tests.
     bun run test
     bun run test:consumers
 
+Before touching `src/build`, `codegen-loaders.ts`, or anything a bundler sees,
+also run the build tier — it is the only thing that catches an optional
+dependency leaking into a worker bundle:
+
+    bun run test:build
+
 The per-runtime e2e suites (`test:e2e:node`, `test:e2e:deno`, `test:e2e:cf`)
 and the polyglot `test:harness` suite need extra toolchains and are normally
 left to CI.

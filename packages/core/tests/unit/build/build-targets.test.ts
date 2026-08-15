@@ -94,8 +94,9 @@ function start(cmd: string, args: string[], env: NodeJS.ProcessEnv, cwd?: string
 }
 
 describe.sequential("honey/build target artifacts", () => {
-	it("cloudflare: vite build then wrangler/workerd serves health + openapi", async () => {
-		if (!(await which("wrangler")) && !(await which("bunx"))) return
+	it("cloudflare: vite build then wrangler/workerd serves health + openapi", async (ctx) => {
+		/* report as skipped, never as passed — a missing toolchain must not read as a green run */
+		if (!(await which("wrangler")) && !(await which("bunx"))) ctx.skip("wrangler not installed")
 		const outDir = resolve(OUT_ROOT, "cloudflare")
 		await viteBuild("cloudflare", outDir)
 		const entry = resolve(outDir, "index.js")
@@ -159,8 +160,8 @@ describe.sequential("honey/build target artifacts", () => {
 		await smokeHttp(`http://127.0.0.1:${PORTS.bun}`)
 	}, 60_000)
 
-	it("deno: vite build then deno dist serves health + openapi", async () => {
-		if (!(await which("deno"))) return
+	it("deno: vite build then deno dist serves health + openapi", async (ctx) => {
+		if (!(await which("deno"))) ctx.skip("deno not installed")
 		const outDir = resolve(OUT_ROOT, "deno")
 		await viteBuild("deno", outDir)
 		const entry = resolve(outDir, "index.js")

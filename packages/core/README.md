@@ -1578,13 +1578,25 @@ Typecheck stays strict. Do not weaken `strict` or add `as any` to make it pass.
 | `bun run test:e2e:node`  | Same tests, Node (`tsx`) listen.                                                 |
 | `bun run test:e2e:deno`  | Same tests, Deno listen.                                                         |
 | `bun run test:e2e:cf`    | Same tests, local workerd. Kitchen REST publish is skipped (`HONEY_E2E_ENV=cf`). |
+| `bun run test:build`     | Every app builds for every deploy target; artifacts and size budgets hold.       |
 | `bun run test:harness`   | Generated SDKs compile and behave.                                               |
 
 ```bash
 bun e2e/run.ts --env node --app kitchen
 bun e2e/run.ts --env all --app surface
 bun e2e/run.ts --env bun --mode prod
+
+bun e2e/run-build.ts --app kitchen --target cloudflare
+bun e2e/run-build.ts --runtime all           # run the builds under node and bun
+bun e2e/run-build.ts --check-generated       # CI: a build must not rewrite committed files
 ```
+
+The build tier builds each e2e app through its own `vite.config.ts` plus
+`createBuildPlugin`, once per target (`node`, `bun`, `deno`, `cloudflare`). A cell
+passes when the build exits 0, emits `dist/<target>/index.js`, and stays under its
+gzipped size budget. The budget is not decoration: honey loads `zod` and `effect`
+dynamically, and a bundler that resolves one of those dynamic imports silently adds
+~300KB to every worker bundle. Size is the only signal that catches it.
 
 ### E2E apps and runtimes
 
