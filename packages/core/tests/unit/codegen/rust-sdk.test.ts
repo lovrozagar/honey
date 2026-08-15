@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs"
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { execSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { generateRustSDK } from "../../../src/codegen-rust.ts"
 import { renderTopLevelRust, renderUseRust } from "../../../src/rust-type-emitter.ts"
+import { cargoEnv } from "../../cargo-env.ts"
 
 /* shared ctx factory for renderUseRust tests */
 function mkRustCtx(overrides: Partial<{
@@ -44,6 +44,21 @@ const hasIntegrationFlag = process.env["HONEY_RUST_INTEGRATION"] !== "0"
 function loadFixture(name: string, dir = "go"): Record<string, unknown> {
 	const url = new URL(`./fixtures/${dir}/${name}.json`, import.meta.url)
 	return JSON.parse(readFileSync(url, "utf8")) as Record<string, unknown>
+}
+
+/** Write generated SDK sources to a temp dir, run `fn`, then delete the sources (artifacts live in CARGO_TARGET_DIR). */
+function withTempSdk(prefix: string, files: Record<string, string>, fn: (dir: string) => void): void {
+	const dir = mkdtempSync(join(tmpdir(), prefix))
+	try {
+		for (const [relPath, content] of Object.entries(files)) {
+			const fullPath = join(dir, relPath)
+			mkdirSync(join(fullPath, ".."), { recursive: true })
+			writeFileSync(fullPath, content, "utf8")
+		}
+		fn(dir)
+	} finally {
+		rmSync(dir, { force: true, recursive: true })
+	}
 }
 
 /* ── Rust bracket-balance helper ──
@@ -595,6 +610,7 @@ describe("Tier 4: errors", () => {
 		expect(errors).toContain("Canceled")
 		expect(errors).toContain("Timeout")
 		expect(errors).toContain("AuthExpired")
+		expect(errors).toContain("Closed")
 		expect(errors).toContain("Other")
 		expect(errors).toMatch(/pub enum Error/)
 	})
@@ -840,7 +856,8 @@ describe("Tier 8: invalidation", () => {
 	it("69. mutating ops emit stale invalidation call after success", () => {
 		const result = generateRustSDK(invSpec, {})
 		const usersRs = result.files["src/resources/users.rs"]
-		expect(usersRs).toMatch(/stale.*invalidate|invalidate.*stale/)
+		expect(usersRs).toContain("stale.mark_stale")
+		expect(usersRs).toContain("entry.invalidate")
 	})
 })
 
@@ -919,8 +936,8 @@ describe("Tier 10: parity vs Go", () => {
 		expect(goResourceMatches.length).toBeGreaterThan(0)
 		expect(rustResourceFiles.length).toBe(goResourceMatches.length)
 
-		/* count operations in Go: func (r *xxxResource) Xxx( */
-		const goOpMatches = goResult.files["client.go"].match(/func\s+\(r\s+\*\w+Resource\)\s+\w+\(/g) ?? []
+		/* count operations in Go: func (u *UsersResource) Xxx( — receiver is first letter of the resource */
+		const goOpMatches = goResult.files["client.go"].match(/func\s+\(\w+\s+\*\w+Resource\)\s+\w+\(/g) ?? []
 		/* count pub async fn in Rust resource files */
 		const rustOps = rustResourceFiles.flatMap((f) => {
 			const content = rustResult.files[f]
@@ -987,18 +1004,13 @@ describe("Tier 11: integration smoke", () => {
 	]
 
 	it.skipIf(!hasCargo || !hasIntegrationFlag).each(cargoCheckCases)(
-		"79. emitted %s output passes cargo check --offline",
+		"79. emitted %s output passes cargo check",
 		(name, fixtureName, fixtureDir) => {
 			const spec = loadFixture(fixtureName, fixtureDir)
 			const result = generateRustSDK(spec, { crateName: `honey-sdk-test-${name}` })
-			const dir = mkdtempSync(join(tmpdir(), `honey-rust-sdk-${name}-`))
-			for (const [relPath, content] of Object.entries(result.files)) {
-				const fullPath = join(dir, relPath)
-				const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"))
-				execSync(`mkdir -p "${parentDir}"`)
-				writeFileSync(fullPath, content, "utf8")
-			}
-			execSync("cargo check --offline", { cwd: dir, stdio: "pipe" })
+			withTempSdk(`honey-rust-sdk-${name}-`, result.files, (dir) => {
+				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
+			})
 		},
 		60000,
 	)
@@ -1011,14 +1023,9 @@ describe("Tier 11: integration smoke", () => {
 			   rustfmt can parse the output without errors, not that it's idempotent. */
 			const spec = loadFixture("crud")
 			const result = generateRustSDK(spec, { crateName: "honey-sdk-test" })
-			const dir = mkdtempSync(join(tmpdir(), "honey-rust-sdk-fmt-"))
-			for (const [relPath, content] of Object.entries(result.files)) {
-				const fullPath = join(dir, relPath)
-				const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"))
-				execSync(`mkdir -p "${parentDir}"`)
-				writeFileSync(fullPath, content, "utf8")
-			}
-			execSync("cargo fmt", { cwd: dir, stdio: "pipe" })
+			withTempSdk("honey-rust-sdk-fmt-", result.files, (dir) => {
+				execSync("cargo fmt", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
+			})
 		},
 		60000,
 	)
@@ -1377,32 +1384,33 @@ describe("Tier 17: per-call timeout", () => {
 describe("Tier 18: StaleTracker::mark", () => {
 	const crudSpec = loadFixture("crud")
 
-	it("117. invalidation.rs declares pub async fn mark(&self, path: &str) on StaleTracker [runtime]", () => {
+	it("117. invalidation.rs declares pub async fn mark_stale on StaleTracker [runtime]", () => {
 		const result = generateRustSDK(crudSpec, {})
 		const inv = result.files["src/invalidation.rs"]
-		expect(inv).toMatch(/pub\s+async\s+fn\s+mark\s*\(\s*&self\s*,\s*path\s*:\s*&str\s*\)/)
+		expect(inv).toContain("pub async fn mark_stale(")
+		expect(inv).toContain("invalidate: &[String]")
+		expect(inv).toContain("mutation_selector: &str")
 	})
 
-	it("118. mark short-circuits when tracker is disabled (stale_time == 0 or enabled == false) [runtime]", () => {
+	it("118. mark_stale short-circuits when tracker is disabled or invalidate is empty [runtime]", () => {
 		const result = generateRustSDK(crudSpec, {})
 		const inv = result.files["src/invalidation.rs"]
-		/* mark must have an early-return guard for disabled state */
-		const markFnMatch = inv.match(/pub async fn mark[\s\S]*?(?=pub async fn|$)/m)
-		expect(markFnMatch).toBeTruthy()
-		const markBody = markFnMatch?.[0] ?? ""
-		expect(markBody).toMatch(/return|if\s+!|enabled|stale_time/)
+		const start = inv.indexOf("pub async fn mark_stale(")
+		const next = inv.indexOf("pub async fn", start + 1)
+		expect(start).toBeGreaterThanOrEqual(0)
+		const markBody = inv.slice(start, next === -1 ? undefined : next)
+		expect(markBody).toContain("if !self.enabled || invalidate.is_empty()")
 	})
 
-	it("119. mark inserts path into stale_until map + calls LRU sweep [runtime]", () => {
+	it("119. mark_stale upserts resolved targets + enforces LRU capacity [runtime]", () => {
 		const result = generateRustSDK(crudSpec, {})
 		const inv = result.files["src/invalidation.rs"]
-		const markFnMatch = inv.match(/pub async fn mark[\s\S]*?(?=pub async fn|\bpub fn|$)/m)
-		expect(markFnMatch).toBeTruthy()
-		const markBody = markFnMatch?.[0] ?? ""
-		/* inserts into the map */
-		expect(markBody).toMatch(/insert\s*\(|\.insert/)
-		/* sweeps LRU */
-		expect(markBody).toMatch(/sweep|max_entries|len\s*\(/)
+		const start = inv.indexOf("pub async fn mark_stale(")
+		const next = inv.indexOf("pub async fn", start + 1)
+		expect(start).toBeGreaterThanOrEqual(0)
+		const markBody = inv.slice(start, next === -1 ? undefined : next)
+		expect(markBody).toMatch(/upsert_locked|insert/)
+		expect(markBody).toMatch(/enforce_capacity_locked|max_entries/)
 	})
 })
 
@@ -1709,17 +1717,12 @@ describe("Tier 20: sync client", () => {
 	})
 
 	it.skipIf(!hasCargo || !hasIntegrationFlag)(
-		"151. [integration] sync crud fixture → cargo check --offline passes",
+		"151. [integration] sync crud fixture → cargo check passes",
 		() => {
 			const result = generateRustSDK(crudSpec, { crateName: "honey-sdk-test-sync" })
-			const dir = mkdtempSync(join(tmpdir(), "honey-rust-sdk-sync-"))
-			for (const [relPath, content] of Object.entries(result.files)) {
-				const fullPath = join(dir, relPath)
-				const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"))
-				execSync(`mkdir -p "${parentDir}"`)
-				writeFileSync(fullPath, content, "utf8")
-			}
-			execSync("cargo check --offline", { cwd: dir, stdio: "pipe" })
+			withTempSdk("honey-rust-sdk-sync-", result.files, (dir) => {
+				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
+			})
 		},
 		60000,
 	)
@@ -1788,17 +1791,12 @@ describe("Tier 21: SdkResult response field", () => {
 	})
 
 	it.skipIf(!hasCargo || !hasIntegrationFlag)(
-		"159. [integration] cargo check --offline on crud fixture with throwOnError=false compiles cleanly",
+		"159. [integration] cargo check on crud fixture with throwOnError=false compiles cleanly",
 		() => {
 			const result = generateRustSDK(crudSpec, { crateName: "honey-sdk-test-response", throwOnError: false })
-			const dir = mkdtempSync(join(tmpdir(), "honey-rust-sdk-response-"))
-			for (const [relPath, content] of Object.entries(result.files)) {
-				const fullPath = join(dir, relPath)
-				const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"))
-				execSync(`mkdir -p "${parentDir}"`)
-				writeFileSync(fullPath, content, "utf8")
-			}
-			execSync("cargo check --offline", { cwd: dir, stdio: "pipe" })
+			withTempSdk("honey-rust-sdk-response-", result.files, (dir) => {
+				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
+			})
 		},
 		60000,
 	)
@@ -1889,17 +1887,12 @@ describe("Tier 22: realtime SSE transport", () => {
 	})
 
 	it.skipIf(!hasCargo || !hasIntegrationFlag)(
-		"170. [integration] realtime-sse.json fixture → cargo check --offline passes",
+		"170. [integration] realtime-sse.json fixture → cargo check passes",
 		() => {
 			const result = generateRustSDK(realtimeSseSpec, { crateName: "honey-sdk-test-realtime-sse" })
-			const dir = mkdtempSync(join(tmpdir(), "honey-rust-sdk-realtime-sse-"))
-			for (const [relPath, content] of Object.entries(result.files)) {
-				const fullPath = join(dir, relPath)
-				const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"))
-				execSync(`mkdir -p "${parentDir}"`)
-				writeFileSync(fullPath, content, "utf8")
-			}
-			execSync("cargo check --offline", { cwd: dir, stdio: "pipe" })
+			withTempSdk("honey-rust-sdk-realtime-sse-", result.files, (dir) => {
+				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
+			})
 		},
 		60000,
 	)
@@ -1968,17 +1961,12 @@ describe("Tier 23: realtime longpoll transport", () => {
 	})
 
 	it.skipIf(!hasCargo || !hasIntegrationFlag)(
-		"178. [integration] realtime-longpoll.json fixture → cargo check --offline passes",
+		"178. [integration] realtime-longpoll.json fixture → cargo check passes",
 		() => {
 			const result = generateRustSDK(realtimeLongpollSpec, { crateName: "honey-sdk-test-realtime-longpoll" })
-			const dir = mkdtempSync(join(tmpdir(), "honey-rust-sdk-realtime-longpoll-"))
-			for (const [relPath, content] of Object.entries(result.files)) {
-				const fullPath = join(dir, relPath)
-				const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"))
-				execSync(`mkdir -p "${parentDir}"`)
-				writeFileSync(fullPath, content, "utf8")
-			}
-			execSync("cargo check --offline", { cwd: dir, stdio: "pipe" })
+			withTempSdk("honey-rust-sdk-realtime-longpoll-", result.files, (dir) => {
+				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
+			})
 		},
 		60000,
 	)
@@ -2007,8 +1995,9 @@ describe("Tier 24: Phase 3 regression", () => {
 		expect(runtime).toContain("on_request")
 		expect(runtime).toContain("on_response")
 		expect(runtime).toContain("state")
-		/* SyncClientConfig must be in runtime_sync, NOT in runtime.rs */
-		expect(runtime).not.toContain("SyncClientConfig")
+		/* SyncClientConfig must be declared in runtime_sync, NOT in runtime.rs
+		 * (a comment in runtime.rs may mention the sibling type by name). */
+		expect(runtime).not.toMatch(/pub struct SyncClientConfig/)
 		const runtimeSync = result.files["src/runtime_sync.rs"]
 		expect(runtimeSync).toContain("SyncClientConfig")
 	})

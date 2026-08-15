@@ -1,5 +1,7 @@
 import type { WSReadyState } from "../types.ts"
 
+export const WS_SEND_BUFFER_MAX = 32
+
 export type WSContext<T = unknown> = {
 	close(code?: number, reason?: string): void
 	raw: T
@@ -15,12 +17,25 @@ export type WSHandler<TCtx = unknown> = {
 	onReconnect?(ctx: TCtx, ws: WSContext, token: string): Promise<void> | void
 }
 
+export type WSPreUpgrade = {
+	response: Response
+	socket: WSContext
+	/** Run `fn` now if the socket is already open, otherwise on the next open. */
+	whenOpen(fn: () => void): void
+}
+
 export type WSAdapter = {
 	upgrade(
 		req: Request,
 		env: unknown,
 		handler: WSHandler<unknown>,
 	): Promise<{ response: Response; socket: WSContext }> | { response: Response; socket: WSContext }
+	/**
+	 * Deno requires `Deno.upgradeWebSocket` in the same turn as the serve
+	 * callback. When present, Honey calls this synchronously from `fetch`
+	 * and returns `response` before any middleware Promise.
+	 */
+	preUpgrade?(req: Request): WSPreUpgrade | undefined
 }
 
 export type RawSocket = {
@@ -31,9 +46,17 @@ export type RawSocket = {
 
 export class WSContextImpl<T extends RawSocket = RawSocket> implements WSContext<T> {
 	raw: T
+	private sendBuffer: Array<ArrayBuffer | Uint8Array | string> = []
 
 	constructor(raw: T) {
 		this.raw = raw
+		const target = raw as T & { addEventListener?(type: string, listener: () => void): void }
+		if (raw.readyState !== 1 && typeof target.addEventListener === "function") {
+			target.addEventListener("open", () => {
+				for (const msg of this.sendBuffer) this.raw.send(msg)
+				this.sendBuffer = []
+			})
+		}
 	}
 
 	get readyState(): WSReadyState {
@@ -41,15 +64,21 @@ export class WSContextImpl<T extends RawSocket = RawSocket> implements WSContext
 	}
 
 	close(code?: number, reason?: string): void {
+		this.sendBuffer = []
 		this.raw.close(code, reason)
 	}
 
 	send(data: ArrayBuffer | Uint8Array | object | string): void {
-		if (typeof data === "string" || data instanceof ArrayBuffer || data instanceof Uint8Array) {
-			this.raw.send(data)
-		} else {
-			this.raw.send(JSON.stringify(data))
+		const payload =
+			typeof data === "string" || data instanceof ArrayBuffer || data instanceof Uint8Array
+				? data
+				: JSON.stringify(data)
+		if (this.raw.readyState === 1) {
+			this.raw.send(payload)
+			return
 		}
+		if (this.sendBuffer.length >= WS_SEND_BUFFER_MAX) this.sendBuffer.shift()
+		this.sendBuffer.push(payload)
 	}
 }
 

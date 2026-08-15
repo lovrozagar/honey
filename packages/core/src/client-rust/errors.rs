@@ -102,6 +102,9 @@ pub enum Error {
     Timeout,
     /// Authentication expired; string carries the refresh error message.
     AuthExpired(String),
+    /// WebSocket close frame (or stream end). `code` is the RFC 6455 status
+    /// (1005 = no status received, 1006 = abnormal / no close frame).
+    Closed { code: u16, reason: String },
     /// Any other error not covered by the above variants.
     Other(String),
 }
@@ -116,6 +119,13 @@ impl fmt::Display for Error {
             Error::Canceled => write!(f, "request canceled"),
             Error::Timeout => write!(f, "request timed out"),
             Error::AuthExpired(msg) => write!(f, "auth expired: {}", msg),
+            Error::Closed { code, reason } => {
+                if reason.is_empty() {
+                    write!(f, "connection closed: {}", code)
+                } else {
+                    write!(f, "connection closed: {} {}", code, reason)
+                }
+            }
             Error::Other(msg) => write!(f, "error: {}", msg),
         }
     }

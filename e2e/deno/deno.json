@@ -1,4 +1,13 @@
 {
-	"nodeModulesDir": "auto",
-	"unstable": ["byonm"]
+	"imports": {
+		"@honey/e2e-app": "../app/src/app.ts",
+		"honey": "../../packages/core/src/index.ts",
+		"honey/codegen": "../../packages/core/src/codegen.ts",
+		"honey/cors": "../../packages/core/src/cors.ts",
+		"honey/logger": "../../packages/core/src/logger.ts",
+		"honey/plugin": "../../packages/core/src/plugin.ts",
+		"honey/request-id": "../../packages/core/src/request-id.ts",
+		"honey/ws/deno": "../../packages/core/src/ws/deno.ts",
+		"zod": "npm:zod@4.3.6"
+	}
 }

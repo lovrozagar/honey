@@ -86,18 +86,13 @@ describe("#1 input-type suffix — signal, headers, cookies", () => {
 		expect(files.types).toContain("signal?: AbortSignal")
 	})
 
-	it("HTTP method input type includes headers?: Record<string, string> on a method line", () => {
+	it("HTTP method input type includes headers?: Record<string, string> via _HttpOpts", () => {
 		const { files } = generateSDK(inputSuffixSpec, { name: "TestSDK" })
-		/*
-		 * headers?: Record<string, string> already exists in the config type as part of a union,
-		 * but NOT on a method's own input type line. After the fix, every method input
-		 * must carry it as a standalone optional field — assert it appears on a
-		 * line that also contains a method call signature (i.e. "(input").
-		 */
-		const methodInputLine = files.types
-			.split("\n")
-			.find((l) => l.includes("(input") && l.includes("headers?: Record<string, string>"))
-		expect(methodInputLine).toBeDefined()
+		expect(files.types).toContain(
+			"export type _HttpOpts = { cookies?: Record<string, string>; headers?: Record<string, string>",
+		)
+		const methodLine = files.types.split("\n").find((l) => l.includes("(input") && l.includes("_HttpOpts"))
+		expect(methodLine).toBeDefined()
 	})
 
 	it("HTTP method input type includes cookies?: Record<string, string>", () => {
@@ -124,7 +119,7 @@ describe("#1 input-type suffix — signal, headers, cookies", () => {
 		/* /items GET has no params, no body, no search — must be optional arg */
 		const { files } = generateSDK(inputSuffixSpec, { name: "TestSDK" })
 		/* The list method should use optional input */
-		expect(files.types).toContain("input?: {")
+		expect(files.types).toContain("input?: _HttpOpts")
 		/* must NOT have a required input for the param-less GET */
 		const listLine = files.types
 			.split("\n")
@@ -371,7 +366,7 @@ describe("#4 binary / non-JSON response types", () => {
 		const { files } = generateSDK(responseTypeSpec, { name: "TestSDK" })
 		const deleteLine = files.types
 			.split("\n")
-			.find((l) => l.includes("delete("))
+			.find((l) => l.includes("delete") && l.includes("SDKResult"))
 		expect(deleteLine).toBeDefined()
 		expect(deleteLine).toContain("SDKResult<null")
 		expect(deleteLine).not.toContain("SDKResult<void")
@@ -563,7 +558,7 @@ describe("#24 error message hygiene — #parseAsClientError emits safe message",
 		const { files } = generateSDK(makeSpec({
 			"/users": { get: { operationId: "users.list", responses: {} } },
 		}), { name: "TestSDK" })
-		expect(files.client).toContain(".slice(0, 512)")
+		expect(files.client).toContain(".slice(0, this.#maxErrorMessageChars)")
 	})
 
 	it("files.client #parseAsClientError contains control-char strip regex [\\x00-\\x1f]", () => {
@@ -583,8 +578,8 @@ describe("#24 error message hygiene — #parseAsClientError emits safe message",
 			"/users": { get: { operationId: "users.list", responses: {} } },
 		}), { name: "TestSDK" })
 		expect(files.client).toContain("body,")
-		/* body must appear inside the _ClientError constructor call */
-		const clientErrorIdx = files.client.indexOf("new _ClientError({")
+		/* body is passed into the status-mapped ClientError constructor */
+		const clientErrorIdx = files.client.indexOf("new Cls({")
 		expect(clientErrorIdx).toBeGreaterThan(-1)
 		const snippet = files.client.slice(clientErrorIdx, clientErrorIdx + 300)
 		expect(snippet).toContain("body,")

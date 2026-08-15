@@ -3,6 +3,7 @@ import * as yup from "yup"
 import { generateOpenApi, generateTypes } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
 import { emitSchemaType } from "../../../src/type-emitter.ts"
+import { resolveSchema } from "./_resolve-schema.ts"
 
 describe("yup — type emission", () => {
 	describe("primitives", () => {
@@ -90,10 +91,13 @@ describe("yup — OpenAPI JSON Schema", () => {
 		const op = spec.paths["/items"]?.post as Record<string, unknown>
 		const body = op.requestBody as Record<string, unknown>
 		const content = body.content as Record<string, Record<string, unknown>>
-		const schema = content["application/json"].schema as Record<string, unknown>
-		expect(schema.type).toBe("object")
-		expect(schema.properties).toBeDefined()
-		const props = schema.properties as Record<string, Record<string, string>>
+		const schema = resolveSchema(
+			spec,
+			content["application/json"].schema as Record<string, unknown>,
+		)
+		expect(schema?.type).toBe("object")
+		expect(schema?.properties).toBeDefined()
+		const props = schema?.properties as Record<string, Record<string, string>>
 		expect(props.name.type).toBe("string")
 		expect(props.age.type).toBe("number")
 	})
@@ -128,9 +132,12 @@ describe("yup — OpenAPI JSON Schema", () => {
 		const op = spec.paths["/items"]?.get as Record<string, unknown>
 		const responses = op.responses as Record<string, Record<string, unknown>>
 		const content = responses["200"].content as Record<string, Record<string, unknown>>
-		const schema = content["application/json"].schema as Record<string, unknown>
-		expect(schema.type).toBe("object")
-		const props = schema.properties as Record<string, Record<string, string>>
+		const schema = resolveSchema(
+			spec,
+			content["application/json"].schema as Record<string, unknown>,
+		)
+		expect(schema?.type).toBe("object")
+		const props = schema?.properties as Record<string, Record<string, string>>
 		expect(props.id.type).toBe("string")
 		expect(props.count.type).toBe("number")
 	})
@@ -145,8 +152,11 @@ describe("yup — OpenAPI JSON Schema", () => {
 		const op = spec.paths["/items"]?.post as Record<string, unknown>
 		const body = op.requestBody as Record<string, unknown>
 		const content = body.content as Record<string, Record<string, unknown>>
-		const schema = content["application/json"].schema as Record<string, unknown>
-		const props = schema.properties as Record<string, unknown>
+		const schema = resolveSchema(
+			spec,
+			content["application/json"].schema as Record<string, unknown>,
+		)
+		const props = schema?.properties as Record<string, unknown>
 		const nameProp = props.name as Record<string, unknown>
 		expect(nameProp.anyOf).toEqual([{ type: "string" }, { type: "null" }])
 	})

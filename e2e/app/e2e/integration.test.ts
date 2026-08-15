@@ -32,6 +32,30 @@ test.describe("CORS", () => {
 		expect(res.headers()["access-control-allow-origin"]).toBe("http://example.com")
 		expect(res.headers()["access-control-allow-credentials"]).toBe("true")
 	})
+
+	test("preflight on GET /api/health → 204", async ({ request }) => {
+		const res = await request.fetch("/api/health", {
+			headers: {
+				"access-control-request-method": "GET",
+				origin: "http://localhost:3000",
+			},
+			method: "OPTIONS",
+		})
+		expect(res.status()).toBe(204)
+		expect(res.headers()["access-control-allow-origin"]).toBe("http://localhost:3000")
+	})
+
+	test("preflight on GET /api/openapi.json → 204", async ({ request }) => {
+		const res = await request.fetch("/api/openapi.json", {
+			headers: {
+				"access-control-request-method": "GET",
+				origin: "http://localhost:3000",
+			},
+			method: "OPTIONS",
+		})
+		expect(res.status()).toBe(204)
+		expect(res.headers()["access-control-allow-origin"]).toBe("http://localhost:3000")
+	})
 })
 
 test.describe("auth", () => {
@@ -224,6 +248,21 @@ test.describe("OpenAPI", () => {
 		expect(spec.paths).toBeDefined()
 	})
 
+	test("GET /api/openapi.yml and /api/openapi.yaml → same YAML spec", async ({ request }) => {
+		const yml = await request.get("/api/openapi.yml")
+		const yaml = await request.get("/api/openapi.yaml")
+		expect(yml.status()).toBe(200)
+		expect(yaml.status()).toBe(200)
+		expect(yml.headers()["content-type"]).toMatch(/yaml/)
+		expect(yaml.headers()["content-type"]).toMatch(/yaml/)
+		const ymlText = await yml.text()
+		const yamlText = await yaml.text()
+		expect(ymlText).toBe(yamlText)
+		expect(ymlText).toMatch(/openapi:\s*"?3\.1\.0"?/)
+		expect(ymlText).toContain("Honey E2E")
+		expect(ymlText).toContain("/api/v1/organizations")
+	})
+
 	test("OpenAPI spec includes paths with correct methods", async ({ request }) => {
 		const res = await request.get("/api/openapi.json")
 		const spec = await res.json()
@@ -261,6 +300,25 @@ test.describe("OpenAPI", () => {
 		const rootGet = spec.paths["/api"].get
 		expect(rootGet.summary).toBe("Root test route")
 		expect(rootGet.tags).toEqual(["test"])
+	})
+
+	test("GET /api/docs → Scalar HTML pointing at /api/openapi.json", async ({ request }) => {
+		const res = await request.get("/api/docs")
+		expect(res.status()).toBe(200)
+		expect(res.headers()["content-type"]).toMatch(/html/)
+		const html = await res.text()
+		expect(html).toContain("cdn.jsdelivr.net/npm/@scalar/api-reference")
+		expect(html).toContain("/api/openapi.json")
+	})
+
+	test("OpenAPI spec excludes spec and docs endpoints", async ({ request }) => {
+		const res = await request.get("/api/openapi.json")
+		const spec = await res.json()
+		expect(spec.paths["/api/openapi.json"]).toBeUndefined()
+		expect(spec.paths["/api/openapi.yml"]).toBeUndefined()
+		expect(spec.paths["/api/openapi.yaml"]).toBeUndefined()
+		expect(spec.paths["/api/docs"]).toBeUndefined()
+		expect(spec.paths["/api/health"]).toBeDefined()
 	})
 })
 

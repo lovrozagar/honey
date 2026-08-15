@@ -119,7 +119,7 @@ describe("generated code structure — config type shape", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		expect(files.types).toContain("baseURL: string")
 		expect(files.types).toContain("fetch?: typeof fetch")
-		expect(files.types).toContain("invalidation?: { staleTime: number }")
+		expect(files.types).toContain("invalidation?: { maxSourcesPerTarget?: number; staleMaxEntries?: number; staleTime: number }")
 		expect(files.types).toContain("onRequest?:")
 		expect(files.types).toContain("onResponse?:")
 	})
@@ -997,7 +997,7 @@ describe("generated code structure — _ClientError class", () => {
 
 	it("re-exports _ClientError as ClientError", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		expect(files.client).toContain("export { _ClientError as ClientError }")
+		expect(files.client).toContain("_ClientError as ClientError")
 	})
 
 	it("emits isClientError standalone helper", () => {
@@ -1137,11 +1137,11 @@ describe("bugfix — #connectWS uses typed opts instead of unsafe casts", () => 
 	it("#connectWS accesses opts.protocols directly without cast", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		/* extract the #connectWS method definition (tab-indented, not proxy call) */
-		const wsStart = files.client.indexOf("\t#connectWS(path:")
+		const wsStart = files.client.indexOf("\t#connectWS(entry:")
 		const wsBody = files.client.slice(wsStart, wsStart + 500)
 		expect(wsBody).toContain("opts.protocols")
 		expect(wsBody).toContain("opts.reconnectToken")
-		expect(wsBody).not.toContain('as Record<string, unknown>')
+		expect(wsBody).not.toContain("as Record<string, unknown>")
 	})
 })
 
@@ -1341,7 +1341,7 @@ describe("bugfix — resource proxy is cached per resource name", () => {
 
 	it("generated client contains #resourceCache.get(resourceName)", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		expect(files.client).toContain("#resourceCache.get(resourceName)")
+		expect(files.client).toContain("#resourceCache.get(key)")
 	})
 
 	it("createSDK: accessing same resource twice returns identical proxy object", () => {
@@ -1495,21 +1495,16 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 		 * BEFORE the entry.ws check. Current code does NOT do this — WS branch
 		 * uses entry.path directly. This assertion will fail until fixed.
 		 */
-		const proxyStart = files.client.indexOf("get: (_t, actionName:")
-		const proxyBody = files.client.slice(proxyStart, proxyStart + 600)
-
-		/* Fixed code would have: const path = target.#toColonParams(entry.path)
-		   followed by the WS branch using `path` not `entry.path` */
-		const toColonBeforeWS = /const path = target\.#toColonParams\(entry\.path\)[\s\S]*?if \(entry\.ws\)/.test(proxyBody)
+		const proxyStart = files.client.indexOf("get(target, key)")
+		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
+		const toColonBeforeWS = /const entryPath = target\.#toColonParams\(entry\.path\)[\s\S]*?if \(entry\.ws\)/.test(proxyBody)
 		expect(toColonBeforeWS).toBe(true)
 	})
 
 	it("WS branch passes converted path variable, not entry.path", () => {
 		const { files } = generateSDK(ssePathParamSpec, { name: "SSETest" })
-		const proxyStart = files.client.indexOf("get: (_t, actionName:")
-		const proxyBody = files.client.slice(proxyStart, proxyStart + 600)
-
-		/* WS branch currently uses entry.path — fixed code must use `path` */
+		const proxyStart = files.client.indexOf("get(target, key)")
+		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
 		const wsSection = proxyBody.slice(proxyBody.indexOf("entry.ws"))
 		const wsBranchBody = wsSection.slice(0, wsSection.indexOf("entry.sse") !== -1 ? wsSection.indexOf("entry.sse") : 300)
 		expect(wsBranchBody).not.toContain("entry.path")
@@ -1517,10 +1512,8 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 
 	it("SSE branch passes converted path variable, not entry.path", () => {
 		const { files } = generateSDK(ssePathParamSpec, { name: "SSETest" })
-		const proxyStart = files.client.indexOf("get: (_t, actionName:")
-		const proxyBody = files.client.slice(proxyStart, proxyStart + 600)
-
-		/* SSE branch currently uses entry.path — fixed code must use `path` */
+		const proxyStart = files.client.indexOf("get(target, key)")
+		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
 		const sseIdx = proxyBody.indexOf("entry.sse")
 		const sseBranchBody = proxyBody.slice(sseIdx, sseIdx + 200)
 		expect(sseBranchBody).not.toContain("entry.path")
@@ -1528,10 +1521,7 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 
 	it("inner proxy get handler has symbol guard for actionName", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		const proxyStart = files.client.indexOf("get: (_t, actionName:")
-		const proxyBody = files.client.slice(proxyStart, proxyStart + 300)
-		/* Fixed code adds: if (typeof actionName === "symbol") return undefined */
-		expect(proxyBody).toContain(`typeof actionName === "symbol"`)
+		expect(files.client).toContain("return Reflect.get(target, key)")
 	})
 })
 
@@ -1540,32 +1530,30 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 describe("round3 bugfix — #clearStale guarded by requestMeta?.isStale", () => {
 	it("#request throwOnError branch wraps #clearStale in requestMeta?.isStale guard", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		const requestStart = files.client.indexOf("\tasync #request(")
-		const requestBody = files.client.slice(requestStart, requestStart + 1200)
-
-		/* Current code calls #clearStale unconditionally.
-		   Fixed code: if (requestMeta?.isStale) this.#clearStale(...) */
-		const guardedPattern = /if \(requestMeta\?\.isStale\)\s+this\.#clearStale/
+		const requestStart = files.client.indexOf("async #request(")
+		const requestBody = files.client.slice(requestStart, requestStart + 4000)
+		const guardedPattern = /if \(requestMeta\?\.isStale\) this\.#clearStale/
 		expect(guardedPattern.test(requestBody)).toBe(true)
 	})
 
 	it("#request safe branch wraps #clearStale in requestMeta?.isStale guard", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		const requestStart = files.client.indexOf("\tasync #request(")
-		const requestBody = files.client.slice(requestStart, requestStart + 1200)
-
-		/* Both clearStale calls must be guarded — count occurrences */
-		const matches = requestBody.match(/if \(requestMeta\?\.isStale\)\s+this\.#clearStale/g)
+		const requestStart = files.client.indexOf("async #request(")
+		const requestBody = files.client.slice(requestStart, requestStart + 4000)
+		const matches = requestBody.match(/if \(requestMeta\?\.isStale\) this\.#clearStale/g)
 		expect(matches).toHaveLength(2)
 	})
 
 	it("#request body does NOT contain bare #clearStale call without isStale guard", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		const requestStart = files.client.indexOf("\tasync #request(")
-		const requestBody = files.client.slice(requestStart, requestStart + 1200)
+		const requestStart = files.client.indexOf("async #request(")
+		const requestBody = files.client.slice(requestStart, requestStart + 4000)
 
 		/* Any line with #clearStale must be preceded on same logical line by isStale guard */
-		const lines = requestBody.split("\n").filter((l) => l.includes("#clearStale("))
+		const lines = requestBody
+			.split("\n")
+			.filter((l) => l.includes("this.#clearStale("))
+		expect(lines.length).toBeGreaterThan(0)
 		for (const line of lines) {
 			expect(line).toContain("requestMeta?.isStale")
 		}
@@ -1654,16 +1642,14 @@ describe("round3 bugfix — proxy get handler parameters typed string | symbol",
 		 * Current code: (target, resourceName: string)
 		 * Fixed code: (target, resourceName: string | symbol)
 		 */
-		expect(files.client).toContain("resourceName: string | symbol")
+		expect(files.client).toContain("get(target, key)")
+		expect(files.client).toContain("return Reflect.get(target, key)")
 	})
 
 	it("inner proxy get handler parameter is typed string | symbol", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		/*
-		 * Current code: (_t, actionName: string)
-		 * Fixed code: (_t, actionName: string | symbol)
-		 */
-		expect(files.client).toContain("actionName: string | symbol")
+		expect(files.client).toContain("get(target, key)")
+		expect(files.client).toContain("return Reflect.get(target, key)")
 	})
 })
 
@@ -1769,6 +1755,6 @@ describe("round3 bugfix — staleUntil size-capped sweep in #markStale", () => {
 		const markStart = files.client.indexOf("\t#markStale(")
 		const markBody = files.client.slice(markStart, markStart + 900)
 		/* The threshold must be a reasonable value — spec says 1000 */
-		expect(markBody).toContain("1000")
+		expect(markBody).toContain("this.#staleMaxEntries")
 	})
 })

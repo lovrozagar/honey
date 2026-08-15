@@ -1,6 +1,6 @@
 import type { MiddlewareFn } from "./middleware.ts"
 
-type CORSOptions = {
+export type CORSOptions = {
 	credentials?: boolean
 	exposeHeaders?: string[]
 	headers?: string[]

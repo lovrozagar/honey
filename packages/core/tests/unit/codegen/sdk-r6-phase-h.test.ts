@@ -201,7 +201,7 @@ const phaseHReorderedSpec = makeSpec({
 describe("#R6-15 void->null — Layer B' regression", () => {
 	it("Layer B' post-fix: project.export method return type contains Promise<null> not Promise<void>", () => {
 		const { files } = generateSDK(phaseHFixtureSpec, { name: "TestSDK" })
-		const exportMethodIdx = files.types.indexOf("\t\texport(")
+		const exportMethodIdx = files.types.indexOf(`\t\t"export"(`)
 		expect(exportMethodIdx).toBeGreaterThan(-1)
 		const exportLine = files.types.slice(exportMethodIdx, files.types.indexOf("\n", exportMethodIdx))
 		expect(exportLine).toContain("Promise<null>")
@@ -316,7 +316,7 @@ describe("#R6-27 _call promotion — Layer B' regression types", () => {
 describe("#R6-27 _call promotion — Layer B' regression client strings", () => {
 	it("Layer B' post-fix: files.client contains the _call promotion guard (actions.length === 1 && actions[0] === \"_call\")", () => {
 		const { files } = generateSDK(phaseHFixtureSpec, { name: "TestSDK" })
-		expect(files.client).toContain(`actions.length === 1 && actions[0] === "_call"`)
+		expect(files.client).toContain(`nodeKeys.length === 1 && nodeKeys[0] === "_call"`)
 	})
 })
 

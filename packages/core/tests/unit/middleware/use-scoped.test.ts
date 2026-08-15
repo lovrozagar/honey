@@ -541,3 +541,28 @@ describe("scoped middleware — runtime tests", () => {
 		expect(calls.length).toBe(1)
 	})
 })
+
+describe("scoped middleware — parent fetch after child use(path)", () => {
+	it("parent fetch runs scoped mw registered on the child (e2e return-h pattern)", async () => {
+		const { mw: spy, calls } = makeSpy()
+		const app = honey<{}>()
+		const admin = app.use("/admin", spy)
+		admin.get("/admin/x").handler((ctx) => ctx.res.text("ok", "x"))
+
+		const res = await app.fetch(new Request("http://localhost/admin/x"), {})
+		expect(res.status).toBe(200)
+		expect(await res.text()).toBe("x")
+		expect(calls.length).toBe(1)
+	})
+
+	it("parent fetch still skips scoped mw on paths outside the prefix", async () => {
+		const { mw: spy, calls } = makeSpy()
+		const app = honey<{}>()
+		const admin = app.use("/admin", spy)
+		admin.get("/admin/x").handler((ctx) => ctx.res.text("ok", "x"))
+		app.get("/public").handler((ctx) => ctx.res.text("ok", "public"))
+
+		await app.fetch(new Request("http://localhost/public"), {})
+		expect(calls.length).toBe(0)
+	})
+})

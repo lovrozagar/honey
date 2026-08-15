@@ -3,4 +3,5 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"main": "src/worker.ts",
 	"name": "honey-cf-e2e",
+	"workers_dev": true
 }

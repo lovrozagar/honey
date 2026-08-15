@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { generateRustSDK } from "../../../src/codegen-rust.ts"
+import { cargoEnv } from "../../cargo-env.ts"
 import { hasBinary, loadMockSpec, startMockServerSubprocess } from "./harness-util.ts"
 
 const hasCargo = hasBinary("cargo")
@@ -70,7 +71,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 120_000,
 				})
 			} catch (err: unknown) {
@@ -184,7 +185,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -299,7 +300,7 @@ fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -407,7 +408,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -551,7 +552,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -657,7 +658,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -770,7 +771,7 @@ fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -906,7 +907,7 @@ fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -1022,7 +1023,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -1139,7 +1140,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 240_000,
 				})
 			} catch (err: unknown) {
@@ -1261,6 +1262,7 @@ fn main() {
 				execSync("cargo build --quiet", {
 					cwd: runnerDir,
 					encoding: "utf8",
+					env: cargoEnv(),
 					timeout: 240_000,
 				})
 			} catch (err: unknown) {
@@ -1368,6 +1370,7 @@ fn main() {
 				execSync("cargo build --quiet", {
 					cwd: runnerDir,
 					encoding: "utf8",
+					env: cargoEnv(),
 					timeout: 240_000,
 				})
 			} catch (err: unknown) {
@@ -1581,6 +1584,7 @@ async fn main() {
 				stdout = execSync("cargo run --quiet", {
 					cwd: runnerDir,
 					encoding: "utf8",
+					env: cargoEnv(),
 					timeout: 300_000,
 				})
 			} catch (err: unknown) {
@@ -1741,6 +1745,7 @@ async fn main() {
 				stdout = execSync("cargo run --quiet", {
 					cwd: runnerDir,
 					encoding: "utf8",
+					env: cargoEnv(),
 					timeout: 300_000,
 				})
 			} catch (err: unknown) {
@@ -1834,7 +1839,7 @@ async fn main() {
 				stdout = execSync("cargo run", {
 					cwd: runnerDir,
 					encoding: "utf8",
-					env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+					env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 					timeout: 180_000,
 				})
 			} catch (err: unknown) {
@@ -1896,7 +1901,7 @@ ${extraCargoDeps}
 			const stdout = execSync("cargo run", {
 				cwd: runnerDir,
 				encoding: "utf8",
-				env: { ...process.env, BASE_URL: `http://127.0.0.1:${port}` },
+				env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
 				timeout: 300_000,
 			})
 			return JSON.parse(stdout.trim())
@@ -1952,6 +1957,7 @@ async fn main() {
 		const mainRs = `use mock_sdk::Client;
 use mock_sdk::ClientConfig;
 use mock_sdk::client::ConnectWsOpts;
+use mock_sdk::errors::Error;
 use std::env;
 
 #[tokio::main]
@@ -1960,20 +1966,24 @@ async fn main() {
     let mut ws = client.connect_ws(&ConnectWsOpts::default()).await.unwrap();
     ws.send(&serde_json::Value::String("__close__".into())).await.unwrap();
     let r = ws.read().await;
-    let err_msg = match r { Ok(_) => "NO_ERR".to_string(), Err(e) => format!("{:?}", e) };
-    println!("{}", serde_json::json!({ "err_msg": err_msg }));
+    let (code, reason) = match r {
+        Ok(_) => (0, "NO_ERR".to_string()),
+        Err(Error::Closed { code, reason }) => (code, reason),
+        Err(e) => (0, format!("{:?}", e)),
+    };
+    println!("{}", serde_json::json!({ "code": code, "reason": reason }));
 }
 `
-		const result = await runRustWsCase(mainRs, "") as { err_msg: string }
-		/* Rust ws.rs returns Error::Other("connection closed by peer") on Close frame.
-		 * Close-frame code/reason not surfaced today — BLOCKER captured in 10.a.2 log. */
-		expect(result.err_msg).toMatch(/connection closed/)
+		const result = await runRustWsCase(mainRs, "") as { code: number; reason: string }
+		expect(result.code).toBe(1000)
+		expect(result.reason).toBe("server-initiated")
 	}, 300_000)
 
 	it("Test 10.a.1 WS-D — auth handshake via ?token= query-param", async () => {
 		const mainRs = `use mock_sdk::Client;
 use mock_sdk::ClientConfig;
 use mock_sdk::client::ConnectWsOpts;
+use mock_sdk::errors::Error;
 use std::env;
 
 #[tokio::main]
@@ -1993,16 +2003,23 @@ async fn main() {
     let mut bad_ws = client.connect_ws(&bad_opts).await.unwrap();
     let _ = bad_ws.send(&serde_json::Value::String("ping".into())).await;
     let bad_read = bad_ws.read().await;
-    let bad_err = match bad_read { Ok(v) => format!("OK:{}", String::from_utf8_lossy(&v)), Err(e) => format!("ERR:{:?}", e) };
+    let (bad_code, bad_reason) = match bad_read {
+        Ok(v) => (0, format!("OK:{}", String::from_utf8_lossy(&v))),
+        Err(Error::Closed { code, reason }) => (code, reason),
+        Err(e) => (0, format!("{:?}", e)),
+    };
 
-    println!("{}", serde_json::json!({ "ok_received": ok_received, "bad_err": bad_err }));
+    println!("{}", serde_json::json!({ "ok_received": ok_received, "bad_code": bad_code, "bad_reason": bad_reason }));
 }
 `
-		const result = await runRustWsCase(mainRs, "") as { ok_received: string; bad_err: string }
+		const result = await runRustWsCase(mainRs, "") as {
+			ok_received: string
+			bad_code: number
+			bad_reason: string
+		}
 		expect(JSON.parse(result.ok_received)).toBe("ping")
-		/* Bad-token close surfaces as read error; not structured with 4401 today.
-		 * Close-frame code parity deferred to 10.a.2 runtime patch. */
-		expect(result.bad_err).toMatch(/^ERR:/)
+		expect(result.bad_code).toBe(4401)
+		expect(result.bad_reason).toBe("unauthorized")
 	}, 300_000)
 
 	/* Ping/pong: auto-handled by tokio-tungstenite, not user-observable.

@@ -5,6 +5,13 @@ import {
 	shortHash,
 } from "./codegen-schema-naming.ts"
 import type { SchemaNameContext } from "./codegen-schema-naming.ts"
+import {
+	effectJsonSchemaFn,
+	loadEffectJsonSchema,
+	loadToJSONSchema,
+	toJSONSchemaFn,
+} from "./codegen-loaders.ts"
+import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
 import { methodsOf, namespacesOf, schemaToIR, toIR } from "./codegen-ir.ts"
 import type { IRNamespace } from "./codegen-ir.ts"
 import type { HoneyError } from "./error.ts"
@@ -21,6 +28,9 @@ import type {
 	StandardSchemaLike,
 } from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
+
+export { prepareCodegen } from "./codegen-loaders.ts"
+export { toYaml, yamlSiblingPath } from "./yaml.ts"
 
 /* Status → typed error subclass. Single source of truth shared between the
  * emitted client (class declarations + status map + footer re-exports) and
@@ -44,58 +54,6 @@ const ERROR_EXPORT_NAMES: ReadonlyArray<string> = [
 	...STATUS_ERROR_CLASSES.map((c) => c.name),
 	"isClientError",
 ]
-
-let _toJSONSchema: ((schema: unknown, opts?: { io?: "input" | "output" }) => unknown) | undefined
-let _toJSONSchemaLoaded = false
-
-async function loadToJSONSchema(): Promise<
-	((schema: unknown, opts?: { io?: "input" | "output" }) => unknown) | undefined
-> {
-	if (_toJSONSchemaLoaded) return _toJSONSchema
-	_toJSONSchemaLoaded = true
-	try {
-		const id = "zod"
-		const zod = await import(id)
-		if (typeof zod.toJSONSchema === "function") {
-			_toJSONSchema = zod.toJSONSchema as (
-				schema: unknown,
-				opts?: { io?: "input" | "output" },
-			) => unknown
-		}
-	} catch {
-		/* zod not available */
-	}
-	return _toJSONSchema
-}
-
-let _effectJsonSchema: ((schema: unknown) => unknown) | undefined
-let _effectLoaded = false
-
-async function loadEffectJsonSchema(): Promise<((schema: unknown) => unknown) | undefined> {
-	if (_effectLoaded) return _effectJsonSchema
-	_effectLoaded = true
-	try {
-		const id = "effect"
-		const effect = await import(id)
-		if (effect.JSONSchema && typeof effect.JSONSchema.make === "function") {
-			_effectJsonSchema = effect.JSONSchema.make as (schema: unknown) => unknown
-		}
-	} catch {
-		/* effect not available */
-	}
-	return _effectJsonSchema
-}
-
-/**
- * Pre-warm dynamic JSON Schema loaders (zod, effect). Safe to call multiple times;
- * both loaders cache their result. Required before invoking any sync codegen entrypoint
- * (`generateRouteTree`, `generateRouteTreeFromApp`, `generateRouteTreeFromRouteTree`)
- * on an app whose schemas are Zod or Effect — otherwise `schemaToJsonSchema` falls back
- * to metadata-only `introspectSchema`.
- */
-export async function prepareCodegen(): Promise<void> {
-	await Promise.all([loadToJSONSchema(), loadEffectJsonSchema()])
-}
 
 /* ---- Valibot → JSON Schema converter ---- */
 
@@ -284,9 +242,9 @@ function yupDescBase(desc: YupJsonDesc): unknown {
 /* ---- Effect → JSON Schema converter ---- */
 
 function effectToJsonSchema(schema: unknown): unknown {
-	if (_effectJsonSchema) {
+	if (effectJsonSchemaFn) {
 		try {
-			return _effectJsonSchema(schema)
+			return effectJsonSchemaFn(schema)
 		} catch {
 			/* fall through */
 		}
@@ -350,6 +308,10 @@ type CollectedRoute = {
 	handler: RouteHandler
 	method: string
 	path: string
+}
+
+function isMetaInternal(handler: RouteHandler): boolean {
+	return (handler.mt as { internal?: boolean } | null)?.internal === true
 }
 
 function walkTree(
@@ -1083,32 +1045,177 @@ export function resolveRefs(spec: OpenApiSpecInput): OpenApiSpecInput {
 	return { ...spec, components, paths }
 }
 
-/**
- * Convert schema to JSON Schema. Supports Zod (+ mini), Valibot, ArkType, Yup, and Effect.
- * Falls back to metadata for unknown StandardSchema vendors.
- */
-/**
- * Post-process Zod's toJSONSchema output for OpenAPI compatibility:
- * - Strip $schema (top-level JSON Schema meta, invalid in inline OpenAPI)
- * - Convert anyOf → oneOf (API responses are exclusive unions, oneOf renders better in docs)
- */
-function sanitizeZodJsonSchema(obj: Record<string, unknown>): void {
-	delete obj["$schema"]
-	if (Array.isArray(obj["anyOf"])) {
-		obj["oneOf"] = obj["anyOf"]
-		delete obj["anyOf"]
-	}
-	/* recurse into nested schemas */
-	for (const val of Object.values(obj)) {
-		if (val && typeof val === "object" && !Array.isArray(val)) {
-			sanitizeZodJsonSchema(val as Record<string, unknown>)
-		} else if (Array.isArray(val)) {
-			for (const item of val) {
-				if (item && typeof item === "object") {
-					sanitizeZodJsonSchema(item as Record<string, unknown>)
-				}
-			}
+/** Zod 4 puts converters on the schema instance. Use those first so Workers
+ * (where `import("zod")` does not resolve) still emit real JSON Schema. */
+function zodInstanceToJsonSchema(
+	schema: StandardSchemaLike,
+	io: "input" | "output",
+): Record<string, unknown> | undefined {
+	const jsonSchema = (
+		schema["~standard"] as {
+			jsonSchema?: { input?: () => unknown; output?: () => unknown }
 		}
+	).jsonSchema
+	const fromStandard = jsonSchema?.[io]
+	if (typeof fromStandard === "function") {
+		const result = fromStandard()
+		if (result && typeof result === "object") return result as Record<string, unknown>
+	}
+	const inst = (schema as { toJSONSchema?: (opts?: { io?: "input" | "output" }) => unknown }).toJSONSchema
+	if (typeof inst === "function") {
+		const result = inst.call(schema, { io })
+		if (result && typeof result === "object") return result as Record<string, unknown>
+	}
+	return undefined
+}
+
+function applyZodBag(schema: unknown, json: Record<string, unknown>): Record<string, unknown> {
+	const bag = (schema as { _zod?: { bag?: Record<string, unknown> } })._zod?.bag
+	if (!bag) return json
+	if (typeof bag.format === "string") {
+		if (bag.format === "safeint") json.type = "integer"
+		else json.format = bag.format
+	}
+	if (json.type === "string") {
+		if (typeof bag.minimum === "number") json.minLength = bag.minimum
+		if (typeof bag.maximum === "number") json.maxLength = bag.maximum
+	}
+	if (json.type === "number" || json.type === "integer") {
+		if (typeof bag.minimum === "number") json.minimum = bag.minimum
+		if (typeof bag.maximum === "number") json.maximum = bag.maximum
+	}
+	return json
+}
+
+function zodDefOf(schema: unknown): Record<string, unknown> | undefined {
+	const s = schema as { _def?: Record<string, unknown>; def?: Record<string, unknown>; _zod?: { def?: Record<string, unknown> } }
+	return s._def ?? s.def ?? s._zod?.def
+}
+
+function zodDefIsOptional(def: Record<string, unknown>): boolean {
+	const t = String(def.typeName ?? def.type ?? "")
+	if (t === "ZodOptional" || t === "optional") return true
+	if (
+		t === "ZodNullable" ||
+		t === "nullable" ||
+		t === "ZodDefault" ||
+		t === "default" ||
+		t === "ZodCatch" ||
+		t === "catch"
+	) {
+		const inner = def.innerType
+		if (inner) {
+			const innerDef = zodDefOf(inner)
+			if (innerDef) return zodDefIsOptional(innerDef)
+		}
+	}
+	return false
+}
+
+/** Walk Zod 3/4 internals. Survives Workers bundles that drop `toJSONSchema`. */
+function zodDefToJsonSchema(schema: unknown, depth = 0): Record<string, unknown> | undefined {
+	if (depth > 24) return {}
+	const def = zodDefOf(schema)
+	if (!def) return undefined
+	const typeName = String(def.typeName ?? def.type ?? "")
+
+	switch (typeName) {
+		case "ZodString":
+		case "string":
+			return applyZodBag(schema, { type: "string" })
+		case "ZodNumber":
+		case "number":
+			return applyZodBag(schema, { type: "number" })
+		case "ZodBoolean":
+		case "boolean":
+			return { type: "boolean" }
+		case "ZodBigInt":
+		case "bigint":
+			return { type: "integer" }
+		case "ZodDate":
+		case "date":
+			return { format: "date-time", type: "string" }
+		case "ZodNull":
+		case "null":
+			return { type: "null" }
+		case "ZodUndefined":
+		case "ZodVoid":
+		case "undefined":
+		case "void":
+		case "ZodAny":
+		case "ZodUnknown":
+		case "any":
+		case "unknown":
+			return {}
+		case "ZodLiteral":
+		case "literal": {
+			const val = def.value !== undefined ? def.value : (def.values as unknown[])?.[0]
+			return { const: val }
+		}
+		case "ZodEnum":
+		case "enum": {
+			const vals = (def.values ?? def.entries) as unknown
+			const list = Array.isArray(vals) ? vals : Object.values(vals as Record<string, string>)
+			return { enum: list, type: "string" }
+		}
+		case "ZodObject":
+		case "object": {
+			const rawShape = def.shape as Record<string, unknown> | (() => Record<string, unknown>) | undefined
+			const shape = typeof rawShape === "function" ? rawShape() : rawShape
+			if (!shape) return { type: "object" }
+			const properties: Record<string, unknown> = {}
+			const required: string[] = []
+			for (const [key, prop] of Object.entries(shape)) {
+				const converted = zodDefToJsonSchema(prop, depth + 1) ?? {}
+				properties[key] = converted
+				const propDef = zodDefOf(prop)
+				if (!propDef || !zodDefIsOptional(propDef)) required.push(key)
+			}
+			const result: Record<string, unknown> = { additionalProperties: false, properties, type: "object" }
+			if (required.length > 0) result.required = required
+			return result
+		}
+		case "ZodArray":
+		case "array":
+			return { items: zodDefToJsonSchema(def.element ?? def.type, depth + 1) ?? {}, type: "array" }
+		case "ZodOptional":
+		case "optional":
+			return zodDefToJsonSchema(def.innerType, depth + 1)
+		case "ZodNullable":
+		case "nullable": {
+			const inner = zodDefToJsonSchema(def.innerType, depth + 1) ?? {}
+			return { anyOf: [inner, { type: "null" }] }
+		}
+		case "ZodUnion":
+		case "ZodDiscriminatedUnion":
+		case "union":
+			return { anyOf: ((def.options as unknown[]) ?? []).map((o) => zodDefToJsonSchema(o, depth + 1) ?? {}) }
+		case "ZodRecord":
+		case "record":
+			return {
+				additionalProperties: zodDefToJsonSchema(def.valueType, depth + 1) ?? {},
+				type: "object",
+			}
+		case "ZodTuple":
+		case "tuple":
+			return {
+				items: ((def.items as unknown[]) ?? []).map((i) => zodDefToJsonSchema(i, depth + 1) ?? {}),
+				type: "array",
+			}
+		case "ZodDefault":
+		case "ZodCatch":
+		case "default":
+		case "catch":
+		case "ZodReadonly":
+		case "readonly":
+			return zodDefToJsonSchema(def.innerType, depth + 1)
+		case "ZodPipeline":
+		case "pipe":
+			return zodDefToJsonSchema(def.out, depth + 1)
+		case "ZodBranded":
+			return zodDefToJsonSchema(def.type, depth + 1)
+		default:
+			return undefined
 	}
 }
 
@@ -1124,11 +1231,15 @@ function schemaToJsonSchema(schema: StandardSchemaLike, io: "input" | "output" =
 	}
 	const vendor = schema["~standard"].vendor
 
-	if (vendor === "zod" && _toJSONSchema) {
+	if (vendor === "zod") {
 		try {
-			const result = _toJSONSchema(schema, { io }) as Record<string, unknown>
-			sanitizeZodJsonSchema(result)
-			return result
+			const result =
+				zodInstanceToJsonSchema(schema, io) ??
+				(toJSONSchemaFn?.(schema, { io }) as Record<string, unknown> | undefined) ??
+				zodDefToJsonSchema(schema)
+			if (result) {
+				return sanitizeZodJsonSchema(result)
+			}
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err)
 			const defType =
@@ -1900,7 +2011,7 @@ function generateFromTreeRoot(root: TreeNode): string {
 	/* emit RouteSelector union from route graph */
 	const selectors = new Set<string>()
 	for (const { handler, method, path } of collected) {
-		if (handler._skip) continue
+		if (handler._skip || isMetaInternal(handler)) continue
 		selectors.add(`${method} ${path}`)
 	}
 	if (selectors.size > 0) {
@@ -2130,7 +2241,7 @@ export function generateTypes<TEnv, TCtx>(
 	const hasErrors = collected.some(({ handler }) => handler.ek.size > 0)
 	const lines: string[] = []
 
-	const importParts = ["HoneyContext"]
+	const importParts = ["HoneyContext", "WithOutput"]
 	if (hasErrors) importParts.push("HoneyError")
 	lines.push(`import type { ${importParts.join(", ")} } from "honey"`)
 	lines.push("")
@@ -2164,7 +2275,7 @@ export function generateTypes<TEnv, TCtx>(
 	/* emit RouteSelector union from route graph */
 	const selectors = new Set<string>()
 	for (const { handler, method, path } of collected) {
-		if (handler._skip) continue
+		if (handler._skip || isMetaInternal(handler)) continue
 		selectors.add(`${method} ${path}`)
 	}
 	if (selectors.size > 0) {
@@ -2267,7 +2378,7 @@ export function generateTypes<TEnv, TCtx>(
 			const metaType = emitMetaType(handler)
 			const outputType = emitOutputType(handler)
 			lines.push(`\t\t${method}: {`)
-			lines.push(`\t\t\tctx: ${ctxType}`)
+			lines.push(`\t\t\tctx: WithOutput<${ctxType}, ${outputType}>`)
 			lines.push(`\t\t\terrors: ${errorType}`)
 			const shapesType = emitErrorShapes(handler, errorMeta)
 			if (shapesType) {

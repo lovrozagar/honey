@@ -2,6 +2,7 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { generateOpenApi } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
+import { resolveSchema } from "./_resolve-schema.ts"
 
 /**
  * Helper: create honey app with valibot schema as JSON input,
@@ -17,7 +18,7 @@ async function inputSchema(schema: v.GenericSchema): Promise<unknown> {
 	const op = spec.paths["/test"]?.post as Record<string, unknown>
 	const body = op.requestBody as Record<string, unknown>
 	const content = body.content as Record<string, Record<string, unknown>>
-	return content["application/json"].schema
+	return resolveSchema(spec, content["application/json"].schema as Record<string, unknown>)
 }
 
 /**
@@ -34,7 +35,7 @@ async function outputSchema(schema: v.GenericSchema): Promise<unknown> {
 	const op = spec.paths["/test"]?.get as Record<string, unknown>
 	const responses = op.responses as Record<string, Record<string, unknown>>
 	const content = responses["200"].content as Record<string, Record<string, unknown>>
-	return content["application/json"].schema
+	return resolveSchema(spec, content["application/json"].schema as Record<string, unknown>)
 }
 
 /* ---- Primitive types ---- */

@@ -4,7 +4,7 @@ import type { MiddlewareFn } from "../../../src/middleware.ts"
 import type { WSRouteHandler } from "../../../src/tree.ts"
 import { createNode, insertWsRoute, matchWsRoute } from "../../../src/tree.ts"
 import type { WSAdapter, WSHandler } from "../../../src/ws/cloudflare.ts"
-import { WSContextImpl } from "../../../src/ws/cloudflare.ts"
+import { WS_SEND_BUFFER_MAX, WSContextImpl } from "../../../src/ws/cloudflare.ts"
 
 /**
  * Node.js Response constructor rejects status 101 (only 200-599 valid per Fetch spec).
@@ -73,6 +73,25 @@ describe("WSContext", () => {
 			send: vi.fn(),
 		}
 	}
+
+	it("caps pre-open send buffer and keeps the newest frames", () => {
+		const listeners: Record<string, Array<() => void>> = {}
+		const raw = {
+			addEventListener(type: string, fn: () => void) {
+				;(listeners[type] ??= []).push(fn)
+			},
+			close: vi.fn(),
+			readyState: 0,
+			send: vi.fn(),
+		}
+		const ws = new WSContextImpl(raw)
+		for (let i = 0; i < 40; i++) ws.send(`m${i}`)
+		raw.readyState = 1
+		for (const fn of listeners.open ?? []) fn()
+		expect(raw.send).toHaveBeenCalledTimes(WS_SEND_BUFFER_MAX)
+		expect(raw.send.mock.calls[0]?.[0]).toBe("m8")
+		expect(raw.send.mock.calls[WS_SEND_BUFFER_MAX - 1]?.[0]).toBe("m39")
+	})
 
 	it("send(string) delegates to raw socket", () => {
 		const raw = makeMockSocket()
@@ -304,6 +323,55 @@ describe("Honey .ws() integration", () => {
 		})
 		const wsRes = await app.fetch(wsReq, {})
 		expect(wsRes.status).toBe(101)
+	})
+
+	it("preUpgrade is not called for Upgrade on a non-WS path", async () => {
+		let preCount = 0
+		const { adapter } = createTestAdapter()
+		adapter.preUpgrade = () => {
+			preCount++
+			return {
+				response: make101Response(),
+				socket: new WSContextImpl({ close: vi.fn(), readyState: 1, send: vi.fn() }),
+				whenOpen(fn) {
+					fn()
+				},
+			}
+		}
+		const app = honey().wsAdapter(adapter)
+		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+		app.ws("/ws").handler({ onOpen: vi.fn() })
+
+		const res = await app.fetch(
+			new Request("http://localhost/health", { headers: { upgrade: "websocket" } }),
+			{},
+		)
+		expect(preCount).toBe(0)
+		expect(res.status).not.toBe(101)
+	})
+
+	it("preUpgrade is called for an actual WS route", async () => {
+		let preCount = 0
+		const { adapter } = createTestAdapter()
+		adapter.preUpgrade = () => {
+			preCount++
+			return {
+				response: make101Response(),
+				socket: new WSContextImpl({ close: vi.fn(), readyState: 1, send: vi.fn() }),
+				whenOpen(fn) {
+					fn()
+				},
+			}
+		}
+		const app = honey().wsAdapter(adapter)
+		app.ws("/ws").handler({ onOpen: vi.fn() })
+
+		const res = await app.fetch(
+			new Request("http://localhost/ws", { headers: { upgrade: "websocket" } }),
+			{},
+		)
+		expect(preCount).toBe(1)
+		expect(res.status).toBe(101)
 	})
 
 	it("middleware chain runs once on upgrade with ctx enrichment", async () => {

@@ -23,6 +23,7 @@
 		"honey": "./src/cli.ts"
 	},
 	"files": [
+		"docs",
 		"src"
 	],
 	"type": "module",
@@ -78,8 +79,9 @@
 		"test:harness": "vitest run --config vitest.harness.config.ts",
 		"test:harness:rust": "vitest run --config vitest.harness.rust.config.ts",
 		"test:watch": "vitest",
-		"type:check": "tsc --noEmit -p tsconfig.src.json",
-		"type:check:tests": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit"
+		"type:check": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit -p tsconfig.types.json",
+		"type:check:tests": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit",
+		"type:check:types": "tsc --noEmit -p tsconfig.types.json"
 	},
 	"dependencies": {
 		"jiti": "2.7.0"
@@ -96,6 +98,7 @@
 		"ts-morph": "catalog:",
 		"typescript": "catalog:",
 		"valibot": "catalog:",
+		"vite": "catalog:",
 		"vitest": "catalog:",
 		"yup": "catalog:",
 		"zod": "catalog:"

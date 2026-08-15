@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test"
 
 const WS_PORT = process.env.PORT ?? "4100"
-const WS_BASE = `ws://localhost:${WS_PORT}`
+const WS_HOST = process.env.WS_HOST ?? "localhost"
+const WS_BASE = `ws://${WS_HOST}:${WS_PORT}`
 
 /**
  * Helper: opens a WebSocket, collects messages, provides close/wait utilities.

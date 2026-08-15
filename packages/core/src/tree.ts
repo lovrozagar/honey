@@ -58,6 +58,8 @@ export type WSRouteHandler = {
 export type TreeNode = {
 	/** dynamic param child — { n: param name, c: child subtree } */
 	d: { c: TreeNode; n: string } | null
+	/** route-graph generation — bumped on insert/merge so served specs can invalidate */
+	g?: number
 	/** method handlers — maps HTTP method (or ALL) to route handler */
 	m: Record<HttpMethod | "ALL", RouteHandler> | null
 	/** static children — maps literal path segment to child subtree */
@@ -66,6 +68,12 @@ export type TreeNode = {
 	w: { m: Record<HttpMethod | "ALL", RouteHandler>; n: string } | null
 	/** websocket handler for this path */
 	ws: WSRouteHandler | null
+}
+
+export function bumpGeneration(root: TreeNode): number {
+	const next = (root.g ?? 0) + 1
+	root.g = next
+	return next
 }
 
 export type MatchResult =
@@ -110,6 +118,7 @@ export function insertRoute(
 	path: string,
 	handler: RouteHandler,
 ): void {
+	bumpGeneration(root)
 	const segments = splitSegments(path)
 	let node = root
 
@@ -256,6 +265,7 @@ export function matchRoute(root: TreeNode, method: HttpMethod, path: string): Ma
 }
 
 export function insertWsRoute(root: TreeNode, path: string, handler: WSRouteHandler): void {
+	bumpGeneration(root)
 	const segments = splitSegments(path)
 	let node = root
 
@@ -344,7 +354,9 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 			target.m = Object.create(null) as Record<HttpMethod | "ALL", RouteHandler>
 		}
 		for (const [method, handler] of Object.entries(source.m)) {
-			if (method in target.m) {
+			const prev = target.m[method as HttpMethod | "ALL"]
+			if (prev !== undefined) {
+				if (prev._skip && handler._skip) continue
 				throw new Error(`Merge conflict: duplicate ${method} ${path}`)
 			}
 			target.m[method as HttpMethod | "ALL"] = handler
@@ -412,6 +424,7 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 
 /** Merge source tree nodes into target tree (mutates target) */
 export function mergeInto(target: TreeNode, source: TreeNode): void {
+	bumpGeneration(target)
 	mergeNodes(target, source, "")
 }
 

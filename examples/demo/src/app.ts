@@ -73,3 +73,5 @@ export const app = base
 		const org = OrgService.create(c)
 		return c.res.json("created", org)
 	})
+	.openapi({ docs: "scalar", title: "Honey Demo", version: "0.0.1" })
+	.manifest()

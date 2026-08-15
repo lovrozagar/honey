@@ -33,21 +33,30 @@ type GeneratedArtifacts = {
 	routeTree: string;
 };
 
-export async function generateFromApp<TEnv, TCtx>(
-	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
+export async function generateFromApp<
+	TEnv,
+	TCtx,
+	TRoutes,
+	TMeta,
+	TFactory,
+	TDefaults extends string,
+	TBase extends string,
+>(
+	app: Honey<TEnv, TCtx, TRoutes, TMeta, TFactory, TDefaults, TBase>,
 	options?: HoneyPluginOptions,
 ): Promise<GeneratedArtifacts> {
+	const host = app as unknown as Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>
 	const artifacts: GeneratedArtifacts = {
-		routeTree: generateRouteTreeFromApp(app),
+		routeTree: generateRouteTreeFromApp(host),
 	};
 
 	if (options?.manifest) {
-		const manifest = generateManifest(app);
+		const manifest = generateManifest(host);
 		artifacts.manifest = JSON.stringify(manifest, null, 2);
 	}
 
 	if (options?.openApi) {
-		const spec = await generateOpenApi(app, { info: options.openApi.info });
+		const spec = await generateOpenApi(host, { info: options.openApi.info });
 		artifacts.openApi = JSON.stringify(spec, null, 2);
 		artifacts.openApiYaml = toYaml(spec);
 	}
@@ -347,7 +356,7 @@ type TreeResult = { root: import("./tree.ts").TreeNode };
 
 async function loadDefaultWithJiti(entryPath: string): Promise<unknown> {
 	const { createJiti } = await import("jiti");
-	const jiti = createJiti(entryPath, { interopDefault: true });
+	const jiti = createJiti(entryPath, { fsCache: false, interopDefault: true, moduleCache: false });
 	const mod = (await jiti.import(entryPath)) as Record<string, unknown>;
 
 	/* prefer named exports, then unwrap interop default */

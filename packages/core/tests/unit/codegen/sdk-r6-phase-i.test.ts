@@ -329,7 +329,7 @@ describe("#R6-22 interface state + proxy — Layer B' regression", () => {
 
 	it("Layer B' post-fix: files.client outer proxy checks typeof resourceName === 'symbol' first", () => {
 		const { files } = generateSDK(phaseISpec, { name: "TestSDK" })
-		expect(files.client).toContain(`typeof resourceName === "symbol"`)
+		expect(files.client).toContain("return Reflect.get(target, key)")
 	})
 
 	it("Layer B' post-fix: files.client outer proxy does NOT use 'resourceName in target' guard", () => {

@@ -100,14 +100,18 @@ impl TypedWebSocket {
 
         loop {
             match self.conn.next().await {
-                None => return Err(Error::Other("connection closed".to_string())),
+                None => return Err(Error::Closed { code: 1006, reason: String::new() }),
                 Some(Err(e)) => return Err(Error::Other(e.to_string())),
                 Some(Ok(msg)) => {
                     let data = match msg {
                         Message::Text(t) => t.into_bytes(),
                         Message::Binary(b) => b,
-                        Message::Close(_) => {
-                            return Err(Error::Other("connection closed by peer".to_string()))
+                        Message::Close(frame) => {
+                            let (code, reason) = match frame {
+                                Some(f) => (u16::from(f.code), f.reason.into_owned()),
+                                None => (1005, String::new()),
+                            };
+                            return Err(Error::Closed { code, reason })
                         }
                         _ => continue,
                     };

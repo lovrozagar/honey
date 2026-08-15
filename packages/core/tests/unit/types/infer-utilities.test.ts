@@ -146,7 +146,8 @@ describe("InferRouteInput", () => {
 			.handler((ctx) => ctx.res.json("ok", { q: ctx.input.search.q }));
 
 		type Input = InferRouteInput<typeof app, "/search", "get">;
-		expectTypeOf<Input>().toMatchTypeOf<{
+		expectTypeOf<Input>().not.toBeUnknown();
+		expectTypeOf<Input>().toEqualTypeOf<{
 			search: { limit: string; q: string };
 		}>();
 	});

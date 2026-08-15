@@ -1,6 +1,5 @@
 import type { InferCtx, MiddlewareFn, WSAdapter } from "honey"
 import { defineErrors, HoneyError, honey } from "honey"
-import { generateManifest, generateOpenApi } from "honey/codegen"
 import { cors } from "honey/cors"
 import { createLogger, logger } from "honey/logger"
 import { generateFromApp } from "honey/plugin"
@@ -51,13 +50,13 @@ const withAuth: MiddlewareFn<DbCtx & { req: Request }, AuthCtx> = (ctx, next) =>
 }
 
 /* ---- app factory ---- */
-export function createApp(wsAdapter: WSAdapter) {
+export function createApp(wsAdapter?: WSAdapter) {
 	const log = createLogger({ level: "debug" })
 
-	const h = honey<Env>()
-		.basePath("/api")
-		.trailingSlash("strip")
-		.wsAdapter(wsAdapter)
+	const root = honey<Env>().basePath("/api").trailingSlash("strip")
+	if (wsAdapter) root.wsAdapter(wsAdapter)
+
+	const h = root
 		.use(requestId())
 		.use(logger({ instance: log }))
 		.errorFactory(errors)
@@ -264,17 +263,14 @@ export function createApp(wsAdapter: WSAdapter) {
 
 	/* ---- codegen endpoints ---- */
 
-	corsed.get("/openapi.json").handler(async (ctx) => {
-		const spec = await generateOpenApi(h, {
-			info: { description: "Honey E2E Test API", title: "Honey E2E", version: "1.0.0" },
-		})
-		return ctx.res.json("ok", spec)
+	corsed.openapi({
+		description: "Honey E2E Test API",
+		docs: "scalar",
+		title: "Honey E2E",
+		version: "1.0.0",
 	})
 
-	corsed.get("/manifest.json").handler((ctx) => {
-		const manifest = generateManifest(h)
-		return ctx.res.json("ok", manifest)
-	})
+	corsed.manifest()
 
 	corsed.get("/generated-tree").handler(async (ctx) => {
 		const artifacts = await generateFromApp(h)

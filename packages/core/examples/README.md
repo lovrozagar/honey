@@ -37,6 +37,7 @@ These files are **documentation**, not compile targets. The referenced `./sdk/` 
 
 ## Related
 
+- SDK index: [`../docs/sdk.md`](../docs/sdk.md)
 - Master spec: `.workerc/specs/honey-sdk-parity-master.md`
 - Behavioral harnesses (verify what these examples document):
   - `public/honey/core/tests/integration/sdk-harness/ts-harness.test.ts`

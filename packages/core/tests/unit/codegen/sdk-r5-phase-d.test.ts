@@ -438,12 +438,14 @@ describe("R5-5 WS/SSE suffix asymmetry", () => {
 
 	it("R5-5: SSE method input types contain cookies?: Record<string, string>", () => {
 		const { files } = generateSDK(streamingSpec, { name: "TestSDK" })
-		/* find the SSE method line (returns AsyncIterable<...>) */
 		const sseLine = files.types
 			.split("\n")
 			.find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
 		expect(sseLine).toBeDefined()
-		expect(sseLine).toContain("cookies?: Record<string, string>")
+		expect(sseLine).toContain("_SseOpts")
+		expect(files.types).toContain(
+			"export type _SseOpts = { cookies?: Record<string, string>; headers?: Record<string, string>; lastEventId?: string; signal?: AbortSignal; timeout?: number }",
+		)
 	})
 
 	it("R5-5: SSE method input types still contain headers?, lastEventId?, signal? (non-regression)", () => {
@@ -452,9 +454,10 @@ describe("R5-5 WS/SSE suffix asymmetry", () => {
 			.split("\n")
 			.find((l) => l.includes("stream(") && l.includes("AsyncIterable"))
 		expect(sseLine).toBeDefined()
-		expect(sseLine).toContain("headers?: Record<string, string>")
-		expect(sseLine).toContain("lastEventId?: string")
-		expect(sseLine).toContain("signal?: AbortSignal")
+		expect(sseLine).toContain("_SseOpts")
+		expect(files.types).toContain("headers?: Record<string, string>")
+		expect(files.types).toContain("lastEventId?: string")
+		expect(files.types).toContain("signal?: AbortSignal")
 	})
 })
 

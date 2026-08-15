@@ -19,7 +19,7 @@ describe("generateTypes", () => {
 		const result = generateTypes(app, {})
 		expect(result).toContain('"/health"')
 		expect(result).toContain("get:")
-		expect(result).toContain("ctx: BaseCtx")
+		expect(result).toContain("ctx: WithOutput<BaseCtx")
 	})
 
 	it("generates input types from zod schemas", () => {
@@ -96,7 +96,7 @@ describe("generateTypes", () => {
 			.get("/health")
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 		const result = generateTypes(app, {})
-		expect(result).toContain('import type { HoneyContext } from "honey"')
+		expect(result).toContain('import type { HoneyContext, WithOutput } from "honey"')
 		expect(result).toContain("export type BaseCtx = HoneyContext<Record<string, unknown>>")
 		expect(result).not.toContain("InferCtx")
 	})
@@ -109,7 +109,7 @@ describe("generateTypes", () => {
 			baseCtxName: "AppCtx",
 		})
 		expect(result).toContain("export type AppCtx = HoneyContext<Record<string, unknown>>")
-		expect(result).toContain("ctx: AppCtx")
+		expect(result).toContain("ctx: WithOutput<AppCtx")
 	})
 
 	it("inlineEnvType and inlineMiddlewareType produces inline BaseCtx", () => {
@@ -120,7 +120,7 @@ describe("generateTypes", () => {
 			inlineEnvType: "{ DB: D1Database; KV: KVNamespace }",
 			inlineMiddlewareType: "{ user: { id: string; role: string } }",
 		})
-		expect(result).toContain('import type { HoneyContext } from "honey"')
+		expect(result).toContain('import type { HoneyContext, WithOutput } from "honey"')
 		expect(result).toContain(
 			"export type BaseCtx = HoneyContext<{ DB: D1Database; KV: KVNamespace }> & { user: { id: string; role: string } }",
 		)
@@ -240,7 +240,8 @@ describe("generateTypes", () => {
 				},
 			})
 
-			expect(result).toContain("ctx: BaseCtx & { auth: { sub: string } }")
+			expect(result).toContain("type MwCtx0 = { auth: { sub: string } }")
+			expect(result).toContain("ctx: WithOutput<BaseCtx & MwCtx0")
 			/* /public route should NOT have auth additions */
 			const lines = result.split("\n")
 			const publicBlock = lines
@@ -249,7 +250,7 @@ describe("generateTypes", () => {
 					lines.findIndex((l) => l.includes('"/private"')),
 				)
 				.join("\n")
-			expect(publicBlock).toContain("ctx: BaseCtx")
+			expect(publicBlock).toContain("ctx: WithOutput<BaseCtx")
 			expect(publicBlock).not.toContain("auth")
 		})
 
@@ -267,7 +268,8 @@ describe("generateTypes", () => {
 				},
 			})
 
-			expect(result).toContain("BaseCtx & { auth: { sub: string; role: string } } & {")
+			expect(result).toContain("type MwCtx0 = { auth: { sub: string; role: string } }")
+			expect(result).toContain("BaseCtx & MwCtx0")
 			expect(result).toContain("input: { json: { action: string } }")
 		})
 
@@ -282,7 +284,7 @@ describe("generateTypes", () => {
 				},
 			})
 
-			expect(result).toContain("ctx: BaseCtx")
+			expect(result).toContain("ctx: WithOutput<BaseCtx")
 			expect(result).not.toContain("auth")
 		})
 
@@ -302,8 +304,10 @@ describe("generateTypes", () => {
 				},
 			})
 
-			expect(result).toContain("ctx: BaseCtx & { auth: { sub: string } }")
-			expect(result).toContain("ctx: BaseCtx & { auth: { sub: string }; admin: { level: number } }")
+			expect(result).toContain("type MwCtx")
+			expect(result).toContain("{ auth: { sub: string } }")
+			expect(result).toContain("{ auth: { sub: string }; admin: { level: number } }")
+			expect(result).toContain("ctx: WithOutput<BaseCtx & MwCtx")
 		})
 	})
 })

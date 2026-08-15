@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:e95a241f560a",
+  "_generated": "honey checksum:989170f1c075",
   "errors": [
     {
       "errorKey": "unauthorized",
@@ -245,36 +245,6 @@
       ],
       "params": [],
       "path": "/api/boundary/custom"
-    },
-    {
-      "errors": [
-        "unauthorized",
-        "api_error"
-      ],
-      "meta": {},
-      "method": "GET",
-      "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
-      ],
-      "params": [],
-      "path": "/api/openapi.json"
-    },
-    {
-      "errors": [
-        "unauthorized",
-        "api_error"
-      ],
-      "meta": {},
-      "method": "GET",
-      "middleware": [
-        "anonymous",
-        "anonymous",
-        "anonymous"
-      ],
-      "params": [],
-      "path": "/api/manifest.json"
     },
     {
       "errors": [

@@ -2,11 +2,11 @@
 
 # state — honey
 
-  milestone  standalone-ready
-  updated    2026-08-13
+  milestone  framework-start
+  updated    2026-08-14
 
 ## now
-  4.a.2   Push `origin/main` (gated — wait for ask)
+  framework-start complete (Phases 22–24)
 
 ## next
-  4.a.3   npm publish `honey` (gated — wait for ask)
+  parked: 4.a.2 push / 4.a.3 npm publish — only if asked

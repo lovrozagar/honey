@@ -19,3 +19,6 @@ app
 	.handler((ctx) => {
 		return ctx.res.json("ok", { name: "" })
 	})
+
+app.openapi({ docs: "scalar", title: "Honey CF", version: "0.0.1" })
+app.manifest()

@@ -78,3 +78,6 @@ const resourceRoutes = base
 
 /* compose all groups */
 export const app = publicRoutes.route(accountRoutes).route(resourceRoutes)
+
+app.openapi({ docs: "scalar", title: "Demo 3", version: "0.0.1" })
+app.manifest()

@@ -50,6 +50,9 @@ import type { RealtimeRouteOpts } from "./realtime/route.ts";
 import { codeToStatusKey, EK, SK } from "./types.ts";
 import { validateInput, validateOutput } from "./validation.ts";
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts";
+import { scalar } from "./openapi/scalar.ts";
+import { swagger } from "./openapi/swagger.ts";
+import { startHoneyServer, type HoneyServeOptions, type ServeHandle } from "./serve.ts";
 
 export { HoneyContext } from "./context.ts";
 /** HoneyContext without internal backing fields — use this for consumer-facing types */
@@ -114,9 +117,11 @@ export type {
 	StatusKey,
 	SuccessStatusKey,
 } from "./types.ts";
-export type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts";
+export type { WSAdapter, WSContext, WSHandler, WSPreUpgrade } from "./ws/cloudflare.ts";
 export type { ConnContext, RealtimeRouteOpts } from "./realtime/route.ts";
 export type { RealtimeBus } from "./realtime/bus.ts";
+export type { HoneyServeOptions, ServeHandle, ServeRuntime } from "./serve.ts";
+export { detectRuntime } from "./serve.ts";
 export { generateMCPServer } from "./codegen-mcp.ts";
 
 /** Type predicate for incoming wire-protocol msg frames from the realtime client. */
@@ -196,6 +201,12 @@ function scopeMatches(prefix: string, fullPath: string): boolean {
 	if (fullPath.length <= prefix.length) return false;
 	if (fullPath.charCodeAt(prefix.length) !== 47) return false;
 	return fullPath.startsWith(prefix);
+}
+
+type HoneyGraph = {
+	handlerMap: Record<string, RouteHandler> | null
+	hasRouteTree: boolean
+	root: TreeNode
 }
 
 function walkTreeHandlers(
@@ -315,15 +326,17 @@ export class Honey<
 	private _errorFormatter: ErrorFormatterFn;
 	private _errorI18n: ErrorI18nConfig<TEnv> | null;
 	private _globalMiddlewares: RuntimeMiddleware[];
-	private _handlerMap: Record<string, RouteHandler> | null;
-	private _hasRouteTree: boolean;
+	private _graph: HoneyGraph;
 	private _hasWsRoutes: boolean;
 	private _logger: Logger | null;
 	private _outputValidation: "always" | "dev" | "off";
-	private _staticRoutes: Record<string, RouteHandler> | null;
+	private _staticRoutes: { map: Record<string, RouteHandler> | null };
 	private _stripPrefix: string | null;
 	private _trailingSlash: "enforce" | "ignore" | "strip";
 	private _wsAdapter: WSAdapter | null;
+	private _openApiCache: { epoch: number; value: Promise<unknown> } | null;
+	private _openApiYamlCache: { epoch: number; value: Promise<string> } | null;
+	private _manifestCache: { epoch: number; value: Promise<unknown> } | null;
 	private _onError:
 		| ((
 				error: unknown,
@@ -349,7 +362,6 @@ export class Honey<
 				req: Request;
 		  }) => Response | Promise<Response>)
 		| null;
-	private _root: TreeNode;
 	private _taps: Map<
 		string,
 		(ctx: TapContext<TEnv>, payload: unknown) => void | Promise<void>
@@ -362,12 +374,17 @@ export class Honey<
 		chainMiddlewares?: RuntimeMiddleware[];
 		defaultErrorKeys?: Set<string>;
 		globalMiddlewares?: RuntimeMiddleware[];
+		graph?: HoneyGraph;
 		handlerMap?: Record<string, RouteHandler> | null;
 		root?: TreeNode;
 		scopedMiddlewares?: ScopedEntry[];
 	}) {
 		this._basePath = "/";
-		this._root = opts?.root ?? createNode();
+		this._graph = opts?.graph ?? {
+			handlerMap: opts?.handlerMap ?? null,
+			hasRouteTree: false,
+			root: opts?.root ?? createNode(),
+		};
 		this._globalMiddlewares = opts?.globalMiddlewares ?? [];
 		this._scopedMiddlewares = opts?.scopedMiddlewares ?? [];
 		this._chainMeta = null;
@@ -381,15 +398,16 @@ export class Honey<
 		this._customErrorSchema = null;
 		this._errorFormatter = defaultErrorFormatter;
 		this._errorI18n = null;
-		this._handlerMap = opts?.handlerMap ?? null;
-		this._hasRouteTree = false;
 		this._hasWsRoutes = false;
 		this._logger = null;
 		this._outputValidation = "off";
-		this._staticRoutes = null;
+		this._staticRoutes = { map: null };
 		this._stripPrefix = null;
 		this._trailingSlash = "ignore";
 		this._wsAdapter = null;
+		this._openApiCache = null;
+		this._openApiYamlCache = null;
+		this._manifestCache = null;
 		this._onError = null;
 		this._onNotFound = null;
 		this._onMethodNotAllowed = null;
@@ -397,6 +415,27 @@ export class Honey<
 		this._telemetry = null;
 		this._realtimeBus = null;
 		this._realtimeRoutes = new Map();
+	}
+
+	private get _handlerMap(): Record<string, RouteHandler> | null {
+		return this._graph.handlerMap;
+	}
+	private set _handlerMap(value: Record<string, RouteHandler> | null) {
+		this._graph.handlerMap = value;
+	}
+
+	private get _hasRouteTree(): boolean {
+		return this._graph.hasRouteTree;
+	}
+	private set _hasRouteTree(value: boolean) {
+		this._graph.hasRouteTree = value;
+	}
+
+	private get _root(): TreeNode {
+		return this._graph.root;
+	}
+	private set _root(value: TreeNode) {
+		this._graph.root = value;
 	}
 
 	/** @internal — used by codegen */
@@ -411,10 +450,10 @@ export class Honey<
 
 	/** @internal — register a static route for O(1) lookup */
 	_registerStatic(key: string, handler: RouteHandler): void {
-		if (this._staticRoutes === null) {
-			this._staticRoutes = Object.create(null) as Record<string, RouteHandler>;
+		if (this._staticRoutes.map === null) {
+			this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>;
 		}
-		this._staticRoutes[key] = handler;
+		this._staticRoutes.map[key] = handler;
 	}
 
 	/** @internal — used by RouteBuilder for pre-filtered error factory */
@@ -700,8 +739,7 @@ export class Honey<
 			chainMiddlewares: this._chainMiddlewares,
 			defaultErrorKeys: this._defaultErrorKeys,
 			globalMiddlewares: this._globalMiddlewares,
-			handlerMap: this._handlerMap,
-			root: this._root,
+			graph: this._graph,
 			scopedMiddlewares: this._scopedMiddlewares,
 		});
 		next._basePath = mergePath(this._basePath, prefix);
@@ -726,6 +764,9 @@ export class Honey<
 		next._telemetry = this._telemetry;
 		next._realtimeBus = this._realtimeBus;
 		next._realtimeRoutes = this._realtimeRoutes;
+		next._staticRoutes = this._staticRoutes;
+		next._hasRouteTree = this._hasRouteTree;
+		next._hasWsRoutes = this._hasWsRoutes;
 		return next as unknown as Honey<
 			TEnv,
 			TCtx,
@@ -771,8 +812,7 @@ export class Honey<
 			chainMiddlewares: this._chainMiddlewares,
 			defaultErrorKeys: this._defaultErrorKeys,
 			globalMiddlewares: this._globalMiddlewares,
-			handlerMap: this._handlerMap,
-			root: this._root,
+			graph: this._graph,
 			scopedMiddlewares: this._scopedMiddlewares,
 		});
 		next._basePath = this._basePath;
@@ -799,6 +839,9 @@ export class Honey<
 		next._telemetry = this._telemetry;
 		next._realtimeBus = this._realtimeBus;
 		next._realtimeRoutes = this._realtimeRoutes;
+		next._staticRoutes = this._staticRoutes;
+		next._hasRouteTree = this._hasRouteTree;
+		next._hasWsRoutes = this._hasWsRoutes;
 		return next as unknown as Honey<TEnv, TCtx & Readonly<TAdds>, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>;
 	}
 
@@ -830,6 +873,148 @@ export class Honey<
 	wsAdapter(adapter: WSAdapter): this {
 		this._wsAdapter = adapter;
 		return this;
+	}
+
+	openapi(options: {
+		description?: string
+		docs?: "scalar" | "swagger"
+		docsPath?: string
+		filterRoutes?: (route: { meta: unknown; method: string; path: string }) => boolean
+		path?: string
+		securitySchemes?: Record<string, unknown>
+		title: string
+		version: string
+	}): this {
+		const stem = options.path ?? "/openapi"
+		const yamlHeaders = { headers: { "content-type": "application/yaml; charset=utf-8" } }
+		const loadJson = (): Promise<unknown> => {
+			const epoch = this._root.g ?? 0
+			if (this._openApiCache && this._openApiCache.epoch === epoch) {
+				return this._openApiCache.value
+			}
+			let pending: Promise<unknown>
+			pending = import("./codegen.ts")
+				.then((m) =>
+					m.generateOpenApi(this as never, {
+						filterRoutes: options.filterRoutes,
+						info: {
+							description: options.description,
+							title: options.title,
+							version: options.version,
+						},
+						securitySchemes: options.securitySchemes,
+					}),
+				)
+				.catch((err: unknown) => {
+					if (this._openApiCache?.value === pending) this._openApiCache = null
+					throw err
+				})
+			this._openApiCache = { epoch, value: pending }
+			return pending
+		}
+		const loadYaml = (): Promise<string> => {
+			const epoch = this._root.g ?? 0
+			if (this._openApiYamlCache && this._openApiYamlCache.epoch === epoch) {
+				return this._openApiYamlCache.value
+			}
+			let pending: Promise<string>
+			pending = import("./codegen.ts")
+				.then(async (m) => m.toYaml(await loadJson()))
+				.catch((err: unknown) => {
+					if (this._openApiYamlCache?.value === pending) this._openApiYamlCache = null
+					throw err
+				})
+			this._openApiYamlCache = { epoch, value: pending }
+			return pending
+		}
+		this._mountInternalGet(`${stem}.json`, async (ctx) => ctx.res.json("ok", await loadJson()))
+		this._mountInternalGet(`${stem}.yml`, async (ctx) =>
+			ctx.res.text("ok", await loadYaml(), yamlHeaders),
+		)
+		this._mountInternalGet(`${stem}.yaml`, async (ctx) =>
+			ctx.res.text("ok", await loadYaml(), yamlHeaders),
+		)
+		if (options.docs) {
+			const specUrl = mergePath(this._basePath, `${stem}.json`)
+			const ui =
+				options.docs === "swagger" ? swagger({ url: specUrl }) : scalar({ url: specUrl })
+			const preferred = options.docsPath ?? "/docs"
+			const candidates = options.docsPath ? [preferred] : [preferred, "/reference"]
+			let mounted = false
+			for (const p of candidates) {
+				if (this._mountInternalGet(p, (ctx) => ui(ctx))) {
+					mounted = true
+					break
+				}
+			}
+			if (!mounted) {
+				throw new Error(
+					`Honey.openapi({ docs }) cannot mount at ${preferred}: already registered. Pass docsPath.`,
+				)
+			}
+		}
+		return this
+	}
+
+	manifest(options?: { path?: string }): this {
+		const path = options?.path ?? "/manifest.json"
+		const load = (): Promise<unknown> => {
+			const epoch = this._root.g ?? 0
+			if (this._manifestCache && this._manifestCache.epoch === epoch) {
+				return this._manifestCache.value
+			}
+			let pending: Promise<unknown>
+			pending = import("./codegen.ts")
+				.then((m) => m.generateManifest(this as never))
+				.catch((err: unknown) => {
+					if (this._manifestCache?.value === pending) this._manifestCache = null
+					throw err
+				})
+			this._manifestCache = { epoch, value: pending }
+			return pending
+		}
+		this._mountInternalGet(path, async (ctx) => ctx.res.json("ok", await load()))
+		return this
+	}
+
+	serve(options?: HoneyServeOptions): Promise<ServeHandle> {
+		return startHoneyServer(this as never, options)
+	}
+
+	private _lookupGet(fullPath: string): RouteHandler | null {
+		const fromStatic = this._staticRoutes.map?.[`GET ${fullPath}`]
+		if (fromStatic) return fromStatic
+		const hit = matchRoute(this._root, "GET", fullPath)
+		if (hit !== null && hit.matched) return hit.handler
+		return null
+	}
+
+	/** Mount an internal GET. Returns false when a user route already owns the path. */
+	private _mountInternalGet(
+		path: string,
+		fn: (ctx: { res: HoneyRes }) => Response | Promise<Response>,
+	): boolean {
+		const fullPath = mergePath(this._basePath, path)
+		const existing = this._lookupGet(fullPath)
+		if (existing) return existing._skip === true
+		const routeHandler: RouteHandler = {
+			_skip: true,
+			bek: this._defaultBoundaryKey,
+			ef: null,
+			ek: this._defaultErrorKeys,
+			fn: (ctx) => fn(ctx as { res: HoneyRes }),
+			iv: null,
+			mt: null,
+			mw: [...this._chainMiddlewares],
+			os: null,
+			ov: null,
+			rp: fullPath,
+		}
+		insertRoute(this._root, "GET", fullPath, routeHandler)
+		if (!fullPath.includes(":") && !fullPath.includes("*")) {
+			this._registerStatic(`GET ${fullPath}`, routeHandler)
+		}
+		return true
 	}
 
 	defaultErrorFormatter<TSchema extends StandardSchemaLike>(
@@ -1104,8 +1289,7 @@ export class Honey<
 			chainMiddlewares: this._chainMiddlewares,
 			defaultErrorKeys: this._defaultErrorKeys,
 			globalMiddlewares: this._globalMiddlewares,
-			handlerMap: this._handlerMap,
-			root: this._root,
+			graph: this._graph,
 			scopedMiddlewares: this._scopedMiddlewares,
 		});
 		next._basePath = this._basePath;
@@ -1132,6 +1316,9 @@ export class Honey<
 		next._telemetry = this._telemetry;
 		next._realtimeBus = this._realtimeBus;
 		next._realtimeRoutes = this._realtimeRoutes;
+		next._staticRoutes = this._staticRoutes;
+		next._hasRouteTree = this._hasRouteTree;
+		next._hasWsRoutes = this._hasWsRoutes;
 		return next;
 	}
 
@@ -1187,8 +1374,7 @@ export class Honey<
 				chainMiddlewares: [...this._chainMiddlewares, mw],
 				defaultErrorKeys: this._defaultErrorKeys,
 				globalMiddlewares: this._globalMiddlewares,
-				handlerMap: this._handlerMap,
-				root: this._root,
+				graph: this._graph,
 				scopedMiddlewares: this._scopedMiddlewares,
 			});
 			newChain._basePath = this._basePath;
@@ -1213,6 +1399,9 @@ export class Honey<
 			newChain._telemetry = this._telemetry;
 			newChain._realtimeBus = this._realtimeBus;
 			newChain._realtimeRoutes = this._realtimeRoutes;
+			newChain._staticRoutes = this._staticRoutes;
+			newChain._hasRouteTree = this._hasRouteTree;
+			newChain._hasWsRoutes = this._hasWsRoutes;
 			return newChain;
 		}
 
@@ -1226,13 +1415,13 @@ export class Honey<
 			mw,
 			prefix: fullPrefix,
 		};
+		this._scopedMiddlewares.push(entry);
 		const newChain = new Honey<TEnv>({
 			chainMiddlewares: this._chainMiddlewares,
 			defaultErrorKeys: this._defaultErrorKeys,
 			globalMiddlewares: this._globalMiddlewares,
-			handlerMap: this._handlerMap,
-			root: this._root,
-			scopedMiddlewares: [...this._scopedMiddlewares, entry],
+			graph: this._graph,
+			scopedMiddlewares: this._scopedMiddlewares,
 		});
 		newChain._basePath = this._basePath;
 		newChain._chainMeta = this._chainMeta;
@@ -1256,6 +1445,9 @@ export class Honey<
 		newChain._telemetry = this._telemetry;
 		newChain._realtimeBus = this._realtimeBus;
 		newChain._realtimeRoutes = this._realtimeRoutes;
+		newChain._staticRoutes = this._staticRoutes;
+		newChain._hasRouteTree = this._hasRouteTree;
+		newChain._hasWsRoutes = this._hasWsRoutes;
 		newChain._applyScopedEntryErrors(entry);
 		return newChain;
 	}
@@ -1291,9 +1483,31 @@ export class Honey<
 		if (sub._tree !== this._root) {
 			mergeInto(this._root, sub._tree);
 			if (sub._hasWsRoutes) this._hasWsRoutes = true;
+			if (sub._hasRouteTree) this._hasRouteTree = true;
 			/* carry sub's scoped mw entries into parent's runtime list (parent scopes run first) */
 			for (const entry of sub._scopedMiddlewares) {
 				this._scopedMiddlewares.push(entry);
+			}
+			if (sub._staticRoutes.map !== null) {
+				if (this._staticRoutes.map === null) {
+					this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>;
+				}
+				Object.assign(this._staticRoutes.map, sub._staticRoutes.map);
+			}
+			for (const [path, cfg] of sub._realtimeRoutes) {
+				if (this._realtimeRoutes.has(path)) {
+					throw new Error(`Duplicate realtime route: ${path}`);
+				}
+				this._realtimeRoutes.set(path, cfg);
+			}
+			if (!this._realtimeBus && sub._realtimeBus) {
+				this._realtimeBus = sub._realtimeBus;
+			}
+			if (sub._taps !== null) {
+				if (this._taps === null) this._taps = new Map();
+				for (const [key, fn] of sub._taps) {
+					if (!this._taps.has(key)) this._taps.set(key, fn);
+				}
 			}
 			/* walk tree and apply all scoped error keys to matching handlers */
 			this._applyAllScopedErrors();
@@ -1330,7 +1544,7 @@ export class Honey<
 		never,
 		TCtx,
 		TMeta,
-		TMeta,
+		InitAccMeta<TMeta>,
 		TErrorFactory,
 		TDefaultErrors,
 		TBasePath,
@@ -1356,7 +1570,7 @@ export class Honey<
 			never,
 			TCtx,
 			TMeta,
-			TMeta,
+			InitAccMeta<TMeta>,
 			TErrorFactory,
 			TDefaultErrors,
 			TBasePath,
@@ -1388,7 +1602,7 @@ export class Honey<
 			never,
 			TCtx,
 			TMeta,
-			TMeta,
+			InitAccMeta<TMeta>,
 			TErrorFactory,
 			TDefaultErrors,
 			TBasePath,
@@ -1415,7 +1629,7 @@ export class Honey<
 		never,
 		TCtx,
 		TMeta,
-		TMeta,
+		InitAccMeta<TMeta>,
 		TErrorFactory,
 		TDefaultErrors,
 		TBasePath,
@@ -1531,8 +1745,78 @@ export class Honey<
 		return this;
 	}
 
-	/* oxlint-disable-next-line require-await -- Workers runtime expects async fetch */
-	async fetch(
+	/**
+	 * Deno must call `Deno.upgradeWebSocket` in the same turn as the serve
+	 * callback. When the adapter implements `preUpgrade`, we do that here
+	 * and return the 101 response before any middleware Promise.
+	 */
+	fetch(
+		request: Request,
+		env: TEnv,
+		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
+	): Response | Promise<Response> {
+		const isWsUpgrade = request.headers.get("upgrade")?.toLowerCase() === "websocket"
+		const path = this.pathFromRequest(request)
+		const canPreUpgrade =
+			isWsUpgrade &&
+			this._wsAdapter?.preUpgrade !== undefined &&
+			!this.trailingSlashRedirects(path) &&
+			matchWsRoute(this._root, this.pathAfterPrefix(path)) !== null
+		const pre = canPreUpgrade ? this._wsAdapter?.preUpgrade?.(request) : undefined
+		const work = this._doFetch(request, env, executionCtx)
+		if (!pre) return work
+		void Promise.resolve(work)
+			.then((res) => {
+				if (res.status === 101) return
+				const code = res.status === 401 ? 4401 : 1008
+				const reason = res.status === 401 ? "unauthorized" : "upgrade rejected"
+				const reject = () => {
+					try {
+						pre.socket.close(code, reason)
+					} catch {
+						/* already closed */
+					}
+				}
+				if (pre.whenOpen) pre.whenOpen(reject)
+				else reject()
+			})
+			.catch(() => {
+				try {
+					pre.socket.close(1011, "internal error")
+				} catch {
+					/* already closed */
+				}
+			})
+		return pre.response
+	}
+
+	private pathFromRequest(request: Request): string {
+		const rawUrl = request.url
+		const protoEnd = rawUrl.indexOf("//")
+		const pathStart = protoEnd === -1 ? 0 : rawUrl.indexOf("/", protoEnd + 2)
+		const searchOrHash = pathStart === -1 ? -1 : findSearchOrHash(rawUrl, pathStart)
+		if (pathStart === -1) return "/"
+		if (searchOrHash === -1) return rawUrl.substring(pathStart)
+		return rawUrl.substring(pathStart, searchOrHash)
+	}
+
+	private trailingSlashRedirects(path: string): boolean {
+		if (path.length <= 1) return false
+		if (this._trailingSlash === "strip" && path.endsWith("/")) return true
+		if (this._trailingSlash === "enforce" && !path.endsWith("/")) return true
+		return false
+	}
+
+	private pathAfterPrefix(path: string): string {
+		if (this._stripPrefix === null) return path
+		if (path === this._stripPrefix) return "/"
+		if (path.startsWith(this._stripPrefix) && path.charCodeAt(this._stripPrefix.length) === 47) {
+			return path.slice(this._stripPrefix.length)
+		}
+		return path
+	}
+
+	private async _doFetch(
 		request: Request,
 		env: TEnv,
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
@@ -1628,7 +1912,7 @@ export class Honey<
 		let fnNullHit = false;
 
 		/* Tier 2: O(1) static route lookup — checks both precompiled and runtime maps */
-		const smap = this._staticRoutes ?? this._handlerMap;
+		const smap = this._staticRoutes.map ?? this._handlerMap;
 		if (smap !== null) {
 			const key = `${method} ${path}`;
 			const staticHandler = smap[key];
@@ -1719,6 +2003,23 @@ export class Honey<
 				}
 
 				if (!result.matched) {
+					if (
+						method === "OPTIONS" &&
+						fc.request.headers.has("access-control-request-method") &&
+						result.allowed.length > 0
+					) {
+						const fallback = this._preflightFallbackMethod(result.allowed);
+						const retry = matchRoute(this._root, fallback, path);
+						if (retry?.matched && retry.handler.fn !== null) {
+							return this._handleCorsPreflight(
+								fc,
+								path,
+								retry.handler,
+								retry.params,
+								result.allowed,
+							);
+						}
+					}
 					return this._handle405(fc, method, path, result.allowed);
 				}
 			}
@@ -1972,8 +2273,9 @@ export class Honey<
 
 				const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, wrappedHandler);
 
-				/* Node/CF adapters return the socket from upgrade(); Bun returns undefined (socket comes via onOpen) */
-				if (upgradeResult.socket && !socket) {
+				/* Node/CF adapters return the socket from upgrade(); Bun returns undefined (socket comes via onOpen).
+				 * Deno pre-upgrade may still be CONNECTING — wait for onOpen so the first send is not dropped. */
+				if (upgradeResult.socket && !socket && upgradeResult.socket.readyState === 1) {
 					initConn(upgradeResult.socket);
 				}
 
@@ -2024,6 +2326,43 @@ export class Honey<
 				fc.log,
 			);
 			return res;
+		} catch (thrown) {
+			return this._toErrorResponse(thrown);
+		}
+	}
+
+	private _preflightFallbackMethod(allowed: string[]): HttpMethod {
+		if (allowed.includes("GET")) return "GET";
+		if (allowed.includes("HEAD")) return "HEAD";
+		if (allowed.includes("POST")) return "POST";
+		return allowed[0] as HttpMethod;
+	}
+
+	/** Run the existing method's middleware for a CORS preflight. Do not invoke the route handler. */
+	private async _handleCorsPreflight(
+		fc: FetchCtx<TEnv>,
+		path: string,
+		handler: RouteHandler,
+		params: Record<string, string>,
+		allowed: string[],
+	): Promise<Response> {
+		const ctx = new HoneyContext({
+			env: fc.env,
+			executionCtx: fc.executionCtx,
+			meta: handler.mt ? Object.freeze(handler.mt) : undefined,
+			params,
+			path,
+			req: fc.request,
+			routePattern: handler.rp,
+			urlFn: fc.url,
+		});
+		if (this._contextValues) Object.assign(ctx, this._contextValues);
+		try {
+			return await executeChain(
+				[...this._globalMiddlewares, ...handler.mw],
+				ctx,
+				() => this._handle405(fc, "OPTIONS", path, allowed),
+			);
 		} catch (thrown) {
 			return this._toErrorResponse(thrown);
 		}
@@ -2466,11 +2805,11 @@ type UniversalRes = Pick<HoneyRes, "noContent" | "raw" | "redirect" | "stream">;
  * Declared content types → method constrained (status keys + body type).
  * Undeclared content types → method removed.
  * Universal methods (noContent, redirect, stream, raw) always available.
- * HoneyContext has no private fields, so Omit preserves structural compatibility.
+ * HoneyContext has no private brand, so Omit<TCtx, "res"> replaces the wide HoneyRes.
  */
 type ApplyOutput<TCtx, TOutput> = [keyof TOutput] extends [never]
 	? TCtx
-	: TCtx & {
+	: Omit<TCtx, "res"> & {
 			readonly res: UniversalRes &
 				NarrowMethod<
 					{},
@@ -2625,6 +2964,16 @@ type RouteBuilderState<TParent> = {
 	root: TreeNode;
 };
 
+/** Honey.TMeta defaults to never; never & X is never, so start acc meta at {}. */
+type InitAccMeta<TMeta> = [TMeta] extends [never] ? {} : TMeta
+
+/** Skip $routes merge only for a real `{ internal: true }` meta — not for `never`. */
+type SkipRouteRecord<TAccMeta> = [TAccMeta] extends [never]
+	? false
+	: [TAccMeta] extends [{ internal: true }]
+		? true
+		: false
+
 /** Return type for handler() — extracted to avoid 3x duplication */
 type HandlerReturn<
 	TEnv,
@@ -2646,7 +2995,7 @@ type HandlerReturn<
 > = Honey<
 	TEnv,
 	TBaseCtx,
-	TAccMeta extends { internal: true }
+	SkipRouteRecord<TAccMeta> extends true
 		? TRoutes
 		: MergeRoute<
 				TRoutes,

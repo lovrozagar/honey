@@ -396,8 +396,7 @@ describe("consumer: onResponse retry against real server", () => {
 			},
 			onResponse: [
 				async (ctx) => {
-					if (ctx.response.status === 500 && !ctx.isRetry) {
-						/* e2e-app wraps unauthorized as 500 via boundary */
+					if (ctx.response.status === 401 && !ctx.isRetry) {
 						return ctx.retry()
 					}
 					return undefined

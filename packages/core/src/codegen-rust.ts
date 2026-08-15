@@ -253,10 +253,22 @@ type MethodInfo = {
 	queryParams: QueryParam[]
 	responseType: string
 	summary: string
+	/** x-invalidate targets from the raw OpenAPI op, falling back to IR extensions. */
+	invalidates: string[]
 }
 
 function pascalizeOpId(opId: string): string {
 	return opId.split(".").map(rustPascal).join("")
+}
+
+function invalidatesOf(irOp: IROperation, rawOp: Record<string, unknown>): string[] {
+	const fromRaw = rawOp["x-invalidate"]
+	if (Array.isArray(fromRaw) && fromRaw.length > 0 && fromRaw.every((x) => typeof x === "string")) {
+		return fromRaw as string[]
+	}
+	const fromIr = irOp.extensions.invalidates
+	if (Array.isArray(fromIr) && fromIr.length > 0) return fromIr
+	return []
 }
 
 function methodInfoFromIROp(
@@ -274,6 +286,7 @@ function methodInfoFromIROp(
 		bodyInfo: rustBodyInfo(rawOp),
 		description: String(rawOp.description ?? ""),
 		httpMethod: irOp.method,
+		invalidates: invalidatesOf(irOp, rawOp),
 		isIdempotent: rawOp["x-idempotency-key"] === true,
 		isRealtime: rawOp["x-realtime"] === true,
 		isSSE: isSSEOperation(rawOp),
@@ -726,7 +739,7 @@ function emitMethod(
 	/* invalidation pre-flight — build path-params map, interpolate to concrete
 	 * selector, snapshot RequestMeta from the tracker. Emitted only for ops
 	 * with x-invalidate; BuildRequestMeta short-circuits to None when disabled. */
-	const hasInvalidate = Array.isArray(m.op["x-invalidate"]) && (m.op["x-invalidate"] as unknown[]).length > 0
+	const hasInvalidate = m.invalidates.length > 0
 	if (hasInvalidate) {
 		const pathParamsMapExpr = m.pathParams.length > 0
 			? `std::collections::HashMap::from([${m.pathParams.map((p) => `(${JSON.stringify(p)}.to_string(), ${rustSnake(p)}.to_string())`).join(", ")}])`
@@ -887,7 +900,7 @@ function emitSyncMethod(
 	}
 
 	/* invalidation pre-flight (sync) — same shape as async, no .await. */
-	const hasInvalidate = Array.isArray(m.op["x-invalidate"]) && (m.op["x-invalidate"] as unknown[]).length > 0
+	const hasInvalidate = m.invalidates.length > 0
 	if (hasInvalidate) {
 		const pathParamsMapExpr = m.pathParams.length > 0
 			? `std::collections::HashMap::from([${m.pathParams.map((p) => `(${JSON.stringify(p)}.to_string(), ${rustSnake(p)}.to_string())`).join(", ")}])`

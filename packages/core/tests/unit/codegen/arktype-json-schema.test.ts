@@ -2,20 +2,22 @@ import { type } from "arktype"
 import { describe, expect, it } from "vitest"
 import { generateOpenApi } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
+import { resolveSchema } from "./_resolve-schema.ts"
 
 type JsonSchema = Record<string, unknown>
 type OpenApiOp = Record<string, unknown>
+type OpenApiSpec = { components?: { schemas?: Record<string, JsonSchema> } }
 
-function extractInputSchema(op: OpenApiOp): JsonSchema {
+function extractInputSchema(spec: OpenApiSpec, op: OpenApiOp): JsonSchema {
 	const body = op.requestBody as Record<string, unknown>
 	const content = body.content as Record<string, Record<string, unknown>>
-	return content["application/json"].schema as JsonSchema
+	return resolveSchema(spec, content["application/json"].schema as JsonSchema) ?? {}
 }
 
-function extractOutputSchema(op: OpenApiOp, status = "200"): JsonSchema {
+function extractOutputSchema(spec: OpenApiSpec, op: OpenApiOp, status = "200"): JsonSchema {
 	const responses = op.responses as Record<string, Record<string, unknown>>
 	const content = responses[status].content as Record<string, Record<string, unknown>>
-	return content["application/json"].schema as JsonSchema
+	return resolveSchema(spec, content["application/json"].schema as JsonSchema) ?? {}
 }
 
 describe("arktype JSON Schema via OpenAPI generation", () => {
@@ -27,7 +29,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.value.type).toBe("string")
 		})
@@ -39,7 +41,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.value.type).toBe("number")
 		})
@@ -51,7 +53,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.value.type).toBe("boolean")
 		})
@@ -63,7 +65,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.value.type).toBe("null")
 		})
@@ -77,7 +79,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.json("ok", { tag: "hello" as const }))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractOutputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractOutputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.tag.const).toBe("hello")
 		})
@@ -91,7 +93,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("object")
 			expect(schema.properties).toBeDefined()
 			const props = schema.properties as Record<string, JsonSchema>
@@ -109,7 +111,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("object")
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.name.type).toBe("string")
@@ -126,7 +128,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("object")
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.name.type).toBe("string")
@@ -147,7 +149,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("object")
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.user.type).toBe("object")
@@ -173,7 +175,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const orgProps = (schema.properties as Record<string, JsonSchema>).org as JsonSchema
 			expect(orgProps.type).toBe("object")
 			const addressProps = (orgProps.properties as Record<string, JsonSchema>).address as JsonSchema
@@ -192,7 +194,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.json("ok", { tags: ["a"] }))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractOutputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractOutputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			expect(props.tags.type).toBe("array")
 			expect((props.tags as JsonSchema).items).toEqual({ type: "string" })
@@ -205,7 +207,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.json("ok", [{ name: "a" }]))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractOutputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractOutputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("array")
 			const items = schema.items as JsonSchema
 			expect(items.type).toBe("object")
@@ -222,7 +224,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.json("ok", { value: "hello" }))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractOutputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractOutputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			const valueSchema = props.value as JsonSchema
 			const anyOf = valueSchema.anyOf as JsonSchema[]
@@ -242,7 +244,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.json("ok", { status: "a" as const }))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractOutputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractOutputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			const props = schema.properties as Record<string, JsonSchema>
 			const statusSchema = props.status as JsonSchema
 			/* arktype produces enum for string literal unions */
@@ -263,7 +265,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("string")
 		})
 
@@ -274,7 +276,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("number")
 		})
 
@@ -285,7 +287,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("boolean")
 		})
 
@@ -296,7 +298,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			expect(schema.type).toBe("null")
 		})
 	})
@@ -309,7 +311,7 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 				.handler((ctx) => ctx.res.text("ok", "ok"))
 
 			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
-			const schema = extractInputSchema(spec.paths["/test"].post as OpenApiOp)
+			const schema = extractInputSchema(spec, spec.paths["/test"].post as OpenApiOp)
 			/* arktype natively adds $schema — verify it doesn't break OpenAPI */
 			expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema")
 			expect(schema.type).toBe("object")
@@ -368,14 +370,12 @@ describe("arktype JSON Schema via OpenAPI generation", () => {
 			expect(responses["200"]).toBeDefined()
 			expect(responses["201"]).toBeDefined()
 
-			const okContent = responses["200"].content as Record<string, Record<string, unknown>>
-			const okSchema = okContent["application/json"].schema as JsonSchema
+			const okSchema = extractOutputSchema(spec, op, "200")
 			expect(okSchema.type).toBe("object")
 			const okProps = okSchema.properties as Record<string, JsonSchema>
 			expect(okProps.ids.type).toBe("array")
 
-			const createdContent = responses["201"].content as Record<string, Record<string, unknown>>
-			const createdSchema = createdContent["application/json"].schema as JsonSchema
+			const createdSchema = extractOutputSchema(spec, op, "201")
 			expect(createdSchema.type).toBe("object")
 			const createdProps = createdSchema.properties as Record<string, JsonSchema>
 			expect(createdProps.id.type).toBe("string")

@@ -1,7 +1,8 @@
 import { createApp } from "@honey/e2e-app"
-import { denoWebSocket } from "honey/ws/deno"
 
-const app = createApp(denoWebSocket())
+const app = createApp()
 const port = Number(Deno.env.get("PORT") ?? "4103")
 
-Deno.serve({ hostname: "0.0.0.0", port }, (req) => app.fetch(req, {}))
+/* 127.0.0.1: Playwright's Node HTTP client prefers ::1 for `localhost`,
+ * and Deno.serve({ hostname: "0.0.0.0" }) is IPv4-only. */
+await app.serve({ hostname: "127.0.0.1", port, runtime: "deno" })

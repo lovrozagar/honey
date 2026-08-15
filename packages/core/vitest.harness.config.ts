@@ -1,9 +1,10 @@
 import { defineConfig } from "vitest/config"
-import { harness, harnessRust } from "./vitest.config.ts"
+import { CARGO_TARGET_DIR } from "./tests/cargo-env.ts"
+import { harness } from "./vitest.config.ts"
 
 export default defineConfig({
 	test: {
-		exclude: harnessRust,
+		env: { CARGO_TARGET_DIR },
 		include: harness,
 		passWithNoTests: true,
 	},

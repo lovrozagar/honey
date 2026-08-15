@@ -86,7 +86,7 @@ describe("edge: interceptor chain ordering with retry", () => {
 			onResponse: [
 				async (ctx) => {
 					log.push(`res:${ctx.response.status}:retry=${ctx.isRetry}`)
-					if (ctx.response.status === 500 && !ctx.isRetry) {
+					if (ctx.response.status === 401 && !ctx.isRetry) {
 						return ctx.retry()
 					}
 					return undefined
@@ -99,7 +99,7 @@ describe("edge: interceptor chain ordering with retry", () => {
 
 		expect(log).toEqual([
 			"req:GET:attempt1",
-			"res:500:retry=false",
+			"res:401:retry=false",
 			"req:GET:attempt2",
 			"res:200:retry=true",
 		])

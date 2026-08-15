@@ -165,6 +165,7 @@
         "ts-morph": "catalog:",
         "typescript": "catalog:",
         "valibot": "catalog:",
+        "vite": "catalog:",
         "vitest": "catalog:",
         "yup": "catalog:",
         "zod": "catalog:",

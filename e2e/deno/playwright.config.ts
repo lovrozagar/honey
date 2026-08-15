@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test"
 
 const PORT = "4103"
 process.env.PORT = PORT
+process.env.WS_HOST = "127.0.0.1"
 
 const mode = process.env.TEST_MODE ?? "dev"
 const isDev = mode === "dev"
@@ -14,7 +15,7 @@ export default defineConfig({
 	testDir: "../app/e2e",
 	timeout: 30_000,
 	use: {
-		baseURL: `http://localhost:${PORT}`,
+		baseURL: `http://127.0.0.1:${PORT}`,
 		trace: "on-first-retry",
 	},
 	webServer: {

@@ -1,4 +1,4 @@
-_generated: honey checksum:bcb3a3ca2a88
+_generated: honey checksum:2420ff3d4f4f
 info:
   description: null
   title: Honey E2E
@@ -145,36 +145,6 @@ paths:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
   /api/health:
-    get:
-      responses:
-        "401":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Err401Unauthorized"
-          description: unauthorized
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Err500ApiError"
-          description: api_error
-  /api/manifest.json:
-    get:
-      responses:
-        "401":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Err401Unauthorized"
-          description: unauthorized
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Err500ApiError"
-          description: api_error
-  /api/openapi.json:
     get:
       responses:
         "401":

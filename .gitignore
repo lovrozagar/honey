@@ -27,4 +27,8 @@ node_modules
 .local
 *.local
 .tmp
+.tmp-*
 .temp
+
+# cargo target for rust SDK / harness (do not use /tmp — it is a small tmpfs)
+.cache/

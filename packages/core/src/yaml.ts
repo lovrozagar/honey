@@ -3,7 +3,8 @@
 const INDENT = "  "
 
 export function yamlSiblingPath(jsonPath: string): string {
-	return jsonPath.endsWith(".json") ? `${jsonPath.slice(0, -5)}.yml` : `${jsonPath}.yml`
+	if (jsonPath.endsWith(".yaml") || jsonPath.endsWith(".yml")) return jsonPath.replace(/\.yml$/, ".yaml")
+	return jsonPath.endsWith(".json") ? `${jsonPath.slice(0, -5)}.yaml` : `${jsonPath}.yaml`
 }
 
 export function toYaml(value: unknown): string {

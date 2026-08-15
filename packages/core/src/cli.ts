@@ -1,8 +1,13 @@
 #!/usr/bin/env bun
 import { existsSync, watch } from "node:fs"
 import { dirname, resolve } from "node:path"
+import { parseInitFlags, runInit } from "./init.ts"
 import type { HoneyGoCliConfig, HoneyVitePluginConfig } from "./plugin.ts"
 import { generateAndWrite, type getLastHoneyConfig, resolveHoneyConfig } from "./plugin.ts"
+
+const USAGE =
+	"Usage: honey generate [--watch] [--config <path>] [--app <path>] [flags]\n" +
+	"       honey init [--cf] [--force]"
 
 type CliFlags = {
 	app?: string
@@ -63,7 +68,7 @@ async function loadConfigFromVite(configPath: string): Promise<HoneyVitePluginCo
 	if (!existsSync(configPath)) return undefined
 
 	const { createJiti } = await import("jiti")
-	const jiti = createJiti(configPath, { interopDefault: true })
+	const jiti = createJiti(configPath, { fsCache: false, interopDefault: true, moduleCache: false })
 
 	/* importing the config executes honey() which stashes config */
 	await jiti.import(configPath)
@@ -122,8 +127,13 @@ async function main() {
 	const args = process.argv.slice(2)
 	const command = args[0]
 
+	if (command === "init") {
+		runInit(process.cwd(), parseInitFlags(args.slice(1)))
+		return
+	}
+
 	if (command !== "generate") {
-		console.error("Usage: honey generate [--watch] [--config <path>] [--app <path>] [flags]")
+		console.error(USAGE)
 		process.exit(1)
 	}
 

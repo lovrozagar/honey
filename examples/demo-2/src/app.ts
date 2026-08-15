@@ -395,3 +395,6 @@ export const app = honey<Env>()
 			ws.send(data)
 		},
 	})
+
+	.openapi({ docs: "scalar", title: "Demo 2", version: "1.0.0" })
+	.manifest()

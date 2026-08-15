@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest"
 import { toYaml, yamlSiblingPath } from "../../../src/yaml.ts"
 
 describe("yamlSiblingPath", () => {
-	it("swaps .json for .yml", () => {
-		expect(yamlSiblingPath("src/_gen/openapi.gen.json")).toBe("src/_gen/openapi.gen.yml")
+	it("swaps .json for .yaml", () => {
+		expect(yamlSiblingPath("src/_gen/openapi.gen.json")).toBe("src/_gen/openapi.gen.yaml")
 	})
 
-	it("appends .yml when the path has no .json suffix", () => {
-		expect(yamlSiblingPath("docs/openapi")).toBe("docs/openapi.yml")
+	it("appends .yaml when the path has no .json suffix", () => {
+		expect(yamlSiblingPath("docs/openapi")).toBe("docs/openapi.yaml")
+	})
+
+	it("normalizes a .yml sibling to .yaml", () => {
+		expect(yamlSiblingPath("src/_gen/openapi.gen.yml")).toBe("src/_gen/openapi.gen.yaml")
 	})
 })
 

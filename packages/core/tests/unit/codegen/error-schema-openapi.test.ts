@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { generateOpenApi } from "../../../src/codegen.ts";
 import { defineErrors, honey } from "../../../src/index.ts";
+import { resolveSchema } from "./_resolve-schema.ts";
 
 const hasZodJsonSchema =
 	typeof (z as Record<string, unknown>).toJSONSchema === "function";
@@ -22,9 +23,10 @@ function getErrorSchema(
 	const content = responses[statusCode].content as
 		| Record<string, Record<string, unknown>>
 		| undefined;
-	return content?.["application/json"]?.schema as
-		| Record<string, unknown>
-		| undefined;
+	return resolveSchema(
+		spec,
+		content?.["application/json"]?.schema as Record<string, unknown> | undefined,
+	);
 }
 
 describe("OpenAPI error schema — default shape", () => {

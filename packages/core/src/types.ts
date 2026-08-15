@@ -443,8 +443,8 @@ export type MergeRoute<
 /** Extract accumulated routes from a Honey instance type */
 export type InferRoutes<T> = T extends { readonly $routes: infer R } ? R : never
 
-/** Extract accumulated context type (TCtx) from a Honey instance */
-export type InferCtx<T> = T extends { readonly $ctx: infer TCtx } ? TCtx : never
+/** Extract accumulated middleware context. `res` is omitted so handler ctx is assignable into services. Use InferRouteCtx for the route's constrained `res`. */
+export type InferCtx<T> = T extends { readonly $ctx: infer TCtx } ? Omit<TCtx, "res"> : never
 
 /** Extract environment type (TEnv) from a Honey instance */
 export type InferEnv<T> = T extends { readonly $env: infer TEnv } ? TEnv : never

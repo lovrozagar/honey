@@ -137,7 +137,7 @@ describe("honeyVitePlugin", () => {
 				.requestBody,
 		).toBeDefined()
 
-		const yaml = readFileSync(join(outDir, "src/_gen/openapi.gen.yml"), "utf-8")
+		const yaml = readFileSync(join(outDir, "src/_gen/openapi.gen.yaml"), "utf-8")
 		expect(yaml).toContain("openapi: \"3.1.0\"")
 		expect(yaml).toContain("title: Test")
 		expect(yaml).toContain("/items:")
@@ -155,6 +155,28 @@ describe("honeyVitePlugin", () => {
 			routes: unknown[]
 		}
 		expect(manifest.routes).toHaveLength(2)
+	})
+
+	it("hotUpdate regenerates when the file matches watch", async () => {
+		writeTempApp(outDir)
+		const plugin = getCodegenPlugin({
+			app: "src/app.ts",
+			watch: ["src/**/*.ts"],
+		})
+		plugin.configResolved({ root: outDir })
+		const server = {
+			moduleGraph: { getModuleById: vi.fn(() => ({ id: "virtual" })) },
+			reloadModule: vi.fn(),
+		}
+
+		const result = await plugin.hotUpdate({
+			file: join(outDir, "src/app.ts"),
+			modules: [],
+			server,
+		})
+		expect(result).toEqual([])
+		expect(server.reloadModule).toHaveBeenCalled()
+		expect(existsSync(join(outDir, "src/_gen/routes.gen.ts"))).toBe(true)
 	})
 
 	it("hotUpdate ignores non-matching files", async () => {
