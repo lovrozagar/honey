@@ -57,6 +57,7 @@ This README is the full usage manual. An agent that reads only this file should 
   - [E2E apps and runtimes](#e2e-apps-and-runtimes)
   - [Live Cloudflare proof](#live-cloudflare-proof)
   - [Bench](#bench)
+- [Releases](#releases)
 - [License](#license)
 
 ## Start
@@ -1532,6 +1533,38 @@ bun run --filter @honey/bench bench:node
 Numbers and bundle sizes: [`bench/RESULTS.md`](bench/RESULTS.md).
 
 Python runtime tests skip without `httpx` (`pip install httpx`). Rust cargo tests skip without `cargo` or when `HONEY_RUST_INTEGRATION=0`. Go tests skip without `go`. Cargo artifacts go to `.cache/cargo-target`, not `/tmp`.
+
+## Releases
+
+The published package is [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey). That URL is the repository website. GitHub Releases match npm versions. Pushing a tag `vX.Y.Z` (same as `packages/core/package.json` `version`) runs [`.github/workflows/release.yml`](./.github/workflows/release.yml): unit + typecheck + consumer tests, `npm publish` via trusted publishing, GitHub Packages, then a GitHub Release.
+
+There is no `NPM_TOKEN` in repo secrets. npm authenticates with GitHub OIDC. Configure the trusted publisher **once**:
+
+[npmjs.com/package/@lovrozagar/honey](https://www.npmjs.com/package/@lovrozagar/honey) → Settings → Trusted Publisher → GitHub Actions
+
+| Field | Value |
+|---|---|
+| Publisher | GitHub Actions |
+| Organization or user | `lovrozagar` |
+| Repository | `honey` |
+| Workflow filename | `release.yml` |
+| Environment name | empty |
+| Allowed actions | Allow npm publish |
+
+```bash
+# 1. set packages/core/package.json version to X.Y.Z
+git add packages/core/package.json
+git commit -m "chore: release X.Y.Z"
+git push origin main
+
+# 2. tag the same version — this starts the Release workflow
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+If that version is already on npm, the npm job skips and GitHub Packages + the GitHub Release still run. `workflow_dispatch` can republish an existing tag.
+
+Install from the public registry: `npm i @lovrozagar/honey`. GitHub Packages is the repo Packages sidebar, not the install path.
 
 ## License
 

@@ -57,6 +57,7 @@ This README is the full usage manual. An agent that reads only this file should 
   - [E2E apps and runtimes](#e2e-apps-and-runtimes)
   - [Live Cloudflare proof](#live-cloudflare-proof)
   - [Bench](#bench)
+- [Releases](#releases)
 - [License](#license)
 
 ## Start
@@ -1532,6 +1533,12 @@ bun run --filter @honey/bench bench:node
 Numbers and bundle sizes: [`bench/RESULTS.md`](https://github.com/lovrozagar/honey/blob/main/bench/RESULTS.md).
 
 Python runtime tests skip without `httpx` (`pip install httpx`). Rust cargo tests skip without `cargo` or when `HONEY_RUST_INTEGRATION=0`. Go tests skip without `go`. Cargo artifacts go to `.cache/cargo-target`, not `/tmp`.
+
+## Releases
+
+The published package is [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey). That URL is the repository website. GitHub Releases match npm versions. Pushing a tag `vX.Y.Z` (same as this `package.json` `version`) runs the repo [`.github/workflows/release.yml`](https://github.com/lovrozagar/honey/blob/main/.github/workflows/release.yml): unit + typecheck + consumer tests, `npm publish` via trusted publishing, GitHub Packages, then a GitHub Release.
+
+Configure the trusted publisher once on this package (Settings → Trusted Publisher → GitHub Actions): repository `lovrozagar/honey`, workflow `release.yml`, no environment, allow npm publish. Do not put an npm token in GitHub secrets.
 
 ## License
 

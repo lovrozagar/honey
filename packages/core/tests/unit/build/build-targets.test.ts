@@ -82,12 +82,23 @@ function start(
 	env: NodeJS.ProcessEnv,
 	cwd?: string,
 ): ChildProcess {
-	const child = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, stdio: "ignore" })
+	const child = spawn(cmd, args, {
+		cwd,
+		env: { ...process.env, ...env },
+		stdio: ["ignore", "pipe", "pipe"],
+	})
+	const logs: string[] = []
+	child.stdout?.on("data", (chunk: Buffer) => logs.push(chunk.toString()))
+	child.stderr?.on("data", (chunk: Buffer) => logs.push(chunk.toString()))
+	child.on("exit", (code, signal) => {
+		if (code !== 0 && code !== null) logs.push(`exit ${code}${signal ? ` ${signal}` : ""}`)
+	})
+	;(child as ChildProcess & { logs: () => string }).logs = () => logs.join("")
 	children.push(child)
 	return child
 }
 
-describe("honey/build target artifacts", () => {
+describe.sequential("honey/build target artifacts", () => {
 	it("cloudflare: vite build then wrangler/workerd serves health + openapi", async () => {
 		if (!(await which("wrangler")) && !(await which("bunx"))) return
 		const outDir = resolve(OUT_ROOT, "cloudflare")
@@ -133,8 +144,13 @@ describe("honey/build target artifacts", () => {
 		await viteBuild("node", outDir)
 		const entry = resolve(outDir, "index.js")
 		expect(existsSync(entry)).toBe(true)
-		start("node", [entry], { PORT: String(PORTS.node) })
-		await waitHealthy(`http://127.0.0.1:${PORTS.node}/health`)
+		const child = start("node", [entry], { PORT: String(PORTS.node) })
+		try {
+			await waitHealthy(`http://127.0.0.1:${PORTS.node}/health`, 20_000)
+		} catch (err) {
+			const extra = (child as ChildProcess & { logs: () => string }).logs()
+			throw new Error(`${err instanceof Error ? err.message : String(err)}${extra ? `\n${extra}` : ""}`)
+		}
 		await smokeHttp(`http://127.0.0.1:${PORTS.node}`)
 	}, 60_000)
 
