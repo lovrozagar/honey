@@ -80,12 +80,17 @@ export function bodyLimit(opts: BodyLimitOptions): MiddlewareFn<{ req: Request }
 			})
 
 			const limited = req.body.pipeThrough(transform)
-			/* duplex: "half" required by Node/undici when body is a ReadableStream */
-			const newReq = new Request(req, {
-				body: limited,
-				duplex: "half",
-			} as RequestInit)
-			Object.defineProperty(ctx, "req", { configurable: true, value: newReq })
+			const replaceBody = (req as unknown as Record<symbol, unknown>)[Symbol.for("honey.replaceBody")]
+			if (typeof replaceBody === "function") {
+				;(replaceBody as (stream: ReadableStream<Uint8Array>) => void).call(req, limited)
+			} else {
+				/* duplex: "half" required by Node/undici when body is a ReadableStream */
+				const newReq = new Request(req, {
+					body: limited,
+					duplex: "half",
+				} as RequestInit)
+				Object.defineProperty(ctx, "req", { configurable: true, value: newReq })
+			}
 		}
 
 		return next()

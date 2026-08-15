@@ -3,6 +3,7 @@ import { createServer } from "node:http"
 import { Readable, type Duplex } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import type { Honey } from "./index.ts"
+import { incomingToNodeRequest } from "./node-request.ts"
 
 type ServeOptions<TEnv> = {
 	env: TEnv
@@ -15,23 +16,7 @@ const BUFFER_BODY_MAX = 256 * 1024
 const RAW_BODY = Symbol.for("honey.rawBody")
 
 function incomingToRequest(req: IncomingMessage): Request {
-	const host = req.headers.host ?? "localhost"
-	const url = `http://${host}${req.url ?? "/"}`
-	const method = (req.method ?? "GET").toUpperCase()
-	const hasBody = method !== "GET" && method !== "HEAD"
-
-	const headers = req.headers as HeadersInit
-
-	if (!hasBody) {
-		return new Request(url, { headers, method })
-	}
-
-	return new Request(url, {
-		body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
-		duplex: "half",
-		headers,
-		method,
-	} as RequestInit)
+	return incomingToNodeRequest(req)
 }
 
 function collectNodeHeaders(

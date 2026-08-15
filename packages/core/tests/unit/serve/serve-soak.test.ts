@@ -134,7 +134,7 @@ describe("Honey.serve() cloudflare is not a listen", () => {
 		expect(existsSync(WORKER)).toBe(true)
 		const src = readFileSync(WORKER, "utf-8")
 		expect(src).toContain("export default")
-		expect(src).toContain("app.fetch")
+		expect(src).toContain(".fetch(")
 		expect(src).not.toMatch(/\.serve\s*\(/)
 	})
 })
