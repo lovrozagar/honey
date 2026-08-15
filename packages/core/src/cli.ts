@@ -154,6 +154,7 @@ async function main() {
 			console.log("honey: generated")
 		} catch (err) {
 			console.error("honey: generation failed", err)
+			if (!flags.watch) process.exit(1)
 		}
 	}
 

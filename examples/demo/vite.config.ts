@@ -1,15 +1,16 @@
 import { honey } from "honey/plugin"
-import { defineConfig } from "vite"
 
-export default defineConfig({
+export default {
 	plugins: [
 		honey({
-			build: { target: "node" },
-			entry: "src/app.ts",
-			manifest: true,
-			openApi: { title: "Demo API", version: "1.0.0" },
-			types: true,
+			app: "src/app.ts",
+			codegen: {
+				manifest: true,
+				openApi: { title: "Demo API", version: "1.0.0" },
+				tree: true,
+				types: true,
+			},
 			watch: ["src/**/*.ts"],
 		}),
 	],
-})
+}

@@ -1,4 +1,6 @@
-import type { HelloGetCtx } from "./honey.gen"
+import type { AppCtx } from "./context"
+
+type HelloGetCtx = AppCtx & { input: { search: { q: string } } }
 
 export class Service {
 	static list(ctx: HelloGetCtx) {

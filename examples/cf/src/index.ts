@@ -1,7 +1,7 @@
 import { defineErrors, honey } from "honey"
 import * as z from "zod"
 
-const app = honey()
+export const app = honey()
 	.errorFactory(
 		defineErrors({
 			a: "bad_request",

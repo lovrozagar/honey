@@ -1,0 +1,277 @@
+{
+  "_generated": "honey checksum:291f0ad31a7d",
+  "errors": [
+    {
+      "errorKey": "api_error",
+      "status": 500,
+      "statusKey": "internal_server_error"
+    },
+    {
+      "errorKey": "invalid_input",
+      "status": 400,
+      "statusKey": "bad_request"
+    },
+    {
+      "errorKey": "org_slug_taken",
+      "status": 409,
+      "statusKey": "conflict"
+    },
+    {
+      "errorKey": "org_limit_reached",
+      "status": 403,
+      "statusKey": "forbidden"
+    }
+  ],
+  "routes": [
+    {
+      "errors": [
+        "api_error",
+        "invalid_input"
+      ],
+      "meta": {
+        "description": "Test route",
+        "openApi": {
+          "summary": "Root test route",
+          "tags": [
+            "test"
+          ]
+        }
+      },
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api",
+      "input": {
+        "search": {
+          "vendor": "zod",
+          "version": 1
+        }
+      },
+      "output": {
+        "application/json": {
+          "ok": {
+            "vendor": "zod",
+            "version": 1
+          }
+        }
+      }
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/health"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/events"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/events-live"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "ALL",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/echo"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous",
+        "withDb",
+        "withAuth"
+      ],
+      "params": [],
+      "path": "/api/v1/organizations"
+    },
+    {
+      "errors": [
+        "api_error",
+        "org_slug_taken",
+        "org_limit_reached",
+        "invalid_input"
+      ],
+      "meta": {},
+      "method": "POST",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous",
+        "withDb",
+        "withAuth"
+      ],
+      "params": [],
+      "path": "/api/v1/organizations"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous",
+        "withDb",
+        "withAuth"
+      ],
+      "params": [
+        "orgId"
+      ],
+      "path": "/api/v1/organizations/:orgId"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "DELETE",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous",
+        "withDb",
+        "withAuth"
+      ],
+      "params": [
+        "orgId"
+      ],
+      "path": "/api/v1/organizations/:orgId"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "POST",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [
+        "topic"
+      ],
+      "path": "/api/realtime/broadcast/:topic"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/boundary/default"
+    },
+    {
+      "errors": [
+        "api_error",
+        "org_limit_reached"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/boundary/custom"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/openapi.json"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/manifest.json"
+    },
+    {
+      "errors": [
+        "api_error"
+      ],
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/api/generated-tree"
+    }
+  ]
+}

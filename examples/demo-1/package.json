@@ -4,9 +4,11 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
-		"honey": "workspace:*"
+		"honey": "workspace:*",
+		"zod": "catalog:"
 	},
 	"scripts": {
+		"generate": "honey generate",
 		"type:check": "tsc --noEmit"
 	},
 	"devDependencies": {

@@ -1,4 +1,5 @@
 {
+  "_generated": "honey checksum:c6b68504df88",
   "errors": [
     {
       "errorKey": "unauthorized",
@@ -28,12 +29,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "input.createJson",
-          "tags": [
-            "input"
-          ]
-        }
+        "operationId": "input.createJson",
+        "tags": [
+          "input"
+        ]
       },
       "method": "POST",
       "middleware": [
@@ -63,12 +62,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "input.createForm",
-          "tags": [
-            "input"
-          ]
-        }
+        "operationId": "input.createForm",
+        "tags": [
+          "input"
+        ]
       },
       "method": "POST",
       "middleware": [
@@ -98,12 +95,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "input.search",
-          "tags": [
-            "input"
-          ]
-        }
+        "operationId": "input.search",
+        "tags": [
+          "input"
+        ]
       },
       "method": "GET",
       "middleware": [
@@ -220,12 +215,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "input.none",
-          "tags": [
-            "input"
-          ]
-        }
+        "operationId": "input.none",
+        "tags": [
+          "input"
+        ]
       },
       "method": "GET",
       "middleware": [
@@ -669,12 +662,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "resources.list",
-          "tags": [
-            "methods"
-          ]
-        }
+        "operationId": "resources.list",
+        "tags": [
+          "methods"
+        ]
       },
       "method": "GET",
       "middleware": [
@@ -698,12 +689,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "resources.create",
-          "tags": [
-            "methods"
-          ]
-        }
+        "operationId": "resources.create",
+        "tags": [
+          "methods"
+        ]
       },
       "method": "POST",
       "middleware": [
@@ -733,12 +722,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "resources.update",
-          "tags": [
-            "methods"
-          ]
-        }
+        "operationId": "resources.update",
+        "tags": [
+          "methods"
+        ]
       },
       "method": "PUT",
       "middleware": [
@@ -774,12 +761,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "resources.patch",
-          "tags": [
-            "methods"
-          ]
-        }
+        "operationId": "resources.patch",
+        "tags": [
+          "methods"
+        ]
       },
       "method": "PATCH",
       "middleware": [
@@ -815,12 +800,10 @@
         "validation_error"
       ],
       "meta": {
-        "openApi": {
-          "operationId": "resources.delete",
-          "tags": [
-            "methods"
-          ]
-        }
+        "operationId": "resources.delete",
+        "tags": [
+          "methods"
+        ]
       },
       "method": "DELETE",
       "middleware": [

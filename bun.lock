@@ -91,6 +91,7 @@
       "version": "0.0.1",
       "dependencies": {
         "honey": "workspace:*",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
@@ -115,6 +116,7 @@
       "version": "0.0.1",
       "dependencies": {
         "honey": "workspace:*",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "typescript": "catalog:",

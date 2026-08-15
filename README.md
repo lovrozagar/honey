@@ -22,9 +22,11 @@ Requires [Bun](https://bun.sh) 1.3+.
 
 ```bash
 bun install
+bun run generate        # honey generate for examples + e2e-app
 bun run test            # core unit + in-process integration (default CI)
 bun run test:consumers  # e2e-app imports honey like a real app
-bun run typecheck       # core src (TypeScript 7)
+bun run typecheck            # core src (TypeScript 7)
+bun run typecheck:consumers  # examples + e2e-app + generated types
 ```
 
 Opt-in:

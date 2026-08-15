@@ -1,7 +1,7 @@
 import { createMiddleware, honey } from "honey"
 import * as z from "zod"
 
-const withTiming = createMiddleware(async ({ next }) => {
+const withTiming = createMiddleware(async (_ctx, next) => {
 	const start = performance.now()
 	const result = await next({ startedAt: start })
 	return result

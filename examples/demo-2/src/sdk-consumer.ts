@@ -3,9 +3,9 @@
  * Returns { data, error, response, status } tuple.
  */
 
-import { createDemo2SDK } from "./honey.sdk.gen"
+import { Demo2SDK } from "./_gen/sdk.index.gen.ts"
 
-const sdk = createDemo2SDK({
+const sdk = new Demo2SDK({
 	baseURL: "http://localhost:3000",
 	headers: { authorization: "Bearer test-token" },
 })
@@ -21,7 +21,7 @@ async function main() {
 	})
 
 	if (error) {
-		console.log(error.errorKey, error.status)
+		console.log(error.error_key, error.status)
 		return
 	}
 	console.log("created.id:", data.id)
@@ -64,7 +64,7 @@ async function main() {
 		json: { name: "no-email" } as { email: string; name: string },
 	})
 	if (bad.error) {
-		console.log("error:", bad.error.errorKey, bad.error.status)
+		console.log("error:", bad.error.error_key, bad.error.status)
 	}
 
 	console.log("\nAll SDK calls with tuple mode!")

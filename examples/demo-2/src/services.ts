@@ -1,4 +1,4 @@
-import type { Routes } from "./honey.gen"
+import type { Routes } from "./_gen/types.gen"
 
 /**
  * Services that import ctx types from the generated file.

@@ -1,4 +1,4 @@
-import type { Routes } from "./honey.gen"
+import type { Routes } from "./_gen/types.gen"
 
 type OrgsGetCtx = Routes["/orgs"]["get"]["ctx"]
 type OrgsOrgIdGetCtx = Routes["/orgs/:orgId"]["get"]["ctx"]

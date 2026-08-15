@@ -17,10 +17,10 @@ const errors = defineErrors({
 	validation_failed: "bad_request",
 })
 
-const withAuth = createMiddleware(async ({ next }) => next({ userId: "u-1" }))
+const withAuth = createMiddleware(async (_ctx, next) => next({ userId: "u-1" }))
 
 function withDatabase(url: string) {
-	return createMiddleware(async ({ next }) =>
+	return createMiddleware(async (_ctx, next) =>
 		next({ db: { query: (_sql: string, _params?: unknown[]): unknown[] => [], url } }),
 	)
 }

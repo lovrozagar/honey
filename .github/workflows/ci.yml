@@ -14,6 +14,8 @@ jobs:
         with:
           bun-version: 1.3.11
       - run: bun install --frozen-lockfile
+      - run: bun run generate
       - run: bun run test
       - run: bun run test:consumers
       - run: bun run typecheck
+      - run: bun run typecheck:consumers

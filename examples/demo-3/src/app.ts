@@ -17,13 +17,13 @@ const errors = defineErrors({
 	rate_limited: "too_many_requests",
 })
 
-const withCache = createMiddleware(async ({ next }) =>
+const withCache = createMiddleware(async (_ctx, next) =>
 	next({
 		cache: { get: (_k: string): string | null => null, set: (_k: string, _v: string) => {} },
 	}),
 )
 
-const withSession = createMiddleware(async ({ next }) =>
+const withSession = createMiddleware(async (_ctx, next) =>
 	next({ session: { orgId: "org-1", permissions: ["read", "write"] as string[], userId: "u-1" } }),
 )
 

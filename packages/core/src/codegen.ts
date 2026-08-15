@@ -936,7 +936,7 @@ export function sanitizeOpenApiSpec(
 	spec: OpenApiSpec,
 	options: OpenApiSanitizeOptions,
 ): OpenApiSpec {
-	const result = structuredClone(spec)
+	const result = cloneJson(spec)
 
 	if (options.stripSecuritySchemes?.length && result.components?.securitySchemes) {
 		for (const name of options.stripSecuritySchemes) {
@@ -971,6 +971,14 @@ export function sanitizeOpenApiSpec(
 	return result
 }
 
+function cloneJson<T>(value: T): T {
+	try {
+		return structuredClone(value)
+	} catch {
+		return JSON.parse(JSON.stringify(value)) as T
+	}
+}
+
 function resolveSchema(
 	schema: Record<string, unknown>,
 	schemas: Record<string, Record<string, unknown>>,
@@ -984,7 +992,7 @@ function resolveSchema(
 		if (!resolved) throw new Error(`$ref points to nonexistent component: ${schema.$ref}`)
 		const next = new Set(visited)
 		next.add(name)
-		return resolveSchemaDeep(structuredClone(resolved), schemas, next)
+		return resolveSchemaDeep(cloneJson(resolved), schemas, next)
 	}
 	return resolveSchemaDeep(schema, schemas, visited)
 }
@@ -1029,7 +1037,7 @@ export function resolveRefs(spec: OpenApiSpecInput): OpenApiSpecInput {
 	const schemas = spec.components?.schemas
 	if (!schemas || Object.keys(schemas).length === 0) return spec
 
-	const paths = structuredClone(spec.paths)
+	const paths = cloneJson(spec.paths)
 
 	for (const methods of Object.values(paths)) {
 		for (const operation of Object.values(methods)) {
@@ -1429,7 +1437,7 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 
 					if (customSchemas.length === 0) {
 						/* all standard errors at this status — use base error schema with constrained enums */
-						schema = structuredClone(baseErrorJsonSchema)
+						schema = cloneJson(baseErrorJsonSchema)
 						const props = schema.properties as Record<string, unknown> | undefined
 						if (props?.error_key) {
 							props.error_key = { enum: standardKeys.sort(), type: "string" }
@@ -1444,7 +1452,7 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 						/* mixed standard + custom, or multiple custom — use oneOf */
 						const schemas: Record<string, unknown>[] = []
 						if (standardKeys.length > 0) {
-							const stdSchema = structuredClone(baseErrorJsonSchema)
+							const stdSchema = cloneJson(baseErrorJsonSchema)
 							const props = stdSchema.properties as Record<string, unknown> | undefined
 							if (props?.error_key) {
 								props.error_key = { enum: standardKeys.sort(), type: "string" }

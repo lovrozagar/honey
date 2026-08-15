@@ -3,7 +3,7 @@ import { honey, type InferCtx, type MiddlewareFn } from "honey"
 type Env = Record<string, unknown>
 
 type DbCtx = { db: { query: (sql: string) => unknown[] } }
-const withDb: MiddlewareFn<{}, DbCtx> = async ({ next }) => {
+const withDb: MiddlewareFn<{}, DbCtx> = async (_ctx, next) => {
 	return next({ db: { query: () => [] } })
 }
 
