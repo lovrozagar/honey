@@ -341,9 +341,9 @@ describe("concurrent requests: state isolation", () => {
 
 		const results = await Promise.all(
 			Array.from({ length: 100 }, (_, i) =>
-				app
-					.fetch(new Request(`http://localhost/users/${i}`), {})
-					.then((r) => r.json() as Promise<Record<string, string>>),
+				Promise.resolve(app.fetch(new Request(`http://localhost/users/${i}`), {})).then(
+					(r) => r.json() as Promise<Record<string, string>>,
+				),
 			),
 		)
 
@@ -361,16 +361,16 @@ describe("concurrent requests: state isolation", () => {
 
 		const results = await Promise.all(
 			Array.from({ length: 50 }, (_, i) =>
-				app
-					.fetch(
+				Promise.resolve(
+					app.fetch(
 						new Request("http://localhost/api", {
 							body: JSON.stringify({ value: i }),
 							headers: { "content-type": "application/json" },
 							method: "POST",
 						}),
 						{},
-					)
-					.then((r) => r.json() as Promise<Record<string, number>>),
+					),
+				).then((r) => r.json() as Promise<Record<string, number>>),
 			),
 		)
 

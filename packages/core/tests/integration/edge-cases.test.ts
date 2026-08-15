@@ -282,19 +282,16 @@ describe("edge: IPv6 in X-Forwarded-For with brackets", () => {
 })
 
 describe("edge: cookie maxAge validation", () => {
-	it("maxAge NaN → throws", () => {
+	it("maxAge NaN → throws", async () => {
 		const app = honey<{}>()
 		app
 			.get("/cookie")
 			.handler((ctx) => ctx.res.json("ok", {}, { cookies: { s: { maxAge: NaN, value: "x" } } }))
 
-		expect(app.fetch(new Request("http://localhost/cookie"), {})).resolves.toHaveProperty(
-			"status",
-			500,
-		)
+		expect((await app.fetch(new Request("http://localhost/cookie"), {})).status).toBe(500)
 	})
 
-	it("maxAge Infinity → throws", () => {
+	it("maxAge Infinity → throws", async () => {
 		const app = honey<{}>()
 		app
 			.get("/cookie")
@@ -302,34 +299,25 @@ describe("edge: cookie maxAge validation", () => {
 				ctx.res.json("ok", {}, { cookies: { s: { maxAge: Infinity, value: "x" } } }),
 			)
 
-		expect(app.fetch(new Request("http://localhost/cookie"), {})).resolves.toHaveProperty(
-			"status",
-			500,
-		)
+		expect((await app.fetch(new Request("http://localhost/cookie"), {})).status).toBe(500)
 	})
 
-	it("maxAge negative → throws", () => {
+	it("maxAge negative → throws", async () => {
 		const app = honey<{}>()
 		app
 			.get("/cookie")
 			.handler((ctx) => ctx.res.json("ok", {}, { cookies: { s: { maxAge: -1, value: "x" } } }))
 
-		expect(app.fetch(new Request("http://localhost/cookie"), {})).resolves.toHaveProperty(
-			"status",
-			500,
-		)
+		expect((await app.fetch(new Request("http://localhost/cookie"), {})).status).toBe(500)
 	})
 
-	it("maxAge 0 → valid (immediate expiry)", () => {
+	it("maxAge 0 → valid (immediate expiry)", async () => {
 		const app = honey<{}>()
 		app
 			.get("/cookie")
 			.handler((ctx) => ctx.res.json("ok", {}, { cookies: { s: { maxAge: 0, value: "x" } } }))
 
-		expect(app.fetch(new Request("http://localhost/cookie"), {})).resolves.toHaveProperty(
-			"status",
-			200,
-		)
+		expect((await app.fetch(new Request("http://localhost/cookie"), {})).status).toBe(200)
 	})
 })
 

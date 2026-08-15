@@ -38,7 +38,7 @@ describe("fetch storm", () => {
 			const lane = i % 4
 			if (lane === 0) {
 				jobs.push(
-					app.fetch(new Request("http://x/health"), {}).then(async (r) => ({
+					Promise.resolve(app.fetch(new Request("http://x/health"), {})).then(async (r) => ({
 						body: await r.text(),
 						kind: "health",
 						status: r.status,
@@ -46,7 +46,7 @@ describe("fetch storm", () => {
 				)
 			} else if (lane === 1) {
 				jobs.push(
-					app.fetch(json("/echo", { n: i }), {}).then(async (r) => ({
+					Promise.resolve(app.fetch(json("/echo", { n: i }), {})).then(async (r) => ({
 						body: await r.text(),
 						kind: "echo",
 						status: r.status,
@@ -54,7 +54,7 @@ describe("fetch storm", () => {
 				)
 			} else if (lane === 2) {
 				jobs.push(
-					app.fetch(json("/echo", { n: "nope" }), {}).then(async (r) => ({
+					Promise.resolve(app.fetch(json("/echo", { n: "nope" }), {})).then(async (r) => ({
 						body: await r.text(),
 						kind: "invalid",
 						status: r.status,
@@ -62,7 +62,7 @@ describe("fetch storm", () => {
 				)
 			} else {
 				jobs.push(
-					app.fetch(new Request("http://x/fail"), {}).then(async (r) => ({
+					Promise.resolve(app.fetch(new Request("http://x/fail"), {})).then(async (r) => ({
 						body: await r.text(),
 						kind: "fail",
 						status: r.status,

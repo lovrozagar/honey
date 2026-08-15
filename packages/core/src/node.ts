@@ -142,7 +142,8 @@ export function serve<TEnv>(
 		inflight++
 		try {
 			const request = incomingToRequest(req)
-			const response = await app.fetch(request, env)
+			const maybe = app.fetch(request, env)
+			const response = maybe instanceof Promise ? await maybe : maybe
 			await responseToNode(response, res)
 		} catch {
 			if (!res.headersSent) {
@@ -164,7 +165,8 @@ export function serve<TEnv>(
 		try {
 			const request = incomingToRequest(req)
 			const envWithUpgrade = { ...env, __nodeUpgrade: { head, req, socket } } as TEnv
-			const response = await app.fetch(request, envWithUpgrade)
+			const maybe = app.fetch(request, envWithUpgrade)
+			const response = maybe instanceof Promise ? await maybe : maybe
 
 			if (response.status !== 101) {
 				const text = await response.text()

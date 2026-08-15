@@ -47,7 +47,7 @@ import type { RealtimeRouteOpts } from "./realtime/route.ts";
 		StatusKey,
 	TapContext,
 } from "./types.ts";
-import { codeToStatusKey, EK, SK } from "./types.ts";
+import { codeToStatusKey, EK, EMPTY_OBJ, SK } from "./types.ts";
 import { validateInput, validateOutput } from "./validation.ts";
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts";
 import { loadHoneyFeature } from "./feature-load.ts";
@@ -227,6 +227,9 @@ function walkTreeHandlers(
 	for (const child of Object.values(root.s)) walkTreeHandlers(child, cb, wsCb);
 	if (root.d) walkTreeHandlers(root.d.c, cb, wsCb);
 }
+
+const EMPTY_PARAMS = EMPTY_OBJ as Record<string, string>
+const EMPTY_MW: RuntimeMiddleware[] = []
 
 /** Find first '?' or '#' in url starting from pos */
 function findSearchOrHash(url: string, pos: number): number {
@@ -550,7 +553,7 @@ export class Honey<
 
 	/** Return scoped middleware functions that match the given route path */
 	private _filterScopedForPath(routePath: string): RuntimeMiddleware[] {
-		if (this._scopedMiddlewares.length === 0) return [];
+		if (this._scopedMiddlewares.length === 0) return EMPTY_MW;
 		const out: RuntimeMiddleware[] = [];
 		for (const s of this._scopedMiddlewares) {
 			if (scopeMatches(s.prefix, routePath)) out.push(s.mw);
@@ -1771,6 +1774,9 @@ export class Honey<
 		env: TEnv,
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
 	): Response | Promise<Response> {
+		if (this._wsAdapter === null && !this._hasWsRoutes) {
+			return this._doFetch(request, env, executionCtx);
+		}
 		const isWsUpgrade = request.headers.get("upgrade")?.toLowerCase() === "websocket"
 		const path = this.pathFromRequest(request)
 		const canPreUpgrade =
@@ -1832,11 +1838,11 @@ export class Honey<
 		return path
 	}
 
-	private async _doFetch(
+	private _doFetch(
 		request: Request,
 		env: TEnv,
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
-	): Promise<Response> {
+	): Response | Promise<Response> {
 		const startTime = performance.now();
 
 		/* fast path extraction — avoids expensive new URL() allocation */
@@ -1871,7 +1877,9 @@ export class Honey<
 			url: getUrl,
 		};
 
-		safeFire(() => this._telemetry?.onRequest?.({ env, req: request }), log);
+		if (this._telemetry !== null) {
+			safeFire(() => this._telemetry?.onRequest?.({ env, req: request }), log);
+		}
 
 		/* trailing slash handling */
 		if (path.length > 1) {
@@ -1935,7 +1943,7 @@ export class Honey<
 			if (staticHandler) {
 				if (staticHandler.fn === null) {
 					fnNullMeta = staticHandler.mt;
-					fnNullParams = Object.create(null) as Record<string, string>;
+					fnNullParams = EMPTY_PARAMS;
 					fnNullHit = true;
 				} else {
 					return this._handleMatched(
@@ -1943,7 +1951,7 @@ export class Honey<
 						method,
 						path,
 						staticHandler,
-						Object.create(null),
+						EMPTY_PARAMS,
 					);
 				}
 			}
@@ -1953,7 +1961,7 @@ export class Honey<
 				if (getHandler) {
 					if (getHandler.fn === null) {
 						fnNullMeta = getHandler.mt;
-						fnNullParams = Object.create(null) as Record<string, string>;
+						fnNullParams = EMPTY_PARAMS;
 						fnNullHit = true;
 					} else {
 						return this._handleMatched(
@@ -1961,7 +1969,7 @@ export class Honey<
 							method,
 							path,
 							getHandler,
-							Object.create(null),
+							EMPTY_PARAMS,
 						);
 					}
 				}
@@ -2049,7 +2057,7 @@ export class Honey<
 				method,
 				path,
 				wildcardResult.handler,
-				fnNullParams ?? Object.create(null),
+				fnNullParams ?? EMPTY_PARAMS,
 				fnNullMeta,
 			);
 		}
@@ -2457,15 +2465,15 @@ export class Honey<
 		}
 	}
 
-	private async _handleMatched(
+	private _handleMatched(
 		fc: FetchCtx<TEnv>,
 		method: HttpMethod,
 		path: string,
 		handler: RouteHandler,
 		params: Record<string, string>,
 		stashedMeta?: Record<string, unknown> | null,
-	): Promise<Response> {
-		const { env, executionCtx, log, request, startTime } = fc;
+	): Response | Promise<Response> {
+		const { env, executionCtx, log, request } = fc;
 
 		/* resolve error factory — pre-computed ef preferred, else build/use global */
 		let errors: Record<string, (...args: never[]) => unknown> | undefined;
@@ -2501,7 +2509,7 @@ export class Honey<
 		const ctx = new HoneyContext({
 			env,
 			executionCtx,
-			meta: resolvedMeta ? Object.freeze(resolvedMeta) : undefined,
+			meta: resolvedMeta ?? undefined,
 			params,
 			path,
 			req: request,
@@ -2536,7 +2544,6 @@ export class Honey<
 		 */
 		const hasTelemetryMw = this._telemetry?.onMiddleware !== undefined;
 		const hasInputValidation = handler.iv !== null;
-		const scopedForPath = this._filterScopedForPath(handler.rp);
 
 		/*
 		 * Error resolver — stored on ctx so the cached handler wrapper can read it.
@@ -2546,19 +2553,30 @@ export class Honey<
 		ctx._errorToResponse = (thrown: unknown) =>
 			this._resolveErrorResponse(thrown, handler, fc, method, path, ctx);
 
+		const onError = (thrown: unknown): Response | Promise<Response> => {
+			if (ctx._errorToResponse) return ctx._errorToResponse(thrown);
+			return this._toErrorResponse(thrown);
+		};
+
+		const after = (response: Response): Response | Promise<Response> => {
+			try {
+				const done = this._afterMatched(fc, method, path, handler, ctx, response);
+				if (done instanceof Promise) return done.catch(onError);
+				return done;
+			} catch (thrown) {
+				return onError(thrown);
+			}
+		};
+
 		try {
-			let response: Response;
-
-			if (!hasTelemetryMw && !hasInputValidation && scopedForPath.length === 0) {
-				/* fast path: use pre-compiled chain when possible */
-				const chainMw = this._chainMiddlewares;
-				const handlerHasChain =
-					chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw);
-				const allMw = handlerHasChain
-					? [...this._globalMiddlewares, ...handler.mw]
-					: [...this._globalMiddlewares, ...chainMw, ...handler.mw];
-
+			if (!hasTelemetryMw && !hasInputValidation && this._scopedMiddlewares.length === 0) {
 				if (!handler._compiled) {
+					const chainMw = this._chainMiddlewares;
+					const handlerHasChain =
+						chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw);
+					const allMw = handlerHasChain
+						? [...this._globalMiddlewares, ...handler.mw]
+						: [...this._globalMiddlewares, ...chainMw, ...handler.mw];
 					handler._compiled = compileChain(allMw, (c) => {
 						try {
 							const result = handler.fn(c);
@@ -2579,196 +2597,226 @@ export class Honey<
 					});
 				}
 				const result = handler._compiled(ctx);
-				response = result instanceof Promise ? await result : result;
-			} else {
-				/* slow path: dynamic assembly for telemetry/validation/scoped-mw */
-				const chainMw = this._chainMiddlewares;
-				const handlerHasChain =
-					chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw);
-				/*
-				 * Ordering: [global → chain → scoped → handler-route-specific]
-				 * When handlerHasChain, handler.mw = [chain..., routeSpecific...].
-				 * Scoped must go after chain but before route-specific, so we split.
-				 */
-				let allMiddlewares: RuntimeMiddleware[] = handlerHasChain
-					? [
-							...this._globalMiddlewares,
-							...handler.mw.slice(0, chainMw.length),
-							...scopedForPath,
-							...handler.mw.slice(chainMw.length),
-						]
-					: [...this._globalMiddlewares, ...chainMw, ...scopedForPath, ...handler.mw];
+				if (result instanceof Promise) return result.then(after, onError);
+				return after(result);
+			}
 
-				if (hasTelemetryMw) {
-					const onMw = this._telemetry?.onMiddleware;
-					if (onMw) {
-						allMiddlewares = allMiddlewares.map((mw) => {
-							const name = mw.name || "anonymous";
-							const wrapped: RuntimeMiddleware = async (wCtx, wNext) => {
-								const mwStart = performance.now();
-								try {
-									const res = await mw(wCtx, wNext);
-									safeFire(
-										() => onMw({ duration: performance.now() - mwStart, name }),
-										log,
-									);
-									return res;
-								} catch (error) {
-									safeFire(
-										() =>
-											onMw({
-												duration: performance.now() - mwStart,
-												error,
-												name,
-											}),
-										log,
-									);
-									throw error;
-								}
-							};
-							return wrapped;
-						});
-					}
-				}
+			const scopedForPath = this._filterScopedForPath(handler.rp);
+			const chainMw = this._chainMiddlewares;
+			const handlerHasChain =
+				chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw);
+			/*
+			 * Ordering: [global → chain → scoped → handler-route-specific]
+			 * When handlerHasChain, handler.mw = [chain..., routeSpecific...].
+			 * Scoped must go after chain but before route-specific, so we split.
+			 */
+			let allMiddlewares: RuntimeMiddleware[] = handlerHasChain
+				? [
+						...this._globalMiddlewares,
+						...handler.mw.slice(0, chainMw.length),
+						...scopedForPath,
+						...handler.mw.slice(chainMw.length),
+					]
+				: [...this._globalMiddlewares, ...chainMw, ...scopedForPath, ...handler.mw];
 
-				if (hasInputValidation) {
-					const schemas = handler.iv;
-					if (schemas) {
-						const inputMw: RuntimeMiddleware = async (inputCtx, inputNext) => {
-								const validated = await validateInput(
-									schemas,
-									inputCtx["req"] as Request,
-									params,
+			if (hasTelemetryMw) {
+				const onMw = this._telemetry?.onMiddleware;
+				if (onMw) {
+					allMiddlewares = allMiddlewares.map((mw) => {
+						const name = mw.name || "anonymous";
+						const wrapped: RuntimeMiddleware = async (wCtx, wNext) => {
+							const mwStart = performance.now();
+							try {
+								const res = await mw(wCtx, wNext);
+								safeFire(
+									() => onMw({ duration: performance.now() - mwStart, name }),
+									log,
 								);
-							return inputNext({ input: validated });
+								return res;
+							} catch (error) {
+								safeFire(
+									() =>
+										onMw({
+											duration: performance.now() - mwStart,
+											error,
+											name,
+										}),
+									log,
+								);
+								throw error;
+							}
 						};
-						allMiddlewares.push(inputMw);
-					}
+						return wrapped;
+					});
 				}
-
-				response = await executeChain(allMiddlewares, ctx, (finalCtx) => {
-					try {
-						const result = handler.fn(finalCtx);
-						if (result instanceof Promise) {
-							return result.catch((thrown: unknown) => {
-								const hCtx = finalCtx as HoneyContext<TEnv>;
-								if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown);
-								throw thrown;
-							});
-						}
-						return result;
-					} catch (thrown) {
-						const hCtx = finalCtx as HoneyContext<TEnv>;
-						if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown);
-						throw thrown;
-					}
-				});
 			}
 
-			/* output validation — skip for error responses and when no body (204, 304, etc) */
-			const validateOut =
-				this._outputValidation === "always" ||
-				(this._outputValidation === "dev" &&
-					(globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
-						?.NODE_ENV !== "production")
-			if (
-				handler.os &&
-				validateOut &&
-				response.body !== null &&
-				!ctx._isErrorResponse
-			) {
-				const ct = response.headers.get("content-type");
+			if (hasInputValidation) {
+				const schemas = handler.iv;
+				if (schemas) {
+					const inputMw: RuntimeMiddleware = async (inputCtx, inputNext) => {
+							const validated = await validateInput(
+								schemas,
+								inputCtx["req"] as Request,
+								params,
+							);
+						return inputNext({ input: validated });
+					};
+					allMiddlewares.push(inputMw);
+				}
+			}
 
-				/* content-type mismatch check */
-				if (ct) {
-					const declaredTypes = Object.keys(handler.os);
-					const matches = declaredTypes.some((t) => ct.startsWith(t));
-					if (!matches) {
-						throw new HoneyError({
-							errorKey: EK.output_content_type_mismatch,
-							status: SK.internal_server_error,
+			return executeChain(allMiddlewares, ctx, (finalCtx) => {
+				try {
+					const result = handler.fn(finalCtx);
+					if (result instanceof Promise) {
+						return result.catch((thrown: unknown) => {
+							const hCtx = finalCtx as HoneyContext<TEnv>;
+							if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown);
+							throw thrown;
 						});
 					}
+					return result;
+				} catch (thrown) {
+					const hCtx = finalCtx as HoneyContext<TEnv>;
+					if (hCtx._errorToResponse) return hCtx._errorToResponse(thrown);
+					throw thrown;
 				}
-
-				/* JSON schema validation — read original, return clone (Bun clone() drains original) */
-				if (ct?.startsWith("application/json") && handler.ov) {
-					const sk = codeToStatusKey[response.status];
-					if (sk) {
-						const forReturn = response.clone();
-						const data: unknown = await response.json();
-						await handler.ov(sk, data);
-						response = forReturn;
-					}
-				}
-			}
-
-			/* taps — fire after successful handler, non-blocking */
-			if (this._taps !== null && !ctx._isErrorResponse) {
-				const taps = this._taps;
-				const log = fc.log;
-
-				/* meta-driven taps — fire for each registered key found in route meta */
-				if (handler.mt !== null) {
-					for (const [key, tapFn] of taps) {
-						const metaValue = handler.mt[key];
-						if (metaValue !== undefined) {
-							ctx.background(
-								Promise.resolve()
-									.then(() => tapFn(ctx, metaValue))
-									.catch((e) => log?.warn?.("tap failed", key, e)),
-							);
-						}
-					}
-				}
-
-				/* dynamic taps — fire for each c.tap() call */
-				if (ctx._pendingTaps !== null) {
-					for (const pending of ctx._pendingTaps) {
-						const tapFn = taps.get(pending.key);
-						if (tapFn !== undefined) {
-							ctx.background(
-								Promise.resolve()
-									.then(() => tapFn(ctx, pending.payload))
-									.catch((e) => log?.warn?.("tap failed", pending.key, e)),
-							);
-						}
-					}
-					ctx._pendingTaps = null;
-				}
-			}
-
-			if (this._telemetry !== null) {
-				try {
-					const duration = performance.now() - startTime;
-					this._telemetry.onHandler?.({
-						duration,
-						method,
-						path,
-						status: response.status,
-					});
-					this._telemetry.onResponse?.({
-						duration,
-						req: request,
-						status: response.status,
-					});
-				} catch {
-					/* telemetry must never crash the response path */
-				}
-			}
-			/* HEAD responses must have empty body — preserve headers + status */
-			if (method === "HEAD") {
-				return new Response(null, {
-					headers: response.headers,
-					status: response.status,
-				});
-			}
-			return response;
+			}).then(after, onError);
 		} catch (thrown) {
 			/* safety net — middleware-level errors (input validation, middleware crash) */
-			if (ctx._errorToResponse) return ctx._errorToResponse(thrown);
-			return this._toErrorResponse(thrown);
+			return onError(thrown);
 		}
+	}
+
+	private _afterMatched(
+		fc: FetchCtx<TEnv>,
+		method: HttpMethod,
+		path: string,
+		handler: RouteHandler,
+		ctx: HoneyContext<TEnv>,
+		response: Response,
+	): Response | Promise<Response> {
+		const validateOut =
+			this._outputValidation === "always" ||
+			(this._outputValidation === "dev" &&
+				(globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+					?.NODE_ENV !== "production")
+		if (
+			handler.os &&
+			validateOut &&
+			response.body !== null &&
+			!ctx._isErrorResponse
+		) {
+			return this._validateThenFinish(fc, method, path, handler, ctx, response);
+		}
+		return this._finishMatched(fc, method, path, handler, ctx, response);
+	}
+
+	private async _validateThenFinish(
+		fc: FetchCtx<TEnv>,
+		method: HttpMethod,
+		path: string,
+		handler: RouteHandler,
+		ctx: HoneyContext<TEnv>,
+		response: Response,
+	): Promise<Response> {
+		const ct = response.headers.get("content-type");
+
+		/* content-type mismatch check */
+		if (ct && handler.os) {
+			const declaredTypes = Object.keys(handler.os);
+			const matches = declaredTypes.some((t) => ct.startsWith(t));
+			if (!matches) {
+				throw new HoneyError({
+					errorKey: EK.output_content_type_mismatch,
+					status: SK.internal_server_error,
+				});
+			}
+		}
+
+		/* JSON schema validation — read original, return clone (Bun clone() drains original) */
+		if (ct?.startsWith("application/json") && handler.ov) {
+			const sk = codeToStatusKey[response.status];
+			if (sk) {
+				const forReturn = response.clone();
+				const data: unknown = await response.json();
+				await handler.ov(sk, data);
+				response = forReturn;
+			}
+		}
+		return this._finishMatched(fc, method, path, handler, ctx, response);
+	}
+
+	private _finishMatched(
+		fc: FetchCtx<TEnv>,
+		method: HttpMethod,
+		path: string,
+		handler: RouteHandler,
+		ctx: HoneyContext<TEnv>,
+		response: Response,
+	): Response {
+		/* taps — fire after successful handler, non-blocking */
+		if (this._taps !== null && !ctx._isErrorResponse) {
+			const taps = this._taps;
+			const log = fc.log;
+
+			/* meta-driven taps — fire for each registered key found in route meta */
+			if (handler.mt !== null) {
+				for (const [key, tapFn] of taps) {
+					const metaValue = handler.mt[key];
+					if (metaValue !== undefined) {
+						ctx.background(
+							Promise.resolve()
+								.then(() => tapFn(ctx, metaValue))
+								.catch((e) => log?.warn?.("tap failed", key, e)),
+						);
+					}
+				}
+			}
+
+			/* dynamic taps — fire for each c.tap() call */
+			if (ctx._pendingTaps !== null) {
+				for (const pending of ctx._pendingTaps) {
+					const tapFn = taps.get(pending.key);
+					if (tapFn !== undefined) {
+						ctx.background(
+							Promise.resolve()
+								.then(() => tapFn(ctx, pending.payload))
+								.catch((e) => log?.warn?.("tap failed", pending.key, e)),
+						);
+					}
+				}
+				ctx._pendingTaps = null;
+			}
+		}
+
+		if (this._telemetry !== null) {
+			try {
+				const duration = performance.now() - fc.startTime;
+				this._telemetry.onHandler?.({
+					duration,
+					method,
+					path,
+					status: response.status,
+				});
+				this._telemetry.onResponse?.({
+					duration,
+					req: fc.request,
+					status: response.status,
+				});
+			} catch {
+				/* telemetry must never crash the response path */
+			}
+		}
+		/* HEAD responses must have empty body — preserve headers + status */
+		if (method === "HEAD") {
+			return new Response(null, {
+				headers: response.headers,
+				status: response.status,
+			});
+		}
+		return response;
 	}
 }
 
@@ -3339,7 +3387,7 @@ class RouteBuilder<
 			ek: this._s.errorKeys,
 			fn: fn as (ctx: unknown) => Response | Promise<Response>,
 			iv: this._s.inputSchemas,
-			mt: this._s.meta,
+			mt: this._s.meta ? Object.freeze(this._s.meta) : null,
 			mw: [...this._s.parentMiddlewares, ...this._s.middlewares],
 			os: this._s.outputSchemas,
 			ov,
@@ -3736,7 +3784,7 @@ class WSRouteBuilder<
 			ek: this._s.errorKeys,
 			fn: wsHandler as WSHandler<unknown>,
 			iv: this._s.inputSchemas,
-			mt: this._s.meta,
+			mt: this._s.meta ? Object.freeze(this._s.meta) : null,
 			mw: [...this._s.parentMiddlewares, ...this._s.middlewares],
 			rp: this._s.path,
 		};
