@@ -35,7 +35,7 @@ curl http://127.0.0.1:3000/openapi.json
 
 `app.serve()` detects bun / node / deno and loads only that WebSocket adapter. Pass `runtime` to pin it. Cloudflare Workers cannot listen — export `fetch: (req, env, ctx) => app.fetch(req, env, ctx)`.
 
-`app.openapi()` serves `/openapi.json`, `/openapi.yml`, `/openapi.yaml`, and (with `docs`) Scalar or Swagger at `/docs`. Spec and docs routes stay out of the generated document.
+`app.serve()`, `app.openapi()`, and `app.errorI18n()` load their implementations when called. A fetch-only production bundle does not include listen adapters, spec generation, or i18n. Spec and docs routes stay out of the generated document.
 
 ```bash
 honey generate          # writes src/_gen/

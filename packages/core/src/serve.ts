@@ -1,7 +1,9 @@
 import type { Honey } from "./index.ts"
 import { cors, type CORSOptions } from "./cors.ts"
+import { detectRuntime, type ServeRuntime } from "./detect-runtime.ts"
 
-export type ServeRuntime = "bun" | "cloudflare" | "deno" | "node"
+export type { ServeRuntime }
+export { detectRuntime }
 
 export type ServeHandle = {
 	close(): Promise<void>
@@ -24,23 +26,6 @@ const CF_SERVE_ERROR =
 	"export default {\n" +
 	"  fetch: (req, env, ctx) => app.fetch(req, env, ctx),\n" +
 	"}\n"
-
-export function detectRuntime(): ServeRuntime {
-	const g = globalThis as {
-		Bun?: unknown
-		Deno?: unknown
-		navigator?: { userAgent?: string }
-		process?: { versions?: { node?: string } }
-	}
-	if (typeof g.Bun !== "undefined") return "bun"
-	if (typeof g.Deno !== "undefined") return "deno"
-	const ua = g.navigator?.userAgent ?? ""
-	if (ua.includes("Cloudflare-Workers") || ua.includes("workerd")) return "cloudflare"
-	if (g.process?.versions?.node) return "node"
-	throw new Error(
-		"Honey.serve() could not detect a runtime. Pass runtime: \"bun\" | \"node\" | \"deno\".",
-	)
-}
 
 function publicHost(hostname: string): string {
 	return hostname === "0.0.0.0" || hostname === "::" ? "127.0.0.1" : hostname
@@ -79,7 +64,7 @@ export async function startHoneyServer(
 		const bound = server.port
 		return {
 			async close() {
-				server.stop()
+				await Promise.resolve(server.stop(true))
 			},
 			hostname,
 			port: bound,
@@ -97,7 +82,7 @@ export async function startHoneyServer(
 					serve: (
 						opts: { hostname: string; port: number; signal?: AbortSignal },
 						handler: (req: Request) => Response | Promise<Response>,
-					) => { addr?: { port?: number } }
+					) => { addr?: { port?: number }; finished?: Promise<void>; shutdown?: () => Promise<void> }
 				}
 			}
 		).Deno
@@ -110,6 +95,17 @@ export async function startHoneyServer(
 		return {
 			async close() {
 				ac.abort()
+				if (server.shutdown) {
+					await Promise.race([
+						server.shutdown(),
+						new Promise<void>((r) => setTimeout(r, 1_000)),
+					])
+					return
+				}
+				await Promise.race([
+					server.finished ?? Promise.resolve(),
+					new Promise<void>((r) => setTimeout(r, 1_000)),
+				])
 			},
 			hostname,
 			port: bound,
@@ -130,7 +126,7 @@ export async function startHoneyServer(
 	const bound = typeof addr === "object" && addr !== null ? addr.port : port
 	return {
 		async close() {
-			await server.shutdown()
+			await server.shutdown(1_000)
 		},
 		hostname,
 		port: bound,
@@ -141,5 +137,5 @@ export async function startHoneyServer(
 
 type BunServer = {
 	port: number
-	stop(): void
+	stop(closeActiveConnections?: boolean): void | Promise<void>
 }

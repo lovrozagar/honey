@@ -2,11 +2,11 @@
 
 # state — honey
 
-  milestone  framework-start
+  milestone  reliability
   updated    2026-08-14
 
 ## now
-  framework-start complete (Phases 22–24)
+  29.a.2   Decide CI opt-in vs checked-in snapshot for bench
 
 ## next
-  parked: 4.a.2 push / 4.a.3 npm publish — only if asked
+  29.a.4   Only hunt a real cliff (Elysia gap / leftover class methods) if we want perf next

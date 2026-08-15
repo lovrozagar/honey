@@ -27,7 +27,11 @@
 		"src"
 	],
 	"type": "module",
-	"sideEffects": false,
+	"sideEffects": [
+		"./src/i18n.ts",
+		"./src/openapi/register.ts",
+		"./src/serve-register.ts"
+	],
 	"exports": {
 		".": "./src/index.ts",
 		"./accepts": "./src/accepts.ts",
@@ -52,7 +56,8 @@
 		"./ip-restrict": "./src/ip-restrict.ts",
 		"./logger": "./src/logger.ts",
 		"./node": "./src/node.ts",
-		"./openapi": "./src/openapi/spec.ts",
+		"./openapi": "./src/openapi/register.ts",
+		"./openapi/spec": "./src/openapi/spec.ts",
 		"./openapi/scalar": "./src/openapi/scalar.ts",
 		"./openapi/swagger": "./src/openapi/swagger.ts",
 		"./plugin": "./src/plugin.ts",
@@ -62,6 +67,7 @@
 		"./request-to-curl": "./src/request-to-curl.ts",
 		"./request-id": "./src/request-id.ts",
 		"./secure-headers": "./src/secure-headers.ts",
+		"./serve": "./src/serve-register.ts",
 		"./server-timing": "./src/server-timing.ts",
 		"./static": "./src/static.ts",
 		"./telemetry/otel": "./src/telemetry/otel.ts",

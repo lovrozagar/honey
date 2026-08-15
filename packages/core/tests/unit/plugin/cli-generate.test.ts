@@ -146,6 +146,7 @@ describe("honey generate CLI", () => {
 			})
 
 		await waitUntil(() => started, 15_000, "watch start timeout")
+		await new Promise((r) => setTimeout(r, 200))
 		writeFileSync(
 			join(TEMP_ROOT, "src/app.ts"),
 			[

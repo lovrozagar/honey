@@ -7,6 +7,7 @@
 		"deploy": "wrangler deploy --name honey-cf-e2e",
 		"dev": "bunx wrangler dev --port 0 --ip 0.0.0.0 --inspector-port 0",
 		"test": "playwright test",
+		"test:live": "bun scripts/live-smoke.ts",
 		"test:prod": "TEST_MODE=prod playwright test",
 		"type:check": "tsc --noEmit"
 	},

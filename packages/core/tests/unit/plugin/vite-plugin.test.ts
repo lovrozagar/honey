@@ -53,6 +53,7 @@ type PluginObj = Record<string, unknown> & {
 	load(id: string): Promise<{ code: string; moduleType: string } | undefined>
 	name: string
 	resolveId(id: string): string | undefined
+	transform(code: string, id: string): { code: string; map: null } | undefined
 }
 
 function getCodegenPlugin(config: HoneyVitePluginConfig): PluginObj {
@@ -81,6 +82,22 @@ describe("honeyVitePlugin", () => {
 	it("codegen plugin named honey", () => {
 		const plugin = getCodegenPlugin({ app: "src/app.ts" })
 		expect(plugin.name).toBe("honey")
+	})
+
+	it("transform injects feature entries when the app uses them", () => {
+		const plugin = getCodegenPlugin({ app: "src/app.ts" })
+		const src = [
+			'import { honey } from "honey"',
+			"const app = honey().get(\"/h\").handler((ctx) => ctx.res.text(\"ok\", \"ok\"))",
+			"app.openapi({ title: \"T\", version: \"1\" })",
+			"await app.serve({ port: 3000 })",
+		].join("\n")
+		const out = plugin.transform(src, "/app/src/app.ts")
+		expect(out?.code).toContain('from "honey/openapi"')
+		expect(out?.code).toContain("enableOpenApi()")
+		expect(out?.code).toContain('from "honey/serve"')
+		expect(out?.code).toContain("enableServe()")
+		expect(plugin.transform('Bun.serve({ fetch() {} })', "/app/src/server.ts")).toBeUndefined()
 	})
 
 	it("resolveId handles virtual modules", () => {

@@ -643,6 +643,7 @@ export function honey(config: HoneyVitePluginConfig) {
 		load(id: string): Promise<{ code: string; moduleType: string } | undefined>;
 		name: string;
 		resolveId(id: string): string | undefined;
+		transform(code: string, id: string): { code: string; map: null } | undefined;
 	} = {
 		async buildStart() {
 			await generateAndWrite(resolved, root);
@@ -734,6 +735,25 @@ export function honey(config: HoneyVitePluginConfig) {
 		},
 
 		name: "honey",
+
+		transform(code: string, id: string): { code: string; map: null } | undefined {
+			if (id.includes("\0") || id.includes("node_modules")) return undefined
+			const inject: string[] = []
+			if (/\.openapi\s*\(|\.manifest\s*\(/.test(code) && !code.includes("honey/openapi")) {
+				inject.push('import { enableOpenApi } from "honey/openapi"', "enableOpenApi()")
+			}
+			if (
+				/(?<!Bun)(?<!Deno)\.serve\s*\(/.test(code) &&
+				!code.includes("honey/serve")
+			) {
+				inject.push('import { enableServe } from "honey/serve"', "enableServe()")
+			}
+			if (/\.errorI18n\s*\(/.test(code) && !code.includes("honey/i18n")) {
+				inject.push('import { enableI18n } from "honey/i18n"', "enableI18n()")
+			}
+			if (inject.length === 0) return undefined
+			return { code: `${inject.join("\n")}\n${code}`, map: null }
+		},
 
 		resolveId(id: string): string | undefined {
 			if (id === VIRTUAL_ROUTES) return RESOLVED_ROUTES;

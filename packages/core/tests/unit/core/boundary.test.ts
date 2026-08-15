@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { HoneyError } from "../../../src/error.ts"
 import { defineErrors } from "../../../src/errors.ts"
 import { honey } from "../../../src/index.ts"
+import "honey/i18n"
 
 const errors = defineErrors({
 	auth_error: "internal_server_error",

@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from "node:fs"
 import { builtinModules } from "node:module"
+import { resolve } from "node:path"
 
 /* ---- Public types ---- */
 
@@ -24,6 +26,20 @@ type BuildAdapterDef = {
 }
 
 /* ---- Entry helpers ---- */
+
+function featurePrelude(appSource: string): string {
+	const lines: string[] = []
+	if (/\.openapi\s*\(|\.manifest\s*\(/.test(appSource)) {
+		lines.push('import { enableOpenApi } from "honey/openapi"', "enableOpenApi()")
+	}
+	if (/\.errorI18n\s*\(/.test(appSource)) {
+		lines.push('import { enableI18n } from "honey/i18n"', "enableI18n()")
+	}
+	if (/(?<!Bun)(?<!Deno)\.serve\s*\(/.test(appSource)) {
+		lines.push('import { enableServe } from "honey/serve"', "enableServe()")
+	}
+	return lines.length > 0 ? `${lines.join("\n")}\n` : ""
+}
 
 function importApp(entry: string, exportName: string): string {
 	if (exportName === "default") return `import app from "./${entry}"`
@@ -103,6 +119,8 @@ export function createBuildPlugin(
 		port: buildConfig.port ?? 3000,
 	}
 
+	let root = ""
+
 	return {
 		apply: "build" as const,
 
@@ -130,9 +148,18 @@ export function createBuildPlugin(
 			}
 		},
 
+		configResolved(cfg: { root: string }) {
+			root = cfg.root
+		},
+
 		load(id: string): { code: string; moduleType: string } | undefined {
 			if (id === RESOLVED_BUILD_ENTRY) {
-				return { code: adapter.entry(resolvedConfig), moduleType: "js" }
+				const appPath = resolve(root || ".", shared.entry)
+				const appSource = existsSync(appPath) ? readFileSync(appPath, "utf-8") : ""
+				return {
+					code: `${featurePrelude(appSource)}${adapter.entry(resolvedConfig)}`,
+					moduleType: "js",
+				}
 			}
 			return undefined
 		},

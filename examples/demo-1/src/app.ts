@@ -1,4 +1,5 @@
 import { honey } from "honey"
+import "honey/openapi"
 import * as z from "zod"
 
 /** demo-1: minimal — no env, no middleware, no errors, no meta */

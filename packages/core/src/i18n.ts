@@ -1,3 +1,5 @@
+import { registerI18nRuntime } from "./i18n-slot.ts"
+
 /**
  * Extracts {varName} patterns from ICU MessageFormat string literals at the type level.
  * "cause" is excluded (reserved by HoneyError).
@@ -224,3 +226,9 @@ export async function resolveFieldName(
 	const name = map[fieldPath]
 	return name ?? fieldPath
 }
+
+export function enableI18n(): void {
+	registerI18nRuntime({ interpolate })
+}
+
+enableI18n()

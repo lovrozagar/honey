@@ -4,8 +4,8 @@
 
 # roadmap — honey
 
-  milestone  framework-start
-  active     —
+  milestone  reliability
+  active     29.a.2
   updated    2026-08-14
 
 ## Phase 1 — Truthful default suite
@@ -213,3 +213,49 @@
   [x] 24.a.1   Root README: install, first route, `/docs`, `app.serve()`, curl
   [x] 24.a.2   Move the four-language SDK matrix to `packages/core/docs` (or keep it as a linked page)
   [x] 24.a.3   Published `packages/core/README.md` matches the framework start, links SDK docs
+
+## Phase 25 — `app.serve()` soak
+  goal    bun / node / deno listen, abort, close, and bind again; CF stays export `fetch` (Workers cannot listen)
+  status  complete
+
+### Track 25.a — Listen soak                                [sequential]
+  [x] 25.a.1   bun / node / deno: bind, request, abort mid-body, `close()`, bind again, `port: 0`, `cors: true`
+  [x] 25.a.2   `runtime: "cloudflare"` (and workerd detect) still throws the export-`fetch` message — no fake listen
+  [x] 25.a.3   CF proof stays `export default { fetch }` + `test:e2e:cf` (local wrangler) + `test:live:cf` (deployed workers.dev)
+
+## Phase 26 — In-process fetch storm
+  goal    Hundreds of concurrent `app.fetch` stay correct on validation, errors, scoped middleware, and `route()`
+  status  complete
+
+### Track 26.a — Concurrent fetch                           [sequential]
+  [x] 26.a.1   Storm happy + validation-fail + typed error paths (local `app.fetch` + live `test:live:cf`)
+  [x] 26.a.2   Storm parent/child `route()` and scoped `use(path)` — 404+CORS and child `onError` leftovers
+  [x] 26.a.3   No leaked handlers / growing tree epoch / unbounded OpenAPI cache across the storm
+
+## Phase 27 — WS under load
+  goal    Many sockets, half-close, close code/reason, reconnect — bun / node / deno / cf
+  status  complete
+
+### Track 27.a — Fan-in / fan-out                           [sequential]
+  [x] 27.a.1   Many concurrent sockets + broadcast / per-conn send on node listen (bun e2e already covers WS)
+  [x] 27.a.2   Half-close, close code/reason, reconnect — parity with existing WS-C / WS-D
+  [x] 27.a.3   Deployed workerd: `bun run test:live:cf` storms HTTP + `/api/echo-ws` on honey-cf-e2e
+
+## Phase 28 — Generate `--watch` honesty
+  goal    Init → generate → second generate / `--watch` is never stale (jiti + checksum)
+  status  complete
+
+### Track 28.a — File layer                                 [sequential]
+  [x] 28.a.1   `honey init` then `honey generate` twice with a real route add (not a handler-body-only edit)
+  [x] 28.a.2   `--watch` regenerates when the tree checksum changes; ignore `_gen` / `.gen.*`
+  [x] 28.a.3   Jiti `fsCache` / `moduleCache` stay off; flake of "generated" log without new routes is gone
+
+## Phase 29 — Bench baseline (after reliability)
+  goal    Record the existing bun bombardier matrix vs Hono / Elysia so later perf work has a number to beat
+  status  in-progress
+
+### Track 29.a — Record, then chase                         [sequential]
+  [x] 29.a.1   Run `bench` json / params / validate / middleware; write numbers + bundle sizes next to `bench/`
+  [ ] 29.a.2   Decide: CI opt-in job, or local-only with a checked-in snapshot
+  [x] 29.a.3   Keep codegen / Effect off `honey()` — runtime spec is `import "honey/openapi"`
+  [ ] 29.a.4   Only then hunt a real cliff (router / middleware / validation) — no rewrite without a delta

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../../../src/errors.ts"
 import { honey } from "../../../src/index.ts"
+import "honey/i18n"
 
 type FieldErrors = Record<string, Array<{ error_key: string; message: string; path: string }>>
 

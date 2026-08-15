@@ -3,6 +3,7 @@ import { HoneyContext } from "../../../src/context.ts"
 import { HoneyError } from "../../../src/error.ts"
 import { createMiddleware, honey } from "../../../src/index.ts"
 import { createErrorResponse } from "../../../src/response.ts"
+import "honey/i18n"
 
 function makeCtx(
 	url = "http://localhost/test",

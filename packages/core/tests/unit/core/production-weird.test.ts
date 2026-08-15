@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { HoneyContext } from "../../../src/context.ts"
 import { createMiddleware, defineErrors, honey } from "../../../src/index.ts"
+import "honey/i18n"
 
 describe("production: handler throws AFTER writing partial response", () => {
 	it("handler creates response then throws → error wins, not partial response", async () => {

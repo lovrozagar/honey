@@ -4,13 +4,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"bench": "bash src/run.sh",
-		"bench:dev": "BENCH_MODE=dev bash src/run.sh",
-		"bench:json": "bash src/run.sh json",
-		"bench:middleware": "bash src/run.sh middleware",
-		"bench:params": "bash src/run.sh params",
-		"bench:validate": "bash src/run.sh validate",
-		"build": "bash src/build.sh"
+		"bench": "bash src/run.sh both",
+		"bench:dev": "BENCH_MODE=dev bash src/run.sh both",
+		"bench:naked": "bash src/run.sh naked",
+		"bench:zod": "bash src/run.sh zod",
+		"bench:json": "bash src/run.sh zod json",
+		"bench:middleware": "bash src/run.sh zod middleware",
+		"bench:params": "bash src/run.sh zod params",
+		"bench:validate": "bash src/run.sh zod validate",
+		"build": "bash src/build.sh both"
 	},
 	"dependencies": {
 		"@hono/zod-validator": "0.8.0",

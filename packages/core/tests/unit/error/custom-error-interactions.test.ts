@@ -3,6 +3,7 @@ import * as z from "zod"
 import { honey, defineErrors } from "../../../src/index.ts"
 import { HoneyError } from "../../../src/error.ts"
 import { createClient } from "../../../src/client/index.ts"
+import "honey/i18n"
 
 const fetchAdapter = (app: { fetch: (req: Request) => Promise<Response> }) =>
 	(input: RequestInfo | URL, init?: RequestInit) => app.fetch(new Request(input, init))

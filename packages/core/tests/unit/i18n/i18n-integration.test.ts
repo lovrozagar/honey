@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../../../src/errors.ts"
 import { honey } from "../../../src/index.ts"
+import "honey/i18n"
 
 describe("i18n: real validation → field errors → translation", () => {
 	it("zod validation error → field names translated", async () => {

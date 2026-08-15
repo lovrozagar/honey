@@ -2,21 +2,19 @@ import { zValidator } from "@hono/zod-validator"
 import { Hono } from "hono"
 import * as z from "zod"
 
+const body = z.object({ age: z.number(), name: z.string() })
+
 const app = new Hono()
 
-/* plain JSON */
 app.get("/json", (c) => c.json({ message: "Hello, World!" }))
 
-/* path params */
 app.get("/params/:id", (c) => c.json({ id: c.req.param("id") }))
 
-/* zod validation */
-app.post("/validate", zValidator("json", z.object({ age: z.number(), name: z.string() })), (c) => {
-	const body = c.req.valid("json")
-	return c.json({ age: body.age, name: body.name })
+app.post("/validate", zValidator("json", body), (c) => {
+	const parsed = c.req.valid("json")
+	return c.json({ age: parsed.age, name: parsed.name })
 })
 
-/* middleware chain */
 app.use("/middleware", async (c, next) => {
 	const start = performance.now()
 	c.set("startedAt", start)

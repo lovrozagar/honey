@@ -8,6 +8,7 @@ import { readableStream } from "../../src/input.ts"
 import { createMiddleware } from "../../src/middleware.ts"
 import { type HoneyServer, serve } from "../../src/node.ts"
 import { serializeCookie } from "../../src/response.ts"
+import "honey/i18n"
 
 function request(
 	port: number,

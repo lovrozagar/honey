@@ -50,9 +50,11 @@ import type { RealtimeRouteOpts } from "./realtime/route.ts";
 import { codeToStatusKey, EK, SK } from "./types.ts";
 import { validateInput, validateOutput } from "./validation.ts";
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts";
-import { scalar } from "./openapi/scalar.ts";
-import { swagger } from "./openapi/swagger.ts";
-import { startHoneyServer, type HoneyServeOptions, type ServeHandle } from "./serve.ts";
+import { loadHoneyFeature } from "./feature-load.ts";
+import { getI18nRuntime } from "./i18n-slot.ts";
+import { getOpenApiRuntime } from "./openapi/spec-factory.ts";
+import { getServeRuntime } from "./serve-slot.ts";
+import type { HoneyServeOptions, ServeHandle } from "./serve.ts";
 
 export { HoneyContext } from "./context.ts";
 /** HoneyContext without internal backing fields — use this for consumer-facing types */
@@ -120,9 +122,9 @@ export type {
 export type { WSAdapter, WSContext, WSHandler, WSPreUpgrade } from "./ws/cloudflare.ts";
 export type { ConnContext, RealtimeRouteOpts } from "./realtime/route.ts";
 export type { RealtimeBus } from "./realtime/bus.ts";
-export type { HoneyServeOptions, ServeHandle, ServeRuntime } from "./serve.ts";
-export { detectRuntime } from "./serve.ts";
-export { generateMCPServer } from "./codegen-mcp.ts";
+export type { HoneyServeOptions, ServeHandle } from "./serve.ts";
+export type { ServeRuntime } from "./detect-runtime.ts";
+export { detectRuntime } from "./detect-runtime.ts";
 
 /** Type predicate for incoming wire-protocol msg frames from the realtime client. */
 function isMsgFrame(value: unknown): value is { data: unknown; t: "msg" } {
@@ -572,8 +574,11 @@ export class Honey<
 			if (translations) {
 				const template = translations[honeyError.errorKey];
 				if (template) {
-					const { interpolate } = await import("./i18n.ts");
-					honeyError.message = interpolate(template, honeyError.vars ?? {});
+					await loadHoneyFeature("i18n")
+					honeyError.message = getI18nRuntime().interpolate(
+						template,
+						honeyError.vars ?? {},
+					);
 				}
 			}
 
@@ -893,9 +898,9 @@ export class Honey<
 				return this._openApiCache.value
 			}
 			let pending: Promise<unknown>
-			pending = import("./codegen.ts")
-				.then((m) =>
-					m.generateOpenApi(this as never, {
+			pending = loadHoneyFeature("openapi")
+				.then(() =>
+					getOpenApiRuntime().generateOpenApi(this, {
 						filterRoutes: options.filterRoutes,
 						info: {
 							description: options.description,
@@ -918,8 +923,8 @@ export class Honey<
 				return this._openApiYamlCache.value
 			}
 			let pending: Promise<string>
-			pending = import("./codegen.ts")
-				.then(async (m) => m.toYaml(await loadJson()))
+			pending = Promise.resolve()
+				.then(async () => getOpenApiRuntime().toYaml(await loadJson()))
 				.catch((err: unknown) => {
 					if (this._openApiYamlCache?.value === pending) this._openApiYamlCache = null
 					throw err
@@ -936,13 +941,16 @@ export class Honey<
 		)
 		if (options.docs) {
 			const specUrl = mergePath(this._basePath, `${stem}.json`)
-			const ui =
-				options.docs === "swagger" ? swagger({ url: specUrl }) : scalar({ url: specUrl })
+			const docs = options.docs
+			const ui = async (ctx: { res: HoneyRes }) => {
+				await loadHoneyFeature("openapi")
+				return getOpenApiRuntime().docsUi(docs, specUrl)(ctx)
+			}
 			const preferred = options.docsPath ?? "/docs"
 			const candidates = options.docsPath ? [preferred] : [preferred, "/reference"]
 			let mounted = false
 			for (const p of candidates) {
-				if (this._mountInternalGet(p, (ctx) => ui(ctx))) {
+				if (this._mountInternalGet(p, ui)) {
 					mounted = true
 					break
 				}
@@ -964,8 +972,8 @@ export class Honey<
 				return this._manifestCache.value
 			}
 			let pending: Promise<unknown>
-			pending = import("./codegen.ts")
-				.then((m) => m.generateManifest(this as never))
+			pending = loadHoneyFeature("openapi")
+				.then(() => getOpenApiRuntime().generateManifest(this))
 				.catch((err: unknown) => {
 					if (this._manifestCache?.value === pending) this._manifestCache = null
 					throw err
@@ -977,8 +985,9 @@ export class Honey<
 		return this
 	}
 
-	serve(options?: HoneyServeOptions): Promise<ServeHandle> {
-		return startHoneyServer(this as never, options)
+	async serve(options?: HoneyServeOptions): Promise<ServeHandle> {
+		await loadHoneyFeature("serve")
+		return getServeRuntime()(this, options)
 	}
 
 	private _lookupGet(fullPath: string): RouteHandler | null {

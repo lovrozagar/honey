@@ -1,5 +1,7 @@
 import type { InferCtx, MiddlewareFn, WSAdapter } from "honey"
 import { defineErrors, HoneyError, honey } from "honey"
+import "honey/i18n"
+import "honey/openapi"
 import { cors } from "honey/cors"
 import { createLogger, logger } from "honey/logger"
 import { generateFromApp } from "honey/plugin"

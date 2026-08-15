@@ -26,6 +26,16 @@ curl -sS -o /dev/null -w "%{http_code}\n" -X OPTIONS \
 # 204
 ```
 
+## Live soak
+
+Same worker, public URL. After deploy:
+
+```bash
+bun run test:live:cf
+```
+
+Default live soak: **8000** `/api/health`, **800** `/api/openapi.json`, **200** CORS preflights (concurrency 250, 8s per-request timeout), then **80** `/api/echo-ws` echo sockets. Override with `HONEY_CF_STORM`, `HONEY_CF_WS`, `HONEY_CF_CONCURRENCY`, `HONEY_CF_LIVE_URL`.
+
 ## Local
 
 ```bash

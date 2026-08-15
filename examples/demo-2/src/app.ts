@@ -1,4 +1,5 @@
 import { createMiddleware, defineErrors, honey } from "honey"
+import "honey/openapi"
 import { readableStream } from "honey/input"
 import * as z from "zod"
 

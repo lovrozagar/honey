@@ -1,4 +1,5 @@
 import { honey } from "honey"
+import "honey/openapi"
 
 export const app = honey()
 	.get("/health")

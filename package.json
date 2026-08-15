@@ -43,6 +43,7 @@
 		"test:e2e:deno": "bun run --filter @honey/e2e-deno test",
 		"test:e2e:cf": "bun run --filter @honey/e2e-cf-workers test",
 		"deploy:e2e:cf": "bun run --filter @honey/e2e-cf-workers deploy",
+		"test:live:cf": "bun run --filter @honey/e2e-cf-workers test:live",
 		"test:harness": "bun run --filter honey test:harness",
 		"test:harness:rust": "bun run --filter honey test:harness:rust",
 		"test:watch": "bun run --filter honey test:watch",

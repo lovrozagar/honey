@@ -1,4 +1,5 @@
 import { defineErrors, honey } from "honey"
+import "honey/openapi"
 import * as z from "zod"
 
 export const app = honey()

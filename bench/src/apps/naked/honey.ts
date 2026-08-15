@@ -1,5 +1,4 @@
 import { createMiddleware, honey } from "honey"
-import * as z from "zod"
 
 const withTiming = createMiddleware(async (_ctx, next) => {
 	const start = performance.now()
@@ -8,20 +7,12 @@ const withTiming = createMiddleware(async (_ctx, next) => {
 })
 
 const app = honey()
-	/* plain JSON */
 	.get("/json")
 	.handler((ctx) => ctx.res.json("ok", { message: "Hello, World!" }))
 
-	/* path params */
 	.get("/params/:id")
 	.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
 
-	/* zod validation */
-	.post("/validate")
-	.input({ json: z.object({ age: z.number(), name: z.string() }) })
-	.handler((ctx) => ctx.res.json("ok", { age: ctx.input.json.age, name: ctx.input.json.name }))
-
-	/* middleware chain */
 	.use(withTiming)
 	.get("/middleware")
 	.handler((ctx) => ctx.res.json("ok", { elapsed: performance.now() - ctx.startedAt }))

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import "honey/serve"
 
 const TEMP_ROOT = resolve(import.meta.dirname, "../../../.tmp-cli-init-test")
 const CLI = resolve(import.meta.dirname, "../../../src/cli.ts")
@@ -116,5 +117,26 @@ describe("honey init CLI", () => {
 		} finally {
 			await handle.close()
 		}
+	})
+
+	it("generate twice picks up a new route", async () => {
+		expect((await runCli(TEMP_ROOT, ["init"])).exitCode).toBe(0)
+		expect((await runCli(TEMP_ROOT, ["generate"])).exitCode).toBe(0)
+		const treePath = join(TEMP_ROOT, "src/_gen/routes.gen.ts")
+		expect(readFileSync(treePath, "utf-8")).toContain("health")
+		expect(readFileSync(treePath, "utf-8")).not.toContain("second")
+
+		const appPath = join(TEMP_ROOT, "src/app.ts")
+		writeFileSync(
+			appPath,
+			readFileSync(appPath, "utf-8").replace(
+				'get("/health")',
+				'get("/second").handler((ctx) => ctx.res.text("ok", "2"))\n\t.get("/health")',
+			),
+			"utf-8",
+		)
+		expect((await runCli(TEMP_ROOT, ["generate"])).exitCode).toBe(0)
+		expect(readFileSync(treePath, "utf-8")).toContain("second")
+		expect(readFileSync(treePath, "utf-8")).toContain("health")
 	})
 })

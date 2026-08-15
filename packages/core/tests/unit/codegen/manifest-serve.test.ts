@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import "honey/openapi"
 import { honey } from "../../../src/index.ts"
 
 describe("Honey.manifest()", () => {

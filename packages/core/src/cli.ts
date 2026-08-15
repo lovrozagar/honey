@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, watch } from "node:fs"
+import { existsSync, statSync, watch } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { parseInitFlags, runInit } from "./init.ts"
 import type { HoneyGoCliConfig, HoneyVitePluginConfig } from "./plugin.ts"
@@ -172,15 +172,29 @@ async function main() {
 
 	if (flags.watch) {
 		if (!resolved.app) throw new Error("watch mode requires --app or a vite honey() config")
-		const srcDir = dirname(resolve(cwd, resolved.app))
+		const appAbs = resolve(cwd, resolved.app)
+		const srcDir = dirname(appAbs)
 		let debounceTimer: ReturnType<typeof setTimeout> | undefined
+		let lastMtime = existsSync(appAbs) ? statSync(appAbs).mtimeMs : 0
+
+		const schedule = (): void => {
+			clearTimeout(debounceTimer)
+			debounceTimer = setTimeout(() => generate(), 100)
+		}
 
 		console.log(`honey: watching ${srcDir}`)
 		watch(srcDir, { recursive: true }, (_event, filename) => {
 			if (!filename || GEN_IGNORE_RE.test(String(filename))) return
-			clearTimeout(debounceTimer)
-			debounceTimer = setTimeout(() => generate(), 100)
+			schedule()
 		})
+		watch(appAbs, schedule)
+		setInterval(() => {
+			if (!existsSync(appAbs)) return
+			const mtime = statSync(appAbs).mtimeMs
+			if (mtime === lastMtime) return
+			lastMtime = mtime
+			schedule()
+		}, 250)
 	}
 }
 
