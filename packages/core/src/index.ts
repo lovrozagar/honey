@@ -2,6 +2,7 @@ import { HoneyContext } from "./context.ts"
 import { HoneyError } from "./error.ts"
 import { ERROR_META } from "./errors.ts"
 import type { MiddlewareFn, RuntimeMiddleware } from "./middleware.ts"
+import { collectMiddlewareMeta } from "./middleware.ts"
 import { compileChain, executeChain } from "./middleware.ts"
 import type { ProxyConfig } from "./proxy.ts"
 import { createProxyHandler } from "./proxy.ts"
@@ -539,6 +540,37 @@ export class Honey<
 				}
 			},
 		)
+	}
+
+	/**
+	 * Meta contributed by every middleware that will run for `routePath`, in runtime order:
+	 * global, chain, then scoped entries matching the path. Route-level `.use()` is folded in
+	 * later, by the builder. Resolved here — at registration — because the precompiled route
+	 * tree bakes `mt` as a literal, so a per-request derivation would diverge from it.
+	 */
+	private _contributedMetaFor(routePath: string): Record<string, unknown> | null {
+		const scoped: RuntimeMiddleware[] = []
+		for (const entry of this._scopedMiddlewares) {
+			if (scopeMatches(entry.prefix, routePath)) scoped.push(entry.mw)
+		}
+		return collectMiddlewareMeta([this._globalMiddlewares, this._chainMiddlewares, scoped])
+	}
+
+	/**
+	 * Back-fill meta from one scoped entry onto handlers already in the tree. Mirrors
+	 * `_applyScopedEntryErrors` — `.use("/prefix", mw)` may be registered after the routes it
+	 * covers, and a tag missing where enforcement happens is the worst failure direction.
+	 * `mt` is frozen at registration, so this replaces the object rather than mutating it.
+	 */
+	private _applyScopedEntryMeta(entry: ScopedEntry): void {
+		const meta = (entry.mw as { meta?: Record<string, unknown> }).meta
+		if (!meta) return
+		const apply = (h: { mt: Record<string, unknown> | null; rp: string }): void => {
+			if (!scopeMatches(entry.prefix, h.rp)) return
+			/* contributed meta never overwrites what the route or chain stated explicitly */
+			h.mt = Object.freeze(h.mt ? { ...meta, ...h.mt } : { ...meta })
+		}
+		walkTreeHandlers(this._root, apply, apply)
 	}
 
 	/** Apply error keys from every scoped entry on this chain to every matching handler in the tree */
@@ -1397,6 +1429,7 @@ export class Honey<
 		newChain._hasRouteTree = this._hasRouteTree
 		newChain._hasWsRoutes = this._hasWsRoutes
 		newChain._applyScopedEntryErrors(entry)
+		newChain._applyScopedEntryMeta(entry)
 		return newChain
 	}
 
@@ -1434,8 +1467,9 @@ export class Honey<
 					if (!this._taps.has(key)) this._taps.set(key, fn)
 				}
 			}
-			/* walk tree and apply all scoped error keys to matching handlers */
+			/* walk tree and apply all scoped error keys + contributed meta to matching handlers */
 			this._applyAllScopedErrors()
+			for (const entry of this._scopedMiddlewares) this._applyScopedEntryMeta(entry)
 		}
 		return this as unknown as Honey<
 			TEnv,
@@ -1507,6 +1541,7 @@ export class Honey<
 			meta: this._chainMeta ? { ...this._chainMeta } : null,
 			method,
 			middlewares: [],
+			mwMeta: this._contributedMetaFor(fullPath),
 			outputSchemas: null,
 			parent: this,
 			parentMiddlewares: this._chainMiddlewares,
@@ -1609,6 +1644,7 @@ export class Honey<
 			inputSchemas: null,
 			meta: null,
 			middlewares: [],
+			mwMeta: this._contributedMetaFor(mergePath(this._basePath, path)),
 			parent: this,
 			parentMiddlewares: this._chainMiddlewares,
 			path: mergePath(this._basePath, path),
@@ -2779,6 +2815,8 @@ type RouteBuilderState<TParent> = {
 	handlerMap: Record<string, RouteHandler> | null
 	inputSchemas: InputSchemasDef | null
 	meta: Record<string, unknown> | null
+	/** meta contributed by middleware — kept apart so explicit .meta() always outranks it */
+	mwMeta: Record<string, unknown> | null
 	method: HttpMethod | "ALL"
 	middlewares: RuntimeMiddleware[]
 	outputSchemas: OutputSchemaDef | null
@@ -2786,6 +2824,18 @@ type RouteBuilderState<TParent> = {
 	parentMiddlewares: RuntimeMiddleware[]
 	path: string
 	root: TreeNode
+}
+
+/**
+ * Route meta = middleware-contributed meta, overlaid by everything stated explicitly
+ * (chain `.meta()`, then route `.meta()`). Explicit always wins.
+ */
+function mergeContributedMeta(
+	contributed: Record<string, unknown> | null | undefined,
+	explicit: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+	if (!contributed) return explicit ? Object.freeze(explicit) : null
+	return Object.freeze(explicit ? { ...contributed, ...explicit } : { ...contributed })
 }
 
 /** Honey.TMeta defaults to never; never & X is never, so start acc meta at {}. */
@@ -3129,7 +3179,7 @@ class RouteBuilder<
 			ek: this._s.errorKeys,
 			fn: fn as (ctx: unknown) => Response | Promise<Response>,
 			iv: this._s.inputSchemas,
-			mt: this._s.meta ? Object.freeze(this._s.meta) : null,
+			mt: mergeContributedMeta(this._s.mwMeta, this._s.meta),
 			mw: [...this._s.parentMiddlewares, ...this._s.middlewares],
 			os: this._s.outputSchemas,
 			ov,
@@ -3456,11 +3506,13 @@ class RouteBuilder<
 		>({
 			...this._s,
 			middlewares: [...this._s.middlewares, mw as RuntimeMiddleware],
+			mwMeta: mw.meta ? { ...this._s.mwMeta, ...mw.meta } : this._s.mwMeta,
 		})
 	}
 }
 
 type WSRouteBuilderState<TParent> = {
+	mwMeta?: Record<string, unknown> | null
 	boundaryErrorKey: string | null
 	errorKeys: Set<string>
 	inputSchemas: InputSchemasDef | null
@@ -3505,7 +3557,7 @@ class WSRouteBuilder<
 			ek: this._s.errorKeys,
 			fn: wsHandler as WSHandler<unknown>,
 			iv: this._s.inputSchemas,
-			mt: this._s.meta ? Object.freeze(this._s.meta) : null,
+			mt: mergeContributedMeta(this._s.mwMeta, this._s.meta),
 			mw: [...this._s.parentMiddlewares, ...this._s.middlewares],
 			rp: this._s.path,
 		}
@@ -3537,6 +3589,7 @@ class WSRouteBuilder<
 		return new WSRouteBuilder<TEnv, TCtx & TAdds, TInput, _TErrorKeys, TParent>({
 			...this._s,
 			middlewares: [...this._s.middlewares, mw as RuntimeMiddleware],
+			mwMeta: mw.meta ? { ...this._s.mwMeta, ...mw.meta } : this._s.mwMeta,
 		})
 	}
 }

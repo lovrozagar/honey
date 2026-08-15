@@ -191,6 +191,56 @@ consumer that gains a tag before honey's policy is updated is not blocked. It is
 secondary: raw passthrough spreads stringly-typed keys across call sites, has no public/private
 separation, and fails on nothing.
 
+## 2.6 Middleware-contributed meta
+
+A fact enforced by middleware should not be retyped on every route it protects. Middleware can
+contribute meta to every route that mounts it:
+
+```ts
+export const shard = createMiddleware(fn, { meta: { tenant: "project_id" } })
+// or: defineMiddleware({ fn, errors: […], meta: { tenant: "project_id" } })
+
+app.use(shard)                    // every route on the chain
+app.use("/orgs", shard)           // every route under a prefix
+app.get("/x").use(shard).handler(…)  // one route
+```
+
+One line, every route the middleware covers, and the tag cannot disagree with the code that
+enforces it — a hand-written `tenant` on 104 routes can, and a wrong one is worse than a missing
+one, because it makes a consumer confident about the wrong parameter.
+
+Rules:
+
+- **Explicit always wins.** Chain `.meta()` and route `.meta()` both outrank a contributed value.
+  Among middleware, later mount order wins.
+- **Contributed meta is real meta.** It lands in the route's `mt`, so it appears on `ctx.meta`, in
+  the manifest, and — critically — it is subject to the policy. A middleware cannot smuggle an
+  untagged fact into the document: with `strict: "error"`, contributing `sla` with no policy entry
+  fails the build exactly as writing it on a route would.
+- **A scoped middleware registered after its routes still reaches them.** `.use("/prefix", mw)`
+  back-fills already-registered handlers, mirroring what honey already does for scoped error keys.
+  A tag missing where enforcement happens is the failure direction that matters.
+- **`internal` may not be contributed.** It controls whether a route appears in generated artifacts
+  at all; a middleware that removed 104 routes from the document would be invisible in both the
+  route and the middleware. `createMiddleware` throws.
+
+### Why it is resolved at registration, not per request
+
+The precompiled route tree bakes `mt` as a JSON literal (`mw` is never serialized), and
+`.routeTree()` patch mode deliberately does not overwrite `mt` — the baked value is what production
+serves. Contributed meta is therefore collected once, when the route registers, so the JIT and
+precompiled paths cannot disagree. A lazily-derived value would produce one answer in development
+and a different, stale one in production — the exact class of divergence this feature exists to
+remove. The usual contract applies: change what a middleware contributes, regenerate.
+
+### One runtime interaction to know about
+
+Meta-driven taps fire for every registered tap key found on a route's meta. A middleware
+contributing `tenant` will therefore start firing an `app.tap("tenant", …)` handler on every route
+it covers. That is coherent — "run this for every tenant-scoped route" is what meta-driven taps are
+for — but it is a behavior change triggered from a distance, so it is worth grepping for tap keys
+that collide with meta keys a middleware contributes.
+
 ## 3. Precedence and merge rules
 
 Contributions are collected per operation and resolved by **rank**, highest wins:
@@ -235,7 +285,7 @@ Enforced at two levels:
 
 `strict` values: `"error"` (default when a `metaSpec` is declared), `"warn"`, `"off"`.
 
-**Known limit:** a *misspelled* policy key is not rejected at the call site. `.metaSpec()` takes a
+**Known limit:** a _misspelled_ policy key is not rejected at the call site. `.metaSpec()` takes a
 generic `TSpec extends HoneyMetaSpec<TMeta>` — required to keep `Honey` from becoming invariant in
 `TMeta`, which would break assignability across the whole builder — and TypeScript does not
 excess-property-check a literal inferred as a generic. The typo is still caught, from the other

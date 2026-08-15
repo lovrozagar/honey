@@ -11,6 +11,8 @@ export type MiddlewareFn<TCtx = {}, TAdds = {}, TErrors extends string = string>
 	},
 ) => Promise<MiddlewareResult<TAdds>>) & {
 	errors?: readonly TErrors[]
+	/** Meta this middleware contributes to every route that mounts it. Codegen + `ctx.meta` */
+	meta?: Readonly<Record<string, unknown>>
 }
 
 /** runtime type for stored middleware — erased generics, used internally */
@@ -28,13 +30,33 @@ export function defineMiddleware<
 	TAdds,
 	TFactory extends Record<string, (...args: never[]) => unknown>,
 	TKeys extends keyof TFactory & string,
->(opts: { errors?: [TFactory, ...TKeys[]]; fn: MiddlewareFn<TReqs, TAdds> }): MiddlewareFn<TReqs, TAdds, TKeys> {
+>(opts: {
+	errors?: [TFactory, ...TKeys[]]
+	fn: MiddlewareFn<TReqs, TAdds>
+	meta?: Record<string, unknown>
+}): MiddlewareFn<TReqs, TAdds, TKeys> {
 	const fn = opts.fn as MiddlewareFn<TReqs, TAdds, TKeys>
 	if (opts.errors) {
 		const [, ...keys] = opts.errors
 		Object.defineProperty(fn, "errors", { value: keys })
 	}
+	if (opts.meta) attachMiddlewareMeta(fn, opts.meta)
 	return fn
+}
+
+/**
+ * `internal` decides whether a route appears in generated artifacts at all. A middleware that
+ * set it would silently remove routes from the document, which is not noticeable by reading
+ * either the route or the middleware — so it is the one key middleware may not contribute.
+ */
+function attachMiddlewareMeta(fn: object, meta: Record<string, unknown>): void {
+	if ("internal" in meta) {
+		throw new Error(
+			'middleware meta cannot set "internal" — it controls whether routes appear in generated ' +
+				"artifacts; set it on the route with .meta({ internal: true })",
+		)
+	}
+	Object.defineProperty(fn, "meta", { value: Object.freeze({ ...meta }) })
 }
 
 type NextFn = {
@@ -51,8 +73,30 @@ type ExtractAdds<T> = T extends Promise<MiddlewareResult<infer A>> ? A : never
  */
 export function createMiddleware<TReqs = {}, TRet extends Promise<Response> = Promise<MiddlewareResult<{}>>>(
 	fn: (ctx: TReqs, next: NextFn) => TRet,
+	opts?: { meta?: Record<string, unknown> },
 ): MiddlewareFn<TReqs, ExtractAdds<TRet>> {
+	if (opts?.meta) attachMiddlewareMeta(fn, opts.meta)
 	return fn as MiddlewareFn<TReqs, ExtractAdds<TRet>>
+}
+
+/**
+ * Merge meta contributed by a middleware chain, in mount order. Resolved once at route
+ * registration — never per request, because the precompiled route tree bakes `mt` as a literal
+ * and a lazily-derived value would diverge from it.
+ */
+export function collectMiddlewareMeta(
+	groups: ReadonlyArray<ReadonlyArray<RuntimeMiddleware>>,
+): Record<string, unknown> | null {
+	let out: Record<string, unknown> | undefined
+	for (const group of groups) {
+		for (const mw of group) {
+			const meta = (mw as { meta?: Readonly<Record<string, unknown>> }).meta
+			if (!meta) continue
+			if (out === undefined) out = {}
+			Object.assign(out, meta)
+		}
+	}
+	return out ?? null
 }
 
 /**

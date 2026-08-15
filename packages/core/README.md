@@ -1188,6 +1188,20 @@ Every key of the app's meta type needs an entry — mapped, or `false` — enfor
 
 Full reference, precedence rules, error taxonomy and migration path: [meta-spec.md](./docs/meta-spec.md).
 
+#### Middleware-contributed meta
+
+A fact that middleware already enforces should not be retyped on every route it protects:
+
+```ts
+export const shard = createMiddleware(fn, { meta: { tenant: "project_id" } })
+
+app.use(shard) // every route on the chain — or app.use("/orgs", shard), or .get("/x").use(shard)
+```
+
+Explicit `.meta()` (route, then chain) always outranks a contributed value; among middleware, later mount order wins. Contributed meta lands in the route's `mt`, so it reaches `ctx.meta`, the manifest, and the policy — with `strict: "error"` a middleware cannot contribute a key that has no entry. A path-scoped middleware registered _after_ the routes it covers still back-fills them. `internal` may not be contributed, since a middleware that removed routes from the document would be invisible from both sides.
+
+Resolved once at registration, never per request: the precompiled route tree bakes `mt` as a literal and patch mode does not overwrite it, so a lazily-derived value would differ between dev and production. Change what a middleware contributes, then regenerate.
+
 ## WebSockets
 
 ```ts
