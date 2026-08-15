@@ -512,6 +512,68 @@ describe("schema-derived entries", () => {
 		expect((op(spec, "/a")["x-entity"] as Record<string, unknown>).name).toBe("user")
 	})
 
+	it("distinguishes `undefined` (unknown → omit) from `null` (explicitly nothing → emit)", async () => {
+		/* Load-bearing for publishers that cannot know a fact: a stamp of `null` reaches the
+		   document as `null`, which tells a consumer "nothing", not "I don't know". A publisher
+		   that means "unknown" must omit the key, or the policy must map it to `undefined`. */
+		const Stamped = z.object({ id: z.string() }).meta({ entity: { searchable: null, table: "article" } })
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				entity: {
+					expand: (e: { searchable: string[] | null; table: string }) => ({
+						"x-entity": e.table,
+						/* passed through — a deliberate "nothing" */
+						"x-searchable-raw": e.searchable,
+						/* normalized — "unknown", so the key never appears */
+						"x-searchable-omitted": e.searchable ?? undefined,
+					}),
+					from: ["output"],
+				},
+			},
+		})
+		app
+			.get("/articles")
+			.output({ "application/json": { ok: Stamped } })
+			.handler((c) => c.res.json("ok", {} as never))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		const o = op(spec, "/articles")
+		expect(o).toHaveProperty("x-searchable-raw", null)
+		expect(o).not.toHaveProperty("x-searchable-omitted")
+	})
+
+	it("a schema-derived null is filled by route meta, not fought by it", async () => {
+		/* the publisher stamps `null` for a fact only the routing layer knows; the route-meta
+		   entry sits at a higher rank, so it fills the gap wherever it is present */
+		const Stamped = z.object({ id: z.string() }).meta({ entity: { table: "article", tenantColumn: null } })
+		const app = honey<{}>().meta<{ tenant?: string }>()
+		app.metaSpec({
+			meta: { tenant: { key: "x-tenant", map: (v) => ({ column: v }) } },
+			schema: {
+				entity: {
+					expand: (e: { table: string; tenantColumn: string | null }) => ({
+						"x-entity": e.table,
+						"x-tenant": e.tenantColumn ? { column: e.tenantColumn } : undefined,
+					}),
+					from: ["output"],
+				},
+			},
+		})
+		app
+			.get("/known")
+			.meta({ tenant: "project_id" })
+			.output({ "application/json": { ok: Stamped } })
+			.handler((c) => c.res.json("ok", {} as never))
+		app
+			.get("/unknown")
+			.output({ "application/json": { ok: Stamped } })
+			.handler((c) => c.res.json("ok", {} as never))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/known")["x-tenant"]).toEqual({ column: "project_id" })
+		/* nothing known and nothing stamped → the key is absent, never `null` */
+		expect(op(spec, "/unknown")).not.toHaveProperty("x-tenant")
+	})
+
 	it("an expand key returning undefined is omitted", async () => {
 		const Plain = z.object({ id: z.string() }).meta({ entity: { name: "token" } })
 		const app = honey<{}>()

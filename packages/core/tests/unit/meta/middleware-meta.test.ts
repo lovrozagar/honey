@@ -144,6 +144,38 @@ describe("middleware-contributed meta", () => {
 		expect(JSON.stringify(op(spec, "/a"))).not.toMatch(/tenant|project_id/)
 	})
 
+	it("a contributed value fills a schema-derived gap without fighting it", async () => {
+		/* a publisher that cannot know the tenant stamps nothing; the middleware that enforces
+		   it supplies the fact, at the higher rank */
+		const Stamped = z.object({ id: z.string() }).meta({ entity: { table: "article", tenantColumn: null } })
+		const app = honey<{}>().meta<{ tenant?: string }>()
+		app.metaSpec({
+			meta: { tenant: { key: "x-tenant", map: (v) => ({ column: v }) } },
+			schema: {
+				entity: {
+					expand: (e: { table: string; tenantColumn: string | null }) => ({
+						"x-entity": e.table,
+						"x-tenant": e.tenantColumn ? { column: e.tenantColumn } : undefined,
+					}),
+					from: ["output"],
+				},
+			},
+		})
+		app
+			.use(shard)
+			.get("/a")
+			.output({ "application/json": { ok: Stamped } })
+			.handler((c) => c.res.json("ok", {} as never))
+		app
+			.get("/b")
+			.output({ "application/json": { ok: Stamped } })
+			.handler((c) => c.res.json("ok", {} as never))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/a")["x-tenant"]).toEqual({ column: "project_id" })
+		expect(op(spec, "/a")["x-entity"]).toBe("article")
+		expect(op(spec, "/b")).not.toHaveProperty("x-tenant")
+	})
+
 	it('rejects "internal" — a middleware must not remove routes from generated artifacts', () => {
 		expect(() => createMiddleware(async (_c, n) => n({}), { meta: { internal: true } })).toThrow(
 			/cannot set "internal"/,

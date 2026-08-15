@@ -233,6 +233,14 @@ precompiled paths cannot disagree. A lazily-derived value would produce one answ
 and a different, stale one in production — the exact class of divergence this feature exists to
 remove. The usual contract applies: change what a middleware contributes, regenerate.
 
+### Two things to put in a release note
+
+- **Adding a middleware can break a build.** Contributed meta is subject to totality, so mounting a
+  middleware that contributes `tenant` fails the build of any app whose policy has no `tenant`
+  entry — an app that never touched its own meta type. That is the correct trade (explicit beats
+  silent) but it is a surprising blast radius for what looks like a local change.
+- The tap interaction below.
+
 ### One runtime interaction to know about
 
 Meta-driven taps fire for every registered tap key found on a route's meta. A middleware
@@ -240,6 +248,34 @@ contributing `tenant` will therefore start firing an `app.tap("tenant", …)` ha
 it covers. That is coherent — "run this for every tenant-scoped route" is what meta-driven taps are
 for — but it is a behavior change triggered from a distance, so it is worth grepping for tap keys
 that collide with meta keys a middleware contributes.
+
+## 2.7 `undefined` omits, `null` is emitted
+
+`map` returning `undefined`, an `undefined` value inside an `expand` record, and a source key absent
+from meta all mean **omit**. `null` is a value and is **emitted verbatim**.
+
+The difference is load-bearing whenever a publisher stamps facts it cannot always know. A schema
+stamped with `searchable: null` or `tenantColumn: null` means _"I don't know"_, but passing that
+straight through publishes `"x-searchable": null`, which a consumer reads as _"nothing is
+searchable"_ — a confident wrong answer, worse than silence. Normalize in the policy:
+
+```ts
+expand: (e) => ({
+	"x-entity": e.table,
+	"x-searchable": e.searchable ?? undefined, // unknown → key absent
+	"x-tenant": e.tenantColumn ? { column: e.tenantColumn } : undefined,
+})
+```
+
+honey does not collapse `null` to omitted for you, because "explicitly nothing" is a legitimate
+statement that some consumers want (`"x-soft-delete": null` = _this entity definitively has no soft
+delete_, as distinct from _unknown_). The framework carries what the policy produces; deciding which
+of the two you mean is the policy's job.
+
+This composes with precedence rather than fighting it. A publisher that stamps nothing for a fact
+only the routing layer knows leaves the key absent at rank 1; a route-meta or middleware-contributed
+value at rank 2 fills it wherever it exists, and where it does not, the key is simply missing —
+which is the honest answer.
 
 ## 3. Precedence and merge rules
 
