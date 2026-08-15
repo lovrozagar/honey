@@ -231,6 +231,15 @@ function walkTreeHandlers(
 const EMPTY_PARAMS = EMPTY_OBJ as Record<string, string>
 const EMPTY_MW: RuntimeMiddleware[] = []
 
+function requestIsWsUpgrade(request: Request): boolean {
+	try {
+		return request.headers.get("upgrade")?.toLowerCase() === "websocket";
+	} catch {
+		/* Deno closes the Request after upgradeWebSocket */
+		return false;
+	}
+}
+
 /** Find first '?' or '#' in url starting from pos */
 function findSearchOrHash(url: string, pos: number): number {
 	for (let i = pos; i < url.length; i++) {
@@ -262,6 +271,8 @@ type FetchCtx<TEnv> = {
 	request: Request;
 	startTime: number;
 	url: () => URL;
+	/** Already known from fetch() before Deno.upgradeWebSocket consumes the request. */
+	wsUpgrade?: boolean;
 };
 
 function defaultErrorFormatter(
@@ -1785,7 +1796,14 @@ export class Honey<
 			!this.trailingSlashRedirects(path) &&
 			matchWsRoute(this._root, this.pathAfterPrefix(path)) !== null
 		const pre = canPreUpgrade ? this._wsAdapter?.preUpgrade?.(request) : undefined
-		const work = this._doFetch(request, env, executionCtx)
+		/* After Deno.upgradeWebSocket the Request is closed. A sync throw here
+		 * used to be boxed by async _doFetch; keep 101 returning either way. */
+		let work: Response | Promise<Response>
+		try {
+			work = this._doFetch(request, env, executionCtx, isWsUpgrade === true)
+		} catch (err) {
+			work = Promise.reject(err)
+		}
 		if (!pre) return work
 		void Promise.resolve(work)
 			.then((res) => {
@@ -1842,6 +1860,7 @@ export class Honey<
 		request: Request,
 		env: TEnv,
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
+		knownWsUpgrade = false,
 	): Response | Promise<Response> {
 		const startTime = performance.now();
 
@@ -1875,6 +1894,7 @@ export class Honey<
 			request,
 			startTime,
 			url: getUrl,
+			wsUpgrade: knownWsUpgrade,
 		};
 
 		if (this._telemetry !== null) {
@@ -1913,8 +1933,8 @@ export class Honey<
 			}
 		}
 
-		/* WebSocket route check */
-		const isWsUpgrade = request.headers.get("upgrade") === "websocket";
+		/* WebSocket route check — do not re-read headers after Deno.upgradeWebSocket */
+		const isWsUpgrade = knownWsUpgrade || requestIsWsUpgrade(request);
 		if (isWsUpgrade) {
 			const wsMatch = matchWsRoute(this._root, path);
 			if (wsMatch !== null) {
@@ -2085,8 +2105,7 @@ export class Honey<
 			return this._handleRealtime(fc, wsMatch, realtimeConfig);
 		}
 
-		const isUpgrade =
-			fc.request.headers.get("upgrade")?.toLowerCase() === "websocket";
+		const isUpgrade = fc.wsUpgrade === true || requestIsWsUpgrade(fc.request);
 		if (!isUpgrade) {
 			return new Response(null, {
 				headers: { upgrade: "websocket" },
@@ -2188,8 +2207,7 @@ export class Honey<
 		wsMatch: { handler: WSRouteHandler; params: Record<string, string> },
 		config: { handler: RealtimeRouteOpts["handler"]; middlewares?: RealtimeRouteOpts["use"]; reconnectBuffer?: number },
 	): Promise<Response> {
-		const isUpgrade =
-			fc.request.headers.get("upgrade")?.toLowerCase() === "websocket";
+		const isUpgrade = fc.wsUpgrade === true || requestIsWsUpgrade(fc.request);
 		if (!isUpgrade) {
 			return new Response(null, {
 				headers: { upgrade: "websocket" },

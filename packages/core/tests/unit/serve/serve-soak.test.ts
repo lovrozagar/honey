@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -7,6 +7,11 @@ import { detectRuntime, honey } from "../../../src/index.ts"
 
 const RUNNER = resolve(import.meta.dirname, "./soak-runner.ts")
 const WORKER = resolve(import.meta.dirname, "../../../../../e2e/cf-workers/src/worker.ts")
+
+function hasCmd(cmd: string): boolean {
+	const result = spawnSync(cmd, ["--version"], { encoding: "utf8" })
+	return result.error === undefined && (result.status === 0 || result.status === null)
+}
 
 function run(cmd: string, args: string[]): Promise<{ exitCode: number; stderr: string; stdout: string }> {
 	return new Promise((resolveProc, reject) => {
@@ -96,7 +101,7 @@ describe("Honey.serve() soak — bun / deno", () => {
 		expect(stdout).toContain('"runtime":"bun"')
 	}, 15_000)
 
-	it("deno runner bind/abort/close/rebind", async () => {
+	it.skipIf(!hasCmd("deno"))("deno runner bind/abort/close/rebind", async () => {
 		const { exitCode, stderr, stdout } = await run("deno", [
 			"run",
 			"--allow-env",
