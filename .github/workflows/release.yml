@@ -63,6 +63,11 @@ jobs:
           node-version: "24"
           package-manager-cache: false
       - run: npm install -g npm@latest
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      # prepack builds dist/*.d.ts, so the toolchain has to be here before publish
+      - run: bun install --frozen-lockfile
       - name: Check tag matches package.json
         run: |
           ref="${{ inputs.tag || github.ref_name }}"
@@ -167,6 +172,11 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: "@lovrozagar"
           package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      # prepack builds dist/*.d.ts, so the toolchain has to be here before publish
+      - run: bun install --frozen-lockfile
       - name: Publish to GitHub Packages
         working-directory: ${{ env.PACKAGE_DIR }}
         env:

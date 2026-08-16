@@ -8,7 +8,8 @@
 		"noEmit": false,
 		"outDir": "./dist",
 		"rewriteRelativeImportExtensions": true,
-		"rootDir": "./src"
+		"rootDir": "./src",
+		"types": []
 	},
 	"include": ["src/**/*.ts"]
 }
