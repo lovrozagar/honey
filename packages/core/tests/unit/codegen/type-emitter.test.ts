@@ -2,7 +2,7 @@ import { type } from "arktype"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
-import { emitSchemaType } from "../../../src/type-emitter.ts"
+import { createTypeEmitState, emitSchemaType } from "../../../src/type-emitter.ts"
 
 describe("emitSchemaType", () => {
 	describe("zod — primitives", () => {
@@ -195,7 +195,29 @@ describe("emitSchemaType", () => {
 		})
 
 		it("lazy", () => {
-			expect(emitSchemaType(z.lazy(() => z.string()))).toBe("unknown")
+			expect(emitSchemaType(z.lazy(() => z.string()))).toBe("string")
+		})
+
+		it("recursive lazy hoists a named alias", () => {
+			type FieldSelection = {
+				relations: Record<string, FieldSelection | null>
+				scalars: string[]
+			}
+			const fieldSelectionSchema: z.ZodType<FieldSelection, FieldSelection> = z.lazy(() =>
+				z.object({
+					relations: z.record(z.string(), fieldSelectionSchema.nullable()),
+					scalars: z.array(z.string()),
+				}),
+			)
+			const state = createTypeEmitState()
+			const emitted = emitSchemaType(fieldSelectionSchema, state)
+			expect(emitted).toBe("_Lazy0")
+			expect(state.aliases.get("_Lazy0")).toBe("{ relations: Record<string, _Lazy0 | null>; scalars: string[] }")
+		})
+
+		it("meta.tsType overrides the emitted type", () => {
+			const schema = z.custom<{ raw: unknown }>().meta({ tsType: "import('x').Y | null" })
+			expect(emitSchemaType(schema)).toBe("import('x').Y | null")
 		})
 
 		it("branded", () => {

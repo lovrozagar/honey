@@ -24,7 +24,8 @@ import type { ErrorMetaEntry } from "./errors.ts"
 import type { Honey } from "./index.ts"
 import type { RouteHandler, TreeNode } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
-import { emitSchemaType } from "./type-emitter.ts"
+import { createTypeEmitState, emitSchemaType } from "./type-emitter.ts"
+import type { TypeEmitState } from "./type-emitter.ts"
 import type {
 	InputSchemaEntry,
 	InputSchemasDef,
@@ -2165,19 +2166,19 @@ type GenerateTypesOptions = {
 	routeMiddlewareProps?: Record<string, Array<{ name: string; opt: boolean; type: string }>>
 }
 
-function emitInputType(handler: RouteHandler): string {
+function emitInputType(handler: RouteHandler, state: TypeEmitState): string {
 	if (!handler.iv) return "{}"
 	const entries: string[] = []
 	for (const [source, schema] of Object.entries(handler.iv)) {
 		if (schema === undefined) continue
 		const unwrapped = unwrapEntry(schema as InputSchemaEntry)
-		entries.push(`${source}: ${emitSchemaType(unwrapped)}`)
+		entries.push(`${source}: ${emitSchemaType(unwrapped, state)}`)
 	}
 	if (entries.length === 0) return "{}"
 	return `{ ${entries.join("; ")} }`
 }
 
-function emitOutputType(handler: RouteHandler): string {
+function emitOutputType(handler: RouteHandler, state: TypeEmitState): string {
 	if (!handler.os) return "{}"
 	const ctEntries: string[] = []
 	for (const [contentType, schemas] of Object.entries(handler.os)) {
@@ -2192,7 +2193,7 @@ function emitOutputType(handler: RouteHandler): string {
 		const statusEntries: string[] = []
 		for (const [statusKey, schema] of Object.entries(schemas)) {
 			if (schema === undefined) continue
-			statusEntries.push(`${statusKey}: ${emitSchemaType(schema as StandardSchemaLike)}`)
+			statusEntries.push(`${statusKey}: ${emitSchemaType(schema as StandardSchemaLike, state)}`)
 		}
 		if (statusEntries.length > 0) {
 			ctEntries.push(`${JSON.stringify(contentType)}: { ${statusEntries.join("; ")} }`)
@@ -2239,13 +2240,17 @@ function emitErrorType(handler: RouteHandler): string {
 		.join(" | ")
 }
 
-function emitErrorShapes(handler: RouteHandler, meta: Record<string, ErrorMetaEntry> | null): string | null {
+function emitErrorShapes(
+	handler: RouteHandler,
+	meta: Record<string, ErrorMetaEntry> | null,
+	state: TypeEmitState,
+): string | null {
 	if (handler.ek.size === 0) return null
 	const entries: string[] = []
 	for (const key of Array.from(handler.ek).sort()) {
 		const entry = meta?.[key]
 		if (entry?.schema) {
-			const schemaType = emitSchemaType(entry.schema as StandardSchemaLike)
+			const schemaType = emitSchemaType(entry.schema as StandardSchemaLike, state)
 			entries.push(`${key}: ${schemaType}`)
 		} else {
 			entries.push(`${key}: null`)
@@ -2258,6 +2263,7 @@ function emitErrorsByStatus(
 	handler: RouteHandler,
 	meta: Record<string, ErrorMetaEntry> | null,
 	factory: Record<string, () => HoneyError> | null,
+	state: TypeEmitState,
 ): string | null {
 	if (handler.ek.size === 0) return null
 	const byStatus = new Map<number, string[]>()
@@ -2280,7 +2286,7 @@ function emitErrorsByStatus(
 		for (const key of keys.sort()) {
 			const entry = meta?.[key]
 			if (entry?.schema) {
-				shapes.push(emitSchemaType(entry.schema as StandardSchemaLike))
+				shapes.push(emitSchemaType(entry.schema as StandardSchemaLike, state))
 			} else {
 				shapes.push("null")
 			}
@@ -2451,16 +2457,18 @@ export function generateTypes<TEnv, TCtx>(
 		}
 	}
 
-	lines.push("export type Routes = {")
+	const emitState = createTypeEmitState()
+	const routesLines: string[] = []
+	routesLines.push("export type Routes = {")
 
 	for (const [path, methods] of byPath) {
-		lines.push(`\t"${path}": {`)
+		routesLines.push(`\t"${path}": {`)
 		for (const { handler, method } of methods) {
 			const mwType = buildMwType(method, path)
 			const mwAlias = mwType ? mwTypeMap.get(mwType) : undefined
 			const basePart = mwAlias ? `${baseCtxName} & ${mwAlias}` : baseCtxName
 			const additions: string[] = []
-			const inputType = emitInputType(handler)
+			const inputType = emitInputType(handler, emitState)
 			if (inputType !== "{}") additions.push(`input: ${inputType}`)
 			const params = extractParams(path)
 			if (params.length > 0) {
@@ -2472,27 +2480,33 @@ export function generateTypes<TEnv, TCtx>(
 			const ctxType = additions.length === 0 ? basePart : `${basePart} & { ${additions.join("; ")} }`
 			const errorType = emitErrorType(handler)
 			const metaType = emitMetaType(handler)
-			const outputType = emitOutputType(handler)
-			lines.push(`\t\t${method}: {`)
-			lines.push(`\t\t\tctx: WithOutput<${ctxType}, ${outputType}>`)
-			lines.push(`\t\t\terrors: ${errorType}`)
-			const shapesType = emitErrorShapes(handler, errorMeta)
+			const outputType = emitOutputType(handler, emitState)
+			routesLines.push(`\t\t${method}: {`)
+			routesLines.push(`\t\t\tctx: WithOutput<${ctxType}, ${outputType}>`)
+			routesLines.push(`\t\t\terrors: ${errorType}`)
+			const shapesType = emitErrorShapes(handler, errorMeta, emitState)
 			if (shapesType) {
-				lines.push(`\t\t\terrorShapes: ${shapesType}`)
-				const byStatusType = emitErrorsByStatus(handler, errorMeta, factory)
+				routesLines.push(`\t\t\terrorShapes: ${shapesType}`)
+				const byStatusType = emitErrorsByStatus(handler, errorMeta, factory, emitState)
 				if (byStatusType) {
-					lines.push(`\t\t\terrorsByStatus: ${byStatusType}`)
+					routesLines.push(`\t\t\terrorsByStatus: ${byStatusType}`)
 				}
 			}
-			lines.push(`\t\t\tinput: ${inputType}`)
-			lines.push(`\t\t\tmeta: ${metaType}`)
-			lines.push(`\t\t\toutput: ${outputType}`)
-			lines.push("\t\t}")
+			routesLines.push(`\t\t\tinput: ${inputType}`)
+			routesLines.push(`\t\t\tmeta: ${metaType}`)
+			routesLines.push(`\t\t\toutput: ${outputType}`)
+			routesLines.push("\t\t}")
 		}
-		lines.push("\t}")
+		routesLines.push("\t}")
 	}
-	lines.push("}")
-	lines.push("")
+	routesLines.push("}")
+	routesLines.push("")
+
+	for (const [name, body] of emitState.aliases) {
+		lines.push(`type ${name} = ${body}`)
+		lines.push("")
+	}
+	lines.push(...routesLines)
 
 	/* route-specific type extractors — services use these instead of typeof app */
 	lines.push("export type RouteCtx<")

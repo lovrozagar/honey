@@ -1,6 +1,7 @@
 import type { StandardSchemaLike } from "./types.ts"
 
 const SAFE_KEY_RE = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/
+const LAZY_ALIAS_CAP = 64
 
 function quoteKey(key: string): string {
 	return SAFE_KEY_RE.test(key) ? key : `"${key}"`
@@ -12,13 +13,36 @@ function arrayOf(el: string): string {
 }
 
 /**
+ * Collects named aliases for recursive `z.lazy` schemas so `generateTypes`
+ * can hoist `type _LazyN = …` before `Routes`.
+ */
+export type TypeEmitState = {
+	aliases: Map<string, string>
+	lazyNames: WeakMap<object, string>
+	nextId: number
+	reserved: Set<string>
+}
+
+export function createTypeEmitState(): TypeEmitState {
+	return {
+		aliases: new Map(),
+		lazyNames: new WeakMap(),
+		nextId: 0,
+		reserved: new Set(),
+	}
+}
+
+/**
  * Emit a TypeScript type string from a Standard Schema compatible schema.
  * Supports Zod (+ mini), Valibot, ArkType, Yup, and Effect.
  * Unknown vendors return "unknown".
+ *
+ * Pass a shared `TypeEmitState` from `generateTypes` so recursive lazy
+ * aliases are hoisted once and reused across routes.
  */
-export function emitSchemaType(schema: StandardSchemaLike): string {
+export function emitSchemaType(schema: StandardSchemaLike, state?: TypeEmitState): string {
 	const vendor = schema["~standard"].vendor
-	if (vendor === "zod") return emitZod(schema)
+	if (vendor === "zod") return emitZod(schema, state ?? createTypeEmitState())
 	if (vendor === "valibot") return emitValibot(schema)
 	if (vendor === "arktype") return emitArkType(schema)
 	if (vendor === "yup") return emitYup(schema)
@@ -51,7 +75,64 @@ function zodDef(schema: unknown): Record<string, unknown> {
 	return (s._def ?? s.def) as Record<string, unknown>
 }
 
-function emitZod(schema: unknown): string {
+/** `.meta({ tsType })` is a vendor-agnostic override; emit it verbatim. */
+function zodTsTypeMeta(schema: unknown): string | undefined {
+	const s = schema as { meta?: () => unknown }
+	if (typeof s.meta !== "function") return undefined
+	let bag: unknown
+	try {
+		bag = s.meta()
+	} catch {
+		return undefined
+	}
+	if (!bag || typeof bag !== "object") return undefined
+	const tsType = (bag as { tsType?: unknown }).tsType
+	return typeof tsType === "string" && tsType.length > 0 ? tsType : undefined
+}
+
+function resolveLazyInner(def: Record<string, unknown>, schema: unknown): unknown {
+	if (typeof def.getter === "function") {
+		try {
+			return (def.getter as () => unknown)()
+		} catch {
+			return undefined
+		}
+	}
+	const s = schema as { unwrap?: () => unknown; _zod?: { innerType?: unknown } }
+	if (typeof s.unwrap === "function") {
+		try {
+			return s.unwrap()
+		} catch {
+			return undefined
+		}
+	}
+	if (s._zod && "innerType" in s._zod) return s._zod.innerType
+	return undefined
+}
+
+function typeRefersTo(body: string, name: string): boolean {
+	return new RegExp(`(?:^|[^A-Za-z0-9_$])${name}(?:[^A-Za-z0-9_$]|$)`).test(body)
+}
+
+function emitZodRecord(keyType: string, valueType: string, state: TypeEmitState): string {
+	/* Partial<Record> adds `| undefined` and is not assignable to a recursive `Record<string, T>`. */
+	if (typeRefersToReserved(valueType, state)) {
+		return `Record<${keyType}, ${valueType}>`
+	}
+	return `Partial<Record<${keyType}, ${valueType}>>`
+}
+
+function typeRefersToReserved(typeStr: string, state: TypeEmitState): boolean {
+	for (const name of state.reserved) {
+		if (typeRefersTo(typeStr, name)) return true
+	}
+	return false
+}
+
+function emitZod(schema: unknown, state: TypeEmitState): string {
+	const stamped = zodTsTypeMeta(schema)
+	if (stamped) return stamped
+
 	const def = zodDef(schema)
 	if (!def) return "unknown"
 	const typeName = (def.typeName ?? def.type) as string
@@ -120,53 +201,81 @@ function emitZod(schema: unknown): string {
 				.map((k) => {
 					const propDef = zodDef(shape[k])
 					const isOpt = propDef && zodIsOptional(propDef)
-					return `${quoteKey(k)}${isOpt ? "?" : ""}: ${emitZod(shape[k])}`
+					return `${quoteKey(k)}${isOpt ? "?" : ""}: ${emitZod(shape[k], state)}`
 				})
 				.join("; ")} }`
 		}
 		case "ZodArray":
 			/* v4: _def.type is the element schema */
-			return arrayOf(emitZod((def.type ?? def.element) as unknown))
+			return arrayOf(emitZod((def.type ?? def.element) as unknown, state))
 		case "array":
-			return arrayOf(emitZod(def.element as unknown))
+			return arrayOf(emitZod(def.element as unknown, state))
 		case "ZodOptional":
 		case "optional":
-			return `${emitZod(def.innerType as unknown)} | undefined`
+			return `${emitZod(def.innerType as unknown, state)} | undefined`
 		case "ZodNullable":
 		case "nullable":
-			return `${emitZod(def.innerType as unknown)} | null`
+			return `${emitZod(def.innerType as unknown, state)} | null`
 		case "ZodUnion":
 		case "ZodDiscriminatedUnion":
 		case "union":
-			return (def.options as unknown[]).map((o) => emitZod(o)).join(" | ")
+			return (def.options as unknown[]).map((o) => emitZod(o, state)).join(" | ")
 		case "ZodIntersection":
 		case "intersection":
-			return `${emitZod(def.left as unknown)} & ${emitZod(def.right as unknown)}`
+			return `${emitZod(def.left as unknown, state)} & ${emitZod(def.right as unknown, state)}`
 		case "ZodRecord":
 		case "record":
-			return `Partial<Record<${emitZod(def.keyType as unknown)}, ${emitZod(def.valueType as unknown)}>>`
+			return emitZodRecord(emitZod(def.keyType as unknown, state), emitZod(def.valueType as unknown, state), state)
 		case "ZodTuple":
 		case "tuple":
-			return `[${(def.items as unknown[]).map((i) => emitZod(i)).join(", ")}]`
+			return `[${(def.items as unknown[]).map((i) => emitZod(i, state)).join(", ")}]`
 		case "ZodDefault":
 		case "ZodCatch":
 		case "default":
 		case "catch":
-			return emitZod(def.innerType as unknown)
+			return emitZod(def.innerType as unknown, state)
 		case "ZodReadonly":
 		case "readonly":
-			return `Readonly<${emitZod(def.innerType as unknown)}>`
+			return `Readonly<${emitZod(def.innerType as unknown, state)}>`
 		case "ZodPipeline":
 		case "pipe":
-			return emitZod(def.out as unknown)
+			return emitZod(def.out as unknown, state)
 		case "ZodBranded":
-			return emitZod(def.type as unknown)
+			return emitZod(def.type as unknown, state)
 		case "ZodLazy":
 		case "lazy":
-			return "unknown"
+			return emitZodLazy(schema, def, state)
 		default:
 			return "unknown"
 	}
+}
+
+function emitZodLazy(schema: unknown, def: Record<string, unknown>, state: TypeEmitState): string {
+	if (schema && typeof schema === "object") {
+		const existing = state.lazyNames.get(schema)
+		if (existing) return existing
+	}
+
+	const inner = resolveLazyInner(def, schema)
+	if (inner === undefined || inner === schema) return "unknown"
+
+	if (!schema || typeof schema !== "object") {
+		return emitZod(inner, state)
+	}
+
+	if (state.nextId >= LAZY_ALIAS_CAP) return "unknown"
+
+	const name = `_Lazy${state.nextId++}`
+	state.lazyNames.set(schema, name)
+	state.reserved.add(name)
+	const body = emitZod(inner, state)
+	if (!typeRefersTo(body, name)) {
+		state.lazyNames.delete(schema)
+		state.reserved.delete(name)
+		return body
+	}
+	state.aliases.set(name, body)
+	return name
 }
 
 /* ---- Valibot emitter ---- */
