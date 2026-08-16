@@ -347,3 +347,88 @@ describe("runtime errorFormatter with schema overload", () => {
 		expect(body.success).toBe(false)
 	})
 })
+
+function errorKeyEnum(schema: Record<string, unknown> | undefined): string[] | undefined {
+	const props = schema?.properties as Record<string, { enum?: string[] }> | undefined
+	return props?.error_key?.enum
+}
+
+describe("OpenAPI error schema — declared keys per status", () => {
+	it("named 404 key is in that operation's error_key enum", async () => {
+		const errors = defineErrors({ item_not_found: "not_found" })
+		const app = honey<{}>().errorFactory(errors)
+		app
+			.get("/items/:id")
+			.errors("item_not_found")
+			.handler((c) => {
+				throw c.errors.item_not_found()
+			})
+		app.get("/other").handler((c) => c.res.json("ok", {}))
+
+		const spec = await generateOpenApi(app, { info: { title: "T", version: "1" } })
+		const item404 = getErrorSchema(spec, "/items/{id}", "get", "404")
+		expect(errorKeyEnum(item404)).toContain("item_not_found")
+		expect(getErrorSchema(spec, "/other", "get", "404")).toBeUndefined()
+	})
+
+	it("route with only generic not_found keeps the generic enum", async () => {
+		const errors = defineErrors({
+			item_not_found: "not_found",
+			not_found: "not_found",
+		})
+		const app = honey<{}>().errorFactory(errors).defaultErrors("not_found")
+		app
+			.get("/items/:id")
+			.errors("item_not_found")
+			.handler((c) => {
+				throw c.errors.item_not_found()
+			})
+		app.get("/other").handler((c) => c.res.json("ok", {}))
+
+		const spec = await generateOpenApi(app, { info: { title: "T", version: "1" } })
+		const named = errorKeyEnum(getErrorSchema(spec, "/items/{id}", "get", "404"))
+		expect(named).toContain("item_not_found")
+		expect(named).toContain("not_found")
+		expect(errorKeyEnum(getErrorSchema(spec, "/other", "get", "404"))).toEqual(["not_found"])
+	})
+
+	it("named 404 key is documented when the app factory does not define it", async () => {
+		const workerErrors = defineErrors({
+			item_not_found: "not_found",
+			not_found: "not_found",
+		})
+		const worker = honey<{}>().errorFactory(workerErrors).defaultErrors("not_found")
+		worker
+			.get("/items/:id")
+			.errors("item_not_found")
+			.handler((c) => {
+				throw c.errors.item_not_found()
+			})
+
+		const gatewayErrors = defineErrors({ not_found: "not_found" })
+		const gateway = honey<{}>().errorFactory(gatewayErrors).routeTree(worker.toRouteTree())
+
+		const spec = await generateOpenApi(gateway, { info: { title: "T", version: "1" } })
+		const keys = errorKeyEnum(getErrorSchema(spec, "/items/{id}", "get", "404"))
+		expect(keys).toContain("item_not_found")
+		expect(keys).toContain("not_found")
+	})
+
+	it("suffix inference prefers not_found over found", async () => {
+		const workerErrors = defineErrors({
+			billing_event_not_found: "not_found",
+		})
+		const worker = honey<{}>().errorFactory(workerErrors)
+		worker
+			.get("/events/:id")
+			.errors("billing_event_not_found")
+			.handler((c) => {
+				throw c.errors.billing_event_not_found()
+			})
+
+		const gateway = honey<{}>().routeTree(worker.toRouteTree())
+		const spec = await generateOpenApi(gateway, { info: { title: "T", version: "1" } })
+		expect(getErrorSchema(spec, "/events/{id}", "get", "302")).toBeUndefined()
+		expect(errorKeyEnum(getErrorSchema(spec, "/events/{id}", "get", "404"))).toEqual(["billing_event_not_found"])
+	})
+})

@@ -365,16 +365,41 @@ function walkWSRoutes(node: TreeNode, currentPath: string, routes: CollectedWSRo
 
 type ErrorInfo = { errorKey: string; status: number; statusKey: string }
 
+/* Longest suffix first so `*_not_found` wins over `*_found` (302). */
+const STATUS_KEYS_BY_LENGTH = (Object.keys(statusKeyToCode) as Array<keyof typeof statusKeyToCode>).sort(
+	(a, b) => b.length - a.length,
+)
+
+/*
+ * Composed apps keep declared keys on the handler but may not carry the worker
+ * factory. Infer HTTP status from a trailing status-key suffix so the document
+ * still lists what `c.errors.<key>` actually writes.
+ */
+function inferErrorInfo(errorKey: string): ErrorInfo | null {
+	const exact = statusKeyToCode[errorKey as keyof typeof statusKeyToCode]
+	if (exact !== undefined) {
+		if (exact < 400) return null
+		return { errorKey, status: exact, statusKey: errorKey }
+	}
+	for (const statusKey of STATUS_KEYS_BY_LENGTH) {
+		if (!errorKey.endsWith(`_${statusKey}`)) continue
+		const status = statusKeyToCode[statusKey]
+		if (status < 400) continue
+		return { errorKey, status, statusKey }
+	}
+	return null
+}
+
 function resolveErrorInfo(errorKey: string, factory: Record<string, () => HoneyError> | null): ErrorInfo {
 	if (factory?.[errorKey]) {
 		try {
 			const err = factory[errorKey]()
 			return { errorKey, status: err.status, statusKey: err.statusKey }
 		} catch {
-			/* factory call failed */
+			/* factory call failed — fall through to suffix inference */
 		}
 	}
-	return { errorKey, status: 0, statusKey: "unknown" }
+	return inferErrorInfo(errorKey) ?? { errorKey, status: 0, statusKey: "unknown" }
 }
 
 function getErrorFactory<TEnv, TCtx>(
