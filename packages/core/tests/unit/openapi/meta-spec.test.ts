@@ -1172,7 +1172,104 @@ describe("policy errors", () => {
 /* ---- composition ---- */
 
 describe("mounted sub-apps", () => {
+	it("a sub-app's own document is unaffected by any parent it is mounted into", async () => {
+		/* mount the same instance that we then generate — the merge must not write back */
+		const worker = honey<{}>().meta<{ secret?: string }>()
+		worker.metaSpec({ meta: { secret: false } })
+		worker
+			.get("/extract/rows")
+			.meta({ secret: "s3cr3t" })
+			.handler((c) => c.res.json("ok", {}))
+
+		const gateway = honey<{}>().meta<{ secret?: string }>()
+		gateway.metaSpec({ meta: { secret: "x-secret" } })
+		gateway.route(worker as never)
+
+		const own = await generateOpenApi(worker as never, { info: INFO })
+		expect(JSON.stringify(op(own, "/extract/rows"))).not.toContain("s3cr3t")
+		expect(op(own, "/extract/rows")).not.toHaveProperty("x-secret")
+	})
+
+	it("a sub-app hiding a key hides it in the aggregate too — the strictest claim survives", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		const sub = honey<{}>().meta<{ secret?: string }>()
+		sub.metaSpec({ meta: { secret: false } })
+		sub
+			.get("/extract/rows")
+			.meta({ secret: "s3cr3t" })
+			.handler((c) => c.res.json("ok", {}))
+
+		const gateway = honey<{}>().meta<{ secret?: string }>()
+		gateway.metaSpec({ meta: { secret: "x-secret" } })
+		gateway.route(sub as never)
+
+		const spec = await generateOpenApi(gateway as never, { info: INFO })
+		expect(JSON.stringify(op(spec, "/extract/rows"))).not.toContain("s3cr3t")
+		expect(warn.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/SUBAPP_ENTRY_CONFLICT.*hides this key/s)
+		warn.mockRestore()
+	})
+
+	it("any other disagreement resolves to the parent, and says so", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		const sub = honey<{}>().meta<{ tenant?: string }>()
+		sub.metaSpec({ meta: { tenant: "x-sub-tenant" } })
+		sub
+			.get("/sub/rows")
+			.meta({ tenant: "orgId" })
+			.handler((c) => c.res.json("ok", {}))
+
+		const gateway = honey<{}>().meta<{ tenant?: string }>()
+		gateway.metaSpec({ meta: { tenant: "x-tenant" } })
+		gateway.route(sub as never)
+
+		const spec = await generateOpenApi(gateway as never, { info: INFO })
+		expect(op(spec, "/sub/rows")["x-tenant"]).toBe("orgId")
+		expect(op(spec, "/sub/rows")).not.toHaveProperty("x-sub-tenant")
+		expect(warn.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/SUBAPP_ENTRY_CONFLICT.*this app's entry wins/s)
+		warn.mockRestore()
+	})
+
+	it("a policy object shared by both apps is not a conflict", async () => {
+		/* the common case: five workers and a gateway importing one policy from a shared
+		   package. Identical entries must not produce a warning per key. */
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		const shared = { meta: { tenant: "x-tenant" } } as const
+		const sub = honey<{}>().meta<{ tenant?: string }>()
+		sub.metaSpec(shared)
+		sub
+			.get("/sub/rows")
+			.meta({ tenant: "orgId" })
+			.handler((c) => c.res.json("ok", {}))
+		const gateway = honey<{}>().meta<{ tenant?: string }>()
+		gateway.metaSpec(shared)
+		gateway.route(sub as never)
+
+		await generateOpenApi(gateway as never, { info: INFO })
+		expect(warn).not.toHaveBeenCalled()
+		warn.mockRestore()
+	})
+
+	it("a parent hiding a key still hides it when a sub wants it emitted", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		const sub = honey<{}>().meta<{ secret?: string }>()
+		sub.metaSpec({ meta: { secret: "x-secret" } })
+		sub
+			.get("/extract/rows")
+			.meta({ secret: "s3cr3t" })
+			.handler((c) => c.res.json("ok", {}))
+
+		const gateway = honey<{}>().meta<{ secret?: string }>()
+		gateway.metaSpec({ meta: { secret: false } })
+		gateway.route(sub as never)
+
+		const spec = await generateOpenApi(gateway as never, { info: INFO })
+		expect(JSON.stringify(op(spec, "/extract/rows"))).not.toContain("s3cr3t")
+		expect(warn.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/SUBAPP_ENTRY_CONFLICT.*this app's entry wins/s)
+		warn.mockRestore()
+	})
+
 	it("a sub-app's policy fills gaps; the parent wins on conflict", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
 		const sub = honey<{}>()
 		sub.metaSpec({ meta: { subKey: "x-sub", tenant: "x-sub-tenant" } })
 		sub
@@ -1189,6 +1286,8 @@ describe("mounted sub-apps", () => {
 		expect(o["x-sub"]).toBe("v")
 		expect(o["x-tenant"]).toBe("t")
 		expect(o).not.toHaveProperty("x-sub-tenant")
+		expect(warn.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/SUBAPP_ENTRY_CONFLICT/)
+		warn.mockRestore()
 	})
 
 	it("a route resolves identically standalone and re-mounted behind a gateway", async () => {

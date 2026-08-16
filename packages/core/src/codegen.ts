@@ -6,6 +6,11 @@ import { methodsOf, namespacesOf, schemaToIR, toIR } from "./codegen-ir.ts"
 import type { IRNamespace } from "./codegen-ir.ts"
 import type { HoneyError } from "./error.ts"
 import {
+	type InvalidateCheckConfig,
+	type InvalidateCheckOperation,
+	reportMissingInvalidate,
+} from "./invalidate-check.ts"
+import {
 	applyMetaSpec,
 	compileMetaSpec,
 	type CompiledMetaSpec,
@@ -31,6 +36,7 @@ import type {
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
 
 export { prepareCodegen } from "./codegen-loaders.ts"
+export type { InvalidateCheckConfig, InvalidateCheckLevel } from "./invalidate-check.ts"
 export { toYaml, yamlSiblingPath } from "./yaml.ts"
 
 /* Status → typed error subclass. Single source of truth shared between the
@@ -1447,6 +1453,12 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 	options: {
 		filterRoutes?: (route: OpenApiRouteInfo<TMeta>) => boolean
 		info: OpenApiInfo
+		/**
+		 * Report mutations that declare no `invalidate`. Default `"warn"` — it drives generated
+		 * SDK invalidation, so a gap is a correctness bug, but many mutations correctly refresh
+		 * nothing. `"off"` for a document served at runtime.
+		 */
+		invalidate?: InvalidateCheckConfig
 		/** Named metaSpec profile — selects which emitted keys this document carries */
 		profile?: string
 		securitySchemes?: Record<string, unknown>
@@ -1477,6 +1489,8 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 
 	const routeFilter = options.filterRoutes
 	const paths: Record<string, Record<string, Record<string, unknown>>> = {}
+	/* operations as emitted, for whole-document checks that need to see siblings */
+	const emitted: InvalidateCheckOperation[] = []
 
 	for (const { handler, method, path } of collected) {
 		if (routeFilter) {
@@ -1691,6 +1705,12 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 		operation.responses = responses
 
 		paths[oaPath][methodKey] = operation
+		emitted.push({
+			meta: handler.mt as Record<string, unknown> | null,
+			method: methodKey,
+			operation,
+			path: oaPath,
+		})
 	}
 
 	/* WS routes */
@@ -1761,6 +1781,8 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 	}
 
 	collector.flush()
+	/* after the policy is known good — a broken policy makes this report meaningless */
+	reportMissingInvalidate(emitted, options.invalidate)
 
 	const result: OpenApiSpec = {
 		info: options.info,

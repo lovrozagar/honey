@@ -403,20 +403,21 @@ All diagnostics are collected across the whole document and thrown as one aggreg
 `Error` (first 20 listed, with a count), because failing on the first of 250 operations makes
 migration miserable.
 
-| Code                   | Level                                    | When                                                                                | Why this level                                                                      |
-| ---------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `MISSING_ENTRY`        | error (`strict:"error"`) / warn / silent | a meta key on some route has no policy entry                                        | the rot-stopper; downgradable during migration                                      |
-| `RESERVED_FIELD`       | error                                    | entry targets `responses` / `parameters` / `requestBody` / `callbacks`              | would contradict schema-derived content                                             |
-| `UNKNOWN_FIELD`        | error                                    | entry targets a non-`x-`, non-allowlisted field                                     | silently ignored by readers                                                         |
-| `DUPLICATE_TARGET`     | error                                    | two same-rank entries write one key                                                 | ambiguous, order-dependent output                                                   |
-| `INVALID_VALUE`        | error                                    | entry `schema` rejects the produced value                                           | a malformed tag is indistinguishable from a missing one downstream                  |
-| `ASYNC_VALIDATION`     | error                                    | entry `schema` validates asynchronously                                             | codegen value resolution is synchronous                                             |
-| `MAP_THREW`            | error                                    | `map` / `expand` threw                                                              | policy bugs must not produce a half-populated document                              |
-| `UNKNOWN_PROFILE`      | error                                    | a document requests a profile that is not declared                                  | almost always a typo that would silently emit everything                            |
-| `AMBIGUOUS_SCHEMA_KEY` | error                                    | a `search: "deep"` entry matched two different values at one depth                  | guessing which entity a route serves is how a tester gets told the wrong thing      |
-| `DESCRIPTOR_MISMATCH`  | error                                    | a descriptor was found under `read` but satisfied no entry's `match`                | a stamped fact nobody claimed is a misconfigured policy, not an absent fact         |
-| `UNSUPPORTED_VERSION`  | error                                    | a descriptor is newer than the entry's `version.max`, or carries no integer version | a partly-understood tag is worse than none — the consumer cannot tell it is partial |
-| omitted value          | silent                                   | `map` returned `undefined`, or the meta key is absent                               | the sanctioned conditional                                                          |
+| Code                    | Level                                    | When                                                                                | Why this level                                                                       |
+| ----------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `MISSING_ENTRY`         | error (`strict:"error"`) / warn / silent | a meta key on some route has no policy entry                                        | the rot-stopper; downgradable during migration                                       |
+| `RESERVED_FIELD`        | error                                    | entry targets `responses` / `parameters` / `requestBody` / `callbacks`              | would contradict schema-derived content                                              |
+| `UNKNOWN_FIELD`         | error                                    | entry targets a non-`x-`, non-allowlisted field                                     | silently ignored by readers                                                          |
+| `DUPLICATE_TARGET`      | error                                    | two same-rank entries write one key                                                 | ambiguous, order-dependent output                                                    |
+| `INVALID_VALUE`         | error                                    | entry `schema` rejects the produced value                                           | a malformed tag is indistinguishable from a missing one downstream                   |
+| `ASYNC_VALIDATION`      | error                                    | entry `schema` validates asynchronously                                             | codegen value resolution is synchronous                                              |
+| `MAP_THREW`             | error                                    | `map` / `expand` threw                                                              | policy bugs must not produce a half-populated document                               |
+| `UNKNOWN_PROFILE`       | error                                    | a document requests a profile that is not declared                                  | almost always a typo that would silently emit everything                             |
+| `AMBIGUOUS_SCHEMA_KEY`  | error                                    | a `search: "deep"` entry matched two different values at one depth                  | guessing which entity a route serves is how a tester gets told the wrong thing       |
+| `DESCRIPTOR_MISMATCH`   | error                                    | a descriptor was found under `read` but satisfied no entry's `match`                | a stamped fact nobody claimed is a misconfigured policy, not an absent fact          |
+| `UNSUPPORTED_VERSION`   | error                                    | a descriptor is newer than the entry's `version.max`, or carries no integer version | a partly-understood tag is worse than none — the consumer cannot tell it is partial  |
+| `SUBAPP_ENTRY_CONFLICT` | warn                                     | a mounted sub-app's policy entry disagrees with this app's                          | silently dropping the sub's entry is how two documents drift without anyone noticing |
+| omitted value           | silent                                   | `map` returned `undefined`, or the meta key is absent                               | the sanctioned conditional                                                           |
 
 Every message carries `method`, `path`, source key and target key.
 
@@ -499,11 +500,28 @@ Steps 1–2 are per-meta-key (nine edits). Step 5 is per-entity, not per-route.
 - **Runtime enforcement.** Everything here is codegen-time. `.metaSpec()` stores one object on the
   route graph and is never consulted on a request.
 
-## 10. Open questions
+## 10. Composition
 
-- **Chain-scoped policies.** `.metaSpec()` is app-global (stored on the shared route graph, merged
-  when sub-apps are mounted, parent wins). Whether a mounted sub-app should be able to _override_ a
-  parent entry rather than only fill gaps is unresolved; today it fills gaps.
+`.metaSpec()` is app-global: one policy object on the route graph. Mounting a sub-app merges that
+object into the parent. Each app's _own_ document still uses only that app's policy — the merge
+writes the parent, never the sub — so a worker that hides a field keeps hiding it in the document
+it generates itself, regardless of what it is later mounted into.
+
+In the **aggregate** document the parent wins on conflict, with one exception. A sub-app entry of
+`false` hides the key in the aggregate too. Hiding is a safety claim: a worker that declares a
+field unpublishable must not have the gateway publish it. Wrongly hidden is a visible gap; wrongly
+published is a leak.
+
+Every other disagreement — two different target keys, two different `map` functions, two different
+schema or profile entries — keeps the parent's entry and reports `SUBAPP_ENTRY_CONFLICT` at
+codegen. The sub-app's own document is unaffected. Identical entries (the common case: five
+workers and a gateway importing one policy from a shared package) are not a conflict.
+
+There is no per-mount override and no way for a worker to _widen_ a gateway entry. If that is the
+shape you want, generate the worker's document from the worker, not from the gateway.
+
+## 11. Open questions
+
 - **Profile inheritance.** Profiles are flat. If real apps grow four or five documents, `extends`
   will be wanted.
 - **Fan-out from a schema key into `parameters`.** `x-query` describes sortable/filterable columns

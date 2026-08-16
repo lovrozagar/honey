@@ -26,6 +26,8 @@ import type {
 	MergePath,
 	MergeRoute,
 	MetaSpecConfig,
+	MetaSpecEntry,
+	MetaSpecMergeConflict,
 	OutputSchemaDef,
 	ParamsFromPath,
 	StandardSchemaLike,
@@ -99,6 +101,7 @@ export type {
 	MetaSpecConfig,
 	MetaSpecContext,
 	MetaSpecEntry,
+	MetaSpecMergeConflict,
 	MetaSpecExpand,
 	MetaSpecProfile,
 	MetaSpecSchemaEntry,
@@ -933,6 +936,8 @@ export class Honey<
 							title: options.title,
 							version: options.version,
 						},
+						/* a served document is not an authoring moment — the check belongs to `honey generate` */
+						invalidate: "off",
 						profile: options.profile,
 						securitySchemes: options.securitySchemes,
 					}),
@@ -1286,7 +1291,18 @@ export class Honey<
 		return this
 	}
 
-	/** Mounted sub-apps fill policy gaps; the parent's entries win on conflict. */
+	/**
+	 * Merge a mounted sub-app's policy into this one.
+	 *
+	 * The parent wins on conflict, so one gateway keeps one answer for its aggregate document —
+	 * with a single exception. A sub entry of `false` wins over anything the parent says, because
+	 * hiding is a safety claim and the strictest claim has to survive composition: a worker that
+	 * declares a field unpublishable must not have the gateway publish it. Wrongly hidden is a
+	 * visible gap; wrongly published is a leak.
+	 *
+	 * Every other disagreement is recorded and reported at codegen. Silently dropping a sub's
+	 * entry is how someone ends up diffing two documents to find out why they differ.
+	 */
 	private _absorbMetaSpec(sub: MetaSpecConfig | null): void {
 		if (!sub) return
 		const own = this._metaSpec
@@ -1294,8 +1310,36 @@ export class Honey<
 			this._metaSpec = sub
 			return
 		}
+		const conflicts: MetaSpecMergeConflict[] = [...(own.conflicts ?? []), ...(sub.conflicts ?? [])]
+
+		const mergeMeta = (): Record<string, MetaSpecEntry> => {
+			const merged: Record<string, MetaSpecEntry> = { ...sub.meta, ...own.meta }
+			for (const [key, subEntry] of Object.entries(sub.meta ?? {})) {
+				const ownEntry = own.meta?.[key]
+				if (ownEntry === undefined || ownEntry === subEntry) continue
+				if (subEntry === false && ownEntry !== false) {
+					merged[key] = false
+					conflicts.push({ key, resolution: "hidden", section: "meta" })
+					continue
+				}
+				conflicts.push({ key, resolution: "parent", section: "meta" })
+			}
+			return merged
+		}
+
+		const recordOverlap = (section: "profiles" | "schema", subSide: object, ownSide: object): void => {
+			for (const [key, subEntry] of Object.entries(subSide)) {
+				const ownEntry = (ownSide as Record<string, unknown>)[key]
+				if (ownEntry === undefined || ownEntry === subEntry) continue
+				conflicts.push({ key, resolution: "parent", section })
+			}
+		}
+		recordOverlap("schema", sub.schema ?? {}, own.schema ?? {})
+		recordOverlap("profiles", sub.profiles ?? {}, own.profiles ?? {})
+
 		this._metaSpec = {
-			meta: { ...sub.meta, ...own.meta },
+			conflicts,
+			meta: mergeMeta(),
 			profiles: { ...sub.profiles, ...own.profiles },
 			schema: { ...sub.schema, ...own.schema },
 			strict: own.strict ?? sub.strict,

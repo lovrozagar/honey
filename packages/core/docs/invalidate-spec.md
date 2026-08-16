@@ -291,6 +291,24 @@ If `invalidate` is not used:
 
 - if needed, consume normalized invalidation metadata for stronger read-after-write handling
 
+## Generate-time check
+
+`invalidate` drives generated SDK behavior: a mutation with no declaration produces clients that
+refresh nothing after the call. The check at `generateOpenApi` / `honey generate` reports mutations
+that declare no `invalidate` _and_ have sibling read routes they plausibly affect.
+
+- Default `"warn"`. One summary, with a list, never one line per operation.
+- `"error"` only on opt-in — many mutations correctly refresh nothing (login, logout, webhook
+  receipt) and a rule that fails the build teaches people to paste `invalidate: null` to shut it up.
+- `"off"` for a document served at runtime. `app.openapi()` and `spec()` already pass this.
+- `invalidate: null` and `invalidate: []` both record "this mutation refreshes nothing". They emit
+  nothing. Absent is the thing the check is looking for.
+- Detection is path-shaped by default (`POST /tables` next to `GET /tables`; `DELETE /tables/{id}`
+  next to `GET /tables`). Pass `{ entityKey: "x-entity" }` to judge by a shared entity tag instead,
+  once a schema policy is stamping one.
+
+Plugin config: `codegen.invalidate`. Programmatic: `generateOpenApi(app, { info, invalidate })`.
+
 ## Recommendation
 
 Ship the narrow version:

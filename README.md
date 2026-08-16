@@ -267,6 +267,9 @@ export default {
 }
 ```
 
+`codegen.invalidate` (default `"warn"`) lists mutations that declare no `invalidate` but have
+sibling read routes they plausibly affect. `"error"` to fail the build; `"off"` to silence it.
+
 `generateFromApp(app)` (from `@lovrozagar/honey/plugin`) is the in-process helper: it returns `{ routeTree, manifest?, openApi?, openApiYaml? }` without writing files.
 
 ## Builder

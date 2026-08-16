@@ -25,6 +25,8 @@ export function spec<TMeta = Record<string, unknown> | null>(
 				? await generateOpenApi(desc.value, {
 						filterRoutes: options.filterRoutes,
 						info: options,
+						/* a served document is not an authoring moment — the check belongs to `honey generate` */
+						invalidate: "off",
 						profile: options.profile,
 						securitySchemes: options.securitySchemes,
 					})

@@ -506,8 +506,18 @@ export type HoneyMetaSpec<TMeta = unknown> = [TMeta] extends [never]
 		? MetaSpecSections<MetaSpecOptionalKeys<TMeta> & MetaSpecRequiredKeys<TMeta>>
 		: MetaSpecSections<Record<string, MetaSpecEntry>>
 
+/** Recorded when a mounted sub-app's policy entry disagrees with the parent's */
+export type MetaSpecMergeConflict = {
+	key: string
+	/** `"hidden"` — the sub hid a key the parent emits, and hiding won */
+	resolution: "hidden" | "parent"
+	section: "meta" | "profiles" | "schema"
+}
+
 /** Erased runtime shape of a resolved policy — what codegen consumes */
 export type MetaSpecConfig = {
+	/** @internal — populated by `.route()` when merging a mounted sub-app's policy */
+	conflicts?: readonly MetaSpecMergeConflict[]
 	meta?: Record<string, MetaSpecEntry>
 	profiles?: Record<string, MetaSpecProfile>
 	schema?: Record<string, MetaSpecSchemaEntry>

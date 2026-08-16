@@ -5,6 +5,7 @@ export type OpenApiGenerate = (
 	options: {
 		filterRoutes?: (route: { meta: unknown; method: string; path: string }) => boolean
 		info: { description?: string; title: string; version: string }
+		invalidate?: "error" | "off" | "warn" | { entityKey?: string; level?: "error" | "off" | "warn" }
 		profile?: string
 		securitySchemes?: Record<string, unknown>
 	},

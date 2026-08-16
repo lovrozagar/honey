@@ -13,8 +13,11 @@ import {
 } from "./codegen.ts"
 import type { OpenApiRouteInfo, OpenApiSanitizeOptions, OpenApiSpecInput } from "./codegen.ts"
 import type { Honey } from "./index.ts"
+import type { InvalidateCheckConfig } from "./invalidate-check.ts"
 import type { ExtractedChainTypes } from "./type-extractor.ts"
 import { toYaml, yamlSiblingPath } from "./yaml.ts"
+
+export type { InvalidateCheckConfig, InvalidateCheckLevel } from "./invalidate-check.ts"
 
 /* ---- generateFromApp (standalone utility) ---- */
 
@@ -97,6 +100,12 @@ export interface HoneySdkPortsConfig {
 
 export interface HoneyCodegenConfig {
 	cli?: boolean | HoneyGoCliConfig
+	/**
+	 * Report mutations that declare no `invalidate` — it drives generated SDK invalidation, so a
+	 * gap means clients refresh nothing after the call. Default `"warn"`. Applies to the first
+	 * openApi document only, so emitting several does not repeat the same report.
+	 */
+	invalidate?: InvalidateCheckConfig
 	manifest?: boolean | string
 	mergeTree?: string
 	openApi?: HoneyOpenApiOutputConfig | HoneyOpenApiOutputConfig[]
@@ -142,10 +151,13 @@ export type ResolvedSdkPorts = {
 	typescript?: { outDir: string }
 }
 
+export type ResolvedInvalidateCheck = InvalidateCheckConfig | undefined
+
 export interface ResolvedHoneyConfig {
 	app?: string
 	codegen: {
 		cli: false | ResolvedGoCliConfig
+		invalidate: ResolvedInvalidateCheck
 		manifest: false | string
 		mergeTree: string | undefined
 		openApi: false | ResolvedOpenApiOutput[]
@@ -256,6 +268,7 @@ export function resolveHoneyConfig(raw: HoneyVitePluginConfig): ResolvedHoneyCon
 		app: raw.app,
 		codegen: {
 			cli,
+			invalidate: c?.invalidate,
 			manifest: resolvePathFlag(c?.manifest, "src/_gen/manifest.gen.json", false),
 			mergeTree: c?.mergeTree,
 			openApi,
@@ -432,6 +445,8 @@ export async function generateAndWrite(config: ResolvedHoneyConfig, root: string
 					title: entry.title,
 					version: entry.version,
 				},
+				/* one report per generate, not one per emitted document */
+				invalidate: entry === cg.openApi[0] ? cg.invalidate : "off",
 				profile: entry.profile,
 				securitySchemes: entry.securitySchemes,
 			})
