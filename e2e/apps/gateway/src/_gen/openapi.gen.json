@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:ef77245af328",
+  "_generated": "honey checksum:b8b90f648dbb",
   "info": {
     "title": "Honey Gateway",
     "version": "0.0.1"
@@ -17,22 +17,23 @@
         },
         "x-entity": "article",
         "x-generated": [
-          "id"
+          "id",
+          "created_at"
         ],
+        "x-identity": "id",
         "x-immutable": [
           "id"
         ],
-        "x-soft-delete": {
-          "field": "deletedAt"
-        },
+        "x-soft-delete": "deleted_at",
         "x-query": {
           "filter": [
             "title"
           ],
-          "pagination": {
-            "defaultLimit": 20,
-            "maxLimit": 100
-          },
+          "maxLimit": 100,
+          "select": [
+            "id",
+            "title"
+          ],
           "sort": [
             "title"
           ]
@@ -105,20 +106,28 @@
                 "title"
               ],
               "additionalProperties": false,
-              "entity": {
+              "x-comb": {
                 "generated": [
-                  "id"
+                  "id",
+                  "created_at"
                 ],
+                "identity": "id",
                 "immutable": [
                   "id"
                 ],
-                "softDelete": "deletedAt",
-                "table": "article"
+                "kind": "entity",
+                "name": "article",
+                "softDelete": "deleted_at",
+                "tenantColumn": null,
+                "v": 1
               }
             }
           },
           "count": {
             "type": "number"
+          },
+          "hasMore": {
+            "type": "boolean"
           },
           "nextCursor": {
             "oneOf": [
@@ -134,6 +143,7 @@
         "required": [
           "articles",
           "count",
+          "hasMore",
           "nextCursor"
         ],
         "additionalProperties": false

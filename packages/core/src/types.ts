@@ -435,12 +435,36 @@ export type MetaSpecEntry<TValue = unknown> = false | MetaSpecExpand<TValue> | M
  */
 export type MetaSpecSchemaSearch = "deep" | "root"
 
-/** Policy entry reading its source key off a route schema instead of route meta */
+/** Refuse a descriptor whose publisher contract version is newer than this policy understands */
+export type MetaSpecVersionGuard = {
+	/** Field carrying the contract version. Default `"v"` */
+	field?: string
+	/** Highest version this entry's `map`/`expand` was written against */
+	max: number
+}
+
+/**
+ * Policy entry reading its source key off a route schema instead of route meta.
+ *
+ * The object key names the entry; `read` says which schema-metadata key it reads, so several
+ * entries can read one reserved key — the shape a publisher takes when it stamps a
+ * discriminated union under a single key.
+ */
 export type MetaSpecSchemaEntry<TValue = unknown> = (MetaSpecExpand<TValue> | MetaSpecSingle<TValue>) & {
-	/** Schema sources to search, in order. First one carrying the key wins */
+	/** Schema sources to search, in order. First one carrying a matching descriptor wins */
 	from?: readonly MetaSpecSchemaSource[]
+	/**
+	 * Shallow subset the descriptor must satisfy for this entry to claim it — the discriminant
+	 * of a union, e.g. `{ kind: "entity" }`. A descriptor found under `read` that satisfies no
+	 * entry's `match` is a build error, never a silently missing tag.
+	 */
+	match?: Record<string, unknown>
+	/** Schema-metadata key to read. Defaults to this entry's own name */
+	read?: string
 	/** Where in the schema to look. Default `"root"` */
 	search?: MetaSpecSchemaSearch
+	/** Fail the build on a descriptor from a newer publisher contract than this entry handles */
+	version?: MetaSpecVersionGuard
 }
 
 /** Per-document filter over emitted operation keys */

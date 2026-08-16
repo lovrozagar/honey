@@ -21,19 +21,47 @@ type GatewayMeta = {
 	worker?: "edge" | "origin"
 }
 
-/* the ORM would stamp this; here it is stamped by hand */
+/*
+ * The shape a publisher takes when it stamps one reserved key with a discriminated union —
+ * this is comb's contract, written out rather than imported so the fixture stays standalone.
+ * The entity descriptor rides the read schema, the query descriptor the list-query schema.
+ */
 const Article = z.object({ id: z.string(), title: z.string() }).meta({
-	entity: { generated: ["id"], immutable: ["id"], softDelete: "deletedAt", table: "article" },
+	"x-comb": {
+		generated: ["id", "created_at"],
+		identity: "id",
+		immutable: ["id"],
+		kind: "entity",
+		name: "article",
+		softDelete: "deleted_at",
+		/* the publisher sees foreign keys but cannot know which table is the tenant */
+		tenantColumn: null,
+		v: 1,
+	},
 })
 
+/* the real list response: the descriptor sits under a named key inside a pagination envelope */
 const ArticleList = z.object({
 	articles: z.array(Article),
 	count: z.number(),
+	hasMore: z.boolean(),
 	nextCursor: z.string().nullable(),
 })
 
 const ListQuery = z.object({ cursor: z.string().optional() }).meta({
-	query: { filter: ["title"], pagination: { defaultLimit: 20, maxLimit: 100 }, sort: ["title"] },
+	"x-comb": {
+		defaultOrder: "created_at.desc",
+		filterable: ["title"],
+		grammar: "postgrest",
+		kind: "query",
+		maxLimit: 100,
+		/* null = not knowable at this layer, which is not the same as "none" */
+		searchable: null,
+		selectable: ["id", "title"],
+		sortable: ["title"],
+		stableTiebreak: "id",
+		v: 1,
+	},
 })
 
 /** one line, every route below it — and it cannot disagree with what it enforces */
@@ -50,18 +78,53 @@ export function createApp(wsAdapter?: WSAdapter) {
 			tenant: { key: "x-tenant", map: (v) => ({ param: v }) },
 			worker: false,
 		},
+		/* two entries, one reserved key, told apart by the union's discriminant */
 		schema: {
-			entity: {
-				from: ["output"],
-				search: "deep",
-				expand: (e: { generated?: string[]; immutable?: string[]; softDelete?: string; table: string }) => ({
-					"x-entity": e.table,
+			entityFacts: {
+				expand: (e: {
+					generated: string[]
+					identity: string
+					immutable: string[]
+					name: string
+					softDelete: string | null
+					tenantColumn: string | null
+				}) => ({
+					"x-entity": e.name,
 					"x-generated": e.generated,
+					"x-identity": e.identity,
 					"x-immutable": e.immutable,
-					"x-soft-delete": e.softDelete ? { field: e.softDelete } : undefined,
+					/* a null the publisher could not determine omits the key — it never
+					   becomes a null tag, which a consumer would read as "definitively none" */
+					"x-soft-delete": e.softDelete ?? undefined,
+					"x-tenant-column": e.tenantColumn ?? undefined,
 				}),
+				from: ["output"],
+				match: { kind: "entity" },
+				read: "x-comb",
+				search: "deep",
+				version: { max: 1 },
 			},
-			query: { from: ["input.search"], key: "x-query" },
+			queryFacts: {
+				expand: (q: {
+					filterable: string[]
+					maxLimit: number
+					searchable: string[] | null
+					selectable: string[]
+					sortable: string[]
+				}) => ({
+					"x-query": {
+						filter: q.filterable,
+						maxLimit: q.maxLimit,
+						select: q.selectable,
+						sort: q.sortable,
+					},
+					"x-searchable": q.searchable ?? undefined,
+				}),
+				from: ["input.search"],
+				match: { kind: "query" },
+				read: "x-comb",
+				version: { max: 1 },
+			},
 		},
 		profiles: {
 			/* default-deny: anything added later stays out until it is opted in */
@@ -77,7 +140,7 @@ export function createApp(wsAdapter?: WSAdapter) {
 		.meta({ permissions: ["articles.read"], summary: "List articles", worker: "origin" })
 		.input({ search: ListQuery })
 		.output({ "application/json": { ok: ArticleList } })
-		.handler((ctx) => ctx.res.json("ok", { articles: [], count: 0, nextCursor: null }))
+		.handler((ctx) => ctx.res.json("ok", { articles: [], count: 0, hasMore: false, nextCursor: null }))
 
 	app
 		.use(shard)

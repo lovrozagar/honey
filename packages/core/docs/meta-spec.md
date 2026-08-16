@@ -102,8 +102,8 @@ dropped by spec-conformant readers, which is the failure mode this feature exist
 
 ### 2.3 Schema-derived facts
 
-The `schema` section is keyed by **a key read off the route's schema metadata**, not by a meta key.
-Sources:
+The `schema` section is keyed by **the entry's own name**. `read` says which schema-metadata key it
+reads, defaulting to that name. Sources:
 
 ```
 "output" | "input.json" | "input.search" | "input.form" | "input.headers" | "input.cookies"
@@ -129,6 +129,69 @@ uses to parse the request gets the extension for free — and the tag cannot dri
 behavior, because both read the same object.
 
 One schema key routinely fans out to several extensions, which is why `expand` exists.
+
+#### One reserved key carrying a union
+
+A publisher with more than one kind of fact does not want more than one collision surface, so the
+mature shape is a single reserved key holding a discriminated union with a version field —
+[comb](https://github.com/lovrozagar/comb) stamps `x-comb` with `{ v, kind: "entity" | "query", … }`.
+The two members arrive on _different schemas of the same operation_: the entity descriptor on the
+response, the query descriptor on the search input.
+
+`read` plus `match` expresses that. Several entries read one key and are told apart by the union's
+discriminant:
+
+```ts
+schema: {
+	entityFacts: {
+		read: "x-comb",
+		match: { kind: "entity" },
+		version: { max: 1 },
+		from: ["output"],
+		search: "deep",
+		expand: (e) => ({
+			"x-entity": e.name,
+			"x-identity": e.identity,
+			"x-soft-delete": e.softDelete ?? undefined,
+			"x-tenant-column": e.tenantColumn ?? undefined,
+		}),
+	},
+	queryFacts: {
+		read: "x-comb",
+		match: { kind: "query" },
+		version: { max: 1 },
+		from: ["input.search"],
+		expand: (q) => ({
+			"x-query": { filter: q.filterable, sort: q.sortable, maxLimit: q.maxLimit },
+			"x-searchable": q.searchable ?? undefined,
+		}),
+	},
+}
+```
+
+Resolution rules:
+
+- Sources are walked in `from` order. A descriptor that fails `match` **does not end the walk** —
+  an entity entry must be free to step past the query descriptor when both entries search every
+  source.
+- If no source yields a match but a descriptor _was_ found under `read`, that is a build error
+  (`DESCRIPTOR_MISMATCH`). A stamped fact nobody claimed is a misconfigured policy, not an absent
+  fact, and silently emitting nothing is how the gaps this feature exists to close came about.
+- `version` is checked **before** `match`, because a newer contract may have redefined the
+  discriminant itself. A descriptor newer than `max`, or carrying no integer version when a guard
+  is declared, fails the build (`UNSUPPORTED_VERSION`) rather than emitting a partly-understood tag.
+
+honey does not own the version number — it is the publisher's contract, and `max` is the app's
+statement of which contract its `expand` was written against. Bumping the publisher then becomes a
+build failure with a name, instead of tags that quietly change shape.
+
+The alternatives were an array of entries under one key, and per-source matches that each run
+`expand`. The array makes the policy value irregular (`entry | entry[]`) and leaves the two
+contributions unnamed, which costs diagnostics — `schema."x-comb"[0]` reads worse than
+`schema."entityFacts"`. Per-source matching would force one `expand` to handle every member of the
+union and to de-duplicate its own target keys, moving work into app code that the policy layer
+already does. Naming entries keeps one entry to one contribution, which is what the rest of the
+design assumes.
 
 > **Deliberate limit.** Deriving operation metadata from _schemas and table definitions_ is safe:
 > they are a separate, hand-reviewed layer, and a handler can still fail to honor them — which is
@@ -340,17 +403,20 @@ All diagnostics are collected across the whole document and thrown as one aggreg
 `Error` (first 20 listed, with a count), because failing on the first of 250 operations makes
 migration miserable.
 
-| Code               | Level                                    | When                                                                   | Why this level                                                     |
-| ------------------ | ---------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `MISSING_ENTRY`    | error (`strict:"error"`) / warn / silent | a meta key on some route has no policy entry                           | the rot-stopper; downgradable during migration                     |
-| `RESERVED_FIELD`   | error                                    | entry targets `responses` / `parameters` / `requestBody` / `callbacks` | would contradict schema-derived content                            |
-| `UNKNOWN_FIELD`    | error                                    | entry targets a non-`x-`, non-allowlisted field                        | silently ignored by readers                                        |
-| `DUPLICATE_TARGET` | error                                    | two same-rank entries write one key                                    | ambiguous, order-dependent output                                  |
-| `INVALID_VALUE`    | error                                    | entry `schema` rejects the produced value                              | a malformed tag is indistinguishable from a missing one downstream |
-| `ASYNC_VALIDATION` | error                                    | entry `schema` validates asynchronously                                | codegen value resolution is synchronous                            |
-| `MAP_THREW`        | error                                    | `map` / `expand` threw                                                 | policy bugs must not produce a half-populated document             |
-| `UNKNOWN_PROFILE`  | error                                    | a document requests a profile that is not declared                     | almost always a typo that would silently emit everything           |
-| omitted value      | silent                                   | `map` returned `undefined`, or the meta key is absent                  | the sanctioned conditional                                         |
+| Code                   | Level                                    | When                                                                                | Why this level                                                                      |
+| ---------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `MISSING_ENTRY`        | error (`strict:"error"`) / warn / silent | a meta key on some route has no policy entry                                        | the rot-stopper; downgradable during migration                                      |
+| `RESERVED_FIELD`       | error                                    | entry targets `responses` / `parameters` / `requestBody` / `callbacks`              | would contradict schema-derived content                                             |
+| `UNKNOWN_FIELD`        | error                                    | entry targets a non-`x-`, non-allowlisted field                                     | silently ignored by readers                                                         |
+| `DUPLICATE_TARGET`     | error                                    | two same-rank entries write one key                                                 | ambiguous, order-dependent output                                                   |
+| `INVALID_VALUE`        | error                                    | entry `schema` rejects the produced value                                           | a malformed tag is indistinguishable from a missing one downstream                  |
+| `ASYNC_VALIDATION`     | error                                    | entry `schema` validates asynchronously                                             | codegen value resolution is synchronous                                             |
+| `MAP_THREW`            | error                                    | `map` / `expand` threw                                                              | policy bugs must not produce a half-populated document                              |
+| `UNKNOWN_PROFILE`      | error                                    | a document requests a profile that is not declared                                  | almost always a typo that would silently emit everything                            |
+| `AMBIGUOUS_SCHEMA_KEY` | error                                    | a `search: "deep"` entry matched two different values at one depth                  | guessing which entity a route serves is how a tester gets told the wrong thing      |
+| `DESCRIPTOR_MISMATCH`  | error                                    | a descriptor was found under `read` but satisfied no entry's `match`                | a stamped fact nobody claimed is a misconfigured policy, not an absent fact         |
+| `UNSUPPORTED_VERSION`  | error                                    | a descriptor is newer than the entry's `version.max`, or carries no integer version | a partly-understood tag is worse than none — the consumer cannot tell it is partial |
+| omitted value          | silent                                   | `map` returned `undefined`, or the meta key is absent                               | the sanctioned conditional                                                          |
 
 Every message carries `method`, `path`, source key and target key.
 

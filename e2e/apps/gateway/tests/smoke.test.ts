@@ -42,13 +42,37 @@ describe("metaSpec — generated documents", () => {
 		expect(operation(internalDoc, "/articles/meta")["x-tenant"]).toEqual({ param: "project_id" })
 	})
 
-	test("a schema-stamped descriptor fans out through a pagination envelope", () => {
+	test("an entity descriptor fans out through a pagination envelope", () => {
 		const op = operation(internalDoc, "/articles")
 		expect(op["x-entity"]).toBe("article")
-		expect(op["x-generated"]).toEqual(["id"])
+		expect(op["x-identity"]).toBe("id")
+		expect(op["x-generated"]).toEqual(["id", "created_at"])
 		expect(op["x-immutable"]).toEqual(["id"])
-		expect(op["x-soft-delete"]).toEqual({ field: "deletedAt" })
-		expect(op["x-query"]).toMatchObject({ sort: ["title"] })
+		expect(op["x-soft-delete"]).toBe("deleted_at")
+	})
+
+	test("both members of one reserved key reach the same operation", () => {
+		/* the publisher stamps `x-comb` with a union: the entity descriptor on the read
+		   schema, the query descriptor on the list-query schema. Two policy entries, told
+		   apart by the discriminant, must both land — this pair is the whole point. */
+		const op = operation(internalDoc, "/articles")
+		expect(op["x-entity"]).toBe("article")
+		expect(op["x-query"]).toEqual({
+			filter: ["title"],
+			maxLimit: 100,
+			select: ["id", "title"],
+			sort: ["title"],
+		})
+	})
+
+	test("a fact the publisher could not determine is an absent key, not a null tag", () => {
+		const op = operation(internalDoc, "/articles")
+		/* tenantColumn: null and searchable: null — "unknown", which must not be published
+		   as "definitively none" */
+		expect(op).not.toHaveProperty("x-tenant-column")
+		expect(op).not.toHaveProperty("x-searchable")
+		/* the routing layer does know the tenant, and supplies it from middleware */
+		expect(op["x-tenant"]).toEqual({ param: "project_id" })
 	})
 
 	test("a hidden meta key is in neither document", () => {
@@ -63,6 +87,7 @@ describe("metaSpec — generated documents", () => {
 		expect(op["x-entity"]).toBe("article")
 		expect(op["x-query"]).toBeDefined()
 		expect(op).not.toHaveProperty("x-tenant")
+		expect(op).not.toHaveProperty("x-identity")
 		expect(op).not.toHaveProperty("x-permissions")
 		/* standard fields are not gated by the allowlist */
 		expect(op.summary).toBe("List articles")

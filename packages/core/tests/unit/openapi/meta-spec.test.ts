@@ -733,6 +733,223 @@ describe("schema-derived entries", () => {
 	})
 })
 
+/* ---- one reserved key carrying a union (the shape comb publishes) ---- */
+
+describe("several entries reading one reserved key", () => {
+	/* comb stamps `x-comb` with a discriminated union: the entity descriptor on the read
+	   schema, the query descriptor on the list-query schema. Both must reach one operation. */
+	const entityStamp = {
+		generated: ["id", "created_at"],
+		identity: "id",
+		immutable: ["id"],
+		kind: "entity",
+		name: "article",
+		softDelete: "deleted_at",
+		tenantColumn: null,
+		v: 1,
+	}
+	const queryStamp = {
+		defaultOrder: "created_at.desc",
+		filterable: ["title"],
+		grammar: "postgrest",
+		kind: "query",
+		maxLimit: 100,
+		searchable: null,
+		selectable: ["id", "title"],
+		sortable: ["title"],
+		stableTiebreak: "id",
+		v: 1,
+	}
+
+	const Article = z.object({ id: z.string(), title: z.string() }).meta({ "x-comb": entityStamp })
+	const Envelope = z.object({
+		articles: z.array(Article),
+		count: z.number(),
+		hasMore: z.boolean(),
+		nextCursor: z.string().nullable(),
+	})
+	const ListQuery = z.object({ cursor: z.string().optional() }).meta({ "x-comb": queryStamp })
+
+	function combApp() {
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				entityFacts: {
+					expand: (e: typeof entityStamp) => ({
+						"x-entity": e.name,
+						"x-generated": e.generated,
+						"x-identity": e.identity,
+						"x-immutable": e.immutable,
+						"x-soft-delete": e.softDelete ?? undefined,
+						"x-tenant": e.tenantColumn ?? undefined,
+					}),
+					from: ["output"],
+					match: { kind: "entity" },
+					read: "x-comb",
+					search: "deep",
+					version: { max: 1 },
+				},
+				queryFacts: {
+					expand: (q: typeof queryStamp) => ({
+						"x-query": { filter: q.filterable, maxLimit: q.maxLimit, sort: q.sortable },
+						"x-searchable": q.searchable ?? undefined,
+					}),
+					from: ["input.search"],
+					match: { kind: "query" },
+					read: "x-comb",
+					version: { max: 1 },
+				},
+			},
+		})
+		app
+			.get("/articles")
+			.input({ search: ListQuery })
+			.output({ "application/json": { ok: Envelope } })
+			.handler((c) => c.res.json("ok", {} as never))
+		return app
+	}
+
+	it("both descriptors reach one operation from one key on different sources", async () => {
+		const spec = await generateOpenApi(combApp() as never, { info: INFO })
+		const o = op(spec, "/articles")
+		expect(o["x-entity"]).toBe("article")
+		expect(o["x-identity"]).toBe("id")
+		expect(o["x-generated"]).toEqual(["id", "created_at"])
+		expect(o["x-soft-delete"]).toBe("deleted_at")
+		expect(o["x-query"]).toEqual({ filter: ["title"], maxLimit: 100, sort: ["title"] })
+	})
+
+	it("a null the publisher could not determine becomes an absent key, never a null tag", async () => {
+		const spec = await generateOpenApi(combApp() as never, { info: INFO })
+		const o = op(spec, "/articles")
+		expect(o).not.toHaveProperty("x-tenant")
+		expect(o).not.toHaveProperty("x-searchable")
+	})
+
+	it("an entry skips past a descriptor of the other kind rather than claiming it", async () => {
+		/* both entries search every source; each must walk past the other's descriptor */
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				entityFacts: {
+					expand: (e: { name: string }) => ({ "x-entity": e.name }),
+					match: { kind: "entity" },
+					read: "x-comb",
+					search: "deep",
+				},
+				queryFacts: {
+					expand: (q: { maxLimit: number }) => ({ "x-max-limit": q.maxLimit }),
+					match: { kind: "query" },
+					read: "x-comb",
+					search: "deep",
+				},
+			},
+		})
+		app
+			.get("/articles")
+			.input({ search: ListQuery })
+			.output({ "application/json": { ok: Envelope } })
+			.handler((c) => c.res.json("ok", {} as never))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/articles")["x-entity"]).toBe("article")
+		expect(op(spec, "/articles")["x-max-limit"]).toBe(100)
+	})
+
+	it("a descriptor no entry claims fails the build", async () => {
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				entityFacts: {
+					expand: (e: { name: string }) => ({ "x-entity": e.name }),
+					from: ["output"],
+					match: { kind: "entity" },
+					read: "x-comb",
+				},
+			},
+		})
+		app
+			.get("/a")
+			.output({ "application/json": { ok: z.object({ id: z.string() }).meta({ "x-comb": queryStamp }) } })
+			.handler((c) => c.res.json("ok", {} as never))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/DESCRIPTOR_MISMATCH/)
+	})
+
+	it("a descriptor from a newer contract fails rather than emitting half a tag", async () => {
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				entityFacts: {
+					expand: (e: { name: string }) => ({ "x-entity": e.name }),
+					from: ["output"],
+					match: { kind: "entity" },
+					read: "x-comb",
+					version: { max: 1 },
+				},
+			},
+		})
+		app
+			.get("/a")
+			.output({
+				"application/json": { ok: z.object({ id: z.string() }).meta({ "x-comb": { ...entityStamp, v: 2 } }) },
+			})
+			.handler((c) => c.res.json("ok", {} as never))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/UNSUPPORTED_VERSION.*v2.*up to v1/s)
+	})
+
+	it("a descriptor with no version field fails when a version guard is declared", async () => {
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				entityFacts: {
+					expand: (e: { name: string }) => ({ "x-entity": e.name }),
+					from: ["output"],
+					read: "x-comb",
+					version: { max: 1 },
+				},
+			},
+		})
+		app
+			.get("/a")
+			.output({
+				"application/json": { ok: z.object({ id: z.string() }).meta({ "x-comb": { kind: "entity", name: "a" } }) },
+			})
+			.handler((c) => c.res.json("ok", {} as never))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/UNSUPPORTED_VERSION.*no integer/s)
+	})
+
+	it("a custom version field name is honored", async () => {
+		const app = honey<{}>()
+		app.metaSpec({
+			schema: {
+				facts: {
+					expand: (e: { name: string }) => ({ "x-entity": e.name }),
+					from: ["output"],
+					read: "x-vendor",
+					version: { field: "contract", max: 3 },
+				},
+			},
+		})
+		app
+			.get("/a")
+			.output({
+				"application/json": { ok: z.object({ id: z.string() }).meta({ "x-vendor": { contract: 4, name: "a" } }) },
+			})
+			.handler((c) => c.res.json("ok", {} as never))
+		await expect(generateOpenApi(app as never, { info: INFO })).rejects.toThrow(/UNSUPPORTED_VERSION.*v4.*up to v3/s)
+	})
+
+	it("`read` defaults to the entry name, so existing policies are unaffected", async () => {
+		const app = honey<{}>()
+		app.metaSpec({ schema: { entity: { from: ["output"], key: "x-entity" } } })
+		app
+			.get("/a")
+			.output({ "application/json": { ok: z.object({ id: z.string() }).meta({ entity: "user" }) } })
+			.handler((c) => c.res.json("ok", {} as never))
+		const spec = await generateOpenApi(app as never, { info: INFO })
+		expect(op(spec, "/a")["x-entity"]).toBe("user")
+	})
+})
+
 /* ---- precedence ---- */
 
 describe("precedence", () => {

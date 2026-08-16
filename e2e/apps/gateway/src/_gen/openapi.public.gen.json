@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:61c540f0718f",
+  "_generated": "honey checksum:79968828f59e",
   "info": {
     "title": "Honey Gateway (public)",
     "version": "0.0.1"
@@ -14,10 +14,11 @@
           "filter": [
             "title"
           ],
-          "pagination": {
-            "defaultLimit": 20,
-            "maxLimit": 100
-          },
+          "maxLimit": 100,
+          "select": [
+            "id",
+            "title"
+          ],
           "sort": [
             "title"
           ]
@@ -87,20 +88,28 @@
                 "title"
               ],
               "additionalProperties": false,
-              "entity": {
+              "x-comb": {
                 "generated": [
-                  "id"
+                  "id",
+                  "created_at"
                 ],
+                "identity": "id",
                 "immutable": [
                   "id"
                 ],
-                "softDelete": "deletedAt",
-                "table": "article"
+                "kind": "entity",
+                "name": "article",
+                "softDelete": "deleted_at",
+                "tenantColumn": null,
+                "v": 1
               }
             }
           },
           "count": {
             "type": "number"
+          },
+          "hasMore": {
+            "type": "boolean"
           },
           "nextCursor": {
             "oneOf": [
@@ -116,6 +125,7 @@
         "required": [
           "articles",
           "count",
+          "hasMore",
           "nextCursor"
         ],
         "additionalProperties": false
