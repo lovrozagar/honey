@@ -168,9 +168,13 @@
         "typescript": "catalog:",
       },
     },
+    "e2e/strict-consumer": {
+      "name": "@honey/e2e-strict-consumer",
+      "version": "0.0.1",
+    },
     "packages/core": {
       "name": "@lovrozagar/honey",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "bin": {
         "honey": "./src/cli.ts",
       },
@@ -367,6 +371,8 @@
     "@honey/e2e-kitchen": ["@honey/e2e-kitchen@workspace:e2e/apps/kitchen"],
 
     "@honey/e2e-node": ["@honey/e2e-node@workspace:e2e/node"],
+
+    "@honey/e2e-strict-consumer": ["@honey/e2e-strict-consumer@workspace:e2e/strict-consumer"],
 
     "@honey/e2e-surface": ["@honey/e2e-surface@workspace:e2e/apps/surface"],
 

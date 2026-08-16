@@ -13,7 +13,7 @@
  *   bun run e2e/run-strict-consumer.ts
  *   bun run e2e/run-strict-consumer.ts --keep     # leave the sandbox for inspection
  */
-import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs"
+import { mkdirSync, readdirSync, rmSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -109,6 +109,39 @@ if (inPackage.length > 0) {
 if (inConsumer.length > 0) {
 	console.log(`\n${inConsumer.length} diagnostics in the fixture itself (these are ours to fix):`)
 	for (const line of inConsumer.slice(0, 10)) console.log(`  ${line.trim()}`)
+}
+
+/* 4. and it must actually run — types passing while the exports map is wrong is a real
+   failure mode, since `types` and `default` resolve independently */
+if (inPackage.length === 0 && inConsumer.length === 0) {
+	await Bun.write(
+		join(consumer, "smoke.ts"),
+		[
+			'import { honey } from "@lovrozagar/honey"',
+			'import "@lovrozagar/honey/openapi"',
+			'import * as z from "zod"',
+			"const app = honey<{}>()",
+			'app.get("/hi").output({ "application/json": { ok: z.object({ ok: z.boolean() }) } })',
+			'\t.handler((c) => c.res.json("ok", { ok: true }))',
+			'app.openapi({ title: "T", version: "1" })',
+			'const res = await app.fetch(new Request("http://x/hi"), {})',
+			"if (res.status !== 200) throw new Error(`route returned ${res.status}`)",
+			'const spec = await app.fetch(new Request("http://x/openapi.json"), {})',
+			"if (spec.status !== 200) throw new Error(`openapi returned ${spec.status}`)",
+			'if (!("/hi" in ((await spec.json()) as { paths: Record<string, unknown> }).paths)) {',
+			'\tthrow new Error("route missing from the generated document")',
+			"}",
+			'console.log("runtime ok")',
+		].join("\n"),
+	)
+	const smoked = await run(["bun", "run", "smoke.ts"], consumer)
+	if (smoked.code !== 0) {
+		console.log("FAIL  the installed package does not run")
+		console.log(smoked.out)
+		if (!keep) rmSync(sandbox, { force: true, recursive: true })
+		process.exit(1)
+	}
+	console.log("runtime smoke ok")
 }
 
 if (!keep) rmSync(sandbox, { force: true, recursive: true })
