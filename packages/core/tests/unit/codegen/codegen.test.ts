@@ -14,6 +14,7 @@ import {
 const hasZodJsonSchema = typeof (z as Record<string, unknown>).toJSONSchema === "function"
 
 import { honey } from "../../../src/index.ts"
+import { readableStream } from "../../../src/input.ts"
 
 /* Resolves a schema that may be a $ref, returning the actual schema object. */
 function resolveSchema(spec: OpenApiSpec, schema: Record<string, unknown>): Record<string, unknown> {
@@ -272,6 +273,78 @@ describe("OpenAPI with real schemas", () => {
 		const op = spec.paths["/items"]?.get as Record<string, unknown> | undefined
 		expect(op?.summary).toBe("List items")
 		expect(op?.tags).toEqual(["Items"])
+	})
+})
+
+describe("OpenAPI form media types", () => {
+	it.skipIf(!hasZodJsonSchema)(
+		"readableStream form with z.file() → multipart/form-data and format binary",
+		async () => {
+			const h = honey<{}>()
+			h.post("/extract")
+				.input({ form: readableStream(z.object({ columns: z.string(), file: z.file() })) })
+				.handler((ctx) => ctx.res.json("created", {}))
+
+			const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
+			const op = spec.paths["/extract"]?.post as Record<string, unknown>
+			const content = (op.requestBody as Record<string, unknown>).content as Record<string, Record<string, unknown>>
+			expect(content["multipart/form-data"]).toBeTruthy()
+			const schema = resolveSchema(spec, content["multipart/form-data"].schema as Record<string, unknown>)
+			const props = schema.properties as Record<string, Record<string, unknown>>
+			expect(props.file.format).toBe("binary")
+		},
+	)
+
+	it.skipIf(!hasZodJsonSchema)("scalar-only form stays urlencoded-only", async () => {
+		const h = honey<{}>()
+		h.post("/login")
+			.input({ form: z.object({ title: z.string() }) })
+			.handler((ctx) => ctx.res.json("created", {}))
+
+		const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
+		const op = spec.paths["/login"]?.post as Record<string, unknown>
+		const content = (op.requestBody as Record<string, unknown>).content as Record<string, unknown>
+		expect(content["application/x-www-form-urlencoded"]).toBeTruthy()
+		expect(content["multipart/form-data"]).toBeUndefined()
+	})
+
+	it.skipIf(!hasZodJsonSchema)("readableStream scalar form unwraps and stays urlencoded-only", async () => {
+		const h = honey<{}>()
+		h.post("/notes")
+			.input({ form: readableStream(z.object({ title: z.string() })) })
+			.handler((ctx) => ctx.res.json("created", {}))
+
+		const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
+		const op = spec.paths["/notes"]?.post as Record<string, unknown>
+		const content = (op.requestBody as Record<string, unknown>).content as Record<string, Record<string, unknown>>
+		expect(content["application/x-www-form-urlencoded"]).toBeTruthy()
+		expect(content["multipart/form-data"]).toBeUndefined()
+		const schema = resolveSchema(spec, content["application/x-www-form-urlencoded"].schema as Record<string, unknown>)
+		expect(schema._tag).toBeUndefined()
+		const props = schema.properties as Record<string, Record<string, unknown>>
+		expect(props.title.type).toBe("string")
+	})
+
+	it("raw form schema with format:byte → multipart/form-data", async () => {
+		const h = honey<{}>()
+		h.post("/upload")
+			.input({
+				form: {
+					properties: {
+						payload: { format: "byte", type: "string" },
+					},
+					type: "object",
+				} as never,
+			})
+			.handler((ctx) => ctx.res.json("created", {}))
+
+		const spec = await generateOpenApi(h, { info: { title: "T", version: "1" } })
+		const op = spec.paths["/upload"]?.post as Record<string, unknown>
+		const content = (op.requestBody as Record<string, unknown>).content as Record<string, Record<string, unknown>>
+		expect(content["multipart/form-data"]).toBeTruthy()
+		const schema = resolveSchema(spec, content["multipart/form-data"].schema as Record<string, unknown>)
+		const props = schema.properties as Record<string, Record<string, unknown>>
+		expect(props.payload.format).toBe("byte")
 	})
 })
 

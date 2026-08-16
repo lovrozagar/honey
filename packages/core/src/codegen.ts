@@ -487,6 +487,32 @@ function stripInternalProps(schema: Record<string, unknown>): Record<string, unk
 	return result
 }
 
+const BINARY_FORM_FORMATS = new Set(["binary", "byte", "file"])
+
+/** File parts cannot ride application/x-www-form-urlencoded. */
+function isBinaryFormPart(schema: Record<string, unknown> | undefined): boolean {
+	if (!schema) return false
+	const format = schema.format
+	if (typeof format === "string" && BINARY_FORM_FORMATS.has(format)) return true
+	if (schema.type === "file") return true
+	if (schema.type === "array") {
+		const items = schema.items
+		if (items !== null && typeof items === "object" && !Array.isArray(items)) {
+			return isBinaryFormPart(items as Record<string, unknown>)
+		}
+	}
+	return false
+}
+
+function formSchemaHasBinaryPart(schema: Record<string, unknown>): boolean {
+	const props = schema.properties as Record<string, Record<string, unknown>> | undefined
+	if (!props) return false
+	for (const prop of Object.values(props)) {
+		if (isBinaryFormPart(prop)) return true
+	}
+	return false
+}
+
 export function canonicalizeSchema(schema: Record<string, unknown>): string {
 	return JSON.stringify(schema, (_, value) => {
 		if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -1143,6 +1169,10 @@ function zodDefToJsonSchema(schema: unknown, depth = 0): Record<string, unknown>
 		case "ZodDate":
 		case "date":
 			return { format: "date-time", type: "string" }
+		case "ZodFile":
+		case "file":
+			/* so form emit can see format:binary when toJSONSchema is unavailable */
+			return { contentEncoding: "binary", format: "binary", type: "string" }
 		case "ZodNull":
 		case "null":
 			return { type: "null" }
@@ -1563,14 +1593,24 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 		if (handler.iv) {
 			for (const [source, entry] of Object.entries(handler.iv)) {
 				if (entry === undefined) continue
-				const unwrapped =
-					"~standard" in (entry as object) ? unwrapEntry(entry as InputSchemaEntry) : (entry as Record<string, unknown>)
+				/* readableStream() is a runtime tag; the document describes the inner schema */
+				const unwrapped = unwrapEntry(entry as InputSchemaEntry)
 				const jsonSchema = asJsonSchema(unwrapped, "input")
 
 				if (source === "json" || source === "form") {
-					const ct = source === "form" ? "application/x-www-form-urlencoded" : "application/json"
+					const schema = stripInternalProps(jsonSchema)
+					const content: Record<string, { schema: Record<string, unknown> }> = {}
+					if (source === "form") {
+						/* z.file() is format:binary — illegal on urlencoded; oat only builds FormData for multipart/* */
+						if (formSchemaHasBinaryPart(schema)) {
+							content["multipart/form-data"] = { schema }
+						}
+						content["application/x-www-form-urlencoded"] = { schema }
+					} else {
+						content["application/json"] = { schema }
+					}
 					operation.requestBody = {
-						content: { [ct]: { schema: stripInternalProps(jsonSchema) } },
+						content,
 						required: true,
 					}
 				} else if (source === "search" || source === "headers" || source === "cookies") {

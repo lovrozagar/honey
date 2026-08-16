@@ -1,8 +1,10 @@
 import http from "node:http"
 import { afterEach, describe, expect, it } from "vitest"
+import * as z from "zod"
 import { generateManifest, generateOpenApi, generateRouteTreeFromApp } from "../../src/codegen.ts"
 import { HoneyError } from "../../src/error.ts"
 import { honey } from "../../src/index.ts"
+import { readableStream } from "../../src/input.ts"
 import { createMiddleware } from "../../src/middleware.ts"
 import { type HoneyServer, serve } from "../../src/node.ts"
 
@@ -164,6 +166,47 @@ describe("bug-hunt-17: OpenAPI — input as requestBody and parameters", () => {
 		const op = spec.paths["/form"].post
 		const content = (op.requestBody as Record<string, unknown>).content as Record<string, unknown>
 		expect(content["application/x-www-form-urlencoded"]).toBeTruthy()
+		expect(content["multipart/form-data"]).toBeUndefined()
+	})
+
+	it("form with z.file() → multipart/form-data and format binary", async () => {
+		const app = honey<{}>()
+		app
+			.post("/extract")
+			.input({ form: readableStream(z.object({ columns: z.string(), file: z.file() })) })
+			.handler((ctx) => ctx.res.json("created", {}))
+
+		const spec = await generateOpenApi(app, {
+			info: { title: "Test", version: "1.0.0" },
+		})
+
+		const op = spec.paths["/extract"].post
+		const content = (op.requestBody as Record<string, unknown>).content as Record<string, Record<string, unknown>>
+		expect(content["multipart/form-data"]).toBeTruthy()
+		const schemaRef = content["multipart/form-data"].schema as Record<string, unknown>
+		const schema =
+			typeof schemaRef.$ref === "string"
+				? (spec.components?.schemas?.[schemaRef.$ref.replace("#/components/schemas/", "")] ?? schemaRef)
+				: schemaRef
+		const props = schema.properties as Record<string, Record<string, unknown>>
+		expect(props.file.format).toBe("binary")
+	})
+
+	it("scalar-only form of { title } stays urlencoded-only", async () => {
+		const app = honey<{}>()
+		app
+			.post("/notes")
+			.input({ form: z.object({ title: z.string() }) })
+			.handler((ctx) => ctx.res.json("created", {}))
+
+		const spec = await generateOpenApi(app, {
+			info: { title: "Test", version: "1.0.0" },
+		})
+
+		const op = spec.paths["/notes"].post
+		const content = (op.requestBody as Record<string, unknown>).content as Record<string, unknown>
+		expect(content["application/x-www-form-urlencoded"]).toBeTruthy()
+		expect(content["multipart/form-data"]).toBeUndefined()
 	})
 })
 

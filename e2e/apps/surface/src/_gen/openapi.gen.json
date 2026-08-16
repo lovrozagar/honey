@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:49244b6690a1",
+  "_generated": "honey checksum:c4888131a74a",
   "info": {
     "title": "Honey Surface",
     "version": "1.0.0"
@@ -144,6 +144,11 @@
       "post": {
         "requestBody": {
           "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInFileRequest"
+              }
+            },
             "application/x-www-form-urlencoded": {
               "schema": {
                 "$ref": "#/components/schemas/CreateInFileRequest"
@@ -1867,36 +1872,19 @@
         "type": "object"
       },
       "CreateRsRequest": {
-        "_tag": "readableStream",
-        "schema": {
-          "def": {
-            "type": "object",
-            "shape": {
-              "chunks": {
-                "def": {
-                  "type": "number",
-                  "checks": []
-                },
-                "type": "number",
-                "minValue": null,
-                "maxValue": null,
-                "isInt": false,
-                "isFinite": true,
-                "format": null
-              },
-              "fileName": {
-                "def": {
-                  "type": "string"
-                },
-                "type": "string",
-                "format": null,
-                "minLength": null,
-                "maxLength": null
-              }
-            }
+        "type": "object",
+        "properties": {
+          "chunks": {
+            "type": "number"
           },
-          "type": "object"
-        }
+          "fileName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chunks",
+          "fileName"
+        ]
       },
       "CreateRsResponse202": {
         "type": "object",

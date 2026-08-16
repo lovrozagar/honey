@@ -1,4 +1,4 @@
-_generated: honey checksum:49244b6690a1
+_generated: honey checksum:c4888131a74a
 info:
   description: null
   title: Honey Surface
@@ -89,6 +89,9 @@ paths:
     post:
       requestBody:
         content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateInFileRequest"
           application/x-www-form-urlencoded:
             schema:
               $ref: "#/components/schemas/CreateInFileRequest"
@@ -1157,221 +1160,15 @@ components:
         - success
       type: object
     CreateRsRequest:
-      _tag: readableStream
-      schema:
-        toJSONSchema: "(params) => {\n  const ctx = initializeContext({ ...params, processors });\n  process(schema, ctx);\n  extractDefs(ctx, schema);\n  return finalize(ctx, schema);\n}"
-        def:
-          type: object
-          shape:
-            chunks:
-              toJSONSchema: "(params) => {\n  const ctx = initializeContext({ ...params, processors });\n  process(schema, ctx);\n  extractDefs(ctx, schema);\n  return finalize(ctx, schema);\n}"
-              def:
-                type: number
-                checks: []
-              type: number
-              check: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
-              with: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
-              clone: "(def, params) => core.clone(inst, def, params)"
-              brand: "() => inst"
-              register: "(reg, meta) => {\n    reg.add(inst, meta);\n    return inst;\n  }"
-              parse: "(data, params) => parse.parse(inst, data, params, { callee: inst.parse })"
-              safeParse: "(data, params) => parse.safeParse(inst, data, params)"
-              parseAsync: "async (data, params) => parse.parseAsync(inst, data, params, { callee: inst.parseAsync })"
-              safeParseAsync: "async (data, params) => parse.safeParseAsync(inst, data, params)"
-              spa: "async (data, params) => parse.safeParseAsync(inst, data, params)"
-              encode: "(data, params) => parse.encode(inst, data, params)"
-              decode: "(data, params) => parse.decode(inst, data, params)"
-              encodeAsync: "async (data, params) => parse.encodeAsync(inst, data, params)"
-              decodeAsync: "async (data, params) => parse.decodeAsync(inst, data, params)"
-              safeEncode: "(data, params) => parse.safeEncode(inst, data, params)"
-              safeDecode: "(data, params) => parse.safeDecode(inst, data, params)"
-              safeEncodeAsync: "async (data, params) => parse.safeEncodeAsync(inst, data, params)"
-              safeDecodeAsync: "async (data, params) => parse.safeDecodeAsync(inst, data, params)"
-              refine: "(check, params) => inst.check(refine(check, params))"
-              superRefine: "(refinement) => inst.check(superRefine(refinement))"
-              overwrite: "(fn) => inst.check(checks.overwrite(fn))"
-              optional: "() => optional(inst)"
-              exactOptional: "() => exactOptional(inst)"
-              nullable: "() => nullable(inst)"
-              nullish: "() => optional(nullable(inst))"
-              nonoptional: "(params) => nonoptional(inst, params)"
-              array: "() => array(inst)"
-              or: "(arg) => union([inst, arg])"
-              and: "(arg) => intersection(inst, arg)"
-              transform: "(tx) => pipe(inst, transform(tx))"
-              default: "(def) => _default(inst, def)"
-              prefault: "(def) => prefault(inst, def)"
-              catch: "(params) => _catch(inst, params)"
-              pipe: "(target) => pipe(inst, target)"
-              readonly: "() => readonly(inst)"
-              describe: "(description) => {\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, { description });\n    return cl;\n  }"
-              meta: "(...args) => {\n    if (args.length === 0)\n      return core.globalRegistry.get(inst);\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, args[0]);\n    return cl;\n  }"
-              isOptional: "() => inst.safeParse(void 0).success"
-              isNullable: "() => inst.safeParse(null).success"
-              apply: "(fn) => fn(inst)"
-              gt: "(value, params) => inst.check(checks.gt(value, params))"
-              gte: "(value, params) => inst.check(checks.gte(value, params))"
-              min: "(value, params) => inst.check(checks.gte(value, params))"
-              lt: "(value, params) => inst.check(checks.lt(value, params))"
-              lte: "(value, params) => inst.check(checks.lte(value, params))"
-              max: "(value, params) => inst.check(checks.lte(value, params))"
-              int: "(params) => inst.check(int(params))"
-              safe: "(params) => inst.check(int(params))"
-              positive: "(params) => inst.check(checks.gt(0, params))"
-              nonnegative: "(params) => inst.check(checks.gte(0, params))"
-              negative: "(params) => inst.check(checks.lt(0, params))"
-              nonpositive: "(params) => inst.check(checks.lte(0, params))"
-              multipleOf: "(value, params) => inst.check(checks.multipleOf(value, params))"
-              step: "(value, params) => inst.check(checks.multipleOf(value, params))"
-              finite: "() => inst"
-              minValue: "-Infinity"
-              maxValue: "Infinity"
-              isInt: false
-              isFinite: true
-              format: null
-            fileName:
-              toJSONSchema: "(params) => {\n  const ctx = initializeContext({ ...params, processors });\n  process(schema, ctx);\n  extractDefs(ctx, schema);\n  return finalize(ctx, schema);\n}"
-              def:
-                type: string
-              type: string
-              check: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
-              with: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
-              clone: "(def, params) => core.clone(inst, def, params)"
-              brand: "() => inst"
-              register: "(reg, meta) => {\n    reg.add(inst, meta);\n    return inst;\n  }"
-              parse: "(data, params) => parse.parse(inst, data, params, { callee: inst.parse })"
-              safeParse: "(data, params) => parse.safeParse(inst, data, params)"
-              parseAsync: "async (data, params) => parse.parseAsync(inst, data, params, { callee: inst.parseAsync })"
-              safeParseAsync: "async (data, params) => parse.safeParseAsync(inst, data, params)"
-              spa: "async (data, params) => parse.safeParseAsync(inst, data, params)"
-              encode: "(data, params) => parse.encode(inst, data, params)"
-              decode: "(data, params) => parse.decode(inst, data, params)"
-              encodeAsync: "async (data, params) => parse.encodeAsync(inst, data, params)"
-              decodeAsync: "async (data, params) => parse.decodeAsync(inst, data, params)"
-              safeEncode: "(data, params) => parse.safeEncode(inst, data, params)"
-              safeDecode: "(data, params) => parse.safeDecode(inst, data, params)"
-              safeEncodeAsync: "async (data, params) => parse.safeEncodeAsync(inst, data, params)"
-              safeDecodeAsync: "async (data, params) => parse.safeDecodeAsync(inst, data, params)"
-              refine: "(check, params) => inst.check(refine(check, params))"
-              superRefine: "(refinement) => inst.check(superRefine(refinement))"
-              overwrite: "(fn) => inst.check(checks.overwrite(fn))"
-              optional: "() => optional(inst)"
-              exactOptional: "() => exactOptional(inst)"
-              nullable: "() => nullable(inst)"
-              nullish: "() => optional(nullable(inst))"
-              nonoptional: "(params) => nonoptional(inst, params)"
-              array: "() => array(inst)"
-              or: "(arg) => union([inst, arg])"
-              and: "(arg) => intersection(inst, arg)"
-              transform: "(tx) => pipe(inst, transform(tx))"
-              default: "(def) => _default(inst, def)"
-              prefault: "(def) => prefault(inst, def)"
-              catch: "(params) => _catch(inst, params)"
-              pipe: "(target) => pipe(inst, target)"
-              readonly: "() => readonly(inst)"
-              describe: "(description) => {\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, { description });\n    return cl;\n  }"
-              meta: "(...args) => {\n    if (args.length === 0)\n      return core.globalRegistry.get(inst);\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, args[0]);\n    return cl;\n  }"
-              isOptional: "() => inst.safeParse(void 0).success"
-              isNullable: "() => inst.safeParse(null).success"
-              apply: "(fn) => fn(inst)"
-              format: null
-              minLength: null
-              maxLength: null
-              regex: "(...args) => inst.check(checks.regex(...args))"
-              includes: "(...args) => inst.check(checks.includes(...args))"
-              startsWith: "(...args) => inst.check(checks.startsWith(...args))"
-              endsWith: "(...args) => inst.check(checks.endsWith(...args))"
-              min: "(...args) => inst.check(checks.minLength(...args))"
-              max: "(...args) => inst.check(checks.maxLength(...args))"
-              length: "(...args) => inst.check(checks.length(...args))"
-              nonempty: "(...args) => inst.check(checks.minLength(1, ...args))"
-              lowercase: "(params) => inst.check(checks.lowercase(params))"
-              uppercase: "(params) => inst.check(checks.uppercase(params))"
-              trim: "() => inst.check(checks.trim())"
-              normalize: "(...args) => inst.check(checks.normalize(...args))"
-              toLowerCase: "() => inst.check(checks.toLowerCase())"
-              toUpperCase: "() => inst.check(checks.toUpperCase())"
-              slugify: "() => inst.check(checks.slugify())"
-              email: "(params) => inst.check(core._email(ZodEmail, params))"
-              url: "(params) => inst.check(core._url(ZodURL, params))"
-              jwt: "(params) => inst.check(core._jwt(ZodJWT, params))"
-              emoji: "(params) => inst.check(core._emoji(ZodEmoji, params))"
-              guid: "(params) => inst.check(core._guid(ZodGUID, params))"
-              uuid: "(params) => inst.check(core._uuid(ZodUUID, params))"
-              uuidv4: "(params) => inst.check(core._uuidv4(ZodUUID, params))"
-              uuidv6: "(params) => inst.check(core._uuidv6(ZodUUID, params))"
-              uuidv7: "(params) => inst.check(core._uuidv7(ZodUUID, params))"
-              nanoid: "(params) => inst.check(core._nanoid(ZodNanoID, params))"
-              cuid: "(params) => inst.check(core._cuid(ZodCUID, params))"
-              cuid2: "(params) => inst.check(core._cuid2(ZodCUID2, params))"
-              ulid: "(params) => inst.check(core._ulid(ZodULID, params))"
-              base64: "(params) => inst.check(core._base64(ZodBase64, params))"
-              base64url: "(params) => inst.check(core._base64url(ZodBase64URL, params))"
-              xid: "(params) => inst.check(core._xid(ZodXID, params))"
-              ksuid: "(params) => inst.check(core._ksuid(ZodKSUID, params))"
-              ipv4: "(params) => inst.check(core._ipv4(ZodIPv4, params))"
-              ipv6: "(params) => inst.check(core._ipv6(ZodIPv6, params))"
-              cidrv4: "(params) => inst.check(core._cidrv4(ZodCIDRv4, params))"
-              cidrv6: "(params) => inst.check(core._cidrv6(ZodCIDRv6, params))"
-              e164: "(params) => inst.check(core._e164(ZodE164, params))"
-              datetime: "(params) => inst.check(iso.datetime(params))"
-              date: "(params) => inst.check(iso.date(params))"
-              time: "(params) => inst.check(iso.time(params))"
-              duration: "(params) => inst.check(iso.duration(params))"
-        type: object
-        check: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
-        with: "(...checks) => {\n    return inst.clone(util.mergeDefs(def, {\n      checks: [\n        ...def.checks ?? [],\n        ...checks.map((ch) => typeof ch === \"function\" ? { _zod: { check: ch, def: { check: \"custom\" }, onattach: [] } } : ch)\n      ]\n    }), {\n      parent: !0\n    });\n  }"
-        clone: "(def, params) => core.clone(inst, def, params)"
-        brand: "() => inst"
-        register: "(reg, meta) => {\n    reg.add(inst, meta);\n    return inst;\n  }"
-        parse: "(data, params) => parse.parse(inst, data, params, { callee: inst.parse })"
-        safeParse: "(data, params) => parse.safeParse(inst, data, params)"
-        parseAsync: "async (data, params) => parse.parseAsync(inst, data, params, { callee: inst.parseAsync })"
-        safeParseAsync: "async (data, params) => parse.safeParseAsync(inst, data, params)"
-        spa: "async (data, params) => parse.safeParseAsync(inst, data, params)"
-        encode: "(data, params) => parse.encode(inst, data, params)"
-        decode: "(data, params) => parse.decode(inst, data, params)"
-        encodeAsync: "async (data, params) => parse.encodeAsync(inst, data, params)"
-        decodeAsync: "async (data, params) => parse.decodeAsync(inst, data, params)"
-        safeEncode: "(data, params) => parse.safeEncode(inst, data, params)"
-        safeDecode: "(data, params) => parse.safeDecode(inst, data, params)"
-        safeEncodeAsync: "async (data, params) => parse.safeEncodeAsync(inst, data, params)"
-        safeDecodeAsync: "async (data, params) => parse.safeDecodeAsync(inst, data, params)"
-        refine: "(check, params) => inst.check(refine(check, params))"
-        superRefine: "(refinement) => inst.check(superRefine(refinement))"
-        overwrite: "(fn) => inst.check(checks.overwrite(fn))"
-        optional: "() => optional(inst)"
-        exactOptional: "() => exactOptional(inst)"
-        nullable: "() => nullable(inst)"
-        nullish: "() => optional(nullable(inst))"
-        nonoptional: "(params) => nonoptional(inst, params)"
-        array: "() => array(inst)"
-        or: "(arg) => union([inst, arg])"
-        and: "(arg) => intersection(inst, arg)"
-        transform: "(tx) => pipe(inst, transform(tx))"
-        default: "(def) => _default(inst, def)"
-        prefault: "(def) => prefault(inst, def)"
-        catch: "(params) => _catch(inst, params)"
-        pipe: "(target) => pipe(inst, target)"
-        readonly: "() => readonly(inst)"
-        describe: "(description) => {\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, { description });\n    return cl;\n  }"
-        meta: "(...args) => {\n    if (args.length === 0)\n      return core.globalRegistry.get(inst);\n    const cl = inst.clone();\n    core.globalRegistry.add(cl, args[0]);\n    return cl;\n  }"
-        isOptional: "() => inst.safeParse(void 0).success"
-        isNullable: "() => inst.safeParse(null).success"
-        apply: "(fn) => fn(inst)"
-        keyof: "() => _enum(Object.keys(inst._zod.def.shape))"
-        catchall: "(catchall) => inst.clone({ ...inst._zod.def, catchall })"
-        passthrough: "() => inst.clone({ ...inst._zod.def, catchall: unknown() })"
-        loose: "() => inst.clone({ ...inst._zod.def, catchall: unknown() })"
-        strict: "() => inst.clone({ ...inst._zod.def, catchall: never() })"
-        strip: "() => inst.clone({ ...inst._zod.def, catchall: void 0 })"
-        extend: "(incoming) => {\n    return util.extend(inst, incoming);\n  }"
-        safeExtend: "(incoming) => {\n    return util.safeExtend(inst, incoming);\n  }"
-        merge: "(other) => util.merge(inst, other)"
-        pick: "(mask) => util.pick(inst, mask)"
-        omit: "(mask) => util.omit(inst, mask)"
-        partial: "(...args) => util.partial(ZodOptional, inst, args[0])"
-        required: "(...args) => util.required(ZodNonOptional, inst, args[0])"
+      type: object
+      properties:
+        chunks:
+          type: number
+        fileName:
+          type: string
+      required:
+        - chunks
+        - fileName
     CreateRsResponse202:
       type: object
       properties:
