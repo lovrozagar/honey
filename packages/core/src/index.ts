@@ -35,7 +35,7 @@ import type {
 	TapContext,
 } from "./types.ts"
 import { codeToStatusKey, EK, EMPTY_OBJ, SK } from "./types.ts"
-import { validateInput, validateOutput } from "./validation.ts"
+import { assertRequestContentType, validateInput, validateOutput } from "./validation.ts"
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts"
 import { loadHoneyFeature } from "./feature-load.ts"
 import { getI18nRuntime } from "./i18n-slot.ts"
@@ -1908,9 +1908,10 @@ export class Honey<
 
 		const method = request.method.toUpperCase() as HttpMethod
 
-		/* fn:null fallthrough — tree match sets meta, catch-all dispatches */
+		/* fn:null fallthrough — tree match sets meta/iv, catch-all dispatches */
 		let fnNullMeta: Record<string, unknown> | null = null
 		let fnNullParams: Record<string, string> | null = null
+		let fnNullIv: InputSchemasDef | null = null
 		let fnNullHit = false
 
 		/* Tier 2: O(1) static route lookup — checks both precompiled and runtime maps */
@@ -1922,6 +1923,7 @@ export class Honey<
 				if (staticHandler.fn === null) {
 					fnNullMeta = staticHandler.mt
 					fnNullParams = EMPTY_PARAMS
+					fnNullIv = staticHandler.iv
 					fnNullHit = true
 				} else {
 					return this._handleMatched(fc, method, path, staticHandler, EMPTY_PARAMS)
@@ -1934,6 +1936,7 @@ export class Honey<
 					if (getHandler.fn === null) {
 						fnNullMeta = getHandler.mt
 						fnNullParams = EMPTY_PARAMS
+						fnNullIv = getHandler.iv
 						fnNullHit = true
 					} else {
 						return this._handleMatched(fc, method, path, getHandler, EMPTY_PARAMS)
@@ -1965,6 +1968,7 @@ export class Honey<
 				if (result.handler.fn === null) {
 					fnNullMeta = result.handler.mt
 					fnNullParams = result.params
+					fnNullIv = result.handler.iv
 					fnNullHit = true
 				} else {
 					return this._handleMatched(fc, method, path, result.handler, result.params)
@@ -2005,6 +2009,14 @@ export class Honey<
 		/* fn:null hit — find catch-all/wildcard to dispatch with stashed meta */
 		const wildcardResult = matchRoute(this._root, method, "/*")
 		if (wildcardResult?.matched && wildcardResult.handler.fn !== null) {
+			/* 415 from matched iv before middleware that waits on the body */
+			if (fnNullIv !== null) {
+				try {
+					assertRequestContentType(fnNullIv, fc.request)
+				} catch (thrown) {
+					return this._toErrorResponse(thrown)
+				}
+			}
 			return this._handleMatched(fc, method, path, wildcardResult.handler, fnNullParams ?? EMPTY_PARAMS, fnNullMeta)
 		}
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { HoneyError } from "../../../src/error.ts"
 import type { NormalizedIssue } from "../../../src/types.ts"
 import {
+	assertRequestContentType,
 	issuesToFieldErrors,
 	mapNormalizedCode,
 	normalizeIssues,
@@ -58,6 +59,57 @@ describe("selectParser", () => {
 
 	it("null → null", () => {
 		expect(selectParser(null)).toBeNull()
+	})
+})
+
+describe("assertRequestContentType", () => {
+	it("POST json + text/plain → unsupported_media_type", () => {
+		const req = new Request("http://localhost/test", {
+			body: "x",
+			headers: { "content-type": "text/plain" },
+			method: "POST",
+		})
+		try {
+			assertRequestContentType({ json: okSchema() }, req)
+			expect.fail("should throw")
+		} catch (e) {
+			expect(e).toBeInstanceOf(HoneyError)
+			const err = e as HoneyError
+			expect(err.errorKey).toBe("unsupported_media_type")
+			expect(err.status).toBe(415)
+		}
+	})
+
+	it("POST json + missing Content-Type → unsupported_media_type", () => {
+		const req = new Request("http://localhost/test", {
+			body: "xx",
+			method: "POST",
+		})
+		req.headers.delete("content-type")
+		expect(() => assertRequestContentType({ json: okSchema() }, req)).toThrow(HoneyError)
+	})
+
+	it("POST json + application/json → no throw, body unread", async () => {
+		const req = new Request("http://localhost/test", {
+			body: '{"x":1}',
+			headers: { "content-type": "application/json" },
+			method: "POST",
+		})
+		assertRequestContentType({ json: okSchema() }, req)
+		expect(await req.text()).toBe('{"x":1}')
+	})
+
+	it("POST params-only + no Content-Type → no throw", () => {
+		const req = new Request("http://localhost/test", {
+			body: "xx",
+			method: "POST",
+		})
+		req.headers.delete("content-type")
+		assertRequestContentType({ params: okSchema() }, req)
+	})
+
+	it("GET json + no Content-Type → no throw", () => {
+		assertRequestContentType({ json: okSchema() }, new Request("http://localhost/test"))
 	})
 })
 

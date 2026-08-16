@@ -44,6 +44,21 @@ export function selectParser(contentType: string | null): "form" | "json" | null
 	return null
 }
 
+/* Content-Type vs declared json/form — no body read */
+export function assertRequestContentType(iv: InputSchemasDef, req: Request): void {
+	const hasBody = req.method !== "DELETE" && req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS"
+	if (hasBody && (iv.json || iv.form)) {
+		const parser = selectParser(req.headers.get("content-type"))
+		const ok = (iv.json && parser === "json") || (iv.form && parser === "form")
+		if (!ok) {
+			throw new HoneyError({
+				errorKey: EK.unsupported_media_type,
+				status: SK.unsupported_media_type,
+			})
+		}
+	}
+}
+
 function tryDecodeCookieValue(value: string): string {
 	try {
 		return decodeURIComponent(value)
@@ -232,6 +247,7 @@ export async function validateInput(
 	}
 
 	/* body-based: json or form — skip for methods without a request body */
+	assertRequestContentType(schemas, req)
 	const hasBody = req.method !== "DELETE" && req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS"
 	if (hasBody && (schemas.json || schemas.form)) {
 		const contentType = req.headers.get("content-type")
@@ -254,11 +270,6 @@ export async function validateInput(
 			} else {
 				result.form = await runSchema(schema, urlEncodedToRecord(await req.text()), "form")
 			}
-		} else {
-			throw new HoneyError({
-				errorKey: EK.unsupported_media_type,
-				status: SK.unsupported_media_type,
-			})
 		}
 	}
 
