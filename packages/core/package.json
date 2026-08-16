@@ -26,6 +26,7 @@
 		"honey": "./src/cli.ts"
 	},
 	"files": [
+		"dist",
 		"docs",
 		"src"
 	],
@@ -36,56 +37,193 @@
 		"./src/serve-register.ts"
 	],
 	"exports": {
-		".": "./src/index.ts",
-		"./accepts": "./src/accepts.ts",
-		"./body-limit": "./src/body-limit.ts",
-		"./build": "./src/build/index.ts",
-		"./cli": "./src/cli.ts",
-		"./client": "./src/client/index.ts",
-		"./client/sdk": "./src/client/sdk.ts",
-		"./codegen": "./src/codegen.ts",
-		"./codegen-go-cli": "./src/codegen-go-cli.ts",
-		"./codegen/extract": "./src/type-extractor.ts",
-		"./cookie": "./src/cookie.ts",
-		"./cookie-sign": "./src/cookie-sign.ts",
-		"./cors": "./src/cors.ts",
-		"./crypto": "./src/crypto.ts",
-		"./curl-logger": "./src/curl-logger.ts",
-		"./csrf": "./src/csrf.ts",
-		"./errors": "./src/errors.ts",
-		"./etag": "./src/etag.ts",
-		"./i18n": "./src/i18n.ts",
-		"./input": "./src/input.ts",
-		"./ip-restrict": "./src/ip-restrict.ts",
-		"./logger": "./src/logger.ts",
-		"./node": "./src/node.ts",
-		"./openapi": "./src/openapi/register.ts",
-		"./openapi/spec": "./src/openapi/spec.ts",
-		"./openapi/scalar": "./src/openapi/scalar.ts",
-		"./openapi/swagger": "./src/openapi/swagger.ts",
-		"./plugin": "./src/plugin.ts",
-		"./powered-by": "./src/powered-by.ts",
-		"./pretty-json": "./src/pretty-json.ts",
-		"./proxy": "./src/proxy.ts",
-		"./request-to-curl": "./src/request-to-curl.ts",
-		"./request-id": "./src/request-id.ts",
-		"./secure-headers": "./src/secure-headers.ts",
-		"./serve": "./src/serve-register.ts",
-		"./server-timing": "./src/server-timing.ts",
-		"./static": "./src/static.ts",
-		"./telemetry/otel": "./src/telemetry/otel.ts",
-		"./testing": "./src/testing.ts",
-		"./timeout": "./src/timeout.ts",
-		"./tree": "./src/tree.ts",
-		"./ws/bun": "./src/ws/bun.ts",
-		"./ws/cloudflare": "./src/ws/cloudflare.ts",
-		"./ws/deno": "./src/ws/deno.ts",
-		"./ws/node": "./src/ws/node.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./src/index.ts"
+		},
+		"./accepts": {
+			"types": "./dist/accepts.d.ts",
+			"default": "./src/accepts.ts"
+		},
+		"./body-limit": {
+			"types": "./dist/body-limit.d.ts",
+			"default": "./src/body-limit.ts"
+		},
+		"./build": {
+			"types": "./dist/build/index.d.ts",
+			"default": "./src/build/index.ts"
+		},
+		"./cli": {
+			"types": "./dist/cli.d.ts",
+			"default": "./src/cli.ts"
+		},
+		"./client": {
+			"types": "./dist/client/index.d.ts",
+			"default": "./src/client/index.ts"
+		},
+		"./client/sdk": {
+			"types": "./dist/client/sdk.d.ts",
+			"default": "./src/client/sdk.ts"
+		},
+		"./codegen": {
+			"types": "./dist/codegen.d.ts",
+			"default": "./src/codegen.ts"
+		},
+		"./codegen-go-cli": {
+			"types": "./dist/codegen-go-cli.d.ts",
+			"default": "./src/codegen-go-cli.ts"
+		},
+		"./codegen/extract": {
+			"types": "./dist/type-extractor.d.ts",
+			"default": "./src/type-extractor.ts"
+		},
+		"./cookie": {
+			"types": "./dist/cookie.d.ts",
+			"default": "./src/cookie.ts"
+		},
+		"./cookie-sign": {
+			"types": "./dist/cookie-sign.d.ts",
+			"default": "./src/cookie-sign.ts"
+		},
+		"./cors": {
+			"types": "./dist/cors.d.ts",
+			"default": "./src/cors.ts"
+		},
+		"./crypto": {
+			"types": "./dist/crypto.d.ts",
+			"default": "./src/crypto.ts"
+		},
+		"./curl-logger": {
+			"types": "./dist/curl-logger.d.ts",
+			"default": "./src/curl-logger.ts"
+		},
+		"./csrf": {
+			"types": "./dist/csrf.d.ts",
+			"default": "./src/csrf.ts"
+		},
+		"./errors": {
+			"types": "./dist/errors.d.ts",
+			"default": "./src/errors.ts"
+		},
+		"./etag": {
+			"types": "./dist/etag.d.ts",
+			"default": "./src/etag.ts"
+		},
+		"./i18n": {
+			"types": "./dist/i18n.d.ts",
+			"default": "./src/i18n.ts"
+		},
+		"./input": {
+			"types": "./dist/input.d.ts",
+			"default": "./src/input.ts"
+		},
+		"./ip-restrict": {
+			"types": "./dist/ip-restrict.d.ts",
+			"default": "./src/ip-restrict.ts"
+		},
+		"./logger": {
+			"types": "./dist/logger.d.ts",
+			"default": "./src/logger.ts"
+		},
+		"./node": {
+			"types": "./dist/node.d.ts",
+			"default": "./src/node.ts"
+		},
+		"./openapi": {
+			"types": "./dist/openapi/register.d.ts",
+			"default": "./src/openapi/register.ts"
+		},
+		"./openapi/spec": {
+			"types": "./dist/openapi/spec.d.ts",
+			"default": "./src/openapi/spec.ts"
+		},
+		"./openapi/scalar": {
+			"types": "./dist/openapi/scalar.d.ts",
+			"default": "./src/openapi/scalar.ts"
+		},
+		"./openapi/swagger": {
+			"types": "./dist/openapi/swagger.d.ts",
+			"default": "./src/openapi/swagger.ts"
+		},
+		"./plugin": {
+			"types": "./dist/plugin.d.ts",
+			"default": "./src/plugin.ts"
+		},
+		"./powered-by": {
+			"types": "./dist/powered-by.d.ts",
+			"default": "./src/powered-by.ts"
+		},
+		"./pretty-json": {
+			"types": "./dist/pretty-json.d.ts",
+			"default": "./src/pretty-json.ts"
+		},
+		"./proxy": {
+			"types": "./dist/proxy.d.ts",
+			"default": "./src/proxy.ts"
+		},
+		"./request-to-curl": {
+			"types": "./dist/request-to-curl.d.ts",
+			"default": "./src/request-to-curl.ts"
+		},
+		"./request-id": {
+			"types": "./dist/request-id.d.ts",
+			"default": "./src/request-id.ts"
+		},
+		"./secure-headers": {
+			"types": "./dist/secure-headers.d.ts",
+			"default": "./src/secure-headers.ts"
+		},
+		"./serve": {
+			"types": "./dist/serve-register.d.ts",
+			"default": "./src/serve-register.ts"
+		},
+		"./server-timing": {
+			"types": "./dist/server-timing.d.ts",
+			"default": "./src/server-timing.ts"
+		},
+		"./static": {
+			"types": "./dist/static.d.ts",
+			"default": "./src/static.ts"
+		},
+		"./telemetry/otel": {
+			"types": "./dist/telemetry/otel.d.ts",
+			"default": "./src/telemetry/otel.ts"
+		},
+		"./testing": {
+			"types": "./dist/testing.d.ts",
+			"default": "./src/testing.ts"
+		},
+		"./timeout": {
+			"types": "./dist/timeout.d.ts",
+			"default": "./src/timeout.ts"
+		},
+		"./tree": {
+			"types": "./dist/tree.d.ts",
+			"default": "./src/tree.ts"
+		},
+		"./ws/bun": {
+			"types": "./dist/ws/bun.d.ts",
+			"default": "./src/ws/bun.ts"
+		},
+		"./ws/cloudflare": {
+			"types": "./dist/ws/cloudflare.d.ts",
+			"default": "./src/ws/cloudflare.ts"
+		},
+		"./ws/deno": {
+			"types": "./dist/ws/deno.d.ts",
+			"default": "./src/ws/deno.ts"
+		},
+		"./ws/node": {
+			"types": "./dist/ws/node.d.ts",
+			"default": "./src/ws/node.ts"
+		}
 	},
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
+		"build:types": "tsc -p tsconfig.dts.json",
+		"prepack": "tsc -p tsconfig.dts.json",
 		"test": "vitest run",
 		"test:all": "vitest run --config vitest.all.config.ts",
 		"test:harness": "vitest run --config vitest.harness.config.ts",

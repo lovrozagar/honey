@@ -47,6 +47,7 @@
 		"test:build:bun": "bun e2e/run-build.ts --runtime bun",
 		"test:build:all": "bun e2e/run-build.ts --runtime all",
 		"test:build:ci": "bun e2e/run-build.ts --runtime all --check-generated",
+		"test:packaging": "bun e2e/run-strict-consumer.ts",
 		"deploy:e2e:cf": "bun run --filter @honey/e2e-cf-workers deploy",
 		"test:live:cf": "bun run --filter @honey/e2e-cf-workers test:live",
 		"test:harness": "bun run --filter @lovrozagar/honey test:harness",

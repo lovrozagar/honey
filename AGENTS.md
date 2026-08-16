@@ -32,5 +32,9 @@ Touching `src/build`, `codegen-loaders.ts`, or anything a bundler sees? Also run
 `bun run test:build` — the only thing that catches an optional dependency
 leaking into a worker bundle.
 
+Touching `package.json` exports, `files`, or anything about what ships? Also run
+`bun run test:packaging` — it packs the real tarball and type-checks a consumer
+with every strictness flag on. See `packages/core/docs/packaging.md`.
+
 Per-runtime e2e (`test:e2e:node`, `:deno`, `:cf`) and `test:harness` need extra
 toolchains — leave to CI.

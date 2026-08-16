@@ -87,6 +87,21 @@ jobs:
       # committed generated file means it is stale or codegen is not deterministic.
       - run: bun e2e/run-build.ts --runtime ${{ matrix.runtime }} --check-generated
 
+  packaging:
+    name: packaging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      # packs the real tarball and type-checks a consumer with every strictness flag on.
+      # A source-shipping package inherits the consumer's flags and skipLibCheck cannot
+      # save them, so nothing else in the matrix can see this.
+      - run: bun run test:packaging
+
   e2e:
     name: e2e (${{ matrix.runtime }})
     runs-on: ubuntu-latest
