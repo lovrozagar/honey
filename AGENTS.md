@@ -16,7 +16,8 @@ assume it can.
 
 ## Before you call it done
 
-From the repo root; CI runs the same set. `generate` first — the e2e apps'
+From the repo root; CI runs the same set, with `fmt:check` in place of `fmt`.
+`generate` first — the e2e apps'
 generated clients feed typecheck and tests.
 
     bun run generate
