@@ -259,11 +259,11 @@ describe("bug-hunt-14: testClient — PUT with all options", () => {
 })
 
 /* ══════════════════════════════════════════════
- * 9. ERROR WITH VARS — vars passed through to response
+ * 9. ERROR WITH VARS — ICU input on HoneyError, not public JSON
  * ══════════════════════════════════════════════ */
 
 describe("bug-hunt-14: HoneyError with vars", () => {
-	it("error vars appear in default error response shape", async () => {
+	it("error vars stay off the default error response shape", async () => {
 		const app = honey<{}>()
 		app.get("/rate").handler(() => {
 			throw new HoneyError({
@@ -275,10 +275,9 @@ describe("bug-hunt-14: HoneyError with vars", () => {
 
 		const res = await app.fetch(new Request("http://localhost/rate"), {})
 		expect(res.status).toBe(429)
-		/* default shape doesn't include vars by default —
-		 * but the error object has them for i18n/custom formatters */
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.error_key).toBe("rate_limited")
+		expect(data.vars).toBeUndefined()
 	})
 
 	it("custom formatter can access vars", async () => {
@@ -299,6 +298,7 @@ describe("bug-hunt-14: HoneyError with vars", () => {
 		expect(res.status).toBe(429)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.retryAfter).toBe(60)
+		expect(data.vars).toBeUndefined()
 	})
 })
 

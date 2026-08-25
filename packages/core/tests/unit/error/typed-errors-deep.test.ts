@@ -137,7 +137,9 @@ describe("createErrorResponse: deep coverage", () => {
 		expect(body.success).toBe(false)
 		expect(body.message).toBe("email_taken")
 		expect(body.fields).toEqual({})
-		expect(body.vars).toEqual({ email: "a@b.com" })
+		/* vars are ICU input on HoneyError, not part of the public envelope */
+		expect(body.vars).toBeUndefined()
+		expect(err.vars).toEqual({ email: "a@b.com" })
 		expect(res.headers.get("content-type")).toBe("application/json")
 	})
 
@@ -458,7 +460,7 @@ describe("regression: standard error flow unchanged", () => {
 		expect(body.status_key).toBe("conflict")
 		expect(body.success).toBe(false)
 		expect(body.message).toBe("slug_taken")
-		expect(body.vars).toEqual({ slug: "my-org" })
+		expect(body.vars).toBeUndefined()
 	})
 
 	it("fields present on standard error", async () => {

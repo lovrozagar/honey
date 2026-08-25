@@ -302,6 +302,7 @@ describe("i18n: custom defineErrors with vars + translation", () => {
 		expect(res.status).toBe(429)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.message).toBe("Rate limited: 150/100 requests in 60s")
+		expect(data.vars).toBeUndefined()
 	})
 
 	it("error with zero-value var → 0 rendered not empty", async () => {

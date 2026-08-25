@@ -43,6 +43,7 @@ export class HoneyError extends Error {
 			obj["status"] = e.status
 			obj["statusKey"] = e.statusKey
 			if (Object.keys(e.fields).length > 0) obj["fields"] = e.fields
+			if (e.vars) obj["vars"] = e.vars
 		}
 
 		if (e.cause) obj["cause"] = HoneyError.serialize(e.cause)

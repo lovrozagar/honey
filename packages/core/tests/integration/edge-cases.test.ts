@@ -450,8 +450,8 @@ describe("edge: ETag not set on error responses", () => {
 	})
 })
 
-describe("edge: error vars in response body", () => {
-	it("HoneyError vars included in JSON error response", async () => {
+describe("edge: error vars stay off the public envelope", () => {
+	it("HoneyError vars are omitted from JSON error response", async () => {
 		const { HoneyError } = await import("../../src/error.ts")
 		const app = honey<{}>()
 		app.get("/fail").handler(() => {
@@ -468,8 +468,8 @@ describe("edge: error vars in response body", () => {
 		expect(res.status).toBe(400)
 		const body = JSON.parse(res.body) as Record<string, unknown>
 		expect(body.error_key).toBe("custom_err")
-		expect(body.vars).toBeDefined()
-		expect((body.vars as Record<string, unknown>).detail).toBe("something specific")
+		expect(body.message).toBe("custom_err")
+		expect(body.vars).toBeUndefined()
 	})
 })
 

@@ -548,6 +548,7 @@ describe("errorI18n", () => {
 		const res = await h.fetch(new Request("http://localhost/fail"), {})
 		const body = (await res.json()) as Record<string, unknown>
 		expect(body.message).toBe("Slug my-org is taken")
+		expect(body.vars).toBeUndefined()
 	})
 
 	it("field names translated when fieldNames configured", async () => {

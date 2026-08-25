@@ -338,7 +338,6 @@ export function createErrorResponse(
 			status: error.status,
 			status_key: error.statusKey,
 			success: false,
-			...(error.vars ? { vars: error.vars } : {}),
 		}
 		try {
 			body = defaultFormatter(error, defaultShape)

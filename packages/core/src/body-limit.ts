@@ -60,27 +60,63 @@ export function bodyLimit(opts: BodyLimitOptions): MiddlewareFn<{ req: Request }
 			if (trustContentLength === true) return next()
 		}
 
-		/* slow path: stream-count when no Content-Length (chunked) or trustContentLength disabled */
+		/* slow path: stream-count when no Content-Length (chunked) or trustContentLength disabled.
+		 * On overflow, error the downstream consumer then drain (do not cancel) the upstream —
+		 * cancelling an undici FormData body mid-encode enqueues into a closed stream on Node 24. */
 		if (req.body !== null) {
 			let totalBytes = 0
+			let overflowed = false
 			const limit = resolvedMax
-			const transform = new TransformStream<Uint8Array, Uint8Array>({
-				transform(chunk, controller) {
-					totalBytes += chunk.byteLength
+			const reader = req.body.getReader()
+
+			const drainUpstream = (): void => {
+				void (async () => {
+					try {
+						while (true) {
+							const r = await reader.read()
+							if (r.done) break
+						}
+					} catch {
+						/* producer may already be done */
+					}
+				})()
+			}
+
+			const limited = new ReadableStream<Uint8Array>({
+				async cancel(reason) {
+					/* consumer aborted — still drain so undici FormData encoders can finish */
+					drainUpstream()
+					void reason
+				},
+				async pull(controller) {
+					if (overflowed) return
+					let result: ReadableStreamReadResult<Uint8Array>
+					try {
+						result = await reader.read()
+					} catch (err) {
+						controller.error(err)
+						return
+					}
+					if (result.done) {
+						controller.close()
+						return
+					}
+					totalBytes += result.value.byteLength
 					if (totalBytes > limit) {
+						overflowed = true
 						controller.error(
 							new HoneyError({
 								errorKey: EK.content_too_large,
 								status: SK.content_too_large,
 							}),
 						)
+						drainUpstream()
 						return
 					}
-					controller.enqueue(chunk)
+					controller.enqueue(result.value)
 				},
 			})
 
-			const limited = req.body.pipeThrough(transform)
 			const replaceBody = (req as unknown as Record<symbol, unknown>)[Symbol.for("honey.replaceBody")]
 			if (typeof replaceBody === "function") {
 				;(replaceBody as (stream: ReadableStream<Uint8Array>) => void).call(req, limited)

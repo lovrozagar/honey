@@ -32,6 +32,21 @@ describe("HoneyError.serialize", () => {
 		expect(result.message).toBe("user_not_found")
 		expect(result.name).toBe("Error")
 		expect(result.stack).toBeTypeOf("string")
+		expect(result).not.toHaveProperty("vars")
+	})
+
+	it("includes vars when present for logs", () => {
+		const err = new HoneyError({
+			errorKey: "slug_taken",
+			status: "conflict",
+			vars: { slug: "acme" },
+		})
+		const result = HoneyError.serialize(err)
+
+		expect(result.errorKey).toBe("slug_taken")
+		expect(result.status).toBe(409)
+		expect(result.vars).toEqual({ slug: "acme" })
+		expect(result).not.toHaveProperty("cause")
 	})
 
 	it("omits empty fields, includes non-empty fields", () => {

@@ -163,6 +163,19 @@ describe("characterization — current behavior", () => {
 		expect(isStandardErrEnvelope(DEFAULT_ERROR_JSON_SCHEMA)).toBeNull()
 	})
 
+	it("DEFAULT_ERROR_JSON_SCHEMA omits vars (ICU input is not a public field)", () => {
+		const props = DEFAULT_ERROR_JSON_SCHEMA.properties as Record<string, unknown>
+		expect(props).not.toHaveProperty("vars")
+		expect(DEFAULT_ERROR_JSON_SCHEMA.required).toEqual([
+			"error_key",
+			"fields",
+			"message",
+			"status",
+			"status_key",
+			"success",
+		])
+	})
+
 	it("isStandardErrEnvelope detects the patched per-endpoint envelope", () => {
 		const result = isStandardErrEnvelope(PATCHED_404_ENVELOPE)
 		expect(result).not.toBeNull()

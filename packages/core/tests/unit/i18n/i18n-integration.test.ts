@@ -356,6 +356,7 @@ describe("i18n: error message interpolation with vars", () => {
 		expect(res.status).toBe(409)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.message).toBe("The slug 'my-org' is already taken by org 42")
+		expect(data.vars).toBeUndefined()
 	})
 
 	it("error with vars but no translation → message not overwritten", async () => {
@@ -375,6 +376,25 @@ describe("i18n: error message interpolation with vars", () => {
 		const res = await app.fetch(new Request("http://localhost/fail"), {})
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.error_key).toBe("custom_err")
+		expect(data.message).toBe("custom_err")
+		expect(data.vars).toBeUndefined()
+	})
+
+	it("i18n off → message stays the key and body still omits vars", async () => {
+		const errors = defineErrors({
+			slug_taken: "conflict",
+		})
+
+		const app = honey<{}>().errorFactory(errors)
+		app.get("/fail").handler(() => {
+			throw errors.slug_taken({ vars: { slug: "acme" } })
+		})
+
+		const res = await app.fetch(new Request("http://localhost/fail"), {})
+		expect(res.status).toBe(409)
+		const data = (await res.json()) as Record<string, unknown>
+		expect(data.message).toBe("slug_taken")
+		expect(data.vars).toBeUndefined()
 	})
 })
 

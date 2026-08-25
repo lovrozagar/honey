@@ -45,10 +45,12 @@ function request(
 
 let server: HoneyServer | null = null
 
-afterEach(() => {
+afterEach(async () => {
 	if (server) {
-		server.close()
+		const s = server
 		server = null
+		/* drain connections so Readable.toWeb / undici cleanup cannot race the next test */
+		await s.shutdown(1000)
 	}
 })
 

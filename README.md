@@ -619,7 +619,7 @@ throw ctx.errors.unauthorized({
 })
 ```
 
-Standard error JSON:
+Standard error JSON (matches OpenAPI / generated `_ErrEnvelope`):
 
 ```json
 {
@@ -628,10 +628,13 @@ Standard error JSON:
 	"status_key": "conflict",
 	"message": "org_slug_taken",
 	"success": false,
-	"fields": {},
-	"vars": { "slug": "acme" }
+	"fields": {}
 }
 ```
+
+`vars` are **ICU input only** — used by `.errorI18n()` to interpolate the top-level `message`, and included in `HoneyError.serialize` for logs. They are **not** part of the public envelope. With i18n on, clients read the interpolated `message` (e.g. `"Slug acme is taken"`); they must not re-translate from `vars` + `error_key`.
+
+For structured client extras (numbers a CLI can chart, typed payloads), use a **custom-schema** error (`defineErrors({ key: { status, schema } })`) and its `data` body — not `vars`.
 
 Custom-schema errors serialize **the schema payload** as the body (not the envelope), unless you set `customErrorFormatter`.
 
@@ -685,9 +688,9 @@ app.errorI18n({
 })
 ```
 
-Messages are ICU: `{slug}`, `{n, number}`, `{n, plural, one {# item} other {# items}}`, `{k, select, a {A} other {X}}`. `cause` is reserved and is not a template var.
+Messages are ICU: `{slug}`, `{n, number}`, `{n, plural, one {# item} other {# items}}`, `{k, select, a {A} other {X}}`. Pass matching values as `vars` on the throw. `cause` is reserved and is not a template var. Field `path` labels use `fieldNames`; field `message` strings are not interpolated with top-level `vars`.
 
-`HoneyError` fields: `errorKey`, `status` (number), `statusKey`, `fields`, `vars`, `data`, `headers`. `HoneyError.serialize(err)` is a JSON-safe dump for logs.
+`HoneyError` fields: `errorKey`, `status` (number), `statusKey`, `fields`, `vars` (ICU / logs only), `data`, `headers`. `HoneyError.serialize(err)` is a JSON-safe dump for logs (includes `vars` when set; never put on the public JSON).
 
 Framework-owned keys you do not declare: `validation_failed` (400), `output_validation_failed` (500), plus routing / content-negotiation keys.
 

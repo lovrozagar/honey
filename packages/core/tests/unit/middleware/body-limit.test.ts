@@ -147,6 +147,25 @@ describe("body-limit stream-through (no buffering)", () => {
 		expect(body.error_key).toBe("content_too_large")
 	})
 
+	it("FormData over limit → 413 without undici enqueue-after-close rejection", async () => {
+		const app = honey<{}>().use(bodyLimit({ maxSize: 1000 }))
+		app.post("/upload").handler(async (ctx) => {
+			const body = await ctx.req.formData()
+			return ctx.res.json("ok", { fields: body.getAll("f").length })
+		})
+
+		const form = new FormData()
+		form.append("f", new Blob(["x".repeat(500)], { type: "text/plain" }), "a.txt")
+		form.append("f", new Blob(["y".repeat(500)], { type: "text/plain" }), "b.txt")
+
+		const res = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
+		expect(res.status).toBe(413)
+		const body = (await res.json()) as Record<string, unknown>
+		expect(body.error_key).toBe("content_too_large")
+		/* let undici finish encoding; drain must prevent unhandled rejection */
+		await new Promise<void>((resolve) => setTimeout(resolve, 50))
+	})
+
 	it("preserves original request headers and method", async () => {
 		let receivedMethod: string | undefined
 		let receivedContentType: string | null | undefined
