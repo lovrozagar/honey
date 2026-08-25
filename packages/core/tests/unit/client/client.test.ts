@@ -316,4 +316,54 @@ describe("createClient", () => {
 		expect(url).toBe("https://api.test.com/users/42/settings")
 		expect(init.method).toBe("PATCH")
 	})
+
+	it("omitted fetch does not throw Illegal invocation when the environment fetch is a method", async () => {
+		const previous = globalThis.fetch
+		const urls: string[] = []
+		function methodFetch(this: unknown, input: RequestInfo | URL): Promise<Response> {
+			if (this !== globalThis) {
+				throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
+			}
+			urls.push(String(input))
+			return Promise.resolve(new Response("healthy", { headers: { "content-type": "text/plain" }, status: 200 }))
+		}
+		globalThis.fetch = methodFetch as typeof fetch
+		try {
+			const client = createClient<TestApp, true>({
+				baseURL: "https://api.test.com",
+				throwOnError: true,
+			})
+			const result = await client.get("/health")
+			expect(result).toBe("healthy")
+			expect(urls).toEqual(["https://api.test.com/health"])
+		} finally {
+			globalThis.fetch = previous
+		}
+	})
+
+	it("resolves a path-only baseURL against location.origin", async () => {
+		const desc = Object.getOwnPropertyDescriptor(globalThis, "location")
+		Object.defineProperty(globalThis, "location", {
+			configurable: true,
+			value: { origin: "https://app.example.com" },
+		})
+		try {
+			const fetchFn = vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ ok: true }), {
+					headers: { "content-type": "application/json" },
+					status: 200,
+				}),
+			)
+			const client = createClient<TestApp, true>({
+				baseURL: "/api",
+				fetch: fetchFn,
+				throwOnError: true,
+			})
+			await client.get("/health")
+			expect(fetchFn.mock.calls[0][0]).toBe("https://app.example.com/api/health")
+		} finally {
+			if (desc) Object.defineProperty(globalThis, "location", desc)
+			else Reflect.deleteProperty(globalThis, "location")
+		}
+	})
 })

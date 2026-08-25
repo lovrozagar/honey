@@ -1,3 +1,4 @@
+import { bindDefaultFetch, parseClientBaseURL } from "./defaults.ts"
 import { ClientError } from "./error.ts"
 import type { SSEEvent } from "./sse.ts"
 import { parseSSEStream } from "./sse.ts"
@@ -45,9 +46,11 @@ export type OnResponseContext = {
 }
 
 export type ClientConfig = {
+	/** Absolute `http(s):` / `ws(s):` URL, or a same-origin path such as `"/api"`. */
 	baseURL: string
 	buildSearchParams?: (query: Record<string, unknown>) => URLSearchParams
 	credentials?: RequestCredentials
+	/** Defaults to the environment `fetch`, bound so it is safe to call in browsers. */
 	fetch?: typeof fetch
 	headers?: HeadersInit
 	mode?: RequestMode
@@ -120,7 +123,7 @@ function buildURL(config: ClientConfig, path: string, opts: RequestOptions): str
 	let resolvedPath = path
 	if (opts.params) resolvedPath = interpolatePath(path, opts.params)
 
-	const baseUrl = new URL(config.baseURL)
+	const baseUrl = parseClientBaseURL(config.baseURL)
 	const basePath = baseUrl.pathname.endsWith("/") ? baseUrl.pathname : `${baseUrl.pathname}/`
 	const relative = resolvedPath.startsWith("/") ? resolvedPath.slice(1) : resolvedPath
 	const url = new URL(`${basePath}${relative}`, baseUrl)
@@ -222,7 +225,7 @@ export class HTTPClient {
 
 	constructor(config: ClientConfig) {
 		this._config = config
-		this._fetch = config.fetch ?? globalThis.fetch
+		this._fetch = bindDefaultFetch(config.fetch)
 	}
 
 	private async _doRequest(

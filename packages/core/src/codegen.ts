@@ -3389,6 +3389,7 @@ function buildSDKClient(sdkName: string, stem: string): string {
 		sdkClientLookupStale(),
 		sdkClientCreateTypedWebSocket(),
 		sdkClientSerializeSearch(),
+		sdkClientResolveBaseURL(),
 		sdkClientBuildURL(),
 		sdkClientBuildHeaders(),
 		sdkClientDoRequest(),
@@ -4112,7 +4113,7 @@ function sdkClientConstructor(n: string): string {
 \t\tconst ownState = config.state ?? {}
 \t\tthis.state = ownState
 \t\tthis.#config = { ...config, state: ownState }
-\t\tthis.#fetchFn = config.fetch ?? globalThis.fetch
+\t\tthis.#fetchFn = config.fetch ?? (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : globalThis.fetch)
 \t\tthis.#searchSerializer = config.buildSearchParams ?? ((q: Record<string, unknown>) => this.#serializeSearch(q))
 \t\tthis.#staleTime = config.invalidation?.staleTime ?? 0
 \t\tthis.#staleUntil = this.#staleTime > 0
@@ -4419,12 +4420,35 @@ function sdkClientSerializeSearch(): string {
 `
 }
 
+/* Keep in sync with client/defaults.ts — generated SDKs have zero runtime imports. */
+function sdkClientResolveBaseURL(): string {
+	return `
+	#resolveBaseURL(baseURL: string): URL {
+		if (/^(?:https?|wss?):\\/\\//i.test(baseURL)) return new URL(baseURL)
+		let origin: unknown
+		try {
+			origin = globalThis.location?.origin
+		} catch {
+			origin = undefined
+		}
+		if (typeof origin === "string" && origin !== "" && origin !== "null" && /^(?:https?|wss?):\\/\\//i.test(origin)) {
+			try {
+				return new URL(baseURL, origin)
+			} catch {
+				throw new Error(\`Invalid baseURL \${JSON.stringify(baseURL)}: expected an absolute http(s): or ws(s): URL. Path-only values such as "/api" resolve against location.origin in browsers.\`)
+			}
+		}
+		throw new Error(\`Invalid baseURL \${JSON.stringify(baseURL)}: expected an absolute http(s): or ws(s): URL. Path-only values such as "/api" resolve against location.origin in browsers.\`)
+	}
+`
+}
+
 function sdkClientBuildURL(): string {
 	return `
 \t#buildURL(path: string, opts: _RequestOptions): string {
 \t\tlet resolvedPath = path
 \t\tif (opts.params) resolvedPath = this.#interpolatePath(path, opts.params)
-\t\tconst baseUrl = new URL(this.#config.baseURL)
+\t\tconst baseUrl = this.#resolveBaseURL(this.#config.baseURL)
 \t\tconst basePath = baseUrl.pathname.endsWith("/") ? baseUrl.pathname : \`\${baseUrl.pathname}/\`
 \t\tconst relative = resolvedPath.startsWith("/") ? resolvedPath.slice(1) : resolvedPath
 \t\tconst url = new URL(\`\${basePath}\${relative}\`, baseUrl)

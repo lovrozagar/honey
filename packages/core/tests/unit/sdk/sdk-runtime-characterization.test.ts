@@ -182,6 +182,14 @@ describe("generated code structure — internal helpers", () => {
 		expect(files.client).toContain("#buildURL(")
 	})
 
+	it("binds default fetch instead of assigning a detached globalThis.fetch", () => {
+		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
+		expect(files.client).toContain("globalThis.fetch.bind(globalThis)")
+		expect(files.client).toContain("#resolveBaseURL(")
+		expect(files.client).toContain("location.origin")
+		expect(files.client).not.toContain("this.#fetchFn = config.fetch ?? globalThis.fetch\n")
+	})
+
 	it("contains async #buildHeaders private method", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		expect(files.client).toContain("async #buildHeaders(")

@@ -57,6 +57,25 @@ describe("$url()", () => {
 		const url = prefixed.$url("/users")
 		expect(url).toBe("https://api.example.com/v1/users")
 	})
+
+	it("resolves a path-only baseURL against location.origin", () => {
+		const desc = Object.getOwnPropertyDescriptor(globalThis, "location")
+		Object.defineProperty(globalThis, "location", {
+			configurable: true,
+			value: { origin: "https://app.example.com" },
+		})
+		try {
+			const sameOrigin = createClient({
+				baseURL: "/api",
+				fetch: vi.fn(),
+			})
+			expect(sameOrigin.$url("/v1/users")).toBe("https://app.example.com/api/v1/users")
+			expect(sameOrigin.$url("/v1/users/:id", { params: { id: "1" } })).toBe("https://app.example.com/api/v1/users/1")
+		} finally {
+			if (desc) Object.defineProperty(globalThis, "location", desc)
+			else Reflect.deleteProperty(globalThis, "location")
+		}
+	})
 })
 
 describe("$path()", () => {

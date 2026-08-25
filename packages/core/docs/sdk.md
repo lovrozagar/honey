@@ -61,6 +61,16 @@ const sdk = new MockSDK({
 })
 ```
 
+In a browser, `baseURL` may be a same-origin path. It resolves against `location.origin`. Omit `fetch` — the default is the environment `fetch`, bound so it is safe to call on `window`. In Node and Workers without an origin, pass an absolute `http(s):` or `ws(s):` URL.
+
+```ts
+const browserSdk = new MockSDK({
+	baseURL: "/api",
+	credentials: "include",
+	throwOnError: true,
+})
+```
+
 ```py
 sdk = AsyncSDK(ClientConfig(
     base_url=BASE_URL,

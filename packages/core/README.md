@@ -1345,6 +1345,13 @@ const client = createClient<typeof app>({
 	onResponse: [async (ctx) => ctx.response],
 })
 
+/* Browser, same-origin: a path is resolved against location.origin.
+   Omit fetch — the default is the environment fetch, bound for window. */
+const sameOrigin = createClient<typeof app>({
+	baseURL: "/api",
+	credentials: "include",
+})
+
 const res = await client.get("/api/health")
 const created = await client.post("/api/users", { json: { email: "a@b.com", name: "Ada" } })
 
@@ -1352,6 +1359,8 @@ client.$url("/api/users/:id", { params: { id: "1" }, search: { x: "1" } })
 client.$path("/api/users/:id", { params: { id: "1" } })
 const ws = client.ws("/echo-ws", { reconnectToken: "t" })
 ```
+
+`baseURL` may be an absolute `http(s):` / `ws(s):` URL or a same-origin path (`"/api"`). Paths resolve against `location.origin`. Omit `fetch` to use the environment `fetch` (bound for browsers). In Node and Workers without an origin, pass an absolute URL.
 
 Per-call options: `json`, `form`, `search`, `params`, `headers`, `cookies`, `timeout`, `signal`, `lastEventId`.
 
@@ -1377,6 +1386,12 @@ const sdk = new MySDK({
 	throwOnError: true,
 	timeout: 10_000,
 	invalidation: { staleTime: 5 },
+})
+
+const browserSdk = new MySDK({
+	baseURL: "/api",
+	credentials: "include",
+	throwOnError: true,
 })
 
 const user = await sdk.createUser({ json: { email: "a@b.com", name: "Ada" } })

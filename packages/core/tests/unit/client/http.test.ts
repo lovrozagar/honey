@@ -256,5 +256,126 @@ describe("HTTPClient", () => {
 			})
 			expect(url).toBe("wss://api.test.com/rooms/42")
 		})
+
+		it("converts a path-only baseURL against location.origin to wss", () => {
+			const desc = Object.getOwnPropertyDescriptor(globalThis, "location")
+			Object.defineProperty(globalThis, "location", {
+				configurable: true,
+				value: { origin: "https://app.example.com" },
+			})
+			try {
+				const client = new HTTPClient({ baseURL: "/api" })
+				expect(client.buildWSUrl("/echo-ws", {})).toBe("wss://app.example.com/api/echo-ws")
+			} finally {
+				if (desc) Object.defineProperty(globalThis, "location", desc)
+				else Reflect.deleteProperty(globalThis, "location")
+			}
+		})
+	})
+
+	describe("default fetch and relative baseURL", () => {
+		it("omitted fetch does not throw Illegal invocation when the environment fetch is a method", async () => {
+			const previous = globalThis.fetch
+			const urls: string[] = []
+			function methodFetch(this: unknown, input: RequestInfo | URL): Promise<Response> {
+				if (this !== globalThis) {
+					throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
+				}
+				urls.push(String(input))
+				return Promise.resolve(
+					new Response(JSON.stringify({ ok: true }), {
+						headers: { "content-type": "application/json" },
+						status: 200,
+					}),
+				)
+			}
+			globalThis.fetch = methodFetch as typeof fetch
+			try {
+				const client = new HTTPClient({ baseURL: "https://api.example.com" })
+				const result = await client.request("GET", "/health", {})
+				expect(result).toEqual({ ok: true })
+				expect(urls).toEqual(["https://api.example.com/health"])
+			} finally {
+				globalThis.fetch = previous
+			}
+		})
+
+		it("honors a provided fetch as-is and does not call the environment fetch", async () => {
+			const previous = globalThis.fetch
+			let nativeCalls = 0
+			globalThis.fetch = (async () => {
+				nativeCalls++
+				return new Response()
+			}) as typeof fetch
+			try {
+				const fetchFn = mockFetch({ ok: true })
+				const client = new HTTPClient({
+					baseURL: "https://api.example.com",
+					fetch: fetchFn,
+				})
+				await client.request("GET", "/health", {})
+				expect(fetchFn).toHaveBeenCalledOnce()
+				expect(nativeCalls).toBe(0)
+			} finally {
+				globalThis.fetch = previous
+			}
+		})
+
+		it("joins a path-only baseURL with the operation path against location.origin", async () => {
+			const desc = Object.getOwnPropertyDescriptor(globalThis, "location")
+			Object.defineProperty(globalThis, "location", {
+				configurable: true,
+				value: { origin: "https://app.example.com" },
+			})
+			try {
+				const fetchFn = mockFetch({ ok: true })
+				const client = new HTTPClient({
+					baseURL: "/api",
+					fetch: fetchFn,
+				})
+				await client.request("POST", "/v1/items", { json: { name: "n" } })
+				const [url] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
+				expect(url).toBe("https://app.example.com/api/v1/items")
+				expect(client.buildUrl("/v1/items", {})).toBe("https://app.example.com/api/v1/items")
+			} finally {
+				if (desc) Object.defineProperty(globalThis, "location", desc)
+				else Reflect.deleteProperty(globalThis, "location")
+			}
+		})
+
+		it("throws a clear error for a path-only baseURL without an origin", () => {
+			const client = new HTTPClient({ baseURL: "/api", fetch: mockFetch({}) })
+			expect(() => client.buildUrl("/v1/items", {})).toThrow(
+				/Invalid baseURL "\/api": expected an absolute http\(s\): or ws\(s\): URL/,
+			)
+		})
+
+		it("uses the bound default fetch for SSE when config.fetch is omitted", async () => {
+			const previous = globalThis.fetch
+			function methodFetch(this: unknown): Promise<Response> {
+				if (this !== globalThis) {
+					throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
+				}
+				const encoder = new TextEncoder()
+				const stream = new ReadableStream({
+					start(controller) {
+						controller.enqueue(encoder.encode("event: message\ndata: hi\n\n"))
+						controller.close()
+					},
+				})
+				return Promise.resolve(new Response(stream, { headers: { "content-type": "text/event-stream" }, status: 200 }))
+			}
+			globalThis.fetch = methodFetch as typeof fetch
+			try {
+				const client = new HTTPClient({ baseURL: "https://api.example.com" })
+				const events = []
+				for await (const event of client.requestStream("GET", "/events", {})) {
+					events.push(event)
+				}
+				expect(events).toEqual([{ data: "hi", event: "message" }])
+			} finally {
+				globalThis.fetch = previous
+			}
+		})
 	})
 })
