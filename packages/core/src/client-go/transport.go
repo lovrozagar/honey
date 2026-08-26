@@ -214,6 +214,9 @@ func (t *SseTransport) Connect(ctx context.Context, rawURL string, opts *Transpo
 			req.Header.Set("Last-Event-ID", opts.LastEventID)
 		}
 	}
+	if req.Header.Get("X-Request-Id") == "" {
+		req.Header.Set("X-Request-Id", newUUIDv4())
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

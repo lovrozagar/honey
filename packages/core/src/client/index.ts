@@ -9,7 +9,7 @@ import { createTypedWebSocket } from "./ws.ts"
 export type { ClientErrorInit } from "./error.ts"
 export { ClientError, isClientError } from "./error.ts"
 export type { ClientConfig, RequestOptions } from "./http.ts"
-export { HTTPClient } from "./http.ts"
+export { HTTPClient, newClientRequestId } from "./http.ts"
 export type { SSEEvent } from "./sse.ts"
 export { parseSSEStream } from "./sse.ts"
 export type {

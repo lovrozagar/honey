@@ -134,6 +134,29 @@ function buildURL(config: ClientConfig, path: string, opts: RequestOptions): str
 	return url.toString()
 }
 
+/**
+ * RFC 4122 §4.4 UUID for `x-request-id`. Prefer `crypto.randomUUID` (browser,
+ * Node 19+, Bun, Deno, CF Workers). Fall back to `getRandomValues` when
+ * `randomUUID` is missing so older runtimes still work without node:crypto.
+ */
+export function newClientRequestId(): string {
+	const c = globalThis.crypto as Crypto | undefined
+	if (c && typeof c.randomUUID === "function") return c.randomUUID()
+	if (c && typeof c.getRandomValues === "function") {
+		const bytes = new Uint8Array(16)
+		c.getRandomValues(bytes)
+		bytes[6] = (bytes[6]! & 0x0f) | 0x40
+		bytes[8] = (bytes[8]! & 0x3f) | 0x80
+		let out = ""
+		for (let i = 0; i < 16; i++) {
+			if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+			out += bytes[i]!.toString(16).padStart(2, "0")
+		}
+		return out
+	}
+	throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+}
+
 async function buildHeaders(config: ClientConfig, opts: RequestOptions, ctx: HeadersContext): Promise<Headers> {
 	const headers = new Headers()
 
@@ -159,6 +182,11 @@ async function buildHeaders(config: ClientConfig, opts: RequestOptions, ctx: Hea
 		if (pairs) {
 			headers.set("cookie", existing ? `${existing}; ${pairs}` : pairs)
 		}
+	}
+
+	/* auto correlation id — config/per-call win via setdefault; onRequest may overwrite later */
+	if (!headers.has("x-request-id")) {
+		headers.set("x-request-id", newClientRequestId())
 	}
 
 	return headers

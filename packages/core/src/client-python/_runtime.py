@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Generic, TypeVar
 
@@ -107,6 +108,11 @@ def _auth_header_name(config: ClientConfig) -> str:
     return config.auth_header_name or "Authorization"
 
 
+def _has_header(headers: dict[str, str], name: str) -> bool:
+    target = name.lower()
+    return any(k.lower() == target for k in headers)
+
+
 def _build_headers(
     config: ClientConfig,
     extra: dict[str, str] | None = None,
@@ -123,6 +129,9 @@ def _build_headers(
         merged[_auth_header_name(config)] = f"{prefix}{token}"
     if extra:
         merged = {**merged, **extra}
+    # auto correlation id — config/extra win; on_request hooks may overwrite
+    if not _has_header(merged, "x-request-id"):
+        merged["x-request-id"] = str(uuid.uuid4())
     return merged
 
 

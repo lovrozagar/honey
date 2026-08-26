@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
@@ -219,6 +220,8 @@ class SseAdapter:
         headers.setdefault("Accept", "text/event-stream")
         if opts.last_event_id is not None:
             headers["Last-Event-ID"] = opts.last_event_id
+        if not any(k.lower() == "x-request-id" for k in headers):
+            headers["x-request-id"] = str(uuid.uuid4())
         client = self.http_client or httpx.AsyncClient()
         owns_client = self.http_client is None
         ctx = client.stream(

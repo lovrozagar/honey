@@ -572,6 +572,86 @@ print(json.dumps({"captured": captured, "result": result}))
 		}
 	}, 30_000)
 
+	it("Test U2 — auto x-request-id; config/call preserve; on_request wins", () => {
+		const spec = loadMockSpec()
+		const { files } = generatePythonSDK(spec)
+		const dir = mkdtempSync(join(tmpdir(), "honey-python-harness-u2-"))
+		try {
+			writeSdkFiles(dir, files)
+
+			const script = `
+import sys
+sys.path.insert(0, ".")
+import asyncio
+import json
+import re
+import httpx
+from sdk.client import AsyncSDK
+from sdk._runtime import ClientConfig
+
+captured = []
+UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.I)
+
+def handler(request):
+    captured.append(dict(request.headers))
+    return httpx.Response(
+        200,
+        headers={"content-type": "application/json"},
+        json={"id": "u1", "name": "Alice", "email": "a@b.com"},
+    )
+
+async def main():
+    transport = httpx.MockTransport(handler)
+    auto = AsyncSDK(ClientConfig(base_url="http://test.local", transport=transport))
+    await auto.create_user(body={"name": "A", "email": "a@b.com"})
+    await auto.create_user(body={"name": "B", "email": "b@b.com"})
+
+    cfg = AsyncSDK(ClientConfig(
+        base_url="http://test.local",
+        headers={"x-request-id": "from-config"},
+        transport=transport,
+    ))
+    await cfg.create_user(body={"name": "C", "email": "c@b.com"})
+
+    await auto.create_user(
+        body={"name": "D", "email": "d@b.com"},
+        headers={"x-request-id": "from-call"},
+    )
+
+    async def hook(ctx):
+        ctx.headers["x-request-id"] = "from-hook"
+
+    hooked = AsyncSDK(ClientConfig(
+        base_url="http://test.local",
+        on_request=[hook],
+        transport=transport,
+    ))
+    await hooked.create_user(
+        body={"name": "E", "email": "e@b.com"},
+        headers={"x-request-id": "from-call"},
+    )
+
+asyncio.run(main())
+ids = [h.get("x-request-id", "") for h in captured]
+print(json.dumps({
+    "autoOk": bool(UUID.match(ids[0]) and UUID.match(ids[1]) and ids[0] != ids[1]),
+    "config": ids[2],
+    "call": ids[3],
+    "hook": ids[4],
+}))
+`
+			writeFileSync(join(dir, "test_runner.py"), script, "utf8")
+			const stdout = runPython(dir, "test_runner.py")
+			const parsed = JSON.parse(stdout.trim()) as Record<string, unknown>
+			expect(parsed["autoOk"]).toBe(true)
+			expect(parsed["config"]).toBe("from-config")
+			expect(parsed["call"]).toBe("from-call")
+			expect(parsed["hook"]).toBe("from-hook")
+		} finally {
+			rmSync(dir, { force: true, recursive: true })
+		}
+	}, 30_000)
+
 	it("Test X — async on_request mutates header + on_response sees response, chain order preserved", () => {
 		const spec = loadMockSpec()
 		const { files } = generatePythonSDK(spec)

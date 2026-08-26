@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use uuid::Uuid;
 
 /// SyncOnRequestHook is a synchronous (non-async) request hook.
 /// Returns Result<(), Error> directly — no Future, no Pin<Box<...>>.
@@ -338,6 +339,13 @@ fn execute_request_blocking(
             let prefix = cfg.auth_header_prefix.as_deref().unwrap_or("Bearer ");
             hook_headers.insert(name.to_string(), format!("{}{}", prefix, token));
         }
+    }
+    /* auto correlation id — config/call win; on_request hooks may overwrite */
+    if !hook_headers
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("x-request-id"))
+    {
+        hook_headers.insert("x-request-id".to_string(), Uuid::new_v4().to_string());
     }
 
     let (meta_selector, meta_is_stale, meta_by) = match request_meta {

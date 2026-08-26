@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 /// OnRequestHook is called before each request is sent.
 /// Receives a mutable RequestContext; can mutate headers, url, or body.
@@ -402,6 +403,13 @@ async fn execute_request(
             let prefix = cfg.auth_header_prefix.as_deref().unwrap_or("Bearer ");
             hook_headers.insert(name.to_string(), format!("{}{}", prefix, token));
         }
+    }
+    /* auto correlation id — config/call win; on_request hooks may overwrite */
+    if !hook_headers
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("x-request-id"))
+    {
+        hook_headers.insert("x-request-id".to_string(), Uuid::new_v4().to_string());
     }
 
     let state = cfg

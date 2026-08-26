@@ -343,6 +343,8 @@ client
 
 Per-call headers merge over config headers; per-call wins per key. Useful for request-scoped tracing IDs, idempotency keys, or one-off auth overrides.
 
+Every outbound REST/SSE request also gets an auto `x-request-id` (UUID v4) when none is already set. Precedence: config / per-call headers keep their value; `onRequest` / `OnRequest` / `on_request` hooks run after and **win** if they set the header.
+
 ```ts
 await sdk.getUser({
 	headers: { "X-Both": "call-wins" },

@@ -1105,6 +1105,65 @@ process.stdout.write(JSON.stringify({ auto: auto.idempotencyKey, explicit: expli
 		}
 	})
 
+	it("Test 9.a.3 — auto x-request-id; per-call preserve; onRequest wins", async () => {
+		const { files } = generateSDK(spec, { name: "MockSDK", stem: STEM })
+		const dir = mkdtempSync(join(tmpdir(), "honey-ts-harness-9a3-"))
+		try {
+			for (const [key, filename] of Object.entries(FILE_NAMES)) {
+				const content = files[key as keyof typeof files]
+				if (content !== null && content !== undefined) writeFileSync(join(dir, filename), content, "utf8")
+			}
+			writeFileSync(join(dir, "tsconfig.json"), TSCONFIG, "utf8")
+
+			const testRunner = `
+import { MockSDK } from "./mock.index.gen"
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const seen: string[] = []
+const fetchFn: typeof fetch = async (_input, init) => {
+	const h = init?.headers as Headers
+	seen.push(h.get("x-request-id") ?? "")
+	return new Response(JSON.stringify({ id: "u1", name: "A", email: "a@b.com" }), {
+		headers: { "content-type": "application/json" },
+		status: 200,
+	})
+}
+
+const auto = new MockSDK({ baseURL: "https://example.test", fetch: fetchFn, throwOnError: true })
+await auto.getUser({ params: { id: "u1" } })
+await auto.getUser({ params: { id: "u1" } })
+
+await auto.getUser({ params: { id: "u1" }, headers: { "x-request-id": "from-call" } })
+
+const hooked = new MockSDK({
+	baseURL: "https://example.test",
+	fetch: fetchFn,
+	throwOnError: true,
+	onRequest: [(ctx) => { ctx.headers.set("x-request-id", "from-hook") }],
+})
+await hooked.getUser({ params: { id: "u1" }, headers: { "x-request-id": "from-call" } })
+
+process.stdout.write(JSON.stringify({
+	autoOk: UUID.test(seen[0]) && UUID.test(seen[1]) && seen[0] !== seen[1],
+	call: seen[2],
+	hook: seen[3],
+}) + "\\n")
+`
+			writeFileSync(join(dir, "test-runner.ts"), testRunner, "utf8")
+			const stdout = execSync("bun run test-runner.ts", {
+				cwd: dir,
+				encoding: "utf8",
+				timeout: 15_000,
+			})
+			const result = JSON.parse(stdout.trim()) as Record<string, unknown>
+			expect(result.autoOk).toBe(true)
+			expect(result.call).toBe("from-call")
+			expect(result.hook).toBe("from-hook")
+		} finally {
+			rmSync(dir, { force: true, recursive: true })
+		}
+	})
+
 	/* ------------------------------------------------------------------
 	 * Phase 10 — WebSocket behavioural audit (10.a.1)
 	 * Four shared behaviours: connect+echo, client-close, server-close,

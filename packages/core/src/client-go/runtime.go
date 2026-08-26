@@ -332,7 +332,8 @@ func buildURL(baseURL, path string, queryParams url.Values) (string, error) {
 
 // mergeHeaders builds the final http.Header for a request by merging in order:
 // config Headers → call Headers (per-call wins per key) → Content-Type when
-// hasBody → Authorization when bearerToken non-empty. Returned header is owned
+// hasBody → Authorization when bearerToken non-empty → X-Request-Id when
+// absent (OnRequest hooks may still overwrite). Returned header is owned
 // by the caller and may be mutated freely (e.g. by OnRequest hooks).
 // contentType is the explicit Content-Type for the request body; when empty
 // and hasBody is true, defaults to application/json. Callers pass
@@ -368,6 +369,9 @@ func mergeHeaders(
 			prefix = "Bearer "
 		}
 		h.Set(name, prefix+bearerToken)
+	}
+	if h.Get("X-Request-Id") == "" {
+		h.Set("X-Request-Id", newUUIDv4())
 	}
 	return h
 }

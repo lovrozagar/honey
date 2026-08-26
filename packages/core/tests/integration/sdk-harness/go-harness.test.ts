@@ -361,6 +361,108 @@ replace example.com/mock-sdk => ./sdk
 		}
 	}, 60_000)
 
+	it("Test V2 — auto X-Request-Id; config/call preserve; OnRequest wins", async () => {
+		const spec = loadMockSpec()
+		const { files } = generateGoSDK(spec, { modulePath: "example.com/mock-sdk" })
+		const dir = mkdtempSync(join(tmpdir(), "honey-go-harness-v2-"))
+		try {
+			const sdkDir = join(dir, "sdk")
+			mkdirSync(sdkDir, { recursive: true })
+			for (const [filename, content] of Object.entries(files)) {
+				const dest = join(sdkDir, filename)
+				mkdirSync(join(dest, ".."), { recursive: true })
+				writeFileSync(dest, content, "utf8")
+			}
+
+			writeFileSync(
+				join(dir, "main.go"),
+				`package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	sdk "example.com/mock-sdk"
+)
+
+func main() {
+	var ids []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ids = append(ids, r.Header.Get("X-Request-Id"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(\`{"id":"u1","name":"Alice","email":"a@b.com"}\`))
+	}))
+	defer srv.Close()
+
+	auto := sdk.NewClient(sdk.Config{BaseURL: srv.URL})
+	_, _ = auto.GetUser(context.Background(), "u1", nil)
+	_, _ = auto.GetUser(context.Background(), "u1", nil)
+
+	cfg := sdk.NewClient(sdk.Config{
+		BaseURL: srv.URL,
+		Headers: map[string]string{"X-Request-Id": "from-config"},
+	})
+	_, _ = cfg.GetUser(context.Background(), "u1", nil)
+
+	_, _ = auto.GetUser(context.Background(), "u1", &sdk.GetUserOpts{
+		Headers: map[string]string{"X-Request-Id": "from-call"},
+	})
+
+	hooked := sdk.NewClient(sdk.Config{
+		BaseURL: srv.URL,
+		OnRequest: []func(*sdk.RequestContext) error{
+			func(c *sdk.RequestContext) error {
+				c.Headers.Set("X-Request-Id", "from-hook")
+				return nil
+			},
+		},
+	})
+	_, _ = hooked.GetUser(context.Background(), "u1", &sdk.GetUserOpts{
+		Headers: map[string]string{"X-Request-Id": "from-call"},
+	})
+
+	uuidRe := regexp.MustCompile(\`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\`)
+	out := map[string]any{
+		"autoOk": uuidRe.MatchString(ids[0]) && uuidRe.MatchString(ids[1]) && ids[0] != ids[1],
+		"config": ids[2],
+		"call":   ids[3],
+		"hook":   ids[4],
+	}
+	b, _ := json.Marshal(out)
+	fmt.Println(string(b))
+}
+`,
+				"utf8",
+			)
+			writeFileSync(
+				join(dir, "go.mod"),
+				`module test-harness
+
+go 1.23
+
+require example.com/mock-sdk v0.0.0
+
+replace example.com/mock-sdk => ./sdk
+`,
+				"utf8",
+			)
+
+			execSync("go mod tidy", { cwd: dir, encoding: "utf8", timeout: 60_000 })
+			const stdout = execSync("go run main.go", { cwd: dir, encoding: "utf8", timeout: 60_000 })
+			const captured = JSON.parse(stdout.trim()) as Record<string, unknown>
+			expect(captured["autoOk"]).toBe(true)
+			expect(captured["config"]).toBe("from-config")
+			expect(captured["call"]).toBe("from-call")
+			expect(captured["hook"]).toBe("from-hook")
+		} finally {
+			rmSync(dir, { force: true, recursive: true })
+		}
+	}, 60_000)
+
 	it("Test W — OnRequest/OnResponse hook chain fires in declaration order", async () => {
 		const spec = loadMockSpec()
 		const { files } = generateGoSDK(spec, { modulePath: "example.com/mock-sdk" })

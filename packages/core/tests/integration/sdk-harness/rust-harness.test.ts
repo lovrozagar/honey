@@ -574,6 +574,147 @@ async fn main() {
 		}
 	}, 180_000)
 
+	it("Test Z2 (async) — auto x-request-id; call preserve; on_request wins", async () => {
+		const spec = loadMockSpec()
+		const { files } = generateRustSDK(spec, { crateName: "mock-sdk" })
+		const dir = mkdtempSync(join(tmpdir(), "honey-rust-harness-z2-"))
+		const { kill, port } = await startMockServerSubprocess()
+		try {
+			const sdkDir = join(dir, "mock-sdk")
+			for (const [filename, content] of Object.entries(files)) {
+				const dest = join(sdkDir, filename)
+				mkdirSync(join(dest, ".."), { recursive: true })
+				writeFileSync(dest, content, "utf8")
+			}
+
+			const runnerDir = join(dir, "runner")
+			mkdirSync(join(runnerDir, "src"), { recursive: true })
+			writeFileSync(
+				join(runnerDir, "Cargo.toml"),
+				`[package]
+name = "runner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mock-sdk = { path = "../mock-sdk" }
+regex = "1"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+`,
+				"utf8",
+			)
+
+			const mainRs = `use mock_sdk::Client;
+use mock_sdk::ClientConfig;
+use mock_sdk::types::UserCreate;
+use mock_sdk::client::CreateUserOpts;
+use mock_sdk::runtime::OnRequestHook;
+use regex::Regex;
+use serde_json::json;
+use std::collections::HashMap;
+use std::env;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+fn header_ci<'a>(headers: &'a HashMap<String, String>, name: &str) -> Option<&'a String> {
+    let lower = name.to_ascii_lowercase();
+    headers.iter().find(|(k, _)| k.to_ascii_lowercase() == lower).map(|(_, v)| v)
+}
+
+#[tokio::main]
+async fn main() {
+    let base_url = env::var("BASE_URL").unwrap();
+    let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let rec = Arc::clone(&seen);
+    let record: OnRequestHook = Arc::new(move |ctx| {
+        let rec = Arc::clone(&rec);
+        Box::pin(async move {
+            let id = header_ci(&ctx.headers, "x-request-id").cloned().unwrap_or_default();
+            rec.lock().await.push(id);
+            Ok(())
+        })
+    });
+
+    let body = UserCreate { name: "Alice".to_string(), email: "a@b.com".to_string() };
+    let auth = [("Authorization".into(), "Bearer valid-token".into())]
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+
+    let auto = Client::new(ClientConfig {
+        base_url: base_url.clone(),
+        headers: auth.clone(),
+        on_request: vec![Arc::clone(&record)],
+        ..Default::default()
+    });
+    let _ = auto.create_user(&body, &CreateUserOpts::default()).await;
+    let _ = auto.create_user(&body, &CreateUserOpts::default()).await;
+
+    let mut call_headers = auth.clone();
+    call_headers.insert("x-request-id".into(), "from-call".into());
+    let _ = auto
+        .create_user(
+            &body,
+            &CreateUserOpts {
+                headers: Some(call_headers),
+                ..Default::default()
+            },
+        )
+        .await;
+
+    let overwrite: OnRequestHook = Arc::new(|ctx| {
+        Box::pin(async move {
+            ctx.headers.insert("x-request-id".into(), "from-hook".into());
+            Ok(())
+        })
+    });
+    /* overwrite first, record last — asserts hooks win over per-call */
+    let hooked = Client::new(ClientConfig {
+        base_url,
+        headers: auth,
+        on_request: vec![overwrite, Arc::clone(&record)],
+        ..Default::default()
+    });
+    let mut call2 = HashMap::new();
+    call2.insert("x-request-id".into(), "from-call".into());
+    let _ = hooked
+        .create_user(
+            &body,
+            &CreateUserOpts {
+                headers: Some(call2),
+                ..Default::default()
+            },
+        )
+        .await;
+
+    let ids = seen.lock().await.clone();
+    let re = Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$").unwrap();
+    println!("{}", json!({
+        "autoOk": re.is_match(&ids[0]) && re.is_match(&ids[1]) && ids[0] != ids[1],
+        "call": ids[2],
+        "hook": ids[3],
+    }));
+}
+`
+			writeFileSync(join(runnerDir, "src", "main.rs"), mainRs, "utf8")
+
+			const stdout = execSync("cargo run", {
+				cwd: runnerDir,
+				encoding: "utf8",
+				env: cargoEnv({ BASE_URL: `http://127.0.0.1:${port}` }),
+				timeout: 180_000,
+			})
+			const result = JSON.parse(stdout.trim()) as Record<string, unknown>
+			expect(result.autoOk).toBe(true)
+			expect(result.call).toBe("from-call")
+			expect(result.hook).toBe("from-hook")
+		} finally {
+			kill()
+			rmSync(dir, { force: true, recursive: true })
+		}
+	}, 180_000)
+
 	it("Test L1 (async) — on_log request lifecycle", async () => {
 		const spec = loadMockSpec()
 		const { files } = generateRustSDK(spec, { crateName: "mock-sdk" })

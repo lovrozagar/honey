@@ -674,6 +674,13 @@ async fn build_sse_state(
     for (k, v) in &opts.headers {
         req_builder = req_builder.header(k.as_str(), v.as_str());
     }
+    if !opts
+        .headers
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("x-request-id"))
+    {
+        req_builder = req_builder.header("x-request-id", uuid::Uuid::new_v4().to_string());
+    }
     let resp = req_builder.send().await?;
     let reconnect_delay_ms = opts.reconnect_delay_ms.unwrap_or(1000);
     let max_reconnect_attempts = opts.max_reconnect_attempts.unwrap_or(5);

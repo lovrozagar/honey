@@ -3391,6 +3391,7 @@ function buildSDKClient(sdkName: string, stem: string): string {
 		sdkClientSerializeSearch(),
 		sdkClientResolveBaseURL(),
 		sdkClientBuildURL(),
+		sdkClientNewRequestId(),
 		sdkClientBuildHeaders(),
 		sdkClientDoRequest(),
 		sdkClientParseBody(),
@@ -4463,6 +4464,28 @@ function sdkClientBuildURL(): string {
 `
 }
 
+function sdkClientNewRequestId(): string {
+	return `
+\t#newRequestId(): string {
+\t\tconst c = globalThis.crypto as Crypto | undefined
+\t\tif (c && typeof c.randomUUID === "function") return c.randomUUID()
+\t\tif (c && typeof c.getRandomValues === "function") {
+\t\t\tconst bytes = new Uint8Array(16)
+\t\t\tc.getRandomValues(bytes)
+\t\t\tbytes[6] = (bytes[6]! & 0x0f) | 0x40
+\t\t\tbytes[8] = (bytes[8]! & 0x3f) | 0x80
+\t\t\tlet out = ""
+\t\t\tfor (let i = 0; i < 16; i++) {
+\t\t\t\tif (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+\t\t\t\tout += bytes[i]!.toString(16).padStart(2, "0")
+\t\t\t}
+\t\t\treturn out
+\t\t}
+\t\tthrow new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+\t}
+`
+}
+
 function sdkClientBuildHeaders(): string {
 	return `
 \tasync #buildHeaders(
@@ -4495,6 +4518,10 @@ function sdkClientBuildHeaders(): string {
 \t\t\tif (pairs) {
 \t\t\t\theaders.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 \t\t\t}
+\t\t}
+
+\t\tif (!headers.has("x-request-id")) {
+\t\t\theaders.set("x-request-id", this.#newRequestId())
 \t\t}
 
 \t\treturn headers
