@@ -424,6 +424,24 @@ export class TestSDK<TThrow extends boolean = false> {
 		return url.toString()
 	}
 
+	#newRequestId(): string {
+		const c = globalThis.crypto as Crypto | undefined
+		if (c && typeof c.randomUUID === "function") return c.randomUUID()
+		if (c && typeof c.getRandomValues === "function") {
+			const bytes = new Uint8Array(16)
+			c.getRandomValues(bytes)
+			bytes[6] = (bytes[6]! & 0x0f) | 0x40
+			bytes[8] = (bytes[8]! & 0x3f) | 0x80
+			let out = ""
+			for (let i = 0; i < 16; i++) {
+				if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+				out += bytes[i]!.toString(16).padStart(2, "0")
+			}
+			return out
+		}
+		throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+	}
+
 	async #buildHeaders(
 		opts: _RequestOptions,
 		ctx: { method: string; path: string },
@@ -454,6 +472,10 @@ export class TestSDK<TThrow extends boolean = false> {
 			if (pairs) {
 				headers.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 			}
+		}
+
+		if (!headers.has("x-request-id")) {
+			headers.set("x-request-id", this.#newRequestId())
 		}
 
 		return headers
@@ -1535,6 +1557,24 @@ export class TestSDK<TThrow extends boolean = false> {
 		return url.toString()
 	}
 
+	#newRequestId(): string {
+		const c = globalThis.crypto as Crypto | undefined
+		if (c && typeof c.randomUUID === "function") return c.randomUUID()
+		if (c && typeof c.getRandomValues === "function") {
+			const bytes = new Uint8Array(16)
+			c.getRandomValues(bytes)
+			bytes[6] = (bytes[6]! & 0x0f) | 0x40
+			bytes[8] = (bytes[8]! & 0x3f) | 0x80
+			let out = ""
+			for (let i = 0; i < 16; i++) {
+				if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+				out += bytes[i]!.toString(16).padStart(2, "0")
+			}
+			return out
+		}
+		throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+	}
+
 	async #buildHeaders(
 		opts: _RequestOptions,
 		ctx: { method: string; path: string },
@@ -1565,6 +1605,10 @@ export class TestSDK<TThrow extends boolean = false> {
 			if (pairs) {
 				headers.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 			}
+		}
+
+		if (!headers.has("x-request-id")) {
+			headers.set("x-request-id", this.#newRequestId())
 		}
 
 		return headers
@@ -2631,6 +2675,24 @@ export class TestSDK<TThrow extends boolean = false> {
 		return url.toString()
 	}
 
+	#newRequestId(): string {
+		const c = globalThis.crypto as Crypto | undefined
+		if (c && typeof c.randomUUID === "function") return c.randomUUID()
+		if (c && typeof c.getRandomValues === "function") {
+			const bytes = new Uint8Array(16)
+			c.getRandomValues(bytes)
+			bytes[6] = (bytes[6]! & 0x0f) | 0x40
+			bytes[8] = (bytes[8]! & 0x3f) | 0x80
+			let out = ""
+			for (let i = 0; i < 16; i++) {
+				if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+				out += bytes[i]!.toString(16).padStart(2, "0")
+			}
+			return out
+		}
+		throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+	}
+
 	async #buildHeaders(
 		opts: _RequestOptions,
 		ctx: { method: string; path: string },
@@ -2661,6 +2723,10 @@ export class TestSDK<TThrow extends boolean = false> {
 			if (pairs) {
 				headers.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 			}
+		}
+
+		if (!headers.has("x-request-id")) {
+			headers.set("x-request-id", this.#newRequestId())
 		}
 
 		return headers
@@ -3733,6 +3799,24 @@ export class TestSDK<TThrow extends boolean = false> {
 		return url.toString()
 	}
 
+	#newRequestId(): string {
+		const c = globalThis.crypto as Crypto | undefined
+		if (c && typeof c.randomUUID === "function") return c.randomUUID()
+		if (c && typeof c.getRandomValues === "function") {
+			const bytes = new Uint8Array(16)
+			c.getRandomValues(bytes)
+			bytes[6] = (bytes[6]! & 0x0f) | 0x40
+			bytes[8] = (bytes[8]! & 0x3f) | 0x80
+			let out = ""
+			for (let i = 0; i < 16; i++) {
+				if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+				out += bytes[i]!.toString(16).padStart(2, "0")
+			}
+			return out
+		}
+		throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+	}
+
 	async #buildHeaders(
 		opts: _RequestOptions,
 		ctx: { method: string; path: string },
@@ -3763,6 +3847,10 @@ export class TestSDK<TThrow extends boolean = false> {
 			if (pairs) {
 				headers.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 			}
+		}
+
+		if (!headers.has("x-request-id")) {
+			headers.set("x-request-id", this.#newRequestId())
 		}
 
 		return headers
@@ -4837,6 +4925,24 @@ export class TestSDK<TThrow extends boolean = false> {
 		return url.toString()
 	}
 
+	#newRequestId(): string {
+		const c = globalThis.crypto as Crypto | undefined
+		if (c && typeof c.randomUUID === "function") return c.randomUUID()
+		if (c && typeof c.getRandomValues === "function") {
+			const bytes = new Uint8Array(16)
+			c.getRandomValues(bytes)
+			bytes[6] = (bytes[6]! & 0x0f) | 0x40
+			bytes[8] = (bytes[8]! & 0x3f) | 0x80
+			let out = ""
+			for (let i = 0; i < 16; i++) {
+				if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+				out += bytes[i]!.toString(16).padStart(2, "0")
+			}
+			return out
+		}
+		throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+	}
+
 	async #buildHeaders(
 		opts: _RequestOptions,
 		ctx: { method: string; path: string },
@@ -4867,6 +4973,10 @@ export class TestSDK<TThrow extends boolean = false> {
 			if (pairs) {
 				headers.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 			}
+		}
+
+		if (!headers.has("x-request-id")) {
+			headers.set("x-request-id", this.#newRequestId())
 		}
 
 		return headers
@@ -5937,6 +6047,24 @@ export class TestSDK<TThrow extends boolean = false> {
 		return url.toString()
 	}
 
+	#newRequestId(): string {
+		const c = globalThis.crypto as Crypto | undefined
+		if (c && typeof c.randomUUID === "function") return c.randomUUID()
+		if (c && typeof c.getRandomValues === "function") {
+			const bytes = new Uint8Array(16)
+			c.getRandomValues(bytes)
+			bytes[6] = (bytes[6]! & 0x0f) | 0x40
+			bytes[8] = (bytes[8]! & 0x3f) | 0x80
+			let out = ""
+			for (let i = 0; i < 16; i++) {
+				if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+				out += bytes[i]!.toString(16).padStart(2, "0")
+			}
+			return out
+		}
+		throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+	}
+
 	async #buildHeaders(
 		opts: _RequestOptions,
 		ctx: { method: string; path: string },
@@ -5967,6 +6095,10 @@ export class TestSDK<TThrow extends boolean = false> {
 			if (pairs) {
 				headers.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 			}
+		}
+
+		if (!headers.has("x-request-id")) {
+			headers.set("x-request-id", this.#newRequestId())
 		}
 
 		return headers
@@ -7031,6 +7163,24 @@ export class TestSDK<TThrow extends boolean = false> {
 		return url.toString()
 	}
 
+	#newRequestId(): string {
+		const c = globalThis.crypto as Crypto | undefined
+		if (c && typeof c.randomUUID === "function") return c.randomUUID()
+		if (c && typeof c.getRandomValues === "function") {
+			const bytes = new Uint8Array(16)
+			c.getRandomValues(bytes)
+			bytes[6] = (bytes[6]! & 0x0f) | 0x40
+			bytes[8] = (bytes[8]! & 0x3f) | 0x80
+			let out = ""
+			for (let i = 0; i < 16; i++) {
+				if (i === 4 || i === 6 || i === 8 || i === 10) out += "-"
+				out += bytes[i]!.toString(16).padStart(2, "0")
+			}
+			return out
+		}
+		throw new Error("honey: no crypto.randomUUID or crypto.getRandomValues in this runtime")
+	}
+
 	async #buildHeaders(
 		opts: _RequestOptions,
 		ctx: { method: string; path: string },
@@ -7061,6 +7211,10 @@ export class TestSDK<TThrow extends boolean = false> {
 			if (pairs) {
 				headers.set("cookie", existing ? \`\${existing}; \${pairs}\` : pairs)
 			}
+		}
+
+		if (!headers.has("x-request-id")) {
+			headers.set("x-request-id", this.#newRequestId())
 		}
 
 		return headers
