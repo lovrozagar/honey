@@ -2,6 +2,14 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.5.2 - 2026-10-02
+
+### Changed
+
+- Route-tree codegen emits interned static trees again. Cloudflare Worker Startup Time on a minified isolate that only loads the anyrow gateway `routes.gen.ts`: intern **18 ms**, packed `assembleRouteTree` **25 ms**, `JSON.parse` + inflate **39 ms**. Unique handlers and unique `ek` Sets stay. `MetaShape` and `RouteSelector` stay type-only.
+
+Regenerate after upgrading: `honey generate`.
+
 ## 0.5.1 - 2026-10-01
 
 ### Changed

@@ -246,8 +246,9 @@ describe("middleware meta and the static route tree", () => {
 			.handler((c) => c.res.json("ok", {}))
 		const generated = generateRouteTreeFromApp(app as never)
 		expect(generated).toContain('"tenant":"project_id"')
-		expect(generated).toContain("assembleRouteTree")
+		expect(generated).toMatch(/mt: M\d+/)
 		/* middleware itself is never serialized — the baked meta is the whole record */
+		expect(generated).toContain("mw: []")
 	})
 
 	it("survives a route that also declares input/output schemas", async () => {
