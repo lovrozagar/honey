@@ -84,8 +84,8 @@ describe("route tree schema preservation", () => {
 		const code = generateRouteTreeFromApp(app)
 
 		expect(code).not.toMatch(/iv:\s*null,\s*os:\s*null/)
-		expect(code).toMatch(/iv:\s*\{/)
-		expect(code).toMatch(/os:\s*\{/)
+		expect(code).toMatch(/\biv:\s*I\d+/)
+		expect(code).toMatch(/\bos:\s*O\d+/)
 		expect(code).toContain('"application/json"')
 		expect(code).toContain('"ok"')
 		expect(code).toContain('"project_id"')
@@ -208,7 +208,7 @@ describe("route tree schema preservation", () => {
 		expect(code).toContain('"filter"')
 		expect(code).toContain('"limit"')
 		expect(code).toContain('"sort"')
-		expect(code).toMatch(/iv:\s*\{/)
+		expect(code).toMatch(/\biv:\s*I\d+/)
 	})
 
 	it("round-trip via evalTreeModule preserves query params in generateOpenApi output (gateway flow)", async () => {
