@@ -45,3 +45,7 @@ export function getOpenApiRuntime(): OpenApiRuntime {
 	if (!runtime) throw new Error(MISSING)
 	return runtime
 }
+
+export function tryGetOpenApiRuntime(): OpenApiRuntime | undefined {
+	return runtime
+}

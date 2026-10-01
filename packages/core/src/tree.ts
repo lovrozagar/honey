@@ -12,8 +12,8 @@ export type RouteHandler = {
 	_skip?: boolean
 	/** boundary error key — wraps undeclared/unexpected errors (null = use default or internal_server_error) */
 	bek: string | null
-	/** pre-computed error factory subset (null = use global factory) */
-	ef: Record<string, (...args: never[]) => unknown> | null
+	/** pre-computed error factory subset (omit/`null` = use global factory) */
+	ef?: Record<string, (...args: never[]) => unknown> | null
 	/** declared error keys for this route — used for runtime enforcement */
 	ek: Set<string>
 	/** handler function */
@@ -32,9 +32,9 @@ export type RouteHandler = {
 	/** output schemas by content-type (null = no output validation) */
 	os: OutputSchemaDef | null
 	/** output validator function — validates response body against schema */
-	ov: OutputValidator | null
-	/** registered path pattern (e.g. "/users/:id") */
-	rp: string
+	ov?: OutputValidator | null
+	/** registered path pattern (e.g. "/users/:id"); intern trees omit this */
+	rp?: string
 }
 
 export type { OutputSchemaDef }

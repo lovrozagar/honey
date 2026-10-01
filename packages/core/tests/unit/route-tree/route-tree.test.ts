@@ -296,14 +296,18 @@ describe("codegen emits handler map and routeTree", () => {
 		expect(code).not.toContain("mt: null")
 	})
 
-	it("emits ef: null in handler constants", () => {
+	it("omits default-null intern handler fields", () => {
 		const app = honey<{}>()
 			.get("/health")
 			.handler((c) => c.res.text("ok", "ok"))
 
 		const code = generateRouteTreeFromApp(app)
 
-		expect(code).toContain("ef: null")
+		expect(code).not.toContain("ef: null")
+		expect(code).not.toContain("ov: null")
+		expect(code).not.toContain('rp: ""')
+		expect(code).toContain("fn: FN")
+		expect(code).toContain("mw: []")
 	})
 
 	it("imports RouteTree type", () => {

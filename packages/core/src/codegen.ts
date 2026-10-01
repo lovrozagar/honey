@@ -6,40 +6,29 @@ import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
 import { methodsOf, namespacesOf, schemaToIR, toIR } from "./codegen-ir.ts"
 import type { IRNamespace } from "./codegen-ir.ts"
 import type { HoneyError } from "./error.ts"
-import {
-	type InvalidateCheckConfig,
-	type InvalidateCheckOperation,
-	reportMissingInvalidate,
-} from "./invalidate-check.ts"
-import {
-	applyMetaSpec,
-	compileMetaSpec,
-	type CompiledMetaSpec,
-	MetaSpecCollector,
-	resolveProfile,
-	type SchemaMetaHit,
-	type SchemaMetaLookup,
-} from "./meta-spec.ts"
 import { ERROR_META } from "./errors.ts"
 import type { ErrorMetaEntry } from "./errors.ts"
+import type { InvalidateCheckConfig } from "./invalidate-check.ts"
 import type { Honey } from "./index.ts"
+import {
+	generateOpenApiFromTree,
+	type OpenApiInfo,
+	type OpenApiRouteInfo,
+	type OpenApiSpec,
+} from "./openapi/document.ts"
+import { getJsonSchemaConverter, setJsonSchemaConverter } from "./openapi/json-schema-slot.ts"
 import type { RouteHandler, TreeNode } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
 import { createTypeEmitState, emitSchemaType } from "./type-emitter.ts"
 import type { TypeEmitState } from "./type-emitter.ts"
-import type {
-	InputSchemaEntry,
-	InputSchemasDef,
-	MetaSpecConfig,
-	MetaSpecSchemaSource,
-	OutputSchemaDef,
-	StandardSchemaLike,
-} from "./types.ts"
+import type { InputSchemaEntry, InputSchemasDef, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
 
 export { prepareCodegen } from "./codegen-loaders.ts"
 export type { InvalidateCheckConfig, InvalidateCheckLevel } from "./invalidate-check.ts"
 export { toYaml, yamlSiblingPath } from "./yaml.ts"
+export { DEFAULT_ERROR_JSON_SCHEMA } from "./openapi/document.ts"
+export type { OpenApiInfo, OpenApiRouteInfo, OpenApiSpec }
 
 /* Status → typed error subclass. Single source of truth shared between the
  * emitted client (class declarations + status map + footer re-exports) and
@@ -283,22 +272,6 @@ type RouteManifest = {
 	routes: RouteManifestEntry[]
 }
 
-type OpenApiInfo = {
-	description?: string
-	title: string
-	version: string
-}
-
-export type OpenApiSpec = {
-	components?: {
-		schemas?: Record<string, Record<string, unknown>>
-		securitySchemes?: Record<string, unknown>
-	}
-	info: OpenApiInfo
-	openapi: string
-	paths: Record<string, Record<string, Record<string, unknown>>>
-}
-
 function extractParams(path: string): string[] {
 	const params: string[] = []
 	for (const seg of path.split("/")) {
@@ -307,10 +280,6 @@ function extractParams(path: string): string[] {
 		}
 	}
 	return params
-}
-
-function toOpenApiPath(path: string): string {
-	return path.replace(/:(\w+)\??/g, "{$1}")
 }
 
 type CollectedRoute = {
@@ -344,23 +313,6 @@ function walkTree(node: TreeNode, currentPath: string, routes: CollectedRoute[],
 			if (handler._skip && !includeSkipped) continue
 			routes.push({ handler, method, path: `${currentPath}/*${node.w.n}` })
 		}
-	}
-}
-
-type CollectedWSRoute = {
-	handler: import("./tree.ts").WSRouteHandler
-	path: string
-}
-
-function walkWSRoutes(node: TreeNode, currentPath: string, routes: CollectedWSRoute[]): void {
-	if (node.ws !== null) {
-		routes.push({ handler: node.ws, path: currentPath || "/" })
-	}
-	for (const [seg, child] of Object.entries(node.s)) {
-		walkWSRoutes(child, `${currentPath}/${seg}`, routes)
-	}
-	if (node.d !== null) {
-		walkWSRoutes(node.d.c, `${currentPath}/:${node.d.n}`, routes)
 	}
 }
 
@@ -409,45 +361,6 @@ function getErrorFactory<TEnv, TCtx>(
 	return (app as unknown as { _errorFactory: Record<string, () => HoneyError> | null })._errorFactory
 }
 
-export const DEFAULT_ERROR_JSON_SCHEMA: Record<string, unknown> = {
-	properties: {
-		error_key: { type: "string" },
-		fields: {
-			additionalProperties: {
-				items: {
-					properties: {
-						error_key: { type: "string" },
-						message: { type: "string" },
-						path: { type: "string" },
-					},
-					required: ["error_key", "message", "path"],
-					type: "object",
-				},
-				type: "array",
-			},
-			type: "object",
-		},
-		message: { type: "string" },
-		status: { type: "integer" },
-		status_key: { type: "string" },
-		success: { const: false },
-	},
-	required: ["error_key", "fields", "message", "status", "status_key", "success"],
-	type: "object",
-}
-
-function getErrorSchema<TEnv, TCtx>(
-	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
-): StandardSchemaLike | null {
-	return (app as unknown as { _errorSchema: StandardSchemaLike | null })._errorSchema
-}
-
-function getCustomErrorSchema<TEnv, TCtx>(
-	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
-): StandardSchemaLike | null {
-	return (app as unknown as { _customErrorSchema: StandardSchemaLike | null })._customErrorSchema
-}
-
 function getErrorMeta(factory: Record<string, () => HoneyError> | null): Record<string, ErrorMetaEntry> | null {
 	if (!factory) return null
 	return (factory as Record<symbol, Record<string, ErrorMetaEntry>>)[ERROR_META] ?? null
@@ -470,49 +383,6 @@ function introspectSchema(schema: StandardSchemaLike): unknown {
 }
 
 export { normalizeSecurity } from "./meta-spec.ts"
-
-/* Strip properties marked with x-internal from an object JSON schema */
-function stripInternalProps(schema: Record<string, unknown>): Record<string, unknown> {
-	const props = schema.properties as Record<string, Record<string, unknown>> | undefined
-	if (!props) return schema
-	const filtered: Record<string, unknown> = {}
-	for (const [key, val] of Object.entries(props)) {
-		if (val?.["x-internal"] === true) continue
-		filtered[key] = val
-	}
-	const required = schema.required as string[] | undefined
-	const result: Record<string, unknown> = { ...schema, properties: filtered }
-	if (required) {
-		result.required = required.filter((k) => filtered[k] !== undefined)
-	}
-	return result
-}
-
-const BINARY_FORM_FORMATS = new Set(["binary", "byte", "file"])
-
-/** File parts cannot ride application/x-www-form-urlencoded. */
-function isBinaryFormPart(schema: Record<string, unknown> | undefined): boolean {
-	if (!schema) return false
-	const format = schema.format
-	if (typeof format === "string" && BINARY_FORM_FORMATS.has(format)) return true
-	if (schema.type === "file") return true
-	if (schema.type === "array") {
-		const items = schema.items
-		if (items !== null && typeof items === "object" && !Array.isArray(items)) {
-			return isBinaryFormPart(items as Record<string, unknown>)
-		}
-	}
-	return false
-}
-
-function formSchemaHasBinaryPart(schema: Record<string, unknown>): boolean {
-	const props = schema.properties as Record<string, Record<string, unknown>> | undefined
-	if (!props) return false
-	for (const prop of Object.values(props)) {
-		if (isBinaryFormPart(prop)) return true
-	}
-	return false
-}
 
 export function canonicalizeSchema(schema: Record<string, unknown>): string {
 	return JSON.stringify(schema, (_, value) => {
@@ -1307,16 +1177,6 @@ function schemaToJsonSchema(schema: StandardSchemaLike, io: "input" | "output" =
 	return introspectSchema(schema)
 }
 
-function asJsonSchema(
-	entry: StandardSchemaLike | Record<string, unknown>,
-	io: "input" | "output" = "output",
-): Record<string, unknown> {
-	if (entry !== null && entry !== undefined && "~standard" in (entry as object)) {
-		return schemaToJsonSchema(entry as StandardSchemaLike, io) as Record<string, unknown>
-	}
-	return entry as Record<string, unknown>
-}
-
 /* ---- Manifest generation ---- */
 
 export function generateManifest<TEnv, TCtx>(
@@ -1382,129 +1242,6 @@ export function generateManifest<TEnv, TCtx>(
 
 /* ---- OpenAPI generation ---- */
 
-export type OpenApiRouteInfo<TMeta = unknown> = {
-	meta: TMeta
-	method: string
-	path: string
-}
-
-function getMetaSpecConfig(app: unknown): MetaSpecConfig | null {
-	return (app as { _metaSpec?: MetaSpecConfig | null })._metaSpec ?? null
-}
-
-/** Lowest declared 2xx JSON output schema — the "output" schema-meta source */
-function primaryOutputSchema(handler: RouteHandler): StandardSchemaLike | null {
-	const json = handler.os?.["application/json"] as Record<string, unknown> | undefined
-	if (!json) return null
-	let best: { code: number; schema: StandardSchemaLike } | null = null
-	for (const [statusKey, schema] of Object.entries(json)) {
-		if (schema === undefined) continue
-		const code = statusKeyToCode[statusKey as keyof typeof statusKeyToCode]
-		if (!code || code < 200 || code > 299) continue
-		if (!best || code < best.code) best = { code, schema: schema as StandardSchemaLike }
-	}
-	return best?.schema ?? null
-}
-
-/**
- * Reads app keys off the *root* of a route schema's JSON Schema. Vendor-neutral: Zod's
- * `.meta({ … })` lands on the JSON Schema root, and so does every other validator honey
- * supports that carries schema metadata.
- */
-/** Child schema nodes a deep search descends into, in visit order */
-function schemaChildren(node: Record<string, unknown>): Record<string, unknown>[] {
-	const out: Record<string, unknown>[] = []
-	const push = (value: unknown): void => {
-		if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-			out.push(value as Record<string, unknown>)
-		}
-	}
-	const props = node.properties
-	if (props !== null && typeof props === "object" && !Array.isArray(props)) {
-		for (const child of Object.values(props as Record<string, unknown>)) push(child)
-	}
-	push(node.items)
-	for (const key of ["allOf", "anyOf", "oneOf", "prefixItems"]) {
-		const members = node[key]
-		if (Array.isArray(members)) {
-			for (const member of members) push(member)
-		}
-	}
-	return out
-}
-
-/** Bounded BFS — shallowest match wins; several distinct values at that depth is ambiguous */
-function searchSchemaKey(root: Record<string, unknown>, key: string, maxDepth: number): SchemaMetaHit {
-	let level = [root]
-	for (let depth = 0; depth <= maxDepth && level.length > 0; depth++) {
-		const matches: unknown[] = []
-		const seen = new Set<string>()
-		for (const node of level) {
-			if (!Object.hasOwn(node, key) || node[key] === undefined) continue
-			const fingerprint = JSON.stringify(node[key]) ?? "undefined"
-			if (seen.has(fingerprint)) continue
-			seen.add(fingerprint)
-			matches.push(node[key])
-		}
-		if (matches.length === 1) return { found: true, value: matches[0] }
-		if (matches.length > 1) return { found: "ambiguous", values: matches }
-		const next: Record<string, unknown>[] = []
-		for (const node of level) next.push(...schemaChildren(node))
-		level = next
-	}
-	return { found: false }
-}
-
-const DEEP_SEARCH_MAX_DEPTH = 6
-
-/**
- * Resolves one schema-metadata key against one schema source. `"root"` reads the schema root,
- * seeing through one level of `items` so a bare `array<Entity>` list output still finds the
- * descriptor stamped on the item. `"deep"` walks the schema for envelope shapes.
- */
-function makeSchemaMetaLookup(handler: RouteHandler): SchemaMetaLookup {
-	const cache = new Map<string, Record<string, unknown> | undefined>()
-
-	const rootOf = (source: MetaSpecSchemaSource): Record<string, unknown> | undefined => {
-		if (cache.has(source)) return cache.get(source)
-		let schema: StandardSchemaLike | null = null
-		let io: "input" | "output" = "output"
-		if (source === "output") {
-			schema = primaryOutputSchema(handler)
-		} else {
-			io = "input"
-			const key = source.slice("input.".length) as keyof InputSchemasDef
-			const entry = handler.iv?.[key]
-			schema = entry ? unwrapEntry(entry as InputSchemaEntry) : null
-		}
-		let root: Record<string, unknown> | undefined
-		if (schema) {
-			const converted = asJsonSchema(schema, io)
-			root = converted && typeof converted === "object" ? converted : undefined
-		}
-		cache.set(source, root)
-		return root
-	}
-
-	return (source, key, search) => {
-		const root = rootOf(source)
-		if (!root) return { found: false }
-		if (search === "deep") return searchSchemaKey(root, key, DEEP_SEARCH_MAX_DEPTH)
-		if (Object.hasOwn(root, key) && root[key] !== undefined) return { found: true, value: root[key] }
-		/* a list output is `array<Entity>` — the descriptor sits on the item */
-		if (root.type === "array") {
-			const items = root.items
-			if (items !== null && typeof items === "object" && !Array.isArray(items)) {
-				const itemRoot = items as Record<string, unknown>
-				if (Object.hasOwn(itemRoot, key) && itemRoot[key] !== undefined) {
-					return { found: true, value: itemRoot[key] }
-				}
-			}
-		}
-		return { found: false }
-	}
-}
-
 export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 	app: Honey<TEnv, TCtx, unknown, TMeta, unknown, string, string>,
 	options: {
@@ -1522,347 +1259,14 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 	},
 ): Promise<OpenApiSpec> {
 	await Promise.all([loadToJSONSchema(), loadEffectJsonSchema()])
-	const collector = new MetaSpecCollector()
-	const metaSpec: CompiledMetaSpec = compileMetaSpec(getMetaSpecConfig(app), collector)
-	const { filter: profileFilter, name: profileName } = resolveProfile(metaSpec, options.profile, collector)
-	const factory = getErrorFactory(app)
-	const errorMeta = getErrorMeta(factory)
-
-	/* resolve error response schema — custom StandardSchema → JSON Schema, or default */
-	const rawErrorSchema = getErrorSchema(app)
-	const baseErrorJsonSchema = rawErrorSchema
-		? (schemaToJsonSchema(rawErrorSchema) as Record<string, unknown>)
-		: DEFAULT_ERROR_JSON_SCHEMA
-
-	/* resolve custom error formatter schema (for merging into custom schema errors) */
-	const rawCustomErrorSchema = getCustomErrorSchema(app)
-	const customErrorAddsSchema = rawCustomErrorSchema
-		? (schemaToJsonSchema(rawCustomErrorSchema) as Record<string, unknown>)
-		: null
-
-	const tree = (app as unknown as { _tree: TreeNode })._tree
-	const collected: CollectedRoute[] = []
-	walkTree(tree, "", collected)
-
-	const routeFilter = options.filterRoutes
-	const paths: Record<string, Record<string, Record<string, unknown>>> = {}
-	/* operations as emitted, for whole-document checks that need to see siblings */
-	const emitted: InvalidateCheckOperation[] = []
-
-	for (const { handler, method, path } of collected) {
-		if (routeFilter) {
-			const meta = handler.mt as TMeta
-			if (!routeFilter({ meta, method, path })) continue
-		}
-		const oaPath = toOpenApiPath(path)
-		if (paths[oaPath] === undefined) {
-			paths[oaPath] = {}
-		}
-
-		const methodKey = method.toLowerCase()
-		const operation: Record<string, unknown> = {}
-		const responses: Record<string, unknown> = {}
-		const parameters: Array<Record<string, unknown>> = []
-
-		/* meta + schema meta → openApi operation fields, per the declared policy */
-		applyMetaSpec({
-			collector,
-			filter: profileFilter,
-			kind: "http",
-			meta: handler.mt as Record<string, unknown> | null,
-			method,
-			operation,
-			path,
-			profile: profileName,
-			schemaMeta: metaSpec.needsSchemas ? makeSchemaMetaLookup(handler) : undefined,
-			spec: metaSpec,
-		})
-
-		/* path params */
-		const params = extractParams(path)
-		for (const name of params) {
-			const isOptional = path.includes(`:${name}?`)
-			parameters.push({
-				in: "path",
-				name,
-				required: !isOptional,
-				schema: { type: "string" },
-			})
-		}
-
-		/* input → requestBody / parameters */
-		if (handler.iv) {
-			for (const [source, entry] of Object.entries(handler.iv)) {
-				if (entry === undefined) continue
-				/* readableStream() is a runtime tag; the document describes the inner schema */
-				const unwrapped = unwrapEntry(entry as InputSchemaEntry)
-				const jsonSchema = asJsonSchema(unwrapped, "input")
-
-				if (source === "json" || source === "form") {
-					const schema = stripInternalProps(jsonSchema)
-					const content: Record<string, { schema: Record<string, unknown> }> = {}
-					if (source === "form") {
-						/* z.file() is format:binary — illegal on urlencoded; oat only builds FormData for multipart/* */
-						if (formSchemaHasBinaryPart(schema)) {
-							content["multipart/form-data"] = { schema }
-						}
-						content["application/x-www-form-urlencoded"] = { schema }
-					} else {
-						content["application/json"] = { schema }
-					}
-					operation.requestBody = {
-						content,
-						required: true,
-					}
-				} else if (source === "search" || source === "headers" || source === "cookies") {
-					let location: "cookie" | "header" | "query" = "cookie"
-					if (source === "search") location = "query"
-					else if (source === "headers") location = "header"
-					/* decompose object schema properties into individual parameters */
-					const props = jsonSchema.properties as Record<string, unknown> | undefined
-					const required = (jsonSchema.required as string[]) ?? []
-					if (props) {
-						for (const [propName, propSchema] of Object.entries(props)) {
-							if ((propSchema as Record<string, unknown>)?.["x-internal"] === true) continue
-							parameters.push({
-								in: location,
-								name: propName,
-								required: required.includes(propName),
-								schema: propSchema,
-							})
-						}
-					}
-				} else if (source === "params") {
-					/* override path param schemas with actual schema types */
-					const props = jsonSchema.properties as Record<string, unknown> | undefined
-					if (props) {
-						for (const param of parameters) {
-							const propSchema = props[param.name as string]
-							if (propSchema && param.in === "path") {
-								param.schema = propSchema
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if (parameters.length > 0) {
-			operation.parameters = parameters
-		}
-
-		/* output → responses */
-		if (handler.os) {
-			for (const [contentType, schemas] of Object.entries(handler.os)) {
-				if (schemas === undefined) continue
-				if (contentType === "redirect") {
-					for (const statusKey of Object.keys(schemas)) {
-						const statusCode = statusKeyToCode[statusKey as keyof typeof statusKeyToCode]
-						if (statusCode) {
-							responses[String(statusCode)] = {
-								description: statusKey.replace(/_/g, " "),
-								headers: {
-									Location: {
-										description: "Redirect target URL",
-										schema: { format: "uri", type: "string" },
-									},
-								},
-							}
-						}
-					}
-					continue
-				}
-				for (const [statusKey, schema] of Object.entries(schemas)) {
-					if (schema === undefined) continue
-					const statusCode = statusKeyToCode[statusKey as keyof typeof statusKeyToCode]
-					if (statusCode) {
-						responses[String(statusCode)] = {
-							content: {
-								[contentType]: {
-									schema: asJsonSchema(schema as StandardSchemaLike | Record<string, unknown>),
-								},
-							},
-							description: statusKey.replace(/_/g, " "),
-						}
-					}
-				}
-			}
-		}
-
-		/* error responses from declared error keys */
-		if (handler.ek.size > 0) {
-			type ErrorEntry = { key: string; schema: Record<string, unknown> | null }
-			const byStatus = new Map<number, ErrorEntry[]>()
-			for (const ek of handler.ek) {
-				const info = resolveErrorInfo(ek, factory)
-				if (info.status > 0) {
-					let entries = byStatus.get(info.status)
-					if (!entries) {
-						entries = []
-						byStatus.set(info.status, entries)
-					}
-					/* check if this error has a custom schema */
-					const meta = errorMeta?.[ek]
-					let customSchema: Record<string, unknown> | null = null
-					if (meta?.schema) {
-						const converted = schemaToJsonSchema(meta.schema as StandardSchemaLike)
-						if (converted) {
-							customSchema = customErrorAddsSchema
-								? { allOf: [converted, customErrorAddsSchema] }
-								: (converted as Record<string, unknown>)
-						}
-					}
-					entries.push({ key: ek, schema: customSchema })
-				}
-			}
-			for (const [status, entries] of byStatus) {
-				if (responses[String(status)] === undefined) {
-					const standardKeys = entries.filter((e) => !e.schema).map((e) => e.key)
-					const customSchemas = entries.filter((e) => e.schema).map((e) => e.schema as Record<string, unknown>)
-
-					let schema: Record<string, unknown>
-
-					if (customSchemas.length === 0) {
-						/* all standard errors at this status — use base error schema with constrained enums */
-						schema = cloneJson(baseErrorJsonSchema)
-						const props = schema.properties as Record<string, unknown> | undefined
-						if (props?.error_key) {
-							props.error_key = { enum: standardKeys.sort(), type: "string" }
-						}
-						if (props?.status) {
-							props.status = { enum: [status], type: "integer" }
-						}
-					} else if (standardKeys.length === 0 && customSchemas.length === 1) {
-						/* single custom schema error — use it directly */
-						schema = customSchemas[0]
-					} else {
-						/* mixed standard + custom, or multiple custom — use oneOf */
-						const schemas: Record<string, unknown>[] = []
-						if (standardKeys.length > 0) {
-							const stdSchema = cloneJson(baseErrorJsonSchema)
-							const props = stdSchema.properties as Record<string, unknown> | undefined
-							if (props?.error_key) {
-								props.error_key = { enum: standardKeys.sort(), type: "string" }
-							}
-							if (props?.status) {
-								props.status = { enum: [status], type: "integer" }
-							}
-							schemas.push(stdSchema)
-						}
-						schemas.push(...customSchemas)
-						schema = { oneOf: schemas }
-					}
-
-					responses[String(status)] = {
-						content: {
-							"application/json": { schema },
-						},
-						description: entries
-							.map((e) => e.key)
-							.sort()
-							.join(", "),
-					}
-				}
-			}
-		}
-
-		if (Object.keys(responses).length === 0) {
-			responses["200"] = { description: "Success" }
-		}
-		operation.responses = responses
-
-		paths[oaPath][methodKey] = operation
-		emitted.push({
-			meta: handler.mt as Record<string, unknown> | null,
-			method: methodKey,
-			operation,
-			path: oaPath,
-		})
+	const prev = getJsonSchemaConverter()
+	setJsonSchemaConverter((schema, io) => schemaToJsonSchema(schema, io) as Record<string, unknown>)
+	try {
+		const spec = generateOpenApiFromTree(app, options)
+		return deduplicateSchemas(spec)
+	} finally {
+		setJsonSchemaConverter(prev)
 	}
-
-	/* WS routes */
-	const wsRoutes: CollectedWSRoute[] = []
-	walkWSRoutes(tree, "", wsRoutes)
-
-	for (const { handler, path } of wsRoutes) {
-		const oaPath = toOpenApiPath(path)
-		if (paths[oaPath] === undefined) {
-			paths[oaPath] = {}
-		}
-
-		const operation: Record<string, unknown> = { "x-websocket": true }
-		const parameters: Array<Record<string, unknown>> = []
-
-		applyMetaSpec({
-			collector,
-			filter: profileFilter,
-			kind: "ws",
-			meta: handler.mt as Record<string, unknown> | null,
-			method: "WS",
-			operation,
-			path,
-			profile: profileName,
-			schemaMeta: metaSpec.needsSchemas ? makeSchemaMetaLookup(handler as unknown as RouteHandler) : undefined,
-			spec: metaSpec,
-		})
-
-		/* path params */
-		const wsParams = extractParams(path)
-		for (const name of wsParams) {
-			parameters.push({
-				in: "path",
-				name,
-				required: true,
-				schema: { type: "string" },
-			})
-		}
-
-		/* query params from input schemas — use same conversion as HTTP routes */
-		if (handler.iv?.search) {
-			const searchEntry = handler.iv.search
-			const searchSchema =
-				"_tag" in searchEntry
-					? (searchEntry as { schema: StandardSchemaLike }).schema
-					: (searchEntry as StandardSchemaLike)
-			const jsonSchema = asJsonSchema(searchSchema as StandardSchemaLike | Record<string, unknown>, "input")
-			if (jsonSchema && typeof jsonSchema === "object") {
-				const props = (jsonSchema as Record<string, unknown>).properties as Record<string, unknown> | undefined
-				const required = new Set(((jsonSchema as Record<string, unknown>).required ?? []) as string[])
-				if (props) {
-					for (const [name, schema] of Object.entries(props)) {
-						parameters.push({
-							in: "query",
-							name,
-							required: required.has(name),
-							schema,
-						})
-					}
-				}
-			}
-		}
-
-		if (parameters.length > 0) operation.parameters = parameters
-		operation.responses = { "101": { description: "WebSocket upgrade" } }
-
-		paths[oaPath].get = operation
-	}
-
-	collector.flush()
-	/* after the policy is known good — a broken policy makes this report meaningless */
-	reportMissingInvalidate(emitted, options.invalidate)
-
-	const result: OpenApiSpec = {
-		info: options.info,
-		openapi: "3.1.0",
-		paths,
-	}
-	if (options.securitySchemes) {
-		result.components = {
-			...result.components,
-			securitySchemes: options.securitySchemes,
-		}
-	}
-	return deduplicateSchemas(result)
 }
 
 export function extractSchemas<TEnv, TCtx>(
@@ -2198,7 +1602,7 @@ function emitRouteTree(routes: RouteConfig[], collected: CollectedRoute[] | null
 			const osExpr = route.outputSchemas !== null ? intern.expr(route.outputSchemas) : "null"
 			const mtExpr = route.meta !== null ? intern.expr(route.meta) : "null"
 			lines.push(
-				`const H${i}: RouteHandler = { bek: ${bekExpr}, ef: null, fn: FN, mw: [], ek: ${ekSet}, iv: ${ivExpr}, os: ${osExpr}, mt: ${mtExpr}, ov: null, rp: "" }`,
+				`const H${i}: RouteHandler = { bek: ${bekExpr}, fn: FN, mw: [], ek: ${ekSet}, iv: ${ivExpr}, os: ${osExpr}, mt: ${mtExpr} }`,
 			)
 		}
 	}

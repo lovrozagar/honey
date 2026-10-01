@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest"
-import { generateManifest, generateOpenApi } from "../../../src/codegen.ts"
+import { beforeEach, describe, expect, it } from "vitest"
+import * as z from "zod"
+import { generateManifest, generateOpenApi, generateRouteTreeFromApp, prepareCodegen } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
 import { scalar } from "../../../src/openapi/scalar.ts"
 import { spec } from "../../../src/openapi/spec.ts"
+import { resetOpenApiRuntime } from "../../../src/openapi/spec-factory.ts"
 import { swagger } from "../../../src/openapi/swagger.ts"
 import { testClient } from "../../../src/testing.ts"
+import type { RouteTree } from "../../../src/tree.ts"
 
 function makeApp() {
 	const app = honey<{}>()
@@ -16,6 +19,10 @@ function makeApp() {
 }
 
 describe("spec", () => {
+	beforeEach(() => {
+		resetOpenApiRuntime()
+	})
+
 	it("returns a handler function", () => {
 		const handler = spec({ title: "API", version: "1.0" })
 		expect(typeof handler).toBe("function")
@@ -112,5 +119,38 @@ describe("spec", () => {
 		const res = await client.get("/openapi/json")
 		const body = (await res.json()) as Record<string, unknown>
 		expect((body.info as Record<string, unknown>).description).toBe("My API description")
+	})
+
+	it("walks intern JSON Schema without the openapi register", async () => {
+		await prepareCodegen()
+		const live = honey<{}>()
+		live
+			.post("/users")
+			.input({ json: z.object({ email: z.string() }) })
+			.handler((ctx) => ctx.res.json("created", { ok: true }))
+		const code = generateRouteTreeFromApp(live)
+		const { transform } = await import("esbuild")
+		const { code: js } = await transform(code, { format: "esm", loader: "ts", target: "esnext" })
+		const mod = (await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`)) as {
+			routeTree: RouteTree
+		}
+
+		const app = honey<{}>()
+		app.routeTree(mod.routeTree)
+		app.get("/openapi/json").handler(spec({ title: "Intern", version: "1" }))
+		const client = testClient(app, { env: {} })
+		const res = await client.get("/openapi/json")
+		const body = (await res.json()) as {
+			paths: {
+				"/users"?: {
+					post?: {
+						requestBody?: { content?: { "application/json"?: { schema?: { properties?: { email?: unknown } } } } }
+					}
+				}
+			}
+		}
+		expect(
+			body.paths["/users"]?.post?.requestBody?.content?.["application/json"]?.schema?.properties?.email,
+		).toBeDefined()
 	})
 })

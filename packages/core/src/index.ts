@@ -533,7 +533,7 @@ export class Honey<
 		walkTreeHandlers(
 			this._root,
 			(h) => {
-				if (scopeMatches(entry.prefix, h.rp)) {
+				if (scopeMatches(entry.prefix, h.rp ?? "")) {
 					for (const k of errors) h.ek.add(k)
 				}
 			},
@@ -568,8 +568,8 @@ export class Honey<
 	private _applyScopedEntryMeta(entry: ScopedEntry): void {
 		const meta = (entry.mw as { meta?: Record<string, unknown> }).meta
 		if (!meta) return
-		const apply = (h: { mt: Record<string, unknown> | null; rp: string }): void => {
-			if (!scopeMatches(entry.prefix, h.rp)) return
+		const apply = (h: { mt: Record<string, unknown> | null; rp?: string }): void => {
+			if (!scopeMatches(entry.prefix, h.rp ?? "")) return
 			/* contributed meta never overwrites what the route or chain stated explicitly */
 			h.mt = Object.freeze(h.mt ? { ...meta, ...h.mt } : { ...meta })
 		}
@@ -2314,7 +2314,7 @@ export class Honey<
 			params,
 			path,
 			req: fc.request,
-			routePattern: handler.rp,
+			routePattern: handler.rp ?? "",
 			urlFn: fc.url,
 		})
 		if (this._contextValues) Object.assign(ctx, this._contextValues)
@@ -2404,7 +2404,7 @@ export class Honey<
 
 		/* resolve error factory — pre-computed ef preferred, else build/use global */
 		let errors: Record<string, (...args: never[]) => unknown> | undefined
-		if (handler.ef !== null) {
+		if (handler.ef != null) {
 			errors = handler.ef
 		} else if (this._errorFactory !== null) {
 			if (handler.ek.size > 0) {
@@ -2431,7 +2431,7 @@ export class Honey<
 			params,
 			path,
 			req: request,
-			routePattern: handler.rp,
+			routePattern: handler.rp ?? "",
 			urlFn: fc.url,
 		})
 		if (this._contextValues) Object.assign(ctx, this._contextValues)
@@ -2516,7 +2516,7 @@ export class Honey<
 				return after(result)
 			}
 
-			const scopedForPath = this._filterScopedForPath(handler.rp)
+			const scopedForPath = this._filterScopedForPath(handler.rp ?? "")
 			const chainMw = this._chainMiddlewares
 			const handlerHasChain = chainMw.length > 0 && chainMw.every((mw, i) => handler.mw[i] === mw)
 			/*

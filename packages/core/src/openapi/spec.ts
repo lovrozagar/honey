@@ -1,7 +1,7 @@
-import { generateOpenApi } from "../codegen.ts"
-import type { OpenApiRouteInfo } from "../codegen.ts"
 import type { DefaultMeta } from "../types.ts"
 import type { TypedResponse } from "../response.ts"
+import { generateOpenApiFromTree, type OpenApiRouteInfo } from "./document.ts"
+import { tryGetOpenApiRuntime } from "./spec-factory.ts"
 
 type SpecOptions<TMeta = Record<string, unknown> | null> = {
 	description?: string
@@ -21,15 +21,25 @@ export function spec<TMeta = Record<string, unknown> | null>(
 	const handler = async (ctx: { res: { json(sk: "ok", data: unknown): TypedResponse } }) => {
 		if (cached === null) {
 			const desc = Object.getOwnPropertyDescriptor(handler, Symbol.for("honey.app"))
-			const openApiSpec = desc
-				? await generateOpenApi(desc.value, {
-						filterRoutes: options.filterRoutes,
-						info: options,
-						/* a served document is not an authoring moment — the check belongs to `honey generate` */
-						invalidate: "off",
-						profile: options.profile,
-						securitySchemes: options.securitySchemes,
-					})
+			const app = desc?.value
+			const generateOptions = {
+				filterRoutes: options.filterRoutes,
+				info: options,
+				/* a served document is not an authoring moment — the check belongs to `honey generate` */
+				invalidate: "off" as const,
+				profile: options.profile,
+				securitySchemes: options.securitySchemes,
+			}
+			const runtime = tryGetOpenApiRuntime()
+			const openApiSpec = app
+				? runtime
+					? await runtime.generateOpenApi(app, {
+							...generateOptions,
+							filterRoutes: options.filterRoutes as
+								| ((route: { meta: unknown; method: string; path: string }) => boolean)
+								| undefined,
+						})
+					: generateOpenApiFromTree(app, generateOptions)
 				: {}
 			cached = JSON.stringify(openApiSpec)
 		}

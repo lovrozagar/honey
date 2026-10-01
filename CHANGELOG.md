@@ -2,6 +2,15 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.5.3 - 2026-10-02
+
+### Changed
+
+- `spec()` from `@lovrozagar/honey/openapi/spec` walks the intern tree with JSON Schema already on the handlers. It does not import `codegen.ts`. Live Zod conversion stays behind `import "@lovrozagar/honey/openapi"` and `honey generate`. Gateway workers should import spec from `/openapi/spec` so the isolate does not eval the generator.
+- Intern `H*` constants omit `ef: null`, `ov: null`, and `rp: ""`. Runtime treats missing `ef` as the global factory and missing `rp` as `""`.
+
+Regenerate after upgrading: `honey generate`. Switch runtime `spec()` imports to `@lovrozagar/honey/openapi/spec`.
+
 ## 0.5.2 - 2026-10-02
 
 ### Changed
