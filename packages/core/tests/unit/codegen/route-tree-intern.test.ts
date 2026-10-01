@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { generateRouteTree, generateRouteTreeFromApp, prepareCodegen } from "../../../src/codegen.ts"
-import { InternPool } from "../../../src/codegen-route-tree-intern.ts"
 import { defineErrors, honey } from "../../../src/index.ts"
 import type { RouteHandler, RouteTree } from "../../../src/tree.ts"
 
@@ -11,7 +10,11 @@ async function evalTreeModule(code: string): Promise<{
 	routeTree: RouteTree
 }> {
 	const { transform } = await import("esbuild")
-	const { code: js } = await transform(code, {
+	const rewritten = code.replace(
+		/from\s+"@lovrozagar\/honey\/tree"/g,
+		`from ${JSON.stringify(new URL("../../../src/tree.ts", import.meta.url).href)}`,
+	)
+	const { code: js } = await transform(rewritten, {
 		format: "esm",
 		loader: "ts",
 		target: "esnext",
@@ -24,127 +27,7 @@ async function evalTreeModule(code: string): Promise<{
 	}
 }
 
-describe("InternPool", () => {
-	it("inlines unique short strings and small unique objects", () => {
-		const pool = new InternPool()
-		pool.count("ok")
-		pool.count({ type: "boolean" })
-		pool.seal()
-		expect(pool.emitConstLines()).toEqual([])
-		expect(pool.expr("ok")).toBe('"ok"')
-		expect(pool.expr({ type: "boolean" })).toBe('{"type":"boolean"}')
-	})
-
-	it("interns repeated objects and reuses the same id", () => {
-		const leaf = { type: "string" }
-		const pool = new InternPool()
-		pool.count({ properties: { a: leaf } })
-		pool.count({ properties: { b: { type: "string" } } })
-		pool.seal()
-		const lines = pool.emitConstLines()
-		expect(lines.some((l) => l.startsWith("const J0 = "))).toBe(true)
-		expect(pool.expr({ type: "string" })).toBe("J0")
-		expect(pool.expr({ properties: { a: { type: "string" } } })).toBe('{"properties":{"a":J0}}')
-	})
-
-	it("interns repeated long strings and numbers before parent objects", () => {
-		const pool = new InternPool()
-		pool.count({ maximum: 9007199254740991, pattern: "internal_server_error" })
-		pool.count({ maximum: 9007199254740991, pattern: "internal_server_error" })
-		pool.seal()
-		const lines = pool.emitConstLines()
-		expect(lines[0]?.startsWith("const T0 = ") || lines[0]?.startsWith("const U0 = ")).toBe(true)
-		const ids = lines.map((l) => l.slice(6, l.indexOf(" =")))
-		expect(ids.indexOf("T0")).toBeLessThan(ids.indexOf("J0"))
-		expect(ids.indexOf("U0")).toBeLessThan(ids.indexOf("J0"))
-	})
-
-	it("force-interns unique roots so callers can share by reference", () => {
-		const meta = { auth: "required" }
-		const pool = new InternPool()
-		pool.count(meta)
-		pool.force(meta, "M")
-		pool.force("GET /orgs", "P")
-		pool.seal()
-		expect(pool.expr(meta)).toBe("M0")
-		expect(pool.expr("GET /orgs")).toBe("P0")
-		expect(pool.emitConstLines()).toEqual(['const P0 = "GET /orgs"', 'const M0 = {"auth":"required"}'])
-	})
-
-	it("does not intern empty arrays even when they repeat", () => {
-		const pool = new InternPool()
-		pool.count([])
-		pool.count([])
-		pool.seal()
-		expect(pool.expr([])).toBe("[]")
-		expect(pool.emitConstLines()).toEqual([])
-	})
-
-	it("does not intern unique error-key arrays unless they repeat", () => {
-		const pool = new InternPool()
-		pool.count(["email_taken"])
-		pool.seal()
-		expect(pool.expr(["email_taken"])).toBe('["email_taken"]')
-		pool.count(["forbidden", "unauthorized"])
-		pool.count(["forbidden", "unauthorized"])
-		const shared = new InternPool()
-		shared.count(["forbidden", "unauthorized"])
-		shared.count(["forbidden", "unauthorized"])
-		shared.seal()
-		expect(shared.expr(["forbidden", "unauthorized"])).toBe("A0")
-	})
-
-	it("skips booleans, null, undefined, and short unique strings", () => {
-		const pool = new InternPool()
-		pool.count(true)
-		pool.count(null)
-		pool.count(undefined)
-		pool.count("ab")
-		pool.force(null, "I")
-		pool.force(undefined, "O")
-		pool.seal()
-		expect(pool.emitConstLines()).toEqual([])
-		expect(pool.expr(null)).toBe("null")
-		expect(pool.expr(undefined)).toBe("undefined")
-		expect(pool.expr(true)).toBe("true")
-		expect(pool.expr(false)).toBe("false")
-	})
-
-	it("omits undefined object keys so print matches JSON.stringify identity", () => {
-		const pool = new InternPool()
-		const obj = { a: 1, b: undefined as unknown }
-		pool.force(obj, "M")
-		pool.seal()
-		expect(pool.emitConstLines()).toEqual(['const M0 = {"a":1}'])
-	})
-
-	it("casts forced I/O roots at the const, not at every use", () => {
-		const iv = { json: { type: "string" } }
-		const os = { "application/json": { ok: { type: "boolean" } } }
-		const pool = new InternPool()
-		pool.count(iv)
-		pool.count(os)
-		pool.force(iv, "I")
-		pool.force(os, "O")
-		pool.seal()
-		const lines = pool.emitConstLines()
-		expect(lines.some((l) => l.includes('as unknown as RouteHandler["iv"]'))).toBe(true)
-		expect(lines.some((l) => l.includes('as unknown as RouteHandler["os"]'))).toBe(true)
-		expect(pool.expr(iv)).toBe("I0")
-		expect(pool.expr(os)).toBe("O0")
-	})
-
-	it("seal is idempotent", () => {
-		const pool = new InternPool()
-		pool.force("POST /users", "P")
-		pool.seal()
-		pool.seal()
-		expect(pool.expr("POST /users")).toBe("P0")
-		expect(pool.emitConstLines()).toHaveLength(1)
-	})
-})
-
-describe("generateRouteTree intern", () => {
+describe("generateRouteTree packed JSON", () => {
 	it("keeps unique handlers and unique Sets when error keys match", async () => {
 		const code = generateRouteTree([
 			{
@@ -168,13 +51,11 @@ describe("generateRouteTree intern", () => {
 				path: "/b",
 			},
 		])
-		expect(code).toContain("const H0: RouteHandler")
-		expect(code).toContain("const H1: RouteHandler")
-		expect(code).toContain("new Set(")
-		expect(code).toMatch(/const A0 = \[/)
-		expect(code).toMatch(/const M0 = \{/)
-		expect(code).toContain("[P0]: H0")
-		expect(code).toContain("[P1]: H1")
+		expect(code).toContain("assembleRouteTree")
+		expect(code).toContain("PackedRouteTable")
+		expect(code).toContain('"GET /a"')
+		expect(code).toContain('"GET /b"')
+		expect(code).toContain("internal_server_error")
 
 		const { handlers } = await evalTreeModule(code)
 		expect(handlers["GET /a"]).not.toBe(handlers["GET /b"])
@@ -182,11 +63,11 @@ describe("generateRouteTree intern", () => {
 		expect(handlers["GET /a"].ek).toEqual(handlers["GET /b"].ek)
 		handlers["GET /a"].ek.add("extra")
 		expect(handlers["GET /b"].ek.has("extra")).toBe(false)
-		expect(handlers["GET /a"].mt).toBe(handlers["GET /b"].mt)
+		expect(handlers["GET /a"].mt).toEqual(handlers["GET /b"].mt)
 		expect(handlers["GET /a"].fn).toBeNull()
 	})
 
-	it("shares identical iv/os JSON by reference after eval", async () => {
+	it("round-trips identical iv/os JSON", async () => {
 		const schema = {
 			json: { properties: { id: { type: "string" } }, required: ["id"], type: "object" },
 		}
@@ -217,15 +98,15 @@ describe("generateRouteTree intern", () => {
 				path: "/two",
 			},
 		])
-		expect(code).toMatch(/const I0 = /)
-		expect(code).toMatch(/const O0 = /)
-		expect(code).toMatch(/const J0 = /)
+		expect(code).toContain('"j":')
 		const { handlers } = await evalTreeModule(code)
-		expect(handlers["POST /one"].iv).toBe(handlers["POST /two"].iv)
-		expect(handlers["POST /one"].os).toBe(handlers["POST /two"].os)
+		expect(handlers["POST /one"].iv).toEqual(schema)
+		expect(handlers["POST /one"].os).toEqual(os)
+		expect(handlers["POST /one"].iv).toEqual(handlers["POST /two"].iv)
+		expect(handlers["POST /one"].os).toEqual(handlers["POST /two"].os)
 	})
 
-	it('inlines a unique error-key array so new Set(["email_taken"]) stays greppable', () => {
+	it("keeps a unique error key greppable in the packed table", () => {
 		const code = generateRouteTree([
 			{
 				boundaryErrorKey: null,
@@ -238,28 +119,7 @@ describe("generateRouteTree intern", () => {
 				path: "/users",
 			},
 		])
-		expect(code).toContain('new Set(["email_taken"])')
-	})
-
-	it("emits tree helpers N/S and empty-children E", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/users/:id",
-			},
-		])
-		expect(code).toContain("function N(")
-		expect(code).toContain("Record<string, RouteHandler>")
-		expect(code).toContain('w as TreeNode["w"]')
-		expect(code).toContain("function S(")
-		expect(code).toContain("const E = Object.create(null)")
-		expect(code).toContain("export const tree: TreeNode = N(")
+		expect(code).toContain("email_taken")
 	})
 
 	it("wildcard and root routes still compile", async () => {
@@ -285,17 +145,16 @@ describe("generateRouteTree intern", () => {
 				path: "/files/*path",
 			},
 		])
-		expect(code).toContain("H0")
-		expect(code).toContain("H1")
-		expect(code).toContain('"path"')
+		expect(code).toContain("GET /")
+		expect(code).toContain("/files/*path")
 		const { handlers } = await evalTreeModule(code)
 		expect(handlers["GET /"]).toBeDefined()
 		expect(handlers["GET /files/*path"]).toBeDefined()
 	})
 })
 
-describe("generateRouteTreeFromApp intern + MetaShape", () => {
-	it("meta export reuses the handler mt const", async () => {
+describe("generateRouteTreeFromApp packed JSON + MetaShape", () => {
+	it("meta export reuses the handler mt object", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 			.meta<{ tags: string[]; summary: string }>()
@@ -304,14 +163,12 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 			.handler((c) => c.res.text("ok", "ok"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toMatch(/const M0 = \{/)
-		expect(code).toContain("as MetaShape")
-		expect(code).toContain("mt: M0")
-		expect(code).toMatch(/meta: Record<string, MetaShape> = \{\s*\[P0\]: M0/)
+		expect(code).toContain("assembleRouteTree")
+		expect(code).toContain('"summary":"List orgs"')
 		expect(code).toContain('tags: ["orgs"]')
 		expect(code).toContain("& Record<string, unknown>")
 		expect(code).not.toContain("unknown[]")
-		expect(code).toContain("export type RouteSelector = typeof P0")
+		expect(code).toContain("export type RouteSelector = typeof P[number]")
 
 		const { handlers, meta, routeTree } = await evalTreeModule(code)
 		expect(meta?.["GET /orgs"]).toBe(handlers["GET /orgs"].mt)
@@ -319,7 +176,7 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 		expect(handlers["GET /orgs"].mt).toEqual({ summary: "List orgs", tags: ["orgs"] })
 	})
 
-	it("shared nested string schemas intern across routes from a live app", async () => {
+	it("shared nested string schemas survive JSON.parse structurally", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 		const body = z.object({ email: z.string().email(), name: z.string() })
@@ -332,10 +189,9 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 			.input({ json: body })
 			.handler((c) => c.res.text("ok", "ok"))
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toMatch(/const I0 = /)
-		expect(code).toMatch(/iv: I0/)
+		expect(code).toContain('"email"')
 		const { handlers } = await evalTreeModule(code)
-		expect(handlers["POST /a"].iv).toBe(handlers["POST /b"].iv)
+		expect(handlers["POST /a"].iv).toEqual(handlers["POST /b"].iv)
 	})
 
 	it("preserves pre-built ek greppability for a single route", () => {
@@ -345,6 +201,195 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 			.errors(errors, "email_taken")
 			.handler((c) => c.res.text("ok", "ok"))
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('new Set(["email_taken"])')
+		expect(code).toContain("email_taken")
+	})
+})
+
+describe("packed schema keys", () => {
+	it("round-trips a property named type and required: ['type']", async () => {
+		const schema = {
+			json: {
+				properties: { type: { type: "string" } },
+				required: ["type"],
+				type: "object",
+			},
+		}
+		const code = generateRouteTree([
+			{
+				boundaryErrorKey: null,
+				errorKeys: [],
+				inputSchemas: schema,
+				meta: null,
+				method: "POST",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/typed",
+			},
+		])
+		expect(code).toContain('"t":"o"')
+		expect(code).toContain('"r":["type"]')
+		const { handlers } = await evalTreeModule(code)
+		expect(handlers["POST /typed"].iv).toEqual(schema)
+	})
+
+	it("does not rewrite enum values that match vocabulary words", async () => {
+		const schema = {
+			json: { enum: ["type", "properties", "required"], type: "string" },
+		}
+		const code = generateRouteTree([
+			{
+				boundaryErrorKey: null,
+				errorKeys: [],
+				inputSchemas: schema,
+				meta: null,
+				method: "POST",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/kind",
+			},
+		])
+		expect(code).toContain('"en":["type","properties","required"]')
+		const { handlers } = await evalTreeModule(code)
+		expect(handlers["POST /kind"].iv).toEqual(schema)
+	})
+
+	it("collapses duplicate iv/os columns to a value table", async () => {
+		const schema = {
+			json: {
+				properties: { email: { format: "email", type: "string" }, name: { type: "string" } },
+				required: ["email", "name"],
+				type: "object",
+			},
+		}
+		const code = generateRouteTree([
+			{
+				boundaryErrorKey: null,
+				errorKeys: ["taken"],
+				inputSchemas: schema,
+				meta: { worker: "api" },
+				method: "POST",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/a",
+			},
+			{
+				boundaryErrorKey: null,
+				errorKeys: ["taken"],
+				inputSchemas: schema,
+				meta: { worker: "api" },
+				method: "POST",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/b",
+			},
+		])
+		expect(code).toContain('"t":')
+		expect(code).toContain('"x":')
+		expect(code).toContain('"k":["taken"]')
+		expect(code).toContain('"f":"e"')
+		expect(code).toContain('"t":"s"')
+		const { handlers } = await evalTreeModule(code)
+		expect([...handlers["POST /a"].ek]).toEqual(["taken"])
+		expect(handlers["POST /a"].mt).toEqual({ worker: "api" })
+		expect(handlers["POST /a"].iv).toEqual(schema)
+	})
+
+	it("packs repeated meta keys through a u dictionary", async () => {
+		const metaA = {
+			operationId: "listThings",
+			permissions: "things:read",
+			security: "jwt",
+			summary: "List things",
+			tags: ["things"],
+			tenant: "auto",
+			worker: "api",
+		}
+		const metaB = {
+			operationId: "getThing",
+			permissions: "things:write",
+			security: "apiKey",
+			summary: "Get thing",
+			tags: ["things"],
+			tenant: "auto",
+			worker: "api",
+		}
+		const code = generateRouteTree([
+			{
+				boundaryErrorKey: null,
+				errorKeys: [],
+				inputSchemas: null,
+				meta: metaA,
+				method: "GET",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/a",
+			},
+			{
+				boundaryErrorKey: null,
+				errorKeys: [],
+				inputSchemas: null,
+				meta: metaB,
+				method: "GET",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/b",
+			},
+		])
+		expect(code).toContain('"u":')
+		expect(code).toContain("operationId")
+		const { handlers } = await evalTreeModule(code)
+		expect(handlers["GET /a"].mt).toEqual(metaA)
+		expect(handlers["GET /b"].mt).toEqual(metaB)
+	})
+
+	it("emits n1 for a nullable oneOf string", async () => {
+		const schema = {
+			json: { oneOf: [{ type: "string" }, { type: "null" }] },
+		}
+		const code = generateRouteTree([
+			{
+				boundaryErrorKey: null,
+				errorKeys: [],
+				inputSchemas: schema,
+				meta: null,
+				method: "GET",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/opt",
+			},
+		])
+		expect(code).toContain('"n1":1')
+		expect(code).not.toContain("oneOf")
+		const { handlers } = await evalTreeModule(code)
+		expect(handlers["GET /opt"].iv).toEqual(schema)
+	})
+
+	it("emits JSON.parse when a property is named __proto__", async () => {
+		const properties = Object.create(null) as Record<string, unknown>
+		Object.defineProperty(properties, "__proto__", {
+			configurable: true,
+			enumerable: true,
+			value: { type: "string" },
+			writable: true,
+		})
+		const schema = { json: { properties, type: "object" } }
+		const code = generateRouteTree([
+			{
+				boundaryErrorKey: null,
+				errorKeys: [],
+				inputSchemas: schema,
+				meta: null,
+				method: "POST",
+				middlewareNames: [],
+				outputSchemas: null,
+				path: "/proto",
+			},
+		])
+		expect(code).toContain("JSON.parse")
+		const { handlers } = await evalTreeModule(code)
+		const iv = handlers["POST /proto"].iv as { json: { properties: Record<string, unknown>; type: string } }
+		expect(Object.hasOwn(iv.json.properties, "__proto__")).toBe(true)
+		expect(Object.getOwnPropertyDescriptor(iv.json.properties, "__proto__")?.value).toEqual({ type: "string" })
+		expect(iv.json.type).toBe("object")
 	})
 })

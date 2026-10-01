@@ -52,8 +52,8 @@ function resolveRef(
 async function evalTreeModule(code: string): Promise<{ routeTree: RouteTree }> {
 	const { transform } = await import("esbuild")
 	const rewritten = code.replace(
-		/from\s+"honey\/tree"/g,
-		`from ${JSON.stringify(new URL("../../../src/tree.ts", import.meta.url).pathname)}`,
+		/from\s+"@lovrozagar\/honey\/tree"/g,
+		`from ${JSON.stringify(new URL("../../../src/tree.ts", import.meta.url).href)}`,
 	)
 	const { code: js } = await transform(rewritten, {
 		format: "esm",
@@ -83,10 +83,8 @@ describe("route tree schema preservation", () => {
 		const app = buildFixtureApp()
 		const code = generateRouteTreeFromApp(app)
 
-		expect(code).not.toMatch(/iv:\s*null,\s*os:\s*null/)
-		expect(code).toMatch(/\biv:\s*I\d+/)
-		expect(code).toMatch(/\bos:\s*O\d+/)
-		expect(code).toContain('"application/json"')
+		expect(code).toContain("assembleRouteTree")
+		expect(code).toContain('"j":')
 		expect(code).toContain('"ok"')
 		expect(code).toContain('"project_id"')
 		expect(code).toContain('"url"')
@@ -138,7 +136,9 @@ describe("route tree schema preservation", () => {
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toMatch(/H0:[^\n]*iv:\s*null[^\n]*os:\s*null/)
+		const { routeTree } = await evalTreeModule(code)
+		expect(routeTree.handlers?.["GET /health"]?.iv).toBeNull()
+		expect(routeTree.handlers?.["GET /health"]?.os).toBeNull()
 	})
 
 	it("preserves all input sources: json, search, params, headers, cookies", async () => {
@@ -156,11 +156,15 @@ describe("route tree schema preservation", () => {
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('"json"')
-		expect(code).toContain('"search"')
-		expect(code).toContain('"params"')
-		expect(code).toContain('"headers"')
-		expect(code).toContain('"cookies"')
+		const { routeTree } = await evalTreeModule(code)
+		const iv = routeTree.handlers?.["POST /multi"]?.iv as Record<string, unknown>
+		expect(iv).toMatchObject({
+			cookies: { properties: { sid: { type: "string" } }, type: "object" },
+			headers: { properties: { "x-req": { type: "string" } }, type: "object" },
+			json: { properties: { body: { type: "string" } }, type: "object" },
+			search: { properties: { q: { type: "string" } }, type: "object" },
+		})
+		expect(iv).toHaveProperty("params")
 	})
 
 	it("preserves redirect output shape (status keys, no schema)", async () => {
@@ -172,9 +176,10 @@ describe("route tree schema preservation", () => {
 			.handler((ctx) => ctx.res.redirect("found", "/somewhere"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('"redirect"')
-		expect(code).toContain('"found":true')
-		expect(code).toContain('"moved_permanently":true')
+		const { routeTree } = await evalTreeModule(code)
+		expect(routeTree.handlers?.["GET /r"]?.os).toEqual({
+			redirect: { found: true, moved_permanently: true },
+		})
 	})
 
 	it("preserves multiple output content types (application/json + text/html)", async () => {
@@ -189,8 +194,11 @@ describe("route tree schema preservation", () => {
 			.handler((ctx) => ctx.res.html("ok", "<p>ok</p>"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('"application/json"')
-		expect(code).toContain('"text/html"')
+		const { routeTree } = await evalTreeModule(code)
+		expect(routeTree.handlers?.["GET /page"]?.os).toMatchObject({
+			"application/json": { ok: { type: "object" } },
+			"text/html": { ok: { type: "string" } },
+		})
 	})
 
 	it("serialises transform-piped search schema into iv block with query property names", async () => {
@@ -208,7 +216,10 @@ describe("route tree schema preservation", () => {
 		expect(code).toContain('"filter"')
 		expect(code).toContain('"limit"')
 		expect(code).toContain('"sort"')
-		expect(code).toMatch(/\biv:\s*I\d+/)
+		const { routeTree } = await evalTreeModule(code)
+		expect(routeTree.handlers?.["GET /items"]?.iv).toMatchObject({
+			search: { properties: { cursor: { type: "string" }, sort: { type: "string" } }, type: "object" },
+		})
 	})
 
 	it("round-trip via evalTreeModule preserves query params in generateOpenApi output (gateway flow)", async () => {

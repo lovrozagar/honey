@@ -311,12 +311,13 @@ describe("bug-hunt-15: generateRouteTree", () => {
 			},
 		])
 
-		expect(code).toContain("import type")
+		expect(code).toContain("assembleRouteTree")
 		expect(code).toContain("export const tree")
 		expect(code).toContain("export const handlers")
-		expect(code).toContain("H0")
-		expect(code).toContain("H1")
-		expect(code).toContain("H2")
+		expect(code).toContain('"GET /users"')
+		expect(code).toContain('"POST /users"')
+		expect(code).toContain('"GET /users/:id"')
+		expect(code).toContain("not_found")
 	})
 
 	it("route tree with wildcard → correct structure", () => {
@@ -333,8 +334,8 @@ describe("bug-hunt-15: generateRouteTree", () => {
 			},
 		])
 
-		expect(code).toContain('"path"')
-		expect(code).toContain("H0")
+		expect(code).toContain("/files/*path")
+		expect(code).toContain("assembleRouteTree")
 	})
 
 	it("route tree with root route /", () => {
@@ -351,7 +352,7 @@ describe("bug-hunt-15: generateRouteTree", () => {
 			},
 		])
 
-		expect(code).toContain("H0")
+		expect(code).toContain('"GET /"')
 		expect(code).toContain("export const tree")
 	})
 })
@@ -393,7 +394,7 @@ describe("bug-hunt-15: generateRouteTreeFromApp", () => {
 
 		const code = generateRouteTreeFromApp(app)
 		expect(code).not.toContain("export const meta:")
-		expect(code).toContain("meta: {}")
+		expect(code).toContain("assembleRouteTree")
 	})
 })
 

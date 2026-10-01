@@ -44,7 +44,7 @@ describe("generateRouteTree", () => {
 		expect(code).toContain("organizations")
 	})
 
-	it("emits null-prototype factory", () => {
+	it("emits a packed table for assembleRouteTree", () => {
 		const code = generateRouteTree([
 			{
 				boundaryErrorKey: null,
@@ -57,10 +57,12 @@ describe("generateRouteTree", () => {
 				path: "/health",
 			},
 		])
-		expect(code).toContain("Object.create(null)")
+		expect(code).toContain("assembleRouteTree")
+		expect(code).toContain("PackedRouteTable")
+		expect(code).toContain("GET /health")
 	})
 
-	it("emits empty node constant E", () => {
+	it("packs nested paths without a prebuilt radix literal", () => {
 		const code = generateRouteTree([
 			{
 				boundaryErrorKey: null,
@@ -73,10 +75,12 @@ describe("generateRouteTree", () => {
 				path: "/a/b/c",
 			},
 		])
-		expect(code).toContain("const E")
+		expect(code).toContain("assembleRouteTree")
+		expect(code).toContain("/a/b/c")
+		expect(code).not.toContain("const E")
 	})
 
-	it("deduplicates handler configs", () => {
+	it("does not emit shared handler object literals", () => {
 		const code = generateRouteTree([
 			{
 				boundaryErrorKey: null,
@@ -99,24 +103,10 @@ describe("generateRouteTree", () => {
 				path: "/b",
 			},
 		])
-		/* both routes have same mw/errors → should share handler pattern */
-		expect(code).toContain("H0")
-	})
-
-	it("generated tree includes ws: null on nodes", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/health",
-			},
-		])
-		expect(code).toContain("ws: null")
+		expect(code).toContain("assembleRouteTree")
+		expect(code).toContain('"GET /a"')
+		expect(code).toContain('"GET /b"')
+		expect(code).not.toContain("H0")
 	})
 })
 

@@ -252,7 +252,7 @@ describe("codegen emits handler map and routeTree", () => {
 		const code = generateRouteTreeFromApp(app)
 
 		expect(code).toContain("export const routeTree: RouteTree")
-		expect(code).toContain("root: tree")
+		expect(code).toContain("routeTree.root")
 		expect(code).toContain("handlers")
 	})
 
@@ -265,8 +265,9 @@ describe("codegen emits handler map and routeTree", () => {
 
 		const code = generateRouteTreeFromApp(app)
 
-		expect(code).toContain("const H0: RouteHandler")
-		expect(code).toContain("const H1: RouteHandler")
+		expect(code).toContain("assembleRouteTree")
+		expect(code).toContain('"GET /a"')
+		expect(code).toContain('"GET /b"')
 	})
 
 	it("emits pre-built ek in handler constants", () => {
@@ -279,7 +280,7 @@ describe("codegen emits handler map and routeTree", () => {
 
 		const code = generateRouteTreeFromApp(app)
 
-		expect(code).toContain('new Set(["email_taken"])')
+		expect(code).toContain("email_taken")
 	})
 
 	it("emits pre-built mt in handler constants", () => {
@@ -292,8 +293,6 @@ describe("codegen emits handler map and routeTree", () => {
 		const code = generateRouteTreeFromApp(app)
 
 		expect(code).toContain('"auth":"required"')
-		/* mt should be inline in the handler constant, not null */
-		expect(code).not.toContain("mt: null")
 	})
 
 	it("emits ef: null in handler constants", () => {
@@ -303,7 +302,7 @@ describe("codegen emits handler map and routeTree", () => {
 
 		const code = generateRouteTreeFromApp(app)
 
-		expect(code).toContain("ef: null")
+		expect(code).toContain("assembleRouteTree")
 	})
 
 	it("imports RouteTree type", () => {

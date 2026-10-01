@@ -108,6 +108,399 @@ export function createNode(): TreeNode {
 	}
 }
 
+const UNSET_FN = null as unknown as RouteHandler["fn"]
+
+/** Dense array, or unique-value table + per-row indices when that JSON is smaller. */
+export type PackedColumn<T> = readonly T[] | { readonly t: readonly T[]; readonly x: readonly number[] }
+
+/** Columnar packed route table consumed by `assembleRouteTree`. */
+export type PackedRouteTable = {
+	/** Boundary error key. A string applies to every route. */
+	b?: Array<string | null> | string
+	/** Per-route error-key lists. When `k` is set, each row is the extras beyond `k`. */
+	e?: PackedColumn<readonly string[] | null>
+	/** Per-route input schemas. */
+	i?: PackedColumn<unknown>
+	/** Error keys shared by every route; prepended onto each `e` row at inflate. */
+	k?: readonly string[]
+	/** Per-route meta objects. Keys are `u` indices when `u` is set. */
+	m?: PackedColumn<Record<string, unknown> | null>
+	/** Per-route output schemas. */
+	o?: PackedColumn<unknown>
+	/** Route selectors (`METHOD /path`), same order as the other columns. */
+	s: readonly string[]
+	/** Meta key dictionary; packed meta objects use decimal index keys. */
+	u?: readonly string[]
+}
+
+const SCHEMA_KEY_PACK = new Map<string, string>([
+	["$ref", "$"],
+	["additionalItems", "ai"],
+	["additionalProperties", "ap"],
+	["allOf", "ao"],
+	["anyOf", "yo"],
+	["const", "c"],
+	["contains", "cs"],
+	["contentEncoding", "ce"],
+	["contentMediaType", "cm"],
+	["contentSchema", "cc"],
+	["default", "d"],
+	["definitions", "df"],
+	["dependentRequired", "dr"],
+	["dependentSchemas", "dh"],
+	["description", "ds"],
+	["else", "el"],
+	["enum", "en"],
+	["examples", "ex"],
+	["exclusiveMaximum", "xm"],
+	["exclusiveMinimum", "xn"],
+	["format", "f"],
+	["if", "if"],
+	["items", "it"],
+	["maxItems", "xi"],
+	["maxLength", "xl"],
+	["maxProperties", "xp"],
+	["maximum", "xa"],
+	["minItems", "ni"],
+	["minLength", "nl"],
+	["minProperties", "np"],
+	["minimum", "na"],
+	["multipleOf", "mo"],
+	["not", "nt"],
+	["nullable", "nu"],
+	["oneOf", "oo"],
+	["pattern", "pt"],
+	["patternProperties", "pp"],
+	["prefixItems", "pi"],
+	["properties", "p"],
+	["propertyNames", "pn"],
+	["required", "r"],
+	["then", "th"],
+	["title", "ti"],
+	["type", "t"],
+	["unevaluatedItems", "ue"],
+	["unevaluatedProperties", "up"],
+	["uniqueItems", "ui"],
+])
+
+function invertStringMap(src: Map<string, string>): Map<string, string> {
+	const out = new Map<string, string>()
+	for (const [long, short] of src) out.set(short, long)
+	return out
+}
+
+const SCHEMA_KEY_UNPACK = invertStringMap(SCHEMA_KEY_PACK)
+
+const SCHEMA_TYPE_PACK = new Map<string, string>([
+	["array", "a"],
+	["boolean", "b"],
+	["integer", "i"],
+	["null", "l"],
+	["number", "n"],
+	["object", "o"],
+	["string", "s"],
+])
+const SCHEMA_TYPE_UNPACK = invertStringMap(SCHEMA_TYPE_PACK)
+
+const SCHEMA_FORMAT_PACK = new Map<string, string>([
+	["binary", "bin"],
+	["date", "d"],
+	["date-time", "dt"],
+	["email", "e"],
+	["hostname", "hn"],
+	["int32", "i3"],
+	["int64", "i6"],
+	["ipv4", "v4"],
+	["ipv6", "v6"],
+	["time", "tm"],
+	["uri", "u"],
+	["uri-reference", "ur"],
+	["uuid", "id"],
+])
+const SCHEMA_FORMAT_UNPACK = invertStringMap(SCHEMA_FORMAT_PACK)
+
+const INPUT_KEY_PACK = new Map<string, string>([
+	["cookies", "c"],
+	["form", "f"],
+	["headers", "h"],
+	["json", "j"],
+	["params", "p"],
+	["search", "q"],
+])
+const INPUT_KEY_UNPACK = invertStringMap(INPUT_KEY_PACK)
+
+const OUTPUT_CT_PACK = new Map<string, string>([
+	["application/cbor", "cb"],
+	["application/json", "j"],
+	["application/msgpack", "mp"],
+	["application/octet-stream", "os"],
+	["application/pdf", "pf"],
+	["application/xml", "xm"],
+	["redirect", "rd"],
+	["text/csv", "csv"],
+	["text/event-stream", "sse"],
+	["text/html", "ht"],
+	["text/plain", "tp"],
+])
+const OUTPUT_CT_UNPACK = invertStringMap(OUTPUT_CT_PACK)
+
+const SCHEMA_NAME_CHILDREN = new Set(["$defs", "definitions", "dependentSchemas", "patternProperties", "properties"])
+const SCHEMA_NODE_CHILDREN = new Set([
+	"$defs",
+	"additionalItems",
+	"additionalProperties",
+	"allOf",
+	"anyOf",
+	"contains",
+	"contentSchema",
+	"definitions",
+	"dependentSchemas",
+	"else",
+	"if",
+	"items",
+	"not",
+	"oneOf",
+	"patternProperties",
+	"prefixItems",
+	"properties",
+	"propertyNames",
+	"then",
+	"unevaluatedItems",
+	"unevaluatedProperties",
+])
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function remapLeaf(value: unknown, map: Map<string, string>): unknown {
+	if (typeof value === "string") return map.get(value) ?? value
+	if (Array.isArray(value)) {
+		return value.map((item) => (typeof item === "string" ? (map.get(item) ?? item) : item))
+	}
+	return value
+}
+
+function isNullTypeSchema(value: unknown): boolean {
+	return isPlainObject(value) && Object.keys(value).length === 1 && value.type === "null"
+}
+
+function packJsonSchema(node: unknown): unknown {
+	if (Array.isArray(node)) return node.map(packJsonSchema)
+	if (!isPlainObject(node)) return node
+
+	const oneOf = node.oneOf
+	if (Array.isArray(oneOf) && oneOf.length === 2 && Object.keys(node).length === 1) {
+		if (isPlainObject(oneOf[0]) && isNullTypeSchema(oneOf[1])) {
+			const packed = packJsonSchema(oneOf[0])
+			if (isPlainObject(packed)) {
+				packed.n1 = 1
+				return packed
+			}
+		}
+		if (isNullTypeSchema(oneOf[0]) && isPlainObject(oneOf[1])) {
+			const packed = packJsonSchema(oneOf[1])
+			if (isPlainObject(packed)) {
+				packed.n1 = 0
+				return packed
+			}
+		}
+	}
+
+	const out: Record<string, unknown> = Object.create(null)
+	for (const [key, value] of Object.entries(node)) {
+		const nextKey = SCHEMA_KEY_PACK.get(key) ?? key
+		if (key === "type") {
+			out[nextKey] = remapLeaf(value, SCHEMA_TYPE_PACK)
+			continue
+		}
+		if (key === "format") {
+			out[nextKey] = remapLeaf(value, SCHEMA_FORMAT_PACK)
+			continue
+		}
+		if (SCHEMA_NAME_CHILDREN.has(key) && isPlainObject(value)) {
+			const inner: Record<string, unknown> = Object.create(null)
+			for (const [name, child] of Object.entries(value)) inner[name] = packJsonSchema(child)
+			out[nextKey] = inner
+			continue
+		}
+		if (SCHEMA_NODE_CHILDREN.has(key)) {
+			out[nextKey] = packJsonSchema(value)
+			continue
+		}
+		out[nextKey] = value
+	}
+	return out
+}
+
+function unpackJsonSchema(node: unknown): unknown {
+	if (Array.isArray(node)) return node.map(unpackJsonSchema)
+	if (!isPlainObject(node)) return node
+
+	if (Object.hasOwn(node, "n1")) {
+		const copy: Record<string, unknown> = Object.create(null)
+		for (const [key, value] of Object.entries(node)) {
+			if (key !== "n1") copy[key] = value
+		}
+		const rest = unpackJsonSchema(copy)
+		const nullBranch = { type: "null" }
+		return node.n1 === 0 ? { oneOf: [nullBranch, rest] } : { oneOf: [rest, nullBranch] }
+	}
+
+	const out: Record<string, unknown> = Object.create(null)
+	for (const [key, value] of Object.entries(node)) {
+		const nextKey = SCHEMA_KEY_UNPACK.get(key) ?? key
+		if (nextKey === "type") {
+			out[nextKey] = remapLeaf(value, SCHEMA_TYPE_UNPACK)
+			continue
+		}
+		if (nextKey === "format") {
+			out[nextKey] = remapLeaf(value, SCHEMA_FORMAT_UNPACK)
+			continue
+		}
+		if (SCHEMA_NAME_CHILDREN.has(nextKey) && isPlainObject(value)) {
+			const inner: Record<string, unknown> = Object.create(null)
+			for (const [name, child] of Object.entries(value)) inner[name] = unpackJsonSchema(child)
+			out[nextKey] = inner
+			continue
+		}
+		if (SCHEMA_NODE_CHILDREN.has(nextKey)) {
+			out[nextKey] = unpackJsonSchema(value)
+			continue
+		}
+		out[nextKey] = value
+	}
+	return out
+}
+
+export function packInputSchemas(iv: unknown): unknown {
+	if (iv === null || typeof iv !== "object") return iv
+	const out: Record<string, unknown> = Object.create(null)
+	for (const [source, schema] of Object.entries(iv as Record<string, unknown>)) {
+		out[INPUT_KEY_PACK.get(source) ?? source] = packJsonSchema(schema)
+	}
+	return out
+}
+
+export function unpackInputSchemas(iv: unknown): unknown {
+	if (iv === null || typeof iv !== "object") return iv
+	const out: Record<string, unknown> = Object.create(null)
+	for (const [source, schema] of Object.entries(iv as Record<string, unknown>)) {
+		out[INPUT_KEY_UNPACK.get(source) ?? source] = unpackJsonSchema(schema)
+	}
+	return out
+}
+
+export function packOutputSchemas(os: unknown): unknown {
+	if (os === null || typeof os !== "object") return os
+	const out: Record<string, unknown> = Object.create(null)
+	for (const [contentType, statuses] of Object.entries(os as Record<string, unknown>)) {
+		const packedCt = OUTPUT_CT_PACK.get(contentType) ?? contentType
+		if (contentType === "redirect" || statuses === null || typeof statuses !== "object") {
+			out[packedCt] = statuses
+			continue
+		}
+		const inner: Record<string, unknown> = Object.create(null)
+		for (const [statusKey, schema] of Object.entries(statuses as Record<string, unknown>)) {
+			inner[statusKey] = schema === true ? true : packJsonSchema(schema)
+		}
+		out[packedCt] = inner
+	}
+	return out
+}
+
+export function unpackOutputSchemas(os: unknown): unknown {
+	if (os === null || typeof os !== "object") return os
+	const out: Record<string, unknown> = Object.create(null)
+	for (const [contentType, statuses] of Object.entries(os as Record<string, unknown>)) {
+		const longCt = OUTPUT_CT_UNPACK.get(contentType) ?? contentType
+		if (longCt === "redirect" || statuses === null || typeof statuses !== "object") {
+			out[longCt] = statuses
+			continue
+		}
+		const inner: Record<string, unknown> = Object.create(null)
+		for (const [statusKey, schema] of Object.entries(statuses as Record<string, unknown>)) {
+			inner[statusKey] = schema === true ? true : unpackJsonSchema(schema)
+		}
+		out[longCt] = inner
+	}
+	return out
+}
+
+function columnAt<T>(col: PackedColumn<T> | undefined, index: number, fallback: T): T {
+	if (col === undefined) return fallback
+	if (!Array.isArray(col) && "x" in col) {
+		const value = col.t[col.x[index]]
+		return (value === undefined ? fallback : value) as T
+	}
+	const value = col[index]
+	return (value === undefined ? fallback : value) as T
+}
+
+function mapColumn<T, U>(col: PackedColumn<T> | undefined, fn: (value: T) => U): PackedColumn<U> | undefined {
+	if (col === undefined) return undefined
+	if (!Array.isArray(col) && "x" in col) {
+		return { t: col.t.map(fn), x: col.x }
+	}
+	return (col as readonly T[]).map(fn)
+}
+
+function unpackMeta(
+	mt: Record<string, unknown> | null,
+	names: readonly string[] | undefined,
+): Record<string, unknown> | null {
+	if (mt === null || names === undefined) return mt
+	const out: Record<string, unknown> = Object.create(null)
+	for (const [key, value] of Object.entries(mt)) {
+		const idx = Number(key)
+		const name = Number.isInteger(idx) ? names[idx] : undefined
+		out[name ?? key] = value
+	}
+	return out
+}
+
+/**
+ * Inflate a packed route table into a live route tree.
+ * Each handler and each `ek` Set is a unique object so `.routeTree()` patches
+ * cannot cross-wire routes.
+ */
+export function assembleRouteTree(table: PackedRouteTable): RouteTree {
+	const root = createNode()
+	const handlers: Record<string, RouteHandler> = Object.create(null)
+	const meta: Record<string, Record<string, unknown>> = Object.create(null)
+	const selectors = table.s
+	const sharedEk = table.k ?? []
+	const inputCol = mapColumn(table.i, unpackInputSchemas)
+	const outputCol = mapColumn(table.o, unpackOutputSchemas)
+	const metaCol = mapColumn(table.m, (mt) => unpackMeta(mt, table.u))
+	for (let i = 0; i < selectors.length; i++) {
+		const sel = selectors[i]
+		const bek = typeof table.b === "string" ? table.b : (table.b?.[i] ?? null)
+		const extra = columnAt(table.e, i, [] as readonly string[])
+		const mt = columnAt(metaCol, i, null)
+		const handler: RouteHandler = {
+			bek,
+			ef: null,
+			ek: new Set(sharedEk.length === 0 ? (extra ?? []) : [...sharedEk, ...(extra ?? [])]),
+			fn: UNSET_FN,
+			iv: columnAt(inputCol, i, null) as RouteHandler["iv"],
+			mt,
+			mw: [],
+			os: columnAt(outputCol, i, null) as RouteHandler["os"],
+			ov: null,
+			rp: "",
+		}
+		handlers[sel] = handler
+		if (mt !== null) meta[sel] = mt
+		const sp = sel.indexOf(" ")
+		if (sp === -1) {
+			throw new Error(`Invalid route selector: ${sel}`)
+		}
+		insertRoute(root, sel.slice(0, sp) as HttpMethod, sel.slice(sp + 1), handler)
+	}
+	return { handlers, meta, root }
+}
+
 function splitSegments(path: string): string[] {
 	return path.split("/").filter((s) => s.length > 0)
 }
