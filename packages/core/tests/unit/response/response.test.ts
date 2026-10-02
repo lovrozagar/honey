@@ -126,6 +126,42 @@ describe("HoneyRes", () => {
 			expect(response.status).toBe(200)
 			expect(await response.text()).toBe("proxied")
 		})
+
+		it("copies a response with immutable headers so they can be set", async () => {
+			/* fetch(), Fetcher.fetch, cache.match, and Response.redirect return guarded headers */
+			const guarded = Response.redirect("https://example.com/next", 302)
+			expect(() => guarded.headers.set("x-request-id", "a")).toThrow(TypeError)
+			const response = res.raw(guarded)
+			response.headers.set("x-request-id", "a")
+			expect(response.headers.get("x-request-id")).toBe("a")
+			expect(response.status).toBe(302)
+			expect(response.headers.get("location")).toBe("https://example.com/next")
+		})
+
+		it("keeps status, statusText, headers, and the streamed body", async () => {
+			const plain = new Response("asset", {
+				headers: { "content-type": "application/json", etag: '"v1"' },
+				status: 203,
+				statusText: "From Asset",
+			})
+			const response = res.raw(plain)
+			expect(response.status).toBe(203)
+			expect(response.statusText).toBe("From Asset")
+			expect(response.headers.get("content-type")).toBe("application/json")
+			expect(response.headers.get("etag")).toBe('"v1"')
+			expect(await response.text()).toBe("asset")
+		})
+
+		it("returns a WebSocket upgrade unchanged", () => {
+			const upgrade = new Response(null, { status: 200 })
+			Object.defineProperty(upgrade, "status", { value: 101 })
+			expect(res.raw(upgrade)).toBe(upgrade)
+		})
+
+		it("returns a response Honey built unchanged", () => {
+			const built = res.json("ok", { id: 1 })
+			expect(res.raw(built)).toBe(built)
+		})
 	})
 
 	describe("sse", () => {

@@ -1,7 +1,7 @@
 import type { CookieOptions } from "./cookie.ts"
 import { serializeCookie } from "./cookie.ts"
 import type { HoneyError } from "./error.ts"
-import { createHoneyResponse } from "./honey-response.ts"
+import { createHoneyResponse, isHoneyResponse } from "./honey-response.ts"
 import type { StatusKey } from "./types.ts"
 import { statusKeyToCode } from "./types.ts"
 
@@ -158,8 +158,15 @@ export class HoneyRes {
 		return typed(new Response(null, { headers, status: 204 }))
 	}
 
+	/**
+	 * Return a native Response. `fetch()`, `Fetcher.fetch`, `cache.match`, and `Response.redirect`
+	 * return guarded headers that throw on `set`, which breaks response middleware (`requestId`,
+	 * `secureHeaders`, `poweredBy`, `serverTiming`). Copy status and headers into a new Response; the
+	 * body streams through unread. WebSocket upgrades and responses Honey built pass through as-is.
+	 */
 	raw(response: Response): TypedResponse {
-		return typed(response)
+		if (response.status === 101 || isHoneyResponse(response) || RAW_BODY in response) return typed(response)
+		return typed(new Response(response.body, response))
 	}
 
 	redirect(url: string, opts?: ResponseOptions): TypedResponse<"none", "found"> {

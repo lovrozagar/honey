@@ -2,6 +2,14 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.6.2 - 2026-10-02
+
+### Fixed
+
+- `ctx.res.raw(response)` copies status and headers into a new `Response`, and the body streams through unread. Responses from `fetch()`, `Fetcher.fetch` (Workers `ASSETS`, service bindings), `cache.match`, and `Response.redirect` have immutable headers. `requestId`, `secureHeaders`, `poweredBy`, and `serverTiming` set headers in place, so those routes returned 500. WebSocket upgrades (`101`) and responses Honey built pass through unchanged.
+
+Drop any local `new Response(r.body, r)` wrapper around `ctx.res.raw`.
+
 ## 0.6.1 - 2026-10-02
 
 ### Changed
