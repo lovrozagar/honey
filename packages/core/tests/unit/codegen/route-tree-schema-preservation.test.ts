@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { generateOpenApi, generateRouteTreeFromApp, prepareCodegen } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
-import type { RouteTree } from "../../../src/tree.ts"
 
 /* Inline reproducer for the transform-piped shape that createListQuerySchema builds.
  * Avoids a cross-workspace dep — honey tests stay self-contained. */
@@ -47,23 +46,6 @@ function resolveRef(
 	return (openApiSpec.components?.schemas?.[name] ?? refOrSchema) as Record<string, unknown>
 }
 
-/* esbuild strips types and rewrites the honey/tree import to an absolute path
- * so the emitted module can be evaluated at test time without tsc. */
-async function evalTreeModule(code: string): Promise<{ routeTree: RouteTree }> {
-	const { transform } = await import("esbuild")
-	const rewritten = code.replace(
-		/from\s+"honey\/tree"/g,
-		`from ${JSON.stringify(new URL("../../../src/tree.ts", import.meta.url).pathname)}`,
-	)
-	const { code: js } = await transform(rewritten, {
-		format: "esm",
-		loader: "ts",
-		target: "esnext",
-	})
-	const dataUrl = `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`
-	return (await import(dataUrl)) as { routeTree: RouteTree }
-}
-
 function buildFixtureApp() {
 	const app = honey<{}>()
 	app
@@ -77,29 +59,24 @@ function buildFixtureApp() {
 	return app
 }
 
-describe("route tree schema preservation", () => {
-	it("emits non-null iv/os in handler constants for routes that declare schemas", async () => {
+describe("route tree intern omits JSON Schema", () => {
+	it("omits iv/os keys for routes that declare schemas", async () => {
 		await prepareCodegen()
 		const app = buildFixtureApp()
 		const code = generateRouteTreeFromApp(app)
 
-		expect(code).not.toMatch(/iv:\s*null,\s*os:\s*null/)
-		expect(code).toMatch(/\biv:\s*I\d+/)
-		expect(code).toMatch(/\bos:\s*O\d+/)
-		expect(code).toContain('"application/json"')
-		expect(code).toContain('"ok"')
-		expect(code).toContain('"project_id"')
-		expect(code).toContain('"url"')
+		expect(code).not.toMatch(/\biv:/)
+		expect(code).not.toMatch(/\bos:/)
+		expect(code).not.toMatch(/\biv:\s*I\d+/)
+		expect(code).not.toMatch(/\bos:\s*O\d+/)
+		expect(code).not.toContain('"additionalProperties"')
+		expect(code).not.toContain('"application/json"')
 	})
 
-	it("round-trips through generateOpenApi with 200 response and requestBody (gateway flow)", async () => {
+	it("generateOpenApi from the live app keeps 200 response and requestBody", async () => {
 		await prepareCodegen()
 		const app = buildFixtureApp()
-		const code = generateRouteTreeFromApp(app)
-		const { routeTree } = await evalTreeModule(code)
-
-		const gateway = honey<{}>().routeTree(routeTree)
-		const spec = await generateOpenApi(gateway, {
+		const spec = await generateOpenApi(app, {
 			info: { title: "T", version: "1" },
 		})
 
@@ -132,16 +109,17 @@ describe("route tree schema preservation", () => {
 		expect(projectIdParam?.schema).toMatchObject({ type: "string" })
 	})
 
-	it("routes with no declared schemas still emit iv: null / os: null", async () => {
+	it("omits iv/os keys when a route declares no schemas", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toMatch(/H0:[^\n]*iv:\s*null[^\n]*os:\s*null/)
+		expect(code).not.toMatch(/\biv:/)
+		expect(code).not.toMatch(/\bos:/)
 	})
 
-	it("preserves all input sources: json, search, params, headers, cookies", async () => {
+	it("intern does not emit input source keys", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 		app
@@ -156,14 +134,12 @@ describe("route tree schema preservation", () => {
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('"json"')
-		expect(code).toContain('"search"')
-		expect(code).toContain('"params"')
-		expect(code).toContain('"headers"')
-		expect(code).toContain('"cookies"')
+		expect(code).not.toContain('"json"')
+		expect(code).not.toContain('"cookies"')
+		expect(code).not.toMatch(/\biv:/)
 	})
 
-	it("preserves redirect output shape (status keys, no schema)", async () => {
+	it("intern does not emit redirect output shape", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 		app
@@ -172,12 +148,12 @@ describe("route tree schema preservation", () => {
 			.handler((ctx) => ctx.res.redirect("found", "/somewhere"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('"redirect"')
-		expect(code).toContain('"found":true')
-		expect(code).toContain('"moved_permanently":true')
+		expect(code).not.toContain('"redirect"')
+		expect(code).not.toContain('"moved_permanently"')
+		expect(code).not.toMatch(/\bos:/)
 	})
 
-	it("preserves multiple output content types (application/json + text/html)", async () => {
+	it("intern does not emit output content types", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 		app
@@ -189,11 +165,11 @@ describe("route tree schema preservation", () => {
 			.handler((ctx) => ctx.res.html("ok", "<p>ok</p>"))
 
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('"application/json"')
-		expect(code).toContain('"text/html"')
+		expect(code).not.toContain('"application/json"')
+		expect(code).not.toContain('"text/html"')
 	})
 
-	it("serialises transform-piped search schema into iv block with query property names", async () => {
+	it("intern does not serialise transform-piped search schemas", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 
@@ -204,14 +180,12 @@ describe("route tree schema preservation", () => {
 
 		const code = generateRouteTreeFromApp(app)
 
-		expect(code).toContain('"cursor"')
-		expect(code).toContain('"filter"')
-		expect(code).toContain('"limit"')
-		expect(code).toContain('"sort"')
-		expect(code).toMatch(/\biv:\s*I\d+/)
+		expect(code).not.toContain('"cursor"')
+		expect(code).not.toMatch(/\biv:\s*I\d+/)
+		expect(code).not.toMatch(/\biv:/)
 	})
 
-	it("round-trip via evalTreeModule preserves query params in generateOpenApi output (gateway flow)", async () => {
+	it("generateOpenApi from the live app keeps query params", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 
@@ -220,11 +194,7 @@ describe("route tree schema preservation", () => {
 			.input({ search: inlineListQuerySchema })
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 
-		const code = generateRouteTreeFromApp(app)
-		const { routeTree } = await evalTreeModule(code)
-
-		const gateway = honey<{}>().routeTree(routeTree)
-		const spec = await generateOpenApi(gateway, { info: { title: "T", version: "1" } })
+		const spec = await generateOpenApi(app, { info: { title: "T", version: "1" } })
 
 		const op = spec.paths["/items"]?.get as Record<string, unknown>
 		const params = (op?.parameters ?? []) as Array<Record<string, unknown>>

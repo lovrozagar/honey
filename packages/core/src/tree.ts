@@ -18,8 +18,8 @@ export type RouteHandler = {
 	ek: Set<string>
 	/** handler function */
 	fn: (ctx: unknown) => Response | Promise<Response>
-	/** input validation schemas (null = no input validation) */
-	iv: InputSchemasDef | null
+	/** input validation schemas — intern trees omit; missing/`null` = no validation */
+	iv?: InputSchemasDef | null
 	/** route metadata — frozen object, accessible via ctx.meta */
 	mt: Record<string, unknown> | null
 	/** middleware chain — same as RuntimeMiddleware, inlined to avoid circular dep */
@@ -29,8 +29,8 @@ export type RouteHandler = {
 			next: (additions?: Record<string, unknown>) => Promise<Response>,
 		) => Promise<Response>
 	>
-	/** output schemas by content-type (null = no output validation) */
-	os: OutputSchemaDef | null
+	/** output schemas by content-type — intern trees omit; missing/`null` = no validation */
+	os?: OutputSchemaDef | null
 	/** output validator function — validates response body against schema */
 	ov?: OutputValidator | null
 	/** registered path pattern (e.g. "/users/:id"); intern trees omit this */

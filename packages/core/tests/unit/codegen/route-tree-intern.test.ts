@@ -186,7 +186,7 @@ describe("generateRouteTree intern", () => {
 		expect(handlers["GET /a"].fn).toBeNull()
 	})
 
-	it("shares identical iv/os JSON by reference after eval", async () => {
+	it("omits JSON Schema from intern even when routes share iv/os", async () => {
 		const schema = {
 			json: { properties: { id: { type: "string" } }, required: ["id"], type: "object" },
 		}
@@ -217,12 +217,14 @@ describe("generateRouteTree intern", () => {
 				path: "/two",
 			},
 		])
-		expect(code).toMatch(/const I0 = /)
-		expect(code).toMatch(/const O0 = /)
-		expect(code).toMatch(/const J0 = /)
+		expect(code).not.toMatch(/const I\d+ = /)
+		expect(code).not.toMatch(/const O\d+ = /)
+		expect(code).not.toMatch(/\biv:/)
+		expect(code).not.toMatch(/\bos:/)
+		expect(code).not.toContain('"additionalProperties"')
 		const { handlers } = await evalTreeModule(code)
-		expect(handlers["POST /one"].iv).toBe(handlers["POST /two"].iv)
-		expect(handlers["POST /one"].os).toBe(handlers["POST /two"].os)
+		expect(handlers["POST /one"].iv).toBeUndefined()
+		expect(handlers["POST /two"].os).toBeUndefined()
 	})
 
 	it('inlines a unique error-key array so new Set(["email_taken"]) stays greppable', () => {
@@ -319,7 +321,7 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 		expect(handlers["GET /orgs"].mt).toEqual({ summary: "List orgs", tags: ["orgs"] })
 	})
 
-	it("shared nested string schemas intern across routes from a live app", async () => {
+	it("live-app intern omits shared input schemas from the isolate tree", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 		const body = z.object({ email: z.string().email(), name: z.string() })
@@ -332,10 +334,12 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 			.input({ json: body })
 			.handler((c) => c.res.text("ok", "ok"))
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toMatch(/const I0 = /)
-		expect(code).toMatch(/iv: I0/)
+		expect(code).not.toMatch(/const I\d+ = /)
+		expect(code).not.toMatch(/\biv:/)
+		expect(code).not.toContain('"email"')
 		const { handlers } = await evalTreeModule(code)
-		expect(handlers["POST /a"].iv).toBe(handlers["POST /b"].iv)
+		expect(handlers["POST /a"].iv).toBeUndefined()
+		expect(handlers["POST /b"].iv).toBeUndefined()
 	})
 
 	it("preserves pre-built ek greppability for a single route", () => {

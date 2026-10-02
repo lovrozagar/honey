@@ -1094,12 +1094,12 @@ Adapters if you wire them yourself: `bunWebSocket` (`honey/ws/bun`), `nodeWebSoc
 
 `honey()` stays fetch-only until you opt in:
 
-| Call or import                                                             | Loads                                        |
-| -------------------------------------------------------------------------- | -------------------------------------------- |
-| `app.serve()` or `import "@lovrozagar/honey/serve"`                        | Listen adapters                              |
-| `app.openapi()` / `app.manifest()` or `import "@lovrozagar/honey/openapi"` | Spec + docs (codegen; live Zod)              |
-| `import { spec } from "@lovrozagar/honey/openapi/spec"`                    | Spec walker (intern JSON Schema; no codegen) |
-| `app.errorI18n()` or `import "@lovrozagar/honey/i18n"`                     | Error i18n                                   |
+| Call or import                                                             | Loads                                              |
+| -------------------------------------------------------------------------- | -------------------------------------------------- |
+| `app.serve()` or `import "@lovrozagar/honey/serve"`                        | Listen adapters                                    |
+| `app.openapi()` / `app.manifest()` or `import "@lovrozagar/honey/openapi"` | Spec + docs (codegen; live Zod)                    |
+| `import { spec } from "@lovrozagar/honey/openapi/spec"`                    | Spec walker (live tree; intern has no JSON Schema) |
+| `app.errorI18n()` or `import "@lovrozagar/honey/i18n"`                     | Error i18n                                         |
 
 Production bundles that only call `app.fetch` do not pull listen, OpenAPI, or i18n code. The load uses an opaque `import(["@lovrozagar/honey", name].join("/"))` so bundlers do not follow unused feature entries.
 
@@ -1513,7 +1513,7 @@ import { requestToCurl } from "@lovrozagar/honey/request-to-curl"
 await requestToCurl(req, { excludeHeader: (n) => n === "authorization" })
 ```
 
-`honey/openapi/spec` walks intern JSON Schema without codegen. `honey/openapi/scalar` and `honey/openapi/swagger` are the docs UIs `app.openapi()` loads. `honey/cli` is the generate/init binary. `honey/codegen/extract` is the ts-morph extractor used by `--types`.
+`honey/openapi/spec` walks a live tree without pulling `codegen.ts`. Intern trees omit JSON Schema — serve generate-time OpenAPI JSON as Worker assets. `honey/openapi/scalar` and `honey/openapi/swagger` are the docs UIs `app.openapi()` loads. `honey/cli` is the generate/init binary. `honey/codegen/extract` is the ts-morph extractor used by `--types`.
 
 ## Package exports
 
@@ -1525,7 +1525,7 @@ Import features from their path.
 | `honey/serve`                                                                                                                                                                                                                                          | Register Node/Bun/Deno listen                                                                                     |
 | `honey/node`                                                                                                                                                                                                                                           | Low-level Node `serve()`                                                                                          |
 | `honey/openapi`                                                                                                                                                                                                                                        | Register live spec generation (pulls codegen)                                                                     |
-| `honey/openapi/spec`                                                                                                                                                                                                                                   | Runtime spec walker — intern JSON Schema, no codegen                                                              |
+| `honey/openapi/spec`                                                                                                                                                                                                                                   | Runtime spec walker — live tree, no codegen. Intern omits JSON Schema                                             |
 | `honey/openapi/scalar` `honey/openapi/swagger`                                                                                                                                                                                                         | Docs UI                                                                                                           |
 | `honey/i18n`                                                                                                                                                                                                                                           | Register error i18n                                                                                               |
 | `@lovrozagar/honey/plugin`                                                                                                                                                                                                                             | Vite plugin + `generateFromApp`                                                                                   |

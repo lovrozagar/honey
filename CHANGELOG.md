@@ -2,6 +2,14 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.6.1 - 2026-10-02
+
+### Changed
+
+- Intern `H*` constants omit `iv` and `os`. JSON Schema no longer lives in `routes.gen.ts`. Match still uses the tree, `mt`, and `ek`. Runtime treats missing `iv`/`os` as no validation. Serve generate-time `openapi*.gen.json` as Worker static assets. `spec()` on an intern tree is metadata-only. `honey generate` still writes full OpenAPI documents from the live app.
+
+Regenerate after upgrading: `honey generate`.
+
 ## 0.6.0 - 2026-10-02
 
 ### Changed

@@ -121,7 +121,7 @@ describe("spec", () => {
 		expect((body.info as Record<string, unknown>).description).toBe("My API description")
 	})
 
-	it("walks intern JSON Schema without the openapi register", async () => {
+	it("intern spec is metadata-only; live spec still has requestBody", async () => {
 		await prepareCodegen()
 		const live = honey<{}>()
 		live
@@ -135,22 +135,19 @@ describe("spec", () => {
 			routeTree: RouteTree
 		}
 
-		const app = honey<{}>()
-		app.routeTree(mod.routeTree)
-		app.get("/openapi/json").handler(spec({ title: "Intern", version: "1" }))
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/openapi/json")
-		const body = (await res.json()) as {
-			paths: {
-				"/users"?: {
-					post?: {
-						requestBody?: { content?: { "application/json"?: { schema?: { properties?: { email?: unknown } } } } }
-					}
-				}
-			}
+		const internApp = honey<{}>()
+		internApp.routeTree(mod.routeTree)
+		internApp.get("/openapi/json").handler(spec({ title: "Intern", version: "1" }))
+		const internClient = testClient(internApp, { env: {} })
+		const internRes = await internClient.get("/openapi/json")
+		const internBody = (await internRes.json()) as {
+			paths: { "/users"?: { post?: { requestBody?: unknown } } }
 		}
-		expect(
-			body.paths["/users"]?.post?.requestBody?.content?.["application/json"]?.schema?.properties?.email,
-		).toBeDefined()
+		expect(internBody.paths["/users"]?.post).toBeDefined()
+		expect(internBody.paths["/users"]?.post?.requestBody).toBeUndefined()
+
+		const generated = await generateOpenApi(live, { info: { title: "Live", version: "1" } })
+		const post = generated.paths["/users"]?.post as { requestBody?: { content?: Record<string, unknown> } } | undefined
+		expect(post?.requestBody).toBeDefined()
 	})
 })

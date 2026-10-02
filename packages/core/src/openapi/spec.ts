@@ -13,6 +13,7 @@ type SpecOptions<TMeta = Record<string, unknown> | null> = {
 	version: string
 }
 
+/** Walks the live or intern tree. Intern trees omit `iv`/`os`; serve generate-time OpenAPI JSON as assets instead of this walker on a gateway isolate. */
 export function spec<TMeta = Record<string, unknown> | null>(
 	options: SpecOptions<TMeta>,
 ): (ctx: { res: { json(sk: "ok", data: unknown): TypedResponse } }) => TypedResponse | Promise<TypedResponse> {

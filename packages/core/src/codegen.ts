@@ -1459,14 +1459,10 @@ function buildInternPool(routes: RouteConfig[]): InternPool {
 	for (const route of routes) {
 		intern.count(route.boundaryErrorKey)
 		intern.count(route.errorKeys)
-		intern.count(route.inputSchemas)
-		intern.count(route.outputSchemas)
 		intern.count(route.meta)
 		intern.count(selectorOf(route))
 	}
 	for (const route of routes) {
-		intern.force(route.inputSchemas, "I")
-		intern.force(route.outputSchemas, "O")
 		intern.force(route.meta, "M")
 		intern.force(selectorOf(route), "P")
 	}
@@ -1598,12 +1594,8 @@ function emitRouteTree(routes: RouteConfig[], collected: CollectedRoute[] | null
 			const route = routes[i]
 			const bekExpr = route.boundaryErrorKey !== null ? intern.expr(route.boundaryErrorKey) : "null"
 			const ekSet = route.errorKeys.length > 0 ? `new Set(${intern.expr(route.errorKeys)})` : "new Set()"
-			const ivExpr = route.inputSchemas !== null ? intern.expr(route.inputSchemas) : "null"
-			const osExpr = route.outputSchemas !== null ? intern.expr(route.outputSchemas) : "null"
 			const mtExpr = route.meta !== null ? intern.expr(route.meta) : "null"
-			lines.push(
-				`const H${i}: RouteHandler = { bek: ${bekExpr}, fn: FN, mw: [], ek: ${ekSet}, iv: ${ivExpr}, os: ${osExpr}, mt: ${mtExpr} }`,
-			)
+			lines.push(`const H${i}: RouteHandler = { bek: ${bekExpr}, fn: FN, mw: [], ek: ${ekSet}, mt: ${mtExpr} }`)
 		}
 	}
 

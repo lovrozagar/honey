@@ -2,8 +2,9 @@
  * Structural intern for generated route-tree modules.
  *
  * Handler objects stay unique (`.routeTree()` patches `fn`/`mw`/`iv`/`os` onto each
- * `H*`). Values they point at — JSON Schema subtrees, meta objects, selector strings,
- * error-key arrays — are shared by identity when their JSON is identical.
+ * `H*`). Intern omits `iv`/`os` — serve generate-time OpenAPI JSON as Worker assets.
+ * Values handlers still point at — meta objects, selector strings, error-key arrays —
+ * are shared by identity when their JSON is identical.
  */
 
 export type ForcedPrefix = "I" | "M" | "O" | "P"

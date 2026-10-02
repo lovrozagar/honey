@@ -1923,7 +1923,7 @@ export class Honey<
 				if (staticHandler.fn === null) {
 					fnNullMeta = staticHandler.mt
 					fnNullParams = EMPTY_PARAMS
-					fnNullIv = staticHandler.iv
+					fnNullIv = staticHandler.iv ?? null
 					fnNullHit = true
 				} else {
 					return this._handleMatched(fc, method, path, staticHandler, EMPTY_PARAMS)
@@ -1936,7 +1936,7 @@ export class Honey<
 					if (getHandler.fn === null) {
 						fnNullMeta = getHandler.mt
 						fnNullParams = EMPTY_PARAMS
-						fnNullIv = getHandler.iv
+						fnNullIv = getHandler.iv ?? null
 						fnNullHit = true
 					} else {
 						return this._handleMatched(fc, method, path, getHandler, EMPTY_PARAMS)
@@ -1968,7 +1968,7 @@ export class Honey<
 				if (result.handler.fn === null) {
 					fnNullMeta = result.handler.mt
 					fnNullParams = result.params
-					fnNullIv = result.handler.iv
+					fnNullIv = result.handler.iv ?? null
 					fnNullHit = true
 				} else {
 					return this._handleMatched(fc, method, path, result.handler, result.params)
@@ -2461,7 +2461,7 @@ export class Honey<
 		 * because each route may match a different subset).
 		 */
 		const hasTelemetryMw = this._telemetry?.onMiddleware !== undefined
-		const hasInputValidation = handler.iv !== null
+		const hasInputValidation = handler.iv != null
 
 		/*
 		 * Error resolver — stored on ctx so the cached handler wrapper can read it.
