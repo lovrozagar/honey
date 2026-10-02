@@ -2,6 +2,18 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.6.5 - 2026-10-02
+
+### Fixed
+
+- TypeScript SDK `onAuthExpired` retried streamed bodies (already consumed by the first attempt) and skipped `FormData`, so multipart uploads that hit an expired token failed instead of retrying. Now `FormData`, `Blob`, and string bodies retry once; `ReadableStream` bodies do not.
+
+### Changed
+
+- `onAuthExpired` receives `{ rejectedToken }`, the token the 401 rejected (read from the auth header). Callers can tell whether a concurrent request already refreshed and skip a second refresh. Hooks that ignore the argument keep working.
+
+Regenerate SDKs after upgrading: `honey generate`.
+
 ## 0.6.3 - 2026-10-02
 
 ### Fixed

@@ -1300,3 +1300,54 @@ process.stdout.write(JSON.stringify({ ok, bad }) + "\\n")
 	 * exposed later. */
 	it.skip("Test 10.a.1 WS-E — ping/pong auto-handled (not user-observable)", () => {})
 })
+
+describe("ts harness — onAuthExpired request bodies", () => {
+	it("a FormData (multipart) body is retried with the new token, and the hook learns which token failed", async () => {
+		const result = (await runErrorHarnessScript(
+			loadMockSpec(),
+			`
+import { MockSDK } from "./mock.index.gen"
+
+let rejected: string | null | undefined
+let calls = 0
+const sdk = new MockSDK({
+	baseURL: process.env["BASE_URL"]!,
+	throwOnError: true,
+	headers: { Authorization: "Bearer expired-token" },
+	onAuthExpired: async (ctx) => { calls++; rejected = ctx?.rejectedToken; return "valid-token" },
+})
+const form = new FormData()
+form.set("file", new Blob(["hello multipart"], { type: "text/plain" }), "a.txt")
+const out = (await sdk.uploadBlob({ body: form as unknown as Blob })) as { size: number }
+process.stdout.write(JSON.stringify({ calls, rejected, uploaded: out.size > 0 }) + "\\n")
+`,
+		)) as { calls: number; rejected: string | null; uploaded: boolean }
+		expect(result).toEqual({ calls: 1, rejected: "expired-token", uploaded: true })
+	}, 30_000)
+
+	it("a streamed body is not retried: it was consumed by the first attempt", async () => {
+		const result = (await runErrorHarnessScript(
+			loadMockSpec(),
+			`
+import { MockSDK } from "./mock.index.gen"
+
+let calls = 0
+const sdk = new MockSDK({
+	baseURL: process.env["BASE_URL"]!,
+	throwOnError: true,
+	headers: { Authorization: "Bearer expired-token" },
+	onAuthExpired: async () => { calls++; return "valid-token" },
+})
+const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode("x")); c.close() } })
+let status = 0
+try {
+	await sdk.uploadBlob({ body: stream })
+} catch (e: unknown) {
+	status = (e as { status?: number }).status ?? 0
+}
+process.stdout.write(JSON.stringify({ calls, status }) + "\\n")
+`,
+		)) as { calls: number; status: number }
+		expect(result).toEqual({ calls: 0, status: 401 })
+	}, 30_000)
+})

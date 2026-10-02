@@ -2699,7 +2699,7 @@ function buildSDKTypes(
 	l.push(
 		`\tonResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>`,
 	)
-	l.push("\tonAuthExpired?: () => Promise<string | null>")
+	l.push("\tonAuthExpired?: (ctx: { rejectedToken: string | null }) => Promise<string | null>")
 	l.push("\tauthHeaderName?: string")
 	l.push("\tauthHeaderPrefix?: string")
 	l.push("\tonLog?: (entry: _LogEntry) => void")
@@ -3141,7 +3141,7 @@ export type ResumableConnectionOpts = {
 \turl: string
 \ttransports: TransportAdapter[]
 \ttoken?: () => string | Promise<string>
-\tonAuthExpired?: () => Promise<string | null>
+\t/** 401 on a request: return a fresh token to retry it once (null = give up). \`rejectedToken\` is the token that failed, so concurrent 401s can share one refresh. */\n\tonAuthExpired?: (ctx: { rejectedToken: string | null }) => Promise<string | null>
 \tonReconnecting?: (attempt: number, transport: Transport) => void
 \tonReconnected?: () => void
 \tsignal?: AbortSignal
@@ -4088,12 +4088,15 @@ function sdkClientDoRequest(): string {
 \t\t\tsignal?.throwIfAborted()
 \t\t\tlet response = await this.#fetchFn(url, init)
 
-\t\t\tif (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof FormData)) {
-\t\t\t\tconst newToken = await this.#config.onAuthExpired()
+\t\t\t/* FormData, Blob, and strings can be sent again; a stream was consumed by the first attempt */
+\t\t\tif (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof ReadableStream)) {
+\t\t\t\tconst authName = this.#config.authHeaderName ?? "Authorization"
+\t\t\t\tconst authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
+\t\t\t\tconst sent = new Headers(headers).get(authName)
+\t\t\t\tconst rejectedToken = sent?.startsWith(authPrefix) ? sent.slice(authPrefix.length) : (sent ?? null)
+\t\t\t\tconst newToken = await this.#config.onAuthExpired({ rejectedToken })
 \t\t\t\tif (newToken !== null && newToken !== undefined) {
 \t\t\t\t\tconst retryHeaders = new Headers(headers)
-\t\t\t\t\tconst authName = this.#config.authHeaderName ?? "Authorization"
-\t\t\t\t\tconst authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
 \t\t\t\t\tretryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
 \t\t\t\t\tresponse = await this.#fetchFn(url, { ...init, headers: retryHeaders })
 \t\t\t\t}
