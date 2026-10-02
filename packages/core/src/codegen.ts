@@ -2245,11 +2245,7 @@ export function isSSEOperation(operation: Record<string, unknown>): boolean {
 }
 
 /** JSON Schema → TypeScript type string (shim — delegates to IR pipeline). */
-export function jsonSchemaToTS(
-	schema: Record<string, unknown> | undefined,
-	depth = 0,
-	binary = "string",
-): string {
+export function jsonSchemaToTS(schema: Record<string, unknown> | undefined, depth = 0, binary = "string"): string {
 	if (!schema || depth > 8) return "unknown"
 	return irToTs(schemaToIR(schema), depth, binary)
 }
