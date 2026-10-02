@@ -2,6 +2,14 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.6.0 - 2026-10-02
+
+### Changed
+
+- `.proxy()` no longer aborts at 30s when `timeout` is omitted. Set `timeout` in milliseconds, or a `(ctx) => number`, to abort. `0` and non-positive values do not abort. WebSocket upgrades still skip the abort signal.
+
+Gateways that need a deadline must set `timeout` on `.proxy()`.
+
 ## 0.5.3 - 2026-10-02
 
 ### Changed

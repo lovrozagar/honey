@@ -217,6 +217,29 @@ describe("proxy", () => {
 
 	/* 101 WS passthrough can't be unit tested — Response(null, {status:101}) is invalid outside real upgrades */
 
+	it("omitted timeout does not set abort signal", async () => {
+		const app = createTestApp()
+			.all("/api/*")
+			.proxy({
+				destination: (_ctx, _url, init) => new Response(init.signal ? "has-signal" : "no-signal"),
+			})
+
+		const res = await app.fetch(makeRequest("GET", "/api/test"), {} as never)
+		expect(await res.text()).toBe("no-signal")
+	})
+
+	it("non-positive timeout does not set abort signal", async () => {
+		const app = createTestApp()
+			.all("/api/*")
+			.proxy({
+				destination: (_ctx, _url, init) => new Response(init.signal ? "has-signal" : "no-signal"),
+				timeout: 0,
+			})
+
+		const res = await app.fetch(makeRequest("GET", "/api/test"), {} as never)
+		expect(await res.text()).toBe("no-signal")
+	})
+
 	it("timeout produces 504 error", async () => {
 		const app = createTestApp()
 			.all("/api/*")

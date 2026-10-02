@@ -42,9 +42,9 @@ export type ProxyConfig<TCtx> = {
 	rewriteUrl?: (url: string, ctx: TCtx) => string
 
 	/**
-	 * Timeout in milliseconds. Default: 30000.
-	 * Accepts a number or a function that receives ctx and returns a number.
-	 * Disabled for WebSocket upgrades.
+	 * Timeout in milliseconds. Omitted: no abort. `0` or a non-positive
+	 * value: no abort. Accepts a number or a function that receives ctx
+	 * and returns a number. Disabled for WebSocket upgrades.
 	 */
 	timeout?: number | ((ctx: TCtx) => number)
 }
@@ -58,7 +58,7 @@ export type ProxyConfig<TCtx> = {
  * which has both fields — we access them via property access on the object.
  */
 export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<Response> {
-	const timeoutOpt = config.timeout ?? 30_000
+	const timeoutOpt = config.timeout
 
 	return async (ctx: TCtx) => {
 		const timeoutMs = typeof timeoutOpt === "function" ? timeoutOpt(ctx) : timeoutOpt
@@ -67,6 +67,7 @@ export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx)
 		const request = c["req"] as Request
 		const method = request.method
 		const isWs = request.headers.get("upgrade") === "websocket"
+		const abortMs = !isWs && timeoutMs != null && timeoutMs > 0 ? timeoutMs : undefined
 
 		/* URL resolution — path + query, no new URL() */
 		const rawUrl = request.url
@@ -108,7 +109,7 @@ export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx)
 			headers,
 			method,
 			redirect: "manual",
-			signal: isWs ? undefined : AbortSignal.timeout(timeoutMs),
+			signal: abortMs == null ? undefined : AbortSignal.timeout(abortMs),
 		}
 
 		/* duplex required for streaming body (Node needs it, CF handles implicitly) */

@@ -955,7 +955,7 @@ app.all("/upstream/*path").proxy({
 	rewriteUrl: (url) => url.replace(/^\/upstream/, ""),
 	requestHeaders: { "x-forwarded-by": "honey" },
 	// or requestHeaders: (ctx, headers) => { headers.set("x-user", ctx.user.id) }
-	timeout: 10_000, // or (ctx) => 5_000; default 30_000; disabled for WS upgrades
+	timeout: 10_000, // or (ctx) => 5_000; omit for no abort; disabled for WS upgrades
 	onResponse: (ctx, response) => {
 		response.headers.set("x-proxied", "1")
 	},
