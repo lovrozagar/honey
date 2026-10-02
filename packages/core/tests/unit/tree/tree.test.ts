@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { HttpMethod, RouteHandler, TreeNode } from "../../../src/tree.ts"
-import { createNode, insertRoute, matchRoute, mergeTree } from "../../../src/tree.ts"
+import { createNode, insertRoute, matchRoute, mergeTree, overlaySchemas } from "../../../src/tree.ts"
 
 function makeHandler(label?: string): RouteHandler {
 	return {
@@ -354,6 +354,45 @@ describe("mergeTree", () => {
 		expect(r1?.matched && r1.handler.mt).toEqual({ worker: "api" })
 		const r2 = matchRoute(merged.root, "GET", "/files/a/b.txt")
 		expect(r2?.matched && r2.handler.mt).toEqual({ worker: "api" })
+	})
+})
+
+describe("overlaySchemas", () => {
+	it("gives each route its own schemas without mutating a shared intern handler", () => {
+		const shared = makeHandler("shared")
+		const target = createNode()
+		insertRoute(target, "POST", "/a", shared)
+		insertRoute(target, "POST", "/b/:id", shared)
+
+		const ivA = { json: { kind: "a" } } as unknown as RouteHandler["iv"]
+		const ivB = { json: { kind: "b" } } as unknown as RouteHandler["iv"]
+		const source = createNode()
+		insertRoute(source, "POST", "/a", { ...makeHandler("a"), iv: ivA })
+		insertRoute(source, "POST", "/b/:id", { ...makeHandler("b"), iv: ivB })
+
+		overlaySchemas(target, source)
+
+		const a = matchRoute(target, "POST", "/a")
+		const b = matchRoute(target, "POST", "/b/1")
+		expect(a?.matched && a.handler.iv).toBe(ivA)
+		expect(b?.matched && b.handler.iv).toBe(ivB)
+		expect(shared.iv).toBeNull()
+	})
+
+	it("keeps schemas the target already has and skips routes missing from the source", () => {
+		const own = { json: { kind: "own" } } as unknown as RouteHandler["iv"]
+		const target = createNode()
+		insertRoute(target, "POST", "/a", { ...makeHandler("a"), iv: own })
+		insertRoute(target, "GET", "/local", makeHandler("local"))
+		const source = createNode()
+		insertRoute(source, "POST", "/a", { ...makeHandler("a"), iv: { json: {} } as unknown as RouteHandler["iv"] })
+
+		overlaySchemas(target, source)
+
+		const a = matchRoute(target, "POST", "/a")
+		const local = matchRoute(target, "GET", "/local")
+		expect(a?.matched && a.handler.iv).toBe(own)
+		expect(local?.matched && local.handler.iv).toBeNull()
 	})
 })
 

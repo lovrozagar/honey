@@ -2,6 +2,19 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.6.3 - 2026-10-02
+
+### Fixed
+
+- Gateway OpenAPI documents lost every request and response body after 0.6.1. A gateway app serves its generated `routes.gen.ts`, and since 0.6.1 that tree carries no JSON Schema. `honey generate` now copies `iv`/`os` from the `codegen.mergeTree` source onto the loaded gateway app before it writes OpenAPI. The gateway's own `routes.gen.ts` still omits schemas, so the isolate stays the same size.
+
+Merge live downstream apps in the `codegen.mergeTree` module with `app.toRouteTree()`. A downstream generated `routes.gen.ts` has no schemas to merge.
+
+```ts
+import { app as usersApp } from "@acme/users/app"
+export const tree = mergeTree([usersApp.toRouteTree(), { worker: "users" }])
+```
+
 ## 0.6.2 - 2026-10-02
 
 ### Fixed

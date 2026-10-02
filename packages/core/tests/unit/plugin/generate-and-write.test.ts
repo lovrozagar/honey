@@ -116,6 +116,55 @@ describe("generateAndWrite", () => {
 		await expect(generateAndWrite(config, TEMP_ROOT)).rejects.toThrow(/No app configured/)
 	})
 
+	it("documents downstream bodies in a gateway built with mergeTree", async () => {
+		/* downstream service: the live app carries the schemas */
+		const down = join(TEMP_ROOT, "down")
+		writeApp(down)
+		/* gateway: route-tree merges the downstream app; the app serves the generated tree */
+		const gw = join(TEMP_ROOT, "gw")
+		mkdirSync(join(gw, "src"), { recursive: true })
+		writeFileSync(
+			join(gw, "src/route-tree.ts"),
+			[
+				'import { mergeTree } from "@lovrozagar/honey"',
+				'import { app as downApp } from "../../down/src/app.ts"',
+				"",
+				'export const tree = mergeTree([downApp.toRouteTree(), { worker: "down" }])',
+				"",
+			].join("\n"),
+			"utf-8",
+		)
+		writeFileSync(
+			join(gw, "src/app.ts"),
+			[
+				'import { honey } from "@lovrozagar/honey"',
+				'import { routeTree } from "./_gen/routes.gen.ts"',
+				"",
+				"export const app = honey().routeTree(routeTree)",
+				"",
+			].join("\n"),
+			"utf-8",
+		)
+		/* the gateway app imports its generated tree, so a first tree-only pass must exist */
+		const treeOnly = resolveHoneyConfig({ app: "src/app.ts", codegen: { mergeTree: "src/route-tree.ts", tree: true } })
+		await generateAndWrite(treeOnly, gw)
+
+		const config = resolveHoneyConfig({
+			app: "src/app.ts",
+			codegen: { mergeTree: "src/route-tree.ts", openApi: { title: "Gateway", version: "1.0.0" }, tree: true },
+		})
+		await generateAndWrite(config, gw)
+
+		const tree = readFileSync(join(gw, "src/_gen/routes.gen.ts"), "utf-8")
+		expect(tree).toContain("items")
+		expect(tree).not.toMatch(/\biv:/)
+
+		const spec = JSON.parse(readFileSync(join(gw, "src/_gen/openapi.gen.json"), "utf-8")) as {
+			paths: Record<string, { post?: { requestBody?: { content: Record<string, unknown> } } }>
+		}
+		expect(spec.paths["/items"]?.post?.requestBody?.content["application/json"]).toBeDefined()
+	})
+
 	it("throws when the app file does not export a Honey app", async () => {
 		writeFileSync(join(TEMP_ROOT, "src/app.ts"), "export const app = { not: true }\n", "utf-8")
 		const config = resolveHoneyConfig({

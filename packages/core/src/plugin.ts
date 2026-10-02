@@ -14,6 +14,7 @@ import {
 import type { OpenApiRouteInfo, OpenApiSanitizeOptions, OpenApiSpecInput } from "./codegen.ts"
 import type { Honey } from "./index.ts"
 import type { InvalidateCheckConfig } from "./invalidate-check.ts"
+import { overlaySchemas } from "./tree.ts"
 import type { ExtractedChainTypes } from "./type-extractor.ts"
 import { toYaml, yamlSiblingPath } from "./yaml.ts"
 
@@ -393,6 +394,7 @@ export async function generateAndWrite(config: ResolvedHoneyConfig, root: string
 	const cg = config.codegen
 
 	/* phase 1: route tree — from mergeTree source or app */
+	let mergeSource: TreeResult | undefined
 	if (cg.tree && (cg.mergeTree || config.app)) {
 		const treeSrc = resolve(root, cg.mergeTree ?? config.app ?? "")
 		const exported = await loadDefaultWithJiti(treeSrc)
@@ -402,11 +404,15 @@ export async function generateAndWrite(config: ResolvedHoneyConfig, root: string
 			treeCode = generateRouteTreeFromApp(exported)
 		} else if (isRouteTree(exported)) {
 			treeCode = generateRouteTreeFromRouteTree(exported)
+			mergeSource = exported
 		} else {
 			throw new Error(`Expected Honey app or RouteTree default export in ${treeSrc}`)
 		}
 
 		writeGenFile(resolve(root, cg.tree), treeCode, "honey")
+	} else if (cg.mergeTree && cg.openApi) {
+		const exported = await loadDefaultWithJiti(resolve(root, cg.mergeTree))
+		if (isRouteTree(exported)) mergeSource = exported
 	}
 
 	/* phase 2: types, manifest, openapi, sdk, cli — app needed unless sdk has specs */
@@ -425,6 +431,8 @@ export async function generateAndWrite(config: ResolvedHoneyConfig, root: string
 			throw new Error(`Expected Honey app default export in ${appPath}`)
 		}
 		app = appExported
+		/* the app serves the intern tree (no schemas); document merged routes from their source */
+		if (mergeSource) overlaySchemas(app.toRouteTree().root, mergeSource.root)
 	}
 
 	/* manifest */

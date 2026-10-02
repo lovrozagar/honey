@@ -1024,6 +1024,16 @@ const snapshot = app.toRouteTree()
 
 `mergeTree` from `honey` / `honey/tree` merges several trees (optional extra meta per tree).
 
+Gateway codegen: point `codegen.mergeTree` at a generate-only module that merges live downstream apps with `app.toRouteTree()`. Generated `routes.gen.ts` omits JSON Schema, so merging another service's generated tree documents no request or response bodies. `honey generate` copies the merged schemas onto the gateway app before it writes OpenAPI; the gateway runtime still serves its own generated tree.
+
+```ts
+// gateway/src/route-tree.ts — codegen only, never imported at runtime
+import { mergeTree } from "@lovrozagar/honey"
+import { app as usersApp } from "@acme/users/app"
+
+export const tree = mergeTree([usersApp.toRouteTree(), { worker: "users" }])
+```
+
 `app.fetch(request, env, executionCtx?)` is always valid. Sync handlers return a `Response` directly; async handlers and middleware return a `Promise<Response>`. Callers should `await app.fetch(...)`.
 
 ## Serve

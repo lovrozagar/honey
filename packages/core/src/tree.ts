@@ -407,6 +407,39 @@ function mergeNodes(target: TreeNode, source: TreeNode, path: string): void {
 	}
 }
 
+function withSchemas(
+	target: Record<HttpMethod | "ALL", RouteHandler>,
+	source: Record<HttpMethod | "ALL", RouteHandler>,
+): Record<HttpMethod | "ALL", RouteHandler> {
+	let next = target
+	for (const [method, handler] of Object.entries(target) as Array<[HttpMethod | "ALL", RouteHandler]>) {
+		const from = source[method]
+		if (from === undefined) continue
+		const iv = handler.iv ?? from.iv
+		const os = handler.os ?? from.os
+		if (iv === handler.iv && os === handler.os) continue
+		/* intern trees share handler objects across routes — copy instead of mutating */
+		if (next === target) next = { ...target }
+		next[method] = { ...handler, iv, os }
+	}
+	return next
+}
+
+/**
+ * Copy input/output schemas from `source` onto matching routes in `target` that lack them.
+ * Generate-time only: a gateway app serves an intern tree (no schemas) while its merge source
+ * (`mergeTree` over downstream `app.toRouteTree()`) still carries them for OpenAPI.
+ */
+export function overlaySchemas(target: TreeNode, source: TreeNode): void {
+	if (target.m !== null && source.m !== null) target.m = withSchemas(target.m, source.m)
+	if (target.w !== null && source.w !== null) target.w = { ...target.w, m: withSchemas(target.w.m, source.w.m) }
+	for (const [seg, child] of Object.entries(target.s)) {
+		const from = source.s[seg]
+		if (from !== undefined) overlaySchemas(child, from)
+	}
+	if (target.d !== null && source.d !== null) overlaySchemas(target.d.c, source.d.c)
+}
+
 /** Merge source tree nodes into target tree (mutates target) */
 export function mergeInto(target: TreeNode, source: TreeNode): void {
 	bumpGeneration(target)
