@@ -2245,10 +2245,17 @@ export function isSSEOperation(operation: Record<string, unknown>): boolean {
 }
 
 /** JSON Schema → TypeScript type string (shim — delegates to IR pipeline). */
-export function jsonSchemaToTS(schema: Record<string, unknown> | undefined, depth = 0): string {
+export function jsonSchemaToTS(
+	schema: Record<string, unknown> | undefined,
+	depth = 0,
+	binary = "string",
+): string {
 	if (!schema || depth > 8) return "unknown"
-	return irToTs(schemaToIR(schema), depth)
+	return irToTs(schemaToIR(schema), depth, binary)
 }
+
+/* a file part of a multipart body is sent as a Blob/File; the runtime appends it to FormData as is */
+const FORM_BINARY_TS = "Blob"
 
 /* extract input type for an operation */
 function emitSDKInputType(op: Record<string, unknown>, path: string): { hasMandatory: boolean; type: string } {
@@ -2323,7 +2330,7 @@ function emitSDKInputType(op: Record<string, unknown>, path: string): { hasManda
 			}
 			const formContent = content["multipart/form-data"] ?? content["application/x-www-form-urlencoded"]
 			if (formContent?.schema) {
-				const entry = `form: ${jsonSchemaToTS(formContent.schema as Record<string, unknown>)}`
+				const entry = `form: ${jsonSchemaToTS(formContent.schema as Record<string, unknown>, 0, FORM_BINARY_TS)}`
 				if (required) {
 					mandatoryParts.push(entry)
 				} else {
