@@ -45,7 +45,7 @@ export type SDKConfig<TThrow extends boolean = false> = {
 	mode?: RequestMode
 	onRequest?: Array<(ctx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string }) => void | Promise<void>>
 	onResponse?: Array<(ctx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string }) => Response | undefined | Promise<Response | undefined>>
-	onAuthExpired?: () => Promise<string | null>
+	onAuthExpired?: (ctx: { rejectedToken: string | null }) => Promise<string | null>
 	authHeaderName?: string
 	authHeaderPrefix?: string
 	onLog?: (entry: _LogEntry) => void
