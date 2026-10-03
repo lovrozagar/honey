@@ -157,8 +157,9 @@ type ErrorI18nConfig<TEnv> = {
 	}) => string | Promise<string>
 }
 
+/** The warn side of a structured logger (`warn(obj, msg)` or `warn(msg)`), e.g. honey/logger. */
 type Logger = {
-	warn?(msg: string, ...args: unknown[]): void
+	warn?(objOrMsg: Record<string, unknown> | string, msg?: string): void
 }
 
 function mergePath(base: string, path: string): string {
@@ -233,11 +234,11 @@ function safeFire(fn: (() => unknown) | undefined, logger?: Logger): void {
 		const result = fn()
 		if (result && typeof result === "object" && "catch" in result) {
 			;(result as Promise<unknown>).catch((e: unknown) => {
-				logger?.warn?.("telemetry callback failed", e)
+				logger?.warn?.({ err: e }, "telemetry callback failed")
 			})
 		}
 	} catch (e) {
-		logger?.warn?.("telemetry callback failed", e)
+		logger?.warn?.({ err: e }, "telemetry callback failed")
 	}
 }
 
@@ -640,7 +641,7 @@ export class Honey<
 				}
 			}
 		} catch (e) {
-			log?.warn?.("i18n resolution failed", e)
+			log?.warn?.({ err: e }, "i18n resolution failed")
 		}
 	}
 
@@ -2670,7 +2671,7 @@ export class Honey<
 						ctx.background(
 							Promise.resolve()
 								.then(() => tapFn(ctx, metaValue))
-								.catch((e) => log?.warn?.("tap failed", key, e)),
+								.catch((e) => log?.warn?.({ err: e, tap: key }, "tap failed")),
 						)
 					}
 				}
@@ -2684,7 +2685,7 @@ export class Honey<
 						ctx.background(
 							Promise.resolve()
 								.then(() => tapFn(ctx, pending.payload))
-								.catch((e) => log?.warn?.("tap failed", pending.key, e)),
+								.catch((e) => log?.warn?.({ err: e, tap: pending.key }, "tap failed")),
 						)
 					}
 				}

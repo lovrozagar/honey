@@ -85,7 +85,7 @@ describe("bug-hunt-8: basePath prefixing", () => {
 	it("logger receives warnings from safeFire", async () => {
 		const warnings: string[] = []
 		const app = honey<{}>()
-		app.logger({ warn: (msg: string) => warnings.push(msg) })
+		app.logger({ warn: (_obj, msg) => warnings.push(msg ?? "") })
 		app.telemetry({
 			onRequest: () => {
 				throw new Error("telemetry boom")
@@ -245,7 +245,7 @@ describe("bug-hunt-8: safeFire with async rejection", () => {
 	it("async telemetry callback rejection → request still succeeds", async () => {
 		const warnings: string[] = []
 		const app = honey<{}>()
-		app.logger({ warn: (msg: string) => warnings.push(msg) })
+		app.logger({ warn: (_obj, msg) => warnings.push(msg ?? "") })
 		app.telemetry({
 			onRequest: async () => {
 				await Promise.reject(new Error("async telemetry fail"))

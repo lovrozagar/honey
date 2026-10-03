@@ -692,7 +692,7 @@ describe("logger integration", () => {
 
 		const res = await h.fetch(new Request("http://localhost/test"), {})
 		expect(res.status).toBe(200)
-		expect(warn).toHaveBeenCalledWith("telemetry callback failed", expect.any(Error))
+		expect(warn).toHaveBeenCalledWith({ err: expect.any(Error) }, "telemetry callback failed")
 	})
 
 	it("logger.warn called when i18n resolution throws", async () => {
@@ -710,7 +710,7 @@ describe("logger integration", () => {
 
 		const res = await h.fetch(new Request("http://localhost/fail"), {})
 		expect(res.status).toBe(400)
-		expect(warn).toHaveBeenCalledWith("i18n resolution failed", expect.any(Error))
+		expect(warn).toHaveBeenCalledWith({ err: expect.any(Error) }, "i18n resolution failed")
 	})
 
 	it("no logger configured → errors still swallowed silently", async () => {
