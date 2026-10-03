@@ -182,6 +182,40 @@ describe("proxy", () => {
 		expect(await res.text()).toBe("manual")
 	})
 
+	it("forwards a small body with a known length as bytes, not a stream", async () => {
+		const app = createTestApp()
+			.all("/api/*")
+			.proxy({
+				destination: async (_ctx, _url, init) => {
+					const duplex = (init as Record<string, unknown>).duplex
+					const kind = init.body instanceof ReadableStream ? "stream" : "bytes"
+					return new Response(`${kind}:${String(duplex ?? "none")}:${await new Response(init.body).text()}`)
+				},
+			})
+
+		const req = makeRequest("POST", "/api/test", { body: "{}", headers: { "content-length": "2" } })
+		/* a body some middleware cloned (tee) must still arrive whole */
+		req.clone()
+		const res = await app.fetch(req, {} as never)
+		expect(await res.text()).toBe("bytes:none:{}")
+	})
+
+	it("streams a body over the buffer limit", async () => {
+		const app = createTestApp()
+			.all("/api/*")
+			.proxy({
+				destination: (_ctx, _url, init) =>
+					new Response(init.body instanceof ReadableStream ? "stream" : "bytes"),
+			})
+
+		const big = "x".repeat(1024 * 1024 + 1)
+		const res = await app.fetch(
+			makeRequest("POST", "/api/upload", { body: big, headers: { "content-length": String(big.length) } }),
+			{} as never,
+		)
+		expect(await res.text()).toBe("stream")
+	})
+
 	it("sets duplex for POST with body", async () => {
 		const app = createTestApp()
 			.all("/api/*")

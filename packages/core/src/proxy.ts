@@ -3,6 +3,24 @@ import { EK, SK } from "./types.ts"
 
 const BODY_METHODS = new Set(["POST", "PUT", "PATCH"])
 
+/* Bodies up to this size with a declared length are forwarded as bytes; larger or unsized ones
+   stream (uploads). */
+const MAX_BUFFERED_BODY_BYTES = 1024 * 1024
+
+/**
+ * A streamed body that the destination never reads (a route without input that was sent `{}`)
+ * can keep the call open until it times out: a service binding does not settle while the
+ * request stream is unconsumed, and a stream teed by `request.clone()` (a body-logging
+ * middleware) has no known length. Bytes have neither problem.
+ */
+async function forwardBody(request: Request): Promise<BodyInit | null> {
+	if (request.body === null) return null
+	const declared = request.headers.get("content-length")
+	const length = declared === null ? Number.NaN : Number.parseInt(declared, 10)
+	if (Number.isFinite(length) && length <= MAX_BUFFERED_BODY_BYTES) return request.arrayBuffer()
+	return request.body
+}
+
 /**
  * Proxy configuration — controls how requests are forwarded to downstream services.
  *
@@ -103,9 +121,9 @@ export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx)
 		}
 
 		/* build init — plain object, no new Request() */
-		const hasBody = BODY_METHODS.has(method)
+		const body = BODY_METHODS.has(method) ? await forwardBody(request) : null
 		const init: RequestInit = {
-			body: hasBody ? request.body : undefined,
+			body: body ?? undefined,
 			headers,
 			method,
 			redirect: "manual",
@@ -113,7 +131,7 @@ export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx)
 		}
 
 		/* duplex required for streaming body (Node needs it, CF handles implicitly) */
-		if (hasBody && request.body) {
+		if (body instanceof ReadableStream) {
 			;(init as Record<string, unknown>)["duplex"] = "half"
 		}
 
