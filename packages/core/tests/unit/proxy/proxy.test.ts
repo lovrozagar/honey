@@ -204,8 +204,7 @@ describe("proxy", () => {
 		const app = createTestApp()
 			.all("/api/*")
 			.proxy({
-				destination: (_ctx, _url, init) =>
-					new Response(init.body instanceof ReadableStream ? "stream" : "bytes"),
+				destination: (_ctx, _url, init) => new Response(init.body instanceof ReadableStream ? "stream" : "bytes"),
 			})
 
 		const big = "x".repeat(1024 * 1024 + 1)

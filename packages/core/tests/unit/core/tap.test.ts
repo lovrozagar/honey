@@ -346,7 +346,9 @@ describe("tap: error isolation", () => {
 		/* wait for background taps to settle */
 		await Promise.allSettled(bgPromises)
 		/* the structured-logger shape: the tap key and the error survive into the log line */
-		expect(warnings).toEqual([[{ err: expect.objectContaining({ message: "tap failure" }), tap: "audit" }, "tap failed"]])
+		expect(warnings).toEqual([
+			[{ err: expect.objectContaining({ message: "tap failure" }), tap: "audit" }, "tap failed"],
+		])
 	})
 })
 
