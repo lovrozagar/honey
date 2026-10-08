@@ -735,9 +735,9 @@ describe("bug-hunt-8: ipRestrict — X-Real-IP header", () => {
 		expect(res.status).toBe(200)
 	})
 
-	it("CF-Connecting-IP takes priority over X-Forwarded-For", async () => {
+	it("trustProxy ignores a client-sent CF-Connecting-IP", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["1.1.1.1"], trustProxy: true }))
+		const app = honey<{}>().use(ipRestrict({ allowList: ["2.2.2.2"], trustProxy: true }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(

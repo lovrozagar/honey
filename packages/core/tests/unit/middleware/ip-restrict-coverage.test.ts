@@ -16,15 +16,23 @@ function reqWithIp(ip: string, header = "cf-connecting-ip") {
 
 describe("ip-restrict — uncovered branches", () => {
 	it("stripBrackets: IPv6 with brackets via cf-connecting-ip", async () => {
-		const app = makeApp({ allowList: ["::1"] })
+		const app = makeApp({ allowList: ["::1"], trustCloudflare: true })
 		const res = await app.fetch(reqWithIp("[::1]"), {})
 		expect(res.status).toBe(200)
 	})
 
-	it("proxyAwareGetIp: cf-connecting-ip preferred", async () => {
+	it("proxyAwareGetIp: client-sent cf-connecting-ip is ignored", async () => {
 		const app = makeApp({ allowList: ["1.2.3.4"], trustProxy: true })
 		const res = await app.fetch(reqWithIp("1.2.3.4", "cf-connecting-ip"), {})
-		expect(res.status).toBe(200)
+		expect(res.status).toBe(403)
+	})
+
+	it("proxyAwareGetIp: rightmost x-forwarded-for entry wins over client-sent ones", async () => {
+		const app = makeApp({ allowList: ["10.0.0.1"], trustProxy: true })
+		const spoofed = await app.fetch(reqWithIp("10.0.0.1, 203.0.113.9", "x-forwarded-for"), {})
+		expect(spoofed.status).toBe(403)
+		const real = await app.fetch(reqWithIp("203.0.113.9, 10.0.0.1", "x-forwarded-for"), {})
+		expect(real.status).toBe(200)
 	})
 
 	it("proxyAwareGetIp: x-forwarded-for fallback", async () => {
@@ -46,25 +54,25 @@ describe("ip-restrict — uncovered branches", () => {
 	})
 
 	it("IPv6 CIDR: fe80::/10 matches fe80::1", async () => {
-		const app = makeApp({ allowList: ["fe80::/10"] })
+		const app = makeApp({ allowList: ["fe80::/10"], trustCloudflare: true })
 		const res = await app.fetch(reqWithIp("fe80::1"), {})
 		expect(res.status).toBe(200)
 	})
 
 	it("IPv6 CIDR: fe80::/10 rejects fd00::1", async () => {
-		const app = makeApp({ allowList: ["fe80::/10"] })
+		const app = makeApp({ allowList: ["fe80::/10"], trustCloudflare: true })
 		const res = await app.fetch(reqWithIp("fd00::1"), {})
 		expect(res.status).toBe(403)
 	})
 
 	it("IPv4-mapped IPv6: ::ffff:10.0.0.1 matching", async () => {
-		const app = makeApp({ allowList: ["::ffff:10.0.0.0/120"] })
+		const app = makeApp({ allowList: ["::ffff:10.0.0.0/120"], trustCloudflare: true })
 		const res = await app.fetch(reqWithIp("::ffff:10.0.0.1"), {})
 		expect(res.status).toBe(200)
 	})
 
 	it("invalid IPv6 in CIDR rule falls back to exact match", async () => {
-		const app = makeApp({ allowList: ["not-valid-ipv6/64"] })
+		const app = makeApp({ allowList: ["not-valid-ipv6/64"], trustCloudflare: true })
 		const res = await app.fetch(reqWithIp("not-valid-ipv6/64"), {})
 		expect(res.status).toBe(200)
 	})

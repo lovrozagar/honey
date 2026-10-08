@@ -55,15 +55,29 @@ describe("ip-restrict middleware — internal", () => {
 	})
 
 	it("no IP extracted with allowList → 403", async () => {
-		const app = makeApp({ allowList: ["10.0.0.1"] })
+		const app = makeApp({ allowList: ["10.0.0.1"], trustProxy: true })
 		const res = await app.fetch(new Request("http://localhost/admin"), {})
 		expect(res.status).toBe(403)
 	})
 
-	it("no IP extracted with no allowList → allowed", async () => {
-		const app = makeApp({ denyList: ["10.0.0.1"] })
+	it("no IP extracted with a deny-only config → 403 (fails closed)", async () => {
+		const app = makeApp({ denyList: ["10.0.0.1"], trustProxy: true })
 		const res = await app.fetch(new Request("http://localhost/admin"), {})
-		expect(res.status).toBe(200)
+		expect(res.status).toBe(403)
+	})
+
+	it("no IP source configured → throws at construction", () => {
+		expect(() => ipRestrict({ allowList: ["10.0.0.1"] })).toThrow(/no client IP source/)
+		expect(() => ipRestrict({ denyList: ["10.0.0.1"] })).toThrow(/no client IP source/)
+	})
+
+	it("cf-connecting-ip is ignored unless trustCloudflare is set", async () => {
+		const app = makeApp({ allowList: ["10.0.0.1"], trustProxy: true })
+		const res = await app.fetch(reqWithIp("10.0.0.1", "cf-connecting-ip"), {})
+		expect(res.status).toBe(403)
+		const cf = makeApp({ allowList: ["10.0.0.1"], trustCloudflare: true })
+		const ok = await cf.fetch(reqWithIp("10.0.0.1", "cf-connecting-ip"), {})
+		expect(ok.status).toBe(200)
 	})
 
 	it("exact IPv6 match works", async () => {
@@ -88,7 +102,7 @@ describe("ip-restrict middleware — internal", () => {
 		expect(r2.status).toBe(403)
 	})
 
-	it("X-Forwarded-For uses first entry", async () => {
+	it("X-Forwarded-For uses the rightmost entry (the one the proxy appended)", async () => {
 		const app = makeApp({ allowList: ["10.0.0.1"], trustProxy: true })
 		const res = await app.fetch(
 			new Request("http://localhost/admin", {
@@ -96,7 +110,7 @@ describe("ip-restrict middleware — internal", () => {
 			}),
 			{},
 		)
-		expect(res.status).toBe(200)
+		expect(res.status).toBe(403)
 	})
 })
 

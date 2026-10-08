@@ -77,7 +77,7 @@ describe("P1-4: ipRestrict trusts X-Forwarded-For by default", () => {
 		const { ipRestrict } = await import("../../../src/ip-restrict.ts")
 
 		const app = honey()
-			.use(ipRestrict({ allowList: ["10.0.0.1"] }))
+			.use(ipRestrict({ allowList: ["10.0.0.1"], trustCloudflare: true }))
 			.get("/secret")
 			.handler((ctx) => ctx.res.json("ok", { access: "granted" }))
 

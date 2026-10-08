@@ -275,7 +275,7 @@ describe("edge: IPv6 in X-Forwarded-For with brackets", () => {
 		const addr = server.address() as { port: number }
 
 		const res = await request(addr.port, "/admin", {
-			headers: { "x-forwarded-for": "[::1], 10.0.0.1" },
+			headers: { "x-forwarded-for": "10.0.0.1, [::1]" },
 		})
 		expect(res.status).toBe(200)
 	})

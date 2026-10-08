@@ -882,13 +882,18 @@ app.use(
 	ipRestrict({
 		allowList: ["127.0.0.1", "10.0.0.0/8"],
 		denyList: ["192.168.1.50"],
-		trustProxy: false, // true: X-Forwarded-For / X-Real-IP after CF
-		getIp: (req) => req.headers.get("cf-connecting-ip"),
+		trustProxy: true, // behind one reverse proxy: rightmost X-Forwarded-For, then X-Real-IP
 	}),
 )
 ```
 
-Default IP: `cf-connecting-ip` only. Denied / not-allowed is **403**.
+Pick exactly one client IP source, or construction throws:
+
+- `trustProxy: true` — behind exactly one reverse proxy that appends the peer address to `X-Forwarded-For`. The rightmost entry is used; entries the client sent are ignored.
+- `trustCloudflare: true` — reads `CF-Connecting-IP`. Only safe when every request reaches the app through Cloudflare; anywhere else a client can send the header itself.
+- `getIp: (req) => ...` — your own source.
+
+A request whose IP cannot be determined is **403**, for allow and deny lists alike. Denied / not-allowed is **403**.
 
 #### `powered-by` — `@lovrozagar/honey/powered-by`
 

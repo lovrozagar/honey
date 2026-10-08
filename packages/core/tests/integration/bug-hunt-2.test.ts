@@ -300,7 +300,7 @@ describe("bug-hunt-2: ipRestrict edge cases", () => {
 
 	it("null IP (no headers) + allowList → blocked", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.0/8"] }))
+		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.0/8"], trustProxy: true }))
 		app.get("/secret").handler((ctx) => ctx.res.json("ok", { secret: true }))
 
 		/* no IP headers at all → null IP → should be blocked by allowList */

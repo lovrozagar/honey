@@ -2,6 +2,17 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## Unreleased
+
+### Security
+
+- `ipRestrict` no longer trusts `CF-Connecting-IP` by default. Off Cloudflare any client could send it and pass an allow list, or omit it and skip a deny list. A request whose IP cannot be determined is now rejected with 403 for deny-only configs too.
+- `ipRestrict({ trustProxy: true })` uses the rightmost `X-Forwarded-For` entry (the one your proxy appended) instead of the leftmost (client-controlled), and no longer reads `CF-Connecting-IP`.
+
+### Migration
+
+- `ipRestrict` needs an explicit IP source and throws at construction without one. On Cloudflare, add `trustCloudflare: true`. Behind one reverse proxy, use `trustProxy: true`. Otherwise pass `getIp`.
+
 ## 0.6.5 - 2026-10-02
 
 ### Fixed

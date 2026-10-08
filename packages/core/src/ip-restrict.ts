@@ -6,8 +6,19 @@ import { EK, SK } from "./types.ts"
 type IpRestrictOptions = {
 	allowList?: string[]
 	denyList?: string[]
+	/** Returns the client address. Takes precedence over `trustProxy` and `trustCloudflare`. */
 	getIp?: (req: Request) => string | null
+	/**
+	 * Behind exactly one reverse proxy that appends the peer address to `X-Forwarded-For`
+	 * (nginx `$proxy_add_x_forwarded_for`, most load balancers): use the rightmost entry,
+	 * the one that proxy wrote, then `X-Real-IP`. Client-sent entries to the left are ignored.
+	 */
 	trustProxy?: boolean
+	/**
+	 * Read `CF-Connecting-IP`. Only safe when every request reaches the app through Cloudflare;
+	 * anywhere else a client can send the header itself.
+	 */
+	trustCloudflare?: boolean
 }
 
 function stripBrackets(ip: string): string {
@@ -17,7 +28,7 @@ function stripBrackets(ip: string): string {
 	return ip
 }
 
-function defaultGetIp(req: Request): string | null {
+function cloudflareGetIp(req: Request): string | null {
 	const cfIp = req.headers.get("cf-connecting-ip")
 	if (cfIp) return stripBrackets(cfIp.trim())
 
@@ -25,16 +36,28 @@ function defaultGetIp(req: Request): string | null {
 }
 
 function proxyAwareGetIp(req: Request): string | null {
-	const cfIp = req.headers.get("cf-connecting-ip")
-	if (cfIp) return stripBrackets(cfIp.trim())
-
 	const xff = req.headers.get("x-forwarded-for")
-	if (xff) return stripBrackets(xff.split(",")[0].trim())
+	if (xff) {
+		/* the rightmost entry is the one the trusted proxy appended */
+		const hops = xff.split(",")
+		const last = hops[hops.length - 1].trim()
+		if (last) return stripBrackets(last)
+	}
 
 	const realIp = req.headers.get("x-real-ip")
 	if (realIp) return stripBrackets(realIp.trim())
 
 	return null
+}
+
+function resolveGetIp(opts: IpRestrictOptions): (req: Request) => string | null {
+	if (opts.getIp) return opts.getIp
+	if (opts.trustProxy === true) return proxyAwareGetIp
+	if (opts.trustCloudflare === true) return cloudflareGetIp
+	throw new Error(
+		"ipRestrict: no client IP source. Pass `getIp`, `trustProxy: true` (behind one reverse proxy), " +
+			"or `trustCloudflare: true` (only when every request comes through Cloudflare).",
+	)
 }
 
 function parseIpv4(ip: string): number | null {
@@ -158,7 +181,7 @@ function throwForbidden(): never {
 }
 
 export function ipRestrict(opts: IpRestrictOptions): MiddlewareFn<{ req: Request }, {}> {
-	const getIp = opts.getIp ?? (opts.trustProxy === true ? proxyAwareGetIp : defaultGetIp)
+	const getIp = resolveGetIp(opts)
 	const denyRules = opts.denyList?.map(parseRule) ?? []
 	const allowRules = opts.allowList?.map(parseRule) ?? []
 	const hasAllowList = allowRules.length > 0
@@ -166,16 +189,16 @@ export function ipRestrict(opts: IpRestrictOptions): MiddlewareFn<{ req: Request
 	const mw: MiddlewareFn<{ req: Request }, {}> = (ctx, next) => {
 		const ip = getIp(ctx.req)
 
+		/* fail closed: an unknown address can match neither list */
+		if (ip === null || ip === "") throwForbidden()
+
 		/* deny list checked first */
-		if (ip !== null) {
-			for (const rule of denyRules) {
-				if (matchesRule(ip, rule)) throwForbidden()
-			}
+		for (const rule of denyRules) {
+			if (matchesRule(ip, rule)) throwForbidden()
 		}
 
 		/* allow list: if set, IP must match at least one rule */
 		if (hasAllowList) {
-			if (ip === null) throwForbidden()
 			let allowed = false
 			for (const rule of allowRules) {
 				if (matchesRule(ip, rule)) {
