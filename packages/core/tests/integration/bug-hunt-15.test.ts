@@ -8,6 +8,8 @@ import {
 	generateRouteTreeFromApp,
 } from "../../src/codegen.ts"
 import { HoneyError } from "../../src/error.ts"
+import type { RouteEntry, RouteTree } from "../../src/tree.ts"
+import { createNode, insertRoute } from "../../src/tree.ts"
 import { defineErrors } from "../../src/errors.ts"
 import { etag } from "../../src/etag.ts"
 import { honey } from "../../src/index.ts"
@@ -277,81 +279,39 @@ describe("bug-hunt-15: generateOpenApi", () => {
  * ══════════════════════════════════════════════ */
 
 describe("bug-hunt-15: generateRouteTree", () => {
+	function treeOf(routes: Array<[string, string, RouteEntry?]>): RouteTree {
+		const root = createNode()
+		const entries: Record<string, RouteEntry> = {}
+		for (const [method, path, entry] of routes) entries[insertRoute(root, method as "GET", path)] = entry ?? {}
+		return { meta: {}, root, routes: entries }
+	}
+
 	it("generates valid TypeScript route tree code", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/users",
-			},
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "POST",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/users",
-			},
-			{
-				boundaryErrorKey: null,
-				errorKeys: ["not_found"],
-				inputSchemas: null,
-				meta: { auth: true },
-				method: "GET",
-				middlewareNames: ["authMw"],
-				outputSchemas: null,
-				path: "/users/:id",
-			},
-		])
+		const code = generateRouteTree(
+			treeOf([
+				["GET", "/users"],
+				["POST", "/users"],
+				["GET", "/users/:id", { ek: ["not_found"], mt: { auth: true } }],
+			]),
+		)
 
 		expect(code).toContain("import type")
 		expect(code).toContain("export const tree")
-		expect(code).toContain("export const handlers")
-		expect(code).toContain("H0")
-		expect(code).toContain("H1")
-		expect(code).toContain("H2")
+		expect(code).toContain("export const routes")
+		expect(code).toContain('"GET /users"')
+		expect(code).toContain('"POST /users"')
+		expect(code).toContain('"GET /users/:id"')
 	})
 
 	it("route tree with wildcard → correct structure", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/files/*path",
-			},
-		])
-
+		const code = generateRouteTree(treeOf([["GET", "/files/*path"]]))
 		expect(code).toContain('"path"')
-		expect(code).toContain("H0")
+		expect(code).toContain('"GET /files/*path"')
 	})
 
 	it("route tree with root route /", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/",
-			},
-		])
-
-		expect(code).toContain("H0")
+		const code = generateRouteTree(treeOf([["GET", "/"]]))
+		expect(code).toContain('"GET /"')
 		expect(code).toContain("export const tree")
 	})
 })
@@ -371,7 +331,7 @@ describe("bug-hunt-15: generateRouteTreeFromApp", () => {
 
 		const code = generateRouteTreeFromApp(app)
 		expect(code).toContain("export const tree")
-		expect(code).toContain("export const handlers")
+		expect(code).toContain("export const routes")
 		expect(code).toContain("export const routeTree")
 	})
 

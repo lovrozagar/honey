@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { honey } from "../../../src/index.ts"
 import type { MiddlewareFn } from "../../../src/middleware.ts"
-import type { WSRouteHandler } from "../../../src/tree.ts"
 import { createNode, insertWsRoute, matchWsRoute } from "../../../src/tree.ts"
 import type { WSAdapter, WSHandler } from "../../../src/ws/cloudflare.ts"
 import { WS_SEND_BUFFER_MAX, WSContextImpl } from "../../../src/ws/cloudflare.ts"
@@ -212,15 +211,8 @@ describe("cfWebSocket adapter", () => {
 /* ---- tree: insertWsRoute / matchWsRoute ---- */
 
 describe("WS tree operations", () => {
-	function makeWsHandler(): WSRouteHandler {
-		return {
-			bek: null,
-			ek: new Set(),
-			fn: { onOpen: vi.fn() },
-			iv: null,
-			mt: null,
-			mw: [],
-		}
+	function makeWsHandler(): string {
+		return "WS handler"
 	}
 
 	it("insert and match static WS route", () => {
@@ -230,7 +222,7 @@ describe("WS tree operations", () => {
 
 		const result = matchWsRoute(root, "/ws")
 		expect(result).not.toBeNull()
-		expect(result?.handler).toBe(handler)
+		expect(result?.id).toBe(handler)
 		expect(Object.keys(result?.params ?? {})).toHaveLength(0)
 	})
 
@@ -242,7 +234,7 @@ describe("WS tree operations", () => {
 		const result = matchWsRoute(root, "/rooms/abc")
 		expect(result).not.toBeNull()
 		expect(result?.params.roomId).toBe("abc")
-		expect(result?.handler).toBe(handler)
+		expect(result?.id).toBe(handler)
 	})
 
 	it("returns null for unmatched path", () => {

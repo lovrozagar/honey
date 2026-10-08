@@ -3,13 +3,17 @@ import * as z from "zod"
 import { generateRouteTree, generateRouteTreeFromApp, prepareCodegen } from "../../../src/codegen.ts"
 import { InternPool } from "../../../src/codegen-route-tree-intern.ts"
 import { defineErrors, honey } from "../../../src/index.ts"
-import type { RouteHandler, RouteTree } from "../../../src/tree.ts"
+import type { RouteEntry, RouteTree, TreeNode } from "../../../src/tree.ts"
+import { createNode, insertRoute } from "../../../src/tree.ts"
 
-async function evalTreeModule(code: string): Promise<{
-	handlers: Record<string, RouteHandler>
+type TreeModule = {
 	meta?: Record<string, Record<string, unknown>>
 	routeTree: RouteTree
-}> {
+	routes: RouteTree["routes"]
+	tree: TreeNode
+}
+
+async function evalTreeModule(code: string): Promise<TreeModule> {
 	const { transform } = await import("esbuild")
 	const { code: js } = await transform(code, {
 		format: "esm",
@@ -17,11 +21,7 @@ async function evalTreeModule(code: string): Promise<{
 		target: "esnext",
 	})
 	const dataUrl = `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`
-	return (await import(dataUrl)) as {
-		handlers: Record<string, RouteHandler>
-		meta?: Record<string, Record<string, unknown>>
-		routeTree: RouteTree
-	}
+	return (await import(dataUrl)) as TreeModule
 }
 
 describe("InternPool", () => {
@@ -100,8 +100,8 @@ describe("InternPool", () => {
 		pool.count(null)
 		pool.count(undefined)
 		pool.count("ab")
-		pool.force(null, "I")
-		pool.force(undefined, "O")
+		pool.force(null, "M")
+		pool.force(undefined, "P")
 		pool.seal()
 		expect(pool.emitConstLines()).toEqual([])
 		expect(pool.expr(null)).toBe("null")
@@ -110,28 +110,24 @@ describe("InternPool", () => {
 		expect(pool.expr(false)).toBe("false")
 	})
 
+	it("prints an own __proto__ key as a computed key so it never sets the prototype", () => {
+		const pool = new InternPool()
+		const obj = JSON.parse('{"__proto__":{"polluted":true},"a":1}') as Record<string, unknown>
+		pool.force(obj, "M")
+		pool.seal()
+		const [line] = pool.emitConstLines()
+		expect(line).toBe('const M0 = {["__proto__"]:{"polluted":true},"a":1}')
+		const value = new Function(`${line}; return M0`)() as Record<string, unknown>
+		expect(Object.getPrototypeOf(value)).toBe(Object.prototype)
+		expect(Object.keys(value)).toEqual(["__proto__", "a"])
+	})
+
 	it("omits undefined object keys so print matches JSON.stringify identity", () => {
 		const pool = new InternPool()
 		const obj = { a: 1, b: undefined as unknown }
 		pool.force(obj, "M")
 		pool.seal()
 		expect(pool.emitConstLines()).toEqual(['const M0 = {"a":1}'])
-	})
-
-	it("casts forced I/O roots at the const, not at every use", () => {
-		const iv = { json: { type: "string" } }
-		const os = { "application/json": { ok: { type: "boolean" } } }
-		const pool = new InternPool()
-		pool.count(iv)
-		pool.count(os)
-		pool.force(iv, "I")
-		pool.force(os, "O")
-		pool.seal()
-		const lines = pool.emitConstLines()
-		expect(lines.some((l) => l.includes('as unknown as RouteHandler["iv"]'))).toBe(true)
-		expect(lines.some((l) => l.includes('as unknown as RouteHandler["os"]'))).toBe(true)
-		expect(pool.expr(iv)).toBe("I0")
-		expect(pool.expr(os)).toBe("O0")
 	})
 
 	it("seal is idempotent", () => {
@@ -144,160 +140,92 @@ describe("InternPool", () => {
 	})
 })
 
+function treeOf(routes: Array<[string, string, RouteEntry?]>): RouteTree {
+	const root = createNode()
+	const entries: Record<string, RouteEntry> = {}
+	for (const [method, path, entry] of routes) entries[insertRoute(root, method as "GET", path)] = entry ?? {}
+	return { meta: {}, root, routes: entries }
+}
+
 describe("generateRouteTree intern", () => {
-	it("keeps unique handlers and unique Sets when error keys match", async () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: "internal_server_error",
-				errorKeys: ["internal_server_error", "forbidden"],
-				inputSchemas: null,
-				meta: { worker: "api" },
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/a",
-			},
-			{
-				boundaryErrorKey: "internal_server_error",
-				errorKeys: ["internal_server_error", "forbidden"],
-				inputSchemas: null,
-				meta: { worker: "api" },
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/b",
-			},
-		])
-		expect(code).toContain("const H0: RouteHandler")
-		expect(code).toContain("const H1: RouteHandler")
-		expect(code).toContain("new Set(")
+	it("shares route data by identity, never handler objects", async () => {
+		const shared = { ek: ["internal_server_error", "forbidden"], mt: { worker: "api" } }
+		const code = generateRouteTree(
+			treeOf([
+				["GET", "/a", { bek: "internal_server_error", ...shared }],
+				["GET", "/b", { bek: "internal_server_error", ...shared }],
+			]),
+		)
+		expect(code).not.toContain("RouteHandler")
 		expect(code).toMatch(/const A0 = \[/)
 		expect(code).toMatch(/const M0 = \{/)
-		expect(code).toContain("[P0]: H0")
-		expect(code).toContain("[P1]: H1")
+		expect(code).toContain("[P0]: { bek: T0, ek: A0, mt: M0 }")
+		expect(code).toContain("[P1]: { bek: T0, ek: A0, mt: M0 }")
 
-		const { handlers } = await evalTreeModule(code)
-		expect(handlers["GET /a"]).not.toBe(handlers["GET /b"])
-		expect(handlers["GET /a"].ek).not.toBe(handlers["GET /b"].ek)
-		expect(handlers["GET /a"].ek).toEqual(handlers["GET /b"].ek)
-		handlers["GET /a"].ek.add("extra")
-		expect(handlers["GET /b"].ek.has("extra")).toBe(false)
-		expect(handlers["GET /a"].mt).toBe(handlers["GET /b"].mt)
-		expect(handlers["GET /a"].fn).toBeNull()
+		const { routes, tree } = await evalTreeModule(code)
+		expect(routes["GET /a"]?.mt).toBe(routes["GET /b"]?.mt)
+		expect(tree.s.a?.m).toEqual({ GET: "GET /a" })
 	})
 
-	it("omits JSON Schema from intern even when routes share iv/os", async () => {
-		const schema = {
-			json: { properties: { id: { type: "string" } }, required: ["id"], type: "object" },
-		}
-		const os = {
-			"application/json": {
-				ok: { additionalProperties: false, properties: { id: { type: "string" } }, required: ["id"], type: "object" },
-			},
-		}
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: schema,
-				meta: null,
-				method: "POST",
-				middlewareNames: [],
-				outputSchemas: os,
-				path: "/one",
-			},
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: schema,
-				meta: null,
-				method: "POST",
-				middlewareNames: [],
-				outputSchemas: os,
-				path: "/two",
-			},
-		])
-		expect(code).not.toMatch(/const I\d+ = /)
-		expect(code).not.toMatch(/const O\d+ = /)
+	it("never emits JSON Schema even when the source tree carries it", async () => {
+		const iv = { json: { properties: { id: { type: "string" } }, type: "object" } } as unknown as RouteEntry["iv"]
+		const code = generateRouteTree(
+			treeOf([
+				["POST", "/one", { iv }],
+				["POST", "/two", { iv }],
+			]),
+		)
 		expect(code).not.toMatch(/\biv:/)
 		expect(code).not.toMatch(/\bos:/)
-		expect(code).not.toContain('"additionalProperties"')
-		const { handlers } = await evalTreeModule(code)
-		expect(handlers["POST /one"].iv).toBeUndefined()
-		expect(handlers["POST /two"].os).toBeUndefined()
+		expect(code).not.toContain('"properties"')
+		const { routes } = await evalTreeModule(code)
+		expect(routes["POST /one"]?.iv).toBeUndefined()
 	})
 
-	it('inlines a unique error-key array so new Set(["email_taken"]) stays greppable', () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: ["email_taken"],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/users",
-			},
-		])
-		expect(code).toContain('new Set(["email_taken"])')
+	it("inlines a unique error-key array so the key stays greppable", () => {
+		const code = generateRouteTree(treeOf([["GET", "/users", { ek: ["email_taken"] }]]))
+		expect(code).toContain('ek: ["email_taken"]')
 	})
 
-	it("emits tree helpers N/S and empty-children E", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/users/:id",
-			},
-		])
+	it("emits null-prototype tree helpers and no shared sentinel", async () => {
+		const code = generateRouteTree(
+			treeOf([
+				["GET", "/users/:id"],
+				["GET", "/health"],
+			]),
+		)
 		expect(code).toContain("function N(")
-		expect(code).toContain("Record<string, RouteHandler>")
-		expect(code).toContain('w as TreeNode["w"]')
-		expect(code).toContain("function S(")
-		expect(code).toContain("const E = Object.create(null)")
+		expect(code).toContain("function S<T>(")
+		expect(code).not.toContain("const E =")
 		expect(code).toContain("export const tree: TreeNode = N(")
+		const { tree } = await evalTreeModule(code)
+		expect(Object.getPrototypeOf(tree.s)).toBeNull()
+		const health = tree.s.health
+		const id = tree.s.users?.d?.c
+		expect(health?.s).not.toBe(id?.s)
 	})
 
-	it("wildcard and root routes still compile", async () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/",
-			},
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/files/*path",
-			},
-		])
-		expect(code).toContain("H0")
-		expect(code).toContain("H1")
-		expect(code).toContain('"path"')
-		const { handlers } = await evalTreeModule(code)
-		expect(handlers["GET /"]).toBeDefined()
-		expect(handlers["GET /files/*path"]).toBeDefined()
+	it("wildcard, root and prototype-named segments compile", async () => {
+		const code = generateRouteTree(
+			treeOf([
+				["GET", "/"],
+				["GET", "/files/*path"],
+				["GET", "/constructor/toString"],
+				["GET", "/__proto__/hasOwnProperty"],
+			]),
+		)
+		const { routes, tree } = await evalTreeModule(code)
+		expect(routes["GET /"]).toBeDefined()
+		expect(routes["GET /files/*path"]).toBeDefined()
+		expect(tree.s.files?.w?.n).toBe("path")
+		expect(tree.s.constructor?.s.toString?.m).toEqual({ GET: "GET /constructor/toString" })
+		expect(Object.keys(tree.s)).toContain("__proto__")
+		expect(Object.getPrototypeOf(tree.s)).toBeNull()
 	})
 })
 
 describe("generateRouteTreeFromApp intern + MetaShape", () => {
-	it("meta export reuses the handler mt const", async () => {
+	it("meta export reuses the route mt const", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 			.meta<{ tags: string[]; summary: string }>()
@@ -309,19 +237,19 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 		expect(code).toMatch(/const M0 = \{/)
 		expect(code).toContain("as MetaShape")
 		expect(code).toContain("mt: M0")
-		expect(code).toMatch(/meta: Record<string, MetaShape> = \{\s*\[P0\]: M0/)
+		expect(code).toMatch(/meta: Record<string, MetaShape> = S\(\{\s*\[P0\]: M0/)
 		expect(code).toContain('tags: ["orgs"]')
 		expect(code).toContain("& Record<string, unknown>")
 		expect(code).not.toContain("unknown[]")
 		expect(code).toContain("export type RouteSelector = typeof P0")
 
-		const { handlers, meta, routeTree } = await evalTreeModule(code)
-		expect(meta?.["GET /orgs"]).toBe(handlers["GET /orgs"].mt)
-		expect(routeTree.meta["GET /orgs"]).toBe(handlers["GET /orgs"].mt)
-		expect(handlers["GET /orgs"].mt).toEqual({ summary: "List orgs", tags: ["orgs"] })
+		const { meta, routeTree, routes } = await evalTreeModule(code)
+		expect(meta?.["GET /orgs"]).toBe(routes["GET /orgs"]?.mt)
+		expect(routeTree.meta["GET /orgs"]).toBe(routes["GET /orgs"]?.mt)
+		expect(routes["GET /orgs"]?.mt).toEqual({ summary: "List orgs", tags: ["orgs"] })
 	})
 
-	it("live-app intern omits shared input schemas from the isolate tree", async () => {
+	it("live-app tree omits input schemas", async () => {
 		await prepareCodegen()
 		const app = honey<{}>()
 		const body = z.object({ email: z.string().email(), name: z.string() })
@@ -329,26 +257,18 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 			.post("/a")
 			.input({ json: body })
 			.handler((c) => c.res.text("ok", "ok"))
-		app
-			.post("/b")
-			.input({ json: body })
-			.handler((c) => c.res.text("ok", "ok"))
 		const code = generateRouteTreeFromApp(app)
-		expect(code).not.toMatch(/const I\d+ = /)
 		expect(code).not.toMatch(/\biv:/)
 		expect(code).not.toContain('"email"')
-		const { handlers } = await evalTreeModule(code)
-		expect(handlers["POST /a"].iv).toBeUndefined()
-		expect(handlers["POST /b"].iv).toBeUndefined()
 	})
 
-	it("preserves pre-built ek greppability for a single route", () => {
+	it("preserves error-key greppability for a single route", () => {
 		const errors = defineErrors({ email_taken: "conflict" })
 		const app = honey<{}>()
 			.get("/users")
 			.errors(errors, "email_taken")
 			.handler((c) => c.res.text("ok", "ok"))
 		const code = generateRouteTreeFromApp(app)
-		expect(code).toContain('new Set(["email_taken"])')
+		expect(code).toContain('ek: ["email_taken"]')
 	})
 })

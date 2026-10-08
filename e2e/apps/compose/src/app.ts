@@ -1,4 +1,5 @@
 import type { WSAdapter } from "@lovrozagar/honey"
+import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 import "@lovrozagar/honey/openapi"
 import * as z from "zod"
@@ -23,13 +24,14 @@ const withSession = createMiddleware(async (_ctx, next) =>
 	next({ session: { orgId: "org-1", permissions: ["read", "write"] as string[], userId: "u-1" } }),
 )
 
+/** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
+export type AppOptions = { routeTree?: RouteTree }
+
 /** Shared base + .route() groups. User /docs keeps Scalar off /docs. */
-export function createApp(wsAdapter?: WSAdapter) {
-	const base = honey<Env>()
-		.errorFactory(errors)
-		.defaultErrors("invalid_token", "expired_token")
-		.use(withCache)
-		.use(withSession)
+export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
+	const root = honey<Env>()
+	if (options?.routeTree) root.routeTree(options.routeTree)
+	const base = root.errorFactory(errors).defaultErrors("invalid_token", "expired_token").use(withCache).use(withSession)
 	if (wsAdapter) base.wsAdapter(wsAdapter)
 
 	const publicRoutes = base

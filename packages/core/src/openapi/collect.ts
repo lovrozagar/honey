@@ -1,4 +1,5 @@
-import type { RouteHandler, TreeNode, WSRouteHandler } from "../tree.ts"
+import { parsePattern, toOpenApiTemplate, UNNAMED_WILDCARD } from "../pattern.ts"
+import type { RouteHandler, WSRouteHandler } from "../tree.ts"
 import type { InputSchemaEntry, StandardSchemaLike } from "../types.ts"
 
 export type CollectedRoute = {
@@ -12,59 +13,33 @@ export type CollectedWSRoute = {
 	path: string
 }
 
+/** Path parameter names of a route pattern, as OpenAPI names them (wildcards included). */
 export function extractParams(path: string): string[] {
-	const params: string[] = []
-	for (const seg of path.split("/")) {
-		if (seg.startsWith(":")) {
-			params.push(seg.endsWith("?") ? seg.slice(1, -1) : seg.slice(1))
-		}
+	const out: string[] = []
+	for (const seg of parsePattern(path)) {
+		if (seg.k === "param") out.push(seg.n)
+		else if (seg.k === "wildcard") out.push(seg.n === UNNAMED_WILDCARD ? "wildcard" : seg.n)
 	}
-	return params
+	return out
 }
 
 export function toOpenApiPath(path: string): string {
-	return path.replace(/:(\w+)\??/g, "{$1}")
+	return toOpenApiTemplate(parsePattern(path))
 }
 
-export function walkTree(
-	node: TreeNode,
-	currentPath: string,
-	routes: CollectedRoute[],
-	includeSkipped?: boolean,
-): void {
-	if (node.m !== null) {
-		for (const [method, handler] of Object.entries(node.m)) {
-			if (handler._skip && !includeSkipped) continue
-			routes.push({ handler, method, path: currentPath || "/" })
-		}
-	}
-
-	for (const [seg, child] of Object.entries(node.s)) {
-		walkTree(child, `${currentPath}/${seg}`, routes, includeSkipped)
-	}
-
-	if (node.d !== null) {
-		walkTree(node.d.c, `${currentPath}/:${node.d.n}`, routes, includeSkipped)
-	}
-
-	if (node.w !== null) {
-		for (const [method, handler] of Object.entries(node.w.m)) {
-			if (handler._skip && !includeSkipped) continue
-			routes.push({ handler, method, path: `${currentPath}/*${node.w.n}` })
-		}
-	}
+type RouteSource = {
+	_collectRoutes(includeSkipped?: boolean): CollectedRoute[]
+	_collectWsRoutes(): CollectedWSRoute[]
 }
 
-export function walkWSRoutes(node: TreeNode, currentPath: string, routes: CollectedWSRoute[]): void {
-	if (node.ws !== null) {
-		routes.push({ handler: node.ws, path: currentPath || "/" })
-	}
-	for (const [seg, child] of Object.entries(node.s)) {
-		walkWSRoutes(child, `${currentPath}/${seg}`, routes)
-	}
-	if (node.d !== null) {
-		walkWSRoutes(node.d.c, `${currentPath}/:${node.d.n}`, routes)
-	}
+/** Every served HTTP route of an app, one entry per concrete path. */
+export function collectRoutes(app: unknown, includeSkipped?: boolean): CollectedRoute[] {
+	return (app as RouteSource)._collectRoutes(includeSkipped)
+}
+
+/** Every websocket route of an app, one entry per concrete path. */
+export function collectWsRoutes(app: unknown): CollectedWSRoute[] {
+	return (app as RouteSource)._collectWsRoutes()
 }
 
 export function unwrapEntry(entry: InputSchemaEntry): StandardSchemaLike {

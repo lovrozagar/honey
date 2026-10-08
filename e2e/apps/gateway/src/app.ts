@@ -1,4 +1,5 @@
 import type { WSAdapter } from "@lovrozagar/honey"
+import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, honey } from "@lovrozagar/honey"
 import "@lovrozagar/honey/openapi"
 import * as z from "zod"
@@ -67,8 +68,12 @@ const ListQuery = z.object({ cursor: z.string().optional() }).meta({
 /** one line, every route below it — and it cannot disagree with what it enforces */
 const shard = createMiddleware(async (_ctx, next) => next({ shard: "s1" }), { meta: { tenant: "project_id" } })
 
-export function createApp(wsAdapter?: WSAdapter) {
+/** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
+export type AppOptions = { routeTree?: RouteTree }
+
+export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	const app = honey().stripPrefix("/app").trailingSlash("enforce").meta<GatewayMeta>()
+	if (options?.routeTree) app.routeTree(options.routeTree)
 	if (wsAdapter) app.wsAdapter(wsAdapter)
 
 	app.metaSpec({

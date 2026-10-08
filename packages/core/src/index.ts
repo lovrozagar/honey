@@ -8,8 +8,31 @@ import type { ProxyConfig } from "./proxy.ts"
 import { createProxyHandler } from "./proxy.ts"
 import type { CustomErrorFormatter, ErrorFormatter, ResponseOptions, TypedResponse } from "./response.ts"
 import { createErrorResponse, type HoneyRes } from "./response.ts"
-import type { OutputValidator, RouteHandler, RouteTree, TreeNode, WSRouteHandler } from "./tree.ts"
-import { createNode, insertRoute, insertWsRoute, matchRoute, matchWsRoute, mergeInto } from "./tree.ts"
+import type { RouteId, Segment } from "./pattern.ts"
+import {
+	canonical,
+	expandOptional,
+	isStaticPattern,
+	joinPatterns,
+	normalizePattern,
+	parsePattern,
+	routeId,
+	splitRouteId,
+} from "./pattern.ts"
+import type { OutputValidator, RouteEntry, RouteHandler, RouteTree, TreeNode, WSRouteHandler } from "./tree.ts"
+import {
+	assertTreeFormat,
+	cloneTree,
+	createNode,
+	findLeaf,
+	forEachLeaf,
+	freezeTree,
+	hasWsLeaf,
+	insertLeaf,
+	matchRoute,
+	matchWsRoute,
+	ROUTE_TREE_VERSION,
+} from "./tree.ts"
 import { createBus } from "./realtime/bus.ts"
 import type { RealtimeBus } from "./realtime/bus.ts"
 import { createConnContext } from "./realtime/route.ts"
@@ -162,19 +185,9 @@ type Logger = {
 	warn?(objOrMsg: Record<string, unknown> | string, msg?: string): void
 }
 
+/** Join a base path and a route or scope path into one canonical pattern. */
 function mergePath(base: string, path: string): string {
-	if (base === "/") return path
-	if (path === "/") return base
-	return `${base}${path}`
-}
-
-/** Normalize a scope prefix: ensure leading slash, strip trailing slash (except "/"). */
-function normalizeScopePath(raw: string): string {
-	let p = raw
-	if (p.length === 0) return "/"
-	if (p.charCodeAt(0) !== 47) p = `/${p}`
-	if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1)
-	return p
+	return joinPatterns(base, path)
 }
 
 /** Check whether fullPath falls under scope prefix — exact match or next char is '/'. */
@@ -186,25 +199,83 @@ function scopeMatches(prefix: string, fullPath: string): boolean {
 	return fullPath.startsWith(prefix)
 }
 
+/** What one app graph serves, resolved at finalize from records and the loaded tree. */
+type FinalTable = {
+	byId: Map<RouteId, RouteHandler>
+	epoch: number
+	/** `METHOD /path` → record, for routes without params or wildcards */
+	statics: Record<string, RouteHandler>
+	wsById: Map<RouteId, WSRouteHandler>
+}
+
+/**
+ * One app graph — shared by every handle derived with `use()`, `basePath()`, `context()`,
+ * `meta()`. Records are per graph, keyed by `RouteId`; the tree holds ids only, so a loaded
+ * (shared, frozen) tree never carries another app's handlers.
+ */
 type HoneyGraph = {
-	handlerMap: Record<string, RouteHandler> | null
-	hasRouteTree: boolean
+	/** gateway catch-alls by method — root wildcards registered over a loaded tree that lacks them */
+	catchAll: Map<string, RouteHandler>
+	/** bumped by every registration; finalize re-runs when it moves */
+	epoch: number
+	final: FinalTable | null
+	hasWs: boolean
+	/** route data of the loaded tree (per-graph copies) — null when no tree was loaded */
+	loaded: Map<RouteId, RouteEntry> | null
 	/** Codegen-time meta → OpenAPI policy. Never read on the request path */
 	metaSpec: MetaSpecConfig | null
 	realtimeBus: RealtimeBus | null
+	records: Map<RouteId, RouteHandler>
 	root: TreeNode
+	/** root is a loaded tree (frozen, possibly shared by other apps) — copy before inserting */
+	rootShared: boolean
+	/** registered after routeTree() with no leaf in the loaded tree — stale generated file */
+	unexpected: Set<RouteId>
+	wsRecords: Map<RouteId, WSRouteHandler>
 }
 
-function walkTreeHandlers(root: TreeNode, cb: (h: RouteHandler) => void, wsCb?: (h: WSRouteHandler) => void): void {
-	if (root.m) {
-		for (const h of Object.values(root.m) as RouteHandler[]) cb(h)
+function createGraph(): HoneyGraph {
+	return {
+		catchAll: new Map(),
+		epoch: 0,
+		final: null,
+		hasWs: false,
+		loaded: null,
+		metaSpec: null,
+		realtimeBus: null,
+		records: new Map(),
+		root: createNode(),
+		rootShared: false,
+		unexpected: new Set(),
+		wsRecords: new Map(),
 	}
-	if (root.w) {
-		for (const h of Object.values(root.w.m) as RouteHandler[]) cb(h)
-	}
-	if (root.ws && wsCb) wsCb(root.ws)
-	for (const child of Object.values(root.s)) walkTreeHandlers(child, cb, wsCb)
-	if (root.d) walkTreeHandlers(root.d.c, cb, wsCb)
+}
+
+/** Fresh copy of a record for another graph — nothing (ek set, compiled chain) is shared. */
+function copyRecord(r: RouteHandler): RouteHandler {
+	const out: RouteHandler = { ...r, ek: new Set(r.ek) }
+	delete out._compiled
+	delete out.ca
+	return out
+}
+
+/** Every leaf a pattern occupies: an optional last param places two. */
+function leafVariants(segments: readonly Segment[]): Segment[][] {
+	return expandOptional(segments)
+}
+
+function patternOf(id: RouteId): { method: string; segments: Segment[] } {
+	const { method, pattern } = splitRouteId(id)
+	return { method, segments: parsePattern(pattern) }
+}
+
+/** `fn` of a tree leaf no handler serves — dispatch answers 404, codegen still documents it. */
+const NOT_SERVED: RouteHandler["fn"] = () => {
+	throw new Error("honey: unserved route reached its handler")
+}
+
+function isRootWildcard(segments: readonly Segment[]): boolean {
+	return segments.length === 1 && segments[0].k === "wildcard"
 }
 
 const EMPTY_PARAMS = EMPTY_OBJ as Record<string, string>
@@ -333,10 +404,8 @@ export class Honey<
 	private _errorI18n: ErrorI18nConfig<TEnv> | null
 	private _globalMiddlewares: RuntimeMiddleware[]
 	private _graph: HoneyGraph
-	private _hasWsRoutes: boolean
 	private _logger: Logger | null
 	private _outputValidation: "always" | "dev" | "off"
-	private _staticRoutes: { map: Record<string, RouteHandler> | null }
 	private _stripPrefix: string | null
 	private _trailingSlash: "enforce" | "ignore" | "strip"
 	private _wsAdapter: WSAdapter | null
@@ -376,18 +445,10 @@ export class Honey<
 		defaultErrorKeys?: Set<string>
 		globalMiddlewares?: RuntimeMiddleware[]
 		graph?: HoneyGraph
-		handlerMap?: Record<string, RouteHandler> | null
-		root?: TreeNode
 		scopedMiddlewares?: ScopedEntry[]
 	}) {
 		this._basePath = "/"
-		this._graph = opts?.graph ?? {
-			handlerMap: opts?.handlerMap ?? null,
-			hasRouteTree: false,
-			metaSpec: null,
-			realtimeBus: null,
-			root: opts?.root ?? createNode(),
-		}
+		this._graph = opts?.graph ?? createGraph()
 		this._globalMiddlewares = opts?.globalMiddlewares ?? []
 		this._scopedMiddlewares = opts?.scopedMiddlewares ?? []
 		this._chainMeta = null
@@ -401,10 +462,8 @@ export class Honey<
 		this._customErrorSchema = null
 		this._errorFormatter = defaultErrorFormatter
 		this._errorI18n = null
-		this._hasWsRoutes = false
 		this._logger = null
 		this._outputValidation = "off"
-		this._staticRoutes = { map: null }
 		this._stripPrefix = null
 		this._trailingSlash = "ignore"
 		this._wsAdapter = null
@@ -419,20 +478,6 @@ export class Honey<
 		this._realtimeRoutes = new Map()
 	}
 
-	private get _handlerMap(): Record<string, RouteHandler> | null {
-		return this._graph.handlerMap
-	}
-	private set _handlerMap(value: Record<string, RouteHandler> | null) {
-		this._graph.handlerMap = value
-	}
-
-	private get _hasRouteTree(): boolean {
-		return this._graph.hasRouteTree
-	}
-	private set _hasRouteTree(value: boolean) {
-		this._graph.hasRouteTree = value
-	}
-
 	/** @internal — read by codegen */
 	private get _metaSpec(): MetaSpecConfig | null {
 		return this._graph.metaSpec
@@ -444,14 +489,6 @@ export class Honey<
 	private get _root(): TreeNode {
 		return this._graph.root
 	}
-	private set _root(value: TreeNode) {
-		this._graph.root = value
-	}
-
-	/** @internal — used by codegen */
-	private get _tree(): TreeNode {
-		return this._root
-	}
 
 	private get _realtimeBus(): RealtimeBus | null {
 		return this._graph.realtimeBus
@@ -460,17 +497,37 @@ export class Honey<
 		this._graph.realtimeBus = value
 	}
 
-	/** @internal — mark that this app has WS routes */
-	_markWsRoutes(): void {
-		this._hasWsRoutes = true
-	}
-
-	/** @internal — register a static route for O(1) lookup */
-	_registerStatic(key: string, handler: RouteHandler): void {
-		if (this._staticRoutes.map === null) {
-			this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>
-		}
-		this._staticRoutes.map[key] = handler
+	/** A new handle on the same graph, carrying this handle's settings. */
+	private _derive(chainMiddlewares: RuntimeMiddleware[] = this._chainMiddlewares): Honey<TEnv> {
+		const next = new Honey<TEnv>({
+			chainMiddlewares,
+			defaultErrorKeys: this._defaultErrorKeys,
+			globalMiddlewares: this._globalMiddlewares,
+			graph: this._graph,
+			scopedMiddlewares: this._scopedMiddlewares,
+		})
+		next._basePath = this._basePath
+		next._chainMeta = this._chainMeta
+		next._contextValues = this._contextValues
+		next._defaultBoundaryKey = this._defaultBoundaryKey
+		next._errorFactory = this._errorFactory
+		next._errorSchema = this._errorSchema
+		next._customErrorFormatter = this._customErrorFormatter
+		next._customErrorSchema = this._customErrorSchema
+		next._errorFormatter = this._errorFormatter
+		next._errorI18n = this._errorI18n
+		next._logger = this._logger
+		next._outputValidation = this._outputValidation
+		next._stripPrefix = this._stripPrefix
+		next._trailingSlash = this._trailingSlash
+		next._wsAdapter = this._wsAdapter
+		next._onError = this._onError
+		next._onNotFound = this._onNotFound
+		next._onMethodNotAllowed = this._onMethodNotAllowed
+		next._taps = this._taps
+		next._telemetry = this._telemetry
+		next._realtimeRoutes = this._realtimeRoutes
+		return next
 	}
 
 	/** @internal — used by RouteBuilder for pre-filtered error factory */
@@ -531,19 +588,14 @@ export class Honey<
 	private _applyScopedEntryErrors(entry: ScopedEntry): void {
 		const errors = entry.errors
 		if (!errors || errors.length === 0) return
-		walkTreeHandlers(
-			this._root,
-			(h) => {
-				if (scopeMatches(entry.prefix, h.rp ?? "")) {
-					for (const k of errors) h.ek.add(k)
-				}
-			},
-			(wh) => {
-				if (scopeMatches(entry.prefix, wh.rp)) {
-					for (const k of errors) wh.ek.add(k)
-				}
-			},
-		)
+		const apply = (h: { ek: Set<string>; rp?: string }): void => {
+			if (scopeMatches(entry.prefix, h.rp ?? "")) {
+				for (const k of errors) h.ek.add(k)
+			}
+		}
+		for (const h of this._graph.records.values()) apply(h)
+		for (const h of this._graph.wsRecords.values()) apply(h)
+		this._bumpEpoch()
 	}
 
 	/**
@@ -574,7 +626,19 @@ export class Honey<
 			/* contributed meta never overwrites what the route or chain stated explicitly */
 			h.mt = Object.freeze(h.mt ? { ...meta, ...h.mt } : { ...meta })
 		}
-		walkTreeHandlers(this._root, apply, apply)
+		for (const h of this._graph.records.values()) apply(h)
+		for (const h of this._graph.wsRecords.values()) apply(h)
+		this._bumpEpoch()
+	}
+
+	/** Scoped errors and meta for records finalize derives from a loaded tree (live and delegated). */
+	private _applyScopedToDerived(h: RouteHandler | WSRouteHandler): void {
+		for (const entry of this._scopedMiddlewares) {
+			if (!scopeMatches(entry.prefix, h.rp ?? "")) continue
+			if (entry.errors) for (const k of entry.errors) h.ek.add(k)
+			const meta = (entry.mw as { meta?: Record<string, unknown> }).meta
+			if (meta) h.mt = Object.freeze(h.mt ? { ...meta, ...h.mt } : { ...meta })
+		}
 	}
 
 	/** Apply error keys from every scoped entry on this chain to every matching handler in the tree */
@@ -760,48 +824,8 @@ export class Honey<
 	basePath<P extends string>(
 		prefix: P,
 	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, MergePath<TBasePath, P>, TTaps, TScopedMw> {
-		const next = new Honey<
-			TEnv,
-			TCtx,
-			TRoutes,
-			TMeta,
-			TErrorFactory,
-			TDefaultErrors,
-			MergePath<TBasePath, P>,
-			TTaps,
-			TScopedMw
-		>({
-			chainMiddlewares: this._chainMiddlewares,
-			defaultErrorKeys: this._defaultErrorKeys,
-			globalMiddlewares: this._globalMiddlewares,
-			graph: this._graph,
-			scopedMiddlewares: this._scopedMiddlewares,
-		})
+		const next = this._derive()
 		next._basePath = mergePath(this._basePath, prefix)
-		next._defaultBoundaryKey = this._defaultBoundaryKey
-		next._errorFactory = this._errorFactory
-		next._errorSchema = this._errorSchema
-		next._customErrorFormatter = this._customErrorFormatter
-		next._customErrorSchema = this._customErrorSchema
-		next._errorFormatter = this._errorFormatter
-		next._errorI18n = this._errorI18n
-		next._logger = this._logger
-		next._outputValidation = this._outputValidation
-		next._stripPrefix = this._stripPrefix
-		next._trailingSlash = this._trailingSlash
-		next._wsAdapter = this._wsAdapter
-		next._onError = this._onError
-		next._onNotFound = this._onNotFound
-		next._onMethodNotAllowed = this._onMethodNotAllowed
-		next._chainMeta = this._chainMeta
-		next._contextValues = this._contextValues
-		next._taps = this._taps
-		next._telemetry = this._telemetry
-		next._realtimeBus = this._realtimeBus
-		next._realtimeRoutes = this._realtimeRoutes
-		next._staticRoutes = this._staticRoutes
-		next._hasRouteTree = this._hasRouteTree
-		next._hasWsRoutes = this._hasWsRoutes
 		return next as unknown as Honey<
 			TEnv,
 			TCtx,
@@ -823,48 +847,8 @@ export class Honey<
 				throw new Error(`context() cannot set reserved key "${key}"`)
 			}
 		}
-		const next = new Honey<
-			TEnv,
-			TCtx & Readonly<TAdds>,
-			TRoutes,
-			TMeta,
-			TErrorFactory,
-			TDefaultErrors,
-			TBasePath,
-			TTaps,
-			TScopedMw
-		>({
-			chainMiddlewares: this._chainMiddlewares,
-			defaultErrorKeys: this._defaultErrorKeys,
-			globalMiddlewares: this._globalMiddlewares,
-			graph: this._graph,
-			scopedMiddlewares: this._scopedMiddlewares,
-		})
-		next._basePath = this._basePath
-		next._chainMeta = this._chainMeta
+		const next = this._derive()
 		next._contextValues = this._contextValues ? { ...this._contextValues, ...values } : { ...values }
-		next._defaultBoundaryKey = this._defaultBoundaryKey
-		next._errorFactory = this._errorFactory
-		next._errorSchema = this._errorSchema
-		next._customErrorFormatter = this._customErrorFormatter
-		next._customErrorSchema = this._customErrorSchema
-		next._errorFormatter = this._errorFormatter
-		next._errorI18n = this._errorI18n
-		next._logger = this._logger
-		next._outputValidation = this._outputValidation
-		next._stripPrefix = this._stripPrefix
-		next._trailingSlash = this._trailingSlash
-		next._wsAdapter = this._wsAdapter
-		next._onError = this._onError
-		next._onNotFound = this._onNotFound
-		next._onMethodNotAllowed = this._onMethodNotAllowed
-		next._taps = this._taps
-		next._telemetry = this._telemetry
-		next._realtimeBus = this._realtimeBus
-		next._realtimeRoutes = this._realtimeRoutes
-		next._staticRoutes = this._staticRoutes
-		next._hasRouteTree = this._hasRouteTree
-		next._hasWsRoutes = this._hasWsRoutes
 		return next as unknown as Honey<
 			TEnv,
 			TCtx & Readonly<TAdds>,
@@ -923,7 +907,7 @@ export class Honey<
 		const stem = options.path ?? "/openapi"
 		const yamlHeaders = { headers: { "content-type": "application/yaml; charset=utf-8" } }
 		const loadJson = (): Promise<unknown> => {
-			const epoch = this._root.g ?? 0
+			const epoch = this._graph.epoch
 			if (this._openApiCache && this._openApiCache.epoch === epoch) {
 				return this._openApiCache.value
 			}
@@ -951,7 +935,7 @@ export class Honey<
 			return pending
 		}
 		const loadYaml = (): Promise<string> => {
-			const epoch = this._root.g ?? 0
+			const epoch = this._graph.epoch
 			if (this._openApiYamlCache && this._openApiYamlCache.epoch === epoch) {
 				return this._openApiYamlCache.value
 			}
@@ -994,7 +978,7 @@ export class Honey<
 	manifest(options?: { path?: string }): this {
 		const path = options?.path ?? "/manifest.json"
 		const load = (): Promise<unknown> => {
-			const epoch = this._root.g ?? 0
+			const epoch = this._graph.epoch
 			if (this._manifestCache && this._manifestCache.epoch === epoch) {
 				return this._manifestCache.value
 			}
@@ -1017,37 +1001,223 @@ export class Honey<
 		return getServeRuntime()(this, options)
 	}
 
-	private _lookupGet(fullPath: string): RouteHandler | null {
-		const fromStatic = this._staticRoutes.map?.[`GET ${fullPath}`]
-		if (fromStatic) return fromStatic
-		const hit = matchRoute(this._root, "GET", fullPath)
-		if (hit !== null && hit.matched) return hit.handler
-		return null
-	}
-
-	/** Mount an internal GET. Returns false when a user route already owns the path. */
+	/**
+	 * Mount an internal GET (spec, docs, manifest). Returns false when a user route owns the
+	 * exact path. Only an exact leaf counts: a `/:slug` or `/*rest` route does not block a
+	 * static internal path, which wins over it on precedence anyway.
+	 */
 	private _mountInternalGet(path: string, fn: (ctx: { res: HoneyRes }) => Response | Promise<Response>): boolean {
 		const fullPath = mergePath(this._basePath, path)
-		const existing = this._lookupGet(fullPath)
+		const segments = parsePattern(fullPath)
+		const id = routeId("GET", fullPath)
+		const g = this._graph
+		const existing = g.records.get(id)
 		if (existing) return existing._skip === true
+		const leaf = findLeaf(g.root, segments, "GET")
+		if (leaf !== undefined && leaf !== id) return false
+		if (findLeaf(g.root, segments, "ALL") !== undefined) return false
+		/* a leaf the loaded tree holds for a user route the app has yet to register */
+		if (leaf === id && g.loaded?.has(id)) return false
 		const routeHandler: RouteHandler = {
 			_skip: true,
 			bek: this._defaultBoundaryKey,
 			ef: null,
-			ek: this._defaultErrorKeys,
+			ek: new Set(this._defaultErrorKeys),
 			fn: (ctx) => fn(ctx as { res: HoneyRes }),
 			iv: null,
 			mt: null,
 			mw: [...this._chainMiddlewares],
 			os: null,
 			ov: null,
-			rp: fullPath,
 		}
-		insertRoute(this._root, "GET", fullPath, routeHandler)
-		if (!fullPath.includes(":") && !fullPath.includes("*")) {
-			this._registerStatic(`GET ${fullPath}`, routeHandler)
-		}
+		this._addRoute("GET", segments, routeHandler)
 		return true
+	}
+
+	private _bumpEpoch(): void {
+		this._graph.epoch++
+	}
+
+	/** Place `id` at every leaf of `segments`, copying a shared (loaded) root first. */
+	private _placeLeaves(segments: readonly Segment[], method: string, id: RouteId): void {
+		const g = this._graph
+		const variants = leafVariants(segments)
+		if (variants.every((v) => findLeaf(g.root, v, method) === id)) return
+		if (g.rootShared) {
+			g.root = cloneTree(g.root)
+			g.rootShared = false
+		}
+		for (const v of variants) insertLeaf(g.root, v, method, id)
+	}
+
+	/**
+	 * @internal — register one route record. Over a loaded tree the record binds to the leaf
+	 * the tree already holds for its id; a root wildcard the tree lacks becomes the gateway
+	 * catch-all; any other unknown route marks the tree as stale (reported at finalize).
+	 */
+	_addRoute(method: string, segments: readonly Segment[], record: RouteHandler): void {
+		const pattern = canonical(segments)
+		const id = routeId(method, pattern)
+		const g = this._graph
+		if (g.records.has(id) || (isRootWildcard(segments) && g.catchAll.has(method))) {
+			throw new Error(`Duplicate route: ${id}`)
+		}
+		record.id = id
+		record.rp = pattern
+		if (g.loaded !== null && record._skip !== true) {
+			const known = leafVariants(segments).every((v) => findLeaf(g.root, v, method) === id)
+			if (!known) {
+				if (isRootWildcard(segments)) {
+					record.ca = true
+					g.catchAll.set(method, record)
+					this._bumpEpoch()
+					return
+				}
+				g.unexpected.add(id)
+			}
+		}
+		this._placeLeaves(segments, method, id)
+		g.records.set(id, record)
+		this._bumpEpoch()
+	}
+
+	/** @internal — register one websocket (or realtime) route record. */
+	_addWsRoute(segments: readonly Segment[], record: WSRouteHandler): void {
+		const pattern = canonical(segments)
+		const id = routeId("WS", pattern)
+		const g = this._graph
+		if (g.wsRecords.has(id)) throw new Error(`Duplicate WebSocket route: ${pattern}`)
+		record.id = id
+		record.rp = pattern
+		if (g.loaded !== null && leafVariants(segments).some((v) => findLeaf(g.root, v, "WS") !== id)) {
+			g.unexpected.add(id)
+		}
+		this._placeLeaves(segments, "WS", id)
+		g.wsRecords.set(id, record)
+		g.hasWs = true
+		this._bumpEpoch()
+	}
+
+	/**
+	 * Resolve what this graph serves: registered records, live records carried by a loaded
+	 * snapshot, and delegated leaves the gateway catch-all serves. Re-runs whenever a
+	 * registration bumped the epoch. Throws — naming every route — when a loaded tree and the
+	 * registered routes disagree, which means the generated file is stale.
+	 */
+	_finalize(): FinalTable {
+		const g = this._graph
+		if (g.final !== null && g.final.epoch === g.epoch) return g.final
+		const byId = new Map<RouteId, RouteHandler>()
+		const wsById = new Map<RouteId, WSRouteHandler>()
+		for (const [id, r] of g.records) byId.set(id, r)
+		for (const [id, r] of g.wsRecords) wsById.set(id, r)
+		const problems: string[] = []
+		if (g.loaded !== null) {
+			for (const id of g.unexpected) problems.push(`${id} is registered but missing from the loaded route tree`)
+			let delegated = 0
+			for (const [id, entry] of g.loaded) {
+				const { method, pattern } = splitRouteId(id)
+				if (method === "WS") {
+					if (wsById.has(id)) continue
+					if (entry.h !== undefined) {
+						const live = { ...(entry.h as WSRouteHandler), ek: new Set(entry.h.ek), id, rp: pattern }
+						this._applyScopedToDerived(live)
+						wsById.set(id, live)
+					}
+					/* a websocket leaf nothing serves is not upgraded: the request falls through to HTTP */
+					continue
+				}
+				if (byId.has(id)) continue
+				if (entry.h !== undefined) {
+					const live = copyRecord(entry.h as RouteHandler)
+					live.id = id
+					live.rp = pattern
+					this._applyScopedToDerived(live)
+					byId.set(id, live)
+					continue
+				}
+				const ca = g.catchAll.get(method) ?? g.catchAll.get("ALL")
+				if (ca !== undefined) {
+					const dl = copyRecord(ca)
+					dl.dl = true
+					dl.id = id
+					dl.rp = pattern
+					dl.mt = entry.mt ? Object.freeze({ ...entry.mt }) : null
+					dl.iv = entry.iv ?? null
+					dl.os = entry.os ?? null
+					if (entry.ek) for (const k of entry.ek) dl.ek.add(k)
+					if (entry.bek !== undefined) dl.bek = entry.bek
+					this._applyScopedToDerived(dl)
+					byId.set(id, dl)
+					delegated++
+					continue
+				}
+				/* no handler anywhere: documented (served specs list it) but answered with 404 */
+				byId.set(id, {
+					bek: entry.bek ?? null,
+					dl: true,
+					ek: new Set(entry.ek ?? []),
+					fn: NOT_SERVED,
+					id,
+					iv: entry.iv ?? null,
+					mt: entry.mt ? Object.freeze({ ...entry.mt }) : null,
+					mw: [],
+					os: entry.os ?? null,
+					rp: pattern,
+				})
+			}
+			if (g.catchAll.size > 0 && delegated === 0) {
+				for (const id of g.catchAll.keys()) {
+					problems.push(`ALL root wildcard (${g.catchAll.get(id)?.id}) is missing from the loaded route tree`)
+				}
+			}
+		}
+		if (problems.length > 0) {
+			throw new Error(`Route tree out of date — regenerate it (\`honey generate\`):\n  ${problems.join("\n  ")}`)
+		}
+		const statics = Object.create(null) as Record<string, RouteHandler>
+		for (const [id, r] of byId) {
+			const { method, segments } = patternOf(id)
+			for (const v of leafVariants(segments)) {
+				if (isStaticPattern(v)) statics[`${method} ${canonical(v)}`] = r
+			}
+		}
+		g.final = { byId, epoch: g.epoch, statics, wsById }
+		return g.final
+	}
+
+	/**
+	 * @internal — every served route as one entry per leaf (an optional param yields two
+	 * paths), in tree order. Codegen and OpenAPI read routes through this.
+	 */
+	_collectRoutes(includeSkipped = false): Array<{ handler: RouteHandler; method: string; path: string }> {
+		const final = this._finalize()
+		const out: Array<{ handler: RouteHandler; method: string; path: string }> = []
+		forEachLeaf(this._root, (method, path, id) => {
+			if (method === "WS") return
+			const handler = final.byId.get(id)
+			if (handler === undefined) return
+			if (handler._skip && !includeSkipped) return
+			out.push({ handler, method, path })
+		})
+		return out
+	}
+
+	/** @internal — websocket routes, one entry per leaf. */
+	_collectWsRoutes(): Array<{ handler: WSRouteHandler; path: string }> {
+		const final = this._finalize()
+		const out: Array<{ handler: WSRouteHandler; path: string }> = []
+		forEachLeaf(this._root, (method, path, id) => {
+			if (method !== "WS") return
+			const handler = final.wsById.get(id)
+			if (handler !== undefined) out.push({ handler, path })
+		})
+		return out
+	}
+
+	/** @internal — the route-graph epoch; served documents cache against it. */
+	get _epoch(): number {
+		return this._graph.epoch
 	}
 
 	defaultErrorFormatter<TSchema extends StandardSchemaLike>(
@@ -1149,15 +1319,97 @@ export class Honey<
 		return this
 	}
 
+	/**
+	 * Load a route tree — a generated `routes.gen.ts`, an `app.toRouteTree()` snapshot, or a
+	 * `mergeTree()` of either. The tree supplies the router topology; what each route runs
+	 * comes from the routes this app registers afterwards (bound by `RouteId`), from live
+	 * records in a snapshot, or — for leaves with neither — from a root wildcard the app
+	 * registers as its gateway catch-all. Must be called before any route is registered.
+	 */
 	routeTree(tree: RouteTree): this {
-		this._root = tree.root
-		this._handlerMap = tree.handlers ?? null
-		this._hasRouteTree = true
+		assertTreeFormat(tree)
+		const g = this._graph
+		if (g.loaded !== null) throw new Error("routeTree() was already called on this app")
+		for (const r of g.records.values()) {
+			if (r._skip !== true) throw new Error(`routeTree() must be called before routes are registered (${r.id} is)`)
+		}
+		if (g.wsRecords.size > 0 || g.catchAll.size > 0) {
+			throw new Error("routeTree() must be called before routes are registered")
+		}
+		forEachLeaf(tree.root, (method, path, id) => {
+			if (!(id in tree.routes)) throw new Error(`routeTree(): leaf ${method} ${path} has no route entry (${id})`)
+		})
+		const internals = [...g.records.values()]
+		g.records.clear()
+		g.root = freezeTree(tree.root)
+		g.rootShared = true
+		g.loaded = new Map()
+		for (const id of Object.keys(tree.routes)) g.loaded.set(id, { ...tree.routes[id] })
+		if (hasWsLeaf(g.root)) g.hasWs = true
+		/* internal routes mounted before the tree was loaded move onto the loaded topology */
+		for (const r of internals) {
+			const { method, segments } = patternOf(r.id as RouteId)
+			this._addRoute(method, segments, r)
+		}
+		this._bumpEpoch()
 		return this
 	}
 
+	/**
+	 * Snapshot this app's routes as a tree: a copy of the topology plus, per route, its data
+	 * and its live record. Internal routes (spec, docs, manifest) are left out. Loading the
+	 * snapshot into another app serves these records; nothing in it is shared with this app.
+	 */
 	toRouteTree(): RouteTree {
-		return { meta: {}, root: this._root }
+		const final = this._finalize()
+		const routes = Object.create(null) as Record<RouteId, RouteEntry>
+		const keep = new Set<RouteId>()
+		for (const [id, r] of final.byId) {
+			if (r._skip) continue
+			keep.add(id)
+			routes[id] = {
+				bek: r.bek,
+				ek: [...r.ek],
+				h: copyRecord(r),
+				iv: r.iv ?? null,
+				mt: r.mt,
+				os: r.os ?? null,
+			}
+		}
+		for (const [id, r] of final.wsById) {
+			keep.add(id)
+			routes[id] = { bek: r.bek, ek: [...r.ek], h: { ...r, ek: new Set(r.ek) }, iv: r.iv, mt: r.mt }
+		}
+		const root = createNode()
+		forEachLeaf(this._root, (method, path, id) => {
+			if (keep.has(id)) insertLeaf(root, parsePattern(path), method, id)
+		})
+		return { meta: {}, root, routes, v: ROUTE_TREE_VERSION }
+	}
+
+	/**
+	 * @internal — generate-time: copy input/output schemas from `source` onto this app's
+	 * routes that lack them (a gateway serves its generated tree, which carries none).
+	 */
+	_overlaySchemas(source: RouteTree): void {
+		const g = this._graph
+		for (const [id, entry] of Object.entries(source.routes)) {
+			const iv = entry.iv ?? (entry.h as RouteHandler | undefined)?.iv ?? null
+			const os = entry.os ?? (entry.h as RouteHandler | undefined)?.os ?? null
+			if (iv === null && os === null) continue
+			const record = g.records.get(id)
+			if (record !== undefined) {
+				record.iv ??= iv
+				record.os ??= os
+				continue
+			}
+			const loaded = g.loaded?.get(id)
+			if (loaded !== undefined) {
+				loaded.iv ??= iv
+				loaded.os ??= os
+			}
+		}
+		this._bumpEpoch()
 	}
 
 	errorFactory<TFactory extends Record<string, (...args: never[]) => unknown>>(
@@ -1245,39 +1497,19 @@ export class Honey<
 			return this as Honey<TEnv, TCtx, TRoutes, unknown, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 		}
 		/* chain-level meta — copy-on-write */
-		const next = new Honey<TEnv, TCtx, TRoutes, unknown, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>({
-			chainMiddlewares: this._chainMiddlewares,
-			defaultErrorKeys: this._defaultErrorKeys,
-			globalMiddlewares: this._globalMiddlewares,
-			graph: this._graph,
-			scopedMiddlewares: this._scopedMiddlewares,
-		})
-		next._basePath = this._basePath
+		const next = this._derive()
 		next._chainMeta = this._chainMeta ? { ...this._chainMeta, ...values } : { ...values }
-		next._contextValues = this._contextValues
-		next._defaultBoundaryKey = this._defaultBoundaryKey
-		next._errorFactory = this._errorFactory
-		next._errorSchema = this._errorSchema
-		next._customErrorFormatter = this._customErrorFormatter
-		next._customErrorSchema = this._customErrorSchema
-		next._errorFormatter = this._errorFormatter
-		next._errorI18n = this._errorI18n
-		next._logger = this._logger
-		next._outputValidation = this._outputValidation
-		next._stripPrefix = this._stripPrefix
-		next._trailingSlash = this._trailingSlash
-		next._wsAdapter = this._wsAdapter
-		next._onError = this._onError
-		next._onNotFound = this._onNotFound
-		next._onMethodNotAllowed = this._onMethodNotAllowed
-		next._taps = this._taps
-		next._telemetry = this._telemetry
-		next._realtimeBus = this._realtimeBus
-		next._realtimeRoutes = this._realtimeRoutes
-		next._staticRoutes = this._staticRoutes
-		next._hasRouteTree = this._hasRouteTree
-		next._hasWsRoutes = this._hasWsRoutes
-		return next
+		return next as unknown as Honey<
+			TEnv,
+			TCtx,
+			TRoutes,
+			unknown,
+			TErrorFactory,
+			TDefaultErrors,
+			TBasePath,
+			TTaps,
+			TScopedMw
+		>
 	}
 
 	/**
@@ -1395,43 +1627,11 @@ export class Honey<
 	use(pathOrMw: string | MiddlewareFn<any, any>, maybeMw?: MiddlewareFn<any, any>): any {
 		if (typeof pathOrMw !== "string") {
 			const mw = pathOrMw as RuntimeMiddleware
-			const newChain = new Honey<TEnv>({
-				chainMiddlewares: [...this._chainMiddlewares, mw],
-				defaultErrorKeys: this._defaultErrorKeys,
-				globalMiddlewares: this._globalMiddlewares,
-				graph: this._graph,
-				scopedMiddlewares: this._scopedMiddlewares,
-			})
-			newChain._basePath = this._basePath
-			newChain._chainMeta = this._chainMeta
-			newChain._contextValues = this._contextValues
-			newChain._defaultBoundaryKey = this._defaultBoundaryKey
-			newChain._errorFactory = this._errorFactory
-			newChain._errorSchema = this._errorSchema
-			newChain._customErrorFormatter = this._customErrorFormatter
-			newChain._customErrorSchema = this._customErrorSchema
-			newChain._errorFormatter = this._errorFormatter
-			newChain._errorI18n = this._errorI18n
-			newChain._logger = this._logger
-			newChain._outputValidation = this._outputValidation
-			newChain._stripPrefix = this._stripPrefix
-			newChain._trailingSlash = this._trailingSlash
-			newChain._wsAdapter = this._wsAdapter
-			newChain._onError = this._onError
-			newChain._onNotFound = this._onNotFound
-			newChain._onMethodNotAllowed = this._onMethodNotAllowed
-			newChain._taps = this._taps
-			newChain._telemetry = this._telemetry
-			newChain._realtimeBus = this._realtimeBus
-			newChain._realtimeRoutes = this._realtimeRoutes
-			newChain._staticRoutes = this._staticRoutes
-			newChain._hasRouteTree = this._hasRouteTree
-			newChain._hasWsRoutes = this._hasWsRoutes
-			return newChain
+			return this._derive([...this._chainMiddlewares, mw])
 		}
 
 		/* scoped path */
-		const normalizedPrefix = normalizeScopePath(pathOrMw)
+		const normalizedPrefix = normalizePattern(pathOrMw)
 		const fullPrefix = mergePath(this._basePath, normalizedPrefix)
 		const mw = maybeMw as RuntimeMiddleware
 		const mwWithErrors = maybeMw as MiddlewareFn<unknown, unknown>
@@ -1441,38 +1641,7 @@ export class Honey<
 			prefix: fullPrefix,
 		}
 		this._scopedMiddlewares.push(entry)
-		const newChain = new Honey<TEnv>({
-			chainMiddlewares: this._chainMiddlewares,
-			defaultErrorKeys: this._defaultErrorKeys,
-			globalMiddlewares: this._globalMiddlewares,
-			graph: this._graph,
-			scopedMiddlewares: this._scopedMiddlewares,
-		})
-		newChain._basePath = this._basePath
-		newChain._chainMeta = this._chainMeta
-		newChain._contextValues = this._contextValues
-		newChain._defaultBoundaryKey = this._defaultBoundaryKey
-		newChain._errorFactory = this._errorFactory
-		newChain._errorSchema = this._errorSchema
-		newChain._customErrorFormatter = this._customErrorFormatter
-		newChain._customErrorSchema = this._customErrorSchema
-		newChain._errorFormatter = this._errorFormatter
-		newChain._errorI18n = this._errorI18n
-		newChain._logger = this._logger
-		newChain._outputValidation = this._outputValidation
-		newChain._stripPrefix = this._stripPrefix
-		newChain._trailingSlash = this._trailingSlash
-		newChain._wsAdapter = this._wsAdapter
-		newChain._onError = this._onError
-		newChain._onNotFound = this._onNotFound
-		newChain._onMethodNotAllowed = this._onMethodNotAllowed
-		newChain._taps = this._taps
-		newChain._telemetry = this._telemetry
-		newChain._realtimeBus = this._realtimeBus
-		newChain._realtimeRoutes = this._realtimeRoutes
-		newChain._staticRoutes = this._staticRoutes
-		newChain._hasRouteTree = this._hasRouteTree
-		newChain._hasWsRoutes = this._hasWsRoutes
+		const newChain = this._derive()
 		newChain._applyScopedEntryErrors(entry)
 		newChain._applyScopedEntryMeta(entry)
 		return newChain
@@ -1481,21 +1650,27 @@ export class Honey<
 	route<TSubRoutes, TSubMeta, TSubErrorFactory, TSubDefaultErrors extends string, TSubBasePath extends string>(
 		sub: Honey<TEnv, TCtx, TSubRoutes, TSubMeta, TSubErrorFactory, TSubDefaultErrors, TSubBasePath>,
 	): Honey<TEnv, TCtx, TRoutes & TSubRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
-		/* skip self-merge: .handler() already inserted into shared _root */
-		if (sub._tree !== this._root) {
-			mergeInto(this._root, sub._tree)
+		/* skip self-merge: .handler() already registered into the shared graph */
+		if (sub._graph !== this._graph) {
+			/*
+			 * Copy the sub's resolved records into this graph — nothing is shared by reference,
+			 * so routes the sub registers later stay its own, and two parents mounting one sub
+			 * each get their own records. Internal routes (spec, docs, manifest) never travel.
+			 */
+			const subFinal = sub._finalize()
+			for (const [id, r] of subFinal.byId) {
+				if (r._skip) continue
+				const { method, segments } = patternOf(id)
+				this._addRoute(method, segments, copyRecord(r))
+			}
+			for (const [id, r] of subFinal.wsById) {
+				const { segments } = patternOf(id)
+				this._addWsRoute(segments, { ...r, ek: new Set(r.ek) })
+			}
 			this._absorbMetaSpec(sub._metaSpec)
-			if (sub._hasWsRoutes) this._hasWsRoutes = true
-			if (sub._hasRouteTree) this._hasRouteTree = true
 			/* carry sub's scoped mw entries into parent's runtime list (parent scopes run first) */
 			for (const entry of sub._scopedMiddlewares) {
 				this._scopedMiddlewares.push(entry)
-			}
-			if (sub._staticRoutes.map !== null) {
-				if (this._staticRoutes.map === null) {
-					this._staticRoutes.map = Object.create(null) as Record<string, RouteHandler>
-				}
-				Object.assign(this._staticRoutes.map, sub._staticRoutes.map)
 			}
 			for (const [path, cfg] of sub._realtimeRoutes) {
 				if (this._realtimeRoutes.has(path)) {
@@ -1512,7 +1687,7 @@ export class Honey<
 					if (!this._taps.has(key)) this._taps.set(key, fn)
 				}
 			}
-			/* walk tree and apply all scoped error keys + contributed meta to matching handlers */
+			/* apply all scoped error keys + contributed meta to matching records */
 			this._applyAllScopedErrors()
 			for (const entry of this._scopedMiddlewares) this._applyScopedEntryMeta(entry)
 		}
@@ -1581,7 +1756,6 @@ export class Honey<
 			boundaryErrorKey: this._defaultBoundaryKey,
 			errorKeys,
 			extraMethods: extraMethods ?? null,
-			handlerMap: this._handlerMap,
 			inputSchemas: null,
 			meta: this._chainMeta ? { ...this._chainMeta } : null,
 			method,
@@ -1591,7 +1765,6 @@ export class Honey<
 			parent: this,
 			parentMiddlewares: this._chainMiddlewares,
 			path: fullPath,
-			root: this._root,
 		}) as unknown as BuilderChain<
 			TEnv,
 			TCtx & ApplyScoped<TScopedMw, MergePath<TBasePath, TPath>>,
@@ -1693,12 +1866,11 @@ export class Honey<
 			parent: this,
 			parentMiddlewares: this._chainMiddlewares,
 			path: mergePath(this._basePath, path),
-			root: this._root,
 		})
 	}
 
 	realtime(path: string, opts: RealtimeRouteOpts): this {
-		const fullPath = mergePath(this._basePath, path) || "/"
+		const fullPath = mergePath(this._basePath, path)
 
 		if (!this._realtimeBus) {
 			this._realtimeBus = createBus()
@@ -1721,7 +1893,7 @@ export class Honey<
 			}
 		}
 
-		insertWsRoute(this._root, fullPath, {
+		this._addWsRoute(parsePattern(fullPath), {
 			bek: this._defaultBoundaryKey,
 			ek: new Set(),
 			fn: Object.create(null),
@@ -1730,8 +1902,6 @@ export class Honey<
 			mw: [...this._chainMiddlewares, ...mw],
 			rp: fullPath,
 		})
-
-		this._hasWsRoutes = true
 		return this
 	}
 
@@ -1745,7 +1915,7 @@ export class Honey<
 		env: TEnv,
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void },
 	): Response | Promise<Response> {
-		if (this._wsAdapter === null && !this._hasWsRoutes) {
+		if (this._wsAdapter === null && !this._graph.hasWs) {
 			return this._doFetch(request, env, executionCtx)
 		}
 		const isWsUpgrade = request.headers.get("upgrade")?.toLowerCase() === "websocket"
@@ -1755,7 +1925,7 @@ export class Honey<
 			isWsUpgrade &&
 			this._wsAdapter?.preUpgrade !== undefined &&
 			!this.trailingSlashRedirects(path) &&
-			matchWsRoute(this._root, this.pathAfterPrefix(path)) !== null
+			this._matchWs(this._finalize(), this.pathAfterPrefix(path)) !== null
 		const pre = canPreUpgrade ? this._wsAdapter?.preUpgrade?.(request) : undefined
 		/* After Deno.upgradeWebSocket the Request is closed. A sync throw here
 		 * used to be boxed by async _doFetch; keep 101 returning either way. */
@@ -1825,6 +1995,7 @@ export class Honey<
 		headerSnap?: Headers,
 	): Response | Promise<Response> {
 		const startTime = performance.now()
+		const final = this._finalize()
 
 		/* fast path extraction — avoids expensive new URL() allocation */
 		const rawUrl = request.url
@@ -1892,136 +2063,91 @@ export class Honey<
 			}
 		}
 
+		const root = this._graph.root
+
 		/* WebSocket route check — do not re-read headers after Deno.upgradeWebSocket */
 		const isWsUpgrade = knownWsUpgrade || requestIsWsUpgrade(request)
 		if (isWsUpgrade) {
-			const wsMatch = matchWsRoute(this._root, path)
+			const wsMatch = this._matchWs(final, path)
 			if (wsMatch !== null) {
 				return this._handleWs(fc, wsMatch)
-			}
-		} else if (this._realtimeRoutes.size > 0) {
-			/* Non-upgrade request hitting a realtime-only path → 426 Upgrade Required */
-			const wsMatch = matchWsRoute(this._root, path)
-			if (wsMatch !== null && this._realtimeRoutes.has(wsMatch.handler.rp)) {
-				return new Response(null, { headers: { upgrade: "websocket" }, status: 426 })
 			}
 		}
 
 		const method = request.method.toUpperCase() as HttpMethod
 
-		/* fn:null fallthrough — tree match sets meta/iv, catch-all dispatches */
-		let fnNullMeta: Record<string, unknown> | null = null
-		let fnNullParams: Record<string, string> | null = null
-		let fnNullIv: InputSchemasDef | null = null
-		let fnNullHit = false
-
-		/* Tier 2: O(1) static route lookup — checks both precompiled and runtime maps */
-		const smap = this._staticRoutes.map ?? this._handlerMap
-		if (smap !== null) {
-			const key = `${method} ${path}`
-			const staticHandler = smap[key]
-			if (staticHandler) {
-				if (staticHandler.fn === null) {
-					fnNullMeta = staticHandler.mt
-					fnNullParams = EMPTY_PARAMS
-					fnNullIv = staticHandler.iv ?? null
-					fnNullHit = true
-				} else {
-					return this._handleMatched(fc, method, path, staticHandler, EMPTY_PARAMS)
-				}
-			}
-			/* HEAD falls back to GET */
-			if (!fnNullHit && method === "HEAD") {
-				const getHandler = smap[`GET ${path}`]
-				if (getHandler) {
-					if (getHandler.fn === null) {
-						fnNullMeta = getHandler.mt
-						fnNullParams = EMPTY_PARAMS
-						fnNullIv = getHandler.iv ?? null
-						fnNullHit = true
-					} else {
-						return this._handleMatched(fc, method, path, getHandler, EMPTY_PARAMS)
-					}
-				}
-			}
+		/* O(1) static route lookup — patterns without params or wildcards only */
+		const staticHit =
+			final.statics[`${method} ${path}`] ?? (method === "HEAD" ? final.statics[`GET ${path}`] : undefined)
+		if (staticHit !== undefined) {
+			return this._dispatchRecord(fc, method, path, staticHit, EMPTY_PARAMS)
 		}
 
-		if (!fnNullHit) {
-			const result = matchRoute(this._root, method, path)
-
-			if (result?.matched) {
-				/*
-				 * routeTree loaded → wildcard matches for unknown paths must 404.
-				 * Only fn:null fallthroughs (known routes) should reach the catch-all.
-				 * Detect wildcard: handler has no mt and fn is NOT null (builder-registered catch-all).
-				 */
-				const isWildcardCatchAll =
-					this._hasRouteTree &&
-					this._root.w !== null &&
-					result.handler.fn !== null &&
-					(this._root.w.m[method] === result.handler || this._root.w.m["ALL"] === result.handler)
-
-				if (isWildcardCatchAll) {
-					/* path not in routeTree — 404 */
-					return this._handle404(fc, method, path)
-				}
-
-				if (result.handler.fn === null) {
-					fnNullMeta = result.handler.mt
-					fnNullParams = result.params
-					fnNullIv = result.handler.iv ?? null
-					fnNullHit = true
-				} else {
-					return this._handleMatched(fc, method, path, result.handler, result.params)
+		const result = matchRoute(root, method, path)
+		if (result === null) {
+			/* no HTTP route: a websocket or realtime route on this path asks for an upgrade */
+			if (!isWsUpgrade && this._graph.hasWs) {
+				const wsMatch = this._matchWs(final, path)
+				if (wsMatch !== null) {
+					if (this._realtimeRoutes.has(wsMatch.handler.rp)) {
+						return new Response(null, { headers: { upgrade: "websocket" }, status: 426 })
+					}
+					return new Response("Upgrade Required", {
+						headers: { connection: "Upgrade", upgrade: "websocket" },
+						status: 426,
+					})
 				}
 			}
-
-			if (!fnNullHit) {
-				if (result === null) {
-					if (!isWsUpgrade) {
-						const wsMatch = matchWsRoute(this._root, path)
-						if (wsMatch !== null) {
-							return new Response("Upgrade Required", {
-								headers: { connection: "Upgrade", upgrade: "websocket" },
-								status: 426,
-							})
-						}
-					}
-					return this._handle404(fc, method, path)
+			return this._handle404(fc, method, path)
+		}
+		if (!result.matched) {
+			if (
+				method === "OPTIONS" &&
+				fc.request.headers.has("access-control-request-method") &&
+				result.allowed.length > 0
+			) {
+				const fallback = this._preflightFallbackMethod(result.allowed)
+				const retry = matchRoute(root, fallback, path)
+				const retryRecord = retry?.matched ? final.byId.get(retry.id) : undefined
+				if (retry?.matched && retryRecord !== undefined) {
+					return this._handleCorsPreflight(fc, path, retryRecord, retry.params, result.allowed)
 				}
+			}
+			return this._handle405(fc, method, path, result.allowed)
+		}
+		const record = final.byId.get(result.id)
+		if (record === undefined) return this._handle404(fc, method, path)
+		return this._dispatchRecord(fc, method, path, record, result.params)
+	}
 
-				if (!result.matched) {
-					if (
-						method === "OPTIONS" &&
-						fc.request.headers.has("access-control-request-method") &&
-						result.allowed.length > 0
-					) {
-						const fallback = this._preflightFallbackMethod(result.allowed)
-						const retry = matchRoute(this._root, fallback, path)
-						if (retry?.matched && retry.handler.fn !== null) {
-							return this._handleCorsPreflight(fc, path, retry.handler, retry.params, result.allowed)
-						}
-					}
-					return this._handle405(fc, method, path, result.allowed)
-				}
+	private _matchWs(
+		final: FinalTable,
+		path: string,
+	): { handler: WSRouteHandler; params: Record<string, string> } | null {
+		const hit = matchWsRoute(this._graph.root, path)
+		if (hit === null) return null
+		const handler = final.wsById.get(hit.id)
+		return handler === undefined ? null : { handler, params: hit.params }
+	}
+
+	private _dispatchRecord(
+		fc: FetchCtx<TEnv>,
+		method: HttpMethod,
+		path: string,
+		record: RouteHandler,
+		params: Record<string, string>,
+	): Response | Promise<Response> {
+		if (record.fn === NOT_SERVED) return this._handle404(fc, method, path)
+		/* a delegated route keeps its own input schemas for docs and the 415 check; the body
+		 * itself belongs to whatever the catch-all forwards it to */
+		if (record.dl === true && record.iv) {
+			try {
+				assertRequestContentType(record.iv, fc.request)
+			} catch (thrown) {
+				return this._toErrorResponse(thrown)
 			}
 		}
-
-		/* fn:null hit — find catch-all/wildcard to dispatch with stashed meta */
-		const wildcardResult = matchRoute(this._root, method, "/*")
-		if (wildcardResult?.matched && wildcardResult.handler.fn !== null) {
-			/* 415 from matched iv before middleware that waits on the body */
-			if (fnNullIv !== null) {
-				try {
-					assertRequestContentType(fnNullIv, fc.request)
-				} catch (thrown) {
-					return this._toErrorResponse(thrown)
-				}
-			}
-			return this._handleMatched(fc, method, path, wildcardResult.handler, fnNullParams ?? EMPTY_PARAMS, fnNullMeta)
-		}
-
-		return this._handle404(fc, method, path)
+		return this._handleMatched(fc, method, path, record, params)
 	}
 
 	private _makeErrorCtx(fc: FetchCtx<TEnv>, allowed?: string[]) {
@@ -2399,7 +2525,6 @@ export class Honey<
 		path: string,
 		handler: RouteHandler,
 		params: Record<string, string>,
-		stashedMeta?: Record<string, unknown> | null,
 	): Response | Promise<Response> {
 		const { env, executionCtx, log, request } = fc
 
@@ -2422,8 +2547,7 @@ export class Honey<
 			}
 		}
 
-		/* meta: stashed meta from fn:null tree match takes priority over handler meta */
-		const resolvedMeta = stashedMeta ?? handler.mt
+		const resolvedMeta = handler.mt
 
 		const ctx = new HoneyContext({
 			env,
@@ -2462,7 +2586,8 @@ export class Honey<
 		 * because each route may match a different subset).
 		 */
 		const hasTelemetryMw = this._telemetry?.onMiddleware !== undefined
-		const hasInputValidation = handler.iv != null
+		/* a delegated route's schemas document it; the body is forwarded, never validated here */
+		const hasInputValidation = handler.iv != null && handler.dl !== true
 
 		/*
 		 * Error resolver — stored on ctx so the cached handler wrapper can read it.
@@ -2860,16 +2985,15 @@ type HandlerCtx<
 
 /** @internal — exposes private Honey members for RouteBuilder/WSRouteBuilder access */
 type HoneyInternal = {
+	_addRoute(method: string, segments: readonly Segment[], record: RouteHandler): void
+	_addWsRoute(segments: readonly Segment[], record: WSRouteHandler): void
 	_factory: unknown
-	_markWsRoutes(): void
-	_registerStatic(key: string, handler: RouteHandler): void
 }
 
 type RouteBuilderState<TParent> = {
 	boundaryErrorKey: string | null
 	errorKeys: Set<string>
 	extraMethods: (HttpMethod | "ALL")[] | null
-	handlerMap: Record<string, RouteHandler> | null
 	inputSchemas: InputSchemasDef | null
 	meta: Record<string, unknown> | null
 	/** meta contributed by middleware — kept apart so explicit .meta() always outranks it */
@@ -2879,8 +3003,8 @@ type RouteBuilderState<TParent> = {
 	outputSchemas: OutputSchemaDef | null
 	parent: TParent
 	parentMiddlewares: RuntimeMiddleware[]
+	/** canonical full pattern */
 	path: string
-	root: TreeNode
 }
 
 /**
@@ -3229,7 +3353,7 @@ class RouteBuilder<
 			Object.defineProperty(fn, Symbol.for("honey.app"), { value: this._s.parent })
 		}
 
-		const routeHandler: RouteHandler = {
+		const base: RouteHandler = {
 			_skip: isInternal || undefined,
 			bek: this._s.boundaryErrorKey,
 			ef: null,
@@ -3240,69 +3364,14 @@ class RouteBuilder<
 			mw: [...this._s.parentMiddlewares, ...this._s.middlewares],
 			os: this._s.outputSchemas,
 			ov,
-			rp: this._s.path,
 		}
 
-		/* patch mode: if handler map has this route, patch existing handler instead of insertRoute */
-		const handlerMap = this._s.handlerMap
-		if (handlerMap) {
-			const key = `${this._s.method} ${this._s.path}`
-			const existing = handlerMap[key]
-			if (existing) {
-				existing.fn = routeHandler.fn
-				existing.mw = routeHandler.mw
-				existing.iv = routeHandler.iv
-				existing.os = routeHandler.os
-				existing.ov = routeHandler.ov
-				/* pre-compute filtered error factory */
-				const factory = (this._s.parent as unknown as HoneyInternal)._factory
-				if (factory !== null && existing.ek.size > 0) {
-					const ef = Object.create(null) as Record<string, (...args: never[]) => unknown>
-					const fac = factory as Record<string, (...args: never[]) => unknown>
-					for (const k of existing.ek) {
-						const factoryFn = fac[k]
-						if (factoryFn !== undefined) {
-							ef[k] = factoryFn
-						}
-					}
-					existing.ef = Object.freeze(ef)
-				}
-				return this._s.parent as HandlerReturn<
-					TEnv,
-					TBaseCtx,
-					TRoutes,
-					TPath,
-					TMethod,
-					TInput,
-					TOutput,
-					TCtx,
-					TAccMeta,
-					TErrorFactory,
-					_TErrorKeys,
-					TDefaultErrors,
-					TMeta,
-					TBasePath,
-					TTaps,
-					TScopedMw
-				>
-			}
-		}
-
-		insertRoute(this._s.root, this._s.method, this._s.path, routeHandler)
-
-		/* .on() extra methods — insert same handler for each additional method */
-		if (this._s.extraMethods) {
-			for (const m of this._s.extraMethods) {
-				insertRoute(this._s.root, m, this._s.path, routeHandler)
-				if (!this._s.path.includes(":") && !this._s.path.includes("*")) {
-					;(this._s.parent as unknown as HoneyInternal)._registerStatic(`${m} ${this._s.path}`, routeHandler)
-				}
-			}
-		}
-
-		/* populate static route map for O(1) lookup on non-parameterized routes */
-		if (!this._s.path.includes(":") && !this._s.path.includes("*")) {
-			;(this._s.parent as unknown as HoneyInternal)._registerStatic(`${this._s.method} ${this._s.path}`, routeHandler)
+		/* one record per method — `.on([...])` registers each under its own RouteId */
+		const parent = this._s.parent as unknown as HoneyInternal
+		const segments = parsePattern(this._s.path)
+		const methods = [this._s.method, ...(this._s.extraMethods ?? [])]
+		for (let i = 0; i < methods.length; i++) {
+			parent._addRoute(methods[i], segments, i === 0 ? base : { ...base, ek: new Set(base.ek) })
 		}
 		return this._s.parent as HandlerReturn<
 			TEnv,
@@ -3578,16 +3647,9 @@ type WSRouteBuilderState<TParent> = {
 	parent: TParent
 	parentMiddlewares: RuntimeMiddleware[]
 	path: string
-	root: TreeNode
 }
 
-class WSRouteBuilder<
-	TEnv,
-	TCtx,
-	TInput = {},
-	_TErrorKeys extends string = never,
-	TParent extends { _markWsRoutes(): void } = { _markWsRoutes(): void },
-> {
+class WSRouteBuilder<TEnv, TCtx, TInput = {}, _TErrorKeys extends string = never, TParent = unknown> {
 	private _s: WSRouteBuilderState<TParent>
 
 	constructor(state: WSRouteBuilderState<TParent>) {
@@ -3618,8 +3680,7 @@ class WSRouteBuilder<
 			mw: [...this._s.parentMiddlewares, ...this._s.middlewares],
 			rp: this._s.path,
 		}
-		insertWsRoute(this._s.root, this._s.path, routeHandler)
-		;(this._s.parent as unknown as HoneyInternal)._markWsRoutes()
+		;(this._s.parent as unknown as HoneyInternal)._addWsRoute(parsePattern(this._s.path), routeHandler)
 		return this._s.parent
 	}
 

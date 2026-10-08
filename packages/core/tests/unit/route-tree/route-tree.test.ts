@@ -3,74 +3,36 @@ import * as z from "zod"
 import { generateRouteTreeFromApp } from "../../../src/codegen.ts"
 import { createMiddleware, defineErrors, honey } from "../../../src/index.ts"
 import { testClient } from "../../../src/testing.ts"
-import type { RouteHandler, RouteTree } from "../../../src/tree.ts"
+import type { RouteEntry, RouteTree } from "../../../src/tree.ts"
 import { createNode, insertRoute } from "../../../src/tree.ts"
 
 /* ---- helpers ---- */
 
-function buildStaticTree(): RouteTree {
+/** A generated-style tree: topology with RouteId leaves plus route data, no handlers. */
+function treeOf(routes: Array<[string, string, RouteEntry?]>): RouteTree {
 	const root = createNode()
-
-	const H0: RouteHandler = {
-		bek: null,
-		ef: null,
-		ek: new Set(["not_found"]),
-		fn: null as unknown as RouteHandler["fn"],
-		iv: null,
-		mt: { auth: "required", rateLimit: "strict" },
-		mw: [],
-		os: null,
-		ov: null,
-		rp: "",
+	const entries: Record<string, RouteEntry> = {}
+	for (const [method, path, entry] of routes) {
+		const id = insertRoute(root, method as "GET", path)
+		entries[id] = entry ?? {}
 	}
-	const H1: RouteHandler = {
-		bek: null,
-		ef: null,
-		ek: new Set(),
-		fn: null as unknown as RouteHandler["fn"],
-		iv: null,
-		mt: { auth: "required" },
-		mw: [],
-		os: null,
-		ov: null,
-		rp: "",
-	}
-	const H2: RouteHandler = {
-		bek: null,
-		ef: null,
-		ek: new Set(),
-		fn: null as unknown as RouteHandler["fn"],
-		iv: null,
-		mt: null,
-		mw: [],
-		os: null,
-		ov: null,
-		rp: "",
-	}
-
-	insertRoute(root, "GET", "/orgs", H0)
-	insertRoute(root, "POST", "/orgs", H1)
-	insertRoute(root, "GET", "/health", H2)
-
-	return {
-		handlers: {
-			"GET /health": H2,
-			"GET /orgs": H0,
-			"POST /orgs": H1,
-		},
-		meta: {},
-		root,
-	}
+	return { meta: {}, root, routes: entries, v: 2 }
 }
 
-/* ---- .routeTree() patching ---- */
+function buildStaticTree(): RouteTree {
+	return treeOf([
+		["GET", "/orgs", { ek: ["not_found"], mt: { auth: "required", rateLimit: "strict" } }],
+		["POST", "/orgs", { mt: { auth: "required" } }],
+		["GET", "/health"],
+	])
+}
 
-describe(".routeTree() patch mode", () => {
-	it("patches handler fn into pre-built tree", async () => {
-		const staticTree = buildStaticTree()
+/* ---- .routeTree() hydration ---- */
 
+describe(".routeTree() hydration", () => {
+	it("binds registered handlers to the loaded leaves", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.get("/orgs")
 			.handler((c) => c.res.text("ok", "orgs-list"))
 			.post("/orgs")
@@ -79,245 +41,278 @@ describe(".routeTree() patch mode", () => {
 			.handler((c) => c.res.text("ok", "ok"))
 
 		const client = testClient(app, { env: {} })
-
-		const res1 = await client.get("/orgs")
-		expect(res1.status).toBe(200)
-		expect(await res1.text()).toBe("orgs-list")
-
-		const res2 = await client.post("/orgs")
-		expect(res2.status).toBe(200)
-		expect(await res2.text()).toBe("orgs-create")
-
-		const res3 = await client.get("/health")
-		expect(res3.status).toBe(200)
-		expect(await res3.text()).toBe("ok")
+		expect(await (await client.get("/orgs")).text()).toBe("orgs-list")
+		expect(await (await client.post("/orgs")).text()).toBe("orgs-create")
+		expect(await (await client.get("/health")).text()).toBe("ok")
 	})
 
-	it("preserves pre-built ek from static tree", async () => {
-		const staticTree = buildStaticTree()
-
-		honey<{}>()
-			.routeTree(staticTree)
-			.get("/orgs")
-			.handler((c) => c.res.text("ok", "ok"))
-
-		/* pre-built handler retains ek from static tree */
-		const handler = staticTree.handlers?.["GET /orgs"]
-		expect(handler?.ek).toEqual(new Set(["not_found"]))
-	})
-
-	it("preserves pre-built mt from static tree", async () => {
-		const staticTree = buildStaticTree()
-
-		honey<{}>()
-			.routeTree(staticTree)
-			.get("/orgs")
-			.handler((c) => c.res.text("ok", "ok"))
-
-		const handler = staticTree.handlers?.["GET /orgs"]
-		expect(handler?.mt).toEqual({ auth: "required", rateLimit: "strict" })
-	})
-
-	it("patches mw from builder chain", async () => {
-		const staticTree = buildStaticTree()
-
-		const withDb = createMiddleware(async (_ctx, next) => next({ db: "connected" }))
-
+	it("the registered route is the whole record — the tree's data is not consulted for it", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
+			.get("/orgs")
+			.meta({ fresh: true })
+			.handler((c) => c.res.json("ok", { meta: c.meta, pattern: c.routePattern }))
+		const res = await testClient(app, { env: {} }).get("/orgs")
+		expect(await res.json()).toEqual({ meta: { fresh: true }, pattern: "/orgs" })
+	})
+
+	it("never mutates the loaded tree, which is frozen", () => {
+		const tree = buildStaticTree()
+		honey<{}>()
+			.routeTree(tree)
+			.get("/orgs")
+			.handler((c) => c.res.text("ok", "ok"))
+		expect(Object.isFrozen(tree.root)).toBe(true)
+		expect(Object.isFrozen(tree.root.s.orgs)).toBe(true)
+		expect(tree.routes["GET /orgs"]).toEqual({ ek: ["not_found"], mt: { auth: "required", rateLimit: "strict" } })
+	})
+
+	it("chain middleware runs for hydrated routes", async () => {
+		const withDb = createMiddleware(async (_ctx, next) => next({ db: "connected" }))
+		const app = honey<{}>()
+			.routeTree(buildStaticTree())
 			.use(withDb)
 			.get("/orgs")
-			.handler((c) => c.res.text("ok", "ok"))
-
-		const handler = staticTree.handlers?.["GET /orgs"]
-		expect(handler?.mw.length).toBe(1)
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/orgs")
-		expect(res.status).toBe(200)
+			.handler((c) => c.res.text("ok", c.db))
+		expect(await (await testClient(app, { env: {} }).get("/orgs")).text()).toBe("connected")
 	})
 
-	it("falls through to insertRoute for unknown routes", async () => {
-		const staticTree = buildStaticTree()
-
+	it("input schemas of the registered route validate", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
-			.get("/orgs")
-			.handler((c) => c.res.text("ok", "orgs"))
-			.get("/new-route")
-			.handler((c) => c.res.text("ok", "new"))
-
-		const client = testClient(app, { env: {} })
-
-		const res1 = await client.get("/orgs")
-		expect(res1.status).toBe(200)
-		expect(await res1.text()).toBe("orgs")
-
-		const res2 = await client.get("/new-route")
-		expect(res2.status).toBe(200)
-		expect(await res2.text()).toBe("new")
-	})
-
-	it("works with input schemas via patching", async () => {
-		const staticTree = buildStaticTree()
-
-		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.get("/orgs")
 			.input({ search: z.object({ limit: z.coerce.number() }) })
 			.handler((c) => c.res.json("ok", { limit: c.input.search.limit }))
+		const res = await testClient(app, { env: {} }).get("/orgs?limit=10")
+		expect(await res.json()).toEqual({ limit: 10 })
+	})
 
+	it("a route the tree does not hold makes the tree stale: finalize names it", () => {
+		const app = honey<{}>()
+			.routeTree(buildStaticTree())
+			.get("/new-route")
+			.handler((c) => c.res.text("ok", "new"))
+		expect(() => app.fetch(new Request("http://x/orgs"), {})).toThrow(/GET \/new-route is registered but missing/)
+	})
+
+	it("a leaf no handler serves is documented but answers 404", async () => {
+		const app = honey<{}>()
+			.routeTree(buildStaticTree())
+			.get("/health")
+			.handler((c) => c.res.text("ok", "ok"))
 		const client = testClient(app, { env: {} })
-		const res = await client.get("/orgs?limit=10")
-		expect(res.status).toBe(200)
-		const body = (await res.json()) as { limit: number }
-		expect(body.limit).toBe(10)
+		expect((await client.get("/orgs")).status).toBe(404)
+		expect((await client.get("/health")).status).toBe(200)
+		const routes = (app as unknown as { _collectRoutes(): Array<{ method: string; path: string }> })._collectRoutes()
+		expect(routes.map((r) => `${r.method} ${r.path}`)).toContain("GET /orgs")
+	})
+
+	it("routeTree() after a route is registered throws", () => {
+		const app = honey<{}>()
+		app.get("/x").handler((c) => c.res.text("ok", "x"))
+		expect(() => app.routeTree(buildStaticTree())).toThrow(/before routes are registered/)
+	})
+
+	it("rejects a tree generated by an older honey (handler objects at the leaves)", () => {
+		const root = createNode()
+		root.m = { GET: { fn: null } as unknown as string }
+		expect(() => honey<{}>().routeTree({ meta: {}, root, routes: {} })).toThrow(/older honey/)
+	})
+
+	it("registration after the first request re-finalizes (epoch)", async () => {
+		const app = honey<{}>()
+		app.get("/a").handler((c) => c.res.text("ok", "a"))
+		expect((await app.fetch(new Request("http://x/a"), {})).status).toBe(200)
+		app.get("/b").handler((c) => c.res.text("ok", "b"))
+		const res = await app.fetch(new Request("http://x/b"), {})
+		expect(await res.text()).toBe("b")
 	})
 })
 
-/* ---- pre-filtered error factory ---- */
+/* ---- two apps, one tree ---- */
 
-describe(".routeTree() pre-filtered error factory", () => {
-	it("pre-computes ef on handler at patch time", () => {
-		const staticTree = buildStaticTree()
-
-		const errors = defineErrors({ not_found: "not_found" })
-
-		honey<{}>()
-			.errorFactory(errors)
-			.routeTree(staticTree)
-			.get("/orgs")
-			.handler((c) => c.res.text("ok", "ok"))
-
-		const handler = staticTree.handlers?.["GET /orgs"]
-		expect(handler?.ef).not.toBeNull()
-		expect(handler?.ef?.not_found).toBeDefined()
-		expect(Object.isFrozen(handler?.ef)).toBe(true)
+describe("two apps built from one generated tree", () => {
+	it("each serves its own handlers", async () => {
+		const tree = treeOf([["GET", "/who"]])
+		const make = (name: string) =>
+			honey<{}>()
+				.routeTree(tree)
+				.get("/who")
+				.handler((c) => c.res.text("ok", name))
+		const a = make("A")
+		const b = make("B")
+		expect(await (await a.fetch(new Request("http://x/who"), {})).text()).toBe("A")
+		expect(await (await b.fetch(new Request("http://x/who"), {})).text()).toBe("B")
+		/* a third app that registers nothing serves nobody's handler */
+		const c = honey<{}>().routeTree(tree)
+		expect((await c.fetch(new Request("http://x/who"), {})).status).toBe(404)
 	})
+})
 
-	it("ctx.errors uses pre-filtered ef from handler", async () => {
-		const staticTree = buildStaticTree()
+/* ---- error factory with a loaded tree ---- */
 
+describe(".routeTree() error factory", () => {
+	it("ctx.errors carries the route's declared keys", async () => {
 		const errors = defineErrors({ not_found: "not_found" })
-
 		const app = honey<{}>()
 			.errorFactory(errors)
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.get("/orgs")
 			.errors("not_found")
 			.handler((c) => {
 				throw c.errors.not_found()
 			})
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/orgs")
-		expect(res.status).toBe(404)
-	})
-
-	it("ef is null when no error factory registered", () => {
-		const staticTree = buildStaticTree()
-
-		honey<{}>()
-			.routeTree(staticTree)
-			.get("/health")
-			.handler((c) => c.res.text("ok", "ok"))
-
-		const handler = staticTree.handlers?.["GET /health"]
-		expect(handler?.ef).toBeNull()
+		expect((await testClient(app, { env: {} }).get("/orgs")).status).toBe(404)
 	})
 })
 
-/* ---- codegen emits handler map ---- */
+/* ---- scoped middleware with a loaded tree (C1) ---- */
 
-describe("codegen emits handler map and routeTree", () => {
-	it("emits handlers export with METHOD /path keys", () => {
+describe(".routeTree() with scoped middleware", () => {
+	const auth = createMiddleware(async (ctx, next) => {
+		if (ctx.req.headers.get("authorization") !== "ok") return new Response("no", { status: 401 })
+		return next()
+	})
+
+	it("guards hydrated routes exactly like the runtime tree", async () => {
+		const build = (tree?: RouteTree) => {
+			const app = honey<{}>()
+			if (tree) app.routeTree(tree)
+			app.use("/admin", auth)
+			app.get("/admin/secret").handler((c) => c.res.json("ok", { pattern: c.routePattern }))
+			app.get("/public").handler((c) => c.res.text("ok", "pub"))
+			return app
+		}
+		const runtime = build()
+		const loaded = build(runtime.toRouteTree())
+		for (const app of [runtime, loaded]) {
+			const denied = await app.fetch(new Request("http://x/admin/secret"), {})
+			expect(denied.status).toBe(401)
+			const ok = await app.fetch(new Request("http://x/admin/secret", { headers: { authorization: "ok" } }), {})
+			expect(await ok.json()).toEqual({ pattern: "/admin/secret" })
+			expect((await app.fetch(new Request("http://x/public"), {})).status).toBe(200)
+		}
+	})
+
+	it("guards delegated routes by their own pattern, not the catch-all's", async () => {
+		const tree = treeOf([
+			["GET", "/admin/users", { mt: { worker: "admin" } }],
+			["GET", "/public", { mt: { worker: "web" } }],
+		])
+		const app = honey<{}>().routeTree(tree)
+		app.use("/admin", auth)
+		app.all("/*").handler((c) => c.res.json("ok", { meta: c.meta, pattern: c.routePattern }))
+		expect((await app.fetch(new Request("http://x/admin/users"), {})).status).toBe(401)
+		const pub = await app.fetch(new Request("http://x/public"), {})
+		expect(await pub.json()).toEqual({ meta: { worker: "web" }, pattern: "/public" })
+	})
+})
+
+/* ---- .on() with a loaded tree (H19) ---- */
+
+describe(".routeTree() with .on()", () => {
+	it("binds every method", async () => {
+		const live = honey<{}>()
+		live.on(["GET", "POST"], "/multi").handler((c) => c.res.text("ok", c.req.method))
+		const app = honey<{}>().routeTree(live.toRouteTree())
+		app.on(["GET", "POST"], "/multi").handler((c) => c.res.text("ok", `local ${c.req.method}`))
+		expect(await (await app.fetch(new Request("http://x/multi"), {})).text()).toBe("local GET")
+		expect(await (await app.fetch(new Request("http://x/multi", { method: "POST" }), {})).text()).toBe("local POST")
+	})
+})
+
+/* ---- root wildcard that the tree holds (H22) ---- */
+
+describe(".routeTree() with the app's own root wildcard", () => {
+	it("serves an SPA fallback that is part of the tree for GET and HEAD alike", async () => {
+		const build = () => {
+			const app = honey<{}>()
+			app.get("/api/x").handler((c) => c.res.text("ok", "x"))
+			app.get("/*path").handler((c) => c.res.text("ok", `spa ${c.params.path}`))
+			return app
+		}
+		const app = honey<{}>().routeTree(build().toRouteTree())
+		app.get("/api/x").handler((c) => c.res.text("ok", "x"))
+		app.get("/*path").handler((c) => c.res.text("ok", `spa ${c.params.path}`))
+		const get = await app.fetch(new Request("http://x/some/page"), {})
+		expect(await get.text()).toBe("spa some/page")
+		const head = await app.fetch(new Request("http://x/some/page", { method: "HEAD" }), {})
+		expect(head.status).toBe(200)
+	})
+})
+
+/* ---- internal routes with a loaded tree (H20) ---- */
+
+describe(".routeTree() with openapi()", () => {
+	it("mounts spec and docs although the generated tree leaves them out", async () => {
+		const build = (tree?: RouteTree) => {
+			const app = honey<{}>()
+			if (tree) app.routeTree(tree)
+			app.get("/users").handler((c) => c.res.json("ok", []))
+			return app.openapi({ docs: "scalar", title: "T", version: "1" })
+		}
+		const live = build()
+		const code = generateRouteTreeFromApp(live)
+		expect(code).not.toContain("openapi.json")
+		const app = build(live.toRouteTree())
+		expect((await app.fetch(new Request("http://x/openapi.json"), {})).status).toBe(200)
+		expect((await app.fetch(new Request("http://x/docs"), {})).status).toBe(200)
+	})
+})
+
+/* ---- codegen ---- */
+
+describe("codegen emits topology and route data", () => {
+	it("leaves are route ids and route data is keyed by them", () => {
 		const app = honey<{}>()
 			.get("/orgs")
 			.handler((c) => c.res.text("ok", "ok"))
 			.post("/orgs")
 			.handler((c) => c.res.text("ok", "ok"))
-
 		const code = generateRouteTreeFromApp(app)
-
-		expect(code).toContain("export const handlers")
+		expect(code).toContain("export const routes")
 		expect(code).toContain('"GET /orgs"')
 		expect(code).toContain('"POST /orgs"')
+		expect(code).not.toContain("export const handlers")
+		expect(code).not.toContain("RouteHandler")
 	})
 
-	it("emits routeTree convenience export", () => {
+	it("emits the routeTree convenience export", () => {
 		const app = honey<{}>()
 			.get("/health")
 			.handler((c) => c.res.text("ok", "ok"))
-
 		const code = generateRouteTreeFromApp(app)
-
 		expect(code).toContain("export const routeTree: RouteTree")
 		expect(code).toContain("root: tree")
-		expect(code).toContain("handlers")
+		expect(code).toContain("routes")
 	})
 
-	it("emits unique handler per route (no dedup)", () => {
-		const app = honey<{}>()
-			.get("/a")
-			.handler((c) => c.res.text("ok", "a"))
-			.get("/b")
-			.handler((c) => c.res.text("ok", "b"))
-
-		const code = generateRouteTreeFromApp(app)
-
-		expect(code).toContain("const H0: RouteHandler")
-		expect(code).toContain("const H1: RouteHandler")
-	})
-
-	it("emits pre-built ek in handler constants", () => {
+	it("emits declared error keys and meta as route data", () => {
 		const errors = defineErrors({ email_taken: "conflict" })
-
-		const app = honey<{}>()
-			.get("/users")
-			.errors(errors, "email_taken")
-			.handler((c) => c.res.text("ok", "ok"))
-
-		const code = generateRouteTreeFromApp(app)
-
-		expect(code).toContain('new Set(["email_taken"])')
-	})
-
-	it("emits pre-built mt in handler constants", () => {
 		const app = honey<{}>()
 			.meta<{ auth: string }>()
-			.get("/orgs")
+			.get("/users")
+			.errors(errors, "email_taken")
 			.meta({ auth: "required" })
 			.handler((c) => c.res.text("ok", "ok"))
-
 		const code = generateRouteTreeFromApp(app)
-
+		expect(code).toContain('ek: ["email_taken"]')
 		expect(code).toContain('"auth":"required"')
-		/* mt should be inline in the handler constant, not null */
-		expect(code).not.toContain("mt: null")
 	})
 
-	it("omits default-null intern handler fields", () => {
+	it("rejects meta JSON cannot carry", () => {
 		const app = honey<{}>()
-			.get("/health")
+		app
+			.get("/when")
+			.meta({ at: new Date(0) } as never)
 			.handler((c) => c.res.text("ok", "ok"))
-
-		const code = generateRouteTreeFromApp(app)
-
-		expect(code).not.toContain("ef: null")
-		expect(code).not.toContain("ov: null")
-		expect(code).not.toContain('rp: ""')
-		expect(code).toContain("fn: FN")
-		expect(code).toContain("mw: []")
-	})
-
-	it("imports RouteTree type", () => {
-		const app = honey<{}>()
-			.get("/health")
+		expect(() => generateRouteTreeFromApp(app)).toThrow(/GET \/when.*Date/)
+		const nan = honey<{}>()
+		nan
+			.get("/n")
+			.meta({ n: Number.NaN } as never)
 			.handler((c) => c.res.text("ok", "ok"))
-
-		const code = generateRouteTreeFromApp(app)
-
-		expect(code).toContain("RouteTree")
+		expect(() => generateRouteTreeFromApp(nan)).toThrow(/NaN/)
 	})
 })
 
@@ -344,6 +339,14 @@ describe(".routeTree() with mergeTree", () => {
 		const resB = await client.get("/b")
 		expect(resB.status).toBe(200)
 		expect(await resB.text()).toBe("from-b")
+	})
+
+	it("toRouteTree() returns a copy, never the live root", () => {
+		const app = honey<{}>()
+		app.get("/a").handler((c) => c.res.text("ok", "a"))
+		const snap = app.toRouteTree()
+		snap.root.s.a = createNode()
+		expect(app.toRouteTree().root.s.a?.m).toEqual({ GET: "GET /a" })
 	})
 })
 
@@ -407,105 +410,69 @@ describe("routeTree meta typing", () => {
 	})
 })
 
-/* ---- fn: null fallthrough — gateway proxy pattern ---- */
+/* ---- gateway delegation — leaves without a local handler go to the catch-all ---- */
 
-describe("routeTree fn:null fallthrough", () => {
-	it("tree handler with fn:null falls through to catch-all with meta", async () => {
-		const staticTree = buildStaticTree()
-		/* H0 has mt: { auth: "required", rateLimit: "strict" }, fn: null */
-
+describe("routeTree delegation to the gateway catch-all", () => {
+	it("delegated leaf dispatches to the catch-all with its own meta", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.all("*")
 			.handler((c) => {
 				const meta = (c as Record<string, unknown>)["meta"] as Record<string, unknown>
 				return c.res.json("ok", { auth: meta["auth"], rateLimit: meta["rateLimit"] })
 			})
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/orgs")
-		expect(res.status).toBe(200)
-		const body = (await res.json()) as { auth: string; rateLimit: string }
-		expect(body.auth).toBe("required")
-		expect(body.rateLimit).toBe("strict")
+		const res = await testClient(app, { env: {} }).get("/orgs")
+		expect(await res.json()).toEqual({ auth: "required", rateLimit: "strict" })
 	})
 
-	it("tree handler with fn:null and no meta falls through without route meta", async () => {
-		const staticTree = buildStaticTree()
-		/* H2 (/health) has mt: null, fn: null */
-
+	it("delegated leaf without meta has no route meta", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.all("*")
 			.handler((c) => {
 				const meta = (c as Record<string, unknown>)["meta"] as Record<string, unknown> | undefined
 				return c.res.json("ok", { hasWorker: meta?.["worker"] !== undefined })
 			})
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/health")
-		expect(res.status).toBe(200)
-		const body = (await res.json()) as { hasWorker: boolean }
-		expect(body.hasWorker).toBe(false)
+		expect(await (await testClient(app, { env: {} }).get("/health")).json()).toEqual({ hasWorker: false })
 	})
 
-	it("tree handler with real fn dispatches normally (no fallthrough)", async () => {
-		const staticTree = buildStaticTree()
-
+	it("a local handler wins over delegation", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.get("/orgs")
 			.handler((c) => c.res.text("ok", "handled"))
 			.all("*")
 			.handler((c) => c.res.text("ok", "catch-all"))
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/orgs")
-		expect(res.status).toBe(200)
-		expect(await res.text()).toBe("handled")
+		expect(await (await testClient(app, { env: {} }).get("/orgs")).text()).toBe("handled")
+		expect(await (await testClient(app, { env: {} }).get("/health")).text()).toBe("catch-all")
 	})
 
-	it("unmatched route (not in tree, no catch-all) returns 404", async () => {
-		const staticTree = buildStaticTree()
-
-		const app = honey<{}>().routeTree(staticTree)
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/unknown")
-		expect(res.status).toBe(404)
-	})
-
-	it("unmatched route returns 404 even with catch-all when routeTree loaded", async () => {
-		const staticTree = buildStaticTree()
-
+	it("unknown paths 404 — for GET and HEAD — even with a catch-all", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.all("*")
 			.handler((c) => c.res.text("ok", "should-not-reach"))
-
 		const client = testClient(app, { env: {} })
-		const res = await client.get("/unknown")
-		expect(res.status).toBe(404)
+		expect((await client.get("/unknown")).status).toBe(404)
+		expect((await app.fetch(new Request("http://x/unknown", { method: "HEAD" }), {})).status).toBe(404)
 	})
 
-	it("wrong method on tree route returns 405 with catch-all present", async () => {
-		const staticTree = buildStaticTree()
+	it("unmatched route without a catch-all returns 404", async () => {
+		const app = honey<{}>().routeTree(buildStaticTree())
+		expect((await testClient(app, { env: {} }).get("/unknown")).status).toBe(404)
+	})
 
+	it("wrong method on a tree route returns 405 with a catch-all present", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.all("*")
 			.handler((c) => c.res.text("ok", "should-not-reach"))
-
-		const client = testClient(app, { env: {} })
-		const res = await client.delete("/orgs")
-		expect(res.status).toBe(405)
+		expect((await testClient(app, { env: {} }).delete("/orgs")).status).toBe(405)
 	})
 
-	it("fn:null fallthrough works with proxy", async () => {
-		const staticTree = buildStaticTree()
-
+	it("works with proxy", async () => {
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.all("*")
 			.proxy({
 				destination: (ctx) => {
@@ -513,66 +480,53 @@ describe("routeTree fn:null fallthrough", () => {
 					return new Response(JSON.stringify({ worker: meta?.["auth"] }))
 				},
 			})
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/orgs")
-		expect(res.status).toBe(200)
-		const body = (await res.json()) as { worker: string }
-		expect(body.worker).toBe("required")
+		expect(await (await testClient(app, { env: {} }).get("/orgs")).json()).toEqual({ worker: "required" })
 	})
 
-	it("middleware runs before fn:null fallthrough handler", async () => {
-		const staticTree = buildStaticTree()
-
+	it("middleware runs before the delegated handler", async () => {
 		const withToken = createMiddleware(async (_ctx, next) => next({ token: "abc" }))
-
 		const app = honey<{}>()
-			.routeTree(staticTree)
+			.routeTree(buildStaticTree())
 			.use(withToken)
 			.all("*")
 			.handler((c) => {
 				const meta = (c as Record<string, unknown>)["meta"] as Record<string, unknown>
 				return c.res.json("ok", { auth: meta?.["auth"], token: c.token })
 			})
-
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/orgs")
-		expect(res.status).toBe(200)
-		const body = (await res.json()) as { auth: string; token: string }
-		expect(body.auth).toBe("required")
-		expect(body.token).toBe("abc")
+		expect(await (await testClient(app, { env: {} }).get("/orgs")).json()).toEqual({ auth: "required", token: "abc" })
 	})
 
-	it("params from tree match are available in fallthrough handler", async () => {
-		const root = createNode()
-		const H: RouteHandler = {
-			bek: null,
-			ef: null,
-			ek: new Set<string>(),
-			fn: null as unknown as RouteHandler["fn"],
-			iv: null,
-			mt: { worker: "users" },
-			mw: [],
-			os: null,
-			ov: null,
-			rp: "",
-		}
-		insertRoute(root, "GET", "/users/:id", H)
-		const tree: RouteTree = { handlers: { "GET /users/:id": H }, meta: {}, root }
-
+	it("params from the tree match are available in the delegated handler", async () => {
+		const tree = treeOf([["GET", "/users/:id", { mt: { worker: "users" } }]])
 		const app = honey<{}>()
 			.routeTree(tree)
 			.all("*")
 			.handler((c) => {
 				const meta = (c as Record<string, unknown>)["meta"] as Record<string, unknown>
-				return c.res.json("ok", { id: c.params["id"], worker: meta["worker"] })
+				return c.res.json("ok", { id: c.params["id"], pattern: c.routePattern, worker: meta["worker"] })
 			})
+		const res = await testClient(app, { env: {} }).get("/users/42")
+		expect(await res.json()).toEqual({ id: "42", pattern: "/users/:id", worker: "users" })
+	})
 
-		const client = testClient(app, { env: {} })
-		const res = await client.get("/users/42")
+	it("meta-driven taps read the delegated route's meta", async () => {
+		const seen: unknown[] = []
+		const tree = treeOf([["GET", "/a", { mt: { audit: "a-route" } }]])
+		const app = honey<{}>().routeTree(tree)
+		app.tap("audit", (_ctx, v) => {
+			seen.push(v)
+		})
+		app.all("/*").handler((c) => c.res.text("ok", "ok"))
+		const res = await app.fetch(new Request("http://x/a"), {})
 		expect(res.status).toBe(200)
-		const body = (await res.json()) as { id: string; worker: string }
-		expect(body.id).toBe("42")
-		expect(body.worker).toBe("users")
+		await new Promise((r) => setTimeout(r, 5))
+		expect(seen).toEqual(["a-route"])
+	})
+
+	it("a catch-all with nothing to delegate means the tree is stale", () => {
+		const app = honey<{}>().routeTree(treeOf([["GET", "/a"]]))
+		app.get("/a").handler((c) => c.res.text("ok", "a"))
+		app.all("/*").handler((c) => c.res.text("ok", "spa"))
+		expect(() => app.fetch(new Request("http://x/a"), {})).toThrow(/missing from the loaded route tree/)
 	})
 })

@@ -1,13 +1,12 @@
 /**
  * Structural intern for generated route-tree modules.
  *
- * Handler objects stay unique (`.routeTree()` patches `fn`/`mw`/`iv`/`os` onto each
- * `H*`). Intern omits `iv`/`os` — serve generate-time OpenAPI JSON as Worker assets.
- * Values handlers still point at — meta objects, selector strings, error-key arrays —
- * are shared by identity when their JSON is identical.
+ * Route data — meta objects, route ids, error-key arrays — is shared by identity when its
+ * JSON is identical. Callers reject non-JSON values first (see `assertJsonValue` in
+ * codegen.ts), so equal canonical JSON always means equal values.
  */
 
-export type ForcedPrefix = "I" | "M" | "O" | "P"
+export type ForcedPrefix = "M" | "P"
 
 const STRING_MIN = 8
 const NUMBER_MIN = 8
@@ -112,14 +111,8 @@ export class InternPool {
 			const v = this.values.get(c)
 			items.push({ c, depth: valueDepth(v), id, seen: this.firstSeen.indexOf(c), v })
 		}
-		items.sort((a, b) => a.depth - b.depth || a.seen - b.seen || a.id.localeCompare(b.id))
-		return items.map((it) => {
-			const kind = this.forcedPrefix.get(it.c)
-			let rhs = this.printExpanded(it.v)
-			if (kind === "I") rhs += ' as unknown as RouteHandler["iv"]'
-			else if (kind === "O") rhs += ' as unknown as RouteHandler["os"]'
-			return `const ${it.id} = ${rhs}`
-		})
+		items.sort((a, b) => a.depth - b.depth || a.seen - b.seen || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+		return items.map((it) => `const ${it.id} = ${this.printExpanded(it.v)}`)
 	}
 
 	private shouldIntern(v: unknown): boolean {
@@ -165,7 +158,8 @@ export class InternPool {
 		if (t === "object") {
 			const obj = v as Record<string, unknown>
 			const keys = Object.keys(obj).filter((k) => obj[k] !== undefined)
-			return `{${keys.map((k) => `${JSON.stringify(k)}:${this.expr(obj[k])}`).join(",")}}`
+			/* a quoted "__proto__" key in a literal sets the prototype; a computed one defines a property */
+			return `{${keys.map((k) => `${k === "__proto__" ? '["__proto__"]' : JSON.stringify(k)}:${this.expr(obj[k])}`).join(",")}}`
 		}
 		return JSON.stringify(v) ?? "undefined"
 	}

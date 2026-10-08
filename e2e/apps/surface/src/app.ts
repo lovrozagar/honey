@@ -1,4 +1,5 @@
 import type { WSAdapter } from "@lovrozagar/honey"
+import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 import { readableStream } from "@lovrozagar/honey/input"
 import "@lovrozagar/honey/openapi"
@@ -29,8 +30,13 @@ const withAuth = createMiddleware(async (_ctx, next) =>
 )
 
 /** Exhaustive consumer surface: every input source, output type, method, SSE, WS. */
-export function createApp(wsAdapter?: WSAdapter) {
+
+/** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
+export type AppOptions = { routeTree?: RouteTree }
+
+export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	const app = honey<Env>()
+	if (options?.routeTree) app.routeTree(options.routeTree)
 	if (wsAdapter) app.wsAdapter(wsAdapter)
 
 	return app

@@ -1,4 +1,5 @@
 import type { InferCtx, MiddlewareFn, WSAdapter } from "@lovrozagar/honey"
+import type { RouteTree } from "@lovrozagar/honey/tree"
 import { defineErrors, HoneyError, honey } from "@lovrozagar/honey"
 import "@lovrozagar/honey/i18n"
 import "@lovrozagar/honey/openapi"
@@ -52,10 +53,14 @@ const withAuth: MiddlewareFn<DbCtx & { req: Request }, AuthCtx> = (ctx, next) =>
 }
 
 /* ---- app factory ---- */
-export function createApp(wsAdapter?: WSAdapter) {
+/** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
+export type AppOptions = { routeTree?: RouteTree }
+
+export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	const log = createLogger({ level: "debug" })
 
 	const root = honey<Env>().basePath("/api").trailingSlash("strip")
+	if (options?.routeTree) root.routeTree(options.routeTree)
 	if (wsAdapter) root.wsAdapter(wsAdapter)
 
 	const h = root

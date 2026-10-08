@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:5a67ebbfde41",
+  "x-generated": "honey checksum:5a67ebbfde41",
   "errors": [
     {
       "errorKey": "invalid_token",

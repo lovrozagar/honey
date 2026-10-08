@@ -489,7 +489,8 @@ describe("bug-hunt-17: codegen — optional param in route tree", () => {
 		expect(code).toContain("export const tree")
 		expect(code).toContain("export const routeTree")
 		/* should compile without errors — verified by the code being syntactically valid */
-		expect(code).toContain("H0")
+		/* one route id, placed at both leaves */
+		expect(code).toContain('"GET /items/:id?"')
 	})
 })
 

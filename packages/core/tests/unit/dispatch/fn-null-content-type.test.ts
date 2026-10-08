@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { honey } from "../../../src/index.ts"
-import type { RouteHandler, RouteTree } from "../../../src/tree.ts"
+import type { RouteEntry, RouteTree } from "../../../src/tree.ts"
 import { createNode, insertRoute } from "../../../src/tree.ts"
 
 function stubSchema() {
@@ -14,48 +14,21 @@ function stubSchema() {
 	}
 }
 
-function fnNullHandler(iv: RouteHandler["iv"], mt: RouteHandler["mt"] = null): RouteHandler {
-	return {
-		bek: null,
-		ef: null,
-		ek: new Set(),
-		fn: null as unknown as RouteHandler["fn"],
-		iv,
-		mt,
-		mw: [],
-		os: null,
-		ov: null,
-		rp: "",
-	}
-}
-
 function gatewayTree(): RouteTree {
 	const root = createNode()
-	const schema = stubSchema()
-	const postItems = fnNullHandler({ json: schema }, { worker: "items" })
-	const getItems = fnNullHandler(null)
-	const restore = fnNullHandler({ params: schema })
-
-	insertRoute(root, "POST", "/v1/items", postItems)
-	insertRoute(root, "GET", "/v1/items", getItems)
-	insertRoute(root, "POST", "/v1/items/:id/restore", restore)
-
-	return {
-		handlers: {
-			"GET /v1/items": getItems,
-			"POST /v1/items": postItems,
-			"POST /v1/items/:id/restore": restore,
-		},
-		meta: {},
-		root,
-	}
+	const schema = stubSchema() as unknown as RouteEntry["iv"] & {}
+	const routes: Record<string, RouteEntry> = {}
+	routes[insertRoute(root, "POST", "/v1/items")] = { iv: { json: schema } as RouteEntry["iv"], mt: { worker: "items" } }
+	routes[insertRoute(root, "GET", "/v1/items")] = {}
+	routes[insertRoute(root, "POST", "/v1/items/:id/restore")] = { iv: { params: schema } as RouteEntry["iv"] }
+	return { meta: {}, root, routes }
 }
 
 function gatewayApp(destination: (ctx: unknown, url: string, init: RequestInit) => Response | Promise<Response>) {
 	return honey<{}>().routeTree(gatewayTree()).all("*").proxy({ destination })
 }
 
-describe("fn:null fallthrough Content-Type from matched iv", () => {
+describe("delegated route Content-Type from its own iv", () => {
 	it("POST json route + text/plain → 415, destination not called", async () => {
 		let called = false
 		const app = gatewayApp(async () => {

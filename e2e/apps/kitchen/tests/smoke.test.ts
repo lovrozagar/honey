@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { WSAdapter } from "@lovrozagar/honey"
+import { compareApps, probesFromTree } from "../../differential.ts"
+import { routeTree } from "../src/_gen/routes.gen.ts"
 import { createApp } from "../src/app.ts"
 
 const stubWs: WSAdapter = {
@@ -54,5 +56,13 @@ describe("e2e kitchen consumes honey", () => {
 		})
 		expect(res.status).toBe(204)
 		expect(res.headers.get("access-control-allow-origin")).toBe("http://localhost:3000")
+	})
+})
+
+describe("serves identically from its generated route tree", () => {
+	test("boots with .routeTree() and answers every probe like the runtime trie", async () => {
+		const probes = probesFromTree(routeTree, (p) => p)
+		expect(probes.length).toBeGreaterThan(5)
+		expect(await compareApps(createApp(stubWs), createApp(stubWs, { routeTree }), probes)).toEqual([])
 	})
 })

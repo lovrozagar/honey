@@ -128,6 +128,7 @@ describe("spec", () => {
 			.post("/users")
 			.input({ json: z.object({ email: z.string() }) })
 			.handler((ctx) => ctx.res.json("created", { ok: true }))
+		live.get("/openapi/json").handler(spec({ title: "Live", version: "1" }))
 		const code = generateRouteTreeFromApp(live)
 		const { transform } = await import("esbuild")
 		const { code: js } = await transform(code, { format: "esm", loader: "ts", target: "esnext" })

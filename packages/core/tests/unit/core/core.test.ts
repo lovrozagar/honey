@@ -662,8 +662,8 @@ describe("meta shallow merge", () => {
 			.meta({ deprecated: true })
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 
-		const tree = (h as unknown as { _tree: import("../../../src/tree.ts").TreeNode })._tree
-		const handler = tree.s["test"]?.m?.GET
+		const records = (h as unknown as { _graph: { records: Map<string, { mt: unknown }> } })._graph.records
+		const handler = records.get("GET /test")
 		expect(handler?.mt).toEqual({ deprecated: true, tags: ["user"] })
 	})
 })

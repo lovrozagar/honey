@@ -1,11 +1,16 @@
 import type { WSAdapter } from "@lovrozagar/honey"
+import type { RouteTree } from "@lovrozagar/honey/tree"
 import { honey } from "@lovrozagar/honey"
 import "@lovrozagar/honey/openapi"
 import * as z from "zod"
 
+/** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
+export type AppOptions = { routeTree?: RouteTree }
+
 /** No basePath, no CORS, no i18n, default trailingSlash ("ignore"). */
-export function createApp(wsAdapter?: WSAdapter) {
+export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	const app = honey()
+	if (options?.routeTree) app.routeTree(options.routeTree)
 	if (wsAdapter) app.wsAdapter(wsAdapter)
 
 	return app

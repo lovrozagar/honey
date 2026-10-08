@@ -2,121 +2,49 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { generateRouteTree } from "../../../src/codegen.ts"
 import { honey } from "../../../src/index.ts"
+import type { RouteEntry, RouteTree } from "../../../src/tree.ts"
+import { createNode, insertRoute } from "../../../src/tree.ts"
 import { generateFromApp } from "../../../src/plugin.ts"
 
-describe("generateRouteTree", () => {
-	it("generates route tree code from routes config", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/health",
-			},
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/v1/organizations/:orgId",
-			},
-			{
-				boundaryErrorKey: null,
-				errorKeys: ["org_slug_taken"],
-				inputSchemas: null,
-				meta: null,
-				method: "POST",
-				middlewareNames: ["withDb", "withAuth"],
-				outputSchemas: null,
-				path: "/v1/organizations",
-			},
-		])
+function treeOf(routes: Array<[string, string, RouteEntry?]>): RouteTree {
+	const root = createNode()
+	const entries: Record<string, RouteEntry> = {}
+	for (const [method, path, entry] of routes) entries[insertRoute(root, method as "GET", path)] = entry ?? {}
+	return { meta: {}, root, routes: entries }
+}
 
+describe("generateRouteTree", () => {
+	it("generates route tree code from a tree", () => {
+		const code = generateRouteTree(
+			treeOf([
+				["GET", "/health"],
+				["GET", "/v1/organizations/:orgId"],
+				["POST", "/v1/organizations", { ek: ["org_slug_taken"] }],
+			]),
+		)
 		expect(code).toContain("TreeNode")
 		expect(code).toContain("health")
 		expect(code).toContain("organizations")
+		expect(code).toContain('ek: ["org_slug_taken"]')
 	})
 
 	it("emits null-prototype factory", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/health",
-			},
-		])
+		const code = generateRouteTree(treeOf([["GET", "/health"]]))
 		expect(code).toContain("Object.create(null)")
 	})
 
-	it("emits empty node constant E", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/a/b/c",
-			},
-		])
-		expect(code).toContain("const E")
+	it("emits fresh children per node — no shared empty-node sentinel", () => {
+		const code = generateRouteTree(treeOf([["GET", "/a/b/c"]]))
+		expect(code).not.toContain("const E")
+		expect(code).toContain("s: Record<string, TreeNode> = S({})")
 	})
 
-	it("deduplicates handler configs", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/a",
-			},
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/b",
-			},
-		])
-		/* both routes have same mw/errors → should share handler pattern */
-		expect(code).toContain("H0")
-	})
-
-	it("generated tree includes ws: null on nodes", () => {
-		const code = generateRouteTree([
-			{
-				boundaryErrorKey: null,
-				errorKeys: [],
-				inputSchemas: null,
-				meta: null,
-				method: "GET",
-				middlewareNames: [],
-				outputSchemas: null,
-				path: "/health",
-			},
-		])
-		expect(code).toContain("ws: null")
+	it("websocket leaves are part of the topology", () => {
+		const app = honey<{}>()
+		app.ws("/live").handler({})
+		app.get("/health").handler((c) => c.res.text("ok", "ok"))
+		const code = generateRouteTree(app.toRouteTree())
+		expect(code).toContain('"WS /live"')
 	})
 })
 

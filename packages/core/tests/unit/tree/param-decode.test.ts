@@ -1,31 +1,10 @@
 import { describe, expect, it } from "vitest"
-import type { HttpMethod, RouteHandler, WSRouteHandler } from "../../../src/tree.ts"
+import type { HttpMethod } from "../../../src/tree.ts"
 import { createNode, insertRoute, insertWsRoute, matchRoute, matchWsRoute } from "../../../src/tree.ts"
 
-function makeHandler(): RouteHandler {
-	return {
-		bek: null,
-		ef: null,
-		ek: new Set<string>(),
-		fn: () => new Response("ok"),
-		iv: null,
-		mt: null,
-		mw: [],
-		os: null,
-		ov: null,
-		rp: "",
-	}
-}
-
-function makeWsHandler(): WSRouteHandler {
-	return {
-		bek: null,
-		ek: new Set<string>(),
-		fn: {},
-		iv: null,
-		mt: null,
-		mw: [],
-	}
+let seq = 0
+function makeHandler(label?: string): string {
+	return label ?? `h${++seq}`
 }
 
 function buildTree(routes: Array<[HttpMethod | "ALL", string]>) {
@@ -116,7 +95,7 @@ describe("wildcard percent-decoding", () => {
 describe("websocket param percent-decoding", () => {
 	it("decodes ws route params", () => {
 		const root = createNode()
-		insertWsRoute(root, "/chat/:room", makeWsHandler())
+		insertWsRoute(root, "/chat/:room")
 		const result = matchWsRoute(root, "/chat/caf%C3%A9")
 		expect(result).not.toBeNull()
 		expect(result?.params.room).toBe("café")
@@ -124,7 +103,7 @@ describe("websocket param percent-decoding", () => {
 
 	it("passes plain ws params unchanged", () => {
 		const root = createNode()
-		insertWsRoute(root, "/chat/:room", makeWsHandler())
+		insertWsRoute(root, "/chat/:room")
 		const result = matchWsRoute(root, "/chat/general")
 		expect(result).not.toBeNull()
 		expect(result?.params.room).toBe("general")

@@ -1,20 +1,10 @@
 import { describe, expect, it } from "vitest"
-import type { HttpMethod, RouteHandler, TreeNode } from "../../../src/tree.ts"
+import type { HttpMethod, RouteEntry, RouteHandler, RouteTree, TreeNode } from "../../../src/tree.ts"
 import { createNode, insertRoute, matchRoute, mergeTree, overlaySchemas } from "../../../src/tree.ts"
 
-function makeHandler(label?: string): RouteHandler {
-	return {
-		bek: null,
-		ef: null,
-		ek: new Set<string>(),
-		fn: () => new Response(label ?? "ok"),
-		iv: null,
-		mt: null,
-		mw: [],
-		os: null,
-		ov: null,
-		rp: "",
-	}
+let seq = 0
+function makeHandler(label?: string): string {
+	return label ?? `h${++seq}`
 }
 
 function buildTree(routes: Array<[HttpMethod | "ALL", string]>): TreeNode {
@@ -119,7 +109,7 @@ describe("matchRoute — priority", () => {
 		const result = matchRoute(root, "GET", "/users/new")
 		expect(result?.matched).toBe(true)
 		if (result?.matched) {
-			expect(result.handler).toBe(staticH)
+			expect(result.id).toBe(staticH)
 		}
 	})
 
@@ -132,11 +122,11 @@ describe("matchRoute — priority", () => {
 
 		const staticResult = matchRoute(root, "GET", "/users/new")
 		expect(staticResult?.matched).toBe(true)
-		if (staticResult?.matched) expect(staticResult.handler).toBe(staticH)
+		if (staticResult?.matched) expect(staticResult.id).toBe(staticH)
 
 		const paramResult = matchRoute(root, "GET", "/users/42")
 		expect(paramResult?.matched).toBe(true)
-		if (paramResult?.matched) expect(paramResult.handler).toBe(paramH)
+		if (paramResult?.matched) expect(paramResult.id).toBe(paramH)
 	})
 })
 
@@ -150,11 +140,11 @@ describe("matchRoute — ALL method", () => {
 
 		const getResult = matchRoute(root, "GET", "/api")
 		expect(getResult?.matched).toBe(true)
-		if (getResult?.matched) expect(getResult.handler).toBe(getH)
+		if (getResult?.matched) expect(getResult.id).toBe(getH)
 
 		const postResult = matchRoute(root, "POST", "/api")
 		expect(postResult?.matched).toBe(true)
-		if (postResult?.matched) expect(postResult.handler).toBe(allH)
+		if (postResult?.matched) expect(postResult.id).toBe(allH)
 	})
 
 	it("ALL only — all HTTP methods match", () => {
@@ -260,139 +250,108 @@ describe("insertRoute", () => {
 	})
 })
 
+/** A tree in the RouteTree format: ids at leaves, data per id. */
+function treeOf(routes: Array<[HttpMethod | "ALL", string, RouteEntry?]>, meta: RouteTree["meta"] = {}): RouteTree {
+	const root = createNode()
+	const entries: Record<string, RouteEntry> = {}
+	for (const [method, path, entry] of routes) {
+		const id = insertRoute(root, method, path)
+		entries[id] = entry ?? {}
+	}
+	return { meta, root, routes: entries }
+}
+
 describe("mergeTree", () => {
 	it("successful merge of disjoint trees", () => {
-		const root1 = buildTree([["GET", "/a"]])
-		const root2 = buildTree([["GET", "/b"]])
-		const merged = mergeTree({ meta: {}, root: root1 }, { meta: {}, root: root2 })
+		const merged = mergeTree(treeOf([["GET", "/a"]]), treeOf([["GET", "/b"]]))
 		expect(matchRoute(merged.root, "GET", "/a")?.matched).toBe(true)
 		expect(matchRoute(merged.root, "GET", "/b")?.matched).toBe(true)
 	})
 
 	it("conflict on duplicate path+method throws", () => {
-		const root1 = buildTree([["GET", "/a"]])
-		const root2 = buildTree([["GET", "/a"]])
-		expect(() => mergeTree({ meta: {}, root: root1 }, { meta: {}, root: root2 })).toThrow()
+		expect(() => mergeTree(treeOf([["GET", "/a"]]), treeOf([["GET", "/a"]]))).toThrow("Merge conflict")
 	})
 
 	it("conflict on param name mismatch throws", () => {
-		const root1 = buildTree([["GET", "/users/:id"]])
-		const root2 = buildTree([["POST", "/users/:userId"]])
-		expect(() => mergeTree({ meta: {}, root: root1 }, { meta: {}, root: root2 })).toThrow()
+		expect(() => mergeTree(treeOf([["GET", "/users/:id"]]), treeOf([["POST", "/users/:userId"]]))).toThrow(
+			"param name mismatch",
+		)
 	})
 
 	it("merges metadata records", () => {
-		const root1 = buildTree([["GET", "/a"]])
-		const root2 = buildTree([["GET", "/b"]])
-		const merged = mergeTree({ meta: { "GET /a": {} }, root: root1 }, { meta: { "GET /b": {} }, root: root2 })
+		const merged = mergeTree(treeOf([["GET", "/a"]], { "GET /a": {} }), treeOf([["GET", "/b"]], { "GET /b": {} }))
 		expect(merged.meta).toHaveProperty("GET /a")
 		expect(merged.meta).toHaveProperty("GET /b")
 	})
 
-	it("tuple input injects meta into all handlers", () => {
-		const root = createNode()
-		const h1 = makeHandler("h1")
-		h1.mt = { auth: "jwt" }
-		const h2 = makeHandler("h2")
-		h2.mt = { auth: false }
-		insertRoute(root, "GET", "/extract", h1)
-		insertRoute(root, "POST", "/extract", h2)
-
-		const merged = mergeTree([{ meta: {}, root }, { worker: "extract" }])
-		const r1 = matchRoute(merged.root, "GET", "/extract")
-		const r2 = matchRoute(merged.root, "POST", "/extract")
-		expect(r1?.matched && r1.handler.mt).toEqual({ auth: "jwt", worker: "extract" })
-		expect(r2?.matched && r2.handler.mt).toEqual({ auth: false, worker: "extract" })
+	it("tuple input injects meta into all routes", () => {
+		const tree = treeOf([
+			["GET", "/extract", { mt: { auth: "jwt" } }],
+			["POST", "/extract", { mt: { auth: false } }],
+		])
+		const merged = mergeTree([tree, { worker: "extract" }])
+		expect(merged.routes["GET /extract"]?.mt).toEqual({ auth: "jwt", worker: "extract" })
+		expect(merged.routes["POST /extract"]?.mt).toEqual({ auth: false, worker: "extract" })
 	})
 
-	it("tuple input sets meta on handlers with null mt", () => {
-		const root = createNode()
-		const h = makeHandler("h")
-		h.mt = null
-		insertRoute(root, "GET", "/health", h)
-
-		const merged = mergeTree([{ meta: {}, root }, { worker: "local" }])
-		const r = matchRoute(merged.root, "GET", "/health")
-		expect(r?.matched && r.handler.mt).toEqual({ worker: "local" })
+	it("tuple input sets meta on routes with null mt", () => {
+		const merged = mergeTree([treeOf([["GET", "/health", { mt: null }]]), { worker: "local" }])
+		expect(merged.routes["GET /health"]?.mt).toEqual({ worker: "local" })
 	})
 
 	it("tuple and plain inputs can be mixed", () => {
-		const root1 = buildTree([["GET", "/a"]])
-		const root2 = createNode()
-		const h = makeHandler("h")
-		h.mt = {}
-		insertRoute(root2, "GET", "/b", h)
-
-		const merged = mergeTree({ meta: {}, root: root1 }, [{ meta: {}, root: root2 }, { worker: "svc" }])
+		const merged = mergeTree(treeOf([["GET", "/a"]]), [treeOf([["GET", "/b", { mt: {} }]]), { worker: "svc" }])
 		expect(matchRoute(merged.root, "GET", "/a")?.matched).toBe(true)
-		const r = matchRoute(merged.root, "GET", "/b")
-		expect(r?.matched && r.handler.mt).toEqual({ worker: "svc" })
+		expect(merged.routes["GET /a"]?.mt).toBeUndefined()
+		expect(merged.routes["GET /b"]?.mt).toEqual({ worker: "svc" })
 	})
 
-	it("tuple meta does not overwrite existing handler meta keys", () => {
-		const root = createNode()
-		const h = makeHandler("h")
-		h.mt = { auth: "jwt", worker: "original" }
-		insertRoute(root, "GET", "/x", h)
-
-		const merged = mergeTree([{ meta: {}, root }, { worker: "override" }])
-		const r = matchRoute(merged.root, "GET", "/x")
-		expect(r?.matched && r.handler.mt).toEqual({ auth: "jwt", worker: "override" })
+	it("tuple meta overrides the same key", () => {
+		const merged = mergeTree([
+			treeOf([["GET", "/x", { mt: { auth: "jwt", worker: "original" } }]]),
+			{ worker: "override" },
+		])
+		expect(merged.routes["GET /x"]?.mt).toEqual({ auth: "jwt", worker: "override" })
 	})
 
-	it("tuple injects meta into dynamic/wildcard handlers", () => {
-		const root = createNode()
-		const paramH = makeHandler("param")
-		paramH.mt = {}
-		const wildH = makeHandler("wild")
-		wildH.mt = {}
-		insertRoute(root, "GET", "/users/:id", paramH)
-		insertRoute(root, "GET", "/files/*path", wildH)
+	it("tuple injects meta into dynamic/wildcard routes", () => {
+		const tree = treeOf([
+			["GET", "/users/:id", { mt: {} }],
+			["GET", "/files/*path", { mt: {} }],
+		])
+		const merged = mergeTree([tree, { worker: "api" }])
+		expect(merged.routes["GET /users/:id"]?.mt).toEqual({ worker: "api" })
+		expect(merged.routes["GET /files/*path"]?.mt).toEqual({ worker: "api" })
+	})
 
-		const merged = mergeTree([{ meta: {}, root }, { worker: "api" }])
-		const r1 = matchRoute(merged.root, "GET", "/users/42")
-		expect(r1?.matched && r1.handler.mt).toEqual({ worker: "api" })
-		const r2 = matchRoute(merged.root, "GET", "/files/a/b.txt")
-		expect(r2?.matched && r2.handler.mt).toEqual({ worker: "api" })
+	it("never mutates or shares its inputs", () => {
+		const a = treeOf([["GET", "/a", { mt: { k: 1 } }]])
+		const merged = mergeTree([a, { worker: "w" }], treeOf([["GET", "/a/b"]]))
+		expect(a.routes["GET /a"]?.mt).toEqual({ k: 1 })
+		expect(Object.keys(a.root.s.a?.s ?? {})).toEqual([])
+		expect(merged.root.s.a).not.toBe(a.root.s.a)
 	})
 })
 
 describe("overlaySchemas", () => {
-	it("gives each route its own schemas without mutating a shared intern handler", () => {
-		const shared = makeHandler("shared")
-		const target = createNode()
-		insertRoute(target, "POST", "/a", shared)
-		insertRoute(target, "POST", "/b/:id", shared)
-
-		const ivA = { json: { kind: "a" } } as unknown as RouteHandler["iv"]
-		const ivB = { json: { kind: "b" } } as unknown as RouteHandler["iv"]
-		const source = createNode()
-		insertRoute(source, "POST", "/a", { ...makeHandler("a"), iv: ivA })
-		insertRoute(source, "POST", "/b/:id", { ...makeHandler("b"), iv: ivB })
-
-		overlaySchemas(target, source)
-
-		const a = matchRoute(target, "POST", "/a")
-		const b = matchRoute(target, "POST", "/b/1")
-		expect(a?.matched && a.handler.iv).toBe(ivA)
-		expect(b?.matched && b.handler.iv).toBe(ivB)
-		expect(shared.iv).toBeNull()
-	})
-
-	it("keeps schemas the target already has and skips routes missing from the source", () => {
+	it("copies schemas onto registered routes that lack them and keeps their own", async () => {
+		const { honey } = await import("../../../src/index.ts")
 		const own = { json: { kind: "own" } } as unknown as RouteHandler["iv"]
-		const target = createNode()
-		insertRoute(target, "POST", "/a", { ...makeHandler("a"), iv: own })
-		insertRoute(target, "GET", "/local", makeHandler("local"))
-		const source = createNode()
-		insertRoute(source, "POST", "/a", { ...makeHandler("a"), iv: { json: {} } as unknown as RouteHandler["iv"] })
-
-		overlaySchemas(target, source)
-
-		const a = matchRoute(target, "POST", "/a")
-		const local = matchRoute(target, "GET", "/local")
-		expect(a?.matched && a.handler.iv).toBe(own)
-		expect(local?.matched && local.handler.iv).toBeNull()
+		const ivB = { json: { kind: "b" } } as unknown as RouteHandler["iv"]
+		const app = honey()
+		app.post("/a").handler((c) => c.res.text("ok", "a"))
+		app.post("/b/:id").handler((c) => c.res.text("ok", "b"))
+		const records = (app as unknown as { _graph: { records: Map<string, RouteHandler> } })._graph.records
+		const recA = records.get("POST /a")
+		if (recA) recA.iv = own
+		const source = treeOf([
+			["POST", "/a", { iv: { json: {} } as unknown as RouteHandler["iv"] }],
+			["POST", "/b/:id", { iv: ivB }],
+			["GET", "/missing", { iv: ivB }],
+		])
+		overlaySchemas(app, source)
+		expect(records.get("POST /a")?.iv).toBe(own)
+		expect(records.get("POST /b/:id")?.iv).toBe(ivB)
 	})
 })
 

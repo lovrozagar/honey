@@ -1,20 +1,10 @@
 import { describe, expect, it } from "vitest"
-import type { HttpMethod, RouteHandler, TreeNode, WSRouteHandler } from "../../../src/tree.ts"
+import type { HttpMethod, TreeNode } from "../../../src/tree.ts"
 import { createNode, insertRoute, insertWsRoute, matchRoute, matchWsRoute } from "../../../src/tree.ts"
 
-function makeHandler(label?: string): RouteHandler {
-	return {
-		bek: null,
-		ef: null,
-		ek: new Set<string>(),
-		fn: () => new Response(label ?? "ok"),
-		iv: null,
-		mt: null,
-		mw: [],
-		os: null,
-		ov: null,
-		rp: "",
-	}
+let seq = 0
+function makeHandler(label?: string): string {
+	return label ?? `h${++seq}`
 }
 
 function buildTree(routes: Array<[HttpMethod | "ALL", string]>): TreeNode {
@@ -161,28 +151,17 @@ describe("matchRoute — char-based path walking", () => {
 /* ---- matchWsRoute path walking ---- */
 
 describe("matchWsRoute — path walking", () => {
-	function makeWsHandler(): WSRouteHandler {
-		return {
-			bek: null,
-			ek: new Set<string>(),
-			fn: { onOpen: () => {} },
-			iv: null,
-			mt: null,
-			mw: [],
-		}
-	}
-
 	it("simple WS path /ws matches", () => {
 		const root = createNode()
-		insertWsRoute(root, "/ws", makeWsHandler())
+		insertWsRoute(root, "/ws")
 		const result = matchWsRoute(root, "/ws")
 		expect(result).not.toBeNull()
-		expect(result?.handler).toBeDefined()
+		expect(result?.id).toBeDefined()
 	})
 
 	it("WS path with param /chat/:roomId extracts param", () => {
 		const root = createNode()
-		insertWsRoute(root, "/chat/:roomId", makeWsHandler())
+		insertWsRoute(root, "/chat/:roomId")
 		const result = matchWsRoute(root, "/chat/room-42")
 		expect(result).not.toBeNull()
 		expect(result?.params.roomId).toBe("room-42")
@@ -190,28 +169,26 @@ describe("matchWsRoute — path walking", () => {
 
 	it("WS path with no match returns null", () => {
 		const root = createNode()
-		insertWsRoute(root, "/ws", makeWsHandler())
+		insertWsRoute(root, "/ws")
 		const result = matchWsRoute(root, "/missing")
 		expect(result).toBeNull()
 	})
 
 	it("WS route does not support wildcards", () => {
 		const root = createNode()
-		expect(() => insertWsRoute(root, "/ws/*path", makeWsHandler())).toThrow(
-			"Wildcard segments not supported for WebSocket routes",
-		)
+		expect(() => insertWsRoute(root, "/ws/*path")).toThrow("Wildcard segments not supported for WebSocket routes")
 	})
 
 	it("WS path with trailing slash matches", () => {
 		const root = createNode()
-		insertWsRoute(root, "/ws", makeWsHandler())
+		insertWsRoute(root, "/ws")
 		const result = matchWsRoute(root, "/ws/")
 		expect(result).not.toBeNull()
 	})
 
 	it("WS path double slash skips empty segment", () => {
 		const root = createNode()
-		insertWsRoute(root, "/chat/:id", makeWsHandler())
+		insertWsRoute(root, "/chat/:id")
 		const result = matchWsRoute(root, "/chat//abc")
 		expect(result).not.toBeNull()
 		expect(result?.params.id).toBe("abc")

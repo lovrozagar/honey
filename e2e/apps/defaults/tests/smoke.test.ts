@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { compareApps, probesFromTree } from "../../differential.ts"
+import { routeTree } from "../src/_gen/routes.gen.ts"
 import { createApp } from "../src/app.ts"
 
 const app = createApp()
@@ -32,5 +34,13 @@ describe("e2e defaults consumes honey", () => {
 		const res = await fetchApp("/health", { headers: { origin: "http://localhost:3000" } })
 		expect(res.status).toBe(200)
 		expect(res.headers.get("access-control-allow-origin")).toBeNull()
+	})
+})
+
+describe("serves identically from its generated route tree", () => {
+	test("boots with .routeTree() and answers every probe like the runtime trie", async () => {
+		const probes = probesFromTree(routeTree, (p) => p)
+		expect(probes.length).toBeGreaterThan(5)
+		expect(await compareApps(createApp(), createApp(undefined, { routeTree }), probes)).toEqual([])
 	})
 })

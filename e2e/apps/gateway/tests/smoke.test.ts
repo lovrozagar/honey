@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import internalDoc from "../src/_gen/openapi.gen.json"
 import publicDoc from "../src/_gen/openapi.public.gen.json"
+import { compareApps, probesFromTree } from "../../differential.ts"
+import { routeTree } from "../src/_gen/routes.gen.ts"
 import { createApp } from "../src/app.ts"
 
 const app = createApp()
@@ -112,5 +114,13 @@ describe("metaSpec — running server", () => {
 		expect(res.status).toBe(200)
 		const served = (await res.json()) as Doc
 		expect(operation(served, "/articles")).toEqual(operation(internalDoc, "/articles"))
+	})
+})
+
+describe("serves identically from its generated route tree", () => {
+	test("boots with .routeTree() and answers every probe like the runtime trie", async () => {
+		const probes = probesFromTree(routeTree, (p) => `/app${p === "/" ? "" : p}/`)
+		expect(probes.length).toBeGreaterThan(5)
+		expect(await compareApps(createApp(), createApp(undefined, { routeTree }), probes)).toEqual([])
 	})
 })

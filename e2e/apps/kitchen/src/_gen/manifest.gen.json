@@ -1,5 +1,5 @@
 {
-  "_generated": "honey checksum:915db7c846ce",
+  "x-generated": "honey checksum:915db7c846ce",
   "errors": [
     {
       "errorKey": "unauthorized",

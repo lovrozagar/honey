@@ -11,7 +11,7 @@ import {
 	type SchemaMetaHit,
 	type SchemaMetaLookup,
 } from "../meta-spec.ts"
-import type { RouteHandler, TreeNode } from "../tree.ts"
+import type { RouteHandler } from "../tree.ts"
 import type {
 	InputSchemaEntry,
 	InputSchemasDef,
@@ -20,7 +20,7 @@ import type {
 	StandardSchemaLike,
 } from "../types.ts"
 import { statusKeyToCode } from "../types.ts"
-import { type CollectedWSRoute, extractParams, toOpenApiPath, unwrapEntry, walkTree, walkWSRoutes } from "./collect.ts"
+import { collectRoutes, collectWsRoutes, extractParams, toOpenApiPath, unwrapEntry } from "./collect.ts"
 import { getJsonSchemaConverter } from "./json-schema-slot.ts"
 
 export type OpenApiRouteInfo<TMeta = unknown> = {
@@ -308,9 +308,7 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 	const rawCustomErrorSchema = getCustomErrorSchema(app)
 	const customErrorAddsSchema = rawCustomErrorSchema ? asJsonSchema(rawCustomErrorSchema) : null
 
-	const tree = (app as { _tree: TreeNode })._tree
-	const collected: Array<{ handler: RouteHandler; method: string; path: string }> = []
-	walkTree(tree, "", collected)
+	const collected = collectRoutes(app)
 
 	const routeFilter = options.filterRoutes
 	const paths: Record<string, Record<string, Record<string, unknown>>> = {}
@@ -532,8 +530,7 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 		})
 	}
 
-	const wsRoutes: CollectedWSRoute[] = []
-	walkWSRoutes(tree, "", wsRoutes)
+	const wsRoutes = collectWsRoutes(app)
 
 	for (const { handler, path } of wsRoutes) {
 		const oaPath = toOpenApiPath(path)

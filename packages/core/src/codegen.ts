@@ -17,7 +17,9 @@ import {
 	type OpenApiSpec,
 } from "./openapi/document.ts"
 import { getJsonSchemaConverter, setJsonSchemaConverter } from "./openapi/json-schema-slot.ts"
-import type { RouteHandler, TreeNode } from "./tree.ts"
+import { collectRoutes, extractParams } from "./openapi/collect.ts"
+import type { RouteHandler, RouteTree } from "./tree.ts"
+import { forEachLeaf, ROUTE_TREE_VERSION } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
 import { createTypeEmitState, emitSchemaType } from "./type-emitter.ts"
 import type { TypeEmitState } from "./type-emitter.ts"
@@ -272,16 +274,6 @@ type RouteManifest = {
 	routes: RouteManifestEntry[]
 }
 
-function extractParams(path: string): string[] {
-	const params: string[] = []
-	for (const seg of path.split("/")) {
-		if (seg.startsWith(":")) {
-			params.push(seg.endsWith("?") ? seg.slice(1, -1) : seg.slice(1))
-		}
-	}
-	return params
-}
-
 type CollectedRoute = {
 	handler: RouteHandler
 	method: string
@@ -290,30 +282,6 @@ type CollectedRoute = {
 
 function isMetaInternal(handler: RouteHandler): boolean {
 	return (handler.mt as { internal?: boolean } | null)?.internal === true
-}
-
-function walkTree(node: TreeNode, currentPath: string, routes: CollectedRoute[], includeSkipped?: boolean): void {
-	if (node.m !== null) {
-		for (const [method, handler] of Object.entries(node.m)) {
-			if (handler._skip && !includeSkipped) continue
-			routes.push({ handler, method, path: currentPath || "/" })
-		}
-	}
-
-	for (const [seg, child] of Object.entries(node.s)) {
-		walkTree(child, `${currentPath}/${seg}`, routes, includeSkipped)
-	}
-
-	if (node.d !== null) {
-		walkTree(node.d.c, `${currentPath}/:${node.d.n}`, routes, includeSkipped)
-	}
-
-	if (node.w !== null) {
-		for (const [method, handler] of Object.entries(node.w.m)) {
-			if (handler._skip && !includeSkipped) continue
-			routes.push({ handler, method, path: `${currentPath}/*${node.w.n}` })
-		}
-	}
 }
 
 type ErrorInfo = { errorKey: string; status: number; statusKey: string }
@@ -1182,10 +1150,8 @@ function schemaToJsonSchema(schema: StandardSchemaLike, io: "input" | "output" =
 export function generateManifest<TEnv, TCtx>(
 	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
 ): RouteManifest {
-	const tree = (app as unknown as { _tree: TreeNode })._tree
 	const factory = getErrorFactory(app)
-	const collected: CollectedRoute[] = []
-	walkTree(tree, "", collected)
+	const collected: CollectedRoute[] = collectRoutes(app)
 
 	const allErrorKeys = new Set<string>()
 
@@ -1272,9 +1238,7 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 export function extractSchemas<TEnv, TCtx>(
 	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
 ): Record<string, Record<string, unknown>> {
-	const tree = (app as unknown as { _tree: TreeNode })._tree
-	const collected: CollectedRoute[] = []
-	walkTree(tree, "", collected)
+	const collected: CollectedRoute[] = collectRoutes(app)
 
 	const result: Record<string, Record<string, unknown>> = {}
 
@@ -1311,213 +1275,72 @@ export function extractSchemas<TEnv, TCtx>(
 
 /* ---- Static route tree codegen ---- */
 
-type RouteConfig = {
-	boundaryErrorKey: string | null
-	errorKeys: string[]
-	/** JSON Schema per input source — { json?, form?, params?, search?, headers?, cookies? }; null = no input validation */
-	inputSchemas: Record<string, Record<string, unknown>> | null
-	meta: Record<string, unknown> | null
-	method: string
-	middlewareNames: string[]
-	/**
-	 * JSON Schema per (contentType, statusKey). Special case: `redirect` contentType holds
-	 * `Record<statusKey, true>` with no schema (declaration-only, no body to validate).
-	 * null = no output validation declared.
-	 */
-	outputSchemas: Record<string, Record<string, unknown>> | null
-	path: string
-}
-
-function serializeInputSchemas(iv: InputSchemasDef | null): Record<string, Record<string, unknown>> | null {
-	if (!iv) return null
-	const result: Record<string, Record<string, unknown>> = {}
-	for (const [source, entry] of Object.entries(iv)) {
-		if (entry === undefined) continue
-		const unwrapped = unwrapEntry(entry as InputSchemaEntry)
-		result[source] = schemaToJsonSchema(unwrapped, "input") as Record<string, unknown>
+/**
+ * Reject meta a generated file cannot reproduce. A route tree is JSON plus topology: a value
+ * JSON cannot round-trip (`Date`, `RegExp`, `NaN`, `BigInt`, class instances) would be
+ * emitted as something else, or interned together with a different value.
+ */
+function assertJsonValue(value: unknown, where: string, path: string): void {
+	const fail = (what: string): never => {
+		throw new Error(`${where}: ${path} is ${what} — route trees carry JSON values only`)
 	}
-	return Object.keys(result).length > 0 ? result : null
-}
-
-function serializeOutputSchemas(os: OutputSchemaDef | null): Record<string, Record<string, unknown>> | null {
-	if (!os) return null
-	const result: Record<string, Record<string, unknown>> = {}
-	for (const [contentType, schemas] of Object.entries(os)) {
-		if (schemas === undefined) continue
-		if (contentType === "redirect") {
-			/* redirect map is Record<statusKey, true> — copy as-is, no schema conversion */
-			result[contentType] = { ...(schemas as Record<string, true>) }
-			continue
-		}
-		const converted: Record<string, unknown> = {}
-		for (const [statusKey, schema] of Object.entries(schemas)) {
-			if (schema === undefined) continue
-			converted[statusKey] = schemaToJsonSchema(schema as StandardSchemaLike)
-		}
-		if (Object.keys(converted).length > 0) {
-			result[contentType] = converted
-		}
+	if (value === null || typeof value === "string" || typeof value === "boolean") return
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) fail(String(value))
+		return
 	}
-	return Object.keys(result).length > 0 ? result : null
-}
-
-function buildRouteConfig(handler: RouteHandler, method: string, path: string): RouteConfig {
-	return {
-		boundaryErrorKey: handler.bek,
-		errorKeys: Array.from(handler.ek),
-		inputSchemas: serializeInputSchemas(handler.iv as InputSchemasDef | null),
-		meta: handler.mt,
-		method,
-		middlewareNames: handler.mw.map((mw) => mw.name || "anonymous"),
-		outputSchemas: serializeOutputSchemas(handler.os as OutputSchemaDef | null),
-		path,
+	if (value === undefined) return
+	if (typeof value !== "object") fail(`a ${typeof value}`)
+	if (Array.isArray(value)) {
+		for (let k = 0; k < value.length; k++) assertJsonValue(value[k], where, `${path}[${k}]`)
+		return
+	}
+	const proto = Object.getPrototypeOf(value) as unknown
+	if (proto !== Object.prototype && proto !== null) {
+		const name = (value as { constructor?: { name?: string } }).constructor?.name ?? "an object"
+		fail(`a ${name}`)
+	}
+	for (const key of Object.keys(value as Record<string, unknown>)) {
+		assertJsonValue((value as Record<string, unknown>)[key], where, `${path}.${key}`)
 	}
 }
 
-function collectRoutesForTree(node: TreeNode, currentPath: string, routes: RouteConfig[]): void {
-	if (node.m !== null) {
-		for (const [method, handler] of Object.entries(node.m)) {
-			routes.push(buildRouteConfig(handler, method, currentPath || "/"))
-		}
-	}
-
-	for (const [seg, child] of Object.entries(node.s)) {
-		collectRoutesForTree(child, `${currentPath}/${seg}`, routes)
-	}
-
-	if (node.d !== null) {
-		collectRoutesForTree(node.d.c, `${currentPath}/:${node.d.n}`, routes)
-	}
-
-	if (node.w !== null) {
-		for (const [method, handler] of Object.entries(node.w.m)) {
-			routes.push(buildRouteConfig(handler, method, `${currentPath}/*${node.w.n}`))
-		}
-	}
+/** Object-literal key that defines an own property even for `__proto__`. */
+function keyExpr(key: string): string {
+	return key === "__proto__" ? '["__proto__"]' : JSON.stringify(key)
 }
 
-type TreeBuild = {
-	children: Record<string, TreeBuild>
-	dynamic: { child: TreeBuild; name: string } | null
-	handlers: Array<{ handler: string; method: string }>
-	wildcard: {
-		handlers: Array<{ handler: string; method: string }>
-		name: string
-	} | null
+type TreeNodeLike = {
+	d: { c: TreeNodeLike; n: string } | null
+	m: Record<string, string> | null
+	s: Record<string, TreeNodeLike>
+	w: { m: Record<string, string>; n: string } | null
+	ws: string | null
 }
 
-function createTreeBuild(): TreeBuild {
-	return { children: {}, dynamic: null, handlers: [], wildcard: null }
+function methodMapExpr(m: Record<string, string>, intern: InternPool): string {
+	const parts = Object.keys(m).map((method) => `${keyExpr(method)}: ${intern.expr(m[method])}`)
+	return `S({ ${parts.join(", ")} })`
 }
 
-function serializeNode(node: TreeBuild): string {
-	const staticEntries = Object.entries(node.children)
+function serializeNode(node: TreeNodeLike, intern: InternPool): string {
+	const statics = Object.keys(node.s)
 	const sExpr =
-		staticEntries.length > 0
-			? `S({ ${staticEntries.map(([k, v]) => `${JSON.stringify(k)}: ${serializeNode(v)}`).join(", ")} })`
-			: "E"
-
-	const dExpr = node.dynamic
-		? `{ n: ${JSON.stringify(node.dynamic.name)}, c: ${serializeNode(node.dynamic.child)} }`
-		: "null"
-
-	const wExpr = node.wildcard
-		? `{ n: ${JSON.stringify(node.wildcard.name)}, m: { ${node.wildcard.handlers.map((h) => `${h.method}: ${h.handler}`).join(", ")} } }`
-		: "null"
-
-	const mExpr =
-		node.handlers.length > 0 ? `{ ${node.handlers.map((h) => `${h.method}: ${h.handler}`).join(", ")} }` : "null"
-
-	const args = [sExpr]
-	if (mExpr !== "null" || dExpr !== "null" || wExpr !== "null") {
-		args.push(mExpr)
-		if (dExpr !== "null" || wExpr !== "null") {
-			args.push(dExpr)
-			if (wExpr !== "null") args.push(wExpr)
-		}
-	}
+		statics.length > 0
+			? `S({ ${statics.map((k) => `${keyExpr(k)}: ${serializeNode(node.s[k], intern)}`).join(", ")} })`
+			: "undefined"
+	const args = [
+		sExpr,
+		node.m !== null ? methodMapExpr(node.m, intern) : "null",
+		node.d !== null ? `{ n: ${JSON.stringify(node.d.n)}, c: ${serializeNode(node.d.c, intern)} }` : "null",
+		node.w !== null ? `{ n: ${JSON.stringify(node.w.n)}, m: ${methodMapExpr(node.w.m, intern)} }` : "null",
+		node.ws !== null ? intern.expr(node.ws) : "null",
+	]
+	while (args.length > 0 && (args[args.length - 1] === "null" || args[args.length - 1] === "undefined")) args.pop()
 	return `N(${args.join(", ")})`
 }
 
-function nodeHasStatic(node: TreeBuild): boolean {
-	if (Object.keys(node.children).length > 0) return true
-	if (node.dynamic !== null) return nodeHasStatic(node.dynamic.child)
-	return false
-}
-
-function selectorOf(route: RouteConfig): string {
-	return `${route.method} ${route.path}`
-}
-
-function mapKeyExpr(intern: InternPool, selector: string): string {
-	const id = intern.id(selector)
-	return id !== undefined ? `[${id}]` : JSON.stringify(selector)
-}
-
-function buildInternPool(routes: RouteConfig[]): InternPool {
-	const intern = new InternPool()
-	for (const route of routes) {
-		intern.count(route.boundaryErrorKey)
-		intern.count(route.errorKeys)
-		intern.count(route.meta)
-		intern.count(selectorOf(route))
-	}
-	for (const route of routes) {
-		intern.force(route.meta, "M")
-		intern.force(selectorOf(route), "P")
-	}
-	intern.seal()
-	return intern
-}
-
-function insertHandler(rootBuild: TreeBuild, route: RouteConfig, hName: string): void {
-	const segments = route.path.split("/").filter((s) => s.length > 0)
-	let node = rootBuild
-
-	for (let i = 0; i < segments.length; i++) {
-		const seg = segments[i]
-		if (seg.startsWith("*")) {
-			const name = seg.length > 1 ? seg.slice(1) : "*"
-			if (node.wildcard === null) {
-				node.wildcard = { handlers: [], name }
-			}
-			node.wildcard.handlers.push({ handler: hName, method: route.method })
-			return
-		}
-		if (seg.startsWith(":")) {
-			const name = seg.endsWith("?") ? seg.slice(1, -1) : seg.slice(1)
-			if (node.dynamic === null) {
-				node.dynamic = { child: createTreeBuild(), name }
-			}
-			if (i === segments.length - 1) {
-				node.dynamic.child.handlers.push({
-					handler: hName,
-					method: route.method,
-				})
-			} else {
-				node = node.dynamic.child
-			}
-			continue
-		}
-		if (node.children[seg] === undefined) {
-			node.children[seg] = createTreeBuild()
-		}
-		if (i === segments.length - 1) {
-			node.children[seg].handlers.push({
-				handler: hName,
-				method: route.method,
-			})
-		} else {
-			node = node.children[seg]
-		}
-	}
-
-	if (segments.length === 0) {
-		node.handlers.push({ handler: hName, method: route.method })
-	}
-}
-
-function collectMetaShape(collected: CollectedRoute[]): {
+function collectMetaShape(entries: Array<{ mt: Record<string, unknown> | null | undefined }>): {
 	allKeys: Map<string, Set<string>>
 	keyCount: Map<string, number>
 	metaHandlerCount: number
@@ -1525,10 +1348,10 @@ function collectMetaShape(collected: CollectedRoute[]): {
 	const allKeys = new Map<string, Set<string>>()
 	const keyCount = new Map<string, number>()
 	let metaHandlerCount = 0
-	for (const { handler } of collected) {
-		if (handler.mt === null) continue
+	for (const { mt } of entries) {
+		if (mt === null || mt === undefined) continue
 		metaHandlerCount++
-		for (const [k, v] of Object.entries(handler.mt)) {
+		for (const [k, v] of Object.entries(mt)) {
 			if (!allKeys.has(k)) allKeys.set(k, new Set())
 			allKeys.get(k)?.add(emitLiteral(v))
 			keyCount.set(k, (keyCount.get(k) ?? 0) + 1)
@@ -1540,43 +1363,78 @@ function collectMetaShape(collected: CollectedRoute[]): {
 function emitMetaShapeType(shape: ReturnType<typeof collectMetaShape>): string {
 	if (shape.allKeys.size === 0) return ""
 	const props = [...shape.allKeys.entries()]
-		.sort(([a], [b]) => a.localeCompare(b))
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 		.map(([key, types]) => {
 			const optional = (shape.keyCount.get(key) ?? 0) < shape.metaHandlerCount ? "?" : ""
-			const safeKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : `"${key}"`
+			const safeKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : JSON.stringify(key)
 			return `\t${safeKey}${optional}: ${[...types].join(" | ")}`
 		})
 	return `export type MetaShape = {\n${props.join("\n")}\n} & Record<string, unknown>\n`
 }
 
-function emitRouteTree(routes: RouteConfig[], collected: CollectedRoute[] | null): string {
-	const intern = buildInternPool(routes)
-	const metaShape = collected !== null ? collectMetaShape(collected) : null
-	const hasMetaShape = metaShape !== null && metaShape.allKeys.size > 0
+type EmitEntry = {
+	bek: string | null
+	ek: string[]
+	id: string
+	internalMeta: boolean
+	mt: Record<string, unknown> | null
+}
+
+/**
+ * Emit a route tree module: topology with `RouteId` leaves plus per-route data (meta, error
+ * keys, boundary key). No handler fields — the app that loads the tree registers its routes,
+ * which bind to these ids; leaves it does not register are delegated to its catch-all.
+ */
+function emitRouteTree(tree: RouteTree): string {
+	const order: string[] = []
+	const seen = new Set<string>()
+	forEachLeaf(tree.root, (_method, _path, id) => {
+		if (!seen.has(id)) {
+			seen.add(id)
+			order.push(id)
+		}
+	})
+	const entries: EmitEntry[] = []
+	for (const id of order) {
+		const entry = tree.routes[id]
+		if (entry === undefined) throw new Error(`route tree leaf ${id} has no route entry`)
+		const mt = entry.mt ?? null
+		if (mt !== null) assertJsonValue(mt, `Route meta for ${id}`, "meta")
+		entries.push({
+			bek: entry.bek ?? null,
+			ek: [...(entry.ek ?? [])],
+			id,
+			internalMeta: (mt as { internal?: unknown } | null)?.internal === true,
+			mt,
+		})
+	}
+
+	const intern = new InternPool()
+	for (const e of entries) {
+		intern.count(e.bek)
+		if (e.ek.length > 0) intern.count(e.ek)
+		intern.count(e.mt)
+		intern.count(e.id)
+	}
+	for (const e of entries) {
+		intern.force(e.mt, "M")
+		intern.force(e.id, "P")
+	}
+	intern.seal()
+
+	const metaShape = collectMetaShape(entries)
+	const hasMetaShape = metaShape.allKeys.size > 0
 	const lines: string[] = []
-	lines.push('import type { TreeNode, RouteHandler, RouteTree } from "@lovrozagar/honey/tree"')
+	lines.push('import type { RouteTree, TreeNode } from "@lovrozagar/honey/tree"')
 	lines.push("")
-	lines.push("const E = Object.create(null) as Record<string, TreeNode>")
-	lines.push(
-		'function N(s: Record<string, TreeNode>, m: Record<string, RouteHandler> | null = null, d: TreeNode["d"] = null, w: { n: string; m: Record<string, RouteHandler> } | null = null): TreeNode {',
-	)
-	lines.push('\treturn { s, d, w: w as TreeNode["w"], m: m as TreeNode["m"], ws: null }')
+	lines.push("function S<T>(o: Record<string, T>): Record<string, T> {")
+	lines.push("\treturn Object.assign(Object.create(null) as Record<string, T>, o)")
 	lines.push("}")
-
-	const rootBuild = createTreeBuild()
-	for (let i = 0; i < routes.length; i++) {
-		insertHandler(rootBuild, routes[i], `H${i}`)
-	}
-
-	if (nodeHasStatic(rootBuild)) {
-		lines.push("function S(o: Record<string, TreeNode>): Record<string, TreeNode> {")
-		lines.push("\treturn Object.assign(Object.create(null), o) as Record<string, TreeNode>")
-		lines.push("}")
-	}
-
-	if (routes.length > 0) {
-		lines.push('const FN = null as unknown as RouteHandler["fn"]')
-	}
+	lines.push(
+		'function N(s: Record<string, TreeNode> = S({}), m: Record<string, string> | null = null, d: TreeNode["d"] = null, w: TreeNode["w"] = null, ws: string | null = null): TreeNode {',
+	)
+	lines.push("\treturn { d, m, s, w, ws }")
+	lines.push("}")
 
 	const consts = intern.emitConstLines()
 	if (consts.length > 0) {
@@ -1587,90 +1445,62 @@ function emitRouteTree(routes: RouteConfig[], collected: CollectedRoute[] | null
 		}
 	}
 
-	if (routes.length > 0) {
-		lines.push("")
-		/* unique handler per route — sharing H objects would cross-wire .routeTree() patches */
-		for (let i = 0; i < routes.length; i++) {
-			const route = routes[i]
-			const bekExpr = route.boundaryErrorKey !== null ? intern.expr(route.boundaryErrorKey) : "null"
-			const ekSet = route.errorKeys.length > 0 ? `new Set(${intern.expr(route.errorKeys)})` : "new Set()"
-			const mtExpr = route.meta !== null ? intern.expr(route.meta) : "null"
-			lines.push(`const H${i}: RouteHandler = { bek: ${bekExpr}, fn: FN, mw: [], ek: ${ekSet}, mt: ${mtExpr} }`)
-		}
-	}
-
 	lines.push("")
-	lines.push(`export const tree: TreeNode = ${serializeNode(rootBuild)}`)
+	lines.push(`export const tree: TreeNode = ${serializeNode(tree.root as TreeNodeLike, intern)}`)
 	lines.push("")
-
-	const handlerMapEntries = routes.map((route, index) => `\t${mapKeyExpr(intern, selectorOf(route))}: H${index}`)
-	lines.push(`export const handlers: Record<string, RouteHandler> = {\n${handlerMapEntries.join(",\n")}\n}`)
+	const routeLines = entries.map((e) => {
+		const parts: string[] = []
+		if (e.bek !== null) parts.push(`bek: ${intern.expr(e.bek)}`)
+		if (e.ek.length > 0) parts.push(`ek: ${intern.expr(e.ek)}`)
+		if (e.mt !== null) parts.push(`mt: ${intern.expr(e.mt)}`)
+		return `\t[${intern.expr(e.id)}]: ${parts.length > 0 ? `{ ${parts.join(", ")} }` : "{}"}`
+	})
+	lines.push(`export const routes: RouteTree["routes"] = S({\n${routeLines.join(",\n")}\n})`)
 	lines.push("")
 
 	let code = lines.join("\n")
-	if (collected === null) return code
 
-	const metaEntries: string[] = []
-	for (const { handler, method, path } of collected) {
-		if (handler.mt === null || Object.keys(handler.mt).length === 0) continue
-		const selector = `${method} ${path}`
-		metaEntries.push(`\t${mapKeyExpr(intern, selector)}: ${intern.expr(handler.mt)}`)
-	}
+	if (hasMetaShape) code += `\n${emitMetaShapeType(metaShape)}\n`
 
-	if (hasMetaShape && metaShape !== null) {
-		code += `\n${emitMetaShapeType(metaShape)}\n`
-	}
-
-	const selectors = new Set<string>()
-	for (const { handler, method, path } of collected) {
-		if (handler._skip || isMetaInternal(handler)) continue
-		selectors.add(`${method} ${path}`)
-	}
-	if (selectors.size > 0) {
-		const sorted = [...selectors].sort()
-		const parts = sorted.map((s) => {
-			const id = intern.id(s)
-			return id !== undefined ? `typeof ${id}` : JSON.stringify(s)
+	const selectors = entries.filter((e) => !e.id.startsWith("WS ") && !e.internalMeta).map((e) => e.id)
+	if (selectors.length > 0) {
+		const sorted = [...new Set(selectors)].sort()
+		const parts = sorted.map((sel) => {
+			const ref = intern.id(sel)
+			return ref !== undefined ? `typeof ${ref}` : JSON.stringify(sel)
 		})
 		code += `\nexport type RouteSelector = ${parts.join(" | ")}\n`
 	}
 
+	const metaEntries = entries
+		.filter((e) => e.mt !== null && Object.keys(e.mt).length > 0)
+		.map((e) => `\t[${intern.expr(e.id)}]: ${intern.expr(e.mt)}`)
+	const metaType = hasMetaShape ? "Record<string, MetaShape>" : "Record<string, Record<string, unknown>>"
 	if (metaEntries.length > 0) {
-		const metaType = hasMetaShape ? "Record<string, MetaShape>" : "Record<string, Record<string, unknown>>"
-		code += `export const meta: ${metaType} = {\n${metaEntries.join(",\n")}\n}\n`
+		code += `export const meta: ${metaType} = S({\n${metaEntries.join(",\n")}\n})\n`
 	}
-
-	const hasMetaExport = metaEntries.length > 0
-	code += `export const routeTree: RouteTree = { root: tree, ${hasMetaExport ? "meta, " : "meta: {}, "}handlers }\n`
+	code += `export const routeTree: RouteTree = { v: ${ROUTE_TREE_VERSION}, root: tree, routes, ${metaEntries.length > 0 ? "meta" : "meta: {}"} }\n`
 
 	return code
 }
 
-export function generateRouteTree(routes: RouteConfig[]): string {
-	return emitRouteTree(routes, null)
-}
-
-function generateFromTreeRoot(root: TreeNode): string {
-	const routes: RouteConfig[] = []
-	collectRoutesForTree(root, "", routes)
-	const collected: CollectedRoute[] = []
-	walkTree(root, "", collected)
-	return emitRouteTree(routes, collected)
+/** Emit a route tree module from a tree (a `mergeTree` result or an `app.toRouteTree()` snapshot). */
+export function generateRouteTree(tree: RouteTree): string {
+	return emitRouteTree(tree)
 }
 
 export function generateRouteTreeFromApp<TEnv, TCtx>(
 	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
 ): string {
-	const root = (app as unknown as { _tree: TreeNode })._tree
-	return generateFromTreeRoot(root)
+	return emitRouteTree(app.toRouteTree())
 }
 
 /**
  * Generate static route tree code from a pre-built RouteTree.
  * Supports gateway patterns: import service trees → enrich meta → mergeTree → generate.
  */
-export function generateRouteTreeFromRouteTree(rt: { root: TreeNode }): string {
-	return generateFromTreeRoot(rt.root)
+export function generateRouteTreeFromRouteTree(rt: RouteTree): string {
+	return emitRouteTree(rt)
 }
 
 /* ---- Type codegen ---- */
@@ -1859,9 +1689,7 @@ export function generateTypes<TEnv, TCtx>(
 	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
 	options: GenerateTypesOptions,
 ): string {
-	const tree = (app as unknown as { _tree: TreeNode })._tree
-	const collected: CollectedRoute[] = []
-	walkTree(tree, "", collected, true)
+	const collected: CollectedRoute[] = collectRoutes(app, true)
 
 	const factory = getErrorFactory(app)
 	const errorMeta = getErrorMeta(factory)

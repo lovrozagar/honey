@@ -295,7 +295,7 @@ describe("bug-hunt-8: route precedence — static > dynamic > wildcard", () => {
 		expect(((await r2.json()) as Record<string, string>).match).toBe("wildcard")
 	})
 
-	it("dynamic + wildcard: dynamic takes single, wildcard unreachable for multi-segment", async () => {
+	it("dynamic + wildcard: dynamic takes single, wildcard takes the rest", async () => {
 		const app = honey<{}>()
 		app.get("/files/:name").handler((ctx) => ctx.res.json("ok", { match: "dynamic", name: ctx.params.name }))
 		app.get("/files/*path").handler((ctx) => ctx.res.json("ok", { match: "wildcard", path: ctx.params.path }))
@@ -304,10 +304,10 @@ describe("bug-hunt-8: route precedence — static > dynamic > wildcard", () => {
 		const r1 = await app.fetch(new Request("http://localhost/files/doc.txt"), {})
 		expect(((await r1.json()) as Record<string, string>).match).toBe("dynamic")
 
-		/* multi-segment → dynamic matches first seg but has no children → 404.
-		 * wildcard is only tried when dynamic doesn't exist at that node. */
+		/* multi-segment → the dynamic branch dead-ends, the router backtracks to the wildcard */
 		const r2 = await app.fetch(new Request("http://localhost/files/a/b"), {})
-		expect(r2.status).toBe(404)
+		expect(r2.status).toBe(200)
+		expect((await r2.json()) as Record<string, string>).toEqual({ match: "wildcard", path: "a/b" })
 	})
 })
 

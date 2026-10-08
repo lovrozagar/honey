@@ -18,7 +18,7 @@ import { detectFeaturesInSource, featurePrelude, importsFeatureEntry } from "./f
 import { runCli } from "./gen-process.ts"
 import { writeGenFile, writeGenJsonFile, writeGenYamlFile, writeOutputDir } from "./gen-write.ts"
 import { matchesGlob } from "./glob.ts"
-import { overlaySchemas } from "./tree.ts"
+import { overlaySchemas, type RouteTree } from "./tree.ts"
 import type { ExtractedChainTypes } from "./type-extractor.ts"
 import { toYaml, yamlSiblingPath } from "./yaml.ts"
 
@@ -343,7 +343,7 @@ export function isGeneratedOutput(file: string, outputs: { dirs: string[]; files
 /* ---- Loaders ---- */
 
 type HoneyApp = Honey<unknown, unknown, unknown, unknown, unknown, string, string>
-type TreeResult = { root: import("./tree.ts").TreeNode }
+type TreeResult = RouteTree
 
 async function loadAppOrTree(load: ModuleLoader, entryPath: string): Promise<unknown> {
 	const mod = await load(entryPath)
@@ -433,7 +433,7 @@ export async function generateAndWrite(
 		}
 		app = appExported
 		/* the app serves the intern tree (no schemas); document merged routes from their source */
-		if (mergeSource) overlaySchemas(app.toRouteTree().root, mergeSource.root)
+		if (mergeSource) overlaySchemas(app, mergeSource)
 	}
 
 	/* manifest */

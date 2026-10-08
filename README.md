@@ -90,6 +90,8 @@ curl http://127.0.0.1:3000/openapi.json
 
 `honey init` writes `src/app.ts`, `src/server.ts`, `vite.config.ts`, and `dev` / `generate` scripts. `honey init --cf` also writes `wrangler.jsonc` and a worker that exports `fetch`.
 
+`honey generate` loads the app in a fresh process with `app.serve()` stubbed, so the one-file shape above does not start a listener while generating, and the process exits when it is done. Other top-level side effects in the app module (database clients, timers) still run during generation; keep them behind a function or in `src/server.ts`.
+
 `app.serve()` detects bun / node / deno and loads only that WebSocket adapter. Pass `runtime` to pin it. Cloudflare Workers cannot listen — export `fetch: (req, env, ctx) => app.fetch(req, env, ctx)`.
 
 `app.serve()`, `app.openapi()`, and `app.errorI18n()` load their implementations when called. A fetch-only production bundle does not include listen adapters, spec generation, or i18n. Spec and docs routes stay out of the generated document.
@@ -113,7 +115,7 @@ Honey is not Express with types bolted on. There is no `req.body` parser stack. 
 
 ## Install
 
-Requires [Bun](https://bun.sh) 1.3+ to develop this repo. Consumers can run the published package on Bun, Node, Deno, or Workers.
+Requires [Bun](https://bun.sh) 1.3+ to develop this repo. The published package runs on Node 22.12 or later, Bun, Deno, and Cloudflare Workers; it ships compiled JavaScript, so plain Node imports it from `node_modules` without a TypeScript loader. The `honey` CLI and the Vite plugin run on Node from npm as well as on Bun.
 
 ```bash
 bun add @lovrozagar/honey
@@ -184,18 +186,20 @@ await app.serve({ env: { DATABASE_URL: process.env.DATABASE_URL! }, port: 3000 }
 ## CLI
 
 ```
-honey generate [--watch] [--config <path>] [--app <path>] [flags]
+honey generate [--watch] [--config <path>] [--plugin <n>] [--app <path>] [flags]
 honey init [--cf] [--force]
 ```
 
-Any other first argument prints usage and exits `1`.
+Flags take `--flag value` or `--flag=value`. Unknown flags, stray arguments, a missing value and a `--config` that does not exist are errors: the CLI prints usage and exits `1`. Any other first argument does the same.
 
 ### `honey init`
 
 | Flag      | Meaning                                                                 |
 | --------- | ----------------------------------------------------------------------- |
-| `--cf`    | Also write a Workers entry and `wrangler.jsonc`                         |
+| `--cf`    | Also write a Workers entry and `wrangler.jsonc` (alias `--cloudflare`)  |
 | `--force` | Overwrite `src/app.ts`, `src/server.ts`, `vite.config.ts` if they exist |
+
+`honey init` adds `@lovrozagar/honey` to `dependencies`. In an existing `package.json` it keeps your `dev` / `generate` scripts and `type` unless you pass `--force`.
 
 ### `honey generate`
 
@@ -207,6 +211,7 @@ If there is no Vite config, you must pass `--app`.
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `--watch`                      | Regenerate when the route tree checksum changes. Ignores `_gen` / `.gen.*`. Requires `--app` or plugin `app`. |
 | `--config <path>`              | Vite config to load (default `vite.config.ts`)                                                                |
+| `--plugin <n>`                 | Which `honey()` plugin in the config, 0-based, when it holds several                                          |
 | `--app <path>`                 | App module, overrides plugin `app`                                                                            |
 | `--tree`                       | Enable writing the generated route tree                                                                       |
 | `--types`                      | Enable writing TypeScript route types (needs `ts-morph`)                                                      |
@@ -267,6 +272,8 @@ export default {
 }
 ```
 
+`watch` patterns are anchored at the project root (`src/**/*.ts` matches `src/a/b.ts`, never `node_modules/x/src/a.ts`). A save that matches still gets its normal HMR update; generated outputs never retrigger a generation.
+
 `codegen.invalidate` (default `"warn"`) lists mutations that declare no `invalidate` but have
 sibling read routes they plausibly affect. `"error"` to fail the build; `"off"` to silence it.
 
@@ -318,8 +325,11 @@ app.get("/files/*path").handler((ctx) => {
 })
 ```
 
-- `:name` is one segment.
-- `*name` is the remainder of the path.
+- `:name` is one whole segment. Names use letters, digits, `_`, `$` and `-`; `/f/:name.json` is rejected at registration.
+- `:name?` is an optional last segment: `/items/:id?` serves `/items` and `/items/42`.
+- `*name` (or bare `*`, read as `ctx.params["*"]`) is the remainder of the path and must be the last segment.
+- Patterns are normalized: `admin/x`, `//admin/x` and `/admin/x/` all register `/admin/x`; `basePath("/api/")` is `/api`. `.` and `..` segments, query strings and fragments are rejected.
+- Precedence at each segment: static, then param, then wildcard. When the preferred branch dead-ends — no route further down, or no route for the request's method — the router backtracks to the next one. With `GET /users/me/settings` and `GET /users/:id/profile`, `/users/me/profile` reaches the second; with `GET /u/me` and `DELETE /u/:id`, `DELETE /u/me` reaches the second. A 405 lists every method of every route that matches the path.
 - Static paths (`/health`) use an O(1) map. Dynamic and wildcard segments walk the radix tree.
 
 Optional extra validation of params (beyond “it is a string”):
@@ -1018,16 +1028,30 @@ app.telemetry({
 })
 ```
 
-Production tree (unknown paths 404 without a catch-all walk):
+Production tree: load the generated `routes.gen.ts` before registering routes. The tree supplies only the router topology (route ids at the leaves) and per-route data (meta, error keys); every route the app registers afterwards binds to its leaf by `METHOD /pattern`. Several apps can load the same module: it is frozen, and each app serves its own handlers.
 
 ```ts
 import { routeTree } from "./_gen/routes.gen.ts"
 
-app.routeTree(routeTree)
-const snapshot = app.toRouteTree()
+const app = honey().routeTree(routeTree)
+app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 ```
 
-`mergeTree` from `honey` / `honey/tree` merges several trees (optional extra meta per tree).
+- A route the app registers that the tree does not hold, or a tree from an older honey, means the generated file is stale: the first request throws an error naming the routes. Run `honey generate`.
+- A tree leaf the app does not register is answered with 404 but still documented by `app.openapi()`.
+- Spec, docs and manifest routes are not part of the generated tree; `app.openapi()` mounts them either way.
+- `routeTree()` must come before any route registration and can be called once.
+
+`app.toRouteTree()` snapshots an app — a copy of its topology plus each route's data and live handler. `mergeTree` from `honey` / `honey/tree` merges several trees (optional extra meta per tree) without touching its inputs. Loading a snapshot or a merge serves those live handlers; loading the same tree twice gives two independent apps.
+
+Gateways: a gateway loads a tree that holds downstream routes it does not implement, and registers a root wildcard (`app.all("/*")`) as its catch-all. Every leaf without a local handler is delegated to the catch-all, which then runs with that route's own pattern (`ctx.routePattern`), params, meta and scoped middleware. Paths that are not in the tree 404 — for every method, including `HEAD` — without reaching the catch-all.
+
+```ts
+import { routeTree } from "./_gen/routes.gen.ts"
+
+const gateway = honey().routeTree(routeTree)
+gateway.all("/*").proxy({ destination: (ctx) => `https://${ctx.meta.worker}.internal${ctx.path}` })
+```
 
 Gateway codegen: point `codegen.mergeTree` at a generate-only module that merges live downstream apps with `app.toRouteTree()`. Generated `routes.gen.ts` omits JSON Schema, so merging another service's generated tree documents no request or response bodies. `honey generate` copies the merged schemas onto the gateway app before it writes OpenAPI; the gateway runtime still serves its own generated tree.
 
@@ -1128,6 +1152,8 @@ createBuildPlugin(
 	{ entry: "src/app.ts", export: "app" }, // or export: "default"
 )
 ```
+
+Which features a bundle needs is detected from the app's import graph (`.openapi()` / `.manifest()`, `.errorI18n()`, `.serve()` calls). Force one on or off with `features: { openapi: true, serve: false }`.
 
 ## OpenAPI, docs, and manifest
 
