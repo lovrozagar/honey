@@ -221,3 +221,20 @@ function stripLive(tree: RouteTree): RouteTree {
 	for (const [id, entry] of Object.entries(tree.routes)) routes[id] = { bek: entry.bek, ek: entry.ek, mt: entry.mt }
 	return { ...tree, routes }
 }
+
+describe("OpenAPI paths come from the parsed pattern", () => {
+	it("documents wildcards as parameters and keeps hyphenated names whole", async () => {
+		const { generateOpenApi } = await import("../../../src/codegen.ts")
+		const app = honey()
+		app.get("/files/*path").handler((c) => c.res.text("ok", "x"))
+		app.get("/star/*").handler((c) => c.res.text("ok", "x"))
+		app.get("/u/:user-id").handler((c) => c.res.text("ok", "x"))
+		const spec = await generateOpenApi(app, { info: { title: "t", version: "1" } })
+		const params = (path: string) =>
+			((spec.paths[path] as { get: { parameters: Array<{ name: string }> } }).get.parameters ?? []).map((p) => p.name)
+		expect(Object.keys(spec.paths).sort()).toEqual(["/files/{path}", "/star/{wildcard}", "/u/{user-id}"])
+		expect(params("/files/{path}")).toEqual(["path"])
+		expect(params("/star/{wildcard}")).toEqual(["wildcard"])
+		expect(params("/u/{user-id}")).toEqual(["user-id"])
+	})
+})
