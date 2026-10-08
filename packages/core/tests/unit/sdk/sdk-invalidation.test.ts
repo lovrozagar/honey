@@ -554,10 +554,10 @@ describe("isStale false for non-stale reads", () => {
 	})
 })
 
-/* ---- Test 22: pattern-level one-shot clears for all instances ---- */
+/* ---- Test 22: a pattern-level mark is cleared per instance, not for all ---- */
 
-describe("pattern-level one-shot clears for all instances", () => {
-	it("first stale read clears pattern entry", async () => {
+describe("pattern-level mark clears per instance", () => {
+	it("each instance reads stale once; a concrete read never clears the others", async () => {
 		const captured: CapturedCtx[] = []
 		const sdk = createSDK(
 			{
@@ -585,8 +585,11 @@ describe("pattern-level one-shot clears for all instances", () => {
 		await sdk.users.create({ json: { name: "Alice" } })
 		await sdk.users.get({ params: { id: "2" } })
 		await sdk.users.get({ params: { id: "3" } })
+		await sdk.users.get({ params: { id: "2" } })
 
 		expect(captured[1]?.isStale).toBe(true)
-		expect(captured[2]?.isStale).toBe(false)
+		/* /users/3 is still stale: /users/2's read refreshed only /users/2 */
+		expect(captured[2]?.isStale).toBe(true)
+		expect(captured[3]?.isStale).toBe(false)
 	})
 })

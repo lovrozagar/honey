@@ -1,6 +1,7 @@
 /* cleaner must export pathMatchesPattern + lookupStale from sdk.ts in Step 5 */
 import { describe, expect, it } from "vitest"
 import { lookupStale, pathMatchesPattern } from "../../../src/client/sdk.ts"
+import { compilePattern } from "../../../src/client/path.ts"
 
 const PHASE_F_FIXED = true
 
@@ -127,12 +128,10 @@ describe.runIf(PHASE_F_FIXED)("#R6-5 — Layer B' regressions: pathMatchesPatter
 		expect(pathMatchesPattern("GET /v1/users/123", "GET /v1/users/:id")).toBe(true)
 	})
 
-	it("post-fix: pathMatchesPattern has a regex cache — function source references a cache Map", () => {
-		/* Structural regression: the post-fix implementation holds a module-level Map
-		   so the same pattern's RegExp is only compiled once. Verify via source inspection. */
-		const src = pathMatchesPattern.toString()
-		/* The cache variable is named patternRegexCache per the spec's canonical shape */
-		expect(src).toContain("patternRegexCache")
+	it("post-fix: pathMatchesPattern compiles each pattern once (cached RegExp)", () => {
+		const pattern = "GET-cache-probe/:id"
+		expect(compilePattern(pattern)).toBe(compilePattern(pattern))
+		expect(pathMatchesPattern("GET-cache-probe/1", pattern)).toBe(true)
 	})
 })
 

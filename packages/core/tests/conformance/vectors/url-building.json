@@ -1,0 +1,132 @@
+{
+	"$comment": "SDK runtime URL building. Each vector: base URL, path template, params, search; `expect` is the full request URL, or `error` (a substring of the message) when the runtime must refuse to send. Templates use `:name` (whole segment), `*name` (rest) or `{name}` (inside a segment).",
+	"vectors": [
+		{
+			"name": "root base",
+			"base": "https://api.example.com",
+			"path": "/users",
+			"expect": "https://api.example.com/users"
+		},
+		{
+			"name": "base path kept",
+			"base": "https://api.example.com/v1",
+			"path": "/users",
+			"expect": "https://api.example.com/v1/users"
+		},
+		{
+			"name": "base path with trailing slash",
+			"base": "https://api.example.com/v1/",
+			"path": "/users",
+			"expect": "https://api.example.com/v1/users"
+		},
+		{
+			"name": "base query kept",
+			"base": "https://api.example.com/v1?key=k",
+			"path": "/users",
+			"expect": "https://api.example.com/v1/users?key=k"
+		},
+		{
+			"name": "colon param encoded",
+			"base": "https://api.example.com",
+			"path": "/users/:id",
+			"params": { "id": "a b/c" },
+			"expect": "https://api.example.com/users/a%20b%2Fc"
+		},
+		{
+			"name": "hyphenated param name",
+			"base": "https://api.example.com",
+			"path": "/users/:user-id",
+			"params": { "user-id": "7" },
+			"expect": "https://api.example.com/users/7"
+		},
+		{
+			"name": "brace param",
+			"base": "https://api.example.com",
+			"path": "/users/{id}",
+			"params": { "id": "7" },
+			"expect": "https://api.example.com/users/7"
+		},
+		{
+			"name": "brace param with hyphen",
+			"base": "https://api.example.com",
+			"path": "/users/{user-id}",
+			"params": { "user-id": "7" },
+			"expect": "https://api.example.com/users/7"
+		},
+		{
+			"name": "brace param inside a segment",
+			"base": "https://api.example.com",
+			"path": "/ops/{id}:cancel",
+			"params": { "id": "9" },
+			"expect": "https://api.example.com/ops/9:cancel"
+		},
+		{
+			"name": "optional param omitted",
+			"base": "https://api.example.com",
+			"path": "/opt/:id?",
+			"expect": "https://api.example.com/opt"
+		},
+		{
+			"name": "wildcard spans segments",
+			"base": "https://api.example.com",
+			"path": "/files/*path",
+			"params": { "path": "a/b c.txt" },
+			"expect": "https://api.example.com/files/a/b%20c.txt"
+		},
+		{
+			"name": "query serialization repeats arrays",
+			"base": "https://api.example.com",
+			"path": "/s",
+			"search": { "tag": ["a", "b"], "q": "x y", "skip": null },
+			"expect": "https://api.example.com/s?tag=a&tag=b&q=x+y"
+		},
+		{
+			"name": "dot-dot param rejected",
+			"base": "https://api.example.com/v1",
+			"path": "/members/:id",
+			"params": { "id": ".." },
+			"error": "Invalid path param"
+		},
+		{
+			"name": "dot param rejected",
+			"base": "https://api.example.com/v1",
+			"path": "/members/:id",
+			"params": { "id": "." },
+			"error": "Invalid path param"
+		},
+		{
+			"name": "empty param rejected",
+			"base": "https://api.example.com",
+			"path": "/:org/:repo",
+			"params": { "org": "", "repo": "evil.example" },
+			"error": "Invalid path param"
+		},
+		{
+			"name": "dot-dot brace param rejected",
+			"base": "https://api.example.com",
+			"path": "/members/{id}",
+			"params": { "id": ".." },
+			"error": "Invalid path param"
+		},
+		{
+			"name": "dot-dot inside wildcard rejected",
+			"base": "https://api.example.com",
+			"path": "/files/*path",
+			"params": { "path": "a/../admin" },
+			"error": "Invalid path param"
+		},
+		{
+			"name": "missing param",
+			"base": "https://api.example.com",
+			"path": "/users/:id",
+			"error": "Missing path param: id"
+		},
+		{
+			"name": "percent-encoded dots stay data",
+			"base": "https://api.example.com",
+			"path": "/users/:id",
+			"params": { "id": "%2e%2e" },
+			"expect": "https://api.example.com/users/%252e%252e"
+		}
+	]
+}

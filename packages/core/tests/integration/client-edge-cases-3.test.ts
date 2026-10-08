@@ -250,18 +250,16 @@ describe("edge: interceptors don't leak state between requests", () => {
 })
 
 describe("edge: empty string path param", () => {
-	it("empty string param does not crash — server handles it", async () => {
+	it("empty string param is rejected before sending (it would address the collection)", async () => {
 		const api = createClient({
 			baseURL,
 			headers: { authorization: "Bearer test" },
 		})
-		const result = await api.get("/api/v1/organizations/:orgId", {
-			params: { orgId: "" },
-		})
-		/* empty param → resolves to /api/v1/organizations/ → list route or 404 */
-		/* either way: no crash, valid response */
-		expect(result.status).toBeGreaterThanOrEqual(200)
-		expect(result.status).toBeLessThan(600)
+		await expect(
+			api.get("/api/v1/organizations/:orgId", {
+				params: { orgId: "" },
+			}),
+		).rejects.toThrow(/Invalid path param "orgId"/)
 	})
 })
 

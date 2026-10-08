@@ -383,14 +383,14 @@ describe.skipIf(PHASE_G_FIXED)("#R6-12 resolveInvalidationTargets — Layer B bu
 })
 
 describe.runIf(PHASE_G_FIXED)("#R6-12 resolveInvalidationTargets — Layer B' regression (post-fix)", () => {
-	it("post-fix: unresolved :tenant_id param causes target to be dropped (returns [])", () => {
+	it("unresolved :tenant_id param stays a pattern (never silently dropped)", () => {
 		const result = resolveInvalidationTargets(["GET /v1/tenants/:tenant_id/rows"], { org_id: "x" })
-		expect(result).toEqual([])
+		expect(result).toEqual(["GET /v1/tenants/:tenant_id/rows"])
 	})
 
-	it("post-fix: multi-param target where one param unresolved — entire target dropped", () => {
+	it("multi-param target where one param is unresolved — resolved part substituted, rest stays a pattern", () => {
 		const result = resolveInvalidationTargets(["GET /v1/x/:a/:b"], { a: "1" })
-		expect(result).toEqual([])
+		expect(result).toEqual(["GET /v1/x/1/:b"])
 	})
 
 	it("post-fix: multi-param target where all params resolved — target kept", () => {

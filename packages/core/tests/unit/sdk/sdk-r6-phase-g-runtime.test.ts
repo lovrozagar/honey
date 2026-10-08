@@ -411,21 +411,18 @@ describe.skipIf(PHASE_G_FIXED)("#R6-13 onResponse retry — Layer B bug witness 
 })
 
 describe.runIf(PHASE_G_FIXED)("#R6-13 onResponse retry — Layer B' regression (post-fix)", () => {
-	it("post-fix: retry on 500 rejects with parsed ClientError (status 500, correct message)", async () => {
+	it("retry resolves with the retried response whatever its status; safe mode returns it as { error }", async () => {
 		const { calls, fetcher } = deferredFetch()
 
-		let retryError: unknown
+		let retried: Response | undefined
 		const sdk = createSDK<ItemSDK>(serviceMap, {
 			baseURL: "http://api.example.com",
 			fetch: fetcher,
 			onResponse: [
 				async (ctx) => {
 					if (ctx.response.status === 429) {
-						try {
-							await ctx.retry()
-						} catch (e) {
-							retryError = e
-						}
+						retried = await ctx.retry()
+						return retried
 					}
 					return undefined
 				},
@@ -452,10 +449,10 @@ describe.runIf(PHASE_G_FIXED)("#R6-13 onResponse retry — Layer B' regression (
 				status: 500,
 			}),
 		)
-		await p.catch(() => {})
+		const result = (await p) as unknown as { error: { message: string }; status: number }
 
-		expect(retryError).toBeInstanceOf(ClientError)
-		expect((retryError as ClientError).status).toBe(500)
-		expect((retryError as ClientError).message).toBe("upstream failed")
+		expect(retried?.status).toBe(500)
+		expect(result.status).toBe(500)
+		expect(result.error.message).toBe("upstream failed")
 	})
 })

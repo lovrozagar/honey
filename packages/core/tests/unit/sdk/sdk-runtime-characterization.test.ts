@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { generateSDK } from "../../../src/codegen.ts"
+import { ClientError } from "../../../src/client/error.ts"
 import { createSDK } from "../../../src/client/sdk.ts"
 import { parseSSEStream } from "../../../src/client/sse.ts"
 
@@ -640,7 +641,7 @@ describe("runtime — error responses", () => {
 		expect(result.status).toBe(403)
 	})
 
-	it("error body that is not JSON returns undefined error", async () => {
+	it("error body that is not JSON still returns a truthy error with the status", async () => {
 		const sdk = createSDK(
 			{ users: { list: { method: "GET", path: "/users" } } },
 			{
@@ -655,8 +656,10 @@ describe("runtime — error responses", () => {
 		}
 
 		expect(result.data).toBeNull()
-		/* Non-JSON error body: _parseErrorBody tries JSON.parse, fails, returns undefined */
-		expect(result.error).toBeUndefined()
+		/* Non-JSON error body: `error` is the ClientError itself, so `if (error)` never misses a failure */
+		expect(result.error).toBeInstanceOf(ClientError)
+		expect((result.error as ClientError).status).toBe(500)
+		expect((result.error as ClientError).body).toBe("Internal Server Error")
 	})
 })
 

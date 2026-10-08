@@ -7,9 +7,26 @@ import type { TypedWebSocket } from "./ws.ts"
 import { createTypedWebSocket } from "./ws.ts"
 
 export type { ClientErrorInit } from "./error.ts"
-export { ClientError, isClientError } from "./error.ts"
-export type { ClientConfig, RequestOptions } from "./http.ts"
+export {
+	BadGatewayError,
+	BadRequestError,
+	ClientError,
+	ConflictError,
+	ForbiddenError,
+	GatewayTimeoutError,
+	InternalServerError,
+	isClientError,
+	NotFoundError,
+	RateLimitError,
+	ServiceUnavailableError,
+	UnauthorizedError,
+	UnprocessableEntityError,
+} from "./error.ts"
+export { PathParamError } from "./path.ts"
+export type { AuthExpiredContext, ClientConfig, RedirectPolicy, RequestOptions } from "./http.ts"
 export { HTTPClient, newClientRequestId } from "./http.ts"
+import type { SSEEvent } from "./sse.ts"
+
 export type { SSEEvent } from "./sse.ts"
 export { parseSSEStream } from "./sse.ts"
 export type {
@@ -30,6 +47,10 @@ export { createTypedWebSocket } from "./ws.ts"
 
 const HTTP_METHODS = new Set(["delete", "get", "patch", "post", "put"])
 
+function isAsyncIterable(value: unknown): value is AsyncIterable<SSEEvent> {
+	return typeof value === "object" && value !== null && Symbol.asyncIterator in value
+}
+
 export function createClient<T>(config: ClientConfig & { throwOnError: true }): HoneyClient<InferRoutes<T>, true>
 export function createClient<T>(
 	config: Omit<ClientConfig, "throwOnError"> & { throwOnError?: false },
@@ -43,7 +64,10 @@ export function createClient<T, TThrow extends boolean = false>(
 	const http = new HTTPClient(config)
 
 	return new Proxy({} as HoneyClient<InferRoutes<T>, TThrow>, {
-		get(_target, prop: string) {
+		get(_target, prop: string | symbol) {
+			/* not a thenable, and printable: `await client` and `String(client)` must not hit the method table */
+			if (typeof prop === "symbol" || prop === "then") return undefined
+			if (prop === "toString" || prop === "toJSON") return () => "[object HoneyClient]"
 			if (prop === "$isClientError") return isClientError
 
 			if (prop === "$url") {
@@ -83,30 +107,44 @@ export function createClient<T, TThrow extends boolean = false>(
 					const shouldThrow = config.throwOnError === true
 
 					/**
-					 * Lazy dual-mode: both PromiseLike (REST) and AsyncIterable (SSE).
-					 * - `await api.get(...)` → REST (request or requestSafe)
-					 * - `for await (... of api.get(...))` → SSE (requestStream)
+					 * One call, one request, consumed either way:
+					 * - `await api.get(...)` sends it; an event-stream response resolves to an
+					 *   `AsyncIterable<SSEEvent>` (never buffered), anything else to the parsed body
+					 *   or result tuple. Returning the call from an async function works the same.
+					 * - `for await (... of api.get(...))` before the call has started sends it as a
+					 *   stream request (`accept: text/event-stream`, no timeout).
+					 * - iterating after awaiting reuses the same response instead of sending again.
 					 */
-					let mode: "idle" | "rest" | "sse" = "idle"
-					let restPromise: Promise<unknown> | undefined
-					const lazyRest = (): Promise<unknown> => {
-						if (!restPromise) {
-							restPromise = shouldThrow ? http.request(method, path, opts) : http.requestSafe(method, path, opts)
-						}
-						return restPromise
+					let mode: "auto" | "idle" | "sse" = "idle"
+					let auto: Promise<unknown> | undefined
+					const runAuto = (): Promise<unknown> => {
+						auto ??= http.requestAuto(method, path, opts, shouldThrow)
+						return auto
 					}
 
 					const lazy = new Promise((resolve, reject) => {
 						queueMicrotask(() => {
 							if (mode === "sse") return
-							mode = "rest"
-							lazyRest().then(resolve, reject)
+							mode = "auto"
+							runAuto().then(resolve, reject)
 						})
 					})
 					Object.defineProperty(lazy, Symbol.asyncIterator, {
 						value() {
-							mode = "sse"
-							return http.requestStream(method, path, opts)[Symbol.asyncIterator]()
+							if (mode === "idle") {
+								mode = "sse"
+								return http.requestStream(method, path, opts)[Symbol.asyncIterator]()
+							}
+							return (async function* () {
+								const result = await runAuto()
+								if (isAsyncIterable(result)) {
+									yield* result
+									return
+								}
+								const error = (result as { error?: unknown } | null)?.error
+								if (error) throw error instanceof Error ? error : new Error("Request failed")
+								throw new TypeError(`${method} ${path} did not respond with an event stream`)
+							})()
 						},
 					})
 					return lazy
