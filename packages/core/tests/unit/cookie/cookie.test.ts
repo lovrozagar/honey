@@ -60,9 +60,9 @@ describe("serializeCookie — value encoding", () => {
 		expect(result).toContain("%5C")
 	})
 
-	it("preserves safe characters (!#$%&'*+-./:)", () => {
+	it("preserves safe characters (!#$&'*+-./:) and encodes %", () => {
 		const result = serializeCookie("x", { value: "!#$%&'*+-./:abc" })
-		expect(result).toBe("x=!#$%&'*+-./:abc")
+		expect(result).toBe("x=!#$%25&'*+-./:abc")
 	})
 
 	it("encodes unicode", () => {

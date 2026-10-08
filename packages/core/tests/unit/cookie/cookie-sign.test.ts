@@ -68,3 +68,57 @@ describe("cookie signing — consumer", () => {
 		expect(verified).toBeNull()
 	})
 })
+
+describe("cookie signing — v2 format", () => {
+	it("binds the signature to the cookie name", async () => {
+		const signed = await sign("admin", secret, { name: "role" })
+		expect(await verify(signed, [secret], { name: "role" })).toBe("admin")
+		expect(await verify(signed, [secret], { name: "other" })).toBeNull()
+		expect(await verify(signed, [secret])).toBeNull()
+	})
+
+	it("uses a marker outside the base64url alphabet", async () => {
+		const signed = await sign("v", secret)
+		expect(signed).toMatch(/^v\.~[A-Za-z0-9_-]{43}$/)
+	})
+
+	it("still verifies legacy v1 signatures (dual verification)", async () => {
+		const key = await crypto.subtle.importKey(
+			"raw",
+			new TextEncoder().encode(secret),
+			{ hash: "SHA-256", name: "HMAC" },
+			false,
+			["sign"],
+		)
+		const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("user-1")))
+		const b64 = btoa(String.fromCharCode(...mac))
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=+$/, "")
+		const legacy = `user-1.${b64}`
+		expect(await verify(legacy, [secret], { name: "sid" })).toBe("user-1")
+		expect(await verify(legacy, [secret], { legacy: false, name: "sid" })).toBeNull()
+	})
+})
+
+describe("cookie signing — malformed input", () => {
+	it("returns null instead of throwing on malformed signatures", async () => {
+		for (const bad of ["v.%%%", "v.~", "v.~!!!", "v.a", "v.====", `v.${"A".repeat(44)}`, "v.~😀"]) {
+			expect(await verify(bad, [secret])).toBeNull()
+		}
+	})
+
+	it("rejects signatures with non-zero trailing bits (no malleability)", async () => {
+		const signed = await sign("v", secret)
+		const sig = signed.slice(signed.lastIndexOf("~") + 1)
+		const last = sig.at(-1) ?? "A"
+		/* 43 chars carry 258 bits for 256: flip a trailing bit that decoding would ignore. */
+		const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+		const tweaked = alphabet[alphabet.indexOf(last) ^ 1]
+		expect(await verify(`v.~${sig.slice(0, -1)}${tweaked}`, [secret])).toBeNull()
+	})
+
+	it("an empty secrets list never verifies", async () => {
+		expect(await verify(await sign("v", secret), [])).toBeNull()
+	})
+})

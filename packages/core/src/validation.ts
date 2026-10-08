@@ -1,4 +1,5 @@
 import { HoneyError } from "./error.ts"
+import { parseCookieHeader } from "./cookie.ts"
 import type {
 	FieldError,
 	InputSchemaEntry,
@@ -59,33 +60,8 @@ export function assertRequestContentType(iv: InputSchemasDef, req: Request): voi
 	}
 }
 
-function tryDecodeCookieValue(value: string): string {
-	try {
-		return decodeURIComponent(value)
-	} catch {
-		return value
-	}
-}
-
-export function parseCookies(header: string): Record<string, string> {
-	const result: Record<string, string> = {}
-	if (header.length === 0) return result
-	for (const pair of header.split(";")) {
-		const trimmed = pair.trim()
-		const eqIdx = trimmed.indexOf("=")
-		if (eqIdx === -1) continue
-		const name = trimmed.slice(0, eqIdx)
-		if (DANGEROUS_KEYS.has(name)) continue
-		let value = trimmed.slice(eqIdx + 1)
-		if (value.indexOf("%") !== -1) value = tryDecodeCookieValue(value)
-		/* RFC 6265: strip surrounding double quotes */
-		if (value.length >= 2 && value.charCodeAt(0) === 34 && value.charCodeAt(value.length - 1) === 34) {
-			value = value.slice(1, -1)
-		}
-		result[name] = value
-	}
-	return result
-}
+/** Cookie parsing lives with the serializer so the two round-trip; see `cookie.ts`. */
+export const parseCookies: (header: string) => Record<string, string> = parseCookieHeader
 
 function toPropertyKey(segment: PropertyKey | { readonly key: PropertyKey }): PropertyKey {
 	if (typeof segment === "object" && segment !== null && "key" in segment) {

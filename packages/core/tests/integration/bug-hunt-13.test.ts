@@ -320,12 +320,10 @@ describe("bug-hunt-13: ipRestrict — IPv4 edge cases", () => {
  * ══════════════════════════════════════════════ */
 
 describe("bug-hunt-13: parseCookies — whitespace edge cases", () => {
-	it("extra spaces around = and ; → outer trimmed, inner preserved", () => {
+	it("extra spaces around = and ; → name and value trimmed (RFC 6265 §5.2)", () => {
 		const result = parseCookies("  name = Alice ;  age = 30  ")
-		/* pair.trim() trims outer whitespace, then splits on first = */
-		/* "name = Alice" → key="name ", value=" Alice" (trailing space from ; split) */
-		expect(result["name "]).toBe(" Alice")
-		expect(result["age "]).toBe(" 30")
+		expect(result.name).toBe("Alice")
+		expect(result.age).toBe("30")
 	})
 
 	it("tab-separated pairs still work", () => {
