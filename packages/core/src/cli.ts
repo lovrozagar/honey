@@ -1,82 +1,13 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { existsSync, statSync, watch } from "node:fs"
 import { dirname, resolve } from "node:path"
-import { parseInitFlags, runInit } from "./init.ts"
-import type { HoneyGoCliConfig, HoneyVitePluginConfig } from "./plugin.ts"
-import { generateAndWrite, type getLastHoneyConfig, resolveHoneyConfig } from "./plugin.ts"
-
-const USAGE =
-	"Usage: honey generate [--watch] [--config <path>] [--app <path>] [flags]\n" + "       honey init [--cf] [--force]"
-
-type CliFlags = {
-	app?: string
-	cli?: boolean
-	cliBinaryName?: string
-	cliConfigName?: string
-	cliDefaultBaseUrl?: string
-	cliEnvPrefix?: string
-	cliModulePath?: string
-	cliOut?: string
-	cliSdkModulePath?: string
-	config?: string
-	manifest?: boolean
-	mergeTree?: string
-	sdk?: boolean
-	tree?: boolean
-	types?: boolean
-	watch?: boolean
-}
-
-const BOOLEAN_FLAGS = new Set(["cli", "manifest", "sdk", "tree", "types", "watch"])
-
-function parseArgs(args: string[]): CliFlags {
-	const parsed: Record<string, string> = {}
-	for (let i = 0; i < args.length; i++) {
-		const arg = args[i]
-		if (!arg.startsWith("--")) continue
-		const key = arg.slice(2)
-		if (BOOLEAN_FLAGS.has(key)) {
-			parsed[key] = "true"
-		} else if (i + 1 < args.length) {
-			parsed[key] = args[i + 1]
-			i++
-		}
-	}
-
-	return {
-		app: parsed.app,
-		cli: parsed.cli !== undefined,
-		cliBinaryName: parsed["cli-binary-name"],
-		cliConfigName: parsed["cli-config-name"],
-		cliDefaultBaseUrl: parsed["cli-default-base-url"],
-		cliEnvPrefix: parsed["cli-env-prefix"],
-		cliModulePath: parsed["cli-module-path"],
-		cliOut: parsed["cli-out"],
-		cliSdkModulePath: parsed["cli-sdk-module-path"],
-		config: parsed.config,
-		manifest: parsed.manifest !== undefined,
-		mergeTree: parsed["merge-tree"],
-		sdk: parsed.sdk !== undefined,
-		tree: parsed.tree !== undefined,
-		types: parsed.types !== undefined,
-		watch: parsed.watch !== undefined,
-	}
-}
-
-async function loadConfigFromVite(configPath: string): Promise<HoneyVitePluginConfig | undefined> {
-	if (!existsSync(configPath)) return undefined
-
-	const { createJiti } = await import("jiti")
-	const jiti = createJiti(configPath, { fsCache: false, interopDefault: true, moduleCache: false })
-
-	/* importing the config executes honey() which stashes config */
-	await jiti.import(configPath)
-
-	/* read stashed config from the same module graph */
-	const pluginMod = (await jiti.import("@lovrozagar/honey/plugin")) as Record<string, unknown>
-	const getter = pluginMod.getLastHoneyConfig as typeof getLastHoneyConfig | undefined
-	return getter?.()
-}
+import { createModuleLoader, findViteConfig, loadHoneyPluginConfigs, type ModuleLoader } from "./codegen-load.ts"
+import { runCli } from "./gen-process.ts"
+import { type CliFlags, parseGenerateArgs, parseInitFlags, USAGE, UsageError } from "./cli-args.ts"
+import { runInit } from "./init.ts"
+import type { HoneyGoCliConfig, HoneyVitePluginConfig, ResolvedHoneyConfig } from "./plugin.ts"
+import { generateAndWrite, generatedOutputs, isGeneratedOutput, resolveHoneyConfig } from "./plugin.ts"
+import { setCodegenProcess } from "./serve-slot.ts"
 
 function applyCodegenFlags(target: HoneyVitePluginConfig, flags: CliFlags): void {
 	if (!target.codegen) target.codegen = {}
@@ -90,17 +21,10 @@ function applyCodegenFlags(target: HoneyVitePluginConfig, flags: CliFlags): void
 	if (cliOverride) cg.cli = cliOverride
 }
 
-function mergeCliOverrides(base: HoneyVitePluginConfig, flags: CliFlags): HoneyVitePluginConfig {
-	const merged = { ...base }
-	if (flags.app) merged.app = flags.app
-	applyCodegenFlags(merged, flags)
-	return merged
-}
-
 function buildCliConfigFromFlags(flags: CliFlags): HoneyGoCliConfig | undefined {
 	if (!flags.cli && !flags.cliOut && !flags.cliBinaryName) return undefined
 	if (!flags.cliOut || !flags.cliBinaryName) {
-		throw new Error("--cli requires --cli-out and --cli-binary-name")
+		throw new UsageError("--cli requires --cli-out and --cli-binary-name")
 	}
 	return {
 		binaryName: flags.cliBinaryName,
@@ -113,18 +37,143 @@ function buildCliConfigFromFlags(flags: CliFlags): HoneyGoCliConfig | undefined 
 	}
 }
 
-function configFromFlags(flags: CliFlags): HoneyVitePluginConfig | undefined {
-	if (!flags.app) return undefined
-	const config: HoneyVitePluginConfig = { app: flags.app }
-	applyCodegenFlags(config, flags)
-	return config
+/** Picks one honey() config: `--plugin` by index, else the only one, else the one whose app is `--app`. */
+function selectPluginConfig(
+	configs: HoneyVitePluginConfig[],
+	flags: CliFlags,
+	configPath: string,
+): HoneyVitePluginConfig | undefined {
+	if (flags.plugin !== undefined) {
+		const picked = configs[flags.plugin]
+		if (!picked) {
+			throw new UsageError(`--plugin ${flags.plugin}: ${configPath} has ${configs.length} honey() plugin(s)`)
+		}
+		return picked
+	}
+	if (configs.length <= 1) return configs[0]
+	const byApp = flags.app ? configs.filter((c) => c.app && resolve(c.app) === resolve(flags.app as string)) : []
+	if (byApp.length === 1) return byApp[0]
+	const apps = configs.map((c, i) => `  ${i}: ${c.app ?? "(no app)"}`).join("\n")
+	throw new UsageError(`${configPath} has ${configs.length} honey() plugins; pick one with --plugin <n>:\n${apps}`)
 }
 
-const GEN_IGNORE_RE = /(_gen[/\\]|\.gen\.(tsx?|json|d\.ts)$)/
+async function resolveConfig(cwd: string, flags: CliFlags, load: ModuleLoader): Promise<ResolvedHoneyConfig> {
+	const configPath = flags.config ? resolve(cwd, flags.config) : findViteConfig(cwd)
+	if (flags.config && !existsSync(configPath as string)) {
+		throw new UsageError(`config file not found: ${flags.config}`)
+	}
 
-async function main() {
+	let raw: HoneyVitePluginConfig | undefined
+	if (configPath) {
+		const command = process.env.HONEY_VITE_COMMAND === "serve" ? "serve" : "build"
+		const mode = process.env.HONEY_VITE_MODE ?? (command === "serve" ? "development" : "production")
+		const configs = await loadHoneyPluginConfigs(configPath, load, { command, mode })
+		if (configs.length === 0 && (flags.config || flags.plugin !== undefined || !flags.app)) {
+			throw new UsageError(`no honey() plugin found in ${configPath}; add honey() to it or pass --app`)
+		}
+		const picked = selectPluginConfig(configs, flags, configPath)
+		if (picked) raw = { ...picked, codegen: { ...picked.codegen } }
+	}
+
+	if (raw) {
+		if (flags.app) raw.app = flags.app
+	} else if (flags.app) {
+		raw = { app: flags.app }
+	} else {
+		throw new UsageError("No config found. Provide a vite.config.ts with honey() or use --app.")
+	}
+	applyCodegenFlags(raw, flags)
+	return resolveHoneyConfig(raw)
+}
+
+/** One generation in this process, then exit: whatever the app left running must not keep it alive. */
+async function generateOnce(cwd: string, flags: CliFlags): Promise<never> {
+	setCodegenProcess(true)
+	const load = await createModuleLoader({ fresh: false, from: resolve(cwd, "index.ts") })
+	const resolved = await resolveConfig(cwd, flags, load)
+	try {
+		await generateAndWrite(resolved, cwd, { load })
+	} catch (err) {
+		console.error("honey: generation failed", err)
+		process.exit(1)
+	}
+	console.log("honey: generated")
+	process.exit(0)
+}
+
+/** Watch mode: every generation runs in a fresh child process, so edits to any imported file are seen. */
+async function watchAndGenerate(cwd: string, flags: CliFlags, args: string[]): Promise<void> {
+	setCodegenProcess(true)
+	const load = await createModuleLoader({ fresh: true, from: resolve(cwd, "index.ts") })
+	const resolved = await resolveConfig(cwd, flags, load)
+	if (!resolved.app) throw new UsageError("--watch requires --app or a honey() config with app")
+	setCodegenProcess(false)
+
+	const childArgs = ["generate", ...args.filter((a) => a !== "--watch" && a !== "--watch=true")]
+	const outputs = generatedOutputs(resolved, cwd)
+
+	let running = false
+	let pending = false
+	const generate = async (): Promise<void> => {
+		if (running) {
+			pending = true
+			return
+		}
+		running = true
+		try {
+			await runCli(childArgs, { cwd })
+		} catch {
+			/* the child already printed why */
+		} finally {
+			running = false
+		}
+		if (pending) {
+			pending = false
+			await generate()
+		}
+	}
+
+	let debounce: ReturnType<typeof setTimeout> | undefined
+	const schedule = (): void => {
+		clearTimeout(debounce)
+		debounce = setTimeout(() => void generate(), 100)
+	}
+
+	await generate()
+
+	const appAbs = resolve(cwd, resolved.app)
+	const srcDir = dirname(appAbs)
+	console.log(`honey: watching ${srcDir}`)
+	watch(srcDir, { recursive: true }, (_event, filename) => {
+		if (!filename) return
+		const abs = resolve(srcDir, String(filename))
+		if (GEN_IGNORE_RE.test(abs) || isGeneratedOutput(abs, outputs)) return
+		schedule()
+	})
+	/* recursive fs.watch misses replace-by-rename saves on some platforms; poll the entry too */
+	let lastMtime = mtimeOf(appAbs)
+	setInterval(() => {
+		const mtime = mtimeOf(appAbs)
+		if (mtime === lastMtime) return
+		lastMtime = mtime
+		schedule()
+	}, 250)
+}
+
+function mtimeOf(path: string): number {
+	return existsSync(path) ? statSync(path).mtimeMs : 0
+}
+
+const GEN_IGNORE_RE = /(^|[/\\])_gen[/\\]|\.gen\.(tsx?|json|ya?ml|d\.ts)$|[/\\]node_modules[/\\]|\.tmp$/
+
+async function main(): Promise<void> {
 	const args = process.argv.slice(2)
 	const command = args[0]
+
+	if (command === "-h" || command === "--help") {
+		console.log(USAGE)
+		return
+	}
 
 	if (command === "init") {
 		runInit(process.cwd(), parseInitFlags(args.slice(1)))
@@ -132,72 +181,25 @@ async function main() {
 	}
 
 	if (command !== "generate") {
-		console.error(USAGE)
-		process.exit(1)
+		throw new UsageError(command ? `unknown command: ${command}` : "missing command")
 	}
 
-	const flags = parseArgs(args.slice(1))
+	const rest = args.slice(1)
+	const flags = parseGenerateArgs(rest)
+	if (flags.help) {
+		console.log(USAGE)
+		return
+	}
 	const cwd = process.cwd()
-
-	/* resolve config: vite.config.ts → CLI flags fallback */
-	const configPath = resolve(cwd, flags.config ?? "vite.config.ts")
-	let rawConfig: HoneyVitePluginConfig | undefined
-
-	const viteConfig = await loadConfigFromVite(configPath)
-	if (viteConfig) {
-		rawConfig = mergeCliOverrides(viteConfig, flags)
-	} else {
-		rawConfig = configFromFlags(flags)
-	}
-
-	if (!rawConfig) {
-		console.error("No config found. Provide a vite.config.ts with honey() or use --app flag.")
-		process.exit(1)
-	}
-
-	const resolved = resolveHoneyConfig(rawConfig)
-
-	async function generate(): Promise<void> {
-		try {
-			await generateAndWrite(resolved, cwd)
-			console.log("honey: generated")
-		} catch (err) {
-			console.error("honey: generation failed", err)
-			if (!flags.watch) process.exit(1)
-		}
-	}
-
-	await generate()
-
-	if (flags.watch) {
-		if (!resolved.app) throw new Error("watch mode requires --app or a vite honey() config")
-		const appAbs = resolve(cwd, resolved.app)
-		const srcDir = dirname(appAbs)
-		let debounceTimer: ReturnType<typeof setTimeout> | undefined
-		let lastMtime = existsSync(appAbs) ? statSync(appAbs).mtimeMs : 0
-
-		const schedule = (): void => {
-			clearTimeout(debounceTimer)
-			debounceTimer = setTimeout(() => generate(), 100)
-		}
-
-		console.log(`honey: watching ${srcDir}`)
-		watch(srcDir, { recursive: true }, (_event, filename) => {
-			if (!filename || GEN_IGNORE_RE.test(String(filename))) return
-			schedule()
-		})
-		watch(appAbs, schedule)
-		setInterval(() => {
-			if (!existsSync(appAbs)) return
-			const mtime = statSync(appAbs).mtimeMs
-			if (mtime === lastMtime) return
-			lastMtime = mtime
-			schedule()
-		}, 250)
-	}
+	if (flags.watch) await watchAndGenerate(cwd, flags, rest)
+	else await generateOnce(cwd, flags)
 }
 
-main().catch((err) => {
-	console.error(err)
+main().catch((err: unknown) => {
+	if (err instanceof UsageError) {
+		console.error(`honey: ${err.message}\n\n${USAGE}`)
+	} else {
+		console.error(err)
+	}
 	process.exit(1)
 })

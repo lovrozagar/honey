@@ -62,8 +62,16 @@ describe("honey init CLI", () => {
 		expect(vite).toContain('app: "src/app.ts"')
 
 		const pkg = JSON.parse(readFileSync(join(TEMP_ROOT, "package.json"), "utf-8")) as {
+			dependencies: Record<string, string>
+			private: boolean
 			scripts: Record<string, string>
+			type: string
 		}
+		/* the scoped package the templates import; unscoped "honey" belongs to someone else on npm */
+		expect(pkg.dependencies["@lovrozagar/honey"]).toMatch(/^\^\d+\.\d+\.\d+/)
+		expect(pkg.dependencies.honey).toBeUndefined()
+		expect(pkg.private).toBe(true)
+		expect(pkg.type).toBe("module")
 		expect(pkg.scripts.dev).toContain("src/server.ts")
 		expect(pkg.scripts.generate).toContain("honey generate")
 		expect(existsSync(join(TEMP_ROOT, "wrangler.jsonc"))).toBe(false)
@@ -141,5 +149,48 @@ describe("honey init CLI", () => {
 		expect((await runCli(TEMP_ROOT, ["generate"])).exitCode).toBe(0)
 		expect(readFileSync(treePath, "utf-8")).toContain("second")
 		expect(readFileSync(treePath, "utf-8")).toContain("health")
+	})
+
+	it("keeps an existing package.json's scripts, type and privacy without --force", async () => {
+		const original = {
+			dependencies: { zod: "^4.0.0" },
+			name: "existing",
+			scripts: { dev: "node server.js", generate: "make gen", test: "vitest" },
+		}
+		writeFileSync(join(TEMP_ROOT, "package.json"), JSON.stringify(original))
+		const { exitCode, stdout } = await runCli(TEMP_ROOT, ["init"])
+		expect(exitCode).toBe(0)
+		const pkg = JSON.parse(readFileSync(join(TEMP_ROOT, "package.json"), "utf-8")) as Record<string, unknown>
+		expect(pkg.scripts).toEqual(original.scripts)
+		expect(pkg.type).toBeUndefined()
+		expect(pkg.private).toBeUndefined()
+		expect(pkg.name).toBe("existing")
+		expect(pkg.dependencies).toMatchObject({ "@lovrozagar/honey": expect.any(String), zod: "^4.0.0" })
+		expect(stdout).toContain("kept scripts.dev")
+		expect(stdout).toContain('"type"')
+	})
+
+	it("--force updates the honey scripts and type of an existing package.json", async () => {
+		writeFileSync(
+			join(TEMP_ROOT, "package.json"),
+			JSON.stringify({ name: "existing", scripts: { dev: "node server.js", test: "vitest" }, type: "commonjs" }),
+		)
+		expect((await runCli(TEMP_ROOT, ["init", "--force"])).exitCode).toBe(0)
+		const pkg = JSON.parse(readFileSync(join(TEMP_ROOT, "package.json"), "utf-8")) as {
+			scripts: Record<string, string>
+			type: string
+		}
+		expect(pkg.scripts.dev).toContain("src/server.ts")
+		expect(pkg.scripts.test).toBe("vitest")
+		/* an explicit type is the project's choice */
+		expect(pkg.type).toBe("commonjs")
+	})
+
+	it("--cloudflare is an alias of --cf; unknown flags fail", async () => {
+		expect((await runCli(TEMP_ROOT, ["init", "--cloudflare"])).exitCode).toBe(0)
+		expect(existsSync(join(TEMP_ROOT, "wrangler.jsonc"))).toBe(true)
+		const typo = await runCli(TEMP_ROOT, ["init", "--forse"])
+		expect(typo.exitCode).toBe(1)
+		expect(typo.stderr).toContain("unknown option: --forse")
 	})
 })

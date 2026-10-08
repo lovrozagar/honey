@@ -166,4 +166,159 @@ describe("honey generate CLI", () => {
 		await new Promise<void>((res) => proc.on("close", () => res()))
 		expect(readFileSync(treePath, "utf-8")).toContain("watched")
 	}, 35_000)
+
+	it("rejects unknown flags and a missing explicit config, even with --app", async () => {
+		const typo = await runGenerate(TEMP_ROOT, ["generate", "--manifset"])
+		expect(typo.exitCode).toBe(1)
+		expect(typo.stderr).toContain("unknown option: --manifset")
+
+		const missing = await runGenerate(TEMP_ROOT, ["generate", "--config", "nope.ts", "--app", "src/app.ts"])
+		expect(missing.exitCode).toBe(1)
+		expect(missing.stderr).toContain("config file not found: nope.ts")
+	})
+
+	it("--app=<path> overrides the config's app", async () => {
+		writeFileSync(
+			join(TEMP_ROOT, "src/other.ts"),
+			'import { honey } from "@lovrozagar/honey"\nexport const app = honey().get("/other").handler((c) => c.res.text("ok", "o"))\n',
+		)
+		const { exitCode } = await runGenerate(TEMP_ROOT, ["generate", "--app=src/other.ts"])
+		expect(exitCode).toBe(0)
+		expect(readFileSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"), "utf-8")).toContain("other")
+	})
+
+	it("calls a function-form Vite config", async () => {
+		writeFileSync(
+			join(TEMP_ROOT, "vite.config.ts"),
+			[
+				'import { honey } from "@lovrozagar/honey/plugin"',
+				"export default ({ command }: { command: string }) => ({",
+				'  plugins: [command === "build" && [honey({ app: "src/app.ts", codegen: { manifest: true } })]],',
+				"})",
+			].join("\n"),
+		)
+		const { exitCode, stderr } = await runGenerate(TEMP_ROOT)
+		expect(exitCode, stderr).toBe(0)
+		expect(existsSync(join(TEMP_ROOT, "src/_gen/manifest.gen.json"))).toBe(true)
+	})
+
+	it("asks which plugin when the config has several, and --plugin picks one", async () => {
+		writeFileSync(
+			join(TEMP_ROOT, "src/other.ts"),
+			'import { honey } from "@lovrozagar/honey"\nexport const app = honey().get("/other").handler((c) => c.res.text("ok", "o"))\n',
+		)
+		writeFileSync(
+			join(TEMP_ROOT, "vite.config.ts"),
+			[
+				'import { honey } from "@lovrozagar/honey/plugin"',
+				"export default {",
+				'  plugins: [honey({ app: "src/app.ts" }), honey({ app: "src/other.ts", codegen: { tree: "src/_gen/other.gen.ts" } })],',
+				"}",
+			].join("\n"),
+		)
+		const ambiguous = await runGenerate(TEMP_ROOT)
+		expect(ambiguous.exitCode).toBe(1)
+		expect(ambiguous.stderr).toContain("--plugin")
+
+		expect((await runGenerate(TEMP_ROOT, ["generate", "--plugin", "1"])).exitCode).toBe(0)
+		expect(readFileSync(join(TEMP_ROOT, "src/_gen/other.gen.ts"), "utf-8")).toContain("other")
+		expect(existsSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"))).toBe(false)
+	})
+
+	it("an app that serves at top level and leaves a timer still generates and exits, without binding the port", async () => {
+		const port = 45_987
+		writeFileSync(
+			join(TEMP_ROOT, "src/app.ts"),
+			[
+				'import { honey } from "@lovrozagar/honey"',
+				'import "@lovrozagar/honey/serve"',
+				'export const app = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
+				`await app.serve({ port: ${port} })`,
+				"setInterval(() => {}, 1000)",
+			].join("\n"),
+		)
+		const started = Date.now()
+		const { exitCode, stderr } = await runGenerate(TEMP_ROOT)
+		expect(exitCode, stderr).toBe(0)
+		expect(Date.now() - started).toBeLessThan(15_000)
+		await expect(fetch(`http://127.0.0.1:${port}/health`)).rejects.toThrow()
+	}, 30_000)
+
+	it("runs on Node too: the config is read off the plugin object, not a module-global stash", async () => {
+		const { cliInvocation } = await import("../../../src/gen-process.ts")
+		const [cmd, ...pre] = cliInvocation() as [string, ...string[]]
+		expect(cmd).toBe(process.execPath)
+		const result = await new Promise<{ code: number; stderr: string }>((res, rej) => {
+			const proc = spawn(cmd, [...pre, "generate"], { cwd: TEMP_ROOT })
+			let stderr = ""
+			proc.stderr.on("data", (c: Buffer) => {
+				stderr += c.toString()
+			})
+			proc.on("error", rej)
+			proc.on("close", (code) => res({ code: code ?? 1, stderr }))
+		})
+		expect(result.code, result.stderr).toBe(0)
+		expect(readFileSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"), "utf-8")).toContain("health")
+	}, 30_000)
+
+	it("--watch sees edits to modules the app imports", async () => {
+		writeFileSync(join(TEMP_ROOT, "src/routes.ts"), 'export const extra = "first"\n')
+		writeFileSync(
+			join(TEMP_ROOT, "src/app.ts"),
+			[
+				'import { honey } from "@lovrozagar/honey"',
+				'import { extra } from "./routes.ts"',
+				'export const app = honey().get(`/${extra}`).handler((ctx) => ctx.res.text("ok", "ok"))',
+			].join("\n"),
+		)
+		const proc = spawn("bun", [CLI, "generate", "--watch"], { cwd: TEMP_ROOT })
+		const treePath = join(TEMP_ROOT, "src/_gen/routes.gen.ts")
+		const waitFor = async (text: string): Promise<boolean> => {
+			const deadline = Date.now() + 15_000
+			while (Date.now() < deadline) {
+				if (existsSync(treePath) && readFileSync(treePath, "utf-8").includes(text)) return true
+				await new Promise((r) => setTimeout(r, 100))
+			}
+			return false
+		}
+		try {
+			expect(await waitFor("first")).toBe(true)
+			writeFileSync(join(TEMP_ROOT, "src/routes.ts"), 'export const extra = "second"\n')
+			expect(await waitFor("second")).toBe(true)
+		} finally {
+			proc.kill("SIGTERM")
+			await new Promise<void>((res) => proc.on("close", () => res()))
+		}
+	}, 40_000)
+
+	it("--watch does not loop on SDK ports written next to the app", async () => {
+		writeFileSync(
+			join(TEMP_ROOT, "vite.config.ts"),
+			[
+				'import { honey } from "@lovrozagar/honey/plugin"',
+				"export default {",
+				"  plugins: [honey({",
+				'    app: "src/app.ts",',
+				'    codegen: { sdk: { ports: { python: { outDir: "src/py" } } } },',
+				"  })],",
+				"}",
+			].join("\n"),
+		)
+		const proc = spawn("bun", [CLI, "generate", "--watch"], { cwd: TEMP_ROOT })
+		let generations = 0
+		proc.stdout.on("data", (chunk: Buffer) => {
+			generations += chunk.toString().split("honey: generated").length - 1
+		})
+		try {
+			const deadline = Date.now() + 15_000
+			const generated = () => generations > 0
+			while (!generated() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100))
+			expect(generations).toBe(1)
+			await new Promise((r) => setTimeout(r, 2_000))
+			expect(generations).toBe(1)
+		} finally {
+			proc.kill("SIGTERM")
+			await new Promise<void>((res) => proc.on("close", () => res()))
+		}
+	}, 30_000)
 })

@@ -1,11 +1,17 @@
 import { existsSync, readFileSync } from "node:fs"
 import { builtinModules } from "node:module"
-import { resolve } from "node:path"
+import { extname, resolve } from "node:path"
+import { detectFeaturesInSource, FEATURES, featurePrelude, type HoneyFeature, scanProgram } from "../feature-detect.ts"
 
 /* ---- Public types ---- */
 
 export type HoneyBuildConfig = {
 	external?: string[]
+	/**
+	 * Force optional features on or off. Unset features are detected by scanning the app's
+	 * import graph for `.openapi()` / `.manifest()`, `.errorI18n()` and `.serve()` calls.
+	 */
+	features?: Partial<Record<HoneyFeature, boolean>>
 	minify?: boolean
 	outDir?: string
 	port?: number
@@ -22,46 +28,38 @@ type ResolvedBuildConfig = {
 
 type BuildAdapterDef = {
 	entry(config: ResolvedBuildConfig): string
+	/** Bundle every dependency. Workers have no node_modules at run time. */
+	noExternal: boolean
+	/** Features the target can never use. */
+	skipFeatures: HoneyFeature[]
 	ssrTarget: "node" | "webworker"
 }
 
 /* ---- Entry helpers ---- */
-
-function featurePrelude(appSource: string): string {
-	const lines: string[] = []
-	if (/\.openapi\s*\(|\.manifest\s*\(/.test(appSource)) {
-		lines.push('import { enableOpenApi } from "@lovrozagar/honey/openapi"', "enableOpenApi()")
-	}
-	if (/\.errorI18n\s*\(/.test(appSource)) {
-		lines.push('import { enableI18n } from "@lovrozagar/honey/i18n"', "enableI18n()")
-	}
-	if (/(?<!Bun)(?<!Deno)\.serve\s*\(/.test(appSource)) {
-		lines.push('import { enableServe } from "@lovrozagar/honey/serve"', "enableServe()")
-	}
-	return lines.length > 0 ? `${lines.join("\n")}\n` : ""
-}
 
 function importApp(entry: string, exportName: string): string {
 	if (exportName === "default") return `import app from "./${entry}"`
 	return `import { ${exportName} as app } from "./${entry}"`
 }
 
+/* server targets start through the same code path as `app.serve()`: WS adapter, env, hostname */
+function serverEntry(config: ResolvedBuildConfig, runtime: "bun" | "deno" | "node", env: string, port: string): string {
+	return [
+		'import { startHoneyServer } from "@lovrozagar/honey/serve"',
+		importApp(config.entry, config.export),
+		"",
+		`const port = Number(${port})`,
+		`await startHoneyServer(app, { env: ${env}, hostname: "0.0.0.0", port, runtime: "${runtime}" })`,
+	].join("\n")
+}
+
 /* ---- Adapter definitions ---- */
 
 const adapters: Record<HoneyBuildConfig["target"], BuildAdapterDef> = {
 	bun: {
-		entry(config) {
-			return [
-				importApp(config.entry, config.export),
-				"",
-				`const port = Number(process.env.PORT ?? ${config.port})`,
-				"Bun.serve({",
-				"  fetch: (req, server) => app.fetch(req, { server }),",
-				'  hostname: "0.0.0.0",',
-				"  port,",
-				"})",
-			].join("\n")
-		},
+		entry: (config) => serverEntry(config, "bun", "process.env", `process.env.PORT ?? ${config.port}`),
+		noExternal: false,
+		skipFeatures: [],
 		ssrTarget: "node",
 	},
 	cloudflare: {
@@ -74,31 +72,79 @@ const adapters: Record<HoneyBuildConfig["target"], BuildAdapterDef> = {
 				"}",
 			].join("\n")
 		},
+		noExternal: true,
+		/* a Worker cannot listen; serve would pull node:http into the bundle */
+		skipFeatures: ["serve"],
 		ssrTarget: "webworker",
 	},
 	deno: {
-		entry(config) {
-			return [
-				importApp(config.entry, config.export),
-				"",
-				`const port = Number(Deno.env.get("PORT") ?? "${config.port}")`,
-				'Deno.serve({ hostname: "0.0.0.0", port }, (req) => app.fetch(req, {}))',
-			].join("\n")
-		},
+		entry: (config) => serverEntry(config, "deno", "Deno.env.toObject()", `Deno.env.get("PORT") ?? "${config.port}"`),
+		noExternal: true,
+		skipFeatures: [],
 		ssrTarget: "webworker",
 	},
 	node: {
-		entry(config) {
-			return [
-				'import { serve } from "@lovrozagar/honey/node"',
-				importApp(config.entry, config.export),
-				"",
-				`const port = Number(process.env.PORT ?? ${config.port})`,
-				'serve(app, { env: process.env, hostname: "0.0.0.0", port })',
-			].join("\n")
-		},
+		entry: (config) => serverEntry(config, "node", "process.env", `process.env.PORT ?? ${config.port}`),
+		noExternal: false,
+		skipFeatures: [],
 		ssrTarget: "node",
 	},
+}
+
+/* ---- Feature detection over the import graph ---- */
+
+const SCANNED_EXT = /\.(?:[cm]?[jt]sx?)$/
+
+type ParseContext = {
+	parse?: (code: string, options?: { lang?: "js" | "jsx" | "ts" | "tsx" }) => unknown
+	resolve?: (source: string, importer?: string) => Promise<{ external?: unknown; id: string } | null>
+}
+
+function langOf(file: string): "js" | "jsx" | "ts" | "tsx" {
+	const ext = extname(file)
+	if (ext === ".tsx") return "tsx"
+	if (ext === ".jsx") return "jsx"
+	return /^\.[cm]?ts$/.test(ext) ? "ts" : "js"
+}
+
+/**
+ * Walks the app's own modules (never node_modules) from `entry`, following static and dynamic
+ * imports, and collects feature calls. Comments and strings do not count.
+ */
+async function detectGraphFeatures(ctx: ParseContext, entry: string): Promise<Set<HoneyFeature>> {
+	const features = new Set<HoneyFeature>()
+	const seen = new Set<string>()
+	const queue = [entry]
+	while (queue.length > 0) {
+		const file = queue.pop() as string
+		if (seen.has(file)) continue
+		seen.add(file)
+		if (!SCANNED_EXT.test(file) || file.includes("node_modules") || !existsSync(file)) continue
+		const code = readFileSync(file, "utf-8")
+
+		let imports: string[] = []
+		let program: unknown
+		try {
+			program = ctx.parse?.(code, { lang: langOf(file) })
+		} catch {
+			program = undefined
+		}
+		if (program) {
+			const scanned = scanProgram(program)
+			for (const f of scanned.features) features.add(f)
+			imports = scanned.imports
+		} else {
+			for (const f of detectFeaturesInSource(code)) features.add(f)
+		}
+
+		if (!ctx.resolve) continue
+		for (const source of imports) {
+			const resolved = await ctx.resolve(source, file).catch(() => null)
+			if (!resolved || resolved.external || resolved.id.startsWith("\0")) continue
+			queue.push(resolved.id.split("?")[0] as string)
+		}
+	}
+	return features
 }
 
 /* ---- Virtual module constants ---- */
@@ -135,7 +181,8 @@ export function createBuildPlugin(buildConfig: HoneyBuildConfig, shared: { entry
 					ssr: true,
 				},
 				ssr: {
-					noExternal: true,
+					/* node and bun install dependencies next to the bundle; inlining them would also inline native addons */
+					...(adapter.noExternal ? { noExternal: true } : {}),
 					target: adapter.ssrTarget,
 				},
 			}
@@ -145,16 +192,19 @@ export function createBuildPlugin(buildConfig: HoneyBuildConfig, shared: { entry
 			root = cfg.root
 		},
 
-		load(id: string): { code: string; moduleType: string } | undefined {
-			if (id === RESOLVED_BUILD_ENTRY) {
-				const appPath = resolve(root || ".", shared.entry)
-				const appSource = existsSync(appPath) ? readFileSync(appPath, "utf-8") : ""
-				return {
-					code: `${featurePrelude(appSource)}${adapter.entry(resolvedConfig)}`,
-					moduleType: "js",
-				}
+		async load(this: ParseContext | undefined, id: string): Promise<{ code: string; moduleType: string } | undefined> {
+			if (id !== RESOLVED_BUILD_ENTRY) return undefined
+			const appPath = resolve(root || ".", shared.entry)
+			const detected = await detectGraphFeatures(this ?? {}, appPath)
+			const features = FEATURES.filter((feature) => {
+				if (adapter.skipFeatures.includes(feature)) return false
+				return buildConfig.features?.[feature] ?? detected.has(feature)
+			})
+			const prelude = featurePrelude(features)
+			return {
+				code: `${prelude ? `${prelude}\n` : ""}${adapter.entry(resolvedConfig)}`,
+				moduleType: "js",
 			}
-			return undefined
 		},
 
 		name: "honey:build",

@@ -1,11 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import type { InitFlags } from "./cli-args.ts"
 
-export type InitFlags = {
-	cf: boolean
-	force: boolean
-}
+export type { InitFlags } from "./cli-args.ts"
+export { parseInitFlags } from "./cli-args.ts"
 
 type PackageJson = {
 	dependencies?: Record<string, string>
@@ -50,13 +49,6 @@ export default {
 }
 `
 
-export function parseInitFlags(args: string[]): InitFlags {
-	return {
-		cf: args.includes("--cf"),
-		force: args.includes("--force"),
-	}
-}
-
 export function runInit(cwd: string, flags: InitFlags): void {
 	const files: Record<string, string> = {
 		"src/app.ts": APP_TS,
@@ -76,7 +68,7 @@ export function runInit(cwd: string, flags: InitFlags): void {
 	for (const [rel, contents] of Object.entries(files)) {
 		writeText(join(cwd, rel), contents)
 	}
-	writePackageJson(cwd)
+	writePackageJson(cwd, flags.force)
 	console.log("honey: initialized")
 }
 
@@ -91,25 +83,45 @@ function wranglerJsonc(name: string): string {
 `
 }
 
-function writePackageJson(cwd: string): void {
+const PACKAGE_NAME = "@lovrozagar/honey"
+
+const SCRIPTS: Record<string, string> = {
+	dev: "bun --watch src/server.ts",
+	generate: "honey generate",
+}
+
+/**
+ * Creates package.json, or adds what is missing to an existing one. Existing scripts, `type` and
+ * dependency ranges are kept unless `force` is set; each kept value is reported.
+ */
+function writePackageJson(cwd: string, force: boolean): void {
 	const path = join(cwd, "package.json")
-	const existing = existsSync(path) ? readPackageJson(path) : {}
-	const next: PackageJson = {
-		...existing,
-		name: existing.name ?? packageNameFromDir(cwd),
-		private: existing.private ?? true,
-		type: existing.type ?? "module",
-		scripts: {
-			...existing.scripts,
-			dev: "bun --watch src/server.ts",
-			generate: "honey generate",
-		},
-		dependencies: {
-			...existing.dependencies,
-			honey: existing.dependencies?.honey ?? `^${honeyVersion()}`,
-		},
+	const exists = existsSync(path)
+	const existing = exists ? readPackageJson(path) : {}
+	const notes: string[] = []
+
+	const scripts = { ...existing.scripts }
+	for (const [name, command] of Object.entries(SCRIPTS)) {
+		const current = scripts[name]
+		if (current === undefined || current === command || force) scripts[name] = command
+		else notes.push(`kept scripts.${name} ("${current}"); honey expects "${command}"`)
 	}
+
+	const dependencies = { ...existing.dependencies }
+	if (dependencies[PACKAGE_NAME] === undefined || force) dependencies[PACKAGE_NAME] = `^${honeyVersion()}`
+
+	const next: PackageJson = { ...existing, dependencies, scripts }
+	if (!exists) {
+		next.name = packageNameFromDir(cwd)
+		next.private = true
+	}
+	if (existing.type === undefined) {
+		if (!exists || force) next.type = "module"
+		else notes.push('package.json has no "type"; the scaffold is ESM, so set "type": "module" or rerun with --force')
+	}
+
 	writeText(path, `${JSON.stringify(next, null, "\t")}\n`)
+	for (const note of notes) console.log(`honey: ${note}`)
 }
 
 function readPackageJson(path: string): PackageJson {

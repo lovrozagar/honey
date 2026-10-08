@@ -37,22 +37,7 @@ function writeMergeTreeFile(dir: string, appRelPath: string): string {
 	return filePath
 }
 
-type PluginObj = Record<string, unknown> & {
-	buildStart(): Promise<void>
-	configResolved(cfg: { root: string }): void
-	hotUpdate(ctx: {
-		file: string
-		modules: unknown[]
-		server: {
-			moduleGraph: { getModuleById(id: string): unknown }
-			reloadModule(mod: unknown): void
-		}
-	}): Promise<unknown[] | undefined>
-	load(id: string): Promise<{ code: string; moduleType: string } | undefined>
-	name: string
-	resolveId(id: string): string | undefined
-	transform(code: string, id: string): { code: string; map: null } | undefined
-}
+type PluginObj = ReturnType<typeof honeyVitePlugin>[number]
 
 function getCodegenPlugin(config: HoneyVitePluginConfig): PluginObj {
 	const plugins = honeyVitePlugin(config)
@@ -96,6 +81,27 @@ describe("honeyVitePlugin", () => {
 		expect(out?.code).toContain('from "@lovrozagar/honey/serve"')
 		expect(out?.code).toContain("enableServe()")
 		expect(plugin.transform("Bun.serve({ fetch() {} })", "/app/src/server.ts")).toBeUndefined()
+	})
+
+	it("transform keeps line numbers and skips comments, strings and client code", () => {
+		const plugin = getCodegenPlugin({ app: "src/app.ts" })
+		const src = 'const app = honey()\napp.openapi({ title: "T", version: "1" })\n'
+		const out = plugin.transform(src, "/app/src/app.ts")
+		expect(out?.code.split("\n")).toHaveLength(src.split("\n").length)
+		expect(out?.code.endsWith(src)).toBe(true)
+
+		expect(plugin.transform("// await app.serve({ port: 3000 })\nconst x = 1\n", "/app/src/a.ts")).toBeUndefined()
+		expect(plugin.transform('const s = "app.openapi("\n', "/app/src/a.ts")).toBeUndefined()
+
+		const client = { environment: { config: { consumer: "client" } } }
+		expect(plugin.transform.call(client, src, "/app/src/app.ts")).toBeUndefined()
+		const server = { environment: { config: { consumer: "server" } } }
+		expect(plugin.transform.call(server, src, "/app/src/app.ts")?.code).toContain("enableOpenApi()")
+	})
+
+	it("exposes its config on the plugin object for honey generate", () => {
+		const config = { app: "src/app.ts" }
+		expect(getCodegenPlugin(config).api.honeyConfig).toBe(config)
 	})
 
 	it("resolveId handles virtual modules", () => {
@@ -170,26 +176,64 @@ describe("honeyVitePlugin", () => {
 		expect(manifest.routes).toHaveLength(2)
 	})
 
-	it("hotUpdate regenerates when the file matches watch", async () => {
+	it("hotUpdate regenerates and keeps HMR, adding the virtual route tree", async () => {
 		writeTempApp(outDir)
 		const plugin = getCodegenPlugin({
 			app: "src/app.ts",
 			watch: ["src/**/*.ts"],
 		})
 		plugin.configResolved({ root: outDir })
-		const server = {
-			moduleGraph: { getModuleById: vi.fn(() => ({ id: "virtual" })) },
-			reloadModule: vi.fn(),
-		}
+		const routes = { id: "\0virtual:honey/routes" }
+		const edited = { id: join(outDir, "src/app.ts") }
+		const server = { moduleGraph: { getModuleById: vi.fn(() => routes) } }
 
 		const result = await plugin.hotUpdate({
 			file: join(outDir, "src/app.ts"),
-			modules: [],
+			modules: [edited],
 			server,
 		})
-		expect(result).toEqual([])
-		expect(server.reloadModule).toHaveBeenCalled()
+		/* the edited module still hot-updates; the route tree joins it */
+		expect(result).toEqual([edited, routes])
 		expect(existsSync(join(outDir, "src/_gen/routes.gen.ts"))).toBe(true)
+	})
+
+	it("hotUpdate leaves HMR alone when there is no virtual route tree", async () => {
+		writeTempApp(outDir)
+		const plugin = getCodegenPlugin({ app: "src/app.ts", watch: ["src/**/*.ts"] })
+		plugin.configResolved({ root: outDir })
+		const server = { moduleGraph: { getModuleById: vi.fn(() => undefined) } }
+		const result = await plugin.hotUpdate({ file: join(outDir, "src/app.ts"), modules: [], server })
+		expect(result).toBeUndefined()
+	})
+
+	it("hotUpdate generates once per save across environments", async () => {
+		writeTempApp(outDir)
+		const plugin = getCodegenPlugin({ app: "src/app.ts", watch: ["src/**/*.ts"] })
+		plugin.configResolved({ root: outDir })
+		const server = { moduleGraph: { getModuleById: () => undefined } }
+		const ctx = { file: join(outDir, "src/app.ts"), modules: [], server, timestamp: 42 }
+		const tree = join(outDir, "src/_gen/routes.gen.ts")
+
+		await plugin.hotUpdate.call({ environment: { moduleGraph: server.moduleGraph } }, ctx)
+		rmSync(tree)
+		await plugin.hotUpdate.call({ environment: { moduleGraph: server.moduleGraph } }, ctx)
+		/* the second environment reused the first run instead of generating again */
+		expect(existsSync(tree)).toBe(false)
+	})
+
+	it("hotUpdate ignores generated outputs, even when they match watch", async () => {
+		writeTempApp(outDir)
+		const plugin = getCodegenPlugin({
+			app: "src/app.ts",
+			codegen: { manifest: "out/manifest.json" },
+			watch: ["**/*"],
+		})
+		plugin.configResolved({ root: outDir })
+		const server = { moduleGraph: { getModuleById: () => undefined } }
+		for (const file of ["src/_gen/routes.gen.ts", "out/manifest.json"]) {
+			await plugin.hotUpdate({ file: join(outDir, file), modules: [], server })
+		}
+		expect(existsSync(join(outDir, "src/_gen/routes.gen.ts"))).toBe(false)
 	})
 
 	it("hotUpdate ignores non-matching files", async () => {
@@ -202,13 +246,14 @@ describe("honeyVitePlugin", () => {
 			reloadModule: vi.fn(),
 		}
 
+		plugin.configResolved({ root: "/project" })
 		const result = await plugin.hotUpdate({
 			file: "/project/src/utils/helper.ts",
 			modules: [] as { id: string | null }[],
 			server,
 		})
 		expect(result).toBeUndefined()
-		expect(server.reloadModule).not.toHaveBeenCalled()
+		expect(server.moduleGraph.getModuleById).not.toHaveBeenCalled()
 	})
 
 	it("load returns route tree for virtual module with moduleType", async () => {
@@ -218,9 +263,40 @@ describe("honeyVitePlugin", () => {
 
 		const result = await plugin.load("\0virtual:honey/routes")
 		expect(result).toBeDefined()
-		expect(result?.code).toContain("TreeNode")
 		expect(result?.code).toContain("health")
 		expect(result?.moduleType).toBe("js")
+		/* JavaScript, not the TypeScript the tree codegen writes to disk */
+		expect(result?.code).not.toMatch(/import type|: TreeNode|as unknown as/)
+	})
+
+	it("virtual route tree loads in a real Vite dev server", async () => {
+		writeTempApp(outDir)
+		const { createServer, defaultServerConditions } = await import("vite")
+		const server = await createServer({
+			configFile: false,
+			logLevel: "silent",
+			plugins: honeyVitePlugin({ app: "src/app.ts", codegen: { tree: false } }),
+			root: outDir,
+			server: { middlewareMode: true, ws: false },
+			ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
+		})
+		try {
+			const mod = (await server.ssrLoadModule("virtual:honey/routes")) as Record<string, unknown>
+			expect(Object.keys(mod).length).toBeGreaterThan(0)
+		} finally {
+			await server.close()
+		}
+	})
+
+	it("virtual openapi module applies the configured profile", async () => {
+		writeTempApp(outDir)
+		const plugin = getCodegenPlugin({
+			app: "src/app.ts",
+			codegen: { openApi: { profile: "nope", title: "T", version: "1" } },
+		})
+		plugin.configResolved({ root: outDir })
+		/* an unknown profile is rejected, which proves the profile reached generateOpenApi */
+		await expect(plugin.load("\0virtual:honey/openapi")).rejects.toThrow(/profile/i)
 	})
 
 	it("load returns undefined for non-virtual ids", async () => {
@@ -309,4 +385,35 @@ describe("honeyVitePlugin", () => {
 
 		expect(existsSync(join(outDir, "src/_gen/routes.gen.ts"))).toBe(false)
 	})
+
+	it("with a config file, generation runs in a child process that sees edits to imported modules", async () => {
+		mkdirSync(join(outDir, "src"), { recursive: true })
+		writeFileSync(join(outDir, "src/routes.ts"), 'export const path = "/first"\n')
+		writeFileSync(
+			join(outDir, "src/app.ts"),
+			[
+				'import { honey } from "@lovrozagar/honey"',
+				'import { path } from "./routes.ts"',
+				'export const app = honey().get(path).handler((ctx) => ctx.res.text("ok", "ok"))',
+			].join("\n"),
+		)
+		const configFile = join(outDir, "vite.config.ts")
+		writeFileSync(
+			configFile,
+			[
+				'import { honey } from "@lovrozagar/honey/plugin"',
+				'export default { plugins: [honey({ app: "src/app.ts", codegen: { tree: "src/_gen/routes.gen.ts" } })] }',
+			].join("\n"),
+		)
+		const plugin = getCodegenPlugin({ app: "src/app.ts" })
+		plugin.configResolved({ command: "build", configFile, plugins: [{ name: "other" }, plugin], root: outDir })
+		const tree = join(outDir, "src/_gen/routes.gen.ts")
+
+		await plugin.buildStart()
+		expect(readFileSync(tree, "utf-8")).toContain("first")
+
+		writeFileSync(join(outDir, "src/routes.ts"), 'export const path = "/second"\n')
+		await plugin.buildStart()
+		expect(readFileSync(tree, "utf-8")).toContain("second")
+	}, 30_000)
 })

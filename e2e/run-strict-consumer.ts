@@ -62,7 +62,7 @@ await Bun.write(
 	`${JSON.stringify(
 		{
 			dependencies: { [PKG]: `file:${join(sandbox, tarball)}`, zod: "4.3.6" },
-			devDependencies: { typescript: "7.0.2" },
+			devDependencies: { typescript: "7.0.2", vite: "8.1.4" },
 			name: "strict-consumer-sandbox",
 			private: true,
 			type: "module",
@@ -141,11 +141,109 @@ if (inPackage.length === 0 && inConsumer.length === 0) {
 		if (!keep) rmSync(sandbox, { force: true, recursive: true })
 		process.exit(1)
 	}
-	console.log("runtime smoke ok")
+	console.log("runtime smoke ok (bun)")
+
+	if (!(await nodeConsumer(consumer))) {
+		if (!keep) rmSync(sandbox, { force: true, recursive: true })
+		process.exit(1)
+	}
 }
 
 if (!keep) rmSync(sandbox, { force: true, recursive: true })
 else console.log(`\nsandbox kept at ${sandbox}`)
+
+/**
+ * Plain Node, no tsx and no type stripping of node_modules: the package entry, the CLI and the
+ * Vite plugin must all run from the compiled dist/. Bun runs source, so it cannot see this.
+ */
+async function nodeConsumer(dir: string): Promise<boolean> {
+	const fail = (what: string, out: string): false => {
+		console.log(`FAIL  ${what}`)
+		console.log(out)
+		return false
+	}
+
+	await Bun.write(
+		join(dir, "node-smoke.mjs"),
+		[
+			'import { honey } from "@lovrozagar/honey"',
+			'import "@lovrozagar/honey/openapi"',
+			"const app = honey()",
+			'app.get("/hi").handler((c) => c.res.text("ok", "hi"))',
+			'const res = await app.fetch(new Request("http://x/hi"), {})',
+			'if (res.status !== 200 || (await res.text()) !== "hi") throw new Error(`route returned ${res.status}`)',
+			'console.log("node import ok")',
+		].join("\n"),
+	)
+	const imported = await run(["node", "node-smoke.mjs"], dir)
+	if (imported.code !== 0) return fail("the core entry does not import on plain Node", imported.out)
+	console.log("runtime smoke ok (node)")
+
+	/* an app in the README "Start" shape: it serves at top level, which generation must survive */
+	const port = 46_123
+	await Bun.write(
+		join(dir, "src", "server-app.ts"),
+		[
+			'import { honey } from "@lovrozagar/honey"',
+			'import "@lovrozagar/honey/serve"',
+			'export const app = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
+			"export default app",
+			`await app.serve({ port: ${port} })`,
+		].join("\n"),
+	)
+	await Bun.write(
+		join(dir, "vite.config.ts"),
+		[
+			'import { honey } from "@lovrozagar/honey/plugin"',
+			'export default { plugins: [honey({ app: "src/server-app.ts", codegen: { openApi: { title: "T", version: "1" } } })] }',
+		].join("\n"),
+	)
+	const generated = await run(["node", join("node_modules", ".bin", "honey"), "generate"], dir)
+	if (generated.code !== 0 || !(await Bun.file(join(dir, "src", "_gen", "routes.gen.ts")).exists())) {
+		return fail("honey generate on Node", generated.out)
+	}
+	console.log("cli ok (node)")
+
+	await Bun.write(
+		join(dir, "vite.build.config.ts"),
+		[
+			'import { createBuildPlugin } from "@lovrozagar/honey/build"',
+			'import base from "./vite.config.ts"',
+			"export default {",
+			"  ...base,",
+			'  logLevel: "error",',
+			'  plugins: [...base.plugins, createBuildPlugin({ outDir: "out", target: "node" }, { entry: "src/server-app.ts", export: "app" })],',
+			"}",
+		].join("\n"),
+	)
+	const built = await run(
+		["node", join("node_modules", "vite", "bin", "vite.js"), "build", "--config", "vite.build.config.ts"],
+		dir,
+	)
+	if (built.code !== 0) return fail("vite build with the honey plugins on Node", built.out)
+
+	const server = Bun.spawn(["node", join("out", "index.js")], {
+		cwd: dir,
+		env: { ...process.env, PORT: String(port + 1) },
+		stderr: "pipe",
+		stdout: "pipe",
+	})
+	try {
+		const deadline = Date.now() + 10_000
+		while (Date.now() < deadline) {
+			const res = await fetch(`http://127.0.0.1:${port + 1}/health`).catch(() => undefined)
+			if (res?.status === 200) {
+				console.log("vite build ok (node)")
+				return true
+			}
+			await Bun.sleep(100)
+		}
+		server.kill()
+		return fail("the built server never answered /health", await new Response(server.stderr).text())
+	} finally {
+		server.kill()
+	}
+}
 
 if (inPackage.length > 0 || inConsumer.length > 0) process.exit(1)
 console.log(`pass  0 diagnostics from ${PKG} under maximal strictness`)

@@ -71,7 +71,7 @@ describe("generateAndWrite", () => {
 		expect(yaml).toContain("/health")
 	})
 
-	it("skips rewrite when checksum matches", async () => {
+	it("skips rewrite when the content is unchanged", async () => {
 		const config = resolveHoneyConfig({
 			app: "src/app.ts",
 			codegen: { tree: true },
@@ -172,5 +172,27 @@ describe("generateAndWrite", () => {
 			codegen: { manifest: true, tree: false },
 		})
 		await expect(generateAndWrite(config, TEMP_ROOT)).rejects.toThrow(/Expected Honey app/)
+	})
+
+	it("evaluates the app once per generation, and its top-level serve() binds nothing", async () => {
+		const log = join(TEMP_ROOT, "evaluations.log")
+		writeFileSync(
+			join(TEMP_ROOT, "src/app.ts"),
+			[
+				'import { appendFileSync } from "node:fs"',
+				'import { honey } from "@lovrozagar/honey"',
+				`appendFileSync(${JSON.stringify(log)}, "x")`,
+				'export const app = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
+				"const handle = await app.serve({ port: 45_986 })",
+				`appendFileSync(${JSON.stringify(log)}, handle.url.includes("45986") ? "s" : "?")`,
+			].join("\n"),
+		)
+		const config = resolveHoneyConfig({
+			app: "src/app.ts",
+			codegen: { manifest: true, openApi: { title: "T", version: "1" }, tree: true },
+		})
+		await generateAndWrite(config, TEMP_ROOT)
+		expect(readFileSync(log, "utf-8")).toBe("xs")
+		await expect(fetch("http://127.0.0.1:45986/health")).rejects.toThrow()
 	})
 })
