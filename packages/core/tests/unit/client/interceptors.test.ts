@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClient } from "../../../src/client/index.ts"
+import { createClient, UnauthorizedError } from "../../../src/client/index.ts"
 
 function mockFetch(body: unknown = { ok: true }, status = 200): typeof fetch {
 	return vi.fn().mockImplementation(() =>
@@ -294,7 +294,7 @@ describe("onResponse interceptors", () => {
 		expect(retryFlags).toEqual([false, true])
 	})
 
-	it("max 1 retry — second retry throws", async () => {
+	it("max 1 retry — a persistent 401 ends as the 401, not a retry error", async () => {
 		const fetchFn = vi.fn().mockImplementation(() =>
 			Promise.resolve(
 				new Response(
@@ -323,7 +323,9 @@ describe("onResponse interceptors", () => {
 			throwOnError: true,
 		})
 
-		await expect(api.get("/test")).rejects.toThrow()
+		const error = await api.get("/test").catch((e: unknown) => e)
+		expect(error).toBeInstanceOf(UnauthorizedError)
+		expect(fetchFn).toHaveBeenCalledTimes(2)
 	})
 
 	it("works with tuple mode", async () => {
