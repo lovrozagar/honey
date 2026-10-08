@@ -65,3 +65,32 @@ describe("pretty-json middleware", () => {
 		expect(res.headers.get("x-custom")).toBe("yes")
 	})
 })
+
+describe("prettyJson — trigger and bodies", () => {
+	const make = () => {
+		const app = honey<{}>().use(prettyJson())
+		app.get("/d").handler((ctx) => ctx.res.json("ok", { a: 1 }))
+		app.get("/empty").handler(() => new Response("", { headers: { "content-type": "application/json" } }))
+		app
+			.get("/bad")
+			.handler(() => new Response("{oops", { headers: { "content-length": "5", "content-type": "application/json" } }))
+		return app
+	}
+
+	it("triggers only on a parameter with exactly that name", async () => {
+		const app = make()
+		expect(await (await app.fetch(new Request("http://x/d?pretty"), {})).text()).toContain("\n")
+		expect(await (await app.fetch(new Request("http://x/d?pretty=1"), {})).text()).toContain("\n")
+		expect(await (await app.fetch(new Request("http://x/d?notpretty=1"), {})).text()).toBe('{"a":1}')
+		expect(await (await app.fetch(new Request("http://x/d?q=pretty"), {})).text()).toBe('{"a":1}')
+	})
+
+	it("passes an empty or invalid JSON body through instead of a 500", async () => {
+		const app = make()
+		const empty = await app.fetch(new Request("http://x/empty?pretty"), {})
+		expect(empty.status).toBe(200)
+		const bad = await app.fetch(new Request("http://x/bad?pretty"), {})
+		expect(bad.status).toBe(200)
+		expect(await bad.text()).toBe("{oops")
+	})
+})

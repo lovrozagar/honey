@@ -1,4 +1,10 @@
-/** JSON-compatible YAML 1.2 emitter — same document as JSON.stringify, different encoding. */
+/**
+ * JSON-compatible YAML 1.2 emitter: the same document as `JSON.stringify`, in a
+ * different encoding. Input is first normalized through JSON (so `undefined` keys
+ * are skipped, `Date` becomes its ISO string, `NaN` becomes `null`), then every
+ * string that is not plainly safe is written as a double-quoted scalar, which
+ * also reads the same under YAML 1.1 parsers.
+ */
 
 const INDENT = "  "
 
@@ -8,37 +14,45 @@ export function yamlSiblingPath(jsonPath: string): string {
 }
 
 export function toYaml(value: unknown): string {
-	return `${emit(value, 0)}\n`
+	const json = JSON.stringify(value)
+	/* JSON.stringify(undefined) is undefined; emit the JSON equivalent of "nothing". */
+	const normalized: unknown = json === undefined ? null : JSON.parse(json)
+	return `${emit(normalized, 0)}\n`
 }
 
 function emit(value: unknown, indent: number): string {
-	if (value === null || value === undefined) return "null"
+	if (value === null) return "null"
 	if (typeof value === "boolean") return value ? "true" : "false"
-	if (typeof value === "number") {
-		if (!Number.isFinite(value)) return JSON.stringify(String(value))
-		return Object.is(value, -0) ? "-0" : String(value)
-	}
+	if (typeof value === "number") return String(value)
 	if (typeof value === "string") return emitString(value)
 	if (Array.isArray(value)) return emitArray(value, indent)
-	if (typeof value === "object") return emitObject(value as Record<string, unknown>, indent)
-	return JSON.stringify(String(value))
+	return emitObject(value as Record<string, unknown>, indent)
 }
+
+/*
+ * A plain scalar is used only for a conservative shape: starts with a letter,
+ * `_`, `/` or `$`; contains only word characters, `.`, `/`, `$`, `-`, `+`,
+ * `{}`, `()` and inner spaces. That excludes every indicator, `: `, ` #`,
+ * leading digits (numbers, YAML 1.1 octal and sexagesimal), and `.inf`/`.nan`.
+ */
+const PLAIN_RE = /^[A-Za-z_/$](?:[\w./${}()+-]| (?! ))*$/
+/* Words YAML 1.1 or 1.2 resolves to null or a boolean. */
+const RESERVED_RE = /^(?:y|n|yes|no|on|off|true|false|null|~)$/i
 
 function emitString(value: string): string {
-	if (value === "") return '""'
-	if (needsQuotes(value)) return JSON.stringify(value)
-	return value
+	if (PLAIN_RE.test(value) && !value.endsWith(" ") && !RESERVED_RE.test(value)) return value
+	return quote(value)
 }
 
-function needsQuotes(value: string): boolean {
-	if (/^[-?:{},[\],&*#|!>'%@`]/.test(value)) return true
-	if (/[\n\r\t]/.test(value)) return true
-	if (/^\s|\s$/.test(value)) return true
-	if (value.includes(": ") || value.includes(" #")) return true
-	if (/^(true|false|null|yes|no|on|off)$/i.test(value)) return true
-	if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) return true
-	if (/^\d/.test(value)) return true
-	return false
+/*
+ * JSON string syntax is a valid YAML double-quoted scalar, except that YAML
+ * forbids raw DEL, C1 controls (other than NEL) and the BOM/non-characters.
+ */
+function quote(value: string): string {
+	return JSON.stringify(value).replace(
+		/[\u007f-\u0084\u0086-\u009f﻿￾￿]/g,
+		(ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`,
+	)
 }
 
 function isNonEmptyCollection(value: unknown): boolean {
@@ -70,7 +84,7 @@ function emitObject(value: Record<string, unknown>, indent: number): string {
 	return keys
 		.map((key) => {
 			const child = value[key]
-			const renderedKey = needsQuotes(key) || key === "" ? JSON.stringify(key) : key
+			const renderedKey = emitString(key)
 			if (isNonEmptyCollection(child)) {
 				return `${pad}${renderedKey}:\n${emit(child, indent + 1)}`
 			}

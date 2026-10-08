@@ -1,22 +1,38 @@
-import { namedMiddleware } from "./middleware.ts"
+import { bodyKind, rawBodyOf } from "./body-kind.ts"
 import { replaceResponse } from "./honey-response.ts"
+import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 
 type ETagOptions = {
 	weak?: boolean
 }
 
-/**
- * FNV-1a 32-bit hash — fast, non-cryptographic, deterministic.
- * Good enough for ETag fingerprinting (not security-critical).
- */
-function fnv1a(data: Uint8Array): string {
-	let hash = 0x811c9dc5
-	for (let i = 0; i < data.length; i++) {
-		hash ^= data[i]
-		hash = Math.imul(hash, 0x01000193)
+const encoder = new TextEncoder()
+
+/** Base64url of the first 16 bytes of SHA-256: collision-resistant enough for a strong validator. */
+async function digest(data: Uint8Array<ArrayBuffer>): Promise<string> {
+	const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", data)).subarray(0, 16)
+	let binary = ""
+	for (let i = 0; i < hash.length; i++) binary += String.fromCharCode(hash[i])
+	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+
+const ENTITY_TAG_RE = /(?:W\/)?"[^"]*"/g
+
+/** Weak comparison (RFC 9110 §8.8.3.2): opaque tags match regardless of the `W/` prefix. */
+function opaque(tag: string): string {
+	return tag.startsWith("W/") ? tag.slice(2) : tag
+}
+
+/** RFC 9110 §13.1.2: `*` or a list of entity tags, compared weakly. */
+export function ifNoneMatchHits(header: string | null, etag: string): boolean {
+	if (header === null) return false
+	if (header.trim() === "*") return true
+	const target = opaque(etag.trim())
+	for (const tag of header.match(ENTITY_TAG_RE) ?? []) {
+		if (opaque(tag) === target) return true
 	}
-	return (hash >>> 0).toString(16).padStart(8, "0")
+	return false
 }
 
 export function etag(options?: ETagOptions): MiddlewareFn<{ req: Request }, {}> {
@@ -30,40 +46,48 @@ export function etag(options?: ETagOptions): MiddlewareFn<{ req: Request }, {}> 
 
 		const response = await next()
 
-		/* skip error responses — caching errors is wasteful and misleading */
-		if (response.status >= 400) return response
+		/* Only a 200 has a selected representation a 304 can stand in for. */
+		if (response.status !== 200) return response
 
-		/* skip streaming responses — can't hash without buffering entire stream */
-		if (
-			response.headers.get("transfer-encoding") === "chunked" ||
-			(response.body !== null && !response.headers.has("content-length") && !response.headers.has("content-type"))
-		) {
-			return response
+		const ifNoneMatch = ctx.req.headers.get("if-none-match")
+
+		/* A handler-set ETag is authoritative: never overwrite it or hash the body. */
+		const existing = response.headers.get("etag")
+		if (existing !== null) {
+			if (!ifNoneMatchHits(ifNoneMatch, existing)) return response
+			await response.body?.cancel().catch(() => {})
+			return replaceResponse(response, { body: null, headers: response.headers, status: 304 })
 		}
 
-		/* read body to compute hash */
-		const body = await response.arrayBuffer()
-		if (body.byteLength === 0) return response
+		/* Never buffer a stream: SSE and generate() can be endless. */
+		if (bodyKind(response) !== "buffered") return response
 
-		const hash = fnv1a(new Uint8Array(body))
+		let bytes: Uint8Array<ArrayBuffer>
+		const raw = rawBodyOf(response)
+		if (raw !== null) {
+			bytes = typeof raw === "string" ? encoder.encode(raw) : new Uint8Array(raw)
+		} else {
+			bytes = new Uint8Array(await response.arrayBuffer())
+		}
+
+		/* Nothing to validate; hand back a fresh body (the original may have been read). */
+		if (bytes.byteLength === 0) {
+			return raw === null ? replaceResponse(response, { body: bytes, headers: response.headers }) : response
+		}
+
+		const hash = await digest(bytes)
 		const etagValue = weak ? `W/"${hash}"` : `"${hash}"`
 
-		const headers = new Headers(response.headers)
+		const headers = new Headers(response.headers as HeadersInit)
 		headers.set("etag", etagValue)
 
-		/* check If-None-Match — supports comma-separated list and wildcard per RFC 7232 */
-		const ifNoneMatch = ctx.req.headers.get("if-none-match")
-		if (ifNoneMatch === "*" || ifNoneMatch?.split(",").some((v) => v.trim() === etagValue)) {
-			return replaceResponse(response, {
-				body: null,
-				headers,
-				status: 304,
-			})
+		if (ifNoneMatchHits(ifNoneMatch, etagValue)) {
+			return replaceResponse(response, { body: null, headers, status: 304 })
 		}
 
-		/* return response with ETag header and reconstituted body */
+		/* The original body was read (or is raw): always hand back a fresh one. */
 		return replaceResponse(response, {
-			body,
+			body: typeof raw === "string" ? raw : bytes,
 			headers,
 			status: response.status,
 		})

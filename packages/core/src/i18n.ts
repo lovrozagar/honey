@@ -28,7 +28,7 @@ export class TranslationRegistry {
 			return this.cache.get(locale)
 		}
 
-		const source = this.sources[locale]
+		const source = Object.hasOwn(this.sources, locale) ? this.sources[locale] : undefined
 		if (source === undefined) {
 			return undefined
 		}
@@ -41,11 +41,34 @@ export class TranslationRegistry {
 
 /* ---- ICU MessageFormat parser ---- */
 
-type PluralCategory = "few" | "many" | "one" | "other" | "two" | "zero"
+const pluralRulesCache = new Map<string, Intl.PluralRules>()
 
-function getPluralCategory(n: number): PluralCategory {
-	if (n === 1) return "one"
-	return "other"
+/** CLDR plural category for `n` in `locale` ("one", "few", "many", ...); English rules when the locale is unknown. */
+function getPluralCategory(n: number, locale?: string): Intl.LDMLPluralRule {
+	const cacheKey = locale ?? "en"
+	let rules = pluralRulesCache.get(cacheKey)
+	if (rules === undefined) {
+		try {
+			rules = new Intl.PluralRules(cacheKey)
+		} catch {
+			rules = new Intl.PluralRules("en")
+		}
+		if (pluralRulesCache.size < 256) pluralRulesCache.set(cacheKey, rules)
+	}
+	return rules.select(n)
+}
+
+/** Own-property lookup: message branches and variables are keyed by data, so `constructor` must not hit the prototype. */
+function own<T>(record: Record<string, T>, key: string): T | undefined {
+	return Object.hasOwn(record, key) ? record[key] : undefined
+}
+
+function formatNumber(n: number, locale?: string): string {
+	try {
+		return new Intl.NumberFormat(locale).format(n)
+	} catch {
+		return String(n)
+	}
 }
 
 type ParsedBlock = { branches: Record<string, string>; type: "plural" | "select"; varName: string }
@@ -66,7 +89,7 @@ function findMatchingBrace(str: string, start: number): number {
 }
 
 function parseBranches(content: string): Record<string, string> {
-	const branches: Record<string, string> = {}
+	const branches: Record<string, string> = Object.create(null) as Record<string, string>
 	let i = 0
 	while (i < content.length) {
 		while (i < content.length && /\s/.test(content[i] ?? "")) i++
@@ -152,35 +175,33 @@ function resolveToken(token: ParsedToken, values: Record<string, unknown>, local
 	if (typeof token === "string") return token
 
 	if (token.type === "simple") {
-		const val = values[token.varName]
+		const val = own(values, token.varName)
 		return val !== undefined && val !== null ? String(val) : `{${token.varName}}`
 	}
 
 	if (token.type === "number") {
-		const val = values[token.varName]
+		const val = own(values, token.varName)
 		if (val === undefined || val === null) return `{${token.varName}}`
-		try {
-			return new Intl.NumberFormat(locale).format(Number(val))
-		} catch {
-			return String(val)
-		}
+		return formatNumber(Number(val), locale)
 	}
 
 	/* plural or select */
-	const val = values[token.varName]
+	const val = own(values, token.varName)
 
 	if (token.type === "plural") {
 		const num = Number(val ?? 0)
 		const exactKey = `=${num}`
-		const category = getPluralCategory(num)
-		const template = token.branches[exactKey] ?? token.branches[category] ?? token.branches["other"] ?? ""
-		const resolved = template.replace(/#/g, String(num))
+		const category = getPluralCategory(num, locale)
+		const template =
+			own(token.branches, exactKey) ?? own(token.branches, category) ?? own(token.branches, "other") ?? ""
+		/* ICU formats `#` for the locale; without one, keep the plain digits (host locale would make output vary). */
+		const resolved = template.replace(/#/g, locale === undefined ? String(num) : formatNumber(num, locale))
 		return interpolate(resolved, values, locale)
 	}
 
 	/* select */
 	const strVal = val !== undefined && val !== null ? String(val) : ""
-	const template = token.branches[strVal] ?? token.branches["other"] ?? ""
+	const template = own(token.branches, strVal) ?? own(token.branches, "other") ?? ""
 	return interpolate(template, values, locale)
 }
 
@@ -202,7 +223,7 @@ export async function resolveTranslation(
 ): Promise<string> {
 	const map = await registry.get(locale)
 	if (map === undefined) return key
-	const template = map[key]
+	const template = own(map, key)
 	if (template === undefined) return key
 	return interpolate(template, vars, locale)
 }
@@ -214,8 +235,7 @@ export async function resolveFieldName(
 ): Promise<string> {
 	const map = await registry.get(locale)
 	if (map === undefined) return fieldPath
-	const name = map[fieldPath]
-	return name ?? fieldPath
+	return own(map, fieldPath) ?? fieldPath
 }
 
 export function enableI18n(): void {

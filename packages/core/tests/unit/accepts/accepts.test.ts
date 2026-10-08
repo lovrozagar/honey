@@ -85,3 +85,36 @@ describe("accepts — consumer", () => {
 		expect(result).toBe("text/html")
 	})
 })
+
+describe("accepts — specificity and q parsing", () => {
+	const req = (accept: string) => new Request("http://x/", { headers: { accept } })
+
+	it("a more specific q=0 range excludes the type even with */*", () => {
+		expect(accepts(req("text/html;q=0, */*"), ["text/html"])).toBeNull()
+		expect(accepts(req("text/html;q=0, */*"), ["text/html", "application/json"])).toBe("application/json")
+	})
+
+	it("the most specific matching range sets the weight", () => {
+		expect(accepts(req("text/*;q=0.1, text/plain;q=0.9, */*;q=0.5"), ["text/csv", "text/plain"])).toBe("text/plain")
+		expect(accepts(req("text/*;q=0.1, */*;q=0.5"), ["text/csv", "application/json"])).toBe("application/json")
+	})
+
+	it("parses uppercase Q and spaces around =", () => {
+		expect(accepts(req("application/json;Q=0.1, text/html"), ["application/json", "text/html"])).toBe("text/html")
+		expect(accepts(req("application/json; q = 0.1, text/html"), ["application/json", "text/html"])).toBe("text/html")
+	})
+
+	it("rejects out-of-range or malformed q instead of clamping it up", () => {
+		expect(accepts(req("application/json;q=5, text/html;q=0.5"), ["application/json", "text/html"])).toBe("text/html")
+		expect(accepts(req("application/json;q=-1"), ["application/json"])).toBeNull()
+		expect(accepts(req("application/json;q=abc"), ["application/json"])).toBeNull()
+	})
+
+	it("matches media types case-insensitively", () => {
+		expect(accepts(req("Application/JSON"), ["application/json"])).toBe("application/json")
+	})
+
+	it("server order breaks ties", () => {
+		expect(accepts(req("*/*"), ["text/html", "application/json"])).toBe("text/html")
+	})
+})

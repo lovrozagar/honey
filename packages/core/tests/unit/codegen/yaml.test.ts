@@ -1,5 +1,18 @@
+import { createRequire } from "node:module"
 import { describe, expect, it } from "vitest"
 import { toYaml, yamlSiblingPath } from "../../../src/yaml.ts"
+
+const jsYaml = createRequire(import.meta.url)("js-yaml") as {
+	CORE_SCHEMA: unknown
+	load(text: string, opts?: { schema?: unknown }): unknown
+}
+
+/** Round-trip through a YAML parser and compare with the JSON view of the input. */
+function expectRoundTrip(value: unknown): void {
+	const json: unknown = JSON.parse(JSON.stringify(value) ?? "null")
+	expect(jsYaml.load(toYaml(value))).toEqual(json)
+	expect(jsYaml.load(toYaml(value), { schema: jsYaml.CORE_SCHEMA })).toEqual(json)
+}
 
 describe("yamlSiblingPath", () => {
 	it("swaps .json for .yaml", () => {
@@ -76,5 +89,74 @@ paths:
       tags:
         - ops
 `)
+	})
+})
+
+describe("toYaml — JSON equivalence", () => {
+	it("skips undefined keys instead of emitting null", () => {
+		expect(toYaml({ a: 1, b: undefined })).toBe("a: 1\n")
+		expect(toYaml({ info: { description: undefined, title: "t" } })).toBe("info:\n  title: t\n")
+	})
+
+	it("Date becomes its ISO string; NaN and Infinity become null", () => {
+		const date = new Date("2026-01-02T03:04:05.000Z")
+		expect(toYaml({ d: date })).toBe('d: "2026-01-02T03:04:05.000Z"\n')
+		expect(toYaml([Number.NaN, Number.POSITIVE_INFINITY])).toBe("- null\n- null\n")
+	})
+
+	it("quotes every string a parser could read differently", () => {
+		for (const s of [
+			'"leading quote',
+			"trailing colon:",
+			"~",
+			".inf",
+			".nan",
+			"-.inf",
+			"y",
+			"n",
+			"Yes",
+			"OFF",
+			"null",
+			"1:20",
+			"0x1f",
+			"0o17",
+			"1e3",
+			"- dash",
+			"? q",
+			"a # comment",
+			"a: b",
+			"tab\there",
+			"bell\u0007",
+			"del\u007f",
+			"c1\u0085\u0090",
+			"bom\ufeff",
+			"line\u2028sep",
+			" lead",
+			"trail ",
+			"@at",
+			"`tick",
+			"%pct",
+			"!tag",
+			"&anchor",
+			"*alias",
+			"|pipe",
+			">fold",
+			"{flow",
+			"[flow",
+			"'single",
+			"#hash",
+			"",
+			"unicode é ✓ 🍯",
+		]) {
+			expectRoundTrip({ k: s, [s]: "v", list: [s] })
+		}
+	})
+
+	it("round-trips an OpenAPI-shaped document", () => {
+		expectRoundTrip({
+			components: { schemas: { User: { properties: { "x-id": { type: "string" } }, type: "object" } } },
+			info: { description: "Multi\nline: with # and 'quotes' and \"doubles\"", title: "API: v2" },
+			paths: { "/users/{id}": { get: { parameters: [{ in: "path", name: "id" }], responses: {} } } },
+		})
 	})
 })
