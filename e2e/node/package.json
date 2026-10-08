@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "bun run dev:kill && bunx tsx src/server.ts",
+		"dev": "bun run dev:kill && NODE_OPTIONS=--conditions=honey-source bunx tsx src/server.ts",
 		"dev:kill": "lsof -ti:4101 2>/dev/null | xargs -r kill -9 2>/dev/null || true",
 		"test": "bun run dev:kill && playwright test",
 		"test:prod": "bun run dev:kill && TEST_MODE=prod playwright test",

@@ -22,7 +22,8 @@ export default defineConfig({
 	},
 	webServer: {
 		command: `bunx wrangler dev --port ${PORT} --ip 0.0.0.0 --var HONEY_E2E_APP:${app}`,
-		env: { HONEY_E2E_APP: app, PORT },
+		/* resolve @lovrozagar/honey to its source; the rest are wrangler's default conditions */
+		env: { HONEY_E2E_APP: app, PORT, WRANGLER_BUILD_CONDITIONS: "honey-source,workerd,worker,browser" },
 		port: Number(PORT),
 		reuseExistingServer: process.env.HONEY_E2E_REUSE === "1",
 		timeout: 15_000,

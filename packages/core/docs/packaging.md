@@ -1,4 +1,4 @@
-# Packaging — why honey ships source _and_ declarations
+# Packaging — why honey ships source, declarations and JavaScript
 
 ## The problem
 
@@ -36,42 +36,55 @@ and produces zero errors in the same app, so it is demonstrably possible. Two th
 
 ## What we do instead
 
-Ship both, and split the conditions:
+Ship source, declarations _and_ compiled JavaScript, and split the conditions:
 
 ```json
 "exports": {
-	".": { "types": "./dist/index.d.ts", "default": "./src/index.ts" }
+	".": {
+		"honey-source": "./src/index.ts",
+		"types": "./dist/index.d.ts",
+		"bun": "./src/index.ts",
+		"default": "./dist/index.js"
+	}
 }
 ```
 
 - **TypeScript** resolves `types` → generated `.d.ts`, which `skipLibCheck` covers. The consumer
   never type-checks our source, so our lint posture is ours alone.
-- **Bundlers and runtimes** resolve `default` → `./src/*.ts`, unchanged. Workers bundling, Vite,
-  and the precompiled-tree path all behave exactly as before.
-- **`declarationMap` is emitted and `src` still ships**, so go-to-definition lands in real source
-  rather than a generated stub. The debugging story that made source-shipping attractive survives.
+- **Node, Deno, Workers bundlers and Vite** resolve `default` → `./dist/*.js`. Node refuses to strip
+  types from `.ts` files under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so
+  a package whose runtime entry is `.ts` cannot be imported on plain Node at all — not the core
+  entry, not the Vite plugin, not the CLI. Shipping only source made the package Bun-only in
+  practice while the README promised Node.
+- **Bun** resolves `bun` → `./src/*.ts`. It runs TypeScript natively, and the `honey` bin
+  (`bin/honey.js`) does the same split: Bun runs `src/cli.ts`, every other runtime `dist/cli.js`.
+- **`honey-source`** is this repository's own condition. Every tool here resolves it first —
+  `customConditions` in the tsconfigs, `resolve.conditions` in the vitest configs,
+  `--conditions=honey-source` for Node and Deno, `WRANGLER_BUILD_CONDITIONS` for wrangler — so
+  development and tests always run the source and never a stale `dist/`. A consumer never sets it.
+- **`declarationMap` and `sourceMap` are emitted and `src` still ships**, so go-to-definition and
+  stack traces land in real source.
 
-`prepack` builds `dist` (`tsc -p tsconfig.dts.json`). npm runs `prepack` for both `npm pack` and
-`npm publish`, and the release workflow publishes from `packages/core`, so a tarball physically
-cannot ship with a stale or missing `dist`.
+`bun run build` (`scripts/build.ts`) compiles `src` with `tsconfig.build.json` and copies the
+non-TypeScript assets codegen reads at run time (the Go, Python and Rust SDK runtimes, the Go CLI
+and MCP templates). `prepack` runs it; npm runs `prepack` for both `npm pack` and `npm publish`, so
+a tarball cannot ship with a stale or missing `dist`. The build tier (`bun run test:build`) also
+builds first, because its bundles resolve honey the way a consumer's do.
 
 ## The trade-off, stated
 
-We pay: a build step, ~870KB of declarations in the tarball, and one more artifact that must stay in
-sync (it is generated, so it does — but it is a step that can be forgotten, which is why it hangs off
-`prepack` rather than a human).
+We pay: a build step, the compiled output and declarations in the tarball, and one more artifact that
+must stay in sync (it is generated, so it does — but it is a step that can be forgotten, which is why
+it hangs off `prepack` rather than a human).
 
-We keep: source shipping, and with it Workers bundling with no `dist/*.js` indirection, TS-path
-debugging, and the ability to read the real implementation from `node_modules`.
+We keep: source shipping for Bun and for debugging.
 
-We buy: consumers are permanently decoupled from our compiler flags, and from any flag TypeScript
-adds later.
+We buy: consumers are decoupled from our compiler flags, and the package runs on every runtime the
+README names.
 
 **This generalizes.** Any package of ours that ships source has the same exposure. The rule: ship
-source for the runtime condition, ship declarations for the `types` condition, and gate it with a
-packaging test. `comb` passes today only because its source happens to satisfy two particular flags
-— that is luck, not a boundary, and it does not cover TS5097 for a consumer who cannot enable
-`allowImportingTsExtensions`.
+compiled JavaScript for the runtime condition, declarations for the `types` condition, source for
+Bun and debugging, and gate it with a packaging test that runs on plain Node.
 
 ## The regression test
 
@@ -81,5 +94,9 @@ installs it into a throwaway consumer, type-checks against `e2e/strict-consumer/
 `noUncheckedIndexedAccess`, `verbatimModuleSyntax` and friends — and fails on any diagnostic whose
 path is inside the package.
 
-It runs as its own CI job. Every other tier compiles honey with honey's own tsconfig, so this is the
-only place the consumer's view is visible at all.
+It then runs the installed package: on Bun, and on plain Node — the core entry, `honey generate`
+against a Vite config, and `vite build` with `honey()` and `createBuildPlugin`, whose output must
+serve `/health`. No tsx, no type stripping.
+
+It runs as its own CI job, on Node 22 and the current Node. Every other tier runs honey from source,
+so this is the only place the consumer's view is visible at all.

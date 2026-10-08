@@ -22,7 +22,8 @@ export default defineConfig({
 		trace: "on-first-retry",
 	},
 	webServer: {
-		command: "deno run --allow-all src/server.ts",
+		/* resolve @lovrozagar/honey to its source where the import map does not reach */
+		command: "deno run --allow-all --conditions=honey-source src/server.ts",
 		env: { HONEY_E2E_APP: app, PORT },
 		port: Number(PORT),
 		reuseExistingServer: process.env.HONEY_E2E_REUSE === "1",

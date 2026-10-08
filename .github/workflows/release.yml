@@ -66,7 +66,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      # prepack builds dist/*.d.ts, so the toolchain has to be here before publish
+      # prepack builds dist/ (bun scripts/build.ts), so the toolchain has to be here before publish
       - run: bun install --frozen-lockfile
       - name: Check tag matches package.json
         run: |
@@ -175,7 +175,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      # prepack builds dist/*.d.ts, so the toolchain has to be here before publish
+      # prepack builds dist/ (bun scripts/build.ts), so the toolchain has to be here before publish
       - run: bun install --frozen-lockfile
       - name: Publish to GitHub Packages
         working-directory: ${{ env.PACKAGE_DIR }}

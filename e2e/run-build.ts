@@ -165,6 +165,19 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 	return { gzipKb: kb, ms, name, status: "pass" }
 }
 
+/* builds bundle honey the way a consumer does, from the compiled dist/ — so build it first */
+{
+	const proc = Bun.spawn(["bun", "run", "build"], {
+		cwd: join(import.meta.dir, "..", "packages", "core"),
+		stderr: "inherit",
+		stdout: verbose ? "inherit" : "ignore",
+	})
+	if ((await proc.exited) !== 0) {
+		console.error("building packages/core failed")
+		process.exit(1)
+	}
+}
+
 const results: Result[] = []
 console.log(`build runtimes=${runtimes.join(",")} targets=${specs.map((s) => s.id).join(",")}\n`)
 

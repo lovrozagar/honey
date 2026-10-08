@@ -174,9 +174,9 @@
     },
     "packages/core": {
       "name": "@lovrozagar/honey",
-      "version": "0.2.0",
+      "version": "0.6.8",
       "bin": {
-        "honey": "./src/cli.ts",
+        "honey": "./bin/honey.js",
       },
       "dependencies": {
         "jiti": "2.7.0",

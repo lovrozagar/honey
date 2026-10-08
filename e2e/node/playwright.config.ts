@@ -22,7 +22,8 @@ export default defineConfig({
 	},
 	webServer: {
 		command: "bunx tsx src/server.ts",
-		env: { HONEY_E2E_APP: app, PORT },
+		/* resolve @lovrozagar/honey to its source, not a dist/ that may be stale or missing */
+		env: { HONEY_E2E_APP: app, NODE_OPTIONS: "--conditions=honey-source", PORT },
 		port: Number(PORT),
 		reuseExistingServer: process.env.HONEY_E2E_REUSE === "1",
 		timeout: 15_000,

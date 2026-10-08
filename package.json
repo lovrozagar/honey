@@ -34,7 +34,7 @@
 	"type": "module",
 	"scripts": {
 		"prepare": "git config --get core.hooksPath >/dev/null || git config core.hooksPath .githooks || true",
-		"generate": "bun run --filter './e2e/apps/*' generate",
+		"generate": "bun --bun run --filter './e2e/apps/*' generate",
 		"test": "bun run --filter @lovrozagar/honey test",
 		"test:all": "bun run --filter @lovrozagar/honey test:all",
 		"test:consumers": "bun test e2e/apps/kitchen/tests/smoke.test.ts e2e/apps/defaults/tests/smoke.test.ts e2e/apps/compose/tests/smoke.test.ts e2e/apps/surface/tests/smoke.test.ts e2e/apps/gateway/tests/smoke.test.ts",

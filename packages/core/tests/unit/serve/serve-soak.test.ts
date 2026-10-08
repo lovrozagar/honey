@@ -111,6 +111,8 @@ describe("Honey.serve() soak — bun / deno", () => {
 				"--allow-env",
 				"--allow-net",
 				"--allow-read",
+				/* resolve the package to its source, as the rest of this repo does */
+				"--conditions=honey-source",
 				RUNNER,
 				"deno",
 			])

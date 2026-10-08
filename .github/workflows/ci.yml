@@ -88,22 +88,31 @@ jobs:
       - run: bun e2e/run-build.ts --runtime ${{ matrix.runtime }} --check-generated
 
   packaging:
-    name: packaging
+    name: packaging (node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # the oldest supported LTS and the current release: Node behavior differs across versions
+        node: ["22", "current"]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      # packs the real tarball and type-checks a consumer with every strictness flag on.
-      # A source-shipping package inherits the consumer's flags and skipLibCheck cannot
-      # save them, so nothing else in the matrix can see this.
+      # packs the real tarball, type-checks a consumer with every strictness flag on, then runs
+      # it on Bun and on plain Node: the core entry, honey generate, and vite build with the
+      # honey plugins. Every other tier runs honey from source, so nothing else can see this.
       - run: bun run test:packaging
 
   e2e:
-    name: e2e (${{ matrix.runtime }})
+    name: e2e (${{ matrix.runtime }}${{ matrix.node && format(' {0}', matrix.node) || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -111,6 +120,10 @@ jobs:
       matrix:
         include:
           - runtime: node
+            node: "22"
+            script: test:e2e:node
+          - runtime: node
+            node: "current"
             script: test:e2e:node
           - runtime: deno
             script: test:e2e:deno
@@ -121,6 +134,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        if: matrix.node
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
       - uses: denoland/setup-deno@v2
         if: matrix.runtime == 'deno'
         with:

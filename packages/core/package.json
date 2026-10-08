@@ -23,9 +23,10 @@
 		"directory": "packages/core"
 	},
 	"bin": {
-		"honey": "./src/cli.ts"
+		"honey": "./bin/honey.js"
 	},
 	"files": [
+		"bin",
 		"dist",
 		"docs",
 		"src"
@@ -34,196 +35,288 @@
 	"sideEffects": [
 		"./src/i18n.ts",
 		"./src/openapi/register.ts",
-		"./src/serve-register.ts"
+		"./src/serve-register.ts",
+		"./dist/i18n.js",
+		"./dist/openapi/register.js",
+		"./dist/serve-register.js"
 	],
 	"exports": {
 		".": {
+			"honey-source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
-			"default": "./src/index.ts"
+			"bun": "./src/index.ts",
+			"default": "./dist/index.js"
 		},
 		"./accepts": {
+			"honey-source": "./src/accepts.ts",
 			"types": "./dist/accepts.d.ts",
-			"default": "./src/accepts.ts"
+			"bun": "./src/accepts.ts",
+			"default": "./dist/accepts.js"
 		},
 		"./body-limit": {
+			"honey-source": "./src/body-limit.ts",
 			"types": "./dist/body-limit.d.ts",
-			"default": "./src/body-limit.ts"
+			"bun": "./src/body-limit.ts",
+			"default": "./dist/body-limit.js"
 		},
 		"./build": {
+			"honey-source": "./src/build/index.ts",
 			"types": "./dist/build/index.d.ts",
-			"default": "./src/build/index.ts"
+			"bun": "./src/build/index.ts",
+			"default": "./dist/build/index.js"
 		},
 		"./cli": {
+			"honey-source": "./src/cli.ts",
 			"types": "./dist/cli.d.ts",
-			"default": "./src/cli.ts"
+			"bun": "./src/cli.ts",
+			"default": "./dist/cli.js"
 		},
 		"./client": {
+			"honey-source": "./src/client/index.ts",
 			"types": "./dist/client/index.d.ts",
-			"default": "./src/client/index.ts"
+			"bun": "./src/client/index.ts",
+			"default": "./dist/client/index.js"
 		},
 		"./client/sdk": {
+			"honey-source": "./src/client/sdk.ts",
 			"types": "./dist/client/sdk.d.ts",
-			"default": "./src/client/sdk.ts"
+			"bun": "./src/client/sdk.ts",
+			"default": "./dist/client/sdk.js"
 		},
 		"./codegen": {
+			"honey-source": "./src/codegen.ts",
 			"types": "./dist/codegen.d.ts",
-			"default": "./src/codegen.ts"
+			"bun": "./src/codegen.ts",
+			"default": "./dist/codegen.js"
 		},
 		"./codegen-go-cli": {
+			"honey-source": "./src/codegen-go-cli.ts",
 			"types": "./dist/codegen-go-cli.d.ts",
-			"default": "./src/codegen-go-cli.ts"
+			"bun": "./src/codegen-go-cli.ts",
+			"default": "./dist/codegen-go-cli.js"
 		},
 		"./codegen/extract": {
+			"honey-source": "./src/type-extractor.ts",
 			"types": "./dist/type-extractor.d.ts",
-			"default": "./src/type-extractor.ts"
+			"bun": "./src/type-extractor.ts",
+			"default": "./dist/type-extractor.js"
 		},
 		"./cookie": {
+			"honey-source": "./src/cookie.ts",
 			"types": "./dist/cookie.d.ts",
-			"default": "./src/cookie.ts"
+			"bun": "./src/cookie.ts",
+			"default": "./dist/cookie.js"
 		},
 		"./cookie-sign": {
+			"honey-source": "./src/cookie-sign.ts",
 			"types": "./dist/cookie-sign.d.ts",
-			"default": "./src/cookie-sign.ts"
+			"bun": "./src/cookie-sign.ts",
+			"default": "./dist/cookie-sign.js"
 		},
 		"./cors": {
+			"honey-source": "./src/cors.ts",
 			"types": "./dist/cors.d.ts",
-			"default": "./src/cors.ts"
+			"bun": "./src/cors.ts",
+			"default": "./dist/cors.js"
 		},
 		"./crypto": {
+			"honey-source": "./src/crypto.ts",
 			"types": "./dist/crypto.d.ts",
-			"default": "./src/crypto.ts"
+			"bun": "./src/crypto.ts",
+			"default": "./dist/crypto.js"
 		},
 		"./curl-logger": {
+			"honey-source": "./src/curl-logger.ts",
 			"types": "./dist/curl-logger.d.ts",
-			"default": "./src/curl-logger.ts"
+			"bun": "./src/curl-logger.ts",
+			"default": "./dist/curl-logger.js"
 		},
 		"./csrf": {
+			"honey-source": "./src/csrf.ts",
 			"types": "./dist/csrf.d.ts",
-			"default": "./src/csrf.ts"
+			"bun": "./src/csrf.ts",
+			"default": "./dist/csrf.js"
 		},
 		"./errors": {
+			"honey-source": "./src/errors.ts",
 			"types": "./dist/errors.d.ts",
-			"default": "./src/errors.ts"
+			"bun": "./src/errors.ts",
+			"default": "./dist/errors.js"
 		},
 		"./etag": {
+			"honey-source": "./src/etag.ts",
 			"types": "./dist/etag.d.ts",
-			"default": "./src/etag.ts"
+			"bun": "./src/etag.ts",
+			"default": "./dist/etag.js"
 		},
 		"./i18n": {
+			"honey-source": "./src/i18n.ts",
 			"types": "./dist/i18n.d.ts",
-			"default": "./src/i18n.ts"
+			"bun": "./src/i18n.ts",
+			"default": "./dist/i18n.js"
 		},
 		"./input": {
+			"honey-source": "./src/input.ts",
 			"types": "./dist/input.d.ts",
-			"default": "./src/input.ts"
+			"bun": "./src/input.ts",
+			"default": "./dist/input.js"
 		},
 		"./ip-restrict": {
+			"honey-source": "./src/ip-restrict.ts",
 			"types": "./dist/ip-restrict.d.ts",
-			"default": "./src/ip-restrict.ts"
+			"bun": "./src/ip-restrict.ts",
+			"default": "./dist/ip-restrict.js"
 		},
 		"./logger": {
+			"honey-source": "./src/logger.ts",
 			"types": "./dist/logger.d.ts",
-			"default": "./src/logger.ts"
+			"bun": "./src/logger.ts",
+			"default": "./dist/logger.js"
 		},
 		"./node": {
+			"honey-source": "./src/node.ts",
 			"types": "./dist/node.d.ts",
-			"default": "./src/node.ts"
+			"bun": "./src/node.ts",
+			"default": "./dist/node.js"
 		},
 		"./openapi": {
+			"honey-source": "./src/openapi/register.ts",
 			"types": "./dist/openapi/register.d.ts",
-			"default": "./src/openapi/register.ts"
+			"bun": "./src/openapi/register.ts",
+			"default": "./dist/openapi/register.js"
 		},
 		"./openapi/spec": {
+			"honey-source": "./src/openapi/spec.ts",
 			"types": "./dist/openapi/spec.d.ts",
-			"default": "./src/openapi/spec.ts"
+			"bun": "./src/openapi/spec.ts",
+			"default": "./dist/openapi/spec.js"
 		},
 		"./openapi/scalar": {
+			"honey-source": "./src/openapi/scalar.ts",
 			"types": "./dist/openapi/scalar.d.ts",
-			"default": "./src/openapi/scalar.ts"
+			"bun": "./src/openapi/scalar.ts",
+			"default": "./dist/openapi/scalar.js"
 		},
 		"./openapi/swagger": {
+			"honey-source": "./src/openapi/swagger.ts",
 			"types": "./dist/openapi/swagger.d.ts",
-			"default": "./src/openapi/swagger.ts"
+			"bun": "./src/openapi/swagger.ts",
+			"default": "./dist/openapi/swagger.js"
 		},
 		"./plugin": {
+			"honey-source": "./src/plugin.ts",
 			"types": "./dist/plugin.d.ts",
-			"default": "./src/plugin.ts"
+			"bun": "./src/plugin.ts",
+			"default": "./dist/plugin.js"
 		},
 		"./powered-by": {
+			"honey-source": "./src/powered-by.ts",
 			"types": "./dist/powered-by.d.ts",
-			"default": "./src/powered-by.ts"
+			"bun": "./src/powered-by.ts",
+			"default": "./dist/powered-by.js"
 		},
 		"./pretty-json": {
+			"honey-source": "./src/pretty-json.ts",
 			"types": "./dist/pretty-json.d.ts",
-			"default": "./src/pretty-json.ts"
+			"bun": "./src/pretty-json.ts",
+			"default": "./dist/pretty-json.js"
 		},
 		"./proxy": {
+			"honey-source": "./src/proxy.ts",
 			"types": "./dist/proxy.d.ts",
-			"default": "./src/proxy.ts"
+			"bun": "./src/proxy.ts",
+			"default": "./dist/proxy.js"
 		},
 		"./request-to-curl": {
+			"honey-source": "./src/request-to-curl.ts",
 			"types": "./dist/request-to-curl.d.ts",
-			"default": "./src/request-to-curl.ts"
+			"bun": "./src/request-to-curl.ts",
+			"default": "./dist/request-to-curl.js"
 		},
 		"./request-id": {
+			"honey-source": "./src/request-id.ts",
 			"types": "./dist/request-id.d.ts",
-			"default": "./src/request-id.ts"
+			"bun": "./src/request-id.ts",
+			"default": "./dist/request-id.js"
 		},
 		"./secure-headers": {
+			"honey-source": "./src/secure-headers.ts",
 			"types": "./dist/secure-headers.d.ts",
-			"default": "./src/secure-headers.ts"
+			"bun": "./src/secure-headers.ts",
+			"default": "./dist/secure-headers.js"
 		},
 		"./serve": {
+			"honey-source": "./src/serve-register.ts",
 			"types": "./dist/serve-register.d.ts",
-			"default": "./src/serve-register.ts"
+			"bun": "./src/serve-register.ts",
+			"default": "./dist/serve-register.js"
 		},
 		"./server-timing": {
+			"honey-source": "./src/server-timing.ts",
 			"types": "./dist/server-timing.d.ts",
-			"default": "./src/server-timing.ts"
+			"bun": "./src/server-timing.ts",
+			"default": "./dist/server-timing.js"
 		},
 		"./static": {
+			"honey-source": "./src/static.ts",
 			"types": "./dist/static.d.ts",
-			"default": "./src/static.ts"
+			"bun": "./src/static.ts",
+			"default": "./dist/static.js"
 		},
 		"./telemetry/otel": {
+			"honey-source": "./src/telemetry/otel.ts",
 			"types": "./dist/telemetry/otel.d.ts",
-			"default": "./src/telemetry/otel.ts"
+			"bun": "./src/telemetry/otel.ts",
+			"default": "./dist/telemetry/otel.js"
 		},
 		"./testing": {
+			"honey-source": "./src/testing.ts",
 			"types": "./dist/testing.d.ts",
-			"default": "./src/testing.ts"
+			"bun": "./src/testing.ts",
+			"default": "./dist/testing.js"
 		},
 		"./timeout": {
+			"honey-source": "./src/timeout.ts",
 			"types": "./dist/timeout.d.ts",
-			"default": "./src/timeout.ts"
+			"bun": "./src/timeout.ts",
+			"default": "./dist/timeout.js"
 		},
 		"./tree": {
+			"honey-source": "./src/tree.ts",
 			"types": "./dist/tree.d.ts",
-			"default": "./src/tree.ts"
+			"bun": "./src/tree.ts",
+			"default": "./dist/tree.js"
 		},
 		"./ws/bun": {
+			"honey-source": "./src/ws/bun.ts",
 			"types": "./dist/ws/bun.d.ts",
-			"default": "./src/ws/bun.ts"
+			"bun": "./src/ws/bun.ts",
+			"default": "./dist/ws/bun.js"
 		},
 		"./ws/cloudflare": {
+			"honey-source": "./src/ws/cloudflare.ts",
 			"types": "./dist/ws/cloudflare.d.ts",
-			"default": "./src/ws/cloudflare.ts"
+			"bun": "./src/ws/cloudflare.ts",
+			"default": "./dist/ws/cloudflare.js"
 		},
 		"./ws/deno": {
+			"honey-source": "./src/ws/deno.ts",
 			"types": "./dist/ws/deno.d.ts",
-			"default": "./src/ws/deno.ts"
+			"bun": "./src/ws/deno.ts",
+			"default": "./dist/ws/deno.js"
 		},
 		"./ws/node": {
+			"honey-source": "./src/ws/node.ts",
 			"types": "./dist/ws/node.d.ts",
-			"default": "./src/ws/node.ts"
+			"bun": "./src/ws/node.ts",
+			"default": "./dist/ws/node.js"
 		}
 	},
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
-		"build:types": "tsc -p tsconfig.dts.json",
-		"prepack": "tsc -p tsconfig.dts.json",
+		"prepack": "bun scripts/build.ts",
 		"test": "vitest run",
 		"test:all": "vitest run --config vitest.all.config.ts",
 		"test:harness": "vitest run --config vitest.harness.config.ts",
@@ -231,7 +324,8 @@
 		"test:watch": "vitest",
 		"type:check": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit -p tsconfig.types.json",
 		"type:check:tests": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit",
-		"type:check:types": "tsc --noEmit -p tsconfig.types.json"
+		"type:check:types": "tsc --noEmit -p tsconfig.types.json",
+		"build": "bun scripts/build.ts"
 	},
 	"dependencies": {
 		"jiti": "2.7.0"
@@ -260,5 +354,8 @@
 		"ts-morph": {
 			"optional": true
 		}
+	},
+	"engines": {
+		"node": ">=22.12"
 	}
 }

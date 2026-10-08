@@ -4,12 +4,13 @@
 		"allowImportingTsExtensions": false,
 		"declaration": true,
 		"declarationMap": true,
-		"emitDeclarationOnly": true,
 		"noEmit": false,
 		"outDir": "./dist",
 		"rewriteRelativeImportExtensions": true,
 		"rootDir": "./src",
+		"sourceMap": true,
 		"types": []
 	},
-	"include": ["src/**/*.ts"]
+	"include": ["src/**/*.ts"],
+	"exclude": ["src/client-mcp/**"]
 }

@@ -32,10 +32,12 @@ async function which(bin: string): Promise<boolean> {
 }
 
 async function viteBuild(target: "bun" | "cloudflare" | "deno" | "node", outDir: string): Promise<void> {
-	const { build } = await import("vite")
+	const { build, defaultServerConditions } = await import("vite")
 	await build({
 		configFile: false,
 		logLevel: "error",
+		/* bundle honey from source; a consumer bundles dist/ */
+		ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
 		plugins: [
 			createBuildPlugin(
 				{ minify: false, outDir, port: PORTS[target], target },
