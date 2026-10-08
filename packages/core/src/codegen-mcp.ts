@@ -71,49 +71,131 @@ function toSnakeCase(id: string): string {
 		.toLowerCase()
 }
 
-function resolveSchema(spec: SpecRecord, schema: SpecRecord | undefined): SpecRecord | undefined {
-	if (!schema) return undefined
-	if (!schema.$ref) return schema
-	const ref = schema.$ref as string
-	const parts = ref.replace(/^#\//, "").split("/")
-	let cur: unknown = spec
-	for (const part of parts) {
-		if (cur === null || typeof cur !== "object") return undefined
-		cur = (cur as SpecRecord)[part]
+/** Follow a `$ref` chain to a concrete schema. A chain that loops back on itself is an error. */
+/** MCP tool names: `^[a-zA-Z0-9_-]{1,64}$`. */
+const MAX_TOOL_NAME = 64
+
+function sanitizeToolName(name: string): string {
+	return (
+		name
+			.replace(/[^A-Za-z0-9_-]+/g, "_")
+			.replace(/_+/g, "_")
+			.replace(/^_|_$/g, "") || "tool"
+	)
+}
+
+/** Deterministic, sanitized, unique tool names; a collision is an error naming both operations. */
+function assignToolNames(ops: MCPOp[], projectName: string): void {
+	const byName = new Map<string, string>()
+	for (const op of ops) {
+		let name = sanitizeToolName(`${projectName}_${toSnakeCase(op.operationId)}`)
+		if (name.length > MAX_TOOL_NAME) {
+			let hash = 0
+			for (let i = 0; i < op.operationId.length; i++) hash = (Math.imul(hash, 31) + op.operationId.charCodeAt(i)) >>> 0
+			const suffix = `_${hash.toString(36)}`
+			name = `${name.slice(0, MAX_TOOL_NAME - suffix.length)}${suffix}`
+		}
+		const other = byName.get(name)
+		if (other !== undefined) {
+			throw new Error(
+				`MCP codegen: operations ${JSON.stringify(other)} and ${JSON.stringify(op.operationId)} both map to tool ${JSON.stringify(name)}`,
+			)
+		}
+		byName.set(name, op.operationId)
+		op.toolName = name
 	}
-	if (cur === undefined) return undefined
-	/* recurse — resolved schema may itself be a ref */
-	return resolveSchema(spec, cur as SpecRecord)
+}
+
+function resolveSchema(spec: SpecRecord, schema: SpecRecord | undefined): SpecRecord | undefined {
+	let cur: SpecRecord | undefined = schema
+	const chain = new Set<string>()
+	while (cur && typeof cur.$ref === "string") {
+		const ref = cur.$ref
+		if (chain.has(ref))
+			throw new Error(`MCP codegen: $ref cycle with no schema in between: ${[...chain, ref].join(" -> ")}`)
+		chain.add(ref)
+		if (!ref.startsWith("#/")) return undefined
+		let next: unknown = spec
+		for (const raw of ref.slice(2).split("/")) {
+			const part = raw.replace(/~1/g, "/").replace(/~0/g, "~")
+			if (next === null || typeof next !== "object" || !Object.hasOwn(next, part)) return undefined
+			next = (next as SpecRecord)[part]
+		}
+		cur = next as SpecRecord | undefined
+	}
+	return cur
+}
+
+/* Inlining expands each $ref; a schema graph with many shared refs can grow exponentially,
+   so the output size is bounded and the generator fails loudly instead of hanging. */
+const MAX_INLINED_NODES = 50_000
+
+type InlineState = {
+	/** Fully expanded refs whose expansion did not cut a cycle, with their size in nodes. */
+	memo: Map<string, { nodes: number; schema: SpecRecord | undefined }>
+	nodes: number
+}
+
+function charge(state: InlineState, nodes: number): void {
+	state.nodes += nodes
+	if (state.nodes > MAX_INLINED_NODES) {
+		throw new Error(`MCP codegen: inlined tool schema exceeds ${MAX_INLINED_NODES} nodes (deeply shared $refs)`)
+	}
 }
 
 function deepResolveSchema(
 	spec: SpecRecord,
 	schema: SpecRecord | undefined,
 	seen: Set<string> = new Set(),
-): SpecRecord | undefined {
-	if (!schema) return undefined
-	if (schema.$ref) {
-		const ref = schema.$ref as string
-		if (seen.has(ref)) return { type: "object" }
+	state: InlineState = { memo: new Map(), nodes: 0 },
+): { cut: boolean; schema: SpecRecord | undefined } {
+	if (!schema) return { cut: false, schema: undefined }
+	if (typeof schema.$ref === "string") {
+		const ref = schema.$ref
+		/* a self-referential schema becomes an open object at the point it recurs */
+		if (seen.has(ref)) {
+			charge(state, 1)
+			return { cut: true, schema: { type: "object" } }
+		}
+		/* a memoized expansion is emitted again in full, so it costs its full size again */
+		const memo = state.memo.get(ref)
+		if (memo) {
+			charge(state, memo.nodes)
+			return { cut: false, schema: memo.schema }
+		}
 		const next = new Set(seen)
 		next.add(ref)
-		return deepResolveSchema(spec, resolveSchema(spec, schema), next)
+		const before = state.nodes
+		const result = deepResolveSchema(spec, resolveSchema(spec, schema), next, state)
+		if (!result.cut) state.memo.set(ref, { nodes: state.nodes - before, schema: result.schema })
+		return result
 	}
+	charge(state, 1)
+	let cut = false
 	const out: SpecRecord = {}
 	for (const [k, v] of Object.entries(schema)) {
 		if (v === null || v === undefined) {
 			out[k] = v
 		} else if (Array.isArray(v)) {
-			out[k] = v.map((item) =>
-				item !== null && typeof item === "object" ? deepResolveSchema(spec, item as SpecRecord, seen) : item,
-			)
+			out[k] = v.map((item) => {
+				if (item === null || typeof item !== "object") return item
+				const r = deepResolveSchema(spec, item as SpecRecord, seen, state)
+				cut ||= r.cut
+				return r.schema
+			})
 		} else if (typeof v === "object") {
-			out[k] = deepResolveSchema(spec, v as SpecRecord, seen)
+			const r = deepResolveSchema(spec, v as SpecRecord, seen, state)
+			cut ||= r.cut
+			out[k] = r.schema
 		} else {
 			out[k] = v
 		}
 	}
-	return out
+	return { cut, schema: out }
+}
+
+function inline(spec: SpecRecord, schema: SpecRecord | undefined): SpecRecord | undefined {
+	return deepResolveSchema(spec, schema).schema
 }
 
 function extractJsonBodySchema(op: SpecRecord): SpecRecord | undefined {
@@ -160,6 +242,8 @@ function collectMCPOps(spec: OpenApiSpecInput): MCPOp[] {
 
 type ParamGroup = { props: SpecRecord; required: string[] }
 
+const FORBIDDEN_HEADER_ARGS = new Set(["authorization", "cookie", "proxy-authorization"])
+
 function emptyParamGroup(): ParamGroup {
 	return { props: {}, required: [] }
 }
@@ -184,12 +268,15 @@ function buildToolInputSchema(op: MCPOp, spec: OpenApiSpecInput): SpecRecord {
 	const header = emptyParamGroup()
 	const groupByLoc: Record<string, ParamGroup> = { header, path, query }
 
-	for (const p of op.parameters) {
+	for (const raw of op.parameters) {
+		const p = resolveSchema(specRec, raw) ?? {}
 		const name = p.name as string
 		const inLoc = p.in as string
-		const group = groupByLoc[inLoc]
-		if (!group) continue
-		group.props[name] = deepResolveSchema(specRec, (p.schema ?? {}) as SpecRecord) ?? {}
+		const group = Object.hasOwn(groupByLoc, inLoc) ? groupByLoc[inLoc] : undefined
+		if (!group || typeof name !== "string") continue
+		/* credentials come from the server's config, never from tool arguments */
+		if (inLoc === "header" && FORBIDDEN_HEADER_ARGS.has(name.toLowerCase())) continue
+		group.props[name] = inline(specRec, (p.schema ?? {}) as SpecRecord) ?? {}
 		if (p.required === true) group.required.push(name)
 	}
 
@@ -198,7 +285,7 @@ function buildToolInputSchema(op: MCPOp, spec: OpenApiSpecInput): SpecRecord {
 	assignGroup(properties, required, "headers", header)
 
 	if (op.bodySchema) {
-		properties.json = deepResolveSchema(specRec, op.bodySchema) ?? { type: "object" }
+		properties.json = inline(specRec, op.bodySchema) ?? { type: "object" }
 		if (op.bodyRequired) required.push("json")
 	}
 
@@ -207,51 +294,60 @@ function buildToolInputSchema(op: MCPOp, spec: OpenApiSpecInput): SpecRecord {
 	return schema
 }
 
+/** Keys a tool may forward to the SDK, per argument group; everything else is dropped. */
+function allowedArgs(inputSchema: SpecRecord): Record<string, string[] | true> {
+	const out: Record<string, string[] | true> = {}
+	const props = inputSchema.properties as Record<string, SpecRecord>
+	for (const group of ["params", "search", "headers"]) {
+		const g = props[group]
+		if (g) out[group] = Object.keys((g.properties as SpecRecord | undefined) ?? {}).sort()
+	}
+	if (props.json) out.json = true
+	return out
+}
+
+/** Text safe inside a block comment. */
+function commentText(text: string): string {
+	return text.replace(/\*\//g, "*\\/").replace(/[\r\n]+/g, " ")
+}
+
 function buildToolsGen(ops: MCPOp[], spec: OpenApiSpecInput, projectName: string): string {
 	const l: string[] = []
 	l.push(`/* Generated by honey codegen-mcp.ts — do not edit by hand. */`)
 	l.push(``)
+	l.push(`import { callTool, type AllowedArgs } from "./_runtime"`)
 	l.push(`import type { Tool } from "./types"`)
 	l.push(``)
 	l.push(`export function buildTools(sdk: Record<string, unknown>): Tool[] {`)
+	/* callTool validates the arguments against inputSchema, forwards only declared keys, and
+	   walks the SDK by operationId segments: ["checkout", "sessions", "create"]. */
+	l.push(
+		`\tconst tool = (name: string, description: string | undefined, inputSchema: Record<string, unknown>, segments: string[], allowed: AllowedArgs): Tool => ({`,
+	)
+	l.push(`\t\tdescription,`)
+	l.push(`\t\thandler: (args) => callTool(sdk, segments, args, inputSchema, allowed),`)
+	l.push(`\t\tinputSchema,`)
+	l.push(`\t\tname,`)
+	l.push(`\t})`)
 	l.push(`\treturn [`)
 
 	for (const op of ops) {
 		const desc = op.description ?? op.summary ?? ""
 		const inputSchema = buildToolInputSchema(op, spec)
-		l.push(`\t\t{`)
-		l.push(`\t\t\tname: ${JSON.stringify(op.toolName)},`)
-		if (desc.length > 0) {
-			l.push(`\t\t\tdescription: ${JSON.stringify(desc)},`)
-		}
-		l.push(`\t\t\tinputSchema: ${JSON.stringify(inputSchema)},`)
-		/* handler dispatches by walking all path segments; pass args verbatim.
-		 * arguments shape already matches TS SDK method signature: { params?, search?, headers?, json? }. */
-		const callExpr = op.pathSegments.reduce(
-			(acc, seg, i) =>
-				i === 0
-					? `(sdk as Record<string, unknown>)[${JSON.stringify(seg)}]`
-					: `(${acc} as Record<string, unknown>)[${JSON.stringify(seg)}]`,
-			"",
-		)
-		l.push(`\t\t\thandler: async (args) => {`)
-		l.push(`\t\t\t\tconst method = ${callExpr}`)
-		l.push(`\t\t\t\tif (typeof method !== "function") {`)
-		l.push(
-			`\t\t\t\t\treturn { content: [{ type: "text", text: JSON.stringify({ message: "SDK missing method ${op.operationId}" }) }], isError: true }`,
-		)
-		l.push(`\t\t\t\t}`)
-		l.push(`\t\t\t\tconst result = await method.call(sdk, args)`)
-		l.push(`\t\t\t\treturn { content: [{ type: "text", text: JSON.stringify(result) }] }`)
-		l.push(`\t\t\t},`)
-		l.push(`\t\t},`)
+		l.push(`\t\ttool(`)
+		l.push(`\t\t\t${JSON.stringify(op.toolName)},`)
+		l.push(`\t\t\t${desc.length > 0 ? JSON.stringify(desc) : "undefined"},`)
+		l.push(`\t\t\t${JSON.stringify(inputSchema)},`)
+		l.push(`\t\t\t${JSON.stringify(op.pathSegments)},`)
+		l.push(`\t\t\t${JSON.stringify(allowedArgs(inputSchema))},`)
+		l.push(`\t\t),`)
 	}
 
 	l.push(`\t]`)
 	l.push(`}`)
 	l.push(``)
 	/* project name embedded for tool-naming contract visibility — consumed by tests */
-	l.push(`/* project: ${projectName} */`)
+	l.push(`/* project: ${commentText(projectName)} */`)
 	l.push(``)
 	return l.join("\n")
 }
@@ -264,7 +360,6 @@ function buildServerEntry(
 	version: string,
 ): string {
 	const { apiKey: envVar, baseUrl: baseUrlEnvVar } = envVarNames(projectName)
-	const defaultBaseUrl = `https://api.${projectName}.com`
 	const l: string[] = []
 	l.push(`/* Generated by honey codegen-mcp.ts — do not edit by hand. */`)
 	l.push(``)
@@ -273,7 +368,14 @@ function buildServerEntry(
 	l.push(`import { buildTools } from "./tools.gen"`)
 	l.push(``)
 	l.push(`const apiKey = process.env[${JSON.stringify(envVar)}] ?? ""`)
-	l.push(`const baseURL = process.env[${JSON.stringify(baseUrlEnvVar)}] ?? ${JSON.stringify(defaultBaseUrl)}`)
+	/* No guessed default: the API key must never be sent to a host nobody configured. */
+	l.push(`const baseURL = process.env[${JSON.stringify(baseUrlEnvVar)}] ?? ""`)
+	l.push(`if (baseURL.length === 0) {`)
+	l.push(
+		`\tprocess.stderr.write(${JSON.stringify(`${baseUrlEnvVar} is required (the API base URL, e.g. https://api.example.com)\n`)})`,
+	)
+	l.push(`\tprocess.exit(1)`)
+	l.push(`}`)
 	l.push(``)
 	l.push(`const sdk = new ${sdkClassName}({`)
 	l.push(`\tbaseURL,`)
@@ -325,9 +427,7 @@ export function generateMCPServer(spec: OpenApiSpecInput, options: MCPOptions): 
 	if (ops.length === 0) {
 		throw new Error("No operations marked x-mcp: true; nothing to emit")
 	}
-	for (const op of ops) {
-		op.toolName = `${projectName}_${toSnakeCase(op.operationId)}`
-	}
+	assignToolNames(ops, projectName)
 
 	const info = (spec as { info?: { title?: string } }).info ?? {}
 	const serverName = info.title ?? `@${projectName}/mcp-server`
