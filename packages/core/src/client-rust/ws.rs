@@ -20,16 +20,17 @@ pub const WS_STATUS_PROTOCOL_ERROR: u16 = 1002;
 type WsStream = WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 type WsHandler = Box<dyn Fn(&[u8]) + Send + Sync>;
-type HandlerMap = Mutex<HashMap<String, Vec<WsHandler>>>;
+type SharedHandler = std::sync::Arc<dyn Fn(&[u8]) + Send + Sync>;
+type HandlerMap = Mutex<HashMap<String, Vec<SharedHandler>>>;
 
-/// TypedWebSocket wraps a tokio-tungstenite connection with a buffered pre-OPEN
-/// send queue (flushed once on first read via AtomicBool) and an event fanout
-/// system that mirrors the TS client's .on() escape hatch.
+/// TypedWebSocket wraps a tokio-tungstenite connection with an event fanout
+/// system that mirrors the TS client's .on() escape hatch: "message" handlers
+/// get each payload, "close" handlers the close reason, "error" handlers the
+/// error text.
 pub struct TypedWebSocket {
     conn: WsStream,
-    send_buffer: Option<Vec<u8>>,
-    once: AtomicBool,
     handlers: HandlerMap,
+    closed: AtomicBool,
 }
 
 impl TypedWebSocket {
@@ -37,10 +38,27 @@ impl TypedWebSocket {
     pub fn new(conn: WsStream) -> Self {
         TypedWebSocket {
             conn,
-            send_buffer: None,
-            once: AtomicBool::new(false),
             handlers: Mutex::new(HashMap::new()),
+            closed: AtomicBool::new(false),
         }
+    }
+
+    /// send_text writes a text frame as-is.
+    pub async fn send_text(&mut self, text: &str) -> Result<(), Error> {
+        use futures_util::SinkExt;
+        self.conn
+            .send(Message::Text(text.to_string()))
+            .await
+            .map_err(|e| Error::Other(e.to_string()))
+    }
+
+    /// send_binary writes a binary frame as-is.
+    pub async fn send_binary(&mut self, data: &[u8]) -> Result<(), Error> {
+        use futures_util::SinkExt;
+        self.conn
+            .send(Message::Binary(data.to_vec()))
+            .await
+            .map_err(|e| Error::Other(e.to_string()))
     }
 
     /// send serialises data to JSON and writes it to the WebSocket connection.
@@ -64,15 +82,21 @@ impl TypedWebSocket {
             .map_err(|e| Error::Other(e.to_string()))
     }
 
-    /// close sends a WebSocket close frame with the given status code and reason.
+    /// close sends a WebSocket close frame with the given status code and reason
+    /// (truncated to the 123 bytes a close frame can carry).
     pub async fn close(&mut self, code: u16, reason: &str) -> Result<(), Error> {
         use futures_util::SinkExt;
         use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
         use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+        let mut end = reason.len().min(123);
+        while !reason.is_char_boundary(end) {
+            end -= 1;
+        }
         let frame = CloseFrame {
             code: CloseCode::from(code),
-            reason: reason.to_string().into(),
+            reason: reason[..end].to_string().into(),
         };
+        self.fire_close(&reason[..end]);
         self.conn
             .send(Message::Close(Some(frame)))
             .await
@@ -80,28 +104,19 @@ impl TypedWebSocket {
     }
 
     /// read reads the next message from the connection.
-    /// On the first call, any pre-OPEN buffered send is flushed via AtomicBool compare_exchange.
     pub async fn read(&mut self) -> Result<Vec<u8>, Error> {
-        use futures_util::{SinkExt, StreamExt};
-
-        /* flush send_buffer exactly once on first read — mirrors Go sync.Once */
-        if self
-            .once
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-            .is_ok()
-        {
-            if let Some(buf) = self.send_buffer.take() {
-                let _ = self
-                    .conn
-                    .send(Message::Text(String::from_utf8_lossy(&buf).into_owned()))
-                    .await;
-            }
-        }
-
+        use futures_util::StreamExt;
         loop {
             match self.conn.next().await {
-                None => return Err(Error::Closed { code: 1006, reason: String::new() }),
-                Some(Err(e)) => return Err(Error::Other(e.to_string())),
+                None => {
+                    self.fire_close("");
+                    return Err(Error::Closed { code: 1006, reason: String::new() });
+                }
+                Some(Err(e)) => {
+                    let msg = e.to_string();
+                    self.fanout("error", msg.as_bytes());
+                    return Err(Error::Other(msg));
+                }
                 Some(Ok(msg)) => {
                     let data = match msg {
                         Message::Text(t) => t.into_bytes(),
@@ -111,7 +126,8 @@ impl TypedWebSocket {
                                 Some(f) => (u16::from(f.code), f.reason.into_owned()),
                                 None => (1005, String::new()),
                             };
-                            return Err(Error::Closed { code, reason })
+                            self.fire_close(&reason);
+                            return Err(Error::Closed { code, reason });
                         }
                         _ => continue,
                     };
@@ -125,19 +141,27 @@ impl TypedWebSocket {
     /// on registers an event handler for a named event.
     /// Supported events: "message", "close", "error", "open".
     pub fn on(&mut self, event: &str, handler: WsHandler) {
-        let mut handlers = self.handlers.lock().unwrap();
+        let mut handlers = self.handlers.lock().unwrap_or_else(|p| p.into_inner());
         handlers
             .entry(event.to_string())
             .or_default()
-            .push(handler);
+            .push(std::sync::Arc::from(handler));
     }
 
+    fn fire_close(&self, reason: &str) {
+        if !self.closed.swap(true, Ordering::AcqRel) {
+            self.fanout("close", reason.as_bytes());
+        }
+    }
+
+    /// fanout calls handlers outside the lock, so a panicking handler cannot poison it.
     fn fanout(&self, event: &str, data: &[u8]) {
-        let handlers = self.handlers.lock().unwrap();
-        if let Some(hs) = handlers.get(event) {
-            for h in hs {
-                h(data);
-            }
+        let hs: Vec<SharedHandler> = {
+            let handlers = self.handlers.lock().unwrap_or_else(|p| p.into_inner());
+            handlers.get(event).cloned().unwrap_or_default()
+        };
+        for h in hs {
+            h(data);
         }
     }
 }

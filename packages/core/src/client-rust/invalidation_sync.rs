@@ -130,7 +130,7 @@ impl StaleTrackerSync {
             if entry.seq > seq_snapshot {
                 continue;
             }
-            if !key.contains('{') && !key.contains(':') {
+            if !crate::invalidation::key_is_pattern(key) {
                 continue;
             }
             let space_idx = match key.find(' ') {
@@ -257,7 +257,7 @@ fn lookup_locked(
         if key == concrete_selector {
             continue;
         }
-        if !key.contains('{') && !key.contains(':') {
+        if !crate::invalidation::key_is_pattern(key) {
             continue;
         }
         let space_idx = match key.find(' ') {

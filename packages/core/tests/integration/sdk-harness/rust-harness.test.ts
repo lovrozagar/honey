@@ -1256,6 +1256,8 @@ async fn main() {
         ..Default::default()
     });
     let result = client.upload_blob(s, &UploadBlobOpts::default()).await.unwrap();
+    /* the inline response schema is a generated struct; read it generically */
+    let result = serde_json::to_value(&result).unwrap();
     let out = serde_json::json!({
         "size": result["size"],
         "hash": result["hash"],
@@ -1952,7 +1954,10 @@ async fn main() {
     opts_win.headers = Some(hdrs);
     let header_win = client.idempotent_create(&opts_win).await.unwrap();
 
-    /* response type is serde_json::Value (inline schema, not a $ref) */
+    /* the inline response schema is a generated struct; read it generically */
+    let auto = serde_json::to_value(&auto).unwrap();
+    let explicit = serde_json::to_value(&explicit).unwrap();
+    let header_win = serde_json::to_value(&header_win).unwrap();
     let out = serde_json::json!({
         "auto": auto["idempotencyKey"],
         "explicit": explicit["idempotencyKey"],

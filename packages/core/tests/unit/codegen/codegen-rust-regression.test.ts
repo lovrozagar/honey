@@ -186,7 +186,10 @@ describe("Regression: opts struct Default derive consistent with enum fields", (
 		)
 		expect(resourceFiles.length).toBeGreaterThan(0)
 
-		for (const [path, body] of resourceFiles) {
+		/* hoisted enums live in types.rs, which every resource module glob-imports */
+		const types = files["src/types.rs"] ?? ""
+		for (const [path, resourceBody] of resourceFiles) {
+			const body = `${resourceBody}\n${types}`
 			/* Find every opts struct that derives Default. */
 			const optsStructPattern = /#\[derive\([^\]]*Default[^\]]*\)\]\s*pub struct (\w+Opts)\s*\{([^}]*)\}/gs
 			for (const structMatch of body.matchAll(optsStructPattern)) {

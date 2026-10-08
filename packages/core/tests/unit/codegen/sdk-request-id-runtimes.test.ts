@@ -46,29 +46,18 @@ describe("SDK runtimes — auto x-request-id (source contracts)", () => {
 		expect(src).toMatch(/uuid\.uuid4|uuid4\(\)/)
 	})
 
-	it("Rust async execute_request setdefaults x-request-id before on_request", () => {
-		const src = read("../../../src/client-rust/runtime.rs")
-		const start = src.indexOf("async fn execute_request(")
-		expect(start, "execute_request missing").toBeGreaterThan(-1)
-		const body = src.slice(start, start + 3500)
-		expect(body).toMatch(/x-request-id/i)
-		expect(body).toMatch(/Uuid::new_v4|uuid::Uuid/)
-		/* must run before firing hooks */
-		const idPos = body.search(/x-request-id/i)
-		const hookPos = body.indexOf("for hook in cfg.on_request")
-		expect(hookPos).toBeGreaterThan(idPos)
-	})
-
-	it("Rust sync execute_request_blocking setdefaults x-request-id before on_request", () => {
-		const src = read("../../../src/client-rust/runtime_sync.rs")
-		const start = src.indexOf("fn execute_request_blocking(")
-		expect(start, "execute_request_blocking missing").toBeGreaterThan(-1)
-		const body = src.slice(start, start + 3500)
-		expect(body).toMatch(/x-request-id/i)
-		expect(body).toMatch(/Uuid::new_v4|uuid::Uuid/)
-		const idPos = body.search(/x-request-id/i)
-		const hookPos = body.indexOf("for hook in cfg.on_request")
-		expect(hookPos).toBeGreaterThan(idPos)
+	it("Rust merged_headers setdefaults x-request-id; async and sync requests build headers before on_request", () => {
+		const runtime = read("../../../src/client-rust/runtime.rs")
+		const merge = runtime.slice(runtime.indexOf("pub(crate) fn merged_headers("))
+		expect(merge).toMatch(/x-request-id/i)
+		expect(merge).toMatch(/Uuid::new_v4|uuid::Uuid/)
+		/* both pipelines merge headers (incl. the id) before firing hooks */
+		const asyncBuild = runtime.slice(runtime.indexOf("async fn build_request("))
+		expect(asyncBuild.indexOf("merged_headers(")).toBeLessThan(asyncBuild.indexOf("for hook in cfg.on_request"))
+		const sync = read("../../../src/client-rust/runtime_sync.rs")
+		const syncBody = sync.slice(sync.indexOf("fn execute_request_blocking("))
+		expect(syncBody.indexOf("merged_headers(")).toBeGreaterThan(-1)
+		expect(syncBody.indexOf("merged_headers(")).toBeLessThan(syncBody.indexOf("for hook in cfg.on_request"))
 	})
 
 	it("TS generated client emits portable request-id helper (not bare crypto.randomUUID only)", () => {

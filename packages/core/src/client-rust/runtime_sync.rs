@@ -7,12 +7,11 @@
    test harnesses, CLI tools). Never call blocking methods from within an async runtime. */
 
 use crate::errors::{raise_for_status, Error};
-use crate::runtime::{LogEntry, OnLogHook};
+use crate::runtime::{build_url, encode_query, merged_headers, set_header, LogEntry, OnLogHook};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use uuid::Uuid;
 
 /// SyncOnRequestHook is a synchronous (non-async) request hook.
 /// Returns Result<(), Error> directly — no Future, no Pin<Box<...>>.
@@ -48,28 +47,30 @@ pub struct SyncResponseContext {
 }
 
 /// SyncRequestBody represents the different body types a blocking request can carry.
-/// `Stream` carries an owned, single-shot `reqwest::blocking::Body` (built via
-/// `reqwest::blocking::Body::new` over any `impl Read + Send + 'static`); like
-/// `Multipart`, it cannot be retried on 401 because the underlying body is not
-/// `Clone`.
+/// `Multipart` and `Stream` own single-shot bodies and are not retried on 401.
 pub enum SyncRequestBody<'a> {
     None,
     Json(&'a serde_json::Value),
-    FormUrl(&'a HashMap<String, String>),
+    FormUrl(Vec<(String, String)>),
+    Raw(&'static str, bytes::Bytes),
     Multipart(reqwest::blocking::multipart::Form),
     Stream(reqwest::blocking::Body),
 }
 
 /// SyncClientConfig holds all configuration for the blocking SDK client.
+/// Same semantics as [`crate::runtime::ClientConfig`].
 #[derive(Clone)]
 pub struct SyncClientConfig {
     pub base_url: String,
     pub bearer_token: Option<String>,
     pub headers: HashMap<String, String>,
     pub timeout: Duration,
+    /// Ignored at runtime: whether methods return `SdkResult` is fixed when the SDK is generated.
     pub throw_on_error: bool,
+    /// Fallback for `InvalidationConfig::stale_max_entries` when that is 0.
     pub stale_max_entries: usize,
     pub invalidation: Option<crate::runtime::InvalidationConfig>,
+    /// Returns the new token; an empty string means "give up".
     pub on_auth_expired:
         Option<Arc<dyn Fn() -> Result<String, Error> + Send + Sync>>,
     pub http_client: Option<reqwest::blocking::Client>,
@@ -78,7 +79,9 @@ pub struct SyncClientConfig {
     pub on_request: Vec<SyncOnRequestHook>,
     pub on_response: Vec<SyncOnResponseHook>,
     pub on_log: Option<OnLogHook>,
+    /// Reserved; the blocking hooks do not receive shared state.
     pub state: Option<Arc<std::sync::Mutex<HashMap<String, serde_json::Value>>>>,
+    pub max_response_bytes: usize,
 }
 
 impl Default for SyncClientConfig {
@@ -99,8 +102,49 @@ impl Default for SyncClientConfig {
             on_response: Vec::new(),
             on_log: None,
             state: None,
+            max_response_bytes: crate::runtime::DEFAULT_MAX_RESPONSE_BYTES,
         }
     }
+}
+
+/// SyncAuthState is the blocking twin of [`crate::runtime::AuthState`].
+pub struct SyncAuthState {
+    token: Mutex<Option<String>>,
+}
+
+impl SyncAuthState {
+    pub fn new(token: Option<String>) -> Self {
+        SyncAuthState { token: Mutex::new(token) }
+    }
+
+    pub fn current(&self) -> Option<String> {
+        self.token.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    fn refresh(
+        &self,
+        hook: &Arc<dyn Fn() -> Result<String, Error> + Send + Sync>,
+        rejected: Option<&str>,
+    ) -> Result<Option<String>, Error> {
+        let mut guard = self.token.lock().unwrap_or_else(|p| p.into_inner());
+        if guard.as_deref() != rejected {
+            return Ok(guard.clone());
+        }
+        let token = hook().map_err(|e| Error::AuthExpired(e.to_string()))?;
+        if token.is_empty() {
+            return Ok(None);
+        }
+        *guard = Some(token.clone());
+        Ok(Some(token))
+    }
+}
+
+/// default_http_client_blocking follows redirects on the same origin only.
+pub fn default_http_client_blocking() -> reqwest::blocking::Client {
+    reqwest::blocking::Client::builder()
+        .redirect(crate::runtime::same_host_redirects())
+        .build()
+        .unwrap_or_default()
 }
 
 /* emit_log invokes the on_log callback if configured, swallowing any panic so a
@@ -121,6 +165,14 @@ fn err_status(err: &Error) -> Option<i32> {
     }
 }
 
+fn map_err(e: reqwest::Error) -> Error {
+    if e.is_timeout() {
+        Error::Timeout
+    } else {
+        Error::Transport(e)
+    }
+}
+
 /// SyncRequestResult carries the raw bytes, status, headers, and final URL from a blocking request.
 #[allow(dead_code)]
 pub(crate) struct SyncRequestResult {
@@ -138,6 +190,7 @@ pub(crate) struct SyncRequestResult {
 pub(crate) fn do_request_blocking(
     client: &reqwest::blocking::Client,
     cfg: &SyncClientConfig,
+    auth: &SyncAuthState,
     method: reqwest::Method,
     raw_url: &str,
     query: &[(String, String)],
@@ -149,21 +202,25 @@ pub(crate) fn do_request_blocking(
     request_meta: Option<&crate::invalidation::RequestMeta>,
 ) -> Result<SyncRequestResult, Error> {
     let start = std::time::Instant::now();
+    let log_error = |e: &Error| {
+        emit_log(
+            cfg,
+            LogEntry {
+                level: "error".to_string(),
+                event: "error".to_string(),
+                operation: operation.to_string(),
+                duration_ms: start.elapsed().as_millis() as i64,
+                status: err_status(e),
+                error: Some(format!("{:?}", e)),
+            },
+        )
+    };
 
-    /* Pre-flight cancellation check — short-circuit before any work. */
+    /* Pre-flight cancellation check — short-circuit before any work. Blocking
+       sends cannot be interrupted once started. */
     if let Some(ref tok) = cancel_token {
         if tok.load(Ordering::Acquire) {
-            emit_log(
-                cfg,
-                LogEntry {
-                    level: "error".to_string(),
-                    event: "error".to_string(),
-                    operation: operation.to_string(),
-                    duration_ms: start.elapsed().as_millis() as i64,
-                    status: None,
-                    error: Some("Canceled".to_string()),
-                },
-            );
+            log_error(&Error::Canceled);
             return Err(Error::Canceled);
         }
     }
@@ -180,15 +237,16 @@ pub(crate) fn do_request_blocking(
         },
     );
 
-    /* Reborrow body for retry path; Multipart + Stream are not Clone so cannot retry 401 */
     let retry_body: Option<SyncRequestBody<'_>> = match &body {
         SyncRequestBody::None => Some(SyncRequestBody::None),
         SyncRequestBody::Json(v) => Some(SyncRequestBody::Json(v)),
-        SyncRequestBody::FormUrl(m) => Some(SyncRequestBody::FormUrl(m)),
+        SyncRequestBody::FormUrl(m) => Some(SyncRequestBody::FormUrl(m.clone())),
+        SyncRequestBody::Raw(ct, b) => Some(SyncRequestBody::Raw(ct, b.clone())),
         SyncRequestBody::Multipart(_) => None,
         SyncRequestBody::Stream(_) => None,
     };
 
+    let token = auth.current();
     let mut result = match execute_request_blocking(
         client,
         cfg,
@@ -197,7 +255,7 @@ pub(crate) fn do_request_blocking(
         query,
         body,
         call_headers,
-        cfg.bearer_token.as_deref(),
+        token.as_deref(),
         false,
         timeout,
         cancel_token.clone(),
@@ -205,42 +263,21 @@ pub(crate) fn do_request_blocking(
     ) {
         Ok(r) => r,
         Err(e) => {
-            emit_log(
-                cfg,
-                LogEntry {
-                    level: "error".to_string(),
-                    event: "error".to_string(),
-                    operation: operation.to_string(),
-                    duration_ms: start.elapsed().as_millis() as i64,
-                    status: err_status(&e),
-                    error: Some(format!("{:?}", e)),
-                },
-            );
+            log_error(&e);
             return Err(e);
         }
     };
 
     if result.status == 401 {
-        if let Some(ref hook) = cfg.on_auth_expired {
-            if let Some(retry) = retry_body {
-                let new_token = match hook() {
-                    Ok(t) => t,
-                    Err(e) => {
-                        let mapped = Error::AuthExpired(e.to_string());
-                        emit_log(
-                            cfg,
-                            LogEntry {
-                                level: "error".to_string(),
-                                event: "error".to_string(),
-                                operation: operation.to_string(),
-                                duration_ms: start.elapsed().as_millis() as i64,
-                                status: err_status(&mapped),
-                                error: Some(format!("{:?}", mapped)),
-                            },
-                        );
-                        return Err(mapped);
-                    }
-                };
+        if let (Some(hook), Some(retry)) = (cfg.on_auth_expired.as_ref(), retry_body) {
+            let new_token = match auth.refresh(hook, token.as_deref()) {
+                Ok(t) => t,
+                Err(e) => {
+                    log_error(&e);
+                    return Err(e);
+                }
+            };
+            if let Some(new_token) = new_token {
                 result = match execute_request_blocking(
                     client,
                     cfg,
@@ -257,22 +294,11 @@ pub(crate) fn do_request_blocking(
                 ) {
                     Ok(r) => r,
                     Err(e) => {
-                        emit_log(
-                            cfg,
-                            LogEntry {
-                                level: "error".to_string(),
-                                event: "error".to_string(),
-                                operation: operation.to_string(),
-                                duration_ms: start.elapsed().as_millis() as i64,
-                                status: err_status(&e),
-                                error: Some(format!("{:?}", e)),
-                            },
-                        );
+                        log_error(&e);
                         return Err(e);
                     }
                 };
             }
-            /* Multipart/Stream 401: Form/Body is not Clone, cannot retry; fall through */
         }
     }
 
@@ -290,19 +316,11 @@ pub(crate) fn do_request_blocking(
         },
     );
 
-    if let Some(err) = raise_for_status(result.status, result.body.clone()) {
-        emit_log(
-            cfg,
-            LogEntry {
-                level: "error".to_string(),
-                event: "error".to_string(),
-                operation: operation.to_string(),
-                duration_ms: start.elapsed().as_millis() as i64,
-                status: Some(status_i32),
-                error: Some(format!("{:?}", err)),
-            },
-        );
-        return Err(err);
+    if !(200..300).contains(&result.status) {
+        if let Some(err) = raise_for_status(result.status, std::mem::take(&mut result.body)) {
+            log_error(&err);
+            return Err(err);
+        }
     }
 
     Ok(result)
@@ -323,29 +341,29 @@ fn execute_request_blocking(
     cancel_token: Option<Arc<AtomicBool>>,
     request_meta: Option<&crate::invalidation::RequestMeta>,
 ) -> Result<SyncRequestResult, Error> {
-    let url = build_url_sync(&cfg.base_url, raw_url, query)?;
-    let url_str = url.to_string();
+    let url = build_url(&cfg.base_url, raw_url, query)?;
 
-    /* build merged headers map for hook inspection */
-    let mut hook_headers: HashMap<String, String> = cfg.headers.clone();
-    if let Some(ch) = call_headers {
-        for (k, v) in ch {
-            hook_headers.insert(k.clone(), v.clone());
+    let mut hook_headers = merged_headers(
+        &cfg.headers,
+        call_headers,
+        cfg.auth_header_name.as_deref(),
+        cfg.auth_header_prefix.as_deref(),
+        bearer_token,
+    );
+    match &body {
+        SyncRequestBody::Json(_) => set_header(&mut hook_headers, "Content-Type", "application/json".into()),
+        SyncRequestBody::FormUrl(_) => set_header(
+            &mut hook_headers,
+            "Content-Type",
+            "application/x-www-form-urlencoded".into(),
+        ),
+        SyncRequestBody::Raw(ct, _) => set_header(&mut hook_headers, "Content-Type", ct.to_string()),
+        SyncRequestBody::Stream(_) => {
+            if !hook_headers.keys().any(|k| k.eq_ignore_ascii_case("content-type")) {
+                set_header(&mut hook_headers, "Content-Type", "application/octet-stream".into());
+            }
         }
-    }
-    if let Some(token) = bearer_token {
-        if !token.is_empty() {
-            let name = cfg.auth_header_name.as_deref().unwrap_or("Authorization");
-            let prefix = cfg.auth_header_prefix.as_deref().unwrap_or("Bearer ");
-            hook_headers.insert(name.to_string(), format!("{}{}", prefix, token));
-        }
-    }
-    /* auto correlation id — config/call win; on_request hooks may overwrite */
-    if !hook_headers
-        .keys()
-        .any(|k| k.eq_ignore_ascii_case("x-request-id"))
-    {
-        hook_headers.insert("x-request-id".to_string(), Uuid::new_v4().to_string());
+        SyncRequestBody::Multipart(_) | SyncRequestBody::None => {}
     }
 
     let (meta_selector, meta_is_stale, meta_by) = match request_meta {
@@ -355,7 +373,7 @@ fn execute_request_blocking(
 
     let mut req_ctx = SyncRequestContext {
         method: method.clone(),
-        url: url_str.clone(),
+        url: url.to_string(),
         path: raw_url.to_string(),
         headers: hook_headers,
         is_retry,
@@ -364,79 +382,81 @@ fn execute_request_blocking(
         invalidated_by: meta_by.clone(),
     };
 
-    /* fire on_request hooks */
     for hook in cfg.on_request.iter() {
         hook(&mut req_ctx)?;
     }
 
     let mut req = client.request(req_ctx.method.clone(), &req_ctx.url);
-
-    /* apply headers from context */
     for (k, v) in &req_ctx.headers {
         req = req.header(k.as_str(), v.as_str());
     }
-
-    /* apply body and content-type */
     req = match body {
-        SyncRequestBody::Json(v) => {
-            req = req.header("Content-Type", "application/json");
-            req.json(v)
-        }
-        SyncRequestBody::FormUrl(m) => req.form(m),
+        SyncRequestBody::Json(v) => req.body(serde_json::to_vec(v)?),
+        SyncRequestBody::FormUrl(pairs) => req.body(encode_query(&pairs)),
+        SyncRequestBody::Raw(_, b) => req.body(b.to_vec()),
         SyncRequestBody::Multipart(f) => req.multipart(f),
-        SyncRequestBody::Stream(b) => {
-            req = req.header("Content-Type", "application/octet-stream");
-            req.body(b)
-        }
+        SyncRequestBody::Stream(b) => req.body(b),
         SyncRequestBody::None => req,
     };
 
-    /* apply per-call timeout (overrides cfg.timeout) */
+    /* per-call timeout overrides cfg.timeout; ZERO means no timeout */
     let effective_timeout = per_call_timeout.unwrap_or(cfg.timeout);
-    req = req.timeout(effective_timeout);
+    if !effective_timeout.is_zero() {
+        req = req.timeout(effective_timeout);
+    }
 
-    /* Re-check cancellation just before the blocking send (covers the window
-       between do_request_blocking pre-flight check and actual send). */
     if let Some(ref tok) = cancel_token {
         if tok.load(Ordering::Acquire) {
             return Err(Error::Canceled);
         }
     }
 
-    let resp = req.send().map_err(|e| {
-        if e.is_timeout() {
-            Error::Timeout
-        } else if e.is_request() {
-            Error::Canceled
-        } else {
-            Error::Transport(e)
-        }
-    })?;
+    let mut resp = req.send().map_err(map_err)?;
 
     let status = resp.status().as_u16();
     let resp_headers = resp.headers().clone();
     let resp_url = resp.url().to_string();
-    let body_bytes = resp.bytes().map_err(Error::Transport)?.to_vec();
+    let mut body_bytes = Vec::new();
+    let limit = cfg.max_response_bytes;
+    {
+        use std::io::Read;
+        let mut buf = [0u8; 16 * 1024];
+        loop {
+            let n = resp.read(&mut buf).map_err(|e| {
+                if e.kind() == std::io::ErrorKind::TimedOut {
+                    Error::Timeout
+                } else {
+                    Error::Other(e.to_string())
+                }
+            })?;
+            if n == 0 {
+                break;
+            }
+            if limit > 0 && body_bytes.len() + n > limit {
+                return Err(Error::Other(format!("response body exceeds {} bytes", limit)));
+            }
+            body_bytes.extend_from_slice(&buf[..n]);
+        }
+    }
 
     let mut resp_ctx = SyncResponseContext {
         status,
-        response: body_bytes.clone(),
-        headers: resp_headers.clone(),
+        response: body_bytes,
+        headers: resp_headers,
         is_retry,
         selector: meta_selector,
         is_stale: meta_is_stale,
         invalidated_by: meta_by,
     };
 
-    /* fire on_response hooks */
     for hook in cfg.on_response.iter() {
         hook(&mut resp_ctx)?;
     }
 
     Ok(SyncRequestResult {
-        body: body_bytes,
+        body: resp_ctx.response,
         status,
-        headers: resp_headers,
+        headers: resp_ctx.headers,
         url: resp_url,
     })
 }
@@ -447,14 +467,5 @@ pub(crate) fn build_url_sync(
     path: &str,
     query: &[(String, String)],
 ) -> Result<url::Url, Error> {
-    let base = url::Url::parse(base_url)?;
-    let joined = base.join(path)?;
-    let mut url = joined;
-    if !query.is_empty() {
-        let mut pairs = url.query_pairs_mut();
-        for (k, v) in query {
-            pairs.append_pair(k, v);
-        }
-    }
-    Ok(url)
+    build_url(base_url, path, query)
 }

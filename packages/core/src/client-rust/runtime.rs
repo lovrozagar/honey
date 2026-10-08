@@ -35,7 +35,8 @@ pub type OnResponseHook = Arc<
 /// RequestContext carries mutable request metadata through OnRequestHook invocations.
 /// `selector` / `is_stale` / `invalidated_by` mirror the TS hook ctx and are
 /// populated from the RequestMeta snapshot taken before the request fires;
-/// zero values when the tracker is disabled.
+/// zero values when the tracker is disabled. Header names are unique
+/// case-insensitively; use [`set_header`] to replace one.
 pub struct RequestContext {
     pub method: reqwest::Method,
     pub url: String,
@@ -62,18 +63,21 @@ pub struct ResponseContext {
 }
 
 /// RequestBody represents the different body types a request can carry.
-/// `Stream` carries an owned, single-shot `reqwest::Body` (typically built via
-/// `reqwest::Body::wrap_stream`); like `Multipart`, it cannot be retried on 401
-/// because the underlying body is not `Clone`.
+/// `Multipart` and `Stream` own single-shot bodies and are not retried on 401;
+/// the others are sent again after an auth refresh.
 pub enum RequestBody<'a> {
     None,
     Json(&'a serde_json::Value),
-    FormUrl(&'a HashMap<String, String>),
+    /// Ordered key/value pairs, sent as application/x-www-form-urlencoded.
+    FormUrl(Vec<(String, String)>),
+    /// Bytes with an explicit content type (text/plain, …).
+    Raw(&'static str, bytes::Bytes),
     Multipart(reqwest::multipart::Form),
     Stream(reqwest::Body),
 }
 
 /// OnAuthExpiredHook is the async auth-refresh callback type for ClientConfig.
+/// Returning an empty token means "give up": the 401 is returned as an error.
 pub type OnAuthExpiredHook =
     Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<String, Error>> + Send>> + Send + Sync>;
 
@@ -98,13 +102,21 @@ pub struct LogEntry {
 pub type OnLogHook = Arc<dyn Fn(LogEntry) + Send + Sync>;
 
 /// ClientConfig holds all configuration for the SDK client.
+///
+/// `timeout` bounds a whole regular request including the body read
+/// (`Duration::ZERO` disables it); streams are not bounded by it.
+/// `max_response_bytes` caps a buffered response body (0 disables the cap).
+/// When `http_client` is None the SDK builds one that does not follow
+/// redirects to another host, so auth and custom headers never leave the origin.
 #[derive(Clone)]
 pub struct ClientConfig {
     pub base_url: String,
     pub bearer_token: Option<String>,
     pub headers: HashMap<String, String>,
     pub timeout: Duration,
+    /// Ignored at runtime: whether methods return `SdkResult` is fixed when the SDK is generated.
     pub throw_on_error: bool,
+    /// Fallback for `InvalidationConfig::stale_max_entries` when that is 0.
     pub stale_max_entries: usize,
     pub invalidation: Option<InvalidationConfig>,
     pub on_auth_expired: Option<OnAuthExpiredHook>,
@@ -115,6 +127,7 @@ pub struct ClientConfig {
     pub on_response: Vec<OnResponseHook>,
     pub on_log: Option<OnLogHook>,
     pub state: Option<Arc<Mutex<HashMap<String, serde_json::Value>>>>,
+    pub max_response_bytes: usize,
 }
 
 impl Default for ClientConfig {
@@ -135,8 +148,77 @@ impl Default for ClientConfig {
             on_response: Vec::new(),
             on_log: None,
             state: None,
+            max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
         }
     }
+}
+
+pub const DEFAULT_MAX_RESPONSE_BYTES: usize = 100 * 1024 * 1024;
+
+/// AuthState keeps the current token so a refreshed token is reused by later
+/// calls, and serializes refreshes so concurrent 401s refresh once.
+pub struct AuthState {
+    token: Mutex<Option<String>>,
+}
+
+impl AuthState {
+    pub fn new(token: Option<String>) -> Self {
+        AuthState { token: Mutex::new(token) }
+    }
+
+    pub async fn current(&self) -> Option<String> {
+        self.token.lock().await.clone()
+    }
+
+    /// refresh calls the hook unless another call already replaced `rejected`.
+    pub async fn refresh(
+        &self,
+        hook: &OnAuthExpiredHook,
+        rejected: Option<&str>,
+    ) -> Result<Option<String>, Error> {
+        let mut guard = self.token.lock().await;
+        if guard.as_deref() != rejected {
+            return Ok(guard.clone());
+        }
+        let token = hook().await.map_err(|e| Error::AuthExpired(e.to_string()))?;
+        if token.is_empty() {
+            return Ok(None);
+        }
+        *guard = Some(token.clone());
+        Ok(Some(token))
+    }
+}
+
+/// default_http_client builds a client that follows redirects on the same
+/// scheme and host only.
+pub fn default_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .redirect(same_host_redirects())
+        .build()
+        .unwrap_or_default()
+}
+
+/// same_host_redirects follows at most 10 redirects, never to another origin.
+pub fn same_host_redirects() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            return attempt.stop();
+        }
+        let same = attempt
+            .previous()
+            .first()
+            .map(|first| {
+                first.scheme() == attempt.url().scheme()
+                    && first.host_str() == attempt.url().host_str()
+                    && first.port_or_known_default() == attempt.url().port_or_known_default()
+            })
+            .unwrap_or(false);
+        if same {
+            attempt.follow()
+        } else {
+            attempt.stop()
+        }
+    })
 }
 
 /* emit_log invokes the on_log callback if configured, swallowing any panic so a
@@ -179,6 +261,17 @@ pub struct ResponseMeta {
     pub body: Vec<u8>,
 }
 
+impl ResponseMeta {
+    pub(crate) fn empty(status: u16) -> Self {
+        ResponseMeta {
+            status,
+            headers: reqwest::header::HeaderMap::new(),
+            url: String::new(),
+            body: Vec::new(),
+        }
+    }
+}
+
 /// RequestResult carries the raw bytes, status, headers, and final URL from a completed request.
 #[allow(dead_code)]
 pub(crate) struct RequestResult {
@@ -186,6 +279,284 @@ pub(crate) struct RequestResult {
     pub status: u16,
     pub headers: reqwest::header::HeaderMap,
     pub url: String,
+}
+
+/* ── URLs, path params, query encoding — shared with runtime_sync ── */
+
+/// escape_segment percent-encodes every byte outside the RFC 3986 unreserved set.
+pub fn escape_segment(s: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push(HEX[(b >> 4) as usize] as char);
+            out.push(HEX[(b & 0x0f) as usize] as char);
+        }
+    }
+    out
+}
+
+/// expand_path fills `{name}` placeholders with escaped values. Values that a
+/// URL parser would collapse ("", ".", "..") are rejected.
+pub fn expand_path(template: &str, params: &[(&str, &str)]) -> Result<String, Error> {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    loop {
+        let open = match rest.find('{') {
+            Some(i) => i,
+            None => {
+                out.push_str(rest);
+                return Ok(out);
+            }
+        };
+        let close = match rest[open..].find('}') {
+            Some(i) => open + i,
+            None => {
+                out.push_str(rest);
+                return Ok(out);
+            }
+        };
+        let name = &rest[open + 1..close];
+        let value = params
+            .iter()
+            .find(|(k, _)| *k == name)
+            .map(|(_, v)| *v)
+            .ok_or_else(|| Error::Other(format!("missing path parameter {:?}", name)))?;
+        if value.is_empty() || value == "." || value == ".." {
+            return Err(Error::Other(format!(
+                "path parameter {:?} must not be {:?}",
+                name, value
+            )));
+        }
+        out.push_str(&rest[..open]);
+        out.push_str(&escape_segment(value));
+        rest = &rest[close + 1..];
+    }
+}
+
+/// format_f64 renders a float like JavaScript's Number#toString, so every SDK
+/// language sends the same query bytes: shortest round-trip digits, fixed
+/// notation for 1e-6 <= |v| < 1e21, otherwise `<mantissa>e±<exp>`.
+pub fn format_f64(v: f64) -> String {
+    if v.is_nan() {
+        return "NaN".to_string();
+    }
+    if v.is_infinite() {
+        return if v > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
+    }
+    if v == 0.0 {
+        return "0".to_string();
+    }
+    /* `{:e}` gives the shortest round-trip digits: "-1.2345678901234568e20" */
+    let sci = format!("{:e}", v);
+    let (mantissa, exp) = sci.split_once('e').unwrap_or((sci.as_str(), "0"));
+    let exp: i32 = exp.parse().unwrap_or(0);
+    let (sign, mantissa) = match mantissa.strip_prefix('-') {
+        Some(m) => ("-", m),
+        None => ("", mantissa),
+    };
+    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
+    let abs = v.abs();
+    if !(1e-6..1e21).contains(&abs) {
+        return format!("{}{}e{}{}", sign, mantissa, if exp > 0 { "+" } else { "-" }, exp.abs());
+    }
+    let n = digits.len() as i32;
+    let body = if exp >= n - 1 {
+        format!("{}{}", digits, "0".repeat((exp - (n - 1)) as usize))
+    } else if exp >= 0 {
+        let split = (exp + 1) as usize;
+        format!("{}.{}", &digits[..split], &digits[split..])
+    } else {
+        format!("0.{}{}", "0".repeat((-exp - 1) as usize), digits)
+    };
+    format!("{}{}", sign, body)
+}
+
+/// QueryValue renders a value as one or more query strings: scalars once,
+/// sequences once per element, None not at all.
+pub trait QueryValue {
+    fn push_query(&self, key: &str, out: &mut Vec<(String, String)>);
+}
+
+macro_rules! display_query_value {
+    ($($t:ty),*) => {$(
+        impl QueryValue for $t {
+            fn push_query(&self, key: &str, out: &mut Vec<(String, String)>) {
+                out.push((key.to_string(), self.to_string()));
+            }
+        }
+    )*};
+}
+display_query_value!(String, str, bool, i8, i16, i32, i64, u8, u16, u32, u64, usize, isize);
+
+impl QueryValue for f64 {
+    fn push_query(&self, key: &str, out: &mut Vec<(String, String)>) {
+        out.push((key.to_string(), format_f64(*self)));
+    }
+}
+
+impl QueryValue for f32 {
+    fn push_query(&self, key: &str, out: &mut Vec<(String, String)>) {
+        out.push((key.to_string(), format_f64(*self as f64)));
+    }
+}
+
+impl<T: QueryValue + ?Sized> QueryValue for &T {
+    fn push_query(&self, key: &str, out: &mut Vec<(String, String)>) {
+        (**self).push_query(key, out)
+    }
+}
+
+impl<T: QueryValue> QueryValue for Option<T> {
+    fn push_query(&self, key: &str, out: &mut Vec<(String, String)>) {
+        if let Some(v) = self {
+            v.push_query(key, out)
+        }
+    }
+}
+
+impl<T: QueryValue> QueryValue for Vec<T> {
+    fn push_query(&self, key: &str, out: &mut Vec<(String, String)>) {
+        for v in self {
+            v.push_query(key, out)
+        }
+    }
+}
+
+impl QueryValue for serde_json::Value {
+    fn push_query(&self, key: &str, out: &mut Vec<(String, String)>) {
+        match self {
+            serde_json::Value::Null => {}
+            serde_json::Value::String(s) => out.push((key.to_string(), s.clone())),
+            serde_json::Value::Bool(b) => out.push((key.to_string(), b.to_string())),
+            serde_json::Value::Number(n) => {
+                let s = if n.is_f64() { format_f64(n.as_f64().unwrap_or_default()) } else { n.to_string() };
+                out.push((key.to_string(), s))
+            }
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    item.push_query(key, out)
+                }
+            }
+            other => out.push((key.to_string(), other.to_string())),
+        }
+    }
+}
+
+/// query_value_of serializes an enum or other Serialize value and pushes it as
+/// a query value (a JSON string becomes its bare text).
+pub fn push_serialized<T: serde::Serialize>(key: &str, value: &T, out: &mut Vec<(String, String)>) {
+    if let Ok(v) = serde_json::to_value(value) {
+        v.push_query(key, out)
+    }
+}
+
+/// form_pairs flattens a serialized body object into form fields (arrays repeat the key).
+pub fn form_pairs<T: serde::Serialize>(body: &T) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if let Ok(serde_json::Value::Object(map)) = serde_json::to_value(body) {
+        let mut keys: Vec<&String> = map.keys().collect();
+        keys.sort();
+        for k in keys {
+            map[k].push_query(k, &mut out);
+        }
+    }
+    out
+}
+
+/// encode_query joins pairs with every byte outside the unreserved set escaped.
+pub fn encode_query(pairs: &[(String, String)]) -> String {
+    pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", escape_segment(k), escape_segment(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+/// build_url joins base and an already-escaped path, keeping the base path and
+/// base query, then appends the query pairs.
+pub fn build_url(base_url: &str, path: &str, query: &[(String, String)]) -> Result<url::Url, Error> {
+    let mut url = url::Url::parse(base_url)?;
+    if url.cannot_be_a_base() || url.host_str().is_none() {
+        return Err(Error::Other(format!("base URL {:?} needs a scheme and host", base_url)));
+    }
+    let path = if path.starts_with('/') { path.to_string() } else { format!("/{}", path) };
+    let joined = format!("{}{}", url.path().trim_end_matches('/'), path);
+    url.set_path(&joined);
+    url.set_fragment(None);
+    let extra = encode_query(query);
+    let q = match (url.query(), extra.is_empty()) {
+        (Some(existing), false) if !existing.is_empty() => Some(format!("{}&{}", existing, extra)),
+        (_, false) => Some(extra),
+        (existing, true) => existing.map(|s| s.to_string()),
+    };
+    url.set_query(q.as_deref());
+    Ok(url)
+}
+
+/// set_header inserts `name` replacing any other casing of it.
+pub fn set_header(headers: &mut HashMap<String, String>, name: &str, value: String) {
+    headers.retain(|k, _| !k.eq_ignore_ascii_case(name));
+    headers.insert(name.to_string(), value);
+}
+
+/// merged_headers merges config headers, then per-call headers, then auth, then
+/// an X-Request-Id when absent — case-insensitively, later wins.
+pub(crate) fn merged_headers(
+    cfg_headers: &HashMap<String, String>,
+    call_headers: Option<&HashMap<String, String>>,
+    auth_header_name: Option<&str>,
+    auth_header_prefix: Option<&str>,
+    bearer_token: Option<&str>,
+) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    let mut cfg: Vec<(&String, &String)> = cfg_headers.iter().collect();
+    cfg.sort();
+    for (k, v) in cfg {
+        set_header(&mut out, k, v.clone());
+    }
+    if let Some(ch) = call_headers {
+        let mut call: Vec<(&String, &String)> = ch.iter().collect();
+        call.sort();
+        for (k, v) in call {
+            set_header(&mut out, k, v.clone());
+        }
+    }
+    if let Some(token) = bearer_token {
+        if !token.is_empty() {
+            let name = auth_header_name.unwrap_or("Authorization");
+            let prefix = auth_header_prefix.unwrap_or("Bearer ");
+            set_header(&mut out, name, format!("{}{}", prefix, token));
+        }
+    }
+    if !out.keys().any(|k| k.eq_ignore_ascii_case("x-request-id")) {
+        out.insert("x-request-id".to_string(), Uuid::new_v4().to_string());
+    }
+    out
+}
+
+/// map_send_error keeps the cause: a refused connection, DNS or TLS failure is
+/// a Transport error, never "canceled".
+pub(crate) fn map_send_error(e: reqwest::Error) -> Error {
+    if e.is_timeout() {
+        Error::Timeout
+    } else {
+        Error::Transport(e)
+    }
+}
+
+async fn read_capped(mut resp: reqwest::Response, limit: usize) -> Result<Vec<u8>, Error> {
+    let mut out = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(map_send_error)? {
+        if limit > 0 && out.len() + chunk.len() > limit {
+            return Err(Error::Other(format!("response body exceeds {} bytes", limit)));
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
 }
 
 /// do_request executes an HTTP request, injects auth, merges headers, handles
@@ -197,6 +568,7 @@ pub(crate) struct RequestResult {
 pub(crate) async fn do_request(
     client: &reqwest::Client,
     cfg: &ClientConfig,
+    auth: &AuthState,
     method: reqwest::Method,
     raw_url: &str,
     query: &[(String, String)],
@@ -208,21 +580,24 @@ pub(crate) async fn do_request(
     request_meta: Option<&crate::invalidation::RequestMeta>,
 ) -> Result<RequestResult, Error> {
     let start = std::time::Instant::now();
+    let log_error = |e: &Error| {
+        emit_log(
+            cfg,
+            LogEntry {
+                level: "error".to_string(),
+                event: "error".to_string(),
+                operation: operation.to_string(),
+                duration_ms: start.elapsed().as_millis() as i64,
+                status: err_status(e),
+                error: Some(format!("{:?}", e)),
+            },
+        )
+    };
 
     /* Pre-flight cancellation check — short-circuit before any work. */
     if let Some(ref tok) = cancel_token {
         if tok.is_cancelled() {
-            emit_log(
-                cfg,
-                LogEntry {
-                    level: "error".to_string(),
-                    event: "error".to_string(),
-                    operation: operation.to_string(),
-                    duration_ms: start.elapsed().as_millis() as i64,
-                    status: None,
-                    error: Some("Canceled".to_string()),
-                },
-            );
+            log_error(&Error::Canceled);
             return Err(Error::Canceled);
         }
     }
@@ -239,16 +614,17 @@ pub(crate) async fn do_request(
         },
     );
 
-    /* Reborrow body for retry path (Json/FormUrl hold references so reborrow is valid;
-       Multipart + Stream own non-Clone values and cannot be retried — 401 falls through) */
+    /* Json/FormUrl/Raw can be sent again; Multipart + Stream own non-Clone values */
     let retry_body: Option<RequestBody<'_>> = match &body {
         RequestBody::None => Some(RequestBody::None),
         RequestBody::Json(v) => Some(RequestBody::Json(v)),
-        RequestBody::FormUrl(m) => Some(RequestBody::FormUrl(m)),
+        RequestBody::FormUrl(m) => Some(RequestBody::FormUrl(m.clone())),
+        RequestBody::Raw(ct, b) => Some(RequestBody::Raw(ct, b.clone())),
         RequestBody::Multipart(_) => None,
         RequestBody::Stream(_) => None,
     };
 
+    let token = auth.current().await;
     let mut result = match execute_request(
         client,
         cfg,
@@ -257,7 +633,7 @@ pub(crate) async fn do_request(
         query,
         body,
         call_headers,
-        cfg.bearer_token.as_deref(),
+        token.as_deref(),
         false,
         timeout,
         cancel_token.clone(),
@@ -267,42 +643,21 @@ pub(crate) async fn do_request(
     {
         Ok(r) => r,
         Err(e) => {
-            emit_log(
-                cfg,
-                LogEntry {
-                    level: "error".to_string(),
-                    event: "error".to_string(),
-                    operation: operation.to_string(),
-                    duration_ms: start.elapsed().as_millis() as i64,
-                    status: err_status(&e),
-                    error: Some(format!("{:?}", e)),
-                },
-            );
+            log_error(&e);
             return Err(e);
         }
     };
 
     if result.status == 401 {
-        if let Some(ref hook) = cfg.on_auth_expired {
-            if let Some(retry) = retry_body {
-                let new_token = match hook().await {
-                    Ok(t) => t,
-                    Err(e) => {
-                        let mapped = Error::AuthExpired(e.to_string());
-                        emit_log(
-                            cfg,
-                            LogEntry {
-                                level: "error".to_string(),
-                                event: "error".to_string(),
-                                operation: operation.to_string(),
-                                duration_ms: start.elapsed().as_millis() as i64,
-                                status: err_status(&mapped),
-                                error: Some(format!("{:?}", mapped)),
-                            },
-                        );
-                        return Err(mapped);
-                    }
-                };
+        if let (Some(hook), Some(retry)) = (cfg.on_auth_expired.as_ref(), retry_body) {
+            let new_token = match auth.refresh(hook, token.as_deref()).await {
+                Ok(t) => t,
+                Err(e) => {
+                    log_error(&e);
+                    return Err(e);
+                }
+            };
+            if let Some(new_token) = new_token {
                 result = match execute_request(
                     client,
                     cfg,
@@ -321,22 +676,11 @@ pub(crate) async fn do_request(
                 {
                     Ok(r) => r,
                     Err(e) => {
-                        emit_log(
-                            cfg,
-                            LogEntry {
-                                level: "error".to_string(),
-                                event: "error".to_string(),
-                                operation: operation.to_string(),
-                                duration_ms: start.elapsed().as_millis() as i64,
-                                status: err_status(&e),
-                                error: Some(format!("{:?}", e)),
-                            },
-                        );
+                        log_error(&e);
                         return Err(e);
                     }
                 };
             }
-            /* Multipart/Stream 401: Form/Body is not Clone, cannot retry; fall through to error mapping */
         }
     }
 
@@ -354,22 +698,93 @@ pub(crate) async fn do_request(
         },
     );
 
-    if let Some(err) = raise_for_status(result.status, result.body.clone()) {
-        emit_log(
-            cfg,
-            LogEntry {
-                level: "error".to_string(),
-                event: "error".to_string(),
-                operation: operation.to_string(),
-                duration_ms: start.elapsed().as_millis() as i64,
-                status: Some(status_i32),
-                error: Some(format!("{:?}", err)),
-            },
-        );
-        return Err(err);
+    if !(200..300).contains(&result.status) {
+        if let Some(err) = raise_for_status(result.status, std::mem::take(&mut result.body)) {
+            log_error(&err);
+            return Err(err);
+        }
     }
 
     Ok(result)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn build_request(
+    client: &reqwest::Client,
+    cfg: &ClientConfig,
+    method: reqwest::Method,
+    raw_url: &str,
+    query: &[(String, String)],
+    body: RequestBody<'_>,
+    call_headers: Option<&HashMap<String, String>>,
+    bearer_token: Option<&str>,
+    is_retry: bool,
+    request_meta: Option<&crate::invalidation::RequestMeta>,
+) -> Result<(reqwest::RequestBuilder, Arc<Mutex<HashMap<String, serde_json::Value>>>), Error> {
+    let url = build_url(&cfg.base_url, raw_url, query)?;
+
+    let mut hook_headers = merged_headers(
+        &cfg.headers,
+        call_headers,
+        cfg.auth_header_name.as_deref(),
+        cfg.auth_header_prefix.as_deref(),
+        bearer_token,
+    );
+    match &body {
+        RequestBody::Json(_) => set_header(&mut hook_headers, "Content-Type", "application/json".into()),
+        RequestBody::FormUrl(_) => set_header(
+            &mut hook_headers,
+            "Content-Type",
+            "application/x-www-form-urlencoded".into(),
+        ),
+        RequestBody::Raw(ct, _) => set_header(&mut hook_headers, "Content-Type", ct.to_string()),
+        RequestBody::Stream(_) => {
+            if !hook_headers.keys().any(|k| k.eq_ignore_ascii_case("content-type")) {
+                set_header(&mut hook_headers, "Content-Type", "application/octet-stream".into());
+            }
+        }
+        RequestBody::Multipart(_) | RequestBody::None => {}
+    }
+
+    let state = cfg
+        .state
+        .clone()
+        .unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new())));
+
+    let (meta_selector, meta_is_stale, meta_by) = match request_meta {
+        Some(m) => (m.selector.clone(), m.is_stale, m.invalidated_by.clone()),
+        None => (String::new(), false, Vec::new()),
+    };
+
+    let mut req_ctx = RequestContext {
+        method: method.clone(),
+        url: url.to_string(),
+        path: raw_url.to_string(),
+        headers: hook_headers,
+        state: Arc::clone(&state),
+        is_retry,
+        selector: meta_selector,
+        is_stale: meta_is_stale,
+        invalidated_by: meta_by,
+    };
+
+    for hook in cfg.on_request.iter() {
+        hook(&mut req_ctx).await?;
+    }
+
+    let mut req = client.request(req_ctx.method.clone(), &req_ctx.url);
+    for (k, v) in &req_ctx.headers {
+        req = req.header(k.as_str(), v.as_str());
+    }
+    req = match body {
+        RequestBody::Json(v) => req.body(serde_json::to_vec(v)?),
+        RequestBody::FormUrl(pairs) => req.body(encode_query(&pairs)),
+        RequestBody::Raw(_, b) => req.body(b),
+        RequestBody::Multipart(f) => req.multipart(f),
+        RequestBody::Stream(b) => req.body(b),
+        RequestBody::None => req,
+    };
+    Ok((req, state))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -387,169 +802,134 @@ async fn execute_request(
     cancel_token: Option<CancellationToken>,
     request_meta: Option<&crate::invalidation::RequestMeta>,
 ) -> Result<RequestResult, Error> {
-    let url = build_url(&cfg.base_url, raw_url, query)?;
-    let url_str = url.to_string();
+    let (mut req, state) = build_request(
+        client,
+        cfg,
+        method,
+        raw_url,
+        query,
+        body,
+        call_headers,
+        bearer_token,
+        is_retry,
+        request_meta,
+    )
+    .await?;
 
-    /* build merged headers map for hook inspection */
-    let mut hook_headers: HashMap<String, String> = cfg.headers.clone();
-    if let Some(ch) = call_headers {
-        for (k, v) in ch {
-            hook_headers.insert(k.clone(), v.clone());
-        }
-    }
-    if let Some(token) = bearer_token {
-        if !token.is_empty() {
-            let name = cfg.auth_header_name.as_deref().unwrap_or("Authorization");
-            let prefix = cfg.auth_header_prefix.as_deref().unwrap_or("Bearer ");
-            hook_headers.insert(name.to_string(), format!("{}{}", prefix, token));
-        }
-    }
-    /* auto correlation id — config/call win; on_request hooks may overwrite */
-    if !hook_headers
-        .keys()
-        .any(|k| k.eq_ignore_ascii_case("x-request-id"))
-    {
-        hook_headers.insert("x-request-id".to_string(), Uuid::new_v4().to_string());
+    /* per-call timeout overrides cfg.timeout; ZERO means no timeout */
+    let effective_timeout = per_call_timeout.unwrap_or(cfg.timeout);
+    if !effective_timeout.is_zero() {
+        req = req.timeout(effective_timeout);
     }
 
-    let state = cfg
-        .state
-        .clone()
-        .unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new())));
+    /* Race send + body read against cancel_token so external cancellation wins. */
+    let work = async {
+        let resp = req.send().await.map_err(map_send_error)?;
+        let status = resp.status().as_u16();
+        let resp_headers = resp.headers().clone();
+        let resp_url = resp.url().to_string();
+        let body = read_capped(resp, cfg.max_response_bytes).await?;
+        Ok::<_, Error>((status, resp_headers, resp_url, body))
+    };
+    let (status, resp_headers, resp_url, body_bytes) = match cancel_token {
+        Some(tok) => {
+            tokio::select! {
+                biased;
+                _ = tok.cancelled() => return Err(Error::Canceled),
+                r = work => r?,
+            }
+        }
+        None => work.await?,
+    };
 
     let (meta_selector, meta_is_stale, meta_by) = match request_meta {
         Some(m) => (m.selector.clone(), m.is_stale, m.invalidated_by.clone()),
         None => (String::new(), false, Vec::new()),
     };
-
-    let mut req_ctx = RequestContext {
-        method: method.clone(),
-        url: url_str.clone(),
-        path: raw_url.to_string(),
-        headers: hook_headers,
-        state: Arc::clone(&state),
-        is_retry,
-        selector: meta_selector.clone(),
-        is_stale: meta_is_stale,
-        invalidated_by: meta_by.clone(),
-    };
-
-    /* fire on_request hooks */
-    for hook in cfg.on_request.iter() {
-        hook(&mut req_ctx).await?;
-    }
-
-    let mut req = client.request(req_ctx.method.clone(), &req_ctx.url);
-
-    /* apply headers from context (already merged above + any hook mutations) */
-    for (k, v) in &req_ctx.headers {
-        req = req.header(k.as_str(), v.as_str());
-    }
-
-    /* apply body and content-type */
-    req = match body {
-        RequestBody::Json(v) => {
-            req = req.header("Content-Type", "application/json");
-            req.json(v)
-        }
-        RequestBody::FormUrl(m) => req.form(m),
-        RequestBody::Multipart(f) => req.multipart(f),
-        RequestBody::Stream(b) => {
-            req = req.header("Content-Type", "application/octet-stream");
-            req.body(b)
-        }
-        RequestBody::None => req,
-    };
-
-    /* apply per-call timeout (overrides cfg.timeout) */
-    let timeout = per_call_timeout;
-    let effective_timeout = timeout.unwrap_or(cfg.timeout);
-    req = req.timeout(effective_timeout);
-
-    /* Race the send future against cancel_token.cancelled() so external cancellation
-       takes priority over an in-flight HTTP send. */
-    let resp = match cancel_token.clone() {
-        Some(tok) => {
-            tokio::select! {
-                biased;
-                _ = tok.cancelled() => return Err(Error::Canceled),
-                r = req.send() => r,
-            }
-        }
-        None => req.send().await,
-    }
-    .map_err(|e| {
-        if e.is_timeout() {
-            Error::Timeout
-        } else if e.is_request() {
-            Error::Canceled
-        } else {
-            Error::Transport(e)
-        }
-    })?;
-
-    let status = resp.status().as_u16();
-    let resp_headers = resp.headers().clone();
-    let resp_url = resp.url().to_string();
-    let bytes = match cancel_token {
-        Some(tok) => {
-            tokio::select! {
-                biased;
-                _ = tok.cancelled() => return Err(Error::Canceled),
-                r = resp.bytes() => r,
-            }
-        }
-        None => resp.bytes().await,
-    }
-    .map_err(|e| {
-        if e.is_timeout() {
-            Error::Timeout
-        } else {
-            Error::Transport(e)
-        }
-    })?;
-    let body_bytes = bytes.to_vec();
-
     let mut resp_ctx = ResponseContext {
         status,
-        response: body_bytes.clone(),
-        headers: resp_headers.clone(),
-        state: Arc::clone(&state),
+        response: body_bytes,
+        headers: resp_headers,
+        state,
         is_retry,
         selector: meta_selector,
         is_stale: meta_is_stale,
         invalidated_by: meta_by,
     };
 
-    /* fire on_response hooks */
     for hook in cfg.on_response.iter() {
         hook(&mut resp_ctx).await?;
     }
 
     Ok(RequestResult {
-        body: body_bytes,
+        body: resp_ctx.response,
         status,
-        headers: resp_headers,
+        headers: resp_ctx.headers,
         url: resp_url,
     })
 }
 
-/// build_url constructs the full URL from base + path + query params.
-#[allow(dead_code)]
-pub(crate) fn build_url(
-    base_url: &str,
-    path: &str,
+/// open_stream sends a streaming request (SSE) through the same URL, header,
+/// auth and hook pipeline as a regular request, without a body-read timeout.
+/// A non-2xx status becomes a typed error.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn open_stream(
+    client: &reqwest::Client,
+    cfg: &ClientConfig,
+    auth: &AuthState,
+    method: reqwest::Method,
+    raw_url: &str,
     query: &[(String, String)],
-) -> Result<url::Url, Error> {
-    let base = url::Url::parse(base_url)?;
-    let joined = base.join(path)?;
-    let mut url = joined;
-    if !query.is_empty() {
-        let mut pairs = url.query_pairs_mut();
-        for (k, v) in query {
-            pairs.append_pair(k, v);
-        }
+    body: RequestBody<'_>,
+    call_headers: Option<&HashMap<String, String>>,
+) -> Result<reqwest::Response, Error> {
+    let token = auth.current().await;
+    let (req, _state) = build_request(
+        client,
+        cfg,
+        method,
+        raw_url,
+        query,
+        body,
+        call_headers,
+        token.as_deref(),
+        false,
+        None,
+    )
+    .await?;
+    let resp = req.send().await.map_err(map_send_error)?;
+    let status = resp.status().as_u16();
+    if !(200..300).contains(&status) {
+        let body = read_capped(resp, 64 * 1024).await.unwrap_or_default();
+        return Err(raise_for_status(status, body).unwrap_or(Error::Other(format!("status {}", status))));
     }
-    Ok(url)
+    Ok(resp)
 }
 
+/// auth_headers returns config headers, extra headers and the auth header, for
+/// transports that cannot run the request pipeline (WebSocket dials).
+pub(crate) async fn auth_headers(
+    cfg: &ClientConfig,
+    auth: &AuthState,
+    extra: Option<&HashMap<String, String>>,
+) -> HashMap<String, String> {
+    let token = auth.current().await;
+    merged_headers(
+        &cfg.headers,
+        extra,
+        cfg.auth_header_name.as_deref(),
+        cfg.auth_header_prefix.as_deref(),
+        token.as_deref(),
+    )
+}
+
+/// to_ws_url swaps the scheme only; a URL inside the query string is untouched.
+pub fn to_ws_url(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("https://") {
+        format!("wss://{}", rest)
+    } else if let Some(rest) = url.strip_prefix("http://") {
+        format!("ws://{}", rest)
+    } else {
+        url.to_string()
+    }
+}

@@ -181,7 +181,7 @@ pub(crate) fn raise_for_status(status: u16, body: Vec<u8>) -> Option<Error> {
     } else {
         serde_json::from_slice(&body).ok()
     };
-    let message = String::from_utf8_lossy(&body).to_string();
+    let message = error_message(&body, data.as_ref());
     let api_err: Box<dyn ApiError + Send + Sync> = match status {
         400 => Box::new(BadRequestError { message, body, status_code: 400, data }),
         401 => Box::new(UnauthorizedError { message, body, status_code: 401, data }),
@@ -197,4 +197,24 @@ pub(crate) fn raise_for_status(status: u16, body: Vec<u8>) -> Option<Error> {
         _ => Box::new(StatusError { message, body, status_code: status, data }),
     };
     Some(Error::Api(api_err))
+}
+
+/// error_message is the server's `message` field when the body is a JSON object
+/// carrying one, else the body text, with control characters dropped and capped
+/// at 512 characters.
+pub(crate) fn error_message(body: &[u8], data: Option<&serde_json::Value>) -> String {
+    let text = data
+        .and_then(|d| d.get("message"))
+        .and_then(|m| m.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| String::from_utf8_lossy(body).into_owned());
+    let mut out = String::new();
+    for (n, ch) in text.chars().filter(|c| !c.is_control()).enumerate() {
+        if n >= 512 {
+            out.push('…');
+            break;
+        }
+        out.push(ch);
+    }
+    out
 }

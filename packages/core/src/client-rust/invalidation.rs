@@ -9,9 +9,11 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
-/* PLACEHOLDER_RE matches `{name}` and `:name` placeholders. */
+/* PLACEHOLDER_RE matches `{name}` (any name without braces or slashes) and a
+ * `:name` segment; a colon inside a segment (`/ops/1:cancel`) is literal.
+ * Group 1: braced name; group 2: the `/` (or start) before a colon param; group 3: its name. */
 static PLACEHOLDER_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}|:([a-zA-Z_][a-zA-Z0-9_]*)").unwrap());
+    Lazy::new(|| Regex::new(r"\{([^{}/]+)\}|(^|/):([a-zA-Z_][a-zA-Z0-9_]*)").unwrap());
 
 /* PATTERN_REGEX_CACHE caches compiled placeholder→`[^/]+` regexps per pattern key.
  * std::sync::Mutex is fine — pure CPU work, never held across an .await point. */
@@ -50,8 +52,11 @@ pub fn compile_pattern(pattern: &str) -> Regex {
     let mut out = String::with_capacity(pattern.len() + 4);
     out.push('^');
     let mut last = 0usize;
-    for m in PLACEHOLDER_RE.find_iter(pattern) {
-        out.push_str(&regex::escape(&pattern[last..m.start()]));
+    for caps in PLACEHOLDER_RE.captures_iter(pattern) {
+        let m = caps.get(0).unwrap();
+        /* keep the segment slash of a `:name` match literal */
+        let start = m.start() + caps.get(2).map(|p| p.len()).unwrap_or(0);
+        out.push_str(&regex::escape(&pattern[last..start]));
         out.push_str("[^/]+");
         last = m.end();
     }
@@ -91,13 +96,17 @@ pub fn interpolate_path(
     for caps in PLACEHOLDER_RE.captures_iter(template) {
         let m = caps.get(0).unwrap();
         out.push_str(&template[last..m.start()]);
+        let prefix = caps.get(2).map(|c| c.as_str()).unwrap_or_default();
         let key = caps
             .get(1)
-            .or_else(|| caps.get(2))
+            .or_else(|| caps.get(3))
             .map(|c| c.as_str())
             .unwrap_or_default();
         match params.get(key) {
-            Some(v) => out.push_str(&urlencoding::encode(v)),
+            Some(v) => {
+                out.push_str(prefix);
+                out.push_str(&crate::runtime::escape_segment(v));
+            }
             None => {
                 if missing.is_none() {
                     missing = Some(key.to_string());
@@ -116,8 +125,8 @@ pub fn interpolate_path(
 
 /// resolve_invalidation_targets_for_mutation expands templated `METHOD /path/{x}`
 /// invalidation entries to concrete `METHOD /path/abc` selectors using params.
-/// Pattern-only entries (no placeholders) pass through; entries whose
-/// placeholders cannot be resolved are dropped.
+/// Entries without placeholders pass through; an entry whose placeholders cannot
+/// all be resolved stays a pattern, so it marks every instance stale (TS parity).
 pub fn resolve_invalidation_targets_for_mutation(
     targets: &[String],
     params: &HashMap<String, String>,
@@ -139,7 +148,7 @@ pub fn resolve_invalidation_targets_for_mutation(
         }
         match interpolate_path(template, params) {
             Ok(concrete) => out.push(format!("{} {}", method, concrete)),
-            Err(_) => continue,
+            Err(_) => out.push(entry.clone()),
         }
     }
     out
@@ -265,7 +274,7 @@ impl StaleTracker {
             if entry.seq > seq_snapshot {
                 continue;
             }
-            if !key.contains('{') && !key.contains(':') {
+            if !key_is_pattern(key) {
                 continue;
             }
             let space_idx = match key.find(' ') {
@@ -392,7 +401,7 @@ fn lookup_locked(
         if key == concrete_selector {
             continue;
         }
-        if !key.contains('{') && !key.contains(':') {
+        if !key_is_pattern(key) {
             continue;
         }
         let space_idx = match key.find(' ') {
@@ -437,5 +446,13 @@ fn enforce_capacity_locked(s: &mut TrackerState, max_entries: usize) {
     while s.entries.len() > target && !s.order.is_empty() {
         let oldest = s.order[0].clone();
         delete_locked(s, &oldest);
+    }
+}
+
+/// key_is_pattern reports whether a stored `METHOD /path` key holds placeholders.
+pub(crate) fn key_is_pattern(key: &str) -> bool {
+    match key.find(' ') {
+        Some(i) => path_has_placeholders(&key[i + 1..]),
+        None => false,
     }
 }

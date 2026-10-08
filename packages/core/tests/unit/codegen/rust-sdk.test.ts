@@ -492,11 +492,12 @@ describe("Tier 3: client methods", () => {
 		expect(client).toMatch(/pub async fn ping\s*\(/)
 	})
 
-	it("32. path params → typed &str arg + urlencoding::encode substitution", () => {
+	it("32. path params → typed &str arg + expand_path substitution (rejects '', '.', '..')", () => {
 		const result = generateRustSDK(crudSpec, {})
 		const usersRs = result.files["src/resources/users.rs"]
 		expect(usersRs).toMatch(/id:\s*&str/)
-		expect(usersRs).toContain("urlencoding::encode(id)")
+		expect(usersRs).toContain(`crate::runtime::expand_path("/users/{id}", &[("id", id)])?`)
+		expect(result.files["src/runtime.rs"]).toContain(`value.is_empty() || value == "." || value == ".."`)
 	})
 
 	it("33. query params → typed Opts struct with Option<T> fields for optional", () => {
@@ -680,7 +681,9 @@ describe("Tier 5: SdkResult + ClientConfig", () => {
 		const result = generateRustSDK(crudSpec, {})
 		const client = result.files["src/client.rs"]
 		expect(client).toMatch(/http_client.*None|None.*http_client/)
-		expect(client).toMatch(/reqwest::Client::new\(\)|reqwest::ClientBuilder/)
+		/* the default client refuses cross-origin redirects */
+		expect(client).toContain("crate::runtime::default_http_client()")
+		expect(result.files["src/runtime.rs"]).toContain(".redirect(same_host_redirects())")
 	})
 })
 
@@ -709,13 +712,13 @@ describe("Tier 6: SSE", () => {
 		expect(eventsRs).toMatch(/last_event_id|lastEventId/)
 	})
 
-	it("52. sse.rs ships parse_sse_stream using bytes_stream + buffer-split parser", () => {
+	it("52. sse.rs ships parse_sse_stream using bytes_stream + an incremental line parser", () => {
 		const result = generateRustSDK(sseSpec, {})
 		const sse = result.files["src/sse.rs"]
 		expect(sse).toContain("parse_sse_stream")
 		expect(sse).toContain("bytes_stream")
-		/* double-newline split logic */
-		expect(sse).toMatch(/\\n\\n|\\r\\n\\r\\n/)
+		expect(sse).toContain("pub struct SseParser")
+		expect(sse).toContain("SSE_MAX_LINE")
 	})
 
 	it("53. SSE non-2xx yields typed error then ends stream", () => {
@@ -735,7 +738,8 @@ describe("Tier 6: SSE", () => {
 		const result = generateRustSDK(sseSpec, {})
 		const sse = result.files["src/sse.rs"]
 		expect(sse).toMatch(/i32::from_str|parse::<i32>/)
-		expect(sse).toMatch(/>= 0|>= ?0/)
+		/* digits only (the spec rejects signs) */
+		expect(sse).toContain("is_ascii_digit()")
 	})
 })
 
@@ -785,11 +789,13 @@ describe("Tier 7: WebSocket", () => {
 		expect(ws).toContain("WS_STATUS_PROTOCOL_ERROR")
 	})
 
-	it("62. TypedWebSocket has send_buffer + AtomicBool flush-once", () => {
+	it("62. TypedWebSocket fires close/error handlers once, outside the handler lock", () => {
 		const result = generateRustSDK(wsSpec, {})
 		const ws = result.files["src/ws.rs"]
-		expect(ws).toContain("send_buffer")
-		expect(ws).toContain("AtomicBool")
+		expect(ws).not.toContain("send_buffer")
+		expect(ws).toContain(`self.fanout("error"`)
+		expect(ws).toContain("fn fire_close")
+		expect(ws).toContain("unwrap_or_else(|p| p.into_inner())")
 	})
 })
 
@@ -833,9 +839,7 @@ describe("Tier 8: invalidation", () => {
 	it("67. invalidation disabled when stale_time == 0", () => {
 		const result = generateRustSDK(invSpec, {})
 		const client = result.files["src/client.rs"]
-		expect(client).toMatch(
-			/stale.*is_some\(\)|is_some.*stale|stale.*is_none\(\)|invalidation.*is_some|if let Some.*invalidation|invalidation.*if let Some/,
-		)
+		expect(client).toContain("Some(mut inv) if inv.stale_time > 0 =>")
 	})
 
 	it("68. path_matches_pattern uses cached regex map (once_cell + Mutex<HashMap<String, Regex>>)", () => {
@@ -850,7 +854,8 @@ describe("Tier 8: invalidation", () => {
 		const result = generateRustSDK(invSpec, {})
 		const usersRs = result.files["src/resources/users.rs"]
 		expect(usersRs).toContain("stale.mark_stale")
-		expect(usersRs).toContain("entry.invalidate")
+		/* targets are emitted inline per operation */
+		expect(usersRs).toMatch(/let targets: Vec<String> = vec!\["GET \/users/)
 	})
 })
 
@@ -1325,16 +1330,18 @@ describe("Tier 16: per-call headers", () => {
 	it("111. emitMethod non-SSE passes opts.headers.as_ref() to do_request (not None)", () => {
 		const result = generateRustSDK(crudSpec, {})
 		const usersRs = result.files["src/resources/users.rs"]
-		/* generated call-site should pass opts.headers (not hardcoded None) */
-		expect(usersRs).toMatch(/opts\.headers\.as_ref\(\)|opts\.headers\.as_deref\(\)/)
+		/* generated call-site starts from opts.headers (not hardcoded None) */
+		expect(usersRs).toContain("opts.headers.clone().unwrap_or_default()")
+		expect(usersRs).toContain("Some(&call_headers)")
 	})
 
 	it("112. SSE body path merges opts.headers into req_headers before req.send()", () => {
 		const result = generateRustSDK(sseSpec, {})
 		const eventsRs = result.files["src/resources/events.rs"]
-		/* SSE method must explicitly merge per-call opts.headers into req_headers */
+		/* SSE method merges per-call opts.headers and sends them through open_stream */
 		expect(eventsRs).toMatch(/opts\.headers/)
-		expect(eventsRs).toContain("req_headers")
+		expect(eventsRs).toContain("crate::runtime::open_stream(")
+		expect(eventsRs).toContain("Some(&call_headers)")
 	})
 })
 
@@ -1817,12 +1824,12 @@ describe("Tier 22: realtime SSE transport", () => {
 		expect(realtime).toMatch(/async\s+fn\s+connect\s*\([\s\S]*?url:\s*&str[\s\S]*?opts:\s*&TransportOpts/)
 	})
 
-	it("162. realtime.rs declares struct SseState { byte_stream, buf, last_event_id, retry_hint_ms } [runtime]", () => {
+	it("162. realtime.rs declares struct SseState { byte_stream, parser, last_event_id, retry_hint_ms } [runtime]", () => {
 		const result = generateRustSDK(realtimeSseSpec, {})
 		const realtime = result.files["src/realtime.rs"]
 		expect(realtime).toContain("SseState")
 		expect(realtime).toContain("byte_stream")
-		expect(realtime).toContain("buf")
+		expect(realtime).toContain("parser: SseParser")
 		expect(realtime).toContain("last_event_id")
 		expect(realtime).toContain("retry_hint_ms")
 	})
@@ -1873,11 +1880,12 @@ describe("Tier 22: realtime SSE transport", () => {
 		expect(realtime).toMatch(/fn\s+send\s*\(/)
 	})
 
-	it("169. sse.rs find_double_newline and parse_sse_block are pub(crate) [runtime]", () => {
+	it("169. sse.rs exposes the incremental SseParser the realtime SSE transport reuses [runtime]", () => {
 		const result = generateRustSDK(realtimeSseSpec, {})
 		const sse = result.files["src/sse.rs"]
 		expect(sse).toBeDefined()
-		expect(sse).toMatch(/pub\s*\(crate\)\s*fn\s+find_double_newline|pub\s*\(crate\)\s*fn\s+parse_sse_block/)
+		expect(sse).toMatch(/pub fn feed\(&mut self, chunk: &\[u8\]\)/)
+		expect(result.files["src/realtime.rs"]).toContain("use crate::sse::SseParser;")
 	})
 
 	it.skipIf(!hasCargo || !hasIntegrationFlag)(
