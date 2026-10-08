@@ -5,6 +5,7 @@ package sdk
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"sync"
 	"time"
 )
@@ -36,32 +37,46 @@ func (s ConnectionState) String() string {
 	return "unknown"
 }
 
+const (
+	defaultReconnectAttempts = 5
+	defaultReconnectDelay    = time.Second
+	maxReconnectDelay        = 30 * time.Second
+	openTimeout              = 30 * time.Second
+)
+
+// ErrConnectionClosed is returned by Connect after Close.
+var ErrConnectionClosed = errors.New("honey: ResumableConnection closed")
+
 // ResumableConnection orchestrates a pluggable Transport chain with
 // proven-transport memoization + full-chain fallback. Events are delivered over
-// Events(); terminal errors are delivered over Errors(). Close() signals the
-// internal goroutine to stop and closes both channels.
+// Events(); terminal errors are delivered over Errors(). Close() stops the
+// read goroutine and then closes both channels.
 //
-// Mirrors TS createResumableConnection, Rust ResumableConnection::connect, and
-// Python ResumableConnection behavior.
+// Reconnects back off exponentially from ReconnectDelayMs (default 1s, capped
+// at 30s, with jitter) for up to MaxReconnectAttempts (default 5; negative
+// means unlimited). Exhaustion is reported on Errors().
 type ResumableConnection struct {
 	url        string
 	transports []Transport
 	opts       TransportOpts
 
-	events  chan any
-	errs    chan error
-	closeCh chan struct{}
+	events chan any
+	errs   chan error
+	/* ctx is canceled by Close; every wait in the read loop selects on it */
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	mu        sync.Mutex
 	state     ConnectionState
 	conn      TransportConn
 	provenIdx int /* -1 = none yet */
 	closed    bool
-	closeOnce sync.Once
+	running   bool
+	loopDone  chan struct{}
 }
 
 // NewResumableConnection constructs a connection with the given adapter chain.
-// Opts is copied; nil → zero-value defaults. Panics if transports is empty —
+// Opts is copied; nil → defaults. Panics if transports is empty —
 // misconfiguration at construction is a programmer error, not runtime.
 func NewResumableConnection(baseURL string, transports []Transport, opts *TransportOpts) *ResumableConnection {
 	if len(transports) == 0 {
@@ -71,13 +86,15 @@ func NewResumableConnection(baseURL string, transports []Transport, opts *Transp
 	if opts != nil {
 		o = *opts
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &ResumableConnection{
 		url:        baseURL,
 		transports: transports,
 		opts:       o,
 		events:     make(chan any, 16),
 		errs:       make(chan error, 4),
-		closeCh:    make(chan struct{}),
+		ctx:        ctx,
+		cancel:     cancel,
 		state:      StateDisconnected,
 		provenIdx:  -1,
 	}
@@ -107,20 +124,22 @@ func (r *ResumableConnection) ProvenTransport() (TransportKind, bool) {
 	return r.transports[r.provenIdx].Kind(), true
 }
 
-// Connect opens the chain and spawns the read goroutine. Returns once the first
-// transport has succeeded. Full-chain failure returns the last transport error.
-// Idempotent when already connected.
+// Connect opens the chain and spawns the read goroutine. ctx bounds the open
+// only; the stream lives until Close. Returns once a transport has succeeded,
+// or the last transport error. A no-op while already connected or connecting;
+// after the read goroutine gave up, Connect starts over.
 func (r *ResumableConnection) Connect(ctx context.Context) error {
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
-		return errors.New("honey: ResumableConnection closed")
+		return ErrConnectionClosed
 	}
-	if r.state == StateConnected {
+	if r.running {
 		r.mu.Unlock()
 		return nil
 	}
-	if r.conn != nil || r.provenIdx >= 0 {
+	r.running = true
+	if r.provenIdx >= 0 {
 		r.state = StateReconnecting
 	} else {
 		r.state = StateConnecting
@@ -129,11 +148,16 @@ func (r *ResumableConnection) Connect(ctx context.Context) error {
 
 	if err := r.openChain(ctx); err != nil {
 		r.mu.Lock()
+		r.running = false
 		r.state = StateDisconnected
 		r.mu.Unlock()
 		return err
 	}
-	go r.readLoop()
+	done := make(chan struct{})
+	r.mu.Lock()
+	r.loopDone = done
+	r.mu.Unlock()
+	go r.readLoop(done)
 	return nil
 }
 
@@ -144,28 +168,29 @@ func (r *ResumableConnection) openChain(ctx context.Context) error {
 	proven := r.provenIdx
 	r.mu.Unlock()
 
-	var lastErr error
+	order := make([]int, 0, len(r.transports))
 	if proven >= 0 && proven < len(r.transports) {
-		c, err := r.transports[proven].Connect(ctx, r.url, &r.opts)
-		if err == nil {
-			r.mu.Lock()
-			r.conn = c
-			r.state = StateConnected
-			r.mu.Unlock()
-			return nil
-		}
-		lastErr = err
+		order = append(order, proven)
 	}
-	for i, t := range r.transports {
-		if i == proven {
-			continue
+	for i := range r.transports {
+		if i != proven {
+			order = append(order, i)
 		}
-		c, err := t.Connect(ctx, r.url, &r.opts)
+	}
+
+	var lastErr error
+	for _, i := range order {
+		c, err := r.transports[i].Connect(ctx, r.url, &r.opts)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 		r.mu.Lock()
+		if r.closed {
+			r.mu.Unlock()
+			_ = c.Close()
+			return ErrConnectionClosed
+		}
 		r.conn = c
 		r.provenIdx = i
 		r.state = StateConnected
@@ -178,35 +203,62 @@ func (r *ResumableConnection) openChain(ctx context.Context) error {
 	return lastErr
 }
 
+func (r *ResumableConnection) maxAttempts() int {
+	switch {
+	case r.opts.MaxReconnectAttempts < 0:
+		return -1
+	case r.opts.MaxReconnectAttempts == 0:
+		return defaultReconnectAttempts
+	}
+	return r.opts.MaxReconnectAttempts
+}
+
+// backoff returns the delay before reconnect attempt n (1-based): exponential
+// from the base delay, capped, with jitter so clients do not reconnect in lockstep.
+func (r *ResumableConnection) backoff(n int) time.Duration {
+	base := defaultReconnectDelay
+	if r.opts.ReconnectDelayMs > 0 {
+		base = time.Duration(r.opts.ReconnectDelayMs) * time.Millisecond
+	}
+	d := base
+	for i := 1; i < n && d < maxReconnectDelay; i++ {
+		d *= 2
+	}
+	if d > maxReconnectDelay {
+		d = maxReconnectDelay
+	}
+	half := d / 2
+	return half + time.Duration(rand.Int64N(int64(half)+1))
+}
+
+func (r *ResumableConnection) fail(err error) {
+	select {
+	case r.errs <- err:
+	default:
+	}
+}
+
 // readLoop pumps Recv → events channel. Transport errors trigger reconnect via
-// the full chain (proven is invalidated on failure) up to MaxReconnectAttempts;
-// exhaustion emits on errs and terminates. Close signal short-circuits via ctx.
-func (r *ResumableConnection) readLoop() {
+// the full chain (proven is invalidated on failure) with backoff; exhaustion
+// emits on errs and terminates. Close short-circuits every wait.
+func (r *ResumableConnection) readLoop(done chan struct{}) {
 	defer func() {
 		r.mu.Lock()
+		conn := r.conn
+		r.conn = nil
+		r.running = false
 		r.state = StateDisconnected
-		if r.conn != nil {
-			_ = r.conn.Close()
-			r.conn = nil
-		}
 		r.mu.Unlock()
-		r.closeOnce.Do(func() {
-			close(r.events)
-			close(r.errs)
-		})
+		if conn != nil {
+			_ = conn.Close()
+		}
+		close(done)
 	}()
 
 	attempts := 0
-	maxAttempts := r.opts.MaxReconnectAttempts
-	delay := time.Duration(r.opts.ReconnectDelayMs) * time.Millisecond
+	limit := r.maxAttempts()
 
 	for {
-		select {
-		case <-r.closeCh:
-			return
-		default:
-		}
-
 		r.mu.Lock()
 		conn := r.conn
 		r.mu.Unlock()
@@ -214,83 +266,57 @@ func (r *ResumableConnection) readLoop() {
 			return
 		}
 
-		recvCtx, cancel := context.WithCancel(context.Background())
-		cancelDone := make(chan struct{})
-		go func() {
-			select {
-			case <-r.closeCh:
-				cancel()
-			case <-cancelDone:
-			}
-		}()
-		v, err := conn.Recv(recvCtx)
-		cancel()
-		close(cancelDone)
+		v, err := conn.Recv(r.ctx)
 
 		if err == nil {
+			attempts = 0
 			select {
 			case r.events <- v:
-				attempts = 0
-			case <-r.closeCh:
+			case <-r.ctx.Done():
 				return
 			}
 			continue
 		}
 
-		/* transport died — attempt reconnect unless capped */
-		select {
-		case <-r.closeCh:
-			return
-		default:
-		}
-		attempts++
-		if maxAttempts > 0 && attempts > maxAttempts {
-			select {
-			case r.errs <- err:
-			default:
-			}
+		if r.ctx.Err() != nil {
 			return
 		}
+
 		r.mu.Lock()
 		r.state = StateReconnecting
-		if r.conn != nil {
-			_ = r.conn.Close()
-			r.conn = nil
-		}
+		r.conn = nil
 		/* drop proven — prefer full chain on recv failure, matches Python */
 		r.provenIdx = -1
 		r.mu.Unlock()
-		if delay > 0 {
-			select {
-			case <-time.After(delay):
-			case <-r.closeCh:
+		_ = conn.Close()
+
+		for {
+			attempts++
+			if limit >= 0 && attempts > limit {
+				r.fail(err)
 				return
 			}
-		}
-		reopenCtx, reopenCancel := context.WithCancel(context.Background())
-		reopenDone := make(chan struct{})
-		go func() {
 			select {
-			case <-r.closeCh:
-				reopenCancel()
-			case <-reopenDone:
+			case <-time.After(r.backoff(attempts)):
+			case <-r.ctx.Done():
+				return
 			}
-		}()
-		reopenErr := r.openChain(reopenCtx)
-		reopenCancel()
-		close(reopenDone)
-		if reopenErr != nil {
-			select {
-			case r.errs <- reopenErr:
-			default:
+			openCtx, openCancel := context.WithTimeout(r.ctx, openTimeout)
+			err = r.openChain(openCtx)
+			openCancel()
+			if err == nil {
+				break
 			}
-			return
+			if errors.Is(err, ErrConnectionClosed) {
+				return
+			}
 		}
 	}
 }
 
-// Close signals the read goroutine to stop, closes the active transport, and
-// closes events / errs channels. Safe to call multiple times.
+// Close stops the read goroutine, closes the active transport, then closes the
+// Events and Errors channels. Safe to call multiple times and concurrently with
+// Recv; Connect after Close returns ErrConnectionClosed.
 func (r *ResumableConnection) Close() error {
 	r.mu.Lock()
 	if r.closed {
@@ -298,20 +324,31 @@ func (r *ResumableConnection) Close() error {
 		return nil
 	}
 	r.closed = true
-	close(r.closeCh)
+	r.cancel()
 	conn := r.conn
 	r.conn = nil
 	r.state = StateDisconnected
+	done := r.loopDone
 	r.mu.Unlock()
 	if conn != nil {
 		_ = conn.Close()
 	}
-	/* when Connect was never called (or failed before spawning readLoop) the
-	 * defer in readLoop never runs; closeOnce guards against double-close from
-	 * both paths. */
-	r.closeOnce.Do(func() {
-		close(r.events)
-		close(r.errs)
-	})
+	if done != nil {
+		<-done
+	}
+	close(r.events)
+	close(r.errs)
 	return nil
+}
+
+// Send writes data on the active transport. SSE and long-poll transports are
+// receive-only and return an error.
+func (r *ResumableConnection) Send(ctx context.Context, data any) error {
+	r.mu.Lock()
+	conn := r.conn
+	r.mu.Unlock()
+	if conn == nil {
+		return errors.New("honey: ResumableConnection not connected")
+	}
+	return conn.Send(ctx, data)
 }

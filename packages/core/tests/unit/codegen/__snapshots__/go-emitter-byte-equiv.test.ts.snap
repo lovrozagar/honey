@@ -9,37 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
 )
-
-var _ = fmt.Sprintf
-var _ = io.Discard
-var _ = strings.NewReader
-var _ = sync.Mutex{}
-
-type serviceEntry struct {
-	Method     string
-	Path       string
-	Params     []string
-	SSE        bool
-	WS         bool
-	Invalidate []string
-}
-
-var invalidationMap = map[string]map[string]serviceEntry{
-	"users": {
-		"create": {Method: "POST", Path: "/users", Params: nil, SSE: false, WS: false, Invalidate: nil},
-		"delete": {Method: "DELETE", Path: "/users/{id}", Params: []string{"id"}, SSE: false, WS: false, Invalidate: nil},
-		"get": {Method: "GET", Path: "/users/{id}", Params: []string{"id"}, SSE: false, WS: false, Invalidate: nil},
-		"list": {Method: "GET", Path: "/users", Params: nil, SSE: false, WS: false, Invalidate: nil},
-		"update": {Method: "PATCH", Path: "/users/{id}", Params: []string{"id"}, SSE: false, WS: false, Invalidate: nil},
-	},
-}
 
 // Client is the generated SDK client.
 type Client struct {
@@ -53,15 +23,13 @@ func NewClient(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		panic("honey sdk: Config.BaseURL must not be empty")
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
 	if cfg.AuthHeaderName == "" {
 		cfg.AuthHeaderName = "Authorization"
 	}
 	if cfg.AuthHeaderPrefix == "" {
 		cfg.AuthHeaderPrefix = "Bearer "
 	}
+	cfg = prepareConfig(cfg)
 	c := &Client{cfg: cfg}
 	c.stale = NewStaleTracker(cfg.Invalidation)
 	c.Users = newUsersResource(c)
@@ -70,10 +38,13 @@ func NewClient(cfg Config) *Client {
 
 // IsStale reports whether (method, path) currently sits inside an active stale window.
 func (c *Client) IsStale(method, path string) bool {
-	if c.stale == nil { return false }
+	if c.stale == nil {
+		return false
+	}
 	return c.stale.IsStale(method, path)
 }
 
+// UsersResource groups the "users" operations.
 type UsersResource struct {
 	client *Client
 }
@@ -84,97 +55,209 @@ func newUsersResource(c *Client) *UsersResource {
 }
 
 // Create — Create user
-func (u *UsersResource) Create(ctx context.Context, body UserCreateInput, opts *UsersCreateOpts) (*User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, u.client.cfg, "POST", "/users", q, body, nil, "", callHeaders, "POST /users", nil)
+func (r *UsersResource) Create(ctx context.Context, body UserCreateInput, opts *UsersCreateOpts) (*User, error) {
+	var err error
+	path := "/users"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string(nil)
+	selector := "POST " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "POST")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "POST", path, q, jsonBody(body), callHeaders, "POST /users", requestMeta)
 	if err != nil {
 		return nil, err
 	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "POST", requestMeta.SeqSnapshot)
+		}
+	}
 	var out User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
 // Delete — Delete user
-func (u *UsersResource) Delete(ctx context.Context, id string, opts *UsersDeleteOpts) error {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	_, err := doRequest(ctx, u.client.cfg, "DELETE", "/users/" + url.PathEscape(id), q, nil, nil, "", callHeaders, "DELETE /users/{id}", nil)
+func (r *UsersResource) Delete(ctx context.Context, id string, opts *UsersDeleteOpts) error {
+	var err error
+	path, err := expandPath("/users/{id}", map[string]string{"id": id})
 	if err != nil {
 		return err
+	}
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string{"id": id}
+	selector := "DELETE " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "DELETE")
+	}
+	_, err = doRequest(ctx, r.client.cfg, "DELETE", path, q, noBody(), callHeaders, "DELETE /users/{id}", requestMeta)
+	if err != nil {
+		return err
+	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "DELETE", requestMeta.SeqSnapshot)
+		}
 	}
 	return nil
 }
 
 // Get — Get user by id
-func (u *UsersResource) Get(ctx context.Context, id string, opts *UsersGetOpts) (*User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, u.client.cfg, "GET", "/users/" + url.PathEscape(id), q, nil, nil, "", callHeaders, "GET /users/{id}", nil)
+func (r *UsersResource) Get(ctx context.Context, id string, opts *UsersGetOpts) (*User, error) {
+	var err error
+	path, err := expandPath("/users/{id}", map[string]string{"id": id})
 	if err != nil {
 		return nil, err
 	}
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string{"id": id}
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /users/{id}", requestMeta)
+	if err != nil {
+		return nil, err
+	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
 // List — List users
-func (u *UsersResource) List(ctx context.Context, opts *UsersListOpts) (*[]User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, u.client.cfg, "GET", "/users", q, nil, nil, "", callHeaders, "GET /users", nil)
+func (r *UsersResource) List(ctx context.Context, opts *UsersListOpts) (*[]User, error) {
+	var err error
+	path := "/users"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string(nil)
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /users", requestMeta)
 	if err != nil {
 		return nil, err
 	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out []User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
 // Update — Patch user
-func (u *UsersResource) Update(ctx context.Context, id string, body UserPatchInput, opts *UsersUpdateOpts) (*User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, u.client.cfg, "PATCH", "/users/" + url.PathEscape(id), q, body, nil, "", callHeaders, "PATCH /users/{id}", nil)
+func (r *UsersResource) Update(ctx context.Context, id string, body UserPatchInput, opts *UsersUpdateOpts) (*User, error) {
+	var err error
+	path, err := expandPath("/users/{id}", map[string]string{"id": id})
 	if err != nil {
 		return nil, err
 	}
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string{"id": id}
+	selector := "PATCH " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "PATCH")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "PATCH", path, q, jsonBody(body), callHeaders, "PATCH /users/{id}", requestMeta)
+	if err != nil {
+		return nil, err
+	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "PATCH", requestMeta.SeqSnapshot)
+		}
+	}
 	var out User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
+// UsersCreateOpts holds the optional inputs of Create.
 type UsersCreateOpts struct {
 	Headers map[string]string
 }
 
+// UsersDeleteOpts holds the optional inputs of Delete.
 type UsersDeleteOpts struct {
 	Headers map[string]string
 }
 
+// UsersGetOpts holds the optional inputs of Get.
 type UsersGetOpts struct {
 	Headers map[string]string
 }
 
+// UsersListOpts holds the optional inputs of List.
 type UsersListOpts struct {
 	Headers map[string]string
 }
 
+// UsersUpdateOpts holds the optional inputs of Update.
 type UsersUpdateOpts struct {
 	Headers map[string]string
 }
@@ -210,6 +293,7 @@ type UserPatchInput struct {
 	Email *string \`json:"email,omitempty"\`
 	Name *string \`json:"name,omitempty"\`
 }
+
 "
 `;
 
@@ -222,34 +306,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
 )
-
-var _ = fmt.Sprintf
-var _ = io.Discard
-var _ = strings.NewReader
-var _ = sync.Mutex{}
-
-type serviceEntry struct {
-	Method     string
-	Path       string
-	Params     []string
-	SSE        bool
-	WS         bool
-	Invalidate []string
-}
-
-var invalidationMap = map[string]map[string]serviceEntry{
-	"animals": {
-		"get": {Method: "GET", Path: "/animals/{id}", Params: []string{"id"}, SSE: false, WS: false, Invalidate: nil},
-		"list": {Method: "GET", Path: "/animals", Params: nil, SSE: false, WS: false, Invalidate: nil},
-	},
-}
 
 // Client is the generated SDK client.
 type Client struct {
@@ -263,15 +320,13 @@ func NewClient(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		panic("honey sdk: Config.BaseURL must not be empty")
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
 	if cfg.AuthHeaderName == "" {
 		cfg.AuthHeaderName = "Authorization"
 	}
 	if cfg.AuthHeaderPrefix == "" {
 		cfg.AuthHeaderPrefix = "Bearer "
 	}
+	cfg = prepareConfig(cfg)
 	c := &Client{cfg: cfg}
 	c.stale = NewStaleTracker(cfg.Invalidation)
 	c.Animals = newAnimalsResource(c)
@@ -280,10 +335,13 @@ func NewClient(cfg Config) *Client {
 
 // IsStale reports whether (method, path) currently sits inside an active stale window.
 func (c *Client) IsStale(method, path string) bool {
-	if c.stale == nil { return false }
+	if c.stale == nil {
+		return false
+	}
 	return c.stale.IsStale(method, path)
 }
 
+// AnimalsResource groups the "animals" operations.
 type AnimalsResource struct {
 	client *Client
 }
@@ -294,41 +352,86 @@ func newAnimalsResource(c *Client) *AnimalsResource {
 }
 
 // Get — Get animal
-func (a *AnimalsResource) Get(ctx context.Context, id string, opts *AnimalsGetOpts) (*Animal, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, a.client.cfg, "GET", "/animals/" + url.PathEscape(id), q, nil, nil, "", callHeaders, "GET /animals/{id}", nil)
+func (r *AnimalsResource) Get(ctx context.Context, id string, opts *AnimalsGetOpts) (*Animal, error) {
+	var err error
+	path, err := expandPath("/animals/{id}", map[string]string{"id": id})
 	if err != nil {
 		return nil, err
 	}
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string{"id": id}
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /animals/{id}", requestMeta)
+	if err != nil {
+		return nil, err
+	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out Animal
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
 // List — List animals
-func (a *AnimalsResource) List(ctx context.Context, opts *AnimalsListOpts) (*[]Animal, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, a.client.cfg, "GET", "/animals", q, nil, nil, "", callHeaders, "GET /animals", nil)
+func (r *AnimalsResource) List(ctx context.Context, opts *AnimalsListOpts) (*[]Animal, error) {
+	var err error
+	path := "/animals"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string(nil)
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /animals", requestMeta)
 	if err != nil {
 		return nil, err
 	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out []Animal
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
+// AnimalsGetOpts holds the optional inputs of Get.
 type AnimalsGetOpts struct {
 	Headers map[string]string
 }
 
+// AnimalsListOpts holds the optional inputs of List.
 type AnimalsListOpts struct {
 	Headers map[string]string
 }
@@ -342,9 +445,47 @@ package sdk
 
 import "encoding/json"
 
+// Animal holds exactly one variant, selected by the "kind" property.
 type Animal struct {
-	Type string \`json:"kind"\`
-	Payload json.RawMessage \`json:"payload"\`
+	Dog *Dog
+	Cat *Cat
+	// Raw keeps a payload whose discriminator matches no known variant.
+	Raw json.RawMessage
+}
+
+func (u *Animal) UnmarshalJSON(data []byte) error {
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return err
+	}
+	var tag string
+	if v, ok := probe["kind"]; ok {
+		_ = json.Unmarshal(v, &tag)
+	}
+	*u = Animal{}
+	switch tag {
+	case "dog":
+		u.Dog = new(Dog)
+		return json.Unmarshal(data, u.Dog)
+	case "cat":
+		u.Cat = new(Cat)
+		return json.Unmarshal(data, u.Cat)
+	}
+	u.Raw = append(json.RawMessage(nil), data...)
+	return nil
+}
+
+func (u Animal) MarshalJSON() ([]byte, error) {
+	if u.Dog != nil {
+		return json.Marshal(u.Dog)
+	}
+	if u.Cat != nil {
+		return json.Marshal(u.Cat)
+	}
+	if u.Raw != nil {
+		return u.Raw, nil
+	}
+	return []byte("null"), nil
 }
 
 type Cat struct {
@@ -356,6 +497,7 @@ type Dog struct {
 	Breed string \`json:"breed"\`
 	Kind string \`json:"kind"\`
 }
+
 "
 `;
 
@@ -368,35 +510,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
 )
-
-var _ = fmt.Sprintf
-var _ = io.Discard
-var _ = strings.NewReader
-var _ = sync.Mutex{}
-
-type serviceEntry struct {
-	Method     string
-	Path       string
-	Params     []string
-	SSE        bool
-	WS         bool
-	Invalidate []string
-}
-
-var invalidationMap = map[string]map[string]serviceEntry{
-	"users": {
-		"create": {Method: "POST", Path: "/users", Params: nil, SSE: false, WS: false, Invalidate: []string{"GET /users", "GET /users/:id"}},
-		"getById": {Method: "GET", Path: "/users/{id}", Params: []string{"id"}, SSE: false, WS: false, Invalidate: nil},
-		"list": {Method: "GET", Path: "/users", Params: nil, SSE: false, WS: false, Invalidate: nil},
-	},
-}
 
 // Client is the generated SDK client.
 type Client struct {
@@ -410,15 +524,13 @@ func NewClient(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		panic("honey sdk: Config.BaseURL must not be empty")
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
 	if cfg.AuthHeaderName == "" {
 		cfg.AuthHeaderName = "Authorization"
 	}
 	if cfg.AuthHeaderPrefix == "" {
 		cfg.AuthHeaderPrefix = "Bearer "
 	}
+	cfg = prepareConfig(cfg)
 	c := &Client{cfg: cfg}
 	c.stale = NewStaleTracker(cfg.Invalidation)
 	c.Users = newUsersResource(c)
@@ -427,10 +539,13 @@ func NewClient(cfg Config) *Client {
 
 // IsStale reports whether (method, path) currently sits inside an active stale window.
 func (c *Client) IsStale(method, path string) bool {
-	if c.stale == nil { return false }
+	if c.stale == nil {
+		return false
+	}
 	return c.stale.IsStale(method, path)
 }
 
+// UsersResource groups the "users" operations.
 type UsersResource struct {
 	client *Client
 }
@@ -441,72 +556,127 @@ func newUsersResource(c *Client) *UsersResource {
 }
 
 // Create — Create user
-func (u *UsersResource) Create(ctx context.Context, body UserCreateInput, opts *UsersCreateOpts) (*User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	_pathParamsMap := map[string]string(nil)
-	_concretePath, _ := interpolatePath("/users", _pathParamsMap)
-	_concreteSelector := "POST " + _concretePath
-	var _requestMeta *RequestMeta
-	if u.client.stale != nil { _requestMeta = u.client.stale.BuildRequestMeta(_concreteSelector, _concretePath, "POST") }
-	result, err := doRequest(ctx, u.client.cfg, "POST", "/users", q, body, nil, "", callHeaders, "POST /users", _requestMeta)
+func (r *UsersResource) Create(ctx context.Context, body UserCreateInput, opts *UsersCreateOpts) (*User, error) {
+	var err error
+	path := "/users"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string(nil)
+	selector := "POST " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "POST")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "POST", path, q, jsonBody(body), callHeaders, "POST /users", requestMeta)
 	if err != nil {
 		return nil, err
 	}
-	if u.client.stale != nil {
-		u.client.stale.MarkStale(invalidationMap["users"]["create"].Invalidate, _pathParamsMap, _concreteSelector)
-		if _requestMeta != nil && _requestMeta.IsStale {
-			u.client.stale.ClearStale(_concreteSelector, _concretePath, "POST", _requestMeta.SeqSnapshot)
+	if r.client.stale != nil {
+		r.client.stale.MarkStale([]string{"GET /users", "GET /users/:id"}, pathParams, selector)
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "POST", requestMeta.SeqSnapshot)
 		}
 	}
 	var out User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
 // GetById — Get user by id
-func (u *UsersResource) GetById(ctx context.Context, id string, opts *UsersGetByIdOpts) (*User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, u.client.cfg, "GET", "/users/" + url.PathEscape(id), q, nil, nil, "", callHeaders, "GET /users/{id}", nil)
+func (r *UsersResource) GetById(ctx context.Context, id string, opts *UsersGetByIdOpts) (*User, error) {
+	var err error
+	path, err := expandPath("/users/{id}", map[string]string{"id": id})
 	if err != nil {
 		return nil, err
 	}
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string{"id": id}
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /users/{id}", requestMeta)
+	if err != nil {
+		return nil, err
+	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
 // List — List users
-func (u *UsersResource) List(ctx context.Context, opts *UsersListOpts) (*[]User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, u.client.cfg, "GET", "/users", q, nil, nil, "", callHeaders, "GET /users", nil)
+func (r *UsersResource) List(ctx context.Context, opts *UsersListOpts) (*[]User, error) {
+	var err error
+	path := "/users"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string(nil)
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /users", requestMeta)
 	if err != nil {
 		return nil, err
 	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out []User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
+// UsersCreateOpts holds the optional inputs of Create.
 type UsersCreateOpts struct {
 	Headers map[string]string
 }
 
+// UsersGetByIdOpts holds the optional inputs of GetById.
 type UsersGetByIdOpts struct {
 	Headers map[string]string
 }
 
+// UsersListOpts holds the optional inputs of List.
 type UsersListOpts struct {
 	Headers map[string]string
 }
@@ -526,6 +696,7 @@ type User struct {
 type UserCreateInput struct {
 	Email string \`json:"email"\`
 }
+
 "
 `;
 
@@ -538,36 +709,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
 )
-
-var _ = fmt.Sprintf
-var _ = io.Discard
-var _ = strings.NewReader
-var _ = sync.Mutex{}
-
-type serviceEntry struct {
-	Method     string
-	Path       string
-	Params     []string
-	SSE        bool
-	WS         bool
-	Invalidate []string
-}
-
-var invalidationMap = map[string]map[string]serviceEntry{
-	"comments": {
-		"get": {Method: "GET", Path: "/comments/{id}", Params: []string{"id"}, SSE: false, WS: false, Invalidate: nil},
-	},
-	"users": {
-		"get": {Method: "GET", Path: "/users/{id}", Params: []string{"id"}, SSE: false, WS: false, Invalidate: nil},
-	},
-}
 
 // Client is the generated SDK client.
 type Client struct {
@@ -582,15 +724,13 @@ func NewClient(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		panic("honey sdk: Config.BaseURL must not be empty")
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
 	if cfg.AuthHeaderName == "" {
 		cfg.AuthHeaderName = "Authorization"
 	}
 	if cfg.AuthHeaderPrefix == "" {
 		cfg.AuthHeaderPrefix = "Bearer "
 	}
+	cfg = prepareConfig(cfg)
 	c := &Client{cfg: cfg}
 	c.stale = NewStaleTracker(cfg.Invalidation)
 	c.Comments = newCommentsResource(c)
@@ -600,10 +740,13 @@ func NewClient(cfg Config) *Client {
 
 // IsStale reports whether (method, path) currently sits inside an active stale window.
 func (c *Client) IsStale(method, path string) bool {
-	if c.stale == nil { return false }
+	if c.stale == nil {
+		return false
+	}
 	return c.stale.IsStale(method, path)
 }
 
+// CommentsResource groups the "comments" operations.
 type CommentsResource struct {
 	client *Client
 }
@@ -614,21 +757,45 @@ func newCommentsResource(c *Client) *CommentsResource {
 }
 
 // Get — Get comment with self-ref parent
-func (c *CommentsResource) Get(ctx context.Context, id string, opts *CommentsGetOpts) (*Comment, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, c.client.cfg, "GET", "/comments/" + url.PathEscape(id), q, nil, nil, "", callHeaders, "GET /comments/{id}", nil)
+func (r *CommentsResource) Get(ctx context.Context, id string, opts *CommentsGetOpts) (*Comment, error) {
+	var err error
+	path, err := expandPath("/comments/{id}", map[string]string{"id": id})
 	if err != nil {
 		return nil, err
 	}
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string{"id": id}
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /comments/{id}", requestMeta)
+	if err != nil {
+		return nil, err
+	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out Comment
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
+// UsersResource groups the "users" operations.
 type UsersResource struct {
 	client *Client
 }
@@ -639,25 +806,50 @@ func newUsersResource(c *Client) *UsersResource {
 }
 
 // Get — Get user with comments
-func (u *UsersResource) Get(ctx context.Context, id string, opts *UsersGetOpts) (*User, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, u.client.cfg, "GET", "/users/" + url.PathEscape(id), q, nil, nil, "", callHeaders, "GET /users/{id}", nil)
+func (r *UsersResource) Get(ctx context.Context, id string, opts *UsersGetOpts) (*User, error) {
+	var err error
+	path, err := expandPath("/users/{id}", map[string]string{"id": id})
 	if err != nil {
 		return nil, err
 	}
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string{"id": id}
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /users/{id}", requestMeta)
+	if err != nil {
+		return nil, err
+	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out User
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
+// CommentsGetOpts holds the optional inputs of Get.
 type CommentsGetOpts struct {
 	Headers map[string]string
 }
 
+// UsersGetOpts holds the optional inputs of Get.
 type UsersGetOpts struct {
 	Headers map[string]string
 }
@@ -681,6 +873,7 @@ type User struct {
 	Email string \`json:"email"\`
 	Id string \`json:"id"\`
 }
+
 "
 `;
 
@@ -693,37 +886,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
-
-var _ = fmt.Sprintf
-var _ = io.Discard
-var _ = strings.NewReader
-var _ = sync.Mutex{}
-
-type serviceEntry struct {
-	Method     string
-	Path       string
-	Params     []string
-	SSE        bool
-	WS         bool
-	Invalidate []string
-}
-
-var invalidationMap = map[string]map[string]serviceEntry{
-	"await": {
-		"yield": {Method: "POST", Path: "/await/yield", Params: nil, SSE: false, WS: false, Invalidate: nil},
-	},
-	"class": {
-		"from": {Method: "GET", Path: "/class/from", Params: nil, SSE: false, WS: false, Invalidate: nil},
-	},
-}
 
 // Client is the generated SDK client.
 type Client struct {
@@ -738,15 +901,13 @@ func NewClient(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		panic("honey sdk: Config.BaseURL must not be empty")
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
 	if cfg.AuthHeaderName == "" {
 		cfg.AuthHeaderName = "Authorization"
 	}
 	if cfg.AuthHeaderPrefix == "" {
 		cfg.AuthHeaderPrefix = "Bearer "
 	}
+	cfg = prepareConfig(cfg)
 	c := &Client{cfg: cfg}
 	c.stale = NewStaleTracker(cfg.Invalidation)
 	c.Await = newAwaitResource(c)
@@ -756,10 +917,13 @@ func NewClient(cfg Config) *Client {
 
 // IsStale reports whether (method, path) currently sits inside an active stale window.
 func (c *Client) IsStale(method, path string) bool {
-	if c.stale == nil { return false }
+	if c.stale == nil {
+		return false
+	}
 	return c.stale.IsStale(method, path)
 }
 
+// AwaitResource groups the "await" operations.
 type AwaitResource struct {
 	client *Client
 }
@@ -770,21 +934,42 @@ func newAwaitResource(c *Client) *AwaitResource {
 }
 
 // Yield — More reserved words as resource and action
-func (a *AwaitResource) Yield(ctx context.Context, body json.RawMessage, opts *AwaitYieldOpts) (*json.RawMessage, error) {
-	q := url.Values{}
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, a.client.cfg, "POST", "/await/yield", q, body, nil, "", callHeaders, "POST /await/yield", nil)
+func (r *AwaitResource) Yield(ctx context.Context, body AwaitYieldBody, opts *AwaitYieldOpts) (*map[string]interface{}, error) {
+	var err error
+	path := "/await/yield"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string(nil)
+	selector := "POST " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "POST")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "POST", path, q, jsonBody(body), callHeaders, "POST /await/yield", requestMeta)
 	if err != nil {
 		return nil, err
 	}
-	var out json.RawMessage
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "POST", requestMeta.SeqSnapshot)
+		}
+	}
+	var out map[string]interface{}
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
+// ClassResource groups the "class" operations.
 type ClassResource struct {
 	client *Client
 }
@@ -795,27 +980,49 @@ func newClassResource(c *Client) *ClassResource {
 }
 
 // From — Both parts are Python reserved words
-func (c *ClassResource) From(ctx context.Context, opts *ClassFromOpts) (*string, error) {
-	q := url.Values{}
-	if opts != nil && opts.Async != nil { q.Set("async", strconv.FormatBool(*opts.Async)) }
-	if opts != nil && opts.Return != nil { q.Set("return", *opts.Return) }
-	var callHeaders map[string]string
-	if opts != nil { callHeaders = opts.Headers }
-	result, err := doRequest(ctx, c.client.cfg, "GET", "/class/from", q, nil, nil, "", callHeaders, "GET /class/from", nil)
+func (r *ClassResource) From(ctx context.Context, opts *ClassFromOpts) (*string, error) {
+	var err error
+	path := "/class/from"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		q.set("async", opts.Async)
+		q.set("return", opts.Return)
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
+	}
+	pathParams := map[string]string(nil)
+	selector := "GET " + path
+	var requestMeta *RequestMeta
+	if r.client.stale != nil {
+		requestMeta = r.client.stale.BuildRequestMeta(selector, path, "GET")
+	}
+	result, err := doRequest(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders, "GET /class/from", requestMeta)
 	if err != nil {
 		return nil, err
 	}
+	if r.client.stale != nil {
+		_ = pathParams
+		if requestMeta != nil && requestMeta.IsStale {
+			r.client.stale.ClearStale(selector, path, "GET", requestMeta.SeqSnapshot)
+		}
+	}
 	var out string
 	if len(result.body) > 0 {
-		if err := json.Unmarshal(result.body, &out); err != nil { return nil, err }
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, fmt.Errorf("honey: decode response: %w", err)
+		}
 	}
 	return &out, nil
 }
 
+// AwaitYieldOpts holds the optional inputs of Yield.
 type AwaitYieldOpts struct {
 	Headers map[string]string
 }
 
+// ClassFromOpts holds the optional inputs of From.
 type ClassFromOpts struct {
 	Async *bool
 	Return *string
@@ -829,6 +1036,11 @@ exports[`go-emitter byte-equivalence > reserved-words client + types stable > re
 
 package sdk
 
+
+type AwaitYieldBody struct {
+	Import string \`json:"import"\`
+	Lambda *int64 \`json:"lambda,omitempty"\`
+}
 "
 `;
 
@@ -839,37 +1051,8 @@ package sdk
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"iter"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
 )
-
-var _ json.RawMessage
-var _ = fmt.Sprintf
-var _ = io.Discard
-var _ = strings.NewReader
-var _ = sync.Mutex{}
-
-type serviceEntry struct {
-	Method     string
-	Path       string
-	Params     []string
-	SSE        bool
-	WS         bool
-	Invalidate []string
-}
-
-var invalidationMap = map[string]map[string]serviceEntry{
-	"events": {
-		"stream": {Method: "GET", Path: "/events/stream", Params: nil, SSE: true, WS: false, Invalidate: nil},
-	},
-}
 
 // Client is the generated SDK client.
 type Client struct {
@@ -883,15 +1066,13 @@ func NewClient(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		panic("honey sdk: Config.BaseURL must not be empty")
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
 	if cfg.AuthHeaderName == "" {
 		cfg.AuthHeaderName = "Authorization"
 	}
 	if cfg.AuthHeaderPrefix == "" {
 		cfg.AuthHeaderPrefix = "Bearer "
 	}
+	cfg = prepareConfig(cfg)
 	c := &Client{cfg: cfg}
 	c.stale = NewStaleTracker(cfg.Invalidation)
 	c.Events = newEventsResource(c)
@@ -900,10 +1081,13 @@ func NewClient(cfg Config) *Client {
 
 // IsStale reports whether (method, path) currently sits inside an active stale window.
 func (c *Client) IsStale(method, path string) bool {
-	if c.stale == nil { return false }
+	if c.stale == nil {
+		return false
+	}
 	return c.stale.IsStale(method, path)
 }
 
+// EventsResource groups the "events" operations.
 type EventsResource struct {
 	client *Client
 }
@@ -914,32 +1098,35 @@ func newEventsResource(c *Client) *EventsResource {
 }
 
 // Stream — Stream events
-func (e *EventsResource) Stream(ctx context.Context, opts *EventsStreamOpts) iter.Seq2[SSEEvent, error] {
+func (r *EventsResource) Stream(ctx context.Context, opts *EventsStreamOpts) iter.Seq2[SSEEvent, error] {
 	return func(yield func(SSEEvent, error) bool) {
-		q := url.Values{}
-		if opts != nil && opts.Topic != nil { q.Set("topic", *opts.Topic) }
+		path := "/events/stream"
+		var q queryList
 		callHeaders := map[string]string{"Accept": "text/event-stream"}
+		if opts != nil {
+			q.set("topic", opts.Topic)
+			for k, v := range opts.Headers {
+				callHeaders[k] = v
+			}
+		}
 		if opts != nil && opts.LastEventID != "" {
 			callHeaders["Last-Event-ID"] = opts.LastEventID
 		}
-		if opts != nil {
-			for k, v := range opts.Headers { callHeaders[k] = v }
+		resp, err := openStream(ctx, r.client.cfg, "GET", path, q, noBody(), callHeaders)
+		if err != nil {
+			yield(SSEEvent{}, err)
+			return
 		}
-		req, err := http.NewRequestWithContext(ctx, "GET", e.client.cfg.BaseURL+"/events/stream"+"?"+q.Encode(), nil)
-		if err != nil { yield(SSEEvent{}, err); return }
-		for k, v := range e.client.cfg.Headers { req.Header.Set(k, v) }
-		for k, v := range callHeaders { req.Header.Set(k, v) }
-		if e.client.cfg.BearerToken != "" { req.Header.Set(e.client.cfg.AuthHeaderName, e.client.cfg.AuthHeaderPrefix+e.client.cfg.BearerToken) }
-		resp, err := e.client.cfg.HTTPClient.Do(req)
-		if err != nil { yield(SSEEvent{}, err); return }
 		for ev, err := range parseSSEStream(ctx, resp) {
-			if !yield(ev, err) { return }
+			if !yield(ev, err) {
+				return
+			}
 		}
 	}
 }
 
+// EventsStreamOpts holds the optional inputs of Stream.
 type EventsStreamOpts struct {
-	LastEventId *string
 	Topic *string
 	LastEventID string
 	Headers map[string]string
@@ -952,6 +1139,7 @@ exports[`go-emitter byte-equivalence > sse client + types stable > sse types.go 
 
 package sdk
 
+
 "
 `;
 
@@ -962,38 +1150,9 @@ package sdk
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
 
 	"nhooyr.io/websocket"
 )
-
-var _ json.RawMessage
-var _ = fmt.Sprintf
-var _ = io.Discard
-var _ = strings.NewReader
-var _ = sync.Mutex{}
-
-type serviceEntry struct {
-	Method     string
-	Path       string
-	Params     []string
-	SSE        bool
-	WS         bool
-	Invalidate []string
-}
-
-var invalidationMap = map[string]map[string]serviceEntry{
-	"realtime": {
-		"subscribe": {Method: "GET", Path: "/realtime/subscribe", Params: nil, SSE: false, WS: true, Invalidate: nil},
-	},
-}
 
 // Client is the generated SDK client.
 type Client struct {
@@ -1007,15 +1166,13 @@ func NewClient(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		panic("honey sdk: Config.BaseURL must not be empty")
 	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
 	if cfg.AuthHeaderName == "" {
 		cfg.AuthHeaderName = "Authorization"
 	}
 	if cfg.AuthHeaderPrefix == "" {
 		cfg.AuthHeaderPrefix = "Bearer "
 	}
+	cfg = prepareConfig(cfg)
 	c := &Client{cfg: cfg}
 	c.stale = NewStaleTracker(cfg.Invalidation)
 	c.Realtime = newRealtimeResource(c)
@@ -1024,10 +1181,13 @@ func NewClient(cfg Config) *Client {
 
 // IsStale reports whether (method, path) currently sits inside an active stale window.
 func (c *Client) IsStale(method, path string) bool {
-	if c.stale == nil { return false }
+	if c.stale == nil {
+		return false
+	}
 	return c.stale.IsStale(method, path)
 }
 
+// RealtimeResource groups the "realtime" operations.
 type RealtimeResource struct {
 	client *Client
 }
@@ -1039,25 +1199,38 @@ func newRealtimeResource(c *Client) *RealtimeResource {
 
 // Subscribe — Subscribe to realtime updates
 func (r *RealtimeResource) Subscribe(ctx context.Context, opts *RealtimeSubscribeOpts) (*TypedWebSocket, error) {
-	q := url.Values{}
-	if opts != nil { q.Set("channel", opts.Channel) }
-	if opts != nil && opts.ReconnectToken != "" { q.Set("reconnect_token", opts.ReconnectToken) }
-	wsURL := r.client.cfg.BaseURL + "/realtime/subscribe"
-	if len(q) > 0 { wsURL += "?" + q.Encode() }
-	dialOpts := &websocket.DialOptions{}
-	if opts != nil && len(opts.Protocols) > 0 { dialOpts.Subprotocols = opts.Protocols }
-	if opts != nil && len(opts.Headers) > 0 {
-		dialOpts.HTTPHeader = http.Header{}
-		for k, v := range opts.Headers { dialOpts.HTTPHeader.Set(k, v) }
+	path := "/realtime/subscribe"
+	var q queryList
+	callHeaders := map[string]string{}
+	if opts != nil {
+		q.set("channel", opts.Channel)
+		q.set("reconnect_token", opts.ReconnectToken2)
+		for k, v := range opts.Headers {
+			callHeaders[k] = v
+		}
 	}
-	conn, _, err := websocket.Dial(ctx, wsURL, dialOpts)
-	if err != nil { return nil, err }
+	if opts != nil && opts.ReconnectToken != "" {
+		q.set("reconnect_token", opts.ReconnectToken)
+	}
+	wsURL, err := buildURL(r.client.cfg.BaseURL, path, q)
+	if err != nil {
+		return nil, err
+	}
+	dialOpts := &websocket.DialOptions{HTTPClient: streamClient(r.client.cfg), HTTPHeader: authHeaders(r.client.cfg, callHeaders)}
+	if opts != nil && len(opts.Protocols) > 0 {
+		dialOpts.Subprotocols = opts.Protocols
+	}
+	conn, _, err := websocket.Dial(ctx, toWsURL(wsURL), dialOpts)
+	if err != nil {
+		return nil, err
+	}
 	return newTypedWebSocket(conn), nil
 }
 
+// RealtimeSubscribeOpts holds the optional inputs of Subscribe.
 type RealtimeSubscribeOpts struct {
 	Channel string
-	ReconnectToken *string
+	ReconnectToken2 *string
 	ReconnectToken string
 	Protocols []string
 	Headers map[string]string
@@ -1069,6 +1242,7 @@ exports[`go-emitter byte-equivalence > ws client + types stable > ws types.go 1`
 "// Code generated by honey. DO NOT EDIT.
 
 package sdk
+
 
 "
 `;

@@ -42,7 +42,8 @@ describe("go-cli codegen — Tier 6: multipart", () => {
 		const result = generateGoCLI(multipartSpec, { binaryName: "acme" })
 		const uploads = result.files["cmd/uploads.go"]
 		expect(uploads).toMatch(/Content-Type/i)
-		expect(uploads).toMatch(/multipart\/form-data|boundary/i)
+		/* the boundary-bearing content type comes from the multipart writer */
+		expect(uploads).toContain(`req.Header.Set("Content-Type", mpCT)`)
 	})
 
 	it("[#41] missing required file path → exit code 4 with readable error", () => {

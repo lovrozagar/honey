@@ -7,14 +7,28 @@ import (
 	"net"
 )
 
+// UsageError marks bad flags, bad config and invalid input; it maps to exit 4.
+type UsageError struct{ Err error }
+
+func (e *UsageError) Error() string { return e.Err.Error() }
+func (e *UsageError) Unwrap() error { return e.Err }
+
+// Usage wraps err as a UsageError.
+func Usage(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &UsageError{Err: err}
+}
+
 // ExitFor maps a CLI-level error to a process exit code.
 //
 // Codes:
 //
 //	0  success
-//	1  4xx client error (status < 500)
-//	2  5xx server error (status >= 500)
-//	3  network / transport failure or status == 0
+//	1  4xx client error
+//	2  5xx server error
+//	3  network / transport failure or timeout
 //	4  bad flags / bad config / missing api key
 //	5  3xx unexpected redirect
 func ExitFor(err error) int {
@@ -24,20 +38,24 @@ func ExitFor(err error) int {
 	if errors.Is(err, ErrMissingAPIKey) {
 		return 4
 	}
+	var usage *UsageError
+	if errors.As(err, &usage) {
+		return 4
+	}
+
+	/* SDK errors expose Status() (APIError) */
+	var apiErr interface{ Status() int }
+	if errors.As(err, &apiErr) {
+		return exitForStatus(apiErr.Status())
+	}
+
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return 3
 	}
-
 	var netErr net.Error
 	if errors.As(err, &netErr) {
 		return 3
 	}
-
-	var apiErr interface{ StatusCode() int }
-	if errors.As(err, &apiErr) {
-		return exitForStatus(apiErr.StatusCode())
-	}
-
 	return 3
 }
 

@@ -20,7 +20,7 @@ func NewRoot(binaryName, version string) *cobra.Command {
 		Use:     binaryName,
 		Version: version,
 	}
-	root.PersistentFlags().String("api-key", "", "API key (overrides env + config file)")
+	root.PersistentFlags().String("api-key", "", "API key (overrides env + config file; visible to other local users in the process list, prefer the env var)")
 	root.PersistentFlags().String("base-url", "", "Override API base URL")
 	root.PersistentFlags().String("output", "json", "Output mode: json|ndjson|yaml|table")
 	root.PersistentFlags().Bool("verbose", false, "Print request metadata to stderr")

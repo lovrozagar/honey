@@ -2,54 +2,78 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
-// BuildMultipart assembles a multipart/form-data body.
+// BuildMultipart streams a multipart/form-data body: files are read as the
+// request is sent, not buffered in memory.
 //
-// fields are written as plain form fields.
-// files are keyed by form-field-name → absolute-or-relative file path.
+// fields are written as plain form fields; files are keyed by form-field-name →
+// file path. Every file is opened up front so a bad path fails before sending.
 //
 // Returns the body reader, the Content-Type header value (including boundary),
 // and any error.
 func BuildMultipart(fields map[string]string, files map[string]string) (io.Reader, string, error) {
-	var buf bytes.Buffer
-	writer := multipart.NewWriter(&buf)
+	fieldNames := sortedNames(fields)
+	fileNames := sortedNames(files)
 
-	for name, val := range fields {
-		if err := writer.WriteField(name, val); err != nil {
-			return nil, "", fmt.Errorf("write field %q: %w", name, err)
-		}
-	}
-
-	for name, path := range files {
+	opened := make(map[string]*os.File, len(files))
+	for _, name := range fileNames {
+		path := files[name]
 		if path == "" {
+			closeAll(opened)
 			return nil, "", fmt.Errorf("missing file path for field %q", name)
 		}
-		file, err := os.Open(path)
+		f, err := os.Open(path)
 		if err != nil {
-			return nil, "", fmt.Errorf("open file %s: %w", path, err)
+			closeAll(opened)
+			return nil, "", Usage(fmt.Errorf("open file %s: %w", path, err))
 		}
-		part, err := writer.CreateFormFile(name, filepath.Base(path))
-		if err != nil {
-			file.Close()
-			return nil, "", fmt.Errorf("create form file %q: %w", name, err)
-		}
-		if _, err := io.Copy(part, file); err != nil {
-			file.Close()
-			return nil, "", fmt.Errorf("copy file %s: %w", path, err)
-		}
-		file.Close()
+		opened[name] = f
 	}
 
-	if err := writer.Close(); err != nil {
-		return nil, "", fmt.Errorf("close multipart writer: %w", err)
-	}
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	go func() {
+		defer closeAll(opened)
+		for _, name := range fieldNames {
+			if err := writer.WriteField(name, fields[name]); err != nil {
+				pw.CloseWithError(fmt.Errorf("write field %q: %w", name, err))
+				return
+			}
+		}
+		for _, name := range fileNames {
+			part, err := writer.CreateFormFile(name, filepath.Base(files[name]))
+			if err != nil {
+				pw.CloseWithError(fmt.Errorf("create form file %q: %w", name, err))
+				return
+			}
+			if _, err := io.Copy(part, opened[name]); err != nil {
+				pw.CloseWithError(fmt.Errorf("copy file %s: %w", files[name], err))
+				return
+			}
+		}
+		pw.CloseWithError(writer.Close())
+	}()
+	return pr, writer.FormDataContentType(), nil
+}
 
-	return &buf, writer.FormDataContentType(), nil
+func sortedNames(m map[string]string) []string {
+	names := make([]string, 0, len(m))
+	for k := range m {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func closeAll(files map[string]*os.File) {
+	for _, f := range files {
+		f.Close()
+	}
 }

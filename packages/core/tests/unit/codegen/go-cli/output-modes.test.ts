@@ -45,7 +45,8 @@ describe("go-cli codegen — Tier 10: output modes", () => {
 	it("[#67] --output=table on primitive value → writes raw value", () => {
 		const result = generateGoCLI(crudSpec, { binaryName: "acme" })
 		const output = pickRuntime(result.files, "output.go")
-		expect(output).toMatch(/fmt\.Fprint(ln)?\(w\s*,\s*data\s*\)|fmt\.Fprint\(w,\s*v\)/)
+		/* the raw value goes through cell(), which strips control characters */
+		expect(output).toMatch(/fmt\.Fprintln\(w,\s*cell\(data\)\)/)
 	})
 
 	it("[#68] unknown --output=xml → exit code 4 with validation error listing allowed modes", () => {
@@ -58,6 +59,9 @@ describe("go-cli codegen — Tier 10: output modes", () => {
 	it("[#69] 204 No Content responses emit no body and return nil (exit 0)", () => {
 		const result = generateGoCLI(crudSpec, { binaryName: "acme" })
 		const users = result.files["cmd/users.go"]
-		expect(users).toMatch(/204|NoContent|StatusNoContent/)
+		/* an empty body decodes to nil and Emit(nil) prints nothing */
+		expect(users).toContain("cli.DecodeJSON(body)")
+		const output = pickRuntime(result.files, "output.go")
+		expect(output).toMatch(/if data == nil \{\s*return nil/)
 	})
 })

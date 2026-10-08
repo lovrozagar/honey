@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // APIError is the interface implemented by all SDK error types.
@@ -155,37 +158,37 @@ type StatusErrorMeta struct {
 
 var statusErrorMap = map[int]func(status int, body []byte, data any, resp *http.Response) APIError{
 	400: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &BadRequestError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &BadRequestError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	401: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &UnauthorizedError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &UnauthorizedError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	403: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &ForbiddenError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &ForbiddenError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	404: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &NotFoundError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &NotFoundError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	409: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &ConflictError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &ConflictError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	422: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &UnprocessableEntityError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &UnprocessableEntityError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	429: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &RateLimitError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &RateLimitError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	500: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &InternalServerError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &InternalServerError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	502: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &BadGatewayError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &BadGatewayError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	503: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &ServiceUnavailableError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &ServiceUnavailableError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 	504: func(s int, b []byte, d any, r *http.Response) APIError {
-		return &GatewayTimeoutError{Body: b, Data: d, Response: r, Message: string(b)}
+		return &GatewayTimeoutError{Body: b, Data: d, Response: r, Message: errorMessage(b, d)}
 	},
 }
 
@@ -203,5 +206,31 @@ func raiseForStatus(resp *http.Response, body []byte) error {
 	if fn, ok := statusErrorMap[resp.StatusCode]; ok {
 		return fn(resp.StatusCode, body, data, resp)
 	}
-	return &StatusError{StatusCode: resp.StatusCode, Body: body, Data: data, Response: resp, Message: string(body)}
+	return &StatusError{StatusCode: resp.StatusCode, Body: body, Data: data, Response: resp, Message: errorMessage(body, data)}
+}
+
+// errorMessage is the server's `message` field when the body is a JSON object
+// carrying one, else the body text. Control characters are dropped and the
+// result is capped, so a hostile server cannot fill logs or drive a terminal.
+func errorMessage(body []byte, data any) string {
+	text := string(body)
+	if m, ok := data.(map[string]any); ok {
+		if msg, ok := m["message"].(string); ok {
+			text = msg
+		}
+	}
+	var b strings.Builder
+	n := 0
+	for _, r := range text {
+		if n >= maxErrorMessageRunes {
+			b.WriteString("…")
+			break
+		}
+		if r == utf8.RuneError || unicode.IsControl(r) {
+			continue
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return b.String()
 }

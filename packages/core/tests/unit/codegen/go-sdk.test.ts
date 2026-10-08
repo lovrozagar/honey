@@ -168,19 +168,15 @@ describe("Tier 1: scaffold + package header", () => {
 		expect(result.files["doc.go"]).toContain("// Package sdk is an auto-generated client for Go Minimal.")
 	})
 
-	it("7. client.go imports required stdlib packages", () => {
+	it("7. client.go imports exactly the stdlib packages it uses", () => {
 		const crudSpec = loadFixture("crud")
 		const result = generateGoSDK(crudSpec, {})
 		const client = result.files["client.go"]
 		expect(client).toContain(`"context"`)
 		expect(client).toContain(`"encoding/json"`)
 		expect(client).toContain(`"fmt"`)
-		expect(client).toContain(`"io"`)
-		expect(client).toContain(`"net/http"`)
-		expect(client).toContain(`"net/url"`)
-		expect(client).toContain(`"strings"`)
-		expect(client).toContain(`"sync"`)
-		expect(client).toContain(`"time"`)
+		/* no `var _ = pkg.X` suppressions: unused packages are simply not imported */
+		expect(client).not.toMatch(/var _ = \w+\./)
 	})
 
 	it("8. types.go imports are empty or only encoding/json", () => {
@@ -256,8 +252,11 @@ describe("Tier 2: JSON Schema → Go type", () => {
 			},
 			new Map(),
 		)
-		expect(withDisc).toContain("Type string")
-		expect(withDisc).toContain("json.RawMessage")
+		/* one pointer field per variant plus Raw for unknown tags; the payload is not lost */
+		expect(withDisc).toContain("Dog *Dog")
+		expect(withDisc).toContain("Cat *Cat")
+		expect(withDisc).toContain("Raw json.RawMessage")
+		expect(withDisc).toContain(`probe["kind"]`)
 	})
 
 	it("18. top-level allOf → struct with embedded fields", () => {
@@ -414,11 +413,12 @@ describe("Tier 3: client methods", () => {
 		expect(client).toMatch(/func\s+\(c\s+\*Client\)\s+Ping\(/)
 	})
 
-	it("28. path params typed + url.PathEscape substitution", () => {
+	it("28. path params typed + expandPath substitution (rejects '', '.', '..')", () => {
 		const result = generateGoSDK(crudSpec, {})
 		const client = result.files["client.go"]
 		expect(client).toMatch(/func\s+\(\w+\s+\*UsersResource\)\s+Get\(ctx context\.Context,\s*id string/)
-		expect(client).toContain("url.PathEscape(id)")
+		expect(client).toContain(`expandPath("/users/{id}", map[string]string{"id": id})`)
+		expect(result.files["runtime.go"]).toContain(`value == "" || value == "." || value == ".."`)
 	})
 
 	it("29. query params → typed opts struct with pointer fields for optional", () => {
@@ -582,7 +582,10 @@ describe("Tier 5: SDKResult + Config", () => {
 		const client = result.files["client.go"]
 		expect(client).toContain("func NewClient(cfg Config) *Client")
 		expect(client).toContain("BaseURL")
-		expect(client).toMatch(/http\.Client\{.*Timeout/)
+		expect(client).toContain("prepareConfig(cfg)")
+		/* default client: no overall Timeout (it would cut streams); Config.Timeout bounds regular calls */
+		expect(result.files["runtime.go"]).toMatch(/cfg\.HTTPClient = &http\.Client\{CheckRedirect: sameHostRedirects\}/)
+		expect(result.files["runtime.go"]).toContain("context.WithTimeout(ctx, cfg.Timeout)")
 	})
 })
 
@@ -612,12 +615,12 @@ describe("Tier 6: SSE", () => {
 		expect(client).toContain("Last-Event-ID")
 	})
 
-	it("49. sse.go ships parseSSEStream using bufio.Scanner with custom split + max-buffer", () => {
+	it("49. sse.go ships a line-based parseSSEStream with a per-line cap", () => {
 		const result = generateGoSDK(sseSpec, {})
 		const sse = result.files["sse.go"]
-		expect(sse).toContain("bufio.Scanner")
 		expect(sse).toContain("parseSSEStream")
-		expect(sse).toContain("scanner.Buffer")
+		expect(sse).toContain("readSSELine")
+		expect(sse).toContain("sseMaxLine")
 	})
 
 	it("50. SSE non-2xx yields typed error before events then returns", () => {
@@ -691,11 +694,13 @@ describe("Tier 7: WebSocket", () => {
 		expect(ws).toContain("websocket.StatusNormalClosure")
 	})
 
-	it("59. TypedWebSocket has sendBuffer []byte + sync.Once for pre-OPEN buffering", () => {
+	it("59. TypedWebSocket fires close/error handlers and raises the 32 KiB read limit", () => {
 		const result = generateGoSDK(wsSpec, {})
 		const ws = result.files["ws.go"]
-		expect(ws).toContain("sendBuffer")
-		expect(ws).toContain("sync.Once")
+		expect(ws).not.toContain("sendBuffer")
+		expect(ws).toContain(`w.fanout("error"`)
+		expect(ws).toContain(`w.fanout("close"`)
+		expect(ws).toContain("conn.SetReadLimit(defaultWSReadLimit)")
 	})
 })
 
@@ -704,13 +709,10 @@ describe("Tier 7: WebSocket", () => {
 describe("Tier 8: invalidation", () => {
 	const invSpec = loadFixture("invalidation")
 
-	it("60. invalidationMap emitted in client.go for operations with x-invalidate", () => {
+	it("60. x-invalidate targets are marked stale inline by the mutation", () => {
 		const result = generateGoSDK(invSpec, {})
 		const client = result.files["client.go"]
-		expect(client).toContain("invalidationMap")
-		expect(client).toContain("users")
-		expect(client).toContain("create")
-		expect(client).toContain("GET /users")
+		expect(client).toMatch(/MarkStale\(\[\]string\{"GET \/users[^"]*"/)
 	})
 
 	it("61. StaleTracker struct in invalidation.go with sync.Mutex guard", () => {
@@ -799,9 +801,9 @@ describe("Tier 9: runtime + auth", () => {
 	it("71. HTTPClient override: NewClient uses provided *http.Client instead of default", () => {
 		const result = generateGoSDK(crudSpec, {})
 		const client = result.files["client.go"]
-		/* nil check then assign default */
-		expect(client).toMatch(/cfg\.HTTPClient\s*==\s*nil/)
-		expect(client).toContain("cfg.HTTPClient")
+		/* nil check then assign default, in the shared runtime */
+		expect(client).toContain("prepareConfig(cfg)")
+		expect(result.files["runtime.go"]).toMatch(/cfg\.HTTPClient\s*==\s*nil/)
 	})
 })
 
@@ -875,11 +877,12 @@ describe("type emitter — use-position / hoisted enums", () => {
 		expect(types, "20+ space alignment padding").not.toMatch(/ {20,}/)
 	}
 
-	it("75. nested object field → anonymous struct literal, no `type` inside", () => {
+	it("75. nested object field → hoisted named struct (anonymous literals stay assignable)", () => {
 		const spec = loadFixture("nested-object-field")
 		const types = generateGoSDK(spec, {}).files["types.go"]
 		assertStructurallyValid(types)
-		expect(types).toMatch(/Filters\s+struct\s*\{[\s\S]*?\}\s*`json:"filters"/)
+		expect(types).toMatch(/Filters\s+\*?(\w*Filters)\s+`json:"filters/)
+		expect(types).toMatch(/type\s+\w*Filters\s+struct\s*\{/)
 	})
 
 	it("76. nested string enum field → hoisted top-level type + reference", () => {
@@ -913,7 +916,8 @@ describe("type emitter — use-position / hoisted enums", () => {
 		const spec = loadFixture("array-of-nested-object")
 		const types = generateGoSDK(spec, {}).files["types.go"]
 		assertStructurallyValid(types)
-		expect(types).toMatch(/Items\s+\[\]struct\s*\{/)
+		expect(types).toMatch(/Items\s+\[\]\w*ItemsItem\s/)
+		expect(types).toMatch(/type\s+\w*ItemsItem\s+struct\s*\{/)
 		expect(types, "no `[]type X struct`").not.toMatch(/\[\]type\s+\w+/)
 	})
 
@@ -921,7 +925,7 @@ describe("type emitter — use-position / hoisted enums", () => {
 		const spec = loadFixture("map-value-nested-object")
 		const types = generateGoSDK(spec, {}).files["types.go"]
 		assertStructurallyValid(types)
-		expect(types).toMatch(/map\[string\]struct\s*\{/)
+		expect(types).toMatch(/map\[string\]\w+/)
 		expect(types, "no `map[string]type X`").not.toMatch(/map\[string\]type\s+\w+/)
 	})
 

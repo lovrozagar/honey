@@ -50,7 +50,9 @@ describe("go-cli codegen — Tier 8: naming", () => {
 		const reservedSpec = loadFixture("go-reserved")
 		const result = generateGoCLI(reservedSpec, { binaryName: "acme" })
 		const allSrc = Object.values(result.files).join("\n")
-		expect(allSrc).toMatch(/Use:\s*"type"/)
+		/* the resource command keeps its kebab name; a path param named `type` keeps --type */
+		expect(allSrc).toMatch(/Use:\s*"go-keywords"/)
+		expect(allSrc).toMatch(/StringVar\(&\w+, "type"/)
 	})
 
 	it("[#51] dot-chained 3-segment extract.table.stream → cmd path `extract table-stream`", () => {

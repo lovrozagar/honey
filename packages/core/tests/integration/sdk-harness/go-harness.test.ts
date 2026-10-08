@@ -915,7 +915,12 @@ func main() {
 		Size int    \`json:"size"\`
 		Hash string \`json:"hash"\`
 	}
-	if err := json.Unmarshal(*raw, &parsed); err != nil {
+	/* the response is a typed struct; round-trip it through JSON to read it generically */
+	rawBytes, err := json.Marshal(raw)
+	if err != nil {
+		panic(err)
+	}
+	if err := json.Unmarshal(rawBytes, &parsed); err != nil {
 		panic(err)
 	}
 	out := map[string]interface{}{
@@ -1708,9 +1713,13 @@ type echoResp struct {
 	IdempotencyKey string \`json:"idempotencyKey"\`
 }
 
-func decode(raw *json.RawMessage) string {
+func decode(raw any) string {
+	b, err := json.Marshal(raw)
+	if err != nil {
+		panic(err)
+	}
 	var r echoResp
-	if err := json.Unmarshal(*raw, &r); err != nil {
+	if err := json.Unmarshal(b, &r); err != nil {
 		panic(err)
 	}
 	return r.IdempotencyKey

@@ -409,7 +409,7 @@ describe("toIR", () => {
 		const spec = specWithOp("/users/{id}", "get", { operationId: "getUser", responses: {} })
 		const ir = toIR(spec)
 		const op = ir.operations[0]
-		expect(op.params.path).toEqual([{ name: "id", schema: { kind: "scalar", type: "string" } }])
+		expect(op.params.path).toEqual([{ name: "id", required: true, schema: { kind: "scalar", type: "string" } }])
 	})
 
 	it("path params use declared schema when present", () => {

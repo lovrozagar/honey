@@ -4,15 +4,15 @@ package sdk
 
 import (
 	"fmt"
-	"net/url"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
 
-/* placeholderRe matches `{name}` and `:name` placeholders. */
-var placeholderRe = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)\}|:([a-zA-Z_][a-zA-Z0-9_]*)`)
+/* placeholderRe matches `{name}` (any name without braces or slashes) and a
+ * `:name` segment. A colon inside a segment (`/ops/1:cancel`) is literal. */
+var placeholderRe = regexp.MustCompile(`\{([^{}/]+)\}|(^|/):([a-zA-Z_][a-zA-Z0-9_]*)`)
 
 /* patternRegexCache caches compiled placeholder→`[^/]+` regexps per pattern key. */
 var patternRegexCache sync.Map /* map[string]*regexp.Regexp */
@@ -44,7 +44,11 @@ func compilePattern(pattern string) *regexp.Regexp {
 	b.WriteByte('^')
 	last := 0
 	for _, m := range matches {
-		b.WriteString(regexp.QuoteMeta(pattern[last:m[0]]))
+		start := m[0]
+		if pattern[start] == '/' {
+			start++ /* keep the segment slash literal */
+		}
+		b.WriteString(regexp.QuoteMeta(pattern[last:start]))
 		b.WriteString(`[^/]+`)
 		last = m[1]
 	}
@@ -78,8 +82,10 @@ func interpolatePath(template string, params map[string]string) (string, error) 
 	out := placeholderRe.ReplaceAllStringFunc(template, func(match string) string {
 		groups := placeholderRe.FindStringSubmatch(match)
 		key := groups[1]
+		prefix := ""
 		if key == "" {
-			key = groups[2]
+			prefix = groups[2]
+			key = groups[3]
 		}
 		val, ok := params[key]
 		if !ok {
@@ -88,7 +94,7 @@ func interpolatePath(template string, params map[string]string) (string, error) 
 			}
 			return match
 		}
-		return url.PathEscape(val)
+		return prefix + escapePathSegment(val)
 	})
 	if missing != "" {
 		return "", fmt.Errorf("interpolatePath: missing path param %q", missing)
@@ -98,8 +104,8 @@ func interpolatePath(template string, params map[string]string) (string, error) 
 
 // resolveInvalidationTargetsForMutation expands templated `METHOD /path/{x}`
 // invalidation entries to concrete `METHOD /path/abc` selectors using params.
-// Pattern-only entries (no params provided) pass through; entries whose
-// placeholders cannot be resolved are dropped.
+// An entry whose placeholders cannot all be resolved stays a pattern, so it
+// marks every instance stale (TS parity).
 func resolveInvalidationTargetsForMutation(targets []string, params map[string]string) []string {
 	out := make([]string, 0, len(targets))
 	for _, entry := range targets {
@@ -116,6 +122,7 @@ func resolveInvalidationTargetsForMutation(targets []string, params map[string]s
 		}
 		concrete, err := interpolatePath(template, params)
 		if err != nil {
+			out = append(out, entry)
 			continue
 		}
 		out = append(out, method+" "+concrete)
@@ -207,11 +214,8 @@ func (t *StaleTracker) ClearStale(concreteSelector, concretePath, method string,
 		if entry.seq > seqSnapshot {
 			continue
 		}
-		if !strings.Contains(key, "{") && !strings.Contains(key, ":") {
-			continue
-		}
 		spaceIdx := strings.IndexByte(key, ' ')
-		if spaceIdx == -1 {
+		if spaceIdx == -1 || !pathHasPlaceholders(key[spaceIdx+1:]) {
 			continue
 		}
 		if key[:spaceIdx] != method {
@@ -323,11 +327,8 @@ func (t *StaleTracker) lookupLocked(concreteSelector, concretePath, method strin
 		if key == concreteSelector {
 			continue
 		}
-		if !strings.Contains(key, "{") && !strings.Contains(key, ":") {
-			continue
-		}
 		spaceIdx := strings.IndexByte(key, ' ')
-		if spaceIdx == -1 {
+		if spaceIdx == -1 || !pathHasPlaceholders(key[spaceIdx+1:]) {
 			continue
 		}
 		if key[:spaceIdx] != method {

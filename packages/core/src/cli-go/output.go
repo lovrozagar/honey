@@ -2,15 +2,65 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"unicode"
 
 	"sigs.k8s.io/yaml"
 )
+
+// DecodeJSON decodes a response body keeping numbers exact (json.Number), so a
+// 64-bit id is printed as sent instead of as a rounded float.
+func DecodeJSON(body []byte) (any, error) {
+	if len(body) == 0 {
+		return nil, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	var out any
+	if err := dec.Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Sanitize drops control characters (ESC, CR, tabs, …) so server-controlled
+// text cannot drive the terminal or break table layout.
+func Sanitize(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' {
+			return ' '
+		}
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+func cell(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return Sanitize(t)
+	case json.Number:
+		return t.String()
+	case map[string]any, []any:
+		enc, err := json.Marshal(t)
+		if err != nil {
+			return Sanitize(fmt.Sprint(t))
+		}
+		return Sanitize(string(enc))
+	default:
+		return Sanitize(fmt.Sprint(t))
+	}
+}
 
 // Emit writes data to w in the requested mode.
 //
@@ -67,11 +117,15 @@ func printTable(data any, w io.Writer) error {
 		}
 		keys := collectKeys(rows)
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, strings.Join(keys, "\t"))
+		header := make([]string, len(keys))
+		for i, k := range keys {
+			header[i] = Sanitize(k)
+		}
+		fmt.Fprintln(tw, strings.Join(header, "\t"))
 		for _, row := range rows {
 			cols := make([]string, len(keys))
 			for i, k := range keys {
-				cols[i] = fmt.Sprintf("%v", row[k])
+				cols[i] = cell(row[k])
 			}
 			fmt.Fprintln(tw, strings.Join(cols, "\t"))
 		}
@@ -84,11 +138,11 @@ func printTable(data any, w io.Writer) error {
 		sort.Strings(keys)
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 		for _, k := range keys {
-			fmt.Fprintf(tw, "%s\t%v\n", k, v[k])
+			fmt.Fprintf(tw, "%s\t%s\n", Sanitize(k), cell(v[k]))
 		}
 		return tw.Flush()
 	default:
-		_, err := fmt.Fprintln(w, data)
+		_, err := fmt.Fprintln(w, cell(data))
 		return err
 	}
 }

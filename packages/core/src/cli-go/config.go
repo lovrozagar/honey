@@ -2,10 +2,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/pflag"
@@ -44,21 +47,30 @@ func LoadConfig(flags *pflag.FlagSet, envPrefix, configName string) (Config, err
 	var cfg Config
 
 	cfgPath := ""
+	explicit := false
 	if flags.Changed("config") {
 		v, _ := flags.GetString("config")
 		cfgPath = v
+		explicit = true
 	} else if v := os.Getenv(envPrefix + "_CONFIG"); v != "" {
 		cfgPath = v
+		explicit = true
 	} else {
 		cfgPath = defaultConfigPath(configName)
 	}
 
 	var fromFile tomlConfig
 	if cfgPath != "" {
-		if data, err := os.ReadFile(cfgPath); err == nil {
+		data, err := os.ReadFile(cfgPath)
+		switch {
+		case err == nil:
 			if err := toml.Unmarshal(data, &fromFile); err != nil {
-				return cfg, fmt.Errorf("parse config %s: %w", cfgPath, err)
+				return cfg, Usage(fmt.Errorf("parse config %s: %w", cfgPath, err))
 			}
+			warnIfReadableByOthers(cfgPath, fromFile.APIKey != "")
+		case explicit || !errors.Is(err, fs.ErrNotExist):
+			/* a config the user named must exist; only the default path may be absent */
+			return cfg, Usage(fmt.Errorf("read config %s: %w", cfgPath, err))
 		}
 	}
 	cfg.ConfigPath = cfgPath
@@ -111,6 +123,21 @@ func LoadConfig(flags *pflag.FlagSet, envPrefix, configName string) (Config, err
 	}
 
 	return cfg, nil
+}
+
+// warnIfReadableByOthers warns when a config file holding an API key can be
+// read by group or other users.
+func warnIfReadableByOthers(path string, hasKey bool) {
+	if !hasKey || runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		fmt.Fprintf(os.Stderr, "warning: %s holds an API key and is readable by other users; run: chmod 600 %s\n", path, path)
+	}
 }
 
 func defaultConfigPath(configName string) string {

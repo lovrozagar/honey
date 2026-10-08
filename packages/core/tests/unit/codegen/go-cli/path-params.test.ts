@@ -25,7 +25,7 @@ describe("go-cli codegen — Tier 2: path params", () => {
 		expect(users).toContain(`usersGetCmd.MarkFlagRequired("id")`)
 	})
 
-	it("[#11] snake_case path param {project_id} → --project-id flag + projectID Go var", () => {
+	it("[#11] snake_case path param {project_id} → --project-id flag, sent under its wire name", () => {
 		const spec = {
 			openapi: "3.1.0",
 			info: { title: "T", version: "1.0.0" },
@@ -49,10 +49,12 @@ describe("go-cli codegen — Tier 2: path params", () => {
 		const result = generateGoCLI(spec, { binaryName: "acme" })
 		const projects = result.files["cmd/projects.go"]
 		expect(projects).toContain(`"project-id"`)
-		expect(projects).toContain("projectID")
+		expect(projects).toMatch(
+			/HoneyExpandPath\("\/projects\/\{project_id\}", map\[string\]string\{"project_id": \w+\}\)/,
+		)
 	})
 
-	it("[#12] multi-param path /orgs/{org_id}/projects/{project_id}/tables/{table_id} → 3 required flags + url.PathEscape per segment", () => {
+	it("[#12] multi-param path /orgs/{org_id}/projects/{project_id}/tables/{table_id} → 3 required flags + one escaped expansion", () => {
 		const spec = {
 			openapi: "3.1.0",
 			info: { title: "T", version: "1.0.0" },
@@ -75,9 +77,8 @@ describe("go-cli codegen — Tier 2: path params", () => {
 		expect(tables).toContain(`MarkFlagRequired("org-id")`)
 		expect(tables).toContain(`MarkFlagRequired("project-id")`)
 		expect(tables).toContain(`MarkFlagRequired("table-id")`)
-		expect(tables).toContain("url.PathEscape(orgID)")
-		expect(tables).toContain("url.PathEscape(projectID)")
-		expect(tables).toContain("url.PathEscape(tableID)")
+		/* HoneyExpandPath escapes each value and rejects "", "." and ".." */
+		expect(tables).toMatch(/"org_id": \w+, "project_id": \w+, "table_id": \w+/)
 	})
 
 	it('[#13] path/body field collision (both "id") → path flag wins, body prop becomes --body-id', () => {
@@ -115,12 +116,12 @@ describe("go-cli codegen — Tier 2: path params", () => {
 		expect(things).toContain(`"body-id"`)
 	})
 
-	it("[#14] reserved Go keyword path param {type} → Go var type_, flag name stays --type", () => {
+	it("[#14] reserved Go keyword path param {type} → flag name stays --type, Go var is not the keyword", () => {
 		const result = generateGoCLI(reservedSpec, { binaryName: "acme" })
 		const file = result.files["cmd/goKeywords.go"] ?? result.files["cmd/go-keywords.go"]
 		expect(file).toBeDefined()
 		const src = file as string
 		expect(src).toContain(`"type"`)
-		expect(src).toMatch(/\btype_\b/)
+		expect(src).not.toMatch(/\bvar type\b/)
 	})
 })

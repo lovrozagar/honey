@@ -5,6 +5,7 @@ package sdk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 
 	"nhooyr.io/websocket"
@@ -19,31 +20,35 @@ const WSStatusGoingAway = websocket.StatusGoingAway
 // WSStatusProtocolError is the protocol error close code (1002).
 const WSStatusProtocolError = websocket.StatusProtocolError
 
-// TypedWebSocket wraps a nhooyr.io/websocket connection with a buffered send
-// queue (pre-OPEN) and an event fanout system that mirrors the TS client's .on()
-// escape hatch.
-//
-// Pre-OPEN buffering: sends before the first read are queued in sendBuffer and
-// flushed on the first successful read via sync.Once — matches TS client.ws.ts.
+// defaultWSReadLimit replaces nhooyr's 32 KiB default, which closes the
+// connection on any larger frame.
+const defaultWSReadLimit = 16 << 20
+
+// TypedWebSocket wraps a nhooyr.io/websocket connection with an event fanout
+// system that mirrors the TS client's .on() escape hatch.
 type TypedWebSocket struct {
-	conn        *websocket.Conn
-	sendBuffer  []byte
-	once        sync.Once
-	mu          sync.Mutex
-	handlers    map[string][]func(data []byte)
-	dialOptions websocket.DialOptions
+	conn     *websocket.Conn
+	mu       sync.Mutex
+	handlers map[string][]func(data []byte)
+	closed   bool
 }
 
 // newTypedWebSocket constructs a TypedWebSocket from an already-dialled conn.
 func newTypedWebSocket(conn *websocket.Conn) *TypedWebSocket {
+	conn.SetReadLimit(defaultWSReadLimit)
 	return &TypedWebSocket{
 		conn:     conn,
 		handlers: make(map[string][]func(data []byte)),
 	}
 }
 
-// Send serialises data to JSON when it is a struct or map, passes []byte and
-// string through as-is. Sends are buffered until the first Read call flushes them.
+// SetReadLimit sets the largest inbound message, in bytes (default 16 MiB).
+func (w *TypedWebSocket) SetReadLimit(n int64) {
+	w.conn.SetReadLimit(n)
+}
+
+// Send serialises data to JSON when it is a struct or map, and passes []byte
+// (binary frame) and string (text frame) through as-is.
 func (w *TypedWebSocket) Send(ctx context.Context, data interface{}) error {
 	switch v := data.(type) {
 	case []byte:
@@ -60,28 +65,35 @@ func (w *TypedWebSocket) Send(ctx context.Context, data interface{}) error {
 }
 
 // Close sends a WebSocket close frame with the given status code and reason.
+// A reason over 123 bytes is truncated to fit the frame.
 func (w *TypedWebSocket) Close(code websocket.StatusCode, reason string) error {
-	return w.conn.Close(code, reason)
+	if len(reason) > 123 {
+		reason = reason[:123]
+	}
+	err := w.conn.Close(code, reason)
+	w.fireClose(int(code), reason)
+	return err
 }
 
-// Read reads the next message from the connection.
-// On the first call, any pre-OPEN buffered send is flushed via sync.Once.
+// Read reads the next message from the connection. On a close frame it fires
+// "close" handlers (data is the close reason); on any other failure it fires
+// "error" handlers (data is the error text).
 func (w *TypedWebSocket) Read(ctx context.Context) ([]byte, error) {
-	w.once.Do(func() {
-		if len(w.sendBuffer) > 0 {
-			_ = w.conn.Write(ctx, websocket.MessageText, w.sendBuffer)
-			w.sendBuffer = nil
-		}
-	})
 	_, msg, err := w.conn.Read(ctx)
 	if err != nil {
+		var ce websocket.CloseError
+		if errors.As(err, &ce) {
+			w.fireClose(int(ce.Code), ce.Reason)
+		} else {
+			w.fanout("error", []byte(err.Error()))
+		}
 		return nil, err
 	}
 	w.fanout("message", msg)
 	return msg, nil
 }
 
-// On registers an event handler. Supported events: "message", "close", "error", "open".
+// On registers an event handler. Supported events: "message", "close", "error".
 // The handler receives the raw message bytes; callers unmarshal as needed.
 // This is an escape hatch — prefer ranging over Read for typed message dispatch.
 func (w *TypedWebSocket) On(event string, handler func(data []byte)) {
@@ -90,9 +102,21 @@ func (w *TypedWebSocket) On(event string, handler func(data []byte)) {
 	w.handlers[event] = append(w.handlers[event], handler)
 }
 
+func (w *TypedWebSocket) fireClose(code int, reason string) {
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return
+	}
+	w.closed = true
+	w.mu.Unlock()
+	_ = code
+	w.fanout("close", []byte(reason))
+}
+
 func (w *TypedWebSocket) fanout(event string, data []byte) {
 	w.mu.Lock()
-	handlers := w.handlers[event]
+	handlers := append([]func([]byte){}, w.handlers[event]...)
 	w.mu.Unlock()
 	for _, h := range handlers {
 		h(data)

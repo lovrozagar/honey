@@ -10,8 +10,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
+	"reflect"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,21 +56,102 @@ type ResponseContext struct {
 }
 
 // Config holds all configuration for the SDK client.
+//
+// Timeout bounds a whole regular request, including reading the response body.
+// Streams (SSE, WebSocket, realtime) are not bounded by it. Zero means 30s; a
+// negative value disables the timeout.
+//
+// HTTPClient defaults to a client that does not follow redirects to another
+// host (the 3xx response is returned as an error instead), so custom auth
+// headers never reach a different origin.
+//
+// MaxResponseBytes caps a buffered response body. Zero means 100 MiB; a
+// negative value disables the cap.
 type Config struct {
-	BaseURL string
-	BearerToken string
-	Headers map[string]string
-	Timeout time.Duration
-	ThrowOnError bool
-	StaleMaxEntries int
-	Invalidation *InvalidationConfig
-	OnAuthExpired func(context.Context) (string, error)
-	HTTPClient *http.Client
-	AuthHeaderName string
+	BaseURL          string
+	BearerToken      string
+	Headers          map[string]string
+	Timeout          time.Duration
+	ThrowOnError     bool
+	StaleMaxEntries  int
+	Invalidation     *InvalidationConfig
+	OnAuthExpired    func(context.Context) (string, error)
+	HTTPClient       *http.Client
+	AuthHeaderName   string
 	AuthHeaderPrefix string
-	OnRequest []func(*RequestContext) error
-	OnResponse []func(*ResponseContext) error
-	OnLog func(LogEntry)
+	OnRequest        []func(*RequestContext) error
+	OnResponse       []func(*ResponseContext) error
+	OnLog            func(LogEntry)
+	MaxResponseBytes int64
+
+	auth *authState
+}
+
+const (
+	defaultTimeout          = 30 * time.Second
+	defaultMaxResponseBytes = 100 << 20
+	maxErrorMessageRunes    = 512
+)
+
+// authState holds the current bearer token so a refreshed token is reused by
+// later calls, and serializes refreshes so N concurrent 401s refresh once.
+type authState struct {
+	mu    sync.Mutex
+	token string
+}
+
+func (a *authState) current(cfg Config) string {
+	if a == nil {
+		return cfg.BearerToken
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.token
+}
+
+// refresh calls OnAuthExpired unless another call already replaced rejected.
+func (a *authState) refresh(ctx context.Context, cfg Config, rejected string) (string, error) {
+	if a == nil {
+		return cfg.OnAuthExpired(ctx)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.token != rejected {
+		return a.token, nil
+	}
+	token, err := cfg.OnAuthExpired(ctx)
+	if err != nil {
+		return "", err
+	}
+	a.token = token
+	return token, nil
+}
+
+// prepareConfig fills defaults. NewClient calls it once.
+func prepareConfig(cfg Config) Config {
+	if cfg.HTTPClient == nil {
+		cfg.HTTPClient = &http.Client{CheckRedirect: sameHostRedirects}
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = defaultTimeout
+	}
+	if cfg.MaxResponseBytes == 0 {
+		cfg.MaxResponseBytes = defaultMaxResponseBytes
+	}
+	cfg.auth = &authState{token: cfg.BearerToken}
+	return cfg
+}
+
+// sameHostRedirects follows redirects on the same scheme and host only.
+func sameHostRedirects(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("honey: stopped after 10 redirects")
+	}
+	first := via[0].URL
+	if req.URL.Scheme != first.Scheme || req.URL.Host != first.Host {
+		return http.ErrUseLastResponse
+	}
+	return nil
 }
 
 // LogEntry is the payload passed to Config.OnLog. Consumers plug in their own
@@ -116,6 +205,321 @@ type requestResult struct {
 	resp   *http.Response
 }
 
+// requestBody is one request payload. JSON values and byte payloads can be
+// sent again on an auth retry; a Reader cannot.
+type requestBody struct {
+	json        any
+	hasJSON     bool
+	raw         []byte
+	hasRaw      bool
+	reader      io.Reader
+	contentType string
+}
+
+func noBody() requestBody { return requestBody{} }
+
+func jsonBody(v any) requestBody { return requestBody{json: v, hasJSON: true} }
+
+func readerBody(r io.Reader, contentType string) requestBody {
+	return requestBody{reader: r, contentType: contentType}
+}
+
+func formBody(values url.Values) requestBody {
+	return requestBody{raw: []byte(values.Encode()), hasRaw: true, contentType: "application/x-www-form-urlencoded"}
+}
+
+func rawBody(raw []byte, contentType string) requestBody {
+	return requestBody{raw: raw, hasRaw: true, contentType: contentType}
+}
+
+// setHeaderValue sets a header parameter: nil and nil pointers are skipped,
+// slices are joined with commas.
+func setHeaderValue(h map[string]string, name string, v any) {
+	var q queryList
+	q.set(name, v)
+	if len(q) == 0 {
+		return
+	}
+	values := make([]string, 0, len(q))
+	for _, p := range q {
+		values = append(values, p.value)
+	}
+	h[name] = strings.Join(values, ",")
+}
+
+// hasHeader reports whether h has name in any casing.
+func hasHeader(h map[string]string, name string) bool {
+	for k := range h {
+		if strings.EqualFold(k, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (b requestBody) present() bool { return b.hasJSON || b.hasRaw || b.reader != nil }
+
+func (b requestBody) replayable() bool { return b.reader == nil }
+
+// bytes returns the encoded payload for JSON and raw bodies.
+func (b requestBody) bytes() ([]byte, error) {
+	if b.hasRaw {
+		return b.raw, nil
+	}
+	if b.hasJSON {
+		encoded, err := json.Marshal(b.json)
+		if err != nil {
+			return nil, fmt.Errorf("honey: marshal body: %w", err)
+		}
+		return encoded, nil
+	}
+	return nil, nil
+}
+
+// FilePart is one file in a multipart/form-data upload. The SDK reads Data
+// fully before sending, so the request can be retried after an auth refresh.
+type FilePart struct {
+	Filename    string
+	ContentType string
+	Data        io.Reader
+}
+
+type multipartField struct {
+	name  string
+	value string
+	file  *FilePart
+}
+
+func textField(name string, value any) multipartField {
+	return multipartField{name: name, value: formatQueryValue(value)}
+}
+
+func fileField(name string, file FilePart) multipartField {
+	return multipartField{name: name, file: &file}
+}
+
+func multipartBody(fields []multipartField) (requestBody, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for _, f := range fields {
+		if f.file == nil {
+			if err := w.WriteField(f.name, f.value); err != nil {
+				return requestBody{}, err
+			}
+			continue
+		}
+		h := make(textproto.MIMEHeader)
+		filename := f.file.Filename
+		if filename == "" {
+			filename = f.name
+		}
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%s; filename=%s`, strconv.Quote(f.name), strconv.Quote(filename)))
+		ct := f.file.ContentType
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		h.Set("Content-Type", ct)
+		part, err := w.CreatePart(h)
+		if err != nil {
+			return requestBody{}, err
+		}
+		if f.file.Data != nil {
+			if _, err := io.Copy(part, f.file.Data); err != nil {
+				return requestBody{}, err
+			}
+		}
+	}
+	if err := w.Close(); err != nil {
+		return requestBody{}, err
+	}
+	return requestBody{raw: buf.Bytes(), hasRaw: true, contentType: w.FormDataContentType()}, nil
+}
+
+// PathParamError reports a path parameter that would change the request path
+// once a URL parser normalizes it ("", "." and "..").
+type PathParamError struct {
+	Name  string
+	Value string
+}
+
+func (e *PathParamError) Error() string {
+	return fmt.Sprintf("honey: path parameter %q must not be %q", e.Name, e.Value)
+}
+
+// escapePathSegment percent-encodes every byte outside the RFC 3986 unreserved set.
+func escapePathSegment(s string) string {
+	const hex = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~' {
+			b.WriteByte(c)
+			continue
+		}
+		b.WriteByte('%')
+		b.WriteByte(hex[c>>4])
+		b.WriteByte(hex[c&0x0f])
+	}
+	return b.String()
+}
+
+// expandPath fills `{name}` placeholders with escaped values. Values that a
+// URL parser would collapse ("", ".", "..") are rejected.
+func expandPath(template string, params map[string]string) (string, error) {
+	var b strings.Builder
+	rest := template
+	for {
+		open := strings.IndexByte(rest, '{')
+		if open == -1 {
+			b.WriteString(rest)
+			return b.String(), nil
+		}
+		end := strings.IndexByte(rest[open:], '}')
+		if end == -1 {
+			b.WriteString(rest)
+			return b.String(), nil
+		}
+		name := rest[open+1 : open+end]
+		value, ok := params[name]
+		if !ok {
+			return "", fmt.Errorf("honey: missing path parameter %q", name)
+		}
+		if value == "" || value == "." || value == ".." {
+			return "", &PathParamError{Name: name, Value: value}
+		}
+		b.WriteString(rest[:open])
+		b.WriteString(escapePathSegment(value))
+		rest = rest[open+end+1:]
+	}
+}
+
+// escapeQueryComponent percent-encodes every byte outside the unreserved set
+// (space becomes %20), so every SDK language sends identical query bytes.
+func escapeQueryComponent(s string) string {
+	return escapePathSegment(s)
+}
+
+// queryPair is one key=value in send order.
+type queryPair struct {
+	key   string
+	value string
+}
+
+type queryList []queryPair
+
+// set appends v under key: nil and nil pointers are skipped, slices repeat the key.
+func (q *queryList) set(key string, v any) {
+	rv := reflect.ValueOf(v)
+	for rv.IsValid() && (rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface) {
+		if rv.IsNil() {
+			return
+		}
+		rv = rv.Elem()
+	}
+	if !rv.IsValid() {
+		return
+	}
+	if (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) && rv.Type().Elem().Kind() != reflect.Uint8 {
+		for i := 0; i < rv.Len(); i++ {
+			q.set(key, rv.Index(i).Interface())
+		}
+		return
+	}
+	*q = append(*q, queryPair{key: key, value: formatQueryValue(rv.Interface())})
+}
+
+func (q queryList) encode() string {
+	parts := make([]string, 0, len(q))
+	for _, p := range q {
+		parts = append(parts, escapeQueryComponent(p.key)+"="+escapeQueryComponent(p.value))
+	}
+	return strings.Join(parts, "&")
+}
+
+// formatQueryValue renders a scalar the way every SDK language does: strings
+// as-is, booleans as true/false, numbers in shortest decimal form, anything
+// else as JSON.
+func formatQueryValue(v any) string {
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.String:
+		return rv.String()
+	case reflect.Bool:
+		return strconv.FormatBool(rv.Bool())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(rv.Int(), 10)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(rv.Uint(), 10)
+	case reflect.Float32, reflect.Float64:
+		return formatFloatJS(rv.Float())
+	}
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprint(v)
+	}
+	return string(encoded)
+}
+
+// formatFloatJS renders a float like JavaScript's Number#toString.
+func formatFloatJS(f float64) string {
+	switch {
+	case math.IsNaN(f):
+		return "NaN"
+	case math.IsInf(f, 1):
+		return "Infinity"
+	case math.IsInf(f, -1):
+		return "-Infinity"
+	case f == 0:
+		return "0"
+	}
+	abs := math.Abs(f)
+	if abs >= 1e-6 && abs < 1e21 {
+		return strconv.FormatFloat(f, 'f', -1, 64)
+	}
+	s := strconv.FormatFloat(f, 'e', -1, 64)
+	mantissa, exp, _ := strings.Cut(s, "e")
+	n, _ := strconv.Atoi(exp)
+	sign := "+"
+	if n < 0 {
+		sign = "-"
+		n = -n
+	}
+	return mantissa + "e" + sign + strconv.Itoa(n)
+}
+
+// buildURL joins base and an already-escaped path, keeping the base path and
+// base query, then appends query pairs.
+func buildURL(baseURL, path string, query queryList) (string, error) {
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return "", err
+	}
+	if base.Scheme == "" || base.Host == "" {
+		return "", fmt.Errorf("honey: base URL %q needs a scheme and host", baseURL)
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	out := *base
+	out.Fragment = ""
+	out.RawFragment = ""
+	joined := strings.TrimRight(base.EscapedPath(), "/") + path
+	unescaped, err := url.PathUnescape(joined)
+	if err != nil {
+		return "", err
+	}
+	out.Path = unescaped
+	out.RawPath = joined
+	extra := query.encode()
+	switch {
+	case out.RawQuery == "":
+		out.RawQuery = extra
+	case extra != "":
+		out.RawQuery = out.RawQuery + "&" + extra
+	}
+	return out.String(), nil
+}
+
 // doRequest executes an HTTP request, injects auth, merges headers, fires
 // OnRequest/OnResponse hooks in declaration order, handles OnAuthExpired retry
 // on 401, and wraps context cancellation errors. Emits OnLog lifecycle entries
@@ -126,11 +530,9 @@ func doRequest(
 	ctx context.Context,
 	cfg Config,
 	method string,
-	rawURL string,
-	queryParams url.Values,
-	bodyData interface{},
-	bodyReader io.Reader,
-	contentType string,
+	path string,
+	query queryList,
+	body requestBody,
 	callHeaders map[string]string,
 	operation string,
 	requestMeta *RequestMeta,
@@ -152,6 +554,11 @@ func doRequest(
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("honey: request canceled: %w", ctx.Err())
 	}
+	if cfg.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
+	}
 
 	emitLog(cfg, LogEntry{
 		Level:     "debug",
@@ -159,23 +566,23 @@ func doRequest(
 		Operation: operation,
 	})
 
-	result, err = executeRequest(ctx, cfg, method, rawURL, queryParams, bodyData, bodyReader, contentType, callHeaders, cfg.BearerToken, false, requestMeta)
+	token := cfg.auth.current(cfg)
+	result, err = executeRequest(ctx, cfg, method, path, query, body, callHeaders, token, false, requestMeta)
 	if err != nil {
 		return nil, err
 	}
 
-	if result.status == 401 && cfg.OnAuthExpired != nil {
-		newToken, authErr := cfg.OnAuthExpired(ctx)
+	if result.status == 401 && cfg.OnAuthExpired != nil && body.replayable() {
+		newToken, authErr := cfg.auth.refresh(ctx, cfg, token)
 		if authErr != nil {
 			err = fmt.Errorf("honey: OnAuthExpired failed: %w", authErr)
 			return nil, err
 		}
-		/* streaming bodies are single-shot: once consumed by the first request,
-		 * retry has no way to replay. Documented as v1 non-goal — consumers
-		 * needing auto-retry on streamed uploads wrap in an outer retry loop. */
-		result, err = executeRequest(ctx, cfg, method, rawURL, queryParams, bodyData, bodyReader, contentType, callHeaders, newToken, true, requestMeta)
-		if err != nil {
-			return nil, err
+		if newToken != "" {
+			result, err = executeRequest(ctx, cfg, method, path, query, body, callHeaders, newToken, true, requestMeta)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -200,44 +607,50 @@ func doRequest(
 	return result, nil
 }
 
-func executeRequest(
+func wrapTransportError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("honey: request timed out: %w", ctx.Err())
+		}
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return fmt.Errorf("honey: request canceled: %w", ctx.Err())
+		}
+		return fmt.Errorf("honey: context error: %w", ctx.Err())
+	}
+	return fmt.Errorf("honey: http do: %w", err)
+}
+
+// newRequest builds the outgoing request after running the OnRequest hooks.
+func newRequest(
 	ctx context.Context,
 	cfg Config,
 	method string,
-	rawURL string,
-	queryParams url.Values,
-	bodyData interface{},
-	bodyReader io.Reader,
-	contentType string,
+	path string,
+	query queryList,
+	body requestBody,
 	callHeaders map[string]string,
 	bearerToken string,
 	isRetry bool,
 	requestMeta *RequestMeta,
-) (*requestResult, error) {
-	fullURL, err := buildURL(cfg.BaseURL, rawURL, queryParams)
+) (*http.Request, error) {
+	fullURL, err := buildURL(cfg.BaseURL, path, query)
 	if err != nil {
 		return nil, fmt.Errorf("honey: build URL: %w", err)
 	}
 
-	/* bodyReader wins over bodyData — streaming uploads bypass JSON marshal.
-	 * RequestContext.Body stays nil for streams so hook consumers don't try to
-	 * read or re-hash a single-shot reader. */
-	var bodyBytes []byte
-	if bodyReader == nil && bodyData != nil {
-		encoded, encErr := json.Marshal(bodyData)
-		if encErr != nil {
-			return nil, fmt.Errorf("honey: marshal body: %w", encErr)
-		}
-		bodyBytes = encoded
+	/* Reader bodies stream as-is; RequestContext.Body stays nil for them so hook
+	 * consumers don't try to read or re-hash a single-shot reader. */
+	bodyBytes, err := body.bytes()
+	if err != nil {
+		return nil, err
 	}
-	hasBody := bodyReader != nil || bodyData != nil
 
-	headers := mergeHeaders(cfg, callHeaders, bearerToken, hasBody, contentType)
+	headers := mergeHeaders(cfg, callHeaders, bearerToken, body.present(), body.contentType)
 
 	reqCtx := &RequestContext{
 		Method:  method,
 		URL:     fullURL,
-		Path:    rawURL,
+		Path:    path,
 		Headers: headers,
 		Body:    bodyBytes,
 		IsRetry: isRetry,
@@ -255,8 +668,8 @@ func executeRequest(
 	}
 
 	var reader io.Reader
-	if bodyReader != nil {
-		reader = bodyReader
+	if body.reader != nil {
+		reader = body.reader
 	} else if reqCtx.Body != nil {
 		reader = bytes.NewReader(reqCtx.Body)
 	}
@@ -266,31 +679,41 @@ func executeRequest(
 		return nil, fmt.Errorf("honey: build request: %w", err)
 	}
 	req.Header = reqCtx.Headers
+	return req, nil
+}
+
+func executeRequest(
+	ctx context.Context,
+	cfg Config,
+	method string,
+	path string,
+	query queryList,
+	body requestBody,
+	callHeaders map[string]string,
+	bearerToken string,
+	isRetry bool,
+	requestMeta *RequestMeta,
+) (*requestResult, error) {
+	req, err := newRequest(ctx, cfg, method, path, query, body, callHeaders, bearerToken, isRetry, requestMeta)
+	if err != nil {
+		return nil, err
+	}
 
 	resp, err := cfg.HTTPClient.Do(req)
 	if err != nil {
-		if ctx.Err() != nil {
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return nil, fmt.Errorf("honey: request timed out: %w", ctx.Err())
-			}
-			if errors.Is(ctx.Err(), context.Canceled) {
-				return nil, fmt.Errorf("honey: request canceled: %w", ctx.Err())
-			}
-			return nil, fmt.Errorf("honey: context error: %w", ctx.Err())
-		}
-		return nil, fmt.Errorf("honey: http do: %w", err)
+		return nil, wrapTransportError(ctx, err)
 	}
 	defer resp.Body.Close()
 
-	body, readErr := io.ReadAll(resp.Body)
+	respBody, readErr := readBody(resp.Body, cfg.MaxResponseBytes)
 	if readErr != nil {
-		return nil, fmt.Errorf("honey: read body: %w", readErr)
+		return nil, wrapTransportError(ctx, readErr)
 	}
 
 	respCtx := &ResponseContext{
 		Status:  resp.StatusCode,
 		Headers: resp.Header,
-		Body:    body,
+		Body:    respBody,
 		IsRetry: isRetry,
 	}
 	if requestMeta != nil {
@@ -308,36 +731,88 @@ func executeRequest(
 	return &requestResult{body: respCtx.Body, status: resp.StatusCode, resp: resp}, nil
 }
 
-func buildURL(baseURL, path string, queryParams url.Values) (string, error) {
-	base, err := url.Parse(baseURL)
-	if err != nil {
-		return "", err
+// ErrResponseTooLarge is returned when a buffered body exceeds Config.MaxResponseBytes.
+var ErrResponseTooLarge = errors.New("honey: response body exceeds MaxResponseBytes")
+
+func readBody(r io.Reader, limit int64) ([]byte, error) {
+	if limit < 0 {
+		return io.ReadAll(r)
 	}
-	ref, err := url.Parse(path)
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	resolved := base.ResolveReference(ref)
-	if len(queryParams) > 0 {
-		existing := resolved.Query()
-		for k, vals := range queryParams {
-			for _, v := range vals {
-				existing.Add(k, v)
-			}
+	if int64(len(body)) > limit {
+		return nil, ErrResponseTooLarge
+	}
+	return body, nil
+}
+
+// streamClient is the configured client without its overall timeout: an
+// http.Client Timeout also bounds body reads, which would cut every stream.
+func streamClient(cfg Config) *http.Client {
+	c := *cfg.HTTPClient
+	c.Timeout = 0
+	return &c
+}
+
+// openStream sends a streaming request (SSE) through the same URL, header,
+// auth and hook pipeline as a regular request. Non-2xx statuses become typed
+// errors; the caller owns the returned body.
+func openStream(
+	ctx context.Context,
+	cfg Config,
+	method string,
+	path string,
+	query queryList,
+	body requestBody,
+	callHeaders map[string]string,
+) (*http.Response, error) {
+	token := cfg.auth.current(cfg)
+	for attempt := 0; ; attempt++ {
+		req, err := newRequest(ctx, cfg, method, path, query, body, callHeaders, token, attempt > 0, nil)
+		if err != nil {
+			return nil, err
 		}
-		resolved.RawQuery = existing.Encode()
+		resp, err := streamClient(cfg).Do(req)
+		if err != nil {
+			return nil, wrapTransportError(ctx, err)
+		}
+		if resp.StatusCode == 401 && attempt == 0 && cfg.OnAuthExpired != nil && body.replayable() {
+			errBody, _ := readBody(resp.Body, 64<<10)
+			resp.Body.Close()
+			newToken, authErr := cfg.auth.refresh(ctx, cfg, token)
+			if authErr != nil {
+				return nil, fmt.Errorf("honey: OnAuthExpired failed: %w", authErr)
+			}
+			if newToken == "" {
+				return nil, raiseForStatus(resp, errBody)
+			}
+			token = newToken
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			defer resp.Body.Close()
+			errBody, _ := readBody(resp.Body, 64<<10)
+			return nil, raiseForStatus(resp, errBody)
+		}
+		return resp, nil
 	}
-	return resolved.String(), nil
+}
+
+// authHeaders returns cfg.Headers plus the auth header, for transports that
+// cannot run the full request pipeline (WebSocket dials).
+func authHeaders(cfg Config, extra map[string]string) http.Header {
+	return mergeHeaders(cfg, extra, cfg.auth.current(cfg), false, "")
 }
 
 // mergeHeaders builds the final http.Header for a request by merging in order:
-// config Headers → call Headers (per-call wins per key) → Content-Type when
-// hasBody → Authorization when bearerToken non-empty → X-Request-Id when
-// absent (OnRequest hooks may still overwrite). Returned header is owned
-// by the caller and may be mutated freely (e.g. by OnRequest hooks).
-// contentType is the explicit Content-Type for the request body; when empty
-// and hasBody is true, defaults to application/json. Callers pass
-// application/octet-stream for streaming-upload ops.
+// config Headers → call Headers (per-call wins per key, case-insensitively) →
+// Content-Type when hasBody → Authorization when bearerToken non-empty →
+// X-Request-Id when absent (OnRequest hooks may still overwrite). Returned
+// header is owned by the caller and may be mutated freely (e.g. by OnRequest
+// hooks). contentType is the explicit Content-Type for the request body; when
+// empty and hasBody is true, defaults to application/json.
 func mergeHeaders(
 	cfg Config,
 	callHeaders map[string]string,
@@ -353,11 +828,11 @@ func mergeHeaders(
 		}
 		h.Set("Content-Type", ct)
 	}
-	for k, v := range cfg.Headers {
-		h.Set(k, v)
+	for _, k := range sortedKeys(cfg.Headers) {
+		h.Set(k, cfg.Headers[k])
 	}
-	for k, v := range callHeaders {
-		h.Set(k, v)
+	for _, k := range sortedKeys(callHeaders) {
+		h.Set(k, callHeaders[k])
 	}
 	if bearerToken != "" {
 		name := cfg.AuthHeaderName
@@ -374,6 +849,15 @@ func mergeHeaders(
 		h.Set("X-Request-Id", newUUIDv4())
 	}
 	return h
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func unmarshalBody[T any](body []byte) (*T, error) {

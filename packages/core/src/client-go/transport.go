@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"nhooyr.io/websocket"
 )
@@ -28,6 +29,9 @@ const (
 
 // TransportOpts is handed to each Transport.Connect call. Mirrors the TS
 // TransportOpts plus per-language extras (HTTPClient for SSE/longpoll dial).
+//
+// MaxMessageBytes caps one inbound WebSocket message (zero means 16 MiB).
+// PollTimeout bounds one long-poll request (zero means 60s).
 type TransportOpts struct {
 	ReconnectToken       string
 	LastEventID          string
@@ -36,6 +40,20 @@ type TransportOpts struct {
 	ReconnectDelayMs     int
 	Protocols            []string
 	HTTPClient           *http.Client
+	MaxMessageBytes      int64
+	PollTimeout          time.Duration
+}
+
+const (
+	defaultMaxMessageBytes = 16 << 20
+	defaultPollTimeout     = 60 * time.Second
+)
+
+func (o *TransportOpts) maxMessageBytes() int64 {
+	if o == nil || o.MaxMessageBytes <= 0 {
+		return defaultMaxMessageBytes
+	}
+	return o.MaxMessageBytes
 }
 
 // TransportConn is the live per-transport connection object. Each built-in
@@ -106,6 +124,7 @@ func (t *WsTransport) Connect(ctx context.Context, rawURL string, opts *Transpor
 		if len(opts.Headers) > 0 {
 			dialOpts.HTTPHeader = opts.Headers.Clone()
 		}
+		dialOpts.HTTPClient = opts.HTTPClient
 	}
 	if dialOpts.Subprotocols == nil && len(t.Subprotocols) > 0 {
 		dialOpts.Subprotocols = t.Subprotocols
@@ -114,6 +133,7 @@ func (t *WsTransport) Connect(ctx context.Context, rawURL string, opts *Transpor
 	if err != nil {
 		return nil, err
 	}
+	conn.SetReadLimit(opts.maxMessageBytes())
 	return &wsConn{conn: conn}, nil
 }
 
@@ -155,6 +175,7 @@ func (c *wsConn) Close() error {
 	return c.conn.Close(websocket.StatusNormalClosure, "client close")
 }
 
+// toWsURL swaps the scheme only; a URL inside the query string is untouched.
 func toWsURL(u string) string {
 	if strings.HasPrefix(u, "https://") {
 		return "wss://" + u[len("https://"):]
@@ -199,8 +220,13 @@ func (t *SseTransport) Connect(ctx context.Context, rawURL string, opts *Transpo
 		}
 		u = u + sep + "reconnect_token=" + url.QueryEscape(opts.ReconnectToken)
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	/* ctx bounds the open only; the stream lives until Close cancels streamCtx */
+	streamCtx, cancel := context.WithCancel(context.Background())
+	stop := context.AfterFunc(ctx, cancel)
+	req, err := http.NewRequestWithContext(streamCtx, "GET", u, nil)
 	if err != nil {
+		stop()
+		cancel()
 		return nil, err
 	}
 	req.Header.Set("Accept", "text/event-stream")
@@ -218,19 +244,34 @@ func (t *SseTransport) Connect(ctx context.Context, rawURL string, opts *Transpo
 		req.Header.Set("X-Request-Id", newUUIDv4())
 	}
 	resp, err := client.Do(req)
+	opened := stop()
 	if err != nil {
+		cancel()
 		return nil, err
+	}
+	if !opened {
+		/* ctx ended while the headers arrived */
+		_ = resp.Body.Close()
+		cancel()
+		return nil, ctx.Err()
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = resp.Body.Close()
+		cancel()
 		return nil, fmt.Errorf("honey: sse transport: status %d", resp.StatusCode)
 	}
-	sc := &sseConn{
-		resp: resp,
-		next: make(chan sseResult, 1),
-		done: make(chan struct{}),
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(strings.ToLower(ct), "text/event-stream") {
+		_ = resp.Body.Close()
+		cancel()
+		return nil, fmt.Errorf("honey: sse transport: unexpected content type %q", ct)
 	}
-	go sc.run(ctx)
+	sc := &sseConn{
+		resp:   resp,
+		next:   make(chan sseResult, 1),
+		done:   make(chan struct{}),
+		cancel: cancel,
+	}
+	go sc.run(streamCtx)
 	return sc, nil
 }
 
@@ -243,8 +284,10 @@ type sseConn struct {
 	resp   *http.Response
 	next   chan sseResult
 	done   chan struct{}
+	cancel context.CancelFunc
 	mu     sync.Mutex
 	closed bool
+	once   sync.Once
 }
 
 func (c *sseConn) Kind() TransportKind { return TransportSse }
@@ -303,21 +346,11 @@ func (c *sseConn) Send(ctx context.Context, data any) error {
 }
 
 func (c *sseConn) Close() error {
-	c.mu.Lock()
-	alreadyClosed := c.closed
-	c.mu.Unlock()
-	/* signal producer, then close body — parseSSEStream closes body on its own
-	 * iterator exit, but bodyClose here is idempotent for the already-closed
-	 * case via Body.Close()'s stdlib contract. */
-	select {
-	case <-c.done:
-	default:
+	c.once.Do(func() {
 		close(c.done)
-	}
-	if !alreadyClosed {
-		return c.resp.Body.Close()
-	}
-	return nil
+		c.cancel()
+	})
+	return c.resp.Body.Close()
 }
 
 /* ──────────────────────────── Longpoll adapter ─────────────────────────── */
@@ -346,9 +379,13 @@ func (t *LongpollTransport) Connect(ctx context.Context, rawURL string, opts *Tr
 		client = http.DefaultClient
 	}
 	lp := &longpollConn{
-		client:  client,
-		url:     rawURL,
-		headers: http.Header{},
+		client:      client,
+		url:         rawURL,
+		headers:     http.Header{},
+		pollTimeout: defaultPollTimeout,
+	}
+	if opts != nil && opts.PollTimeout > 0 {
+		lp.pollTimeout = opts.PollTimeout
 	}
 	if opts != nil {
 		lp.reconnectToken = opts.ReconnectToken
@@ -361,6 +398,7 @@ func (t *LongpollTransport) Connect(ctx context.Context, rawURL string, opts *Tr
 }
 
 type longpollConn struct {
+	pollTimeout    time.Duration
 	client         *http.Client
 	url            string
 	headers        http.Header
@@ -398,7 +436,9 @@ func (c *longpollConn) Recv(ctx context.Context) (any, error) {
 		}
 		u = u + sep + q.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	pollCtx, cancel := context.WithTimeout(ctx, c.pollTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(pollCtx, "GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -412,12 +452,12 @@ func (c *longpollConn) Recv(ctx context.Context) (any, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("honey: longpoll transport: status %d", resp.StatusCode)
+	}
+	body, err := readBody(resp.Body, defaultMaxMessageBytes)
+	if err != nil {
+		return nil, err
 	}
 	var v any
 	if jsonErr := json.Unmarshal(body, &v); jsonErr != nil {
