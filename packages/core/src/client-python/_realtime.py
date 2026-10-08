@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from enum import Enum
 from typing import Any, AsyncIterator
 
@@ -10,6 +11,8 @@ from ._transport import (
     TransportKind,
     TransportOpts,
 )
+
+MAX_RECONNECT_DELAY = 30.0
 
 
 class ConnectionState(str, Enum):
@@ -27,6 +30,12 @@ class ResumableConnection:
     - First successful adapter index memoized in `_proven_index`.
     - On reconnect, proven adapter tried first; full chain on failure.
     - State transitions drive `.state` property.
+
+    A dropped connection (including a clean end of an SSE stream) reconnects
+    with exponential backoff and jitter. The attempt counter resets after every
+    delivered message, so `max_reconnect_attempts` limits consecutive failures,
+    not lifetime drops. When the attempts run out the iterator raises the last
+    error instead of ending silently. Cancellation is never swallowed.
     """
 
     def __init__(
@@ -72,28 +81,25 @@ class ResumableConnection:
         await self._open_chain()
 
     async def _open_chain(self) -> None:
-        last_err: BaseException | None = None
-        if (
-            self._proven_index is not None
-            and self._proven_index < len(self._transports)
-        ):
-            adapter = self._transports[self._proven_index]
+        last_err: Exception | None = None
+        order: list[int] = []
+        if self._proven_index is not None and self._proven_index < len(self._transports):
+            order.append(self._proven_index)
+        order.extend(i for i in range(len(self._transports)) if i not in order)
+        for idx in order:
+            adapter = self._transports[idx]
             try:
-                self._conn = await adapter.connect(self._url, self._opts)
-                self._state = ConnectionState.CONNECTED
-                return
-            except BaseException as exc:
+                conn = await adapter.connect(self._url, self._opts)
+            except Exception as exc:  # CancelledError is a BaseException: it propagates
                 last_err = exc
-        for idx, adapter in enumerate(self._transports):
-            if idx == self._proven_index:
                 continue
-            try:
-                self._conn = await adapter.connect(self._url, self._opts)
-                self._proven_index = idx
-                self._state = ConnectionState.CONNECTED
-                return
-            except BaseException as exc:
-                last_err = exc
+            if self._closed:
+                await _close_quietly(conn)
+                raise RuntimeError("ResumableConnection is closed")
+            self._conn = conn
+            self._proven_index = idx
+            self._state = ConnectionState.CONNECTED
+            return
         self._state = ConnectionState.DISCONNECTED
         if last_err is not None:
             raise last_err
@@ -110,10 +116,12 @@ class ResumableConnection:
         if self._conn is not None:
             conn = self._conn
             self._conn = None
-            try:
-                await conn.close()
-            except Exception:
-                pass
+            await _close_quietly(conn)
+
+    def _delay(self, attempt: int) -> float:
+        base = max(self._opts.reconnect_delay_ms, 0) / 1000.0
+        delay = min(base * (2 ** (attempt - 1)), MAX_RECONNECT_DELAY)
+        return delay / 2 + random.uniform(0, delay / 2)
 
     def __aiter__(self) -> AsyncIterator[Any]:
         return self._iter()
@@ -127,30 +135,43 @@ class ResumableConnection:
                 return
             try:
                 value = await conn.recv()
-            except StopAsyncIteration:
-                return
             except asyncio.CancelledError:
                 raise
-            except BaseException:
-                """ transport died — invalidate proven, retry full chain after delay """
-                self._reconnect_attempts += 1
-                max_attempts = self._opts.max_reconnect_attempts
-                if max_attempts > 0 and self._reconnect_attempts > max_attempts:
-                    self._state = ConnectionState.DISCONNECTED
-                    return
-                delay = self._opts.reconnect_delay_ms / 1000.0
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                self._state = ConnectionState.RECONNECTING
+            except Exception as exc:
+                # transport died or the stream ended: drop it and reconnect with backoff
+                last_err: Exception = exc
                 self._conn = None
                 self._proven_index = None
-                try:
-                    await self._open_chain()
-                except BaseException:
-                    self._state = ConnectionState.DISCONNECTED
-                    return
+                self._state = ConnectionState.RECONNECTING
+                await _close_quietly(conn)
+                while True:
+                    if self._closed:
+                        return
+                    self._reconnect_attempts += 1
+                    max_attempts = self._opts.max_reconnect_attempts
+                    if max_attempts > 0 and self._reconnect_attempts > max_attempts:
+                        self._state = ConnectionState.DISCONNECTED
+                        if isinstance(last_err, StopAsyncIteration):
+                            return
+                        raise last_err
+                    await asyncio.sleep(self._delay(self._reconnect_attempts))
+                    try:
+                        await self._open_chain()
+                        break
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as reopen_exc:
+                        last_err = reopen_exc
                 continue
+            self._reconnect_attempts = 0
             yield value
+
+
+async def _close_quietly(conn: TransportConn) -> None:
+    try:
+        await conn.close()
+    except Exception:
+        pass
 
 
 __all__ = ["ConnectionState", "ResumableConnection"]

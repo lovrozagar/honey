@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
-from typing import AsyncIterator, TypedDict
+import codecs
+from typing import AsyncIterator, Iterable, Iterator, TypedDict
 
 import httpx
 
@@ -13,87 +13,143 @@ class SSEEvent(TypedDict, total=False):
     retry: int
 
 
-def _parse_sse_block(block: str) -> SSEEvent | None:
-    lines = block.splitlines()
-    is_comment = True
-    data: str | None = None
-    event: str | None = None
-    id_val: str | None = None
-    retry: int | None = None
+DEFAULT_MAX_BUFFER = 1024 * 1024
+MAX_EVENT_DATA = 8 * 1024 * 1024
 
-    for line in lines:
+
+class SSEParser:
+    """WHATWG event-stream parser.
+
+    Lines end in CRLF, LF or CR only (never U+2028 and friends, which
+    ``str.splitlines`` would also split on). A blank line dispatches the event;
+    a final event without its blank line is discarded; the id is sticky across
+    events; ``retry`` needs ASCII digits. Each chunk is scanned once.
+    """
+
+    def __init__(self, max_line: int = DEFAULT_MAX_BUFFER) -> None:
+        self._max_line = max_line
+        self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self._line: list[str] = []
+        self._line_len = 0
+        self._pending_cr = False
+        self._first = True
+        self._data: list[str] = []
+        self._data_len = 0
+        self._has_data = False
+        self._event: str | None = None
+        self._last_id: str | None = None
+        self._retry: int | None = None
+
+    def feed(self, chunk: bytes) -> Iterator[SSEEvent]:
+        yield from self._feed_text(self._decoder.decode(chunk))
+
+    def feed_text(self, text: str) -> Iterator[SSEEvent]:
+        yield from self._feed_text(text)
+
+    def _feed_text(self, text: str) -> Iterator[SSEEvent]:
+        start = 0
+        for i, ch in enumerate(text):
+            if i < start or (ch != "\r" and ch != "\n"):
+                continue
+            if ch == "\n" and self._pending_cr and i == start:
+                # LF completing a CRLF split across chunks
+                self._pending_cr = False
+                start = i + 1
+                continue
+            self._pending_cr = False
+            self._append(text[start:i])
+            line = "".join(self._line)
+            self._line = []
+            self._line_len = 0
+            if ch == "\r":
+                if i + 1 < len(text):
+                    if text[i + 1] == "\n":
+                        start = i + 2
+                        event = self._process(line)
+                        if event is not None:
+                            yield event
+                        continue
+                else:
+                    self._pending_cr = True
+            start = i + 1
+            event = self._process(line)
+            if event is not None:
+                yield event
+        if start < len(text):
+            self._pending_cr = False
+            self._append(text[start:])
+
+    def _append(self, part: str) -> None:
+        if not part:
+            return
+        self._line_len += len(part)
+        if self._line_len > self._max_line:
+            raise RuntimeError(f"SSE line exceeded {self._max_line} characters")
+        self._line.append(part)
+
+    def _process(self, line: str) -> SSEEvent | None:
+        if self._first:
+            self._first = False
+            if line.startswith("\ufeff"):
+                line = line[1:]
+        if line == "":
+            return self._dispatch()
         if line.startswith(":"):
-            continue
-        is_comment = False
-        colon_idx = line.find(":")
-        if colon_idx == -1:
-            field_name = line
-            val = ""
-        else:
-            field_name = line[:colon_idx]
-            val = line[colon_idx + 1:]
-            if val.startswith(" "):
-                val = val[1:]
-
-        if field_name == "data":
-            data = val if data is None else f"{data}\n{val}"
-        elif field_name == "event":
-            event = val
-        elif field_name == "id":
-            # per SSE spec: id containing null byte must be ignored
-            if "\0" not in val:
-                id_val = val
-        elif field_name == "retry":
-            try:
-                n = int(val)
-                if n >= 0:
-                    retry = n
-            except ValueError:
-                pass
-
-    if is_comment or data is None:
+            return None
+        name, sep, value = line.partition(":")
+        if sep and value.startswith(" "):
+            value = value[1:]
+        if name == "data":
+            self._data_len += len(value) + 1
+            if self._data_len > MAX_EVENT_DATA:
+                raise RuntimeError(f"SSE event exceeded {MAX_EVENT_DATA} characters")
+            self._data.append(value)
+            self._has_data = True
+        elif name == "event":
+            self._event = value
+        elif name == "id":
+            if "\0" not in value:
+                self._last_id = value
+        elif name == "retry":
+            if value and value.isascii() and value.isdigit():
+                self._retry = int(value)
         return None
 
-    result: SSEEvent = {"data": data}
-    if event is not None:
-        result["event"] = event
-    if id_val is not None:
-        result["id"] = id_val
-    if retry is not None:
-        result["retry"] = retry
-    return result
+    def _dispatch(self) -> SSEEvent | None:
+        event: SSEEvent | None = None
+        if self._has_data:
+            event = {"data": "\n".join(self._data)}
+            if self._event is not None:
+                event["event"] = self._event
+            if self._last_id is not None:
+                event["id"] = self._last_id
+            if self._retry is not None:
+                event["retry"] = self._retry
+        self._data = []
+        self._data_len = 0
+        self._has_data = False
+        self._event = None
+        self._retry = None
+        return event
 
 
-DEFAULT_MAX_BUFFER = 1024 * 1024
-
-_SSE_BLOCK_RE = re.compile(r"\r\n\r\n|\r\n\r|\r\n\n|\r\r\n|\n\r\n|\n\r|\r\r|\n\n")
+def parse_sse_text(chunks: Iterable[str]) -> list[SSEEvent]:
+    """Parse already-decoded text chunks; used by the conformance vectors."""
+    parser = SSEParser()
+    out: list[SSEEvent] = []
+    for chunk in chunks:
+        out.extend(parser.feed_text(chunk))
+    return out
 
 
 async def parse_sse_stream(
     response: httpx.Response,
     max_buffer_size: int = DEFAULT_MAX_BUFFER,
 ) -> AsyncIterator[SSEEvent]:
-    buffer = ""
-    async for chunk in response.aiter_text():
-        buffer += chunk
-        if len(buffer) > max_buffer_size:
-            raise RuntimeError(f"SSE buffer exceeded {max_buffer_size} characters")
-
-        # split on double-newline (any combo of \r\n, \r, \n)
-        blocks = _SSE_BLOCK_RE.split(buffer)
-        buffer = blocks.pop()
-
-        for block in blocks:
-            if not block.strip():
-                continue
-            event = _parse_sse_block(block)
-            if event is not None:
-                yield event
-
-    if buffer.strip():
-        event = _parse_sse_block(buffer)
-        if event is not None:
+    parser = SSEParser(max_buffer_size)
+    async for chunk in response.aiter_bytes():
+        for event in parser.feed(chunk):
             yield event
 
 
-__all__ = ["SSEEvent", "parse_sse_stream"]
+__all__ = ["SSEEvent", "SSEParser", "parse_sse_stream", "parse_sse_text"]

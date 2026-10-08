@@ -349,13 +349,13 @@ describe("Tier 3: client methods", () => {
 		expect(client).toMatch(/async def ping\s*\(self/)
 	})
 
-	it("[#25] path params typed in signature and interpolated in request URL with quote()", () => {
+	it("[#25] path params typed in signature and expanded with _expand_path (rejects '', '.', '..')", () => {
 		const result = generatePythonSDK(crudSpec, { name: "CrudSDK" })
 		const client = result.files["client.py"]
 		/* id: str in signature */
 		expect(client).toMatch(/def get\s*\(self[^)]*id\s*:\s*str/)
-		/* f-string URL with quote(id) */
-		expect(client).toMatch(/f["']\/users\/\{.*quote.*id/)
+		expect(client).toContain(`_expand_path("/users/{id}", {"id": id})`)
+		expect(result.files["_runtime.py"]).toContain(`if value in ("", ".", ".."):`)
 	})
 
 	it("[#26] optional query params → kwargs with default None; required → positional keyword-only", () => {
@@ -571,15 +571,15 @@ describe("Tier 6: SSE", () => {
 	it("[#46] SSE generator raises APIError subclass before first yield on non-2xx", () => {
 		const result = generatePythonSDK(sseSpec, { name: "SseSDK" })
 		const client = result.files["client.py"]
-		/* status check before yield */
+		/* the stream opens through _open_stream, which raises the typed error before the body is read */
 		const streamMethodStart = client.indexOf("async def stream")
 		expect(streamMethodStart).toBeGreaterThan(-1)
-		const streamBody = client.slice(streamMethodStart, streamMethodStart + 800)
-		/* raise or _raise_for_status before any yield */
-		const raiseIdx = streamBody.search(/_raise_for_status|raise.*Error/)
-		const yieldIdx = streamBody.indexOf("yield")
-		expect(raiseIdx).toBeGreaterThan(-1)
-		expect(raiseIdx).toBeLessThan(yieldIdx)
+		const streamBody = client.slice(streamMethodStart, streamMethodStart + 1500)
+		expect(streamBody.indexOf("_open_stream(")).toBeGreaterThan(-1)
+		expect(streamBody.indexOf("_open_stream(")).toBeLessThan(streamBody.indexOf("yield"))
+		const runtime = result.files["_runtime.py"]
+		const open = runtime.slice(runtime.indexOf("async def _open_stream"))
+		expect(open.indexOf("_raise_for_status(response)")).toBeLessThan(open.indexOf("yield response"))
 	})
 })
 
@@ -732,7 +732,10 @@ describe("Tier 9: sync facade + config", () => {
 		const result = generatePythonSDK(crudSpec, { name: "CrudSDK" })
 		const runtime = result.files["_runtime.py"]
 		/* merge pattern: config headers + per-call headers */
-		expect(runtime).toMatch(/\*\*.*headers|headers.*update|{.*\*\*.*headers/)
+		/* config headers first, per-call headers last, merged case-insensitively */
+		const build = runtime.slice(runtime.indexOf("def _build_headers"))
+		expect(build.indexOf("config.headers.items()")).toBeLessThan(build.indexOf("(extra or {}).items()"))
+		expect(runtime).toContain("def _set_header")
 	})
 
 	it("[#64] on_auth_expired hook called on 401, retries once with new token", () => {

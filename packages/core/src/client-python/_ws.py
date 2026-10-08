@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable, cast
 
 try:
     import websockets
@@ -43,15 +43,12 @@ class _TypedWebSocket:
         }
         self.close_code: int | None = None
         self.close_reason: str | None = None
+        self._close_fired = False
 
     async def __aenter__(self) -> _TypedWebSocket:
         if websockets is None:
             raise ImportError("pip install honey-sdk[ws] to use WebSocket methods")
-        self._conn = await websockets.connect(
-            self._url,
-            subprotocols=self._protocols or None,
-            additional_headers=self._extra_headers or None,
-        )
+        self._conn = await _connect(self._url, self._protocols, self._extra_headers)
         for handler in self._handlers["open"]:
             try:
                 handler()
@@ -66,13 +63,10 @@ class _TypedWebSocket:
             except Exception:
                 pass
             self._capture_close()
-            code = self.close_code if self.close_code is not None else 1000
-            reason = self.close_reason if self.close_reason is not None else ""
-            for handler in self._handlers["close"]:
-                try:
-                    handler(code, reason)
-                except Exception:
-                    pass
+            self._fire_close(
+                self.close_code if self.close_code is not None else 1000,
+                self.close_reason if self.close_reason is not None else "",
+            )
 
     def __aiter__(self) -> AsyncIterator[str | bytes]:
         return self._iter_messages()
@@ -86,16 +80,31 @@ class _TypedWebSocket:
                     except Exception:
                         pass
                 yield msg
-        finally:
-            self._capture_close()
-            code = self.close_code
-            reason = self.close_reason
-            if code is not None:
-                for handler in self._handlers["close"]:
+        except Exception as exc:
+            closed_ok = websockets is not None and isinstance(
+                exc, getattr(websockets.exceptions, "ConnectionClosedOK", ())
+            )
+            if not closed_ok:
+                for handler in self._handlers["error"]:
                     try:
-                        handler(code, reason or "")
+                        handler(exc)
                     except Exception:
                         pass
+                raise
+        finally:
+            self._capture_close()
+            if self.close_code is not None:
+                self._fire_close(self.close_code, self.close_reason or "")
+
+    def _fire_close(self, code: int, reason: str) -> None:
+        if self._close_fired:
+            return
+        self._close_fired = True
+        for handler in self._handlers["close"]:
+            try:
+                handler(code, reason)
+            except Exception:
+                pass
 
     def _capture_close(self) -> None:
         """Read close code/reason from the underlying websockets.Connection once
@@ -118,14 +127,32 @@ class _TypedWebSocket:
             )
         self._handlers[event].append(callback)
 
-    async def send(self, data: str | bytes | dict[str, Any]) -> None:
-        if isinstance(data, dict):
+    async def send(self, data: Any) -> None:
+        """Send str/bytes as-is; anything else (dict, list, numbers) as JSON text."""
+        if not isinstance(data, (str, bytes, bytearray)):
             data = json.dumps(data)
         await self._conn.send(data)
 
     async def close(self, code: int = 1000, reason: str = "") -> None:
         if self._conn is not None:
             await self._conn.close(code, reason)
+
+
+async def _connect(url: str, protocols: list[str], headers: dict[str, str]) -> Any:
+    """websockets >= 14 takes ``additional_headers``; older releases ``extra_headers``."""
+    assert websockets is not None
+    try:
+        return await websockets.connect(
+            url,
+            subprotocols=cast(Any, protocols or None),
+            additional_headers=headers or None,
+        )
+    except TypeError:
+        return await websockets.connect(
+            url,
+            subprotocols=cast(Any, protocols or None),
+            extra_headers=headers or None,
+        )
 
 
 __all__ = ["_TypedWebSocket"]

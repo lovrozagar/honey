@@ -14,7 +14,9 @@ def _now() -> float:
     return time.monotonic()
 
 
-_PATH_PARAM_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}|:([a-zA-Z_][a-zA-Z0-9_]*)")
+# `{name}` (any name without braces or slashes) or a `:name` segment; a colon
+# inside a segment (`/ops/{id}:cancel`) is literal.
+_PATH_PARAM_RE = re.compile(r"\{([^{}/]+)\}|(?:(?<=/)|^):([a-zA-Z_][a-zA-Z0-9_]*)")
 
 
 @dataclass
@@ -79,8 +81,8 @@ def resolve_invalidation_targets_for_mutation(
 ) -> list[str]:
     """Expand ``METHOD /path/{id}`` template invalidation targets to concrete selectors.
 
-    Targets without placeholders are passed through. Targets whose placeholders cannot
-    be resolved against *params* are dropped (no point storing a half-templated key).
+    Targets without placeholders are passed through. A target whose placeholders cannot
+    all be resolved stays a pattern, so it marks every instance stale (TS parity).
     """
     resolved: list[str] = []
     for entry in targets:
@@ -96,6 +98,7 @@ def resolve_invalidation_targets_for_mutation(
         try:
             concrete = interpolate_path(template, params)
         except ValueError:
+            resolved.append(entry)
             continue
         resolved.append(f"{method} {concrete}")
     return resolved
@@ -253,7 +256,7 @@ class _StaleTracker:
                 if entry.seq > seq_snapshot:
                     continue
                 key_method, key_pattern = self._split_key(key)
-                if "{" not in key_pattern and ":" not in key_pattern:
+                if not _has_unresolved(key_pattern):
                     continue
                 if key_method != method:
                     continue
@@ -320,7 +323,7 @@ class _StaleTracker:
             if entry.until <= now:
                 expired.append(key)
                 continue
-            if "{" not in key and ":" not in key:
+            if not _has_unresolved(key.split(" ", 1)[-1]):
                 continue
             if key == concrete_selector:
                 continue
@@ -463,7 +466,7 @@ class _StaleTrackerSync:
                 if entry.seq > seq_snapshot:
                     continue
                 key_method, key_pattern = _StaleTracker._split_key(key)
-                if "{" not in key_pattern and ":" not in key_pattern:
+                if not _has_unresolved(key_pattern):
                     continue
                 if key_method != method:
                     continue
@@ -530,7 +533,7 @@ class _StaleTrackerSync:
             if entry.until <= now:
                 expired.append(key)
                 continue
-            if "{" not in key and ":" not in key:
+            if not _has_unresolved(key.split(" ", 1)[-1]):
                 continue
             if key == concrete_selector:
                 continue

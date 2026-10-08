@@ -4,7 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 from urllib.parse import urlencode
 
 try:
@@ -28,12 +28,21 @@ class TransportKind(str, Enum):
 
 @dataclass
 class TransportOpts:
+    """Options for each transport connect.
+
+    ``max_reconnect_attempts`` caps consecutive failed reconnects (0 or less:
+    unlimited); ``reconnect_delay_ms`` is the first backoff delay. ``headers``
+    are sent on every transport (the generated SDK fills in config headers and
+    auth). ``max_message_bytes`` caps one WebSocket message.
+    """
+
     reconnect_token: str | None = None
     last_event_id: str | None = None
     headers: dict[str, str] | None = None
     max_reconnect_attempts: int = 5
     reconnect_delay_ms: int = 1000
     protocols: list[str] | None = None
+    max_message_bytes: int = 16 * 1024 * 1024
 
 
 @runtime_checkable
@@ -148,8 +157,9 @@ class WsAdapter:
         headers = opts.headers or None
         conn = await websockets.connect(
             ws_url,
-            subprotocols=subprotocols,
+            subprotocols=cast(Any, subprotocols),
             additional_headers=headers,
+            max_size=opts.max_message_bytes,
         )
         return _WsConn(conn)
 
@@ -224,11 +234,27 @@ class SseAdapter:
             headers["x-request-id"] = str(uuid.uuid4())
         client = self.http_client or httpx.AsyncClient()
         owns_client = self.http_client is None
+        # a stream may idle between events: no read timeout
         ctx = client.stream(
-            "GET", url, params=params or None, headers=headers,
+            "GET",
+            url,
+            params=params or None,
+            headers=headers,
+            timeout=httpx.Timeout(30.0, read=None),
         )
-        response = await ctx.__aenter__()
-        response.raise_for_status()
+        try:
+            response = await ctx.__aenter__()
+        except BaseException:
+            if owns_client:
+                await client.aclose()
+            raise
+        try:
+            response.raise_for_status()
+        except BaseException:
+            await ctx.__aexit__(None, None, None)
+            if owns_client:
+                await client.aclose()
+            raise
         return _SseConn(
             client=client, owns_client=owns_client,
             ctx=ctx, response=response,
