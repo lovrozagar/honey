@@ -180,6 +180,8 @@ describe("ambient global types are written by name", () => {
 			JSON.stringify({
 				compilerOptions: {
 					module: "ESNext",
+					/* resolve honey from source like the package tsconfig; CI runs tests without dist/ */
+					customConditions: ["honey-source"],
 					moduleResolution: "Bundler",
 					noEmit: true,
 					strict: true,
@@ -242,6 +244,8 @@ describe("ambient global types are written by name", () => {
 			JSON.stringify({
 				compilerOptions: {
 					module: "ESNext",
+					/* resolve honey from source like the package tsconfig; CI runs tests without dist/ */
+					customConditions: ["honey-source"],
 					moduleResolution: "Bundler",
 					strict: true,
 					target: "ES2022",
