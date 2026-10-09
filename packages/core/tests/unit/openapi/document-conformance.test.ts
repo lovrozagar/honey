@@ -196,6 +196,7 @@ describe("OpenAPI 3.1 conformance", () => {
 })
 
 describe("the router accepts every path the document emits", () => {
+	// regression: M (openapi/collect.ts:15-27)
 	it("every operation, with its declared path parameters filled in, reaches a handler", async () => {
 		for (const [name, doc, app] of await generated()) {
 			const prefix = doc.servers?.[0]?.url ?? ""

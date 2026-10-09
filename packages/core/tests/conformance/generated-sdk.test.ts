@@ -57,6 +57,7 @@ function recorder(
 	return { calls, fetch }
 }
 
+// regression: H35b
 describe("conformance: URL building (generated TypeScript SDK)", () => {
 	type Vector = {
 		base: string

@@ -42,6 +42,7 @@ describe("honey init CLI", () => {
 		rmSync(TEMP_ROOT, { force: true, recursive: true })
 	})
 
+	// regression: H67
 	it("writes app, vite config, and package scripts", async () => {
 		const { exitCode, stdout } = await runCli(TEMP_ROOT, ["init"])
 		expect(exitCode).toBe(0)
@@ -151,6 +152,7 @@ describe("honey init CLI", () => {
 		expect(readFileSync(treePath, "utf-8")).toContain("health")
 	})
 
+	// regression: M (init.ts:94-112)
 	it("keeps an existing package.json's scripts, type and privacy without --force", async () => {
 		const original = {
 			dependencies: { zod: "^4.0.0" },
@@ -186,6 +188,7 @@ describe("honey init CLI", () => {
 		expect(pkg.type).toBe("commonjs")
 	})
 
+	// regression: H70
 	it("--cloudflare is an alias of --cf; unknown flags fail", async () => {
 		expect((await runCli(TEMP_ROOT, ["init", "--cloudflare"])).exitCode).toBe(0)
 		expect(existsSync(join(TEMP_ROOT, "wrangler.jsonc"))).toBe(true)

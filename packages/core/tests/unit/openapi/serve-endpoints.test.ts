@@ -30,6 +30,7 @@ function tenantApp() {
 }
 
 describe("openapi(): one document per call (H31)", () => {
+	// regression: H31
 	it("an internal and a public document never share a cache, whichever is hit first", async () => {
 		for (const first of ["/internal/openapi.json", "/openapi.json"]) {
 			const app = tenantApp()
@@ -73,6 +74,7 @@ describe("openapi(): one document per call (H31)", () => {
 		)
 	})
 
+	// regression: M (index.ts:968 perf)
 	it("generates and serializes once per route change, however many requests", async () => {
 		const app = honey()
 		app.get("/a").handler((c) => c.res.text("ok", "a"))
@@ -99,6 +101,7 @@ describe("openapi(): one document per call (H31)", () => {
 })
 
 describe("openapi(): caching headers and enabled", () => {
+	// regression: L (spec gating)
 	it("sends a strong ETag with no-cache and answers If-None-Match with 304", async () => {
 		const app = honey()
 		app.get("/a").handler((c) => c.res.text("ok", "a"))
@@ -120,6 +123,7 @@ describe("openapi(): caching headers and enabled", () => {
 		expect(changed.headers.get("etag")).not.toBe(before)
 	})
 
+	// regression: L (spec gating)
 	it("enabled: false mounts nothing", async () => {
 		const app = honey()
 		app.get("/a").handler((c) => c.res.text("ok", "a"))
@@ -131,6 +135,7 @@ describe("openapi(): caching headers and enabled", () => {
 })
 
 describe("openapi(): mounting", () => {
+	// regression: M (index.ts:1020-1032)
 	it("a root /:slug or /*rest route does not shadow the spec routes", async () => {
 		for (const pattern of ["/:slug", "/*rest"]) {
 			const app = honey()
@@ -157,6 +162,7 @@ describe("openapi(): mounting", () => {
 		expect(() => after.get("/openapi.json").handler((c) => c.res.text("ok", "mine"))).toThrow(/Duplicate route/)
 	})
 
+	// regression: L (index.ts:972)
 	it("the docs UI points at the stripped prefix the browser sees", async () => {
 		const app = honey().stripPrefix("/api")
 		app.get("/a").handler((c) => c.res.text("ok", "a"))
@@ -169,6 +175,7 @@ describe("openapi(): mounting", () => {
 
 describe("openapi(): gateway and sub-app", () => {
 	for (const order of ["sub-first", "gateway-first"] as const) {
+		// regression: H32
 		it(`the gateway serves its own document when the sub also called openapi() (${order})`, async () => {
 			const sub = honey()
 			sub.get("/users").handler((c) => c.res.text("ok", "users"))
@@ -191,6 +198,7 @@ describe("openapi(): gateway and sub-app", () => {
 })
 
 describe("standalone spec() on several apps", () => {
+	// regression: M (openapi/spec.ts:20-47)
 	it("one spec() handler mounted on two apps documents each app", async () => {
 		const handler = spec({ title: "Shared", version: "1" })
 		const a = honey()
@@ -217,6 +225,7 @@ describe("metaSpec composition with mounted sub-apps", () => {
 		return sub
 	}
 
+	// regression: L (index.ts:1310-1312)
 	it("metaSpec() after route(sub) merges instead of throwing", async () => {
 		const parent = honey<{}>().meta<{ rateLimit?: string }>()
 		parent.route(subWith(undefined) as never)
@@ -228,6 +237,7 @@ describe("metaSpec composition with mounted sub-apps", () => {
 	})
 
 	for (const order of ["declare-first", "mount-first"] as const) {
+		// regression: M (index.ts:1346)
 		it(`a sub's strict: "off" does not downgrade the parent's resolved strictness (${order})`, async () => {
 			const parent = honey<{}>().meta<{ rateLimit?: string }>()
 			if (order === "declare-first") parent.metaSpec({ meta: {} })

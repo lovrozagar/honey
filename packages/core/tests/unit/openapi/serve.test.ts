@@ -210,6 +210,7 @@ describe("Honey.openapi()", () => {
 		expect(await yaml.text()).toContain("/b")
 	})
 
+	// regression: M (index.ts:968 perf)
 	it("caches a failed generation until the routes change, then retries", async () => {
 		const app = honey()
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))

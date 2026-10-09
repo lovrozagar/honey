@@ -93,17 +93,20 @@ paths:
 })
 
 describe("toYaml — JSON equivalence", () => {
+	// regression: M (src/yaml.ts:15,33-42)
 	it("skips undefined keys instead of emitting null", () => {
 		expect(toYaml({ a: 1, b: undefined })).toBe("a: 1\n")
 		expect(toYaml({ info: { description: undefined, title: "t" } })).toBe("info:\n  title: t\n")
 	})
 
+	// regression: M (src/yaml.ts:15,33-42)
 	it("Date becomes its ISO string; NaN and Infinity become null", () => {
 		const date = new Date("2026-01-02T03:04:05.000Z")
 		expect(toYaml({ d: date })).toBe('d: "2026-01-02T03:04:05.000Z"\n')
 		expect(toYaml([Number.NaN, Number.POSITIVE_INFINITY])).toBe("- null\n- null\n")
 	})
 
+	// regression: M (src/yaml.ts:15,33-42)
 	it("quotes every string a parser could read differently", () => {
 		for (const s of [
 			'"leading quote',

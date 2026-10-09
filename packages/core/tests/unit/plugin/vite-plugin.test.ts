@@ -176,6 +176,7 @@ describe("honeyVitePlugin", () => {
 		expect(manifest.routes).toHaveLength(2)
 	})
 
+	// regression: M (plugin.ts:656-675)
 	it("hotUpdate regenerates and keeps HMR, adding the virtual route tree", async () => {
 		writeTempApp(outDir)
 		const plugin = getCodegenPlugin({
@@ -206,6 +207,7 @@ describe("honeyVitePlugin", () => {
 		expect(result).toBeUndefined()
 	})
 
+	// regression: M (plugin.ts:656-675)
 	it("hotUpdate generates once per save across environments", async () => {
 		writeTempApp(outDir)
 		const plugin = getCodegenPlugin({ app: "src/app.ts", watch: ["src/**/*.ts"] })
@@ -221,6 +223,7 @@ describe("honeyVitePlugin", () => {
 		expect(existsSync(tree)).toBe(false)
 	})
 
+	// regression: M (plugin.ts:656-675)
 	it("hotUpdate ignores generated outputs, even when they match watch", async () => {
 		writeTempApp(outDir)
 		const plugin = getCodegenPlugin({
@@ -256,6 +259,7 @@ describe("honeyVitePlugin", () => {
 		expect(server.moduleGraph.getModuleById).not.toHaveBeenCalled()
 	})
 
+	// regression: M (plugin.ts:677-695)
 	it("load returns route tree for virtual module with moduleType", async () => {
 		writeTempApp(outDir)
 		const plugin = getCodegenPlugin({ app: "src/app.ts" })
@@ -269,6 +273,7 @@ describe("honeyVitePlugin", () => {
 		expect(result?.code).not.toMatch(/import type|: TreeNode|as unknown as/)
 	})
 
+	// regression: M (plugin.ts:677-695)
 	it("virtual route tree loads in a real Vite dev server", async () => {
 		writeTempApp(outDir)
 		const { createServer, defaultServerConditions } = await import("vite")
@@ -288,6 +293,7 @@ describe("honeyVitePlugin", () => {
 		}
 	})
 
+	// regression: L (plugin.ts:714-722)
 	it("virtual openapi module applies the configured profile", async () => {
 		writeTempApp(outDir)
 		const plugin = getCodegenPlugin({

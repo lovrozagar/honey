@@ -174,6 +174,7 @@ describe("generateAndWrite", () => {
 		await expect(generateAndWrite(config, TEMP_ROOT)).rejects.toThrow(/Expected Honey app/)
 	})
 
+	// regression: H (plugin.ts:360-363 side effects)
 	it("evaluates the app once per generation, and its top-level serve() binds nothing", async () => {
 		const log = join(TEMP_ROOT, "evaluations.log")
 		writeFileSync(

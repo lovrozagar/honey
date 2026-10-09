@@ -557,6 +557,7 @@ describe("isStale false for non-stale reads", () => {
 /* ---- Test 22: a pattern-level mark is cleared per instance, not for all ---- */
 
 describe("pattern-level mark clears per instance", () => {
+	// regression: M (client/sdk.ts:193-207)
 	it("each instance reads stale once; a concrete read never clears the others", async () => {
 		const captured: CapturedCtx[] = []
 		const sdk = createSDK(

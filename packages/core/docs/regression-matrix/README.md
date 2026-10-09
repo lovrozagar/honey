@@ -6,10 +6,11 @@ fails on `3ab88ce`. A test that passes on the old code guards nothing, so each o
 against it. Each test carries its finding id in its name or in a `// regression: <id>` comment, so
 `grep -r "H12" packages/core/tests` finds the guard for H12.
 
-| Workstreams                                                     | Matrix               |
-| --------------------------------------------------------------- | -------------------- |
-| 1–3: route model, middleware finalize, request normalization    | [ws1-3.md](ws1-3.md) |
-| 4–8: streaming, Node/WS, realtime bus, security middleware, I/O | [ws4-8.md](ws4-8.md) |
+| Workstreams                                                     | Matrix                 |
+| --------------------------------------------------------------- | ---------------------- |
+| 1–3: route model, middleware finalize, request normalization    | [ws1-3.md](ws1-3.md)   |
+| 4–8: streaming, Node/WS, realtime bus, security middleware, I/O | [ws4-8.md](ws4-8.md)   |
+| 9–12: OpenAPI, codegen, client runtimes, tooling                | [ws9-12.md](ws9-12.md) |
 
 ## Re-verify against 3ab88ce
 

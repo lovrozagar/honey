@@ -306,6 +306,7 @@ describe("generateRouteTreeFromApp preserves invalidate", () => {
 /* ---- Test 15b: generateTypes emits HoneyCodegen module augmentation ---- */
 
 describe("generateTypes emits HoneyCodegen module augmentation", () => {
+	// regression: H39
 	it("emits declare module with HoneyCodegen routeSelector", () => {
 		const app = honey()
 			.get("/v1/users")

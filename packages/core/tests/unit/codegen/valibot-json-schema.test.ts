@@ -369,6 +369,7 @@ describe("valibot → JSON Schema: pipe", () => {
 /* ---- node kinds the converter used to drop ---- */
 
 describe("valibot → JSON Schema: object variants, wrappers, lazy, binary", () => {
+	// regression: M (codegen.ts:87-149 valibot)
 	it("nullish and exactOptional entries are optional", async () => {
 		const schema = v.object({ a: v.nullish(v.string()), b: v.exactOptional(v.string()), c: v.string() })
 		expect(await inputSchema(schema)).toEqual({
@@ -382,6 +383,7 @@ describe("valibot → JSON Schema: object variants, wrappers, lazy, binary", () 
 		})
 	})
 
+	// regression: M (codegen.ts:87-149 valibot)
 	it("strictObject forbids extra keys; looseObject and objectWithRest describe them", async () => {
 		expect(await inputSchema(v.strictObject({ a: v.string() }))).toEqual({
 			additionalProperties: false,
@@ -402,6 +404,7 @@ describe("valibot → JSON Schema: object variants, wrappers, lazy, binary", () 
 		})
 	})
 
+	// regression: M (codegen.ts:87-149 valibot)
 	it("variant is a union; lazy resolves; file and blob are binary", async () => {
 		const schema = v.object({
 			f: v.file(),

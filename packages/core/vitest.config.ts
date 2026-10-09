@@ -9,6 +9,7 @@ export const harness = [
 	"tests/unit/codegen/python-sdk.test.ts",
 	"tests/unit/codegen/rust-sdk.test.ts",
 	"tests/unit/codegen/*-emitter-byte-equiv.test.ts",
+	"tests/regression/ws9-12/polyglot.regression.test.ts",
 ]
 
 /**

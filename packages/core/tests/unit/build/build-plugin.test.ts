@@ -141,6 +141,7 @@ describe("createBuildPlugin", () => {
 			expect(cfg.build.minify).toBe(false)
 		})
 
+		// regression: L (build/index.ts:137-140)
 		it("keeps dependencies external on node and bun, bundles them for workers", () => {
 			const ssr = (target: HoneyBuildConfig["target"]) =>
 				(makePlugin(target).config() as { ssr: { noExternal?: boolean } }).ssr.noExternal
@@ -199,6 +200,7 @@ describe("createBuildPlugin", () => {
 
 	describe("server entries start like app.serve()", () => {
 		for (const target of ["node", "bun", "deno"] as const) {
+			// regression: M (build/index.ts:52-65), for the bun target
 			it(`${target}: startHoneyServer with the runtime, env and 0.0.0.0`, async () => {
 				const entry = await getEntry(makePlugin(target))
 				expect(entry).toContain('import { startHoneyServer } from "@lovrozagar/honey/serve"')
@@ -255,6 +257,7 @@ describe("createBuildPlugin", () => {
 			'app.openapi({ title: "T", version: "1" })',
 		].join("\n")
 
+		// regression: M (build/index.ts:30-42)
 		it("finds openapi() behind a re-export entry", async () => {
 			const entry = await entryFor("cloudflare", {
 				"src/app.ts": 'export { app } from "./routes"\n',
@@ -264,6 +267,7 @@ describe("createBuildPlugin", () => {
 			expect(entry).toContain("enableOpenApi()")
 		})
 
+		// regression: M (build/index.ts:30-42)
 		it("ignores feature calls in comments and strings", async () => {
 			const entry = await entryFor("cloudflare", {
 				"src/app.ts": [

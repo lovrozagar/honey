@@ -46,6 +46,7 @@ describe("URL building (H35)", () => {
 })
 
 describe("Headers", () => {
+	// regression: L (client/http.ts:126,171-175)
 	it("skips undefined per-call headers and keeps one Authorization", async () => {
 		const { calls, fetch } = recorder(() => json({}))
 		const api = createClient({ baseURL: "https://x", fetch, headers: { Authorization: "Bearer a" } })
@@ -57,6 +58,7 @@ describe("Headers", () => {
 		expect(h.has("x-maybe")).toBe(false)
 	})
 
+	// regression: L (client/http.ts:126,171-175)
 	it("requestId: false sends no x-request-id (no CORS preflight)", async () => {
 		const { calls, fetch } = recorder(() => json({}))
 		const api = createClient({ baseURL: "https://x", fetch, requestId: false })
@@ -108,6 +110,7 @@ describe("Timeouts and abort", () => {
 		}) as typeof fetch
 	}
 
+	// regression: M (client/http.ts:340-386)
 	it("the timeout covers reading the body", async () => {
 		const api = createClient({ baseURL: "https://x", fetch: signalAwareFetch(() => slowBody(2000)), timeout: 50 })
 		const started = Date.now()
@@ -118,6 +121,7 @@ describe("Timeouts and abort", () => {
 		expect(Date.now() - started).toBeLessThan(1000)
 	})
 
+	// regression: M (client/http.ts:70-79)
 	it("per-call timeout overrides the config", async () => {
 		const api = createClient({
 			baseURL: "https://x",
@@ -129,6 +133,7 @@ describe("Timeouts and abort", () => {
 		).rejects.toMatchObject({ name: "TimeoutError" })
 	})
 
+	// regression: M (client/http.ts:340-386)
 	it("a user abort after headers still cancels the body read when a timeout is set", async () => {
 		const api = createClient({
 			baseURL: "https://x",
@@ -232,6 +237,7 @@ describe("Errors (H36)", () => {
 		}
 	})
 
+	// regression: M (client/http.ts:70-79)
 	it("throw mode: per-status subclasses", async () => {
 		const api = createClient({
 			baseURL: "https://x",
@@ -244,6 +250,7 @@ describe("Errors (H36)", () => {
 		expect((error as Error).message).toBe("who")
 	})
 
+	// regression: M (client/http.ts:389-401)
 	it("empty or invalid 2xx bodies keep the status", async () => {
 		const empty = createClient({
 			baseURL: "https://x",
@@ -293,6 +300,7 @@ describe("ctx.retry()", () => {
 		expect(calls).toHaveLength(2)
 	})
 
+	// regression: M (client/http.ts:359-365)
 	it("a guarded hook in safe mode returns { error } instead of throwing", async () => {
 		const { fetch } = recorder((_, n) => (n === 0 ? json({}, 429) : json({ message: "down" }, 500)))
 		const api = createClient({
@@ -331,6 +339,7 @@ describe("Streams (H37) and the lazy call", () => {
 		expect(seen).toEqual(["text/event-stream"])
 	})
 
+	// regression: M (client/index.ts:90-112)
 	it("awaiting an SSE call resolves to an iterable instead of buffering the stream", async () => {
 		const { calls, fetch } = recorder(
 			() =>
@@ -356,6 +365,7 @@ describe("Streams (H37) and the lazy call", () => {
 		expect(calls).toHaveLength(1)
 	})
 
+	// regression: M (client/index.ts:90-112)
 	it("await then for-await reuses the one request", async () => {
 		const { calls, fetch } = recorder(() => sse("data: a\n\ndata: b\n\n"))
 		const api = createClient({ baseURL: "https://x", fetch })
@@ -407,6 +417,7 @@ describe("Redirects", () => {
 })
 
 describe("Form encoding", () => {
+	// regression: M (client/http.ts:316-322)
 	it("arrays repeat the key in both encodings; nested objects are rejected", async () => {
 		const { calls, fetch } = recorder(() => json({}))
 		const api = createClient({ baseURL: "https://x", fetch })
@@ -431,6 +442,7 @@ describe("Client and SDK objects", () => {
 		expect(await Promise.resolve(sdk)).toBe(sdk)
 	})
 
+	// regression: L (client/sdk.ts:31-33)
 	it("SDK paths: hyphenated braces and `{id}:action` interpolate", async () => {
 		const { calls, fetch } = recorder(() => json({}))
 		const sdk = createSDK(
@@ -445,6 +457,7 @@ describe("Client and SDK objects", () => {
 		expect(calls.map((c) => c.url)).toEqual(["https://x/users/7", "https://x/ops/9:cancel"])
 	})
 
+	// regression: M (client/sdk.ts:49-58)
 	it("partially resolvable invalidation targets mark the narrower pattern", async () => {
 		const seen: Array<boolean | undefined> = []
 		const sdk = createSDK(

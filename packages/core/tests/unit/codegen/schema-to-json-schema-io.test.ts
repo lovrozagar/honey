@@ -96,6 +96,7 @@ describe("schemaToJsonSchema — io:input for transform-piped search schemas", (
 		expect(props.name).toBeDefined()
 	})
 
+	// regression: H33
 	it("an unrepresentable z.custom degrades only its own node, with a warning naming it", async () => {
 		const warnSpy = vi.spyOn(console, "warn")
 		warnSpy.mockImplementation(() => {})
@@ -138,6 +139,7 @@ describe("schemaToJsonSchema — io:input for transform-piped search schemas", (
 		}
 	})
 
+	// regression: H33
 	it("an unrepresentable search field keeps every other query parameter", async () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 		try {

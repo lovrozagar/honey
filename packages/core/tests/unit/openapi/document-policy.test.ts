@@ -15,6 +15,7 @@ function ops(doc: { paths: unknown }): Ops {
 }
 
 describe("paths and methods (H34)", () => {
+	// regression: H34
 	it("a named wildcard is a path parameter, an unnamed one too", async () => {
 		const app = honey<{}>()
 		app.get("/files/*path").handler((c) => c.res.text("ok", "ok"))
@@ -25,6 +26,7 @@ describe("paths and methods (H34)", () => {
 		expect(param).toMatchObject({ in: "path", name: "path", required: true, "x-honey-wildcard": true })
 	})
 
+	// regression: H34
 	it("all() documents the standard methods, never an `all` key, and yields to explicit routes", async () => {
 		const app = honey<{}>()
 		app.get("/upstream/*path").handler((c) => c.res.text("ok", "explicit"))
@@ -47,6 +49,7 @@ describe("paths and methods (H34)", () => {
 })
 
 describe("operationIds", () => {
+	// regression: M (codegen.ts:295-317)
 	it("one route expanded into several operations gets method and variant suffixes", async () => {
 		const app = honey<{}>()
 		app
@@ -64,6 +67,7 @@ describe("operationIds", () => {
 		expect(ops(doc)["/opt/{id}"].get.operationId).toBe("opt_with_id")
 	})
 
+	// regression: L (meta-spec.ts:289-306)
 	it("two routes declaring the same operationId fail generation", async () => {
 		const app = honey<{}>()
 		app
@@ -79,6 +83,7 @@ describe("operationIds", () => {
 })
 
 describe("content types", () => {
+	// regression: M (openapi/document.ts:375,421,438)
 	it("json and form bodies of one route are both documented", async () => {
 		const app = honey<{}>()
 		app
@@ -92,6 +97,7 @@ describe("content types", () => {
 		expect(content["application/x-www-form-urlencoded"].schema).toMatchObject({ properties: { f: { type: "string" } } })
 	})
 
+	// regression: M (openapi/document.ts:375,421,438)
 	it("two response content types of one status keep their own schemas", async () => {
 		const app = honey<{}>()
 		app
@@ -113,6 +119,7 @@ describe("content types", () => {
 		expect(rc["text/csv"].schema).toEqual({ type: "string" })
 	})
 
+	// regression: H (codegen.ts:580-596)
 	it("deduplicateSchemas keys slots by content type, so JSON never points at the XML schema", () => {
 		const json = { properties: { a: { type: "string" } }, type: "object" }
 		const xml = { properties: { b: { type: "string" } }, type: "object" }
@@ -140,6 +147,7 @@ describe("content types", () => {
 		expect(content["application/xml"].schema).toEqual(xml)
 	})
 
+	// regression: H (codegen.ts:580-596)
 	it("an existing component is never overwritten by a derived name", () => {
 		const existing = { properties: { keep: { type: "string" } }, type: "object" }
 		const deduped = deduplicateSchemas({
@@ -165,6 +173,7 @@ describe("content types", () => {
 		expect(Object.keys(deduped.components?.schemas ?? {})).toHaveLength(2)
 	})
 
+	// regression: L (codegen.ts:2359-2360)
 	it("a `default` response key never becomes NaN in a schema name", () => {
 		const deduped = deduplicateSchemas({
 			info: INFO,
@@ -187,6 +196,7 @@ describe("content types", () => {
 })
 
 describe("schemas", () => {
+	// regression: M (codegen-sanitize.ts:34-36)
 	it("unions stay anyOf — overlapping members must not start rejecting valid values", async () => {
 		const app = honey<{}>()
 		app
@@ -199,6 +209,7 @@ describe("schemas", () => {
 		expect(text).not.toContain('"oneOf"')
 	})
 
+	// regression: M (codegen-sanitize.ts:34-36)
 	it("a recursive schema's self-reference points at its component, not the document root", async () => {
 		const Category = z.object({
 			name: z.string(),
@@ -223,6 +234,7 @@ describe("schemas", () => {
 })
 
 describe("websocket operations", () => {
+	// regression: M (openapi/document.ts:538-597)
 	it("go through filterRoutes and meta.internal, and never replace an HTTP GET", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
 		try {
@@ -246,6 +258,7 @@ describe("websocket operations", () => {
 		}
 	})
 
+	// regression: M (openapi/document.ts:538-597)
 	it("drop x-internal search fields", async () => {
 		const app = honey<{}>()
 		app
@@ -259,6 +272,7 @@ describe("websocket operations", () => {
 })
 
 describe("filterRoutes", () => {
+	// regression: L (openapi/document.ts:321)
 	it("receives an object for meta, never null", async () => {
 		const app = honey<{}>()
 		app.get("/plain").handler((c) => c.res.text("ok", "ok"))
@@ -271,6 +285,7 @@ describe("filterRoutes", () => {
 })
 
 describe("validation against the inventory", () => {
+	// regression: M (meta-spec.ts:182)
 	it("an invalidate selector that names no route fails generation", async () => {
 		const app = honey<{}>()
 		app
@@ -293,6 +308,7 @@ describe("validation against the inventory", () => {
 		expect(ops(doc)["/users"].post["x-invalidate"]).toEqual(["GET /users"])
 	})
 
+	// regression: M (meta-spec.ts:49-64,181)
 	it("a security scheme missing from securitySchemes fails generation", async () => {
 		const app = honey<{}>()
 		app
@@ -316,6 +332,7 @@ describe("metaSpec composition", () => {
 		expect(compileMetaSpec(merged, collector).strict).toBe("error")
 	})
 
+	// regression: L (meta-spec.ts:289-306)
 	it("entries for different targets or disjoint profiles are not duplicates", () => {
 		const collector = new MetaSpecCollector()
 		compileMetaSpec(
@@ -340,6 +357,7 @@ describe("metaSpec composition", () => {
 })
 
 describe("served manifest", () => {
+	// regression: M (codegen.ts:1192-1200 manifest)
 	it("applies the document's visibility policy", () => {
 		const app = honey<{}>()
 		app.metaSpec({ meta: { captcha: false, team: "x-team" } } as never)
@@ -370,6 +388,7 @@ describe("served manifest", () => {
 		expect(allowed("worker")).toBe(false)
 	})
 
+	// regression: M (codegen.ts:1192-1200 manifest)
 	it("the /manifest.json route serves the published view", async () => {
 		await import("../../../src/openapi/register.ts")
 		const app = honey<{}>()
@@ -399,10 +418,12 @@ describe("invalidate check", () => {
 	})
 	const read = { meta: null, method: "get", operation: {}, path: "/users" }
 
+	// regression: L (invalidate-check.ts:65-68)
 	it("a profile without x-invalidate does not make a declared mutation look undeclared", () => {
 		expect(findMissingInvalidate([read, mutation({ invalidate: ["GET /users"] })], undefined)).toEqual([])
 	})
 
+	// regression: L (invalidate-check.ts:120-123)
 	it("an entity with no tagged reader falls back to path shape instead of staying silent", () => {
 		const findings = findMissingInvalidate([read, mutation(null, { "x-entity": "user" })], "x-entity")
 		expect(findings).toEqual([{ affects: ["GET /users"], method: "POST", path: "/users" }])
@@ -421,6 +442,7 @@ describe("server prefix and trailing slash", () => {
 })
 
 describe("standalone spec()", () => {
+	// regression: M (openapi/spec.ts:20-47)
 	it("documents bodies and parameters without the codegen runtime, and keeps options out of info", async () => {
 		resetOpenApiRuntime()
 		const app = honey<{}>()
@@ -440,6 +462,7 @@ describe("standalone spec()", () => {
 		expect(JSON.stringify(post.requestBody)).toContain('"name"')
 	})
 
+	// regression: M (openapi/spec.ts:20-47)
 	it("rebuilds after routes change, and serves the same bytes otherwise", async () => {
 		const app = honey<{}>()
 		app.get("/openapi.json").handler(spec({ title: "T", version: "1" }) as never)

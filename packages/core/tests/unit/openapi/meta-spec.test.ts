@@ -201,6 +201,7 @@ describe("hidden keys", () => {
 		}
 	})
 
+	// regression: decision (meta.internal)
 	it("built-in `internal` stays hidden and does not trip totality", async () => {
 		const app = honey<{}>()
 		app.metaSpec({ meta: {}, strict: "error" })

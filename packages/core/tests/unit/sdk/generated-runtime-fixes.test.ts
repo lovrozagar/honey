@@ -35,6 +35,7 @@ function recorder(make: () => Response = () => Response.json({ ok: true })) {
 }
 
 describe("streamed operations send their request (H37b)", () => {
+	// regression: H37b
 	it("a POST SSE operation sends its JSON body and runs onRequest/onResponse hooks", async () => {
 		const SDK = await load(
 			doc({
@@ -69,6 +70,7 @@ describe("streamed operations send their request (H37b)", () => {
 })
 
 describe("stream request bodies", () => {
+	// regression: M (codegen.ts:4079,4118,4484)
 	it("send with duplex: half, and an onResponse hook still gets a Request", async () => {
 		const SDK = await load(
 			doc({
@@ -102,6 +104,7 @@ describe("stream request bodies", () => {
 })
 
 describe("idempotency keys", () => {
+	// regression: M (codegen.ts:4320-4325)
 	it("are never written into the caller's input, so a reused input gets a fresh key", async () => {
 		const SDK = await load(doc({ "/pay": { post: { operationId: "pay", responses: OK, "x-idempotency-key": true } } }))
 		const { calls, fetch } = recorder()
@@ -124,6 +127,7 @@ describe("resource names never shadow the client or Object.prototype", () => {
 		"/u": { get: { operationId: "toString", responses: OK } },
 	})
 
+	// regression: M (codegen.ts:2757-2760)
 	it("renames colliding resources consistently in the types and the map", () => {
 		const { files } = generateSDK(spec as never, { name: "FixSDK" })
 		expect(files.types).toContain("state_: {")
@@ -134,6 +138,7 @@ describe("resource names never shadow the client or Object.prototype", () => {
 		expect(files.map).not.toMatch(/^\tthen:/m)
 	})
 
+	// regression: M (codegen.ts:2757-2760)
 	it("keeps state, dispose and String(sdk) working, and the client is not a thenable", async () => {
 		const SDK = await load(spec)
 		const { calls, fetch } = recorder()
@@ -148,6 +153,7 @@ describe("resource names never shadow the client or Object.prototype", () => {
 		expect(String(sdk.then_)).toBe("[object Object]")
 	})
 
+	// regression: L (codegen.ts:4607-4639)
 	it("an operationId of __proto__.x never reaches Object.prototype during generation", () => {
 		generateSDK(doc({ "/p": { get: { operationId: "__proto__.polluted", responses: OK } } }) as never)
 		expect(({} as Record<string, unknown>).polluted).toBeUndefined()
@@ -155,6 +161,7 @@ describe("resource names never shadow the client or Object.prototype", () => {
 })
 
 describe("generation inputs", () => {
+	// regression: L (codegen.ts:4708-4710)
 	it("rejects an SDK name or stem that is not safe in source", () => {
 		const spec = doc({ "/a": { get: { operationId: "a", responses: OK } } })
 		expect(() => generateSDK(spec as never, { name: "My SDK" })).toThrow(/identifier/)
@@ -179,6 +186,7 @@ describe("generation inputs", () => {
 		expect(files.types).toContain("Promise<string>")
 	})
 
+	// regression: L (codegen.ts:2257-2342)
 	it("header and cookie params reach the input type, hyphenated names quoted", () => {
 		const { files } = generateSDK(
 			doc({

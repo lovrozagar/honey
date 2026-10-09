@@ -14,6 +14,7 @@ describe("emitSchemaType — literals are written as source, never interpolated"
 		expect(emitSchemaType(v.picklist(['a"b', 1]))).toBe('"a\\"b" | 1')
 	})
 
+	// regression: M (type-emitter.ts:6-8)
 	it("numeric TS enums emit their values, without reverse mappings", () => {
 		enum E {
 			A = 1,
@@ -23,12 +24,14 @@ describe("emitSchemaType — literals are written as source, never interpolated"
 		expect(emitSchemaType(v.enum(E))).toBe("1 | 2")
 	})
 
+	// regression: M (type-emitter.ts:6-8)
 	it("bigint literals keep their n", () => {
 		expect(emitSchemaType(z.literal(5n))).toBe("5n")
 	})
 })
 
 describe("emitSchemaType — shapes", () => {
+	// regression: M (type-emitter.ts:6-8)
 	it("an intersection over a union keeps the union together", () => {
 		const s = z.intersection(
 			z.union([z.object({ a: z.string() }), z.object({ b: z.string() })]),
@@ -37,6 +40,7 @@ describe("emitSchemaType — shapes", () => {
 		expect(emitSchemaType(s)).toBe("({ a: string } | { b: string }) & { c: string }")
 	})
 
+	// regression: M (type-emitter.ts:6-8)
 	it("tuple rest, map, set, nonoptional and functions", () => {
 		expect(emitSchemaType(z.tuple([z.string()], z.number()))).toBe("[string, ...number[]]")
 		expect(emitSchemaType(z.map(z.string(), z.number()))).toBe("Map<string, number>")
@@ -45,6 +49,7 @@ describe("emitSchemaType — shapes", () => {
 		expect(emitSchemaType(z.array(z.function()))).toBe("((...args: never[]) => unknown)[]")
 	})
 
+	// regression: M (type-emitter.ts:194-207)
 	it("Zod 4 getter recursion becomes a named alias instead of overflowing the stack", () => {
 		const Category = z.object({
 			name: z.string(),

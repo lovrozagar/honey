@@ -190,6 +190,7 @@ describe("irToTs — equivalence with jsonSchemaToTS (Layer A inputs)", () => {
 })
 
 describe("irToTs — precedence, maps beside fields, depth", () => {
+	// regression: M (ts-type-emitter.ts:101-107)
 	it("an allOf over a union keeps the union together", () => {
 		const ir = schemaToIR({
 			allOf: [{ anyOf: [{ type: "string" }, { type: "number" }] }, { type: "boolean" }],
@@ -197,6 +198,7 @@ describe("irToTs — precedence, maps beside fields, depth", () => {
 		expect(irToTs(ir)).toBe("(string | number) & boolean")
 	})
 
+	// regression: M (ts-type-emitter.ts:101-107)
 	it("typed additionalProperties beside fields is an intersection, not a conflicting index signature", () => {
 		const ir = schemaToIR({
 			additionalProperties: { type: "number" },
@@ -207,12 +209,14 @@ describe("irToTs — precedence, maps beside fields, depth", () => {
 		expect(irToTs(ir)).toBe("{ name: string } & { [k: string]: number }")
 	})
 
+	// regression: M (ts-type-emitter.ts:101-107)
 	it("nesting deeper than 8 levels keeps its type", () => {
 		let schema: Record<string, unknown> = { type: "string" }
 		for (let i = 0; i < 12; i++) schema = { items: schema, type: "array" }
 		expect(irToTs(schemaToIR(schema))).toBe(`string${"[]".repeat(12)}`)
 	})
 
+	// regression: M (localeCompare)
 	it("fields are ordered by code unit, not locale", () => {
 		const ir = schemaToIR({
 			properties: { a: { type: "string" }, B: { type: "string" }, ch: { type: "string" }, c: { type: "string" } },

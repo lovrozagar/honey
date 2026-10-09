@@ -167,6 +167,7 @@ describe("honey generate CLI", () => {
 		expect(readFileSync(treePath, "utf-8")).toContain("watched")
 	}, 35_000)
 
+	// regression: H70
 	it("rejects unknown flags and a missing explicit config, even with --app", async () => {
 		const typo = await runGenerate(TEMP_ROOT, ["generate", "--manifset"])
 		expect(typo.exitCode).toBe(1)
@@ -177,6 +178,7 @@ describe("honey generate CLI", () => {
 		expect(missing.stderr).toContain("config file not found: nope.ts")
 	})
 
+	// regression: H70
 	it("--app=<path> overrides the config's app", async () => {
 		writeFileSync(
 			join(TEMP_ROOT, "src/other.ts"),
@@ -187,6 +189,7 @@ describe("honey generate CLI", () => {
 		expect(readFileSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"), "utf-8")).toContain("other")
 	})
 
+	// regression: H70
 	it("calls a function-form Vite config", async () => {
 		writeFileSync(
 			join(TEMP_ROOT, "vite.config.ts"),
@@ -225,6 +228,7 @@ describe("honey generate CLI", () => {
 		expect(existsSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"))).toBe(false)
 	})
 
+	// regression: H (plugin.ts:360-363 side effects)
 	it("an app that serves at top level and leaves a timer still generates and exits, without binding the port", async () => {
 		const port = 45_987
 		writeFileSync(
@@ -261,6 +265,7 @@ describe("honey generate CLI", () => {
 		expect(readFileSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"), "utf-8")).toContain("health")
 	}, 30_000)
 
+	// regression: H68
 	it("--watch sees edits to modules the app imports", async () => {
 		writeFileSync(join(TEMP_ROOT, "src/routes.ts"), 'export const extra = "first"\n')
 		writeFileSync(

@@ -15,6 +15,7 @@ async function expectParses(code: string, name: string) {
 }
 
 describe("MCP codegen — emitted source stays well-formed", () => {
+	// regression: L (codegen-mcp.ts:241,254,329)
 	it("an operationId with quotes and a project name with */ do not inject code", async () => {
 		const out = generateMCPServer(
 			spec({ "/x": { get: { operationId: 'evil"); process.exit(1); ("', responses: {}, "x-mcp": true } } }),
@@ -27,6 +28,7 @@ describe("MCP codegen — emitted source stays well-formed", () => {
 		expect(tools).toContain("/* project: a*\\/b */")
 	})
 
+	// regression: L (codegen-mcp.ts:241,254,329)
 	it("tool names are sanitized to [A-Za-z0-9_-], capped at 64, and collisions fail loudly", () => {
 		const out = generateMCPServer(
 			spec({
@@ -76,6 +78,7 @@ describe("MCP codegen — emitted source stays well-formed", () => {
 		expect(out.files["src/tools.gen.ts"]).not.toContain("$ref")
 	})
 
+	// regression: M (codegen-mcp.ts:74-87)
 	it("a pure $ref cycle is an error, not a hang", () => {
 		expect(() =>
 			generateMCPServer(
@@ -97,6 +100,7 @@ describe("MCP codegen — emitted source stays well-formed", () => {
 		).toThrow(/\$ref cycle/)
 	})
 
+	// regression: M (codegen-mcp.ts:74-87)
 	it("shared $refs are expanded once each (no exponential blowup)", () => {
 		const schemas: Record<string, unknown> = { L0: { type: "string" } }
 		for (let i = 1; i <= 30; i++) {
@@ -127,6 +131,7 @@ describe("MCP codegen — emitted source stays well-formed", () => {
 		expect(Date.now() - started).toBeLessThan(2000)
 	})
 
+	// regression: M (codegen-mcp.ts:267,275-281)
 	it("server.ts requires an explicit base URL", () => {
 		const out = generateMCPServer(
 			spec({ "/x": { get: { operationId: "x.get", responses: {}, "x-mcp": true } } }),
@@ -137,6 +142,7 @@ describe("MCP codegen — emitted source stays well-formed", () => {
 		expect(server).toContain("ANYROW_BASE_URL is required")
 	})
 
+	// regression: M (codegen-mcp.ts:228-245)
 	it("credential headers are never tool arguments", () => {
 		const out = generateMCPServer(
 			spec({

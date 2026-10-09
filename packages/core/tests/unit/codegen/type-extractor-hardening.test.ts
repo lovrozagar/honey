@@ -155,6 +155,7 @@ describe("structural types are written exactly (H73)", () => {
 })
 
 describe("entries", () => {
+	// regression: L (type-extractor.ts:521)
 	it("accepts `export default honey()`", async () => {
 		const entryPath = write(
 			"default/app.ts",

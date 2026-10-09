@@ -864,6 +864,7 @@ describe("normalizeSecurity", () => {
 		])
 	})
 
+	// regression: M (meta-spec.ts:49-64,181)
 	it("mixed string and nested array is refused, not read as public", () => {
 		expect(() => normalizeSecurity(["jwt", ["iaKey", "iaDomain"]])).toThrow(/mixed or malformed/)
 	})
@@ -888,6 +889,7 @@ describe("normalizeSecurity", () => {
 		expect(() => normalizeSecurity([{ jwt: "read" }])).toThrow(/mixed or malformed/)
 	})
 
+	// regression: M (meta-spec.ts:49-64,181)
 	it("a route with malformed security fails generation instead of documenting it public", async () => {
 		const app = honey<{}>()
 		app
