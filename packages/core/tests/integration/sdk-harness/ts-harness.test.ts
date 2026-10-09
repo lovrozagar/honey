@@ -1268,13 +1268,14 @@ const sdk = new MockSDK({ baseURL: process.env["BASE_URL"]!, throwOnError: true 
 
 async function runCase(token: string): Promise<{ token: string; closeCode: number; echoed: string[] }> {
 	const ws = sdk.connectWs({ search: { token } })
-	await new Promise<void>((resolve) => { ws.on("open", () => resolve()) })
+	/* listen for close before open: the server rejects a bad token right after the handshake,
+	 * and a runtime may deliver open and close back to back */
+	const closed = new Promise<{ code: number }>((resolve) => { ws.on("close", (code: number) => resolve({ code })) })
 	const echoed: string[] = []
 	ws.on("message", (data: string) => { echoed.push(data); if (echoed.length === 1) ws.close(1000, "done") })
-	const closeInfo = await new Promise<{ code: number }>((resolve) => {
-		ws.on("close", (code: number) => resolve({ code }))
-		ws.send("ping")
-	})
+	await Promise.race([new Promise<void>((resolve) => { ws.on("open", () => resolve()) }), closed])
+	ws.send("ping")
+	const closeInfo = await closed
 	return { token, closeCode: closeInfo.code, echoed }
 }
 

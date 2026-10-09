@@ -810,39 +810,51 @@ describe("Tier 9: runtime + auth", () => {
 /* ── Tier 10: integration smoke (skip when go binary missing) ── */
 
 describe("Tier 10: integration smoke", () => {
-	it.skipIf(!hasGo)("72. emitted package passes go vet ./...", () => {
-		const spec = loadFixture("crud")
-		const result = generateGoSDK(spec, { modulePath: "example.com/sdk" })
-		const dir = mkdtempSync(join(tmpdir(), "honey-go-sdk-"))
-		for (const [filename, content] of Object.entries(result.files)) {
-			writeFileSync(join(dir, filename), content, "utf8")
-		}
-		execSync("go mod tidy", { cwd: dir, stdio: "pipe" })
-		execSync("go vet ./...", { cwd: dir, stdio: "pipe" })
-	})
+	it.skipIf(!hasGo)(
+		"72. emitted package passes go vet ./...",
+		() => {
+			const spec = loadFixture("crud")
+			const result = generateGoSDK(spec, { modulePath: "example.com/sdk" })
+			const dir = mkdtempSync(join(tmpdir(), "honey-go-sdk-"))
+			for (const [filename, content] of Object.entries(result.files)) {
+				writeFileSync(join(dir, filename), content, "utf8")
+			}
+			execSync("go mod tidy", { cwd: dir, stdio: "pipe" })
+			execSync("go vet ./...", { cwd: dir, stdio: "pipe" })
+		},
+		120_000,
+	)
 
-	it.skipIf(!hasGo)("73. emitted package passes go build ./...", () => {
-		const spec = loadFixture("crud")
-		const result = generateGoSDK(spec, { modulePath: "example.com/sdk" })
-		const dir = mkdtempSync(join(tmpdir(), "honey-go-sdk-"))
-		for (const [filename, content] of Object.entries(result.files)) {
-			writeFileSync(join(dir, filename), content, "utf8")
-		}
-		execSync("go mod tidy", { cwd: dir, stdio: "pipe" })
-		execSync("go build ./...", { cwd: dir, stdio: "pipe" })
-	})
+	it.skipIf(!hasGo)(
+		"73. emitted package passes go build ./...",
+		() => {
+			const spec = loadFixture("crud")
+			const result = generateGoSDK(spec, { modulePath: "example.com/sdk" })
+			const dir = mkdtempSync(join(tmpdir(), "honey-go-sdk-"))
+			for (const [filename, content] of Object.entries(result.files)) {
+				writeFileSync(join(dir, filename), content, "utf8")
+			}
+			execSync("go mod tidy", { cwd: dir, stdio: "pipe" })
+			execSync("go build ./...", { cwd: dir, stdio: "pipe" })
+		},
+		120_000,
+	)
 
-	it.skipIf(!hasGo)("74. emitted package is gofmt-clean (gofmt -l returns empty)", () => {
-		const spec = loadFixture("crud")
-		/* gofmt post-process is opt-in; enable it so emitted output is canonical Go. */
-		const result = generateGoSDK(spec, { gofmt: true, modulePath: "example.com/sdk" })
-		const dir = mkdtempSync(join(tmpdir(), "honey-go-sdk-"))
-		for (const [filename, content] of Object.entries(result.files)) {
-			writeFileSync(join(dir, filename), content, "utf8")
-		}
-		const out = execSync(`gofmt -l ${dir}`, { encoding: "utf8" })
-		expect(out.trim(), "gofmt found unformatted files").toBe("")
-	})
+	it.skipIf(!hasGo)(
+		"74. emitted package is gofmt-clean (gofmt -l returns empty)",
+		() => {
+			const spec = loadFixture("crud")
+			/* gofmt post-process is opt-in; enable it so emitted output is canonical Go. */
+			const result = generateGoSDK(spec, { gofmt: true, modulePath: "example.com/sdk" })
+			const dir = mkdtempSync(join(tmpdir(), "honey-go-sdk-"))
+			for (const [filename, content] of Object.entries(result.files)) {
+				writeFileSync(join(dir, filename), content, "utf8")
+			}
+			const out = execSync(`gofmt -l ${dir}`, { encoding: "utf8" })
+			expect(out.trim(), "gofmt found unformatted files").toBe("")
+		},
+		120_000,
+	)
 })
 
 /* ── type emitter — use-position / hoisted enums ── */
