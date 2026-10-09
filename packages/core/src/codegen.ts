@@ -4384,7 +4384,7 @@ function sdkClientDoRequest(): string {
 \t\t\tif (crossOrigin) {
 \t\t\t\t/* only allowlisted headers cross: no credential, configured, per-call or hook header */
 \t\t\t\tconst safe = new Headers()
-\t\t\t\tfor (const name of ${JSON.stringify(CROSS_ORIGIN_SAFE_HEADERS)}) {
+\t\t\t\tfor (const name of [${CROSS_ORIGIN_SAFE_HEADERS.map((h) => JSON.stringify(h)).join(", ")}]) {
 \t\t\t\t\tconst value = (nextInit.headers as Headers).get(name)
 \t\t\t\t\tif (value !== null) safe.set(name, value)
 \t\t\t\t}

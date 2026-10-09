@@ -785,9 +785,10 @@ export class TestSDK<TThrow extends boolean = false> {
 		return this.#refreshing
 	}
 
-	/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-	   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-	   follows cross-origin ones, without credentials, configured headers or a replayed body.
+	/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+	   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+	   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+	   headers and never a replayed body.
 	   Browsers hide redirect targets from script, so there the platform follows. */
 	async #send(url: string, init: RequestInit): Promise<Response> {
 		const policy = this.#config.redirect ?? "same-origin"
@@ -826,11 +827,13 @@ export class TestSDK<TThrow extends boolean = false> {
 				}
 			}
 			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-				headers.delete(this.#config.authHeaderName ?? "Authorization")
-				const configured = this.#config.headers
-				if (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+				/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+				const safe = new Headers()
+				for (const name of ["accept", "accept-language", "user-agent"]) {
+					const value = (nextInit.headers as Headers).get(name)
+					if (value !== null) safe.set(name, value)
+				}
+				nextInit.headers = safe
 			}
 			await response.body?.cancel().catch(() => {})
 			current = target
@@ -2167,9 +2170,10 @@ export class TestSDK<TThrow extends boolean = false> {
 		return this.#refreshing
 	}
 
-	/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-	   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-	   follows cross-origin ones, without credentials, configured headers or a replayed body.
+	/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+	   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+	   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+	   headers and never a replayed body.
 	   Browsers hide redirect targets from script, so there the platform follows. */
 	async #send(url: string, init: RequestInit): Promise<Response> {
 		const policy = this.#config.redirect ?? "same-origin"
@@ -2208,11 +2212,13 @@ export class TestSDK<TThrow extends boolean = false> {
 				}
 			}
 			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-				headers.delete(this.#config.authHeaderName ?? "Authorization")
-				const configured = this.#config.headers
-				if (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+				/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+				const safe = new Headers()
+				for (const name of ["accept", "accept-language", "user-agent"]) {
+					const value = (nextInit.headers as Headers).get(name)
+					if (value !== null) safe.set(name, value)
+				}
+				nextInit.headers = safe
 			}
 			await response.body?.cancel().catch(() => {})
 			current = target
@@ -3534,9 +3540,10 @@ export class TestSDK<TThrow extends boolean = false> {
 		return this.#refreshing
 	}
 
-	/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-	   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-	   follows cross-origin ones, without credentials, configured headers or a replayed body.
+	/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+	   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+	   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+	   headers and never a replayed body.
 	   Browsers hide redirect targets from script, so there the platform follows. */
 	async #send(url: string, init: RequestInit): Promise<Response> {
 		const policy = this.#config.redirect ?? "same-origin"
@@ -3575,11 +3582,13 @@ export class TestSDK<TThrow extends boolean = false> {
 				}
 			}
 			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-				headers.delete(this.#config.authHeaderName ?? "Authorization")
-				const configured = this.#config.headers
-				if (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+				/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+				const safe = new Headers()
+				for (const name of ["accept", "accept-language", "user-agent"]) {
+					const value = (nextInit.headers as Headers).get(name)
+					if (value !== null) safe.set(name, value)
+				}
+				nextInit.headers = safe
 			}
 			await response.body?.cancel().catch(() => {})
 			current = target
@@ -4907,9 +4916,10 @@ export class TestSDK<TThrow extends boolean = false> {
 		return this.#refreshing
 	}
 
-	/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-	   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-	   follows cross-origin ones, without credentials, configured headers or a replayed body.
+	/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+	   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+	   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+	   headers and never a replayed body.
 	   Browsers hide redirect targets from script, so there the platform follows. */
 	async #send(url: string, init: RequestInit): Promise<Response> {
 		const policy = this.#config.redirect ?? "same-origin"
@@ -4948,11 +4958,13 @@ export class TestSDK<TThrow extends boolean = false> {
 				}
 			}
 			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-				headers.delete(this.#config.authHeaderName ?? "Authorization")
-				const configured = this.#config.headers
-				if (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+				/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+				const safe = new Headers()
+				for (const name of ["accept", "accept-language", "user-agent"]) {
+					const value = (nextInit.headers as Headers).get(name)
+					if (value !== null) safe.set(name, value)
+				}
+				nextInit.headers = safe
 			}
 			await response.body?.cancel().catch(() => {})
 			current = target
@@ -6282,9 +6294,10 @@ export class TestSDK<TThrow extends boolean = false> {
 		return this.#refreshing
 	}
 
-	/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-	   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-	   follows cross-origin ones, without credentials, configured headers or a replayed body.
+	/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+	   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+	   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+	   headers and never a replayed body.
 	   Browsers hide redirect targets from script, so there the platform follows. */
 	async #send(url: string, init: RequestInit): Promise<Response> {
 		const policy = this.#config.redirect ?? "same-origin"
@@ -6323,11 +6336,13 @@ export class TestSDK<TThrow extends boolean = false> {
 				}
 			}
 			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-				headers.delete(this.#config.authHeaderName ?? "Authorization")
-				const configured = this.#config.headers
-				if (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+				/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+				const safe = new Headers()
+				for (const name of ["accept", "accept-language", "user-agent"]) {
+					const value = (nextInit.headers as Headers).get(name)
+					if (value !== null) safe.set(name, value)
+				}
+				nextInit.headers = safe
 			}
 			await response.body?.cancel().catch(() => {})
 			current = target
@@ -7653,9 +7668,10 @@ export class TestSDK<TThrow extends boolean = false> {
 		return this.#refreshing
 	}
 
-	/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-	   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-	   follows cross-origin ones, without credentials, configured headers or a replayed body.
+	/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+	   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+	   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+	   headers and never a replayed body.
 	   Browsers hide redirect targets from script, so there the platform follows. */
 	async #send(url: string, init: RequestInit): Promise<Response> {
 		const policy = this.#config.redirect ?? "same-origin"
@@ -7694,11 +7710,13 @@ export class TestSDK<TThrow extends boolean = false> {
 				}
 			}
 			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-				headers.delete(this.#config.authHeaderName ?? "Authorization")
-				const configured = this.#config.headers
-				if (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+				/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+				const safe = new Headers()
+				for (const name of ["accept", "accept-language", "user-agent"]) {
+					const value = (nextInit.headers as Headers).get(name)
+					if (value !== null) safe.set(name, value)
+				}
+				nextInit.headers = safe
 			}
 			await response.body?.cancel().catch(() => {})
 			current = target
@@ -9018,9 +9036,10 @@ export class TestSDK<TThrow extends boolean = false> {
 		return this.#refreshing
 	}
 
-	/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-	   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-	   follows cross-origin ones, without credentials, configured headers or a replayed body.
+	/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+	   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+	   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+	   headers and never a replayed body.
 	   Browsers hide redirect targets from script, so there the platform follows. */
 	async #send(url: string, init: RequestInit): Promise<Response> {
 		const policy = this.#config.redirect ?? "same-origin"
@@ -9059,11 +9078,13 @@ export class TestSDK<TThrow extends boolean = false> {
 				}
 			}
 			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-				headers.delete(this.#config.authHeaderName ?? "Authorization")
-				const configured = this.#config.headers
-				if (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+				/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+				const safe = new Headers()
+				for (const name of ["accept", "accept-language", "user-agent"]) {
+					const value = (nextInit.headers as Headers).get(name)
+					if (value !== null) safe.set(name, value)
+				}
+				nextInit.headers = safe
 			}
 			await response.body?.cancel().catch(() => {})
 			current = target
