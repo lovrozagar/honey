@@ -111,8 +111,7 @@ function resolveRule(rule: TrustRule, req: Request, peer: string | null): Client
 }
 
 /** The client of `req` under `trust`; the same answer `ctx.ip` and `clientInfo()` give. */
-export function resolveClientInfo(trust: TrustSetting, req: Request, peer: string | null): ClientInfo {
-	return trust.kind === "off" ? directClientInfo(req, peer) : trust.resolve(req, peer)
-}
+/** The client a request comes from under `trust`; the core's own resolver, re-exported. */
+export { resolveClient as resolveClientInfo } from "./client-info.ts"
 
 registerFeature("trust", { compileTrust })

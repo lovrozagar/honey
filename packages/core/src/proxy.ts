@@ -1,6 +1,7 @@
 import { clientInfo, type HoneyContext } from "./context.ts"
 import { HoneyError } from "./error.ts"
 import { registerFeature } from "./feature-slots.ts"
+import { searchOfUrl } from "./request-path.ts"
 import { EK, SK } from "./types.ts"
 
 /* Bodies up to this size with a declared length are forwarded as bytes; larger or unsized ones
@@ -263,13 +264,7 @@ export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx)
 		const idleMs = isWs ? undefined : resolveMs(config.idleTimeout, ctx)
 
 		/* URL: the normalized path the router matched, plus the raw query — no new URL() */
-		const rawUrl = request.url
-		const protoEnd = rawUrl.indexOf("//")
-		const pathStart = protoEnd === -1 ? 0 : rawUrl.indexOf("/", protoEnd + 2)
-		const qIdx = pathStart === -1 ? -1 : rawUrl.indexOf("?", pathStart)
-		const hIdx = qIdx === -1 ? -1 : rawUrl.indexOf("#", qIdx)
-		const query = qIdx === -1 ? "" : rawUrl.slice(qIdx, hIdx === -1 ? undefined : hIdx)
-		const pathQuery = c.path + query
+		const pathQuery = c.path + searchOfUrl(request.url)
 		const url = config.rewriteUrl ? config.rewriteUrl(pathQuery, ctx) : pathQuery
 
 		/* headers — one copy (the original is immutable) */
