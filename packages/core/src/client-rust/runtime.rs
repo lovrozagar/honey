@@ -283,13 +283,14 @@ pub(crate) struct RequestResult {
 
 /* ── URLs, path params, query encoding — shared with runtime_sync ── */
 
-/// escape_segment percent-encodes every byte outside the RFC 3986 unreserved set.
-pub fn escape_segment(s: &str) -> String {
+fn percent_encode(s: &str, keep: &[u8], space_as_plus: bool) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut out = String::with_capacity(s.len());
     for &b in s.as_bytes() {
-        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+        if b.is_ascii_alphanumeric() || keep.contains(&b) {
             out.push(b as char);
+        } else if b == b' ' && space_as_plus {
+            out.push('+');
         } else {
             out.push('%');
             out.push(HEX[(b >> 4) as usize] as char);
@@ -299,42 +300,84 @@ pub fn escape_segment(s: &str) -> String {
     out
 }
 
-/// expand_path fills `{name}` placeholders with escaped values. Values that a
-/// URL parser would collapse ("", ".", "..") are rejected.
-pub fn expand_path(template: &str, params: &[(&str, &str)]) -> Result<String, Error> {
-    let mut out = String::with_capacity(template.len());
-    let mut rest = template;
-    loop {
-        let open = match rest.find('{') {
-            Some(i) => i,
-            None => {
-                out.push_str(rest);
-                return Ok(out);
-            }
-        };
-        let close = match rest[open..].find('}') {
-            Some(i) => open + i,
-            None => {
-                out.push_str(rest);
-                return Ok(out);
-            }
-        };
-        let name = &rest[open + 1..close];
-        let value = params
-            .iter()
-            .find(|(k, _)| *k == name)
-            .map(|(_, v)| *v)
-            .ok_or_else(|| Error::Other(format!("missing path parameter {:?}", name)))?;
-        if value.is_empty() || value == "." || value == ".." {
-            return Err(Error::Other(format!(
-                "path parameter {:?} must not be {:?}",
-                name, value
-            )));
-        }
-        out.push_str(&rest[..open]);
-        out.push_str(&escape_segment(value));
-        rest = &rest[close + 1..];
+/// escape_segment encodes like JavaScript's encodeURIComponent, so every SDK
+/// language (and the TypeScript client) sends the same path bytes.
+pub fn escape_segment(s: &str) -> String {
+    percent_encode(s, b"-_.!~*'()", false)
+}
+
+/// escape_query encodes like URLSearchParams (space becomes '+').
+pub fn escape_query(s: &str) -> String {
+    percent_encode(s, b"*-._", true)
+}
+
+fn missing(name: &str) -> Error {
+    Error::Other(format!("Missing path param: {}", name))
+}
+
+fn encode_segment_value(name: &str, value: &str) -> Result<String, Error> {
+    if value.is_empty() || value == "." || value == ".." {
+        return Err(Error::Other(format!(
+            "Invalid path param {:?}: {:?} is not a path segment",
+            name, value
+        )));
     }
+    Ok(escape_segment(value))
+}
+
+/// expand_path fills a path template with the TypeScript client's grammar:
+/// `:name` / `:name?` take a whole segment, a final `*name` takes the rest,
+/// `{name}` may sit inside a segment. Values are encoded; "", "." and ".."
+/// are rejected.
+pub fn expand_path(template: &str, params: &[(&str, &str)]) -> Result<String, Error> {
+    let get = |name: &str| params.iter().find(|(k, _)| *k == name).map(|(_, v)| *v);
+    let segments: Vec<&str> = template.split('/').collect();
+    let mut out: Vec<String> = Vec::with_capacity(segments.len());
+    for (i, seg) in segments.iter().enumerate() {
+        if seg.len() > 1 && seg.starts_with(':') {
+            let optional = seg.ends_with('?');
+            let name = if optional { &seg[1..seg.len() - 1] } else { &seg[1..] };
+            match get(name) {
+                Some(v) => out.push(encode_segment_value(name, v)?),
+                None if optional => continue,
+                None => return Err(missing(name)),
+            }
+        } else if seg.starts_with('*') && i == segments.len() - 1 {
+            let name = if seg.len() > 1 { &seg[1..] } else { "*" };
+            match get(name) {
+                Some("") => out.push(String::new()),
+                Some(v) => {
+                    let parts: Result<Vec<String>, Error> =
+                        v.split('/').map(|p| encode_segment_value(name, p)).collect();
+                    out.push(parts?.join("/"));
+                }
+                None if seg.len() == 1 => out.push(String::new()),
+                None => return Err(missing(name)),
+            }
+        } else {
+            let mut piece = String::with_capacity(seg.len());
+            let mut rest: &str = seg;
+            loop {
+                let open = rest.find('{');
+                let close = open.and_then(|o| rest[o..].find('}').map(|c| o + c));
+                match (open, close) {
+                    (Some(o), Some(c)) if !rest[o + 1..c].contains('{') => {
+                        let name = &rest[o + 1..c];
+                        let v = get(name).ok_or_else(|| missing(name))?;
+                        piece.push_str(&rest[..o]);
+                        piece.push_str(&encode_segment_value(name, v)?);
+                        rest = &rest[c + 1..];
+                    }
+                    _ => {
+                        piece.push_str(rest);
+                        break;
+                    }
+                }
+            }
+            out.push(piece);
+        }
+    }
+    Ok(out.join("/"))
 }
 
 /// format_f64 renders a float like JavaScript's Number#toString, so every SDK
@@ -471,7 +514,7 @@ pub fn form_pairs<T: serde::Serialize>(body: &T) -> Vec<(String, String)> {
 pub fn encode_query(pairs: &[(String, String)]) -> String {
     pairs
         .iter()
-        .map(|(k, v)| format!("{}={}", escape_segment(k), escape_segment(v)))
+        .map(|(k, v)| format!("{}={}", escape_query(k), escape_query(v)))
         .collect::<Vec<_>>()
         .join("&")
 }

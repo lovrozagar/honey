@@ -29,35 +29,45 @@
 			"name": "colon param encoded",
 			"base": "https://api.example.com",
 			"path": "/users/:id",
-			"params": { "id": "a b/c" },
+			"params": {
+				"id": "a b/c"
+			},
 			"expect": "https://api.example.com/users/a%20b%2Fc"
 		},
 		{
 			"name": "hyphenated param name",
 			"base": "https://api.example.com",
 			"path": "/users/:user-id",
-			"params": { "user-id": "7" },
+			"params": {
+				"user-id": "7"
+			},
 			"expect": "https://api.example.com/users/7"
 		},
 		{
 			"name": "brace param",
 			"base": "https://api.example.com",
 			"path": "/users/{id}",
-			"params": { "id": "7" },
+			"params": {
+				"id": "7"
+			},
 			"expect": "https://api.example.com/users/7"
 		},
 		{
 			"name": "brace param with hyphen",
 			"base": "https://api.example.com",
 			"path": "/users/{user-id}",
-			"params": { "user-id": "7" },
+			"params": {
+				"user-id": "7"
+			},
 			"expect": "https://api.example.com/users/7"
 		},
 		{
 			"name": "brace param inside a segment",
 			"base": "https://api.example.com",
 			"path": "/ops/{id}:cancel",
-			"params": { "id": "9" },
+			"params": {
+				"id": "9"
+			},
 			"expect": "https://api.example.com/ops/9:cancel"
 		},
 		{
@@ -70,49 +80,66 @@
 			"name": "wildcard spans segments",
 			"base": "https://api.example.com",
 			"path": "/files/*path",
-			"params": { "path": "a/b c.txt" },
+			"params": {
+				"path": "a/b c.txt"
+			},
 			"expect": "https://api.example.com/files/a/b%20c.txt"
 		},
 		{
 			"name": "query serialization repeats arrays",
 			"base": "https://api.example.com",
 			"path": "/s",
-			"search": { "tag": ["a", "b"], "q": "x y", "skip": null },
+			"search": {
+				"tag": ["a", "b"],
+				"q": "x y",
+				"skip": null
+			},
 			"expect": "https://api.example.com/s?tag=a&tag=b&q=x+y"
 		},
 		{
 			"name": "dot-dot param rejected",
 			"base": "https://api.example.com/v1",
 			"path": "/members/:id",
-			"params": { "id": ".." },
+			"params": {
+				"id": ".."
+			},
 			"error": "Invalid path param"
 		},
 		{
 			"name": "dot param rejected",
 			"base": "https://api.example.com/v1",
 			"path": "/members/:id",
-			"params": { "id": "." },
+			"params": {
+				"id": "."
+			},
 			"error": "Invalid path param"
 		},
 		{
 			"name": "empty param rejected",
 			"base": "https://api.example.com",
 			"path": "/:org/:repo",
-			"params": { "org": "", "repo": "evil.example" },
+			"params": {
+				"org": "",
+				"repo": "evil.example"
+			},
 			"error": "Invalid path param"
 		},
 		{
 			"name": "dot-dot brace param rejected",
 			"base": "https://api.example.com",
 			"path": "/members/{id}",
-			"params": { "id": ".." },
+			"params": {
+				"id": ".."
+			},
 			"error": "Invalid path param"
 		},
 		{
 			"name": "dot-dot inside wildcard rejected",
 			"base": "https://api.example.com",
 			"path": "/files/*path",
-			"params": { "path": "a/../admin" },
+			"params": {
+				"path": "a/../admin"
+			},
 			"error": "Invalid path param"
 		},
 		{
@@ -125,8 +152,53 @@
 			"name": "percent-encoded dots stay data",
 			"base": "https://api.example.com",
 			"path": "/users/:id",
-			"params": { "id": "%2e%2e" },
+			"params": {
+				"id": "%2e%2e"
+			},
 			"expect": "https://api.example.com/users/%252e%252e"
+		},
+		{
+			"name": "query escaping",
+			"base": "https://api.example.com",
+			"path": "/s",
+			"search": {
+				"q": "a b&c=d",
+				"ü": "é+",
+				"e": "",
+				"t": "~*"
+			},
+			"expect": "https://api.example.com/s?q=a+b%26c%3Dd&%C3%BC=%C3%A9%2B&e=&t=%7E*"
+		},
+		{
+			"name": "query numbers and booleans",
+			"base": "https://api.example.com",
+			"path": "/s",
+			"search": {
+				"n": 3,
+				"f": 0.5,
+				"big": 1e21,
+				"tiny": 1.5e-7,
+				"b": true
+			},
+			"expect": "https://api.example.com/s?n=3&f=0.5&big=1e%2B21&tiny=1.5e-7&b=true"
+		},
+		{
+			"name": "base query and search merge",
+			"base": "https://api.example.com/v1?key=k",
+			"path": "/users",
+			"search": {
+				"a": "1"
+			},
+			"expect": "https://api.example.com/v1/users?key=k&a=1"
+		},
+		{
+			"name": "path segment encoding set",
+			"base": "https://api.example.com",
+			"path": "/x/:id",
+			"params": {
+				"id": "!*'()~ é"
+			},
+			"expect": "https://api.example.com/x/!*'()~%20%C3%A9"
 		}
 	]
 }

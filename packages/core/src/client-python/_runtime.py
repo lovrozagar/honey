@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import re
 import threading
 import time
 import unicodedata
@@ -235,36 +236,63 @@ def _build_headers(
 
 
 class PathParamError(ValueError):
-    """A path parameter that a URL parser would collapse ("", "." or "..")."""
+    """A path parameter that is missing, or that a URL parser would collapse ("", "." or "..")."""
 
 
 def _escape_segment(value: str) -> str:
-    # unreserved characters only: every SDK language escapes the same bytes
-    return quote(value, safe="")
+    # encodeURIComponent's safe set: every SDK language and the TS client send the same bytes
+    return quote(value, safe="!~*'()")
+
+
+def _escape_query(value: str) -> str:
+    # URLSearchParams encoding: space becomes "+"
+    return quote(value, safe="*").replace("%20", "+").replace("~", "%7E")
+
+
+def _encode_segment_value(name: str, value: str) -> str:
+    if value in ("", ".", ".."):
+        raise PathParamError(f"Invalid path param {name!r}: {value!r} is not a path segment")
+    return _escape_segment(value)
 
 
 def _expand_path(template: str, params: dict[str, Any]) -> str:
-    """Fill ``{name}`` placeholders with escaped values. Rejects "", "." and ".."."""
+    """Fill a path template with the TS client's grammar: ``:name`` / ``:name?`` take a
+    whole segment, a final ``*name`` takes the rest, ``{name}`` may sit inside a segment.
+    Values are encoded; "", "." and ".." are rejected."""
+    segments = template.split("/")
     out: list[str] = []
-    rest = template
-    while True:
-        open_idx = rest.find("{")
-        if open_idx == -1:
-            out.append(rest)
-            return "".join(out)
-        close_idx = rest.find("}", open_idx)
-        if close_idx == -1:
-            out.append(rest)
-            return "".join(out)
-        name = rest[open_idx + 1 : close_idx]
-        if name not in params:
-            raise ValueError(f"missing path parameter {name!r}")
-        value = _format_value(params[name])
-        if value in ("", ".", ".."):
-            raise PathParamError(f"path parameter {name!r} must not be {value!r}")
-        out.append(rest[:open_idx])
-        out.append(_escape_segment(value))
-        rest = rest[close_idx + 1 :]
+    for i, seg in enumerate(segments):
+        if len(seg) > 1 and seg[0] == ":":
+            optional = seg.endswith("?")
+            name = seg[1:-1] if optional else seg[1:]
+            if params.get(name) is None:
+                if optional:
+                    continue
+                raise PathParamError(f"Missing path param: {name}")
+            out.append(_encode_segment_value(name, _format_value(params[name])))
+        elif seg[:1] == "*" and i == len(segments) - 1:
+            name = seg[1:] or "*"
+            if params.get(name) is None:
+                if seg == "*":
+                    out.append("")
+                    continue
+                raise PathParamError(f"Missing path param: {name}")
+            value = _format_value(params[name])
+            out.append(
+                "" if value == "" else "/".join(_encode_segment_value(name, p) for p in value.split("/"))
+            )
+        else:
+            def _sub(match: re.Match[str]) -> str:
+                name = match.group(1)
+                if params.get(name) is None:
+                    raise PathParamError(f"Missing path param: {name}")
+                return _encode_segment_value(name, _format_value(params[name]))
+
+            out.append(_BRACE_RE.sub(_sub, seg))
+    return "/".join(out)
+
+
+_BRACE_RE = re.compile(r"\{([^{}/]+)\}")
 
 
 def _format_float(value: float) -> str:
@@ -319,7 +347,7 @@ def _query_pairs(params: dict[str, Any] | None) -> list[tuple[str, str]]:
 
 
 def _encode_query(pairs: list[tuple[str, str]]) -> str:
-    return "&".join(f"{_escape_segment(k)}={_escape_segment(v)}" for k, v in pairs)
+    return "&".join(f"{_escape_query(k)}={_escape_query(v)}" for k, v in pairs)
 
 
 def _build_url(base_url: str, path: str, params: dict[str, Any] | None = None) -> str:

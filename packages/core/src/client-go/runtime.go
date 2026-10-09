@@ -335,68 +335,142 @@ func multipartBody(fields []multipartField) (requestBody, error) {
 	return requestBody{raw: buf.Bytes(), hasRaw: true, contentType: w.FormDataContentType()}, nil
 }
 
-// PathParamError reports a path parameter that would change the request path
-// once a URL parser normalizes it ("", "." and "..").
+// PathParamError reports a path parameter that is missing, or that would
+// change the request path once a URL parser normalizes it ("", "." and "..").
 type PathParamError struct {
-	Name  string
-	Value string
+	Name    string
+	Value   string
+	Missing bool
 }
 
 func (e *PathParamError) Error() string {
-	return fmt.Sprintf("honey: path parameter %q must not be %q", e.Name, e.Value)
+	if e.Missing {
+		return "Missing path param: " + e.Name
+	}
+	return fmt.Sprintf("Invalid path param %q: %q is not a path segment", e.Name, e.Value)
 }
 
-// escapePathSegment percent-encodes every byte outside the RFC 3986 unreserved set.
-func escapePathSegment(s string) string {
+func percentEncode(s string, keep func(c byte) bool, spaceAsPlus bool) string {
 	const hex = "0123456789ABCDEF"
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~' {
+		switch {
+		case (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || keep(c):
 			b.WriteByte(c)
-			continue
+		case c == ' ' && spaceAsPlus:
+			b.WriteByte('+')
+		default:
+			b.WriteByte('%')
+			b.WriteByte(hex[c>>4])
+			b.WriteByte(hex[c&0x0f])
 		}
-		b.WriteByte('%')
-		b.WriteByte(hex[c>>4])
-		b.WriteByte(hex[c&0x0f])
 	}
 	return b.String()
 }
 
-// expandPath fills `{name}` placeholders with escaped values. Values that a
-// URL parser would collapse ("", ".", "..") are rejected.
-func expandPath(template string, params map[string]string) (string, error) {
-	var b strings.Builder
-	rest := template
-	for {
-		open := strings.IndexByte(rest, '{')
-		if open == -1 {
-			b.WriteString(rest)
-			return b.String(), nil
-		}
-		end := strings.IndexByte(rest[open:], '}')
-		if end == -1 {
-			b.WriteString(rest)
-			return b.String(), nil
-		}
-		name := rest[open+1 : open+end]
-		value, ok := params[name]
-		if !ok {
-			return "", fmt.Errorf("honey: missing path parameter %q", name)
-		}
-		if value == "" || value == "." || value == ".." {
-			return "", &PathParamError{Name: name, Value: value}
-		}
-		b.WriteString(rest[:open])
-		b.WriteString(escapePathSegment(value))
-		rest = rest[open+end+1:]
-	}
+// escapePathSegment encodes like JavaScript's encodeURIComponent, so every
+// SDK language (and the TypeScript client) sends the same path bytes.
+func escapePathSegment(s string) string {
+	return percentEncode(s, func(c byte) bool { return strings.IndexByte("-_.!~*'()", c) >= 0 }, false)
 }
 
-// escapeQueryComponent percent-encodes every byte outside the unreserved set
-// (space becomes %20), so every SDK language sends identical query bytes.
+// escapeQueryComponent encodes like URLSearchParams (space becomes '+').
 func escapeQueryComponent(s string) string {
-	return escapePathSegment(s)
+	return percentEncode(s, func(c byte) bool { return strings.IndexByte("*-._", c) >= 0 }, true)
+}
+
+func encodeSegmentValue(name, value string) (string, error) {
+	if value == "" || value == "." || value == ".." {
+		return "", &PathParamError{Name: name, Value: value}
+	}
+	return escapePathSegment(value), nil
+}
+
+// expandPath fills a path template, segment by segment, with the same grammar
+// as the TypeScript client: `:name` (or `:name?`) takes a whole segment,
+// `*name` (or `*`) as the last segment takes the rest of the path, `{name}`
+// may appear anywhere inside a segment. Values are encoded; values that a URL
+// parser would collapse ("", ".", "..") are rejected.
+func expandPath(template string, params map[string]string) (string, error) {
+	segments := strings.Split(template, "/")
+	out := make([]string, 0, len(segments))
+	for i, seg := range segments {
+		switch {
+		case len(seg) > 1 && seg[0] == ':':
+			optional := strings.HasSuffix(seg, "?")
+			name := strings.TrimSuffix(seg[1:], "?")
+			if !optional {
+				name = seg[1:]
+			}
+			value, ok := params[name]
+			if !ok {
+				if optional {
+					continue
+				}
+				return "", &PathParamError{Name: name, Missing: true}
+			}
+			enc, err := encodeSegmentValue(name, value)
+			if err != nil {
+				return "", err
+			}
+			out = append(out, enc)
+		case len(seg) > 0 && seg[0] == '*' && i == len(segments)-1:
+			name := "*"
+			if len(seg) > 1 {
+				name = seg[1:]
+			}
+			value, ok := params[name]
+			if !ok {
+				if len(seg) == 1 {
+					out = append(out, "")
+					continue
+				}
+				return "", &PathParamError{Name: name, Missing: true}
+			}
+			if value == "" {
+				out = append(out, "")
+				continue
+			}
+			parts := strings.Split(value, "/")
+			for j, part := range parts {
+				enc, err := encodeSegmentValue(name, part)
+				if err != nil {
+					return "", err
+				}
+				parts[j] = enc
+			}
+			out = append(out, strings.Join(parts, "/"))
+		default:
+			var b strings.Builder
+			rest := seg
+			for {
+				open := strings.IndexByte(rest, '{')
+				end := -1
+				if open >= 0 {
+					end = strings.IndexByte(rest[open:], '}')
+				}
+				if open < 0 || end < 0 || strings.ContainsRune(rest[open+1:open+end], '{') {
+					b.WriteString(rest)
+					break
+				}
+				name := rest[open+1 : open+end]
+				value, ok := params[name]
+				if !ok {
+					return "", &PathParamError{Name: name, Missing: true}
+				}
+				enc, err := encodeSegmentValue(name, value)
+				if err != nil {
+					return "", err
+				}
+				b.WriteString(rest[:open])
+				b.WriteString(enc)
+				rest = rest[open+end+1:]
+			}
+			out = append(out, b.String())
+		}
+	}
+	return strings.Join(out, "/"), nil
 }
 
 // queryPair is one key=value in send order.

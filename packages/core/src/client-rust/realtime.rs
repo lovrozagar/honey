@@ -371,8 +371,8 @@ fn with_query(url: &str, key: &str, value: &str) -> String {
         "{}{}{}={}",
         url,
         sep,
-        crate::runtime::escape_segment(key),
-        crate::runtime::escape_segment(value)
+        crate::runtime::escape_query(key),
+        crate::runtime::escape_query(value)
     )
 }
 
