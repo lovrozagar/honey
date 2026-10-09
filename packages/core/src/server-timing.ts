@@ -1,5 +1,6 @@
 import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
+import { withHeaders } from "./with-headers.ts"
 
 export type Timing = {
 	end(name: string): void
@@ -12,14 +13,17 @@ type TimingEntry = {
 	start: number
 }
 
-/** Strip characters that would break Server-Timing header syntax */
-const unsafeNameRe = /[;,="]/g
+/* metric names are RFC 9110 tokens; anything else becomes `_` */
+const nonTokenRe = /[^!#$%&'*+.^`|~\w-]/g
 function sanitizeName(name: string): string {
-	return name.replace(unsafeNameRe, "")
+	const token = name.replace(nonTokenRe, "_")
+	return token.length > 0 ? token : "_"
 }
 
+/* descriptions are quoted-strings: latin1 only, no controls, `\` and `"` escaped */
+const nonQuotableRe = /[^\t\x20-\x7e\x80-\xff]/g
 function escapeDescription(desc: string): string {
-	return desc.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+	return desc.replace(nonQuotableRe, "?").replace(/[\\"]/g, "\\$&")
 }
 
 export function serverTiming(): MiddlewareFn<{}, { timing: Timing }> {
@@ -58,9 +62,9 @@ export function serverTiming(): MiddlewareFn<{}, { timing: Timing }> {
 		const totalDur = (performance.now() - requestStart).toFixed(2)
 		parts.push(`total;dur=${totalDur}`)
 
-		response.headers.set("server-timing", parts.join(", "))
-
-		return response
+		/* append: an upstream or handler Server-Timing is kept */
+		const value = parts.join(", ")
+		return withHeaders(response, (headers) => headers.append("server-timing", value))
 	}
 
 	return namedMiddleware("serverTiming", mw)

@@ -1,5 +1,6 @@
 import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
+import { withHeaders } from "./with-headers.ts"
 
 type SecureHeadersOptions = {
 	contentSecurityPolicy?: string
@@ -58,12 +59,15 @@ export function secureHeaders(options?: SecureHeadersOptions): MiddlewareFn<{}, 
 		headers.push(["cross-origin-embedder-policy", opts.crossOriginEmbedderPolicy])
 	}
 
+	/* A header the handler already set wins: a route with a stricter CSP or
+	 * `X-Frame-Options: DENY` must not be loosened by the app-wide default. */
 	const mw: MiddlewareFn<{}, {}> = async (_ctx, next) => {
 		const response = await next()
-		for (const [name, value] of headers) {
-			response.headers.set(name, value)
-		}
-		return response
+		return withHeaders(response, (out) => {
+			for (const [name, value] of headers) {
+				if (!out.has(name)) out.set(name, value)
+			}
+		})
 	}
 
 	return namedMiddleware("secureHeaders", mw)
