@@ -236,7 +236,7 @@ describe("code review regressions", () => {
 		afterEach(() => rmSync(ROOT, { force: true, recursive: true }))
 
 		// regression: R7
-		it.fails("R7: a stale manifest entry whose directory the user deleted does not abort generation", () => {
+		it("R7: a stale manifest entry whose directory the user deleted does not abort generation", () => {
 			mkdirSync(ROOT, { recursive: true })
 			writeOutputDir(ROOT, { "main.go": "package main\n", "models/x.go": "package models\n" })
 			rmSync(join(ROOT, "models"), { force: true, recursive: true })

@@ -109,8 +109,11 @@ function resolveInside(root: string, rel: string): string {
 function removeEmptyParents(dir: string, root: string): void {
 	let current = dir
 	while (current !== root && current.startsWith(root + sep)) {
-		if (readdirSync(current).length > 0) return
-		rmdirSync(current)
+		/* a directory the user already deleted counts as removed; keep walking up */
+		if (existsSync(current)) {
+			if (readdirSync(current).length > 0) return
+			rmdirSync(current)
+		}
 		current = dirname(current)
 	}
 }
