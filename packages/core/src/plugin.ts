@@ -17,7 +17,7 @@ import type { InvalidateCheckConfig } from "./invalidate-check.ts"
 import { detectFeaturesInSource, featurePrelude, importsFeatureEntry } from "./feature-detect.ts"
 import { runCli } from "./gen-process.ts"
 import { writeGenFile, writeGenJsonFile, writeGenYamlFile, writeOutputDir } from "./gen-write.ts"
-import { WATCH_IGNORE_RE, matchesGlob } from "./glob.ts"
+import { WATCH_IGNORE_RE, compileGlobs } from "./glob.ts"
 import { overlaySchemas, type RouteTree } from "./tree.ts"
 import type { ExtractedChainTypes } from "./type-extractor.ts"
 import { openApiOutputPaths, toYaml } from "./yaml.ts"
@@ -657,6 +657,7 @@ export function honey(config: HoneyVitePluginConfig) {
 
 	const resolved = resolveHoneyConfig(config)
 	const watchPatterns = config.watch ?? []
+	const matchesWatch = compileGlobs(watchPatterns)
 
 	let root = ""
 	let configFile: string | undefined
@@ -732,7 +733,7 @@ export function honey(config: HoneyVitePluginConfig) {
 		async hotUpdate(this: PluginThis | void, ctx: HotUpdateContext): Promise<unknown[] | undefined> {
 			if (watchPatterns.length === 0) return undefined
 			if (WATCH_IGNORE_RE.test(ctx.file) || isGeneratedOutput(ctx.file, outputs)) return undefined
-			if (!matchesGlob(ctx.file, watchPatterns, root)) return undefined
+			if (!matchesWatch(ctx.file, root)) return undefined
 
 			const key = `${ctx.file}\0${ctx.timestamp ?? Date.now()}`
 			let run = savesSeen.get(key)

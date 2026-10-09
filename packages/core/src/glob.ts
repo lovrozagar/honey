@@ -83,11 +83,22 @@ function splitTopLevel(body: string): string[] {
 	return parts
 }
 
+/**
+ * A matcher for `patterns`, compiled once: true when `file` (absolute, or relative to `root`)
+ * matches any pattern. Files outside `root` never match.
+ */
+export function compileGlobs(patterns: readonly string[]): (file: string, root: string) => boolean {
+	const regexps = patterns.map(globToRegExp)
+	return (file, root) => {
+		const rel = (isAbsolute(file) ? relative(root, file) : file).replaceAll("\\", "/")
+		if (rel === "" || rel.startsWith("../") || rel === ".." || isAbsolute(rel)) return false
+		return regexps.some((re) => re.test(rel))
+	}
+}
+
 /** True when `file` (absolute, or relative to `root`) matches any pattern. Files outside `root` never match. */
 export function matchesGlob(file: string, patterns: readonly string[], root: string): boolean {
-	const rel = (isAbsolute(file) ? relative(root, file) : file).replaceAll("\\", "/")
-	if (rel === "" || rel.startsWith("../") || rel === ".." || isAbsolute(rel)) return false
-	return patterns.some((pattern) => globToRegExp(pattern).test(rel))
+	return compileGlobs(patterns)(file, root)
 }
 
 /**
