@@ -92,6 +92,7 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - Go SDK: `Config.Timeout` is honored (default 30 s) and no longer cuts streams — the default `HTTPClient` has no overall timeout; nested objects become named types; discriminated unions become a struct with one pointer per variant plus `Raw`; the `doRequest` signature changed; realtime defaults to 5 reconnect attempts with backoff (it retried forever with no delay); the WebSocket read limit is 16 MiB.
 - Go CLI: exit codes are 1 for 4xx, 2 for 5xx, 5 for 3xx and 4 for bad flags or config (everything exited 3); colliding flags are renamed (`--query-timeout`, `--body-data`); a config file named on the command line must exist.
 - Python SDK: `types.py` uses the functional `TypedDict` form where JSON keys are not identifiers, and `TypeAlias` for arrays, enums and unions; params that clash with SDK arguments are renamed (`timeout2`, …); `max_reconnect_attempts <= 0` means unlimited.
+- Go and Rust SDKs: optional nullable fields are tri-state, so an explicit `null` can be sent. Go uses `Nullable[T]` (`sdk.Some(v)`, `sdk.NullOf[T]()`, `IsNull()`, `Get()`); Rust uses `Option<Option<T>>` (`None` = absent, `Some(None)` = null). A required Go slice or map left nil is sent as `[]` / `{}`, not `null`. The generated Go `go.mod` requires go 1.24.
 - Rust SDK: fields named after keywords keep a `_` suffix; safe mode fills `SdkResult.error`; `RequestBody::FormUrl` takes pairs; `do_request` takes an `AuthState`; `Duration::ZERO` disables the timeout; `x-realtime` operations return a `ResumableConnection` (they were plain HTTP calls).
 - Route literals are percent-encoded the way URLs encode them, so a route with a non-ASCII, space or `^` literal (`/é`) now matches its requests (it never did). Its route id, OpenAPI path and invalidate selector change accordingly (`/é` → `/%C3%A9`). `ctx.path` encodes `^` as `%5E` on every runtime (Deno left it raw). A `%2e` dot segment in a route pattern throws at registration.
 
@@ -119,11 +120,14 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - Realtime route options `namespace`, `identify` (sets `conn.userId`; a throw rejects the upgrade), `onError`, `allowedOrigins` and `limits` (`maxTopics`, `maxFrameBytes`, `maxPendingFrames`, `maxBufferedBytes` with a `slowConsumer` policy); `conn.closed`; `ctx.realtime.namespace(name)`; the `RealtimeLimits` and `RealtimePublisher` types.
 - `openapi({ enabled })` and `manifest({ enabled })`; spec and manifest responses carry a strong `ETag` (304 on `If-None-Match`), `Cache-Control: no-cache` and `nosniff`.
 - `generateOpenApi({ onSchemaError })`, `mergeMetaSpec`, `publishableMetaKeys`, `bindInternalHandler`, and `toIR({ duplicateOperationIds, deriveOperationIds })`.
+- MCP: an operation without an `operationId` gets a tool that calls the SDK's derived method; path-item parameters are tool arguments.
+- Rust SDK: `SyncClientConfig::state` reaches blocking hooks as `ctx.state`.
 - Go SDK: `ResumableConnection.Send`, a `FilePart` type and multipart/urlencoded request bodies (uploads used to send an empty body). Go CLI: `Version` is settable with `-ldflags -X`. Python SDK: `AsyncSDK.aclose()` and `SDK.close()`. Rust SDK: `RequestBody::Raw`, `ResumableConnectionOpts.http_client`, `ClientConfig.max_response_bytes`.
 
 ### Deprecated
 
 - `getLastHoneyConfig`.
+- Rust SDK `ClientConfig.throw_on_error`: it never had an effect. Whether methods return `SdkResult` is fixed at generation time (`throwOnError: false`).
 
 ### Fixed
 
@@ -176,6 +180,8 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - The spec, docs and manifest routes of a mounted sub-app hijacked the gateway's; two `openapi()` calls with different options served whichever document was generated first on both paths; the JSON document was re-serialized on every request (~10 ms at 500 routes) and a failed generation re-ran on every request; the docs UI's spec URL missed `stripPrefix`; one `spec()` handler mounted on two apps threw.
 - `metaSpec()` after `route(sub)` threw "already declared", and a mounted sub-app's `strict: "off"` downgraded the parent's check.
 - Generated TypeScript: enum values, keys, error keys and meta strings were interpolated raw (a `"`, newline or `-` produced invalid code); SSE operations dropped the request body; stream bodies lacked `duplex: "half"` on Node; the idempotency key was written into the caller's input object; output order depended on the system locale; JSON and XML responses of one operation shared one schema; a self-referential `$ref` hung MCP generation; `operationId: "__proto__.x"` polluted the generator's prototype.
+- Generated TypeScript SDK: path-item parameters are typed; XML responses are typed and parsed as text; `+json` responses are typed from their schema; deeply shared `$ref` chains fail generation with an error instead of exhausting memory.
+- Go, Python and Rust SDK stale-tracker lookups no longer slow down as stale entries accumulate.
 - Generated Go, Python, Rust and Go CLI code that did not compile or misbehaved: keyword and hyphenated identifiers, enum and field name collisions, multi-line descriptions escaping comments, Python `types.py` with keys like `from`/`content-type` (unimportable package), query params named `timeout`/`headers`/`url` clashing with SDK arguments, Go receivers colliding with locals, Rust tagged unions with duplicate variants, mutual recursion without boxing, and a CLI resource named `root` overwriting `cmd/root.go`.
 - Go, Python and Rust runtimes: Go SSE streams died at the 30 s client timeout and Python's at httpx's 5 s read timeout; Go SSE died right after every reconnect; Go `ResumableConnection` could panic on concurrent `Connect`/`Close`; Python realtime stopped silently after five lifetime drops and leaked a client per reconnect; Python split SSE lines on U+2028 and other Unicode separators (event and id injection); the 401 refresh retry resent uploads with an empty body; Rust reported every connection error as "request canceled"; Rust long-poll re-polled forever with no delay on any JSON error; Rust `ResumableConnection` stuck in `Reconnecting` when a `recv()` was dropped.
 
