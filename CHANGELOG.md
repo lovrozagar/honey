@@ -2,7 +2,7 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
-## Unreleased
+## 0.7.0 - 2026-10-09
 
 ### Breaking
 
