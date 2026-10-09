@@ -174,7 +174,7 @@
     },
     "packages/core": {
       "name": "@lovrozagar/honey",
-      "version": "0.7.1",
+      "version": "0.7.2",
       "bin": {
         "honey": "./bin/honey.js",
       },

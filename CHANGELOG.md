@@ -2,6 +2,15 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.7.2 - 2026-10-09
+
+### Fixed
+
+- OpenAPI documents carried `$ref`s to schemas they never emitted when one object nested in another was shared by two request bodies (required in one, optional in the other): the nested schemas hoisted from it were dropped, and SDK generation failed with `$ref points to nonexistent component`. Every `$ref` in a generated document now resolves.
+- `honey generate` started from a Bun script (`bun run generate`, `bunx honey`) runs under that Bun again. Since 0.7.0 the bin's `node` shebang loaded the app on Node, so an app relying on Bun's module loading (text imports such as `.md`) failed with `ERR_UNKNOWN_FILE_EXTENSION`. Plain Node still runs on Node; `HONEY_NO_BUN_HANDOFF=1` keeps Node.
+- A stale `routes.gen.ts` no longer breaks the generation that replaces it. While `honey generate` loads the app, `routeTree()` ignores a tree written by an older honey, and a loaded tree that misses routes the app registers is dropped for the registered routes; a gateway can regenerate over its previous tree. Outside generation both still fail with the same errors.
+- The SDK and Go CLI step reported a security scheme declared in the `openApi` config as undeclared. It now checks against the schemes the `openApi` outputs declare; generated SDK auth is unchanged.
+
 ## 0.7.1 - 2026-10-09
 
 ### Fixed
