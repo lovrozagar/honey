@@ -60,6 +60,11 @@ async def h50_multipart_body():
     report({"err": await err_text(client().files.upload({"name": "multipart-value", "file": b"file-bytes"}))})
 
 
+# regression: R8
+async def r8_empty_multipart_body():
+    report({"err": await err_text(client().files.upload({}))})
+
+
 # regression: H42
 async def h42_sse_post_body():
     report({"data": await collect(client().chat.send({"q": "hi"}))})

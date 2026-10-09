@@ -358,6 +358,17 @@ describe.skipIf(!hasPython)("Python runtime", () => {
 		expect(rec?.body).toContain("file-bytes")
 	})
 
+	// regression: R8
+	it.fails("R8: a multipart operation called with no fields still sends an empty multipart body", async () => {
+		const out = await pyCheck("r8_empty_multipart_body")
+		expect(out.err).toBe("")
+		const rec = records.find((r) => r.url === "/upload")
+		const type = rec?.headers["content-type"] ?? ""
+		expect(type).toMatch(/^multipart\/form-data; boundary=/)
+		const boundary = type.split("boundary=")[1] ?? ""
+		expect(rec?.body).toBe(`--${boundary}--\r\n`)
+	})
+
 	it("H42: an SSE operation on POST sends its JSON body", async () => {
 		const out = await pyCheck("h42_sse_post_body", (rec) =>
 			rec.url.startsWith("/chat") ? sse({ data: "data: one\n\n" }) : undefined,
