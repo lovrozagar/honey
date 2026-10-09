@@ -20,3 +20,25 @@ R8 runs in `tests/regression/ws9-12/polyglot.regression.test.ts` (`test:harness`
 The two duplication findings (D1: the proxy's copy of `searchOfUrl` and trust's copy of
 `resolveClient`; D2: the realtime server's copies of the `ws/shared.ts` helpers) are refactors with
 no behavioral red state; the existing suites guard them (`f0d4c2f`, `e66658d`).
+
+## Second pass
+
+Findings from the second pass (codegen, SDK runtimes, OpenAPI, tooling). Same method: each test
+was committed red (`it.fails`, `6041355`) and flipped in its fix commit. Tests live in
+`tests/regression/review2.regression.test.ts`; S3 and S4 run in
+`tests/regression/ws9-12/polyglot.regression.test.ts` (`test:harness`).
+
+| Id  | Severity               | Bug                                                                                                                               | Test                                                                                                                        | Failed before the fix                                                     | Fix       |
+| --- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------- |
+| S1  | High (credential leak) | Under `redirect: "follow"` a cross-origin hop carried per-call, function-form config and `onRequest` headers, in both TS runtimes | "createClient (function-form config.headers, per-call headers, onRequest)", "the generated TypeScript SDK (…)"              | `x-api-key: expected 'secret' to be undefined`                            | `a98452c` |
+| S2  | Medium                 | The SDK and Go CLI passes ignored `codegen.invalidate`                                                                            | "S2: codegen.invalidate "off" also covers the SDK and Go CLI passes", "S2: the missing-invalidate warning prints once …"    | `[honey:metaSpec] 1 policy error(s)`; 3 reports instead of 1              | `ecc120f` |
+| S3  | Medium                 | A Python param named `uuid` or `str` shadowed names the method body calls                                                         | poly "S3: a Python path param named uuid or str …"; guard "every global the emitted bodies evaluate is reserved"            | `AttributeError: 'str' object has no attribute 'uuid4'`                   | `44a9de0` |
+| S4  | Medium                 | NUL, controls and BOM in spec text broke generated Go, Go CLI and Python comments                                                 | poly "S4: NUL, BEL and BOM in spec text keep the generated … compiling" (Go SDK, Python SDK, Go CLI; Rust is a plain guard) | `unexpected NUL in input`; `source code string cannot contain null bytes` | `1e94711` |
+| S5  | Low                    | The Vite plugin did not ignore atomic-write `.tmp` files, so each save under a watched output generated twice                     | "S5: a temp file from an atomic write never schedules a generation"                                                         | `expected 1 to be +0`                                                     | `a7542bb` |
+| S6  | Low                    | An `openApi.path` ending in `.yml`/`.yaml` got JSON content or a JSON write before the YAML                                       | "S6: … .yml holds YAML and no sibling appears", "S6: … .yaml is written once, as YAML"                                      | `expected true to be false`; JSON written to `openapi.yaml`               | `e765833` |
+| S7  | Low                    | `buildStart` in two environments ran two generations                                                                              | "S7: buildStart in two environments runs one generation"                                                                    | `expected 2 to be 1`                                                      | `a993559` |
+| S8  | Low (perf)             | One generation built the unfiltered document up to three times                                                                    | "S8: openApi + sdk + cli build the unfiltered document once"                                                                | called 3 times instead of 2                                               | `ecc120f` |
+
+S9 (the generated TS runtime's hand-copied redirect rules) is closed by S1: both runtimes take the
+cross-origin allowlist from `client/redirect-policy.ts`. S10 (watch globs recompiled per call) is a
+refactor with no behavioral red state; the glob and plugin suites guard it (`094176a`).

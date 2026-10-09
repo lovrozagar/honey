@@ -142,6 +142,11 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `accepts()`: a media range with parameters (`application/json;v=2;q=0`) overrode the plain range for a supported type without those parameters, answering 406 for plain JSON. A parameterized range now applies only to a type carrying the same parameters.
 - A `codegen.mergeTree` gateway whose own routes all shadowed downstream routes passed generation silently; it now fails naming the routes, like a partial overlap.
 - Realtime: a frame that arrived before the socket opened (Bun, Deno) was delivered after frames that arrived later.
+- `codegen.invalidate` was ignored by the SDK and Go CLI passes: `invalidate: "off"` still failed generation on an invalid selector, and the missing-invalidate report printed once per pass. Both passes now share one unfiltered document, built once per generation.
+- Generated Python SDK: a path or query param named `uuid` or `str` shadowed the module and builtin the method body calls (`AttributeError: 'str' object has no attribute 'uuid4'` on an idempotent operation). Such params now get a suffix (`uuid2`).
+- Generated Go SDK, Go CLI and Python SDK: a NUL, other control character or BOM in an OpenAPI description broke compilation (Go and Python reject them even in comments). Comments and docstrings now write them as `\uXXXX`.
+- Vite plugin: the `.tmp` files of atomic writes triggered a second generation after every save when an output sat under a watched glob; `buildStart` in two environments ran two generations at startup.
+- An `openApi.path` ending in `.yml` or `.yaml` got JSON content (`.yml`, plus a stray `.yaml` sibling) or JSON written before the YAML (`.yaml`). Such a path is now written as YAML only.
 - `honey generate` aborted with `ENOENT` when a directory listed in the previous output manifest had been deleted by hand.
 - Generated Python SDK: a multipart operation called with no fields sent no body and no Content-Type; it now sends an empty multipart body.
 - Generated Python SDK: multipart uploads failed. httpx 0.28 cannot encode a list of form tuples beside files (a text field raised `TypeError`, a file alone went out with an empty body); text fields are now sent as plain multipart parts.
@@ -203,6 +208,7 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 
 ### Security
 
+- `createClient` and the generated TypeScript SDK with `redirect: "follow"` sent per-call headers, headers from a function-form `config.headers` and headers set in `onRequest` to the origin a cross-origin redirect pointed at (an API key, say). A cross-origin hop now carries only `Accept`, `Accept-Language` and `User-Agent`.
 - `ipRestrict` no longer trusts `CF-Connecting-IP` by default. Off Cloudflare any client could send it and pass an allow list, or omit it and skip a deny list. A request whose IP cannot be determined is now rejected with 403 for deny-only configs too.
 - `ipRestrict` with a proxy read the leftmost (client-controlled) `X-Forwarded-For` entry; the client is now the entry the outermost trusted proxy wrote. IPv4-mapped IPv6, ports, zones and IPv6 case no longer bypass deny rules; `10.0.0.1abc` no longer matches `10.0.0.0/8`; `/33` is an error instead of a rule that never matches.
 - On Node, the request URL was `http://${Host}${target}` without validation: `Host: x/admin/secret` routed any request to `/admin/secret`, bypassing path rules in a front proxy, and `Host: a b` turned any request into a 500. On Deno, which builds the URL the same way, `serve()` now rejects such a `Host`.
