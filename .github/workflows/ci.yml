@@ -59,6 +59,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      # the integration suites run server fixtures as `node x.ts`: they need Node's type stripping,
+      # which the runner image's default Node may not have
+      - uses: actions/setup-node@v4
+        with:
+          node-version: current
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -121,6 +127,11 @@ jobs:
         runtime: [node, bun]
     steps:
       - uses: actions/checkout@v4
+      # the node tier runs the built bundles on the oldest supported Node line, not the image default
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}

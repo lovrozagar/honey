@@ -70,7 +70,9 @@ function randomTarget(r: ReturnType<typeof rng>): string {
 function whatwg(target: string): string | null {
 	let pathname: string
 	try {
-		pathname = new URL(target, "http://h").pathname
+		/* WHATWG parsers disagree on `^` (Node 26 encodes it, Node 22 and Deno leave it raw);
+		 * normalizePath always encodes it, so the oracle applies the same rule */
+		pathname = new URL(target, "http://h").pathname.replaceAll("^", "%5E")
 	} catch {
 		return null
 	}
