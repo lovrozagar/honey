@@ -29,10 +29,16 @@ export type DocsUi = (
 	specUrl: string,
 ) => (ctx: { res: HoneyRes }) => Response | Promise<Response>
 
+/** A served document, serialized once per route epoch: the bytes, their type and a strong ETag. */
+export type ServedArtifact = { body: string; contentType: string; etag: string }
+
 export type OpenApiRuntime = {
+	/** Answer a request for a served artifact: `ETag`, `Cache-Control`, and 304 on a match. */
+	artifactResponse: (request: Request, artifact: ServedArtifact) => Response
 	docsUi: DocsUi
 	generateManifest: ManifestGenerate
 	generateOpenApi: OpenApiGenerate
+	toServedArtifact: (body: string, contentType: string) => Promise<ServedArtifact>
 	toYaml: YamlGenerate
 }
 
@@ -55,6 +61,25 @@ export function getOpenApiRuntime(): OpenApiRuntime {
 
 export function tryGetOpenApiRuntime(): OpenApiRuntime | undefined {
 	return runtime
+}
+
+/**
+ * Memoize `compute` per route epoch. A failure is cached too, until the routes change: a
+ * document that cannot be generated fails every request the same way instead of re-running the
+ * whole generation per request.
+ */
+export function epochCached<T>(epochOf: () => number, compute: () => Promise<T>): () => Promise<T> {
+	let entry: { epoch: number; value: Promise<T> } | null = null
+	return () => {
+		const epoch = epochOf()
+		if (entry === null || entry.epoch !== epoch) {
+			const value = Promise.resolve().then(compute)
+			/* handled here so a failure no request is awaiting yet is never an unhandled rejection */
+			value.catch(() => {})
+			entry = { epoch, value }
+		}
+		return entry.value
+	}
 }
 
 const APP = Symbol.for("honey.app")

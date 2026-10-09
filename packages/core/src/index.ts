@@ -57,8 +57,6 @@ import type {
 	MergePath,
 	MergeRoute,
 	MetaSpecConfig,
-	MetaSpecEntry,
-	MetaSpecMergeConflict,
 	OutputSchemaDef,
 	ParamsFromPath,
 	StandardSchemaLike,
@@ -70,7 +68,9 @@ import { assertBodySchemaAllowed, assertRequestContentType, validateInput, valid
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts"
 import { loadHoneyFeature } from "./feature-load.ts"
 import { getI18nRuntime } from "./i18n-slot.ts"
-import { getOpenApiRuntime } from "./openapi/spec-factory.ts"
+import { bindInternalHandler, epochCached, getOpenApiRuntime } from "./openapi/spec-factory.ts"
+import type { ServedArtifact } from "./openapi/spec-factory.ts"
+import { mergeMetaSpec } from "./meta-spec-merge.ts"
 import { getServeRuntime } from "./serve-slot.ts"
 import type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 
@@ -329,6 +329,8 @@ type ScopedEntry = {
  * (shared, frozen) tree never carries another app's handlers.
  */
 type HoneyGraph = {
+	/** metaSpec policies of mounted sub-apps, merged under `metaSpec` when codegen reads it */
+	absorbedMetaSpecs: MetaSpecConfig[]
 	/** gateway catch-alls by method — root wildcards registered over a loaded tree that lacks them */
 	catchAll: Map<string, RouteHandler>
 	/** every `use(mw)` handle — one that never registers a route is reported at finalize */
@@ -341,7 +343,7 @@ type HoneyGraph = {
 	hasWs: boolean
 	/** route data of the loaded tree (per-graph copies) — null when no tree was loaded */
 	loaded: Map<RouteId, RouteEntry> | null
-	/** Codegen-time meta → OpenAPI policy. Never read on the request path */
+	/** Codegen-time meta → OpenAPI policy declared on this app. Never read on the request path */
 	metaSpec: MetaSpecConfig | null
 	/** route builders still waiting for `.handler()` */
 	pending: Set<PendingRoute>
@@ -363,8 +365,12 @@ type HoneyGraph = {
 	wsRecords: Map<RouteId, WSRouteHandler>
 }
 
+/** Outcome of mounting an internal route: done, or who already owns the path. */
+type MountResult = "internal" | "mounted" | "user"
+
 function createGraph(): HoneyGraph {
 	return {
+		absorbedMetaSpecs: [],
 		catchAll: new Map(),
 		chains: [],
 		epoch: 0,
@@ -623,9 +629,6 @@ export class Honey<
 	private _graph: HoneyGraph
 	/** the `use(mw)` call that created this chain — null on the root handle */
 	private _node: ChainNode | null
-	private _openApiCache: { epoch: number; value: Promise<unknown> } | null
-	private _openApiYamlCache: { epoch: number; value: Promise<string> } | null
-	private _manifestCache: { epoch: number; value: Promise<unknown> } | null
 
 	constructor(opts?: { graph?: HoneyGraph }) {
 		this._basePath = "/"
@@ -634,21 +637,20 @@ export class Honey<
 		this._contextValues = null
 		this._graph = opts?.graph ?? createGraph()
 		this._node = null
-		this._openApiCache = null
-		this._openApiYamlCache = null
-		this._manifestCache = null
 	}
 
 	private get _s(): AppSettings<TEnv> {
 		return this._graph.settings as AppSettings<TEnv>
 	}
 
-	/** @internal — read by codegen */
+	/**
+	 * @internal — read by codegen: the declared policy with every mounted sub-app's merged in,
+	 * in mount order. Merged on read, so `metaSpec()` may come before or after `route(sub)`.
+	 */
 	private get _metaSpec(): MetaSpecConfig | null {
-		return this._graph.metaSpec
-	}
-	private set _metaSpec(value: MetaSpecConfig | null) {
-		this._graph.metaSpec = value
+		let merged = this._graph.metaSpec
+		for (const sub of this._graph.absorbedMetaSpecs) merged = mergeMetaSpec(merged, sub)
+		return merged
 	}
 
 	/** @internal — read by codegen and OpenAPI */
@@ -1008,10 +1010,20 @@ export class Honey<
 		return this
 	}
 
+	/**
+	 * Serve this app's OpenAPI document at `${path}.json`, `.yaml` and `.yml` (default
+	 * `/openapi`), and optionally a docs UI. Each call serves its own document: two calls with
+	 * different options (say an internal and a public profile) never share a cache. Documents
+	 * are generated once per route change, serialized once, and sent with an `ETag` and
+	 * `Cache-Control: no-cache`. Pass `enabled: false` (for example in production) to mount
+	 * nothing while keeping the call in place.
+	 */
 	openapi(options: {
 		description?: string
 		docs?: "scalar" | "swagger"
 		docsPath?: string
+		/** Mount the document and docs routes. Default `true`. */
+		enabled?: boolean
 		filterRoutes?: (route: { meta: unknown; method: string; path: string }) => boolean
 		path?: string
 		/** Named metaSpec profile selecting which emitted keys this document carries */
@@ -1020,96 +1032,96 @@ export class Honey<
 		title: string
 		version: string
 	}): this {
+		if (options.enabled === false) return this
 		const stem = options.path ?? "/openapi"
-		const yamlHeaders = { headers: { "content-type": "application/yaml; charset=utf-8" } }
-		const loadJson = (): Promise<unknown> => {
-			const epoch = this._graph.epoch
-			if (this._openApiCache && this._openApiCache.epoch === epoch) {
-				return this._openApiCache.value
-			}
-			let pending: Promise<unknown>
-			pending = loadHoneyFeature("openapi")
-				.then(() =>
-					getOpenApiRuntime().generateOpenApi(this, {
-						filterRoutes: options.filterRoutes,
-						info: {
-							description: options.description,
-							title: options.title,
-							version: options.version,
-						},
-						/* a served document is not an authoring moment — the check belongs to `honey generate` */
-						invalidate: "off",
-						profile: options.profile,
-						securitySchemes: options.securitySchemes,
-					}),
-				)
-				.catch((err: unknown) => {
-					if (this._openApiCache?.value === pending) this._openApiCache = null
-					throw err
-				})
-			this._openApiCache = { epoch, value: pending }
-			return pending
-		}
-		const loadYaml = (): Promise<string> => {
-			const epoch = this._graph.epoch
-			if (this._openApiYamlCache && this._openApiYamlCache.epoch === epoch) {
-				return this._openApiYamlCache.value
-			}
-			let pending: Promise<string>
-			pending = Promise.resolve()
-				.then(async () => getOpenApiRuntime().toYaml(await loadJson()))
-				.catch((err: unknown) => {
-					if (this._openApiYamlCache?.value === pending) this._openApiYamlCache = null
-					throw err
-				})
-			this._openApiYamlCache = { epoch, value: pending }
-			return pending
-		}
-		this._mountInternalGet(`${stem}.json`, async (ctx) => ctx.res.json("ok", await loadJson()))
-		this._mountInternalGet(`${stem}.yml`, async (ctx) => ctx.res.text("ok", await loadYaml(), yamlHeaders))
-		this._mountInternalGet(`${stem}.yaml`, async (ctx) => ctx.res.text("ok", await loadYaml(), yamlHeaders))
+		const epochOf = (): number => this._graph.epoch
+		/* per call, not per app: each openapi() serves the document its own options describe */
+		const document = epochCached(epochOf, async () => {
+			await loadHoneyFeature("openapi")
+			return getOpenApiRuntime().generateOpenApi(this, {
+				filterRoutes: options.filterRoutes,
+				info: { description: options.description, title: options.title, version: options.version },
+				/* a served document is not an authoring moment — the check belongs to `honey generate` */
+				invalidate: "off",
+				profile: options.profile,
+				securitySchemes: options.securitySchemes,
+			})
+		})
+		/* the document first: it loads the runtime the serializers come from */
+		const json = epochCached(epochOf, async () => {
+			const doc = await document()
+			return getOpenApiRuntime().toServedArtifact(JSON.stringify(doc), "application/json")
+		})
+		const yaml = epochCached(epochOf, async () => {
+			const doc = await document()
+			const runtime = getOpenApiRuntime()
+			return runtime.toServedArtifact(runtime.toYaml(doc), "application/yaml; charset=utf-8")
+		})
+		const jsonPath = `${stem}.json`
+		this._mountArtifact("openapi", jsonPath, json)
+		this._mountArtifact("openapi", `${stem}.yml`, yaml)
+		this._mountArtifact("openapi", `${stem}.yaml`, yaml)
 		if (options.docs) {
-			const specUrl = mergePath(this._basePath, `${stem}.json`)
 			const docs = options.docs
+			const specPath = mergePath(this._basePath, jsonPath)
 			const ui = async (ctx: { res: HoneyRes }) => {
 				await loadHoneyFeature("openapi")
-				return getOpenApiRuntime().docsUi(docs, specUrl)(ctx)
+				/* the browser asks for the URL it sees: a stripped prefix is part of it */
+				const prefix = this._s.stripPrefix ?? ""
+				return getOpenApiRuntime().docsUi(docs, prefix + specPath)(ctx)
 			}
-			const preferred = options.docsPath ?? "/docs"
-			const candidates = options.docsPath ? [preferred] : [preferred, "/reference"]
-			let mounted = false
+			/* without an explicit docsPath, a user route at /docs moves the UI to /reference */
+			const candidates = options.docsPath ? [options.docsPath] : ["/docs", "/reference"]
+			let mounted: MountResult = "user"
+			let tried = candidates[0]
 			for (const p of candidates) {
-				if (this._mountInternalGet(p, ui)) {
-					mounted = true
-					break
-				}
+				tried = p
+				mounted = this._mountInternalGet(p, ui)
+				if (mounted !== "user") break
 			}
-			if (!mounted) {
-				throw new Error(`Honey.openapi({ docs }) cannot mount at ${preferred}: already registered. Pass docsPath.`)
+			if (mounted !== "mounted") {
+				const at = mergePath(this._basePath, tried)
+				throw new Error(
+					mounted === "internal"
+						? `Honey.openapi({ docs }) cannot mount at ${at}: an earlier openapi() or manifest() serves it. Pass docsPath.`
+						: `Honey.openapi({ docs }) cannot mount at ${at}: a route already owns it. Pass docsPath.`,
+				)
 			}
 		}
 		return this
 	}
 
-	manifest(options?: { path?: string }): this {
-		const path = options?.path ?? "/manifest.json"
-		const load = (): Promise<unknown> => {
-			const epoch = this._graph.epoch
-			if (this._manifestCache && this._manifestCache.epoch === epoch) {
-				return this._manifestCache.value
-			}
-			let pending: Promise<unknown>
-			pending = loadHoneyFeature("openapi")
-				.then(() => getOpenApiRuntime().generateManifest(this))
-				.catch((err: unknown) => {
-					if (this._manifestCache?.value === pending) this._manifestCache = null
-					throw err
-				})
-			this._manifestCache = { epoch, value: pending }
-			return pending
-		}
-		this._mountInternalGet(path, async (ctx) => ctx.res.json("ok", await load()))
+	/**
+	 * Serve the route manifest at `path` (default `/manifest.json`), filtered by the same
+	 * visibility policy as the OpenAPI document. Cached per route change, sent with an `ETag`.
+	 * `enabled: false` mounts nothing.
+	 */
+	manifest(options?: { enabled?: boolean; path?: string }): this {
+		if (options?.enabled === false) return this
+		const epochOf = (): number => this._graph.epoch
+		const artifact = epochCached(epochOf, async () => {
+			await loadHoneyFeature("openapi")
+			const runtime = getOpenApiRuntime()
+			return runtime.toServedArtifact(JSON.stringify(await runtime.generateManifest(this)), "application/json")
+		})
+		this._mountArtifact("manifest", options?.path ?? "/manifest.json", artifact)
 		return this
+	}
+
+	/** Mount a served document; a path another route or an earlier call owns is an error. */
+	private _mountArtifact(owner: "manifest" | "openapi", path: string, load: () => Promise<ServedArtifact>): void {
+		const result = this._mountInternalGet(path, async (ctx) => {
+			const c = ctx as unknown as { req: Request; res: HoneyRes }
+			const artifact = await load()
+			return c.res.raw(getOpenApiRuntime().artifactResponse(c.req, artifact))
+		})
+		if (result === "mounted") return
+		const at = mergePath(this._basePath, path)
+		throw new Error(
+			result === "internal"
+				? `Honey.${owner}() cannot mount GET ${at}: an earlier openapi() or manifest() serves it. Pass a different path.`
+				: `Honey.${owner}() cannot mount GET ${at}: a route already owns it. Pass a different path.`,
+		)
 	}
 
 	async serve(options?: HoneyServeOptions): Promise<ServeHandle> {
@@ -1118,22 +1130,23 @@ export class Honey<
 	}
 
 	/**
-	 * Mount an internal GET (spec, docs, manifest). Returns false when a user route owns the
-	 * exact path. Only an exact leaf counts: a `/:slug` or `/*rest` route does not block a
-	 * static internal path, which wins over it on precedence anyway.
+	 * Mount an internal GET (spec, docs, manifest). Reports who owns the path when it cannot:
+	 * a user route (`"user"`) or an earlier internal mount (`"internal"`). Only an exact leaf
+	 * counts: a `/:slug` or `/*rest` route does not block a static internal path, which wins
+	 * over it on precedence, with backtracking, in both the runtime and a loaded tree.
 	 */
-	private _mountInternalGet(path: string, fn: (ctx: { res: HoneyRes }) => Response | Promise<Response>): boolean {
+	private _mountInternalGet(path: string, fn: (ctx: { res: HoneyRes }) => Response | Promise<Response>): MountResult {
 		const fullPath = mergePath(this._basePath, path)
 		const segments = parsePattern(fullPath)
 		const id = routeId("GET", fullPath)
 		const g = this._graph
 		const existing = g.records.get(id)
-		if (existing) return existing._skip === true
+		if (existing) return existing._skip === true ? "internal" : "user"
 		const leaf = findLeaf(g.root, segments, "GET")
-		if (leaf !== undefined && leaf !== id) return false
-		if (findLeaf(g.root, segments, "ALL") !== undefined) return false
+		if (leaf !== undefined && leaf !== id) return "user"
+		if (findLeaf(g.root, segments, "ALL") !== undefined) return "user"
 		/* a leaf the loaded tree holds for a user route the app has yet to register */
-		if (leaf === id && g.loaded?.has(id)) return false
+		if (leaf === id && g.loaded?.has(id)) return "user"
 		const routeHandler: RouteHandler = {
 			_skip: true,
 			bek: null,
@@ -1154,7 +1167,7 @@ export class Honey<
 		}
 		this._markUsed()
 		this._addRoute("GET", segments, routeHandler)
-		return true
+		return "mounted"
 	}
 
 	private _bumpEpoch(): void {
@@ -1853,66 +1866,11 @@ export class Honey<
 	 * Codegen-time only — never consulted on the request path. See docs/meta-spec.md.
 	 */
 	metaSpec<TSpec extends HoneyMetaSpec<TMeta>>(spec: TSpec): this {
-		if (this._metaSpec !== null) {
+		if (this._graph.metaSpec !== null) {
 			throw new Error("metaSpec() was already declared on this app — declare the whole policy in one call")
 		}
-		this._metaSpec = spec as MetaSpecConfig
+		this._graph.metaSpec = spec as MetaSpecConfig
 		return this
-	}
-
-	/**
-	 * Merge a mounted sub-app's policy into this one.
-	 *
-	 * The parent wins on conflict, so one gateway keeps one answer for its aggregate document —
-	 * with a single exception. A sub entry of `false` wins over anything the parent says, because
-	 * hiding is a safety claim and the strictest claim has to survive composition: a worker that
-	 * declares a field unpublishable must not have the gateway publish it. Wrongly hidden is a
-	 * visible gap; wrongly published is a leak.
-	 *
-	 * Every other disagreement is recorded and reported at codegen. Silently dropping a sub's
-	 * entry is how someone ends up diffing two documents to find out why they differ.
-	 */
-	private _absorbMetaSpec(sub: MetaSpecConfig | null): void {
-		if (!sub) return
-		const own = this._metaSpec
-		if (!own) {
-			this._metaSpec = sub
-			return
-		}
-		const conflicts: MetaSpecMergeConflict[] = [...(own.conflicts ?? []), ...(sub.conflicts ?? [])]
-
-		const mergeMeta = (): Record<string, MetaSpecEntry> => {
-			const merged: Record<string, MetaSpecEntry> = { ...sub.meta, ...own.meta }
-			for (const [key, subEntry] of Object.entries(sub.meta ?? {})) {
-				const ownEntry = own.meta?.[key]
-				if (ownEntry === undefined || ownEntry === subEntry) continue
-				if (subEntry === false && ownEntry !== false) {
-					merged[key] = false
-					conflicts.push({ key, resolution: "hidden", section: "meta" })
-					continue
-				}
-				conflicts.push({ key, resolution: "parent", section: "meta" })
-			}
-			return merged
-		}
-
-		const recordOverlap = (section: "profiles" | "schema", subSide: object, ownSide: object): void => {
-			for (const [key, subEntry] of Object.entries(subSide)) {
-				const ownEntry = (ownSide as Record<string, unknown>)[key]
-				if (ownEntry === undefined || ownEntry === subEntry) continue
-				conflicts.push({ key, resolution: "parent", section })
-			}
-		}
-		recordOverlap("schema", sub.schema ?? {}, own.schema ?? {})
-		recordOverlap("profiles", sub.profiles ?? {}, own.profiles ?? {})
-
-		this._metaSpec = {
-			conflicts,
-			meta: mergeMeta(),
-			profiles: { ...sub.profiles, ...own.profiles },
-			schema: { ...sub.schema, ...own.schema },
-			strict: own.strict ?? sub.strict,
-		}
 	}
 
 	/** Declare tap payload types — auto-extends meta with Partial<T> for meta-driven taps */
@@ -2023,7 +1981,10 @@ export class Honey<
 				const { segments } = patternOf(id)
 				this._addWsRoute(segments, mount(r))
 			}
-			this._absorbMetaSpec(sub._metaSpec)
+			/* merged when codegen reads `_metaSpec` (see `mergeMetaSpec`): the parent wins
+			 * conflicts and keeps its resolved strictness, a sub's `false` still hides */
+			const subPolicy = sub._metaSpec
+			if (subPolicy !== null) this._graph.absorbedMetaSpecs.push(subPolicy)
 			/* the sub's scopes guard the paths it brought — appended after this app's own */
 			const g = this._graph
 			for (const entry of sub._graph.scoped) {
@@ -3323,9 +3284,8 @@ class RouteBuilder<
 		}
 
 		const isInternal = Symbol.for("honey.internal") in fn
-		if (isInternal) {
-			Object.defineProperty(fn, Symbol.for("honey.app"), { value: this._s.parent })
-		}
+		/* a bound copy per app: one `spec()` or docs handler may be mounted on several apps */
+		if (isInternal) fn = bindInternalHandler(fn, this._s.parent)
 
 		const parent = this._s.parent as unknown as HoneyInternal
 		const view = parent._view()

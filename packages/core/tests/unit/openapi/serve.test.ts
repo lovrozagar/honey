@@ -132,12 +132,12 @@ describe("Honey.openapi()", () => {
 		expect(await ui.text()).toContain("scalar")
 	})
 
-	it("openapi() twice is idempotent", async () => {
+	it("a second openapi() at the same path throws instead of serving the first document", async () => {
 		const app = honey()
 			.get("/health")
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 		app.openapi({ docs: "scalar", title: "Demo", version: "1" })
-		expect(() => app.openapi({ docs: "scalar", title: "Demo", version: "1" })).not.toThrow()
+		expect(() => app.openapi({ title: "Other", version: "1" })).toThrow(/GET \/openapi\.json: an earlier openapi\(\)/)
 		const res = await app.fetch(new Request("http://x/docs"), {})
 		expect(res.status).toBe(200)
 		expect(await res.text()).toContain("scalar")
@@ -210,12 +210,14 @@ describe("Honey.openapi()", () => {
 		expect(await yaml.text()).toContain("/b")
 	})
 
-	it("retries generate after a failed spec request", async () => {
+	it("caches a failed generation until the routes change, then retries", async () => {
 		const app = honey()
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 		let shouldThrow = true
+		let calls = 0
 		app.openapi({
 			filterRoutes: () => {
+				calls++
 				if (shouldThrow) throw new Error("codegen boom")
 				return true
 			},
@@ -225,11 +227,20 @@ describe("Honey.openapi()", () => {
 
 		const fail = await app.fetch(new Request("http://x/openapi.json"), {})
 		expect(fail.status).toBeGreaterThanOrEqual(500)
+		const failedCalls = calls
 
+		/* same routes: the failure is served again without regenerating */
 		shouldThrow = false
+		const again = await app.fetch(new Request("http://x/openapi.json"), {})
+		expect(again.status).toBeGreaterThanOrEqual(500)
+		expect(calls).toBe(failedCalls)
+
+		/* a route change starts a new epoch: generation runs again */
+		app.get("/later").handler((ctx) => ctx.res.text("ok", "later"))
 		const ok = await app.fetch(new Request("http://x/openapi.json"), {})
 		expect(ok.status).toBe(200)
 		const spec = (await ok.json()) as { paths: Record<string, unknown> }
 		expect(spec.paths["/health"]).toBeDefined()
+		expect(spec.paths["/later"]).toBeDefined()
 	})
 })
