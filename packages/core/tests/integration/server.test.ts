@@ -316,7 +316,9 @@ describe("integration: real HTTP server with all middleware", () => {
 
 describe("integration: IP restriction over real HTTP", () => {
 	it("allowed IP → 200", async () => {
-		const app = honey<{}>().use(ipRestrict({ allowList: ["127.0.0.1"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["127.0.0.1"] }))
 		app.get("/admin").handler((ctx) => ctx.res.json("ok", { admin: true }))
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
@@ -328,7 +330,9 @@ describe("integration: IP restriction over real HTTP", () => {
 	})
 
 	it("blocked IP → 403", async () => {
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.0/8"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["10.0.0.0/8"] }))
 		app.get("/admin").handler((ctx) => ctx.res.json("ok", { admin: true }))
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }

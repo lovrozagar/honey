@@ -193,11 +193,11 @@ describe("stripPrefix chaining", () => {
 })
 
 describe("stripPrefix encoded paths", () => {
-	it("encoded slash in path does not confuse strip", async () => {
+	it("an encoded slash is rejected, never stripped as a separator", async () => {
 		const app = honey<{}>().stripPrefix("/api")
 		app.get("/test").handler((ctx) => ctx.res.text("ok", "ok"))
 
 		const res = await app.fetch(new Request("http://localhost/api%2Ftest"), {})
-		expect(res.status).toBe(404)
+		expect(res.status).toBe(400)
 	})
 })

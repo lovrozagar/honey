@@ -332,6 +332,19 @@ app.get("/files/*path").handler((ctx) => {
 - Precedence at each segment: static, then param, then wildcard. When the preferred branch dead-ends — no route further down, or no route for the request's method — the router backtracks to the next one. With `GET /users/me/settings` and `GET /users/:id/profile`, `/users/me/profile` reaches the second; with `GET /u/me` and `DELETE /u/:id`, `DELETE /u/me` reaches the second. A 405 lists every method of every route that matches the path.
 - Static paths (`/health`) use an O(1) map. Dynamic and wildcard segments walk the radix tree.
 
+#### Request paths
+
+Every request path is normalized once, before anything looks at it. The router, scoped middleware, `ctx.path`, `staticFiles()` and `proxy()` all see the same result, on every runtime:
+
+- Empty segments collapse: `//admin///users` is `/admin/users`.
+- Dot segments resolve: `/files/../admin` is `/admin`, never above the root; `%2e` counts as a dot.
+- A backslash is a `/`, and characters a URL path cannot hold raw (space, controls, `"`, `<`, `>`, `` ` ``, `{`, `}`, non-ASCII) are percent-encoded — what URL parsing does, so Deno (which hands the app the raw target) and Bun or Node (which parse it) route the same bytes the same way.
+- An encoded `/` or `\` (`%2F`, `%5C`) is **400**: a segment that decodes to a separator means one thing to this router and another to a proxy upstream or a file system. `app.encodedSlashes("allow")` keeps them encoded in the path so they decode into a param (`/repos/group%2Fproject` gives `id === "group/project"`); only allow them when nothing downstream treats a decoded slash as a separator.
+- Everything else stays percent-encoded in `ctx.path`; params are decoded when extracted.
+- A trailing slash is kept; `trailingSlash()` decides what it means.
+
+On Node, `serve()` also answers **400** for a `Host` header that is not `host[:port]` and for request targets other than `/path` or `http(s)://host/path`; on Deno, `serve()` (and `Deno.serve(app.fetch)`) reject such a `Host`, since Deno builds the request URL from it.
+
 Optional extra validation of params (beyond “it is a string”):
 
 ```ts
@@ -345,7 +358,7 @@ app
 
 ```ts
 const api = app.basePath("/api") // routes registered on `api` are prefixed
-app.trailingSlash("strip") // 308 /health/ → /health
+app.trailingSlash("strip") // 308 /health/ → /health (Location is relative: /health)
 app.trailingSlash("enforce") // 308 /health → /health/
 app.trailingSlash("ignore") // both match (default)
 app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
@@ -354,34 +367,51 @@ app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
 - `basePath` returns a new handle; only routes registered through it (or handles derived from it) are prefixed.
 - `stripPrefix` is a gateway rewrite. Requests without the prefix still match. It will not strip a partial segment (`/apple` is not stripped by `/app`).
 - `.use(mw)` / `.basePath()` / `.context()` / `.meta()` return a new **handle** on the same app. A route captures its handle's chain, prefix, context values and meta when it is registered; serving any handle of the app behaves the same. The handle you call them on is unchanged, so `app.use(auth)` as a bare statement installs nothing — finalize (the first request, `toRouteTree()` or codegen) throws when a `use(mw)` handle never registers, mounts or serves anything, and when a route builder never got `.handler()`.
-- Settings — `trailingSlash`, `stripPrefix`, `errorFactory`, `defaultErrors`, `defaultBoundary`, `outputValidation`, `onError`, `onNotFound`, `onMethodNotAllowed`, error formatters, `errorI18n`, `logger`, `telemetry`, `tap`, `wsAdapter` — belong to the app: calling one on any handle applies to every handle and every route, registered before or after.
+- Settings — `trailingSlash`, `stripPrefix`, `encodedSlashes`, `trustProxy`, `errorFactory`, `defaultErrors`, `defaultBoundary`, `outputValidation`, `onError`, `onNotFound`, `onMethodNotAllowed`, error formatters, `errorI18n`, `logger`, `telemetry`, `tap`, `wsAdapter` — belong to the app: calling one on any handle applies to every handle and every route, registered before or after.
 
 ### Context
 
 `ctx` is a `HoneyContext`. Fields:
 
-| Field                          | Meaning                                                 |
-| ------------------------------ | ------------------------------------------------------- |
-| `ctx.req`                      | Web `Request` (on Node serve, a Request-shaped wrapper) |
-| `ctx.res`                      | `HoneyRes` — see [Responses](#responses)                |
-| `ctx.env`                      | Bindings you passed to `fetch` / `serve`                |
-| `ctx.params`                   | Path params (`:id`, `*path`)                            |
-| `ctx.search` / `ctx.searchAll` | First value / all values of the query string (lazy)     |
-| `ctx.headers` / `ctx.cookies`  | Lazy records (lowercase cookie names as sent)           |
-| `ctx.input`                    | Validated input when `.input()` is declared             |
-| `ctx.errors`                   | Typed error factory when `.errorFactory()` is set       |
-| `ctx.meta`                     | Merged route + chain `.meta()`                          |
-| `ctx.path`                     | Request pathname after `stripPrefix`                    |
-| `ctx.routePattern`             | Registered pattern, e.g. `/users/:id`                   |
-| `ctx.realtime`                 | `{ publish(topic, data) }` when realtime routes exist   |
-| `ctx.tap(key, payload)`        | Queue a tap (only if `.taps()` was declared)            |
-| `ctx.background(promise)`      | `waitUntil` on Workers, otherwise fire-and-forget       |
-| `ctx.executionCtx`             | Workers `ExecutionContext` when `fetch` received one    |
-| `ctx.log`                      | Present when `logger({ instance })` middleware ran      |
-| `ctx.requestId`                | Present when `requestId()` middleware ran               |
-| `ctx.timing`                   | Present when `serverTiming()` middleware ran            |
+| Field                          | Meaning                                                     |
+| ------------------------------ | ----------------------------------------------------------- |
+| `ctx.req`                      | Web `Request` (on Node serve, a Request-shaped wrapper)     |
+| `ctx.res`                      | `HoneyRes` — see [Responses](#responses)                    |
+| `ctx.env`                      | Bindings you passed to `fetch` / `serve`                    |
+| `ctx.params`                   | Path params (`:id`, `*path`)                                |
+| `ctx.search` / `ctx.searchAll` | First value / all values of the query string (lazy)         |
+| `ctx.headers` / `ctx.cookies`  | Lazy records (lowercase cookie names as sent)               |
+| `ctx.ip`                       | Client IP, canonical; see [Client address](#client-address) |
+| `ctx.input`                    | Validated input when `.input()` is declared                 |
+| `ctx.errors`                   | Typed error factory when `.errorFactory()` is set           |
+| `ctx.meta`                     | Merged route + chain `.meta()`                              |
+| `ctx.path`                     | Normalized request path after `stripPrefix`                 |
+| `ctx.routePattern`             | Registered pattern, e.g. `/users/:id`                       |
+| `ctx.realtime`                 | `{ publish(topic, data) }` when realtime routes exist       |
+| `ctx.tap(key, payload)`        | Queue a tap (only if `.taps()` was declared)                |
+| `ctx.background(promise)`      | `waitUntil` on Workers, otherwise fire-and-forget           |
+| `ctx.executionCtx`             | Workers `ExecutionContext` when `fetch` received one        |
+| `ctx.log`                      | Present when `logger({ instance })` middleware ran          |
+| `ctx.requestId`                | Present when `requestId()` middleware ran                   |
+| `ctx.timing`                   | Present when `serverTiming()` middleware ran                |
 
-Reserved keys that middleware / `.context()` **cannot** overwrite: `req`, `res`, `env`, `params`, `headers`, `cookies`, `search`, `background`.
+Reserved keys that middleware / `.context()` **cannot** overwrite: every field above that Honey sets (`req`, `res`, `env`, `params`, `headers`, `cookies`, `search`, `searchAll`, `ip`, `path`, `meta`, `errors`, …).
+
+`ctx.search`, `ctx.searchAll`, `ctx.headers` and validated `search`/`headers`/`form` records have no prototype, so a query like `?__proto__=x` or `?constructor=x` is plain data. Read them with `ctx.search.key`, `key in ctx.search` or `Object.hasOwn(ctx.search, key)`; they have no `hasOwnProperty` method.
+
+#### Client address
+
+`ctx.ip` is the client's address in canonical form (`::ffff:1.2.3.4` is `1.2.3.4`, IPv6 lowercase and compressed), or `null` when unknown. `clientInfo(ctx)` (from `@lovrozagar/honey`) also returns the `protocol` and `host` the client used. One app setting decides all three, and every feature that needs them (`ipRestrict`, loggers, `proxy()`) reads the same answer:
+
+```ts
+app.trustProxy(false) // default: the TCP peer is the client; X-Forwarded-* is ignored
+app.trustProxy(1) // one reverse proxy in front, appending to X-Forwarded-For (nginx, most load balancers)
+app.trustProxy(["10.0.0.0/8", "fd00::/8"]) // proxies recognized by address; the first other hop is the client
+```
+
+- The peer address comes from the runtime: the socket on Node, `server.requestIP()` on Bun, `info.remoteAddr` on Deno, `CF-Connecting-IP` on Cloudflare Workers (the edge sets it; a client cannot). `app.fetch(req, env)` without a server reports no peer; in tests pass `testClient(app, { env, ip: "203.0.113.1" })`.
+- With a hop count, the client is the `X-Forwarded-For` entry the outermost trusted proxy wrote; entries further left were sent by the client and are never read. With ranges, trusted hops are skipped from the right. `X-Forwarded-Proto` and `X-Forwarded-Host` are read only through a trusted hop.
+- A value at the position the setting reads that is not an address makes `ctx.ip` `null`, never a guess. `X-Real-IP`, `Forwarded` and `True-Client-IP` are not read.
 
 ```ts
 app
@@ -902,22 +932,21 @@ api.get("/work").handler((ctx) => {
 ```ts
 import { ipRestrict } from "@lovrozagar/honey/ip-restrict"
 
-const api = app.use(
-	ipRestrict({
-		allowList: ["127.0.0.1", "10.0.0.0/8"],
-		denyList: ["192.168.1.50"],
-		trustProxy: true, // behind one reverse proxy: rightmost X-Forwarded-For, then X-Real-IP
-	}),
-)
+const api = app
+	.trustProxy(1) // behind one reverse proxy; see Client address
+	.use(
+		ipRestrict({
+			allowList: ["127.0.0.1", "10.0.0.0/8"],
+			denyList: ["192.168.1.50"],
+		}),
+	)
 ```
 
-Pick exactly one client IP source, or construction throws:
-
-- `trustProxy: true` — behind exactly one reverse proxy that appends the peer address to `X-Forwarded-For`. The rightmost entry is used; entries the client sent are ignored.
-- `trustCloudflare: true` — reads `CF-Connecting-IP`. Only safe when every request reaches the app through Cloudflare; anywhere else a client can send the header itself.
-- `getIp: (req) => ...` — your own source.
-
-A request whose IP cannot be determined is **403**, for allow and deny lists alike. Denied / not-allowed is **403**.
+- The client address is `ctx.ip`, decided by `app.trustProxy()` — see [Client address](#client-address). `getIp: (req) => ...` replaces it with your own source.
+- Rules and addresses are compared as numbers, so `::ffff:203.0.113.7`, `203.0.113.7` and `203.0.113.7:51234` are one address, and `2001:DB8::1` equals `2001:db8::1`.
+- Construction throws on an invalid rule (`10.0.0.0/33`, `010.0.0.1`, `abc`), on `allowList: []` (it would reject everyone), and with no list at all.
+- Fails closed: a request whose address is unknown or not an address is **403**, for allow and deny lists alike. Denied / not-allowed is **403**.
+- What it does not cover: it trusts whatever `trustProxy()` says. Behind a proxy you did not declare, every request has the proxy's address.
 
 #### `powered-by` — `@lovrozagar/honey/powered-by`
 
@@ -1013,7 +1042,11 @@ const site = app.use(
 )
 ```
 
-GET/HEAD only. `..` segments are rejected. `resolve` returning `null` falls through to the next route.
+GET/HEAD only. `resolve` returning `null` falls through to the next route.
+
+- `staticFiles` matches `ctx.path` — the normalized path the router saw, after `stripPrefix` — on whole segments: `prefix: "/assets"` serves `/assets/x`, never `/assets-private/x`.
+- `filePath` is decoded once and contains no `.`, `..`, empty, NUL, `:`, `/` or `\` segments, so joining it onto a root directory cannot leave the root, on POSIX or Windows. Anything else, including malformed percent-encoding, falls through to the next handler. A `rewritePath` result is checked again.
+- `headers(filePath)` receives the same path `resolve` got. Headers are added copy-on-write, so a `Response` with immutable headers (from `fetch()` or a Workers `ASSETS` binding) works.
 
 ### Logging, telemetry, production tree
 

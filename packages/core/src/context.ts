@@ -1,6 +1,9 @@
 import { isNodeOutbound } from "./honey-response.ts"
 import type { SSEOptions, SSEStream, TypedResponse } from "./response.ts"
 import { HoneyRes } from "./response.ts"
+import { dict } from "./dict.ts"
+import { peerAddressOf } from "./peer.ts"
+import { resolveClientInfo, TRUST_OFF, type ClientInfo, type TrustSetting } from "./trust.ts"
 import type { PendingTap } from "./types.ts"
 import { EMPTY_OBJ } from "./types.ts"
 import { parseCookies } from "./validation.ts"
@@ -33,21 +36,39 @@ class ContextRes extends HoneyRes {
 }
 function parseSearch(ctx: HoneyContext): void {
 	const url = ctx._lzUrlFn ? ctx._lzUrlFn() : new URL(ctx.req.url)
-	const first: Record<string, string> = {}
-	const all: Record<string, string[]> = {}
+	/* keys are request data: no prototype, so `?__proto__=` or `?toString=` is just a key */
+	const first = dict<string>()
+	const all = dict<string[]>()
 	for (const [key, value] of url.searchParams) {
-		if (first[key] === undefined) {
+		const values = all[key]
+		if (values === undefined) {
 			first[key] = value
 			all[key] = [value]
 		} else {
-			const values = all[key]
-			if (values) {
-				values.push(value)
-			}
+			values.push(value)
 		}
 	}
 	ctx._lzSearch = first
 	ctx._lzSearchAll = all
+}
+
+/** What `ctx._rq` carries for client-info resolution; the dispatcher's FetchCtx has these fields. */
+type ClientSource = { env?: unknown; request?: Request; trust?: TrustSetting }
+
+/**
+ * The client address, scheme and host of the request `ctx` serves, decided by the app's
+ * `trustProxy()` setting. `ctx.ip` is its `ip`.
+ */
+export function clientInfo(ctx: HoneyContext<never> | HoneyContext): ClientInfo {
+	const c = ctx as HoneyContext
+	if (c._lzClient === null) {
+		const src = (c._rq ?? {}) as ClientSource
+		/* the peer is registered on the request the adapter handed over; headers are read from
+		 * ctx.req, which survives Deno's upgrade (a header snapshot) */
+		const peer = peerAddressOf(src.request ?? c.req, src.env ?? c.env)
+		c._lzClient = resolveClientInfo(src.trust ?? TRUST_OFF, c.req, peer)
+	}
+	return c._lzClient
 }
 
 function bgSwallow(p: Promise<unknown>) {
@@ -75,6 +96,12 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	declare readonly errors: Record<string, (...args: never[]) => unknown>
 	declare readonly executionCtx: { waitUntil?: (p: Promise<unknown>) => void } | undefined
 	declare readonly headers: Record<string, string>
+	/**
+	 * The client's IP address in canonical form (`::ffff:1.2.3.4` is `1.2.3.4`), or `null` when
+	 * the runtime does not report one. Behind reverse proxies, set `app.trustProxy()`; until then
+	 * this is the proxy's address and forwarding headers are ignored.
+	 */
+	declare readonly ip: string | null
 	declare readonly meta: Record<string, unknown>
 	declare readonly path: string
 	declare readonly realtime: { publish(topic: string, data: unknown): void }
@@ -83,6 +110,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	declare readonly searchAll: Record<string, string[]>
 
 	/* backing state for lazy getters — stored directly on instance to avoid extra object allocation */
+	/** @internal */ _lzClient: ClientInfo | null
 	/** @internal */ _lzCookies: Record<string, string> | null
 	/** @internal */ _lzHeaders: Record<string, string> | null
 	/** @internal */ _lzSearch: Record<string, string> | null
@@ -130,6 +158,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 			: bgSwallow
 
 		/* lazy getter backing — flat on instance, no extra object */
+		this._lzClient = null
 		this._lzCookies = null
 		this._lzHeaders = null
 		this._lzSearch = null
@@ -178,13 +207,20 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 			enumerable: true,
 			get(this: HoneyContext): Record<string, string> {
 				if (this._lzHeaders === null) {
-					const h: Record<string, string> = {}
+					const h = dict<string>()
 					this.req.headers.forEach((value, key) => {
 						h[key] = value
 					})
 					this._lzHeaders = h
 				}
 				return this._lzHeaders
+			},
+		})
+		Object.defineProperty(HoneyContext.prototype, "ip", {
+			configurable: true,
+			enumerable: true,
+			get(this: HoneyContext): string | null {
+				return clientInfo(this).ip
 			},
 		})
 		Object.defineProperty(HoneyContext.prototype, "search", {

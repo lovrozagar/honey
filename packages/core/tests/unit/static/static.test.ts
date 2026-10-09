@@ -119,8 +119,8 @@ describe("staticFiles", () => {
 		expect(resolve).toHaveBeenCalledWith(expect.anything(), "/dist/app.js")
 	})
 
-	it("falls through on path traversal attempts", async () => {
-		const resolve = vi.fn()
+	it("dot segments resolve inside the root, never above it", async () => {
+		const resolve = vi.fn(() => null)
 		const mw = staticFiles({ resolve })
 		const next = makeNext()
 
@@ -129,7 +129,7 @@ describe("staticFiles", () => {
 		await mw(makeRawCtx("GET", "http://localhost/foo/../../bar"), next)
 		await mw(makeRawCtx("GET", "http://localhost/foo/%2e%2e/bar"), next)
 
-		expect(resolve).not.toHaveBeenCalled()
+		expect(resolve.mock.calls.map((c) => c[1])).toEqual(["/etc/passwd", "/bar", "/bar"])
 		expect(next).toHaveBeenCalledTimes(3)
 	})
 
@@ -163,5 +163,97 @@ describe("staticFiles", () => {
 
 		expect(await res.text()).toBe("async file")
 		expect(next).not.toHaveBeenCalled()
+	})
+})
+
+describe("staticFiles path safety", () => {
+	it("matches the prefix on a segment boundary", async () => {
+		const resolve = vi.fn(() => new Response("ok"))
+		const mw = staticFiles({ prefix: "/assets", resolve })
+		const next = makeNext()
+
+		await mw(makeCtx("GET", "/assets-private/secret.txt"), next)
+		expect(resolve).not.toHaveBeenCalled()
+		expect(next).toHaveBeenCalledTimes(1)
+
+		await mw(makeCtx("GET", "/assets/app.js"), next)
+		await mw(makeCtx("GET", "/assets"), next)
+		expect(resolve.mock.calls.map((c) => c[1])).toEqual(["/app.js", "/"])
+	})
+
+	it("a trailing slash on the prefix makes no difference", async () => {
+		const resolve = vi.fn(() => new Response("ok"))
+		const mw = staticFiles({ prefix: "/assets/", resolve })
+		await mw(makeCtx("GET", "/assets/app.js"), makeNext())
+		expect(resolve).toHaveBeenCalledWith(expect.anything(), "/app.js")
+	})
+
+	it("hands resolve the decoded path", async () => {
+		const resolve = vi.fn(() => new Response("ok"))
+		const mw = staticFiles({ resolve })
+		await mw(makeCtx("GET", "/my%20file.txt"), makeNext())
+		expect(resolve).toHaveBeenCalledWith(expect.anything(), "/my file.txt")
+	})
+
+	it("falls through on malformed percent-encoding instead of throwing", async () => {
+		const resolve = vi.fn()
+		const mw = staticFiles({ resolve })
+		const next = makeNext()
+		const res = await mw(makeRawCtx("GET", "http://localhost/bad%E0%A4%A.txt"), next)
+		expect(await res.text()).toBe("next")
+		expect(resolve).not.toHaveBeenCalled()
+	})
+
+	it("falls through on encoded separators and NUL", async () => {
+		const resolve = vi.fn()
+		const mw = staticFiles({ resolve })
+		const next = makeNext()
+		for (const url of [
+			"http://localhost/a%5C..%5Csecret",
+			"http://localhost/a%2F..%2Fsecret",
+			"http://localhost/a%00.txt",
+		]) {
+			await mw(makeRawCtx("GET", url), next)
+		}
+		expect(resolve).not.toHaveBeenCalled()
+		expect(next).toHaveBeenCalledTimes(3)
+	})
+
+	it("reads a raw backslash as a separator, so it resolves inside the root", async () => {
+		const resolve = vi.fn(() => null)
+		const mw = staticFiles({ resolve })
+		await mw(makeRawCtx("GET", "http://localhost/a\\..\\secret"), makeNext())
+		expect(resolve).toHaveBeenCalledWith(expect.anything(), "/secret")
+	})
+
+	it("sets extra headers on a response with immutable headers", async () => {
+		const immutable = Response.redirect("http://localhost/x", 302)
+		const mw = staticFiles({ headers: { "cache-control": "max-age=60" }, resolve: () => immutable })
+		const res = await mw(makeCtx("GET", "/x"), makeNext())
+		expect(res.status).toBe(302)
+		expect(res.headers.get("cache-control")).toBe("max-age=60")
+		expect(res.headers.get("location")).toBe("http://localhost/x")
+	})
+
+	it("uses ctx.path, the normalized path the router matched", async () => {
+		const resolve = vi.fn(() => new Response("ok"))
+		const mw = staticFiles({ prefix: "/assets", resolve })
+		const ctx = { path: "/assets/app.js", req: new Request("http://localhost/api/assets/app.js") }
+		await mw(ctx, makeNext())
+		expect(resolve).toHaveBeenCalledWith(expect.anything(), "/app.js")
+	})
+
+	it("re-checks a rewritten path and gives headers() the path resolve got", async () => {
+		const resolve = vi.fn(() => new Response("ok"))
+		const headers = vi.fn(() => ({ "x-file": "1" }))
+		const mw = staticFiles({ headers, resolve, rewritePath: (p) => `/dist${p}` })
+		await mw(makeCtx("GET", "/app.js"), makeNext())
+		expect(resolve).toHaveBeenCalledWith(expect.anything(), "/dist/app.js")
+		expect(headers).toHaveBeenCalledWith("/dist/app.js")
+
+		const escaping = staticFiles({ resolve: vi.fn(), rewritePath: (p) => `/..${p}` })
+		const next = makeNext()
+		await escaping(makeCtx("GET", "/app.js"), next)
+		expect(next).toHaveBeenCalledTimes(1)
 	})
 })

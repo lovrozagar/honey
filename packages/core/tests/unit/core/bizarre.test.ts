@@ -219,15 +219,22 @@ describe("bizarre: handler that modifies its own response headers", () => {
 })
 
 describe("bizarre: params that look like path traversal", () => {
-	it(":id with value '../etc/passwd' → decoded but not traversed", async () => {
+	it(":id with value '../etc/passwd' → 400, an encoded slash never reaches a param", async () => {
 		const app = honey<{}>()
 		app.get("/files/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
 
 		const res = await app.fetch(new Request(`http://localhost/files/${encodeURIComponent("../etc/passwd")}`), {})
+		expect(res.status).toBe(400)
+	})
+
+	it(":id with an encoded dot-dot segment resolves like a literal one", async () => {
+		const app = honey<{}>()
+		app.get("/files/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
+		app.get("/etc").handler((ctx) => ctx.res.json("ok", { id: "etc" }))
+
+		const res = await app.fetch(new Request("http://localhost/files/%2e%2e/etc"), {})
 		expect(res.status).toBe(200)
-		const body = (await res.json()) as Record<string, unknown>
-		/* param is decoded but treated as a value, not a path */
-		expect(body.id).toBe("../etc/passwd")
+		expect(await res.json()).toEqual({ id: "etc" })
 	})
 })
 

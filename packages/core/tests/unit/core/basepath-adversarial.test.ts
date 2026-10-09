@@ -53,10 +53,9 @@ describe("basePath adversarial", () => {
 		const app = honey<{}>().basePath("/api")
 		app.get("/test").handler((ctx) => ctx.res.text("ok", "ok"))
 
-		/* %2F is encoded / — should not be treated as path separator */
+		/* %2F is an encoded / — rejected rather than guessed at as a separator or a literal */
 		const res = await app.fetch(new Request("http://localhost/api%2Ftest"), {})
-		/* /api%2Ftest is one path segment, not /api/test */
-		expect(res.status).toBe(404)
+		expect(res.status).toBe(400)
 	})
 })
 

@@ -1,6 +1,8 @@
 import type { Honey } from "./index.ts"
 import { cors, type CORSOptions } from "./cors.ts"
 import { detectRuntime, type ServeRuntime } from "./detect-runtime.ts"
+import { setPeerAddress } from "./peer.ts"
+import { hasValidHost } from "./trust.ts"
 
 export type { ServeRuntime }
 export { detectRuntime }
@@ -80,13 +82,19 @@ export async function startHoneyServer(
 				Deno: {
 					serve: (
 						opts: { hostname: string; port: number; signal?: AbortSignal },
-						handler: (req: Request) => Response | Promise<Response>,
+						handler: (req: Request, info: { remoteAddr?: { hostname?: string } }) => Response | Promise<Response>,
 					) => { addr?: { port?: number }; finished?: Promise<void>; shutdown?: () => Promise<void> }
 				}
 			}
 		).Deno
 		const ac = new AbortController()
-		const server = DenoNs.serve({ hostname, port, signal: ac.signal }, (req) => listening.fetch(req, env))
+		const server = DenoNs.serve({ hostname, port, signal: ac.signal }, (req, info) => {
+			/* Deno builds req.url from Host and the target: a `Host: x/admin?` would pick the path */
+			if (!hasValidHost(req)) return (listening as unknown as { _badRequestTarget(): Response })._badRequestTarget()
+			const peer = info?.remoteAddr?.hostname
+			if (typeof peer === "string") setPeerAddress(req, peer)
+			return listening.fetch(req, env)
+		})
 		const bound = server.addr?.port ?? port
 		return {
 			async close() {

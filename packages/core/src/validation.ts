@@ -1,5 +1,6 @@
 import { HoneyError } from "./error.ts"
 import { parseCookieHeader } from "./cookie.ts"
+import { dict } from "./dict.ts"
 import type {
 	FieldError,
 	InputSchemaEntry,
@@ -98,7 +99,8 @@ export function normalizeIssues(issues: ReadonlyArray<StandardSchemaIssue>, vend
 }
 
 export function issuesToFieldErrors(issues: NormalizedIssue[], prefix: string): Record<string, FieldError[]> {
-	const fields: Record<string, FieldError[]> = {}
+	/* field names come from the request (record keys): `toString` must not find a prototype method */
+	const fields = dict<FieldError[]>()
 	for (const issue of issues) {
 		const fieldName = issue.path.at(-1)?.toString() ?? "unknown"
 		const fullPath = `${prefix}.${issue.path.map(String).join(".")}`
@@ -131,7 +133,7 @@ async function runSchema(schema: StandardSchemaLike, data: unknown, prefix: stri
 
 function parseSearchParams(url: string): Record<string, string | string[]> {
 	const searchParams = new URL(url).searchParams
-	const result: Record<string, string | string[]> = {}
+	const result = dict<string | string[]>()
 	for (const [key, value] of searchParams) {
 		const existing = result[key]
 		if (existing === undefined) {
@@ -146,7 +148,7 @@ function parseSearchParams(url: string): Record<string, string | string[]> {
 }
 
 function headersToRecord(headers: Headers): Record<string, string> {
-	const result: Record<string, string> = {}
+	const result = dict<string>()
 	headers.forEach((value, key) => {
 		result[key] = value
 	})
@@ -169,7 +171,7 @@ function resolveSchema(entry: InputSchemaEntry): ResolvedSchema {
 }
 
 function formDataToRecord(formData: FormData): Record<string, unknown> {
-	const record: Record<string, unknown> = {}
+	const record = dict<unknown>()
 	formData.forEach((value, key) => {
 		if (DANGEROUS_KEYS.has(key)) return
 		record[key] = value
@@ -179,7 +181,7 @@ function formDataToRecord(formData: FormData): Record<string, unknown> {
 
 function urlEncodedToRecord(body: string): Record<string, string> {
 	const params = new URLSearchParams(body)
-	const record: Record<string, string> = {}
+	const record = dict<string>()
 	params.forEach((value, key) => {
 		if (DANGEROUS_KEYS.has(key)) return
 		record[key] = value

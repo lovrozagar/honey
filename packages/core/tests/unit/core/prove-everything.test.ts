@@ -439,10 +439,11 @@ describe("prove: middleware suite on one app", () => {
 		const { ipRestrict } = await import("../../../src/ip-restrict.ts")
 
 		const app = honey()
+			.trustProxy(1)
 			.use(requestId())
 			.use(timeout({ duration: 1_000 }))
 			.use(bodyLimit({ maxSize: 1_000 }))
-			.use(ipRestrict({ allowList: ["127.0.0.1"], trustProxy: true }))
+			.use(ipRestrict({ allowList: ["127.0.0.1"] }))
 			.post("/ping")
 			.handler((ctx) => ctx.res.json("ok", { id: ctx.req.headers.get("x-request-id") ?? "ok" }))
 

@@ -40,6 +40,14 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `accepts`: a malformed `q` counts as `q=0`.
 - i18n: with a locale set, `#` in plural messages is locale-formatted.
 - The MCP server requires `<PROJECT>_BASE_URL`.
+- Request paths are normalized before routing, and the router, scoped middleware, `ctx.path`, `staticFiles()` and `proxy()` all see the result: empty segments collapse (`//admin/x` → `/admin/x`), dot segments resolve (`%2e` counts as a dot), a backslash is a `/`, and characters a URL path cannot hold raw are percent-encoded. `ctx.path` used to be the raw path, so `ctx.path.startsWith("/admin")` missed `//admin/secret`, which still reached the `/admin/secret` handler.
+- A request path containing an encoded `/` or `\` (`%2F`, `%5C`) is 400 (`error_key: "bad_request"`, a new framework key). Opt back in with `app.encodedSlashes("allow")`.
+- Trailing-slash redirects send a relative `Location` (`/users?page=2`). It used to be absolute, built from the request URL: `http://` behind a TLS-terminating proxy, the internal host and port, or a reflected `Host`.
+- `ctx.search`, `ctx.searchAll`, `ctx.headers`, and the records `.input()` validates for `search`, `headers` and `form` have no prototype. `?__proto__=`, `?constructor=`, `?toString=` used to make `ctx.search` throw (500) or replace the validated object's prototype. Code that calls `ctx.search.hasOwnProperty(k)` must use `Object.hasOwn(ctx.search, k)` or `k in ctx.search`.
+- `ip` is a reserved context key (`ctx.ip`); `next({ ip })` and `.context({ ip })` throw.
+- `ipRestrict` reads the client address from `ctx.ip`, which `app.trustProxy()` decides; its `trustProxy` and `trustCloudflare` options are gone and throw. Rules are parsed at construction (invalid rules, `allowList: []` and a config with no list throw) and compared numerically. `X-Real-IP` is no longer read.
+- `staticFiles`: `resolve` gets the decoded path (`/my file.txt`, was `/my%20file.txt`), matched against `ctx.path` (after `stripPrefix`, was the raw URL) on whole segments; `headers(filePath)` gets the path after `rewritePath`; segments containing `:` fall through.
+- Node `serve()` answers 400 for a `Host` header that is not `host[:port]` and for request targets that are not `/path` or `http(s)://host/path`. An absolute-form target's authority is used instead of `Host`; the scheme is `https` on a TLS socket.
 
 ### Added
 
@@ -50,6 +58,9 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `RouteTree.routes`: per-route data keyed by `METHOD /pattern`, and `insertRoute`/`insertWsRoute` in `@lovrozagar/honey/tree` that place a route's leaves by pattern.
 - `createClient`: error subclasses (`BadRequestError` … `GatewayTimeoutError`) and `PathParamError`; `onAuthExpired({ rejectedToken })` (it was accepted and never called), `authHeaderName`/`authHeaderPrefix`, `redirect`, `requestId: false`, and a per-call `timeout`.
 - `ifNoneMatchHits` from `@lovrozagar/honey/etag`.
+- `app.trustProxy(false | hops | ranges)`: one setting for which reverse proxies to believe. `ctx.ip` (canonical client address from the runtime's peer: the Node socket, Bun `requestIP`, Deno `remoteAddr`, Workers `CF-Connecting-IP`) and `clientInfo(ctx)` (`ip`, `protocol`, `host`) follow it.
+- `app.encodedSlashes("allow" | "reject")`.
+- `testClient(app, { ip })` and per-request `{ ip }` set the peer address.
 
 ### Deprecated
 
@@ -70,18 +81,27 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - A non-short-circuited CORS preflight ran the chain twice; `telemetry.onResponse` fired twice for handler-thrown errors.
 - Internal routes (spec, docs, manifest) shared the default error-key set, so a scoped middleware's keys leaked into every later route.
 - `HoneyError` with an unknown status key answered with HTTP 200; it is now a 500.
+- A validation issue on a field named like an `Object.prototype` member (`{"toString": "x"}` against a record schema) answered 500 instead of 400.
+- Error i18n mutated the thrown `HoneyError` in place (a shared error instance kept the first locale's message), did not pass the locale to `{n, number}` and plural formatting, and resolved locales and field names through prototype lookups.
+- `ctx.res` headers and the Node request headers answered `get("constructor")` with a function.
+- `staticFiles` matched `/assets-private/x` under `prefix: "/assets"`, passed backslashes and trailing `/..` to `resolve`, answered 500 for malformed percent-encoding, and set headers in place on immutable responses.
+- `proxy()` could hand `destination` a path starting with `//` or containing `..%2f` segments.
 - Any `use(path, mw)`, `.input()`, an `errorFactory` with `.errors()`, or `telemetry.onMiddleware` sent every request through a slow path that rebuilt middleware arrays and error-factory subsets per request; mounting re-walked every route per scoped entry (21 s for 200 sub-apps). Chains, error subsets and telemetry wrappers are now built once.
 
 ### Security
 
 - `ipRestrict` no longer trusts `CF-Connecting-IP` by default. Off Cloudflare any client could send it and pass an allow list, or omit it and skip a deny list. A request whose IP cannot be determined is now rejected with 403 for deny-only configs too.
-- `ipRestrict({ trustProxy: true })` uses the rightmost `X-Forwarded-For` entry (the one your proxy appended) instead of the leftmost (client-controlled), and no longer reads `CF-Connecting-IP`.
+- `ipRestrict` with a proxy read the leftmost (client-controlled) `X-Forwarded-For` entry; the client is now the entry the outermost trusted proxy wrote. IPv4-mapped IPv6, ports, zones and IPv6 case no longer bypass deny rules; `10.0.0.1abc` no longer matches `10.0.0.0/8`; `/33` is an error instead of a rule that never matches.
+- On Node, the request URL was `http://${Host}${target}` without validation: `Host: x/admin/secret` routed any request to `/admin/secret`, bypassing path rules in a front proxy, and `Host: a b` turned any request into a 500. On Deno, which builds the URL the same way, `serve()` now rejects such a `Host`.
 
 ### Migration
 
 - Regenerate route trees (`honey generate`) and call `app.routeTree(routeTree)` before registering routes. A gateway keeps its catch-all: `app.routeTree(routeTree)` then `app.all("/*").proxy(...)`.
 - Code that read the router internals (`app._tree`, `tree.handlers`, handler objects at leaves) reads `RouteTree.routes` instead.
-- `ipRestrict` needs an explicit IP source and throws at construction without one. On Cloudflare, add `trustCloudflare: true`. Behind one reverse proxy, use `trustProxy: true`. Otherwise pass `getIp`.
+- `ipRestrict` reads `ctx.ip`. Behind one reverse proxy call `app.trustProxy(1)` (or list your proxies' ranges); on Cloudflare Workers `ctx.ip` already reads `CF-Connecting-IP`; elsewhere with no proxy, nothing to do. Remove `trustProxy`/`trustCloudflare` from the `ipRestrict` options.
+- Replace `ctx.search.hasOwnProperty(k)` (and the same on `ctx.headers`, validated search/form/headers records) with `Object.hasOwn(ctx.search, k)`.
+- Routes that take IDs containing `/` encoded as `%2F` need `app.encodedSlashes("allow")`.
+- A `staticFiles` resolver that decoded `filePath` itself should stop: it is decoded once already.
 - Keep the handle `use(mw)` returns: `const authed = app.use(auth); authed.get(...)`, or chain `honey().use(cors()).get(...)`. If the first request throws "returned a handle that never registers a route", that middleware never ran before this release either.
 - Middleware that caught errors from `await next()` now gets the error response instead: check `res.status` (or use `onError`).
 - If a scope like `use("/admin", auth)` should not run on 404s under `/admin` or on `/:section` routes whose value is `admin`, narrow the scope; the old behavior left those paths unguarded.

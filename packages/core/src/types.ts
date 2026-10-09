@@ -136,6 +136,7 @@ export const codeToStatusKey: Record<number, StatusKey> = Object.fromEntries(
 /** Framework error keys — centralized to prevent typo-induced silent failures */
 export const EK = {
 	bad_gateway: "bad_gateway",
+	bad_request: "bad_request",
 	content_too_large: "content_too_large",
 	forbidden: "forbidden",
 	gateway_timeout: "gateway_timeout",

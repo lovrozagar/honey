@@ -282,25 +282,16 @@ describe("bug-hunt-2: requestId edge cases", () => {
  * ────────────────────────────────────────────── */
 
 describe("bug-hunt-2: ipRestrict edge cases", () => {
-	it("empty allowList silently allows all IPs (misconfiguration)", async () => {
+	it("empty allowList is a misconfiguration and throws at construction", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: [], trustProxy: true }))
-		app.get("/secret").handler((ctx) => ctx.res.json("ok", { secret: true }))
-
-		/* with empty allowList, all IPs should be allowed (current behavior) */
-		const res = await app.fetch(
-			new Request("http://localhost/secret", {
-				headers: { "x-forwarded-for": "1.2.3.4" },
-			}),
-			{},
-		)
-		/* this documents the current behavior — empty allowList = no restriction */
-		expect(res.status).toBe(200)
+		expect(() => ipRestrict({ allowList: [] })).toThrow(/would reject every request/)
 	})
 
 	it("null IP (no headers) + allowList → blocked", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.0/8"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["10.0.0.0/8"] }))
 		app.get("/secret").handler((ctx) => ctx.res.json("ok", { secret: true }))
 
 		/* no IP headers at all → null IP → should be blocked by allowList */
@@ -310,7 +301,9 @@ describe("bug-hunt-2: ipRestrict edge cases", () => {
 
 	it("CIDR matching with /0 → allows all IPv4", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["0.0.0.0/0"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["0.0.0.0/0"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(

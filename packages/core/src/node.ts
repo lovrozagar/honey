@@ -4,7 +4,7 @@ import { Readable, type Duplex } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import type { Honey } from "./index.ts"
 import { isHoneyResponse } from "./honey-response.ts"
-import { incomingToNodeRequest } from "./node-request.ts"
+import { incomingToNodeRequest, nodeRequestUrl } from "./node-request.ts"
 
 type ServeOptions<TEnv> = {
 	env: TEnv
@@ -21,8 +21,10 @@ function asNodeWebStream(stream: ReadableStream<Uint8Array>): import("node:strea
 	return stream as unknown as import("node:stream/web").ReadableStream
 }
 
-function incomingToRequest(req: IncomingMessage): Request {
-	return incomingToNodeRequest(req)
+/** `null` when the request target or `Host` is invalid (see `nodeRequestUrl`); the caller answers 400. */
+function incomingToRequest(req: IncomingMessage): Request | null {
+	const url = nodeRequestUrl(req)
+	return url === null ? null : incomingToNodeRequest(req, url)
 }
 
 function collectNodeHeaders(response: Response, extra?: Record<string, string>): Record<string, string | string[]> {
@@ -141,6 +143,11 @@ export function serve<TEnv>(
 		inflight++
 		try {
 			const request = incomingToRequest(req)
+			if (request === null) {
+				res.writeHead(400, { connection: "close", "content-type": "text/plain" })
+				res.end("Bad Request")
+				return
+			}
 			const maybe = app.fetch(request, env)
 			const response = maybe instanceof Promise ? await maybe : maybe
 			await responseToNode(response, res)
@@ -163,6 +170,10 @@ export function serve<TEnv>(
 	server.on("upgrade", async (req: IncomingMessage, socket: Duplex, head: Buffer) => {
 		try {
 			const request = incomingToRequest(req)
+			if (request === null) {
+				socket.end("HTTP/1.1 400 Bad Request\r\nconnection: close\r\ncontent-length: 0\r\n\r\n")
+				return
+			}
 			const envWithUpgrade = { ...env, __nodeUpgrade: { head, req, socket } } as TEnv
 			const maybe = app.fetch(request, envWithUpgrade)
 			const response = maybe instanceof Promise ? await maybe : maybe

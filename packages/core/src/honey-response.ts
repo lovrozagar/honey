@@ -33,21 +33,25 @@ export class HoneyOutHeaders {
 
 	get(name: string): string | null {
 		if (this.#native) return this.#native.get(name)
-		const raw = this.#map[name.toLowerCase()]
+		const key = name.toLowerCase()
+		/* own keys only: `get("constructor")` must not return Object */
+		if (!Object.hasOwn(this.#map, key)) return null
+		const raw = this.#map[key]
 		if (raw === undefined) return null
 		return Array.isArray(raw) ? raw.join(", ") : raw
 	}
 
 	getSetCookie(): string[] {
 		if (this.#native) return this.#native.getSetCookie()
-		const raw = this.#map["set-cookie"]
+		const raw = Object.hasOwn(this.#map, "set-cookie") ? this.#map["set-cookie"] : undefined
 		if (raw === undefined) return []
 		return Array.isArray(raw) ? raw : [raw]
 	}
 
 	has(name: string): boolean {
 		if (this.#native) return this.#native.has(name)
-		return this.#map[name.toLowerCase()] !== undefined
+		const key = name.toLowerCase()
+		return Object.hasOwn(this.#map, key) && this.#map[key] !== undefined
 	}
 
 	set(name: string, value: string): void {

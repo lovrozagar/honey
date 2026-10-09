@@ -1,176 +1,29 @@
 import { namedMiddleware } from "./middleware.ts"
 import { HoneyError } from "./error.ts"
+import { ipInRange, parseIp, parseIpRange, type IpRange } from "./ip.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 import { EK, SK } from "./types.ts"
 
 type IpRestrictOptions = {
+	/** Addresses and CIDR ranges allowed through. When set, everything else is rejected. */
 	allowList?: string[]
+	/** Addresses and CIDR ranges rejected. Checked before `allowList`. */
 	denyList?: string[]
-	/** Returns the client address. Takes precedence over `trustProxy` and `trustCloudflare`. */
+	/**
+	 * Returns the client address, replacing `ctx.ip`. Leave it out to use `ctx.ip`, which the
+	 * app's `trustProxy()` setting decides — the same address every other feature sees.
+	 */
 	getIp?: (req: Request) => string | null
-	/**
-	 * Behind exactly one reverse proxy that appends the peer address to `X-Forwarded-For`
-	 * (nginx `$proxy_add_x_forwarded_for`, most load balancers): use the rightmost entry,
-	 * the one that proxy wrote, then `X-Real-IP`. Client-sent entries to the left are ignored.
-	 */
-	trustProxy?: boolean
-	/**
-	 * Read `CF-Connecting-IP`. Only safe when every request reaches the app through Cloudflare;
-	 * anywhere else a client can send the header itself.
-	 */
-	trustCloudflare?: boolean
 }
 
-function stripBrackets(ip: string): string {
-	if (ip.startsWith("[") && ip.endsWith("]")) {
-		return ip.slice(1, -1)
-	}
-	return ip
-}
-
-function cloudflareGetIp(req: Request): string | null {
-	const cfIp = req.headers.get("cf-connecting-ip")
-	if (cfIp) return stripBrackets(cfIp.trim())
-
-	return null
-}
-
-function proxyAwareGetIp(req: Request): string | null {
-	const xff = req.headers.get("x-forwarded-for")
-	if (xff) {
-		/* the rightmost entry is the one the trusted proxy appended */
-		const hops = xff.split(",")
-		const last = hops[hops.length - 1].trim()
-		if (last) return stripBrackets(last)
-	}
-
-	const realIp = req.headers.get("x-real-ip")
-	if (realIp) return stripBrackets(realIp.trim())
-
-	return null
-}
-
-function resolveGetIp(opts: IpRestrictOptions): (req: Request) => string | null {
-	if (opts.getIp) return opts.getIp
-	if (opts.trustProxy === true) return proxyAwareGetIp
-	if (opts.trustCloudflare === true) return cloudflareGetIp
-	throw new Error(
-		"ipRestrict: no client IP source. Pass `getIp`, `trustProxy: true` (behind one reverse proxy), " +
-			"or `trustCloudflare: true` (only when every request comes through Cloudflare).",
-	)
-}
-
-function parseIpv4(ip: string): number | null {
-	const parts = ip.split(".")
-	if (parts.length !== 4) return null
-	let result = 0
-	for (const part of parts) {
-		const n = Number.parseInt(part, 10)
-		if (Number.isNaN(n) || n < 0 || n > 255) return null
-		result = (result << 8) | n
-	}
-	return result >>> 0
-}
-
-type Ipv4CidrRule = {
-	base: number
-	mask: number
-	v6: false
-}
-
-type Ipv6CidrRule = {
-	base: bigint
-	mask: bigint
-	v6: true
-}
-
-type CidrRule = Ipv4CidrRule | Ipv6CidrRule
-
-type ParsedRule = {
-	cidr?: CidrRule
-	exact: string
-}
-
-function expandIpv6(ip: string): bigint | null {
-	let addr = ip
-
-	/* handle ::ffff:1.2.3.4 mapped IPv4 */
-	const v4Suffix = addr.match(/:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/)
-	if (v4Suffix) {
-		const v4 = parseIpv4(v4Suffix[1])
-		if (v4 === null) return null
-		addr = `${addr.slice(0, addr.lastIndexOf(":"))}:${((v4 >>> 16) & 0xffff).toString(16)}:${(v4 & 0xffff).toString(16)}`
-	}
-
-	/* expand :: */
-	const halves = addr.split("::")
-	if (halves.length > 2) return null
-
-	let groups: string[]
-	if (halves.length === 2) {
-		const left = halves[0] === "" ? [] : halves[0].split(":")
-		const right = halves[1] === "" ? [] : halves[1].split(":")
-		const fill = 8 - left.length - right.length
-		if (fill < 0) return null
-		groups = [...left, ...Array.from<string>({ length: fill }).fill("0"), ...right]
-	} else {
-		groups = addr.split(":")
-	}
-
-	if (groups.length !== 8) return null
-
-	let result = 0n
-	for (const g of groups) {
-		const n = Number.parseInt(g, 16)
-		if (Number.isNaN(n) || n < 0 || n > 0xffff) return null
-		result = (result << 16n) | BigInt(n)
-	}
-	return result
-}
-
-function isIpv6(ip: string): boolean {
-	return ip.includes(":")
-}
-
-function parseRule(rule: string): ParsedRule {
-	const slashIdx = rule.indexOf("/")
-	if (slashIdx === -1) {
-		return { exact: rule }
-	}
-
-	const ip = rule.slice(0, slashIdx)
-	const bits = Number.parseInt(rule.slice(slashIdx + 1), 10)
-
-	if (isIpv6(ip)) {
-		const base = expandIpv6(ip)
-		if (base === null || Number.isNaN(bits) || bits < 0 || bits > 128) {
-			return { exact: rule }
-		}
-		const mask = bits === 0 ? 0n : ((1n << BigInt(bits)) - 1n) << BigInt(128 - bits)
-		return { cidr: { base: base & mask, mask, v6: true }, exact: rule }
-	}
-
-	const base = parseIpv4(ip)
-	if (base === null || Number.isNaN(bits) || bits < 0 || bits > 32) {
-		return { exact: rule }
-	}
-
-	const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0
-	return { cidr: { base: (base & mask) >>> 0, mask, v6: false }, exact: rule }
-}
-
-function matchesRule(ip: string, rule: ParsedRule): boolean {
-	if (rule.cidr) {
-		if (rule.cidr.v6) {
-			const parsed = expandIpv6(ip)
-			if (parsed === null) return false
-			return (parsed & rule.cidr.mask) === rule.cidr.base
-		}
-		const parsed = parseIpv4(ip)
-		if (parsed === null) return false
-		return (parsed & rule.cidr.mask) >>> 0 === rule.cidr.base
-	}
-	return ip === rule.exact
+function parseRules(list: readonly string[] | undefined, name: string): IpRange[] {
+	if (list === undefined) return []
+	return list.map((rule) => {
+		const range = typeof rule === "string" ? parseIpRange(rule) : null
+		if (range === null)
+			throw new Error(`ipRestrict: ${name} entry ${JSON.stringify(rule)} is not an IP address or CIDR range`)
+		return range
+	})
 }
 
 function throwForbidden(): never {
@@ -180,34 +33,44 @@ function throwForbidden(): never {
 	})
 }
 
+/**
+ * Allows or rejects requests by client address. Rules and addresses are compared in canonical
+ * numeric form, so `::ffff:203.0.113.7`, `203.0.113.7` and `203.0.113.7:51234` are one address.
+ *
+ * Fails closed: a request whose address is unknown or unparseable is rejected with 403, under
+ * a deny list as much as under an allow list.
+ */
 export function ipRestrict(opts: IpRestrictOptions): MiddlewareFn<{ req: Request }, {}> {
-	const getIp = resolveGetIp(opts)
-	const denyRules = opts.denyList?.map(parseRule) ?? []
-	const allowRules = opts.allowList?.map(parseRule) ?? []
-	const hasAllowList = allowRules.length > 0
+	const legacy = opts as { trustCloudflare?: unknown; trustProxy?: unknown }
+	if (legacy.trustProxy !== undefined || legacy.trustCloudflare !== undefined) {
+		throw new Error(
+			"ipRestrict: `trustProxy` and `trustCloudflare` moved to the app. Call `app.trustProxy(1)` " +
+				"(one reverse proxy) or `app.trustProxy([...proxy ranges])`; on Cloudflare Workers `ctx.ip` " +
+				"already reads CF-Connecting-IP.",
+		)
+	}
+	if (opts.allowList !== undefined && opts.allowList.length === 0) {
+		throw new Error("ipRestrict: `allowList: []` would reject every request. Remove the middleware or list addresses.")
+	}
+	const denyRules = parseRules(opts.denyList, "denyList")
+	const allowRules = parseRules(opts.allowList, "allowList")
+	if (denyRules.length === 0 && allowRules.length === 0) {
+		throw new Error("ipRestrict: pass a non-empty `allowList` or `denyList`")
+	}
+	const getIp = opts.getIp
 
 	const mw: MiddlewareFn<{ req: Request }, {}> = (ctx, next) => {
-		const ip = getIp(ctx.req)
+		const raw = getIp ? getIp(ctx.req) : ((ctx as { ip?: string | null }).ip ?? null)
+		const addr = raw === null || raw === "" ? null : parseIp(raw)
 
 		/* fail closed: an unknown address can match neither list */
-		if (ip === null || ip === "") throwForbidden()
+		if (addr === null) throwForbidden()
 
-		/* deny list checked first */
 		for (const rule of denyRules) {
-			if (matchesRule(ip, rule)) throwForbidden()
+			if (ipInRange(addr, rule)) throwForbidden()
 		}
 
-		/* allow list: if set, IP must match at least one rule */
-		if (hasAllowList) {
-			let allowed = false
-			for (const rule of allowRules) {
-				if (matchesRule(ip, rule)) {
-					allowed = true
-					break
-				}
-			}
-			if (!allowed) throwForbidden()
-		}
+		if (allowRules.length > 0 && !allowRules.some((rule) => ipInRange(addr, rule))) throwForbidden()
 
 		return next()
 	}

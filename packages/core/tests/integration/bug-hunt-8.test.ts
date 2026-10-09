@@ -721,9 +721,11 @@ describe("bug-hunt-8: full middleware stack integration", () => {
  * ══════════════════════════════════════════════ */
 
 describe("bug-hunt-8: ipRestrict — X-Real-IP header", () => {
-	it("X-Real-IP used when no CF or XFF headers", async () => {
+	it("X-Real-IP is not a client address source; only X-Forwarded-For is", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.1"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["10.0.0.1"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(
@@ -732,12 +734,14 @@ describe("bug-hunt-8: ipRestrict — X-Real-IP header", () => {
 			}),
 			{},
 		)
-		expect(res.status).toBe(200)
+		expect(res.status).toBe(403)
 	})
 
 	it("trustProxy ignores a client-sent CF-Connecting-IP", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["2.2.2.2"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["2.2.2.2"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(

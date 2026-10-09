@@ -1,6 +1,8 @@
 import type { IncomingMessage } from "node:http"
 import { Readable } from "node:stream"
 import { NODE_OUTBOUND } from "./honey-response.ts"
+import { PEER_ADDRESS } from "./peer.ts"
+import { isValidHost } from "./trust.ts"
 
 /** bodyLimit uses this to swap the inbound stream without `new Request(req)`. */
 export const REPLACE_BODY = Symbol.for("honey.replaceBody")
@@ -27,7 +29,10 @@ export class NodeHeaders {
 
 	get(name: string): string | null {
 		if (this.#native) return this.#native.get(name)
-		const raw = this.#incoming.headers[name.toLowerCase()]
+		const key = name.toLowerCase()
+		const headers = this.#incoming.headers
+		if (!Object.hasOwn(headers, key)) return null
+		const raw = headers[key]
 		if (raw === undefined) return null
 		return Array.isArray(raw) ? raw.join(", ") : raw
 	}
@@ -38,7 +43,9 @@ export class NodeHeaders {
 
 	has(name: string): boolean {
 		if (this.#native) return this.#native.has(name)
-		return this.#incoming.headers[name.toLowerCase()] !== undefined
+		const key = name.toLowerCase()
+		const headers = this.#incoming.headers
+		return Object.hasOwn(headers, key) && headers[key] !== undefined
 	}
 
 	set(name: string, value: string): void {
@@ -83,6 +90,56 @@ export class NodeHeaders {
 	}
 }
 
+/** Printable ASCII with no `\`, no dot segment, no `%2e`: what a WHATWG URL parse would leave as it is. */
+function isPlainTarget(target: string): boolean {
+	if (target.charCodeAt(0) !== 47) return false
+	for (let i = 0; i < target.length; i++) {
+		const c = target.charCodeAt(i)
+		if (c <= 0x20 || c >= 0x7f || c === 92 /* \ */) return false
+		if (c === 47 && target.charCodeAt(i + 1) === 46) return false
+		if (c === 37 && target.charCodeAt(i + 1) === 50 && (target.charCodeAt(i + 2) | 0x20) === 101) return false
+	}
+	return true
+}
+
+/**
+ * The request URL from what the client actually sent: scheme from the socket (TLS or not),
+ * authority from `Host` (or from an absolute-form target, which takes precedence per RFC 9112),
+ * path and query from the request target. Anything but an origin-form (`/path`) or http(s)
+ * absolute-form target, and any `Host` that is not `host[:port]`, returns `null`: the request
+ * gets 400. A target that needs it is parsed the way `new URL()` parses it, so the path matches
+ * what Bun, Deno and Workers hand the app for the same bytes.
+ */
+export function nodeRequestUrl(incoming: IncomingMessage): string | null {
+	const scheme = (incoming.socket as { encrypted?: boolean } | null)?.encrypted === true ? "https" : "http"
+	const target = incoming.url ?? "/"
+	const hostHeader = incoming.headers.host
+	if (target.charCodeAt(0) !== 47) {
+		/* absolute-form: http://host/path */
+		const lower = target.slice(0, 8).toLowerCase()
+		if (!lower.startsWith("http://") && !lower.startsWith("https://")) return null
+		let url: URL
+		try {
+			url = new URL(target)
+		} catch {
+			return null
+		}
+		if (url.username !== "" || url.password !== "" || !isValidHost(url.host)) return null
+		return `${scheme}://${url.host}${url.pathname}${url.search}`
+	}
+	const host =
+		hostHeader === undefined || hostHeader === "" ? (incoming.httpVersion === "1.0" ? "localhost" : null) : hostHeader
+	if (host === null || !isValidHost(host)) return null
+	if (isPlainTarget(target)) return `${scheme}://${host}${target}`
+	try {
+		/* never `new URL(target, base)`: a `//x/y` target would become a host */
+		const url = new URL(`${scheme}://${host}${target}`)
+		return `${scheme}://${host}${url.pathname}${url.search}`
+	} catch {
+		return null
+	}
+}
+
 /**
  * Request-shaped wrapper around IncomingMessage. Avoids `new Request()`
  * until a body method needs the real Fetch object (formData / blob / clone).
@@ -109,10 +166,12 @@ export class NodeRequest {
 	#fetch: Request | null = null
 	#signal: AbortSignal | null = null
 
-	constructor(incoming: IncomingMessage) {
+	/** @param url the request URL; `nodeRequestUrl(incoming)` when left out (throws if that is invalid) */
+	constructor(incoming: IncomingMessage, url?: string) {
 		this.#incoming = incoming
-		const host = incoming.headers.host ?? "localhost"
-		this.url = `http://${host}${incoming.url ?? "/"}`
+		const resolved = url ?? nodeRequestUrl(incoming)
+		if (resolved === null) throw new TypeError("Invalid request target or Host header")
+		this.url = resolved
 		this.method = (incoming.method ?? "GET").toUpperCase()
 		this.headers = new NodeHeaders(incoming)
 		this.#hasBody = this.method !== "GET" && this.method !== "HEAD"
@@ -125,6 +184,11 @@ export class NodeRequest {
 			this.#webBody = Readable.toWeb(this.#incoming) as unknown as ReadableStream<Uint8Array>
 		}
 		return this.#webBody
+	}
+
+	/** The socket peer, for `ctx.ip`. */
+	get [PEER_ADDRESS](): string | null {
+		return this.#incoming.socket?.remoteAddress ?? null
 	}
 
 	get bodyUsed(): boolean {
@@ -236,6 +300,6 @@ function installRequestHasInstance(): void {
 
 installRequestHasInstance()
 
-export function incomingToNodeRequest(req: IncomingMessage): Request {
-	return new NodeRequest(req) as unknown as Request
+export function incomingToNodeRequest(req: IncomingMessage, url?: string): Request {
+	return new NodeRequest(req, url) as unknown as Request
 }

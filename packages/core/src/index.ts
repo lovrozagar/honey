@@ -1,4 +1,7 @@
 import { HoneyContext } from "./context.ts"
+import { dict } from "./dict.ts"
+import { normalizePath, pathOfUrl, searchOfUrl } from "./request-path.ts"
+import { compileTrust, hasValidHost, TRUST_OFF, type TrustProxy, type TrustSetting } from "./trust.ts"
 import { HoneyError } from "./error.ts"
 import { ERROR_META } from "./errors.ts"
 import type { ChainErrorConverter, MiddlewareFn, RuntimeMiddleware } from "./middleware.ts"
@@ -42,6 +45,7 @@ import type {
 	ComputeErrorsByStatus,
 	DefaultMeta,
 	ExtractSchemas,
+	FieldError,
 	HttpMethod,
 	InferInputMap,
 	InferOutput,
@@ -67,12 +71,14 @@ import { getOpenApiRuntime } from "./openapi/spec-factory.ts"
 import { getServeRuntime } from "./serve-slot.ts"
 import type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 
-export { HoneyContext } from "./context.ts"
+export { clientInfo, HoneyContext } from "./context.ts"
+export type { ClientInfo, TrustProxy } from "./trust.ts"
 /** HoneyContext without internal backing fields — use this for consumer-facing types */
 export type HoneyCtx<TEnv = Record<string, unknown>> = Omit<
 	import("./context.ts").HoneyContext<TEnv>,
 	| "_errorToResponse"
 	| "_isErrorResponse"
+	| "_lzClient"
 	| "_lzCookies"
 	| "_lzHeaders"
 	| "_lzSearch"
@@ -230,6 +236,8 @@ type AppSettings<TEnv = unknown> = {
 	taps: Map<string, TapFn<TEnv>> | null
 	telemetry: TelemetryAdapter | null
 	trailingSlash: "enforce" | "ignore" | "strip"
+	encodedSlashes: "allow" | "reject"
+	trust: TrustSetting
 	wsAdapter: WSAdapter | null
 }
 
@@ -252,6 +260,8 @@ function createSettings<TEnv>(): AppSettings<TEnv> {
 		taps: null,
 		telemetry: null,
 		trailingSlash: "ignore",
+		encodedSlashes: "reject",
+		trust: TRUST_OFF,
 		wsAdapter: null,
 	}
 }
@@ -427,23 +437,34 @@ function requestIsWsUpgrade(request: Request): boolean {
 	}
 }
 
-/** Find first '?' or '#' in url starting from pos */
-function findSearchOrHash(url: string, pos: number): number {
-	for (let i = pos; i < url.length; i++) {
-		const c = url.charCodeAt(i)
-		if (c === 63 || c === 35) return i
-	}
-	return -1
+/** The info object `Deno.serve` passes as the second handler argument. */
+function isDenoServeInfo(env: unknown): boolean {
+	return env !== null && typeof env === "object" && (env as { remoteAddr?: unknown }).remoteAddr !== undefined
 }
 
-/** Request pathname, without allocating a URL. */
-function pathOfUrl(rawUrl: string): string {
-	const protoEnd = rawUrl.indexOf("//")
-	const pathStart = protoEnd === -1 ? 0 : rawUrl.indexOf("/", protoEnd + 2)
-	if (pathStart === -1) return "/"
-	const searchOrHash = findSearchOrHash(rawUrl, pathStart)
-	if (searchOrHash === -1) return rawUrl.substring(pathStart)
-	return rawUrl.substring(pathStart, searchOrHash)
+/** `obj[key]` for an own key only; `undefined` for inherited names such as `constructor`. */
+function ownValue<T>(obj: Record<string, T> | undefined, key: string): T | undefined {
+	return obj !== undefined && Object.hasOwn(obj, key) ? obj[key] : undefined
+}
+
+/** A copy of `error` with a translated message and field paths; same key, status, data and cause. */
+function translatedError(
+	error: HoneyError,
+	message: string | undefined,
+	fields: Record<string, FieldError[]> | undefined,
+): HoneyError {
+	const copy = new HoneyError({
+		cause: error.cause,
+		data: error.data,
+		errorKey: error.errorKey,
+		fields: fields ?? error.fields,
+		headers: error.headers,
+		status: error.statusKey,
+		vars: error.vars,
+	})
+	copy.message = message ?? error.message
+	if (error.stack !== undefined) copy.stack = error.stack
+	return copy
 }
 
 function safeFire(fn: (() => unknown) | undefined, logger?: Logger): void {
@@ -472,6 +493,8 @@ type FetchCtx<TEnv> = {
 	plan: Plan | null
 	request: Request
 	startTime: number
+	/** the app's trustProxy() setting, read by ctx.ip and clientInfo() */
+	trust: TrustSetting
 	url: () => URL
 	/** matched websocket route, for the upgrade terminal */
 	ws: { handler: WSRouteHandler; params: Record<string, string> } | null
@@ -522,6 +545,7 @@ const FRAMEWORK_EKS = new Set<string>([
 	EK.gateway_timeout,
 	EK.bad_gateway,
 	EK.forbidden,
+	EK.bad_request,
 ])
 
 function shouldValidateOutput(mode: OutputValidationMode): boolean {
@@ -734,17 +758,21 @@ export class Honey<
 		return new HoneyError({ errorKey, status: statusKey })
 	}
 
-	/** Mutates `honeyError.message` in-place with the i18n-resolved template for its errorKey.
-	 * No-op when i18n is not configured or when no template matches. */
+	/**
+	 * The i18n-resolved copy of `honeyError`: message from the locale's template for its
+	 * errorKey, field paths from the locale's field names. Returns `honeyError` itself when
+	 * i18n is not configured or nothing matches. Never mutates it: an error instance can be
+	 * thrown again, on another request, in another locale.
+	 */
 	private async _resolveI18n(
 		honeyError: HoneyError,
 		ctx: HoneyContext<TEnv>,
 		env: TEnv,
 		request: Request,
 		log?: Logger,
-	): Promise<void> {
+	): Promise<HoneyError> {
 		const i18n = this._s.errorI18n
-		if (!i18n) return
+		if (!i18n) return honeyError
 		try {
 			const locale = await i18n.resolveLocale({
 				cookies: ctx.cookies,
@@ -754,35 +782,38 @@ export class Honey<
 				req: request,
 				search: ctx.search,
 			})
-			const translations = i18n.errors?.[locale]
-			if (translations) {
-				const template = translations[honeyError.errorKey]
-				if (template) {
-					await loadHoneyFeature("i18n")
-					honeyError.message = getI18nRuntime().interpolate(template, honeyError.vars ?? {})
-				}
+			/* the locale can come from request data: own keys only */
+			const translations = ownValue(i18n.errors, locale)
+			const template = translations ? ownValue(translations, honeyError.errorKey) : undefined
+			let message: string | undefined
+			if (template) {
+				await loadHoneyFeature("i18n")
+				message = getI18nRuntime().interpolate(template, honeyError.vars ?? {}, locale)
 			}
 
-			const fieldTranslations = i18n.fieldNames?.[locale]
+			const fieldTranslations = ownValue(i18n.fieldNames, locale)
+			let fields: Record<string, FieldError[]> | undefined
 			if (fieldTranslations && Object.keys(honeyError.fields).length > 0) {
-				for (const fieldErrors of Object.values(honeyError.fields)) {
-					for (const fe of fieldErrors) {
+				fields = dict<FieldError[]>()
+				for (const name of Object.keys(honeyError.fields)) {
+					fields[name] = honeyError.fields[name].map((fe) => {
 						let candidate = fe.path
 						while (candidate) {
-							const translated = fieldTranslations[candidate]
-							if (translated) {
-								fe.path = translated
-								break
-							}
+							const translated = ownValue(fieldTranslations, candidate)
+							if (translated) return { ...fe, path: translated }
 							const dotIdx = candidate.indexOf(".")
 							if (dotIdx === -1) break
 							candidate = candidate.slice(dotIdx + 1)
 						}
-					}
+						return fe
+					})
 				}
 			}
+			if (message === undefined && fields === undefined) return honeyError
+			return translatedError(honeyError, message, fields)
 		} catch (e) {
 			log?.warn?.({ err: e }, "i18n resolution failed")
+			return honeyError
 		}
 	}
 
@@ -853,7 +884,7 @@ export class Honey<
 				: new HoneyError({ cause: thrown, errorKey: EK.internal_server_error, status: SK.internal_server_error })
 		}
 
-		await this._resolveI18n(honeyError, ctx, env, request, log)
+		honeyError = await this._resolveI18n(honeyError, ctx, env, request, log)
 
 		if (s.onError) {
 			try {
@@ -861,8 +892,7 @@ export class Honey<
 				if (customResult instanceof HoneyError) {
 					/* user-mapped boundary error — re-run i18n against new errorKey,
 					 * then fall through to the default response path */
-					honeyError = customResult
-					await this._resolveI18n(honeyError, ctx, env, request, log)
+					honeyError = await this._resolveI18n(customResult, ctx, env, request, log)
 				} else if (customResult) {
 					safeFire(
 						() => s.telemetry?.onError?.({ duration: performance.now() - startTime, error: honeyError, method, path }),
@@ -939,6 +969,35 @@ export class Honey<
 
 	trailingSlash(mode: "enforce" | "ignore" | "strip"): this {
 		this._s.trailingSlash = mode
+		return this
+	}
+
+	/**
+	 * Request paths containing an encoded `/` or `\` (`%2F`, `%5C`) answer 400 by default.
+	 * `"allow"` keeps them encoded in the path, so they decode into a param value
+	 * (`/repos/:id` with `/repos/group%2Fproject` gives `id === "group/project"`). Only allow
+	 * them when nothing downstream (a `proxy()` upstream, a file resolver) treats a decoded
+	 * slash as a separator.
+	 */
+	encodedSlashes(mode: "allow" | "reject"): this {
+		this._s.encodedSlashes = mode
+		return this
+	}
+
+	/**
+	 * Which reverse proxies in front of the app to believe. Decides `ctx.ip`, `clientInfo()`,
+	 * `ipRestrict`, and every other feature that needs the client's address, scheme or host.
+	 *
+	 * - `false` (default): the peer address the runtime reports is the client; `X-Forwarded-*`
+	 *   headers are ignored, since any client can send them.
+	 * - a hop count: exactly that many proxies, each appending its peer to `X-Forwarded-For`
+	 *   (nginx `$proxy_add_x_forwarded_for`, most load balancers). The client is the entry the
+	 *   outermost proxy wrote.
+	 * - addresses and CIDR ranges of your proxies: hops from those addresses are skipped; the
+	 *   first other address is the client.
+	 */
+	trustProxy(value: TrustProxy): this {
+		this._s.trust = compileTrust(value)
 		return this
 	}
 
@@ -2236,7 +2295,12 @@ export class Honey<
 			this._bumpEpoch()
 		}
 		const wsAdapter = this._graph.settings.wsAdapter
-		const path = pathOfUrl(request.url)
+		const path = normalizePath(pathOfUrl(request.url), this._graph.settings.encodedSlashes)
+		if (path === null) return this._badRequestTarget()
+		/* Deno builds request.url by concatenating Host and the target, so a `Host: x/admin?` would
+		 * choose the routed path. `serve()` checks Host on Deno; this covers `Deno.serve(app.fetch)`,
+		 * which passes its serve info as env. Node's adapter checks it; Bun routes on the target. */
+		if (isDenoServeInfo(env) && !hasValidHost(request)) return this._badRequestTarget()
 		if (wsAdapter === null && !this._graph.hasWs) {
 			return this._doFetch(request, env, executionCtx, path)
 		}
@@ -2282,6 +2346,11 @@ export class Honey<
 		return pre.response
 	}
 
+	/** @internal 400 for a request path the normalization policy rejects (see `normalizePath`), or an invalid `Host`. */
+	_badRequestTarget(): Response {
+		return this._toErrorResponse(this._createError(EK.bad_request, SK.bad_request))
+	}
+
 	private trailingSlashRedirects(path: string): boolean {
 		if (path.length <= 1) return false
 		const mode = this._graph.settings.trailingSlash
@@ -2304,7 +2373,7 @@ export class Honey<
 		request: Request,
 		env: TEnv,
 		executionCtx: { waitUntil?: (p: Promise<unknown>) => void } | undefined,
-		rawPath: string,
+		fullPath: string,
 		knownWsUpgrade = false,
 		headerSnap?: Headers,
 	): Response | Promise<Response> {
@@ -2329,10 +2398,11 @@ export class Honey<
 			headerSnap,
 			log,
 			method,
-			path: rawPath,
+			path: fullPath,
 			plan: null,
 			request,
 			startTime,
+			trust: s.trust,
 			url: getUrl,
 			ws: null,
 			wsUpgrade: knownWsUpgrade,
@@ -2342,28 +2412,18 @@ export class Honey<
 			safeFire(() => s.telemetry?.onRequest?.({ env, req: request }), log)
 		}
 
-		/* trailing slash handling */
-		if (rawPath.length > 1) {
-			if (s.trailingSlash === "strip" && rawPath.endsWith("/")) {
-				const redirectUrl = getUrl()
-				redirectUrl.pathname = rawPath.slice(0, -1)
-				return new Response(null, {
-					headers: { location: redirectUrl.toString() },
-					status: 308,
-				})
-			}
-			if (s.trailingSlash === "enforce" && !rawPath.endsWith("/")) {
-				const redirectUrl = getUrl()
-				redirectUrl.pathname = `${rawPath}/`
-				return new Response(null, {
-					headers: { location: redirectUrl.toString() },
-					status: 308,
-				})
-			}
+		/* trailing slash handling — a relative Location: the scheme, host and port the client
+		 * used are the ones it keeps, whatever proxy terminated TLS in front of the app */
+		if (this.trailingSlashRedirects(fullPath)) {
+			const target = s.trailingSlash === "strip" ? fullPath.slice(0, -1) : `${fullPath}/`
+			return new Response(null, {
+				headers: { location: target + searchOfUrl(rawUrl) },
+				status: 308,
+			})
 		}
 
 		/* prefix stripping — must run AFTER trailing slash so redirects preserve the full prefixed URL */
-		const path = this.pathAfterPrefix(rawPath)
+		const path = this.pathAfterPrefix(fullPath)
 		fc.path = path
 		const root = this._graph.root
 

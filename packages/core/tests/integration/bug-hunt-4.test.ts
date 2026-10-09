@@ -618,7 +618,9 @@ describe("bug-hunt-4: CORS origin array", () => {
 describe("bug-hunt-4: ipRestrict CIDR", () => {
 	it("10.0.0.0/8 matches 10.255.255.255", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.0/8"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["10.0.0.0/8"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(
@@ -632,7 +634,9 @@ describe("bug-hunt-4: ipRestrict CIDR", () => {
 
 	it("10.0.0.0/8 rejects 11.0.0.1", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.0/8"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["10.0.0.0/8"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(
@@ -646,7 +650,9 @@ describe("bug-hunt-4: ipRestrict CIDR", () => {
 
 	it("denyList blocks specific IP", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ denyList: ["1.2.3.4"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ denyList: ["1.2.3.4"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(
@@ -660,7 +666,9 @@ describe("bug-hunt-4: ipRestrict CIDR", () => {
 
 	it("denyList allows non-matching IP", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ denyList: ["1.2.3.4"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ denyList: ["1.2.3.4"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(

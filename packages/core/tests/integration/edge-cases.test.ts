@@ -269,7 +269,9 @@ describe("edge: handler returning undefined", () => {
 
 describe("edge: IPv6 in X-Forwarded-For with brackets", () => {
 	it("bracketed IPv6 [::1] matches allowList ::1", async () => {
-		const app = honey<{}>().use(ipRestrict({ allowList: ["::1"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["::1"] }))
 		app.get("/admin").handler((ctx) => ctx.res.json("ok", { ok: true }))
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }

@@ -305,8 +305,16 @@ describe("bug-hunt: ETag middleware body reconstruction", () => {
  * ────────────────────────────────────────────── */
 
 describe("bug-hunt: route param with encoded characters", () => {
-	it("encoded slash %2F in param → decoded correctly", async () => {
+	it("encoded slash %2F in param → 400 by default", async () => {
 		const app = honey<{}>()
+		app.get("/files/:path").handler((ctx) => ctx.res.json("ok", { path: ctx.params.path }))
+
+		const res = await app.fetch(new Request("http://localhost/files/docs%2Freadme.md"), {})
+		expect(res.status).toBe(400)
+	})
+
+	it("encoded slash %2F in param → decoded correctly with encodedSlashes('allow')", async () => {
+		const app = honey<{}>().encodedSlashes("allow")
 		app.get("/files/:path").handler((ctx) => ctx.res.json("ok", { path: ctx.params.path }))
 
 		/* %2F is encoded slash — the URL parser splits on real / but param

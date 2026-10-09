@@ -215,7 +215,9 @@ describe("bug-hunt-13: handler returns non-Response truthy", () => {
 describe("bug-hunt-13: ipRestrict — IPv4 edge cases", () => {
 	it("255.255.255.255 → valid, matched by denyList", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ denyList: ["255.255.255.255"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ denyList: ["255.255.255.255"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(
@@ -227,26 +229,16 @@ describe("bug-hunt-13: ipRestrict — IPv4 edge cases", () => {
 		expect(res.status).toBe(403)
 	})
 
-	it("256.0.0.0 → invalid IP, not matched by CIDR", async () => {
+	it("256.0.0.0/8 → invalid rule, rejected at construction", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["256.0.0.0/8"], trustProxy: true }))
-		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
-
-		/* 256.0.0.0/8 is an invalid CIDR — parseIpv4 returns null for 256.
-		 * So it's treated as exact string match, not CIDR. */
-		const res = await app.fetch(
-			new Request("http://localhost/api", {
-				headers: { "x-forwarded-for": "10.0.0.1" },
-			}),
-			{},
-		)
-		/* 10.0.0.1 doesn't match "256.0.0.0/8" as exact string → blocked */
-		expect(res.status).toBe(403)
+		expect(() => ipRestrict({ allowList: ["256.0.0.0/8"] })).toThrow(/not an IP address or CIDR range/)
 	})
 
 	it("0.0.0.0 exact match → allowed", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["0.0.0.0"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["0.0.0.0"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const res = await app.fetch(
@@ -258,39 +250,21 @@ describe("bug-hunt-13: ipRestrict — IPv4 edge cases", () => {
 		expect(res.status).toBe(200)
 	})
 
-	it("malformed IP like 'abc' → not matched by CIDR, treated as exact", async () => {
+	it("malformed rule like 'abc' → rejected at construction", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ denyList: ["abc"], trustProxy: true }))
-		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
-
-		/* abc doesn't match any real IP */
-		const res = await app.fetch(
-			new Request("http://localhost/api", {
-				headers: { "x-forwarded-for": "10.0.0.1" },
-			}),
-			{},
-		)
-		expect(res.status).toBe(200)
+		expect(() => ipRestrict({ denyList: ["abc"] })).toThrow(/not an IP address or CIDR range/)
 	})
 
-	it("IPv4 with too few octets → invalid, not matched", async () => {
+	it("IPv4 rule with too few octets → rejected at construction", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0/24"], trustProxy: true }))
-		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
-
-		/* 10.0.0 has only 3 octets → parseIpv4 returns null → treated as exact */
-		const res = await app.fetch(
-			new Request("http://localhost/api", {
-				headers: { "x-forwarded-for": "10.0.0.1" },
-			}),
-			{},
-		)
-		expect(res.status).toBe(403)
+		expect(() => ipRestrict({ allowList: ["10.0.0/24"] })).toThrow(/not an IP address or CIDR range/)
 	})
 
 	it("CIDR /32 → matches single IP exactly", async () => {
 		const { ipRestrict } = await import("../../src/ip-restrict.ts")
-		const app = honey<{}>().use(ipRestrict({ allowList: ["10.0.0.5/32"], trustProxy: true }))
+		const app = honey<{}>()
+			.trustProxy(1)
+			.use(ipRestrict({ allowList: ["10.0.0.5/32"] }))
 		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
 
 		const r1 = await app.fetch(

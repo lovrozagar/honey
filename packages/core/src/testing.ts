@@ -1,8 +1,11 @@
 import type { Honey } from "./index.ts"
+import { setPeerAddress } from "./peer.ts"
 
 type TestRequestOptions = {
 	form?: Record<string, string>
 	headers?: Record<string, string>
+	/** Peer address the request comes from, as a server adapter would report it (`ctx.ip`). */
+	ip?: string
 	json?: unknown
 	search?: Record<string, string>
 }
@@ -47,6 +50,8 @@ function buildRequest(method: string, path: string, baseUrl: string, opts?: Test
 type TestClientOptions<TEnv> = {
 	cookies?: boolean
 	env: TEnv
+	/** Default peer address for every request; a per-request `ip` wins. */
+	ip?: string
 }
 
 function parseCookieName(setCookie: string): { name: string; value: string } | null {
@@ -77,6 +82,8 @@ export function testClient<TEnv>(
 		}
 
 		const req = buildRequest(method, path, baseUrl, { ...opts, headers: mergedHeaders })
+		const ip = opts?.ip ?? options.ip
+		if (ip !== undefined) setPeerAddress(req, ip)
 		const res = await app.fetch(req, options.env)
 
 		if (options.cookies) {

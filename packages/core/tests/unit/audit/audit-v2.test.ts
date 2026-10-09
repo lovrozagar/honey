@@ -72,12 +72,12 @@ describe("P0-2: SSE client parseSSEStream buffer has no size limit", () => {
 /* ------------------------------------------------------------------ */
 /*  P1-4: X-Forwarded-For trusted by default                         */
 /* ------------------------------------------------------------------ */
-describe("P1-4: ipRestrict trusts X-Forwarded-For by default", () => {
+describe("P1-4: ipRestrict ignores X-Forwarded-For by default", () => {
 	it("spoofed XFF header bypasses allowList", async () => {
 		const { ipRestrict } = await import("../../../src/ip-restrict.ts")
 
 		const app = honey()
-			.use(ipRestrict({ allowList: ["10.0.0.1"], trustCloudflare: true }))
+			.use(ipRestrict({ allowList: ["10.0.0.1"] }))
 			.get("/secret")
 			.handler((ctx) => ctx.res.json("ok", { access: "granted" }))
 
