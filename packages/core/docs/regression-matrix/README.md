@@ -11,6 +11,7 @@ against it. Each test carries its finding id in its name or in a `// regression:
 | 1–3: route model, middleware finalize, request normalization    | [ws1-3.md](ws1-3.md)   |
 | 4–8: streaming, Node/WS, realtime bus, security middleware, I/O | [ws4-8.md](ws4-8.md)   |
 | 9–12: OpenAPI, codegen, client runtimes, tooling                | [ws9-12.md](ws9-12.md) |
+| Code review of the rework (`3ab88ce..HEAD`), R1–R8              | [review.md](review.md) |
 
 ## Re-verify against 3ab88ce
 

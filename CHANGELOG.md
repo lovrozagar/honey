@@ -136,6 +136,14 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 
 ### Fixed
 
+- Scoped middleware over a non-ASCII literal (`app.use("/é", auth)`) was skipped for a request that spelled the literal with lowercase percent-escapes (`/%c3%a9`), which still reached a `/:slug` route: the scope literal is stored encoded and was compared with the decoded segment. Both sides are now decoded.
+- A sub-app mounted under a `basePath` kept its realtime routes' default namespace, so `app.route("/v1", sub)` and `app.route("/v2", sub)`, or a parent route at the sub's path, shared topics. A default namespace now follows the mounted full path; a named `namespace` is kept.
+- `logger()`: a log sink that throws on the `--> method path` line turned the request into a 500. The request line is now contained like the response line.
+- `accepts()`: a media range with parameters (`application/json;v=2;q=0`) overrode the plain range for a supported type without those parameters, answering 406 for plain JSON. A parameterized range now applies only to a type carrying the same parameters.
+- A `codegen.mergeTree` gateway whose own routes all shadowed downstream routes passed generation silently; it now fails naming the routes, like a partial overlap.
+- Realtime: a frame that arrived before the socket opened (Bun, Deno) was delivered after frames that arrived later.
+- `honey generate` aborted with `ENOENT` when a directory listed in the previous output manifest had been deleted by hand.
+- Generated Python SDK: a multipart operation called with no fields sent no body and no Content-Type; it now sends an empty multipart body.
 - Generated Python SDK: multipart uploads failed. httpx 0.28 cannot encode a list of form tuples beside files (a text field raised `TypeError`, a file alone went out with an empty body); text fields are now sent as plain multipart parts.
 - Generated Rust SDK: a bare `{ "type": "object" }` response did not compile (`HashMap` used in a resource file without an import). Map types are now written as `std::collections::HashMap` wherever they appear.
 - Generated Go CLI: a missing required flag exited 3 (network error) instead of 4 (usage); an unknown subcommand under a group printed help and exited 0. Both now exit 4 before any request is sent.
