@@ -93,7 +93,7 @@ describe("code review regressions", () => {
 	})
 
 	// regression: R2
-	it.fails("R2: one sub-app mounted twice keeps two realtime namespaces", async () => {
+	it("R2: one sub-app mounted twice keeps two realtime namespaces", async () => {
 		const { adapter, sockets } = manualAdapter({ openOnUpgrade: true })
 		const sub = honey().realtime("/chat", {
 			handler: (_c, conn) => {
@@ -114,7 +114,7 @@ describe("code review regressions", () => {
 	})
 
 	// regression: R2
-	it.fails("R2: a mounted realtime route does not share topics with the parent's route of the sub's path", async () => {
+	it("R2: a mounted realtime route does not share topics with the parent's route of the sub's path", async () => {
 		const { adapter, sockets } = manualAdapter({ openOnUpgrade: true })
 		const sub = honey().realtime("/chat", {
 			handler: (_c, conn) => {
@@ -177,7 +177,7 @@ describe("code review regressions", () => {
 	})
 
 	// regression: R5
-	it.fails("R5: a gateway whose every own route shadows a downstream route fails generation", () => {
+	it("R5: a gateway whose every own route shadows a downstream route fails generation", () => {
 		const down = honey()
 		down.get("/health").handler((c) => c.res.json("ok", { from: "down" }))
 		down.get("/users").handler((c) => c.res.json("ok", {}))

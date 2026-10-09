@@ -1761,21 +1761,27 @@ export class Honey<
 			routes[id] = { bek, ek, i, mt }
 		}
 		const own: { method: string; segments: Segment[]; id: RouteId }[] = []
-		for (const r of [...g.records.values(), ...g.wsRecords.values()]) {
+		/* every route id this app serves, root wildcards included */
+		const served = new Set<string>()
+		for (const r of [...g.records.values(), ...g.catchAll.values(), ...g.wsRecords.values()]) {
 			if ((r as RouteHandler)._skip === true) continue
 			const id = r.id as RouteId
+			served.add(id)
 			const { method, segments } = patternOf(id)
 			if (!isRootWildcard(segments)) own.push({ id, method, segments })
 		}
 		const overlap = own.filter((o) => o.id in routes)
-		/* a merge source built from this app itself (`app.toRouteTree()`) already holds every own
-		   route; only a partial overlap is a gateway route shadowing a downstream one */
-		if (overlap.length > 0 && overlap.length < own.length) {
+		/* a merge source built from this app itself (`app.toRouteTree()`) holds exactly the routes
+		   this app serves; anything else that overlaps is a gateway route shadowing a downstream
+		   one — judged by the route sets, never by how many routes overlap */
+		const sourceIds = Object.keys(routes)
+		const isSelf = own.length > 0 && overlap.length === own.length && sourceIds.every((id) => served.has(id))
+		if (overlap.length > 0 && !isSelf) {
 			throw new Error(
 				`Gateway routes are also downstream routes in the merged tree: ${overlap.map((o) => o.id).join(", ")}`,
 			)
 		}
-		if (overlap.length === own.length) own.length = 0
+		if (isSelf) own.length = 0
 		for (const { id, method, segments } of own) {
 			for (const v of leafVariants(segments)) insertLeaf(root, v, method, id)
 			routes[id] = {}
@@ -2099,7 +2105,8 @@ export class Honey<
 				if (g.realtimeRoutes.has(path)) {
 					throw new Error(`Duplicate realtime route: ${path}`)
 				}
-				g.realtimeRoutes.set(path, cfg)
+				/* a default namespace is the route's full path, so it follows the mount; a named one is kept */
+				g.realtimeRoutes.set(path, { ...cfg, namespace: cfg.namespaceExplicit ? cfg.namespace : path, path })
 			}
 			if (!g.realtimeBus && sub._graph.realtimeBus) {
 				this._setBus(sub._graph.realtimeBus)

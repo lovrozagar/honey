@@ -73,6 +73,8 @@ export type RealtimeConfig = {
 	identify: NonNullable<RealtimeRouteOpts["identify"]> | null
 	limits: Required<RealtimeLimits>
 	namespace: string
+	/** false when `namespace` is the default (the route's path), which follows the route when mounted */
+	namespaceExplicit: boolean
 	onError: NonNullable<RealtimeRouteOpts["onError"]> | null
 	path: string
 }
@@ -127,6 +129,7 @@ export function resolveRealtimeConfig<C>(path: string, routeOpts: RealtimeRouteO
 			slowConsumer: l.slowConsumer ?? DEFAULT_LIMITS.slowConsumer,
 		},
 		namespace: opts.namespace ?? path,
+		namespaceExplicit: opts.namespace !== undefined,
 		onError: opts.onError ?? null,
 		path,
 	}
