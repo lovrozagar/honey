@@ -255,3 +255,95 @@ describe("invalidation", () => {
 		expect(marks.slice(1).map(([, stale]) => stale)).toEqual([true, false, true])
 	})
 })
+
+describe("behavior spec: errors, timeouts, auth refresh, redirects", () => {
+	const spec = doc({
+		"/a": { get: { operationId: "a", responses: OK } },
+		"/b": { post: { operationId: "b", responses: OK } },
+	})
+
+	it("safe mode always returns a truthy error for a failed request, whatever the body", async () => {
+		const SDK = await load(spec)
+		const sdk = new SDK({
+			baseURL: "https://api.example.com",
+			fetch: async () =>
+				new Response("<html>bad gateway</html>", { headers: { "content-type": "text/html" }, status: 502 }),
+		})
+		const r = (await (sdk.a as () => Promise<{ error: { status?: number } | null; status: number }>)()) as {
+			error: { status?: number } | null
+			status: number
+		}
+		expect(r.status).toBe(502)
+		expect(r.error).toBeTruthy()
+		expect(r.error?.status).toBe(502)
+	})
+
+	it("the request timeout covers reading the body", async () => {
+		const SDK = await load(spec)
+		const sdk = new SDK({
+			baseURL: "https://api.example.com",
+			fetch: async (_url: string, init: RequestInit) =>
+				new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.enqueue(new TextEncoder().encode('{"a":'))
+							init.signal?.addEventListener("abort", () => controller.error(init.signal?.reason))
+						},
+					}),
+					{ headers: { "content-type": "application/json" } },
+				),
+			throwOnError: true,
+			timeout: 50,
+		})
+		const started = Date.now()
+		await expect((sdk.a as () => Promise<unknown>)()).rejects.toBeTruthy()
+		expect(Date.now() - started).toBeLessThan(2000)
+	})
+
+	it("concurrent 401s share one refresh, and the new token is used afterwards", async () => {
+		const SDK = await load(spec)
+		let refreshes = 0
+		const seen: Array<string | null> = []
+		const sdk = new SDK({
+			baseURL: "https://api.example.com",
+			fetch: async (_url: string, init: RequestInit) => {
+				const auth = new Headers(init.headers).get("authorization")
+				seen.push(auth)
+				return auth === "Bearer fresh" ? Response.json({ ok: true }) : new Response(null, { status: 401 })
+			},
+			headers: { authorization: "Bearer stale" },
+			onAuthExpired: async () => {
+				refreshes++
+				await new Promise((r) => setTimeout(r, 10))
+				return "fresh"
+			},
+		})
+		const call = sdk.a as () => Promise<{ status: number }>
+		const results = await Promise.all([call(), call(), call()])
+		expect(results.map((r) => r.status)).toEqual([200, 200, 200])
+		expect(refreshes).toBe(1)
+		const before = seen.length
+		await call()
+		/* the stored token goes out first: no 401 round trip */
+		expect(seen.slice(before)).toEqual(["Bearer fresh"])
+	})
+
+	it("redirects: same-origin by default, cross-origin returned unfollowed", async () => {
+		const SDK = await load(spec)
+		const urls: string[] = []
+		const sdk = new SDK({
+			baseURL: "https://api.example.com",
+			fetch: async (url: string) => {
+				urls.push(url)
+				if (url.endsWith("/a")) return new Response(null, { headers: { location: "/a2" }, status: 302 })
+				if (url.endsWith("/a2"))
+					return new Response(null, { headers: { location: "https://evil.example/x" }, status: 302 })
+				return Response.json({})
+			},
+			headers: { "x-api-key": "secret" },
+		})
+		const r = (await (sdk.a as () => Promise<{ status: number }>)()) as { status: number }
+		expect(urls).toEqual(["https://api.example.com/a", "https://api.example.com/a2"])
+		expect(r.status).toBe(302)
+	})
+})

@@ -2776,6 +2776,7 @@ function buildSDKTypes(
 	l.push("\tauthHeaderName?: string")
 	l.push("\tauthHeaderPrefix?: string")
 	l.push("\tonLog?: (entry: _LogEntry) => void")
+	l.push('\tredirect?: "error" | "follow" | "manual" | "same-origin"')
 	l.push("\tsortSearchParams?: boolean")
 	l.push("\tsseMaxBufferChars?: number")
 	l.push("\tstate?: Record<string, unknown>")
@@ -3650,6 +3651,8 @@ export class ${n}<TThrow extends boolean = false> {
 \t#sseMaxBufferChars: number
 \t#disposeCtrl = new AbortController()
 \t#disposed = false
+\t#refreshing: Promise<string | null> | null = null
+\t#token: string | null = null
 `
 }
 
@@ -4125,9 +4128,14 @@ function sdkClientBuildHeaders(): string {
 \t\t\t}
 \t\t}
 
+\t\t/* a token from onAuthExpired replaces the configured one until the next refresh */
+\t\tif (this.#token !== null) {
+\t\t\theaders.set(this.#config.authHeaderName ?? "Authorization", \`\${this.#config.authHeaderPrefix ?? "Bearer "}\${this.#token}\`)
+\t\t}
+
 \t\tif (opts.headers) {
 \t\t\tfor (const [k, v] of Object.entries(opts.headers)) {
-\t\t\t\theaders.set(k, v)
+\t\t\t\tif (v !== undefined) headers.set(k, v)
 \t\t\t}
 \t\t}
 
@@ -4167,7 +4175,7 @@ function sdkClientDoRequest(): string {
 \t\t\t\t\tbody: opts.json,
 \t\t\t\t\tdata: null,
 \t\t\t\t\tmessage: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
-\t\t\t\t\tresponse: Response.error(),
+\t\t\t\t\tresponse: new Response(null, { status: 0 }),
 \t\t\t\t\tstatus: 0,
 \t\t\t\t})
 \t\t\t}
@@ -4236,7 +4244,7 @@ function sdkClientDoRequest(): string {
 \t\topts: _RequestOptions,
 \t\tisRetry: boolean,
 \t\trequestMeta?: _RequestMeta,
-\t): Promise<{ response: Response }> {
+\t): Promise<{ done: () => void; response: Response }> {
 \t\tconst url = this.#buildURL(path, opts)
 \t\tconst headers = await this.#buildHeaders(opts, { method, path })
 \t\tlet body = this.#buildBody(opts, headers)
@@ -4265,7 +4273,7 @@ function sdkClientDoRequest(): string {
 
 \t\ttry {
 \t\t\tsignal?.throwIfAborted()
-\t\t\tlet response = await this.#fetchFn(url, init)
+\t\t\tlet response = await this.#send(url, init)
 
 \t\t\t/* FormData, Blob, and strings can be sent again; a stream was consumed by the first attempt */
 \t\t\tif (response.status === 401 && this.#config.onAuthExpired && !isRetry && !(body instanceof ReadableStream)) {
@@ -4273,11 +4281,12 @@ function sdkClientDoRequest(): string {
 \t\t\t\tconst authPrefix = this.#config.authHeaderPrefix ?? "Bearer "
 \t\t\t\tconst sent = new Headers(headers).get(authName)
 \t\t\t\tconst rejectedToken = sent?.startsWith(authPrefix) ? sent.slice(authPrefix.length) : (sent ?? null)
-\t\t\t\tconst newToken = await this.#config.onAuthExpired({ rejectedToken })
-\t\t\t\tif (newToken !== null && newToken !== undefined) {
+\t\t\t\tconst newToken = await this.#refreshToken(rejectedToken)
+\t\t\t\tif (newToken !== null) {
 \t\t\t\t\tconst retryHeaders = new Headers(headers)
 \t\t\t\t\tretryHeaders.set(authName, \`\${authPrefix}\${newToken}\`)
-\t\t\t\t\tresponse = await this.#fetchFn(url, { ...init, headers: retryHeaders })
+\t\t\t\t\tawait response.body?.cancel().catch(() => {})
+\t\t\t\t\tresponse = await this.#send(url, { ...init, headers: retryHeaders })
 \t\t\t\t}
 \t\t\t}
 
@@ -4301,6 +4310,7 @@ function sdkClientDoRequest(): string {
 \t\t\t\t\t\tif (body instanceof ReadableStream) throw new Error("A streamed request body cannot be sent again")
 \t\t\t\t\t\treturn this.#doRequest(method, path, opts, true, requestMeta)
 \t\t\t\t\t\t\t.then(async (r) => {
+\t\t\t\t\t\t\t\tr.done()
 \t\t\t\t\t\t\t\tif (!r.response.ok) throw await this.#parseAsClientError(r.response)
 \t\t\t\t\t\t\t\treturn r.response
 \t\t\t\t\t\t\t})
@@ -4322,8 +4332,10 @@ function sdkClientDoRequest(): string {
 \t\t\t\t}
 \t\t\t}
 
-\t\t\treturn { response }
+\t\t\t/* the caller releases the timer after reading the body: the timeout covers the whole exchange */
+\t\t\treturn { done: cleanup, response }
 \t\t} catch (err) {
+\t\t\tcleanup()
 \t\t\tconst _errStatus = typeof (err as { status?: unknown })?.status === "number" ? (err as { status: number }).status : undefined
 \t\t\tthis.#config.onLog?.({
 \t\t\t\tduration_ms: Date.now() - _logStart,
@@ -4334,8 +4346,79 @@ function sdkClientDoRequest(): string {
 \t\t\t\t...(_errStatus !== undefined ? { status: _errStatus } : {}),
 \t\t\t})
 \t\t\tthrow err
-\t\t} finally {
-\t\t\tcleanup()
+\t\t}
+\t}
+
+\t/* one refresh for every 401 in flight; the new token is kept for later requests */
+\t#refreshToken(rejectedToken: string | null): Promise<string | null> {
+\t\tconst hook = this.#config.onAuthExpired
+\t\tif (!hook) return Promise.resolve(null)
+\t\tif (rejectedToken !== null && this.#token !== null && rejectedToken !== this.#token) {
+\t\t\t/* another request already refreshed past the rejected token */
+\t\t\treturn Promise.resolve(this.#token)
+\t\t}
+\t\tthis.#refreshing ??= Promise.resolve()
+\t\t\t.then(() => hook({ rejectedToken }))
+\t\t\t.then((token) => {
+\t\t\t\tthis.#token = typeof token === "string" && token.length > 0 ? token : null
+\t\t\t\treturn this.#token
+\t\t\t})
+\t\t\t.finally(() => {
+\t\t\t\tthis.#refreshing = null
+\t\t\t})
+\t\treturn this.#refreshing
+\t}
+
+\t/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
+\t   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
+\t   follows cross-origin ones, without credentials, configured headers or a replayed body.
+\t   Browsers hide redirect targets from script, so there the platform follows. */
+\tasync #send(url: string, init: RequestInit): Promise<Response> {
+\t\tconst policy = this.#config.redirect ?? "same-origin"
+\t\tconst g = globalThis as { document?: unknown; WorkerGlobalScope?: unknown }
+\t\tconst platformFollows = typeof g.document !== "undefined" || typeof g.WorkerGlobalScope !== "undefined"
+\t\tif (policy === "manual" || policy === "error" || platformFollows) {
+\t\t\treturn this.#fetchFn(url, policy === "same-origin" ? init : { ...init, redirect: policy })
+\t\t}
+\t\tconst origin = new URL(url).origin
+\t\tlet current = new URL(url)
+\t\tlet currentInit: RequestInit = { ...init, redirect: "manual" }
+\t\tconst replayable = (b: unknown) =>
+\t\t\tb == null || typeof b === "string" || (typeof Blob !== "undefined" && b instanceof Blob) || (typeof FormData !== "undefined" && b instanceof FormData) || b instanceof URLSearchParams || b instanceof ArrayBuffer || ArrayBuffer.isView(b)
+\t\tfor (let hop = 0; ; hop++) {
+\t\t\tconst response = await this.#fetchFn(current.toString(), currentInit)
+\t\t\tconst location = response.headers.get("location")
+\t\t\tif (![301, 302, 303, 307, 308].includes(response.status) || location === null || hop >= 20) return response
+\t\t\tlet target: URL
+\t\t\ttry {
+\t\t\t\ttarget = new URL(location, current)
+\t\t\t} catch {
+\t\t\t\treturn response
+\t\t\t}
+\t\t\tif (target.protocol !== "http:" && target.protocol !== "https:") return response
+\t\t\tconst crossOrigin = target.origin !== origin
+\t\t\tif (crossOrigin && policy !== "follow") return response
+\t\t\tconst nextInit: RequestInit = { ...currentInit, headers: new Headers(currentInit.headers) }
+\t\t\tif (response.status === 307 || response.status === 308) {
+\t\t\t\tif (currentInit.body != null && (crossOrigin || !replayable(currentInit.body))) return response
+\t\t\t} else {
+\t\t\t\tconst method = (currentInit.method ?? "GET").toUpperCase()
+\t\t\t\tif (response.status === 303 ? method !== "HEAD" : method === "POST") {
+\t\t\t\t\tnextInit.method = "GET"
+\t\t\t\t\tnextInit.body = undefined
+\t\t\t\t\t;(nextInit.headers as Headers).delete("content-type")
+\t\t\t\t}
+\t\t\t}
+\t\t\tif (crossOrigin) {
+\t\t\t\tconst headers = nextInit.headers as Headers
+\t\t\t\tfor (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
+\t\t\t\theaders.delete(this.#config.authHeaderName ?? "Authorization")
+\t\t\t\tconst configured = this.#config.headers
+\t\t\t\tif (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+\t\t\t}
+\t\t\tawait response.body?.cancel().catch(() => {})
+\t\t\tcurrent = target
+\t\t\tcurrentInit = nextInit
 \t\t}
 \t}
 `
@@ -4438,11 +4521,13 @@ function sdkClientRequestThrow(): string {
 \t\topts: _RequestOptions,
 \t\trequestMeta?: _RequestMeta,
 \t): Promise<unknown> {
-\t\tconst { response } = await this.#doRequest(method, path, opts, false, requestMeta)
-\t\tif (!response.ok) {
-\t\t\tthrow await this.#parseAsClientError(response)
+\t\tconst { done, response } = await this.#doRequest(method, path, opts, false, requestMeta)
+\t\ttry {
+\t\t\tif (!response.ok) throw await this.#parseAsClientError(response)
+\t\t\treturn await this.#parseBody(response)
+\t\t} finally {
+\t\t\tdone()
 \t\t}
-\t\treturn this.#parseBody(response)
 \t}
 `
 }
@@ -4460,33 +4545,34 @@ function sdkClientRequestSafe(): string {
 \t\tresponse: Response
 \t\tstatus: number
 \t}> {
-\t\tlet doResponse: { response: Response }
+\t\tlet doResponse: { done: () => void; response: Response }
 \t\ttry {
 \t\t\tdoResponse = await this.#doRequest(method, path, opts, false, requestMeta)
 \t\t} catch (e) {
 \t\t\tif (e instanceof _ClientError) return { data: null, error: e, response: e.response, status: e.status }
 \t\t\tthrow e
 \t\t}
-\t\tconst { response } = doResponse
-
-\t\tif (!response.ok) {
-\t\t\tconst preserved = response.clone()
-\t\t\tconst error = await this.#parseErrorBody(response)
-\t\t\treturn {
-\t\t\t\tdata: null,
-\t\t\t\terror,
-\t\t\t\tresponse: preserved,
-\t\t\t\tstatus: response.status,
-\t\t\t}
-\t\t}
-
-\t\tlet data: unknown
+\t\tconst { done, response } = doResponse
 \t\ttry {
-\t\t\tdata = await this.#parseBody(response)
-\t\t} catch (e) {
-\t\t\treturn { data: null, error: e, response, status: response.status }
+\t\t\tif (!response.ok) {
+\t\t\t\tconst preserved = response.clone()
+\t\t\t\tconst parsed = await this.#parseErrorBody(response)
+\t\t\t\t/* a failed request always has a truthy error: the JSON body, or a ClientError for any other body */
+\t\t\t\tconst error = parsed !== undefined && parsed !== null && parsed !== false && parsed !== "" && parsed !== 0
+\t\t\t\t\t? parsed
+\t\t\t\t\t: await this.#parseAsClientError(preserved.clone())
+\t\t\t\treturn { data: null, error, response: preserved, status: response.status }
+\t\t\t}
+\t\t\tlet data: unknown
+\t\t\ttry {
+\t\t\t\tdata = await this.#parseBody(response)
+\t\t\t} catch (e) {
+\t\t\t\treturn { data: null, error: e, response, status: response.status }
+\t\t\t}
+\t\t\treturn { data, error: null, response, status: response.status }
+\t\t} finally {
+\t\t\tdone()
 \t\t}
-\t\treturn { data, error: null, response, status: response.status }
 \t}
 `
 }

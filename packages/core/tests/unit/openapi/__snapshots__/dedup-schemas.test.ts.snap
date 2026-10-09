@@ -49,6 +49,7 @@ export type SDKConfig<TThrow extends boolean = false> = {
 	authHeaderName?: string
 	authHeaderPrefix?: string
 	onLog?: (entry: _LogEntry) => void
+	redirect?: "error" | "follow" | "manual" | "same-origin"
 	sortSearchParams?: boolean
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
