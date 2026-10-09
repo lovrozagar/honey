@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { generateTypes } from "../../../src/codegen.ts"
@@ -163,5 +163,77 @@ describe("entries", () => {
 		)
 		const result = await extractBaseCtx({ entryPath, exportName: "default" })
 		expect(result.envType).toContain("KEY")
+	})
+})
+
+describe("ambient global types are written by name", () => {
+	// regression: 0.7.0 inlined Cloudflare.Env (wrangler's ambient worker-configuration.d.ts) structurally;
+	// generic methods and overloads were lost, so `env.BUCKET` was no longer an R2Bucket
+	it.fails("env typed with an ambient namespace type stays Cloudflare.Env and keeps R2Bucket assignable", async () => {
+		const ambient = readFileSync(
+			resolve(import.meta.dirname, "../../fixtures/ambient-env/worker-configuration.d.ts"),
+			"utf8",
+		)
+		write("ambient/worker-configuration.d.ts", ambient)
+		write(
+			"ambient/tsconfig.json",
+			JSON.stringify({
+				compilerOptions: {
+					module: "ESNext",
+					moduleResolution: "Bundler",
+					noEmit: true,
+					strict: true,
+					target: "ES2022",
+					types: ["./worker-configuration.d.ts"],
+				},
+			}),
+		)
+		const entryPath = write(
+			"ambient/app.ts",
+			lines('import { honey } from "@lovrozagar/honey"', "export const app = honey<Cloudflare.Env>()"),
+		)
+		const { envType } = await extractBaseCtx({ entryPath, exportName: "app", outputDir: join(ROOT, "ambient") })
+		expect(envType).toBe("Cloudflare.Env")
+
+		/* a consumer compiled strictly (no skipLibCheck) against the extracted type */
+		write("ambient/gen.d.ts", `export type Env = ${envType}\n`)
+		const usePath = write(
+			"ambient/use.ts",
+			lines(
+				'import type { Env } from "./gen"',
+				"export function bucket(env: Env): R2Bucket {",
+				"\treturn env.BUCKET",
+				"}",
+			),
+		)
+		const ts = await import("typescript")
+		const program = ts.createProgram([usePath, join(ROOT, "ambient/worker-configuration.d.ts")], {
+			lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
+			module: ts.ModuleKind.ESNext,
+			moduleResolution: ts.ModuleResolutionKind.Bundler,
+			noEmit: true,
+			skipLibCheck: false,
+			strict: true,
+			target: ts.ScriptTarget.ES2022,
+			types: [],
+		})
+		const errors = ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))
+		expect(errors).toEqual([])
+	})
+	// regression: a generic method's type parameter inside another type (`Promise<T>`) was written as `unknown`
+	it.fails("a generic method keeps its type parameter inside the return type", async () => {
+		const entryPath = write(
+			"generic-method/app.ts",
+			lines(
+				'import { createMiddleware, honey } from "@lovrozagar/honey"',
+				"const store = createMiddleware((_c, next) =>",
+				"\tnext({ store: { read: <T,>(key: string): Promise<T[]> => Promise.resolve([] as T[]) } }),",
+				")",
+				"export const app = honey<{}>().use(store)",
+				'app.get("/x").handler((c) => c.res.json("ok", {}))',
+			),
+		)
+		const { middlewareType } = await extractBaseCtx({ entryPath, exportName: "app" })
+		expect(middlewareType).toContain("read: <T>(key: string) => Promise<T[]>")
 	})
 })
