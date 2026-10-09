@@ -130,7 +130,7 @@ describe("0.7.2 regressions", () => {
 	})
 
 	// regression: V072-4 — the SDK document was built without the configured security schemes
-	it.fails("V072-4: a scheme declared in the openApi config is not reported as undeclared by the SDK step", async () => {
+	it("V072-4: a scheme declared in the openApi config is not reported as undeclared by the SDK step", async () => {
 		const dir = project("sdk-schemes", {
 			"src/app.ts": [
 				'import { honey } from "@lovrozagar/honey"',

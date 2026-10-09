@@ -533,9 +533,24 @@ export async function generateAndWrite(
 	const unfilteredSpec = (what: string): Promise<OpenApiSpecInput> => {
 		if (!app) throw new Error(`${what} generation requires a configured app`)
 		const primaryOA = cg.openApi && cg.openApi.length > 0 ? cg.openApi[0] : null
+		/* routes name schemes the openApi outputs declare; checked against all of them, so a declared
+		   scheme is not reported as missing. The document the SDK reads stays without them, as it
+		   always was, so generated SDK auth does not change. */
+		const schemes: Record<string, unknown> = {}
+		for (const entry of cg.openApi || []) {
+			for (const [name, scheme] of Object.entries(entry.securitySchemes ?? {})) {
+				if (!Object.hasOwn(schemes, name)) schemes[name] = scheme
+			}
+		}
+		const declared = Object.keys(schemes).length > 0
 		unfiltered ??= generateOpenApi(app, {
 			info: primaryOA ? { title: primaryOA.title, version: primaryOA.version } : { title: "API", version: "1.0.0" },
 			invalidate: primaryOA ? "off" : cg.invalidate,
+			...(declared ? { securitySchemes: schemes } : {}),
+		}).then((spec) => {
+			if (!declared || !spec.components?.securitySchemes) return spec
+			const { securitySchemes: _schemes, ...components } = spec.components
+			return { ...spec, components }
 		})
 		return unfiltered
 	}
