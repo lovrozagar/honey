@@ -4,7 +4,7 @@ import { bodyLimit } from "../../src/body-limit.ts"
 import { cors } from "../../src/cors.ts"
 import { csrf } from "../../src/csrf.ts"
 import { etag } from "../../src/etag.ts"
-import { createMiddleware, honey } from "../../src/index.ts"
+import { createMiddleware, honey, toFetchRequest } from "../../src/index.ts"
 import { ipRestrict } from "../../src/ip-restrict.ts"
 import { type HoneyServer, serve } from "../../src/node.ts"
 import { timeout } from "../../src/timeout.ts"
@@ -321,7 +321,8 @@ describe("edge: middleware next() reserved key protection", () => {
 		const app = honey<{}>().use(evilMw)
 		app.get("/test").handler((ctx) =>
 			ctx.res.json("ok", {
-				isRequest: (ctx as unknown as { req: unknown }).req instanceof Request,
+				/* on Node ctx.req is honey's Request view; toFetchRequest() gives the Fetch Request */
+				isRequest: toFetchRequest((ctx as unknown as { req: Request }).req) instanceof Request,
 				type: typeof (ctx as unknown as { req: unknown }).req,
 			}),
 		)

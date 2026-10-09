@@ -403,7 +403,8 @@ describe("Honey .ws() integration", () => {
 
 		fireClose(1001, "going away")
 
-		expect(closeCalls).toHaveLength(1)
+		/* events run on the connection's ordered queue, after whatever came before them */
+		await vi.waitFor(() => expect(closeCalls).toHaveLength(1))
 		expect(closeCalls[0].code).toBe(1001)
 		expect(closeCalls[0].reason).toBe("going away")
 	})

@@ -43,7 +43,57 @@ describe("denoWebSocket adapter", () => {
 		adapter.upgrade(req, {}, handler)
 
 		const denoNs = (globalThis as Record<string, unknown>).Deno as Record<string, unknown>
-		expect(denoNs.upgradeWebSocket).toHaveBeenCalledWith(req)
+		/* Deno pings idle sockets itself: the shared idleTimeout goes over in seconds */
+		expect(denoNs.upgradeWebSocket).toHaveBeenCalledWith(req, { idleTimeout: 120 })
+		cleanupDenoGlobal()
+	})
+
+	it("passes the chosen subprotocol and sets binaryType to arraybuffer", () => {
+		const { rawSocket } = mockDenoGlobal()
+		const adapter = denoWebSocket({ idleTimeout: 0 })
+		const req = new Request("http://localhost/ws", { headers: { "sec-websocket-protocol": "a, b" } })
+		adapter.upgrade(req, {}, {})
+		const denoNs = (globalThis as Record<string, unknown>).Deno as Record<string, unknown>
+		expect(denoNs.upgradeWebSocket).toHaveBeenCalledWith(req, { protocol: "a" })
+		expect((rawSocket as { binaryType?: string }).binaryType).toBe("arraybuffer")
+		cleanupDenoGlobal()
+	})
+
+	it("preUpgrade holds frames that arrive before the handler is bound, then delivers them in order", () => {
+		const { emit } = mockDenoGlobal()
+		const adapter = denoWebSocket()
+		const req = new Request("http://localhost/ws")
+		adapter.preUpgrade?.(req)
+		emit("open")
+		emit("message", { data: "first" })
+		emit("message", { data: "second" })
+		const seen: string[] = []
+		adapter.upgrade(
+			req,
+			{},
+			{
+				onMessage: (_c, _ws, data) => {
+					seen.push(String(data))
+				},
+				onOpen: () => {
+					seen.push("open")
+				},
+			},
+		)
+		expect(seen).toEqual(["open", "first", "second"])
+		emit("message", { data: "third" })
+		expect(seen).toEqual(["open", "first", "second", "third"])
+		cleanupDenoGlobal()
+	})
+
+	it("closes with 1009 on a message over maxPayload", () => {
+		const { emit, rawSocket } = mockDenoGlobal()
+		const adapter = denoWebSocket({ maxPayload: 4 })
+		const onMessage = vi.fn()
+		adapter.upgrade(new Request("http://localhost/ws"), {}, { onMessage })
+		emit("message", { data: "12345" })
+		expect(onMessage).not.toHaveBeenCalled()
+		expect(rawSocket.close).toHaveBeenCalledWith(1009, "message too big")
 		cleanupDenoGlobal()
 	})
 

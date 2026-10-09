@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-type PongCb = () => void
-type CloseCb = (code: number, reason: Buffer) => void
-type ErrorCb = (err: unknown) => void
 type MessageCb = (data: Buffer | ArrayBuffer | Buffer[], isBinary: boolean) => void
 
 type FakeWS = {
@@ -12,6 +9,12 @@ type FakeWS = {
 	ping: ReturnType<typeof vi.fn>
 	readyState: number
 	send: ReturnType<typeof vi.fn>
+	terminate: ReturnType<typeof vi.fn>
+}
+
+/** Call every listener for `event`, as an EventEmitter would. */
+function fire(ws: FakeWS, event: string, ...args: unknown[]): void {
+	for (const cb of ws._listeners[event] ?? []) cb(...args)
 }
 
 function createFakeWS(): FakeWS {
@@ -26,14 +29,22 @@ function createFakeWS(): FakeWS {
 		ping: vi.fn(),
 		readyState: 1,
 		send: vi.fn(),
+		terminate: vi.fn(),
 	}
 }
 
 let fakeWS: FakeWS
+type ServerOpts = { handleProtocols(p: Set<string>, req: unknown): string | false; maxPayload: number }
+let serverOpts: ServerOpts | null = null
+let chosenProtocol: string | false | null = null
 
 vi.mock("ws", () => ({
 	WebSocketServer: class {
+		constructor(opts: ServerOpts) {
+			serverOpts = opts
+		}
 		handleUpgrade(_req: unknown, _socket: unknown, _head: unknown, cb: (ws: FakeWS) => void) {
+			chosenProtocol = serverOpts?.handleProtocols(new Set(["graphql-ws", "json"]), _req) ?? null
 			cb(fakeWS)
 		}
 	},
@@ -134,8 +145,7 @@ describe("nodeWebSocket", () => {
 			onClose,
 		})
 
-		const closeCb = fakeWS._listeners["close"]?.[0] as CloseCb
-		closeCb(1000, Buffer.from("normal"))
+		fire(fakeWS, "close", 1000, Buffer.from("normal"))
 
 		expect(onClose).toHaveBeenCalledWith(undefined, expect.anything(), 1000, "normal")
 	})
@@ -148,9 +158,8 @@ describe("nodeWebSocket", () => {
 			onError,
 		})
 
-		const errorCb = fakeWS._listeners["error"]?.[0] as ErrorCb
 		const err = new Error("test")
-		errorCb(err)
+		fire(fakeWS, "error", err)
 
 		expect(onError).toHaveBeenCalledWith(undefined, expect.anything(), err)
 	})
@@ -165,15 +174,15 @@ describe("nodeWebSocket", () => {
 		expect(fakeWS.ping).toHaveBeenCalledTimes(1)
 
 		/* pong received → clears timeout */
-		const pongCb = fakeWS._listeners["pong"]?.[0] as PongCb
-		pongCb()
+		fire(fakeWS, "pong")
 
 		/* no close should be called */
 		vi.advanceTimersByTime(500)
 		expect(fakeWS.close).not.toHaveBeenCalled()
+		expect(fakeWS.terminate).not.toHaveBeenCalled()
 	})
 
-	it("keepalive: no pong → close(1001)", async () => {
+	it("keepalive: no pong → terminate()", async () => {
 		const adapter = await getAdapter({ interval: 1000, timeout: 500 })
 
 		await adapter.upgrade(new Request("http://localhost/ws"), makeEnv(), {})
@@ -182,9 +191,9 @@ describe("nodeWebSocket", () => {
 		vi.advanceTimersByTime(1000)
 		expect(fakeWS.ping).toHaveBeenCalledTimes(1)
 
-		/* no pong, wait for timeout */
+		/* no pong, wait for timeout: a dead peer never answers a close handshake */
 		vi.advanceTimersByTime(500)
-		expect(fakeWS.close).toHaveBeenCalledWith(1001, "keepalive timeout")
+		expect(fakeWS.terminate).toHaveBeenCalledTimes(1)
 	})
 
 	it("response has status 101", async () => {
@@ -204,5 +213,103 @@ describe("nodeWebSocket", () => {
 		})
 
 		expect(onOpen).toHaveBeenCalledWith(undefined, expect.anything())
+	})
+
+	it("creates the server with a 1 MiB maxPayload by default, configurable", async () => {
+		const { nodeWebSocket } = await import("../../../src/ws/node.ts")
+		await nodeWebSocket().upgrade(new Request("http://localhost/ws"), makeEnv(), {})
+		expect(serverOpts?.maxPayload).toBe(1024 * 1024)
+		await nodeWebSocket({ maxPayload: 4096 }).upgrade(new Request("http://localhost/ws"), makeEnv(), {})
+		expect(serverOpts?.maxPayload).toBe(4096)
+	})
+
+	it("selects the first offered subprotocol by default, or the one `protocol` picks", async () => {
+		const { nodeWebSocket } = await import("../../../src/ws/node.ts")
+		const offer = { headers: { "sec-websocket-protocol": "graphql-ws, json" } }
+		await nodeWebSocket().upgrade(new Request("http://localhost/ws", offer), makeEnv(), {})
+		expect(chosenProtocol).toBe("graphql-ws")
+		await nodeWebSocket({ protocol: (offered) => offered.at(-1) }).upgrade(
+			new Request("http://localhost/ws", offer),
+			makeEnv(),
+			{},
+		)
+		expect(chosenProtocol).toBe("json")
+		/* a choice the client did not offer is never sent */
+		await nodeWebSocket({ protocol: () => "other" }).upgrade(new Request("http://localhost/ws", offer), makeEnv(), {})
+		expect(chosenProtocol).toBe(false)
+	})
+
+	it("marks the upgrade done before calling back, so serve() never writes HTTP onto the socket", async () => {
+		const adapter = await getAdapter()
+		const env = makeEnv() as { __nodeUpgrade: { upgraded?: boolean } }
+		let seen: boolean | undefined
+		await adapter.upgrade(new Request("http://localhost/ws"), env, {
+			onOpen() {
+				seen = env.__nodeUpgrade.upgraded
+			},
+		})
+		expect(seen).toBe(true)
+	})
+
+	it("contains a throwing handler instead of throwing into ws", async () => {
+		const adapter = await getAdapter()
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {})
+		await expect(
+			adapter.upgrade(new Request("http://localhost/ws"), makeEnv(), {
+				onMessage() {
+					throw new Error("boom")
+				},
+				onOpen() {
+					throw new Error("boom")
+				},
+			}),
+		).resolves.toMatchObject({ response: { status: 101 } })
+		expect(() => fire(fakeWS, "message", Buffer.from("x"), false)).not.toThrow()
+		await vi.waitFor(() => expect(errors).toHaveBeenCalled())
+		errors.mockRestore()
+	})
+
+	it("keepalive keeps one pong outstanding: a slow pong never stacks timers", async () => {
+		const adapter = await getAdapter({ interval: 100, timeout: 250 })
+		await adapter.upgrade(new Request("http://localhost/ws"), makeEnv(), {})
+		vi.advanceTimersByTime(200)
+		/* the second tick finds a pong still pending and does not ping again */
+		expect(fakeWS.ping).toHaveBeenCalledTimes(1)
+		fire(fakeWS, "pong")
+		vi.advanceTimersByTime(300)
+		expect(fakeWS.terminate).not.toHaveBeenCalled()
+	})
+
+	it("idleTimeout pings a quiet peer, then terminates it", async () => {
+		const { nodeWebSocket } = await import("../../../src/ws/node.ts")
+		await nodeWebSocket({ idleTimeout: 1000 }).upgrade(new Request("http://localhost/ws"), makeEnv(), {})
+		vi.advanceTimersByTime(500)
+		expect(fakeWS.ping).toHaveBeenCalledTimes(1)
+		vi.advanceTimersByTime(500)
+		expect(fakeWS.terminate).toHaveBeenCalledTimes(1)
+	})
+
+	it("traffic resets the idle clock", async () => {
+		const { nodeWebSocket } = await import("../../../src/ws/node.ts")
+		await nodeWebSocket({ idleTimeout: 1000 }).upgrade(new Request("http://localhost/ws"), makeEnv(), {})
+		for (let i = 0; i < 5; i++) {
+			vi.advanceTimersByTime(400)
+			fire(fakeWS, "pong")
+		}
+		expect(fakeWS.terminate).not.toHaveBeenCalled()
+	})
+
+	it("closeAll closes every open socket", async () => {
+		const adapter = await getAdapter()
+		await adapter.upgrade(new Request("http://localhost/ws"), makeEnv(), {})
+		adapter.closeAll?.(1001, "server shutting down")
+		expect(fakeWS.close).toHaveBeenCalledWith(1001, "server shutting down")
+	})
+
+	it("rejects invalid options at construction", async () => {
+		const { nodeWebSocket } = await import("../../../src/ws/node.ts")
+		expect(() => nodeWebSocket({ maxPayload: -1 })).toThrow(TypeError)
+		expect(() => nodeWebSocket({ backpressurePolicy: "pause" as never })).toThrow(TypeError)
+		expect(() => nodeWebSocket({ keepalive: { interval: 0, timeout: 1 } })).toThrow(TypeError)
 	})
 })

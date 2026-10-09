@@ -1,5 +1,5 @@
 import { bodyKind, headResponse, isProducedStream, rawBodyOf } from "./body-kind.ts"
-import { HoneyContext } from "./context.ts"
+import { clientInfo, HoneyContext } from "./context.ts"
 import { dict } from "./dict.ts"
 import { normalizePath, pathOfUrl, searchOfUrl } from "./request-path.ts"
 import { compileTrust, hasValidHost, TRUST_OFF, type TrustProxy, type TrustSetting } from "./trust.ts"
@@ -66,6 +66,8 @@ import type {
 import { codeToStatusKey, EK, EMPTY_OBJ, SK } from "./types.ts"
 import { assertBodySchemaAllowed, assertRequestContentType, validateInput, validateOutput } from "./validation.ts"
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts"
+import { createEventQueue, invokeUser, type InvokeLogger } from "./invoke-user.ts"
+import { originAllowed, type WSOriginPolicy, validateOriginPolicy } from "./ws-origin.ts"
 import { loadHoneyFeature } from "./feature-load.ts"
 import { getI18nRuntime } from "./i18n-slot.ts"
 import { bindInternalHandler, epochCached, getOpenApiRuntime } from "./openapi/spec-factory.ts"
@@ -75,6 +77,8 @@ import { getServeRuntime } from "./serve-slot.ts"
 import type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 
 export { clientInfo, HoneyContext } from "./context.ts"
+export { toFetchRequest } from "./fetch-request.ts"
+export type { WSOriginPolicy } from "./ws-origin.ts"
 export type { ClientInfo, TrustProxy } from "./trust.ts"
 /** HoneyContext without internal backing fields — use this for consumer-facing types */
 export type HoneyCtx<TEnv = Record<string, unknown>> = Omit<
@@ -153,7 +157,7 @@ export type {
 	StatusKey,
 	SuccessStatusKey,
 } from "./types.ts"
-export type { WSAdapter, WSContext, WSHandler, WSPreUpgrade } from "./ws/cloudflare.ts"
+export type { WSAdapter, WSAdapterOptions, WSContext, WSHandler, WSPreUpgrade } from "./ws/cloudflare.ts"
 export type { ConnContext, RealtimeLimits, RealtimeRouteOpts } from "./realtime/route.ts"
 export type { RealtimePublisher } from "./realtime/server.ts"
 export type { RealtimeBus } from "./realtime/bus.ts"
@@ -427,6 +431,9 @@ function isRootWildcard(segments: readonly Segment[]): boolean {
 }
 
 const EMPTY_PARAMS = EMPTY_OBJ as Record<string, string>
+
+/** Messages one websocket connection may have waiting for its handler; more close it with 1008. */
+const WS_PENDING_MAX = 1024
 
 function requestIsWsUpgrade(request: Request): boolean {
 	try {
@@ -2207,6 +2214,7 @@ export class Honey<
 			inputSchemas: null,
 			meta: this._chainMeta ? { ...this._chainMeta } : null,
 			middlewares: [],
+			origins: null,
 			parent: this,
 			path: fullPath,
 			pending,
@@ -2267,17 +2275,26 @@ export class Honey<
 		 * choose the routed path. `serve()` checks Host on Deno; this covers `Deno.serve(app.fetch)`,
 		 * which passes its serve info as env. Node's adapter checks it; Bun routes on the target. */
 		if (isDenoServeInfo(env) && !hasValidHost(request)) return this._badRequestTarget()
-		if (wsAdapter === null && !this._graph.hasWs) {
+		/* an adapter alone (serve() always installs one) does not need the websocket path */
+		if (!this._graph.hasWs) {
 			return this._doFetch(request, env, executionCtx, path)
 		}
 		const isWsUpgrade = request.headers.get("upgrade")?.toLowerCase() === "websocket"
-		const headerSnap = isWsUpgrade ? new Headers(request.headers) : undefined
 		const canPreUpgrade =
 			isWsUpgrade &&
 			wsAdapter?.preUpgrade !== undefined &&
 			!this.trailingSlashRedirects(path) &&
 			this._matchWs(this._finalize(), this.pathAfterPrefix(path)) !== null
-		const pre = canPreUpgrade ? wsAdapter?.preUpgrade?.(request) : undefined
+		/* Deno closes the Request in preUpgrade: snapshot the headers the chain will read first */
+		const headerSnap = canPreUpgrade ? new Headers(request.headers) : undefined
+		let pre: ReturnType<NonNullable<WSAdapter["preUpgrade"]>>
+		try {
+			pre = canPreUpgrade ? wsAdapter?.preUpgrade?.(request) : undefined
+		} catch (err) {
+			/* the runtime refused the handshake: answer through the normal path, which fails the upgrade */
+			this._graph.settings.logger?.warn?.({ err }, "websocket preUpgrade failed")
+			pre = undefined
+		}
 		/* After Deno.upgradeWebSocket the Request is closed. A sync throw here
 		 * used to be boxed by async _doFetch; keep 101 returning either way. */
 		let work: Response | Promise<Response>
@@ -2541,13 +2558,33 @@ export class Honey<
 		return plan.run(ctx)
 	}
 
-	/** Terminal of a websocket route's chain: upgrade and wire the handler. */
+	/** Reject a cross-origin upgrade the route's origin policy does not allow (403). */
+	private _checkWsOrigin(finalCtx: HoneyContext<TEnv>, policy: WSOriginPolicy | null): void {
+		const headers = finalCtx.req.headers
+		const origin = headers.get("origin")
+		if (origin === null || policy === "*") return
+		const credentialed = headers.has("cookie") || headers.has("authorization")
+		if (!originAllowed(policy, origin, clientInfo(finalCtx as unknown as HoneyContext).host, credentialed)) {
+			throw this._createError(EK.forbidden, SK.forbidden)
+		}
+	}
+
+	/**
+	 * Terminal of a websocket route's chain: check the origin, upgrade, and wire the handler.
+	 * Every callback runs on one ordered queue per connection (open, each message, close), each
+	 * awaited and contained: a throw or rejection goes to `onError`, or to the app logger when
+	 * there is none or it throws itself, and never into the runtime.
+	 */
 	private async _wsUpgrade(finalCtx: HoneyContext<TEnv>): Promise<Response> {
 		const fc = finalCtx._rq as FetchCtx<TEnv>
 		const wsMatch = fc.ws as { handler: WSRouteHandler; params: Record<string, string> }
+		this._checkWsOrigin(finalCtx, wsMatch.handler.og ?? null)
 		const wsAdapter = this._graph.settings.wsAdapter as WSAdapter
 		const userHandler = wsMatch.handler.fn
-		let messageQueue: Promise<void> = Promise.resolve()
+		const log = (this._graph.settings.logger ?? null) as InvokeLogger | null
+		const route = wsMatch.handler.rp
+		const queue = createEventQueue()
+		let pending = 0
 
 		const onOpenFn = userHandler.onOpen
 		const onMsgFn = userHandler.onMessage
@@ -2556,38 +2593,48 @@ export class Honey<
 		const onReconnectFn = userHandler.onReconnect
 		const reconnectToken = fc.url().searchParams.get("reconnect_token")
 
-		const wrappedHandler: WSHandler<unknown> = {}
+		const run = (phase: string, ws: WSContext, fn: () => unknown): Promise<unknown> =>
+			invokeUser(fn, {
+				fields: { route },
+				log,
+				onError: onErrorFn ? (err) => onErrorFn(finalCtx, ws, err) : null,
+				phase: `websocket ${phase}`,
+			})
 
-		if (reconnectToken && onReconnectFn) {
-			wrappedHandler.onOpen = (_ctx, ws) => {
-				onReconnectFn(finalCtx, ws, reconnectToken)
-			}
-		} else if (onOpenFn) {
-			wrappedHandler.onOpen = (_ctx, ws) => {
-				onOpenFn(finalCtx, ws)
-			}
-		}
-
-		if (onMsgFn) {
-			wrappedHandler.onMessage = (_ctx, ws, data) => {
-				messageQueue = messageQueue
-					.then(() => onMsgFn(finalCtx, ws, data))
-					.catch((err: unknown) => {
-						onErrorFn?.(finalCtx, ws, err)
-					})
-			}
-		}
-
-		if (onCloseFn) {
-			wrappedHandler.onClose = (_ctx, ws, code, reason) => {
-				onCloseFn(finalCtx, ws, code, reason)
-			}
-		}
-
-		if (onErrorFn) {
-			wrappedHandler.onError = (_ctx, ws, error) => {
-				onErrorFn(finalCtx, ws, error)
-			}
+		const wrappedHandler: WSHandler<unknown> = {
+			onClose: (_ctx, ws, code, reason) => {
+				if (onCloseFn) void queue.push(() => run("close", ws, () => onCloseFn(finalCtx, ws, code, reason)))
+			},
+			/* a transport error: tell onError once; if onError throws, that is logged */
+			onError: (_ctx, ws, error) => {
+				void queue.push(() =>
+					invokeUser(() => (onErrorFn ? onErrorFn(finalCtx, ws, error) : Promise.reject(error)), {
+						fields: { route },
+						log,
+						phase: "websocket error",
+					}),
+				)
+			},
+			onMessage: (_ctx, ws, data) => {
+				if (!onMsgFn) return
+				if (pending >= WS_PENDING_MAX) {
+					ws.close(1008, "too many pending messages")
+					return
+				}
+				pending++
+				void queue.push(() =>
+					run("message", ws, () => onMsgFn(finalCtx, ws, data)).finally(() => {
+						pending--
+					}),
+				)
+			},
+			onOpen: (_ctx, ws) => {
+				if (reconnectToken && onReconnectFn) {
+					void queue.push(() => run("open", ws, () => onReconnectFn(finalCtx, ws, reconnectToken)))
+				} else if (onOpenFn) {
+					void queue.push(() => run("open", ws, () => onOpenFn(finalCtx, ws)))
+				}
+			},
 		}
 
 		const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, wrappedHandler)
@@ -2597,6 +2644,7 @@ export class Honey<
 	/** Terminal of a realtime route's chain: identify, upgrade, and attach the connection to the bus. */
 	private async _realtimeUpgrade(finalCtx: HoneyContext<TEnv>, config: RealtimeConfig): Promise<Response> {
 		const fc = finalCtx._rq as FetchCtx<TEnv>
+		this._checkWsOrigin(finalCtx, config.allowedOrigins)
 		const wsAdapter = this._graph.settings.wsAdapter as WSAdapter
 		const bus = this._graph.realtimeBus ?? this._setBus(createBus())
 		/* a throwing identify rejects the upgrade through the chain's error boundary */
@@ -3602,6 +3650,7 @@ class RouteBuilder<
 type WSRouteBuilderState<TParent> = {
 	errorKeys: Set<string>
 	inputSchemas: InputSchemasDef | null
+	origins: WSOriginPolicy | null
 	meta: Record<string, unknown> | null
 	middlewares: RuntimeMiddleware[]
 	parent: TParent
@@ -3643,6 +3692,7 @@ class WSRouteBuilder<TEnv, TCtx, TInput = {}, _TErrorKeys extends string = never
 			iv: this._s.inputSchemas,
 			mt: null,
 			mw: [],
+			og: this._s.origins,
 			own: view.own,
 			rb: null,
 			rm: [...this._s.middlewares],
@@ -3666,6 +3716,18 @@ class WSRouteBuilder<TEnv, TCtx, TInput = {}, _TErrorKeys extends string = never
 	meta(meta: Record<string, unknown>): this {
 		this._s.meta = { ...this._s.meta, ...meta }
 		return this
+	}
+
+	/**
+	 * Browser origins allowed to open this socket: `"*"`, a list of origins
+	 * (`https://app.example.com`), or a predicate. Same-origin always passes. Without it, a
+	 * cross-origin upgrade that carries `Cookie` or `Authorization` gets 403.
+	 */
+	origins(policy: WSOriginPolicy): WSRouteBuilder<TEnv, TCtx, TInput, _TErrorKeys, TParent> {
+		return new WSRouteBuilder<TEnv, TCtx, TInput, _TErrorKeys, TParent>({
+			...this._s,
+			origins: validateOriginPolicy(policy),
+		})
 	}
 
 	use<TAdds>(mw: MiddlewareFn<TCtx, TAdds>): WSRouteBuilder<TEnv, TCtx & TAdds, TInput, _TErrorKeys, TParent> {

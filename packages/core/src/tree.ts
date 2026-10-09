@@ -2,6 +2,7 @@ import type { RouteId, Segment } from "./pattern.ts"
 import { canonical, expandOptional, parsePattern, routeId } from "./pattern.ts"
 import type { HttpMethod, InputSchemasDef, OutputSchemaDef } from "./types.ts"
 import type { WSHandler } from "./ws/cloudflare.ts"
+import type { WSOriginPolicy } from "./ws-origin.ts"
 
 export type { HttpMethod, RouteId }
 
@@ -84,6 +85,8 @@ export type WSRouteHandler = RecordSource & {
 	iv: InputSchemasDef | null
 	mt: Record<string, unknown> | null
 	mw: ChainMiddleware[]
+	/** browser origins allowed to open the socket (`.origins()`); `null` = same-origin when credentialed */
+	og?: WSOriginPolicy | null
 	/** canonical ws path pattern */
 	rp: string
 }

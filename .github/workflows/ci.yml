@@ -68,6 +68,35 @@ jobs:
       - run: bun run test:consumers
       - run: bun run test:e2e
 
+  runtimes:
+    name: runtime integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Node 22.12 has no shouldUpgradeCallback, so it exercises the adapter's 'upgrade' fallback
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          package-manager-cache: false
+      - run: echo "HONEY_TEST_NODE_LEGACY=$(which node)" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: current
+          package-manager-cache: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      # the same app over raw sockets on Node (current and 22.12), Bun and Deno
+      - working-directory: packages/core
+        run: >-
+          bunx vitest run tests/integration/hostile-client tests/integration/stream-lifecycle
+          tests/integration/request-target
+
   build:
     name: build (${{ matrix.runtime }})
     runs-on: ubuntu-latest

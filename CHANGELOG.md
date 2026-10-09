@@ -56,6 +56,13 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `ResponseOptions.status` wins over the status key in `json`, `text`, `html` and the other body helpers (it was ignored).
 - `signal` is a reserved context key.
 - On Node, `ctx.req.json()` on an empty body throws a `SyntaxError` and a second body read throws a `TypeError`, as Fetch does (they returned `null` and `""`).
+- On Node, `ctx.req instanceof Request` is `false`. The Node request view used to patch `Request[Symbol.hasInstance]` to pass as a Fetch Request, which made `new Request(ctx.req)` and `fetch(ctx.req)` throw inside undici. Use `toFetchRequest(ctx.req)` for those.
+- A cross-origin WebSocket or realtime upgrade that carries `Cookie` or `Authorization` is refused with 403 unless the route allows that origin (`ws(path).origins([...])`, realtime `allowedOrigins`). Same-origin and `Origin`-less (non-browser) upgrades pass.
+- WebSocket callbacks run on one ordered queue per connection (`onOpen` → messages → `onClose`), each awaited: an event fires after the previous callback settled, not synchronously from the runtime.
+- WebSocket defaults on every adapter: inbound messages over 1 MiB close the connection with 1009 (Node's `ws` allowed 100 MiB); more than 8 MiB of unsent outbound data closes it with 1013; a connection that receives nothing for 120 s is pinged, then closed. All configurable (`maxPayload`, `backpressureLimit`, `backpressurePolicy`, `idleTimeout`).
+- Node and Bun reject request bodies over 128 MiB (413, connection closed); set `maxRequestBodySize` on `serve()` to change it.
+- `ws` is an optional peer dependency. WebSocket routes on Node need `npm install ws`.
+- Node `nodeWebSocket({ keepalive })` terminates a peer that misses a pong (it sent a close frame the dead peer never answered) and never stacks pong timers.
 
 ### Added
 
@@ -70,6 +77,11 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `app.encodedSlashes("allow" | "reject")`.
 - `testClient(app, { ip })` and per-request `{ ip }` set the peer address.
 - `ctx.signal`: aborts when the client disconnects, when `timeout()` fires (with a `TimeoutError`), or when the server shuts down. `SSEStream` gains `signal` and `closed`; the `ctx.res.stream()` callback receives the signal as its second argument; `generate()` accepts `Uint8Array` values.
+- `toFetchRequest(req)` (from `@lovrozagar/honey`): the Fetch `Request` behind Node's request view, `req` itself elsewhere.
+- WebSocket origin policy: `ws(path).origins("*" | string[] | (origin) => boolean)` and realtime `allowedOrigins`.
+- WebSocket adapter options, the same on `nodeWebSocket`, `bunWebSocket`, `denoWebSocket` and `cfWebSocket`: `maxPayload`, `backpressureLimit`, `backpressurePolicy`, `idleTimeout`, `protocol` (subprotocol choice; default: the first offered, now also on Deno and Workers). `ws.bufferedAmount`. `WSAdapter.closeAll()`.
+- `serve()` options: `maxRequestBodySize` (Node, Bun), `headersTimeout`, `requestTimeout`, `keepAliveTimeout`, `upgradeTimeout` (Node). `ServeHandle.close(timeout?)` and the low-level Node `serve()`'s `onError`.
+- `testClient(app, { transport: "node" })` sends real HTTP through the Node adapter; `client.close()` stops it.
 
 ### Deprecated
 
@@ -106,12 +118,26 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `HoneyResponse` (Node's fast-path response): `clone()` locked the original's stream, a second `text()` returned the body again instead of throwing; `replaceResponse()` on a native response with only a new status dropped every header and `statusText`, and rebuilt `101` upgrade responses.
 - On Node, `clone()` on the request locked its body for later readers (body-logging middleware before `bodyLimit` turned every POST into a 500); `opts.cookies` replaced a `set-cookie` in `opts.headers` instead of appending as on other runtimes.
 - Node `shutdown()` waited out keep-alive timeouts (6 s with one idle client), never cleared its timer, and could not finish while an SSE stream was open: streaming responses now end at once, idle connections close, and handlers past the timeout get their signal aborted.
+- Node: a client that reset its connection while the app was still handling an `Upgrade` request (any route, `Upgrade: x` is enough) crashed the process with an unhandled `'error'` event. Upgrade sockets get an error listener first, and a timeout (`upgradeTimeout`).
+- Node: every request with `Connection: Upgrade` went through a hand-written writer: response headers dropped, content type forced to JSON, no status text, the body read whole with `text()` (an SSE route reached that way sent nothing and its producer ran forever), and on some Node versions the request body was empty. Only WebSocket handshakes take the upgrade path now (`shouldUpgradeCallback`, with a fallback for older Node); anything else, and a rejected handshake, is a real streamed response with every header.
+- Node: a callback that threw after `ws` had written the 101 made the adapter write `HTTP/1.1 500` onto the WebSocket.
+- WebSocket `onOpen`, `onReconnect`, `onClose` and `onError` were called without awaiting or catching: a sync throw or a rejection crashed Node, and a throwing `onError` dropped the next message. The first message could run before an async `onOpen` finished.
+- `ws.close(code, reason)` with a reason over 123 bytes threw a `RangeError` inside the runtime; it is cut to fit.
+- `app.serve()` replaced an adapter set with `app.wsAdapter(...)` (`nodeWebSocket({ keepalive })` was lost). On Node the adapter's `ws` import failure was cached, so installing `ws` needed a restart.
+- WebSockets survived `shutdown()`/`close()` and kept receiving; Bun's `close()` aborted in-flight requests (`stop(true)`) instead of letting them finish.
+- On Node, `headers.get()` on the request answered differently before and after the headers were iterated when a header repeated (`Authorization` twice); it now always joins every value, as Fetch does.
+- Node: a native `Response`'s `statusText` was dropped; hop-by-hop headers (`Transfer-Encoding`, `Connection`, `Keep-Alive`, and headers `Connection` names) were copied onto the response, so a proxied chunked upstream went out with both `transfer-encoding` and `content-length`; a stream's declared `content-length` was trusted. The adapter's catch-all answered 500 without logging.
+- Deno: binary WebSocket messages arrived as `Blob` instead of `ArrayBuffer`; messages sent between the 101 and the end of the middleware chain were dropped; a throwing `preUpgrade` escaped `fetch()`. Bun: binary messages carried the whole pooled buffer. Workers: echoing a 1005 close threw, so no close frame was sent.
+- `testClient` kept cookies a response deleted with `Max-Age=0` or a past `Expires`.
+- Every request took the WebSocket-aware `fetch()` path once `serve()` installed an adapter, even with no WebSocket routes; the request headers were copied on every upgrade though only Deno needs the copy.
 
 ### Security
 
 - `ipRestrict` no longer trusts `CF-Connecting-IP` by default. Off Cloudflare any client could send it and pass an allow list, or omit it and skip a deny list. A request whose IP cannot be determined is now rejected with 403 for deny-only configs too.
 - `ipRestrict` with a proxy read the leftmost (client-controlled) `X-Forwarded-For` entry; the client is now the entry the outermost trusted proxy wrote. IPv4-mapped IPv6, ports, zones and IPv6 case no longer bypass deny rules; `10.0.0.1abc` no longer matches `10.0.0.0/8`; `/33` is an error instead of a rule that never matches.
 - On Node, the request URL was `http://${Host}${target}` without validation: `Host: x/admin/secret` routed any request to `/admin/secret`, bypassing path rules in a front proxy, and `Host: a b` turned any request into a 500. On Deno, which builds the URL the same way, `serve()` now rejects such a `Host`.
+- WebSocket and realtime upgrades never checked `Origin`, so any page could open a cookie-authenticated socket (cross-site WebSocket hijacking). See the origin policy above.
+- A stalled or reset upgrade could crash a Node server; WebSocket messages had no size cap beyond `ws`'s 100 MiB and no backpressure limit; request bodies had no default cap on Node.
 
 ### Migration
 
@@ -127,6 +153,11 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - Pass the same `name` to cookie `sign` and `verify`. Set `legacy: false` once cookies signed by an older release have expired. During a rolling deploy, instances still on an older release cannot verify v2 signatures.
 - Pass `ctx.signal` (or `stream.signal`) to `fetch()`, database drivers and timers in long-running handlers and producers, so a disconnect, timeout or shutdown stops them. Loops of `await stream.send()` already end: the send rejects once the client is gone.
 - A test that checked an SSE/stream callback's side effects right after `app.fetch()` must read the body first (`await res.text()`).
+- Install `ws` next to honey for WebSocket or realtime routes on Node.
+- Cross-origin browser clients of a cookie- or header-authenticated WebSocket route: list their origins with `.origins([...])` (realtime: `allowedOrigins`).
+- Raise `maxPayload` on the adapter (`app.wsAdapter(nodeWebSocket({ maxPayload }))`) if clients send WebSocket messages over 1 MiB, and `maxRequestBodySize` on `serve()` for request bodies over 128 MiB.
+- Replace `new Request(ctx.req)`, `fetch(ctx.req)` and `ctx.req instanceof Request` with `toFetchRequest(ctx.req)` on Node.
+- Tests that fire a WebSocket event and assert right away must wait for the callback (`await vi.waitFor(...)`): callbacks run on the connection's queue.
 
 ## 0.6.5 - 2026-10-02
 

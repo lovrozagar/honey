@@ -132,7 +132,10 @@ honey init
 honey generate
 ```
 
-Peer-free runtime: the published package depends only on `jiti` for generate/watch. Validation libraries are your choice. Type generation (`codegen.types`) needs `ts-morph` as a **dev** dependency.
+The published package depends only on `jiti` (for generate/watch). Validation libraries are your choice. Two optional peer dependencies:
+
+- `ws`, for WebSocket and realtime routes on **Node** (`npm install ws`). Bun, Deno and Workers have WebSockets built in. Without it, a WebSocket upgrade on Node answers 500 and logs the install hint.
+- `ts-morph`, as a **dev** dependency, for type generation (`codegen.types`).
 
 ## First app
 
@@ -375,7 +378,7 @@ app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
 
 | Field                          | Meaning                                                                                    |
 | ------------------------------ | ------------------------------------------------------------------------------------------ |
-| `ctx.req`                      | Web `Request` (on Node serve, a Request-shaped wrapper)                                    |
+| `ctx.req`                      | Web `Request`; on Node serve, a Request-shaped view (see below)                            |
 | `ctx.res`                      | `HoneyRes` — see [Responses](#responses)                                                   |
 | `ctx.env`                      | Bindings you passed to `fetch` / `serve`                                                   |
 | `ctx.params`                   | Path params (`:id`, `*path`)                                                               |
@@ -399,6 +402,8 @@ app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
 Reserved keys that middleware / `.context()` **cannot** overwrite: every field above that Honey sets (`req`, `res`, `env`, `params`, `headers`, `cookies`, `search`, `searchAll`, `ip`, `path`, `signal`, `meta`, `errors`, …).
 
 `ctx.search`, `ctx.searchAll`, `ctx.headers` and validated `search`/`headers`/`form` records have no prototype, so a query like `?__proto__=x` or `?constructor=x` is plain data. Read them with `ctx.search.key`, `key in ctx.search` or `Object.hasOwn(ctx.search, key)`; they have no `hasOwnProperty` method.
+
+On Node, `ctx.req` reads the `IncomingMessage` directly instead of building a Fetch `Request` per request. It behaves like one (headers, body methods, `clone()`, `signal`; the same conformance tests run against both), but it is not one: `ctx.req instanceof Request` is `false`, and `new Request(ctx.req)` or `fetch(ctx.req)` throw. Pass it through `toFetchRequest(ctx.req)` (from `@lovrozagar/honey`) first; on other runtimes that returns `ctx.req` itself. The Fetch Request then owns the body, so read it through one or the other.
 
 #### Client address
 
@@ -1130,10 +1135,24 @@ handle.url // http://127.0.0.1:3000
 handle.port
 handle.hostname
 handle.runtime // "bun" | "node" | "deno"
-await handle.close()
+await handle.close() // or close(timeoutMs), default 1000
 ```
 
 Defaults: `port` 3000, `hostname` `0.0.0.0` (Deno defaults to `127.0.0.1`). Bound `0.0.0.0` / `::` is printed as `127.0.0.1` in `url`.
+
+More options:
+
+| Option               | Runtimes  | Meaning                                                                                  |
+| -------------------- | --------- | ---------------------------------------------------------------------------------------- |
+| `maxRequestBodySize` | Node, Bun | Largest request body in bytes; bigger is 413 and the connection closes. Default 128 MiB. |
+| `headersTimeout`     | Node      | `server.headersTimeout` (ms)                                                             |
+| `requestTimeout`     | Node      | `server.requestTimeout` (ms)                                                             |
+| `keepAliveTimeout`   | Node      | `server.keepAliveTimeout` (ms)                                                           |
+| `upgradeTimeout`     | Node      | How long an upgrade request may take to become a WebSocket (ms). Default 30 000.         |
+
+`close(timeout?)` is the same on every runtime: stop accepting connections, close WebSockets with 1001, let in-flight requests finish for up to `timeout` ms, then cut what is left (Deno has no forced close: a request still running finishes on its own).
+
+`app.serve()` keeps an adapter you set with `app.wsAdapter(...)` (for example `nodeWebSocket({ keepalive })`), and attaches the runtime's default adapter otherwise.
 
 | Runtime | How it listens                                |
 | ------- | --------------------------------------------- |
@@ -1151,9 +1170,13 @@ const server = serve(app, { env: {}, port: 3000, hostname: "0.0.0.0" })
 await server.shutdown(10_000)
 ```
 
-`shutdown(timeout?)` stops accepting connections and lets in-flight requests finish. Responses that are already streaming (SSE, `generate()`) never finish on their own, so their `ctx.signal` aborts at once and they end; handlers still working get until `timeout`, then their signal aborts and every connection is closed. Idle keep-alive connections close immediately.
+`shutdown(timeout?)` stops accepting connections and lets in-flight requests finish. Responses that are already streaming (SSE, `generate()`) never finish on their own, so their `ctx.signal` aborts at once and they end; WebSockets get a 1001 close; handlers still working get until `timeout`, then their signal aborts and every connection, WebSockets included, is closed. Idle keep-alive connections close immediately.
 
-On Node, bodies Honey built in memory, or that declare a small `content-length`, are written in one `res.end`. Anything else is piped as it is produced, whatever its content type, and the reader is cancelled when the client goes away.
+The low-level `serve()` takes the same `maxRequestBodySize`, `headersTimeout`, `requestTimeout`, `keepAliveTimeout` and `upgradeTimeout` options, plus `onError(err)` for failures the adapter cannot hand to the app (default `console.error`; the client gets 500).
+
+On Node, bodies Honey built in memory, or that declare a small `content-length`, are written in one `res.end`. Anything else is piped as it is produced, whatever its content type, and the reader is cancelled when the client goes away. A streamed body's `content-length` is never trusted (Node chunks it), and hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, and any header `Connection` names) on a Response are dropped: Node writes its own.
+
+Only a WebSocket handshake takes Node's upgrade path. Any other `Upgrade` request (`h2c`, …) is served as the normal request it is, with its body. A rejected handshake (auth failure, 404, an SSE route) gets a real response with every header and its status text.
 
 `runtime: "cloudflare"` throws. Workers cannot listen.
 
@@ -1321,13 +1344,48 @@ app.ws("/echo-ws").handler({
 })
 ```
 
-`ws` is `{ send, close, readyState, raw }`. `readyState` is `0|1|2|3`. Sends before open are buffered (max 32). Middleware on the chain runs for the HTTP upgrade. Auth middleware works: throw to reject.
+`ws` is `{ send, close, readyState, bufferedAmount, raw }`. `readyState` is `0|1|2|3`. Sends before open are buffered (max 32); sends after close are dropped. `close(code, reason)` cuts a reason longer than 123 UTF-8 bytes to fit. Middleware on the chain runs for the HTTP upgrade, and so does `.input()` validation of search, headers and cookies (400 before the upgrade). Auth middleware works: throw to reject.
+
+Callbacks run on one ordered queue per connection: `onOpen` (or `onReconnect`), then each message, then `onClose`, each awaited, so a message never runs before an async `onOpen` finished. A callback that throws or rejects goes to `onError`; without `onError`, or when `onError` throws itself, the error is logged (app logger, else `console.error`) and the queue moves on. Nothing a callback throws reaches the runtime. More than 1024 messages waiting for the handler close the connection with 1008.
+
+**Origin.** Browsers let any page open a socket to any host and send that host's cookies with it. So by default a cross-origin upgrade that carries `Cookie` or `Authorization` gets **403**; same-origin upgrades, and requests without `Origin` (non-browser clients), pass. Allow other origins per route:
+
+```ts
+app
+	.ws("/feed")
+	.origins(["https://app.example.com"]) // or "*", or (origin) => boolean
+	.handler({
+		onOpen(_ctx, ws) {
+			ws.send("hi")
+		},
+	})
+
+app.realtime("/rt", { allowedOrigins: ["https://app.example.com"], handler })
+```
+
+"Same origin" compares the `Origin` host with the request host (`clientInfo(ctx).host`, which follows `trustProxy`).
+
+**Adapter options.** Every adapter takes the same options with the same defaults:
+
+| Option               | Default       | Meaning                                                                                                                                                                              |
+| -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `maxPayload`         | 1 MiB         | Largest inbound message; bigger closes with 1009 (Bun drops the connection: 1006).                                                                                                   |
+| `backpressureLimit`  | 8 MiB         | Unsent outbound bytes before `backpressurePolicy` applies to the next `send()`.                                                                                                      |
+| `backpressurePolicy` | `"close"`     | `"close"` closes with 1013 (try again later); `"drop"` discards the message.                                                                                                         |
+| `idleTimeout`        | 120 000 ms    | Close a connection that received nothing (message or pong) for this long; quiet peers are pinged. `0` disables. Bun and Deno take whole seconds; Workers evicts idle sockets itself. |
+| `protocol`           | first offered | `(offered, req) => string \| null`: the subprotocol to answer with.                                                                                                                  |
+
+`nodeWebSocket()` also takes `keepalive: { interval, timeout }`: ping every `interval` ms and terminate a peer whose pong is `timeout` ms late. Binary messages arrive as `ArrayBuffer` on every runtime.
+
+```ts
+app.wsAdapter(nodeWebSocket({ maxPayload: 64 * 1024, keepalive: { interval: 30_000, timeout: 10_000 } }))
+```
 
 A GET **without** `Upgrade: websocket` to a WS/realtime path returns **426** with `upgrade: websocket`.
 
 Reconnect: pass `?reconnect_token=` on the next handshake; Honey calls `onReconnect` instead of `onOpen`.
 
-`app.serve()` attaches the runtime adapter. On Cloudflare, call `app.wsAdapter(cfWebSocket())` yourself.
+`app.serve()` attaches the runtime adapter unless you set one. On Node it needs the `ws` package (an optional peer dependency). On Cloudflare, call `app.wsAdapter(cfWebSocket())` yourself.
 
 ## Realtime
 
@@ -1635,7 +1693,9 @@ await client.post("/api/users", {
 await client.post("/login", { form: { user: "a", pass: "b" } })
 ```
 
-Methods: `get` `post` `put` `patch` `delete` `head` `options` `request`. `cookies: true` stores `Set-Cookie` and sends them back.
+Methods: `get` `post` `put` `patch` `delete` `head` `options` `request`. `cookies: true` stores `Set-Cookie` and sends them back; a cookie set with `Max-Age=0` (or a past `Expires`) is removed.
+
+`transport: "node"` serves the app with honey's Node adapter on a random local port and sends real HTTP, so the request goes through the Node `Request` view and response writer, as in production on Node. Call `await client.close()` when done.
 
 ## Utilities
 

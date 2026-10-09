@@ -19,6 +19,8 @@ type TestClient = {
 	post(path: string, opts?: TestRequestOptions): Promise<Response>
 	put(path: string, opts?: TestRequestOptions): Promise<Response>
 	request(method: string, path: string, opts?: TestRequestOptions): Promise<Response>
+	/** Stop the server a `transport: "node"` client started (a no-op otherwise). */
+	close(): Promise<void>
 }
 
 function buildRequest(method: string, path: string, baseUrl: string, opts?: TestRequestOptions): Request {
@@ -50,17 +52,42 @@ function buildRequest(method: string, path: string, baseUrl: string, opts?: Test
 type TestClientOptions<TEnv> = {
 	cookies?: boolean
 	env: TEnv
-	/** Default peer address for every request; a per-request `ip` wins. */
+	/** Default peer address for every request; a per-request `ip` wins. Ignored by `transport: "node"`. */
 	ip?: string
+	/**
+	 * `"fetch"` (default) calls `app.fetch()` directly. `"node"` serves the app with honey's Node
+	 * adapter on a random local port and sends real HTTP, so requests go through the Node
+	 * `Request` view and response writer. Call `close()` when done.
+	 */
+	transport?: "fetch" | "node"
 }
 
-function parseCookieName(setCookie: string): { name: string; value: string } | null {
-	const eq = setCookie.indexOf("=")
+type ParsedSetCookie = { expired: boolean; name: string; value: string }
+
+/** Name, value, and whether the cookie is already expired (`Max-Age<=0`, or `Expires` in the past). */
+function parseSetCookie(setCookie: string, now: number): ParsedSetCookie | null {
+	const parts = setCookie.split(";")
+	const pair = parts[0] ?? ""
+	const eq = pair.indexOf("=")
 	if (eq === -1) return null
-	const name = setCookie.slice(0, eq).trim()
-	const semi = setCookie.indexOf(";", eq)
-	const value = semi === -1 ? setCookie.slice(eq + 1) : setCookie.slice(eq + 1, semi)
-	return { name, value }
+	const name = pair.slice(0, eq).trim()
+	if (name === "") return null
+	const value = pair.slice(eq + 1).trim()
+	let maxAge: number | null = null
+	let expires: number | null = null
+	for (const attr of parts.slice(1)) {
+		const i = attr.indexOf("=")
+		const key = (i === -1 ? attr : attr.slice(0, i)).trim().toLowerCase()
+		const v = i === -1 ? "" : attr.slice(i + 1).trim()
+		if (key === "max-age" && /^-?\d+$/.test(v)) maxAge = Number(v)
+		else if (key === "expires") {
+			const t = Date.parse(v)
+			if (!Number.isNaN(t)) expires = t
+		}
+	}
+	/* Max-Age wins over Expires (RFC 6265 §5.3) */
+	const expired = maxAge !== null ? maxAge <= 0 : expires !== null && expires <= now
+	return { expired, name, value }
 }
 
 export function testClient<TEnv>(
@@ -69,6 +96,24 @@ export function testClient<TEnv>(
 ): TestClient {
 	const baseUrl = "http://localhost"
 	const jar = new Map<string, string>()
+	let node: Promise<{ close(): Promise<void>; url: string }> | null = null
+
+	/* a real Node server for `transport: "node"`, started on first use */
+	const nodeServer = (): Promise<{ close(): Promise<void>; url: string }> => {
+		if (node === null) {
+			node = (async () => {
+				const { serve } = await import("./node.ts")
+				const server = serve(app, { env: options.env, hostname: "127.0.0.1", port: 0 })
+				await new Promise<void>((resolve, reject) => {
+					server.once("listening", () => resolve())
+					server.once("error", reject)
+				})
+				const addr = server.address() as { port: number }
+				return { close: () => server.shutdown(1_000), url: `http://127.0.0.1:${addr.port}` }
+			})()
+		}
+		return node
+	}
 
 	async function doRequest(method: string, path: string, opts?: TestRequestOptions): Promise<Response> {
 		const mergedHeaders = { ...opts?.headers }
@@ -81,18 +126,24 @@ export function testClient<TEnv>(
 			mergedHeaders.cookie = existing ? `${existing}; ${jarStr}` : jarStr
 		}
 
-		const req = buildRequest(method, path, baseUrl, { ...opts, headers: mergedHeaders })
-		const ip = opts?.ip ?? options.ip
-		if (ip !== undefined) setPeerAddress(req, ip)
-		const res = await app.fetch(req, options.env)
+		let res: Response
+		if (options.transport === "node") {
+			const { url } = await nodeServer()
+			res = await fetch(buildRequest(method, path, url, { ...opts, headers: mergedHeaders }), { redirect: "manual" })
+		} else {
+			const req = buildRequest(method, path, baseUrl, { ...opts, headers: mergedHeaders })
+			const ip = opts?.ip ?? options.ip
+			if (ip !== undefined) setPeerAddress(req, ip)
+			res = await app.fetch(req, options.env)
+		}
 
 		if (options.cookies) {
-			const setCookies = res.headers.getSetCookie()
-			for (const sc of setCookies) {
-				const parsed = parseCookieName(sc)
-				if (parsed) {
-					jar.set(parsed.name, parsed.value)
-				}
+			const now = Date.now()
+			for (const sc of res.headers.getSetCookie()) {
+				const parsed = parseSetCookie(sc, now)
+				if (parsed === null) continue
+				if (parsed.expired) jar.delete(parsed.name)
+				else jar.set(parsed.name, parsed.value)
 			}
 		}
 
@@ -100,6 +151,10 @@ export function testClient<TEnv>(
 	}
 
 	return {
+		async close() {
+			if (node !== null) await (await node).close()
+			node = null
+		},
 		delete: (path, opts) => doRequest("DELETE", path, opts),
 		get: (path, opts) => doRequest("GET", path, opts),
 		head: (path, opts) => doRequest("HEAD", path, opts),

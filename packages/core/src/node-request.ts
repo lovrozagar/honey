@@ -1,14 +1,33 @@
 import type { IncomingMessage } from "node:http"
 import { Readable } from "node:stream"
+import { HoneyError } from "./error.ts"
+import { TO_FETCH_REQUEST } from "./fetch-request.ts"
 import { NODE_OUTBOUND } from "./honey-response.ts"
 import { PEER_ADDRESS } from "./peer.ts"
 import { isValidHost } from "./trust.ts"
+import { EK, SK } from "./types.ts"
 
 /** bodyLimit uses this to swap the inbound stream without `new Request(req)`. */
 export const REPLACE_BODY = Symbol.for("honey.replaceBody")
 
 /** The Node adapter calls this when the response closes before it finished (client disconnect, shutdown). */
 export const ABORT_REQUEST = Symbol.for("honey.abortRequest")
+
+/** True once a body read went over the adapter's `maxRequestBodySize`: the connection must not be reused. */
+export const BODY_OVERFLOW = Symbol.for("honey.bodyOverflow")
+
+export { DEFAULT_MAX_REQUEST_BODY } from "./request-limits.ts"
+
+export type NodeRequestOptions = {
+	/** Where the body bytes come from when not the IncomingMessage itself (an upgrade socket on old Node). */
+	bodySource?: AsyncIterable<Buffer | string> | null
+	/** Largest body a read accepts, in bytes; over it the read throws a 413 `HoneyError`. `0` disables. */
+	maxBodySize?: number
+}
+
+function tooLarge(): HoneyError {
+	return new HoneyError({ errorKey: EK.content_too_large, status: SK.content_too_large })
+}
 
 /**
  * Headers view over IncomingMessage. `get`/`has` read Node's already-parsed
@@ -30,14 +49,27 @@ export class NodeHeaders {
 		this.#ensureNative().delete(name)
 	}
 
+	/**
+	 * Every value of the header, joined the way Fetch joins them. Node's `headers` map keeps only
+	 * the first `Authorization`, `Host`, … and drops the rest; `headersDistinct` keeps them all,
+	 * so the answer is the same before and after something iterates the headers.
+	 */
 	get(name: string): string | null {
 		if (this.#native) return this.#native.get(name)
 		const key = name.toLowerCase()
-		const headers = this.#incoming.headers
-		if (!Object.hasOwn(headers, key)) return null
-		const raw = headers[key]
+		/* `headersDistinct` is a lazy getter on a real IncomingMessage; a plain stand-in has only `headers` */
+		const all = this.#incoming.headersDistinct as NodeJS.Dict<string[]> | undefined
+		if (all === undefined) {
+			const headers = this.#incoming.headers
+			if (!Object.hasOwn(headers, key)) return null
+			const one = headers[key]
+			if (one === undefined) return null
+			return Array.isArray(one) ? one.join(", ") : one
+		}
+		if (!Object.hasOwn(all, key)) return null
+		const raw = all[key]
 		if (raw === undefined) return null
-		return Array.isArray(raw) ? raw.join(", ") : raw
+		return raw.length === 1 ? raw[0] : raw.join(", ")
 	}
 
 	getSetCookie(): string[] {
@@ -148,21 +180,15 @@ export function nodeRequestUrl(incoming: IncomingMessage): string | null {
  * until a body method needs the real Fetch object (formData / blob / clone).
  */
 export class NodeRequest {
-	readonly [NODE_OUTBOUND] = true
-	readonly cache = "default" as RequestCache
-	readonly credentials = "same-origin" as RequestCredentials
-	readonly destination = "" as RequestDestination
 	readonly headers: NodeHeaders
-	readonly integrity = ""
-	readonly keepalive = false
 	readonly method: string
-	readonly mode = "cors" as RequestMode
-	readonly redirect = "follow" as RequestRedirect
-	readonly referrer = "about:client"
-	readonly referrerPolicy = "" as ReferrerPolicy
 	readonly url: string
 
 	#incoming: IncomingMessage
+	#source: AsyncIterable<Buffer | string>
+	#maxBody: number
+	#received = 0
+	#overflow = false
 	#hasBody: boolean
 	#webBody: ReadableStream<Uint8Array> | null | undefined
 	#bodyUsed = false
@@ -172,7 +198,7 @@ export class NodeRequest {
 	#abortReason: { reason: unknown } | null = null
 
 	/** @param url the request URL; `nodeRequestUrl(incoming)` when left out (throws if that is invalid) */
-	constructor(incoming: IncomingMessage, url?: string) {
+	constructor(incoming: IncomingMessage, url?: string, opts?: NodeRequestOptions) {
 		this.#incoming = incoming
 		const resolved = url ?? nodeRequestUrl(incoming)
 		if (resolved === null) throw new TypeError("Invalid request target or Host header")
@@ -180,6 +206,44 @@ export class NodeRequest {
 		this.method = (incoming.method ?? "GET").toUpperCase()
 		this.headers = new NodeHeaders(incoming)
 		this.#hasBody = this.method !== "GET" && this.method !== "HEAD"
+		this.#source = opts?.bodySource ?? incoming
+		this.#maxBody = opts?.maxBodySize ?? 0
+	}
+
+	get [NODE_OUTBOUND](): true {
+		return true
+	}
+	get cache(): RequestCache {
+		return "default"
+	}
+	get credentials(): RequestCredentials {
+		return "same-origin"
+	}
+	get destination(): RequestDestination {
+		return ""
+	}
+	get integrity(): string {
+		return ""
+	}
+	get keepalive(): boolean {
+		return false
+	}
+	get mode(): RequestMode {
+		return "cors"
+	}
+	get redirect(): RequestRedirect {
+		return "follow"
+	}
+	get referrer(): string {
+		return "about:client"
+	}
+	get referrerPolicy(): ReferrerPolicy {
+		return ""
+	}
+
+	/** Set once a read went over `maxRequestBodySize`; the adapter then closes the connection. */
+	get [BODY_OVERFLOW](): boolean {
+		return this.#overflow
 	}
 
 	get body(): ReadableStream<Uint8Array> | null {
@@ -187,10 +251,62 @@ export class NodeRequest {
 		/* once a Fetch Request owns the stream (clone, formData, blob), it is the body */
 		if (this.#fetch) return this.#fetch.body
 		if (this.#webBody === undefined) {
-			// Node's web stream and the DOM/Bun ReadableStream brands do not overlap.
-			this.#webBody = Readable.toWeb(this.#incoming) as unknown as ReadableStream<Uint8Array>
+			this.#webBody = this.#countedStream()
 		}
 		return this.#webBody
+	}
+
+	/** The real Fetch `Request` behind this one: `new Request(x)`, `fetch(x)` and `instanceof` work on it. */
+	[TO_FETCH_REQUEST](): Request {
+		return this.#asFetch()
+	}
+
+	/** Count a chunk against the cap; over it, the read fails with a 413 and the rest is not read. */
+	#count(n: number): void {
+		this.#received += n
+		if (this.#maxBody > 0 && this.#received > this.#maxBody) {
+			this.#overflow = true
+			throw tooLarge()
+		}
+	}
+
+	/** A declared length over the cap fails before reading anything. */
+	#checkDeclared(): void {
+		if (this.#maxBody <= 0) return
+		const declared = Number(this.#incoming.headers["content-length"])
+		if (Number.isFinite(declared) && declared > this.#maxBody) {
+			this.#overflow = true
+			throw tooLarge()
+		}
+	}
+
+	#countedStream(): ReadableStream<Uint8Array> {
+		if (this.#maxBody <= 0 && this.#source === this.#incoming) {
+			// Node's web stream and the DOM/Bun ReadableStream brands do not overlap.
+			return Readable.toWeb(this.#incoming) as unknown as ReadableStream<Uint8Array>
+		}
+		const iterator = this.#source[Symbol.asyncIterator]()
+		return new ReadableStream<Uint8Array>({
+			cancel: async () => {
+				await iterator.return?.()
+			},
+			pull: async (controller) => {
+				try {
+					this.#checkDeclared()
+					const { done, value } = await iterator.next()
+					if (done) {
+						controller.close()
+						return
+					}
+					const chunk = typeof value === "string" ? Buffer.from(value) : value
+					this.#count(chunk.byteLength)
+					controller.enqueue(chunk)
+				} catch (err) {
+					controller.error(err)
+					void iterator.return?.()
+				}
+			},
+		})
 	}
 
 	/** The socket peer, for `ctx.ip`. */
@@ -268,7 +384,8 @@ export class NodeRequest {
 		this.#fetch = new Request(this.url, {
 			body: this.body,
 			duplex: this.#hasBody ? "half" : undefined,
-			headers: this.#incoming.headers as HeadersInit,
+			/* every value of a repeated header, as the view reports them (Node's map keeps only the first of some) */
+			headers: [...this.headers] as HeadersInit,
 			method: this.method,
 			signal: this.signal,
 		} as RequestInit)
@@ -282,9 +399,12 @@ export class NodeRequest {
 		this.#bodyUsed = true
 		if (this.#fetch) return Buffer.from(await this.#fetch.arrayBuffer())
 		if (this.#webBody) return streamToBuffer(this.#webBody)
+		this.#checkDeclared()
 		const chunks: Buffer[] = []
-		for await (const chunk of this.#incoming) {
-			chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk)
+		for await (const chunk of this.#source) {
+			const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk
+			this.#count(buf.byteLength)
+			chunks.push(buf)
 		}
 		return chunks.length === 1 ? chunks[0] : Buffer.concat(chunks)
 	}
@@ -301,24 +421,11 @@ async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffe
 	return chunks.length === 1 ? chunks[0] : Buffer.concat(chunks)
 }
 
-const REQUEST_HAS_INSTANCE = Symbol.for("honey.requestHasInstance")
-
-function installRequestHasInstance(): void {
-	const ctor = Request as typeof Request & { [REQUEST_HAS_INSTANCE]?: boolean }
-	if (ctor[REQUEST_HAS_INSTANCE]) return
-	const original = Request[Symbol.hasInstance]
-	Object.defineProperty(Request, Symbol.hasInstance, {
-		configurable: true,
-		value(this: Function, value: unknown) {
-			if (this === Request && value instanceof NodeRequest) return true
-			return original.call(this, value)
-		},
-	})
-	ctor[REQUEST_HAS_INSTANCE] = true
-}
-
-installRequestHasInstance()
-
-export function incomingToNodeRequest(req: IncomingMessage, url?: string): Request {
-	return new NodeRequest(req, url) as unknown as Request
+/**
+ * A Request-shaped view of `req`. It is not a Fetch `Request` (`instanceof Request` is false, and
+ * platform code that reads a Request's internal state cannot take it): pass it through
+ * `toFetchRequest()` for `new Request(r)`, `fetch(r)` or a library that needs the real thing.
+ */
+export function incomingToNodeRequest(req: IncomingMessage, url?: string, opts?: NodeRequestOptions): Request {
+	return new NodeRequest(req, url, opts) as unknown as Request
 }

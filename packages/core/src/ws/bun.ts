@@ -1,11 +1,20 @@
-export { type RawSocket, type WSAdapter, type WSContext, WSContextImpl, type WSHandler } from "./cloudflare.ts"
+export {
+	type RawSocket,
+	type WSAdapter,
+	type WSAdapterOptions,
+	type WSContext,
+	WSContextImpl,
+	type WSHandler,
+} from "./cloudflare.ts"
 
 import type { WSAdapter, WSContext, WSHandler } from "./cloudflare.ts"
-import { WSContextImpl } from "./cloudflare.ts"
+import { fireHandler, WSContextImpl } from "./cloudflare.ts"
+import { resolveWSOptions, selectProtocol, toArrayBuffer, type WSAdapterOptions } from "./shared.ts"
 
 type BunRawSocket = {
 	close(code?: number, reason?: string): void
 	data: BunWSData
+	getBufferedAmount?(): number
 	readyState: number
 	send(data: ArrayBufferLike | ArrayBufferView | string, compress?: boolean): number
 }
@@ -16,12 +25,17 @@ type BunWSData = {
 }
 
 type BunServer = {
-	upgrade<T>(req: Request, opts?: { data?: T }): boolean
+	upgrade<T>(req: Request, opts?: { data?: T; headers?: HeadersInit }): boolean
 }
 
 export type BunWSAdapter = WSAdapter & {
+	/** Pass to `Bun.serve({ websocket })`; honey's `serve()` does. */
 	websocket: {
+		backpressureLimit: number
 		close(ws: BunRawSocket, code: number, reason: string): void
+		closeOnBackpressureLimit: boolean
+		idleTimeout: number
+		maxPayloadLength: number
 		message(ws: BunRawSocket, data: ArrayBufferView | string): void
 		open(ws: BunRawSocket): void
 	}
@@ -30,12 +44,27 @@ export type BunWSAdapter = WSAdapter & {
 /**
  * Bun WebSocket adapter.
  * Returns adapter + websocket handler object for Bun.serve().
- * Bun has no onError callback (noted limitation).
- * Keepalive is not supported — Bun's WS API lacks ping/pong control.
- * Use nodeWebSocket() for keepalive support.
+ * Bun has no onError callback (noted limitation). Bun pings idle sockets itself
+ * (`idleTimeout`, whole seconds, at most 960); there is no `keepalive` option.
  */
-export function bunWebSocket(): BunWSAdapter {
+export function bunWebSocket(opts?: WSAdapterOptions): BunWSAdapter {
+	const options = resolveWSOptions(opts)
+	const open = new Set<BunRawSocket>()
+	const socketOf = (ws: BunRawSocket): WSContext => {
+		if (!ws.data.socket) ws.data.socket = new WSContextImpl(ws, options)
+		return ws.data.socket
+	}
 	return {
+		closeAll(code: number, reason: string) {
+			for (const ws of open) {
+				try {
+					ws.close(code, reason)
+				} catch {
+					/* already closing */
+				}
+			}
+		},
+		options,
 		upgrade(req: Request, env: unknown, handler: WSHandler<unknown>) {
 			const server = (env as Record<string, unknown>).server as BunServer
 			/*
@@ -43,8 +72,10 @@ export function bunWebSocket(): BunWSAdapter {
 			 * WSContext cast is safe: actual socket is assigned in open/message/close
 			 * before any user code accesses it.
 			 */
+			const protocol = selectProtocol(req, options)
 			const success = server.upgrade<BunWSData>(req, {
 				data: { handler, socket: undefined as unknown as WSContext },
+				headers: protocol === null ? undefined : { "sec-websocket-protocol": protocol },
 			})
 			if (!success) {
 				return {
@@ -63,19 +94,26 @@ export function bunWebSocket(): BunWSAdapter {
 		},
 
 		websocket: {
+			/* honey applies its own policy on send (WSContext); Bun's limit only bounds its queue */
+			backpressureLimit: Math.max(options.backpressureLimit, 1),
 			close(ws: BunRawSocket, code: number, reason: string) {
-				if (!ws.data.socket) ws.data.socket = new WSContextImpl(ws)
-				ws.data.handler.onClose?.(undefined, ws.data.socket, code, reason)
+				open.delete(ws)
+				const socket = socketOf(ws)
+				fireHandler("close", () => ws.data.handler.onClose?.(undefined, socket, code, reason))
 			},
+			closeOnBackpressureLimit: false,
+			idleTimeout: options.idleTimeout === 0 ? 0 : Math.min(Math.max(Math.ceil(options.idleTimeout / 1000), 1), 960),
+			maxPayloadLength: options.maxPayload,
 			message(ws: BunRawSocket, data: ArrayBufferView | string) {
-				if (!ws.data.socket) ws.data.socket = new WSContextImpl(ws)
-				/* Bun passes Buffer (Uint8Array) for binary — normalize to ArrayBuffer for WSHandler */
-				const normalized = typeof data === "string" ? data : ((data as Uint8Array).buffer as ArrayBuffer)
-				ws.data.handler.onMessage?.(undefined, ws.data.socket, normalized)
+				const socket = socketOf(ws)
+				/* Bun passes a Buffer for binary frames: hand over exactly its bytes, as an ArrayBuffer */
+				const normalized = typeof data === "string" ? data : toArrayBuffer(data)
+				fireHandler("message", () => ws.data.handler.onMessage?.(undefined, socket, normalized))
 			},
 			open(ws: BunRawSocket) {
-				if (!ws.data.socket) ws.data.socket = new WSContextImpl(ws)
-				ws.data.handler.onOpen?.(undefined, ws.data.socket)
+				open.add(ws)
+				const socket = socketOf(ws)
+				fireHandler("open", () => ws.data.handler.onOpen?.(undefined, socket))
 			},
 		},
 	}

@@ -1,3 +1,5 @@
+import { validateOriginPolicy, type WSOriginPolicy } from "../ws-origin.ts"
+
 /**
  * One realtime connection as the route handler sees it. Only the WebSocket transport ships.
  * Every frame, in both directions, is one JSON text (see the README's realtime wire format).
@@ -55,11 +57,18 @@ export type RealtimeRouteOpts<C = unknown> = {
 	/** Receives every error thrown by `handler` and the `message`/`close` handlers. Defaults to the app logger. */
 	onError?: (error: unknown, conn: ConnContext) => void | Promise<void>
 	limits?: RealtimeLimits
+	/**
+	 * Browser origins allowed to connect: `"*"`, a list (`https://app.example.com`), or a
+	 * predicate. Same-origin always passes. Unset, a cross-origin upgrade that carries `Cookie`
+	 * or `Authorization` gets 403.
+	 */
+	allowedOrigins?: WSOriginPolicy
 	handler: (c: C, conn: ConnContext) => void | Promise<void>
 }
 
 /** A realtime route after validation, with every default applied. */
 export type RealtimeConfig = {
+	allowedOrigins: WSOriginPolicy | null
 	handler: RealtimeRouteOpts["handler"]
 	identify: NonNullable<RealtimeRouteOpts["identify"]> | null
 	limits: Required<RealtimeLimits>
@@ -107,6 +116,7 @@ export function resolveRealtimeConfig<C>(path: string, routeOpts: RealtimeRouteO
 		throw new TypeError(`realtime limits.slowConsumer must be "close" or "drop"`)
 	}
 	return {
+		allowedOrigins: opts.allowedOrigins === undefined ? null : validateOriginPolicy(opts.allowedOrigins),
 		handler: opts.handler,
 		identify: opts.identify ?? null,
 		limits: {

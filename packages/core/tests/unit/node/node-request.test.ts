@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { honey } from "../../../src/index.ts"
 import { serve } from "../../../src/node.ts"
 import { bodyLimit } from "../../../src/body-limit.ts"
+import { toFetchRequest } from "../../../src/fetch-request.ts"
 import { incomingToNodeRequest, NodeRequest } from "../../../src/node-request.ts"
 
 function fetchFromServer(
@@ -44,9 +45,11 @@ describe("NodeRequest", () => {
 			url: "/json",
 		} as unknown as http.IncomingMessage
 		const req = incomingToNodeRequest(incoming)
-		expect(req instanceof Request).toBe(true)
-		expect(Object.getPrototypeOf(req) === Request.prototype).toBe(false)
+		/* not a Fetch Request, and it does not pretend to be one: platform code reading a Request's
+		 * internals would throw on it. toFetchRequest() hands over the real one. */
+		expect(req instanceof Request).toBe(false)
 		expect(req).toBeInstanceOf(NodeRequest)
+		expect(toFetchRequest(req)).toBeInstanceOf(Request)
 		expect(req.method).toBe("GET")
 		expect(req.url).toBe("http://localhost/json")
 		expect(req.headers.get("host")).toBe("localhost")

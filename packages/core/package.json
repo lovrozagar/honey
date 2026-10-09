@@ -347,14 +347,19 @@
 		"valibot": "catalog:",
 		"vite": "catalog:",
 		"vitest": "catalog:",
+		"ws": "catalog:",
 		"yup": "catalog:",
 		"zod": "catalog:"
 	},
 	"peerDependencies": {
-		"ts-morph": ">=25.0.0"
+		"ts-morph": ">=25.0.0",
+		"ws": ">=8.0.0"
 	},
 	"peerDependenciesMeta": {
 		"ts-morph": {
+			"optional": true
+		},
+		"ws": {
 			"optional": true
 		}
 	},
