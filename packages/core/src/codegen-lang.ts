@@ -99,6 +99,18 @@ function hex(n: number, width: number): string {
 	return n.toString(16).padStart(width, "0")
 }
 
+/**
+ * Text for a comment or docstring: well-formed, with every character a compiler rejects even inside
+ * a comment (Go and Python refuse NUL; Go refuses a BOM) written as visible `\uXXXX` text. Tab and
+ * line breaks stay; the writers split lines themselves.
+ */
+function commentText(s: string): string {
+	return wellFormed(s).replace(
+		/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFEFF]/g,
+		(ch) => `\\u${hex(ch.charCodeAt(0), 4)}`,
+	)
+}
+
 /* ── Go ── */
 
 export const GO_KEYWORDS = new Set([
@@ -235,7 +247,7 @@ export function goString(s: string): string {
 
 /** `// ` comment lines for arbitrary text; every line break in the input starts a new comment line. */
 export function goComment(text: string, indent = ""): string[] {
-	return splitLines(wellFormed(text)).map((line) => (line.trim() === "" ? `${indent}//` : `${indent}// ${line}`))
+	return splitLines(commentText(text)).map((line) => (line.trim() === "" ? `${indent}//` : `${indent}// ${line}`))
 }
 
 /** encoding/json silently ignores tag names with other characters and falls back to the field name. */
@@ -400,12 +412,12 @@ export function rustString(s: string): string {
 
 /** `/// ` doc lines; each input line break starts a new doc line so text never becomes code. */
 export function rustDoc(text: string, indent = ""): string[] {
-	return splitLines(wellFormed(text)).map((line) => (line.trim() === "" ? `${indent}///` : `${indent}/// ${line}`))
+	return splitLines(commentText(text)).map((line) => (line.trim() === "" ? `${indent}///` : `${indent}/// ${line}`))
 }
 
 /** Text safe inside a `/* … *\/` block comment. */
 export function blockCommentText(text: string): string {
-	return wellFormed(text).replace(/\*\//g, "* /").replace(/\/\*/g, "/ *")
+	return commentText(text).replace(/\*\//g, "* /").replace(/\/\*/g, "/ *")
 }
 
 /* ── Python ── */
@@ -493,10 +505,10 @@ export function pyString(s: string): string {
 
 /** Docstring body lines: backslashes and quotes escaped, so `"""`, a trailing `"` and `C:\users` are inert. */
 export function pyDocLines(text: string): string[] {
-	return splitLines(wellFormed(text)).map((line) => line.replace(/\\/g, "\\\\").replace(/"/g, '\\"'))
+	return splitLines(commentText(text)).map((line) => line.replace(/\\/g, "\\\\").replace(/"/g, '\\"'))
 }
 
 /** `# ` comment lines. */
 export function pyComment(text: string, indent = ""): string[] {
-	return splitLines(wellFormed(text)).map((line) => (line.trim() === "" ? `${indent}#` : `${indent}# ${line}`))
+	return splitLines(commentText(text)).map((line) => (line.trim() === "" ? `${indent}#` : `${indent}# ${line}`))
 }

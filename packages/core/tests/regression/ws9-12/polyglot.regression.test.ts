@@ -1017,7 +1017,6 @@ const CASES: CompileCase[] = [
 		// regression: S4
 		id: "S4: NUL, BEL and BOM in spec text keep the generated Go SDK compiling",
 		lang: "go",
-		fails: true,
 		spec: doc(
 			{
 				"/n": get("n.get", {
@@ -1039,7 +1038,6 @@ const CASES: CompileCase[] = [
 		// regression: S4
 		id: "S4: NUL, BEL and BOM in spec text keep the generated Python SDK compiling",
 		lang: "python",
-		fails: true,
 		spec: doc(
 			{
 				"/n": get("n.get", {
@@ -1061,7 +1059,6 @@ const CASES: CompileCase[] = [
 		// regression: S4
 		id: "S4: NUL, BEL and BOM in spec text keep the generated Go CLI compiling",
 		lang: "cli",
-		fails: true,
 		spec: doc(
 			{
 				"/n": get("n.get", {
