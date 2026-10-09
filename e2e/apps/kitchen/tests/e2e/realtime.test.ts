@@ -104,11 +104,12 @@ test.describe("Realtime", () => {
 		const ws = connectRealtime("/api/realtime/echo")
 		await ws.waitForFrames(1) /* connected event */
 
-		ws.send({ data: { text: "hello realtime" }, t: "msg" })
+		/* the wire format is one JSON value per frame, both directions */
+		ws.send({ text: "hello realtime" })
 		const received = await ws.waitForFrames(2)
 
 		const echoFrame = received[1] as Record<string, unknown>
-		expect(echoFrame.echo).toBeDefined()
+		expect(echoFrame.echo).toEqual({ text: "hello realtime" })
 
 		ws.close(1000)
 		await ws.waitForClose()

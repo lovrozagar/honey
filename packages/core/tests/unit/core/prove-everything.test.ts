@@ -6,8 +6,6 @@ import * as z from "zod"
 import { sign, verify } from "../../../src/cookie-sign.ts"
 import { defineErrors, honey } from "../../../src/index.ts"
 import { readableStream } from "../../../src/input.ts"
-import { createLongPollHandler } from "../../../src/realtime/longpoll.ts"
-import { ReconnectBuffer } from "../../../src/realtime/buffer.ts"
 import { staticFiles } from "../../../src/static.ts"
 import { otelAdapter } from "../../../src/telemetry/otel.ts"
 import type { WSAdapter, WSHandler } from "../../../src/ws/cloudflare.ts"
@@ -385,49 +383,6 @@ describe("prove: REST publish reaches a realtime subscriber", () => {
 		)
 		expect(pub.status).toBe(200)
 		expect(ws.inbox.some((m) => m.includes("hello"))).toBe(true)
-	})
-})
-
-describe("prove: longpoll handler over Honey routes", () => {
-	it("poll + send round trip", async () => {
-		const buffer = new ReconnectBuffer({ size: 16 })
-		const token = buffer.create("c1")
-		const subscribers = new Map<string, (frame: { data: unknown; id: number; t: "msg" }) => void>()
-		const lp = createLongPollHandler({
-			buffer: {
-				replay(t, lastId) {
-					return buffer.replay(t, lastId)
-				},
-			},
-			bus: {
-				deliverMessage(t, payload) {
-					const cb = subscribers.get(t)
-					if (!cb) return false
-					cb({ data: payload, id: 1, t: "msg" })
-					return true
-				},
-				subscribe(t, cb) {
-					subscribers.set(t, cb)
-					return () => subscribers.delete(t)
-				},
-			},
-			defaultWait: 0,
-		})
-
-		const app = honey()
-			.get("/lp")
-			.handler((ctx) => lp.poll(ctx.req))
-			.post("/lp")
-			.handler((ctx) => lp.send(ctx.req))
-
-		buffer.push(token, { hi: 1 })
-		const polled = await app.fetch(
-			new Request(`http://x/lp?reconnectToken=${encodeURIComponent(token)}&lastId=0&wait=0`),
-			{},
-		)
-		expect(polled.status).toBe(200)
-		const frames = (await polled.json()) as Array<{ data: { hi: number } }>
-		expect(frames[0]?.data.hi).toBe(1)
 	})
 })
 

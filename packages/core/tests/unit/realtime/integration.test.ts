@@ -703,7 +703,7 @@ describe("app.realtime() — edge cases", () => {
 		expect(res.status).toBe(101)
 	})
 
-	it("reconnectBuffer option is accepted without error", () => {
+	it("reconnectBuffer is rejected: resume does not ship, so the option must not be silently ignored", () => {
 		const { adapter } = createTestAdapter()
 		const app = honey().wsAdapter(adapter)
 
@@ -711,8 +711,8 @@ describe("app.realtime() — edge cases", () => {
 			app.realtime("/chat/stream", {
 				handler: (_c, _conn) => {},
 				reconnectBuffer: 500,
-			})
-		}).not.toThrow()
+			} as never)
+		}).toThrow(/reconnectBuffer is not supported/)
 	})
 
 	it("handler that throws does not crash the server — returns error response", async () => {

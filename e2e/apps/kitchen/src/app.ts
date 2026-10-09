@@ -239,6 +239,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	})
 
 	corsed.realtime("/realtime/chat/:roomId", {
+		namespace: "chat",
 		handler: (_c, conn) => {
 			conn.join("room:default")
 			conn.send({ event: "joined", roomId: "default" })
@@ -251,7 +252,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	/* REST endpoint that publishes to realtime subscribers */
 	corsed.post("/realtime/broadcast/:topic").handler(async (ctx) => {
 		const body = await ctx.req.json()
-		ctx.realtime.publish(ctx.params.topic, body)
+		ctx.realtime.namespace("chat").publish(ctx.params.topic, body)
 		return ctx.res.json("ok", { published: true })
 	})
 

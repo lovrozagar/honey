@@ -154,7 +154,11 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	declare readonly ip: string | null
 	declare readonly meta: Record<string, unknown>
 	declare readonly path: string
-	declare readonly realtime: { publish(topic: string, data: unknown): void }
+	/** Publish into a realtime namespace (see `RealtimePublisher`); spelled out so generated types inline it. */
+	declare readonly realtime: {
+		publish(topic: string, data: unknown): void
+		namespace(name: string): { publish(topic: string, data: unknown): void }
+	}
 	declare readonly routePattern: string
 	declare readonly search: Record<string, string>
 	declare readonly searchAll: Record<string, string[]>

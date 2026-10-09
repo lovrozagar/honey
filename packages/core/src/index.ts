@@ -40,8 +40,10 @@ import {
 } from "./tree.ts"
 import { createBus } from "./realtime/bus.ts"
 import type { RealtimeBus } from "./realtime/bus.ts"
-import { createConnContext } from "./realtime/route.ts"
-import type { RealtimeRouteOpts } from "./realtime/route.ts"
+import { resolveRealtimeConfig } from "./realtime/route.ts"
+import type { RealtimeConfig, RealtimeRouteOpts } from "./realtime/route.ts"
+import { createRealtimePublisher, createRealtimeSession } from "./realtime/server.ts"
+import type { RealtimePublisher } from "./realtime/server.ts"
 import type {
 	ComputeErrorsByStatus,
 	DefaultMeta,
@@ -152,18 +154,12 @@ export type {
 	SuccessStatusKey,
 } from "./types.ts"
 export type { WSAdapter, WSContext, WSHandler, WSPreUpgrade } from "./ws/cloudflare.ts"
-export type { ConnContext, RealtimeRouteOpts } from "./realtime/route.ts"
+export type { ConnContext, RealtimeLimits, RealtimeRouteOpts } from "./realtime/route.ts"
+export type { RealtimePublisher } from "./realtime/server.ts"
 export type { RealtimeBus } from "./realtime/bus.ts"
 export type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 export type { ServeRuntime } from "./detect-runtime.ts"
 export { detectRuntime } from "./detect-runtime.ts"
-
-/** Type predicate for incoming wire-protocol msg frames from the realtime client. */
-function isMsgFrame(value: unknown): value is { data: unknown; t: "msg" } {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return false
-	if (!("t" in value) || !("data" in value)) return false
-	return value.t === "msg"
-}
 
 type TelemetryAdapter = {
 	onError?(ctx: { duration: number; error: HoneyError; method: string; path: string }): void
@@ -272,12 +268,6 @@ function mergePath(base: string, path: string): string {
 	return joinPatterns(base, path)
 }
 
-type RealtimeConfig = {
-	handler: RealtimeRouteOpts["handler"]
-	middlewares?: RealtimeRouteOpts["use"]
-	reconnectBuffer?: number
-}
-
 /**
  * Everything a matched route runs, compiled once at finalize: the record (with its resolved
  * error keys, meta and chain) and one function that runs chain + handler and never rejects.
@@ -357,7 +347,7 @@ type HoneyGraph = {
 	pending: Set<PendingRoute>
 	realtimeBus: RealtimeBus | null
 	/** `ctx.realtime`, shared by every request of this graph */
-	realtimeCtx: { publish: (topic: string, data: unknown) => void } | null
+	realtimeCtx: RealtimePublisher | null
 	realtimeRoutes: Map<string, RealtimeConfig>
 	records: Map<RouteId, RouteHandler>
 	root: TreeNode
@@ -2073,7 +2063,7 @@ export class Honey<
 	private _setBus(bus: RealtimeBus): RealtimeBus {
 		const g = this._graph
 		g.realtimeBus = bus
-		g.realtimeCtx = { publish: (topic: string, data: unknown) => bus.publish(topic, data) }
+		g.realtimeCtx = createRealtimePublisher(bus, () => [...g.realtimeRoutes.values()].map((cfg) => cfg.namespace))
 		return bus
 	}
 
@@ -2259,18 +2249,18 @@ export class Honey<
 		})
 	}
 
-	realtime(path: string, opts: RealtimeRouteOpts): this {
+	realtime<const TPath extends string>(
+		path: TPath,
+		opts: RealtimeRouteOpts<TCtx & ApplyScoped<TScopedMw, MergePath<TBasePath, TPath>>>,
+	): this {
 		const fullPath = mergePath(this._basePath, path)
 		const g = this._graph
-		if (!g.realtimeBus) this._setBus(createBus())
+		const config = resolveRealtimeConfig(fullPath, opts)
 		if (g.realtimeRoutes.has(fullPath)) {
 			throw new Error(`Duplicate realtime route: ${fullPath}`)
 		}
-		g.realtimeRoutes.set(fullPath, {
-			handler: opts.handler,
-			middlewares: opts.use,
-			reconnectBuffer: opts.reconnectBuffer,
-		})
+		if (!g.realtimeBus) this._setBus(createBus())
+		g.realtimeRoutes.set(fullPath, config)
 		this._markUsed()
 		this._addWsRoute(parsePattern(fullPath), {
 			bek: null,
@@ -2627,84 +2617,17 @@ export class Honey<
 		return upgradeResult.response
 	}
 
-	/** Terminal of a realtime route's chain: upgrade and attach the connection to the bus. */
+	/** Terminal of a realtime route's chain: identify, upgrade, and attach the connection to the bus. */
 	private async _realtimeUpgrade(finalCtx: HoneyContext<TEnv>, config: RealtimeConfig): Promise<Response> {
 		const fc = finalCtx._rq as FetchCtx<TEnv>
 		const wsAdapter = this._graph.settings.wsAdapter as WSAdapter
-		/* Lazily create bus if not yet initialized */
 		const bus = this._graph.realtimeBus ?? this._setBus(createBus())
-		const connId = crypto.randomUUID()
-
-		let socket: WSContext<unknown> | null = null
-		let conn: ReturnType<typeof createConnContext> | null = null
-
-		/*
-		 * initConn creates the ConnContext and calls the user handler.
-		 * Called from onOpen (for Bun where socket arrives later)
-		 * or inline after upgrade (for Node/CF where socket is immediate).
-		 */
-		const initConn = (ws: WSContext<unknown>) => {
-			socket = ws
-			conn = createConnContext({
-				bus,
-				closeFn: (reason) => {
-					if (socket) socket.close(1000, reason)
-				},
-				id: connId,
-				sendFn: (payload) => {
-					if (socket)
-						socket.send(typeof payload === "object" && payload !== null ? JSON.stringify(payload) : String(payload))
-				},
-				transport: "ws",
-				userId: null,
-			})
-
-			bus.onMessage(connId, (data) => {
-				if (socket) {
-					socket.send(typeof data === "object" && data !== null ? JSON.stringify(data) : String(data))
-				}
-			})
-
-			config.handler(finalCtx, conn)
-		}
-
-		const wrappedHandler: WSHandler<unknown> = {
-			onClose: (_ctx, _ws, _code, reason) => {
-				if (!conn) return
-				const handlers = conn._handlers
-				if (handlers.close) {
-					handlers.close(reason || "normal")
-				}
-				bus.unsubscribeAll(connId)
-				bus.removeHandler(connId)
-			},
-			onMessage: (_ctx, _ws, data) => {
-				if (!conn) return
-				const handlers = conn._handlers
-				if (handlers.message && typeof data === "string") {
-					try {
-						const parsed: unknown = JSON.parse(data)
-						if (isMsgFrame(parsed)) {
-							handlers.message(parsed.data)
-						}
-					} catch {
-						/* ignore malformed frames */
-					}
-				}
-			},
-			onOpen: (_ctx, ws) => {
-				if (!socket) initConn(ws)
-			},
-		}
-
-		const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, wrappedHandler)
-
-		/* Node/CF adapters return the socket from upgrade(); Bun returns undefined (socket comes via onOpen).
-		 * Deno pre-upgrade may still be CONNECTING — wait for onOpen so the first send is not dropped. */
-		if (upgradeResult.socket && !socket && upgradeResult.socket.readyState === 1) {
-			initConn(upgradeResult.socket)
-		}
-
+		/* a throwing identify rejects the upgrade through the chain's error boundary */
+		const userId = config.identify === null ? null : ((await config.identify(finalCtx)) ?? null)
+		const session = createRealtimeSession({ bus, config, ctx: finalCtx, log: fc.log, userId })
+		const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, session.handler)
+		/* Node/CF return an open socket from upgrade(); Bun and Deno deliver it through onOpen */
+		if (upgradeResult.socket && upgradeResult.socket.readyState === 1) session.attach(upgradeResult.socket)
 		return upgradeResult.response
 	}
 

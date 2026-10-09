@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from "vitest"
 import { createBus } from "../../../src/realtime/bus.ts"
 import type { RealtimeBus } from "../../../src/realtime/bus.ts"
 
+/** Register `handler` for `connId`, decoding the JSON frames the bus delivers. */
+function onParsed(bus: RealtimeBus, connId: string, handler: (data: unknown) => void): void {
+	bus.onMessage(connId, (frame) => handler(JSON.parse(frame)))
+}
+
 describe("createBus", () => {
 	it("returns an object implementing the RealtimeBus interface", () => {
 		const bus = createBus()
@@ -92,8 +97,8 @@ describe("publish / fanout", () => {
 
 		bus.subscribe("conn-1", "chat")
 		bus.subscribe("conn-2", "chat")
-		bus.onMessage("conn-1", handler1)
-		bus.onMessage("conn-2", handler2)
+		onParsed(bus, "conn-1", handler1)
+		onParsed(bus, "conn-2", handler2)
 
 		bus.publish("chat", { text: "hello" })
 
@@ -115,8 +120,8 @@ describe("publish / fanout", () => {
 		const nonSubscriberHandler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "chat")
-		bus.onMessage("conn-1", subscriberHandler)
-		bus.onMessage("conn-2", nonSubscriberHandler)
+		onParsed(bus, "conn-1", subscriberHandler)
+		onParsed(bus, "conn-2", nonSubscriberHandler)
 
 		bus.publish("chat", "msg")
 
@@ -129,7 +134,7 @@ describe("publish / fanout", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "events")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		const payload = { nested: { deep: true }, type: "user_joined", userId: 42 }
 		bus.publish("events", payload)
@@ -143,7 +148,7 @@ describe("publish / fanout", () => {
 		const handler = vi.fn<(data: unknown) => void>((data: unknown) => received.push(data))
 
 		bus.subscribe("conn-1", "ordered")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		bus.publish("ordered", "first")
 		bus.publish("ordered", "second")
@@ -160,7 +165,7 @@ describe("publish / fanout", () => {
 		for (let i = 0; i < 50; i++) {
 			const connId = `conn-${i}`
 			bus.subscribe(connId, "broadcast")
-			bus.onMessage(connId, handlers[i])
+			onParsed(bus, connId, handlers[i])
 		}
 
 		bus.publish("broadcast", "mass-message")
@@ -180,8 +185,8 @@ describe("topic isolation", () => {
 
 		bus.subscribe("conn-1", "topic-a")
 		bus.subscribe("conn-2", "topic-b")
-		bus.onMessage("conn-1", handlerA)
-		bus.onMessage("conn-2", handlerB)
+		onParsed(bus, "conn-1", handlerA)
+		onParsed(bus, "conn-2", handlerB)
 
 		bus.publish("topic-a", "for-a-only")
 
@@ -196,7 +201,7 @@ describe("topic isolation", () => {
 
 		bus.subscribe("conn-1", "topic-a")
 		bus.subscribe("conn-1", "topic-b")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		bus.publish("topic-a", "msg-a")
 		bus.publish("topic-b", "msg-b")
@@ -212,7 +217,7 @@ describe("topic isolation", () => {
 
 		bus.subscribe("conn-1", "topic-a")
 		bus.subscribe("conn-1", "topic-b")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		bus.unsubscribe("conn-1", "topic-a")
 
@@ -229,7 +234,7 @@ describe("message handler", () => {
 		const bus = createBus()
 		const handler = vi.fn<(data: unknown) => void>()
 
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 		bus.subscribe("conn-1", "test")
 		bus.publish("test", "data")
 
@@ -241,7 +246,7 @@ describe("message handler", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "events")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		bus.publish("events", 123)
 		bus.publish("events", "text")
@@ -258,7 +263,7 @@ describe("message handler", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "chat")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		bus.publish("chat", "before-remove")
 		bus.removeHandler("conn-1")
@@ -274,11 +279,11 @@ describe("message handler", () => {
 		const secondHandler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "chat")
-		bus.onMessage("conn-1", firstHandler)
+		onParsed(bus, "conn-1", firstHandler)
 
 		bus.publish("chat", "to-first")
 
-		bus.onMessage("conn-1", secondHandler)
+		onParsed(bus, "conn-1", secondHandler)
 		bus.publish("chat", "to-second")
 
 		expect(firstHandler).toHaveBeenCalledOnce()
@@ -356,7 +361,7 @@ describe("edge cases", () => {
 
 		bus.subscribe("conn-1", "chat")
 		bus.subscribe("conn-1", "chat")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		bus.publish("chat", "hello")
 
@@ -383,8 +388,8 @@ describe("edge cases", () => {
 
 		bus.subscribe("conn-1", "chat")
 		bus.subscribe("conn-2", "chat")
-		bus.onMessage("conn-1", throwingHandler)
-		bus.onMessage("conn-2", safeHandler)
+		onParsed(bus, "conn-1", throwingHandler)
+		onParsed(bus, "conn-2", safeHandler)
 
 		bus.publish("chat", "test")
 
@@ -398,22 +403,20 @@ describe("edge cases", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "varied")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 
 		bus.publish("varied", 42)
 		bus.publish("varied", "string-data")
 		bus.publish("varied", null)
-		bus.publish("varied", undefined)
 		bus.publish("varied", [1, 2, 3])
 		bus.publish("varied", true)
 
-		expect(handler).toHaveBeenCalledTimes(6)
+		expect(handler).toHaveBeenCalledTimes(5)
 		expect(handler).toHaveBeenNthCalledWith(1, 42)
 		expect(handler).toHaveBeenNthCalledWith(2, "string-data")
 		expect(handler).toHaveBeenNthCalledWith(3, null)
-		expect(handler).toHaveBeenNthCalledWith(4, undefined)
-		expect(handler).toHaveBeenNthCalledWith(5, [1, 2, 3])
-		expect(handler).toHaveBeenNthCalledWith(6, true)
+		expect(handler).toHaveBeenNthCalledWith(4, [1, 2, 3])
+		expect(handler).toHaveBeenNthCalledWith(5, true)
 	})
 
 	it("unsubscribe then resubscribe restores delivery", () => {
@@ -421,7 +424,7 @@ describe("edge cases", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "chat")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 		bus.unsubscribe("conn-1", "chat")
 
 		bus.publish("chat", "while-unsubscribed")
@@ -438,7 +441,7 @@ describe("edge cases", () => {
 		const bus = createBus()
 
 		bus.subscribe("conn-1", "chat")
-		bus.onMessage("conn-1", vi.fn<(data: unknown) => void>())
+		onParsed(bus, "conn-1", vi.fn<(data: unknown) => void>())
 		bus.removeHandler("conn-1")
 
 		expect(bus.presence("chat")).toEqual(["conn-1"])
@@ -449,7 +452,7 @@ describe("edge cases", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("conn-1", "chat")
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 		bus.unsubscribeAll("conn-1")
 
 		/* handler is still registered, so resubscribing should resume delivery */
@@ -465,7 +468,7 @@ describe("edge cases", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 		const topicCount = 1000
 
-		bus.onMessage("conn-1", handler)
+		onParsed(bus, "conn-1", handler)
 		for (let i = 0; i < topicCount; i++) {
 			bus.subscribe("conn-1", `topic-${i}`)
 		}
@@ -481,7 +484,7 @@ describe("edge cases", () => {
 		const handler = vi.fn<(data: unknown) => void>()
 
 		bus.subscribe("", "")
-		bus.onMessage("", handler)
+		onParsed(bus, "", handler)
 		bus.publish("", "empty-strings")
 
 		expect(handler).toHaveBeenCalledOnce()
@@ -508,11 +511,68 @@ describe("type contracts", () => {
 		const bus = createBus()
 		bus.subscribe("conn-1", "t")
 
-		bus.onMessage("conn-1", (data) => {
+		onParsed(bus, "conn-1", (data) => {
 			const _typed: unknown = data
 			expect(_typed).toBeDefined()
 		})
 
 		bus.publish("t", { key: "value" })
+	})
+})
+
+describe("publish serializes once", () => {
+	it("hands every subscriber the same JSON text frame", () => {
+		const bus = createBus()
+		const frames: string[] = []
+		for (const id of ["a", "b", "c"]) {
+			bus.subscribe(id, "t")
+			bus.onMessage(id, (frame) => frames.push(frame))
+		}
+		const payload = { n: 1 }
+		const spy = vi.spyOn(JSON, "stringify")
+		bus.publish("t", payload)
+		expect(spy).toHaveBeenCalledTimes(1)
+		spy.mockRestore()
+		expect(frames).toEqual(['{"n":1}', '{"n":1}', '{"n":1}'])
+	})
+
+	it("throws for a payload JSON cannot represent, before any delivery", () => {
+		const bus = createBus()
+		const handler = vi.fn<(frame: string) => void>()
+		bus.subscribe("a", "t")
+		bus.onMessage("a", handler)
+		expect(() => bus.publish("t", undefined)).toThrow(TypeError)
+		expect(() => bus.publish("t", 1n)).toThrow(TypeError)
+		const cyclic: Record<string, unknown> = {}
+		cyclic["self"] = cyclic
+		expect(() => bus.publish("t", cyclic)).toThrow(TypeError)
+		expect(() => bus.publish("nobody-listens", undefined)).toThrow(TypeError)
+		expect(handler).not.toHaveBeenCalled()
+	})
+
+	it("a sink that unsubscribes itself during delivery does not skip the others", () => {
+		const bus = createBus()
+		const got: string[] = []
+		bus.subscribe("a", "t")
+		bus.subscribe("b", "t")
+		bus.onMessage("a", () => {
+			bus.unsubscribeAll("a")
+			got.push("a")
+		})
+		bus.onMessage("b", () => got.push("b"))
+		bus.publish("t", 1)
+		expect(got).toEqual(["a", "b"])
+	})
+
+	it("topicCount and isSubscribed track membership", () => {
+		const bus = createBus()
+		bus.subscribe("a", "x")
+		bus.subscribe("a", "y")
+		expect(bus.topicCount("a")).toBe(2)
+		expect(bus.isSubscribed("a", "x")).toBe(true)
+		bus.unsubscribe("a", "x")
+		expect(bus.isSubscribed("a", "x")).toBe(false)
+		expect(bus.topicCount("a")).toBe(1)
+		expect(bus.topicCount("nobody")).toBe(0)
 	})
 })

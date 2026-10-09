@@ -388,7 +388,7 @@ app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
 | `ctx.path`                     | Normalized request path after `stripPrefix`                                                |
 | `ctx.signal`                   | Aborts on disconnect, `timeout()` or shutdown; see [SSE and streaming](#sse-and-streaming) |
 | `ctx.routePattern`             | Registered pattern, e.g. `/users/:id`                                                      |
-| `ctx.realtime`                 | `{ publish(topic, data) }` when realtime routes exist                                      |
+| `ctx.realtime`                 | `{ publish, namespace(name).publish }` when realtime routes exist                          |
 | `ctx.tap(key, payload)`        | Queue a tap (only if `.taps()` was declared)                                               |
 | `ctx.background(promise)`      | `waitUntil` on Workers, otherwise fire-and-forget                                          |
 | `ctx.executionCtx`             | Workers `ExecutionContext` when `fetch` received one                                       |
@@ -1331,46 +1331,68 @@ Reconnect: pass `?reconnect_token=` on the next handshake; Honey calls `onReconn
 
 ## Realtime
 
-Honey's room protocol (not a raw socket). Transports: `ws`, `sse`, `longpoll`.
+A topic bus over WebSockets: connections join topics, and anyone can publish to a topic. Only the WebSocket transport ships, with no resume, replay or acknowledgements. A client that reconnects is a new connection.
 
 ```ts
-app.realtime("/realtime/chat/:roomId", {
-	reconnectBuffer: 32,
-	use: [withAuth], // extra middleware for this socket only
+const authed = app.use(withAuth)
+
+authed.realtime("/realtime/chat/:roomId", {
+	namespace: "chat",
+	identify: (ctx) => ctx.user.id, // becomes conn.userId; a throw rejects the upgrade
 	handler: (ctx, conn) => {
-		conn.join("room:default")
+		const room = `room:${ctx.params.roomId}`
+		conn.join(room)
 		conn.send({ event: "joined", id: conn.id, userId: conn.userId })
 		conn.on("message", (payload) => {
-			conn.publish("room:default", payload)
+			conn.publish(room, { from: conn.userId, payload })
 		})
-		conn.on("close", (_reason) => {
-			conn.leave("room:default")
+		conn.on("close", () => {
+			conn.publish(room, { left: conn.userId })
 		})
 	},
+	onError: (error, conn) => log.error({ error, conn: conn.id }),
 })
 
-app.post("/realtime/broadcast/:topic").handler(async (ctx) => {
-	const body = await ctx.req.json()
-	ctx.realtime.publish(ctx.params.topic, body)
+// publishing from HTTP needs the same auth as the socket
+authed.post("/realtime/broadcast/:roomId").handler(async (ctx) => {
+	ctx.realtime.namespace("chat").publish(`room:${ctx.params.roomId}`, await ctx.req.json())
 	return ctx.res.json("ok", { published: true })
 })
 ```
 
+**Wire format.** Every frame, in both directions, is one JSON text. `conn.send(x)` and `publish(topic, x)` send `JSON.stringify(x)`, strings included (`"hi"`), and throw for values JSON cannot represent. An inbound text frame is parsed and handed to the `message` handler as is. Non-JSON and binary frames are dropped.
+
+**Namespaces.** Topics belong to a namespace. It defaults to the route's full path pattern, so two realtime routes never see each other's topics unless both set the same `namespace`. `ctx.realtime.namespace(name).publish(topic, data)` publishes from any request. `ctx.realtime.publish(topic, data)` works only while the app has exactly one namespace; with several it throws.
+
+**Callbacks.** `handler`, then each inbound frame, then the `close` handler run in order, one at a time. Async callbacks are awaited. Frames that arrive before `conn.on("message")` wait for it. A throw or rejection goes to `onError`, or to the app logger when there is none; it never reaches the runtime. A failing `handler` closes the connection with 1011. On close, the connection leaves every topic before the `close` handler runs. After close, `join` and `send` do nothing, and `publish` still works, for "left" announcements.
+
 `conn`:
 
-| Field                          | Meaning                       |
-| ------------------------------ | ----------------------------- |
-| `id`                           | Connection id                 |
-| `userId`                       | `string \| null`              |
-| `transport`                    | `"ws" \| "sse" \| "longpoll"` |
-| `state`                        | Mutable bag                   |
-| `join(topic)` / `leave(topic)` | Topic membership              |
-| `send(payload)`                | To this connection            |
-| `publish(topic, payload)`      | To everyone on the topic      |
-| `close(reason?)`               | Disconnect                    |
-| `on("message" \| "close", fn)` | Inbound / teardown            |
+| Field                          | Meaning                                    |
+| ------------------------------ | ------------------------------------------ |
+| `id`                           | Connection id                              |
+| `userId`                       | What `identify(ctx)` returned, else `null` |
+| `transport`                    | Always `"ws"`                              |
+| `closed`                       | `true` once closed                         |
+| `state`                        | Mutable bag                                |
+| `join(topic)` / `leave(topic)` | Topic membership in this route's namespace |
+| `send(payload)`                | One JSON frame to this connection          |
+| `publish(topic, payload)`      | One JSON frame to everyone on the topic    |
+| `close(reason?)`               | Close with 1000 (reason cut to 123 bytes)  |
+| `on("message" \| "close", fn)` | Inbound frames / teardown                  |
 
-Duplicate `realtime()` paths throw. Cloudflare's isolate-local bus does **not** cross isolates — REST publish to another connection is skipped on the CF e2e env.
+`limits` (per connection):
+
+| Option             | Default | Past it                                                      |
+| ------------------ | ------- | ------------------------------------------------------------ |
+| `maxTopics`        | 128     | `join` throws                                                |
+| `maxFrameBytes`    | 1 MiB   | close 1009                                                   |
+| `maxPendingFrames` | 64      | close 1008 (frames waiting for a slow or missing handler)    |
+| `maxBufferedBytes` | 4 MiB   | `slowConsumer`: `"close"` (1013, default) or `"drop"` frames |
+
+`maxBufferedBytes` applies where the runtime reports how much it holds for a client (`bufferedAmount`). Cap inbound frame size at the adapter as well, because the runtime reads a frame before Honey sees it.
+
+The `use` option adds middleware for this socket only. Duplicate `realtime()` paths throw, and so do the unsupported `reconnectBuffer` and `transports` options. The bus is in-process: it does not cross processes or Cloudflare isolates (REST publish to another connection is skipped on the CF e2e env).
 
 ## SSE and streaming
 
@@ -1568,26 +1590,26 @@ Language printers used by the plugin (`generatePythonSDK`, `generateGoSDK`, `gen
 
 Exported from `@lovrozagar/honey`. They describe the **app you built**:
 
-| Type                                                 | Meaning                              |
-| ---------------------------------------------------- | ------------------------------------ |
-| `InferRoutes<typeof app>`                            | Path → methods → input/output/errors |
-| `InferRoutePaths<typeof app>`                        | Union of paths                       |
-| `InferRouteMethods<typeof app, Path>`                | Methods on one path                  |
-| `InferRouteInput<typeof app, Path, Method>`          | Validated input                      |
-| `InferRouteOutput<typeof app, Path, Method>`         | Output map                           |
-| `InferRouteErrors<typeof app, Path, Method>`         | Declared error keys                  |
-| `InferRouteMeta<typeof app, Path, Method>`           | Route meta                           |
-| `InferRouteCtx<typeof app, Path, Method>`            | Handler ctx for one route            |
-| `InferCtx<typeof app>`                               | Handler context (no `res` brand)     |
-| `InferEnv<typeof app>`                               | `ctx.env`                            |
-| `InferMeta<typeof app>`                              | App-level meta                       |
-| `InferErrorFactory<typeof app>`                      | Error factory                        |
-| `InferBasePath<typeof app>`                          | Base path string                     |
-| `StatusKey` / `SuccessStatusKey`                     | Status-key unions                    |
-| `HoneyCtx<TEnv>`                                     | Untyped context shape                |
-| `HoneyServeOptions` / `ServeHandle` / `ServeRuntime` | Serve types                          |
-| `WSHandler` / `WSContext` / `WSAdapter`              | Socket types                         |
-| `ConnContext` / `RealtimeRouteOpts`                  | Realtime types                       |
+| Type                                                                         | Meaning                              |
+| ---------------------------------------------------------------------------- | ------------------------------------ |
+| `InferRoutes<typeof app>`                                                    | Path → methods → input/output/errors |
+| `InferRoutePaths<typeof app>`                                                | Union of paths                       |
+| `InferRouteMethods<typeof app, Path>`                                        | Methods on one path                  |
+| `InferRouteInput<typeof app, Path, Method>`                                  | Validated input                      |
+| `InferRouteOutput<typeof app, Path, Method>`                                 | Output map                           |
+| `InferRouteErrors<typeof app, Path, Method>`                                 | Declared error keys                  |
+| `InferRouteMeta<typeof app, Path, Method>`                                   | Route meta                           |
+| `InferRouteCtx<typeof app, Path, Method>`                                    | Handler ctx for one route            |
+| `InferCtx<typeof app>`                                                       | Handler context (no `res` brand)     |
+| `InferEnv<typeof app>`                                                       | `ctx.env`                            |
+| `InferMeta<typeof app>`                                                      | App-level meta                       |
+| `InferErrorFactory<typeof app>`                                              | Error factory                        |
+| `InferBasePath<typeof app>`                                                  | Base path string                     |
+| `StatusKey` / `SuccessStatusKey`                                             | Status-key unions                    |
+| `HoneyCtx<TEnv>`                                                             | Untyped context shape                |
+| `HoneyServeOptions` / `ServeHandle` / `ServeRuntime`                         | Serve types                          |
+| `WSHandler` / `WSContext` / `WSAdapter`                                      | Socket types                         |
+| `ConnContext` / `RealtimeRouteOpts` / `RealtimeLimits` / `RealtimePublisher` | Realtime types                       |
 
 ```ts
 import type { InferCtx, InferRouteInput, InferRoutes } from "@lovrozagar/honey"
