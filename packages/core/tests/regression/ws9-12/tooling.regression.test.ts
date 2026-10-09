@@ -3,8 +3,9 @@
  * The temp apps import honey by path, so in an extracted old tree they load that tree's source. */
 
 import { spawn } from "node:child_process"
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { dirname, join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { generateAndWrite, honey as honeyVitePlugin, resolveHoneyConfig } from "../../../src/plugin.ts"
 
@@ -182,4 +183,44 @@ describe("workstream 12 regressions", () => {
 		expect(code, out).toBe(0)
 		expect(existsSync(join(dir, "src/_gen/routes.gen.ts")), out).toBe(true)
 	}, 90_000)
+})
+
+// regression: GEN-STALE-DIST
+describe("bin/honey.js picks the CLI it runs", () => {
+	const BIN = resolve(import.meta.dirname, "../../../bin/honey.js")
+	const JITI = dirname(createRequire(import.meta.url).resolve("jiti/package.json"))
+	const dir = join(ROOT, "bin-pick")
+
+	beforeEach(() => {
+		rmSync(dir, { force: true, recursive: true })
+		mkdirSync(join(dir, "bin"), { recursive: true })
+		mkdirSync(join(dir, "src"), { recursive: true })
+		mkdirSync(join(dir, "dist"), { recursive: true })
+		mkdirSync(join(dir, "node_modules"), { recursive: true })
+		writeFileSync(join(dir, "bin/honey.js"), readFileSync(BIN, "utf-8"))
+		writeFileSync(join(dir, "package.json"), '{ "type": "module" }')
+		writeFileSync(join(dir, "src/cli.ts"), 'const from: string = "source"\nconsole.log(from)\n')
+		writeFileSync(join(dir, "dist/cli.js"), 'console.log("dist")\n')
+		symlinkSync(JITI, join(dir, "node_modules/jiti"), "dir")
+	})
+	afterEach(() => rmSync(dir, { force: true, recursive: true }))
+
+	function runNode(): Promise<string> {
+		return new Promise((res, rej) => {
+			const child = spawn("node", [join(dir, "bin/honey.js")], { cwd: dir })
+			let out = ""
+			child.stdout.on("data", (c: Buffer) => (out += c.toString()))
+			child.on("error", rej)
+			child.on("close", () => res(out.trim()))
+		})
+	}
+
+	it("Node in a repository checkout runs the source, never a possibly stale dist/", async () => {
+		writeFileSync(join(dir, "tsconfig.json"), "{}")
+		expect(await runNode()).toBe("source")
+	}, 30_000)
+
+	it("Node in an installed package (no tsconfig.json) runs the compiled dist/", async () => {
+		expect(await runNode()).toBe("dist")
+	}, 30_000)
 })

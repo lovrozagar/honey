@@ -136,6 +136,9 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 
 ### Fixed
 
+- Generated Python SDK: multipart uploads failed. httpx 0.28 cannot encode a list of form tuples beside files (a text field raised `TypeError`, a file alone went out with an empty body); text fields are now sent as plain multipart parts.
+- Generated Rust SDK: a bare `{ "type": "object" }` response did not compile (`HashMap` used in a resource file without an import). Map types are now written as `std::collections::HashMap` wherever they appear.
+- Generated Go CLI: a missing required flag exited 3 (network error) instead of 4 (usage); an unknown subcommand under a group printed help and exited 0. Both now exit 4 before any request is sent.
 - Path-scoped middleware (`app.use("/admin", auth)`) was skipped for every route when a generated route tree was loaded (C1); route meta and error keys back-filled by scoped middleware did not apply either.
 - With a loaded tree: POST on an `.on(["GET", "POST"])` route was 404; `openapi()` spec and docs routes were 404 (docs silently moved to `/reference`); a GET to the app's own root wildcard (an SPA fallback) was 404 while HEAD was 200; HEAD to an unknown path reached a gateway catch-all; stale meta and error keys from the generated file were served; `.route(sub)` threw `Merge conflict` when the tree was generated from the full app; optional params, unnamed wildcards and trailing-slash routes threw `Duplicate route`.
 - Gateway delegation found the catch-all by matching a literal `/*`, so any root `/:slug` broke it, and delegated routes ran with the catch-all's pattern and scopes; meta-driven taps read the catch-all's meta. Delegated routes now carry their own pattern, params, meta and scopes.

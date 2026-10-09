@@ -216,10 +216,10 @@ export function irRenderUseRust(ir: IRSchema, ctx: RustRenderUseCtx, depth = 0):
 			if (fields.length === 0) {
 				if (additional !== undefined && additional !== false) {
 					const valType = irRenderUseRust(additional, { ...ctx, fieldName: `${ctx.fieldName}Value` }, depth + 1)
-					return `HashMap<String, ${valType.startsWith("Box<") ? valType.slice(4, -1) : valType}>`
+					return `std::collections::HashMap<String, ${valType.startsWith("Box<") ? valType.slice(4, -1) : valType}>`
 				}
 				if (additional === false) return "serde_json::Value"
-				return "HashMap<String, serde_json::Value>"
+				return "std::collections::HashMap<String, serde_json::Value>"
 			}
 
 			return hoist(ctx, (name) => irRenderTopLevelRust(name, ir, ctx.decls, undefined, ctx.names))
@@ -491,12 +491,12 @@ export function irRenderTopLevelRust(
 				names,
 				parentName: typeName,
 			})
-			return `pub type ${typeName} = HashMap<String, ${valType}>;`
+			return `pub type ${typeName} = std::collections::HashMap<String, ${valType}>;`
 		}
 
 		if (fields.length === 0) {
 			if (additional === false) return `#[derive(Debug, Clone, Serialize, Deserialize)]\npub struct ${typeName};`
-			return `pub type ${typeName} = HashMap<String, serde_json::Value>;`
+			return `pub type ${typeName} = std::collections::HashMap<String, serde_json::Value>;`
 		}
 
 		const scope = new NameScope()
@@ -516,7 +516,7 @@ export function irRenderTopLevelRust(
 				parentName: typeName,
 			})
 			l.push(`\t#[serde(flatten)]`)
-			l.push(`\tpub ${extraIdent}: HashMap<String, ${valType}>,`)
+			l.push(`\tpub ${extraIdent}: std::collections::HashMap<String, ${valType}>,`)
 		}
 
 		l.push(`}`)

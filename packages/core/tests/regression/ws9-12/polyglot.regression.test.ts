@@ -347,15 +347,15 @@ describe.skipIf(!hasPython)("Python runtime", () => {
 		expect(records.find((r) => r.url === "/form")?.body).toContain("form-value")
 	})
 
-	/* NOT fixed on HEAD: the SDK passes httpx a list of (key, value) tuples as `data`, which httpx
-	 * 0.28 cannot encode beside `files` (TypeError), and with no text field the body goes out empty.
-	 * Skipped until fixed; the matrix records it as open. */
-	it.skip("H50: a multipart body is sent", async () => {
+	/* httpx 0.28 cannot encode a list of `data` tuples beside `files`: text fields travel as
+	 * `(None, value)` file parts instead. */
+	it("H50: a multipart body is sent", async () => {
 		const out = await pyCheck("h50_multipart_body")
 		expect(out.err).toBe("")
 		const rec = records.find((r) => r.url === "/upload")
 		expect(rec?.headers["content-type"]).toMatch(/multipart\/form-data/)
 		expect(rec?.body).toContain("multipart-value")
+		expect(rec?.body).toContain("file-bytes")
 	})
 
 	it("H42: an SSE operation on POST sends its JSON body", async () => {
@@ -591,6 +591,18 @@ describe.skipIf(!hasGo)("Go CLI runtime", () => {
 		const broken = await cli(["items", "get", "--id", "x"], () => json({ message: "down" }, 500))
 		expect(notFound.code).toBe(1)
 		expect(broken.code).toBe(2)
+	})
+
+	// regression: CLI-REQUIRED-FLAG
+	it("a missing required flag, an unknown flag and a stray subcommand exit 4 (usage) and send nothing", async () => {
+		const missing = await cli(["items", "get"], () => undefined)
+		const unknown = await cli(["items", "get", "--id", "x", "--nope"], () => undefined)
+		const stray = await cli(["items", "nope"], () => undefined)
+		expect(missing.code, missing.err).toBe(4)
+		expect(missing.err).toMatch(/id/)
+		expect(unknown.code, unknown.err).toBe(4)
+		expect(stray.code, stray.err).toBe(4)
+		expect(records).toEqual([])
 	})
 
 	it("M (client-go/errors.go:156-206; cli-go/output.go:53-94): hostile server bytes are not printed raw", async () => {
@@ -956,6 +968,12 @@ const CASES: CompileCase[] = [
 			{ "/e": get("e.get", { responses: jsonOk({ $ref: "#/components/schemas/Esc" }) }) },
 			{ Esc: { enum: ["a\bb", "c\fd", "é"], type: "string" } },
 		),
+	},
+	{
+		// regression: RUST-BARE-OBJECT
+		id: "NEW (H): a bare object response compiles (HashMap in a resource file)",
+		lang: "rust",
+		spec: doc({ "/meta": get("meta.get", { responses: jsonOk({ type: "object" }) }) }),
 	},
 	{
 		id: "M (codegen-python.ts:622-628): list, enum and union aliases are typed, not Any",

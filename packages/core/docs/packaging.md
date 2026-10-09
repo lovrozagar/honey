@@ -57,7 +57,9 @@ Ship source, declarations _and_ compiled JavaScript, and split the conditions:
   entry, not the Vite plugin, not the CLI. Shipping only source made the package Bun-only in
   practice while the README promised Node.
 - **Bun** resolves `bun` → `./src/*.ts`. It runs TypeScript natively, and the `honey` bin
-  (`bin/honey.js`) does the same split: Bun runs `src/cli.ts`, every other runtime `dist/cli.js`.
+  (`bin/honey.js`) does the same split: Bun runs `src/cli.ts`, every other runtime `dist/cli.js`. In a
+  repository checkout (marked by `tsconfig.json`, which is not published) Node also runs the source,
+  through jiti, so `honey generate` never runs a stale `dist/`.
 - **`honey-source`** is this repository's own condition. Every tool here resolves it first —
   `customConditions` in the tsconfigs, `resolve.conditions` in the vitest configs,
   `--conditions=honey-source` for Node and Deno, `WRANGLER_BUILD_CONDITIONS` for wrangler — so

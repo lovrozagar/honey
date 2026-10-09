@@ -662,7 +662,7 @@ pub struct ErrField {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorEnvelope {
 	pub error_key: String,
-	pub fields: HashMap<String, Vec<String>>,
+	pub fields: std::collections::HashMap<String, Vec<String>>,
 	pub message: String,
 	pub status: i64,
 	pub status_key: String,
@@ -2331,7 +2331,7 @@ pub struct AwaitResource {
 
 impl AwaitResource {
 	/// More reserved words as resource and action
-	pub async fn r#yield(&self, body: &AwaitYieldBody, opts: &AwaitYieldOpts) -> Result<HashMap<String, serde_json::Value>, Error> {
+	pub async fn r#yield(&self, body: &AwaitYieldBody, opts: &AwaitYieldOpts) -> Result<std::collections::HashMap<String, serde_json::Value>, Error> {
 		let url_path = "/await/yield".to_string();
 		let query: Vec<(String, String)> = Vec::new();
 		let mut call_headers: std::collections::HashMap<String, String> = opts.headers.clone().unwrap_or_default();
@@ -2363,7 +2363,7 @@ impl AwaitResource {
 				}
 			}
 		}
-		let out: HashMap<String, serde_json::Value> = serde_json::from_slice(if result.body.is_empty() { b"null" } else { &result.body })?;
+		let out: std::collections::HashMap<String, serde_json::Value> = serde_json::from_slice(if result.body.is_empty() { b"null" } else { &result.body })?;
 		Ok(out)
 	}
 	
@@ -2381,7 +2381,7 @@ pub struct AwaitResourceSync {
 
 impl AwaitResourceSync {
 	/// More reserved words as resource and action
-	pub fn r#yield(&self, body: &AwaitYieldBody, opts: &AwaitYieldOpts) -> Result<HashMap<String, serde_json::Value>, Error> {
+	pub fn r#yield(&self, body: &AwaitYieldBody, opts: &AwaitYieldOpts) -> Result<std::collections::HashMap<String, serde_json::Value>, Error> {
 		let url_path = "/await/yield".to_string();
 		let query: Vec<(String, String)> = Vec::new();
 		let mut call_headers: std::collections::HashMap<String, String> = opts.headers.clone().unwrap_or_default();
@@ -2413,7 +2413,7 @@ impl AwaitResourceSync {
 				}
 			}
 		}
-		let out: HashMap<String, serde_json::Value> = serde_json::from_slice(if result.body.is_empty() { b"null" } else { &result.body })?;
+		let out: std::collections::HashMap<String, serde_json::Value> = serde_json::from_slice(if result.body.is_empty() { b"null" } else { &result.body })?;
 		Ok(out)
 	}
 	

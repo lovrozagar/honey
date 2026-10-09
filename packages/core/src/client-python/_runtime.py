@@ -384,9 +384,13 @@ def _form_content(body: Any) -> bytes:
 
 def _multipart_parts(
     body: Any, files: list[str], list_files: list[str],
-) -> tuple[list[tuple[str, str]], list[tuple[str, Any]]]:
-    """Split a multipart body into httpx ``data`` and ``files``."""
-    data: list[tuple[str, str]] = []
+) -> tuple[None, list[tuple[str, Any]]]:
+    """Encode a multipart body as httpx ``files`` entries (``data`` is always ``None``).
+
+    httpx 0.28 cannot combine a list of ``data`` tuples with ``files`` (a text field raises
+    ``TypeError``, and an empty list sends an empty body), so text fields go in as
+    ``(None, value)`` parts: same wire format, and repeated keys keep their order.
+    """
     out_files: list[tuple[str, Any]] = []
     for key, value in dict(body or {}).items():
         if value is None:
@@ -396,10 +400,10 @@ def _multipart_parts(
         elif key in list_files:
             out_files.extend((key, item) for item in value)
         elif isinstance(value, (list, tuple)):
-            data.extend((key, _format_value(v)) for v in value)
+            out_files.extend((key, (None, _format_value(v))) for v in value)
         else:
-            data.append((key, _format_value(value)))
-    return data, out_files
+            out_files.append((key, (None, _format_value(value))))
+    return None, out_files
 
 
 def _to_ws_url(url: str) -> str:
