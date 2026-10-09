@@ -157,8 +157,13 @@ describe.sequential("honey/build target artifacts", () => {
 		await viteBuild("bun", outDir)
 		const entry = resolve(outDir, "index.js")
 		expect(existsSync(entry)).toBe(true)
-		start("bun", [entry], { PORT: String(PORTS.bun) })
-		await waitHealthy(`http://127.0.0.1:${PORTS.bun}/health`)
+		const child = start("bun", [entry], { PORT: String(PORTS.bun) })
+		try {
+			await waitHealthy(`http://127.0.0.1:${PORTS.bun}/health`, 20_000)
+		} catch (err) {
+			const extra = (child as ChildProcess & { logs: () => string }).logs()
+			throw new Error(`${err instanceof Error ? err.message : String(err)}${extra ? `\n${extra}` : ""}`)
+		}
 		await smokeHttp(`http://127.0.0.1:${PORTS.bun}`)
 	}, 60_000)
 

@@ -34,6 +34,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+      # same as ci.yml's test job: the integration suites run `node x.ts` fixtures, which need
+      # Node's type stripping
+      - uses: actions/setup-node@v4
+        with:
+          node-version: current
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
