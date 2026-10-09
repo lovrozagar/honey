@@ -70,7 +70,7 @@ async function loadGenerated(): Promise<new (config: Record<string, unknown>) =>
 
 describe("S1: a cross-origin redirect carries no configured, per-call or hook header", () => {
 	// regression: S1
-	it.fails("createClient (function-form config.headers, per-call headers, onRequest)", async () => {
+	it("createClient (function-form config.headers, per-call headers, onRequest)", async () => {
 		const { atEvil, fetch } = twoOrigins()
 		const client = createClient({
 			baseURL: "https://api.test",
@@ -85,7 +85,7 @@ describe("S1: a cross-origin redirect carries no configured, per-call or hook he
 	})
 
 	// regression: S1
-	it.fails("the generated TypeScript SDK (function-form config.headers, per-call headers, onRequest)", async () => {
+	it("the generated TypeScript SDK (function-form config.headers, per-call headers, onRequest)", async () => {
 		const { atEvil, fetch } = twoOrigins()
 		const Ctor = await loadGenerated()
 		const sdk = new Ctor({

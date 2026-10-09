@@ -44,6 +44,7 @@ import { createTypeEmitState, emitSchemaType, quoteKey } from "./type-emitter.ts
 import type { TypeEmitState } from "./type-emitter.ts"
 import type { InputSchemaEntry, InputSchemasDef, MetaSpecConfig, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
+import { CROSS_ORIGIN_SAFE_HEADERS } from "./client/redirect-policy.ts"
 
 export { prepareCodegen } from "./codegen-loaders.ts"
 export type { InvalidateCheckConfig, InvalidateCheckLevel } from "./invalidate-check.ts"
@@ -4339,9 +4340,10 @@ function sdkClientDoRequest(): string {
 \t\treturn this.#refreshing
 \t}
 
-\t/* Keep in sync with client/http.ts — redirects follow the configured policy. "same-origin"
-\t   (default) follows a redirect only while it stays on the base URL's origin; "follow" also
-\t   follows cross-origin ones, without credentials, configured headers or a replayed body.
+\t/* Same rules as client/http.ts; the cross-origin header allowlist comes from
+\t   client/redirect-policy.ts. "same-origin" (default) follows a redirect only while it stays on
+\t   the base URL's origin; "follow" also follows cross-origin ones, carrying only allowlisted
+\t   headers and never a replayed body.
 \t   Browsers hide redirect targets from script, so there the platform follows. */
 \tasync #send(url: string, init: RequestInit): Promise<Response> {
 \t\tconst policy = this.#config.redirect ?? "same-origin"
@@ -4380,11 +4382,13 @@ function sdkClientDoRequest(): string {
 \t\t\t\t}
 \t\t\t}
 \t\t\tif (crossOrigin) {
-\t\t\t\tconst headers = nextInit.headers as Headers
-\t\t\t\tfor (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name)
-\t\t\t\theaders.delete(this.#config.authHeaderName ?? "Authorization")
-\t\t\t\tconst configured = this.#config.headers
-\t\t\t\tif (configured && typeof configured !== "function") for (const name of Object.keys(configured)) headers.delete(name)
+\t\t\t\t/* only allowlisted headers cross: no credential, configured, per-call or hook header */
+\t\t\t\tconst safe = new Headers()
+\t\t\t\tfor (const name of ${JSON.stringify(CROSS_ORIGIN_SAFE_HEADERS)}) {
+\t\t\t\t\tconst value = (nextInit.headers as Headers).get(name)
+\t\t\t\t\tif (value !== null) safe.set(name, value)
+\t\t\t\t}
+\t\t\t\tnextInit.headers = safe
 \t\t\t}
 \t\t\tawait response.body?.cancel().catch(() => {})
 \t\t\tcurrent = target

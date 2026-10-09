@@ -3,6 +3,7 @@ import type { ClientError } from "./error.ts"
 import { clientErrorFor } from "./error.ts"
 import { isJsonMediaType, isTextMediaType, parseMediaType } from "../media-type.ts"
 import { interpolatePath } from "./path.ts"
+import { crossOriginHeaders } from "./redirect-policy.ts"
 import type { SSEEvent } from "./sse.ts"
 import { parseSSEStream } from "./sse.ts"
 
@@ -58,9 +59,9 @@ export type OnResponseContext = {
  * - `same-origin` (default): follow redirects that stay on the base URL's origin; a
  *   cross-origin redirect is returned unfollowed (a non-2xx result). In browsers, which hide
  *   redirect targets from script, the platform follows and applies CORS to the target.
- * - `follow`: also follow cross-origin redirects, without credentials (`Authorization`,
- *   `Cookie`, the auth header, and every configured or per-call header) and without
- *   replaying a body.
+ * - `follow`: also follow cross-origin redirects. Such a hop carries only `Accept`,
+ *   `Accept-Language` and `User-Agent` (no credentials, auth header, configured, per-call or
+ *   `onRequest` header) and never replays a body.
  * - `manual` / `error`: passed to `fetch`.
  */
 export type RedirectPolicy = "error" | "follow" | "manual" | "same-origin"
@@ -300,7 +301,6 @@ function platformFollowsRedirects(): boolean {
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const MAX_REDIRECTS = 20
-const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"]
 
 export class HTTPClient {
 	private _config: ClientConfig
@@ -470,22 +470,11 @@ export class HTTPClient {
 					;(nextInit.headers as Headers).delete("content-type")
 				}
 			}
-			if (crossOrigin) {
-				const headers = nextInit.headers as Headers
-				for (const name of CREDENTIAL_HEADERS) headers.delete(name)
-				headers.delete(this.authName)
-				for (const name of this._customHeaderNames()) headers.delete(name)
-			}
+			if (crossOrigin) nextInit.headers = crossOriginHeaders(nextInit.headers as Headers)
 			await response.body?.cancel().catch(() => {})
 			current = target
 			currentInit = nextInit
 		}
-	}
-
-	/** Names of headers set by `config.headers` (static form) — stripped on a cross-origin hop. */
-	private _customHeaderNames(): string[] {
-		const h = this._config.headers
-		return h && typeof h !== "function" ? Object.keys(h) : []
 	}
 
 	/** Build, send and post-process one request: hooks, auth refresh, redirects. */
