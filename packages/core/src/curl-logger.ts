@@ -1,6 +1,7 @@
 import { namedMiddleware } from "./middleware.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 import type { LoggerInstance } from "./logger.ts"
+import { shellQuote } from "./request-to-curl.ts"
 
 type BodyOmittedReason = "content-type" | "disabled" | "missing" | "read-error" | "too-large"
 
@@ -15,6 +16,9 @@ type CurlLogData = {
 	status: number
 }
 
+/** What `skip` sees: everything known before the curl command is built. */
+type CurlSkipData = Pick<CurlLogData, "duration" | "method" | "path" | "requestId" | "status">
+
 type CurlLoggerBodyOptions = {
 	allowContentTypes?: string[]
 	maxBytes?: number
@@ -24,17 +28,46 @@ type CurlLoggerOptions = {
 	body?: boolean | CurlLoggerBodyOptions
 	instance?: LoggerInstance
 	log?: (data: CurlLogData) => void
+	/**
+	 * Return the value to log, or null to drop the header. Replaces the default,
+	 * which masks `authorization`, `proxy-authorization`, `cookie`, `set-cookie`
+	 * and API-key/token headers. Call `defaultRedactHeader` to keep it and add more.
+	 */
 	redactHeader?: (name: string, value: string) => string | null
+	/** Same for query parameters. The default masks token-, key-, secret- and password-like names. */
 	redactQueryParam?: (name: string, value: string) => string | null
-	skip?: (data: CurlLogData) => boolean
+	/** Runs before the curl command is built; returning true skips all of that work. */
+	skip?: (data: CurlSkipData) => boolean
 }
 
 const DEFAULT_BODY_CONTENT_TYPES = ["application/json", "application/x-www-form-urlencoded", "application/xml", "text/"]
 
 const DEFAULT_MAX_BODY_BYTES = 16_384
 
-function shellEscape(value: string): string {
-	return value.replace(/'/g, "'\\''")
+const REDACTED = "[REDACTED]"
+
+const SENSITIVE_HEADERS = new Set([
+	"authorization",
+	"cookie",
+	"proxy-authorization",
+	"set-cookie",
+	"x-api-key",
+	"x-auth-token",
+	"x-csrf-token",
+	"x-xsrf-token",
+])
+const SENSITIVE_HEADER_RE = /(?:^|-)(?:token|secret|api-?key|password|session)(?:$|-)/i
+const SENSITIVE_PARAM_RE =
+	/(?:^|[_.-])(?:access_?token|refresh_?token|id_?token|token|secret|client_?secret|password|passwd|pwd|api_?key|apikey|key|sig|signature|auth|code|session|jwt)$/i
+
+function defaultRedactHeader(name: string, value: string): string | null {
+	const lower = name.toLowerCase()
+	if (SENSITIVE_HEADERS.has(lower) || SENSITIVE_HEADER_RE.test(lower)) return REDACTED
+	return value
+}
+
+function defaultRedactQueryParam(name: string, value: string): string | null {
+	return SENSITIVE_PARAM_RE.test(name) ? REDACTED : value
 }
 
 function defaultLog(data: CurlLogData): void {
@@ -43,175 +76,183 @@ function defaultLog(data: CurlLogData): void {
 
 function shouldIncludeBody(contentType: string | null, allowContentTypes: string[]): boolean {
 	if (contentType === null || contentType.length === 0) return false
-	return allowContentTypes.some((allowed) => contentType.startsWith(allowed))
+	const lower = contentType.toLowerCase()
+	return allowContentTypes.some((allowed) => lower.startsWith(allowed.toLowerCase()))
 }
 
-function redactUrl(url: URL, redactQueryParam?: (name: string, value: string) => string | null): string {
-	if (redactQueryParam === undefined || url.search.length === 0) return url.toString()
-
-	const redacted = new URL(url.toString())
-	redacted.search = ""
-
-	for (const [name, value] of url.searchParams.entries()) {
-		const nextValue = redactQueryParam(name, value)
-		if (nextValue === null) continue
-		redacted.searchParams.append(name, nextValue)
-	}
-
-	return redacted.toString()
-}
-
-async function readBodyWithinLimit(
-	request: Request,
-	maxBytes: number,
-): Promise<{
-	body: string | null
-	omittedReason: BodyOmittedReason | null
-}> {
-	if (request.body === null) {
-		return { body: null, omittedReason: "missing" }
-	}
-
-	const contentLength = request.headers.get("content-length")
-	if (contentLength !== null) {
-		const parsedLength = Number.parseInt(contentLength, 10)
-		if (!Number.isNaN(parsedLength) && parsedLength > maxBytes) {
-			return { body: null, omittedReason: "too-large" }
-		}
-	}
-
-	const clone = request.clone()
-	if (clone.body === null) {
-		return { body: null, omittedReason: "missing" }
-	}
-
-	const reader = clone.body.getReader()
-	const chunks: Uint8Array[] = []
-	let totalBytes = 0
-
+function redactUrl(rawUrl: string, redactQueryParam: (name: string, value: string) => string | null): string {
+	let url: URL
 	try {
+		url = new URL(rawUrl)
+	} catch {
+		/* a malformed Host (Node builds the URL from it) must not fail the request */
+		return rawUrl.split("?")[0] ?? rawUrl
+	}
+	if (url.search.length === 0) return url.toString()
+	const params = new URLSearchParams()
+	for (const [name, value] of url.searchParams) {
+		const nextValue = redactQueryParam(name, value)
+		if (nextValue !== null) params.append(name, nextValue)
+	}
+	url.search = params.toString()
+	return url.toString()
+}
+
+type BodyResult = { body: string | null; omittedReason: BodyOmittedReason | null }
+
+/**
+ * A second, independent reader of the request body. On Node the request is
+ * re-pointed at one branch of a tee (the same hook `bodyLimit` uses) rather
+ * than `clone()`d, so later body readers keep working.
+ */
+function teeBody(request: Request): ReadableStream<Uint8Array> | null {
+	const body = request.body
+	if (body === null) return null
+	const replaceBody = (request as unknown as Record<symbol, unknown>)[Symbol.for("honey.replaceBody")]
+	if (typeof replaceBody === "function") {
+		const [forRequest, forLog] = body.tee()
+		;(replaceBody as (stream: ReadableStream<Uint8Array>) => void).call(request, forRequest)
+		return forLog
+	}
+	return request.clone().body
+}
+
+/** Never rejects: a body that cannot be read is logged as omitted. */
+async function readBodyWithinLimit(request: Request, maxBytes: number): Promise<BodyResult> {
+	try {
+		if (request.body === null) return { body: null, omittedReason: "missing" }
+
+		const contentLength = request.headers.get("content-length")
+		if (contentLength !== null) {
+			const parsedLength = Number.parseInt(contentLength, 10)
+			if (!Number.isNaN(parsedLength) && parsedLength > maxBytes) {
+				return { body: null, omittedReason: "too-large" }
+			}
+		}
+
+		const stream = teeBody(request)
+		if (stream === null) return { body: null, omittedReason: "missing" }
+
+		const reader = stream.getReader()
+		const chunks: Uint8Array[] = []
+		let totalBytes = 0
 		while (true) {
 			const { done, value } = await reader.read()
 			if (done) break
 			totalBytes += value.byteLength
 			if (totalBytes > maxBytes) {
-				await reader.cancel()
+				await reader.cancel().catch(() => {})
 				return { body: null, omittedReason: "too-large" }
 			}
 			chunks.push(value)
 		}
+
+		const bytes = new Uint8Array(totalBytes)
+		let offset = 0
+		for (const chunk of chunks) {
+			bytes.set(chunk, offset)
+			offset += chunk.byteLength
+		}
+		return { body: new TextDecoder().decode(bytes), omittedReason: null }
 	} catch {
 		return { body: null, omittedReason: "read-error" }
 	}
+}
 
-	const bytes = new Uint8Array(totalBytes)
-	let offset = 0
+type ResolvedOptions = {
+	redactHeader: (name: string, value: string) => string | null
+	redactQueryParam: (name: string, value: string) => string | null
+}
 
-	for (const chunk of chunks) {
-		bytes.set(chunk, offset)
-		offset += chunk.byteLength
+function formatCurl(request: Request, body: BodyResult | null, opts: ResolvedOptions): string {
+	const parts: string[] = ["curl", "-X", shellQuote(request.method)]
+	for (const [name, value] of request.headers.entries()) {
+		const redactedValue = opts.redactHeader(name, value)
+		if (redactedValue === null) continue
+		parts.push("-H", shellQuote(`${name}: ${redactedValue}`))
 	}
+	if (body !== null && body.body !== null) parts.push("--data-raw", shellQuote(body.body))
+	parts.push(shellQuote(redactUrl(request.url, opts.redactQueryParam)))
+	return parts.join(" ")
+}
 
-	return {
-		body: new TextDecoder().decode(bytes),
-		omittedReason: null,
+/** Start reading the body (if logged) now, before a handler consumes it. */
+function startBodyRead(request: Request, body: CurlLoggerOptions["body"]): Promise<BodyResult> {
+	if (body !== true && typeof body !== "object") {
+		return Promise.resolve({ body: null, omittedReason: "disabled" })
 	}
+	const bodyOptions = typeof body === "object" ? body : {}
+	const allowContentTypes = bodyOptions.allowContentTypes ?? DEFAULT_BODY_CONTENT_TYPES
+	if (!shouldIncludeBody(request.headers.get("content-type"), allowContentTypes)) {
+		return Promise.resolve({ body: null, omittedReason: request.body === null ? "missing" : "content-type" })
+	}
+	return readBodyWithinLimit(request, bodyOptions.maxBytes ?? DEFAULT_MAX_BODY_BYTES)
 }
 
 async function buildCurlLogData(
 	request: Request,
 	options?: Pick<CurlLoggerOptions, "body" | "redactHeader" | "redactQueryParam">,
 ): Promise<Pick<CurlLogData, "bodyIncluded" | "bodyOmittedReason" | "curl">> {
-	const parts: string[] = [`curl -X ${request.method}`]
-
-	for (const [name, value] of request.headers.entries()) {
-		const redactedValue = options?.redactHeader !== undefined ? options.redactHeader(name, value) : value
-		if (redactedValue === null) continue
-		parts.push(`-H '${shellEscape(name)}: ${shellEscape(redactedValue)}'`)
+	const resolved: ResolvedOptions = {
+		redactHeader: options?.redactHeader ?? defaultRedactHeader,
+		redactQueryParam: options?.redactQueryParam ?? defaultRedactQueryParam,
 	}
-
-	let bodyIncluded = false
-	let bodyOmittedReason: BodyOmittedReason | null = null
-
-	if (options?.body === true || typeof options?.body === "object") {
-		const bodyOptions = typeof options.body === "object" ? options.body : {}
-		const allowContentTypes = bodyOptions.allowContentTypes ?? DEFAULT_BODY_CONTENT_TYPES
-		const contentType = request.headers.get("content-type")
-
-		if (shouldIncludeBody(contentType, allowContentTypes) === false) {
-			bodyOmittedReason = request.body === null ? "missing" : "content-type"
-		} else {
-			const result = await readBodyWithinLimit(request, bodyOptions.maxBytes ?? DEFAULT_MAX_BODY_BYTES)
-
-			if (result.body === null) {
-				bodyOmittedReason = result.omittedReason
-			} else {
-				bodyIncluded = true
-				parts.push(`--data-raw '${shellEscape(result.body)}'`)
-			}
-		}
-	} else {
-		bodyOmittedReason = "disabled"
-	}
-
-	parts.push(`'${shellEscape(redactUrl(new URL(request.url), options?.redactQueryParam))}'`)
-
+	const body = await startBodyRead(request, options?.body)
 	return {
-		bodyIncluded,
-		bodyOmittedReason,
-		curl: parts.join(" "),
+		bodyIncluded: body.body !== null,
+		bodyOmittedReason: body.omittedReason,
+		curl: formatCurl(request, body, resolved),
 	}
 }
 
 function curlLogger(options?: CurlLoggerOptions): MiddlewareFn<{ path: string; req: Request }, {}> {
 	const log = options?.log ?? defaultLog
 	const skip = options?.skip
+	const resolved: ResolvedOptions = {
+		redactHeader: options?.redactHeader ?? defaultRedactHeader,
+		redactQueryParam: options?.redactQueryParam ?? defaultRedactQueryParam,
+	}
 
 	return namedMiddleware("curlLogger", async (ctx, next) => {
 		const start = performance.now()
-		const method = ctx.req.method
+		const request = ctx.req
+		const method = request.method
 		const path = ctx.path
 		const rid = ((ctx as Record<string, unknown>)["requestId"] as string | null) ?? null
-		const curlDataPromise = buildCurlLogData(ctx.req, options)
+		/* the only work before `next()`: the body must be teed before a handler reads it */
+		const bodyPromise = startBodyRead(request, options?.body)
 
 		const response = await next()
-		const duration = performance.now() - start
-		const curlData = await curlDataPromise
-
-		const data: CurlLogData = {
-			...curlData,
-			duration,
+		const skipData: CurlSkipData = {
+			duration: performance.now() - start,
 			method,
 			path,
 			requestId: rid,
 			status: response.status,
 		}
 
-		if (skip?.(data)) {
-			return response
-		}
-
-		if (options?.instance) {
-			options.instance.info(
-				{
-					bodyIncluded: data.bodyIncluded,
-					bodyOmittedReason: data.bodyOmittedReason,
-					curl: data.curl,
-					duration: data.duration,
-					method: data.method,
-					path: data.path,
-					requestId: data.requestId,
-					status: data.status,
-				},
-				"request curl",
-			)
-		} else {
-			log(data)
+		/* a failing redact callback, skip or sink never turns the response into a 500 */
+		try {
+			if (skip?.(skipData)) return response
+			const body = await bodyPromise
+			const data: CurlLogData = {
+				...skipData,
+				bodyIncluded: body.body !== null,
+				bodyOmittedReason: body.omittedReason,
+				curl: formatCurl(request, body, resolved),
+			}
+			if (options?.instance) {
+				options.instance.info({ ...data }, "request curl")
+			} else {
+				log(data)
+			}
+		} catch (err) {
+			console.error("curlLogger: failed to log request", err)
 		}
 
 		return response
 	})
 }
 
-export { buildCurlLogData, curlLogger }
-export type { BodyOmittedReason, CurlLogData, CurlLoggerBodyOptions, CurlLoggerOptions }
+export { buildCurlLogData, curlLogger, defaultRedactHeader, defaultRedactQueryParam }
+export type { BodyOmittedReason, CurlLogData, CurlLoggerBodyOptions, CurlLoggerOptions, CurlSkipData }

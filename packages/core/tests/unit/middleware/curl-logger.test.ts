@@ -23,7 +23,7 @@ describe("buildCurlLogData", () => {
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("disabled")
 		expect(data.curl).toBe(
-			"curl -X POST -H 'authorization: [redacted]' -H 'content-type: application/json' 'https://example.com/users?page=1'",
+			"curl -X 'POST' -H 'authorization: [redacted]' -H 'content-type: application/json' 'https://example.com/users?page=1'",
 		)
 		expect(await request.text()).toBe('{"ok":true}')
 	})
@@ -42,7 +42,7 @@ describe("buildCurlLogData", () => {
 		expect(data.bodyIncluded).toBe(true)
 		expect(data.bodyOmittedReason).toBeNull()
 		expect(data.curl).toBe(
-			"curl -X POST -H 'content-type: application/json' --data-raw '{\"name\":\"O'\\''Reilly\"}' 'https://example.com/users'",
+			"curl -X 'POST' -H 'content-type: application/json' --data-raw '{\"name\":\"O'\\''Reilly\"}' 'https://example.com/users'",
 		)
 	})
 
@@ -60,7 +60,7 @@ describe("buildCurlLogData", () => {
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("content-type")
 		expect(data.curl).toBe(
-			"curl -X POST -H 'content-type: multipart/form-data; boundary=abc' 'https://example.com/upload'",
+			"curl -X 'POST' -H 'content-type: multipart/form-data; boundary=abc' 'https://example.com/upload'",
 		)
 	})
 
@@ -81,7 +81,7 @@ describe("buildCurlLogData", () => {
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("too-large")
 		expect(data.curl).toBe(
-			"curl -X POST -H 'content-length: 17' -H 'content-type: application/json' 'https://example.com/users'",
+			"curl -X 'POST' -H 'content-length: 17' -H 'content-type: application/json' 'https://example.com/users'",
 		)
 	})
 
@@ -92,7 +92,7 @@ describe("buildCurlLogData", () => {
 			redactQueryParam: (name, value) => (name === "token" ? "[redacted]" : value),
 		})
 
-		expect(data.curl).toBe("curl -X GET 'https://example.com/users?token=%5Bredacted%5D&page=1'")
+		expect(data.curl).toBe("curl -X 'GET' 'https://example.com/users?token=%5Bredacted%5D&page=1'")
 	})
 
 	it("omits headers when redactHeader returns null", async () => {
@@ -107,7 +107,7 @@ describe("buildCurlLogData", () => {
 			redactHeader: (name, value) => (name === "authorization" ? null : value),
 		})
 
-		expect(data.curl).toBe("curl -X GET -H 'x-visible: ok' 'https://example.com/users'")
+		expect(data.curl).toBe("curl -X 'GET' -H 'x-visible: ok' 'https://example.com/users'")
 	})
 
 	it("treats explicit body false the same as the default", async () => {
@@ -121,7 +121,7 @@ describe("buildCurlLogData", () => {
 
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("disabled")
-		expect(data.curl).toBe("curl -X POST -H 'content-type: application/json' 'https://example.com/users'")
+		expect(data.curl).toBe("curl -X 'POST' -H 'content-type: application/json' 'https://example.com/users'")
 	})
 
 	it("reports missing body when body logging is enabled but request has no body", async () => {
@@ -136,7 +136,7 @@ describe("buildCurlLogData", () => {
 
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("missing")
-		expect(data.curl).toBe("curl -X POST -H 'content-type: application/json' 'https://example.com/users'")
+		expect(data.curl).toBe("curl -X 'POST' -H 'content-type: application/json' 'https://example.com/users'")
 	})
 
 	it("omits body when a streaming request exceeds maxBytes without content-length", async () => {
@@ -159,7 +159,7 @@ describe("buildCurlLogData", () => {
 
 		expect(data.bodyIncluded).toBe(false)
 		expect(data.bodyOmittedReason).toBe("too-large")
-		expect(data.curl).toBe("curl -X POST -H 'content-type: application/json' 'https://example.com/users'")
+		expect(data.curl).toBe("curl -X 'POST' -H 'content-type: application/json' 'https://example.com/users'")
 	})
 })
 
@@ -179,7 +179,7 @@ describe("curlLogger middleware", () => {
 		expect(logged[0].path).toBe("/users")
 		expect(logged[0].status).toBe(200)
 		expect(logged[0].requestId).toBe("req-123")
-		expect(logged[0].curl).toBe("curl -X GET 'http://localhost/users'")
+		expect(logged[0].curl).toBe("curl -X 'GET' 'http://localhost/users'")
 	})
 
 	it("supports instance logging", async () => {
@@ -195,7 +195,7 @@ describe("curlLogger middleware", () => {
 		expect(lines).toHaveLength(1)
 		const parsed = JSON.parse(lines[0])
 		expect(parsed.msg).toBe("request curl")
-		expect(parsed.curl).toBe("curl -X GET 'http://localhost/users'")
+		expect(parsed.curl).toBe("curl -X 'GET' 'http://localhost/users'")
 		expect(parsed.status).toBe(200)
 	})
 

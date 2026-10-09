@@ -39,38 +39,61 @@ type CreateLoggerOptions = {
 	write?: (line: string) => void
 }
 
-function createLogger(opts?: CreateLoggerOptions): LoggerInstance {
-	const threshold = LEVELS[opts?.level ?? "info"]
-	const write = opts?.write ?? ((line: string) => console.log(line))
-	const base = opts?.base ?? {}
+/* Methods live on the prototype: `logger()` makes a child per request, and a
+ * closure-per-level instance cost seven allocations each time. */
+class Logger implements LoggerInstance {
+	level: LogLevel
+	#threshold: number
+	#write: (line: string) => void
+	#base: Record<string, unknown>
 
-	function emit(level: number, first: Record<string, unknown> | string, second?: string): void {
-		if (level < threshold) return
+	constructor(level: LogLevel, write: (line: string) => void, base: Record<string, unknown>) {
+		this.level = level
+		this.#threshold = LEVELS[level]
+		this.#write = write
+		this.#base = base
+	}
+
+	child(bindings: Record<string, unknown>): LoggerInstance {
+		return new Logger(this.level, this.#write, { ...this.#base, ...bindings })
+	}
+
+	trace(first: Record<string, unknown> | string, second?: string): void {
+		this.#emit(LEVELS.trace, first, second)
+	}
+
+	debug(first: Record<string, unknown> | string, second?: string): void {
+		this.#emit(LEVELS.debug, first, second)
+	}
+
+	info(first: Record<string, unknown> | string, second?: string): void {
+		this.#emit(LEVELS.info, first, second)
+	}
+
+	warn(first: Record<string, unknown> | string, second?: string): void {
+		this.#emit(LEVELS.warn, first, second)
+	}
+
+	error(first: Record<string, unknown> | string, second?: string): void {
+		this.#emit(LEVELS.error, first, second)
+	}
+
+	fatal(first: Record<string, unknown> | string, second?: string): void {
+		this.#emit(LEVELS.fatal, first, second)
+	}
+
+	#emit(level: number, first: Record<string, unknown> | string, second?: string): void {
+		if (level < this.#threshold) return
 		const obj =
 			typeof first === "string"
-				? { ...base, level, msg: first, time: Date.now() }
-				: { ...base, ...first, level, msg: second ?? "", time: Date.now() }
-		write(JSON.stringify(obj))
+				? { ...this.#base, level, msg: first, time: Date.now() }
+				: { ...this.#base, ...first, level, msg: second ?? "", time: Date.now() }
+		this.#write(JSON.stringify(obj))
 	}
+}
 
-	const instance: LoggerInstance = {
-		child(bindings: Record<string, unknown>): LoggerInstance {
-			return createLogger({
-				base: { ...base, ...bindings },
-				level: opts?.level,
-				write,
-			})
-		},
-		debug: (first: Record<string, unknown> | string, second?: string) => emit(LEVELS.debug, first, second),
-		error: (first: Record<string, unknown> | string, second?: string) => emit(LEVELS.error, first, second),
-		fatal: (first: Record<string, unknown> | string, second?: string) => emit(LEVELS.fatal, first, second),
-		info: (first: Record<string, unknown> | string, second?: string) => emit(LEVELS.info, first, second),
-		level: opts?.level ?? "info",
-		trace: (first: Record<string, unknown> | string, second?: string) => emit(LEVELS.trace, first, second),
-		warn: (first: Record<string, unknown> | string, second?: string) => emit(LEVELS.warn, first, second),
-	}
-
-	return instance
+function createLogger(opts?: CreateLoggerOptions): LoggerInstance {
+	return new Logger(opts?.level ?? "info", opts?.write ?? ((line: string) => console.log(line)), opts?.base ?? {})
 }
 
 /* ── request lifecycle middleware ── */
@@ -131,14 +154,16 @@ function logger(options?: LoggerOptions): MiddlewareFn<{ path: string; req: Requ
 			status: response.status,
 		}
 
-		if (skip?.(data)) {
-			return response
-		}
-
-		if (instance) {
-			child.info({ duration, status: response.status }, `<-- ${method} ${path}`)
-		} else {
-			log(data)
+		/* a failing sink or `skip` never turns the response into a 500 */
+		try {
+			if (skip?.(data)) return response
+			if (instance) {
+				child.info({ duration, status: response.status }, `<-- ${method} ${path}`)
+			} else {
+				log(data)
+			}
+		} catch (err) {
+			console.error("logger: failed to log request", err)
 		}
 
 		return response

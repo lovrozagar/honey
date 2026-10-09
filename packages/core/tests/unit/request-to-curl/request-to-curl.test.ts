@@ -15,7 +15,7 @@ describe("requestToCurl", () => {
 		const curl = await requestToCurl(request)
 
 		expect(curl).toBe(
-			"curl -X POST -H 'content-type: application/json' -H 'x-test: it'\\''s-set' --data-raw '{\"name\":\"O'\\''Reilly\"}' 'https://example.com/api/users?active=true'",
+			"curl -X 'POST' -H 'content-type: application/json' -H 'x-test: it'\\''s-set' --data-raw '{\"name\":\"O'\\''Reilly\"}' 'https://example.com/api/users?active=true'",
 		)
 		expect(await request.text()).toBe('{"name":"O\'Reilly"}')
 	})
@@ -33,6 +33,6 @@ describe("requestToCurl", () => {
 			excludeHeader: (name) => name === "authorization" || name.startsWith("cf-"),
 		})
 
-		expect(curl).toBe("curl -X GET -H 'x-test: ok' 'https://example.com/'")
+		expect(curl).toBe("curl -X 'GET' -H 'x-test: ok' 'https://example.com/'")
 	})
 })
