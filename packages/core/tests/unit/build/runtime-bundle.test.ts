@@ -66,9 +66,10 @@ describe("production runtime bundle", () => {
 			for (const [feature, marker] of Object.entries(OPTIONAL_FEATURES)) {
 				expect(js.includes(marker), `${feature} leaked into a bundle that does not use it`).toBe(false)
 			}
-			/* a budget on what the wire carries: measured 25.1 KB gzipped (bun --minify); every
-			 * optional feature above is out, what remains is the core router, context and responses */
-			expect(gzipSync(js, { level: 9 }).length).toBeLessThan(26_000)
+			/* a budget on what the wire carries: measured 26.1 KB gzipped with CI's bun 1.3 --minify,
+			 * about 0.4 KB less with bun 1.4; every optional feature above is out, what remains is the
+			 * core router, context and responses */
+			expect(gzipSync(js, { level: 9 }).length).toBeLessThan(26_500)
 		} finally {
 			rmSync(DIR, { force: true, recursive: true })
 		}

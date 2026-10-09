@@ -52,22 +52,37 @@ function readThenDrop(port: number, path: string, bytes: number): Promise<string
 }
 
 /** A full request on a fresh connection; the whole response as text. */
+/* `Connection: close` is not something to wait on: Bun before 1.4 leaves the socket open after an
+ * asynchronously produced response. A response is complete once its framing says so. */
+function complete(raw: string): boolean {
+	const end = raw.indexOf("\r\n\r\n")
+	if (end === -1) return false
+	const head = raw.slice(0, end).toLowerCase()
+	const length = /\r\ncontent-length:\s*(\d+)/.exec(head)
+	if (length) return Buffer.byteLength(raw.slice(end + 4), "latin1") >= Number(length[1])
+	if (/\r\ntransfer-encoding:[^\r]*chunked/.test(head)) return raw.endsWith("0\r\n\r\n")
+	return /^http\/1\.1 (1\d\d|204|304) /.test(head)
+}
+
 function exchange(port: number, method: string, path: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const socket = net.connect(port, "127.0.0.1")
 		let got = ""
+		const finish = (): void => {
+			clearTimeout(timer)
+			socket.destroy()
+			resolve(got)
+		}
 		const timer = setTimeout(() => {
 			socket.destroy()
 			reject(new Error(`timeout: ${method} ${path}`))
 		}, 5_000)
 		socket.on("data", (d) => {
 			got += d.toString("latin1")
+			if (method !== "HEAD" && complete(got)) finish()
 		})
 		socket.on("error", reject)
-		socket.on("close", () => {
-			clearTimeout(timer)
-			resolve(got)
-		})
+		socket.on("close", finish)
 		socket.write(`${method} ${path} HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n`)
 	})
 }
