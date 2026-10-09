@@ -204,7 +204,7 @@ describe("code review regressions", () => {
 	})
 
 	// regression: R6
-	it.fails("R6: a realtime frame that beat the open is delivered before frames that arrive later", async () => {
+	it("R6: a realtime frame that beat the open is delivered before frames that arrive later", async () => {
 		const { adapter, sockets } = manualAdapter({ openOnUpgrade: false })
 		const got: unknown[] = []
 		let attach: () => void = () => {}

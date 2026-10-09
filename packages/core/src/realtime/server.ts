@@ -104,11 +104,11 @@ export function createRealtimeSession(opts: {
 	let onMessageFn: ((payload: unknown) => void | Promise<void>) | null = null
 	let onCloseFn: ((reason: string) => void | Promise<void>) | null = null
 
-	/* ordered queue: open → messages → close; `pending` counts frames waiting in it or in `early` */
+	/* ordered queue: open → messages → close. Every inbound frame waits in `inbox` in arrival
+	 * order, including frames that beat the open or the `message` handler; a drain task delivers
+	 * them, so a frame never overtakes one that arrived before it. */
 	let queue: Promise<void> = Promise.resolve()
-	let pending = 0
-	/* frames that arrived before a `message` handler was attached */
-	const early: unknown[] = []
+	const inbox: unknown[] = []
 
 	/* the same containment as WebSocket callbacks: onError gets the error, an onError that
 	 * throws is logged and never invoked again for its own error, nothing reaches the runtime */
@@ -134,7 +134,6 @@ export function createRealtimeSession(opts: {
 		closed = true
 		bus.unsubscribeAll(connId)
 		bus.removeHandler(connId)
-		early.length = 0
 	}
 
 	const closeSocket = (code: number, reason: string) => {
@@ -164,27 +163,27 @@ export function createRealtimeSession(opts: {
 		}
 	}
 
-	const deliver = (payload: unknown): Promise<unknown> => {
-		pending--
-		/* frames that arrived before the close still run; the close handler is queued after them */
-		const fn = onMessageFn
-		if (fn === null) {
-			if (closed) return Promise.resolve()
-			/* no handler yet: hold it until one is attached */
-			early.push(payload)
-			pending++
-			return Promise.resolve()
+	/* frames that arrived before the close still run; the close handler is queued after them.
+	 * Without a handler the frames stay in the inbox until one is attached, or are dropped on close. */
+	const drain = async (): Promise<void> => {
+		while (inbox.length > 0) {
+			const fn = onMessageFn
+			if (fn === null) {
+				if (closed) inbox.length = 0
+				return
+			}
+			const payload = inbox.shift()
+			await invoke("message", () => fn(payload))
 		}
-		return invoke("message", () => fn(payload))
 	}
 
 	const accept = (payload: unknown) => {
-		if (pending >= limits.maxPendingFrames) {
+		if (inbox.length >= limits.maxPendingFrames) {
 			closeSocket(CLOSE_POLICY, "too many pending frames")
 			return
 		}
-		pending++
-		enqueue(() => deliver(payload))
+		inbox.push(payload)
+		enqueue(drain)
 	}
 
 	const conn = Object.create(null) as ConnContext
@@ -223,7 +222,7 @@ export function createRealtimeSession(opts: {
 				if (event === "message") {
 					onMessageFn = fn as (payload: unknown) => void | Promise<void>
 					/* frames that waited for a handler run next, in arrival order */
-					for (const payload of early.splice(0)) enqueue(() => deliver(payload))
+					if (inbox.length > 0) enqueue(drain)
 				} else if (event === "close") {
 					onCloseFn = fn as (reason: string) => void | Promise<void>
 				} else {
@@ -293,10 +292,9 @@ export function createRealtimeSession(opts: {
 				return
 			}
 			if (socket === null) {
-				/* a frame before open (runtime quirk): hold it like one that beat its handler */
-				if (pending >= limits.maxPendingFrames) return
-				pending++
-				early.push(payload)
+				/* a frame before open (runtime quirk): it waits in the inbox, ahead of later frames */
+				if (inbox.length >= limits.maxPendingFrames) return
+				inbox.push(payload)
 				return
 			}
 			accept(payload)
