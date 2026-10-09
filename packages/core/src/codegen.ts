@@ -1882,10 +1882,9 @@ function emitErrorsCtxType(handler: RouteHandler): string {
 }
 
 /**
- * Look up per-route middleware type additions.
- * The type extractor stores keys as `"method /route-path"` (no basePath prefix),
- * but the codegen resolves routes to full paths (with basePath).
- * Try exact match first, then strip leading segments until a match is found.
+ * Per-route middleware type additions. The type extractor keys routes by their full path —
+ * basePath included — exactly as the router registers them, so the lookup is exact: a route
+ * with no entry gets the base ctx, never another route's additions.
  */
 function resolveRouteMiddleware(
 	routeMiddleware: Record<string, string> | undefined,
@@ -1893,18 +1892,8 @@ function resolveRouteMiddleware(
 	fullPath: string,
 ): string | undefined {
 	if (!routeMiddleware) return undefined
-	const exact = routeMiddleware[`${method} ${fullPath}`]
-	if (exact) return exact
-
-	/* strip leading path segments (basePath) until match */
-	let p = fullPath
-	while (p.includes("/", 1)) {
-		const nextSlash = p.indexOf("/", 1)
-		p = p.slice(nextSlash)
-		const key = `${method} ${p}`
-		if (routeMiddleware[key]) return routeMiddleware[key]
-	}
-	return undefined
+	const key = `${method} ${fullPath}`
+	return Object.hasOwn(routeMiddleware, key) ? routeMiddleware[key] : undefined
 }
 
 export function generateTypes<TEnv, TCtx>(
@@ -1997,7 +1986,7 @@ export function generateTypes<TEnv, TCtx>(
 
 	function buildMwType(method: string, path: string): string | undefined {
 		const key = `${method} ${path}`
-		const props = routeProps?.[key]
+		const props = routeProps && Object.hasOwn(routeProps, key) ? routeProps[key] : undefined
 		if (props?.length) {
 			const entries = props.map((p) => {
 				const typeStr = subTypeMap.get(p.type) ?? p.type
@@ -4840,14 +4829,16 @@ export function isClientError(e: unknown): e is _ClientError {
 `
 }
 
-export function collectSDKMethods(spec: OpenApiSpecInput): {
+export function collectSDKMethods(
+	spec: OpenApiSpecInput,
+	/* toIR validates namespace collisions; an operation without an operationId gets a derived
+	   one instead of silently vanishing from the SDK */
+	ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" }),
+): {
 	serviceMap: Record<string, Record<string, ServiceEntry>>
 	nestedMap: Map<string, NestedServiceNode>
 	methods: SDKMethod[]
 } {
-	/* toIR validates namespace collisions; an operation without an operationId gets a derived
-	   one instead of silently vanishing from the SDK */
-	const ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" })
 	const resolved = resolveRefs(spec)
 	/* null-prototype: an operationId of "__proto__.x" must not reach Object.prototype */
 	const serviceMap: Record<string, Record<string, ServiceEntry>> = Object.create(null)
@@ -4987,10 +4978,9 @@ export function generateSDK(spec: OpenApiSpecInput, options?: { name?: string; s
 	const sdkName = options?.name ?? "SDK"
 	const stem = options?.stem ?? "sdk"
 	validateSdkNames(sdkName, stem)
-	const { methods: sdkMethods, nestedMap, serviceMap } = collectSDKMethods(spec)
-	const hasRealtime = sdkMethods.some((m) => m.realtime)
-
 	const ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" })
+	const { methods: sdkMethods, nestedMap, serviceMap } = collectSDKMethods(spec, ir)
+	const hasRealtime = sdkMethods.some((m) => m.realtime)
 	const fullMethodLookup = new Map<string, SDKMethod>()
 	for (const m of sdkMethods) fullMethodLookup.set(m.id, m)
 

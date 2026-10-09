@@ -359,9 +359,31 @@ describe("extractChainTypes", () => {
 
 		const result = await extractBaseCtx({ entryPath, exportName: "app" })
 		expect(result.middlewareType).not.toBeNull()
-		/* no type annotation on variable → structural expansion is expected */
-		expect(result.middlewareType).toContain("query:")
-		expect(result.middlewareType).toContain("users:")
+		/* no annotation on the variable, but its type is an exported alias → referenced, not expanded */
+		expect(result.middlewareType).toMatch(/db: import\("[^"]*db-types\.ts"\)\.DbClient/)
+	})
+
+	it("an anonymous object type with no exported name is expanded structurally", async () => {
+		const entryPath = writeTempFile(
+			TEMP_ROOT,
+			"app.ts",
+			[
+				'import { honey, createMiddleware } from "@lovrozagar/honey"',
+				"",
+				"const withDb = createMiddleware((_ctx: { env: { DB: string } }, next) => {",
+				'  const db = { query: { users: { id: "x" } }, run: () => {} }',
+				"  return next({ db })",
+				"})",
+				"",
+				"export const app = honey<{ DB: string }>()",
+				"  .use(withDb)",
+				'  .get("/test")',
+				'  .handler((ctx) => ctx.res.text("ok", "ok"))',
+			].join("\n"),
+		)
+		const result = await extractBaseCtx({ entryPath, exportName: "app" })
+		expect(result.middlewareType).toContain("query: { users: { id: string } }")
+		expect(result.middlewareType).toContain("run: () => void")
 	})
 
 	it("middleware shorthand property traces to variable type annotation", async () => {

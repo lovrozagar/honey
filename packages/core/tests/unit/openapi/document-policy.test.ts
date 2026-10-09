@@ -467,3 +467,26 @@ describe("standalone spec()", () => {
 		expect(Object.keys(docB.paths)).toEqual(["/only-b"])
 	})
 })
+
+describe("schema name hash collisions", () => {
+	it("two shapes whose 24-bit name hashes collide still get distinct components", () => {
+		/* djb2 of these canonical forms collides in the first 6 hex digits */
+		const a = { enum: ["aR"] }
+		const b = { enum: ["b1"] }
+		const op = (schema: unknown) => ({
+			get: { responses: { "200": { content: { "application/json": { schema } }, description: "ok" } } },
+		})
+		/* same derived base name for both (the variant qualifier is dropped), different shapes */
+		const deduped = deduplicateSchemas({
+			info: INFO,
+			openapi: "3.1.0",
+			paths: { "/webhooks/github": op(a), "/webhooks/stripe": op(b) } as never,
+		})
+		const resolved = resolveRefs(deduped)
+		const schemaOf = (p: string) =>
+			(resolved.paths[p].get.responses as Record<string, { content: Record<string, { schema: unknown }> }>)["200"]
+				.content["application/json"].schema
+		expect(schemaOf("/webhooks/github")).toEqual(a)
+		expect(schemaOf("/webhooks/stripe")).toEqual(b)
+	})
+})
