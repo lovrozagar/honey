@@ -360,11 +360,12 @@ test.describe("generated route tree", () => {
 		const res = await request.get("/api/generated-tree")
 		expect(res.status()).toBe(200)
 		const code = await res.text()
-		/* generated code should import from honey/tree */
-		expect(code).toContain('import type { TreeNode, RouteHandler, RouteTree } from "@lovrozagar/honey/tree"')
-		/* should export a tree constant */
+		/* generated code imports its types from honey/tree */
+		expect(code).toContain('import type { RouteTree, TreeNode } from "@lovrozagar/honey/tree"')
+		/* topology with route ids at the leaves, per-route data beside it, no handler objects */
 		expect(code).toContain("export const tree: TreeNode")
-		/* should contain handler definitions */
-		expect(code).toContain("const H0: RouteHandler")
+		expect(code).toContain('export const routes: RouteTree["routes"]')
+		expect(code).toContain("export const routeTree: RouteTree = { v: 2,")
+		expect(code).not.toContain("RouteHandler")
 	})
 })

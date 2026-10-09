@@ -1,3 +1,4 @@
+import { invokeUser } from "../invoke-user.ts"
 import type { WSContext, WSHandler } from "../ws/cloudflare.ts"
 import { encodeRealtimeFrame } from "./bus.ts"
 import type { RealtimeBus } from "./bus.ts"
@@ -109,48 +110,15 @@ export function createRealtimeSession(opts: {
 	/* frames that arrived before a `message` handler was attached */
 	const early: unknown[] = []
 
-	const logError = (err: unknown, phase: string) => {
-		const fields = { connId, err, namespace, phase, route: config.path }
-		if (log?.error) log.error(fields, "realtime callback failed")
-		else console.error("honey: realtime callback failed", fields)
-	}
-
-	const report = (err: unknown, phase: string) => {
-		const onError = config.onError
-		if (!onError) {
-			logError(err, phase)
-			return
-		}
-		/* an onError that throws is logged, never invoked again for its own error */
-		try {
-			const r = onError(err, conn)
-			if (r && typeof (r as Promise<void>).then === "function") {
-				;(r as Promise<void>).then(undefined, (e: unknown) => logError(e, "onError"))
-			}
-		} catch (e) {
-			logError(e, "onError")
-		}
-	}
-
-	/** Run a user callback; resolves when it settles, never rejects. Returns whether it succeeded. */
-	const invoke = (phase: string, fn: () => void | Promise<void>): Promise<boolean> => {
-		try {
-			const r = fn()
-			if (r && typeof (r as Promise<void>).then === "function") {
-				return (r as Promise<void>).then(
-					() => true,
-					(e: unknown) => {
-						report(e, phase)
-						return false
-					},
-				)
-			}
-			return Promise.resolve(true)
-		} catch (e) {
-			report(e, phase)
-			return Promise.resolve(false)
-		}
-	}
+	/* the same containment as WebSocket callbacks: onError gets the error, an onError that
+	 * throws is logged and never invoked again for its own error, nothing reaches the runtime */
+	const invoke = (phase: string, fn: () => void | Promise<void>): Promise<boolean> =>
+		invokeUser(fn, {
+			fields: { connId, namespace, route: config.path },
+			log,
+			onError: config.onError ? (err) => config.onError?.(err, conn) : null,
+			phase,
+		})
 
 	const enqueue = (task: () => Promise<unknown>) => {
 		queue = queue.then(task).then(

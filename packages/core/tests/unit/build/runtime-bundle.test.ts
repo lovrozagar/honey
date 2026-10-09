@@ -57,10 +57,12 @@ describe("production runtime bundle", () => {
 			expect(js).not.toContain("Deno.upgradeWebSocket")
 			expect(js).not.toContain("WebSocketServer")
 			expect(js).not.toMatch(/from"http"|from "http"|createServer/)
-			/* a leak guard, not a budget: codegen or effect would add ~300 KB. The streaming
-			 * lifecycle (one producer primitive, body-kind tags) is ~5 KB of the runtime, the
-			 * reverse proxy (hop-by-hop, forwarding, timeouts) ~3 KB. */
-			expect(js.length).toBeLessThan(100_000)
+			/* a leak guard, not a budget: codegen or effect would add ~300 KB. Measured 92.3 KB:
+			 * index.ts ~34 KB; validation, responses, tree and pattern ~22 KB; realtime server and
+			 * bus ~7 KB, client address (ip, trust, peer) ~5.5 KB, proxy ~3.6 KB. Realtime and proxy
+			 * stay in because `app.realtime()` and `.proxy()` are builder methods (not
+			 * tree-shakeable), and a lazy feature load would need build-time injection. */
+			expect(js.length).toBeLessThan(96_000)
 		} finally {
 			rmSync(DIR, { force: true, recursive: true })
 		}
