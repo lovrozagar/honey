@@ -34,6 +34,7 @@
 	"type": "module",
 	"scripts": {
 		"prepare": "git config --get core.hooksPath >/dev/null || git config core.hooksPath .githooks || true",
+		"readme:sync": "bun packages/core/scripts/sync-readme.ts",
 		"generate": "bun --bun run --filter './e2e/apps/*' generate",
 		"test": "bun run --filter @lovrozagar/honey test",
 		"test:all": "bun run --filter @lovrozagar/honey test:all",

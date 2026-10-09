@@ -411,6 +411,8 @@ On Node, `ctx.req` reads the `IncomingMessage` directly instead of building a Fe
 `ctx.ip` is the client's address in canonical form (`::ffff:1.2.3.4` is `1.2.3.4`, IPv6 lowercase and compressed), or `null` when unknown. `clientInfo(ctx)` (from `@lovrozagar/honey`) also returns the `protocol` and `host` the client used. One app setting decides all three, and every feature that needs them (`ipRestrict`, loggers, `proxy()`) reads the same answer:
 
 ```ts
+import "@lovrozagar/honey/trust" // needed for a hop count or a list; not for the default
+
 app.trustProxy(false) // default: the TCP peer is the client; X-Forwarded-* is ignored
 app.trustProxy(1) // one reverse proxy in front, appending to X-Forwarded-For (nginx, most load balancers)
 app.trustProxy(["10.0.0.0/8", "fd00::/8"]) // proxies recognized by address; the first other hop is the client
@@ -794,7 +796,16 @@ app.use("/admin", withAuth) // scoped: every request under /admin, whichever han
 What a route runs is fixed when it is registered or mounted, in this order: the chain of the handle it was registered on (a mounting handle's chain first), then every scope that covers it, then its own `.get(...).use(mw)`, then input validation.
 
 - **Scopes guard request paths.** `app.use("/admin", mw)` uses the route grammar (`/orgs/:id`, `/admin/*`) and covers every request whose path is under it — including requests that reach `all("/*")` or `/:section/users`, where the request path is checked at runtime. It applies to routes registered before or after it, on any handle, and to mounted sub-apps.
-- **Errors become responses at every `next()`.** A throw in a handler or a middleware is turned into the error response at that layer, so every middleware around it gets a `Response` from `await next()` and its post-`next()` code (CORS headers, request id, logging, timing) runs on errors too. A `try/catch` around `next()` no longer sees throws: inspect the response status instead.
+- **Errors become responses at every `next()`.** A throw in a handler or a middleware is turned into the error response at that layer, so every middleware around it gets a `Response` from `await next()` and its post-`next()` code (CORS headers, request id, logging, timing) runs on errors too. A `try/catch` around `next()` no longer sees throws: read `ctx.error` instead — the `HoneyError` behind the error response (`errorKey`, `status`, and `cause`, the original throw when it was not a `HoneyError`), `undefined` when nothing failed. 404 and 405 are plain responses and leave it unset.
+
+  ```ts
+  const metrics = createMiddleware(async (ctx, next) => {
+  	const res = await next()
+  	record(res.status, ctx.error?.errorKey)
+  	return res
+  })
+  ```
+
 - **404, 405 and CORS preflight** run the same pipeline: the middleware every route of the app starts with, plus the scopes covering the request path, with `ctx.errors`, `ctx.path` and context values set. A preflight (`OPTIONS` with `Access-Control-Request-Method`) runs the chain of the route for the requested method, never its handler.
 - Middleware `errors` and `meta` count for every route the middleware runs on — chain, scoped or route level.
 - **Mounting** (`parent.route(sub)`): the sub's routes keep the sub's error factory, default errors, boundary, output validation, taps and context values; the parent's `onError`, formatters, logger and telemetry serve them. A sub-app's own `fetch` keeps serving the sub alone — mounting copies its routes and never changes it.
@@ -976,6 +987,7 @@ api.get("/work").handler((ctx) => {
 
 ```ts
 import { ipRestrict } from "@lovrozagar/honey/ip-restrict"
+import "@lovrozagar/honey/trust"
 
 const api = app
 	.trustProxy(1) // behind one reverse proxy; see Client address
@@ -1037,9 +1049,10 @@ const users = honey()
 	.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
 
 const app = honey().route(users) // merges routes, realtime, taps, static map
+const v1 = honey().route("/v1", users) // serves /v1/users/:id
 ```
 
-`.route(sub)` copies the sub-app's routes into this one, under the chain of the handle you call it on: `app.use(auth).route(admin)` runs `auth` on every admin route. The sub's paths are kept as they are (its own `basePath` applies, the mounting handle's does not). Duplicate paths throw.
+`.route(sub)` copies the sub-app's routes into this one, under the chain of the handle you call it on: `app.use(auth).route(admin)` runs `auth` on every admin route. The sub's paths land under that handle's `basePath`, after the sub's own: `app.basePath("/v1").route(users)` serves `/v1/users/:id`, and `route("/v1", users)` is the same thing. The sub's scoped middleware and realtime routes move with it. Duplicate paths throw.
 
 ### Taps
 
@@ -1065,9 +1078,11 @@ const app = honey()
 
 ### Proxy routes
 
-Finish a route with `.proxy()` instead of `.handler()`:
+Finish a route with `.proxy()` instead of `.handler()`. The proxy is not part of the core bundle: import its entry once in the app, or `.proxy()` throws at registration.
 
 ```ts
+import "@lovrozagar/honey/proxy"
+
 app.all("/upstream/*path").proxy({
 	destination: (ctx, url, init) => fetch(`https://api.internal${url}`, init),
 	rewriteUrl: (url) => url.replace(/^\/upstream/, ""),
@@ -1160,6 +1175,8 @@ Gateways: a gateway loads a tree that holds downstream routes it does not implem
 
 ```ts
 import { routeTree } from "./_gen/routes.gen.ts"
+
+import "@lovrozagar/honey/proxy"
 
 const gateway = honey().routeTree(routeTree)
 gateway.all("/*").proxy({ destination: (ctx) => `https://${ctx.meta.worker}.internal${ctx.path}` })
@@ -1451,13 +1468,15 @@ A GET **without** `Upgrade: websocket` to a WS/realtime path returns **426** wit
 
 Reconnect: pass `?reconnect_token=` on the next handshake; Honey calls `onReconnect` instead of `onOpen`.
 
-`app.serve()` attaches the runtime adapter unless you set one. On Node it needs the `ws` package (an optional peer dependency). On Cloudflare, call `app.wsAdapter(cfWebSocket())` yourself.
+`app.serve()` attaches the runtime adapter unless you set one. On Node it needs the `ws` package (an optional peer dependency). On Cloudflare, call `app.wsAdapter(cfWebSocket())` yourself. The adapters bring the websocket session runtime with them, so an app without websockets does not bundle it; a custom `WSAdapter` in a bundled build needs `import "@lovrozagar/honey/ws/session"`.
 
 ## Realtime
 
-A topic bus over WebSockets: connections join topics, and anyone can publish to a topic. Only the WebSocket transport ships, with no resume, replay or acknowledgements. A client that reconnects is a new connection.
+A topic bus over WebSockets: connections join topics, and anyone can publish to a topic. Only the WebSocket transport ships, with no resume, replay or acknowledgements. A client that reconnects is a new connection. The realtime server is not part of the core bundle: import `@lovrozagar/honey/realtime` once in the app, or `app.realtime()` throws at registration.
 
 ```ts
+import "@lovrozagar/honey/realtime"
+
 const authed = app.use(withAuth)
 
 authed.realtime("/realtime/chat/:roomId", {
@@ -1820,31 +1839,34 @@ await requestToCurl(req, { excludeHeader: (n) => n === "authorization" })
 
 Import features from their path.
 
-| Export                                                                                                                                                                                                                                                 | Purpose                                                                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `@lovrozagar/honey`                                                                                                                                                                                                                                    | `honey`, `defineErrors`, `HoneyError`, `createMiddleware`, `HoneyRes`, Infer* types, `mergeTree`, `detectRuntime` |
-| `honey/serve`                                                                                                                                                                                                                                          | Register Node/Bun/Deno listen                                                                                     |
-| `honey/node`                                                                                                                                                                                                                                           | Low-level Node `serve()`                                                                                          |
-| `honey/openapi`                                                                                                                                                                                                                                        | Register live spec generation (pulls codegen)                                                                     |
-| `honey/openapi/spec`                                                                                                                                                                                                                                   | Runtime spec walker — live tree, no codegen. Intern omits JSON Schema                                             |
-| `honey/openapi/scalar` `honey/openapi/swagger`                                                                                                                                                                                                         | Docs UI                                                                                                           |
-| `honey/i18n`                                                                                                                                                                                                                                           | Register error i18n                                                                                               |
-| `@lovrozagar/honey/plugin`                                                                                                                                                                                                                             | Vite plugin + `generateFromApp`                                                                                   |
-| `honey/client` / `honey/client/sdk`                                                                                                                                                                                                                    | Typed TS client runtime / generated-SDK helpers                                                                   |
-| `honey/cors` `honey/csrf` `honey/body-limit` `honey/logger` `honey/curl-logger` `honey/etag` `honey/timeout` `honey/request-id` `honey/secure-headers` `honey/server-timing` `honey/ip-restrict` `honey/powered-by` `honey/pretty-json` `honey/static` | Middleware                                                                                                        |
-| `honey/proxy`                                                                                                                                                                                                                                          | `ProxyConfig` type (`.proxy()` lives on the route builder)                                                        |
-| `honey/input`                                                                                                                                                                                                                                          | `readableStream()`                                                                                                |
-| `honey/testing`                                                                                                                                                                                                                                        | `testClient`                                                                                                      |
-| `honey/ws/bun` `honey/ws/node` `honey/ws/deno` `honey/ws/cloudflare`                                                                                                                                                                                   | WS adapters                                                                                                       |
-| `honey/accepts` `honey/cookie` `honey/cookie-sign` `honey/crypto` `honey/request-to-curl`                                                                                                                                                              | Utilities                                                                                                         |
-| `honey/telemetry/otel`                                                                                                                                                                                                                                 | `otelAdapter`                                                                                                     |
-| `honey/codegen`                                                                                                                                                                                                                                        | `generateOpenApi`, `generateSDK`, `generateManifest`, trees, sanitize                                             |
-| `honey/codegen-go-cli`                                                                                                                                                                                                                                 | `generateGoCLI`                                                                                                   |
-| `honey/codegen/extract`                                                                                                                                                                                                                                | ts-morph chain extractor                                                                                          |
-| `honey/build`                                                                                                                                                                                                                                          | `createBuildPlugin`                                                                                               |
-| `honey/tree`                                                                                                                                                                                                                                           | Tree types + `mergeTree`                                                                                          |
-| `honey/cli`                                                                                                                                                                                                                                            | `honey` binary                                                                                                    |
-| `honey/errors`                                                                                                                                                                                                                                         | `defineErrors` (also on the root export)                                                                          |
+| Export                                                                                                                                                                                                                                                 | Purpose                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `@lovrozagar/honey`                                                                                                                                                                                                                                    | `honey`, `defineErrors`, `HoneyError`, `createMiddleware`, `HoneyRes`, Infer* types, `mergeTree`, `detectRuntime`      |
+| `honey/serve`                                                                                                                                                                                                                                          | Register Node/Bun/Deno listen                                                                                          |
+| `honey/node`                                                                                                                                                                                                                                           | Low-level Node `serve()`                                                                                               |
+| `honey/openapi`                                                                                                                                                                                                                                        | Register live spec generation (pulls codegen)                                                                          |
+| `honey/openapi/spec`                                                                                                                                                                                                                                   | Runtime spec walker — live tree, no codegen. Intern omits JSON Schema                                                  |
+| `honey/openapi/scalar` `honey/openapi/swagger`                                                                                                                                                                                                         | Docs UI                                                                                                                |
+| `honey/i18n`                                                                                                                                                                                                                                           | Register error i18n                                                                                                    |
+| `@lovrozagar/honey/plugin`                                                                                                                                                                                                                             | Vite plugin + `generateFromApp`                                                                                        |
+| `honey/client` / `honey/client/sdk`                                                                                                                                                                                                                    | Typed TS client runtime / generated-SDK helpers                                                                        |
+| `honey/cors` `honey/csrf` `honey/body-limit` `honey/logger` `honey/curl-logger` `honey/etag` `honey/timeout` `honey/request-id` `honey/secure-headers` `honey/server-timing` `honey/ip-restrict` `honey/powered-by` `honey/pretty-json` `honey/static` | Middleware                                                                                                             |
+| `honey/proxy`                                                                                                                                                                                                                                          | Registers `.proxy()` on route builders (import once); `ProxyConfig` type                                               |
+| `honey/realtime`                                                                                                                                                                                                                                       | Registers `app.realtime()` (import once)                                                                               |
+| `honey/trust`                                                                                                                                                                                                                                          | Registers hop counts and address lists for `app.trustProxy()` (import once)                                            |
+| `honey/input`                                                                                                                                                                                                                                          | `readableStream()`                                                                                                     |
+| `honey/testing`                                                                                                                                                                                                                                        | `testClient`                                                                                                           |
+| `honey/ws/bun` `honey/ws/node` `honey/ws/deno` `honey/ws/cloudflare`                                                                                                                                                                                   | WS adapters                                                                                                            |
+| `honey/ws/session`                                                                                                                                                                                                                                     | The websocket session runtime. Every honey adapter imports it; a custom `WSAdapter` in a bundled build imports it once |
+| `honey/accepts` `honey/cookie` `honey/cookie-sign` `honey/crypto` `honey/request-to-curl`                                                                                                                                                              | Utilities                                                                                                              |
+| `honey/telemetry/otel`                                                                                                                                                                                                                                 | `otelAdapter`                                                                                                          |
+| `honey/codegen`                                                                                                                                                                                                                                        | `generateOpenApi`, `generateSDK`, `generateManifest`, trees, sanitize                                                  |
+| `honey/codegen-go-cli`                                                                                                                                                                                                                                 | `generateGoCLI`                                                                                                        |
+| `honey/codegen/extract`                                                                                                                                                                                                                                | ts-morph chain extractor                                                                                               |
+| `honey/build`                                                                                                                                                                                                                                          | `createBuildPlugin`                                                                                                    |
+| `honey/tree`                                                                                                                                                                                                                                           | Tree types + `mergeTree`                                                                                               |
+| `honey/cli`                                                                                                                                                                                                                                            | `honey` binary                                                                                                         |
+| `honey/errors`                                                                                                                                                                                                                                         | `defineErrors` (also on the root export)                                                                               |
 
 ## Repository layout
 
@@ -1889,6 +1911,13 @@ bun run test:harness       # TS / Go / Python / Rust / MCP compile + behavioral
 bun run test:harness:rust  # rust-only subset of the same loop
 bun run test:all           # default suite + language harnesses
 ```
+
+The harness needs Go, cargo and `python3` on PATH. Python packages come from
+`packages/core/tests/python-requirements.txt`: on first run the harness creates
+`.cache/python-venv` and installs them there, then reuses it until the file changes.
+Set `HONEY_PYTHON` to use your own interpreter instead. Without a usable Python
+(no `python3`, no `venv` module, or offline on first run) the Python tests skip
+with a warning; `HONEY_REQUIRE_PYTHON=1` (set in CI) turns that into a failure.
 
 Typecheck stays strict. Do not weaken `strict` or add `as any` to make it pass.
 
