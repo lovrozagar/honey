@@ -188,10 +188,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      # deno and cf-workers still run node for wrangler, playwright and the type-stripped fixtures
       - uses: actions/setup-node@v4
-        if: matrix.node
         with:
-          node-version: ${{ matrix.node }}
+          node-version: ${{ matrix.node || 'current' }}
           package-manager-cache: false
       - uses: denoland/setup-deno@v2
         if: matrix.runtime == 'deno'
