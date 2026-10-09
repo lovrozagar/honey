@@ -272,3 +272,50 @@ describe("generateRouteTreeFromApp intern + MetaShape", () => {
 		expect(code).toContain('ek: ["email_taken"]')
 	})
 })
+
+describe("route-tree emission cost", () => {
+	it("keys each value once: deep and wide meta stays linear", () => {
+		/* a 1500-level chain: re-serializing per level would build over a million characters of keys */
+		let deep: Record<string, unknown> = { leaf: "end-of-chain" }
+		for (let i = 0; i < 1500; i++) deep = { [`k${i % 7}`]: deep }
+		const pool = new InternPool()
+		const t0 = performance.now()
+		for (let i = 0; i < 3; i++) pool.count(deep)
+		pool.seal()
+		expect(pool.id(deep)).toBeDefined()
+		expect(performance.now() - t0).toBeLessThan(500)
+	})
+
+	it("equal JSON shares one const, whatever the object identity", () => {
+		const pool = new InternPool()
+		pool.count({ a: [1, { b: "xxxxxxxxxx" }] })
+		pool.count({ a: [1, { b: "xxxxxxxxxx" }] })
+		pool.count({ a: [1, { b: "yyyyyyyyyy" }] })
+		pool.seal()
+		expect(pool.id({ a: [1, { b: "xxxxxxxxxx" }] })).toBeDefined()
+		expect(pool.id({ a: [1, { b: "yyyyyyyyyy" }] })).toBeUndefined()
+		/* an undefined property is not part of the value, as in JSON */
+		expect(pool.id({ a: [1, { b: "xxxxxxxxxx" }], c: undefined })).toBe(pool.id({ a: [1, { b: "xxxxxxxxxx" }] }))
+	})
+
+	it("never converts a schema to JSON Schema", async () => {
+		const { getJsonSchemaConverter, setJsonSchemaConverter } = await import("../../../src/openapi/json-schema-slot.ts")
+		const prev = getJsonSchemaConverter()
+		let calls = 0
+		setJsonSchemaConverter(() => {
+			calls++
+			return {}
+		})
+		try {
+			const app = honey()
+			app
+				.post("/users")
+				.input({ json: z.object({ name: z.string() }) })
+				.handler((c) => c.res.json("ok", c.input.json))
+			generateRouteTreeFromApp(app)
+		} finally {
+			setJsonSchemaConverter(prev)
+		}
+		expect(calls).toBe(0)
+	})
+})

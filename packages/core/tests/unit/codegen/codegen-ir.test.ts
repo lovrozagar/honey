@@ -113,8 +113,9 @@ describe("schemaToIR", () => {
 		expect(schemaToIR({ const: 42 })).toEqual({ kind: "const", value: 42 })
 	})
 
-	it("const with explicit type", () => {
-		expect(schemaToIR({ const: "x", type: "string" })).toEqual({ kind: "const", value: "x" })
+	it("const with explicit type keeps the declared type", () => {
+		expect(schemaToIR({ const: "x", type: "string" })).toEqual({ kind: "const", type: "string", value: "x" })
+		expect(schemaToIR({ const: 1, type: "number" })).toEqual({ kind: "const", type: "number", value: 1 })
 	})
 
 	/* ---- object ---- */

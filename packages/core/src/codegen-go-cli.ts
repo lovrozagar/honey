@@ -16,12 +16,12 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import type { OpenApiSpecInput } from "./codegen.ts"
-import { collectSDKMethods } from "./codegen.ts"
+import { serviceMapOf } from "./codegen.ts"
 import { GO_KEYWORDS, GO_PREDECLARED, NameScope, cmpCodeUnit, goExported, goLocal, goString } from "./codegen-lang.ts"
-import type { IRParam, IRSchema } from "./codegen-ir.ts"
+import type { IRInfo, IRParam, IRSchema } from "./codegen-ir.ts"
 import { buildSdkModel } from "./codegen-sdk-model.ts"
 import type { SdkModel, SdkOp } from "./codegen-sdk-model.ts"
-import { detectAuthScheme, generateGoSDK } from "./codegen-go.ts"
+import { generateGoSDK } from "./codegen-go.ts"
 
 const DEFAULT_MODULE_PATH = "example.com/cli"
 
@@ -202,13 +202,6 @@ function isScalarSchema(schema: IRSchema, resolve: (s: IRSchema) => IRSchema): b
 	return s.kind === "scalar" || s.kind === "const"
 }
 
-/** `schema.default` of a declared parameter; the IR does not carry defaults. */
-function rawParamDefault(op: SdkOp, name: string, where: string): unknown {
-	const params = (op.raw.parameters as Array<Record<string, unknown>> | undefined) ?? []
-	const p = params.find((x) => x.name === name && x.in === where)
-	return (p?.schema as Record<string, unknown> | undefined)?.default
-}
-
 /** Go literal for a flag default, or the zero value. */
 function flagDefault(f: Flag): string {
 	const d = f.defaultValue
@@ -281,7 +274,7 @@ function collectCLIMethods(model: SdkModel, pkg: NameScope): { groups: Map<strin
 		const mkFlag = (p: IRParam, where: Flag["where"], prefix: string): Flag => {
 			const flagName = claimFlag(p.name, prefix)
 			return {
-				defaultValue: where === "query" || where === "header" ? rawParamDefault(op, p.name, where) : undefined,
+				defaultValue: where === "query" || where === "header" ? p.default : undefined,
 				enumValues: enumOf(p.schema, resolve),
 				flagName,
 				kind: flagKind(p.schema, resolve),
@@ -931,11 +924,10 @@ function emitGoMod(options: GoCLIOptions, hasEmbeddedSDK: boolean): string {
 
 /* ── emit: README.md ── */
 
-function emitReadme(spec: Record<string, unknown>, options: GoCLIOptions): string {
+function emitReadme(info: IRInfo, options: GoCLIOptions): string {
 	const envPrefix = options.envPrefix ?? toSnakeUpper(options.binaryName)
 	const configName = options.configName ?? options.binaryName
-	const info = (spec.info ?? {}) as Record<string, unknown>
-	const title = typeof info.title === "string" ? info.title : options.binaryName
+	const title = info.title ?? options.binaryName
 	return [
 		`# ${options.binaryName}`,
 		``,
@@ -1014,7 +1006,7 @@ function emitSSEExportShim(files: Record<string, string>, hasEmbedded: boolean):
 export function generateGoCLI(spec: Record<string, unknown>, options: GoCLIOptions): GeneratedGoCLI {
 	const input = spec as unknown as OpenApiSpecInput
 	const model = buildSdkModel(input)
-	const { serviceMap } = collectSDKMethods(input)
+	const serviceMap = serviceMapOf(model.ir)
 	const pkg = new NameScope(CMD_PACKAGE_NAMES)
 	const { groups, skipped } = collectCLIMethods(model, pkg)
 
@@ -1029,14 +1021,14 @@ export function generateGoCLI(spec: Record<string, unknown>, options: GoCLIOptio
 	files["main.go"] = emitMainFile(options)
 
 	const sortedGroups = [...groups.values()].sort((a, b) => cmpCodeUnit(a.resource, b.resource))
-	files["cmd/root.go"] = emitRootFile(sortedGroups, options, detectAuthScheme(spec))
+	files["cmd/root.go"] = emitRootFile(sortedGroups, options, model.ir.auth)
 
 	for (const g of sortedGroups) {
 		files[`cmd/${g.fileName}`] = emitResourceFile(g, options)
 	}
 
 	files["go.mod"] = emitGoMod(options, hasEmbeddedSDK)
-	files["README.md"] = emitReadme(spec, options)
+	files["README.md"] = emitReadme(model.ir.info, options)
 
 	if (hasEmbeddedSDK) copyEmbeddedSDK(spec, options, files)
 	emitSSEExportShim(files, hasEmbeddedSDK)

@@ -1,11 +1,11 @@
-/* One request model for the Go, Rust, Python and Go CLI emitters, built from the IR.
+/* One request model for the Go, Rust, Python and Go CLI emitters, built from the IR alone.
  *
  * Regular, SSE, WebSocket and realtime operations share it, so method, query, headers, body and
  * response handling are decided once here instead of per emitter from the raw spec.
  */
 
 import type { OpenApiSpecInput } from "./codegen.ts"
-import { parseOpenApiPath, toIR } from "./codegen-ir.ts"
+import { irResolver, parseOpenApiPath, toIR } from "./codegen-ir.ts"
 import type { IR, IRMultipartPart, IROperation, IRParam, IRPathSegment, IRSchema } from "./codegen-ir.ts"
 import { cmpCodeUnit } from "./codegen-lang.ts"
 
@@ -29,8 +29,6 @@ export type SdkStream = "sse" | "ws" | "realtime" | null
 
 export type SdkOp = {
 	ir: IROperation
-	/** Raw OpenAPI operation, only for shape checks the IR does not carry (error envelopes). */
-	raw: Record<string, unknown>
 	id: string
 	segments: string[]
 	method: string
@@ -70,7 +68,7 @@ export function isJsonMedia(contentType: string): boolean {
 	return e === "application/json" || e.endsWith("+json")
 }
 
-function isTextMedia(contentType: string): boolean {
+export function isTextMedia(contentType: string): boolean {
 	const e = mediaEssence(contentType)
 	return e.startsWith("text/") || e === "application/xml" || e.endsWith("+xml")
 }
@@ -135,24 +133,7 @@ function bodyOf(op: IROperation, resolve: (s: IRSchema) => IRSchema): SdkBody | 
 export function buildSdkModel(spec: OpenApiSpecInput): SdkModel {
 	const ir = toIR(spec, { deriveOperationIds: true })
 
-	const resolve = (schema: IRSchema): IRSchema => {
-		let cur = schema
-		for (let i = 0; i < 32 && cur.kind === "ref"; i++) {
-			const next = Object.hasOwn(ir.schemas, cur.name) ? ir.schemas[cur.name] : undefined
-			if (!next) return { kind: "unknown" }
-			cur = next
-		}
-		return cur
-	}
-
-	const rawById = new Map<string, Record<string, unknown>>()
-	for (const pathItem of Object.values(spec.paths ?? {})) {
-		for (const op of Object.values(pathItem as Record<string, unknown>)) {
-			if (op && typeof op === "object" && typeof (op as Record<string, unknown>).operationId === "string") {
-				rawById.set((op as Record<string, unknown>).operationId as string, op as Record<string, unknown>)
-			}
-		}
-	}
+	const resolve = irResolver(ir.schemas)
 
 	const ops: SdkOp[] = []
 	const opsById = new Map<string, SdkOp>()
@@ -184,7 +165,6 @@ export function buildSdkModel(spec: OpenApiSpecInput): SdkModel {
 			pathParams: op.params.path,
 			pathSegments: parseOpenApiPath(op.path),
 			query: [...op.params.query].sort((a, b) => cmpCodeUnit(a.name, b.name)),
-			raw: rawById.get(op.id) ?? {},
 			segments: op.id.split("."),
 			stream,
 			success: successOf(op),

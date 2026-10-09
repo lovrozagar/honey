@@ -5,7 +5,11 @@ export type IRScalarType = "string" | "number" | "integer" | "boolean" | "null"
 
 export type IRSchema =
 	| { kind: "scalar"; type: IRScalarType; format?: string; enum?: (string | number | boolean)[] }
-	| { kind: "const"; value: string | number | boolean }
+	| {
+			kind: "const"
+			value: string | number | boolean
+			/** the declared `type`, when the schema has one */ type?: IRScalarType
+	  }
 	| { kind: "object"; fields: IRField[]; additional?: IRSchema | false }
 	| { kind: "array"; items: IRSchema }
 	| { kind: "tuple"; items: IRSchema[] }
@@ -34,6 +38,10 @@ export type IRParam = {
 	description?: string
 	/** Path params are always required. */
 	required?: boolean
+	/** A path param that may span segments (`x-honey-wildcard`). */
+	wildcard?: true
+	/** `schema.default` as declared. */
+	default?: unknown
 }
 
 export type IRMultipartPart = {
@@ -51,6 +59,8 @@ export type IRBody =
 			contentType: "multipart/form-data"
 			parts: IRMultipartPart[]
 			required: boolean
+			/** The whole form object, for emitters that type the form as one value. */
+			schema?: IRSchema
 	  }
 
 export type IRResponse = {
@@ -79,8 +89,13 @@ export type IROperation = {
 		path: IRParam[]
 		query: IRParam[]
 		header: IRParam[]
+		/** Cookie params. Most SDKs leave them to per-call options; the TypeScript SDK types them. */
+		cookie?: IRParam[]
 	}
+	/** The preferred request body: JSON first, then form, multipart, raw bytes. */
 	body?: IRBody
+	/** Every declared request body, one per content type, in the same preference order. */
+	bodies?: IRBody[]
 	responses: Record<string, IRResponse>
 	extensions: IROperationExtensions
 }
@@ -91,10 +106,19 @@ export type IRNamespace = {
 	entries: Map<string, IRTreeEntry>
 }
 
+/** How a client authenticates: the header it sends and the prefix before the token. */
+export type IRAuth = { headerName: string; prefix: string }
+
+export type IRInfo = { title?: string; description?: string; version?: string }
+
 export type IR = {
 	operations: IROperation[]
 	schemas: Record<string, IRSchema>
+	/** `description` of each component schema that has one. */
+	schemaDescriptions: Record<string, string>
 	tree: IRNamespace
+	auth: IRAuth
+	info: IRInfo
 }
 
 export function methodsOf(ns: IRNamespace): Array<[string, IROperation]> {
@@ -219,7 +243,10 @@ export function schemaToIR(schema: Record<string, unknown> | undefined): IRSchem
 	if (schema.const !== undefined) {
 		const v = schema.const
 		if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-			return { kind: "const", value: v }
+			const out: Extract<IRSchema, { kind: "const" }> = { kind: "const", value: v }
+			const t = schema.type
+			if (t === "string" || t === "integer" || t === "number" || t === "boolean") out.type = t
+			return out
 		}
 	}
 
@@ -446,13 +473,51 @@ function isJsonMediaType(ct: string): boolean {
 	return essence === "application/json" || essence.endsWith("+json")
 }
 
+function contentTypeRank(ct: string): number {
+	const essence = ct.split(";")[0]?.trim().toLowerCase() ?? ""
+	const i = BODY_PREFERENCE.indexOf(essence)
+	if (i >= 0) return i
+	return isJsonMediaType(ct) ? BODY_PREFERENCE.length : BODY_PREFERENCE.length + 1
+}
+
+/** Content types in preference order; ties keep the order the spec lists them in. */
+function orderedContentTypes(content: Record<string, unknown>): string[] {
+	return Object.keys(content)
+		.map((ct, i) => ({ ct, i, rank: contentTypeRank(ct) }))
+		.sort((a, b) => a.rank - b.rank || a.i - b.i)
+		.map((x) => x.ct)
+}
+
 function preferredContentType(content: Record<string, unknown>): string | undefined {
-	const keys = Object.keys(content)
-	for (const want of BODY_PREFERENCE) {
-		const hit = keys.find((k) => k.split(";")[0]?.trim().toLowerCase() === want)
-		if (hit) return hit
+	return orderedContentTypes(content)[0]
+}
+
+function bodyFor(
+	ct: string,
+	mediaType: Record<string, unknown> | undefined,
+	required: boolean,
+	components: Components,
+): IRBody {
+	const rawSchema = mediaType?.schema as Record<string, unknown> | undefined
+	const essence = ct.split(";")[0]?.trim().toLowerCase()
+	if (essence === "application/octet-stream") {
+		return { contentType: "application/octet-stream", kind: "stream", required }
 	}
-	return keys.find(isJsonMediaType) ?? keys[0]
+	if (
+		essence === "multipart/form-data" &&
+		hasBinaryMultipartPart(resolveSchemaShallow(rawSchema, components), components)
+	) {
+		const body: IRBody = {
+			contentType: "multipart/form-data",
+			kind: "multipart",
+			parts: extractMultipartParts(resolveSchemaShallow(rawSchema, components), components),
+			required,
+		}
+		if (rawSchema) body.schema = schemaToIR(rawSchema)
+		return body
+	}
+	const bodySchema = rawSchema ? schemaToIR(rawSchema) : { kind: "unknown" as const }
+	return { contentType: ct, kind: "raw", required, schema: bodySchema }
 }
 
 function buildOperation(
@@ -478,6 +543,7 @@ function buildOperation(
 	const pathParams: IRParam[] = []
 	const queryParams: IRParam[] = []
 	const headerParams: IRParam[] = []
+	const cookieParams: IRParam[] = []
 	const templateNames = openApiPathParams(path)
 
 	for (const p of declaredParams) {
@@ -488,6 +554,9 @@ function buildOperation(
 			: { kind: "scalar" as const, type: "string" as const }
 		const param: IRParam = { name: pName, required: pIn === "path" || p.required === true, schema: pSchema }
 		if (typeof p.description === "string") param.description = p.description
+		if (p["x-honey-wildcard"] === true) param.wildcard = true
+		const pDefault = (p.schema as Record<string, unknown> | undefined)?.default
+		if (pDefault !== undefined) param.default = pDefault
 		if (pIn === "path") {
 			/* a declared path param missing from the template cannot be sent */
 			if (templateNames.includes(pName)) pathParams.push(param)
@@ -495,8 +564,9 @@ function buildOperation(
 			queryParams.push(param)
 		} else if (pIn === "header") {
 			headerParams.push(param)
+		} else if (pIn === "cookie") {
+			cookieParams.push(param)
 		}
-		/* cookie params discarded per OpenAPI client convention */
 	}
 
 	/* path params in template order; back-fill the ones absent from parameters[] */
@@ -508,32 +578,15 @@ function buildOperation(
 	}
 
 	let body: IRBody | undefined
+	const bodies: IRBody[] = []
 	const requestBody = deref(op.requestBody, components)
 	if (requestBody) {
 		const content = requestBody.content as Record<string, Record<string, unknown>> | undefined
-		const ct = content ? preferredContentType(content) : undefined
-		if (ct && content) {
-			const mediaType = content[ct]
-			const required = requestBody.required === true
-			const rawSchema = mediaType?.schema as Record<string, unknown> | undefined
-			const essence = ct.split(";")[0]?.trim().toLowerCase()
-			if (essence === "application/octet-stream") {
-				body = { contentType: "application/octet-stream", kind: "stream", required }
-			} else if (
-				essence === "multipart/form-data" &&
-				hasBinaryMultipartPart(resolveSchemaShallow(rawSchema, components), components)
-			) {
-				body = {
-					contentType: "multipart/form-data",
-					kind: "multipart",
-					parts: extractMultipartParts(resolveSchemaShallow(rawSchema, components), components),
-					required,
-				}
-			} else {
-				const bodySchema = rawSchema ? schemaToIR(rawSchema) : { kind: "unknown" as const }
-				body = { contentType: ct, kind: "raw", required, schema: bodySchema }
-			}
+		const required = requestBody.required === true
+		for (const ct of content ? orderedContentTypes(content) : []) {
+			bodies.push(bodyFor(ct, content?.[ct], required, components))
 		}
+		body = bodies[0]
 	}
 
 	const responses: Record<string, IRResponse> = {}
@@ -578,7 +631,9 @@ function buildOperation(
 		path,
 		responses,
 	}
+	if (cookieParams.length > 0) operation.params.cookie = cookieParams
 	if (body) operation.body = body
+	if (bodies.length > 1) operation.bodies = bodies
 	if (typeof op.description === "string") operation.description = op.description
 	if (typeof op.summary === "string") operation.summary = op.summary
 
@@ -655,5 +710,103 @@ export function toIR(spec: OpenApiSpecInput, options: ToIROptions = {}): IR {
 	}
 
 	const tree = buildResourceTree(operations)
-	return { operations, schemas, tree }
+	const schemaDescriptions: Record<string, string> = {}
+	for (const [name, schema] of Object.entries(spec.components?.schemas ?? {})) {
+		if (typeof schema.description === "string") schemaDescriptions[name] = schema.description
+	}
+	return { auth: specAuth(spec), info: infoOf(spec), operations, schemaDescriptions, schemas, tree }
+}
+
+/**
+ * The first security scheme (code-unit order) decides the header: http basic → `Basic `, other
+ * http → `Bearer `, a header apiKey → its name, with a prefix when its description says
+ * `Format: <prefix> {token}`. Anything else, or no scheme, is `Authorization: Bearer`.
+ */
+export function specAuth(spec: OpenApiSpecInput): IRAuth {
+	const components = (spec.components ?? {}) as Record<string, unknown>
+	const schemes = (components.securitySchemes ?? {}) as Record<string, Record<string, unknown>>
+	const keys = Object.keys(schemes).sort(cmpCodeUnit)
+	const fallback = { headerName: "Authorization", prefix: "Bearer " }
+	const scheme = keys.length > 0 ? schemes[keys[0]] : undefined
+	if (!scheme) return fallback
+	const type = String(scheme.type ?? "")
+	if (type === "http") {
+		const httpScheme = String(scheme.scheme ?? "").toLowerCase()
+		return { headerName: "Authorization", prefix: httpScheme === "basic" ? "Basic " : "Bearer " }
+	}
+	if (type === "apiKey" && scheme.in === "header") {
+		const headerName = String(scheme.name ?? "Authorization")
+		const match = /Format:\s*(\S+)\s+\{/i.exec(String(scheme.description ?? ""))
+		return { headerName, prefix: match ? `${match[1]} ` : "" }
+	}
+	return fallback
+}
+
+function infoOf(spec: OpenApiSpecInput): IRInfo {
+	const info = ((spec as { info?: unknown }).info ?? {}) as Record<string, unknown>
+	const out: IRInfo = {}
+	for (const key of ["title", "description", "version"] as const) {
+		if (typeof info[key] === "string") out[key] = info[key] as string
+	}
+	return out
+}
+
+/** Every request body an operation declares, preferred first. */
+export function bodiesOf(op: IROperation): IRBody[] {
+	return op.bodies ?? (op.body ? [op.body] : [])
+}
+
+/** Follows `ref` nodes to their component schema; an unknown ref resolves to `unknown`. */
+export function irResolver(schemas: Record<string, IRSchema>): (schema: IRSchema) => IRSchema {
+	return (schema) => {
+		let cur = schema
+		for (let i = 0; i < 32 && cur.kind === "ref"; i++) {
+			const next = Object.hasOwn(schemas, cur.name) ? schemas[cur.name] : undefined
+			if (!next) return { kind: "unknown" }
+			cur = next
+		}
+		return cur
+	}
+}
+
+function isStringSchema(s: IRSchema | undefined): boolean {
+	return s?.kind === "scalar" && s.type === "string"
+}
+
+/**
+ * Honey's standard error envelope (`success: false`, `error_key` enum, one `status`), read from the IR.
+ * Returns its error keys and status, or null for any other shape.
+ */
+export function irErrorEnvelope(
+	schema: IRSchema,
+	resolve: (schema: IRSchema) => IRSchema,
+): { keys: string[]; status: number } | null {
+	const obj = resolve(schema)
+	if (obj.kind !== "object") return null
+	const field = (o: Extract<IRSchema, { kind: "object" }>, name: string): IRSchema | undefined => {
+		const f = o.fields.find((x) => x.name === name)
+		return f ? resolve(f.schema) : undefined
+	}
+
+	const success = field(obj, "success")
+	if (success?.kind !== "const" || success.value !== false) return null
+	if (!isStringSchema(field(obj, "message")) || !isStringSchema(field(obj, "status_key"))) return null
+
+	const fields = field(obj, "fields")
+	if (fields?.kind !== "object" || !fields.additional) return null
+	const list = resolve(fields.additional)
+	if (list.kind !== "array") return null
+	const item = resolve(list.items)
+	if (item.kind !== "object") return null
+	for (const k of ["error_key", "message", "path"]) if (!isStringSchema(field(item, k))) return null
+
+	const status = field(obj, "status")
+	if (status?.kind !== "scalar" || !status.enum || status.enum.length !== 1) return null
+	const statusVal = status.enum[0]
+	if (typeof statusVal !== "number") return null
+
+	const key = field(obj, "error_key")
+	if (key?.kind !== "scalar" || !key.enum || key.enum.length === 0) return null
+	if (!key.enum.every((k) => typeof k === "string")) return null
+	return { keys: key.enum as string[], status: statusVal }
 }

@@ -458,7 +458,7 @@ export function irRenderTopLevel(
 	}
 
 	if (ir.kind === "const") {
-		const rawType = raw?.type as string | undefined
+		const rawType = ir.type ?? (raw?.type as string | undefined)
 		const base = rawType ? (primitiveFor(rawType) ?? "string") : constBaseType(ir.value)
 		const val = typeof ir.value === "string" ? goString(ir.value) : String(ir.value)
 		return [`type ${typeName} ${base}`, `const ${n.claimConst(`${typeName}Value`)} ${typeName} = ${val}`].join("\n")

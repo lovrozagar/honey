@@ -11,11 +11,6 @@ export type ForcedPrefix = "M" | "P"
 const STRING_MIN = 8
 const NUMBER_MIN = 8
 
-function canonical(v: unknown): string {
-	if (v === undefined) return "__undefined__"
-	return JSON.stringify(v) as string
-}
-
 function valueDepth(v: unknown): number {
 	if (v === null || typeof v !== "object") return 0
 	let max = 0
@@ -37,6 +32,12 @@ function valueDepth(v: unknown): number {
 export class InternPool {
 	private readonly counts = new Map<string, number>()
 	private readonly firstSeen: string[] = []
+	/** Position of each canonical key in `firstSeen`. */
+	private readonly seenAt = new Map<string, number>()
+	/** Canonical key of each object, computed once: a key names its children by their own short keys. */
+	private readonly objectKeys = new WeakMap<object, string>()
+	/** Short key per distinct object structure, so a parent's key never repeats a whole subtree. */
+	private readonly structureIds = new Map<string, string>()
 	private readonly forced = new Set<string>()
 	private readonly forcedPrefix = new Map<string, ForcedPrefix>()
 	private readonly ids = new Map<string, string>()
@@ -68,11 +69,41 @@ export class InternPool {
 		}
 	}
 
+	/**
+	 * Equal JSON values get equal keys. Objects and arrays are keyed by their children's keys,
+	 * memoized per object, so keying a value costs its size once instead of once per level.
+	 */
+	private canonical(v: unknown): string {
+		if (v === undefined) return "__undefined__"
+		if (v === null || typeof v !== "object") return JSON.stringify(v) as string
+		const memo = this.objectKeys.get(v)
+		if (memo !== undefined) return memo
+		let structure: string
+		if (Array.isArray(v)) {
+			structure = `[${v.map((x) => (x === undefined ? "null" : this.canonical(x))).join(",")}]`
+		} else {
+			const obj = v as Record<string, unknown>
+			const parts: string[] = []
+			for (const k of Object.keys(obj)) {
+				if (obj[k] !== undefined) parts.push(`${JSON.stringify(k)}:${this.canonical(obj[k])}`)
+			}
+			structure = `{${parts.join(",")}}`
+		}
+		let id = this.structureIds.get(structure)
+		if (id === undefined) {
+			id = `#${this.structureIds.size}`
+			this.structureIds.set(structure, id)
+		}
+		this.objectKeys.set(v, id)
+		return id
+	}
+
 	force(v: unknown, prefix: ForcedPrefix): void {
 		if (v === null || v === undefined) return
-		const c = canonical(v)
+		const c = this.canonical(v)
 		if (!this.values.has(c)) {
 			this.values.set(c, v)
+			this.seenAt.set(c, this.firstSeen.length)
 			this.firstSeen.push(c)
 			this.counts.set(c, this.counts.get(c) ?? 1)
 		}
@@ -95,12 +126,12 @@ export class InternPool {
 
 	id(v: unknown): string | undefined {
 		if (v === undefined) return undefined
-		return this.ids.get(canonical(v))
+		return this.ids.get(this.canonical(v))
 	}
 
 	expr(v: unknown): string {
 		if (v === undefined) return "undefined"
-		const ref = this.ids.get(canonical(v))
+		const ref = this.ids.get(this.canonical(v))
 		if (ref !== undefined) return ref
 		return this.printExpanded(v)
 	}
@@ -109,7 +140,7 @@ export class InternPool {
 		const items: Array<{ c: string; depth: number; id: string; seen: number; v: unknown }> = []
 		for (const [c, id] of this.ids) {
 			const v = this.values.get(c)
-			items.push({ c, depth: valueDepth(v), id, seen: this.firstSeen.indexOf(c), v })
+			items.push({ c, depth: valueDepth(v), id, seen: this.seenAt.get(c) ?? -1, v })
 		}
 		items.sort((a, b) => a.depth - b.depth || a.seen - b.seen || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 		return items.map((it) => `const ${it.id} = ${this.printExpanded(it.v)}`)
@@ -117,7 +148,7 @@ export class InternPool {
 
 	private shouldIntern(v: unknown): boolean {
 		if (v === null || v === undefined) return false
-		const c = canonical(v)
+		const c = this.canonical(v)
 		if (this.forced.has(c)) return true
 		const n = this.counts.get(c) ?? 0
 		if (n < 2) return false
@@ -138,11 +169,12 @@ export class InternPool {
 	}
 
 	private bump(v: unknown): void {
-		const c = canonical(v)
+		const c = this.canonical(v)
 		const n = (this.counts.get(c) ?? 0) + 1
 		this.counts.set(c, n)
 		if (n === 1) {
 			this.values.set(c, v)
+			this.seenAt.set(c, this.firstSeen.length)
 			this.firstSeen.push(c)
 		}
 	}

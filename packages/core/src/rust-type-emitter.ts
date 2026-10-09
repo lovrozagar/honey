@@ -320,7 +320,7 @@ export function irRenderTopLevelRust(
 	}
 
 	if (ir.kind === "const") {
-		const rawType = raw?.type as string | undefined
+		const rawType = ir.type ?? (raw?.type as string | undefined)
 		const base = rawType ? (primitiveFor(rawType) ?? "String") : constBaseType(ir.value)
 		return [`#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]`, `pub struct ${typeName}(pub ${base});`].join(
 			"\n",

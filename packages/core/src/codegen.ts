@@ -9,8 +9,18 @@ import {
 import type { SchemaNameContext } from "./codegen-schema-naming.ts"
 import { effectJsonSchemaFn, loadEffectJsonSchema, loadToJSONSchema, toJSONSchemaFn } from "./codegen-loaders.ts"
 import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
-import { methodsOf, namespacesOf, schemaToIR, toIR } from "./codegen-ir.ts"
-import type { IRNamespace } from "./codegen-ir.ts"
+import {
+	bodiesOf,
+	irErrorEnvelope,
+	irResolver,
+	methodsOf,
+	namespacesOf,
+	openApiPathParams,
+	schemaToIR,
+	toIR,
+} from "./codegen-ir.ts"
+import type { IR, IRBody, IRNamespace, IROperation, IRSchema } from "./codegen-ir.ts"
+import { isJsonMedia, isTextMedia, mediaEssence } from "./codegen-sdk-model.ts"
 import type { HoneyError } from "./error.ts"
 import { ERROR_META } from "./errors.ts"
 import type { ErrorMetaEntry } from "./errors.ts"
@@ -905,35 +915,53 @@ function cloneJson<T>(value: T): T {
 	}
 }
 
+/* Inlining expands each $ref; a graph of shared refs can grow exponentially (`L30` with two
+   fields that both point at `L29`, …), so the output is bounded and generation fails loudly. */
+const MAX_INLINED_SCHEMA_NODES = 200_000
+
+type InlineBudget = { nodes: number }
+
+function chargeInline(budget: InlineBudget): void {
+	if (++budget.nodes > MAX_INLINED_SCHEMA_NODES) {
+		throw new Error(
+			`SDK codegen: inlined schemas exceed ${MAX_INLINED_SCHEMA_NODES} nodes (deeply shared $refs); ` +
+				"flatten the shared component chain",
+		)
+	}
+}
+
 function resolveSchema(
 	schema: Record<string, unknown>,
 	schemas: Record<string, Record<string, unknown>>,
+	budget: InlineBudget,
 	visited = new Set<string>(),
 ): Record<string, unknown> {
 	if (typeof schema.$ref === "string" && schema.$ref.startsWith("#/components/schemas/")) {
 		const name = schema.$ref.slice("#/components/schemas/".length)
 		/* circular ref guard — return empty schema which maps to unknown in IR */
 		if (visited.has(name)) return {}
-		const resolved = schemas[name]
+		const resolved = Object.hasOwn(schemas, name) ? schemas[name] : undefined
 		if (!resolved) throw new Error(`$ref points to nonexistent component: ${schema.$ref}`)
 		const next = new Set(visited)
 		next.add(name)
-		return resolveSchemaDeep(cloneJson(resolved), schemas, next)
+		return resolveSchemaDeep(cloneJson(resolved), schemas, budget, next)
 	}
-	return resolveSchemaDeep(schema, schemas, visited)
+	return resolveSchemaDeep(schema, schemas, budget, visited)
 }
 
 function resolveSchemaDeep(
 	schema: Record<string, unknown>,
 	schemas: Record<string, Record<string, unknown>>,
+	budget: InlineBudget,
 	visited: Set<string>,
 ): Record<string, unknown> {
+	chargeInline(budget)
 	for (const key of ["oneOf", "anyOf", "allOf"] as const) {
 		const arr = schema[key]
 		if (Array.isArray(arr)) {
 			schema[key] = arr.map((item: unknown) => {
 				if (item && typeof item === "object" && !Array.isArray(item)) {
-					return resolveSchema(item as Record<string, unknown>, schemas, visited)
+					return resolveSchema(item as Record<string, unknown>, schemas, budget, visited)
 				}
 				return item
 			})
@@ -941,14 +969,14 @@ function resolveSchemaDeep(
 	}
 	/* resolve array items */
 	if (schema.items && typeof schema.items === "object" && !Array.isArray(schema.items)) {
-		schema.items = resolveSchema(schema.items as Record<string, unknown>, schemas, visited)
+		schema.items = resolveSchema(schema.items as Record<string, unknown>, schemas, budget, visited)
 	}
 	/* resolve object properties */
 	if (schema.properties && typeof schema.properties === "object") {
 		const props = schema.properties as Record<string, unknown>
 		for (const [k, v] of Object.entries(props)) {
 			if (v && typeof v === "object" && !Array.isArray(v)) {
-				props[k] = resolveSchema(v as Record<string, unknown>, schemas, visited)
+				props[k] = resolveSchema(v as Record<string, unknown>, schemas, budget, visited)
 			}
 		}
 	}
@@ -961,6 +989,7 @@ function resolveSchemaDeep(
 		schema.additionalProperties = resolveSchema(
 			schema.additionalProperties as Record<string, unknown>,
 			schemas,
+			budget,
 			visited,
 		)
 	}
@@ -972,6 +1001,7 @@ export function resolveRefs(spec: OpenApiSpecInput): OpenApiSpecInput {
 	if (!schemas || Object.keys(schemas).length === 0) return spec
 
 	const paths = cloneJson(spec.paths)
+	const budget: InlineBudget = { nodes: 0 }
 
 	for (const methods of Object.values(paths)) {
 		for (const operation of Object.values(methods)) {
@@ -983,7 +1013,7 @@ export function resolveRefs(spec: OpenApiSpecInput): OpenApiSpecInput {
 				if (content) {
 					for (const [ct, mediaType] of Object.entries(content)) {
 						const schema = mediaType.schema as Record<string, unknown> | undefined
-						if (schema) content[ct] = { ...mediaType, schema: resolveSchema(schema, schemas) }
+						if (schema) content[ct] = { ...mediaType, schema: resolveSchema(schema, schemas, budget) }
 					}
 				}
 			}
@@ -997,7 +1027,7 @@ export function resolveRefs(spec: OpenApiSpecInput): OpenApiSpecInput {
 					const resolved: Record<string, Record<string, unknown>> = {}
 					for (const [ct, mediaType] of Object.entries(content)) {
 						const schema = mediaType.schema as Record<string, unknown> | undefined
-						resolved[ct] = schema ? { ...mediaType, schema: resolveSchema(schema, schemas) } : mediaType
+						resolved[ct] = schema ? { ...mediaType, schema: resolveSchema(schema, schemas, budget) } : mediaType
 					}
 					responses[status] = { ...response, content: resolved }
 				}
@@ -2302,110 +2332,76 @@ export function jsonSchemaToTS(schema: Record<string, unknown> | undefined, dept
 /* a file part of a multipart body is sent as a Blob/File; the runtime appends it to FormData as is */
 const FORM_BINARY_TS = "Blob"
 
+/* the TS SDK input field a request body fills, by its media type */
+function sdkBodyField(body: IRBody): "body" | "form" | "json" | null {
+	if (body.kind === "stream") return "body"
+	if (body.kind === "multipart") return "form"
+	const essence = mediaEssence(body.contentType)
+	if (isJsonMedia(body.contentType)) return "json"
+	if (essence === "multipart/form-data" || essence === "application/x-www-form-urlencoded") return "form"
+	return null
+}
+
 /* extract input type for an operation */
-function emitSDKInputType(op: Record<string, unknown>, path: string): { hasMandatory: boolean; type: string } {
+function emitSDKInputType(op: IROperation): { hasMandatory: boolean; type: string } {
 	const mandatoryParts: string[] = []
 	const optionalParts: string[] = []
 
 	/* path params — always required */
-	const pathParamNames = extractOpenApiPathParams(path)
-	if (pathParamNames.length > 0) {
-		const allParameters = op.parameters as Array<Record<string, unknown>> | undefined
-		const entries = pathParamNames
-			.map((name) => {
-				const paramDef = allParameters?.find((p) => p.name === name && p.in === "path")
-				const schema = paramDef?.schema as Record<string, unknown> | undefined
-				const tsType = schema ? jsonSchemaToTS(schema) : "string"
-				const safeParamName = sdkSafeName(name)
-				return `${safeParamName}: ${tsType}`
-			})
-			.join("; ")
+	if (op.params.path.length > 0) {
+		const entries = op.params.path.map((p) => `${sdkSafeName(p.name)}: ${irToTs(p.schema)}`).join("; ")
 		mandatoryParts.push(`params: { ${entries} }`)
 	}
 
 	/* query params */
-	const parameters = op.parameters as Array<Record<string, unknown>> | undefined
-	if (parameters) {
-		const queryParams = parameters.filter((p) => p.in === "query")
-		if (queryParams.length > 0) {
-			const hasRequired = queryParams.some((p) => p.required === true)
-			const entries = queryParams
-				.sort((a, b) => compareCodeUnits(String(a.name), String(b.name)))
-				.map((p) => {
-					const name = String(p.name)
-					const required = p.required === true
-					const schema = p.schema as Record<string, unknown> | undefined
-					const tsType = jsonSchemaToTS(schema)
-					const safeQueryName = sdkSafeName(name)
-					return `${safeQueryName}${required ? "" : "?"}: ${tsType}`
-				})
-			const searchEntry = `search: { ${entries.join("; ")} }`
-			if (hasRequired) {
-				mandatoryParts.push(searchEntry)
-			} else {
-				optionalParts.push(searchEntry)
-			}
-		}
+	if (op.params.query.length > 0) {
+		const entries = op.params.query
+			.slice()
+			.sort((a, b) => compareCodeUnits(a.name, b.name))
+			.map((p) => `${sdkSafeName(p.name)}${p.required === true ? "" : "?"}: ${irToTs(p.schema)}`)
+		const searchEntry = `search: { ${entries.join("; ")} }`
+		if (op.params.query.some((p) => p.required === true)) mandatoryParts.push(searchEntry)
+		else optionalParts.push(searchEntry)
 	}
 
 	/* header and cookie params — typed on top of the free-form per-call `headers` / `cookies` */
-	if (parameters) {
-		for (const [location, field] of [
-			["header", "headers"],
-			["cookie", "cookies"],
-		] as const) {
-			const declared = parameters.filter((p) => p.in === location)
-			if (declared.length === 0) continue
-			const entries = declared
-				.slice()
-				.sort((a, b) => compareCodeUnits(String(a.name), String(b.name)))
-				.map((p) => {
-					const schema = p.schema as Record<string, unknown> | undefined
-					/* sent as text: a header or cookie value is a string on the wire */
-					const tsType = schema && schema.enum ? jsonSchemaToTS(schema) : "string"
-					return `${quoteKey(String(p.name))}${p.required === true ? "" : "?"}: ${tsType}`
-				})
-			const entry = `${field}: { ${entries.join("; ")} }`
-			if (declared.some((p) => p.required === true)) mandatoryParts.push(entry)
-			else optionalParts.push(entry)
-		}
+	for (const [declared, field] of [
+		[op.params.header, "headers"],
+		[op.params.cookie ?? [], "cookies"],
+	] as const) {
+		if (declared.length === 0) continue
+		const entries = declared
+			.slice()
+			.sort((a, b) => compareCodeUnits(a.name, b.name))
+			.map((p) => {
+				/* sent as text: a header or cookie value is a string on the wire */
+				const tsType = p.schema.kind === "scalar" && p.schema.enum ? irToTs(p.schema) : "string"
+				return `${quoteKey(p.name)}${p.required === true ? "" : "?"}: ${tsType}`
+			})
+		const entry = `${field}: { ${entries.join("; ")} }`
+		if (declared.some((p) => p.required === true)) mandatoryParts.push(entry)
+		else optionalParts.push(entry)
 	}
 
-	/* request body */
-	const requestBody = op.requestBody as Record<string, unknown> | undefined
-	if (requestBody) {
-		const required = (requestBody.required as boolean | undefined) === true
-		const content = requestBody.content as Record<string, Record<string, unknown>> | undefined
-		if (content) {
-			/* application/octet-stream: raw byte stream — emit `body:` field,
-			 * mutually exclusive with json/form for this operation */
-			if ("application/octet-stream" in content) {
-				const entry = "body: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array"
-				if (required) {
-					mandatoryParts.push(entry)
-				} else {
-					optionalParts.push(entry)
-				}
-			}
-			const jsonContent = content["application/json"]
-			if (jsonContent?.schema) {
-				const entry = `json: ${jsonSchemaToTS(jsonContent.schema as Record<string, unknown>)}`
-				if (required) {
-					mandatoryParts.push(entry)
-				} else {
-					optionalParts.push(entry)
-				}
-			}
-			const formContent = content["multipart/form-data"] ?? content["application/x-www-form-urlencoded"]
-			if (formContent?.schema) {
-				const entry = `form: ${jsonSchemaToTS(formContent.schema as Record<string, unknown>, 0, FORM_BINARY_TS)}`
-				if (required) {
-					mandatoryParts.push(entry)
-				} else {
-					optionalParts.push(entry)
-				}
-			}
+	/* request body: one input field per kind; the preferred content type of each kind wins */
+	const byField = new Map<string, IRBody>()
+	for (const body of bodiesOf(op)) {
+		const field = sdkBodyField(body)
+		if (field && !byField.has(field)) byField.set(field, body)
+	}
+	/* raw bytes first, then json, then form: the order the fields always had */
+	for (const field of ["body", "json", "form"] as const) {
+		const body = byField.get(field)
+		if (!body) continue
+		let entry: string
+		if (field === "body") entry = "body: ReadableStream<Uint8Array> | Blob | ArrayBuffer | Uint8Array"
+		else if (field === "json") entry = `json: ${body.kind === "raw" ? irToTs(body.schema) : "unknown"}`
+		else {
+			const schema = body.kind === "raw" ? body.schema : body.kind === "multipart" ? body.schema : undefined
+			entry = `form: ${schema ? irToTs(schema, 0, FORM_BINARY_TS) : "Record<string, unknown>"}`
 		}
+		if (body.required) mandatoryParts.push(entry)
+		else optionalParts.push(entry)
 	}
 
 	const allParts = [...mandatoryParts, ...optionalParts]
@@ -2414,49 +2410,31 @@ function emitSDKInputType(op: Record<string, unknown>, path: string): { hasManda
 }
 
 /* extract response type for an operation */
-function emitSDKResponseType(op: Record<string, unknown>): string {
-	const responses = op.responses as Record<string, Record<string, unknown>> | undefined
-	if (!responses) return "void"
-
-	/* check for SSE — shape mirrors runtime _SSEEvent (event/id/retry all optional) */
-	for (const response of Object.values(responses)) {
-		const content = response.content as Record<string, unknown> | undefined
-		if (content && "text/event-stream" in content)
-			return "AsyncIterable<{ data: string; event?: string; id?: string; retry?: number }>"
-	}
+function emitSDKResponseType(op: IROperation): string {
+	/* SSE — shape mirrors runtime _SSEEvent (event/id/retry all optional) */
+	if (op.extensions.sse) return "AsyncIterable<{ data: string; event?: string; id?: string; retry?: number }>"
 
 	/* collect success response types (2xx) — `default` and `4XX`-style keys are never success */
 	const successTypes: string[] = []
-	for (const [status, response] of Object.entries(responses)) {
+	for (const [status, response] of Object.entries(op.responses)) {
 		if (!/^2(?:[0-9][0-9]|XX)$/i.test(status)) continue
 		const code = /^2XX$/i.test(status) ? 200 : Number(status)
-		if (code === 204) {
+		if (code === 204 || code === 205 || !response.contentType) {
 			successTypes.push("null")
 			continue
 		}
-		const content = response.content as Record<string, Record<string, unknown>> | undefined
-		if (!content) {
-			successTypes.push("null")
-			continue
-		}
-		if (content["application/json"]?.schema) {
-			successTypes.push(jsonSchemaToTS(content["application/json"].schema as Record<string, unknown>))
-		} else if ("application/octet-stream" in content) {
-			successTypes.push("ArrayBuffer")
+		/* the same classes the runtime's body parser reads: JSON, text, otherwise bytes */
+		if (isJsonMedia(response.contentType)) {
+			successTypes.push(response.schema ? irToTs(response.schema) : "unknown")
+		} else if (isTextMedia(response.contentType)) {
+			successTypes.push("string")
 		} else {
-			const keys = Object.keys(content)
-			const isText = keys.some((k) => k.startsWith("text/") || k === "application/xml")
-			if (isText) {
-				successTypes.push("string")
-			} else if (keys.length > 0) {
-				successTypes.push("ArrayBuffer")
-			}
+			successTypes.push("ArrayBuffer")
 		}
 	}
 
 	if (successTypes.length === 0) return "void"
-	if (successTypes.length === 1) return successTypes[0]
-	return successTypes.join(" | ")
+	return [...new Set(successTypes)].join(" | ")
 }
 
 /* detect whether a JSON schema matches the standard error envelope shape */
@@ -2496,26 +2474,19 @@ export function isStandardErrEnvelope(schema: Record<string, unknown>): { keys: 
 }
 
 /* extract error types by status code for an operation (non-2xx responses) */
-function emitSDKErrorsByStatusType(op: Record<string, unknown>): string | null {
-	const responses = op.responses as Record<string, Record<string, unknown>> | undefined
-	if (!responses) return null
-
+function emitSDKErrorsByStatusType(op: IROperation, resolve: (schema: IRSchema) => IRSchema): string | null {
 	const entries: string[] = []
-	for (const [status, response] of Object.entries(responses)) {
+	for (const [status, response] of Object.entries(op.responses)) {
 		/* only concrete error statuses: `default` and `4XX` have no single status to key on */
 		if (!/^[45][0-9][0-9]$/.test(status)) continue
+		if (!response.schema || !response.contentType || !isJsonMedia(response.contentType)) continue
 		const code = Number(status)
-
-		const content = response.content as Record<string, Record<string, unknown>> | undefined
-		const schema = content?.["application/json"]?.schema as Record<string, unknown> | undefined
-		if (!schema) continue
-
-		const envelope = isStandardErrEnvelope(schema)
+		const envelope = irErrorEnvelope(response.schema, resolve)
 		if (envelope) {
 			const keyUnion = envelope.keys.map((k) => JSON.stringify(k)).join(" | ")
 			entries.push(`${code}: _ErrEnvelope<${envelope.status}, ${keyUnion}>`)
 		} else {
-			entries.push(`${code}: ${jsonSchemaToTS(schema)}`)
+			entries.push(`${code}: ${irToTs(response.schema)}`)
 		}
 	}
 
@@ -4437,7 +4408,8 @@ function sdkClientParseBody(): string {
 \t\tif (ct === "application/octet-stream" || ct === "application/pdf") {
 \t\t\treturn response.arrayBuffer()
 \t\t}
-\t\tif (ct.startsWith("text/")) return response.text()
+\t\t/* the classes the generated types use: text/*, XML, otherwise bytes */
+\t\tif (ct.startsWith("text/") || ct === "application/xml" || ct.endsWith("+xml")) return response.text()
 \t\t/* unknown content type \u2014 binary-safe fallback */
 \t\treturn response.arrayBuffer()
 \t}
@@ -4915,69 +4887,76 @@ export function isClientError(e: unknown): e is _ClientError {
 `
 }
 
+/** The IR every TypeScript SDK emitter reads: refs inlined, derived ids, duplicate ids refused. */
+export function sdkIR(spec: OpenApiSpecInput): IR {
+	return toIR(resolveRefs(spec), { deriveOperationIds: true, duplicateOperationIds: "throw" })
+}
+
+/** Flat `resource → action → entry` map of every operation, for SDK result objects. */
+export function serviceMapOf(ir: IR): Record<string, Record<string, ServiceEntry>> {
+	/* null-prototype: an operationId of "__proto__.x" must not reach Object.prototype */
+	const serviceMap: Record<string, Record<string, ServiceEntry>> = Object.create(null)
+	for (const op of ir.operations) {
+		const segments = op.id.split(".")
+		const resource = segments.length === 1 ? op.id : (segments[0] ?? op.id)
+		const action = segments.length === 1 ? "_call" : segments.slice(1).join(".")
+		if (!Object.hasOwn(serviceMap, resource)) serviceMap[resource] = Object.create(null)
+		serviceMap[resource][action] = buildServiceEntryForOp(op)
+	}
+	return serviceMap
+}
+
 export function collectSDKMethods(
 	spec: OpenApiSpecInput,
 	/* toIR validates namespace collisions; an operation without an operationId gets a derived
 	   one instead of silently vanishing from the SDK */
-	ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" }),
+	ir = sdkIR(spec),
 ): {
 	serviceMap: Record<string, Record<string, ServiceEntry>>
 	nestedMap: Map<string, NestedServiceNode>
 	methods: SDKMethod[]
 } {
-	const resolved = resolveRefs(spec)
-	/* null-prototype: an operationId of "__proto__.x" must not reach Object.prototype */
-	const serviceMap: Record<string, Record<string, ServiceEntry>> = Object.create(null)
+	const resolve = irResolver(ir.schemas)
 	const methods: SDKMethod[] = []
 
-	for (const irOp of ir.operations) {
-		const method = irOp.method.toLowerCase()
-		const op = resolved.paths[irOp.path]?.[method] as Record<string, unknown> | undefined
-		if (!op) continue
-		const operationId = irOp.id
-		const path = irOp.path
-
+	for (const op of ir.operations) {
+		const operationId = op.id
 		const segments = operationId.split(".")
 		const isTopLevel = segments.length === 1
 		const resource = isTopLevel ? operationId : (segments[0] ?? operationId)
 		const action = isTopLevel ? "_call" : segments.slice(1).join(".")
 
-		if (!Object.hasOwn(serviceMap, resource)) serviceMap[resource] = Object.create(null)
-		serviceMap[resource][action] = buildServiceEntryForOp(op, path, method)
-
-		const inputResult = emitSDKInputType(op, path)
+		const inputResult = emitSDKInputType(op)
 		methods.push({
 			action,
-			errorsByStatusType: emitSDKErrorsByStatusType(op),
+			errorsByStatusType: emitSDKErrorsByStatusType(op, resolve),
 			id: operationId,
 			inputHasMandatory: inputResult.hasMandatory,
 			inputType: inputResult.type,
-			realtime: op["x-realtime"] === true,
+			realtime: op.extensions.realtime === true,
 			resource,
 			responseType: emitSDKResponseType(op),
-			sse: isSSEOperation(op),
-			ws: op["x-websocket"] === true,
+			sse: op.extensions.sse === true,
+			ws: op.extensions.websocket === true,
 		})
 	}
 
-	const nestedMap = buildNestedServiceMap(safeMemberTree(ir.tree, true), resolved)
-	return { methods, nestedMap, serviceMap }
+	const nestedMap = buildNestedServiceMap(safeMemberTree(ir.tree, true))
+	return { methods, nestedMap, serviceMap: serviceMapOf(ir) }
 }
 
-function buildServiceEntryForOp(op: Record<string, unknown>, path: string, method: string): ServiceEntry {
-	const params = extractOpenApiPathParams(path)
-	const entry: ServiceEntry = { method: method.toUpperCase(), path }
+function buildServiceEntryForOp(op: IROperation): ServiceEntry {
+	const params = openApiPathParams(op.path)
+	const entry: ServiceEntry = { method: op.method, path: op.path }
 	if (params.length > 0) entry.params = params
-	const parameters = op.parameters as Array<Record<string, unknown>> | undefined
-	const wildcard = parameters?.find((p) => p.in === "path" && p["x-honey-wildcard"] === true)
-	if (wildcard) entry.wildcard = String(wildcard.name)
-	const sse = isSSEOperation(op)
-	if (sse) entry.sse = true
-	if (op["x-websocket"] === true) entry.ws = true
-	if (op["x-realtime"] === true) entry.realtime = true
-	if (op["x-idempotency-key"] === true) entry.idempotent = true
-	const xinv = op["x-invalidate"]
-	if (Array.isArray(xinv) && xinv.length > 0) entry.invalidate = xinv as string[]
+	const wildcard = op.params.path.find((p) => p.wildcard === true)
+	if (wildcard) entry.wildcard = wildcard.name
+	if (op.extensions.sse) entry.sse = true
+	if (op.extensions.websocket) entry.ws = true
+	if (op.extensions.realtime) entry.realtime = true
+	if (op.extensions.idempotencyKey) entry.idempotent = true
+	const inv = op.extensions.invalidates
+	if (inv && inv.length > 0) entry.invalidate = inv
 	return entry
 }
 
@@ -5024,21 +5003,36 @@ function safeMemberTree(ns: IRNamespace, root: boolean): IRNamespace {
 	return { entries }
 }
 
-function buildNestedServiceMap(
-	ns: IRNamespace,
-	resolved: ReturnType<typeof resolveRefs>,
-): Map<string, NestedServiceNode> {
+/**
+ * The member path of every operation on a generated TypeScript client, after the renames
+ * `safeMemberTree` applies: `["state_", "get"]` for an operation `state.get`. A namespace whose
+ * only method is `_call` is callable itself, so its path ends at the namespace.
+ */
+export function sdkMemberPaths(ir: IR): Map<string, string[]> {
+	const out = new Map<string, string[]>()
+	const walk = (ns: IRNamespace, prefix: string[]): void => {
+		const methods = methodsOf(ns)
+		for (const [key, entry] of ns.entries) {
+			if (entry.kind === "namespace") {
+				walk(entry.ns, [...prefix, key])
+			} else if (key !== "_call") {
+				out.set(entry.op.id, [...prefix, key])
+			} else if (methods.length === 1) {
+				/* the interface promotes a lone `_call` to the namespace itself and drops any other */
+				out.set(entry.op.id, prefix)
+			}
+		}
+	}
+	walk(safeMemberTree(ir.tree, true), [])
+	return out
+}
+
+function buildNestedServiceMap(ns: IRNamespace): Map<string, NestedServiceNode> {
 	function walkNs(namespace: IRNamespace): Map<string, NestedServiceNode> {
 		const map = new Map<string, NestedServiceNode>()
 		for (const [key, entry] of [...namespace.entries.entries()].sort(([a], [b]) => compareCodeUnits(a, b))) {
-			if (entry.kind === "method") {
-				const method = entry.op.method.toLowerCase()
-				const op = resolved.paths[entry.op.path]?.[method] as Record<string, unknown> | undefined
-				if (!op) continue
-				map.set(key, { entry: buildServiceEntryForOp(op, entry.op.path, method), kind: "leaf" })
-			} else {
-				map.set(key, { children: walkNs(entry.ns), kind: "ns" })
-			}
+			if (entry.kind === "method") map.set(key, { entry: buildServiceEntryForOp(entry.op), kind: "leaf" })
+			else map.set(key, { children: walkNs(entry.ns), kind: "ns" })
 		}
 		return map
 	}
@@ -5064,7 +5058,7 @@ export function generateSDK(spec: OpenApiSpecInput, options?: { name?: string; s
 	const sdkName = options?.name ?? "SDK"
 	const stem = options?.stem ?? "sdk"
 	validateSdkNames(sdkName, stem)
-	const ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" })
+	const ir = sdkIR(spec)
 	const { methods: sdkMethods, nestedMap, serviceMap } = collectSDKMethods(spec, ir)
 	const hasRealtime = sdkMethods.some((m) => m.realtime)
 	const fullMethodLookup = new Map<string, SDKMethod>()

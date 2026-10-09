@@ -819,6 +819,26 @@ describe("IR snapshot — operation extensions", () => {
 			      },
 			    ],
 			    "required": true,
+			    "schema": {
+			      "fields": [
+			        {
+			          "name": "description",
+			          "required": false,
+			          "schema": {
+			            "kind": "scalar",
+			            "type": "string",
+			          },
+			        },
+			        {
+			          "name": "file",
+			          "required": false,
+			          "schema": {
+			            "kind": "binary",
+			          },
+			        },
+			      ],
+			      "kind": "object",
+			    },
 			  },
 			  "extensions": {},
 			  "id": "uploadOp",

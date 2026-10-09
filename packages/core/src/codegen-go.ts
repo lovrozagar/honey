@@ -12,9 +12,9 @@ import { spawnSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import type { OpenApiSpecInput } from "./codegen.ts"
-import { collectSDKMethods } from "./codegen.ts"
-import { methodsOf, namespacesOf } from "./codegen-ir.ts"
-import type { IRNamespace, IRSchema } from "./codegen-ir.ts"
+import { serviceMapOf } from "./codegen.ts"
+import { methodsOf, namespacesOf, specAuth } from "./codegen-ir.ts"
+import type { IRAuth, IRInfo, IRNamespace, IRSchema } from "./codegen-ir.ts"
 import {
 	GO_KEYWORDS,
 	GO_PREDECLARED,
@@ -126,26 +126,9 @@ export function safeResourceName(name: string): string {
  * embeds a "Format: <Prefix> {token}" hint (common pattern for APIs like Anyrow
  * that use `Authorization: ApiKey <token>`).
  */
-export function detectAuthScheme(spec: Record<string, unknown>): { headerName: string; prefix: string } {
-	const components = (spec.components ?? {}) as Record<string, unknown>
-	const schemes = (components.securitySchemes ?? {}) as Record<string, Record<string, unknown>>
-	const keys = Object.keys(schemes).sort(cmpCodeUnit)
-	if (keys.length === 0) return { headerName: "Authorization", prefix: "Bearer " }
-	const scheme = schemes[keys[0]]
-	const type = String(scheme.type ?? "")
-	if (type === "http") {
-		const httpScheme = String(scheme.scheme ?? "").toLowerCase()
-		if (httpScheme === "basic") return { headerName: "Authorization", prefix: "Basic " }
-		return { headerName: "Authorization", prefix: "Bearer " }
-	}
-	if (type === "apiKey" && scheme.in === "header") {
-		const headerName = String(scheme.name ?? "Authorization")
-		const desc = String(scheme.description ?? "")
-		const match = /Format:\s*(\S+)\s+\{/i.exec(desc)
-		if (match) return { headerName, prefix: `${match[1]} ` }
-		return { headerName, prefix: "" }
-	}
-	return { headerName: "Authorization", prefix: "Bearer " }
+/** The auth header and prefix the spec's first security scheme asks for (see `IR.auth`). */
+export function detectAuthScheme(spec: Record<string, unknown>): IRAuth {
+	return specAuth(spec as unknown as OpenApiSpecInput)
 }
 
 function goImportBlock(stdlib: string[], thirdParty: string[]): string {
@@ -196,20 +179,15 @@ export function buildGoNames(model: SdkModel): GoNames {
 
 /* ── buildGoTypes ── */
 
-function buildGoTypes(model: SdkModel, names: GoNames, spec: Record<string, unknown>): string {
-	const rawSchemas = ((spec.components as Record<string, unknown> | undefined)?.schemas ?? {}) as Record<
-		string,
-		Record<string, unknown>
-	>
+function buildGoTypes(model: SdkModel, names: GoNames): string {
 	const body: string[] = []
 	const decls = names.hoistedDecls
 	for (const name of model.schemaNames) {
 		const ir = model.ir.schemas[name]
 		const goName = names.types.ref(name)
-		const raw = Object.hasOwn(rawSchemas, name) ? rawSchemas[name] : undefined
-		const description = typeof raw?.description === "string" ? raw.description : ""
+		const description = Object.hasOwn(model.ir.schemaDescriptions, name) ? model.ir.schemaDescriptions[name] : ""
 		if (description) body.push(...goComment(description))
-		body.push(irRenderTopLevel(goName, ir, decls, raw, names.types))
+		body.push(irRenderTopLevel(goName, ir, decls, undefined, names.types))
 		body.push(``)
 	}
 	return body.join("\n")
@@ -252,10 +230,9 @@ function buildGoMod(modulePath?: string): string {
 
 /* ── buildGoDoc ── */
 
-function buildGoDoc(spec: Record<string, unknown>): string {
-	const info = (spec.info ?? {}) as Record<string, unknown>
-	const title = typeof info.title === "string" ? info.title : "API"
-	const desc = typeof info.description === "string" ? info.description : ""
+function buildGoDoc(info: IRInfo): string {
+	const title = info.title ?? "API"
+	const desc = info.description ?? ""
 	/* Generator directive on its own line, separated from package-doc by blank
 	 * line so pkg.go.dev does not aggregate "Code generated..." into Overview.
 	 * The `// Package sdk ...` line IS attached to `package sdk` (no blank line
@@ -920,8 +897,8 @@ function emitClientBody(
 	return body.join("\n")
 }
 
-function clientFile(model: SdkModel, names: GoNames, options: GoSDKOptions, spec: Record<string, unknown>): string {
-	const bodyStr = buildGoClient(model, names, options, detectAuthScheme(spec))
+function clientFile(model: SdkModel, names: GoNames, options: GoSDKOptions): string {
+	const bodyStr = buildGoClient(model, names, options, model.ir.auth)
 
 	const stdlib = ["context"]
 	const uses = (re: RegExp) => re.test(bodyStr)
@@ -955,7 +932,7 @@ export function generateGoSDK(spec: Record<string, unknown>, options: GoSDKOptio
 	const input = spec as unknown as OpenApiSpecInput
 	const model = buildSdkModel(input)
 	const names = buildGoNames(model)
-	const { serviceMap } = collectSDKMethods(input)
+	const serviceMap = serviceMapOf(model.ir)
 
 	const files: Record<string, string> = {}
 
@@ -965,11 +942,11 @@ export function generateGoSDK(spec: Record<string, unknown>, options: GoSDKOptio
 	}
 
 	/* schema types claim their names first; the client then hoists into the same table */
-	const schemaTypes = buildGoTypes(model, names, spec)
-	files["client.go"] = clientFile(model, names, options, spec)
+	const schemaTypes = buildGoTypes(model, names)
+	files["client.go"] = clientFile(model, names, options)
 	files["types.go"] = typesFile(schemaTypes, names)
 	files["go.mod"] = buildGoMod(options.modulePath)
-	files["doc.go"] = buildGoDoc(spec)
+	files["doc.go"] = buildGoDoc(model.ir.info)
 
 	/* Opt-in post-process. Consumers publishing to pkg.go.dev pass `gofmt: true`
 	 * so struct fields align and single-line `if` blocks expand. No-op when

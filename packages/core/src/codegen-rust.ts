@@ -8,9 +8,8 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import type { OpenApiSpecInput } from "./codegen.ts"
-import { collectSDKMethods, isStandardErrEnvelope } from "./codegen.ts"
-import { detectAuthScheme } from "./codegen-go.ts"
-import { methodsOf, namespacesOf } from "./codegen-ir.ts"
+import { serviceMapOf } from "./codegen.ts"
+import { irErrorEnvelope, methodsOf, namespacesOf } from "./codegen-ir.ts"
 import type { IRNamespace, IRSchema } from "./codegen-ir.ts"
 import {
 	NameScope,
@@ -22,7 +21,7 @@ import {
 	rustTypeIdent,
 	rustValueIdent,
 } from "./codegen-lang.ts"
-import { buildSdkModel, valueCycleSchemas } from "./codegen-sdk-model.ts"
+import { buildSdkModel, isJsonMedia, valueCycleSchemas } from "./codegen-sdk-model.ts"
 import type { SdkModel, SdkOp } from "./codegen-sdk-model.ts"
 import { irRenderTopLevelRust, irRenderUseRust } from "./rust-type-emitter.ts"
 import type { RustTypeNames } from "./rust-type-emitter.ts"
@@ -248,39 +247,14 @@ const METHOD_LOCALS = [
 	"headers",
 ]
 
-function resolveRaw(
-	schema: Record<string, unknown> | undefined,
-	spec: Record<string, unknown>,
-): Record<string, unknown> | undefined {
-	let cur = schema
-	for (let i = 0; i < 16 && cur && typeof cur.$ref === "string"; i++) {
-		const name = (cur.$ref as string).split("/").pop() ?? ""
-		const schemas = ((spec.components as Record<string, unknown> | undefined)?.schemas ?? {}) as Record<
-			string,
-			Record<string, unknown>
-		>
-		cur = Object.hasOwn(schemas, name) ? schemas[name] : undefined
-	}
-	return cur
-}
-
-/** Per-status error envelopes (standard shapes only), with `$ref` schemas resolved first. */
-function errorEnvelopes(
-	op: SdkOp,
-	opPascal: string,
-	spec: Record<string, unknown>,
-	names: RustNames,
-): ErrEnvelopeInfo[] {
-	const responses = op.raw.responses as Record<string, Record<string, unknown>> | undefined
-	if (!responses) return []
+/** Per-status error envelopes (standard shapes only), read from the IR with refs resolved. */
+function errorEnvelopes(op: SdkOp, opPascal: string, model: SdkModel, names: RustNames): ErrEnvelopeInfo[] {
 	const out: ErrEnvelopeInfo[] = []
-	for (const [status, response] of Object.entries(responses).sort(([a], [b]) => cmpCodeUnit(a, b))) {
+	for (const [status, response] of Object.entries(op.ir.responses).sort(([a], [b]) => cmpCodeUnit(a, b))) {
 		const code = Number.parseInt(status, 10)
 		if (!/^[0-9]{3}$/.test(status) || code < 400) continue
-		const content = response.content as Record<string, Record<string, unknown>> | undefined
-		const schema = resolveRaw(content?.["application/json"]?.schema as Record<string, unknown> | undefined, spec)
-		if (!schema) continue
-		const envelope = isStandardErrEnvelope(schema)
+		if (!response.schema || !response.contentType || !isJsonMedia(response.contentType)) continue
+		const envelope = irErrorEnvelope(response.schema, model.resolve)
 		if (!envelope) continue
 		out.push({
 			keyEnumName: names.scope.claim(`${opPascal}Err${code}Key`),
@@ -329,7 +303,6 @@ function planOp(
 	fnName: string,
 	pathSegs: string[],
 	names: RustNames,
-	spec: Record<string, unknown>,
 	throwOnError: boolean,
 	model: SdkModel,
 ): RustOpPlan {
@@ -444,7 +417,7 @@ function planOp(
 		} else if (s.kind === "text") plan.resultType = "String"
 		else if (s.kind === "binary") plan.resultType = "Vec<u8>"
 		/* the typed error enums exist in both modes; only safe-mode methods return them */
-		plan.envelopes = errorEnvelopes(op, opPascal, spec, names)
+		plan.envelopes = errorEnvelopes(op, opPascal, model, names)
 		if (plan.envelopes.length > 0) plan.errorEnum = names.scope.claim(`${opPascal}Error`)
 	}
 	void model
@@ -926,12 +899,7 @@ function hasSync(node: RustNode): boolean {
 	return node.plans.some((p) => isSyncCapable(p.op)) || node.children.some((c) => hasSync(c.node))
 }
 
-function buildTree(
-	model: SdkModel,
-	names: RustNames,
-	spec: Record<string, unknown>,
-	throwOnError: boolean,
-): { root: RustNode; plans: RustOpPlan[] } {
+function buildTree(model: SdkModel, names: RustNames, throwOnError: boolean): { root: RustNode; plans: RustOpPlan[] } {
 	const plans: RustOpPlan[] = []
 	function visit(ns: IRNamespace, path: string[], modName: string, reserved: string[]): RustNode {
 		const isRoot = path.length === 0
@@ -962,7 +930,7 @@ function buildTree(
 			const ident = rustValueIdent(seg)
 			const plain = ident.startsWith("r#") ? ident.slice(2) : ident
 			const claimed = members.claim(plain)
-			const plan = planOp(op, claimed === plain ? ident : claimed, [...path, seg], names, spec, throwOnError, model)
+			const plan = planOp(op, claimed === plain ? ident : claimed, [...path, seg], names, throwOnError, model)
 			node.plans.push(plan)
 			plans.push(plan)
 		}
@@ -977,11 +945,7 @@ function buildTree(
 
 /* ── files ── */
 
-function buildRustTypes(model: SdkModel, names: RustNames, spec: Record<string, unknown>): string {
-	const rawSchemas = ((spec.components as Record<string, unknown> | undefined)?.schemas ?? {}) as Record<
-		string,
-		Record<string, unknown>
-	>
+function buildRustTypes(model: SdkModel, names: RustNames): string {
 	const body: string[] = []
 	/* always emit shared error-envelope field type used by per-op error structs */
 	body.push(`#[derive(Debug, Clone, Serialize, Deserialize)]`)
@@ -992,9 +956,8 @@ function buildRustTypes(model: SdkModel, names: RustNames, spec: Record<string, 
 	body.push(`}`)
 	body.push(``)
 	for (const name of model.schemaNames) {
-		const raw = Object.hasOwn(rawSchemas, name) ? rawSchemas[name] : undefined
-		if (typeof raw?.description === "string") body.push(...rustDoc(raw.description))
-		body.push(irRenderTopLevelRust(names.types.ref(name), model.ir.schemas[name], names.decls, raw, names.types))
+		if (Object.hasOwn(model.ir.schemaDescriptions, name)) body.push(...rustDoc(model.ir.schemaDescriptions[name]))
+		body.push(irRenderTopLevelRust(names.types.ref(name), model.ir.schemas[name], names.decls, undefined, names.types))
 		body.push(``)
 	}
 	return body.join("\n")
@@ -1404,7 +1367,7 @@ export function generateRustSDK(spec: Record<string, unknown>, options: RustSDKO
 
 	const input = spec as unknown as OpenApiSpecInput
 	const model = buildSdkModel(input)
-	const { serviceMap } = collectSDKMethods(input)
+	const serviceMap = serviceMapOf(model.ir)
 	const names = buildRustNames(model)
 	const hasRealtime = model.ops.some((op) => op.stream === "realtime")
 	const realtimeIds = new Set(model.ops.filter((op) => op.stream === "realtime").map((op) => op.id))
@@ -1416,9 +1379,9 @@ export function generateRustSDK(spec: Record<string, unknown>, options: RustSDKO
 	}
 
 	/* schema types claim their names first; operations then hoist into the same table */
-	const schemaSource = buildRustTypes(model, names, spec)
-	const { plans, root } = buildTree(model, names, spec, throwOnError)
-	files["src/client.rs"] = buildRustClient(root, plans, throwOnError, detectAuthScheme(spec), serviceMap, realtimeIds)
+	const schemaSource = buildRustTypes(model, names)
+	const { plans, root } = buildTree(model, names, throwOnError)
+	files["src/client.rs"] = buildRustClient(root, plans, throwOnError, model.ir.auth, serviceMap, realtimeIds)
 	for (const [relPath, content] of buildRustResources(root, throwOnError)) files[relPath] = content
 	files["src/types.rs"] = typesFile(schemaSource, names)
 	files["src/lib.rs"] = buildLibRs(hasRealtime)

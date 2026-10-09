@@ -1,10 +1,16 @@
-/* MCP server code generator. Spec-driven (not IR-driven) — OpenAPI parameters[]
- * + requestBody.content['application/json'].schema are already JSON Schema,
- * no translation layer needed. Mirrors codegen-python.ts structure. */
+/* MCP server code generator.
+ *
+ * Which operations become tools, their ids, their place in the TypeScript SDK and their parameter
+ * set come from the IR the TypeScript SDK is built from, so a tool always calls a method that
+ * exists. Only the JSON Schema of each parameter and JSON body is copied from the document,
+ * verbatim and with refs inlined: a tool's input contract is JSON Schema, and the IR keeps less
+ * than JSON Schema says (lengths, patterns, formats), which tool validation needs. */
 
 import { readFileSync } from "node:fs"
 import type { OpenApiSpecInput } from "./codegen.ts"
-import { toIR } from "./codegen-ir.ts"
+import { sdkMemberPaths } from "./codegen.ts"
+import { bodiesOf, toIR } from "./codegen-ir.ts"
+import { isJsonMedia } from "./codegen-sdk-model.ts"
 
 type MCPOptions = {
 	projectName: string
@@ -32,8 +38,6 @@ type MCPOp = {
 
 type SpecRecord = Record<string, unknown>
 
-const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"] as const
-
 const TEMPLATE_FILE_NAMES = ["server.ts", "types.ts"] as const
 const TEMPLATE_CACHE = new Map<string, string>()
 
@@ -49,16 +53,6 @@ function loadMCPRuntimeTemplates(): Map<string, string> {
 function envVarNames(projectName: string): { apiKey: string; baseUrl: string } {
 	const upper = projectName.toUpperCase()
 	return { apiKey: `${upper}_API_KEY`, baseUrl: `${upper}_BASE_URL` }
-}
-
-function hasSSEResponse(op: SpecRecord): boolean {
-	const responses = op.responses as Record<string, SpecRecord> | undefined
-	if (!responses) return false
-	for (const resp of Object.values(responses)) {
-		const content = resp.content as SpecRecord | undefined
-		if (content && "text/event-stream" in content) return true
-	}
-	return false
 }
 
 function toSnakeCase(id: string): string {
@@ -198,43 +192,49 @@ function inline(spec: SpecRecord, schema: SpecRecord | undefined): SpecRecord | 
 	return deepResolveSchema(spec, schema).schema
 }
 
-function extractJsonBodySchema(op: SpecRecord): SpecRecord | undefined {
-	const requestBody = op.requestBody as SpecRecord | undefined
-	const content = requestBody?.content as Record<string, SpecRecord> | undefined
-	return content?.["application/json"]?.schema as SpecRecord | undefined
+/** Declared parameters of an operation: its own, then the path item's it does not override. */
+function declaredParameters(op: SpecRecord, pathItem: SpecRecord, spec: SpecRecord): SpecRecord[] {
+	const own = ((op.parameters as unknown[] | undefined) ?? []).map((p) => resolveSchema(spec, p as SpecRecord) ?? {})
+	const shared = ((pathItem.parameters as unknown[] | undefined) ?? []).map(
+		(p) => resolveSchema(spec, p as SpecRecord) ?? {},
+	)
+	const out = [...own]
+	for (const p of shared) if (!out.some((d) => d.name === p.name && d.in === p.in)) out.push(p)
+	return out
 }
 
 function collectMCPOps(spec: OpenApiSpecInput): MCPOp[] {
-	const paths = spec.paths as Record<string, SpecRecord> | undefined
-	if (!paths) return []
+	/* the ids, tree and member names the TypeScript SDK derives; its schemas are not needed here */
+	const ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" })
+	const members = sdkMemberPaths(ir)
+	const specRec = spec as unknown as SpecRecord
 	const ops: MCPOp[] = []
 
-	for (const [path, pathItem] of Object.entries(paths)) {
-		for (const method of HTTP_METHODS) {
-			const op = pathItem[method] as SpecRecord | undefined
-			if (!op) continue
-			if (op["x-mcp"] !== true) continue
-			/* skip websocket / realtime / SSE operations — MCP is request/response only */
-			if (op["x-websocket"] === true) continue
-			if (op["x-realtime"] === true) continue
-			if (hasSSEResponse(op)) continue
+	for (const irOp of ir.operations) {
+		const ext = irOp.extensions
+		if (ext.mcp !== true) continue
+		/* skip websocket / realtime / SSE operations — MCP is request/response only */
+		if (ext.websocket || ext.realtime || ext.sse) continue
 
-			const operationId = op.operationId as string | undefined
-			if (!operationId) continue
+		const pathItem = (spec.paths?.[irOp.path] ?? {}) as SpecRecord
+		const op = (pathItem[irOp.method.toLowerCase()] ?? {}) as SpecRecord
+		const requestBody = resolveSchema(specRec, op.requestBody as SpecRecord | undefined)
+		const content = requestBody?.content as Record<string, SpecRecord> | undefined
+		/* the JSON body the SDK's `json` input sends: the first JSON media type, as the SDK picks it */
+		const jsonBody = bodiesOf(irOp).find((b) => b.kind === "raw" && isJsonMedia(b.contentType))
 
-			ops.push({
-				bodyRequired: (op.requestBody as SpecRecord | undefined)?.required === true,
-				bodySchema: extractJsonBodySchema(op),
-				description: op.description as string | undefined,
-				method: method.toUpperCase(),
-				operationId,
-				parameters: (op.parameters as Array<SpecRecord> | undefined) ?? [],
-				path,
-				pathSegments: operationId.split("."),
-				summary: op.summary as string | undefined,
-				toolName: "",
-			})
-		}
+		ops.push({
+			bodyRequired: jsonBody?.required === true,
+			bodySchema: jsonBody ? (content?.[jsonBody.contentType]?.schema as SpecRecord | undefined) : undefined,
+			description: irOp.description,
+			method: irOp.method,
+			operationId: irOp.id,
+			parameters: declaredParameters(op, pathItem, specRec),
+			path: irOp.path,
+			pathSegments: members.get(irOp.id) ?? irOp.id.split("."),
+			summary: irOp.summary,
+			toolName: "",
+		})
 	}
 
 	return ops
@@ -419,7 +419,6 @@ function buildTsconfig(): string {
 }
 
 export function generateMCPServer(spec: OpenApiSpecInput, options: MCPOptions): MCPResult {
-	toIR(spec)
 	const { projectName, sdkClassName, sdkPackageName } = options
 	const version = options.version ?? "0.1.0"
 
