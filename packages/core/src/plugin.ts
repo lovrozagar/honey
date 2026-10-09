@@ -526,9 +526,22 @@ export async function generateAndWrite(
 		writeGenFile(typesPath, typesCode, "honey")
 	}
 
+	/* The SDK and Go CLI share one unfiltered document. With openApi outputs the invalidate check
+	 * already ran on the first of them, so it is not reported again; without, it runs here once. */
+	let unfiltered: Promise<OpenApiSpecInput> | undefined
+	const unfilteredSpec = (what: string): Promise<OpenApiSpecInput> => {
+		if (!app) throw new Error(`${what} generation requires a configured app`)
+		const primaryOA = cg.openApi && cg.openApi.length > 0 ? cg.openApi[0] : null
+		unfiltered ??= generateOpenApi(app, {
+			info: primaryOA ? { title: primaryOA.title, version: primaryOA.version } : { title: "API", version: "1.0.0" },
+			invalidate: primaryOA ? "off" : cg.invalidate,
+		})
+		return unfiltered
+	}
+
 	/* sdk */
 	if (cg.sdk) {
-		const { generateOpenApi: genOA, generateSDK: genSDK, mergeSpecs } = await import("./codegen.ts")
+		const { generateSDK: genSDK, mergeSpecs } = await import("./codegen.ts")
 
 		let spec: OpenApiSpecInput
 		if (cg.sdk.specs && cg.sdk.specs.length > 0) {
@@ -538,12 +551,7 @@ export async function generateAndWrite(
 			})
 			spec = mergeSpecs(...specs)
 		} else {
-			if (!app) throw new Error("SDK generation requires a configured app or specs")
-			const primaryOA = cg.openApi && cg.openApi.length > 0 ? cg.openApi[0] : null
-			const info = primaryOA
-				? { title: primaryOA.title, version: primaryOA.version }
-				: { title: "API", version: "1.0.0" }
-			spec = await genOA(app, { info })
+			spec = await unfilteredSpec("SDK")
 		}
 
 		const ports = cg.sdk.ports
@@ -583,10 +591,7 @@ export async function generateAndWrite(
 	if (cg.cli) {
 		const { generateGoCLI } = await import("./codegen-go-cli.ts")
 
-		const primaryOA = cg.openApi && cg.openApi.length > 0 ? cg.openApi[0] : null
-		const info = primaryOA ? { title: primaryOA.title, version: primaryOA.version } : { title: "API", version: "1.0.0" }
-		if (!app) throw new Error("CLI generation requires a configured app")
-		const spec = await generateOpenApi(app, { info })
+		const spec = await unfilteredSpec("CLI")
 
 		const { files } = generateGoCLI(spec, {
 			binaryName: cg.cli.binaryName,

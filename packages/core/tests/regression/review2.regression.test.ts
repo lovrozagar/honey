@@ -146,7 +146,7 @@ describe("plugin", () => {
 	const loads = () => (existsSync(join(dir, "loads.txt")) ? readFileSync(join(dir, "loads.txt"), "utf-8").length : 0)
 
 	// regression: S2
-	it.fails('S2: codegen.invalidate "off" also covers the SDK and Go CLI passes', async () => {
+	it('S2: codegen.invalidate "off" also covers the SDK and Go CLI passes', async () => {
 		writeApp([
 			`app.post("/users").meta({ operationId: "users.create", invalidate: ["GET /userz"] } as never).handler((c) => c.res.text("ok", "ok"))`,
 		])
@@ -162,7 +162,7 @@ describe("plugin", () => {
 	}, 60_000)
 
 	// regression: S2
-	it.fails("S2: the missing-invalidate warning prints once with openApi + sdk + cli", async () => {
+	it("S2: the missing-invalidate warning prints once with openApi + sdk + cli", async () => {
 		writeApp([`app.post("/users").meta({ operationId: "users.create" }).handler((c) => c.res.text("ok", "ok"))`])
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
 		const config = resolveHoneyConfig({
@@ -235,7 +235,7 @@ describe("plugin", () => {
 	}, 60_000)
 
 	// regression: S8
-	it.fails("S8: openApi + sdk + cli build the unfiltered document once", async () => {
+	it("S8: openApi + sdk + cli build the unfiltered document once", async () => {
 		writeApp()
 		const config = resolveHoneyConfig({
 			app: "src/app.ts",
