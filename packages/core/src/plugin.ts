@@ -668,6 +668,7 @@ export function honey(config: HoneyVitePluginConfig) {
 	/* one generation at a time; any request during a run schedules exactly one more */
 	let running: Promise<void> | undefined
 	let rerun: Promise<void> | undefined
+	let starting: Promise<void> | undefined
 	const savesSeen = new Map<string, Promise<void>>()
 
 	async function generateOnce(): Promise<void> {
@@ -704,8 +705,13 @@ export function honey(config: HoneyVitePluginConfig) {
 		/** Read by `honey generate` to find this plugin's config in a loaded Vite config. */
 		api: { honeyConfig: config },
 
+		/* Vite calls this once per environment, back to back: the second joins the running
+		 * generation instead of queueing another. A later buildStart (a watch rebuild) runs anew. */
 		async buildStart() {
-			await regenerate()
+			starting ??= regenerate().finally(() => {
+				starting = undefined
+			})
+			await starting
 		},
 
 		configResolved(cfg: ResolvedViteConfigLike) {

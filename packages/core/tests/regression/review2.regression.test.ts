@@ -221,7 +221,7 @@ describe("plugin", () => {
 	}, 60_000)
 
 	// regression: S7
-	it.fails("S7: buildStart in two environments runs one generation", async () => {
+	it("S7: buildStart in two environments runs one generation", async () => {
 		writeApp()
 		const plugin = honeyVitePlugin({ app: "src/app.ts", codegen: { tree: true } })[0] as unknown as Plugin
 		plugin.configResolved({ root: dir })
