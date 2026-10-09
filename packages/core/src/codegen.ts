@@ -851,12 +851,21 @@ export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 	const mergedSchemas: Record<string, Record<string, unknown>> = { ...existing, ...extractedSchemas }
 
 	/* a hoisted nested schema whose every user became a component $ref is still referenced from
-	   that component; one referenced from nowhere is dropped */
+	   that component; one referenced from nowhere is dropped. A kept hoisted schema can itself
+	   reference hoisted schemas (an object nested in a shared object), so keep closing over the
+	   references until no new one appears. */
 	const referenced = new Set<string>()
 	collectComponentRefs(paths, referenced)
 	collectComponentRefs(mergedSchemas, referenced)
-	for (const [name, schema] of Object.entries(hoistedSchemas)) {
-		if (referenced.has(name)) mergedSchemas[name] = schema
+	let added = true
+	while (added) {
+		added = false
+		for (const [name, schema] of Object.entries(hoistedSchemas)) {
+			if (Object.hasOwn(mergedSchemas, name) || !referenced.has(name)) continue
+			mergedSchemas[name] = schema
+			collectComponentRefs(schema, referenced)
+			added = true
+		}
 	}
 
 	const components: OpenApiSpec["components"] = {

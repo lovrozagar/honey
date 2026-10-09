@@ -145,6 +145,39 @@ function trailingSlashApp() {
 	return app
 }
 
+/** One object nested in another, shared by two bodies: required in one, optional in the other. */
+function sharedNestedApp() {
+	const assertion = z.object({
+		clientExtensionResults: z.object({}),
+		id: z.string(),
+		response: z.object({ signature: z.string() }),
+	})
+	const app = honey()
+	app
+		.post("/login")
+		.input({ json: z.object({ response: assertion }) })
+		.handler((c) => c.res.json("ok", {}))
+	app
+		.post("/reauth")
+		.input({ json: z.object({ passkey: assertion.optional() }) })
+		.handler((c) => c.res.json("ok", {}))
+	return app
+}
+
+/** `$ref`s to `#/components/schemas/*` that name no component. */
+function danglingRefs(doc: unknown): string[] {
+	const have = new Set(Object.keys((doc as { components?: { schemas?: object } }).components?.schemas ?? {}))
+	const missing = new Set<string>()
+	JSON.stringify(doc, (key, value: unknown) => {
+		if (key === "$ref" && typeof value === "string" && value.startsWith("#/components/schemas/")) {
+			const name = value.slice("#/components/schemas/".length)
+			if (!have.has(name)) missing.add(name)
+		}
+		return value
+	})
+	return [...missing].sort()
+}
+
 async function generated(): Promise<Array<[string, Doc, ReturnType<typeof honey<{}>>]>> {
 	const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
 	try {
@@ -152,6 +185,7 @@ async function generated(): Promise<Array<[string, Doc, ReturnType<typeof honey<
 		for (const [name, make] of [
 			["corner cases", cornerCaseApp],
 			["trailing slash", trailingSlashApp],
+			["shared nested object", sharedNestedApp],
 		] as const) {
 			const app = make() as unknown as ReturnType<typeof honey<{}>>
 			out.push([name, (await generateOpenApi(app, { info: { title: name, version: "1" } })) as Doc, app])
@@ -186,6 +220,12 @@ describe("OpenAPI 3.1 conformance", () => {
 			expect(result.errors, name).toBeNull()
 			expect(loadYaml(toYaml(doc)), name).toEqual(JSON.parse(JSON.stringify(doc)))
 		}
+	})
+
+	// regression: V072-1 — every $ref names a component the document carries
+	it("every $ref in a committed or generated document resolves", async () => {
+		for (const [name, doc] of committedDocuments()) expect(danglingRefs(doc), name).toEqual([])
+		for (const [name, doc] of await generated()) expect(danglingRefs(doc), name).toEqual([])
 	})
 
 	it("committed documents round-trip through YAML", () => {

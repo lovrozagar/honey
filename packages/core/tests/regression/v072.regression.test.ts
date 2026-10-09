@@ -42,7 +42,7 @@ function danglingRefs(doc: unknown): string[] {
 
 describe("0.7.2 regressions", () => {
 	// regression: V072-1 — a nested object shared by two bodies (required in one, optional in the other)
-	it.fails("V072-1: nested schemas hoisted from a shared object are all emitted", async () => {
+	it("V072-1: nested schemas hoisted from a shared object are all emitted", async () => {
 		const assertion = z.object({
 			clientExtensionResults: z.object({}),
 			id: z.string(),
