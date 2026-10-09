@@ -104,7 +104,8 @@ describe("Honey.openapi()", () => {
 		expect(res.status).toBe(200)
 		expect(res.headers.get("content-type")).toMatch(/html/)
 		const html = await res.text()
-		expect(html).toContain("unpkg.com/swagger-ui-dist")
+		expect(html).toContain("cdn.jsdelivr.net/npm/swagger-ui-dist@")
+		expect(html).toContain('integrity="sha384-')
 		expect(html).toContain("/openapi.json")
 	})
 

@@ -62,8 +62,15 @@ function declaredNothing(meta: Record<string, unknown> | null): boolean {
 	return value === null || (Array.isArray(value) && value.length === 0)
 }
 
-function alreadyInvalidates(operation: Record<string, unknown>): boolean {
-	const emitted = operation["x-invalidate"]
+/**
+ * Did the author declare targets? Read from the meta, not the emitted operation: a profile
+ * that leaves `x-invalidate` out of its document must not make every declared mutation look
+ * undeclared.
+ */
+function alreadyInvalidates(entry: InvalidateCheckOperation): boolean {
+	const declared = entry.meta?.invalidate
+	if (Array.isArray(declared) && declared.length > 0) return true
+	const emitted = entry.operation["x-invalidate"]
 	return Array.isArray(emitted) && emitted.length > 0
 }
 
@@ -112,7 +119,7 @@ export function findMissingInvalidate(
 	const findings: InvalidateFinding[] = []
 	for (const entry of operations) {
 		if (!MUTATION_METHODS.has(entry.method)) continue
-		if (alreadyInvalidates(entry.operation)) continue
+		if (alreadyInvalidates(entry)) continue
 		if (declaredNothing(entry.meta)) continue
 
 		let affects: string[] = []
@@ -120,7 +127,9 @@ export function findMissingInvalidate(
 		if (entity !== undefined && entity !== null) {
 			/* sharper than path shape: the same entity is read somewhere else in the document */
 			affects = readsByEntity.get(JSON.stringify(entity)) ?? []
-		} else {
+		}
+		if (affects.length === 0) {
+			/* no reader is tagged with the entity — path shape is still a signal, not silence */
 			affects = pathFamily(entry.path)
 				.filter((candidate) => readPaths.has(candidate))
 				.map((candidate) => `GET ${candidate}`)
@@ -164,4 +173,33 @@ export function reportMissingInvalidate(
 	const report = formatReport(findings)
 	if (level === "error") throw new Error(report)
 	console.warn(report)
+}
+
+/**
+ * `invalidate` selectors that name no route. A selector is `"<METHOD> <pattern>"`, exactly as
+ * the generated `RouteSelector` union spells it; anything else invalidates nothing at runtime.
+ */
+export function findInvalidSelectors(
+	operations: readonly InvalidateCheckOperation[],
+	inventory: ReadonlySet<string>,
+): Array<{ method: string; path: string; selector: unknown }> {
+	const out: Array<{ method: string; path: string; selector: unknown }> = []
+	const seen = new Set<string>()
+	for (const entry of operations) {
+		const declared = entry.meta?.invalidate
+		if (!Array.isArray(declared)) continue
+		for (const selector of declared) {
+			if (typeof selector === "string" && inventory.has(selector)) continue
+			const key = `${entry.method} ${entry.path} ${String(selector)}`
+			if (seen.has(key)) continue
+			seen.add(key)
+			out.push({ method: entry.method.toUpperCase(), path: entry.path, selector })
+		}
+	}
+	return out
+}
+
+/** The level an `invalidate` config reports at. */
+export function invalidateLevel(config: InvalidateCheckConfig | undefined): InvalidateCheckLevel {
+	return resolveConfig(config).level
 }

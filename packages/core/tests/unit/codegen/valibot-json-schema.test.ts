@@ -54,7 +54,7 @@ describe("valibot → JSON Schema: primitives", () => {
 	})
 
 	it("bigint → {type: 'integer'}", async () => {
-		expect(await inputSchema(v.bigint())).toEqual({ type: "integer" })
+		expect(await inputSchema(v.bigint())).toEqual({ format: "int64", type: "integer" })
 	})
 
 	it("date → {type: 'string', format: 'date-time'}", async () => {
@@ -327,9 +327,10 @@ describe("valibot → JSON Schema: tuple", () => {
 	it("tuple [string, number] → fixed array", async () => {
 		const schema = v.tuple([v.string(), v.number()])
 		expect(await inputSchema(schema)).toEqual({
-			items: [{ type: "string" }, { type: "number" }],
+			items: false,
 			maxItems: 2,
 			minItems: 2,
+			prefixItems: [{ type: "string" }, { type: "number" }],
 			type: "array",
 		})
 	})
@@ -337,9 +338,10 @@ describe("valibot → JSON Schema: tuple", () => {
 	it("single-element tuple", async () => {
 		const schema = v.tuple([v.boolean()])
 		expect(await inputSchema(schema)).toEqual({
-			items: [{ type: "boolean" }],
+			items: false,
 			maxItems: 1,
 			minItems: 1,
+			prefixItems: [{ type: "boolean" }],
 			type: "array",
 		})
 	})
@@ -348,14 +350,80 @@ describe("valibot → JSON Schema: tuple", () => {
 /* ---- pipe ---- */
 
 describe("valibot → JSON Schema: pipe", () => {
-	it("pipe(string, minLength) → still {type: 'string'}", async () => {
+	it("pipe(string, minLength) → minLength", async () => {
 		const schema = v.pipe(v.string(), v.minLength(1))
-		expect(await inputSchema(schema)).toEqual({ type: "string" })
+		expect(await inputSchema(schema)).toEqual({ minLength: 1, type: "string" })
 	})
 
-	it("pipe(number, minValue) → still {type: 'number'}", async () => {
+	it("pipe(number, minValue) → minimum", async () => {
 		const schema = v.pipe(v.number(), v.minValue(0))
-		expect(await inputSchema(schema)).toEqual({ type: "number" })
+		expect(await inputSchema(schema)).toEqual({ minimum: 0, type: "number" })
+	})
+
+	it("pipe(string, email) and pipe(number, integer) keep their meaning", async () => {
+		expect(await inputSchema(v.pipe(v.string(), v.email()))).toEqual({ format: "email", type: "string" })
+		expect(await inputSchema(v.pipe(v.number(), v.integer()))).toEqual({ type: "integer" })
+	})
+})
+
+/* ---- node kinds the converter used to drop ---- */
+
+describe("valibot → JSON Schema: object variants, wrappers, lazy, binary", () => {
+	it("nullish and exactOptional entries are optional", async () => {
+		const schema = v.object({ a: v.nullish(v.string()), b: v.exactOptional(v.string()), c: v.string() })
+		expect(await inputSchema(schema)).toEqual({
+			properties: {
+				a: { anyOf: [{ type: "string" }, { type: "null" }] },
+				b: { type: "string" },
+				c: { type: "string" },
+			},
+			required: ["c"],
+			type: "object",
+		})
+	})
+
+	it("strictObject forbids extra keys; looseObject and objectWithRest describe them", async () => {
+		expect(await inputSchema(v.strictObject({ a: v.string() }))).toEqual({
+			additionalProperties: false,
+			properties: { a: { type: "string" } },
+			required: ["a"],
+			type: "object",
+		})
+		expect(await inputSchema(v.looseObject({ a: v.string() }))).toEqual({
+			properties: { a: { type: "string" } },
+			required: ["a"],
+			type: "object",
+		})
+		expect(await inputSchema(v.objectWithRest({ a: v.string() }, v.number()))).toEqual({
+			additionalProperties: { type: "number" },
+			properties: { a: { type: "string" } },
+			required: ["a"],
+			type: "object",
+		})
+	})
+
+	it("variant is a union; lazy resolves; file and blob are binary", async () => {
+		const schema = v.object({
+			f: v.file(),
+			l: v.lazy(() => v.string()),
+			u: v.variant("k", [v.object({ k: v.literal("a") }), v.object({ k: v.literal("b") })]),
+		})
+		const out = (await inputSchema(schema)) as { properties: Record<string, unknown> }
+		expect(out.properties.f).toEqual({ contentEncoding: "binary", format: "binary", type: "string" })
+		expect(out.properties.l).toEqual({ type: "string" })
+		expect(out.properties.u).toEqual({
+			anyOf: [
+				{ properties: { k: { const: "a" } }, required: ["k"], type: "object" },
+				{ properties: { k: { const: "b" } }, required: ["k"], type: "object" },
+			],
+		})
+	})
+
+	it("a recursive lazy schema terminates", async () => {
+		type Node = { children: Node[] }
+		const node: v.GenericSchema<Node> = v.object({ children: v.array(v.lazy(() => node)) })
+		const out = await inputSchema(node)
+		expect(out).toMatchObject({ properties: { children: { type: "array" } }, type: "object" })
 	})
 })
 

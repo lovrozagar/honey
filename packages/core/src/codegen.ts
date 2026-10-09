@@ -1,5 +1,11 @@
 import { InternPool } from "./codegen-route-tree-intern.ts"
-import { deriveErrorEnvelopeName, deriveSchemaName, isErrorEnvelope, shortHash } from "./codegen-schema-naming.ts"
+import {
+	deriveErrorEnvelopeName,
+	deriveSchemaName,
+	isErrorEnvelope,
+	sanitizeComponentName,
+	shortHash,
+} from "./codegen-schema-naming.ts"
 import type { SchemaNameContext } from "./codegen-schema-naming.ts"
 import { effectJsonSchemaFn, loadEffectJsonSchema, loadToJSONSchema, toJSONSchemaFn } from "./codegen-loaders.ts"
 import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
@@ -9,6 +15,7 @@ import type { HoneyError } from "./error.ts"
 import { ERROR_META } from "./errors.ts"
 import type { ErrorMetaEntry } from "./errors.ts"
 import type { InvalidateCheckConfig } from "./invalidate-check.ts"
+import { publishableMetaKeys } from "./meta-spec.ts"
 import type { Honey } from "./index.ts"
 import {
 	generateOpenApiFromTree,
@@ -23,7 +30,7 @@ import { forEachLeaf, ROUTE_TREE_VERSION } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
 import { createTypeEmitState, emitSchemaType } from "./type-emitter.ts"
 import type { TypeEmitState } from "./type-emitter.ts"
-import type { InputSchemaEntry, InputSchemasDef, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
+import type { InputSchemaEntry, InputSchemasDef, MetaSpecConfig, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
 
 export { prepareCodegen } from "./codegen-loaders.ts"
@@ -59,21 +66,80 @@ const ERROR_EXPORT_NAMES: ReadonlyArray<string> = [
 
 type ValibotSchema = Record<string, unknown> & { type: string }
 
-function valibotToJsonSchema(schema: unknown): unknown {
-	const s = schema as ValibotSchema
-	const t = s.type
+/** Wrappers that make an object entry optional. */
+const VALIBOT_OPTIONAL = new Set(["exact_optional", "nullish", "optional", "undefinedable"])
 
-	switch (t) {
+/** Pipe actions with a JSON Schema equivalent. Anything else constrains nothing in the document. */
+function applyValibotPipe(schema: ValibotSchema, json: Record<string, unknown>): Record<string, unknown> {
+	const pipe = schema.pipe as Array<Record<string, unknown>> | undefined
+	if (!Array.isArray(pipe)) return json
+	const formats: Record<string, string> = {
+		email: "email",
+		ipv4: "ipv4",
+		ipv6: "ipv6",
+		iso_date: "date",
+		iso_date_time: "date-time",
+		iso_timestamp: "date-time",
+		url: "uri",
+		uuid: "uuid",
+	}
+	for (const action of pipe.slice(1)) {
+		const type = action.type as string
+		const req = action.requirement
+		if (type in formats) json.format = formats[type]
+		else if (type === "integer") json.type = "integer"
+		else if (type === "regex" && req instanceof RegExp) json.pattern = req.source
+		else if (type === "min_length" && typeof req === "number")
+			json[json.type === "array" ? "minItems" : "minLength"] = req
+		else if (type === "max_length" && typeof req === "number")
+			json[json.type === "array" ? "maxItems" : "maxLength"] = req
+		else if (type === "length" && typeof req === "number") {
+			json[json.type === "array" ? "minItems" : "minLength"] = req
+			json[json.type === "array" ? "maxItems" : "maxLength"] = req
+		} else if (type === "min_value" && typeof req === "number") json.minimum = req
+		else if (type === "max_value" && typeof req === "number") json.maximum = req
+		else if (type === "description" && typeof action.description === "string") json.description = action.description
+	}
+	return json
+}
+
+function valibotObject(s: ValibotSchema, depth: number): Record<string, unknown> {
+	const entries = s.entries as Record<string, ValibotSchema>
+	if (Object.keys(entries).length === 0 && s.type === "object") return { type: "object" }
+	const properties: Record<string, unknown> = {}
+	const required: string[] = []
+	for (const k of Object.keys(entries)) {
+		const entry = entries[k]
+		properties[k] = valibotToJsonSchema(entry, depth + 1)
+		if (!VALIBOT_OPTIONAL.has(entry.type)) required.push(k)
+	}
+	const result: Record<string, unknown> = { properties, type: "object" }
+	if (required.length > 0) result.required = required
+	if (s.type === "strict_object") result.additionalProperties = false
+	else if (s.type === "object_with_rest") result.additionalProperties = valibotToJsonSchema(s.rest, depth + 1)
+	return result
+}
+
+function valibotToJsonSchema(schema: unknown, depth = 0): unknown {
+	/* a lazy schema can recurse without end; past this depth the node is unconstrained */
+	if (depth > 32) return {}
+	const s = schema as ValibotSchema
+	const walk = (child: unknown): unknown => valibotToJsonSchema(child, depth + 1)
+
+	switch (s.type) {
 		case "string":
-			return { type: "string" }
+			return applyValibotPipe(s, { type: "string" })
 		case "number":
-			return { type: "number" }
+			return applyValibotPipe(s, { type: "number" })
 		case "boolean":
 			return { type: "boolean" }
 		case "bigint":
-			return { type: "integer" }
+			return { format: "int64", type: "integer" }
 		case "date":
 			return { format: "date-time", type: "string" }
+		case "file":
+		case "blob":
+			return { contentEncoding: "binary", format: "binary", type: "string" }
 		case "undefined":
 		case "void":
 			return {}
@@ -82,69 +148,62 @@ function valibotToJsonSchema(schema: unknown): unknown {
 		case "any":
 		case "unknown":
 			return {}
-		case "literal": {
-			const val = s.literal
-			return { const: val }
-		}
-		case "object": {
-			const entries = s.entries as Record<string, unknown>
-			const keys = Object.keys(entries)
-			if (keys.length === 0) return { type: "object" }
-			const properties: Record<string, unknown> = {}
-			const required: string[] = []
-			for (const k of keys) {
-				const entry = entries[k] as ValibotSchema
-				if (entry.type === "optional") {
-					properties[k] = valibotToJsonSchema(entry.wrapped as unknown)
-				} else {
-					properties[k] = valibotToJsonSchema(entry)
-					required.push(k)
-				}
-			}
-			const result: Record<string, unknown> = { properties, type: "object" }
-			if (required.length > 0) result.required = required
-			return result
-		}
+		case "literal":
+			return { const: s.literal }
+		case "object":
+		case "strict_object":
+		case "loose_object":
+		case "object_with_rest":
+			return valibotObject(s, depth)
 		case "array":
-			return { items: valibotToJsonSchema(s.item as unknown), type: "array" }
+			return applyValibotPipe(s, { items: walk(s.item), type: "array" })
 		case "optional":
-			return valibotToJsonSchema(s.wrapped as unknown)
-		case "nullable": {
-			const inner = valibotToJsonSchema(s.wrapped as unknown) as Record<string, unknown>
-			return { anyOf: [inner, { type: "null" }] }
+		case "exact_optional":
+		case "undefinedable":
+		case "non_nullable":
+		case "non_nullish":
+		case "non_optional": {
+			const inner = walk(s.wrapped) as Record<string, unknown>
+			const fallback = s.default
+			return fallback === undefined || typeof fallback === "function" ? inner : { ...inner, default: fallback }
 		}
-		case "nullish": {
-			const inner = valibotToJsonSchema(s.wrapped as unknown) as Record<string, unknown>
-			return { anyOf: [inner, { type: "null" }] }
-		}
+		case "nullable":
+		case "nullish":
+			return { anyOf: [walk(s.wrapped), { type: "null" }] }
 		case "union":
-			return {
-				anyOf: (s.options as unknown[]).map((o) => valibotToJsonSchema(o)),
-			}
+		case "variant":
+			return { anyOf: (s.options as unknown[]).map(walk) }
 		case "intersect":
-			return {
-				allOf: (s.options as unknown[]).map((o) => valibotToJsonSchema(o)),
-			}
+			return { allOf: (s.options as unknown[]).map(walk) }
 		case "picklist":
 			return { enum: s.options }
 		case "enum": {
-			const enumObj = s.enum as Record<string, string>
-			return { enum: Object.values(enumObj) }
-		}
-		case "record": {
+			const enumObj = s.enum as Record<string, string | number>
+			/* a TS numeric enum carries reverse mappings — keep the values */
 			return {
-				additionalProperties: valibotToJsonSchema(s.value as unknown),
-				type: "object",
+				enum: Object.keys(enumObj)
+					.filter((k) => typeof enumObj[enumObj[k] as string] !== "number")
+					.map((k) => enumObj[k]),
 			}
 		}
-		case "tuple": {
-			const items = (s.items as unknown[]).map((i) => valibotToJsonSchema(i))
-			return {
-				items,
-				maxItems: items.length,
-				minItems: items.length,
-				type: "array",
+		case "record":
+			return { additionalProperties: walk(s.value), type: "object" }
+		case "tuple":
+		case "strict_tuple":
+		case "loose_tuple":
+		case "tuple_with_rest": {
+			const items = (s.items as unknown[]).map(walk)
+			const result: Record<string, unknown> = { minItems: items.length, prefixItems: items, type: "array" }
+			if (s.type === "tuple_with_rest") result.items = walk(s.rest)
+			else if (s.type !== "loose_tuple") {
+				result.items = false
+				result.maxItems = items.length
 			}
+			return result
+		}
+		case "lazy": {
+			const getter = s.getter as ((input: unknown) => unknown) | undefined
+			return typeof getter === "function" ? walk(getter(undefined)) : {}
 		}
 		default:
 			return {}
@@ -224,9 +283,10 @@ function yupDescBase(desc: YupJsonDesc): unknown {
 			if (!Array.isArray(desc.innerType)) return { type: "array" }
 			const items = desc.innerType.map((i) => yupDescToJsonSchema(i))
 			return {
-				items,
+				items: false,
 				maxItems: items.length,
 				minItems: items.length,
+				prefixItems: items,
 				type: "array",
 			}
 		}
@@ -352,10 +412,18 @@ function introspectSchema(schema: StandardSchemaLike): unknown {
 
 export { normalizeSecurity } from "./meta-spec.ts"
 
+/** Locale-independent string order (UTF-16 code units), so output is the same on every machine. */
+export function compareCodeUnits(a: string, b: string): number {
+	if (a === b) return 0
+	return a < b ? -1 : 1
+}
+
 export function canonicalizeSchema(schema: Record<string, unknown>): string {
 	return JSON.stringify(schema, (_, value) => {
 		if (value && typeof value === "object" && !Array.isArray(value)) {
-			return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+			return Object.fromEntries(
+				Object.entries(value as Record<string, unknown>).sort(([a], [b]) => compareCodeUnits(a, b)),
+			)
 		}
 		return value
 	})
@@ -363,6 +431,7 @@ export function canonicalizeSchema(schema: Record<string, unknown>): string {
 
 type SchemaSlot = {
 	canonical: string
+	contentType: string
 	context: SchemaNameContext
 	/* path key from the spec — used for context-based ref rewriting */
 	pathKey: string
@@ -374,6 +443,16 @@ function isObjectSchema(schema: unknown): schema is Record<string, unknown> {
 	const s = schema as Record<string, unknown>
 	if (typeof s.$ref === "string") return false
 	return s.type === "object" || (typeof s.properties === "object" && s.properties !== null)
+}
+
+/**
+ * A response key as a number: `"200"` → 200, `"default"` → 0, `"4XX"` → 400. Never `NaN`, which
+ * would name a schema `…ResponseNaN` and make every `default` response collide.
+ */
+function statusNumber(key: string): number {
+	if (/^[1-5][0-9][0-9]$/.test(key)) return Number(key)
+	if (/^[1-5]XX$/i.test(key)) return Number(key[0]) * 100
+	return 0
 }
 
 function collectSchemaSlots(paths: Record<string, Record<string, Record<string, unknown>>>): SchemaSlot[] {
@@ -388,11 +467,11 @@ function collectSchemaSlots(paths: Record<string, Record<string, Record<string, 
 			if (requestBody) {
 				const content = requestBody.content as Record<string, Record<string, unknown>> | undefined
 				if (content) {
-					for (const mediaType of Object.values(content)) {
+					for (const [contentType, mediaType] of Object.entries(content)) {
 						const schema = mediaType.schema as Record<string, unknown> | undefined
 						if (schema && !schema.$ref) {
 							const context: SchemaNameContext = { method: m, path: pathKey, role: "request" }
-							slots.push({ canonical: canonicalizeSchema(schema), context, pathKey, schema })
+							slots.push({ canonical: canonicalizeSchema(schema), contentType, context, pathKey, schema })
 						}
 					}
 				}
@@ -405,17 +484,17 @@ function collectSchemaSlots(paths: Record<string, Record<string, Record<string, 
 						| Record<string, Record<string, unknown>>
 						| undefined
 					if (content) {
-						for (const mediaType of Object.values(content)) {
+						for (const [contentType, mediaType] of Object.entries(content)) {
 							const schema = mediaType.schema as Record<string, unknown> | undefined
 							if (schema && !schema.$ref) {
-								const statusNum = Number(status)
+								const statusNum = statusNumber(status)
 								const context: SchemaNameContext = {
 									method: m,
 									path: pathKey,
 									role: "response",
 									status: statusNum,
 								}
-								slots.push({ canonical: canonicalizeSchema(schema), context, pathKey, schema })
+								slots.push({ canonical: canonicalizeSchema(schema), contentType, context, pathKey, schema })
 							}
 						}
 					}
@@ -441,6 +520,20 @@ type HoistedResult = {
 	schemas: Record<string, Record<string, unknown>>
 }
 
+/**
+ * A component name nobody holds yet. A clash gets the content hash, and a clash on the
+ * hashed name (24 bits collide) a counter — a name is never handed out twice.
+ */
+function uniqueName(base: string, canonical: string, taken: (name: string) => boolean): string {
+	if (!taken(base)) return base
+	const hashed = `${base}_${shortHash(canonical)}`
+	if (!taken(hashed)) return hashed
+	for (let n = 2; ; n++) {
+		const candidate = `${hashed}_${n}`
+		if (!taken(candidate)) return candidate
+	}
+}
+
 function walkNestedObjects(
 	schema: Record<string, unknown>,
 	slotName: string,
@@ -450,7 +543,8 @@ function walkNestedObjects(
 ): void {
 	const props = schema.properties as Record<string, unknown> | undefined
 	if (!props) return
-	for (const [key, val] of Object.entries(props)) {
+	for (const key of Object.keys(props)) {
+		const val = props[key]
 		if (!isObjectSchema(val)) continue
 		const child = val as Record<string, unknown>
 		const childPath = [...fieldPath, key]
@@ -473,7 +567,7 @@ function walkNestedObjects(
 function collectHoistedSchemas(
 	slots: SchemaSlot[],
 	slotNames: Map<SchemaSlot, string>,
-	reservedNames: Set<string>,
+	taken: (name: string) => boolean,
 ): HoistedResult {
 	const nestedMap = new Map<string, NestedEntry>()
 	for (const slot of slots) {
@@ -497,18 +591,24 @@ function collectHoistedSchemas(
 		const owner = entry.samples.slice().sort((a, b) => {
 			const na = a.slotName + a.fieldPath.join("")
 			const nb = b.slotName + b.fieldPath.join("")
-			return na.localeCompare(nb)
+			return compareCodeUnits(na, nb)
 		})[0]
 
-		const fieldPart = owner.fieldPath.map((f) => f.charAt(0).toUpperCase() + f.slice(1)).join("")
-		let name = `${owner.slotName}${fieldPart}`
-		if (reservedNames.has(name)) name = `${name}_${shortHash(canonical)}`
-		if (schemas[name]) continue
-
+		const fieldPart = owner.fieldPath
+			.map((f) => sanitizeComponentName(f))
+			.map((f) => f.charAt(0).toUpperCase() + f.slice(1))
+			.join("")
+		const name = uniqueName(
+			sanitizeComponentName(`${owner.slotName}${fieldPart}`),
+			canonical,
+			(n) => taken(n) || Object.hasOwn(schemas, n),
+		)
 		schemas[name] = entry.schema
 		canonicalToName.set(canonical, name)
-		reservedNames.add(name)
 	}
+
+	/* nested hoists inside a hoisted schema point at their component too */
+	for (const name of Object.keys(schemas)) schemas[name] = rewriteNestedRefs(schemas[name], canonicalToName)
 
 	return { canonicalToName, schemas }
 }
@@ -517,7 +617,8 @@ function collectHoistedSchemas(
  * Builds a new paths object by shallow-copying only the containers that need schema
  * replacement. Avoids structuredClone (which fails on arktype schemas containing
  * native functions). Original schema objects are dropped; only $ref objects are new.
- * Also rewrites nested inline object properties that were hoisted (canonicalToName).
+ * Also rewrites nested inline object properties that were hoisted (canonicalToName),
+ * at any depth — a hoisted name nothing points at would be an orphan component.
  */
 
 function rewriteNestedRefs(
@@ -527,16 +628,28 @@ function rewriteNestedRefs(
 	const props = schema.properties as Record<string, unknown> | undefined
 	if (!props) return schema
 	let newProps: Record<string, unknown> | undefined
-	for (const [key, val] of Object.entries(props)) {
+	for (const key of Object.keys(props)) {
+		const val = props[key]
 		if (!isObjectSchema(val)) continue
 		const child = val as Record<string, unknown>
 		const name = canonicalToName.get(canonicalizeSchema(child))
-		if (!name) continue
+		const next = name ? { $ref: `#/components/schemas/${name}` } : rewriteNestedRefs(child, canonicalToName)
+		if (next === child) continue
 		if (!newProps) newProps = { ...props }
-		newProps[key] = { $ref: `#/components/schemas/${name}` }
+		newProps[key] = next
 	}
 	if (!newProps) return schema
 	return { ...schema, properties: newProps }
+}
+
+function slotKey(
+	pathKey: string,
+	method: string,
+	role: string,
+	status: number | undefined,
+	contentType: string,
+): string {
+	return `${pathKey}::${method}::${role}::${status ?? ""}::${contentType}`
 }
 
 function rewritePathsToRefs(
@@ -545,22 +658,42 @@ function rewritePathsToRefs(
 	slotNames: Map<SchemaSlot, string>,
 	hoistedCanonicalToName: Map<string, string>,
 ): Record<string, Record<string, Record<string, unknown>>> {
-	const ctxKey = (pathKey: string, method: string, role: string, status?: number): string =>
-		`${pathKey}::${method}::${role}::${status ?? ""}`
-
+	/* keyed by operation + status + content type: JSON and XML bodies of one status are two slots */
 	const lookup = new Map<string, string>()
 	for (const slot of slots) {
 		const name = slotNames.get(slot)
-		if (name)
-			lookup.set(
-				ctxKey(
-					slot.pathKey,
-					slot.context.method,
-					slot.context.role,
-					slot.context.role === "response" ? slot.context.status : undefined,
-				),
-				name,
-			)
+		if (!name) continue
+		const status = slot.context.role === "response" ? slot.context.status : undefined
+		lookup.set(slotKey(slot.pathKey, slot.context.method, slot.context.role, status, slot.contentType), name)
+	}
+
+	const rewriteContent = (
+		content: Record<string, Record<string, unknown>>,
+		keyFor: (ct: string) => string,
+	): Record<string, Record<string, unknown>> | null => {
+		const newContent: Record<string, Record<string, unknown>> = {}
+		let changed = false
+		for (const [ct, mediaType] of Object.entries(content)) {
+			const schema = mediaType.schema as Record<string, unknown> | undefined
+			if (!schema || schema.$ref) {
+				newContent[ct] = mediaType
+				continue
+			}
+			const name = lookup.get(keyFor(ct))
+			if (name) {
+				newContent[ct] = { ...mediaType, schema: { $ref: `#/components/schemas/${name}` } }
+				changed = true
+				continue
+			}
+			const rewritten = hoistedCanonicalToName.size > 0 ? rewriteNestedRefs(schema, hoistedCanonicalToName) : schema
+			if (rewritten !== schema) {
+				newContent[ct] = { ...mediaType, schema: rewritten }
+				changed = true
+			} else {
+				newContent[ct] = mediaType
+			}
+		}
+		return changed ? newContent : null
 	}
 
 	const newPaths: Record<string, Record<string, Record<string, unknown>>> = {}
@@ -574,76 +707,23 @@ function rewritePathsToRefs(
 			let newOp = op
 
 			const requestBody = op.requestBody as Record<string, unknown> | undefined
-			if (requestBody) {
-				const content = requestBody.content as Record<string, Record<string, unknown>> | undefined
-				if (content) {
-					const reqName = lookup.get(ctxKey(pathKey, m, "request"))
-					const newContent: Record<string, Record<string, unknown>> = {}
-					for (const [ct, mediaType] of Object.entries(content)) {
-						const schema = mediaType.schema as Record<string, unknown> | undefined
-						if (schema && !schema.$ref) {
-							if (reqName) {
-								newContent[ct] = {
-									...mediaType,
-									schema: { $ref: `#/components/schemas/${reqName}` },
-								}
-							} else if (hoistedCanonicalToName.size > 0) {
-								newContent[ct] = {
-									...mediaType,
-									schema: rewriteNestedRefs(schema, hoistedCanonicalToName),
-								}
-							} else {
-								newContent[ct] = mediaType
-							}
-						} else {
-							newContent[ct] = mediaType
-						}
-					}
-					if (Object.keys(newContent).length > 0) {
-						newOp = { ...op, requestBody: { ...requestBody, content: newContent } }
-					}
-				}
+			const reqContent = requestBody?.content as Record<string, Record<string, unknown>> | undefined
+			if (requestBody && reqContent) {
+				const next = rewriteContent(reqContent, (ct) => slotKey(pathKey, m, "request", undefined, ct))
+				if (next) newOp = { ...op, requestBody: { ...requestBody, content: next } }
 			}
 
-			const responses = (newOp as Record<string, unknown>).responses as
-				| Record<string, Record<string, unknown>>
-				| undefined
+			const responses = newOp.responses as Record<string, Record<string, unknown>> | undefined
 			if (responses) {
 				let newResponses: Record<string, Record<string, unknown>> | undefined
 				for (const [status, response] of Object.entries(responses)) {
-					const content = (response as Record<string, unknown>).content as
-						| Record<string, Record<string, unknown>>
-						| undefined
+					const content = response.content as Record<string, Record<string, unknown>> | undefined
 					if (!content) continue
-					const statusNum = Number(status)
-					const respName = lookup.get(ctxKey(pathKey, m, "response", statusNum))
-					const newContent: Record<string, Record<string, unknown>> = {}
-					let changed = false
-					for (const [ct, mediaType] of Object.entries(content)) {
-						const schema = mediaType.schema as Record<string, unknown> | undefined
-						if (schema && !schema.$ref) {
-							if (respName) {
-								newContent[ct] = {
-									...mediaType,
-									schema: { $ref: `#/components/schemas/${respName}` },
-								}
-								changed = true
-							} else if (hoistedCanonicalToName.size > 0) {
-								const rewritten = rewriteNestedRefs(schema, hoistedCanonicalToName)
-								newContent[ct] = { ...mediaType, schema: rewritten }
-								if (rewritten !== schema) changed = true
-								else newContent[ct] = mediaType
-							} else {
-								newContent[ct] = mediaType
-							}
-						} else {
-							newContent[ct] = mediaType
-						}
-					}
-					if (changed) {
-						if (!newResponses) newResponses = { ...responses }
-						newResponses[status] = { ...(response as Record<string, unknown>), content: newContent }
-					}
+					const statusNum = statusNumber(status)
+					const next = rewriteContent(content, (ct) => slotKey(pathKey, m, "response", statusNum, ct))
+					if (!next) continue
+					if (!newResponses) newResponses = { ...responses }
+					newResponses[status] = { ...response, content: next }
 				}
 				if (newResponses) newOp = { ...newOp, responses: newResponses }
 			}
@@ -657,18 +737,35 @@ function rewritePathsToRefs(
 	return newPaths
 }
 
+/** Every `#/components/schemas/<name>` a value refers to. */
+function collectComponentRefs(value: unknown, out: Set<string>): void {
+	if (Array.isArray(value)) {
+		for (const item of value) collectComponentRefs(item, out)
+		return
+	}
+	if (value === null || typeof value !== "object") return
+	for (const [key, child] of Object.entries(value)) {
+		if (key === "$ref" && typeof child === "string" && child.startsWith("#/components/schemas/")) {
+			out.add(child.slice("#/components/schemas/".length))
+		} else {
+			collectComponentRefs(child, out)
+		}
+	}
+}
+
 export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 	/* Sort paths lexicographically for determinism — input order must not affect output. */
 	const sortedPaths: Record<string, Record<string, Record<string, unknown>>> = {}
 	for (const key of Object.keys(spec.paths).sort()) sortedPaths[key] = spec.paths[key]
 
 	const slots = collectSchemaSlots(sortedPaths)
+	const existing = spec.components?.schemas ?? {}
 
 	/* Group slots by canonical shape — same shape = one component. */
 	const groups = new Map<string, SchemaSlot[]>()
 	for (const slot of slots) {
-		const existing = groups.get(slot.canonical)
-		if (existing) existing.push(slot)
+		const group = groups.get(slot.canonical)
+		if (group) group.push(slot)
 		else groups.set(slot.canonical, [slot])
 	}
 
@@ -677,29 +774,28 @@ export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 	 *   Tier 1: unique shape (group.length === 1) → operation-derived name
 	 *   Tier 2: shared error envelope → Err{status}* name
 	 *   Tier 3: shared non-error → first-slot operation-derived name
-	 * Collision (two canonicals → same tier name) → hash suffix on second.
+	 * Collision (two canonicals → same tier name, or a name an existing component holds) →
+	 * hash suffix, re-checked until free.
 	 */
 	const canonicalToName = new Map<string, string>()
 	const nameToCanonical = new Map<string, string>()
 
 	for (const [canonical, groupSlots] of groups) {
 		const firstSlot = groupSlots[0]
-		let name: string
+		let base: string
 
-		if (groupSlots.length === 1) {
-			name = deriveSchemaName(firstSlot.context)
-		} else if (isErrorEnvelope(firstSlot.schema)) {
+		if (groupSlots.length > 1 && isErrorEnvelope(firstSlot.schema)) {
 			const fallbackStatus = firstSlot.context.role === "response" ? firstSlot.context.status : undefined
-			name = deriveErrorEnvelopeName(firstSlot.schema, fallbackStatus)
+			base = deriveErrorEnvelopeName(firstSlot.schema, fallbackStatus)
 		} else {
-			name = deriveSchemaName(firstSlot.context)
+			base = deriveSchemaName(firstSlot.context)
 		}
 
-		/* Collision: different canonical claims same name → suffix second with hash. */
-		const claimed = nameToCanonical.get(name)
-		if (claimed !== undefined && claimed !== canonical) {
-			name = `${name}_${shortHash(canonical)}`
-		}
+		const name = uniqueName(
+			base,
+			canonical,
+			(n) => Object.hasOwn(existing, n) || (nameToCanonical.has(n) && nameToCanonical.get(n) !== canonical),
+		)
 		nameToCanonical.set(name, canonical)
 		canonicalToName.set(canonical, name)
 	}
@@ -714,27 +810,23 @@ export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 	/* Nested hoisting: collect shared nested objects, then rewrite inline → $ref.
 	 * Error envelope slots (any tier) mark their nested schemas as envelope-owned so
 	 * envelope-exclusive nesting (e.g. `fields`) is not hoisted under a per-spec name. */
-	const allTopLevelNames = new Set(slotNames.values())
 	const { schemas: hoistedSchemas, canonicalToName: hoistedCanonicalToName } = collectHoistedSchemas(
 		slots,
 		slotNames,
-		allTopLevelNames,
+		(n) => Object.hasOwn(existing, n) || nameToCanonical.has(n),
 	)
 
 	/* Build components map, rewriting nested fields → $refs where hoisted */
 	const extractedSchemas: Record<string, Record<string, unknown>> = {}
-	const seenNames = new Set<string>()
 	for (const slot of slots) {
 		const name = slotNames.get(slot)
-		if (name && !seenNames.has(name)) {
-			seenNames.add(name)
+		if (name && !Object.hasOwn(extractedSchemas, name)) {
 			extractedSchemas[name] =
 				hoistedCanonicalToName.size > 0 ? rewriteNestedRefs(slot.schema, hoistedCanonicalToName) : slot.schema
 		}
 	}
-	Object.assign(extractedSchemas, hoistedSchemas)
 
-	const hasNewSchemas = Object.keys(extractedSchemas).length > 0
+	const hasNewSchemas = Object.keys(extractedSchemas).length > 0 || Object.keys(hoistedSchemas).length > 0
 	/* Nothing to extract and no existing components — return unchanged */
 	if (!hasNewSchemas && !spec.components) return spec
 
@@ -743,7 +835,17 @@ export function deduplicateSchemas(spec: OpenApiSpec): OpenApiSpec {
 			? rewritePathsToRefs(sortedPaths, slots, slotNames, hoistedCanonicalToName)
 			: sortedPaths
 
-	const mergedSchemas = { ...spec.components?.schemas, ...extractedSchemas }
+	const mergedSchemas: Record<string, Record<string, unknown>> = { ...existing, ...extractedSchemas }
+
+	/* a hoisted nested schema whose every user became a component $ref is still referenced from
+	   that component; one referenced from nowhere is dropped */
+	const referenced = new Set<string>()
+	collectComponentRefs(paths, referenced)
+	collectComponentRefs(mergedSchemas, referenced)
+	for (const [name, schema] of Object.entries(hoistedSchemas)) {
+		if (referenced.has(name)) mergedSchemas[name] = schema
+	}
+
 	const components: OpenApiSpec["components"] = {
 		...spec.components,
 		...(Object.keys(mergedSchemas).length > 0 ? { schemas: mergedSchemas } : {}),
@@ -889,20 +991,14 @@ export function resolveRefs(spec: OpenApiSpecInput): OpenApiSpecInput {
 			if (responses) {
 				for (const [status, response] of Object.entries(responses)) {
 					const content = response.content as Record<string, Record<string, unknown>> | undefined
-					if (content) {
-						for (const [ct, mediaType] of Object.entries(content)) {
-							const schema = mediaType.schema as Record<string, unknown> | undefined
-							if (schema) {
-								responses[status] = {
-									...response,
-									content: {
-										...content,
-										[ct]: { ...mediaType, schema: resolveSchema(schema, schemas) },
-									},
-								}
-							}
-						}
+					if (!content) continue
+					/* every content type resolved, not only the last one written */
+					const resolved: Record<string, Record<string, unknown>> = {}
+					for (const [ct, mediaType] of Object.entries(content)) {
+						const schema = mediaType.schema as Record<string, unknown> | undefined
+						resolved[ct] = schema ? { ...mediaType, schema: resolveSchema(schema, schemas) } : mediaType
 					}
+					responses[status] = { ...response, content: resolved }
 				}
 			}
 		}
@@ -914,25 +1010,60 @@ export function resolveRefs(spec: OpenApiSpecInput): OpenApiSpecInput {
 	return { ...spec, components, paths }
 }
 
+/**
+ * Zod node kinds JSON Schema has no word for. Zod emits `{}` for each of them under
+ * `unrepresentable: "any"`; the degrade is per node, and the rest of the schema survives.
+ */
+const ZOD_UNREPRESENTABLE = new Set(["custom", "function", "map", "nan", "promise", "set", "symbol", "transform"])
+
+type ZodOverrideCtx = { jsonSchema: Record<string, unknown>; zodSchema: unknown }
+
+/** `override` for Zod's converter: give `Date` and `BigInt` their wire shape, record what degraded. */
+function zodOverride(degraded: Set<string>): (ctx: ZodOverrideCtx) => void {
+	return (ctx) => {
+		const def = zodDefOf(ctx.zodSchema)
+		const kind = String(def?.type ?? "")
+		if (kind === "date") {
+			/* JSON.stringify writes a Date as an ISO string */
+			ctx.jsonSchema.format = "date-time"
+			ctx.jsonSchema.type = "string"
+			return
+		}
+		if (kind === "bigint") {
+			ctx.jsonSchema.format = "int64"
+			ctx.jsonSchema.type = "integer"
+			return
+		}
+		if (ZOD_UNREPRESENTABLE.has(kind) && Object.keys(ctx.jsonSchema).length === 0) degraded.add(kind)
+	}
+}
+
 /** Zod 4 puts converters on the schema instance. Use those first so Workers
  * (where `import("zod")` does not resolve) still emit real JSON Schema. */
 function zodInstanceToJsonSchema(
 	schema: StandardSchemaLike,
 	io: "input" | "output",
+	degraded: Set<string>,
 ): Record<string, unknown> | undefined {
+	const libraryOptions = { override: zodOverride(degraded), unrepresentable: "any" as const }
 	const jsonSchema = (
 		schema["~standard"] as {
-			jsonSchema?: { input?: () => unknown; output?: () => unknown }
+			jsonSchema?: Record<"input" | "output", ((params?: unknown) => unknown) | undefined>
 		}
 	).jsonSchema
 	const fromStandard = jsonSchema?.[io]
 	if (typeof fromStandard === "function") {
-		const result = fromStandard()
+		const result = fromStandard({ libraryOptions, target: "draft-2020-12" })
 		if (result && typeof result === "object") return result as Record<string, unknown>
 	}
-	const inst = (schema as { toJSONSchema?: (opts?: { io?: "input" | "output" }) => unknown }).toJSONSchema
+	const inst = (schema as { toJSONSchema?: (opts?: Record<string, unknown>) => unknown }).toJSONSchema
 	if (typeof inst === "function") {
-		const result = inst.call(schema, { io })
+		const result = inst.call(schema, { ...libraryOptions, io })
+		if (result && typeof result === "object") return result as Record<string, unknown>
+	}
+	if (toJSONSchemaFn) {
+		const convert = toJSONSchemaFn as (schema: unknown, opts: Record<string, unknown>) => unknown
+		const result = convert(schema, { ...libraryOptions, io })
 		if (result && typeof result === "object") return result as Record<string, unknown>
 	}
 	return undefined
@@ -965,32 +1096,47 @@ function zodDefOf(schema: unknown): Record<string, unknown> | undefined {
 	return s._def ?? s.def ?? s._zod?.def
 }
 
-function zodDefIsOptional(def: Record<string, unknown>): boolean {
+function zodDefIsOptional(def: Record<string, unknown>, io: "input" | "output"): boolean {
 	const t = String(def.typeName ?? def.type ?? "")
 	if (t === "ZodOptional" || t === "optional") return true
+	/* a default fills the value in: optional on the way in, always present on the way out */
+	if ((t === "ZodDefault" || t === "default" || t === "prefault") && io === "input") return true
 	if (
 		t === "ZodNullable" ||
 		t === "nullable" ||
 		t === "ZodDefault" ||
 		t === "default" ||
+		t === "prefault" ||
 		t === "ZodCatch" ||
-		t === "catch"
+		t === "catch" ||
+		t === "ZodReadonly" ||
+		t === "readonly"
 	) {
 		const inner = def.innerType
 		if (inner) {
 			const innerDef = zodDefOf(inner)
-			if (innerDef) return zodDefIsOptional(innerDef)
+			if (innerDef) return zodDefIsOptional(innerDef, io)
 		}
 	}
 	return false
 }
 
+function literalSchema(values: readonly unknown[]): Record<string, unknown> {
+	if (values.length === 1) return { const: values[0] }
+	return { enum: [...values] }
+}
+
 /** Walk Zod 3/4 internals. Survives Workers bundles that drop `toJSONSchema`. */
-function zodDefToJsonSchema(schema: unknown, depth = 0): Record<string, unknown> | undefined {
+function zodDefToJsonSchema(
+	schema: unknown,
+	io: "input" | "output" = "output",
+	depth = 0,
+): Record<string, unknown> | undefined {
 	if (depth > 24) return {}
 	const def = zodDefOf(schema)
 	if (!def) return undefined
 	const typeName = String(def.typeName ?? def.type ?? "")
+	const walk = (child: unknown): Record<string, unknown> => zodDefToJsonSchema(child, io, depth + 1) ?? {}
 
 	switch (typeName) {
 		case "ZodString":
@@ -1004,7 +1150,7 @@ function zodDefToJsonSchema(schema: unknown, depth = 0): Record<string, unknown>
 			return { type: "boolean" }
 		case "ZodBigInt":
 		case "bigint":
-			return { type: "integer" }
+			return { format: "int64", type: "integer" }
 		case "ZodDate":
 		case "date":
 			return { format: "date-time", type: "string" }
@@ -1026,14 +1172,25 @@ function zodDefToJsonSchema(schema: unknown, depth = 0): Record<string, unknown>
 			return {}
 		case "ZodLiteral":
 		case "literal": {
-			const val = def.value !== undefined ? def.value : (def.values as unknown[])?.[0]
-			return { const: val }
+			const values = Array.isArray(def.values) ? (def.values as unknown[]) : [def.value]
+			return literalSchema(values.map((v) => (typeof v === "bigint" ? Number(v) : v)))
 		}
 		case "ZodEnum":
 		case "enum": {
-			const vals = (def.values ?? def.entries) as unknown
-			const list = Array.isArray(vals) ? vals : Object.values(vals as Record<string, string>)
-			return { enum: list, type: "string" }
+			const raw = (def.values ?? def.entries) as unknown
+			let list: unknown[]
+			if (Array.isArray(raw)) list = raw
+			else {
+				/* a TS numeric enum carries reverse mappings: { A: 0, "0": "A" } — keep the values */
+				const entries = raw as Record<string, unknown>
+				list = Object.keys(entries)
+					.filter((k) => typeof entries[entries[k] as string] !== "number")
+					.map((k) => entries[k])
+			}
+			const types = new Set(list.map((v) => typeof v))
+			if (types.size === 1 && types.has("string")) return { enum: list, type: "string" }
+			if (types.size === 1 && types.has("number")) return { enum: list, type: "number" }
+			return { enum: list }
 		}
 		case "ZodObject":
 		case "object": {
@@ -1042,58 +1199,86 @@ function zodDefToJsonSchema(schema: unknown, depth = 0): Record<string, unknown>
 			if (!shape) return { type: "object" }
 			const properties: Record<string, unknown> = {}
 			const required: string[] = []
-			for (const [key, prop] of Object.entries(shape)) {
-				const converted = zodDefToJsonSchema(prop, depth + 1) ?? {}
-				properties[key] = converted
+			for (const key of Object.keys(shape)) {
+				const prop = shape[key]
+				properties[key] = walk(prop)
 				const propDef = zodDefOf(prop)
-				if (!propDef || !zodDefIsOptional(propDef)) required.push(key)
+				if (!propDef || !zodDefIsOptional(propDef, io)) required.push(key)
 			}
-			const result: Record<string, unknown> = { additionalProperties: false, properties, type: "object" }
+			const result: Record<string, unknown> = { properties, type: "object" }
+			if (io === "output") result.additionalProperties = false
 			if (required.length > 0) result.required = required
 			return result
 		}
 		case "ZodArray":
 		case "array":
-			return { items: zodDefToJsonSchema(def.element ?? def.type, depth + 1) ?? {}, type: "array" }
+			return { items: walk(def.element ?? def.type), type: "array" }
 		case "ZodOptional":
 		case "optional":
-			return zodDefToJsonSchema(def.innerType, depth + 1)
+			return zodDefToJsonSchema(def.innerType, io, depth + 1)
 		case "ZodNullable":
-		case "nullable": {
-			const inner = zodDefToJsonSchema(def.innerType, depth + 1) ?? {}
-			return { anyOf: [inner, { type: "null" }] }
-		}
+		case "nullable":
+			return { anyOf: [walk(def.innerType), { type: "null" }] }
 		case "ZodUnion":
 		case "ZodDiscriminatedUnion":
 		case "union":
-			return { anyOf: ((def.options as unknown[]) ?? []).map((o) => zodDefToJsonSchema(o, depth + 1) ?? {}) }
+			return { anyOf: ((def.options as unknown[]) ?? []).map(walk) }
+		case "ZodIntersection":
+		case "intersection":
+			return { allOf: [walk(def.left), walk(def.right)] }
 		case "ZodRecord":
 		case "record":
-			return {
-				additionalProperties: zodDefToJsonSchema(def.valueType, depth + 1) ?? {},
-				type: "object",
-			}
+			return { additionalProperties: walk(def.valueType), type: "object" }
 		case "ZodTuple":
-		case "tuple":
-			return {
-				items: ((def.items as unknown[]) ?? []).map((i) => zodDefToJsonSchema(i, depth + 1) ?? {}),
-				type: "array",
+		case "tuple": {
+			const items = ((def.items as unknown[]) ?? []).map(walk)
+			const out: Record<string, unknown> = { prefixItems: items, type: "array" }
+			if (def.rest) out.items = walk(def.rest)
+			else {
+				out.items = false
+				out.maxItems = items.length
 			}
+			out.minItems = items.length
+			return out
+		}
 		case "ZodDefault":
-		case "ZodCatch":
 		case "default":
+		case "prefault": {
+			const inner = walk(def.innerType)
+			const value = (def as { defaultValue?: unknown }).defaultValue
+			const resolved = typeof value === "function" ? undefined : value
+			return resolved === undefined ? inner : { ...inner, default: resolved }
+		}
+		case "ZodCatch":
 		case "catch":
 		case "ZodReadonly":
 		case "readonly":
-			return zodDefToJsonSchema(def.innerType, depth + 1)
+			return zodDefToJsonSchema(def.innerType, io, depth + 1)
 		case "ZodPipeline":
 		case "pipe":
-			return zodDefToJsonSchema(def.out, depth + 1)
+			/* a pipe validates `in` and returns `out` */
+			return zodDefToJsonSchema(io === "input" ? def.in : def.out, io, depth + 1)
 		case "ZodBranded":
-			return zodDefToJsonSchema(def.type, depth + 1)
+			return zodDefToJsonSchema(def.type, io, depth + 1)
+		case "ZodLazy":
+		case "lazy": {
+			const getter = def.getter as (() => unknown) | undefined
+			return typeof getter === "function" ? zodDefToJsonSchema(getter(), io, depth + 1) : {}
+		}
 		default:
 			return undefined
 	}
+}
+
+/** How a schema that cannot be converted at all is handled. Set per `generateOpenApi` call. */
+let schemaFailureMode: "throw" | "warn" = "throw"
+
+function schemaConversionFailed(what: string, io: "input" | "output", err: unknown): Record<string, unknown> {
+	const msg = err instanceof Error ? err.message : String(err)
+	const text = `[honey:codegen] schemaToJsonSchema could not convert ${what} (io=${io}): ${msg}`
+	if (schemaFailureMode === "throw") throw new Error(text)
+	console.warn(`${text}. Documented as an unconstrained schema.`)
+	return {}
 }
 
 function schemaToJsonSchema(schema: StandardSchemaLike, io: "input" | "output" = "output"): unknown {
@@ -1109,49 +1294,69 @@ function schemaToJsonSchema(schema: StandardSchemaLike, io: "input" | "output" =
 	const vendor = schema["~standard"].vendor
 
 	if (vendor === "zod") {
+		const kind = (schema as { _zod?: { def?: { type?: string } } })?._zod?.def?.type ?? "unknown"
+		const degraded = new Set<string>()
+		let result: Record<string, unknown> | undefined
 		try {
-			const result =
-				zodInstanceToJsonSchema(schema, io) ??
-				(toJSONSchemaFn?.(schema, { io }) as Record<string, unknown> | undefined) ??
-				zodDefToJsonSchema(schema)
-			if (result) {
-				return sanitizeZodJsonSchema(result)
-			}
+			result = zodInstanceToJsonSchema(schema, io, degraded) ?? zodDefToJsonSchema(schema, io)
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err)
-			const defType = (schema as { _zod?: { def?: { type?: string } } })?._zod?.def?.type ?? "unknown"
+			return schemaConversionFailed(`zod/${kind}`, io, err)
+		}
+		if (!result) return schemaConversionFailed(`zod/${kind}`, io, new Error("no converter available"))
+		if (degraded.size > 0) {
 			console.warn(
-				`[honey:codegen] schemaToJsonSchema failed for zod/${defType} (io=${io}): ${msg}. Falling back to metadata-only introspection.`,
+				`[honey:codegen] schemaToJsonSchema: zod/${kind} (io=${io}) has ${[...degraded].sort().join(", ")} ` +
+					"node(s) JSON Schema cannot express; each is documented as an unconstrained schema. " +
+					'Describe them with .meta({ ... }) or z.toJSONSchema\'s "override".',
 			)
 		}
+		return sanitizeZodJsonSchema(result)
 	}
 
-	if (vendor === "valibot") {
-		return valibotToJsonSchema(schema)
+	try {
+		if (vendor === "valibot") return valibotToJsonSchema(schema)
+		if (vendor === "arktype") return arkTypeToJsonSchema(schema)
+		if (vendor === "yup") return yupToJsonSchema(schema)
+		if (vendor === "effect") return effectToJsonSchema(schema)
+	} catch (err) {
+		return schemaConversionFailed(vendor, io, err)
 	}
 
-	if (vendor === "arktype") {
-		return arkTypeToJsonSchema(schema)
-	}
-
-	if (vendor === "yup") {
-		return yupToJsonSchema(schema)
-	}
-
-	if (vendor === "effect") {
-		return effectToJsonSchema(schema)
-	}
-
-	return introspectSchema(schema)
+	/* no converter for this vendor: say so once per schema, never emit the introspection object */
+	console.warn(
+		`[honey:codegen] schemaToJsonSchema: no JSON Schema converter for vendor "${vendor}"; ` +
+			"documented as an unconstrained schema.",
+	)
+	return {}
 }
 
 /* ---- Manifest generation ---- */
 
+export type GenerateManifestOptions = {
+	/** Drop routes the predicate rejects, as `openapi({ filterRoutes })` does. */
+	filterRoutes?: (route: OpenApiRouteInfo) => boolean
+	/**
+	 * `"all"` (default, the `honey generate` artifact): every route and meta key.
+	 * `"published"` (a served `/manifest.json`): the OpenAPI document's visibility policy —
+	 * `meta.internal` routes are left out, and meta carries only keys the app's `metaSpec`
+	 * maps (built-ins included) and does not hide.
+	 */
+	visibility?: "all" | "published"
+}
+
 export function generateManifest<TEnv, TCtx>(
 	app: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>,
+	options: GenerateManifestOptions = {},
 ): RouteManifest {
 	const factory = getErrorFactory(app)
-	const collected: CollectedRoute[] = collectRoutes(app)
+	const published = options.visibility === "published"
+	const publishable = published
+		? publishableMetaKeys((app as unknown as { _metaSpec?: MetaSpecConfig | null })._metaSpec ?? null)
+		: null
+	const collected: CollectedRoute[] = collectRoutes(app).filter(({ handler, method, path }) => {
+		if (published && isMetaInternal(handler)) return false
+		return !options.filterRoutes || options.filterRoutes({ meta: handler.mt ?? EMPTY_OBJ, method, path })
+	})
 
 	/* each key resolved against the factory of a route that declares it — a mounted sub-app keeps its own */
 	const allErrorKeys = new Map<string, Record<string, () => HoneyError> | null>()
@@ -1159,7 +1364,9 @@ export function generateManifest<TEnv, TCtx>(
 	const routes: RouteManifestEntry[] = collected.map(({ handler, method, path }) => {
 		const entry: RouteManifestEntry = {
 			errors: Array.from(handler.ek),
-			meta: handler.mt ?? EMPTY_OBJ,
+			meta: publishable
+				? Object.fromEntries(Object.entries(handler.mt ?? EMPTY_OBJ).filter(([key]) => publishable(key)))
+				: (handler.mt ?? EMPTY_OBJ),
 			method,
 			middleware: handler.mw.map((mw) => mw.name || "anonymous"),
 			params: extractParams(path),
@@ -1221,6 +1428,13 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 		 * nothing. `"off"` for a document served at runtime.
 		 */
 		invalidate?: InvalidateCheckConfig
+		/**
+		 * A schema that cannot be converted at all: `"throw"` (default, `honey generate`) fails
+		 * the build; `"warn"` (a served document) logs it and documents an unconstrained schema.
+		 * A single node JSON Schema cannot express (`z.date()`, `z.custom()`) never fails either
+		 * way — only that node degrades.
+		 */
+		onSchemaError?: "throw" | "warn"
 		/** Named metaSpec profile — selects which emitted keys this document carries */
 		profile?: string
 		securitySchemes?: Record<string, unknown>
@@ -1228,12 +1442,16 @@ export async function generateOpenApi<TEnv, TCtx, TMeta = unknown>(
 ): Promise<OpenApiSpec> {
 	await Promise.all([loadToJSONSchema(), loadEffectJsonSchema()])
 	const prev = getJsonSchemaConverter()
+	const prevMode = schemaFailureMode
+	schemaFailureMode = options.onSchemaError ?? "throw"
 	setJsonSchemaConverter((schema, io) => schemaToJsonSchema(schema, io) as Record<string, unknown>)
 	try {
-		const spec = generateOpenApiFromTree(app, options)
+		const { onSchemaError: _mode, ...rest } = options
+		const spec = generateOpenApiFromTree(app, rest)
 		return deduplicateSchemas(spec)
 	} finally {
 		setJsonSchemaConverter(prev)
+		schemaFailureMode = prevMode
 	}
 }
 
@@ -1835,10 +2053,13 @@ export function generateTypes<TEnv, TCtx>(
 			routesLines.push(`\t\t${method}: {`)
 			routesLines.push(`\t\t\tctx: WithOutput<${ctxType}, ${outputType}>`)
 			routesLines.push(`\t\t\terrors: ${errorType}`)
-			const shapesType = emitErrorShapes(handler, errorMeta, emitState)
+			/* a mounted sub-app's route keeps its own error factory */
+			const routeFactory = (handler.fac as Record<string, () => HoneyError> | null | undefined) ?? factory
+			const routeErrorMeta = routeFactory === factory ? errorMeta : getErrorMeta(routeFactory)
+			const shapesType = emitErrorShapes(handler, routeErrorMeta, emitState)
 			if (shapesType) {
 				routesLines.push(`\t\t\terrorShapes: ${shapesType}`)
-				const byStatusType = emitErrorsByStatus(handler, errorMeta, factory, emitState)
+				const byStatusType = emitErrorsByStatus(handler, routeErrorMeta, routeFactory, emitState)
 				if (byStatusType) {
 					routesLines.push(`\t\t\terrorsByStatus: ${byStatusType}`)
 				}
@@ -2111,7 +2332,7 @@ function emitSDKInputType(op: Record<string, unknown>, path: string): { hasManda
 		if (queryParams.length > 0) {
 			const hasRequired = queryParams.some((p) => p.required === true)
 			const entries = queryParams
-				.sort((a, b) => String(a.name).localeCompare(String(b.name)))
+				.sort((a, b) => compareCodeUnits(String(a.name), String(b.name)))
 				.map((p) => {
 					const name = String(p.name)
 					const required = p.required === true
@@ -2332,7 +2553,7 @@ function buildTypeAliases(
 	const aliases = new Map<string, string>()
 	const lines: string[] = []
 	let idx = 0
-	for (const [typeStr, count] of [...counts.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+	for (const [typeStr, count] of [...counts.entries()].sort(([a], [b]) => compareCodeUnits(a, b))) {
 		if (count >= minCount || typeStr.length > 200) {
 			const alias = `${prefix}${idx++}`
 			aliases.set(typeStr, alias)
@@ -2606,7 +2827,7 @@ function emitNestedMapNode(node: NestedServiceNode, indent: string): string[] {
 		return [`{ ${parts.join(", ")} }`]
 	}
 	const lines: string[] = ["{"]
-	for (const [key, child] of [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+	for (const [key, child] of [...node.children.entries()].sort(([a], [b]) => compareCodeUnits(a, b))) {
 		const safeKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : JSON.stringify(key)
 		const childLines = emitNestedMapNode(child, `${indent}\t`)
 		if (childLines.length === 1) {
@@ -2625,7 +2846,7 @@ function buildSDKMap(nestedMap: Map<string, NestedServiceNode>): string {
 	const l: string[] = []
 
 	l.push("export const serviceMap = {")
-	for (const [key, node] of [...nestedMap.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+	for (const [key, node] of [...nestedMap.entries()].sort(([a], [b]) => compareCodeUnits(a, b))) {
 		const safeKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : JSON.stringify(key)
 		const childLines = emitNestedMapNode(node, "\t")
 		if (childLines.length === 1) {
@@ -4519,7 +4740,7 @@ function buildNestedServiceMap(
 
 	function walkNs(namespace: IRNamespace): Map<string, NestedServiceNode> {
 		const map = new Map<string, NestedServiceNode>()
-		for (const [key, entry] of [...namespace.entries.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+		for (const [key, entry] of [...namespace.entries.entries()].sort(([a], [b]) => compareCodeUnits(a, b))) {
 			if (entry.kind === "method") {
 				const found = opLookup.get(entry.op.id)
 				if (!found) continue

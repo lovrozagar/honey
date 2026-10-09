@@ -1,10 +1,10 @@
-x-generated: "honey checksum:b8b90f648dbb"
+x-generated: "honey checksum:5f86de0de2d2"
 info:
   title: Honey Gateway
   version: "0.0.1"
 openapi: "3.1.0"
 paths:
-  /articles:
+  /articles/:
     get:
       summary: List articles
       x-permissions:
@@ -41,18 +41,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/ListArticlesResponse200"
           description: ok
-  /articles/meta:
+  /articles/meta/:
     get:
       x-tenant:
         param: project_id
       responses:
         "200":
           description: Success
-  /ping:
+  /ping/:
     get:
       responses:
         "200":
           description: Success
+servers:
+  - url: /app
 components:
   schemas:
     ListArticlesResponse200:
@@ -88,7 +90,7 @@ components:
         hasMore:
           type: boolean
         nextCursor:
-          oneOf:
+          anyOf:
             - type: string
             - type: "null"
       required:

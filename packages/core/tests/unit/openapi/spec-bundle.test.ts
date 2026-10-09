@@ -6,11 +6,12 @@ import { describe, expect, it } from "vitest"
 const SRC = join(dirname(fileURLToPath(import.meta.url)), "../../../src")
 
 describe("openapi spec isolate graph", () => {
-	it("spec.ts and document.ts do not import codegen", () => {
+	it("spec.ts and document.ts do not import the codegen module", () => {
 		const spec = readFileSync(join(SRC, "openapi/spec.ts"), "utf8")
 		const document = readFileSync(join(SRC, "openapi/document.ts"), "utf8")
-		expect(spec).not.toMatch(/codegen/)
-		expect(document).not.toMatch(/codegen/)
+		/* small leaf helpers (schema naming) are fine; the converters and SDK emitters are not */
+		expect(spec).not.toMatch(/from "\.\.\/codegen\.ts"/)
+		expect(document).not.toMatch(/from "\.\.\/codegen\.ts"/)
 	})
 
 	it("bundled spec entry excludes codegen converters", async () => {

@@ -1,4 +1,5 @@
 import type { TypedResponse } from "../response.ts"
+import { docsPage, escapeAttribute, inlineJson, SWAGGER_UI } from "./docs-page.ts"
 
 type SwaggerOptions = {
 	url: string
@@ -7,28 +8,28 @@ type SwaggerOptions = {
 
 export function swagger(
 	options: SwaggerOptions,
-): (ctx: { res: { html(sk: "ok", body: string): TypedResponse } }) => TypedResponse {
+): (ctx: {
+	res: { html(sk: "ok", body: string, opts?: { headers?: Record<string, string> }): TypedResponse }
+}) => TypedResponse {
 	const { url, ...rest } = options
-	const config = JSON.stringify({ dom_id: "#swagger-ui", url, ...rest })
+	const config = inlineJson({ dom_id: "#swagger-ui", url, ...rest })
 
-	const html = `<!DOCTYPE html>
+	return docsPage(
+		(nonce) => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Swagger UI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+  <link rel="stylesheet" href="${SWAGGER_UI.css.url}" integrity="${SWAGGER_UI.css.integrity}" crossorigin="anonymous" />
 </head>
 <body>
   <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
-  <script>
+  <script src="${SWAGGER_UI.js.url}" integrity="${SWAGGER_UI.js.integrity}" crossorigin="anonymous"></script>
+  <script nonce="${escapeAttribute(nonce)}">
     SwaggerUIBundle(${config})
   </script>
 </body>
-</html>`
-
-	const handler = (ctx: { res: { html(sk: "ok", body: string): TypedResponse } }) => ctx.res.html("ok", html)
-	Object.defineProperty(handler, Symbol.for("honey.internal"), { value: true })
-	return handler
+</html>`,
+	)
 }

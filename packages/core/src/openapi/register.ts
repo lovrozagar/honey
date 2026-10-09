@@ -7,8 +7,10 @@ import { registerOpenApiRuntime } from "./spec-factory.ts"
 export function enableOpenApi(): void {
 	registerOpenApiRuntime({
 		docsUi: (kind, specUrl) => (kind === "swagger" ? swagger({ url: specUrl }) : scalar({ url: specUrl })),
-		generateManifest: (app) => Promise.resolve(generateManifest(app as never)),
-		generateOpenApi: (app, options) => generateOpenApi(app as never, options),
+		/* served artifacts follow the document's visibility policy and never fail on one schema */
+		generateManifest: (app, options) =>
+			Promise.resolve(generateManifest(app as never, { visibility: "published", ...options })),
+		generateOpenApi: (app, options) => generateOpenApi(app as never, { onSchemaError: "warn", ...options }),
 		toYaml,
 	})
 }

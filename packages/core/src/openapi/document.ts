@@ -1,16 +1,19 @@
-import { HoneyError } from "../error.ts"
+import { deriveSchemaName, sanitizeComponentName } from "../codegen-schema-naming.ts"
+import type { HoneyError } from "../error.ts"
 import { ERROR_META } from "../errors.ts"
 import type { ErrorMetaEntry } from "../errors.ts"
 import type { InvalidateCheckConfig, InvalidateCheckOperation } from "../invalidate-check.ts"
-import { reportMissingInvalidate } from "../invalidate-check.ts"
+import { findInvalidSelectors, invalidateLevel, reportMissingInvalidate } from "../invalidate-check.ts"
 import {
 	applyMetaSpec,
 	compileMetaSpec,
 	MetaSpecCollector,
 	resolveProfile,
+	securitySchemeNames,
 	type SchemaMetaHit,
 	type SchemaMetaLookup,
 } from "../meta-spec.ts"
+import { parsePattern, UNNAMED_WILDCARD } from "../pattern.ts"
 import type { RouteHandler } from "../tree.ts"
 import type {
 	InputSchemaEntry,
@@ -20,8 +23,8 @@ import type {
 	StandardSchemaLike,
 } from "../types.ts"
 import { statusKeyToCode } from "../types.ts"
-import { collectRoutes, collectWsRoutes, extractParams, toOpenApiPath, unwrapEntry } from "./collect.ts"
-import { getJsonSchemaConverter } from "./json-schema-slot.ts"
+import { collectRoutes, collectWsRoutes, toOpenApiPath, unwrapEntry } from "./collect.ts"
+import { getJsonSchemaConverter, instanceJsonSchema } from "./json-schema-slot.ts"
 
 export type OpenApiRouteInfo<TMeta = unknown> = {
 	meta: TMeta
@@ -43,6 +46,7 @@ export type OpenApiSpec = {
 	info: OpenApiInfo
 	openapi: string
 	paths: Record<string, Record<string, Record<string, unknown>>>
+	servers?: Array<{ description?: string; url: string }>
 }
 
 export const DEFAULT_ERROR_JSON_SCHEMA: Record<string, unknown> = {
@@ -180,9 +184,8 @@ function asJsonSchema(
 	io: "input" | "output" = "output",
 ): Record<string, unknown> {
 	if (entry !== null && entry !== undefined && "~standard" in (entry as object)) {
-		const convert = getJsonSchemaConverter()
-		if (convert) return convert(entry as StandardSchemaLike, io)
-		return {}
+		const convert = getJsonSchemaConverter() ?? instanceJsonSchema
+		return convert(entry as StandardSchemaLike, io)
 	}
 	return entry as Record<string, unknown>
 }
@@ -286,6 +289,224 @@ function makeSchemaMetaLookup(handler: RouteHandler): SchemaMetaLookup {
 	}
 }
 
+/** Methods an OpenAPI path item can hold. Anything else cannot be described and is skipped. */
+const OPENAPI_METHODS = new Set(["delete", "get", "head", "options", "patch", "post", "put", "trace"])
+
+/** What `app.all()` documents: every method a client would send to it, unless the path declares that method itself. */
+const ALL_METHODS = ["get", "post", "put", "patch", "delete"] as const
+
+type AppSettingsView = { stripPrefix?: string | null; trailingSlash?: "enforce" | "ignore" | "strip" }
+
+function appSettings(app: unknown): AppSettingsView {
+	return (app as { _graph?: { settings?: AppSettingsView } })._graph?.settings ?? {}
+}
+
+/** The URL path a client sends for a route path: `trailingSlash("enforce")` adds a slash. */
+function publicPath(path: string, settings: AppSettingsView): string {
+	if (settings.trailingSlash === "enforce" && path.length > 1 && !path.endsWith("/")) return `${path}/`
+	return path
+}
+
+function isMetaInternal(meta: Record<string, unknown> | null): boolean {
+	return meta?.internal === true
+}
+
+/** Path parameters of a concrete route path. Every path parameter is required in OpenAPI. */
+function pathParameters(path: string): Array<Record<string, unknown>> {
+	const out: Array<Record<string, unknown>> = []
+	for (const seg of parsePattern(path)) {
+		if (seg.k === "param") {
+			out.push({ in: "path", name: seg.n, required: true, schema: { type: "string" } })
+		} else if (seg.k === "wildcard") {
+			out.push({
+				description: "The rest of the path; may contain `/`.",
+				in: "path",
+				name: seg.n === UNNAMED_WILDCARD ? "wildcard" : seg.n,
+				required: true,
+				schema: { type: "string" },
+				"x-honey-wildcard": true,
+			})
+		}
+	}
+	return out
+}
+
+type ContentMap = Record<string, { schema: Record<string, unknown> }>
+
+/** Add a response, merging content types and headers into one already declared for the status. */
+function addResponse(
+	responses: Record<string, Record<string, unknown>>,
+	status: string,
+	description: string,
+	content: ContentMap | null,
+	headers: Record<string, unknown> | null,
+): void {
+	const existing = responses[status]
+	if (existing === undefined) {
+		const response: Record<string, unknown> = {}
+		if (content) response.content = content
+		response.description = description
+		if (headers) response.headers = headers
+		responses[status] = response
+		return
+	}
+	if (headers) existing.headers = { ...(existing.headers as Record<string, unknown> | undefined), ...headers }
+	if (content) existing.content = { ...(existing.content as ContentMap | undefined), ...content }
+}
+
+/**
+ * Turn a converted schema's local references into component references.
+ *
+ * Converters write `$ref: "#"` for recursion and `#/$defs/<name>` for shared nodes — relative
+ * to the schema's own root. In an OpenAPI document `#` is the document, so each is hoisted into
+ * `components.schemas` and the reference rewritten to point at it.
+ */
+class LocalRefHoister {
+	readonly components: Record<string, Record<string, unknown>> = Object.create(null)
+
+	private readonly taken: (name: string) => boolean
+
+	constructor(taken: (name: string) => boolean) {
+		this.taken = taken
+	}
+
+	private reserve(base: string): string {
+		const clean = sanitizeComponentName(base) || "Schema"
+		let name = clean
+		for (let n = 2; this.taken(name) || Object.hasOwn(this.components, name); n++) name = `${clean}${n}`
+		this.components[name] = {}
+		return name
+	}
+
+	hoist(schema: Record<string, unknown>, hint: string): Record<string, unknown> {
+		const defs = schema.$defs ?? schema.definitions
+		const hasDefs = defs !== null && typeof defs === "object" && Object.keys(defs).length > 0
+		const selfRef = refersTo(schema, "#")
+		if (!hasDefs && !selfRef) return schema
+
+		const rootName = selfRef ? this.reserve(hint) : null
+		const defNames = new Map<string, string>()
+		if (hasDefs) {
+			for (const key of Object.keys(defs as Record<string, unknown>)) {
+				defNames.set(key, this.reserve(key.startsWith("__schema") ? `${hint}${key.slice(8)}` : key))
+			}
+		}
+		const rewrite = (ref: string): string | null => {
+			if (ref === "#" && rootName !== null) return `#/components/schemas/${rootName}`
+			for (const prefix of ["#/$defs/", "#/definitions/"]) {
+				if (!ref.startsWith(prefix)) continue
+				const name = defNames.get(decodePointer(ref.slice(prefix.length)))
+				if (name !== undefined) return `#/components/schemas/${name}`
+			}
+			return null
+		}
+		for (const [key, name] of defNames) {
+			this.components[name] = rewriteRefs((defs as Record<string, Record<string, unknown>>)[key], rewrite)
+		}
+		const { $defs: _defs, definitions: _definitions, ...rest } = schema
+		const root = rewriteRefs(rest, rewrite)
+		if (rootName === null) return root
+		this.components[rootName] = root
+		return { $ref: `#/components/schemas/${rootName}` }
+	}
+}
+
+function decodePointer(token: string): string {
+	return token.replace(/~1/g, "/").replace(/~0/g, "~")
+}
+
+/** Keys whose values are data, not schemas: a `$ref` inside them is a value, not a reference. */
+const DATA_KEYS = new Set(["const", "default", "enum", "example", "examples"])
+
+function refersTo(node: unknown, target: string): boolean {
+	if (Array.isArray(node)) return node.some((item) => refersTo(item, target))
+	if (node === null || typeof node !== "object") return false
+	for (const [key, value] of Object.entries(node)) {
+		if (key === "$ref" && value === target) return true
+		if (DATA_KEYS.has(key)) continue
+		if (refersTo(value, target)) return true
+	}
+	return false
+}
+
+function rewriteRefs(node: unknown, rewrite: (ref: string) => string | null): Record<string, unknown> {
+	const walk = (value: unknown): unknown => {
+		if (Array.isArray(value)) return value.map(walk)
+		if (value === null || typeof value !== "object") return value
+		const out: Record<string, unknown> = {}
+		for (const [key, child] of Object.entries(value)) {
+			if (key === "$ref" && typeof child === "string") {
+				out[key] = rewrite(child) ?? child
+			} else if (DATA_KEYS.has(key)) {
+				out[key] = child
+			} else {
+				out[key] = walk(child)
+			}
+		}
+		return out
+	}
+	return walk(node) as Record<string, unknown>
+}
+
+function operationIdOf(operation: Record<string, unknown>): string | null {
+	return typeof operation.operationId === "string" ? operation.operationId : null
+}
+
+type EmittedOperation = {
+	handler: object
+	/** What one registration shares across its operations: the handler function */
+	source: unknown
+	method: string
+	operation: Record<string, unknown>
+	path: string
+	/** Path params beyond the route's shortest variant, for optional-param suffixes */
+	params: string[]
+}
+
+/**
+ * Make `operationId`s unique. One route that the document expands into several operations
+ * (`.on(["GET","POST"])`, `all()`, an optional param) keeps one meta `operationId`; each
+ * operation gets a method or variant suffix. Two different routes declaring the same id is
+ * an authoring error.
+ */
+function assignOperationIds(emitted: readonly EmittedOperation[], collector: MetaSpecCollector): void {
+	const byId = new Map<string, EmittedOperation[]>()
+	for (const entry of emitted) {
+		const id = operationIdOf(entry.operation)
+		if (id === null) continue
+		const list = byId.get(id)
+		if (list) list.push(entry)
+		else byId.set(id, [entry])
+	}
+	const used = new Set(byId.keys())
+	for (const [id, group] of byId) {
+		if (group.length < 2) continue
+		/* `.on([...])` registers one record per method around one handler function */
+		const handlers = new Set(group.map((g) => g.source))
+		if (handlers.size > 1) {
+			const where = group.map((g) => `${g.method.toUpperCase()} ${g.path}`).join(", ")
+			collector.add(
+				"DUPLICATE_OPERATION_ID",
+				"error",
+				`operationId "${id}" is declared by more than one route (${where}); operationIds must be unique`,
+			)
+			continue
+		}
+		const methods = new Set(group.map((g) => g.method))
+		const minParams = Math.min(...group.map((g) => g.params.length))
+		for (const entry of group) {
+			let next = id
+			if (methods.size > 1) next += `_${entry.method}`
+			const extra = entry.params.slice(minParams)
+			if (extra.length > 0) next += `_with_${extra.join("_")}`
+			if (next === id) continue
+			while (used.has(next)) next += "_"
+			used.add(next)
+			entry.operation.operationId = next
+		}
+	}
+}
+
 export function generateOpenApiFromTree<TMeta = unknown>(
 	app: unknown,
 	options: {
@@ -301,6 +522,8 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 	const { filter: profileFilter, name: profileName } = resolveProfile(metaSpec, options.profile, collector)
 	const factory = getErrorFactory(app)
 	const errorMeta = getErrorMeta(factory)
+	const settings = appSettings(app)
+	const hoister = new LocalRefHoister(() => false)
 
 	const rawErrorSchema = getErrorSchema(app)
 	const baseErrorJsonSchema = rawErrorSchema ? asJsonSchema(rawErrorSchema) : DEFAULT_ERROR_JSON_SCHEMA
@@ -311,102 +534,84 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 	const collected = collectRoutes(app)
 
 	const routeFilter = options.filterRoutes
-	const paths: Record<string, Record<string, Record<string, unknown>>> = {}
+	const paths: Record<string, Record<string, Record<string, unknown>>> = Object.create(null)
 	const emitted: InvalidateCheckOperation[] = []
+	const operations: EmittedOperation[] = []
+
+	/* explicit methods per path — `all()` documents only the methods nobody declared */
+	const declared = new Set<string>()
+	for (const { method, path } of collected) {
+		if (method !== "ALL") declared.add(`${method.toLowerCase()} ${path}`)
+	}
+	const shortestParams = new Map<object, number>()
+	for (const { handler, path } of collected) {
+		const n = pathParameters(path).length
+		const prev = shortestParams.get(handler)
+		if (prev === undefined || n < prev) shortestParams.set(handler, n)
+	}
 
 	for (const { handler, method, path } of collected) {
-		if (routeFilter) {
-			const meta = handler.mt as TMeta
-			if (!routeFilter({ meta, method, path })) continue
-		}
-		const oaPath = toOpenApiPath(path)
-		if (paths[oaPath] === undefined) {
-			paths[oaPath] = {}
-		}
+		const meta = (handler.mt ?? null) as Record<string, unknown> | null
+		if (isMetaInternal(meta)) continue
+		if (routeFilter && !routeFilter({ meta: (meta ?? {}) as TMeta, method, path })) continue
 
-		const methodKey = method.toLowerCase()
-		const operation: Record<string, unknown> = {}
-		const responses: Record<string, unknown> = {}
-		const parameters: Array<Record<string, unknown>> = []
+		const methods =
+			method === "ALL"
+				? ALL_METHODS.filter((m) => !declared.has(`${m} ${path}`))
+				: [method.toLowerCase()].filter((m) => {
+						if (OPENAPI_METHODS.has(m)) return true
+						collector.add(
+							"UNSUPPORTED_METHOD",
+							"warn",
+							`${method} ${path}: OpenAPI cannot describe the ${method} method; the route is left out of the document`,
+						)
+						return false
+					})
+		if (methods.length === 0) continue
 
-		applyMetaSpec({
-			collector,
-			filter: profileFilter,
-			kind: "http",
-			meta: handler.mt as Record<string, unknown> | null,
-			method,
-			operation,
-			path,
-			profile: profileName,
-			schemaMeta: metaSpec.needsSchemas ? makeSchemaMetaLookup(handler) : undefined,
-			spec: metaSpec,
-		})
+		const oaPath = publicPath(toOpenApiPath(path), settings)
+		const params = pathParameters(path)
+		const schemaHint = (role: "request" | "response", status?: number): string =>
+			role === "request"
+				? deriveSchemaName({ method: methods[0], path: oaPath, role })
+				: deriveSchemaName({ method: methods[0], path: oaPath, role, status: status ?? 200 })
 
-		const params = extractParams(path)
-		for (const name of params) {
-			const isOptional = path.includes(`:${name}?`)
-			parameters.push({
-				in: "path",
-				name,
-				required: !isOptional,
-				schema: { type: "string" },
-			})
-		}
+		/* the parts that do not depend on the method are built once per route */
+		const parameters: Array<Record<string, unknown>> = params.map((p) => ({ ...p }))
+		let requestBody: Record<string, unknown> | null = null
+		const responses: Record<string, Record<string, unknown>> = {}
 
 		if (handler.iv) {
+			const body: ContentMap = {}
 			for (const [source, entry] of Object.entries(handler.iv)) {
 				if (entry === undefined) continue
 				const unwrapped = unwrapEntry(entry as InputSchemaEntry)
 				const jsonSchema = asJsonSchema(unwrapped, "input")
 
 				if (source === "json" || source === "form") {
-					const schema = stripInternalProps(jsonSchema)
-					const content: Record<string, { schema: Record<string, unknown> }> = {}
+					const schema = hoister.hoist(stripInternalProps(jsonSchema), schemaHint("request"))
 					if (source === "form") {
-						if (formSchemaHasBinaryPart(schema)) {
-							content["multipart/form-data"] = { schema }
-						}
-						content["application/x-www-form-urlencoded"] = { schema }
+						if (formSchemaHasBinaryPart(jsonSchema)) body["multipart/form-data"] = { schema }
+						body["application/x-www-form-urlencoded"] = { schema }
 					} else {
-						content["application/json"] = { schema }
-					}
-					operation.requestBody = {
-						content,
-						required: true,
+						body["application/json"] = { schema }
 					}
 				} else if (source === "search" || source === "headers" || source === "cookies") {
 					let location: "cookie" | "header" | "query" = "cookie"
 					if (source === "search") location = "query"
 					else if (source === "headers") location = "header"
-					const props = jsonSchema.properties as Record<string, unknown> | undefined
-					const required = (jsonSchema.required as string[]) ?? []
-					if (props) {
-						for (const [propName, propSchema] of Object.entries(props)) {
-							if ((propSchema as Record<string, unknown>)?.["x-internal"] === true) continue
-							parameters.push({
-								in: location,
-								name: propName,
-								required: required.includes(propName),
-								schema: propSchema,
-							})
-						}
-					}
+					parameters.push(...propertyParameters(jsonSchema, location, hoister, schemaHint("request")))
 				} else if (source === "params") {
 					const props = jsonSchema.properties as Record<string, unknown> | undefined
 					if (props) {
 						for (const param of parameters) {
-							const propSchema = props[param.name as string]
-							if (propSchema && param.in === "path") {
-								param.schema = propSchema
-							}
+							if (param.in !== "path" || !Object.hasOwn(props, param.name as string)) continue
+							param.schema = props[param.name as string]
 						}
 					}
 				}
 			}
-		}
-
-		if (parameters.length > 0) {
-			operation.parameters = parameters
+			if (Object.keys(body).length > 0) requestBody = { content: body, required: true }
 		}
 
 		if (handler.os) {
@@ -415,140 +620,106 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 				if (contentType === "redirect") {
 					for (const statusKey of Object.keys(schemas)) {
 						const statusCode = statusKeyToCode[statusKey as keyof typeof statusKeyToCode]
-						if (statusCode) {
-							responses[String(statusCode)] = {
-								description: statusKey.replace(/_/g, " "),
-								headers: {
-									Location: {
-										description: "Redirect target URL",
-										schema: { format: "uri", type: "string" },
-									},
-								},
-							}
-						}
+						if (!statusCode) continue
+						addResponse(responses, String(statusCode), statusKey.replace(/_/g, " "), null, {
+							Location: {
+								description: "Redirect target URL",
+								schema: { format: "uri", type: "string" },
+							},
+						})
 					}
 					continue
 				}
 				for (const [statusKey, schema] of Object.entries(schemas)) {
 					if (schema === undefined) continue
 					const statusCode = statusKeyToCode[statusKey as keyof typeof statusKeyToCode]
-					if (statusCode) {
-						responses[String(statusCode)] = {
-							content: {
-								[contentType]: {
-									schema: asJsonSchema(schema as StandardSchemaLike | Record<string, unknown>),
-								},
-							},
-							description: statusKey.replace(/_/g, " "),
-						}
-					}
+					if (!statusCode) continue
+					const converted = asJsonSchema(schema as StandardSchemaLike | Record<string, unknown>)
+					addResponse(
+						responses,
+						String(statusCode),
+						statusKey.replace(/_/g, " "),
+						{ [contentType]: { schema: hoister.hoist(converted, schemaHint("response", statusCode)) } },
+						null,
+					)
 				}
 			}
 		}
 
 		if (handler.ek.size > 0) {
-			type ErrorEntry = { key: string; schema: Record<string, unknown> | null }
-			const byStatus = new Map<number, ErrorEntry[]>()
-			/* a mounted sub-app's route resolves its keys against its own factory */
+			/* a mounted sub-app's route keeps its own error factory */
 			const routeFactory = (handler.fac as Record<string, () => HoneyError> | null | undefined) ?? factory
-			const routeErrorMeta = routeFactory === factory ? errorMeta : getErrorMeta(routeFactory)
-			for (const ek of handler.ek) {
-				const info = resolveErrorInfo(ek, routeFactory)
-				if (info.status > 0) {
-					let entries = byStatus.get(info.status)
-					if (!entries) {
-						entries = []
-						byStatus.set(info.status, entries)
-					}
-					const meta = routeErrorMeta?.[ek]
-					let customSchema: Record<string, unknown> | null = null
-					if (meta?.schema) {
-						const converted = asJsonSchema(meta.schema as StandardSchemaLike)
-						if (converted && Object.keys(converted).length > 0) {
-							customSchema = customErrorAddsSchema ? { allOf: [converted, customErrorAddsSchema] } : converted
-						}
-					}
-					entries.push({ key: ek, schema: customSchema })
-				}
-			}
-			for (const [status, entries] of byStatus) {
-				if (responses[String(status)] === undefined) {
-					const standardKeys = entries.filter((e) => !e.schema).map((e) => e.key)
-					const customSchemas = entries.filter((e) => e.schema).map((e) => e.schema as Record<string, unknown>)
-
-					let schema: Record<string, unknown>
-
-					if (customSchemas.length === 0) {
-						schema = cloneJson(baseErrorJsonSchema)
-						const props = schema.properties as Record<string, unknown> | undefined
-						if (props?.error_key) {
-							props.error_key = { enum: standardKeys.sort(), type: "string" }
-						}
-						if (props?.status) {
-							props.status = { enum: [status], type: "integer" }
-						}
-					} else if (standardKeys.length === 0 && customSchemas.length === 1) {
-						schema = customSchemas[0]
-					} else {
-						const schemas: Record<string, unknown>[] = []
-						if (standardKeys.length > 0) {
-							const stdSchema = cloneJson(baseErrorJsonSchema)
-							const props = stdSchema.properties as Record<string, unknown> | undefined
-							if (props?.error_key) {
-								props.error_key = { enum: standardKeys.sort(), type: "string" }
-							}
-							if (props?.status) {
-								props.status = { enum: [status], type: "integer" }
-							}
-							schemas.push(stdSchema)
-						}
-						schemas.push(...customSchemas)
-						schema = { oneOf: schemas }
-					}
-
-					responses[String(status)] = {
-						content: {
-							"application/json": { schema },
-						},
-						description: entries
-							.map((e) => e.key)
-							.sort()
-							.join(", "),
-					}
-				}
-			}
+			addErrorResponses(responses, handler, {
+				baseErrorJsonSchema,
+				customErrorAddsSchema,
+				errorMeta: routeFactory === factory ? errorMeta : getErrorMeta(routeFactory),
+				factory: routeFactory,
+			})
 		}
 
 		if (Object.keys(responses).length === 0) {
 			responses["200"] = { description: "Success" }
 		}
-		operation.responses = responses
 
-		paths[oaPath][methodKey] = operation
-		emitted.push({
-			meta: handler.mt as Record<string, unknown> | null,
-			method: methodKey,
-			operation,
-			path: oaPath,
-		})
+		for (const methodKey of methods) {
+			const operation: Record<string, unknown> = {}
+
+			applyMetaSpec({
+				collector,
+				filter: profileFilter,
+				kind: "http",
+				meta,
+				method: methodKey.toUpperCase(),
+				operation,
+				path,
+				profile: profileName,
+				schemaMeta: metaSpec.needsSchemas ? makeSchemaMetaLookup(handler) : undefined,
+				spec: metaSpec,
+			})
+
+			if (requestBody) operation.requestBody = methods.length > 1 ? cloneJson(requestBody) : requestBody
+			if (parameters.length > 0) operation.parameters = methods.length > 1 ? cloneJson(parameters) : parameters
+			operation.responses = methods.length > 1 ? cloneJson(responses) : responses
+
+			const pathItem = paths[oaPath] ?? (paths[oaPath] = {})
+			pathItem[methodKey] = operation
+			operations.push({
+				handler,
+				method: methodKey,
+				source: handler.fn ?? handler,
+				operation,
+				params: params.slice(shortestParams.get(handler) ?? 0).map((p) => p.name as string),
+				path: oaPath,
+			})
+			emitted.push({ meta, method: methodKey, operation, path: oaPath })
+		}
 	}
 
 	const wsRoutes = collectWsRoutes(app)
 
 	for (const { handler, path } of wsRoutes) {
-		const oaPath = toOpenApiPath(path)
-		if (paths[oaPath] === undefined) {
-			paths[oaPath] = {}
+		const meta = handler.mt
+		if (isMetaInternal(meta)) continue
+		if (routeFilter && !routeFilter({ meta: (meta ?? {}) as TMeta, method: "WS", path })) continue
+
+		const oaPath = publicPath(toOpenApiPath(path), settings)
+		if (paths[oaPath]?.get !== undefined) {
+			collector.add(
+				"WS_SHADOWED",
+				"warn",
+				`WS ${path}: GET ${oaPath} is an HTTP operation; the websocket route is left out of the document`,
+			)
+			continue
 		}
 
 		const operation: Record<string, unknown> = { "x-websocket": true }
-		const parameters: Array<Record<string, unknown>> = []
+		const parameters: Array<Record<string, unknown>> = pathParameters(path)
 
 		applyMetaSpec({
 			collector,
 			filter: profileFilter,
 			kind: "ws",
-			meta: handler.mt,
+			meta,
 			method: "WS",
 			operation,
 			path,
@@ -557,58 +728,165 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 			spec: metaSpec,
 		})
 
-		const wsParams = extractParams(path)
-		for (const name of wsParams) {
-			parameters.push({
-				in: "path",
-				name,
-				required: true,
-				schema: { type: "string" },
-			})
-		}
-
-		if (handler.iv?.search) {
-			const searchEntry = handler.iv.search
-			const searchSchema =
-				"_tag" in searchEntry
-					? (searchEntry as { schema: StandardSchemaLike }).schema
-					: (searchEntry as StandardSchemaLike)
-			const jsonSchema = asJsonSchema(searchSchema as StandardSchemaLike | Record<string, unknown>, "input")
-			if (jsonSchema && typeof jsonSchema === "object") {
-				const props = jsonSchema.properties as Record<string, unknown> | undefined
-				const required = new Set((jsonSchema.required ?? []) as string[])
-				if (props) {
-					for (const [name, schema] of Object.entries(props)) {
-						parameters.push({
-							in: "query",
-							name,
-							required: required.has(name),
-							schema,
-						})
-					}
-				}
-			}
+		const searchEntry = handler.iv?.search
+		if (searchEntry) {
+			const jsonSchema = asJsonSchema(unwrapEntry(searchEntry as InputSchemaEntry), "input")
+			const hint = deriveSchemaName({ method: "get", path: oaPath, role: "request" })
+			parameters.push(...propertyParameters(jsonSchema, "query", hoister, hint))
 		}
 
 		if (parameters.length > 0) operation.parameters = parameters
 		operation.responses = { "101": { description: "WebSocket upgrade" } }
 
-		paths[oaPath].get = operation
+		const pathItem = paths[oaPath] ?? (paths[oaPath] = {})
+		pathItem.get = operation
+		operations.push({ handler, method: "get", operation, params: [], path: oaPath, source: handler.fn ?? handler })
 	}
 
+	assignOperationIds(operations, collector)
+	checkSecurityReferences(operations, options.securitySchemes, collector)
+	if (invalidateLevel(options.invalidate) !== "off") {
+		const inventory = new Set(collected.map((r) => `${r.method} ${r.path}`))
+		for (const bad of findInvalidSelectors(emitted, inventory)) {
+			collector.add(
+				"INVALID_SELECTOR",
+				"error",
+				`${bad.method} ${bad.path}: invalidate selector ${JSON.stringify(bad.selector)} names no route ` +
+					'— write "<METHOD> <pattern>" for a registered route, e.g. "GET /users/:id"',
+			)
+		}
+	}
 	collector.flush()
 	reportMissingInvalidate(emitted, options.invalidate)
 
 	const result: OpenApiSpec = {
-		info: options.info,
+		info: cleanInfo(options.info),
 		openapi: "3.1.0",
-		paths,
+		paths: { ...paths },
 	}
-	if (options.securitySchemes) {
-		result.components = {
-			...result.components,
-			securitySchemes: options.securitySchemes,
-		}
+	if (settings.stripPrefix) {
+		result.servers = [{ url: settings.stripPrefix }]
+	}
+	const hoisted = Object.keys(hoister.components).length > 0 ? { ...hoister.components } : null
+	if (hoisted || options.securitySchemes) {
+		result.components = {}
+		if (hoisted) result.components.schemas = hoisted
+		if (options.securitySchemes) result.components.securitySchemes = options.securitySchemes
 	}
 	return result
+}
+
+/** Only the Info Object's own fields: callers pass their whole options bag. */
+function cleanInfo(info: OpenApiInfo): OpenApiInfo {
+	const out: OpenApiInfo = { title: info.title, version: info.version }
+	if (typeof info.description === "string") out.description = info.description
+	return out
+}
+
+/** One parameter per property of an object schema (`search`, `headers`, `cookies`). */
+function propertyParameters(
+	jsonSchema: Record<string, unknown>,
+	location: "cookie" | "header" | "query",
+	hoister: LocalRefHoister,
+	hint: string,
+): Array<Record<string, unknown>> {
+	const out: Array<Record<string, unknown>> = []
+	const hoisted = hoister.hoist(jsonSchema, hint)
+	/* a recursive search schema hoists its root; its properties are still the parameters */
+	const root = hoisted.$ref === undefined ? hoisted : jsonSchema
+	const props = root.properties as Record<string, unknown> | undefined
+	if (!props) return out
+	const required = new Set((root.required as string[] | undefined) ?? [])
+	for (const name of Object.keys(props)) {
+		const propSchema = props[name] as Record<string, unknown> | undefined
+		if (propSchema?.["x-internal"] === true) continue
+		out.push({ in: location, name, required: required.has(name), schema: propSchema ?? {} })
+	}
+	return out
+}
+
+type ErrorResponseContext = {
+	baseErrorJsonSchema: Record<string, unknown>
+	customErrorAddsSchema: Record<string, unknown> | null
+	errorMeta: Record<string, ErrorMetaEntry> | null
+	factory: Record<string, () => HoneyError> | null
+}
+
+function addErrorResponses(
+	responses: Record<string, Record<string, unknown>>,
+	handler: { ek: Set<string> },
+	ctx: ErrorResponseContext,
+): void {
+	type ErrorEntry = { key: string; schema: Record<string, unknown> | null }
+	const byStatus = new Map<number, ErrorEntry[]>()
+	for (const ek of handler.ek) {
+		const info = resolveErrorInfo(ek, ctx.factory)
+		if (info.status <= 0) continue
+		let entries = byStatus.get(info.status)
+		if (!entries) {
+			entries = []
+			byStatus.set(info.status, entries)
+		}
+		const meta = ctx.errorMeta?.[ek]
+		let customSchema: Record<string, unknown> | null = null
+		if (meta?.schema) {
+			const converted = asJsonSchema(meta.schema as StandardSchemaLike)
+			if (converted && Object.keys(converted).length > 0) {
+				customSchema = ctx.customErrorAddsSchema ? { allOf: [converted, ctx.customErrorAddsSchema] } : converted
+			}
+		}
+		entries.push({ key: ek, schema: customSchema })
+	}
+	const standardSchema = (status: number, keys: string[]): Record<string, unknown> => {
+		const schema = cloneJson(ctx.baseErrorJsonSchema)
+		const props = schema.properties as Record<string, unknown> | undefined
+		if (props?.error_key) props.error_key = { enum: [...keys].sort(), type: "string" }
+		if (props?.status) props.status = { enum: [status], type: "integer" }
+		return schema
+	}
+	for (const [status, entries] of byStatus) {
+		if (responses[String(status)] !== undefined) continue
+		const standardKeys = entries.filter((e) => !e.schema).map((e) => e.key)
+		const customSchemas = entries.filter((e) => e.schema).map((e) => e.schema as Record<string, unknown>)
+
+		let schema: Record<string, unknown>
+		if (customSchemas.length === 0) {
+			schema = standardSchema(status, standardKeys)
+		} else if (standardKeys.length === 0 && customSchemas.length === 1) {
+			schema = customSchemas[0]
+		} else {
+			const schemas: Record<string, unknown>[] = []
+			if (standardKeys.length > 0) schemas.push(standardSchema(status, standardKeys))
+			schemas.push(...customSchemas)
+			schema = { oneOf: schemas }
+		}
+
+		responses[String(status)] = {
+			content: { "application/json": { schema } },
+			description: entries
+				.map((e) => e.key)
+				.sort()
+				.join(", "),
+		}
+	}
+}
+
+/** Every scheme an operation's `security` names must exist in `components.securitySchemes`. */
+function checkSecurityReferences(
+	operations: readonly EmittedOperation[],
+	schemes: Record<string, unknown> | undefined,
+	collector: MetaSpecCollector,
+): void {
+	for (const { method, operation, path } of operations) {
+		for (const name of securitySchemeNames(operation.security)) {
+			if (schemes && Object.hasOwn(schemes, name)) continue
+			collector.add(
+				"UNKNOWN_SECURITY_SCHEME",
+				schemes ? "error" : "warn",
+				schemes
+					? `${method.toUpperCase()} ${path}: security names "${name}", which is not in securitySchemes`
+					: `security scheme "${name}" (first used by ${method.toUpperCase()} ${path}) is not declared — pass securitySchemes`,
+			)
+		}
+	}
 }

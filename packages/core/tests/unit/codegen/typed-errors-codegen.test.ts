@@ -149,3 +149,21 @@ describe("generateTypes: error shapes in codegen output", () => {
 		expect(routeBlock).not.toContain("errorShapes:")
 	})
 })
+
+describe("generateTypes: a mounted sub-app keeps its own error factory", () => {
+	it("errorsByStatus resolves a sub-app key against the sub-app's factory", () => {
+		const parentErrors = defineErrors({ api_error: "internal_server_error" })
+		const subErrors = defineErrors({ api_error: "internal_server_error", locked: "conflict" })
+		const sub = honey().basePath("/sub").errorFactory(subErrors)
+		sub
+			.get("/door")
+			.errors("locked")
+			.handler((c) => c.res.json("ok", {}))
+		const app = honey().errorFactory(parentErrors)
+		app.route(sub)
+
+		const output = generateTypes(app, {})
+		/* "locked" is not in the parent's factory; only the sub-app's says it is a 409 */
+		expect(output).toMatch(/errorsByStatus: \{ 409: null \}/)
+	})
+})

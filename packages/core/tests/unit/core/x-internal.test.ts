@@ -148,7 +148,7 @@ describe("x-internal routes — type exclusion", () => {
 })
 
 describe("x-internal routes — codegen inclusion", () => {
-	it("generateOpenApi INCLUDES meta.internal routes (path-D semantics)", async () => {
+	it("generateOpenApi EXCLUDES meta.internal routes (docs/meta-spec.md §2.6)", async () => {
 		const app = honey<{}>().meta<AppMeta>()
 
 		app
@@ -167,10 +167,10 @@ describe("x-internal routes — codegen inclusion", () => {
 
 		const paths = spec.paths as Record<string, unknown>
 		expect(paths["/api/users"]).toBeTruthy()
-		expect(paths["/health"]).toBeTruthy()
+		expect(paths["/health"]).toBeUndefined()
 	})
 
-	it("chain-level meta.internal also INCLUDED in OpenAPI", async () => {
+	it("chain-level meta.internal is also EXCLUDED from OpenAPI", async () => {
 		const app = honey<{}>().meta<AppMeta>()
 
 		app
@@ -190,7 +190,7 @@ describe("x-internal routes — codegen inclusion", () => {
 
 		const paths = spec.paths as Record<string, unknown>
 		expect(paths["/api/users"]).toBeTruthy()
-		expect(paths["/metrics"]).toBeTruthy()
+		expect(paths["/metrics"]).toBeUndefined()
 	})
 
 	it("generateTypes INCLUDES x-internal routes (services need RouteCtx)", () => {

@@ -451,8 +451,16 @@ eight mappings, unchanged, with the same truthiness gates and the same emit orde
 | `security`    | `security` (normalized)      | truthy           | ✓    | —   |
 | `invalidate`  | `x-invalidate`               | array, non-empty | ✓    | —   |
 | `mcp`         | `x-mcp`                      | `=== true`       | ✓    | —   |
-| `internal`    | _hidden_                     | —                | —    | —   |
+| `internal`    | _route left out_             | `=== true`       | —    | —   |
 | `extensions`  | verbatim passthrough         | —                | ✓    | ✓   |
+
+A route with `internal: true` is left out of the served and generated OpenAPI document and the
+served `/manifest.json`; it still serves requests and still appears in `types.gen.d.ts`, so
+services can type against it. `security` must be a scheme name, a list of names, a list of name
+groups, or standard requirement objects — anything else fails generation instead of documenting the
+route as public — and every scheme it names must be in `securitySchemes`. `invalidate` selectors
+must name a registered route (`"GET /users/:id"`); a selector that names nothing fails generation
+unless the document is generated with `invalidate: "off"`.
 
 The WS column reproduces the previous WS mapping exactly (it was a strict subset). App entries
 default to `on: "both"`; the asymmetry is preserved only for the built-ins.

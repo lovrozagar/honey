@@ -96,7 +96,7 @@ describe("schemaToJsonSchema — io:input for transform-piped search schemas", (
 		expect(props.name).toBeDefined()
 	})
 
-	it("unrepresentable z.custom in output schema triggers console.warn containing schemaToJsonSchema and error text", async () => {
+	it("an unrepresentable z.custom degrades only its own node, with a warning naming it", async () => {
 		const warnSpy = vi.spyOn(console, "warn")
 		warnSpy.mockImplementation(() => {})
 
@@ -107,22 +107,48 @@ describe("schemaToJsonSchema — io:input for transform-piped search schemas", (
 				.output({
 					"application/json": {
 						ok: z.object({
+							at: z.date(),
+							count: z.number(),
 							data: z.custom<{ raw: unknown }>(),
+							id: z.string(),
 						}),
 					},
 				})
-				.handler((ctx) => ctx.res.json("ok", { data: { raw: null } }))
+				.handler((ctx) => ctx.res.json("ok", { at: new Date(), count: 1, data: { raw: null }, id: "x" }))
 
-			await generateOpenApi(app, { info: { title: "T", version: "1" } })
+			const spec = await generateOpenApi(app, { info: { title: "T", version: "1" } })
+			const responses = spec.paths["/custom-out"]?.post?.responses as Record<string, Record<string, unknown>>
+			const content = responses["200"]?.content as Record<string, Record<string, unknown>>
+			const schema = resolveRef(spec, content["application/json"].schema as Record<string, unknown>)
+			/* the rest of the schema survives — never replaced by an introspection object */
+			expect(schema).not.toHaveProperty("vendor")
+			expect(schema.properties).toEqual({
+				at: { format: "date-time", type: "string" },
+				count: { type: "number" },
+				data: {},
+				id: { type: "string" },
+			})
 
-			const calls = warnSpy.mock.calls
-			const relevant = calls.filter(
-				(args) =>
-					typeof args[0] === "string" &&
-					args[0].includes("schemaToJsonSchema") &&
-					args[0].includes("Custom types cannot be represented in JSON Schema"),
+			const relevant = warnSpy.mock.calls.filter(
+				(args) => typeof args[0] === "string" && args[0].includes("schemaToJsonSchema") && args[0].includes("custom"),
 			)
 			expect(relevant.length).toBeGreaterThan(0)
+		} finally {
+			warnSpy.mockRestore()
+		}
+	})
+
+	it("an unrepresentable search field keeps every other query parameter", async () => {
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+		try {
+			const app = honey<{}>()
+			app
+				.get("/q")
+				.input({ search: z.object({ at: z.date().optional(), q: z.string(), tag: z.custom<string>() }) })
+				.handler((ctx) => ctx.res.text("ok", "ok"))
+			const spec = await generateOpenApi(app, { info: { title: "T", version: "1" } })
+			const params = (spec.paths["/q"]?.get?.parameters ?? []) as Array<Record<string, unknown>>
+			expect(params.map((p) => p.name).sort()).toEqual(["at", "q", "tag"])
 		} finally {
 			warnSpy.mockRestore()
 		}

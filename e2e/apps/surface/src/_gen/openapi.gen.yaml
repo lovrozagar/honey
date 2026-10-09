@@ -1,4 +1,4 @@
-x-generated: "honey checksum:c4888131a74a"
+x-generated: "honey checksum:a23fa721cb58"
 info:
   title: Honey Surface
   version: "1.0.0"
@@ -1082,9 +1082,7 @@ components:
       properties:
         name:
           type: string
-    ListOutBinaryResponse200:
-      vendor: zod
-      version: 1
+    ListOutBinaryResponse200: {}
     ListOutCsvResponse200:
       type: string
     CreateOutMultiStatuRequest:

@@ -1,4 +1,5 @@
 import type { TypedResponse } from "../response.ts"
+import { docsPage, escapeAttribute, inlineJson, SCALAR } from "./docs-page.ts"
 
 type ScalarOptions = {
 	url: string
@@ -7,11 +8,14 @@ type ScalarOptions = {
 
 export function scalar(
 	options: ScalarOptions,
-): (ctx: { res: { html(sk: "ok", body: string): TypedResponse } }) => TypedResponse {
+): (ctx: {
+	res: { html(sk: "ok", body: string, opts?: { headers?: Record<string, string> }): TypedResponse }
+}) => TypedResponse {
 	const { url, ...rest } = options
-	const config = JSON.stringify({ url, ...rest })
+	const config = inlineJson({ url, ...rest })
 
-	const html = `<!DOCTYPE html>
+	return docsPage(
+		(nonce) => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -20,14 +24,11 @@ export function scalar(
 </head>
 <body>
   <div id="app"></div>
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-  <script>
+  <script src="${SCALAR.js.url}" integrity="${SCALAR.js.integrity}" crossorigin="anonymous"></script>
+  <script nonce="${escapeAttribute(nonce)}">
     Scalar.createApiReference(document.getElementById("app"), ${config})
   </script>
 </body>
-</html>`
-
-	const handler = (ctx: { res: { html(sk: "ok", body: string): TypedResponse } }) => ctx.res.html("ok", html)
-	Object.defineProperty(handler, Symbol.for("honey.internal"), { value: true })
-	return handler
+</html>`,
+	)
 }

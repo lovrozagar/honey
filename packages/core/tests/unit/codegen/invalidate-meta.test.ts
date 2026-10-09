@@ -203,6 +203,8 @@ describe("generateManifest preserves invalidate in route meta", () => {
 describe("generateOpenApi does not emit invalidate", () => {
 	it("excludes invalidate from OpenAPI operation but keeps summary", async () => {
 		const app = honey()
+		app.get("/v1/users").handler((c) => c.res.text("ok", "ok"))
+		app
 			.post("/v1/users")
 			.meta({ invalidate: ["GET /v1/users"], summary: "Create user" })
 			.handler((c) => c.res.text("ok", "ok"))

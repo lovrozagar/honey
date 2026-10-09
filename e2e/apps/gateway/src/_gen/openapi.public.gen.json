@@ -1,12 +1,12 @@
 {
-  "x-generated": "honey checksum:79968828f59e",
+  "x-generated": "honey checksum:55809bebc21a",
   "info": {
     "title": "Honey Gateway (public)",
     "version": "0.0.1"
   },
   "openapi": "3.1.0",
   "paths": {
-    "/articles": {
+    "/articles/": {
       "get": {
         "summary": "List articles",
         "x-entity": "article",
@@ -47,7 +47,7 @@
         }
       }
     },
-    "/articles/meta": {
+    "/articles/meta/": {
       "get": {
         "responses": {
           "200": {
@@ -56,7 +56,7 @@
         }
       }
     },
-    "/ping": {
+    "/ping/": {
       "get": {
         "responses": {
           "200": {
@@ -66,6 +66,11 @@
       }
     }
   },
+  "servers": [
+    {
+      "url": "/app"
+    }
+  ],
   "components": {
     "schemas": {
       "ListArticlesResponse200": {
@@ -112,7 +117,7 @@
             "type": "boolean"
           },
           "nextCursor": {
-            "oneOf": [
+            "anyOf": [
               {
                 "type": "string"
               },

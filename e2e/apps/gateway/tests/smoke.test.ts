@@ -33,19 +33,19 @@ describe("e2e gateway consumes honey", () => {
 
 describe("metaSpec — generated documents", () => {
 	test("route meta reaches the internal document", () => {
-		const op = operation(internalDoc, "/articles")
+		const op = operation(internalDoc, "/articles/")
 		expect(op["x-permissions"]).toEqual(["articles.read"])
 		expect(op.summary).toBe("List articles")
 	})
 
 	test("middleware-contributed tenancy reaches the document", () => {
-		expect(operation(internalDoc, "/articles")["x-tenant"]).toEqual({ param: "project_id" })
+		expect(operation(internalDoc, "/articles/")["x-tenant"]).toEqual({ param: "project_id" })
 		/* a route that declares no meta at all still carries what the middleware contributed */
-		expect(operation(internalDoc, "/articles/meta")["x-tenant"]).toEqual({ param: "project_id" })
+		expect(operation(internalDoc, "/articles/meta/")["x-tenant"]).toEqual({ param: "project_id" })
 	})
 
 	test("an entity descriptor fans out through a pagination envelope", () => {
-		const op = operation(internalDoc, "/articles")
+		const op = operation(internalDoc, "/articles/")
 		expect(op["x-entity"]).toBe("article")
 		expect(op["x-identity"]).toBe("id")
 		expect(op["x-generated"]).toEqual(["id", "created_at"])
@@ -57,7 +57,7 @@ describe("metaSpec — generated documents", () => {
 		/* the publisher stamps `x-comb` with a union: the entity descriptor on the read
 		   schema, the query descriptor on the list-query schema. Two policy entries, told
 		   apart by the discriminant, must both land — this pair is the whole point. */
-		const op = operation(internalDoc, "/articles")
+		const op = operation(internalDoc, "/articles/")
 		expect(op["x-entity"]).toBe("article")
 		expect(op["x-query"]).toEqual({
 			filter: ["title"],
@@ -68,7 +68,7 @@ describe("metaSpec — generated documents", () => {
 	})
 
 	test("a fact the publisher could not determine is an absent key, not a null tag", () => {
-		const op = operation(internalDoc, "/articles")
+		const op = operation(internalDoc, "/articles/")
 		/* tenantColumn: null and searchable: null — "unknown", which must not be published
 		   as "definitively none" */
 		expect(op).not.toHaveProperty("x-tenant-column")
@@ -85,7 +85,7 @@ describe("metaSpec — generated documents", () => {
 	})
 
 	test("the public profile is default-deny: only allowlisted extensions survive", () => {
-		const op = operation(publicDoc, "/articles")
+		const op = operation(publicDoc, "/articles/")
 		expect(op["x-entity"]).toBe("article")
 		expect(op["x-query"]).toBeDefined()
 		expect(op).not.toHaveProperty("x-tenant")
@@ -97,7 +97,7 @@ describe("metaSpec — generated documents", () => {
 
 	test("both documents describe the same routes and schemas", () => {
 		expect(Object.keys((publicDoc as Doc).paths).sort()).toEqual(Object.keys((internalDoc as Doc).paths).sort())
-		expect(operation(publicDoc, "/articles").responses).toEqual(operation(internalDoc, "/articles").responses)
+		expect(operation(publicDoc, "/articles/").responses).toEqual(operation(internalDoc, "/articles/").responses)
 	})
 })
 
@@ -113,7 +113,7 @@ describe("metaSpec — running server", () => {
 		const res = await fetchApp("/app/openapi.json/")
 		expect(res.status).toBe(200)
 		const served = (await res.json()) as Doc
-		expect(operation(served, "/articles")).toEqual(operation(internalDoc, "/articles"))
+		expect(operation(served, "/articles/")).toEqual(operation(internalDoc, "/articles/"))
 	})
 })
 

@@ -864,22 +864,36 @@ describe("normalizeSecurity", () => {
 		])
 	})
 
-	it("mixed string and nested array falls to empty", () => {
-		expect(normalizeSecurity(["jwt", ["iaKey", "iaDomain"]])).toEqual([])
+	it("mixed string and nested array is refused, not read as public", () => {
+		expect(() => normalizeSecurity(["jwt", ["iaKey", "iaDomain"]])).toThrow(/mixed or malformed/)
 	})
 
 	it("single empty nested array returns single empty AND group", () => {
 		expect(normalizeSecurity([[]])).toEqual([{}])
 	})
 
-	it("nested array mixed with object falls to empty", () => {
-		expect(normalizeSecurity([{ jwt: [] }, ["iaKey"]])).toEqual([])
+	it("nested array mixed with object is refused", () => {
+		expect(() => normalizeSecurity([{ jwt: [] }, ["iaKey"]])).toThrow(/mixed or malformed/)
 	})
 
-	it("non-array non-string primitives return empty", () => {
-		expect(normalizeSecurity(null)).toEqual([])
-		expect(normalizeSecurity(undefined)).toEqual([])
-		expect(normalizeSecurity(42)).toEqual([])
-		expect(normalizeSecurity({})).toEqual([])
+	it("non-array non-string values are refused", () => {
+		expect(() => normalizeSecurity(null)).toThrow(TypeError)
+		expect(() => normalizeSecurity(undefined)).toThrow(TypeError)
+		expect(() => normalizeSecurity(42)).toThrow(TypeError)
+		expect(() => normalizeSecurity({})).toThrow(TypeError)
+		expect(() => normalizeSecurity("")).toThrow(TypeError)
+	})
+
+	it("requirement objects must map scheme names to scope arrays", () => {
+		expect(() => normalizeSecurity([{ jwt: "read" }])).toThrow(/mixed or malformed/)
+	})
+
+	it("a route with malformed security fails generation instead of documenting it public", async () => {
+		const app = honey<{}>()
+		app
+			.get("/secret")
+			.meta({ security: [{ jwt: [] }, ["iaKey"]] } as never)
+			.handler((c) => c.res.text("ok", "ok"))
+		await expect(generateOpenApi(app, { info: { title: "T", version: "1" } })).rejects.toThrow(/MAP_THREW/)
 	})
 })

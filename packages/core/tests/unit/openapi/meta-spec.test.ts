@@ -63,7 +63,20 @@ describe("built-in policy (no metaSpec declared)", () => {
 				.get(`/r${i}`)
 				.meta(meta as never)
 				.handler((c) => c.res.json("ok", { ok: true }))
-			const spec = await generateOpenApi(app as never, { info: INFO })
+			/* invalidate selectors must name registered routes */
+			for (const target of ["/users", "/a", "/b"]) app.get(target).handler((c) => c.res.json("ok", {}))
+			const spec = await generateOpenApi(app as never, {
+				info: INFO,
+				securitySchemes: {
+					apiKey: { in: "header", name: "x-api-key", type: "apiKey" },
+					jwt: { scheme: "bearer", type: "http" },
+				},
+			})
+			if (meta.internal === true) {
+				/* `internal` routes stay out of the document altogether */
+				expect(spec.paths[`/r${i}`], `meta #${i}`).toBeUndefined()
+				continue
+			}
 			const actual = { ...op(spec, `/r${i}`) }
 			delete actual.responses
 			expect(JSON.stringify(actual), `meta #${i}`).toBe(JSON.stringify(legacyOperation(meta)))
@@ -196,7 +209,8 @@ describe("hidden keys", () => {
 			.meta({ internal: true })
 			.handler((c) => c.res.json("ok", {}))
 		const spec = await generateOpenApi(app as never, { info: INFO })
-		expect(op(spec, "/a")).not.toHaveProperty("internal")
+		/* the route itself is left out of the document (docs/meta-spec.md §2.6) */
+		expect(spec.paths["/a"]).toBeUndefined()
 	})
 })
 

@@ -1,4 +1,4 @@
-x-generated: "honey checksum:2420ff3d4f4f"
+x-generated: "honey checksum:6b957d7eb075"
 info:
   title: Honey E2E
   version: "0.0.1"
@@ -78,7 +78,63 @@ paths:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
   /api/echo:
-    all:
+    get:
+      responses:
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err500ApiError"
+          description: api_error
+    post:
+      responses:
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err500ApiError"
+          description: api_error
+    put:
+      responses:
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err500ApiError"
+          description: api_error
+    patch:
+      responses:
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err401Unauthorized"
+          description: unauthorized
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Err500ApiError"
+          description: api_error
+    delete:
       responses:
         "401":
           content:

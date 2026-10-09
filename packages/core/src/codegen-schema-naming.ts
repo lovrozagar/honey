@@ -13,10 +13,23 @@ export function shortHash(canonical: string): string {
 	return hashString(canonical).slice(0, 6)
 }
 
+/** `user-profiles`, `user_profiles`, `books:archive`, `v1.json` → one PascalCase word, letters and digits only. */
 function toPascal(segment: string): string {
 	return segment
-		.replace(/[-_](.)/g, (_, c: string) => c.toUpperCase())
-		.replace(/^(.)/, (_, c: string) => c.toUpperCase())
+		.split(/[^A-Za-z0-9]+/)
+		.filter((part) => part.length > 0)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join("")
+}
+
+/**
+ * A name OpenAPI accepts as a `components.schemas` key (`^[a-zA-Z0-9._-]+$`) that also reads
+ * as an identifier in every SDK language: letters, digits and `_`, never a leading digit.
+ */
+export function sanitizeComponentName(name: string): string {
+	const cleaned = name.replace(/[^A-Za-z0-9_]+/g, "_").replace(/^_+|_+$/g, "")
+	if (cleaned === "") return ""
+	return /^[0-9]/.test(cleaned) ? `S${cleaned}` : cleaned
 }
 
 function stripPathPrefix(path: string): string[] {
@@ -128,12 +141,12 @@ export function deriveErrorEnvelopeName(schema: Record<string, unknown>, fallbac
 	const keysPascal = keys
 		.map((k) =>
 			k
-				.split(/[_-]/)
+				.split(/[^A-Za-z0-9]+/)
 				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 				.join(""),
 		)
 		.join("")
-	return `Err${status}${keysPascal}`
+	return sanitizeComponentName(`Err${status}${keysPascal}`)
 }
 
 /** Derives a human-readable schema component name from operation context. */
@@ -145,8 +158,8 @@ export function deriveSchemaName(ctx: SchemaNameContext): string {
 
 	if (ctx.fieldPath && ctx.fieldPath.length > 0) {
 		const fieldPart = ctx.fieldPath.map(toPascal).join("")
-		return `${base}${fieldPart}`
+		return sanitizeComponentName(`${base}${fieldPart}`)
 	}
 
-	return `${base}${roleSuffix(ctx)}`
+	return sanitizeComponentName(`${base}${roleSuffix(ctx)}`)
 }

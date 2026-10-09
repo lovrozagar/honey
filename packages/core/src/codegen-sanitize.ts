@@ -31,10 +31,6 @@ export function sanitizeZodJsonSchema(obj: Record<string, unknown>): Record<stri
 	const out: Record<string, unknown> = {}
 	for (const [key, val] of Object.entries(obj)) {
 		if (key === "$schema" || key === "~standard") continue
-		if (key === "anyOf" && Array.isArray(val)) {
-			out.oneOf = val.map((item) => sanitizeSchemaValue(item))
-			continue
-		}
 		if (SCHEMA_MAP_KEYS.has(key) && asRecord(val)) {
 			const mapped: Record<string, unknown> = {}
 			for (const [childKey, child] of Object.entries(val)) {

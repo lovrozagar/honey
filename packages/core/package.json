@@ -337,6 +337,8 @@
 		"@total-typescript/ts-reset": "catalog:",
 		"@types/node": "catalog:",
 		"@types/ws": "catalog:",
+		"ajv": "8.20.0",
+		"ajv-formats": "3.0.1",
 		"arktype": "catalog:",
 		"effect": "catalog:",
 		"js-yaml": "4.3.1",

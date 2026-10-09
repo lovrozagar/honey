@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { honey } from "../../../src/index.ts"
 import { testClient } from "../../../src/testing.ts"
+import { SCALAR } from "../../../src/openapi/docs-page.ts"
 import { scalar } from "../../../src/openapi/scalar.ts"
 
 describe("scalar", () => {
@@ -24,7 +25,8 @@ describe("scalar", () => {
 		const client = testClient(app, { env: {} })
 		const res = await client.get("/openapi/scalar")
 		const html = await res.text()
-		expect(html).toContain("cdn.jsdelivr.net/npm/@scalar/api-reference")
+		expect(html).toContain(`src="${SCALAR.js.url}" integrity="${SCALAR.js.integrity}"`)
+		expect(SCALAR.js.url).toMatch(/@scalar\/api-reference@\d+\.\d+\.\d+\//)
 	})
 
 	it("HTML contains the spec URL from config", async () => {
