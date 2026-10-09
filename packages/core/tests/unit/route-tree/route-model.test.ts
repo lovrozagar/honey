@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { generateRouteTreeFromApp } from "../../../src/codegen.ts"
 import { createMiddleware, honey } from "../../../src/index.ts"
-import { canonical, normalizePattern, parsePattern } from "../../../src/pattern.ts"
+import { canonical, joinPatterns, normalizePattern, parsePattern } from "../../../src/pattern.ts"
 import type { RouteTree } from "../../../src/tree.ts"
 import type { WSHandler } from "../../../src/ws/cloudflare.ts"
 
@@ -47,6 +47,24 @@ describe("pattern grammar", () => {
 		expect(() => parsePattern("/a/:id/b/:id")).toThrow(/appears twice/)
 		expect(() => parsePattern("/items?x=1")).toThrow(/query strings/)
 		expect(() => honey().get("/f/:name.json")).toThrow(/Invalid route pattern/)
+	})
+
+	it("encodes a literal the way the request path is encoded, so it can be requested", async () => {
+		expect(normalizePattern("/é/a b/x^y")).toBe("/%C3%A9/a%20b/x%5Ey")
+		expect(normalizePattern("/%C3%A9")).toBe("/%C3%A9")
+		expect(() => parsePattern("/a/%2e%2E")).toThrow(/segments are not allowed/)
+		const app = honey()
+		app.get("/é/a b").handler((c) => c.res.text("ok", c.path))
+		for (const target of ["/é/a b", "/%C3%A9/a%20b"]) {
+			const res = await get(app, target)
+			expect(res.status).toBe(200)
+			expect(await res.text()).toBe("/%C3%A9/a%20b")
+		}
+	})
+
+	it("joinPatterns rejects a param name used on both sides", () => {
+		expect(joinPatterns("/api/", "users")).toBe("/api/users")
+		expect(() => joinPatterns("/:id", "/:id?")).toThrow(/appears twice/)
 	})
 })
 

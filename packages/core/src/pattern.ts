@@ -13,6 +13,8 @@
  * pattern without a leading slash gets one. `.` and `..` segments are rejected.
  */
 
+import { encodeSegment } from "./request-path.ts"
+
 export type StaticSegment = { readonly k: "static"; readonly v: string }
 export type ParamSegment = { readonly k: "param"; readonly n: string; readonly o: boolean }
 export type WildcardSegment = { readonly k: "wildcard"; readonly n: string }
@@ -22,6 +24,7 @@ export type Segment = StaticSegment | ParamSegment | WildcardSegment
 export type RouteId = string
 
 const NAME = /^[A-Za-z_$][A-Za-z0-9_$-]*$/
+const DOT_SEGMENT = /^(?:\.|%2e){1,2}$/i
 
 /** Name given to a `*` wildcard without a name. */
 export const UNNAMED_WILDCARD = "*"
@@ -39,7 +42,8 @@ export function parsePattern(path: string): Segment[] {
 	for (let i = 0; i < raw.length; i++) {
 		const seg = raw[i]
 		if (seg === "") continue
-		if (seg === "." || seg === "..") invalid(path, `"${seg}" segments are not allowed`)
+		/* `%2e` is a dot to every URL parser, so `/%2e%2e` can never be requested either */
+		if (DOT_SEGMENT.test(seg)) invalid(path, `"${seg}" segments are not allowed`)
 		const c = seg.charCodeAt(0)
 		if (c === 58 /* : */) {
 			const optional = seg.endsWith("?")
@@ -66,7 +70,8 @@ export function parsePattern(path: string): Segment[] {
 			continue
 		}
 		if (seg.includes("?")) invalid(path, "query strings are not part of a route pattern")
-		segments.push({ k: "static", v: seg })
+		/* the request path is percent-encoded the way URL parsing encodes it; so is a literal */
+		segments.push({ k: "static", v: encodeSegment(seg) })
 	}
 	for (let i = 0; i < segments.length - 1; i++) {
 		const s = segments[i]
@@ -105,7 +110,8 @@ export function joinPatterns(base: string, path: string): string {
 			if (p.length > 0) invalid(`${base}${path}`, "cannot append to a wildcard or optional parameter")
 		}
 	}
-	return canonical([...b, ...p])
+	/* re-parse: a name used on both sides (`/:id` + `/:id`) is only caught on the whole pattern */
+	return normalizePattern(canonical([...b, ...p]))
 }
 
 /**

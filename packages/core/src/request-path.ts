@@ -81,7 +81,11 @@ export function normalizePath(raw: string, encodedSlashes: "allow" | "reject" = 
 	return trailing ? `${path}/` : path
 }
 
-/** The WHATWG path percent-encode set, plus every non-ASCII code unit. */
+/**
+ * The WHATWG path percent-encode set, plus every non-ASCII code unit. `^` joined the set in
+ * 2023; Node and Bun encode it, Deno's parser does not yet, so it is encoded here to keep
+ * `ctx.path` the same on all three.
+ */
 function needsEncoding(c: number): boolean {
 	return (
 		c <= 0x20 ||
@@ -89,13 +93,20 @@ function needsEncoding(c: number): boolean {
 		c === 34 /* " */ ||
 		c === 60 /* < */ ||
 		c === 62 /* > */ ||
+		c === 94 /* ^ */ ||
 		c === 96 /* ` */ ||
 		c === 123 /* { */ ||
 		c === 125 /* } */
 	)
 }
 
-function encodeSegment(seg: string): string {
+/**
+ * One path segment as a normalized request path holds it: characters a URL path cannot hold
+ * raw become UTF-8 percent escapes, everything else (existing escapes included) is kept.
+ * Route patterns encode their static segments with this too, so `app.get("/é")` matches the
+ * `/%C3%A9` every runtime hands the app.
+ */
+export function encodeSegment(seg: string): string {
 	let needs = false
 	for (let i = 0; i < seg.length; i++) {
 		if (needsEncoding(seg.charCodeAt(i))) {

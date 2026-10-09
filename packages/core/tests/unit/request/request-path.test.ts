@@ -64,6 +64,11 @@ describe("normalizePath", () => {
 		expect(normalizePath("/files/%")).toBe("/files/%")
 	})
 
+	it("encodes ^ as Node and Bun do, so a raw target on Deno routes the same", () => {
+		expect(normalizePath("/a^b")).toBe("/a%5Eb")
+		expect(normalizePath(new URL("http://h/a^b").pathname)).toBe("/a%5Eb")
+	})
+
 	it("keeps encoded separators when they are allowed", () => {
 		expect(normalizePath("/repos/group%2Fproject", "allow")).toBe("/repos/group%2Fproject")
 		expect(normalizePath("/a%5Cb", "allow")).toBe("/a%5Cb")
