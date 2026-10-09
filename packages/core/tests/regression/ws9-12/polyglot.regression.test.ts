@@ -987,7 +987,6 @@ const CASES: CompileCase[] = [
 		// regression: S3
 		id: "S3: a Python path param named uuid or str does not shadow what the method body calls",
 		lang: "python",
-		fails: true,
 		spec: doc({
 			"/items/{uuid}/{str}": {
 				put: {

@@ -8,6 +8,7 @@ import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createClient } from "../../src/client/index.ts"
 import { generateSDK } from "../../src/codegen.ts"
+import { generatePythonSDK, PY_BODY_GLOBALS } from "../../src/codegen-python.ts"
 import * as codegen from "../../src/codegen.ts"
 import * as genWrite from "../../src/gen-write.ts"
 import { generateAndWrite, honey as honeyVitePlugin, resolveHoneyConfig } from "../../src/plugin.ts"
@@ -249,4 +250,100 @@ describe("plugin", () => {
 		/* one per openApi entry plus one shared by the SDK and the CLI */
 		expect(vi.mocked(codegen.generateOpenApi)).toHaveBeenCalledTimes(2)
 	}, 60_000)
+})
+
+/* ── S3 guard: the reserved names follow the emitter ──────────────────────────────────── */
+
+describe("S3: Python parameter locals never shadow a name a method body evaluates", () => {
+	const ok = { "200": { content: { "application/json": { schema: { type: "object" } } }, description: "ok" } }
+	const sseOk = { "200": { content: { "text/event-stream": { schema: { type: "string" } } }, description: "ok" } }
+	const pathP = (name: string) => ({ in: "path", name, required: true, schema: { type: "string" } })
+	const spec = {
+		info: { title: "T", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/a/{id}": {
+				put: {
+					operationId: "a.put",
+					parameters: [pathP("id"), { in: "query", name: "q", schema: { type: "string" } }],
+					requestBody: { content: { "application/json": { schema: { type: "object" } } } },
+					responses: ok,
+					"x-idempotency-key": true,
+				},
+			},
+			"/f": {
+				post: {
+					operationId: "f.up",
+					requestBody: {
+						content: {
+							"multipart/form-data": {
+								schema: {
+									properties: { file: { format: "binary", type: "string" }, name: { type: "string" } },
+									type: "object",
+								},
+							},
+						},
+					},
+					responses: ok,
+				},
+			},
+			"/rt/{room}": { get: { operationId: "r.conn", parameters: [pathP("room")], responses: ok, "x-realtime": true } },
+			"/s": {
+				post: {
+					operationId: "s.stream",
+					requestBody: { content: { "application/json": { schema: { type: "object" } } } },
+					responses: sseOk,
+				},
+			},
+			"/u": {
+				post: {
+					operationId: "u.form",
+					requestBody: {
+						content: {
+							"application/x-www-form-urlencoded": {
+								schema: { properties: { a: { type: "string" } }, type: "object" },
+							},
+						},
+					},
+					responses: ok,
+				},
+			},
+			"/ws": { get: { operationId: "w.conn", responses: ok, "x-websocket": true } },
+		},
+	}
+	const KEYWORDS = new Set(
+		"and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield None True False".split(
+			" ",
+		),
+	)
+
+	/** Names each method body calls, indexes or reads an attribute of, minus `self` and that method's params. */
+	function bodyGlobals(client: string): Set<string> {
+		const found = new Set<string>()
+		let params = new Set<string>()
+		for (const raw of client.split("\n")) {
+			const line = raw.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""')
+			if (/^\s+(?:async )?def \w+\(/.test(line)) {
+				params = new Set([...line.matchAll(/(\w+)\s*:/g)].map((m) => m[1] ?? ""))
+				continue
+			}
+			if (!/^ {8}/.test(raw)) continue
+			/* a local variable annotation is never evaluated */
+			const evaluated = line.replace(/^(\s+\w+): [^=]+=/, "$1 =")
+			for (const m of evaluated.matchAll(/(?<![\w.])([A-Za-z]\w*)\s*[(.[]/g)) {
+				const name = m[1] ?? ""
+				if (!KEYWORDS.has(name) && name !== "self" && !params.has(name)) found.add(name)
+			}
+		}
+		return found
+	}
+
+	// regression: S3
+	it("every global the emitted bodies evaluate is reserved", () => {
+		const { files } = generatePythonSDK(spec as never)
+		const client = String(Object.entries(files).find(([k]) => k.endsWith("client.py"))?.[1])
+		const globals = bodyGlobals(client)
+		expect(globals.size).toBeGreaterThan(3)
+		expect([...globals].filter((n) => !PY_BODY_GLOBALS.includes(n))).toEqual([])
+	})
 })

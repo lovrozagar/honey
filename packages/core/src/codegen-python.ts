@@ -249,6 +249,51 @@ type PyOpPlan = {
 }
 
 /** kwargs the generated methods always take; params must not reuse them. */
+/** What client.py may import from the runtime modules; each name only when the bodies use it. */
+const PY_CLIENT_IMPORTS: ReadonlyArray<readonly [string, readonly string[]]> = [
+	[
+		"._runtime",
+		[
+			"ClientConfig",
+			"SDKResult",
+			"_AuthState",
+			"_build_headers",
+			"_build_url",
+			"_do_request_async",
+			"_do_request_sync",
+			"_expand_path",
+			"_form_content",
+			"_format_value",
+			"_has_header",
+			"_multipart_parts",
+			"_open_stream",
+			"_parse_body",
+			"_raise_for_status",
+			"_set_header",
+			"_to_ws_url",
+		],
+	],
+	["._invalidation", ["_StaleTracker", "_StaleTrackerSync"]],
+	["._sse", ["SSEEvent", "parse_sse_stream"]],
+	["._ws", ["_TypedWebSocket"]],
+	["._transport", ["LongpollAdapter", "SseAdapter", "TransportOpts", "WsAdapter"]],
+	["._realtime", ["ResumableConnection"]],
+]
+
+/**
+ * Module-scope names a generated method body evaluates at runtime (calls and attribute access, not
+ * annotations, which `from __future__ import annotations` never evaluates). A parameter local must
+ * never shadow one: a path param named `uuid` would turn `str(uuid.uuid4())` into an
+ * AttributeError. Underscore names cannot collide, since parameter locals never start with `_`.
+ */
+export const PY_BODY_GLOBALS: readonly string[] = [
+	"httpx",
+	"str",
+	"threading",
+	"uuid",
+	...PY_CLIENT_IMPORTS.flatMap(([, syms]) => syms.filter((n) => !n.startsWith("_"))),
+]
+
 const PY_METHOD_RESERVED = [
 	"self",
 	"timeout",
@@ -258,6 +303,7 @@ const PY_METHOD_RESERVED = [
 	"last_event_id",
 	"protocols",
 	"reconnect_token",
+	...PY_BODY_GLOBALS,
 ]
 
 function planPyOp(op: SdkOp, methodName: string, names: PyNames, model: SdkModel): PyOpPlan {
@@ -770,36 +816,7 @@ function clientFile(bodyText: string, names: PyNames): string {
 	const typingUsed = ["Any", "AsyncIterator", "Literal", "NotRequired", "TypedDict"].filter(uses)
 	if (typingUsed.length > 0) imports.push(`from typing import ${typingUsed.join(", ")}`)
 
-	const groups: Array<[string, string[]]> = [
-		[
-			"._runtime",
-			[
-				"ClientConfig",
-				"SDKResult",
-				"_AuthState",
-				"_build_headers",
-				"_build_url",
-				"_do_request_async",
-				"_do_request_sync",
-				"_expand_path",
-				"_form_content",
-				"_format_value",
-				"_has_header",
-				"_multipart_parts",
-				"_open_stream",
-				"_parse_body",
-				"_raise_for_status",
-				"_set_header",
-				"_to_ws_url",
-			],
-		],
-		["._invalidation", ["_StaleTracker", "_StaleTrackerSync"]],
-		["._sse", ["SSEEvent", "parse_sse_stream"]],
-		["._ws", ["_TypedWebSocket"]],
-		["._transport", ["LongpollAdapter", "SseAdapter", "TransportOpts", "WsAdapter"]],
-		["._realtime", ["ResumableConnection"]],
-	]
-	for (const [mod, syms] of groups) {
+	for (const [mod, syms] of PY_CLIENT_IMPORTS) {
 		const used = syms.filter(uses)
 		if (used.length === 0) continue
 		imports.push(`from ${mod} import (`)
