@@ -195,7 +195,12 @@ type RustOpPlan = {
 	optsName: string
 	optFields: RustOptField[]
 	pathParams: Array<{ local: string; wire: string }>
-	bodyParam?: { local: string; asyncType: string; syncType: string; generic?: { async: string; sync: string } }
+	bodyParam?: {
+		local: string
+		asyncType: string
+		syncType: string
+		generic?: { async: string; asyncWhere?: string; sync: string }
+	}
 	/** Rust type of the decoded success payload, "" for none */
 	resultType: string
 	errorEnum?: string
@@ -408,7 +413,8 @@ function planOp(
 				plan.bodyParam = {
 					asyncType: "S",
 					generic: {
-						async: `S: futures::Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + Sync + 'static`,
+						async: `S`,
+						asyncWhere: ` where S: futures::TryStream + Send + 'static, S::Error: Into<Box<dyn std::error::Error + Send + Sync>>, bytes::Bytes: From<S::Ok>`,
 						sync: `R: std::io::Read + Send + 'static`,
 					},
 					local: bodyLocal,
@@ -680,16 +686,20 @@ function resultLines(plan: RustOpPlan, throwOnError: boolean, sync: boolean, a: 
 	return l
 }
 
-function signature(plan: RustOpPlan, sync: boolean): { generics: string; params: string } {
+function signature(plan: RustOpPlan, sync: boolean): { generics: string; params: string; where: string } {
 	const params: string[] = [`&self`]
 	for (const p of plan.pathParams) params.push(`${p.local}: &str`)
 	let generics = ""
+	let where = ""
 	if (plan.bodyParam) {
 		params.push(`${plan.bodyParam.local}: ${sync ? plan.bodyParam.syncType : plan.bodyParam.asyncType}`)
-		if (plan.bodyParam.generic) generics = `<${sync ? plan.bodyParam.generic.sync : plan.bodyParam.generic.async}>`
+		if (plan.bodyParam.generic) {
+			generics = `<${sync ? plan.bodyParam.generic.sync : plan.bodyParam.generic.async}>`
+			if (!sync) where = plan.bodyParam.generic.asyncWhere ?? ""
+		}
 	}
 	params.push(`opts: &${plan.optsName}`)
-	return { generics, params: params.join(", ") }
+	return { generics, params: params.join(", "), where }
 }
 
 function emitMethod(plan: RustOpPlan, selfAccess: "self" | "self.client", throwOnError: boolean): string[] {
@@ -725,7 +735,9 @@ function emitMethod(plan: RustOpPlan, selfAccess: "self" | "self.client", throwO
 	}
 
 	if (op.stream === "sse") {
-		l.push(`pub fn ${plan.fnName}${sig.generics}(${sig.params}) -> impl Stream<Item = Result<SseEvent, Error>> {`)
+		l.push(
+			`pub fn ${plan.fnName}${sig.generics}(${sig.params}) -> impl Stream<Item = Result<SseEvent, Error>>${sig.where} {`,
+		)
 		/* clone everything the stream needs into owned locals: the stream outlives &self/&opts */
 		if (plan.pathParams.length === 0) {
 			l.push(`\tlet url_path: Result<String, Error> = Ok(${rustString(op.path)}.to_string());`)
@@ -819,7 +831,7 @@ function emitMethod(plan: RustOpPlan, selfAccess: "self" | "self.client", throwO
 		return l
 	}
 
-	l.push(`pub async fn ${plan.fnName}${sig.generics}(${sig.params}) -> ${returnType(plan, throwOnError)} {`)
+	l.push(`pub async fn ${plan.fnName}${sig.generics}(${sig.params}) -> ${returnType(plan, throwOnError)}${sig.where} {`)
 	l.push(...pathLines(plan))
 	l.push(...queryLines(plan))
 	l.push(...headerLines(plan, idempotencyLines(plan)))

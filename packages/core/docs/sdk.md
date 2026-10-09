@@ -92,7 +92,7 @@ client := sdk.NewClient(sdk.Config{
     OnRequest:     []func(*sdk.RequestContext) error{addTrace, addApp},
     OnResponse:    []func(*sdk.ResponseContext) error{inspect5xx},
     OnLog:         func(e sdk.LogEntry) { fmt.Println(e.Event, e.Operation, e.DurationMs, e.Status) },
-    Invalidation:  sdk.InvalidationConfig{StaleTime: 5 * time.Second},
+    Invalidation:  &sdk.InvalidationConfig{StaleTime: 5000}, // milliseconds
     Timeout:       10 * time.Second,
 })
 ```
@@ -101,11 +101,11 @@ client := sdk.NewClient(sdk.Config{
 let client = Client::new(ClientConfig {
     base_url,
     bearer_token: Some("expired-token".into()),
-    on_auth_expired: Some(Arc::new(|| Box::pin(async { Ok(Some("valid-token".into())) }))),
+    on_auth_expired: Some(Arc::new(|| Box::pin(async { Ok("valid-token".to_string()) }))),
     on_log: Some(Arc::new(|e: LogEntry| println!("{} {} {}", e.event, e.operation, e.duration_ms))),
     on_request: vec![trace_hook, app_hook],
     on_response: vec![inspect_hook],
-    invalidation: InvalidationConfig { stale_time_ms: 5_000 },
+    invalidation: Some(InvalidationConfig { stale_time: 5_000, ..Default::default() }),
     timeout: Some(Duration::from_secs(10)),
     ..Default::default()
 });
@@ -121,7 +121,7 @@ console.log(user.id, user.name)
 ```
 
 ```py
-user = await sdk.createUser(body={"name": "Alice", "email": "a@b.com"})
+user = await sdk.create_user(body={"name": "Alice", "email": "a@b.com"})
 print(user["id"], user["name"])
 ```
 
@@ -162,7 +162,7 @@ try {
 
 ```py
 try:
-    await sdk.createUser(body=input)
+    await sdk.create_user(body=input)
 except BadRequestError as e:
     print("400", e.status)
 except UnauthorizedError:
@@ -223,7 +223,7 @@ try {
 
 ```py
 try:
-    await sdk.createUser(body=bad)
+    await sdk.create_user(body=bad)
 except BadRequestError as e:
     print("400 data:", e.data, "body:", e.body)
 ```
@@ -264,7 +264,7 @@ OnAuthExpired: func(ctx context.Context) (string, error) {
 
 ```rust
 on_auth_expired: Some(Arc::new(|| Box::pin(async {
-    Ok(Some("valid-token".into()))
+    Ok("valid-token".to_string()) // an empty string gives up and returns the 401
 }))),
 ```
 
@@ -295,7 +295,7 @@ except asyncio.CancelledError:
 ```go
 cancelCtx, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
 defer cancel()
-_, err := client.Slow(cancelCtx, &sdk.SlowOpts{Ms: 500})
+_, err := client.Slow(cancelCtx, &sdk.SlowOpts{Ms: ptr(int64(500))})
 if err != nil {
     fmt.Println("cancelled:", err)
 }
@@ -326,7 +326,10 @@ await sdk.slow(ms=200, timeout=0.05)
 ```
 
 ```go
-_, err := client.Slow(ctx, &sdk.SlowOpts{Ms: 200, Timeout: 50 * time.Millisecond})
+// Go's per-call timeout is a context deadline; Config.Timeout (default 30s) applies to every call
+slowCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+defer cancel()
+_, err := client.Slow(slowCtx, &sdk.SlowOpts{Ms: ptr(int64(200))})
 ```
 
 ```rust
@@ -353,7 +356,7 @@ await sdk.getUser({
 ```
 
 ```py
-await sdk.getUser("u1", headers={"X-Both": "call-wins"})
+await sdk.get_user("u1", headers={"X-Both": "call-wins"})
 ```
 
 ```go
@@ -464,7 +467,7 @@ console.log("users/u1 stale?", stale)
 ```
 
 ```py
-await sdk.updateUser("u1", body={"name": "Alice2"})
+await sdk.update_user("u1", body={"name": "Alice2"})
 print("users/u1 stale?", await sdk.is_stale("GET", "/users/u1"))
 ```
 
@@ -496,26 +499,28 @@ for await (const ev of sdk.streamEvents()) {
 ```
 
 ```py
-async for ev in sdk.streamEvents():
+async for ev in sdk.stream_events():
     print("sse event:", ev)
     break
 ```
 
 ```go
-stream, err := client.StreamEvents(ctx, nil)
-if err == nil {
-    for ev := range stream.Events() {
-        fmt.Println("sse event:", ev)
+// an iter.Seq2; breaking out of the loop closes the stream
+for ev, err := range client.StreamEvents(ctx, nil) {
+    if err != nil {
+        fmt.Println("sse error:", err)
         break
     }
-    stream.Close()
+    fmt.Println("sse event:", ev.Data)
+    break
 }
 ```
 
 ```rust
-let mut sse = client.stream_events(&StreamEventsOpts::default()).await?;
-if let Some(ev) = sse.next().await {
-    println!("sse event: {:?}", ev);
+// a Stream: the call itself is not awaited
+let mut sse = std::pin::pin!(client.stream_events(&StreamEventsOpts::default()));
+if let Some(Ok(ev)) = sse.next().await {
+    println!("sse event: {}", ev.data);
 }
 ```
 
@@ -536,7 +541,7 @@ ws.send("hello")
 ```
 
 ```py
-async with sdk.connectWs() as ws:
+async with sdk.connect_ws() as ws:
     await ws.send("hello")
     async for msg in ws:
         print("ws recv:", msg)
@@ -547,25 +552,26 @@ async with sdk.connectWs() as ws:
 ```go
 ws, err := client.ConnectWs(ctx, nil)
 if err == nil {
-    _ = ws.Send("hello")
-    msg, _ := ws.Recv()
-    fmt.Println("ws recv:", msg)
-    _ = ws.Close(1000, "done")
+    _ = ws.Send(ctx, "hello")
+    msg, _ := ws.Read(ctx)
+    fmt.Println("ws recv:", string(msg))
+    _ = ws.Close(sdk.WSStatusNormalClosure, "done")
 }
 ```
 
 ```rust
 let mut ws = client.connect_ws(&ConnectWsOpts::default()).await?;
-ws.send("hello".to_string()).await?;
-if let Some(msg) = ws.recv().await {
-    println!("ws recv: {:?}", msg);
-}
+ws.send_text("hello").await?;
+let msg = ws.read().await?;
+println!("ws recv: {}", String::from_utf8_lossy(&msg));
 ws.close(1000, "done").await?;
 ```
 
 ### §14 — Realtime with custom adapter
 
-`x-realtime: true` opens a `ResumableConnection` with a pluggable `TransportAdapter`, an auto fallback chain (`[ws, sse, longpoll]` by default), and hidden proven-transport memoization. Consumers can reorder, drop, or inject entirely custom transports — browser WS, node `ws`, workerd sockets, `tokio-tungstenite`, `gorilla/websocket`, whatever.
+`x-realtime: true` opens a `ResumableConnection` with a pluggable `TransportAdapter`, a fallback chain (`[ws, sse, longpoll]` by default), and proven-transport memoization. The generated method always uses the default chain; to reorder, drop, or inject custom transports, construct the connection directly with your own list (as below). The config's headers and auth reach every transport. A dropped connection reconnects with exponential backoff and jitter (capped at 30 s; default 5 consecutive attempts, 1 s first delay), and a message resets the count.
+
+Not implemented yet: the resume protocol (`ready` frames, resume tokens, ping/liveness, replay). Honey's shipped realtime server is a topic bus over WebSocket; the SSE and long-poll transports only work against servers that speak them.
 
 ```ts
 function makeCustomAdapter(): TransportAdapter {
@@ -619,39 +625,37 @@ await rc.close()
 ```
 
 ```go
-rc, err := client.ConnectRealtime(ctx, &sdk.ConnectRealtimeOpts{
-    Transports:           []sdk.Transport{&tickTransport{}},
+// the generated method (client.ConnectRealtime) uses the default chain;
+// NewResumableConnection takes a custom one
+rc := sdk.NewResumableConnection(baseURL+"/rt", []sdk.Transport{&tickTransport{}}, &sdk.TransportOpts{
     MaxReconnectAttempts: 5,
     ReconnectDelayMs:     100,
 })
-if err == nil {
+if err := rc.Connect(ctx); err == nil {
     for ev := range rc.Events() {
         fmt.Println("rt event:", ev)
         break
     }
-    rc.Close()
+    _ = rc.Close()
 }
 ```
 
 ```rust
-let tick_adapter: Arc<dyn Transport + Send + Sync> = Arc::new(TickAdapter);
-let mut rc = client
-    .connect_realtime(&ConnectRealtimeOpts {
-        transports: vec![tick_adapter],
-        max_reconnect_attempts: 5,
-        reconnect_delay_ms: 100,
-        ..Default::default()
-    })
-    .await?;
-if let Some(ev) = rc.next().await {
-    println!("rt event: {:?}", ev);
-}
-rc.close().await;
+// the generated method uses the default chain; ResumableConnection::connect takes a custom one
+let mut rc = ResumableConnection::<serde_json::Value, serde_json::Value>::connect(
+    format!("{}/rt", base_url),
+    ResumableConnectionOpts { max_reconnect_attempts: Some(5), reconnect_delay_ms: Some(100), ..Default::default() },
+    vec![Box::new(TickAdapter)],
+)
+.await?;
+let ev = rc.recv().await?;
+println!("rt event: {:?}", ev);
+rc.close().await?;
 ```
 
 ### §15 — Streaming upload
 
-Binary or multipart uploads flow as a stream. No buffering — the SDK pipes the source directly into the underlying HTTP client. Critical on memory-bounded runtimes like CF Workers.
+`application/octet-stream` bodies flow as a stream: the SDK pipes the source into the HTTP client without buffering (critical on memory-bounded runtimes like CF Workers), and does not retry them after an auth refresh. Multipart and urlencoded bodies are supported in all four languages: TS takes a `FormData`/object, Python a dict whose file parts are bytes, a file object or `(filename, content[, content_type])`, Go a generated `<Op>Body` struct with `sdk.FilePart` fields (read into memory so the request can be retried), Rust a `reqwest::multipart::Form`.
 
 ```ts
 const stream = new ReadableStream<Uint8Array>({
@@ -674,7 +678,7 @@ async def gen() -> AsyncIterator[bytes]:
     for off in range(0, TOTAL, CHUNK):
         yield buf[off:off + CHUNK]
 
-uploaded = await sdk.uploadBlob(gen())
+uploaded = await sdk.upload_blob(gen())
 print("uploaded:", uploaded["size"], uploaded["hash"])
 ```
 
@@ -703,9 +707,9 @@ const viaHeader = await sdk.idempotentCreate({ headers: { "Idempotency-Key": "he
 ```
 
 ```py
-auto       = await sdk.idempotentCreate()
-explicit   = await sdk.idempotentCreate(idempotency_key="user-supplied-123")
-via_header = await sdk.idempotentCreate(headers={"Idempotency-Key": "header-wins-456"})
+auto       = await sdk.idempotent_create()
+explicit   = await sdk.idempotent_create(idempotency_key="user-supplied-123")
+via_header = await sdk.idempotent_create(headers={"Idempotency-Key": "header-wins-456"})
 ```
 
 ```go
@@ -731,6 +735,40 @@ let via_header = client
     })
     .await?;
 ```
+
+## Runtime behavior
+
+The Go, Python and Rust runtimes follow one behavior spec. The shared vectors in
+`tests/conformance/vectors/` (URL building, SSE) are run by every runtime, and one operation
+is sent by each generated SDK to the same capture server and compared byte for byte
+(`tests/integration/sdk-harness/polyglot-conformance.test.ts`).
+
+- **Path params.** Templates accept `{name}` anywhere in a segment, `:name` / `:name?` for a
+  whole segment and a trailing `*name`. Values are encoded like `encodeURIComponent`. `""`,
+  `.` and `..` are rejected before sending (`PathParamError` in Go and Python, `Error::Other`
+  in Rust), so a value can never retarget a request to a parent resource or another host.
+- **Base URL.** The base path and base query are kept: `https://host/v1` + `/users` is
+  `https://host/v1/users`.
+- **Query.** Encoded like `URLSearchParams` (space is `+`). Arrays repeat the key, `null`
+  and unset optionals are omitted, booleans are `true`/`false`, numbers use JavaScript's
+  formatting (`100`, `1e+21`).
+- **Headers.** Config headers, then per-call headers, then auth; merged case-insensitively,
+  so exactly one of each is sent.
+- **Timeouts.** The config timeout (default 30 s) bounds a whole regular request including
+  the body. SSE, WebSocket and realtime streams are not bounded by it.
+- **Redirects.** The default HTTP client follows redirects only to the same origin; any other
+  redirect is returned as an error, so custom auth headers never leave the origin.
+- **Auth refresh.** A 401 calls `onAuthExpired` once; concurrent 401s share one refresh; the
+  new token is kept for later calls; an empty token (or `None`) gives up. Streamed bodies
+  are not retried.
+- **Errors.** Every non-2xx (3xx included) is a typed error carrying status, raw body and
+  parsed data. Messages prefer the body's `message` field, drop control characters and are
+  capped at 512 characters.
+- **SSE.** WHATWG parsing: CR, LF and CRLF line endings (U+2028 is data), one leading space
+  stripped, the id is sticky, `retry` needs digits, a final event without its blank line is
+  discarded, lines are capped at 1 MiB.
+- **Operations without `operationId`** (Go, Python, Rust) get a derived name (`GET /users/{id}` →
+  `getUsersById`) instead of being dropped.
 
 ## Links
 

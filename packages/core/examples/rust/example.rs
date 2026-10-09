@@ -9,9 +9,12 @@
  *     tokio-util = { version = "0.7", features = ["rt"] }
  *     futures-util = "0.3"
  *     bytes = "1"
+ *     async-trait = "0.1"
+ *     serde_json = "1"
+ *     sha2 = "0.10"
  *
- * This file is DOCUMENTATION — not a compile target. Types referenced below
- * exist only after codegen.
+ * Types referenced below exist only after codegen. The SDK harness compiles
+ * this file against the SDK generated from tests/mock-server/spec.json.
  *
  * Demonstrates the cross-lang parity surface:
  *   1. Client init + config                   9.  Per-call headers merge
@@ -29,13 +32,16 @@ use bytes::Bytes;
 use futures_util::stream;
 use futures_util::StreamExt;
 use mock_sdk::client::{
-    ConnectRealtimeOpts, ConnectWsOpts, CreateUserOpts, GetUserOpts, IdempotentCreateOpts,
+    ConnectWsOpts, CreateUserOpts, GetUserOpts, IdempotentCreateOpts,
     SlowOpts, StreamEventsOpts, UpdateUserOpts, UploadBlobOpts,
 };
 use mock_sdk::errors::{
     BadRequestError, Error, InternalServerError, NotFoundError, RateLimitError, UnauthorizedError,
 };
-use mock_sdk::realtime::{ResumableConnection, Transport, TransportConn, TransportKind, TransportOpts};
+use mock_sdk::realtime::{
+    RealtimeError, ResumableConnection, ResumableConnectionOpts, Transport, TransportConn, TransportKind,
+    TransportOpts,
+};
 use mock_sdk::runtime::{InvalidationConfig, LogEntry, OnRequestHook, OnResponseHook};
 use mock_sdk::types::{UserCreate, UserUpdate};
 use mock_sdk::{Client, ClientConfig};
@@ -76,16 +82,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new(ClientConfig {
         base_url,
         bearer_token: Some("expired-token".into()),
-        /* §5: exactly one retry on 401. Return Ok(None) to let 401 propagate. */
-        on_auth_expired: Some(Arc::new(|| Box::pin(async { Ok(Some("valid-token".into())) }))),
+        /* §5: exactly one retry on 401. Return an empty token to let the 401 propagate. */
+        on_auth_expired: Some(Arc::new(|| Box::pin(async { Ok("valid-token".to_string()) }))),
         /* §7: single pluggable sink — NOT a logger framework. */
         on_log: Some(Arc::new(|e: LogEntry| {
             println!("{} {} {} {:?}", e.event, e.operation, e.duration_ms, e.status);
         })),
         on_request: vec![trace_hook, app_hook],
         on_response: vec![inspect_hook],
-        invalidation: InvalidationConfig { stale_time_ms: 5_000 },
-        timeout: Some(Duration::from_secs(10)),
+        invalidation: Some(InvalidationConfig { stale_time: 5_000, ..Default::default() }),
+        timeout: Duration::from_secs(10),
         ..Default::default()
     });
 
@@ -139,41 +145,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = client
         .update_user(
             "u1",
-            &UserUpdate { name: Some("Alice2".into()), ..Default::default() },
+            &UserUpdate { name: Some("Alice2".into()), email: None },
             &UpdateUserOpts::default(),
         )
         .await;
-    println!("users/u1 stale? {}", client.is_stale("GET", "/users/u1"));
+    println!("users/u1 stale? {}", client.is_stale("GET", "/users/u1").await);
 
-    /* §11: SSE — async stream iteration. */
-    let mut sse = client.stream_events(&StreamEventsOpts::default()).await?;
+    /* §11: SSE — the method returns a Stream (no await on the call itself). */
+    let mut sse = std::pin::pin!(client.stream_events(&StreamEventsOpts::default()));
     if let Some(ev) = sse.next().await {
-        println!("sse event: {:?}", ev);
+        match ev {
+            Ok(ev) => println!("sse event: {}", ev.data),
+            Err(e) => eprintln!("sse error: {}", e),
+        }
     }
 
     /* §12: WebSocket — bidi channel. */
     let mut ws = client.connect_ws(&ConnectWsOpts::default()).await?;
-    ws.send("hello".to_string()).await?;
-    if let Some(msg) = ws.recv().await {
-        println!("ws recv: {:?}", msg);
-    }
+    ws.send_text("hello").await?;
+    let msg = ws.read().await?;
+    println!("ws recv: {}", String::from_utf8_lossy(&msg));
     ws.close(1000, "done").await?;
 
-    /* §13: x-realtime ResumableConnection. Transport trait is the swap point;
-     * the chain memoizes a proven transport across reconnects (hidden). */
-    let tick_adapter: Arc<dyn Transport + Send + Sync> = Arc::new(TickAdapter);
-    let mut rc = client
-        .connect_realtime(&ConnectRealtimeOpts {
-            transports: vec![tick_adapter],
-            max_reconnect_attempts: 5,
-            reconnect_delay_ms: 100,
-            ..Default::default()
-        })
-        .await?;
-    if let Some(ev) = rc.next().await {
-        println!("rt event: {:?}", ev);
-    }
-    rc.close().await;
+    /* §13: x-realtime ResumableConnection. The generated method uses the default
+     * [ws, sse, longpoll] chain; ResumableConnection::connect takes a custom one. */
+    let mut rc = ResumableConnection::<serde_json::Value, serde_json::Value>::connect(
+        format!("{}/rt", env::var("BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into())),
+        ResumableConnectionOpts { max_reconnect_attempts: Some(5), reconnect_delay_ms: Some(100), ..Default::default() },
+        vec![Box::new(TickAdapter)],
+    )
+    .await?;
+    let ev = rc.recv().await?;
+    println!("rt event: {:?}", ev);
+    rc.close().await?;
 
     /* §14: streaming upload — impl Stream<Item = Bytes>. No buffering. */
     const TOTAL: usize = 1024 * 1024;
@@ -182,7 +186,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (i, b) in buf.iter_mut().enumerate() {
         *b = (i & 0xff) as u8;
     }
-    let expected = hex::encode(Sha256::digest(&buf));
+    let expected: String = Sha256::digest(&buf).iter().map(|b| format!("{:02x}", b)).collect();
     let chunks: Vec<Bytes> = buf.chunks(CHUNK).map(|c| Bytes::copy_from_slice(c)).collect();
     let body_stream = stream::iter(chunks.into_iter().map(Ok::<_, std::io::Error>));
     let uploaded = client.upload_blob(body_stream, &UploadBlobOpts::default()).await?;
@@ -223,19 +227,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /* §13: minimal custom Transport impl. Real transports wrap tokio-tungstenite
- * (WS), reqwest + eventsource-stream (SSE), or longpoll. */
+ * (WS), reqwest + an SSE parser, or longpoll. */
 struct TickAdapter;
 
 #[async_trait]
 impl Transport for TickAdapter {
-    fn name(&self) -> &str { "tick" }
+    fn name(&self) -> &'static str { "tick" }
     fn kind(&self) -> TransportKind { TransportKind::Ws }
 
     async fn connect(
         &self,
         _url: &str,
         _opts: &TransportOpts,
-    ) -> Result<Box<dyn TransportConn + Send>, Error> {
+    ) -> Result<Box<dyn TransportConn>, RealtimeError> {
         Ok(Box::new(TickConn { sent: false }))
     }
 }
@@ -244,15 +248,15 @@ struct TickConn { sent: bool }
 
 #[async_trait]
 impl TransportConn for TickConn {
-    async fn recv(&mut self) -> Option<serde_json::Value> {
+    async fn recv_json(&mut self) -> Result<serde_json::Value, RealtimeError> {
         if self.sent {
             tokio::time::sleep(Duration::from_secs(3600)).await;
-            return None;
+            return Err(RealtimeError::Closed);
         }
         self.sent = true;
-        Some(serde_json::json!({ "kind": "tick" }))
+        Ok(serde_json::json!({ "kind": "tick" }))
     }
-    async fn send(&mut self, _data: serde_json::Value) -> Result<(), Error> { Ok(()) }
-    async fn close(&mut self) -> Result<(), Error> { Ok(()) }
+    async fn send_json(&mut self, _data: serde_json::Value) -> Result<(), RealtimeError> { Ok(()) }
+    async fn close(&mut self) -> Result<(), RealtimeError> { Ok(()) }
     fn kind(&self) -> TransportKind { TransportKind::Ws }
 }

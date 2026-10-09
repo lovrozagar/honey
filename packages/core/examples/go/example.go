@@ -3,8 +3,8 @@
  *
  * Assumes ./sdk/ was generated via generateGoSDK(spec, { modulePath: "example.com/mock-sdk" })
  * and is reachable via a `replace example.com/mock-sdk => ./sdk` directive.
- * This file is DOCUMENTATION — not a compile target. Types referenced below
- * exist only after codegen.
+ * Types referenced below exist only after codegen. The SDK harness compiles
+ * this file against the SDK generated from tests/mock-server/spec.json.
  *
  * Demonstrates the cross-lang parity surface:
  *   1. Client init + config                   9.  Per-call headers merge
@@ -72,7 +72,7 @@ func runExample(ctx context.Context, baseURL string) {
 		OnLog: func(e sdk.LogEntry) {
 			fmt.Println(e.Event, e.Operation, e.DurationMs, e.Status)
 		},
-		Invalidation: sdk.InvalidationConfig{StaleTime: 5 * time.Second},
+		Invalidation: &sdk.InvalidationConfig{StaleTime: 5000}, /* milliseconds */
 		Timeout:      10 * time.Second,
 	})
 
@@ -103,8 +103,10 @@ func runExample(ctx context.Context, baseURL string) {
 		fmt.Println(user.Id, user.Name)
 	}
 
-	/* §8: per-call timeout override via opts. Config is a default; opts wins. */
-	_, err = client.Slow(ctx, &sdk.SlowOpts{Ms: 200, Timeout: 50 * time.Millisecond})
+	/* §8: per-call timeout: a context deadline. Config.Timeout is the default for every call. */
+	slowCtx, cancelSlow := context.WithTimeout(ctx, 50*time.Millisecond)
+	_, err = client.Slow(slowCtx, &sdk.SlowOpts{Ms: ptr(int64(200))})
+	cancelSlow()
 	if err != nil {
 		fmt.Println("aborted:", err)
 	}
@@ -115,45 +117,44 @@ func runExample(ctx context.Context, baseURL string) {
 	})
 
 	/* §10: mutation invalidates matching GET paths. Consumer polls IsStale. */
-	_, _ = client.UpdateUser(ctx, "u1", sdk.UserUpdate{Name: "Alice2"}, nil)
+	_, _ = client.UpdateUser(ctx, "u1", sdk.UserUpdate{Name: ptr("Alice2")}, nil)
 	fmt.Println("users/u1 stale?", client.IsStale("GET", "/users/u1"))
 
-	/* §11: SSE — stream iteration. Server-sent text/event-stream. */
-	stream, err := client.StreamEvents(ctx, nil)
-	if err == nil {
-		for ev := range stream.Events() {
-			fmt.Println("sse event:", ev)
+	/* §11: SSE — range over the iterator; breaking out closes the stream. */
+	for ev, err := range client.StreamEvents(ctx, nil) {
+		if err != nil {
+			fmt.Println("sse error:", err)
 			break
 		}
-		stream.Close()
+		fmt.Println("sse event:", ev.Data)
+		break
 	}
 
-	/* §12: WebSocket — bidi channel. ws.Send / ws.Recv / ws.Close. */
+	/* §12: WebSocket — bidi channel. ws.Send / ws.Read / ws.Close. */
 	ws, err := client.ConnectWs(ctx, nil)
 	if err == nil {
-		_ = ws.Send("hello")
-		msg, _ := ws.Recv()
-		fmt.Println("ws recv:", msg)
-		_ = ws.Close(1000, "done")
+		_ = ws.Send(ctx, "hello")
+		msg, _ := ws.Read(ctx)
+		fmt.Println("ws recv:", string(msg))
+		_ = ws.Close(sdk.WSStatusNormalClosure, "done")
 	}
 
-	/* §13: x-realtime ResumableConnection — Transport interface + auto
-	 * fallback chain + proven-transport memoization (hidden, always on). */
-	rc, err := client.ConnectRealtime(ctx, &sdk.ConnectRealtimeOpts{
-		Transports:           []sdk.Transport{&tickTransport{}},
+	/* §13: x-realtime ResumableConnection. The generated method uses the default
+	 * [ws, sse, longpoll] chain; NewResumableConnection takes a custom one. */
+	rc := sdk.NewResumableConnection(baseURL+"/rt", []sdk.Transport{&tickTransport{}}, &sdk.TransportOpts{
 		MaxReconnectAttempts: 5,
 		ReconnectDelayMs:     100,
 	})
-	if err == nil {
+	if err := rc.Connect(ctx); err == nil {
 		for ev := range rc.Events() {
 			fmt.Println("rt event:", ev)
 			break
 		}
-		rc.Close()
+		_ = rc.Close()
 	}
 
-	/* §14: streaming upload — io.Reader. No buffering; SDK pipes the reader
-	 * straight into the HTTP request body. */
+	/* §14: streaming upload — io.Reader, piped straight into the request body
+	 * (a Reader body is not retried after an auth refresh). */
 	const total = 1024 * 1024
 	buf := make([]byte, total)
 	for i := range buf {
@@ -178,7 +179,7 @@ func runExample(ctx context.Context, baseURL string) {
 	 * propagates to the HTTP client + SSE + WS + ResumableConnection. */
 	cancelCtx, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
 	defer cancel()
-	_, err = client.Slow(cancelCtx, &sdk.SlowOpts{Ms: 500})
+	_, err = client.Slow(cancelCtx, &sdk.SlowOpts{Ms: ptr(int64(500))})
 	if err != nil {
 		fmt.Println("cancelled:", err)
 	}
@@ -189,9 +190,9 @@ func runExample(ctx context.Context, baseURL string) {
 type tickTransport struct{}
 
 func (t *tickTransport) Name() string           { return "tick" }
-func (t *tickTransport) Kind() sdk.TransportKind { return sdk.TransportKindWs }
+func (t *tickTransport) Kind() sdk.TransportKind { return sdk.TransportWs }
 
-func (t *tickTransport) Connect(_ context.Context, _ string, _ sdk.TransportOpts) (sdk.TransportConn, error) {
+func (t *tickTransport) Connect(_ context.Context, _ string, _ *sdk.TransportOpts) (sdk.TransportConn, error) {
 	return &tickConn{}, nil
 }
 
@@ -205,8 +206,11 @@ func (c *tickConn) Recv(ctx context.Context) (interface{}, error) {
 	c.sent = true
 	return map[string]string{"kind": "tick"}, nil
 }
-func (c *tickConn) Send(_ interface{}) error { return nil }
-func (c *tickConn) Close() error              { return nil }
+func (c *tickConn) Send(_ context.Context, _ any) error { return nil }
+func (c *tickConn) Close() error                        { return nil }
+func (c *tickConn) Kind() sdk.TransportKind             { return sdk.TransportWs }
+
+func ptr[T any](v T) *T { return &v }
 
 /* runHookDemo spins an httptest.Server in-process to show OnRequest/OnResponse
  * hooks mutating + observing live traffic without needing the mock server. */

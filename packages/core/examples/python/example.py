@@ -5,8 +5,8 @@ Honey SDK — Python end-to-end example
 Assumes ./sdk/ was generated via generatePythonSDK(spec) and written as a
 Python package (sdk/__init__.py, sdk/client.py, sdk/_runtime.py, sdk/_errors.py,
 sdk/_realtime.py, sdk/_transport.py, sdk/_ws.py).
-This file is DOCUMENTATION — not a compile target. Names referenced below
-exist only after codegen.
+Names referenced below exist only after codegen. The SDK harness type-checks
+this file against the SDK generated from tests/mock-server/spec.json.
 
 Demonstrates the cross-lang parity surface:
   1. Client init + config                  9.  Per-call headers merge
@@ -31,8 +31,8 @@ import httpx
 from sdk.client import AsyncSDK, SDK
 from sdk._runtime import ClientConfig, InvalidationConfig, LogEntry
 from sdk._errors import (
+    APIError,
     BadRequestError,
-    ClientError,
     InternalServerError,
     NotFoundError,
     RateLimitError,
@@ -84,10 +84,10 @@ async def async_example() -> None:
     ))
 
     # §2 + §3 + §4: typed call + typed error catch. Every subclass is a
-    # ClientError; err.data is the parsed typed payload from the declared
+    # APIError; err.data is the parsed typed payload from the declared
     # error schema, err.body is raw bytes.
     try:
-        user = await sdk.createUser(body={"name": "Alice", "email": "a@b.com"})
+        user = await sdk.create_user(body={"name": "Alice", "email": "a@b.com"})
         print(user["id"], user["name"])
     except BadRequestError as e:
         print("400 data:", e.data, "body:", e.body)
@@ -99,7 +99,7 @@ async def async_example() -> None:
         print("429 — backoff per consumer policy")
     except InternalServerError:
         print("500")
-    except ClientError as e:
+    except APIError as e:
         print("unknown status:", e.status)
 
     # §8: per-call timeout overrides config timeout.
@@ -109,19 +109,19 @@ async def async_example() -> None:
         print("aborted:", type(e).__name__)
 
     # §9: per-call headers merge over config headers; per-call wins per key.
-    await sdk.getUser("u1", headers={"X-Both": "call-wins"})
+    await sdk.get_user("u1", headers={"X-Both": "call-wins"})
 
     # §10: mutation invalidates matching GET paths.
-    await sdk.updateUser("u1", body={"name": "Alice2"})
+    await sdk.update_user("u1", body={"name": "Alice2"})
     print("users/u1 stale?", await sdk.is_stale("GET", "/users/u1"))
 
     # §11: SSE — typed async iterable.
-    async for ev in sdk.streamEvents():
+    async for ev in sdk.stream_events():
         print("sse event:", ev)
         break
 
     # §12: WebSocket — async context manager, bidirectional send + recv.
-    async with sdk.connectWs() as ws:
+    async with sdk.connect_ws() as ws:
         await ws.send("hello")
         async for msg in ws:
             print("ws recv:", msg)
@@ -169,13 +169,13 @@ async def async_example() -> None:
         for off in range(0, TOTAL, CHUNK):
             yield buf[off:off + CHUNK]
 
-    uploaded = await sdk.uploadBlob(gen())
+    uploaded = await sdk.upload_blob(gen())
     print("uploaded:", uploaded["size"], uploaded["hash"], "expected:", expected)
 
     # §15: x-idempotency-key — auto UUID, explicit kwarg, header override.
-    auto = await sdk.idempotentCreate()
-    explicit = await sdk.idempotentCreate(idempotency_key="user-supplied-123")
-    via_header = await sdk.idempotentCreate(headers={"Idempotency-Key": "header-wins-456"})
+    auto = await sdk.idempotent_create()
+    explicit = await sdk.idempotent_create(idempotency_key="user-supplied-123")
+    via_header = await sdk.idempotent_create(headers={"Idempotency-Key": "header-wins-456"})
     print(auto["idempotencyKey"], explicit["idempotencyKey"], via_header["idempotencyKey"])
 
     # §16 (async): asyncio.Task.cancel() propagates to the underlying httpx
@@ -199,7 +199,7 @@ def sync_example() -> None:
     evt = threading.Event()
     evt.set()
     try:
-        sdk.createUser(body={"name": "Alice", "email": "a@b.com"}, cancel_token=evt)
+        sdk.create_user(body={"name": "Alice", "email": "a@b.com"}, cancel_token=evt)
     except Exception as e:
         print("cancelled sync:", type(e).__name__)
 
