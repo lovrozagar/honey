@@ -305,7 +305,7 @@ app.delete("/items/:id")
 app.head("/items/:id")
 app.options("/items")
 app.all("/echo") // every method
-app.on("GET", "/health")
+app.on(["GET"], "/health") // methods are always a list
 app.on(["GET", "HEAD"], "/resource") // same handler, extra methods
 ```
 
@@ -370,6 +370,7 @@ app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
 - `basePath` returns a new handle; only routes registered through it (or handles derived from it) are prefixed.
 - `stripPrefix` is a gateway rewrite. Requests without the prefix still match. It will not strip a partial segment (`/apple` is not stripped by `/app`).
 - `.use(mw)` / `.basePath()` / `.context()` / `.meta()` return a new **handle** on the same app. A route captures its handle's chain, prefix, context values and meta when it is registered; serving any handle of the app behaves the same. The handle you call them on is unchanged, so `app.use(auth)` as a bare statement installs nothing — finalize (the first request, `toRouteTree()` or codegen) throws when a `use(mw)` handle never registers, mounts or serves anything, and when a route builder never got `.handler()`.
+- **Lifecycle.** An app is built, then finalized: the first request, `toRouteTree()` or codegen resolves every route's full middleware chain, scopes and error keys once into a per-app table, and requests only look routes up in it. Registering a route, a scope or a mount afterwards (dev/HMR patching, lazy plugins) is allowed: it moves the app to a new epoch, and the next request finalizes again. Served documents cache per epoch too. Finalize is where misconfiguration surfaces — a `use(mw)` handle that registers nothing, a builder without `.handler()`, a stale generated tree — as an error naming the route.
 - Settings — `trailingSlash`, `stripPrefix`, `encodedSlashes`, `trustProxy`, `errorFactory`, `defaultErrors`, `defaultBoundary`, `outputValidation`, `onError`, `onNotFound`, `onMethodNotAllowed`, error formatters, `errorI18n`, `logger`, `telemetry`, `tap`, `wsAdapter` — belong to the app: calling one on any handle applies to every handle and every route, registered before or after.
 
 ### Context
@@ -563,11 +564,31 @@ app
 	})
 ```
 
-Content-Type selection:
+Content-Type selection (case-insensitive, parameters ignored):
 
-- `application/json` → `json`
+- `application/json` or any `+json` type (`application/vnd.api+json`) → `json`
 - `application/x-www-form-urlencoded` or `multipart/form-data` → `form` (`req.formData()`)
+- Anything else — a missing Content-Type, a look-alike such as `application/jsonx`, or a header with two media types — is **415** `unsupported_media_type`.
+- A body the declared parser cannot read (malformed JSON or multipart, an empty JSON body) is **400** with `error_key: "malformed_body"` and `vars.format`. `onError` sees it as that 400 `HoneyError`.
 - Invalid input is **400** with `error_key: "validation_failed"` and `fields: { name: [{ error_key, message, path }] }`.
+
+A `json` or `form` schema is validated for every method that declares it, `DELETE` and `OPTIONS` included (a missing body is 415). Declaring one on a `GET` or `HEAD` route throws at registration — put that data in `search`.
+
+Repeated keys in `search` and `form` follow one policy, read from the schema's JSON Schema (Zod 4.2+, ArkType):
+
+- A key the schema types as an array always gets an array, even for one value — so a single file validates against `z.array(z.instanceof(File))`.
+- A key typed as a scalar gets the **first** value, the same one `ctx.search.key` returns.
+- With schemas that expose no JSON Schema (Valibot, Yup, Effect), one value is a scalar and a repeated key is an array.
+
+```ts
+// ?tag=a&tag=b&page=1&page=2
+app
+	.get("/items")
+	.input({ search: z.object({ tag: z.array(z.string()), page: z.coerce.number() }) })
+	.handler((ctx) => ctx.res.json("ok", ctx.input.search)) // { tag: ["a", "b"], page: 1 }
+```
+
+Cookies with a repeated name keep the first; headers follow Fetch (repeated values joined with `, `).
 
 Valibot / ArkType work the same way — pass any Standard Schema:
 
@@ -625,6 +646,8 @@ app.outputValidation("always")
 
 ### Errors
 
+<!-- snippet:name errors-app -->
+
 ```ts
 import { defineErrors, HoneyError, honey } from "@lovrozagar/honey"
 
@@ -636,6 +659,7 @@ const errors = defineErrors({
 		schema: z.object({ reason: z.string() }),
 	},
 	api_error: "internal_server_error",
+	orgs_unavailable: "service_unavailable",
 })
 
 const app = honey()
@@ -687,11 +711,13 @@ Custom-schema errors serialize **the schema payload** as the body (not the envel
 
 Per-route:
 
+<!-- snippet:continue errors-app -->
+
 ```ts
 app
 	.post("/orgs")
-	.errors("org_slug_taken", "unauthorized")
-	.boundary("api_error") // this route's unexpected-throw key
+	.errors("org_slug_taken") // default errors ("unauthorized") need no listing
+	.boundary("orgs_unavailable") // this route's unexpected-throw key
 	.handler((ctx) => {
 		throw ctx.errors.org_slug_taken({ vars: { slug: "x" } })
 	})
@@ -739,7 +765,7 @@ Messages are ICU: `{slug}`, `{n, number}`, `{n, plural, one {# item} other {# it
 
 `HoneyError` fields: `errorKey`, `status` (number), `statusKey`, `fields`, `vars` (ICU / logs only), `data`, `headers`. `HoneyError.serialize(err)` is a JSON-safe dump for logs (includes `vars` when set; never put on the public JSON).
 
-Framework-owned keys you do not declare: `validation_failed` (400), `output_validation_failed` (500), plus routing / content-negotiation keys.
+Framework-owned keys you do not declare: `validation_failed` (400), `malformed_body` (400), `bad_request` (400, e.g. an encoded `/` in the path), `forbidden` (403, `csrf` / `ipRestrict`), `output_validation_failed` (500), plus routing / content-negotiation keys (`not_found`, `method_not_allowed`, `unsupported_media_type`, `content_too_large`, …).
 
 ### Middleware
 
@@ -747,11 +773,11 @@ Framework-owned keys you do not declare: `validation_failed` (400), `output_vali
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 
 const errors = defineErrors({ unauthorized: "unauthorized" })
-const app = honey().errorFactory(errors) // ctx.errors exists only with an error factory
+const app = honey().errorFactory(errors)
 
-const withAuth = createMiddleware(async (ctx, next) => {
+const withAuth = createMiddleware(async (ctx: { req: Request }, next) => {
 	const token = ctx.req.headers.get("authorization")
-	if (!token) throw ctx.errors.unauthorized()
+	if (!token) throw errors.unauthorized()
 	return next({ user: { id: "u-1" } })
 })
 
@@ -761,7 +787,7 @@ authed.get("/me").handler((ctx) => ctx.res.json("ok", ctx.user))
 app.use("/admin", withAuth) // scoped: every request under /admin, whichever handle registered the route
 ```
 
-`createMiddleware` infers additions from `next({ ... })`. Later handlers see `ctx.user`. Return `next()` with no argument to add nothing. Without an `errorFactory`, `ctx.errors` is undefined — throw a `HoneyError` instead.
+`createMiddleware` infers additions from `next({ ... })`. Later handlers see `ctx.user`. Return `next()` with no argument to add nothing. Type the `ctx` parameter with the fields the middleware reads (`{ req: Request }`); a middleware can run on any route, so it throws errors from the factory itself (`errors.unauthorized()`) rather than `ctx.errors`, which handlers get typed. Without an error factory, throw a `HoneyError`.
 
 `.use(mw)` returns a new handle and leaves the one it is called on unchanged: keep the returned value (or keep chaining) and register routes on it. `app.use(mw)` as a bare statement installs nothing, and the first request (or codegen) throws to say so.
 
@@ -786,7 +812,7 @@ const api = app.use(cors())
 const custom = app.use(
 	cors({
 		origin: "https://app.example.com", // or "*" | string[] | (origin) => boolean
-		credentials: true, // wildcard origin is echoed (spec-safe)
+		credentials: true, // needs an explicit origin (string, list or predicate); with "*" or none, cors() throws
 		methods: ["GET", "POST"],
 		headers: ["authorization", "content-type"],
 		exposeHeaders: ["x-request-id"],
@@ -795,7 +821,12 @@ const custom = app.use(
 )
 ```
 
-No `Origin` header → middleware is a no-op. Preflight is `OPTIONS` + `access-control-request-method`. `app.serve({ cors: true })` runs `cors()` with defaults before every route, 404 and preflight of the app. `app.serve({ cors: { origin } })` passes the object through.
+No `Origin` header → no CORS headers are added. Preflight is `OPTIONS` + `access-control-request-method`. `app.serve({ cors: true })` runs `cors()` with defaults before every route, 404 and preflight of the app. `app.serve({ cors: { origin } })` passes the object through, and throws at `serve()` for `credentials: true` without an origin.
+
+- `credentials: true` requires an explicit `origin`: a wildcard would let every site make credentialed requests and read the answers, so construction throws.
+- The opaque origin `null` (sandboxed iframes, `file:`) is never reflected; any page can produce it.
+- Every response carries `Vary: Origin` unless the policy is a plain `"*"`, so a shared cache never serves one origin's answer to another. 101 upgrade responses pass through untouched.
+- What it does not cover: CORS only decides what a browser lets a page _read_. It does not stop a cross-site form post or `no-cors` fetch from reaching the handler — use `csrf()` for that.
 
 #### `csrf` — `@lovrozagar/honey/csrf`
 
@@ -805,7 +836,13 @@ import { csrf } from "@lovrozagar/honey/csrf"
 const api = app.use(csrf({ origin: "https://app.example.com" }))
 ```
 
-Safe methods (`GET`/`HEAD`/`OPTIONS`) pass. Non-form JSON also passes. Form posts (`urlencoded` / `multipart` / `text/plain`) need `Sec-Fetch-Site: same-origin` or a matching `Origin`. Failure is **403** `forbidden`.
+Every unsafe request is checked, whatever its Content-Type (the algorithm of Go's `http.CrossOriginProtection`):
+
+1. `GET`, `HEAD` and `OPTIONS` pass.
+2. With `Sec-Fetch-Site` (every current browser sends it): `same-origin` and `none` pass. `same-site` and `cross-site` pass only for an `Origin` in `origin` (a string, list or predicate) — a sibling subdomain is same-site but not trusted.
+3. Without it: a request with no `Origin` passes (curl, server-to-server, clients a browser cannot drive cross-site), an `Origin` whose host equals `Host` passes, an allow-listed `Origin` passes, anything else is rejected.
+
+Failure is **403** `forbidden`. Cross-origin browser callers of your JSON API must be listed in `origin`. What it does not cover: safe methods (keep `GET` side-effect free), and same-origin attackers (XSS).
 
 #### `body-limit` — `@lovrozagar/honey/body-limit`
 
@@ -821,7 +858,7 @@ const api = app.use(
 )
 ```
 
-Skipped for GET/HEAD/OPTIONS/DELETE. Oversize is **413** `content_too_large`. `limits` keys are matched with `startsWith` against `Content-Type`.
+Applies to every request that has a body, `DELETE` included. Oversize is **413** `content_too_large`; the rest of the upload is drained up to 1 MiB so the client sees the 413, then the stream is cancelled. `limits` keys are media-type prefixes matched case-insensitively against the request's media type (parameters dropped, the shared Content-Type parser); the longest matching key wins. Node and Bun `serve()` also cap every request body at 128 MiB (`maxRequestBodySize`), with or without this middleware.
 
 #### `logger` — `@lovrozagar/honey/logger`
 
@@ -847,22 +884,24 @@ const custom = app.use(
 )
 ```
 
-`createLogger` writes one JSON line per call (`level`, `msg`, `time`, plus `base`). `ctx.log.info("hello")` / `ctx.log.info({ k: 1 }, "hello")`.
+`createLogger` writes one JSON line per call (`level`, `msg`, `time`, plus `base`). `ctx.log.info("hello")` / `ctx.log.info({ k: 1 }, "hello")`. The logged `path` is the normalized `ctx.path` (no query string). A throwing `log`, `skip` or sink is reported with `console.error` and never turns the response into a 500.
 
 #### `curl-logger` — `@lovrozagar/honey/curl-logger`
 
 ```ts
-import { curlLogger } from "@lovrozagar/honey/curl-logger"
+import { curlLogger, defaultRedactHeader, defaultRedactQueryParam } from "@lovrozagar/honey/curl-logger"
 
 const api = app.use(
 	curlLogger({
 		body: { maxBytes: 2048, allowContentTypes: ["application/json"] },
-		redactHeader: (name, value) => (name === "authorization" ? "Bearer ***" : value),
-		redactQueryParam: (name, value) => (name === "token" ? "***" : value),
-		skip: (data) => data.path === "/health",
+		redactHeader: (name, value) => (name === "x-tenant" ? "***" : defaultRedactHeader(name, value)),
+		redactQueryParam: (name, value) => defaultRedactQueryParam(name, value),
+		skip: (data) => data.path === "/health", // { duration, method, path, requestId, status }
 	}),
 )
 ```
+
+Credentials are masked by default: `authorization`, `cookie`, `set-cookie`, `proxy-authorization`, API-key and token headers, and token-like query params (`token`, `access_token`, `api_key`, `sig`, `code`, …) print as `[REDACTED]`. A custom `redactHeader` / `redactQueryParam` replaces the default — compose with the exported `defaultRedactHeader` / `defaultRedactQueryParam` to extend it; return `null` to drop the header or param. `skip` runs before the curl command is built. Every part of the command is shell-quoted (`-X 'POST'`, `$'…'` for control characters), so a logged command is safe to paste. A failing callback never fails the request.
 
 #### `request-id` — `@lovrozagar/honey/request-id`
 
@@ -873,7 +912,7 @@ const api = app.use(requestId())
 const custom = app.use(requestId({ header: "x-request-id", generator: () => crypto.randomUUID() }))
 ```
 
-Adds `ctx.requestId` and echoes the header on the response. Reuses the inbound header when present.
+Adds `ctx.requestId` and echoes the header on the response. Reuses an inbound id only when it is 1–128 characters of `A-Z a-z 0-9 . _ : + / = -` (UUIDs, ULIDs, base64, W3C trace ids); anything else is replaced with a generated id, so a client cannot put arbitrary text into your logs. `validate: (id) => boolean` overrides the check.
 
 #### `etag` — `@lovrozagar/honey/etag`
 
@@ -918,7 +957,7 @@ const custom = app.use(
 )
 ```
 
-Defaults when omitted: `x-content-type-options: nosniff`, `x-frame-options: SAMEORIGIN`, `referrer-policy: strict-origin-when-cross-origin`, `x-xss-protection: 0`.
+Defaults when omitted: `x-content-type-options: nosniff`, `x-frame-options: SAMEORIGIN`, `referrer-policy: strict-origin-when-cross-origin`, `x-xss-protection: 0`. A header the handler already set wins (a route's stricter CSP is never overwritten). Works on immutable responses (`fetch()`, `Response.redirect()`) and leaves 101 upgrades alone.
 
 #### `server-timing` — `@lovrozagar/honey/server-timing`
 
@@ -972,7 +1011,22 @@ const api = app.use(prettyJson()) // ?pretty=
 const custom = app.use(prettyJson({ query: "pretty", space: 2 }))
 ```
 
-Only rewrites `application/json` when the query string contains the key.
+Rewrites buffered `application/json` (and `+json`) bodies when the query string has a parameter with exactly that name (`?pretty`, `?pretty=1`; not `?prettyx`). Streams, empty bodies and invalid JSON pass through untouched.
+
+#### What the middleware does not cover
+
+| Middleware      | Does not cover                                                                                                                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cors`          | Requests reaching the handler: it only controls what a browser lets a page read. Pair it with `csrf` for cookie-authenticated writes.                |
+| `csrf`          | Safe methods (keep `GET` side-effect free), same-origin attackers (XSS), non-browser clients (they have no ambient credentials to abuse).            |
+| `ipRestrict`    | Proxies you did not declare in `trustProxy()`: behind one, every request has the proxy's address.                                                    |
+| `bodyLimit`     | Bodies a handler reads before the middleware runs. Node and Bun `serve()` add their own cap (`maxRequestBodySize`).                                  |
+| `timeout`       | Work that ignores `ctx.signal` keeps running after the 504.                                                                                          |
+| `secureHeaders` | Content it does not see: a header the handler set wins, and the CSP is yours to write.                                                               |
+| `staticFiles`   | What `resolve` does with the path: it is safe to join onto a root, but symlinks inside the root are followed if your file API follows them.          |
+| `proxy()`       | Where requests go: build the URL from a fixed origin in `destination`, never from request data. Upstream responses are passed through, not filtered. |
+| `requestId`     | Uniqueness of inbound ids: a client can still send an id that collides with another request's.                                                       |
+| loggers         | Secrets in bodies (`curlLogger({ body })`) and in header or param names the default patterns miss; extend the redact callbacks.                      |
 
 ### Composition
 
@@ -1019,14 +1073,17 @@ app.all("/upstream/*path").proxy({
 	rewriteUrl: (url) => url.replace(/^\/upstream/, ""),
 	requestHeaders: { "x-forwarded-by": "honey" },
 	// or requestHeaders: (ctx, headers) => { headers.set("x-user", ctx.user.id) }
-	timeout: 10_000, // or (ctx) => 5_000; omit for no abort; disabled for WS upgrades
+	timeout: 10_000, // time to response headers (default 60 s); 0 for none; disabled for WS upgrades
+	idleTimeout: 30_000, // max gap between body chunks; omit for none (SSE)
 	onResponse: (ctx, response) => {
 		response.headers.set("x-proxied", "1")
 	},
 })
 ```
 
-`destination` receives path + query (after `rewriteUrl`) and a prepared `RequestInit` (method, headers, body, signal, redirect). Hop-by-hop headers are stripped. `onResponse` is not called for 101 upgrades.
+`destination` receives the normalized path + query (after `rewriteUrl`) and a prepared `RequestInit` (method, headers, body for every method but GET/HEAD, a signal following `ctx.signal` and the timeouts, `redirect: "manual"`). Hop-by-hop headers and headers named in `Connection` are stripped both ways; the client's `Host`, `Expect` and forwarding headers are dropped, and `X-Forwarded-For`/`-Proto`/`-Host` describe the client as `trustProxy()` decided (`forwardedHeaders: false` to omit). Encoded responses lose `Content-Encoding`/`Content-Length` because `fetch()` decodes them (`decoded: false` for destinations returning encoded bytes). Network failures answer 502, a headers timeout 504, any other throw 500. `onResponse` gets a mutable copy and is not called for 101 upgrades.
+
+What it does not cover: `destination` decides where the request goes — build the URL from a fixed origin (as above), never from request data.
 
 ### Static files
 
@@ -1071,8 +1128,8 @@ app.telemetry(otelAdapter({ tracer }))
 // or a hand-rolled adapter:
 app.telemetry({
 	onRequest: ({ req }) => {},
-	onRoute: ({ method, path, params }) => {},
-	onHandler: ({ status, duration }) => {},
+	onRoute: ({ method, path, route, params }) => {},
+	onHandler: ({ route, status, duration }) => {},
 	onResponse: ({ status, duration }) => {},
 	onError: ({ error, duration }) => {},
 	onMiddleware: ({ name, duration, error }) => {},
@@ -1080,6 +1137,8 @@ app.telemetry({
 	onMethodNotAllowed: ({ allowed }) => {},
 })
 ```
+
+`onResponse` fires exactly once for every request that fired `onRequest` — trailing-slash redirects, 404, 405, preflights, upgrades and errors included. `route` is the matched pattern (`/users/:id`); otel records it as `http.route` and never puts the query string in an attribute (`url.path`, `http.url` without query or fragment).
 
 Production tree: load the generated `routes.gen.ts` before registering routes. The tree supplies only the router topology (route ids at the leaves) and per-route data (meta, error keys); every route the app registers afterwards binds to its leaf by `METHOD /pattern`. Several apps can load the same module: it is frozen, and each app serves its own handlers.
 
@@ -1238,17 +1297,22 @@ app.openapi({
 	version: "1.0.0",
 	description: "Optional",
 	docs: "scalar", // or "swagger"
-	docsPath: "/docs", // default /docs, then /reference if /docs is taken
+	docsPath: "/docs", // default /docs, then /reference if a user route owns /docs
 	path: "/openapi", // stem → /openapi.json, .yaml, .yml
 	filterRoutes: (route) => route.path !== "/debug",
 	securitySchemes: {
 		bearerAuth: { type: "http", scheme: "bearer" },
 	},
+	enabled: process.env.NODE_ENV !== "production", // false mounts nothing; default true
 })
 
 app.manifest()
 app.manifest({ path: "/manifest.json" })
 ```
+
+Each `openapi()` call serves its own document, so an internal and a public profile can live side by side at different paths (`openapi({ path: "/internal/openapi" })` and `openapi({ path: "/openapi", profile: "public" })`). A document is generated once per route change, serialized once, and sent with a strong `ETag` (a matching `If-None-Match` is 304), `Cache-Control: no-cache` and `X-Content-Type-Options: nosniff`. A generation that fails is not retried until the routes change. A path an earlier call or a user route already owns throws at the `openapi()` / `manifest()` call — give a second call its own `path` and `docsPath`.
+
+The docs UIs load pinned asset versions (Scalar 1.73.1, Swagger UI 5.33.1 from jsDelivr) with Subresource Integrity, under a per-response CSP nonce and `nosniff`; the inline config is escaped. The UI's spec URL includes `stripPrefix`.
 
 Served (cached, invalidated when the route graph changes):
 
@@ -1259,11 +1323,13 @@ Served (cached, invalidated when the route graph changes):
 | `/docs`                          | Scalar or Swagger UI pointing at the JSON spec     |
 | `/manifest.json`                 | Route methods, paths, middleware names, error keys |
 
-Those routes are marked internal. They do not appear inside the spec or the manifest. If `/docs` is already a user route, pass `docsPath` or Honey throws.
+Those routes are marked internal. They do not appear inside the spec or the manifest. Routes with `.meta({ internal: true })` are left out of the served document and the served manifest too. The served manifest follows the document's visibility policy: it carries only meta keys the `metaSpec` maps, plus the built-ins.
 
 `.meta({ operationId, tags, summary, description })` on a route feeds the document. App-level `.meta<Shape>()` / `.meta({ auth: "required" })` sets defaults and constrains route meta.
 
 Generate-time sanitize (plugin `codegen.openApi.sanitize`):
+
+<!-- snippet:skip -->
 
 ```ts
 {
@@ -1524,6 +1590,27 @@ See [honey generate](#honey-generate). `codegen.sdk: true` is TypeScript-only in
 
 Hand-typed client against `InferRoutes<typeof app>` (no generate):
 
+<!-- snippet:define client-app
+```ts
+import { honey } from "@lovrozagar/honey"
+import * as z from "zod"
+
+const root = honey()
+root.ws("/echo-ws").handler({ onMessage: (_ctx, ws, data) => ws.send(data) })
+const app = root
+	.basePath("/api")
+	.get("/health")
+	.handler((ctx) => ctx.res.json("ok", { status: "ok" }))
+	.get("/users/:id")
+	.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
+	.post("/users")
+	.input({ json: z.object({ email: z.string(), name: z.string() }) })
+	.output({ "application/json": { created: z.object({ id: z.string() }) } })
+	.handler((ctx) => ctx.res.json("created", { id: "u-1" }))
+```
+-->
+<!-- snippet:continue client-app -->
+
 ```ts
 import { createClient, isClientError } from "@lovrozagar/honey/client"
 
@@ -1603,11 +1690,18 @@ const browserSdk = new MySDK({
 const user = await sdk.createUser({ json: { email: "a@b.com", name: "Ada" } })
 ```
 
+- Method names come from `operationId`; an operation without one gets a derived name from its method and path (`getUsersById`). One `operationId` that expands to several methods or optional-param variants gets a method or variant suffix.
+- A resource name that would shadow a client member or an `Object.prototype` key (`state`, `dispose`, `then`, `toString`) gets a trailing `_` (`sdk.state_`). Schemas named like SDK or language types get a `Model` suffix in Go, Rust and Python (`Config` → `ConfigModel`).
+- A path param that is `""`, `.` or `..` is refused before sending. Redirects are followed only to the same origin by default (`redirect` option). In safe mode, `error` is truthy for every non-2xx.
+- The same request rules hold in every language (base path and query kept, `URLSearchParams` query encoding, one auth refresh for concurrent 401s, no retry of streamed bodies); a shared conformance suite runs them against each generated SDK.
+
 Python / Go / Rust: point `ports.*.outDir` at a folder and import that package (`replace` in `go.mod`, `path =` in Cargo). Sync clients exist for Python and Rust only.
 
 Capability details and four-language snippets: [packages/core/docs/sdk.md](packages/core/docs/sdk.md) and [packages/core/examples](packages/core/examples).
 
 ### Go CLI
+
+<!-- snippet:skip -->
 
 ```ts
 codegen: {
@@ -1668,6 +1762,8 @@ Exported from `@lovrozagar/honey`. They describe the **app you built**:
 | `HoneyServeOptions` / `ServeHandle` / `ServeRuntime`                         | Serve types                          |
 | `WSHandler` / `WSContext` / `WSAdapter`                                      | Socket types                         |
 | `ConnContext` / `RealtimeRouteOpts` / `RealtimeLimits` / `RealtimePublisher` | Realtime types                       |
+
+<!-- snippet:continue client-app -->
 
 ```ts
 import type { InferCtx, InferRouteInput, InferRoutes } from "@lovrozagar/honey"
@@ -1855,6 +1951,8 @@ bun run --filter @honey/bench bench:node
 ```
 
 Numbers and bundle sizes: [`bench/RESULTS.md`](bench/RESULTS.md).
+
+`bun run bench:hotpath` is the hot-path regression gate CI runs: in-process `app.fetch` cost on static, param, chain-middleware, scoped-middleware and 404 paths, as a ratio to a hand-written fetch handler in the same process, against `bench/hotpath-baseline.json` (`--update` records a new baseline). It fails when a ratio grows past `HOTPATH_THRESHOLD` (default 25%). Baselines are kept per Bun minor version.
 
 Python runtime tests skip without `httpx` (`pip install httpx`). Rust cargo tests skip without `cargo` or when `HONEY_RUST_INTEGRATION=0`. Go tests skip without `go`. Cargo artifacts go to `.cache/cargo-target`, not `/tmp`.
 

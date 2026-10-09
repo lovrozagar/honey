@@ -7,6 +7,8 @@ Status: implemented in `@lovrozagar/honey` (tree of record: `packages/core`).
 Before this feature, `generateOpenApi` mapped route meta onto the operation object with a
 hardcoded allowlist of eight fields:
 
+<!-- snippet:skip -->
+
 ```ts
 summary, description, tags, deprecated, operationId, security, invalidate → x-invalidate, mcp → x-mcp
 ```
@@ -141,6 +143,8 @@ response, the query descriptor on the search input.
 `read` plus `match` expresses that. Several entries read one key and are told apart by the union's
 discriminant:
 
+<!-- snippet:skip -->
+
 ```ts
 schema: {
 	entityFacts: {
@@ -202,6 +206,8 @@ design assumes.
 
 ### 2.4 Profiles (multi-document)
 
+<!-- snippet:skip -->
+
 ```ts
 profiles: {
   public:  { include: ["x-entity", "x-query"] },       // default-deny — preferred
@@ -224,6 +230,8 @@ things to withhold is genuinely shorter than the list to publish.
 
 - A document selects a profile:
 
+<!-- snippet:skip -->
+
 ```ts
 codegen: {
   openApi: [
@@ -245,6 +253,8 @@ covers "never, anywhere".
 
 `OpenApiMeta` now carries:
 
+<!-- snippet:skip -->
+
 ```ts
 extensions?: Record<`x-${string}`, unknown>
 ```
@@ -262,6 +272,8 @@ separation, and fails on nothing.
 
 A fact enforced by middleware should not be retyped on every route it protects. Middleware can
 contribute meta to every route that mounts it:
+
+<!-- snippet:skip -->
 
 ```ts
 export const shard = createMiddleware(fn, { meta: { tenant: "project_id" } })
@@ -325,6 +337,8 @@ The difference is load-bearing whenever a publisher stamps facts it cannot alway
 stamped with `searchable: null` or `tenantColumn: null` means _"I don't know"_, but passing that
 straight through publishes `"x-searchable": null`, which a consumer reads as _"nothing is
 searchable"_ — a confident wrong answer, worse than silence. Normalize in the policy:
+
+<!-- snippet:skip -->
 
 ```ts
 expand: (e) => ({
@@ -422,6 +436,8 @@ migration miserable.
 Every message carries `method`, `path`, source key and target key.
 
 ## 6. Validating what is emitted
+
+<!-- snippet:skip -->
 
 ```ts
 rateLimit: {

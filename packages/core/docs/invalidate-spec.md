@@ -2,7 +2,9 @@
 
 ## Status
 
-Draft
+Implemented. Generated route types narrow `invalidate` to the selector union, and generation
+validates every authored selector against the route graph (a selector that names no route fails
+`honey generate`; duplicates are removed). See "Validation Rules".
 
 ## Goal
 
@@ -74,6 +76,8 @@ Reason:
 
 ### Mutation Invalidating Collection Read
 
+<!-- snippet:skip -->
+
 ```ts
 .meta({
   operationId: "project.create",
@@ -82,6 +86,8 @@ Reason:
 ```
 
 ### Mutation Invalidating Collection And Entity Reads
+
+<!-- snippet:skip -->
 
 ```ts
 .meta({
@@ -94,6 +100,8 @@ Reason:
 ```
 
 ### Mutation Invalidating Query-Like POST Reads
+
+<!-- snippet:skip -->
 
 ```ts
 .meta({
@@ -148,11 +156,15 @@ type GeneratedInvalidateRoute =
 
 Then the generated meta type becomes effectively:
 
+<!-- snippet:skip -->
+
 ```ts
 invalidate?: readonly GeneratedInvalidateRoute[] | null
 ```
 
 If generated route-aware types are unavailable, the type falls back to:
+
+<!-- snippet:skip -->
 
 ```ts
 readonly string[] | null
