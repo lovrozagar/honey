@@ -57,7 +57,9 @@ describe("production runtime bundle", () => {
 			expect(js).not.toContain("Deno.upgradeWebSocket")
 			expect(js).not.toContain("WebSocketServer")
 			expect(js).not.toMatch(/from"http"|from "http"|createServer/)
-			expect(js.length).toBeLessThan(80_000)
+			/* a leak guard, not a budget: codegen or effect would add ~300 KB. The streaming
+			 * lifecycle (one producer primitive, body-kind tags) is ~5 KB of the runtime. */
+			expect(js.length).toBeLessThan(90_000)
 		} finally {
 			rmSync(DIR, { force: true, recursive: true })
 		}

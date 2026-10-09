@@ -61,18 +61,17 @@ describe("SSE edge cases", () => {
 })
 
 describe("stream callback exceptions", () => {
-	it("stream callback throws → response body closed cleanly", async () => {
+	it("stream callback throws → the body errors instead of ending cleanly", async () => {
 		const res = new HoneyRes()
 		const response = res.stream(async () => {
 			throw new Error("stream callback exploded")
 		})
 
-		/* body should be closed, not hanging */
-		const text = await response.text()
-		expect(text).toBe("")
+		/* a broken body, not a hang and not a clean (truncated) 200 */
+		await expect(response.text()).rejects.toThrow("stream callback exploded")
 	})
 
-	it("SSE callback throws → stream closed cleanly", async () => {
+	it("SSE callback throws → the body errors instead of ending cleanly", async () => {
 		const app = honey<{}>()
 		app.get("/sse").handler((ctx) =>
 			ctx.res.sse(async () => {
@@ -81,9 +80,7 @@ describe("stream callback exceptions", () => {
 		)
 
 		const res = await app.fetch(new Request("http://localhost/sse"), {})
-		const text = await res.text()
-		/* should not hang — stream closed on error */
-		expect(typeof text).toBe("string")
+		await expect(res.text()).rejects.toThrow("sse exploded")
 	})
 })
 

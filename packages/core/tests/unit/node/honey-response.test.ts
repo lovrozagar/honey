@@ -2,7 +2,7 @@ import http from "node:http"
 import { describe, expect, it } from "vitest"
 import { cors } from "../../../src/cors.ts"
 import { etag } from "../../../src/etag.ts"
-import { HoneyResponse, isHoneyResponse } from "../../../src/honey-response.ts"
+import { createHoneyResponse, HoneyResponse, isHoneyResponse, replaceResponse } from "../../../src/honey-response.ts"
 import { createMiddleware, honey } from "../../../src/index.ts"
 import { serve } from "../../../src/node.ts"
 import { HoneyRes } from "../../../src/response.ts"
@@ -126,5 +126,46 @@ describe("HoneyResponse", () => {
 		expect(second.body).toBe("")
 
 		server.close()
+	})
+})
+
+describe("HoneyResponse reads like a Fetch Response", () => {
+	it("clone() tees: the original and the clone both read the whole stream", async () => {
+		const stream = new ReadableStream<Uint8Array>({
+			start(c) {
+				c.enqueue(new TextEncoder().encode("streamed"))
+				c.close()
+			},
+		})
+		const original = createHoneyResponse({ headers: {}, status: 200, stream })
+		const copy = original.clone()
+		expect(await copy.text()).toBe("streamed")
+		expect(await original.text()).toBe("streamed")
+	})
+
+	it("a second read throws instead of returning an empty body", async () => {
+		const res = createHoneyResponse({ headers: {}, raw: "once", status: 200 })
+		expect(await res.text()).toBe("once")
+		await expect(res.text()).rejects.toThrow(TypeError)
+		await expect(res.arrayBuffer()).rejects.toThrow(TypeError)
+		expect(res.bodyUsed).toBe(true)
+		expect(() => res.clone()).toThrow(TypeError)
+	})
+})
+
+describe("replaceResponse", () => {
+	it("keeps headers and statusText when only the status changes on a native response", () => {
+		const native = new Response("x", { headers: { "x-keep": "1" }, status: 200, statusText: "Fine" })
+		const same = replaceResponse(native, { body: "y" })
+		expect(same.headers.get("x-keep")).toBe("1")
+		expect(same.statusText).toBe("Fine")
+		const moved = replaceResponse(new Response("x", { headers: { "x-keep": "1" } }), { status: 201 })
+		expect(moved.status).toBe(201)
+		expect(moved.headers.get("x-keep")).toBe("1")
+	})
+
+	it("returns a 101 unchanged", () => {
+		const upgrade = { headers: new Headers(), status: 101 } as unknown as Response
+		expect(replaceResponse(upgrade, { headers: { "x-a": "1" } })).toBe(upgrade)
 	})
 })

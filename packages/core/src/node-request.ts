@@ -7,6 +7,9 @@ import { isValidHost } from "./trust.ts"
 /** bodyLimit uses this to swap the inbound stream without `new Request(req)`. */
 export const REPLACE_BODY = Symbol.for("honey.replaceBody")
 
+/** The Node adapter calls this when the response closes before it finished (client disconnect, shutdown). */
+export const ABORT_REQUEST = Symbol.for("honey.abortRequest")
+
 /**
  * Headers view over IncomingMessage. `get`/`has` read Node's already-parsed
  * map. A real `Headers` is built only if something iterates or mutates.
@@ -164,7 +167,9 @@ export class NodeRequest {
 	#webBody: ReadableStream<Uint8Array> | null | undefined
 	#bodyUsed = false
 	#fetch: Request | null = null
-	#signal: AbortSignal | null = null
+	#ac: AbortController | null = null
+	/* set when the adapter aborted the request before anything read `signal` */
+	#abortReason: { reason: unknown } | null = null
 
 	/** @param url the request URL; `nodeRequestUrl(incoming)` when left out (throws if that is invalid) */
 	constructor(incoming: IncomingMessage, url?: string) {
@@ -179,6 +184,8 @@ export class NodeRequest {
 
 	get body(): ReadableStream<Uint8Array> | null {
 		if (!this.#hasBody) return null
+		/* once a Fetch Request owns the stream (clone, formData, blob), it is the body */
+		if (this.#fetch) return this.#fetch.body
 		if (this.#webBody === undefined) {
 			// Node's web stream and the DOM/Bun ReadableStream brands do not overlap.
 			this.#webBody = Readable.toWeb(this.#incoming) as unknown as ReadableStream<Uint8Array>
@@ -192,15 +199,26 @@ export class NodeRequest {
 	}
 
 	get bodyUsed(): boolean {
-		return this.#bodyUsed || this.#incoming.readableEnded
+		if (this.#fetch) return this.#fetch.bodyUsed
+		return this.#bodyUsed || (this.#hasBody && this.#incoming.readableEnded)
 	}
 
+	/**
+	 * Aborts when the response closes before it finished: the client disconnected, or the
+	 * server shut down. Reading the body does not end it (Node's `'aborted'` event did).
+	 */
 	get signal(): AbortSignal {
-		if (this.#signal) return this.#signal
-		const ac = new AbortController()
-		this.#incoming.once("aborted", () => ac.abort())
-		this.#signal = ac.signal
-		return this.#signal
+		if (this.#ac === null) {
+			this.#ac = new AbortController()
+			if (this.#abortReason !== null) this.#ac.abort(this.#abortReason.reason)
+		}
+		return this.#ac.signal
+	}
+
+	[ABORT_REQUEST](reason?: unknown): void {
+		const why = reason ?? new DOMException("The client disconnected", "AbortError")
+		if (this.#ac !== null) this.#ac.abort(why)
+		else if (this.#abortReason === null) this.#abortReason = { reason: why }
 	}
 
 	get duplex(): "half" {
@@ -235,9 +253,9 @@ export class NodeRequest {
 		return this.#asFetch().formData()
 	}
 
+	/** As Fetch: an empty body is a `SyntaxError`, not `null`. */
 	async json(): Promise<unknown> {
-		const text = await this.text()
-		return text.length === 0 ? null : JSON.parse(text)
+		return JSON.parse(await this.text())
 	}
 
 	async text(): Promise<string> {
@@ -254,13 +272,14 @@ export class NodeRequest {
 			method: this.method,
 			signal: this.signal,
 		} as RequestInit)
-		this.#bodyUsed = true
 		return this.#fetch
 	}
 
 	async #readIncoming(): Promise<Buffer> {
-		this.#bodyUsed = true
+		/* a null body reads as empty, any number of times */
 		if (!this.#hasBody) return Buffer.alloc(0)
+		if (this.bodyUsed) throw new TypeError("Body has already been used")
+		this.#bodyUsed = true
 		if (this.#fetch) return Buffer.from(await this.#fetch.arrayBuffer())
 		if (this.#webBody) return streamToBuffer(this.#webBody)
 		const chunks: Buffer[] = []

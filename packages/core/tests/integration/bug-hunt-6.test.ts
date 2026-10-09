@@ -652,23 +652,23 @@ describe("bug-hunt-6: stream() error handling", () => {
 		expect(body).toContain("before-error")
 	})
 
-	it("callback throws without closing writer → no unhandled rejection", async () => {
+	it("callback throws without closing writer → the body errors after the data written", async () => {
 		const app = honey<{}>()
 		app.get("/stream").handler((ctx) =>
 			ctx.res.stream(async (writable) => {
 				const writer = writable.getWriter()
 				await writer.write(new TextEncoder().encode("data"))
-				/* release lock before throwing so writable.close() can work */
-				writer.releaseLock()
 				throw new Error("callback error")
 			}),
 		)
 
 		const res = await app.fetch(new Request("http://localhost/stream"), {})
 		expect(res.status).toBe(200)
-		/* stream closes via .catch handler */
-		const body = await res.text()
-		expect(body).toContain("data")
+		const reader = (res.body as ReadableStream<Uint8Array>).getReader()
+		const first = await reader.read()
+		expect(new TextDecoder().decode(first.value)).toBe("data")
+		/* the writer is still held; the body breaks anyway instead of hanging */
+		await expect(reader.read()).rejects.toThrow("callback error")
 	})
 })
 

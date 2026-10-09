@@ -1,5 +1,5 @@
 import http from "node:http"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { HoneyError } from "../../src/error.ts"
 import { defineErrors } from "../../src/errors.ts"
 import { etag } from "../../src/etag.ts"
@@ -193,11 +193,16 @@ describe("bug-hunt-12: SSE keepalive cleanup on callback error", () => {
 			),
 		)
 
+		const clearSpy = vi.spyOn(globalThis, "clearInterval")
 		const res = await app.fetch(new Request("http://localhost/events"), {})
 		expect(res.status).toBe(200)
-		const body = await res.text()
-		expect(body).toContain("data: first")
-		/* if keepalive leaked, we'd see ongoing heartbeats — but stream is closed */
+		const reader = (res.body as ReadableStream<Uint8Array>).getReader()
+		const first = await reader.read()
+		expect(new TextDecoder().decode(first.value)).toContain("data: first")
+		/* the throw breaks the body, and the keepalive interval is cleared with it */
+		await expect(reader.read()).rejects.toThrow("callback died")
+		expect(clearSpy).toHaveBeenCalled()
+		clearSpy.mockRestore()
 	})
 })
 

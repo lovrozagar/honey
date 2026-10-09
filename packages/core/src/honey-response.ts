@@ -186,8 +186,16 @@ export class HoneyResponse {
 		return this.#raw
 	}
 
-	async arrayBuffer(): Promise<ArrayBuffer> {
+	/** A body is read once, as with Fetch: a second read throws instead of returning nothing. */
+	#consume(): void {
+		if (this.#bodyUsed || (this.#stream?.locked ?? false)) {
+			throw new TypeError("Body has already been used")
+		}
 		this.#bodyUsed = true
+	}
+
+	async arrayBuffer(): Promise<ArrayBuffer> {
+		this.#consume()
 		if (this.#raw === null) {
 			if (this.#stream) return streamToArrayBuffer(this.#stream)
 			return new ArrayBuffer(0)
@@ -210,17 +218,27 @@ export class HoneyResponse {
 	}
 
 	clone(): Response {
+		if (this.#bodyUsed) throw new TypeError("Body has already been used")
+		let stream = this.#stream
+		if (stream !== undefined && stream !== null) {
+			/* tee, keep one branch: the original stays readable */
+			const [mine, theirs] = stream.tee()
+			this.#stream = mine
+			stream = theirs
+		}
 		return new HoneyResponse({
 			headers: { ...this.plainHeaders },
 			raw: this.#raw,
 			status: this.status,
 			statusText: this.statusText,
-			stream: this.#stream === undefined || this.#stream === null ? this.#stream : this.#stream.tee()[1],
+			stream,
 		}) as unknown as Response
 	}
 
 	async formData(): Promise<FormData> {
-		return new Response(this.body, {
+		const body = this.body
+		this.#consume()
+		return new Response(body, {
 			headers: this.plainHeaders as HeadersInit,
 			status: this.status,
 		}).formData()
@@ -232,7 +250,7 @@ export class HoneyResponse {
 	}
 
 	async text(): Promise<string> {
-		this.#bodyUsed = true
+		this.#consume()
 		if (this.#raw === null) {
 			if (this.#stream) return new TextDecoder().decode(await streamToArrayBuffer(this.#stream))
 			return ""
@@ -275,6 +293,8 @@ export function replaceResponse(
 		status?: number
 	},
 ): Response {
+	/* an upgrade response belongs to the runtime: rebuilding it throws (RangeError) or breaks the socket */
+	if (response.status === 101) return response
 	if (isHoneyResponse(response)) {
 		if (init.body === undefined) {
 			return response.derive({ headers: init.headers, status: init.status }) as unknown as Response
@@ -304,9 +324,12 @@ export function replaceResponse(
 			}) as unknown as Response
 		}
 	}
+	const status = init.status ?? response.status
 	return new Response(init.body !== undefined ? init.body : response.body, {
-		headers: init.headers === undefined ? undefined : headersToInit(init.headers),
-		status: init.status ?? response.status,
+		/* left out, the headers carry over: a status change must not drop them */
+		headers: headersToInit(init.headers ?? response.headers),
+		status,
+		statusText: status === response.status ? response.statusText : undefined,
 	})
 }
 

@@ -1,3 +1,4 @@
+import { bodyKind, headResponse, isProducedStream, rawBodyOf } from "./body-kind.ts"
 import { HoneyContext } from "./context.ts"
 import { dict } from "./dict.ts"
 import { normalizePath, pathOfUrl, searchOfUrl } from "./request-path.ts"
@@ -2802,9 +2803,10 @@ export class Honey<
 
 	/** Output validation, inside the chain: an invalid body becomes an error response the middleware sees. */
 	private async _validateOutput(handler: RouteHandler, ctx: HoneyContext<TEnv>, response: Response): Promise<Response> {
-		if (response === undefined || response === null || ctx._isErrorResponse || response.body === null) {
-			return response
-		}
+		if (response === undefined || response === null || ctx._isErrorResponse) return response
+		/* read the creation tag, never `response.body`: on Node that would build a stream per response */
+		const kind = bodyKind(response)
+		if (kind === "empty") return response
 		const ct = response.headers.get("content-type")
 
 		/* content-type mismatch check */
@@ -2819,10 +2821,18 @@ export class Honey<
 			}
 		}
 
-		/* JSON schema validation — read original, return clone (Bun clone() drains original) */
-		if (ct?.startsWith("application/json") && handler.ov) {
+		/* JSON schema validation. A body Honey built from a string is validated from that string
+		 * (no stream, no tee); anything else is read from a clone (Bun clone() drains the original).
+		 * A stream Honey created (sse, stream, generate) is never buffered: it may never end. */
+		if (ct?.startsWith("application/json") && handler.ov && !isProducedStream(response)) {
 			const sk = codeToStatusKey[response.status]
 			if (sk) {
+				const raw = rawBodyOf(response)
+				if (raw !== null) {
+					const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw)
+					await handler.ov(sk, text.length === 0 ? null : JSON.parse(text))
+					return response
+				}
 				const forReturn = response.clone()
 				const data: unknown = await response.json()
 				await handler.ov(sk, data)
@@ -2888,13 +2898,7 @@ export class Honey<
 				/* telemetry must never crash the response path */
 			}
 		}
-		/* HEAD responses must have empty body — preserve headers + status */
-		if (fc.method === "HEAD") {
-			return new Response(null, {
-				headers: response.headers,
-				status: response.status,
-			})
-		}
+		if (fc.method === "HEAD") return headResponse(response)
 		return response
 	}
 }

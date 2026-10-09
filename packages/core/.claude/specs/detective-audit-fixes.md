@@ -29,7 +29,7 @@ Both REDs must be validated before any CODE. Both GREENs must be confirmed after
 
 ### 7. Middleware undefined return → guard with helpful error
 
-### 8. Stream error swallowed → close writable on error
+### 8. Stream error swallowed → ~~close writable on error~~ superseded: the body errors (see §8)
 
 ### 9. WS adapter detail leak → generic error response + log
 
@@ -234,6 +234,13 @@ callback(writable).catch((e) => {
 
 **Files:** `src/response.ts`
 **Tests:** `tests/unit/response/response.test.ts`
+
+**Status (2026-10-09): the fix above was incomplete.** `writable.close()` throws while the callback
+still holds a writer (the README pattern), so the response hung, and a clean close turned a failure
+into a truncated 200. Replaced by `src/producer-stream.ts`: `sse`, `stream` and `generate` own their
+readable side, so a producer error errors the body (`controller.error`) whatever the writable's lock
+state, and is logged through the app logger. Tests: `tests/unit/response/streaming.test.ts`,
+`tests/integration/stream-lifecycle/`.
 
 ---
 

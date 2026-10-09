@@ -373,29 +373,30 @@ app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
 
 `ctx` is a `HoneyContext`. Fields:
 
-| Field                          | Meaning                                                     |
-| ------------------------------ | ----------------------------------------------------------- |
-| `ctx.req`                      | Web `Request` (on Node serve, a Request-shaped wrapper)     |
-| `ctx.res`                      | `HoneyRes` — see [Responses](#responses)                    |
-| `ctx.env`                      | Bindings you passed to `fetch` / `serve`                    |
-| `ctx.params`                   | Path params (`:id`, `*path`)                                |
-| `ctx.search` / `ctx.searchAll` | First value / all values of the query string (lazy)         |
-| `ctx.headers` / `ctx.cookies`  | Lazy records (lowercase cookie names as sent)               |
-| `ctx.ip`                       | Client IP, canonical; see [Client address](#client-address) |
-| `ctx.input`                    | Validated input when `.input()` is declared                 |
-| `ctx.errors`                   | Typed error factory when `.errorFactory()` is set           |
-| `ctx.meta`                     | Merged route + chain `.meta()`                              |
-| `ctx.path`                     | Normalized request path after `stripPrefix`                 |
-| `ctx.routePattern`             | Registered pattern, e.g. `/users/:id`                       |
-| `ctx.realtime`                 | `{ publish(topic, data) }` when realtime routes exist       |
-| `ctx.tap(key, payload)`        | Queue a tap (only if `.taps()` was declared)                |
-| `ctx.background(promise)`      | `waitUntil` on Workers, otherwise fire-and-forget           |
-| `ctx.executionCtx`             | Workers `ExecutionContext` when `fetch` received one        |
-| `ctx.log`                      | Present when `logger({ instance })` middleware ran          |
-| `ctx.requestId`                | Present when `requestId()` middleware ran                   |
-| `ctx.timing`                   | Present when `serverTiming()` middleware ran                |
+| Field                          | Meaning                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `ctx.req`                      | Web `Request` (on Node serve, a Request-shaped wrapper)                                    |
+| `ctx.res`                      | `HoneyRes` — see [Responses](#responses)                                                   |
+| `ctx.env`                      | Bindings you passed to `fetch` / `serve`                                                   |
+| `ctx.params`                   | Path params (`:id`, `*path`)                                                               |
+| `ctx.search` / `ctx.searchAll` | First value / all values of the query string (lazy)                                        |
+| `ctx.headers` / `ctx.cookies`  | Lazy records (lowercase cookie names as sent)                                              |
+| `ctx.ip`                       | Client IP, canonical; see [Client address](#client-address)                                |
+| `ctx.input`                    | Validated input when `.input()` is declared                                                |
+| `ctx.errors`                   | Typed error factory when `.errorFactory()` is set                                          |
+| `ctx.meta`                     | Merged route + chain `.meta()`                                                             |
+| `ctx.path`                     | Normalized request path after `stripPrefix`                                                |
+| `ctx.signal`                   | Aborts on disconnect, `timeout()` or shutdown; see [SSE and streaming](#sse-and-streaming) |
+| `ctx.routePattern`             | Registered pattern, e.g. `/users/:id`                                                      |
+| `ctx.realtime`                 | `{ publish(topic, data) }` when realtime routes exist                                      |
+| `ctx.tap(key, payload)`        | Queue a tap (only if `.taps()` was declared)                                               |
+| `ctx.background(promise)`      | `waitUntil` on Workers, otherwise fire-and-forget                                          |
+| `ctx.executionCtx`             | Workers `ExecutionContext` when `fetch` received one                                       |
+| `ctx.log`                      | Present when `logger({ instance })` middleware ran                                         |
+| `ctx.requestId`                | Present when `requestId()` middleware ran                                                  |
+| `ctx.timing`                   | Present when `serverTiming()` middleware ran                                               |
 
-Reserved keys that middleware / `.context()` **cannot** overwrite: every field above that Honey sets (`req`, `res`, `env`, `params`, `headers`, `cookies`, `search`, `searchAll`, `ip`, `path`, `meta`, `errors`, …).
+Reserved keys that middleware / `.context()` **cannot** overwrite: every field above that Honey sets (`req`, `res`, `env`, `params`, `headers`, `cookies`, `search`, `searchAll`, `ip`, `path`, `signal`, `meta`, `errors`, …).
 
 `ctx.search`, `ctx.searchAll`, `ctx.headers` and validated `search`/`headers`/`form` records have no prototype, so a query like `?__proto__=x` or `?constructor=x` is plain data. Read them with `ctx.search.key`, `key in ctx.search` or `Object.hasOwn(ctx.search, key)`; they have no `hasOwnProperty` method.
 
@@ -878,7 +879,7 @@ const api = app.use(etag()) // weak ETag (default)
 const custom = app.use(etag({ weak: false }))
 ```
 
-GET/HEAD only. Skips 4xx and streaming bodies. Responds **304** when `If-None-Match` matches.
+GET/HEAD only, and only on 200 responses. Never reads a stream: `sse()`, `stream()`, `generate()` and native bodies without a `content-length` pass through untagged. A handler-set `ETag` is kept. Responds **304** when `If-None-Match` matches (weak comparison, lists and `*`).
 
 #### `timeout` — `@lovrozagar/honey/timeout`
 
@@ -888,7 +889,7 @@ import { timeout } from "@lovrozagar/honey/timeout"
 const api = app.use(timeout({ duration: 5_000 }))
 ```
 
-Slow handlers reject with **504** `request_timeout`.
+Slow handlers reject with **504** `request_timeout`, and `ctx.signal` aborts with a `TimeoutError` so the handler's work stops: pass the signal to `fetch()`, your database driver or anything else that takes one. Work that ignores it runs to completion and its response is dropped.
 
 #### `secure-headers` — `@lovrozagar/honey/secure-headers`
 
@@ -1147,8 +1148,12 @@ Low-level Node listen (same adapter, no runtime detect):
 ```ts
 import { serve } from "@lovrozagar/honey/node"
 const server = serve(app, { env: {}, port: 3000, hostname: "0.0.0.0" })
-await server.shutdown()
+await server.shutdown(10_000)
 ```
+
+`shutdown(timeout?)` stops accepting connections and lets in-flight requests finish. Responses that are already streaming (SSE, `generate()`) never finish on their own, so their `ctx.signal` aborts at once and they end; handlers still working get until `timeout`, then their signal aborts and every connection is closed. Idle keep-alive connections close immediately.
+
+On Node, bodies Honey built in memory, or that declare a small `content-length`, are written in one `res.end`. Anything else is piped as it is produced, whatever its content type, and the reader is cancelled when the client goes away.
 
 `runtime: "cloudflare"` throws. Workers cannot listen.
 
@@ -1376,9 +1381,13 @@ app.get("/events").handler((ctx) =>
 			if (stream.lastEventId) {
 				await stream.send({ event: "resume", data: `from ${stream.lastEventId}` })
 			}
-			await stream.send({ event: "tick", data: "hello", id: "1", retry: 3000 })
-			await stream.send({ event: "data", data: { n: 42 }, id: "2" })
-			stream.close()
+			try {
+				for (const update of await feed.since(stream.lastEventId, { signal: stream.signal })) {
+					await stream.send({ event: "data", data: update, id: update.id })
+				}
+			} finally {
+				stream.close()
+			}
 		},
 		{ defaultRetry: 3000, keepalive: 15_000 },
 	),
@@ -1389,23 +1398,39 @@ app.get("/events").handler((ctx) =>
 
 ```ts
 app.get("/stream").handler((ctx) =>
-	ctx.res.stream(async (writable) => {
+	ctx.res.stream(async (writable, signal) => {
 		const w = writable.getWriter()
-		await w.write(new TextEncoder().encode("chunk"))
-		await w.close()
+		while (!signal.aborted) {
+			await w.write(new TextEncoder().encode("chunk"))
+			await sleep(1_000)
+		}
 	}),
 )
 
 app.get("/gen").handler((ctx) =>
 	ctx.res.generate(
 		(async function* () {
-			yield "one"
-			yield "two"
+			try {
+				yield "one"
+				yield "two"
+			} finally {
+				/* runs on a normal end, a disconnect, a timeout or shutdown */
+			}
 		})(),
 		{ contentType: "text/plain", status: 200 },
 	),
 )
 ```
+
+All three share one lifecycle:
+
+- **Lazy start.** The callback (or generator) runs when the body is first read. A HEAD request, or middleware that replaces the response, never starts it.
+- **One end.** The stream ends when the producer finishes, when the client disconnects, or when `ctx.signal` aborts (`timeout()`, server shutdown). `stream.signal` / the `signal` argument abort with it, a generator gets `return()` so its `finally` runs, and the keepalive timer is cleared.
+- **Writes after the end.** `stream.send()` and `writer.write()` reject with an `AbortError`, which ends an awaiting loop. Honey does not report that rejection, and an unawaited send never becomes an unhandled rejection. `stream.close()` is synchronous and idempotent, so it is safe in a `finally`.
+- **Errors.** A callback or generator that throws breaks the body (the client sees an aborted transfer, not a clean end) and is logged through the app logger, or `console.error` without one.
+- **Flushing.** `ctx.res.stream()` ends the body after queued writes flush when the callback returns, whether or not you closed the writable.
+
+`ctx.signal` is the same signal for any handler: it aborts when the client disconnects, when `timeout()` fires, or when the server shuts down. On Deno, `request.signal` also aborts once a response has been delivered (Deno's legacy behavior; it prints a notice the first time a handler listens), so treat an abort after the response as normal.
 
 ## Generated clients
 

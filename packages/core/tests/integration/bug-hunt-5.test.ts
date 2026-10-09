@@ -416,7 +416,7 @@ describe("bug-hunt-5: generate() streaming", () => {
 		expect(res.body).toContain("Alice,30")
 	})
 
-	it("generator that throws → stream closed gracefully", async () => {
+	it("generator that throws → the response is cut off after the data before it", async () => {
 		const app = honey<{}>()
 		app.get("/fail").handler((ctx) => {
 			async function* gen() {
@@ -428,10 +428,23 @@ describe("bug-hunt-5: generate() streaming", () => {
 		server = serve(app, { env: {}, port: 0 })
 		const addr = server.address() as { port: number }
 
-		const res = await request(addr.port, "/fail")
-		/* stream should close gracefully, partial data received */
+		/* a broken body: the client sees the data before the throw, then an aborted transfer,
+		 * never a clean end it would take for the whole response */
+		const res = await new Promise<{ aborted: boolean; body: string; status: number }>((resolve, reject) => {
+			const req = http.get({ hostname: "127.0.0.1", path: "/fail", port: addr.port }, (r) => {
+				let body = ""
+				r.on("data", (c) => {
+					body += c
+				})
+				r.on("end", () => resolve({ aborted: false, body, status: r.statusCode ?? 0 }))
+				r.on("error", () => resolve({ aborted: true, body, status: r.statusCode ?? 0 }))
+				r.on("aborted", () => resolve({ aborted: true, body, status: r.statusCode ?? 0 }))
+			})
+			req.on("error", reject)
+		})
 		expect(res.status).toBe(200)
 		expect(res.body).toContain("before-error")
+		expect(res.aborted).toBe(true)
 	})
 })
 

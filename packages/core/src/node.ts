@@ -3,8 +3,9 @@ import { createServer } from "node:http"
 import { Readable, type Duplex } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import type { Honey } from "./index.ts"
+import { bodyKind, rawBodyOf } from "./body-kind.ts"
 import { isHoneyResponse } from "./honey-response.ts"
-import { incomingToNodeRequest, nodeRequestUrl } from "./node-request.ts"
+import { ABORT_REQUEST, incomingToNodeRequest, nodeRequestUrl } from "./node-request.ts"
 
 type ServeOptions<TEnv> = {
 	env: TEnv
@@ -14,7 +15,6 @@ type ServeOptions<TEnv> = {
 
 /** Buffer known-size bodies up to this many bytes, then `res.end(buf)`. */
 const BUFFER_BODY_MAX = 256 * 1024
-const RAW_BODY = Symbol.for("honey.rawBody")
 
 // Node's `Readable.fromWeb` wants `node:stream/web` streams; DOM/Bun brands do not overlap.
 function asNodeWebStream(stream: ReadableStream<Uint8Array>): import("node:stream/web").ReadableStream {
@@ -45,25 +45,36 @@ function collectNodeHeaders(response: Response, extra?: Record<string, string>):
 	return headerObj
 }
 
+/**
+ * Buffer a body only when its size is known and small: a body Honey built in memory, or one
+ * that declares `content-length`. Everything else (SSE, `generate()`, a proxied stream, an
+ * untagged `new Response(stream)`) is piped as it is produced, whatever its content type.
+ */
 function shouldBufferBody(response: Response): boolean {
-	const rawLen = response.headers.get("content-length")
-	if (rawLen !== null) {
-		const len = Number(rawLen)
-		return Number.isFinite(len) && len <= BUFFER_BODY_MAX
-	}
-	const ct = response.headers.get("content-type") ?? ""
-	if (ct.startsWith("text/event-stream")) return false
-	return (
-		ct.startsWith("application/json") ||
-		ct.startsWith("text/plain") ||
-		ct.startsWith("text/html") ||
-		ct.startsWith("text/csv") ||
-		ct.startsWith("application/xml")
-	)
+	if (bodyKind(response) !== "buffered") return false
+	const len = Number(response.headers.get("content-length"))
+	return Number.isFinite(len) && len <= BUFFER_BODY_MAX
 }
 
-function rawBodyOf(response: Response): string | Uint8Array | undefined {
-	return (response as Response & { [RAW_BODY]?: string | Uint8Array })[RAW_BODY]
+/**
+ * Pipe a body to the socket. When the response closes first (client gone, shutdown), the
+ * reader is cancelled so the producer stops; nothing is left reading.
+ */
+async function pipeBody(stream: ReadableStream<Uint8Array>, res: ServerResponse): Promise<void> {
+	const readable = Readable.fromWeb(asNodeWebStream(stream))
+	const onClose = (): void => {
+		if (!res.writableFinished) readable.destroy()
+	}
+	res.once("close", onClose)
+	try {
+		await pipeline(readable, res)
+	} catch {
+		if (!res.destroyed) res.destroy()
+		/* `destroy()` cancels the web reader; this covers a stream that errored on its own */
+		stream.cancel().catch(() => {})
+	} finally {
+		res.off("close", onClose)
+	}
 }
 
 async function responseToNode(response: Response, res: ServerResponse): Promise<void> {
@@ -82,11 +93,7 @@ async function responseToNode(response: Response, res: ServerResponse): Promise<
 			return
 		}
 		res.writeHead(response.status, response.plainHeaders)
-		try {
-			await pipeline(Readable.fromWeb(asNodeWebStream(stream)), res)
-		} catch {
-			if (!res.destroyed) res.destroy()
-		}
+		await pipeBody(stream, res)
 		return
 	}
 
@@ -114,11 +121,7 @@ async function responseToNode(response: Response, res: ServerResponse): Promise<
 	}
 
 	res.writeHead(response.status, collectNodeHeaders(response))
-	try {
-		await pipeline(Readable.fromWeb(asNodeWebStream(body)), res)
-	} catch {
-		if (!res.destroyed) res.destroy()
-	}
+	await pipeBody(body, res)
 }
 
 export type HoneyServer = Server & {
@@ -130,26 +133,38 @@ export function serve<TEnv>(
 	options: ServeOptions<TEnv>,
 ): HoneyServer {
 	const env = options.env
-	let inflight = 0
+	/* in-flight requests and their responses: shutdown aborts their signals */
+	const inflight = new Map<ServerResponse, Request>()
 	let draining = false
-	let drainResolve: (() => void) | null = null
+
+	const abort = (request: Request, reason: unknown): void => {
+		;(request as unknown as { [ABORT_REQUEST]?: (r?: unknown) => void })[ABORT_REQUEST]?.(reason)
+	}
 
 	const server = createServer(async (req, res) => {
 		if (draining) {
-			res.writeHead(503)
+			res.writeHead(503, { connection: "close" })
 			res.end("Service Unavailable")
 			return
 		}
-		inflight++
+		let request: Request | null = null
 		try {
-			const request = incomingToRequest(req)
+			request = incomingToRequest(req)
 			if (request === null) {
 				res.writeHead(400, { connection: "close", "content-type": "text/plain" })
 				res.end("Bad Request")
 				return
 			}
+			const tracked = request
+			inflight.set(res, tracked)
+			/* the response closed before it finished: the client left (or shutdown cut it) */
+			res.once("close", () => {
+				if (!res.writableFinished) abort(tracked, new DOMException("The client disconnected", "AbortError"))
+			})
 			const maybe = app.fetch(request, env)
 			const response = maybe instanceof Promise ? await maybe : maybe
+			/* while draining, tell keep-alive clients this connection ends with the response */
+			if (draining) res.shouldKeepAlive = false
 			await responseToNode(response, res)
 		} catch {
 			if (!res.headersSent) {
@@ -159,10 +174,9 @@ export function serve<TEnv>(
 				res.destroy()
 			}
 		} finally {
-			inflight--
-			if (draining && inflight === 0) {
-				drainResolve?.()
-			}
+			if (request !== null) inflight.delete(res)
+			/* a keep-alive connection that just went idle would hold `close()` open until it times out */
+			if (draining) setImmediate(() => server.closeIdleConnections())
 		}
 	})
 
@@ -196,23 +210,31 @@ export function serve<TEnv>(
 	server.listen(options?.port ?? 0, options?.hostname)
 
 	const honeyServer = server as HoneyServer
+	/**
+	 * Stop accepting connections and let in-flight requests finish. Responses already streaming
+	 * (SSE, `generate()`) never finish on their own, so their `ctx.signal` aborts now and they
+	 * end; handlers still working get until `timeout`, then their signal aborts and every
+	 * connection is closed.
+	 */
 	honeyServer.shutdown = (timeout?: number): Promise<void> => {
 		draining = true
+		const shutdownReason = (): DOMException => new DOMException("The server is shutting down", "AbortError")
 
 		return new Promise<void>((resolve) => {
+			let timer: ReturnType<typeof setTimeout> | undefined
+			/* fires once every connection has closed */
 			server.close(() => {
-				if (inflight === 0) {
-					resolve()
-					return
-				}
-				drainResolve = resolve
+				if (timer !== undefined) clearTimeout(timer)
+				resolve()
 			})
-
+			server.closeIdleConnections()
+			for (const [res, request] of inflight) {
+				if (res.headersSent) abort(request, shutdownReason())
+			}
 			if (timeout !== undefined) {
-				setTimeout(() => {
-					drainResolve = null
+				timer = setTimeout(() => {
+					for (const request of inflight.values()) abort(request, shutdownReason())
 					server.closeAllConnections()
-					resolve()
 				}, timeout)
 			}
 		})

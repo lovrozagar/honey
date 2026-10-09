@@ -48,6 +48,14 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `ipRestrict` reads the client address from `ctx.ip`, which `app.trustProxy()` decides; its `trustProxy` and `trustCloudflare` options are gone and throw. Rules are parsed at construction (invalid rules, `allowList: []` and a config with no list throw) and compared numerically. `X-Real-IP` is no longer read.
 - `staticFiles`: `resolve` gets the decoded path (`/my file.txt`, was `/my%20file.txt`), matched against `ctx.path` (after `stripPrefix`, was the raw URL) on whole segments; `headers(filePath)` gets the path after `rewritePath`; segments containing `:` fall through.
 - Node `serve()` answers 400 for a `Host` header that is not `host[:port]` and for request targets that are not `/path` or `http(s)://host/path`. An absolute-form target's authority is used instead of `Host`; the scheme is `https` on a TLS socket.
+- `ctx.res.sse()`, `ctx.res.stream()` and `ctx.res.generate()` start their callback or generator when the body is first read, not when the handler returns. A HEAD request, or middleware that swaps the response, never runs the producer. Code that relied on the callback running without anyone reading the body must read it.
+- A producer that throws now breaks the body (the client sees an aborted transfer) instead of ending it as a clean, truncated 200, and the error is logged through the app logger (`console.error` without one).
+- `stream.send()` and `writer.write()` after the stream ended reject with an `AbortError` (an unawaited one never surfaces as an unhandled rejection).
+- SSE responses no longer send `connection: keep-alive` (hop-by-hop, forbidden in HTTP/2, and it overrode a client's `Connection: close`).
+- `ctx.res.json/text/html/csv/xml/binary` with a null-body status (`204`, `205`, `304`) throw a `TypeError` on every runtime; on Node they used to send the body with a `content-length`. Use `ctx.res.noContent()`.
+- `ResponseOptions.status` wins over the status key in `json`, `text`, `html` and the other body helpers (it was ignored).
+- `signal` is a reserved context key.
+- On Node, `ctx.req.json()` on an empty body throws a `SyntaxError` and a second body read throws a `TypeError`, as Fetch does (they returned `null` and `""`).
 
 ### Added
 
@@ -61,6 +69,7 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `app.trustProxy(false | hops | ranges)`: one setting for which reverse proxies to believe. `ctx.ip` (canonical client address from the runtime's peer: the Node socket, Bun `requestIP`, Deno `remoteAddr`, Workers `CF-Connecting-IP`) and `clientInfo(ctx)` (`ip`, `protocol`, `host`) follow it.
 - `app.encodedSlashes("allow" | "reject")`.
 - `testClient(app, { ip })` and per-request `{ ip }` set the peer address.
+- `ctx.signal`: aborts when the client disconnects, when `timeout()` fires (with a `TimeoutError`), or when the server shuts down. `SSEStream` gains `signal` and `closed`; the `ctx.res.stream()` callback receives the signal as its second argument; `generate()` accepts `Uint8Array` values.
 
 ### Deprecated
 
@@ -87,6 +96,16 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `staticFiles` matched `/assets-private/x` under `prefix: "/assets"`, passed backslashes and trailing `/..` to `resolve`, answered 500 for malformed percent-encoding, and set headers in place on immutable responses.
 - `proxy()` could hand `destination` a path starting with `//` or containing `..%2f` segments.
 - Any `use(path, mw)`, `.input()`, an `errorFactory` with `.errors()`, or `telemetry.onMiddleware` sent every request through a slow path that rebuilt middleware arrays and error-factory subsets per request; mounting re-walked every route per scoped entry (21 s for 200 sub-apps). Chains, error subsets and telemetry wrappers are now built once.
+- SSE: `writer.write()` (default retry, keepalive) and `writer.close()` were floating promises. A client that disconnected while `defaultRetry` was set, or a `stream.close()` in a `finally` (the README pattern), raised an unhandled rejection that exits Node.
+- HEAD on a streaming route (a GET handler answering HEAD) dropped the body without cancelling it: each HEAD left a producer and its keepalive interval running forever. HEAD on Node also lost the `content-length` GET sends.
+- The Node adapter buffered any body without a `content-length` whose type was JSON, text, HTML, CSV or XML: `generate(gen, { contentType: "text/plain" })` sent nothing until the generator finished, an endless one never responded, and `shutdown()` never drained. Only bodies Honey built in memory or that declare a small length are buffered now; the rest is piped, and cancelled when the client leaves.
+- `ctx.req.signal` on Node only followed the deprecated `'aborted'` event, so after the body was read (POST → SSE) a disconnect never aborted it. It now aborts when the response closes before it finished.
+- `ctx.res.stream()` hung forever when the callback threw while holding a writer; it returned without flushing writes it had not awaited; `generate()` never called `return()` on disconnect, so the generator's `finally` never ran.
+- `timeout()` only raced the handler: the 504 went out and the work ran on. It now aborts `ctx.signal`.
+- Output validation re-parsed the body through a tee'd stream; a body Honey built is validated from its string. Output validation, `etag()` and the Node adapter read a body-kind tag set at creation instead of `response.body`, which built a stream per response on Node.
+- `HoneyResponse` (Node's fast-path response): `clone()` locked the original's stream, a second `text()` returned the body again instead of throwing; `replaceResponse()` on a native response with only a new status dropped every header and `statusText`, and rebuilt `101` upgrade responses.
+- On Node, `clone()` on the request locked its body for later readers (body-logging middleware before `bodyLimit` turned every POST into a 500); `opts.cookies` replaced a `set-cookie` in `opts.headers` instead of appending as on other runtimes.
+- Node `shutdown()` waited out keep-alive timeouts (6 s with one idle client), never cleared its timer, and could not finish while an SSE stream was open: streaming responses now end at once, idle connections close, and handlers past the timeout get their signal aborted.
 
 ### Security
 
@@ -106,6 +125,8 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - Middleware that caught errors from `await next()` now gets the error response instead: check `res.status` (or use `onError`).
 - If a scope like `use("/admin", auth)` should not run on 404s under `/admin` or on `/:section` routes whose value is `admin`, narrow the scope; the old behavior left those paths unguarded.
 - Pass the same `name` to cookie `sign` and `verify`. Set `legacy: false` once cookies signed by an older release have expired. During a rolling deploy, instances still on an older release cannot verify v2 signatures.
+- Pass `ctx.signal` (or `stream.signal`) to `fetch()`, database drivers and timers in long-running handlers and producers, so a disconnect, timeout or shutdown stops them. Loops of `await stream.send()` already end: the send rejects once the client is gone.
+- A test that checked an SSE/stream callback's side effects right after `app.fetch()` must read the body first (`await res.text()`).
 
 ## 0.6.5 - 2026-10-02
 

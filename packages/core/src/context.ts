@@ -1,4 +1,5 @@
 import { isNodeOutbound } from "./honey-response.ts"
+import type { ProducerOptions } from "./producer-stream.ts"
 import type { SSEOptions, SSEStream, TypedResponse } from "./response.ts"
 import { HoneyRes } from "./response.ts"
 import { dict } from "./dict.ts"
@@ -14,11 +15,22 @@ import { parseCookies } from "./validation.ts"
  */
 class ContextRes extends HoneyRes {
 	private _req: Request
+	private _ctx: HoneyContext<unknown>
 	private _lastEventId: string | undefined | false = false
 
-	constructor(req: Request) {
+	constructor(req: Request, ctx: HoneyContext<unknown>) {
 		super(isNodeOutbound(req))
 		this._req = req
+		this._ctx = ctx
+	}
+
+	/** Streams end with the request: `ctx.signal`. Producer failures go to the app logger. */
+	protected override _producer(): ProducerOptions {
+		const ctx = this._ctx
+		return {
+			report: (err) => reportStreamError(ctx, err),
+			signal: () => ctx.signal,
+		}
 	}
 
 	override sse(
@@ -84,6 +96,44 @@ function noop() {}
  * `declare` fields have no private brand, so Omit<HoneyContext, "res">
  * works structurally for ApplyOutput type narrowing.
  */
+type Logger = { error?: (obj: unknown, msg?: string) => void }
+
+function reportStreamError(ctx: HoneyContext<unknown>, err: unknown): void {
+	const log = (ctx._rq as { log?: Logger } | null)?.log
+	if (typeof log?.error === "function") {
+		log.error({ err, path: ctx.path }, "stream producer failed")
+		return
+	}
+	console.error("honey: stream producer failed", err)
+}
+
+/**
+ * Abort `ctx.signal` (with `reason`) for the request `ctx` serves: `timeout()` uses it. Streams
+ * still running for the request end, and handlers that pass the signal on stop their work.
+ */
+export function abortRequest(ctx: HoneyContext<never> | HoneyContext, reason?: unknown): void {
+	const c = ctx as HoneyContext
+	if (c._ac === null) linkSignal(c)
+	c._ac?.abort(reason)
+}
+
+/** Create `ctx.signal`, following the request's own signal (client disconnect, shutdown). */
+function linkSignal(ctx: HoneyContext): AbortSignal {
+	const ac = new AbortController()
+	ctx._ac = ac
+	let request: AbortSignal | undefined
+	try {
+		request = ctx.req.signal
+	} catch {
+		/* a request shim without a signal: only timeout() can abort */
+	}
+	if (request !== undefined && request !== null) {
+		if (request.aborted) ac.abort(request.reason)
+		else request.addEventListener("abort", () => ac.abort(request.reason), { once: true })
+	}
+	return ac.signal
+}
+
 export class HoneyContext<TEnv = Record<string, unknown>> {
 	readonly background: (p: Promise<unknown>) => void
 	readonly env: TEnv
@@ -108,8 +158,15 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	declare readonly routePattern: string
 	declare readonly search: Record<string, string>
 	declare readonly searchAll: Record<string, string[]>
+	/**
+	 * Aborts when the client disconnects, when `timeout()` fires, or when the server shuts down.
+	 * Pass it to `fetch()`, database drivers and timers so abandoned work stops; streams from
+	 * `ctx.res.sse()`, `stream()` and `generate()` already end with it.
+	 */
+	declare readonly signal: AbortSignal
 
 	/* backing state for lazy getters — stored directly on instance to avoid extra object allocation */
+	/** @internal */ _ac: AbortController | null
 	/** @internal */ _lzClient: ClientInfo | null
 	/** @internal */ _lzCookies: Record<string, string> | null
 	/** @internal */ _lzHeaders: Record<string, string> | null
@@ -140,7 +197,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		this.req = opts.req
 		this.env = opts.env
 		this.params = opts.params
-		this.res = new ContextRes(opts.req)
+		this.res = new ContextRes(opts.req, this as HoneyContext<unknown>)
 
 		/* direct assignment — no defineProperty */
 		;(this as Record<string, unknown>)["executionCtx"] = opts.executionCtx
@@ -158,6 +215,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 			: bgSwallow
 
 		/* lazy getter backing — flat on instance, no extra object */
+		this._ac = null
 		this._lzClient = null
 		this._lzCookies = null
 		this._lzHeaders = null
@@ -221,6 +279,13 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 			enumerable: true,
 			get(this: HoneyContext): string | null {
 				return clientInfo(this).ip
+			},
+		})
+		Object.defineProperty(HoneyContext.prototype, "signal", {
+			configurable: true,
+			enumerable: true,
+			get(this: HoneyContext): AbortSignal {
+				return this._ac === null ? linkSignal(this) : this._ac.signal
 			},
 		})
 		Object.defineProperty(HoneyContext.prototype, "search", {

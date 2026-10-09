@@ -426,14 +426,12 @@ describe("HoneyRes", () => {
 			expect(await response.text()).toBe("chunk")
 		})
 
-		it("callback error closes the writable stream", async () => {
+		it("callback error breaks the body", async () => {
 			const response = res.stream(async () => {
 				throw new Error("stream callback failed")
 			})
-			/* stream should be closed, not left dangling */
-			const text = await response.text()
-			/* closed stream produces empty body — not a hanging request */
-			expect(text).toBe("")
+			/* errored, not dangling and not a clean empty body */
+			await expect(response.text()).rejects.toThrow("stream callback failed")
 		})
 	})
 
@@ -458,15 +456,17 @@ describe("HoneyRes", () => {
 			expect(await response.text()).toBe("line1\nline2\n")
 		})
 
-		it("generator that throws → stream closed", async () => {
+		it("generator that throws → the body errors after the chunks before it", async () => {
 			async function* gen() {
 				yield "ok\n"
 				throw new Error("gen failed")
 			}
 			const response = res.generate(gen())
-			const text = await response.text()
-			/* at least the first chunk should be written before error */
-			expect(text).toContain("ok\n")
+			const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+			const first = await reader.read()
+			expect(new TextDecoder().decode(first.value)).toBe("ok\n")
+			/* a mid-stream throw is a broken body, never a clean EOF */
+			await expect(reader.read()).rejects.toThrow("gen failed")
 		})
 
 		it("empty generator → empty body", async () => {

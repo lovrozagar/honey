@@ -18,16 +18,13 @@ describe("P0-1: SSE keepalive timer not cleaned on callback resolve", () => {
 			{ keepalive: 50 },
 		)
 
-		/* give callback microtask time to resolve */
-		await new Promise((r) => setTimeout(r, 10))
+		/* the callback starts on the first read; reading to the end lets it resolve */
+		await response.text()
 
 		const timerCleared = clearIntervalSpy.mock.calls.length > 0
 		expect(timerCleared).toBe(true)
 
 		clearIntervalSpy.mockRestore()
-
-		/* consume response to avoid dangling stream */
-		response.body?.cancel()
 	})
 })
 

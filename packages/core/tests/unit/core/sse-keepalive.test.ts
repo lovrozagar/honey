@@ -53,12 +53,14 @@ describe("SSE lastEventId and defaultRetry", () => {
 			}),
 		)
 
-		await h.fetch(
+		const res = await h.fetch(
 			new Request("http://localhost/events", {
 				headers: { "last-event-id": "evt-42" },
 			}),
 			{},
 		)
+		/* the callback runs when the body is first read */
+		await res.text()
 
 		expect(receivedId).toBe("evt-42")
 	})
@@ -74,7 +76,7 @@ describe("SSE lastEventId and defaultRetry", () => {
 			}),
 		)
 
-		await h.fetch(new Request("http://localhost/events"), {})
+		await (await h.fetch(new Request("http://localhost/events"), {})).text()
 		expect(receivedId).toBeUndefined()
 	})
 
