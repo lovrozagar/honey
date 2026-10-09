@@ -210,6 +210,10 @@ Reads the Vite `honey()` plugin config (default `vite.config.ts`) and writes art
 
 If there is no Vite config, you must pass `--app`.
 
+The CLI loads the app on the runtime that started it. Started from a Bun script (`bun run generate`, `bunx honey`), it runs under that Bun even though the bin's shebang is `node`, so an app that relies on Bun's module loading (text imports such as `.md`, Bun-only APIs) generates as it runs. Under Node it stays on Node. Set `HONEY_NO_BUN_HANDOFF=1` to keep Node.
+
+A route tree that is stale or was written by an older honey does not stop the generation that replaces it: while `honey generate` loads the app, `routeTree()` ignores such a tree and the routes the app registers are used instead. Outside generation the stale tree still fails with an error naming the routes.
+
 | Flag                           | Meaning                                                                                                       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `--watch`                      | Regenerate when the route tree checksum changes. Ignores `_gen` / `.gen.*`. Requires `--app` or plugin `app`. |

@@ -62,7 +62,7 @@ describe("0.7.2 regressions", () => {
 	})
 
 	// regression: V072-2 — `bun run generate` ran the bin's node shebang, so Bun-only module loading was lost
-	it.fails("V072-2: honey started from a Bun script runs generation under Bun", () => {
+	it("V072-2: honey started from a Bun script runs generation under Bun", () => {
 		const bun = execFileSync("bun", ["-e", "console.log(process.execPath)"], { encoding: "utf8" }).trim()
 		const dir = project("bun-text-module", {
 			"src/app.ts": [
