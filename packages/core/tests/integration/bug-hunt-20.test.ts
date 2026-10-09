@@ -96,7 +96,8 @@ describe("bug-hunt-20: otelAdapter — route info", () => {
 
 		const requestSpan = tracer.spans.find((s) => s.name === "http.request")
 		expect(requestSpan?.attributes["http.method"]).toBe("GET")
-		expect(requestSpan?.attributes["http.route"]).toBe("/users/42")
+		/* the pattern, not the request path: route cardinality stays bounded */
+		expect(requestSpan?.attributes["http.route"]).toBe("/users/:id")
 	})
 })
 
@@ -136,7 +137,7 @@ describe("bug-hunt-20: otelAdapter — 404 event", () => {
 		expect(requestSpan).toBeTruthy()
 		const notFoundEvent = requestSpan?.events.find((e) => e.name === "not_found")
 		expect(notFoundEvent).toBeTruthy()
-		expect(notFoundEvent?.attributes?.["http.path"]).toBe("/nope")
+		expect(notFoundEvent?.attributes?.["url.path"]).toBe("/nope")
 	})
 })
 

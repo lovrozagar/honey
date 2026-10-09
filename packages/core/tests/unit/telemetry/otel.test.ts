@@ -62,11 +62,12 @@ describe("otelAdapter", () => {
 		adapter.onRoute?.({
 			method: "GET",
 			params: { id: "1" },
-			path: "/test",
+			path: "/test/1",
 			req,
+			route: "/test/:id",
 		})
 		expect(tracer.spans[0].attributes["http.method"]).toBe("GET")
-		expect(tracer.spans[0].attributes["http.route"]).toBe("/test")
+		expect(tracer.spans[0].attributes["http.route"]).toBe("/test/:id")
 	})
 
 	it("onHandler creates child span", () => {

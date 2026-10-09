@@ -163,13 +163,16 @@ export { detectRuntime } from "./detect-runtime.ts"
 
 type TelemetryAdapter = {
 	onError?(ctx: { duration: number; error: HoneyError; method: string; path: string }): void
-	onHandler?(ctx: { duration: number; method: string; path: string; status: number }): void
+	/** `path` is the request path; `route` the matched pattern (`/users/:id`). */
+	onHandler?(ctx: { duration: number; method: string; path: string; route: string; status: number }): void
 	onMethodNotAllowed?(ctx: { allowed: string[]; method: string; path: string; req: Request }): void
 	onMiddleware?(ctx: { duration: number; error?: unknown; name: string }): void
 	onNotFound?(ctx: { method: string; path: string; req: Request }): void
 	onRequest?(ctx: { env: unknown; req: Request }): void
+	/** Fires exactly once per request that fired `onRequest`, whichever way it exits. */
 	onResponse?(ctx: { duration: number; req: Request; status: number }): void
-	onRoute?(ctx: { method: string; params: Record<string, string>; path: string; req: Request }): void
+	/** `path` is the request path; `route` the matched pattern (`/users/:id`). */
+	onRoute?(ctx: { method: string; params: Record<string, string>; path: string; req: Request; route: string }): void
 }
 
 type ErrorI18nConfig<TEnv> = {
@@ -2371,9 +2374,22 @@ export class Honey<
 			wsUpgrade: knownWsUpgrade,
 		}
 
-		if (s.telemetry !== null) {
-			safeFire(() => s.telemetry?.onRequest?.({ env, req: request }), log)
-		}
+		if (s.telemetry === null) return this._route(fc, final, fullPath, rawUrl, knownWsUpgrade)
+		safeFire(() => s.telemetry?.onRequest?.({ env, req: request }), log)
+		/* every exit after onRequest — redirects, 426, upgrades, misses, preflights, handlers —
+		 * fires onResponse exactly once, here */
+		return this._withOnResponse(fc, this._route(fc, final, fullPath, rawUrl, knownWsUpgrade))
+	}
+
+	private _route(
+		fc: FetchCtx<TEnv>,
+		final: FinalTable,
+		fullPath: string,
+		rawUrl: string,
+		knownWsUpgrade: boolean,
+	): Response | Promise<Response> {
+		const s = this._graph.settings
+		const { method, request } = fc
 
 		/* trailing slash handling — a relative Location: the scheme, host and port the client
 		 * used are the ones it keeps, whatever proxy terminated TLS in front of the app */
@@ -2607,22 +2623,34 @@ export class Honey<
 		fc.allowed = allowed
 		const plan = this._finalize().miss
 		const ctx = this._newCtx(fc, plan, EMPTY_PARAMS)
-		return this._withOnResponse(fc, plan.run(ctx))
+		return plan.run(ctx)
 	}
 
-	/** Fire `onResponse` once and return. */
+	/** Fire `onResponse` once for the request's one exit and return. A dispatch that rejects
+	 * (an adapter failure past every error boundary) still ends the request: it reports 500. */
 	private _withOnResponse(fc: FetchCtx<TEnv>, res: Response | Promise<Response>): Response | Promise<Response> {
 		const s = this._graph.settings
 		if (s.telemetry?.onResponse === undefined) return res
-		const fire = (r: Response): Response => {
+		const fire = (status: number): void => {
 			safeFire(
-				() =>
-					s.telemetry?.onResponse?.({ duration: performance.now() - fc.startTime, req: fc.request, status: r.status }),
+				() => s.telemetry?.onResponse?.({ duration: performance.now() - fc.startTime, req: fc.request, status }),
 				fc.log,
 			)
-			return r
 		}
-		return res instanceof Promise ? res.then(fire) : fire(res)
+		if (!(res instanceof Promise)) {
+			fire(res.status)
+			return res
+		}
+		return res.then(
+			(r) => {
+				fire(r.status)
+				return r
+			},
+			(error: unknown) => {
+				fire(500)
+				throw error
+			},
+		)
 	}
 
 	private _make404(fc: FetchCtx<TEnv>): Response | Promise<Response> {
@@ -2667,7 +2695,7 @@ export class Honey<
 			},
 			final.convert,
 		)
-		return this._withOnResponse(fc, plan.pf(ctx))
+		return plan.pf(ctx)
 	}
 
 	private _handleMatched(fc: FetchCtx<TEnv>, plan: Plan, params: Record<string, string>): Response | Promise<Response> {
@@ -2675,7 +2703,7 @@ export class Honey<
 		const telemetry = this._graph.settings.telemetry
 		if (telemetry !== null && telemetry.onRoute !== undefined) {
 			try {
-				telemetry.onRoute({ method: fc.method, params, path: fc.path, req: fc.request })
+				telemetry.onRoute({ method: fc.method, params, path: fc.path, req: fc.request, route: plan.r.rp ?? "" })
 			} catch {
 				/* telemetry must not crash request */
 			}
@@ -2771,11 +2799,7 @@ export class Honey<
 					duration,
 					method: fc.method,
 					path: fc.path,
-					status: response.status,
-				})
-				s.telemetry.onResponse?.({
-					duration,
-					req: fc.request,
+					route: handler.rp ?? "",
 					status: response.status,
 				})
 			} catch {
