@@ -109,6 +109,19 @@ tr.mark_stale(["GET /users/{user-id}"], None, "POST /x")
 check("pattern target kept", tr.is_stale("GET", "/users/42"))
 check("colon inside a segment is literal", interpolate_path("/ops/{id}:cancel", {"id": "7"}) == "/ops/7:cancel")
 
+# a lookup scans only its method's pattern keys, not every stale entry
+import time as _time
+big = _StaleTrackerSync(stale_time=60.0, stale_max_entries=100_000, max_sources_per_target=4)
+big.mark_stale([f"GET /items/{i}" for i in range(20_000)], None, "POST /items")
+big.mark_stale(["GET /users/{id}"], None, "PUT /users")
+t0 = _time.perf_counter()
+for i in range(2_000):
+    big.lookup_stale(f"GET /users/{i}", f"/users/{i}", "GET")
+check("stale lookup does not scan every entry", _time.perf_counter() - t0 < 0.5)
+check("pattern still matches", big.lookup_stale("GET /users/9", "/users/9", "GET") == (["PUT /users"], True))
+big.clear_stale("GET /users/9", "/users/9", "GET", big.build_request_meta("GET /users/9", "/users/9", "GET").seq_snapshot)
+check("clear drops the pattern", not big.is_stale("GET", "/users/9") and big.is_stale("GET", "/items/3"))
+
 # H61 realtime: counter resets per message, clean end reconnects, give-up raises, cancel propagates
 class Conn:
     def __init__(self, items):

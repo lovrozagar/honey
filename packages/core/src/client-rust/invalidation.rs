@@ -5,7 +5,7 @@
 use crate::runtime::InvalidationConfig;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
@@ -154,11 +154,152 @@ pub fn resolve_invalidation_targets_for_mutation(
     out
 }
 
-struct TrackerState {
-    entries: HashMap<String, StaleEntry>,
-    /* insertion order; oldest at index 0 */
-    order: Vec<String>,
-    seq: u64,
+struct Slot {
+    entry: StaleEntry,
+    /* position in `order`; a touch moves the entry to a fresh tick */
+    tick: u64,
+}
+
+/// Stale state shared by the async and blocking trackers; each wraps it in its own mutex.
+/// Concrete keys are found by one map read; keys that still hold placeholders are also
+/// indexed per method, so a lookup scans only the patterns of its method. `order` keeps
+/// LRU order by tick, so touch and eviction are O(log n).
+#[derive(Default)]
+pub(crate) struct TrackerState {
+    entries: HashMap<String, Slot>,
+    order: BTreeMap<u64, String>,
+    patterns: HashMap<String, HashSet<String>>,
+    next_tick: u64,
+    pub(crate) seq: u64,
+}
+
+impl TrackerState {
+    fn tick(&mut self) -> u64 {
+        self.next_tick += 1;
+        self.next_tick
+    }
+
+    pub(crate) fn upsert(&mut self, key: &str, until: Instant, seq: u64, mutation_selector: &str, max_sources: usize) {
+        let tick = self.tick();
+        if let Some(slot) = self.entries.get_mut(key) {
+            slot.entry.until = until;
+            slot.entry.seq = seq;
+            if !mutation_selector.is_empty()
+                && slot.entry.by.len() < max_sources
+                && !slot.entry.by.iter().any(|b| b == mutation_selector)
+            {
+                slot.entry.by.push(mutation_selector.to_string());
+            }
+            let old = std::mem::replace(&mut slot.tick, tick);
+            self.order.remove(&old);
+            self.order.insert(tick, key.to_string());
+            return;
+        }
+        let by = if mutation_selector.is_empty() { Vec::new() } else { vec![mutation_selector.to_string()] };
+        self.entries.insert(key.to_string(), Slot { entry: StaleEntry { by, seq, until }, tick });
+        self.order.insert(tick, key.to_string());
+        if let Some((method, _)) = key.split_once(' ') {
+            if key_is_pattern(key) {
+                self.patterns.entry(method.to_string()).or_default().insert(key.to_string());
+            }
+        }
+    }
+
+    pub(crate) fn delete(&mut self, key: &str) {
+        let Some(slot) = self.entries.remove(key) else { return };
+        self.order.remove(&slot.tick);
+        if let Some((method, _)) = key.split_once(' ') {
+            if let Some(bucket) = self.patterns.get_mut(method) {
+                bucket.remove(key);
+                if bucket.is_empty() {
+                    self.patterns.remove(method);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn seq_of(&self, key: &str) -> Option<u64> {
+        self.entries.get(key).map(|s| s.entry.seq)
+    }
+
+    pub(crate) fn lookup(&mut self, concrete_selector: &str, concrete_path: &str, method: &str, now: Instant) -> (Vec<String>, bool) {
+        let mut all_by: Vec<String> = Vec::new();
+        let mut exact_expired = false;
+        if let Some(exact) = self.entries.get(concrete_selector) {
+            if exact.entry.until > now {
+                all_by.extend(exact.entry.by.iter().cloned());
+            } else {
+                exact_expired = true;
+            }
+        }
+        if exact_expired {
+            self.delete(concrete_selector);
+        }
+        let mut expired: Vec<String> = Vec::new();
+        if let Some(bucket) = self.patterns.get(method) {
+            for key in bucket {
+                let Some(slot) = self.entries.get(key) else { continue };
+                if slot.entry.until <= now {
+                    expired.push(key.clone());
+                    continue;
+                }
+                if key == concrete_selector {
+                    continue;
+                }
+                let pattern = key.split_once(' ').map(|(_, p)| p).unwrap_or("");
+                if path_matches_pattern(concrete_path, pattern) {
+                    all_by.extend(slot.entry.by.iter().cloned());
+                }
+            }
+        }
+        for key in expired {
+            self.delete(&key);
+        }
+        let mut seen = HashSet::new();
+        all_by.retain(|src| seen.insert(src.clone()));
+        let any = !all_by.is_empty();
+        (all_by, any)
+    }
+
+    pub(crate) fn clear(&mut self, concrete_selector: &str, concrete_path: &str, method: &str, seq_snapshot: u64) {
+        if self.seq_of(concrete_selector).is_some_and(|seq| seq <= seq_snapshot) {
+            self.delete(concrete_selector);
+        }
+        let to_delete: Vec<String> = self
+            .patterns
+            .get(method)
+            .map(|bucket| {
+                bucket
+                    .iter()
+                    .filter(|key| {
+                        self.seq_of(key).is_some_and(|seq| seq <= seq_snapshot)
+                            && path_matches_pattern(concrete_path, key.split_once(' ').map(|(_, p)| p).unwrap_or(""))
+                    })
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+        for key in to_delete {
+            self.delete(&key);
+        }
+    }
+
+    pub(crate) fn enforce_capacity(&mut self, max_entries: usize) {
+        if self.entries.len() <= max_entries {
+            return;
+        }
+        let now = Instant::now();
+        let expired: Vec<String> = self.entries.iter().filter(|(_, s)| s.entry.until <= now).map(|(k, _)| k.clone()).collect();
+        for key in expired {
+            self.delete(&key);
+        }
+        let target = (max_entries / 2).max(1);
+        while self.entries.len() > target {
+            /* the oldest tick; delete() drops the rest of its state */
+            let Some((_, oldest)) = self.order.pop_first() else { break };
+            self.delete(&oldest);
+        }
+    }
 }
 
 /// StaleTracker tracks invalidation state per `METHOD /path` selector with TS-
@@ -173,37 +314,30 @@ pub struct StaleTracker {
     max_sources: usize,
 }
 
+/// (enabled, stale_time, max_entries, max_sources) from a config; disabled when absent or stale_time ≤ 0.
+pub(crate) fn tracker_settings(cfg: Option<&InvalidationConfig>) -> (bool, Duration, usize, usize) {
+    let mut out = (false, Duration::from_millis(0), 1000usize, 16usize);
+    if let Some(c) = cfg {
+        if c.stale_time > 0 {
+            out.0 = true;
+            out.1 = Duration::from_millis(c.stale_time as u64);
+            if c.stale_max_entries > 0 {
+                out.2 = c.stale_max_entries;
+            }
+            if c.max_sources_per_target > 0 {
+                out.3 = c.max_sources_per_target;
+            }
+        }
+    }
+    out
+}
+
 impl StaleTracker {
     /// new constructs a tracker from an InvalidationConfig.
     /// Tracker is disabled (cheap no-op) when cfg is None or stale_time ≤ 0.
     pub fn new(cfg: Option<&InvalidationConfig>) -> Self {
-        let mut enabled = false;
-        let mut stale_time = Duration::from_millis(0);
-        let mut max_entries = 1000usize;
-        let mut max_sources = 16usize;
-        if let Some(c) = cfg {
-            if c.stale_time > 0 {
-                enabled = true;
-                stale_time = Duration::from_millis(c.stale_time as u64);
-                if c.stale_max_entries > 0 {
-                    max_entries = c.stale_max_entries;
-                }
-                if c.max_sources_per_target > 0 {
-                    max_sources = c.max_sources_per_target;
-                }
-            }
-        }
-        StaleTracker {
-            state: Mutex::new(TrackerState {
-                entries: HashMap::new(),
-                order: Vec::new(),
-                seq: 0,
-            }),
-            enabled,
-            stale_time,
-            max_entries,
-            max_sources,
-        }
+        let (enabled, stale_time, max_entries, max_sources) = tracker_settings(cfg);
+        StaleTracker { state: Mutex::new(TrackerState::default()), enabled, stale_time, max_entries, max_sources }
     }
 
     /// enabled reports whether the tracker will record / report stale entries.
@@ -215,12 +349,7 @@ impl StaleTracker {
     /// `params`, and records each resolved target as freshly stale.
     /// `mutation_selector` is appended to each entry's `by` list (capped at
     /// max_sources, deduped).
-    pub async fn mark_stale(
-        &self,
-        invalidate: &[String],
-        params: &HashMap<String, String>,
-        mutation_selector: &str,
-    ) {
+    pub async fn mark_stale(&self, invalidate: &[String], params: &HashMap<String, String>, mutation_selector: &str) {
         if !self.enabled || invalidate.is_empty() {
             return;
         }
@@ -228,69 +357,28 @@ impl StaleTracker {
         s.seq += 1;
         let seq = s.seq;
         let until = Instant::now() + self.stale_time;
-        let resolved = resolve_invalidation_targets_for_mutation(invalidate, params);
-        for target in resolved {
-            upsert_locked(&mut s, &target, until, seq, mutation_selector, self.max_sources);
+        for target in resolve_invalidation_targets_for_mutation(invalidate, params) {
+            s.upsert(&target, until, seq, mutation_selector, self.max_sources);
         }
-        enforce_capacity_locked(&mut s, self.max_entries);
+        s.enforce_capacity(self.max_entries);
     }
 
     /// lookup_stale returns (invalidated_by, is_stale): exact + pattern lookup
     /// with expired-key sweep. Disabled tracker → (vec![], false).
-    pub async fn lookup_stale(
-        &self,
-        concrete_selector: &str,
-        concrete_path: &str,
-        method: &str,
-        now: Instant,
-    ) -> (Vec<String>, bool) {
+    pub async fn lookup_stale(&self, concrete_selector: &str, concrete_path: &str, method: &str, now: Instant) -> (Vec<String>, bool) {
         if !self.enabled {
             return (Vec::new(), false);
         }
-        let mut s = self.state.lock().await;
-        lookup_locked(&mut s, concrete_selector, concrete_path, method, now)
+        self.state.lock().await.lookup(concrete_selector, concrete_path, method, now)
     }
 
     /// clear_stale drops stale entries whose seq ≤ seq_snapshot and which match
     /// the given concrete_path under method (exact key + pattern keys).
-    pub async fn clear_stale(
-        &self,
-        concrete_selector: &str,
-        concrete_path: &str,
-        method: &str,
-        seq_snapshot: u64,
-    ) {
+    pub async fn clear_stale(&self, concrete_selector: &str, concrete_path: &str, method: &str, seq_snapshot: u64) {
         if !self.enabled {
             return;
         }
-        let mut s = self.state.lock().await;
-        if let Some(entry) = s.entries.get(concrete_selector) {
-            if entry.seq <= seq_snapshot {
-                delete_locked(&mut s, concrete_selector);
-            }
-        }
-        let mut to_delete: Vec<String> = Vec::new();
-        for (key, entry) in s.entries.iter() {
-            if entry.seq > seq_snapshot {
-                continue;
-            }
-            if !key_is_pattern(key) {
-                continue;
-            }
-            let space_idx = match key.find(' ') {
-                Some(i) => i,
-                None => continue,
-            };
-            if &key[..space_idx] != method {
-                continue;
-            }
-            if path_matches_pattern(concrete_path, &key[space_idx + 1..]) {
-                to_delete.push(key.clone());
-            }
-        }
-        for key in to_delete {
-            delete_locked(&mut s, &key);
-        }
+        self.state.lock().await.clear(concrete_selector, concrete_path, method, seq_snapshot);
     }
 
     /// is_stale reports whether (method, path) currently sits inside an active
@@ -299,153 +387,19 @@ impl StaleTracker {
         if !self.enabled {
             return false;
         }
-        let mut s = self.state.lock().await;
         let selector = format!("{} {}", method, path);
-        let (_, is_stale) = lookup_locked(&mut s, &selector, path, method, Instant::now());
-        is_stale
+        self.state.lock().await.lookup(&selector, path, method, Instant::now()).1
     }
 
     /// build_request_meta returns a RequestMeta snapshot for the request about
     /// to fire, or None when tracker is disabled.
-    pub async fn build_request_meta(
-        &self,
-        concrete_selector: &str,
-        concrete_path: &str,
-        method: &str,
-    ) -> Option<RequestMeta> {
+    pub async fn build_request_meta(&self, concrete_selector: &str, concrete_path: &str, method: &str) -> Option<RequestMeta> {
         if !self.enabled {
             return None;
         }
         let mut s = self.state.lock().await;
-        let (by, is_stale) =
-            lookup_locked(&mut s, concrete_selector, concrete_path, method, Instant::now());
-        Some(RequestMeta {
-            selector: concrete_selector.to_string(),
-            is_stale,
-            invalidated_by: by,
-            seq_snapshot: s.seq,
-        })
-    }
-}
-
-fn upsert_locked(
-    s: &mut TrackerState,
-    key: &str,
-    until: Instant,
-    seq: u64,
-    mutation_selector: &str,
-    max_sources: usize,
-) {
-    if let Some(existing) = s.entries.get_mut(key) {
-        existing.until = until;
-        existing.seq = seq;
-        if !mutation_selector.is_empty() && existing.by.len() < max_sources {
-            let already = existing.by.iter().any(|b| b == mutation_selector);
-            if !already {
-                existing.by.push(mutation_selector.to_string());
-            }
-        }
-        touch_order_locked(s, key);
-        return;
-    }
-    let by = if mutation_selector.is_empty() {
-        Vec::new()
-    } else {
-        vec![mutation_selector.to_string()]
-    };
-    s.entries.insert(key.to_string(), StaleEntry { by, seq, until });
-    s.order.push(key.to_string());
-}
-
-fn touch_order_locked(s: &mut TrackerState, key: &str) {
-    if let Some(idx) = s.order.iter().position(|k| k == key) {
-        s.order.remove(idx);
-    }
-    s.order.push(key.to_string());
-}
-
-fn delete_locked(s: &mut TrackerState, key: &str) {
-    if s.entries.remove(key).is_none() {
-        return;
-    }
-    if let Some(idx) = s.order.iter().position(|k| k == key) {
-        s.order.remove(idx);
-    }
-}
-
-fn lookup_locked(
-    s: &mut TrackerState,
-    concrete_selector: &str,
-    concrete_path: &str,
-    method: &str,
-    now: Instant,
-) -> (Vec<String>, bool) {
-    let mut all_by: Vec<String> = Vec::new();
-    let mut exact_expired = false;
-    if let Some(exact) = s.entries.get(concrete_selector) {
-        if exact.until > now {
-            all_by.extend(exact.by.iter().cloned());
-        } else {
-            exact_expired = true;
-        }
-    }
-    if exact_expired {
-        delete_locked(s, concrete_selector);
-    }
-    let mut expired: Vec<String> = Vec::new();
-    for (key, entry) in s.entries.iter() {
-        if entry.until <= now {
-            expired.push(key.clone());
-            continue;
-        }
-        if key == concrete_selector {
-            continue;
-        }
-        if !key_is_pattern(key) {
-            continue;
-        }
-        let space_idx = match key.find(' ') {
-            Some(i) => i,
-            None => continue,
-        };
-        if &key[..space_idx] != method {
-            continue;
-        }
-        if path_matches_pattern(concrete_path, &key[space_idx + 1..]) {
-            all_by.extend(entry.by.iter().cloned());
-        }
-    }
-    for key in expired {
-        delete_locked(s, &key);
-    }
-    let mut deduped: Vec<String> = Vec::with_capacity(all_by.len());
-    for src in all_by {
-        if !deduped.iter().any(|d| d == &src) {
-            deduped.push(src);
-        }
-    }
-    let any = !deduped.is_empty();
-    (deduped, any)
-}
-
-fn enforce_capacity_locked(s: &mut TrackerState, max_entries: usize) {
-    if s.entries.len() <= max_entries {
-        return;
-    }
-    let now = Instant::now();
-    let expired: Vec<String> = s
-        .entries
-        .iter()
-        .filter(|(_, e)| e.until <= now)
-        .map(|(k, _)| k.clone())
-        .collect();
-    for key in expired {
-        delete_locked(s, &key);
-    }
-    let target = if max_entries / 2 < 1 { 1 } else { max_entries / 2 };
-    while s.entries.len() > target && !s.order.is_empty() {
-        let oldest = s.order[0].clone();
-        delete_locked(s, &oldest);
+        let (by, is_stale) = s.lookup(concrete_selector, concrete_path, method, Instant::now());
+        Some(RequestMeta { selector: concrete_selector.to_string(), is_stale, invalidated_by: by, seq_snapshot: s.seq })
     }
 }
 

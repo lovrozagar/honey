@@ -158,5 +158,57 @@ async fn main() {
     tracker.mark_stale(&["GET /users/{user-id}".to_string()], &HashMap::new(), "POST /x").await;
     out.insert("pattern target kept", tracker.is_stale("GET", "/users/42").await);
 
+    /* a lookup scans its method's pattern keys, not every entry; eviction keeps LRU order */
+    let big = mock_sdk::invalidation_sync::StaleTrackerSync::new(Some(&mock_sdk::runtime::InvalidationConfig { stale_time: 60_000, stale_max_entries: 100_000, ..Default::default() }));
+    let keys: Vec<String> = (0..20_000).map(|i| format!("GET /items/{}", i)).collect();
+    big.mark_stale(&keys, &HashMap::new(), "POST /items");
+    big.mark_stale(&["GET /users/{id}".to_string()], &HashMap::new(), "PUT /users");
+    let t0 = std::time::Instant::now();
+    for i in 0..2_000 {
+        big.lookup_stale(&format!("GET /users/{}", i), &format!("/users/{}", i), "GET", std::time::Instant::now());
+    }
+    out.insert("stale lookup does not scan every entry", t0.elapsed() < Duration::from_millis(500));
+    let (by, hit) = big.lookup_stale("GET /users/9", "/users/9", "GET", std::time::Instant::now());
+    out.insert("pattern still matches", hit && by == vec!["PUT /users".to_string()]);
+    let snap = big.build_request_meta("GET /users/9", "/users/9", "GET").unwrap().seq_snapshot;
+    big.clear_stale("GET /users/9", "/users/9", "GET", snap);
+    out.insert("clear drops the pattern", !big.is_stale("GET", "/users/9") && big.is_stale("GET", "/items/3"));
+    let small = mock_sdk::invalidation_sync::StaleTrackerSync::new(Some(&mock_sdk::runtime::InvalidationConfig { stale_time: 60_000, stale_max_entries: 4, ..Default::default() }));
+    for k in ["GET /a", "GET /b", "GET /c", "GET /d", "GET /a", "GET /e"] {
+        small.mark_stale(&[k.to_string()], &HashMap::new(), "POST /x");
+    }
+    out.insert("eviction keeps recently touched keys", small.is_stale("GET", "/a") && small.is_stale("GET", "/e") && !small.is_stale("GET", "/b"));
+
+    /* blocking hooks share `ctx.state` (SyncClientConfig::state) across request and response */
+    let base = serve(Arc::new(|_r: &str| (200, "application/json".into(), r#"{"id":"u1","name":"A","email":"e"}"#.into())));
+    let (seen_in_response, kept) = tokio::task::spawn_blocking(move || {
+        use mock_sdk::runtime_sync::{SyncClientConfig, SyncOnRequestHook, SyncOnResponseHook};
+        let state = Arc::new(Mutex::new(HashMap::new()));
+        let got = Arc::new(Mutex::new(None));
+        let g2 = got.clone();
+        let on_req: SyncOnRequestHook = Arc::new(|ctx| {
+            ctx.state.lock().unwrap().insert("k".into(), serde_json::json!(1));
+            Ok(())
+        });
+        let on_res: SyncOnResponseHook = Arc::new(move |ctx| {
+            *g2.lock().unwrap() = ctx.state.lock().unwrap().get("k").cloned();
+            Ok(())
+        });
+        let c = mock_sdk::SyncClient::new(SyncClientConfig {
+            base_url: base,
+            on_request: vec![on_req],
+            on_response: vec![on_res],
+            state: Some(state.clone()),
+            ..Default::default()
+        });
+        let _ = c.get_user("u1", &GetUserOpts::default());
+        let seen = got.lock().unwrap().clone();
+        let kept = state.lock().unwrap().get("k").cloned();
+        (seen, kept)
+    })
+    .await
+    .unwrap();
+    out.insert("sync hooks share state", seen_in_response == Some(serde_json::json!(1)) && kept == Some(serde_json::json!(1)));
+
     println!("{}", serde_json::to_string(&out).unwrap());
 }

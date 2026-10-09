@@ -4,8 +4,9 @@
  *    (url-building.json, sse.json) — the same files the TypeScript client runs: path
  *    templates (escaping, "", ".", ".." rejected), URL building (base path and base query kept),
  *    query serialization and the WHATWG SSE parser.
- * 2. Each generated SDK sends the same operation to one capture server; method, path, query and
- *    the selected headers must be byte-identical, and the JSON body equal.
+ * 2. Each generated SDK — Go, Python, Rust, the generated TypeScript SDK — and the TypeScript
+ *    `createClient` send the same operation to one capture server; method, path, query and the
+ *    selected headers must be byte-identical, and the JSON body equal.
  */
 
 import { spawn, spawnSync } from "node:child_process"
@@ -16,6 +17,8 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { createClient } from "../../../src/client/index.ts"
+import { generateSDK } from "../../../src/codegen.ts"
 import { generateGoSDK } from "../../../src/codegen-go.ts"
 import { generatePythonSDK } from "../../../src/codegen-python.ts"
 import { generateRustSDK } from "../../../src/codegen-rust.ts"
@@ -439,6 +442,58 @@ describe.skipIf(!hasPython)("conformance — Python runtime", () => {
 			rmSync(dir, { force: true, recursive: true })
 		}
 	}, 600_000)
+})
+
+/* ── TypeScript: the generated SDK and createClient ── */
+
+function expectReference(lang: string): void {
+	const { body, ...rest } = captured.get(lang) as Captured
+	const { body: wantBody, ...wantRest } = EXPECTED_REQUEST
+	expect(rest).toEqual(wantRest)
+	expect(body).toEqual(wantBody)
+}
+
+const REFERENCE_SEARCH = { flag: true, limit: 3, q: "hé&llo", ratio: 0.5, tags: ["x", "y z"] }
+
+describe("conformance — TypeScript", () => {
+	it("the generated SDK sends the reference request", async () => {
+		const { files } = generateSDK(conformanceSpec as never, { name: "ConfSDK", stem: "sdk" })
+		const clientBody = files.client.replace(/^import type \{[^\n]+\n/, "").replace(/^import \{[^\n]+\n/, "")
+		const { transform } = await import("esbuild")
+		const { code } = await transform(`${files.map}\n${clientBody}`, { format: "esm", loader: "ts", target: "esnext" })
+		const { ConfSDK } = (await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`)) as {
+			ConfSDK: new (config: Record<string, unknown>) => {
+				items: { update(input: Record<string, unknown>): Promise<{ error: unknown }> }
+			}
+		}
+		const sdk = new ConfSDK({
+			baseURL: `http://127.0.0.1:${port}/v1`,
+			headers: { Authorization: "Bearer tok", "x-lang": "ts-sdk" },
+		})
+		const result = await sdk.items.update({
+			headers: { "x-trace": "t1" },
+			json: { n: 2, name: "n" },
+			params: { id: "a b/ü" },
+			search: REFERENCE_SEARCH,
+		})
+		expect(result.error).toBeNull()
+		expectReference("ts-sdk")
+	})
+
+	it("createClient sends the reference request", async () => {
+		const client = createClient({
+			baseURL: `http://127.0.0.1:${port}/v1`,
+			headers: { Authorization: "Bearer tok", "x-lang": "ts-client" },
+		}) as unknown as Record<string, (path: string, input: Record<string, unknown>) => Promise<{ error: unknown }>>
+		const result = await client.put("/items/:id", {
+			headers: { "x-trace": "t1" },
+			json: { n: 2, name: "n" },
+			params: { id: "a b/ü" },
+			search: REFERENCE_SEARCH,
+		})
+		expect(result.error).toBeNull()
+		expectReference("ts-client")
+	})
 })
 
 /* ── Rust ── */

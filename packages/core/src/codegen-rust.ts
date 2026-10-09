@@ -550,12 +550,13 @@ function bodyExpr(plan: RustOpPlan, sync: boolean): { lines: string[]; expr: str
 	}
 }
 
-function decodeLines(plan: RustOpPlan): string[] {
+function decodeLines(plan: RustOpPlan, throwOnError: boolean): string[] {
 	switch (plan.op.success.kind) {
 		case "text":
 			return [`\tlet out: String = String::from_utf8_lossy(&result.body).into_owned();`]
 		case "binary":
-			return [`\tlet out: Vec<u8> = result.body.clone();`]
+			/* the bytes move into the result; only a safe-mode call keeps a second copy in `response` */
+			return [`\tlet out: Vec<u8> = ${throwOnError ? "result.body" : "result.body.clone()"};`]
 		default:
 			/* an empty JSON body decodes as `null` (Option / Value types accept it) */
 			return [
@@ -649,12 +650,13 @@ function resultLines(plan: RustOpPlan, throwOnError: boolean, sync: boolean, a: 
 		l.push(`\tOk(())`)
 		return l
 	}
-	l.push(...decodeLines(plan))
+	l.push(...decodeLines(plan, throwOnError))
 	if (throwOnError) {
 		l.push(`\tOk(out)`)
 	} else {
+		/* the response snapshot takes the body, headers and URL by move */
 		l.push(
-			`\tOk(SdkResult { data: Some(out), error: None, status: result.status, response: crate::runtime::ResponseMeta { status: result.status, headers: result.headers.clone(), url: result.url.clone(), body: result.body.clone() } })`,
+			`\tOk(SdkResult { data: Some(out), error: None, status: result.status, response: crate::runtime::ResponseMeta { status: result.status, headers: result.headers, url: result.url, body: result.body } })`,
 		)
 	}
 	return l

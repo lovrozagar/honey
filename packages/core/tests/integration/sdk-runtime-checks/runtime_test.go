@@ -177,6 +177,42 @@ func TestInvalidationPatterns(t *testing.T) {
 	}
 }
 
+/* A lookup scans the pattern keys of its method, not every entry; eviction keeps LRU order. */
+func TestStaleLookupScale(t *testing.T) {
+	tr := NewStaleTracker(&InvalidationConfig{StaleTime: 60000, StaleMaxEntries: 100000})
+	keys := make([]string, 0, 20000)
+	for i := 0; i < 20000; i++ {
+		keys = append(keys, fmt.Sprintf("GET /items/%d", i))
+	}
+	tr.MarkStale(keys, nil, "POST /items")
+	tr.MarkStale([]string{"GET /users/{id}"}, nil, "PUT /users")
+	start := time.Now()
+	for i := 0; i < 2000; i++ {
+		tr.LookupStale(fmt.Sprintf("GET /users/%d", i), fmt.Sprintf("/users/%d", i), "GET", time.Now())
+	}
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Fatalf("2000 lookups over 20000 entries took %s", d)
+	}
+	if by, ok := tr.LookupStale("GET /users/9", "/users/9", "GET", time.Now()); !ok || len(by) != 1 || by[0] != "PUT /users" {
+		t.Fatalf("pattern lookup: %v %v", by, ok)
+	}
+	meta := tr.BuildRequestMeta("GET /users/9", "/users/9", "GET")
+	tr.ClearStale("GET /users/9", "/users/9", "GET", meta.SeqSnapshot)
+	if tr.IsStale("GET", "/users/9") || !tr.IsStale("GET", "/items/3") {
+		t.Fatal("clear dropped the wrong keys")
+	}
+
+	small := NewStaleTracker(&InvalidationConfig{StaleTime: 60000, StaleMaxEntries: 4})
+	for _, k := range []string{"GET /a", "GET /b", "GET /c", "GET /d"} {
+		small.MarkStale([]string{k}, nil, "POST /x")
+	}
+	small.MarkStale([]string{"GET /a"}, nil, "POST /x") /* touch: /a is now the newest */
+	small.MarkStale([]string{"GET /e"}, nil, "POST /x") /* over capacity: keep the newest half */
+	if !small.IsStale("GET", "/a") || !small.IsStale("GET", "/e") || small.IsStale("GET", "/b") {
+		t.Fatal("eviction did not keep the most recently touched keys")
+	}
+}
+
 type failTransport struct{ connects atomic.Int32 }
 
 func (f *failTransport) Name() string        { return "fail" }

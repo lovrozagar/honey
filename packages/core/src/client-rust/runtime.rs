@@ -115,6 +115,7 @@ pub struct ClientConfig {
     pub headers: HashMap<String, String>,
     pub timeout: Duration,
     /// Ignored at runtime: whether methods return `SdkResult` is fixed when the SDK is generated.
+    #[deprecated(note = "has no effect; generate with `throwOnError: false` for SdkResult methods")]
     pub throw_on_error: bool,
     /// Fallback for `InvalidationConfig::stale_max_entries` when that is 0.
     pub stale_max_entries: usize,
@@ -130,6 +131,7 @@ pub struct ClientConfig {
     pub max_response_bytes: usize,
 }
 
+#[allow(deprecated)]
 impl Default for ClientConfig {
     fn default() -> Self {
         ClientConfig {

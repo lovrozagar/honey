@@ -29,6 +29,8 @@ pub struct SyncRequestContext {
     pub url: String,
     pub path: String,
     pub headers: HashMap<String, String>,
+    /// `SyncClientConfig::state`, shared by every hook of every call; a fresh map per call when unset.
+    pub state: Arc<std::sync::Mutex<HashMap<String, serde_json::Value>>>,
     pub is_retry: bool,
     pub selector: String,
     pub is_stale: bool,
@@ -40,6 +42,8 @@ pub struct SyncResponseContext {
     pub status: u16,
     pub response: Vec<u8>,
     pub headers: reqwest::header::HeaderMap,
+    /// The same map the request hooks saw.
+    pub state: Arc<std::sync::Mutex<HashMap<String, serde_json::Value>>>,
     pub is_retry: bool,
     pub selector: String,
     pub is_stale: bool,
@@ -66,6 +70,7 @@ pub struct SyncClientConfig {
     pub headers: HashMap<String, String>,
     pub timeout: Duration,
     /// Ignored at runtime: whether methods return `SdkResult` is fixed when the SDK is generated.
+    #[deprecated(note = "has no effect; generate with `throwOnError: false` for SdkResult methods")]
     pub throw_on_error: bool,
     /// Fallback for `InvalidationConfig::stale_max_entries` when that is 0.
     pub stale_max_entries: usize,
@@ -79,11 +84,12 @@ pub struct SyncClientConfig {
     pub on_request: Vec<SyncOnRequestHook>,
     pub on_response: Vec<SyncOnResponseHook>,
     pub on_log: Option<OnLogHook>,
-    /// Reserved; the blocking hooks do not receive shared state.
+    /// Shared state handed to every `on_request` / `on_response` hook (`ctx.state`).
     pub state: Option<Arc<std::sync::Mutex<HashMap<String, serde_json::Value>>>>,
     pub max_response_bytes: usize,
 }
 
+#[allow(deprecated)]
 impl Default for SyncClientConfig {
     fn default() -> Self {
         SyncClientConfig {
@@ -366,6 +372,11 @@ fn execute_request_blocking(
         SyncRequestBody::Multipart(_) | SyncRequestBody::None => {}
     }
 
+    let state = cfg
+        .state
+        .clone()
+        .unwrap_or_else(|| Arc::new(std::sync::Mutex::new(HashMap::new())));
+
     let (meta_selector, meta_is_stale, meta_by) = match request_meta {
         Some(m) => (m.selector.clone(), m.is_stale, m.invalidated_by.clone()),
         None => (String::new(), false, Vec::new()),
@@ -376,6 +387,7 @@ fn execute_request_blocking(
         url: url.to_string(),
         path: raw_url.to_string(),
         headers: hook_headers,
+        state: Arc::clone(&state),
         is_retry,
         selector: meta_selector.clone(),
         is_stale: meta_is_stale,
@@ -443,6 +455,7 @@ fn execute_request_blocking(
         status,
         response: body_bytes,
         headers: resp_headers,
+        state,
         is_retry,
         selector: meta_selector,
         is_stale: meta_is_stale,

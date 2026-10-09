@@ -139,6 +139,140 @@ def lookup_stale(key: str, stale_map: "OrderedDict[str, Any]") -> bool:
     return _now() < until
 
 
+class _StaleStore:
+    """Stale state shared by the async and sync trackers; callers hold their own lock.
+
+    Concrete keys are looked up directly; keys that still hold ``{name}`` placeholders are
+    also indexed per method, so a lookup scans only the patterns of its method, not every
+    entry. Expired concrete entries go on access, expired patterns when scanned, and the
+    rest when the map is over capacity.
+    """
+
+    def __init__(self, stale_time: float, stale_max_entries: int, max_sources_per_target: int) -> None:
+        self.enabled = stale_time > 0
+        self.stale_time = max(stale_time, 0.0)
+        self.max_entries = max(stale_max_entries, 1)
+        self.max_sources = max(max_sources_per_target, 1)
+        self.map: OrderedDict[str, _StaleEntry] = OrderedDict()
+        self.patterns: dict[str, dict[str, None]] = {}
+        self.seq = 0
+
+    def delete(self, key: str) -> None:
+        if self.map.pop(key, None) is None:
+            return
+        method, path = _split_key(key)
+        bucket = self.patterns.get(method)
+        if bucket is not None and _has_unresolved(path):
+            bucket.pop(key, None)
+            if not bucket:
+                del self.patterns[method]
+
+    def upsert(self, key: str, until: float, seq: int, mutation_selector: str | None) -> None:
+        existing = self.map.get(key)
+        if existing is not None:
+            existing.until = until
+            existing.seq = seq
+            if mutation_selector and mutation_selector not in existing.by:
+                if len(existing.by) < self.max_sources:
+                    existing.by.append(mutation_selector)
+            self.map.move_to_end(key)
+            return
+        by = [mutation_selector] if mutation_selector else []
+        self.map[key] = _StaleEntry(by=by, seq=seq, until=until)
+        method, path = _split_key(key)
+        if _has_unresolved(path):
+            self.patterns.setdefault(method, {})[key] = None
+
+    def invalidate(self, patterns: list[str]) -> None:
+        self.evict_expired()
+        targets = resolve_invalidation_targets(patterns, self.map)
+        self.seq += 1
+        until = _now() + self.stale_time
+        for t in targets:
+            self.upsert(t, until, self.seq, None)
+        self.enforce_capacity()
+
+    def mark_stale(self, invalidate: list[str], params: dict[str, str] | None, mutation_selector: str) -> None:
+        self.seq += 1
+        until = _now() + self.stale_time
+        for target in resolve_invalidation_targets_for_mutation(invalidate, params):
+            self.upsert(target, until, self.seq, mutation_selector)
+        self.enforce_capacity()
+
+    def mark(self, key: str) -> None:
+        self.seq += 1
+        self.upsert(key, _now() + self.stale_time, self.seq, None)
+        self.enforce_capacity()
+
+    def lookup(self, concrete_selector: str, concrete_path: str, method: str, now: float) -> tuple[list[str], bool]:
+        all_by: list[str] = []
+        exact = self.map.get(concrete_selector)
+        if exact is not None:
+            if exact.until > now:
+                all_by.extend(exact.by)
+            else:
+                self.delete(concrete_selector)
+        expired: list[str] = []
+        for key in self.patterns.get(method, {}):
+            entry = self.map[key]
+            if entry.until <= now:
+                expired.append(key)
+                continue
+            if key != concrete_selector and path_matches_pattern(concrete_path, _split_key(key)[1]):
+                all_by.extend(entry.by)
+        for key in expired:
+            self.delete(key)
+        deduped = list(dict.fromkeys(all_by))
+        return deduped, len(deduped) > 0
+
+    def clear(self, concrete_selector: str, concrete_path: str, method: str, seq_snapshot: int) -> None:
+        exact = self.map.get(concrete_selector)
+        if exact and exact.seq <= seq_snapshot:
+            self.delete(concrete_selector)
+        to_delete = [
+            key
+            for key in self.patterns.get(method, {})
+            if self.map[key].seq <= seq_snapshot and path_matches_pattern(concrete_path, _split_key(key)[1])
+        ]
+        for key in to_delete:
+            self.delete(key)
+
+    def request_meta(self, concrete_selector: str, concrete_path: str, method: str) -> _RequestMeta:
+        by, is_stale = self.lookup(concrete_selector, concrete_path, method, _now())
+        return _RequestMeta(
+            selector=concrete_selector,
+            is_stale=is_stale,
+            invalidated_by=by,
+            seq_snapshot=self.seq,
+        )
+
+    def evict_expired(self) -> None:
+        now = _now()
+        for key in [k for k, v in self.map.items() if now >= v.until]:
+            self.delete(key)
+
+    def enforce_capacity(self) -> None:
+        if len(self.map) <= self.max_entries:
+            return
+        self.evict_expired()
+        target = max(self.max_entries // 2, 1)
+        while len(self.map) > target:
+            self.delete(next(iter(self.map)))
+
+
+def _split_key(key: str) -> tuple[str, str]:
+    space_idx = key.find(" ")
+    if space_idx == -1:
+        return key, ""
+    return key[:space_idx], key[space_idx + 1 :]
+
+
+def _split_method_path(method_or_key: str, path: str | None) -> tuple[str, str]:
+    if path is None:
+        return _split_key(method_or_key)
+    return method_or_key, path
+
+
 class _StaleTracker:
     """Async-aware stale tracker backed by ``asyncio.Lock``."""
 
@@ -149,30 +283,23 @@ class _StaleTracker:
         max_sources_per_target: int = 16,
     ) -> None:
         """ stale_time == 0 disables the tracker (no stale window applied). """
-        self._enabled = stale_time > 0
-        self._stale_time = max(stale_time, 0.0)
-        self._max_entries = max(stale_max_entries, 1)
-        self._max_sources = max(max_sources_per_target, 1)
-        self._map: OrderedDict[str, _StaleEntry] = OrderedDict()
+        self._store = _StaleStore(stale_time, stale_max_entries, max_sources_per_target)
         self._lock = asyncio.Lock()
-        self._seq = 0
 
     @property
     def enabled(self) -> bool:
-        return self._enabled
+        return self._store.enabled
+
+    @property
+    def _map(self) -> "OrderedDict[str, _StaleEntry]":
+        return self._store.map
 
     async def invalidate(self, patterns: list[str]) -> None:
         """Mark every existing key matching *patterns* as freshly stale."""
-        if not self._enabled:
+        if not self.enabled:
             return
         async with self._lock:
-            self._evict_expired()
-            targets = resolve_invalidation_targets(patterns, self._map)
-            self._seq += 1
-            until = _now() + self._stale_time
-            for t in targets:
-                self._upsert(t, until, self._seq, mutation_selector=None)
-            self._enforce_capacity()
+            self._store.invalidate(patterns)
 
     async def mark_stale(
         self,
@@ -181,27 +308,17 @@ class _StaleTracker:
         mutation_selector: str,
     ) -> None:
         """Bump seq, expand templated invalidation entries, store stale keys."""
-        if not self._enabled or not invalidate:
+        if not self.enabled or not invalidate:
             return
         async with self._lock:
-            self._seq += 1
-            until = _now() + self._stale_time
-            resolved = resolve_invalidation_targets_for_mutation(invalidate, params)
-            for target in resolved:
-                self._upsert(
-                    target, until, self._seq, mutation_selector=mutation_selector,
-                )
-            self._enforce_capacity()
+            self._store.mark_stale(invalidate, params, mutation_selector)
 
     async def mark(self, key: str) -> None:
         """Force *key* into the stale map. Used by SSE/WS open hooks and tests."""
-        if not self._enabled:
+        if not self.enabled:
             return
         async with self._lock:
-            self._seq += 1
-            until = _now() + self._stale_time
-            self._upsert(key, until, self._seq, mutation_selector=None)
-            self._enforce_capacity()
+            self._store.mark(key)
 
     async def is_stale(self, method_or_key: str, path: str | None = None) -> bool:
         """Return True if (method, path) is currently stale.
@@ -209,21 +326,11 @@ class _StaleTracker:
         Accepts either ``is_stale("GET /users")`` or ``is_stale("GET", "/users")``.
         Walks pattern entries too.
         """
-        if not self._enabled:
+        if not self.enabled:
             return False
-        if path is None:
-            method, concrete_path = self._split_key(method_or_key)
-        else:
-            method, concrete_path = method_or_key, path
+        method, concrete_path = _split_method_path(method_or_key, path)
         async with self._lock:
-            now = _now()
-            _by, is_stale = self._lookup_locked(
-                concrete_selector=f"{method} {concrete_path}",
-                concrete_path=concrete_path,
-                method=method,
-                now=now,
-            )
-            return is_stale
+            return self._store.lookup(f"{method} {concrete_path}", concrete_path, method, _now())[1]
 
     async def lookup_stale(
         self,
@@ -232,10 +339,10 @@ class _StaleTracker:
         method: str,
     ) -> tuple[list[str], bool]:
         """Return (invalidated_by_list, is_stale): exact + pattern lookup with sweep."""
-        if not self._enabled:
+        if not self.enabled:
             return [], False
         async with self._lock:
-            return self._lookup_locked(concrete_selector, concrete_path, method, _now())
+            return self._store.lookup(concrete_selector, concrete_path, method, _now())
 
     async def clear_stale(
         self,
@@ -245,25 +352,10 @@ class _StaleTracker:
         seq_snapshot: int,
     ) -> None:
         """Drop seq-older entries matching *concrete_path* (exact + pattern keys)."""
-        if not self._enabled:
+        if not self.enabled:
             return
         async with self._lock:
-            exact = self._map.get(concrete_selector)
-            if exact and exact.seq <= seq_snapshot:
-                del self._map[concrete_selector]
-            to_delete: list[str] = []
-            for key, entry in self._map.items():
-                if entry.seq > seq_snapshot:
-                    continue
-                key_method, key_pattern = self._split_key(key)
-                if not _has_unresolved(key_pattern):
-                    continue
-                if key_method != method:
-                    continue
-                if path_matches_pattern(concrete_path, key_pattern):
-                    to_delete.append(key)
-            for key in to_delete:
-                del self._map[key]
+            self._store.clear(concrete_selector, concrete_path, method, seq_snapshot)
 
     async def build_request_meta(
         self,
@@ -271,98 +363,14 @@ class _StaleTracker:
         concrete_path: str,
         method: str,
     ) -> _RequestMeta | None:
-        if not self._enabled:
+        if not self.enabled:
             return None
         async with self._lock:
-            by, is_stale = self._lookup_locked(
-                concrete_selector, concrete_path, method, _now(),
-            )
-            return _RequestMeta(
-                selector=concrete_selector,
-                is_stale=is_stale,
-                invalidated_by=by,
-                seq_snapshot=self._seq,
-            )
-
-    def _upsert(
-        self,
-        key: str,
-        until: float,
-        seq: int,
-        mutation_selector: str | None,
-    ) -> None:
-        existing = self._map.get(key)
-        if existing is not None:
-            existing.until = until
-            existing.seq = seq
-            if mutation_selector and mutation_selector not in existing.by:
-                if len(existing.by) < self._max_sources:
-                    existing.by.append(mutation_selector)
-            self._map.move_to_end(key)
-            return
-        by = [mutation_selector] if mutation_selector else []
-        self._map[key] = _StaleEntry(by=by, seq=seq, until=until)
-        self._map.move_to_end(key)
-
-    def _lookup_locked(
-        self,
-        concrete_selector: str,
-        concrete_path: str,
-        method: str,
-        now: float,
-    ) -> tuple[list[str], bool]:
-        all_by: list[str] = []
-        exact = self._map.get(concrete_selector)
-        if exact is not None:
-            if exact.until > now:
-                all_by.extend(exact.by)
-            else:
-                del self._map[concrete_selector]
-        expired: list[str] = []
-        for key, entry in self._map.items():
-            if entry.until <= now:
-                expired.append(key)
-                continue
-            if not _has_unresolved(key.split(" ", 1)[-1]):
-                continue
-            if key == concrete_selector:
-                continue
-            key_method, key_pattern = self._split_key(key)
-            if key_method != method:
-                continue
-            if path_matches_pattern(concrete_path, key_pattern):
-                all_by.extend(entry.by)
-        for key in expired:
-            del self._map[key]
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for src in all_by:
-            if src in seen:
-                continue
-            seen.add(src)
-            deduped.append(src)
-        return deduped, len(deduped) > 0
-
-    def _evict_expired(self) -> None:
-        now = _now()
-        expired = [k for k, v in self._map.items() if now >= v.until]
-        for k in expired:
-            del self._map[k]
-
-    def _enforce_capacity(self) -> None:
-        if len(self._map) <= self._max_entries:
-            return
-        self._evict_expired()
-        target = max(self._max_entries // 2, 1)
-        while len(self._map) > target:
-            self._map.popitem(last=False)
+            return self._store.request_meta(concrete_selector, concrete_path, method)
 
     @staticmethod
     def _split_key(key: str) -> tuple[str, str]:
-        space_idx = key.find(" ")
-        if space_idx == -1:
-            return key, ""
-        return key[:space_idx], key[space_idx + 1 :]
+        return _split_key(key)
 
 
 class _StaleTrackerSync:
@@ -375,29 +383,22 @@ class _StaleTrackerSync:
         max_sources_per_target: int = 16,
     ) -> None:
         """ stale_time == 0 disables the tracker (no stale window applied). """
-        self._enabled = stale_time > 0
-        self._stale_time = max(stale_time, 0.0)
-        self._max_entries = max(stale_max_entries, 1)
-        self._max_sources = max(max_sources_per_target, 1)
-        self._map: OrderedDict[str, _StaleEntry] = OrderedDict()
+        self._store = _StaleStore(stale_time, stale_max_entries, max_sources_per_target)
         self._lock = threading.Lock()
-        self._seq = 0
 
     @property
     def enabled(self) -> bool:
-        return self._enabled
+        return self._store.enabled
+
+    @property
+    def _map(self) -> "OrderedDict[str, _StaleEntry]":
+        return self._store.map
 
     def invalidate(self, patterns: list[str]) -> None:
-        if not self._enabled:
+        if not self.enabled:
             return
         with self._lock:
-            self._evict_expired()
-            targets = resolve_invalidation_targets(patterns, self._map)
-            self._seq += 1
-            until = _now() + self._stale_time
-            for t in targets:
-                self._upsert(t, until, self._seq, None)
-            self._enforce_capacity()
+            self._store.invalidate(patterns)
 
     def mark_stale(
         self,
@@ -405,37 +406,23 @@ class _StaleTrackerSync:
         params: dict[str, str] | None,
         mutation_selector: str,
     ) -> None:
-        if not self._enabled or not invalidate:
+        if not self.enabled or not invalidate:
             return
         with self._lock:
-            self._seq += 1
-            until = _now() + self._stale_time
-            resolved = resolve_invalidation_targets_for_mutation(invalidate, params)
-            for target in resolved:
-                self._upsert(target, until, self._seq, mutation_selector)
-            self._enforce_capacity()
+            self._store.mark_stale(invalidate, params, mutation_selector)
 
     def mark(self, key: str) -> None:
-        if not self._enabled:
+        if not self.enabled:
             return
         with self._lock:
-            self._seq += 1
-            until = _now() + self._stale_time
-            self._upsert(key, until, self._seq, None)
-            self._enforce_capacity()
+            self._store.mark(key)
 
     def is_stale(self, method_or_key: str, path: str | None = None) -> bool:
-        if not self._enabled:
+        if not self.enabled:
             return False
-        if path is None:
-            method, concrete_path = _StaleTracker._split_key(method_or_key)
-        else:
-            method, concrete_path = method_or_key, path
+        method, concrete_path = _split_method_path(method_or_key, path)
         with self._lock:
-            _by, is_stale = self._lookup_locked(
-                f"{method} {concrete_path}", concrete_path, method, _now(),
-            )
-            return is_stale
+            return self._store.lookup(f"{method} {concrete_path}", concrete_path, method, _now())[1]
 
     def lookup_stale(
         self,
@@ -443,10 +430,10 @@ class _StaleTrackerSync:
         concrete_path: str,
         method: str,
     ) -> tuple[list[str], bool]:
-        if not self._enabled:
+        if not self.enabled:
             return [], False
         with self._lock:
-            return self._lookup_locked(concrete_selector, concrete_path, method, _now())
+            return self._store.lookup(concrete_selector, concrete_path, method, _now())
 
     def clear_stale(
         self,
@@ -455,25 +442,10 @@ class _StaleTrackerSync:
         method: str,
         seq_snapshot: int,
     ) -> None:
-        if not self._enabled:
+        if not self.enabled:
             return
         with self._lock:
-            exact = self._map.get(concrete_selector)
-            if exact and exact.seq <= seq_snapshot:
-                del self._map[concrete_selector]
-            to_delete: list[str] = []
-            for key, entry in self._map.items():
-                if entry.seq > seq_snapshot:
-                    continue
-                key_method, key_pattern = _StaleTracker._split_key(key)
-                if not _has_unresolved(key_pattern):
-                    continue
-                if key_method != method:
-                    continue
-                if path_matches_pattern(concrete_path, key_pattern):
-                    to_delete.append(key)
-            for key in to_delete:
-                del self._map[key]
+            self._store.clear(concrete_selector, concrete_path, method, seq_snapshot)
 
     def build_request_meta(
         self,
@@ -481,91 +453,10 @@ class _StaleTrackerSync:
         concrete_path: str,
         method: str,
     ) -> _RequestMeta | None:
-        if not self._enabled:
+        if not self.enabled:
             return None
         with self._lock:
-            by, is_stale = self._lookup_locked(
-                concrete_selector, concrete_path, method, _now(),
-            )
-            return _RequestMeta(
-                selector=concrete_selector,
-                is_stale=is_stale,
-                invalidated_by=by,
-                seq_snapshot=self._seq,
-            )
-
-    def _upsert(
-        self,
-        key: str,
-        until: float,
-        seq: int,
-        mutation_selector: str | None,
-    ) -> None:
-        existing = self._map.get(key)
-        if existing is not None:
-            existing.until = until
-            existing.seq = seq
-            if mutation_selector and mutation_selector not in existing.by:
-                if len(existing.by) < self._max_sources:
-                    existing.by.append(mutation_selector)
-            self._map.move_to_end(key)
-            return
-        by = [mutation_selector] if mutation_selector else []
-        self._map[key] = _StaleEntry(by=by, seq=seq, until=until)
-        self._map.move_to_end(key)
-
-    def _lookup_locked(
-        self,
-        concrete_selector: str,
-        concrete_path: str,
-        method: str,
-        now: float,
-    ) -> tuple[list[str], bool]:
-        all_by: list[str] = []
-        exact = self._map.get(concrete_selector)
-        if exact is not None:
-            if exact.until > now:
-                all_by.extend(exact.by)
-            else:
-                del self._map[concrete_selector]
-        expired: list[str] = []
-        for key, entry in self._map.items():
-            if entry.until <= now:
-                expired.append(key)
-                continue
-            if not _has_unresolved(key.split(" ", 1)[-1]):
-                continue
-            if key == concrete_selector:
-                continue
-            key_method, key_pattern = _StaleTracker._split_key(key)
-            if key_method != method:
-                continue
-            if path_matches_pattern(concrete_path, key_pattern):
-                all_by.extend(entry.by)
-        for key in expired:
-            del self._map[key]
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for src in all_by:
-            if src in seen:
-                continue
-            seen.add(src)
-            deduped.append(src)
-        return deduped, len(deduped) > 0
-
-    def _evict_expired(self) -> None:
-        now = _now()
-        expired = [k for k, v in self._map.items() if now >= v.until]
-        for k in expired:
-            del self._map[k]
-
-    def _enforce_capacity(self) -> None:
-        if len(self._map) <= self._max_entries:
-            return
-        self._evict_expired()
-        target = max(self._max_entries // 2, 1)
-        while len(self._map) > target:
-            self._map.popitem(last=False)
+            return self._store.request_meta(concrete_selector, concrete_path, method)
 
 
 __all__ = [

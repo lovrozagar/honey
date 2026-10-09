@@ -1408,7 +1408,7 @@ describe("Tier 18: StaleTracker::mark", () => {
 		const next = inv.indexOf("pub async fn", start + 1)
 		expect(start).toBeGreaterThanOrEqual(0)
 		const markBody = inv.slice(start, next === -1 ? undefined : next)
-		expect(markBody).toMatch(/upsert_locked|insert/)
+		expect(markBody).toMatch(/\.upsert\(|insert/)
 		expect(markBody).toMatch(/enforce_capacity_locked|max_entries/)
 	})
 })
