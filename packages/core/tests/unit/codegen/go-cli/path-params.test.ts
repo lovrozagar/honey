@@ -112,8 +112,20 @@ describe("go-cli codegen — Tier 2: path params", () => {
 		}
 		const result = generateGoCLI(spec, { binaryName: "acme" })
 		const things = result.files["cmd/things.go"]
-		expect(things).toContain(`"id"`)
-		expect(things).toContain(`"body-id"`)
+		/* two flags, two variables: the path flag fills the URL, the body flag the JSON key "id" */
+		const pathVar = /StringVar\(&(\w+), "id", ""/.exec(things)?.[1]
+		const bodyVar = /StringVar\(&(\w+), "body-id", ""/.exec(things)?.[1]
+		expect(pathVar).toBeDefined()
+		expect(bodyVar).toBeDefined()
+		expect(pathVar).not.toBe(bodyVar)
+		expect(things).toContain(`MarkFlagRequired("id")`)
+		expect(things).not.toContain(`MarkFlagRequired("body-id")`)
+		expect(things).toContain(`HoneyExpandPath("/things/{id}", map[string]string{"id": ${pathVar}})`)
+		expect(things).toMatch(
+			new RegExp(`if cmd\\.Flags\\(\\)\\.Changed\\("body-id"\\) \\{\\s+merged\\["id"\\] = ${bodyVar}`),
+		)
+		/* the path value never lands in the body, and the body value never in the URL */
+		expect(things).not.toContain(`merged["id"] = ${pathVar}`)
 	})
 
 	it("[#14] reserved Go keyword path param {type} → flag name stays --type, Go var is not the keyword", () => {

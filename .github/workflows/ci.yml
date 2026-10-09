@@ -203,7 +203,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          # generated go.mod files say go 1.24 (`omitzero` on tri-state fields)
+          go-version: "1.24"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -219,6 +220,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('packages/core/src/client-rust/**', 'packages/core/src/codegen-rust.ts') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - run: pip install httpx websockets ruff
+      # mypy: the compile gate type-checks the generated Python SDK
+      - run: pip install httpx websockets ruff mypy
       - run: bun install --frozen-lockfile
       - run: bun run test:harness
