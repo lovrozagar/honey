@@ -18,6 +18,7 @@ import { generatePythonSDK } from "../../../src/codegen-python.ts"
 import { generateRustSDK } from "../../../src/codegen-rust.ts"
 import { CARGO_TARGET_DIR } from "../../cargo-env.ts"
 import { loadMockSpec } from "./harness-util.ts"
+import { PYTHON } from "../../python-env.ts"
 
 const check = (name: string) => fileURLToPath(new URL(`../sdk-runtime-checks/${name}`, import.meta.url))
 
@@ -64,14 +65,14 @@ describe("SDK runtime behavior", () => {
 		600_000,
 	)
 
-	it.skipIf(!has("python3", ["-c", "import httpx"]))(
+	it.skipIf(!has(PYTHON, ["-c", "import httpx"]))(
 		"Python",
 		() => {
 			const dir = mkdtempSync(join(tmpdir(), "honey-rt-py-"))
 			try {
 				writeTree(join(dir, "sdk"), generatePythonSDK(loadMockSpec()).files)
 				copyFileSync(check("runtime_check.py"), join(dir, "runtime_check.py"))
-				const r = run("python3", ["runtime_check.py"], dir)
+				const r = run(PYTHON, ["runtime_check.py"], dir)
 				expect(r.ok, r.err).toBe(true)
 				expectAllTrue(r.out)
 			} finally {

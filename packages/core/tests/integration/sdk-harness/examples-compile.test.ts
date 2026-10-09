@@ -13,6 +13,7 @@ import { generatePythonSDK } from "../../../src/codegen-python.ts"
 import { generateRustSDK } from "../../../src/codegen-rust.ts"
 import { CARGO_TARGET_DIR } from "../../cargo-env.ts"
 import { loadMockSpec } from "./harness-util.ts"
+import { PYTHON } from "../../python-env.ts"
 
 const example = (rel: string) => fileURLToPath(new URL(`../../../examples/${rel}`, import.meta.url))
 
@@ -83,7 +84,7 @@ describe("examples compile against the generated SDKs", () => {
 		600_000,
 	)
 
-	const hasMypy = has("python3", ["-m", "mypy", "--version"]) && has("python3", ["-c", "import httpx"])
+	const hasMypy = has(PYTHON, ["-m", "mypy", "--version"]) && has(PYTHON, ["-c", "import httpx"])
 	it.skipIf(!hasMypy)(
 		"examples/python/example.py",
 		() => {
@@ -91,11 +92,7 @@ describe("examples compile against the generated SDKs", () => {
 			try {
 				writeTree(join(dir, "sdk"), generatePythonSDK(loadMockSpec()).files)
 				copyFileSync(example("python/example.py"), join(dir, "example.py"))
-				const typed = run(
-					"python3",
-					["-m", "mypy", "--python-version", "3.11", "--no-error-summary", "example.py"],
-					dir,
-				)
+				const typed = run(PYTHON, ["-m", "mypy", "--python-version", "3.11", "--no-error-summary", "example.py"], dir)
 				expect(typed.ok, typed.out).toBe(true)
 			} finally {
 				rmSync(dir, { force: true, recursive: true })

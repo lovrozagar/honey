@@ -142,13 +142,15 @@ def lookup_stale(key: str, stale_map: "OrderedDict[str, Any]") -> bool:
 class _StaleStore:
     """Stale state shared by the async and sync trackers; callers hold their own lock.
 
-    Concrete keys are looked up directly; keys that still hold ``{name}`` placeholders are
-    also indexed per method, so a lookup scans only the patterns of its method, not every
-    entry. Expired concrete entries go on access, expired patterns when scanned, and the
-    rest when the map is over capacity.
+    Concrete keys are looked up directly; keys that still hold ``{name}``
+    placeholders are also indexed per method, so a lookup scans only the patterns
+    of its method, not every entry. Expired concrete entries go on access, expired
+    patterns when scanned, and the rest when the map is over capacity.
     """
 
-    def __init__(self, stale_time: float, stale_max_entries: int, max_sources_per_target: int) -> None:
+    def __init__(
+        self, stale_time: float, stale_max_entries: int, max_sources_per_target: int
+    ) -> None:
         self.enabled = stale_time > 0
         self.stale_time = max(stale_time, 0.0)
         self.max_entries = max(stale_max_entries, 1)
@@ -167,7 +169,9 @@ class _StaleStore:
             if not bucket:
                 del self.patterns[method]
 
-    def upsert(self, key: str, until: float, seq: int, mutation_selector: str | None) -> None:
+    def upsert(
+        self, key: str, until: float, seq: int, mutation_selector: str | None
+    ) -> None:
         existing = self.map.get(key)
         if existing is not None:
             existing.until = until
@@ -192,7 +196,12 @@ class _StaleStore:
             self.upsert(t, until, self.seq, None)
         self.enforce_capacity()
 
-    def mark_stale(self, invalidate: list[str], params: dict[str, str] | None, mutation_selector: str) -> None:
+    def mark_stale(
+        self,
+        invalidate: list[str],
+        params: dict[str, str] | None,
+        mutation_selector: str,
+    ) -> None:
         self.seq += 1
         until = _now() + self.stale_time
         for target in resolve_invalidation_targets_for_mutation(invalidate, params):
@@ -204,7 +213,9 @@ class _StaleStore:
         self.upsert(key, _now() + self.stale_time, self.seq, None)
         self.enforce_capacity()
 
-    def lookup(self, concrete_selector: str, concrete_path: str, method: str, now: float) -> tuple[list[str], bool]:
+    def lookup(
+        self, concrete_selector: str, concrete_path: str, method: str, now: float
+    ) -> tuple[list[str], bool]:
         all_by: list[str] = []
         exact = self.map.get(concrete_selector)
         if exact is not None:
@@ -218,26 +229,33 @@ class _StaleStore:
             if entry.until <= now:
                 expired.append(key)
                 continue
-            if key != concrete_selector and path_matches_pattern(concrete_path, _split_key(key)[1]):
+            if key != concrete_selector and path_matches_pattern(
+                concrete_path, _split_key(key)[1]
+            ):
                 all_by.extend(entry.by)
         for key in expired:
             self.delete(key)
         deduped = list(dict.fromkeys(all_by))
         return deduped, len(deduped) > 0
 
-    def clear(self, concrete_selector: str, concrete_path: str, method: str, seq_snapshot: int) -> None:
+    def clear(
+        self, concrete_selector: str, concrete_path: str, method: str, seq_snapshot: int
+    ) -> None:
         exact = self.map.get(concrete_selector)
         if exact and exact.seq <= seq_snapshot:
             self.delete(concrete_selector)
         to_delete = [
             key
             for key in self.patterns.get(method, {})
-            if self.map[key].seq <= seq_snapshot and path_matches_pattern(concrete_path, _split_key(key)[1])
+            if self.map[key].seq <= seq_snapshot
+            and path_matches_pattern(concrete_path, _split_key(key)[1])
         ]
         for key in to_delete:
             self.delete(key)
 
-    def request_meta(self, concrete_selector: str, concrete_path: str, method: str) -> _RequestMeta:
+    def request_meta(
+        self, concrete_selector: str, concrete_path: str, method: str
+    ) -> _RequestMeta:
         by, is_stale = self.lookup(concrete_selector, concrete_path, method, _now())
         return _RequestMeta(
             selector=concrete_selector,
@@ -282,7 +300,7 @@ class _StaleTracker:
         stale_max_entries: int = 1000,
         max_sources_per_target: int = 16,
     ) -> None:
-        """ stale_time == 0 disables the tracker (no stale window applied). """
+        """stale_time == 0 disables the tracker (no stale window applied)."""
         self._store = _StaleStore(stale_time, stale_max_entries, max_sources_per_target)
         self._lock = asyncio.Lock()
 
@@ -330,7 +348,9 @@ class _StaleTracker:
             return False
         method, concrete_path = _split_method_path(method_or_key, path)
         async with self._lock:
-            return self._store.lookup(f"{method} {concrete_path}", concrete_path, method, _now())[1]
+            return self._store.lookup(
+                f"{method} {concrete_path}", concrete_path, method, _now()
+            )[1]
 
     async def lookup_stale(
         self,
@@ -382,7 +402,7 @@ class _StaleTrackerSync:
         stale_max_entries: int = 1000,
         max_sources_per_target: int = 16,
     ) -> None:
-        """ stale_time == 0 disables the tracker (no stale window applied). """
+        """stale_time == 0 disables the tracker (no stale window applied)."""
         self._store = _StaleStore(stale_time, stale_max_entries, max_sources_per_target)
         self._lock = threading.Lock()
 
@@ -422,7 +442,9 @@ class _StaleTrackerSync:
             return False
         method, concrete_path = _split_method_path(method_or_key, path)
         with self._lock:
-            return self._store.lookup(f"{method} {concrete_path}", concrete_path, method, _now())[1]
+            return self._store.lookup(
+                f"{method} {concrete_path}", concrete_path, method, _now()
+            )[1]
 
     def lookup_stale(
         self,

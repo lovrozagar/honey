@@ -18,6 +18,7 @@ import { generatePythonSDK } from "../../../src/codegen-python.ts"
 import { generateRustSDK } from "../../../src/codegen-rust.ts"
 import { CARGO_TARGET_DIR } from "../../cargo-env.ts"
 import { adversarialSpec } from "../../unit/codegen/__fixtures__/adversarial-spec.ts"
+import { PYTHON } from "../../python-env.ts"
 
 const spec = adversarialSpec as unknown as Record<string, unknown>
 
@@ -27,9 +28,9 @@ function has(cmd: string, args: string[]): boolean {
 
 const hasGo = has("go", ["version"])
 const hasCargo = has("cargo", ["--version"])
-const hasPython = has("python3", ["--version"])
-const hasMypy = hasPython && has("python3", ["-m", "mypy", "--version"])
-const hasHttpx = hasPython && has("python3", ["-c", "import httpx"])
+const hasPython = has(PYTHON, ["--version"])
+const hasMypy = hasPython && has(PYTHON, ["-m", "mypy", "--version"])
+const hasHttpx = hasPython && has(PYTHON, ["-c", "import httpx"])
 
 function writeTree(root: string, files: Record<string, string>): void {
 	for (const [rel, content] of Object.entries(files)) {
@@ -125,14 +126,14 @@ describe.skipIf(!hasPython)("adversarial corpus — Python", () => {
 			try {
 				writeTree(join(dir, "advsdk"), generatePythonSDK(spec, { throwOnError }).files)
 				/* compileall catches what ast.parse misses (duplicate arguments) */
-				const compiled = run("python3", ["-m", "compileall", "-q", "advsdk"], dir)
+				const compiled = run(PYTHON, ["-m", "compileall", "-q", "advsdk"], dir)
 				expect(compiled.ok, compiled.out).toBe(true)
 				if (hasHttpx) {
-					const imported = run("python3", ["-c", "import advsdk"], dir)
+					const imported = run(PYTHON, ["-c", "import advsdk"], dir)
 					expect(imported.ok, imported.out).toBe(true)
 				}
 				if (hasMypy && hasHttpx) {
-					const typed = run("python3", ["-m", "mypy", "--python-version", "3.11", "--no-error-summary", "advsdk"], dir)
+					const typed = run(PYTHON, ["-m", "mypy", "--python-version", "3.11", "--no-error-summary", "advsdk"], dir)
 					expect(typed.ok, typed.out).toBe(true)
 				}
 			} finally {

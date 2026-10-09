@@ -23,6 +23,7 @@ import { generateGoSDK } from "../../../src/codegen-go.ts"
 import { generatePythonSDK } from "../../../src/codegen-python.ts"
 import { generateRustSDK } from "../../../src/codegen-rust.ts"
 import { CARGO_TARGET_DIR } from "../../cargo-env.ts"
+import { PYTHON } from "../../python-env.ts"
 
 const URL_VECTORS = fileURLToPath(new URL("../../conformance/vectors/url-building.json", import.meta.url))
 const SSE_VECTORS = fileURLToPath(new URL("../../conformance/vectors/sse.json", import.meta.url))
@@ -48,7 +49,7 @@ function has(cmd: string, args: string[]): boolean {
 }
 const hasGo = has("go", ["version"])
 const hasCargo = has("cargo", ["--version"])
-const hasPython = has("python3", ["-c", "import httpx"])
+const hasPython = has(PYTHON, ["-c", "import httpx"])
 
 const OFFLINE = /dial tcp|no such host|Could not resolve|failed to download|network|timed out|proxy\.golang\.org/i
 
@@ -431,7 +432,7 @@ describe.skipIf(!hasPython)("conformance — Python runtime", () => {
 		try {
 			writeTree(join(dir, "confsdk"), generatePythonSDK(conformanceSpec).files)
 			writeFileSync(join(dir, "main.py"), PY_MAIN)
-			const r = await run("python3", ["main.py", URL_VECTORS, SSE_VECTORS, `http://127.0.0.1:${port}/v1`], dir)
+			const r = await run(PYTHON, ["main.py", URL_VECTORS, SSE_VECTORS, `http://127.0.0.1:${port}/v1`], dir)
 			expect(r.ok, r.err).toBe(true)
 			expectVectors(JSON.parse(r.out) as Results)
 			const { body, ...rest } = captured.get("python") as Captured

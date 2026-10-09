@@ -90,9 +90,9 @@ class _StubConn:
 
 def _to_ws_url(url: str) -> str:
     if url.startswith("https://"):
-        return "wss://" + url[len("https://"):]
+        return "wss://" + url[len("https://") :]
     if url.startswith("http://"):
-        return "ws://" + url[len("http://"):]
+        return "ws://" + url[len("http://") :]
     return url
 
 
@@ -256,8 +256,10 @@ class SseAdapter:
                 await client.aclose()
             raise
         return _SseConn(
-            client=client, owns_client=owns_client,
-            ctx=ctx, response=response,
+            client=client,
+            owns_client=owns_client,
+            ctx=ctx,
+            response=response,
         )
 
 

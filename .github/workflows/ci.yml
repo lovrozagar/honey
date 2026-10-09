@@ -220,7 +220,11 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('packages/core/src/client-rust/**', 'packages/core/src/codegen-rust.ts') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      # mypy: the compile gate type-checks the generated Python SDK
-      - run: pip install httpx websockets ruff mypy
+      # one pinned list for CI and local runs (locally the harness fills .cache/python-venv from it)
+      - run: pip install -r packages/core/tests/python-requirements.txt
       - run: bun install --frozen-lockfile
       - run: bun run test:harness
+        env:
+          HONEY_PYTHON: python
+          # a Python problem fails the job instead of skipping the Python SDK tests
+          HONEY_REQUIRE_PYTHON: "1"

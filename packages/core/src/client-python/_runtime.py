@@ -236,11 +236,13 @@ def _build_headers(
 
 
 class PathParamError(ValueError):
-    """A path parameter that is missing, or that a URL parser would collapse ("", "." or "..")."""
+    """A path parameter that is missing, or that a URL parser would collapse
+    ("", "." or "..")."""
 
 
 def _escape_segment(value: str) -> str:
-    # encodeURIComponent's safe set: every SDK language and the TS client send the same bytes
+    # encodeURIComponent's safe set: every SDK language and the TS client send
+    # the same bytes
     return quote(value, safe="!~*'()")
 
 
@@ -251,14 +253,16 @@ def _escape_query(value: str) -> str:
 
 def _encode_segment_value(name: str, value: str) -> str:
     if value in ("", ".", ".."):
-        raise PathParamError(f"Invalid path param {name!r}: {value!r} is not a path segment")
+        raise PathParamError(
+            f"Invalid path param {name!r}: {value!r} is not a path segment"
+        )
     return _escape_segment(value)
 
 
 def _expand_path(template: str, params: dict[str, Any]) -> str:
-    """Fill a path template with the TS client's grammar: ``:name`` / ``:name?`` take a
-    whole segment, a final ``*name`` takes the rest, ``{name}`` may sit inside a segment.
-    Values are encoded; "", "." and ".." are rejected."""
+    """Fill a path template with the TS client's grammar: ``:name`` / ``:name?``
+    take a whole segment, a final ``*name`` takes the rest, ``{name}`` may sit
+    inside a segment. Values are encoded; "", "." and ".." are rejected."""
     segments = template.split("/")
     out: list[str] = []
     for i, seg in enumerate(segments):
@@ -279,9 +283,12 @@ def _expand_path(template: str, params: dict[str, Any]) -> str:
                 raise PathParamError(f"Missing path param: {name}")
             value = _format_value(params[name])
             out.append(
-                "" if value == "" else "/".join(_encode_segment_value(name, p) for p in value.split("/"))
+                ""
+                if value == ""
+                else "/".join(_encode_segment_value(name, p) for p in value.split("/"))
             )
         else:
+
             def _sub(match: re.Match[str]) -> str:
                 name = match.group(1)
                 if params.get(name) is None:
@@ -373,7 +380,8 @@ def _append_query(url: str, params: dict[str, Any] | None) -> str:
     return f"{url}{'&' if '?' in url else '?'}{extra}"
 
 
-# One multipart file: raw bytes, a binary file object, or a (filename, content[, content_type]) tuple.
+# One multipart file: raw bytes, a binary file object, or a
+# (filename, content[, content_type]) tuple.
 FileInput = Any
 
 
@@ -383,13 +391,16 @@ def _form_content(body: Any) -> bytes:
 
 
 def _multipart_parts(
-    body: Any, files: list[str], list_files: list[str],
+    body: Any,
+    files: list[str],
+    list_files: list[str],
 ) -> tuple[None, list[tuple[str, Any]]]:
     """Encode a multipart body as httpx ``files`` entries (``data`` is always ``None``).
 
-    httpx 0.28 cannot combine a list of ``data`` tuples with ``files`` (a text field raises
-    ``TypeError``, and an empty list sends an empty body), so text fields go in as
-    ``(None, value)`` parts: same wire format, and repeated keys keep their order.
+    httpx 0.28 cannot combine a list of ``data`` tuples with ``files`` (a text
+    field raises ``TypeError``, and an empty list sends an empty body), so text
+    fields go in as ``(None, value)`` parts: same wire format, and repeated keys
+    keep their order.
     """
     out_files: list[tuple[str, Any]] = []
     for key, value in dict(body or {}).items():
@@ -407,10 +418,14 @@ def _multipart_parts(
 
 
 def _body_args(
-    content: Any, data: Any, files: Any, headers: dict[str, str],
+    content: Any,
+    data: Any,
+    files: Any,
+    headers: dict[str, str],
 ) -> tuple[Any, Any, Any, dict[str, str]]:
-    """httpx sends ``files=[]`` as no body at all. A multipart operation called with no fields
-    still sends a multipart body: the empty one, a lone closing boundary."""
+    """httpx sends ``files=[]`` as no body at all. A multipart operation called
+    with no fields still sends a multipart body: the empty one, a lone closing
+    boundary."""
     if files is not None and len(files) == 0 and content is None and not data:
         boundary = uuid.uuid4().hex
         out = dict(headers)
@@ -422,9 +437,9 @@ def _body_args(
 def _to_ws_url(url: str) -> str:
     """Swap only the scheme; a URL inside the query string is untouched."""
     if url.startswith("https://"):
-        return "wss://" + url[len("https://"):]
+        return "wss://" + url[len("https://") :]
     if url.startswith("http://"):
-        return "ws://" + url[len("http://"):]
+        return "ws://" + url[len("http://") :]
     return url
 
 
@@ -504,7 +519,8 @@ def _apply_meta_to_request_ctx(ctx: RequestContext, meta: _RequestMeta | None) -
 
 
 def _apply_meta_to_response_ctx(
-    ctx: ResponseContext, meta: _RequestMeta | None,
+    ctx: ResponseContext,
+    meta: _RequestMeta | None,
 ) -> None:
     if meta is None:
         return
@@ -553,16 +569,22 @@ async def _do_request_async(
 
     _emit_log(
         config,
-        LogEntry(level="debug", event="request_start", operation=operation, duration_ms=0),
+        LogEntry(
+            level="debug", event="request_start", operation=operation, duration_ms=0
+        ),
     )
 
     async def _send(ctx: RequestContext) -> httpx.Response:
-        b_content, b_data, b_files, b_headers = _body_args(content, data, files, ctx.headers)
+        b_content, b_data, b_files, b_headers = _body_args(
+            content, data, files, ctx.headers
+        )
         return await client.request(
             ctx.method,
             ctx.url,
             headers=b_headers,
-            json=ctx.body if content is None and data is None and files is None else None,
+            json=ctx.body
+            if content is None and data is None and files is None
+            else None,
             content=b_content,
             data=b_data,
             files=b_files,
@@ -573,7 +595,9 @@ async def _do_request_async(
         if config.on_response:
             raw = response.content
             parsed = _parse_body(response)
-            resp_ctx = ResponseContext(response=response, body=raw, parsed=parsed, is_retry=is_retry)
+            resp_ctx = ResponseContext(
+                response=response, body=raw, parsed=parsed, is_retry=is_retry
+            )
             _apply_meta_to_response_ctx(resp_ctx, request_meta)
             for hook in config.on_response:
                 await hook(resp_ctx)
@@ -596,12 +620,16 @@ async def _do_request_async(
             if new_token is not None:
                 current_auth_name = _auth_header_name(config).lower()
                 extra_no_auth = {
-                    k: v for k, v in req_ctx.headers.items() if k.lower() != current_auth_name
+                    k: v
+                    for k, v in req_ctx.headers.items()
+                    if k.lower() != current_auth_name
                 }
                 retry_ctx = RequestContext(
                     method=req_ctx.method,
                     url=req_ctx.url,
-                    headers=_build_headers(config, extra=extra_no_auth or None, bearer_token=new_token),
+                    headers=_build_headers(
+                        config, extra=extra_no_auth or None, bearer_token=new_token
+                    ),
                     body=req_ctx.body,
                     is_retry=True,
                 )
@@ -669,16 +697,22 @@ def _do_request_sync(
 
     _emit_log(
         config,
-        LogEntry(level="debug", event="request_start", operation=operation, duration_ms=0),
+        LogEntry(
+            level="debug", event="request_start", operation=operation, duration_ms=0
+        ),
     )
 
     def _send(ctx: RequestContext) -> httpx.Response:
-        b_content, b_data, b_files, b_headers = _body_args(content, data, files, ctx.headers)
+        b_content, b_data, b_files, b_headers = _body_args(
+            content, data, files, ctx.headers
+        )
         return client.request(
             ctx.method,
             ctx.url,
             headers=b_headers,
-            json=ctx.body if content is None and data is None and files is None else None,
+            json=ctx.body
+            if content is None and data is None and files is None
+            else None,
             content=b_content,
             data=b_data,
             files=b_files,
@@ -689,7 +723,9 @@ def _do_request_sync(
         if config.on_response_sync:
             raw = response.content
             parsed = _parse_body(response)
-            resp_ctx = ResponseContext(response=response, body=raw, parsed=parsed, is_retry=is_retry)
+            resp_ctx = ResponseContext(
+                response=response, body=raw, parsed=parsed, is_retry=is_retry
+            )
             _apply_meta_to_response_ctx(resp_ctx, request_meta)
             for hook in config.on_response_sync:
                 hook(resp_ctx)
@@ -712,12 +748,16 @@ def _do_request_sync(
             if new_token is not None:
                 current_auth_name = _auth_header_name(config).lower()
                 extra_no_auth = {
-                    k: v for k, v in req_ctx.headers.items() if k.lower() != current_auth_name
+                    k: v
+                    for k, v in req_ctx.headers.items()
+                    if k.lower() != current_auth_name
                 }
                 retry_ctx = RequestContext(
                     method=req_ctx.method,
                     url=req_ctx.url,
-                    headers=_build_headers(config, extra=extra_no_auth or None, bearer_token=new_token),
+                    headers=_build_headers(
+                        config, extra=extra_no_auth or None, bearer_token=new_token
+                    ),
                     body=req_ctx.body,
                     is_retry=True,
                 )
@@ -774,12 +814,16 @@ async def _open_stream(
         for hook in config.on_request:
             await hook(req_ctx)
     timeout = httpx.Timeout(config.timeout, read=None)
-    b_content, b_data, b_files, b_headers = _body_args(content, data, files, req_ctx.headers)
+    b_content, b_data, b_files, b_headers = _body_args(
+        content, data, files, req_ctx.headers
+    )
     request = client.build_request(
         req_ctx.method,
         req_ctx.url,
         headers=b_headers,
-        json=req_ctx.body if content is None and data is None and files is None else None,
+        json=req_ctx.body
+        if content is None and data is None and files is None
+        else None,
         content=b_content,
         data=b_data,
         files=b_files,

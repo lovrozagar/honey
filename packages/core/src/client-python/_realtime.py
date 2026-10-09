@@ -83,7 +83,9 @@ class ResumableConnection:
     async def _open_chain(self) -> None:
         last_err: Exception | None = None
         order: list[int] = []
-        if self._proven_index is not None and self._proven_index < len(self._transports):
+        if self._proven_index is not None and self._proven_index < len(
+            self._transports
+        ):
             order.append(self._proven_index)
         order.extend(i for i in range(len(self._transports)) if i not in order)
         for idx in order:

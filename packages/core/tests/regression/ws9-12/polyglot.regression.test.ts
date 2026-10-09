@@ -29,9 +29,10 @@ import {
 	rustRuntimeSpec,
 	sseOk,
 } from "./polyglot-specs.ts"
+import { PYTHON } from "../../python-env.ts"
 
 const CHECKS = join(import.meta.dirname, "checks")
-const PY = process.env.HONEY_PYTHON ?? "python3"
+const PY = PYTHON
 
 function has(cmd: string, args: string[]): boolean {
 	return spawnSync(cmd, args, { stdio: "ignore" }).status === 0

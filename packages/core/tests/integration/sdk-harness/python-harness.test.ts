@@ -4,14 +4,15 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { generatePythonSDK } from "../../../src/codegen-python.ts"
-import { hasBinary, loadMockSpec, startMockServerSubprocess } from "./harness-util.ts"
+import { loadMockSpec, startMockServerSubprocess } from "./harness-util.ts"
+import { PYTHON, pythonHas } from "../../python-env.ts"
 
-const hasPython3 = hasBinary("python3")
+const hasPython3 = pythonHas()
 
 function hasHttpx(): boolean {
 	if (!hasPython3) return false
 	try {
-		execSync("python3 -c 'import httpx'", { stdio: "ignore" })
+		execSync(`"${PYTHON}" -c 'import httpx'`, { stdio: "ignore" })
 		return true
 	} catch {
 		return false
@@ -49,7 +50,7 @@ print(json.dumps({"created": created, "fetched": fetched}))
 
 			let stdout: string
 			try {
-				stdout = execSync("python3 test_round_trip.py", {
+				stdout = execSync(`"${PYTHON}" test_round_trip.py`, {
 					cwd: dir,
 					encoding: "utf8",
 					timeout: 30_000,
@@ -57,7 +58,7 @@ print(json.dumps({"created": created, "fetched": fetched}))
 			} catch (err: unknown) {
 				const e = err as { stderr?: string; stdout?: string; message?: string }
 				throw new Error(
-					`python3 test_round_trip.py failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
+					`${PYTHON} test_round_trip.py failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
 					{ cause: err },
 				)
 			}
@@ -83,7 +84,7 @@ print(json.dumps({"created": created, "fetched": fetched}))
 
 	function runPython(dir: string, scriptName: string): string {
 		try {
-			return execSync(`python3 ${scriptName}`, {
+			return execSync(`"${PYTHON}" ${scriptName}`, {
 				cwd: dir,
 				encoding: "utf8",
 				timeout: 30_000,
@@ -91,7 +92,7 @@ print(json.dumps({"created": created, "fetched": fetched}))
 		} catch (err: unknown) {
 			const e = err as { stderr?: string; stdout?: string; message?: string }
 			throw new Error(
-				`python3 ${scriptName} failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
+				`${PYTHON} ${scriptName} failed:\nstderr: ${e.stderr ?? ""}\nstdout: ${e.stdout ?? ""}\n${e.message ?? ""}`,
 				{ cause: err },
 			)
 		}

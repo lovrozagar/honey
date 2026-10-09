@@ -5,10 +5,11 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { generatePythonSDK } from "../../../src/codegen-python.ts"
 import { jsonSchemaToPy } from "../../../src/python-type-emitter.ts"
+import { PYTHON } from "../../python-env.ts"
 
 /* ── environment probes (module-load time, not per-test) ── */
 
-const hasPython = spawnSync("python3", ["--version"], { encoding: "utf8" }).status === 0
+const hasPython = spawnSync(PYTHON, ["--version"], { encoding: "utf8" }).status === 0
 const hasRuff = spawnSync("ruff", ["--version"], { encoding: "utf8" }).status === 0
 
 /* ── fixture loader ── */
@@ -762,12 +763,12 @@ describe("Tier 9: sync facade + config", () => {
    ══════════════════════════════════════════════════════════════════════ */
 
 const hasHttpx = (() => {
-	const probe = spawnSync("python3", ["-c", "import httpx"], { encoding: "utf8" })
+	const probe = spawnSync(PYTHON, ["-c", "import httpx"], { encoding: "utf8" })
 	return probe.status === 0
 })()
 
 const hasWebsockets = (() => {
-	const probe = spawnSync("python3", ["-c", "import websockets"], { encoding: "utf8" })
+	const probe = spawnSync(PYTHON, ["-c", "import websockets"], { encoding: "utf8" })
 	return probe.status === 0
 })()
 
@@ -811,7 +812,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -848,7 +849,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -891,7 +892,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -934,7 +935,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -973,7 +974,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1024,7 +1025,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1062,7 +1063,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1114,7 +1115,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1152,7 +1153,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1205,7 +1206,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1245,7 +1246,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1293,7 +1294,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1338,7 +1339,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8" })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8" })
 		expect(out.status, `runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1381,7 +1382,7 @@ asyncio.run(main())
 		for (const [name, content] of Object.entries(result.files)) {
 			writeFileSync(join(pkgDir, name), content, "utf8")
 		}
-		const out = spawnSync("python3", ["-c", script, dir], { encoding: "utf8", timeout: 10000 })
+		const out = spawnSync(PYTHON, ["-c", script, dir], { encoding: "utf8", timeout: 10000 })
 		expect(out.status, `WS runtime failed:\n${out.stdout}\n${out.stderr}`).toBe(0)
 		expect(out.stdout.trim()).toBe("ok")
 	})
@@ -1406,7 +1407,7 @@ describe.skipIf(!hasPython)("Tier 10: integration smoke (python3 required)", () 
 		for (const [name, content] of Object.entries(result.files)) {
 			if (!name.endsWith(".py")) continue
 			writeFileSync(join(dir, name), content, "utf8")
-			const out = spawnSync("python3", ["-m", "py_compile", join(dir, name)], {
+			const out = spawnSync(PYTHON, ["-m", "py_compile", join(dir, name)], {
 				encoding: "utf8",
 			})
 			expect(out.status, `py_compile failed on ${name}:\n${out.stderr}`).toBe(0)
@@ -1432,7 +1433,7 @@ describe.skipIf(!hasPython)("Tier 10: integration smoke (python3 required)", () 
 			if (!name.endsWith(".py")) continue
 			writeFileSync(join(dir, name), content, "utf8")
 			const script = `import ast, sys; ast.parse(open(sys.argv[1]).read()); print("ok")`
-			const out = spawnSync("python3", ["-c", script, join(dir, name)], {
+			const out = spawnSync(PYTHON, ["-c", script, join(dir, name)], {
 				encoding: "utf8",
 			})
 			expect(out.status, `ast.parse failed on ${name}:\n${out.stderr}`).toBe(0)

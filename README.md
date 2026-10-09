@@ -1912,6 +1912,13 @@ bun run test:harness:rust  # rust-only subset of the same loop
 bun run test:all           # default suite + language harnesses
 ```
 
+The harness needs Go, cargo and `python3` on PATH. Python packages come from
+`packages/core/tests/python-requirements.txt`: on first run the harness creates
+`.cache/python-venv` and installs them there, then reuses it until the file changes.
+Set `HONEY_PYTHON` to use your own interpreter instead. Without a usable Python
+(no `python3`, no `venv` module, or offline on first run) the Python tests skip
+with a warning; `HONEY_REQUIRE_PYTHON=1` (set in CI) turns that into a failure.
+
 Typecheck stays strict. Do not weaken `strict` or add `as any` to make it pass.
 
 ### Test matrix

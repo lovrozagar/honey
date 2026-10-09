@@ -1,0 +1,8 @@
+# Python packages the SDK harness needs. One source for local runs and CI:
+# - locally, tests/python-setup.ts installs these into .cache/python-venv on first use;
+# - CI installs them into the runner's interpreter (.github/workflows/ci.yml, harness job).
+# httpx and websockets are the generated SDK's runtime deps; mypy and ruff are the compile gates.
+httpx==0.28.1
+websockets==17.2
+mypy==2.4.0
+ruff==0.16.10

@@ -9,6 +9,8 @@ export default defineConfig({
 	ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
 	test: {
 		env: { CARGO_TARGET_DIR },
+		/* provisions .cache/python-venv once, before any worker (see tests/python-env.ts) */
+		globalSetup: ["./tests/python-setup.ts"],
 		include: harness,
 		passWithNoTests: true,
 	},

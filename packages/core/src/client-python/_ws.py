@@ -139,7 +139,8 @@ class _TypedWebSocket:
 
 
 async def _connect(url: str, protocols: list[str], headers: dict[str, str]) -> Any:
-    """websockets >= 14 takes ``additional_headers``; older releases ``extra_headers``."""
+    """websockets >= 14 takes ``additional_headers``; older releases take
+    ``extra_headers``."""
     assert websockets is not None
     try:
         return await websockets.connect(
