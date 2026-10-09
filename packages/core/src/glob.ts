@@ -89,3 +89,10 @@ export function matchesGlob(file: string, patterns: readonly string[], root: str
 	if (rel === "" || rel.startsWith("../") || rel === ".." || isAbsolute(rel)) return false
 	return patterns.some((pattern) => globToRegExp(pattern).test(rel))
 }
+
+/**
+ * Paths a watch never regenerates for: generated files (`_gen/`, `*.gen.*`), dependencies, and the
+ * `<file>.<hex>.tmp` files an atomic write renames into place. Shared by `honey generate --watch`
+ * and the Vite plugin.
+ */
+export const WATCH_IGNORE_RE = /(^|[/\\])_gen[/\\]|\.gen\.(tsx?|json|ya?ml|d\.ts)$|[/\\]node_modules[/\\]|\.tmp$/

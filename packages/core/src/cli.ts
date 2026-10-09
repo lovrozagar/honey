@@ -7,6 +7,7 @@ import { type CliFlags, parseGenerateArgs, parseInitFlags, USAGE, UsageError } f
 import { runInit } from "./init.ts"
 import type { HoneyGoCliConfig, HoneyVitePluginConfig, ResolvedHoneyConfig } from "./plugin.ts"
 import { generateAndWrite, generatedOutputs, isGeneratedOutput, resolveHoneyConfig } from "./plugin.ts"
+import { WATCH_IGNORE_RE } from "./glob.ts"
 import { setCodegenProcess } from "./serve-slot.ts"
 
 function applyCodegenFlags(target: HoneyVitePluginConfig, flags: CliFlags): void {
@@ -147,7 +148,7 @@ async function watchAndGenerate(cwd: string, flags: CliFlags, args: string[]): P
 	watch(srcDir, { recursive: true }, (_event, filename) => {
 		if (!filename) return
 		const abs = resolve(srcDir, String(filename))
-		if (GEN_IGNORE_RE.test(abs) || isGeneratedOutput(abs, outputs)) return
+		if (WATCH_IGNORE_RE.test(abs) || isGeneratedOutput(abs, outputs)) return
 		schedule()
 	})
 	/* recursive fs.watch misses replace-by-rename saves on some platforms; poll the entry too */
@@ -163,8 +164,6 @@ async function watchAndGenerate(cwd: string, flags: CliFlags, args: string[]): P
 function mtimeOf(path: string): number {
 	return existsSync(path) ? statSync(path).mtimeMs : 0
 }
-
-const GEN_IGNORE_RE = /(^|[/\\])_gen[/\\]|\.gen\.(tsx?|json|ya?ml|d\.ts)$|[/\\]node_modules[/\\]|\.tmp$/
 
 async function main(): Promise<void> {
 	const args = process.argv.slice(2)

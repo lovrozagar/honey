@@ -17,7 +17,7 @@ import type { InvalidateCheckConfig } from "./invalidate-check.ts"
 import { detectFeaturesInSource, featurePrelude, importsFeatureEntry } from "./feature-detect.ts"
 import { runCli } from "./gen-process.ts"
 import { writeGenFile, writeGenJsonFile, writeGenYamlFile, writeOutputDir } from "./gen-write.ts"
-import { matchesGlob } from "./glob.ts"
+import { WATCH_IGNORE_RE, matchesGlob } from "./glob.ts"
 import { overlaySchemas, type RouteTree } from "./tree.ts"
 import type { ExtractedChainTypes } from "./type-extractor.ts"
 import { toYaml, yamlSiblingPath } from "./yaml.ts"
@@ -614,9 +614,6 @@ const RESOLVED_ROUTES = `\0${VIRTUAL_ROUTES}`
 const RESOLVED_MANIFEST = `\0${VIRTUAL_MANIFEST}`
 const RESOLVED_OPENAPI = `\0${VIRTUAL_OPENAPI}`
 
-/** Generated files carry these markers; a save of one must never trigger another generation. */
-const GEN_FILE_RE = /(^|[/\\])_gen[/\\]|\.gen\.(tsx?|json|ya?ml|d\.ts)$/
-
 type ModuleGraphLike = { getModuleById(id: string): unknown }
 
 type PluginThis = {
@@ -727,7 +724,7 @@ export function honey(config: HoneyVitePluginConfig) {
 		 */
 		async hotUpdate(this: PluginThis | void, ctx: HotUpdateContext): Promise<unknown[] | undefined> {
 			if (watchPatterns.length === 0) return undefined
-			if (GEN_FILE_RE.test(ctx.file) || isGeneratedOutput(ctx.file, outputs)) return undefined
+			if (WATCH_IGNORE_RE.test(ctx.file) || isGeneratedOutput(ctx.file, outputs)) return undefined
 			if (!matchesGlob(ctx.file, watchPatterns, root)) return undefined
 
 			const key = `${ctx.file}\0${ctx.timestamp ?? Date.now()}`

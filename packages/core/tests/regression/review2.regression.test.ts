@@ -179,7 +179,7 @@ describe("plugin", () => {
 	}, 60_000)
 
 	// regression: S5
-	it.fails("S5: a temp file from an atomic write never schedules a generation", async () => {
+	it("S5: a temp file from an atomic write never schedules a generation", async () => {
 		writeApp()
 		const plugin = honeyVitePlugin({
 			app: "src/app.ts",
