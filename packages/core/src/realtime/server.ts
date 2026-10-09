@@ -2,7 +2,17 @@ import { invokeUser } from "../invoke-user.ts"
 import type { WSContext, WSHandler } from "../ws/cloudflare.ts"
 import { encodeRealtimeFrame } from "./bus.ts"
 import type { RealtimeBus } from "./bus.ts"
-import { truncateUtf8, utf8Exceeds } from "./route.ts"
+import {
+	bufferedAmountOf,
+	CLOSE_INTERNAL,
+	CLOSE_NORMAL,
+	CLOSE_POLICY,
+	CLOSE_TOO_BIG,
+	CLOSE_TRY_AGAIN,
+	exceedsPayload,
+	MAX_CLOSE_REASON,
+} from "../ws/shared.ts"
+import { truncateUtf8 } from "./route.ts"
 import type { ConnContext, RealtimeConfig } from "./route.ts"
 
 type Logger = {
@@ -20,15 +30,6 @@ export type RealtimePublisher = {
 	/** The publisher for one namespace (a route's `namespace` option, or its full path pattern). */
 	namespace(name: string): { publish(topic: string, data: unknown): void }
 }
-
-/* WebSocket close codes the server sends */
-const CLOSE_NORMAL = 1000
-const CLOSE_POLICY = 1008
-const CLOSE_TOO_BIG = 1009
-const CLOSE_INTERNAL = 1011
-const CLOSE_TRY_AGAIN = 1013
-/* RFC 6455: the close reason is at most 123 bytes */
-const MAX_CLOSE_REASON = 123
 
 const SEP = "\u0000"
 
@@ -59,17 +60,6 @@ export function createRealtimePublisher(bus: RealtimeBus, namespaces: () => Iter
 			forNs(all.values().next().value as string).publish(topic, data)
 		},
 	}
-}
-
-/** Outbound bytes the runtime holds for this socket, when the runtime reports it. */
-function bufferedAmount(raw: unknown): number {
-	if (raw === null || typeof raw !== "object") return 0
-	const r = raw as { bufferedAmount?: unknown; getBufferedAmount?: () => unknown }
-	if (typeof r.getBufferedAmount === "function") {
-		const n = r.getBufferedAmount()
-		return typeof n === "number" ? n : 0
-	}
-	return typeof r.bufferedAmount === "number" ? r.bufferedAmount : 0
 }
 
 export type RealtimeSession = {
@@ -150,7 +140,7 @@ export function createRealtimeSession(opts: {
 	const sendFrame = (frame: string) => {
 		const ws = socket
 		if (closed || ws === null) return
-		if (bufferedAmount(ws.raw) > limits.maxBufferedBytes) {
+		if (bufferedAmountOf(ws.raw) > limits.maxBufferedBytes) {
 			if (limits.slowConsumer === "drop") return
 			closeSocket(CLOSE_TRY_AGAIN, "slow consumer")
 			return
@@ -280,7 +270,7 @@ export function createRealtimeSession(opts: {
 			if (closed) return
 			/* the wire format is JSON text; binary frames are not part of it */
 			if (typeof data !== "string") return
-			if (utf8Exceeds(data, limits.maxFrameBytes)) {
+			if (exceedsPayload(data, limits.maxFrameBytes)) {
 				closeSocket(CLOSE_TOO_BIG, "frame too large")
 				return
 			}

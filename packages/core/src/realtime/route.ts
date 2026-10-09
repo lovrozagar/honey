@@ -151,10 +151,3 @@ export function truncateUtf8(reason: string, max: number): string {
 	}
 	return out
 }
-
-/** UTF-8 byte length of `text`, short-circuited once it is known to exceed `limit`. */
-export function utf8Exceeds(text: string, limit: number): boolean {
-	if (text.length > limit) return true
-	if (text.length * 3 <= limit) return false
-	return encoder.encode(text).byteLength > limit
-}

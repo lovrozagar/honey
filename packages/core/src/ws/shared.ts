@@ -43,7 +43,8 @@ export const DEFAULT_MAX_PAYLOAD = 1024 * 1024
 export const DEFAULT_BACKPRESSURE_LIMIT = 8 * 1024 * 1024
 export const DEFAULT_IDLE_TIMEOUT = 120_000
 
-/** Close codes the adapters use. */
+/** Close codes the adapters and the realtime server use. */
+export const CLOSE_NORMAL = 1000
 export const CLOSE_GOING_AWAY = 1001
 export const CLOSE_POLICY = 1008
 export const CLOSE_TOO_BIG = 1009
