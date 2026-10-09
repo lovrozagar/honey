@@ -4,6 +4,7 @@ import publicDoc from "../src/_gen/openapi.public.gen.json"
 import { compareApps, probesFromTree } from "../../differential.ts"
 import { routeTree } from "../src/_gen/routes.gen.ts"
 import { createApp } from "../src/app.ts"
+import { tree as downstream } from "../src/route-tree.ts"
 
 const app = createApp()
 
@@ -117,10 +118,44 @@ describe("metaSpec — running server", () => {
 	})
 })
 
-describe("serves identically from its generated route tree", () => {
-	test("boots with .routeTree() and answers every probe like the runtime trie", async () => {
-		const probes = probesFromTree(routeTree, (p) => `/app${p === "/" ? "" : p}/`)
+describe("gateway — generated tree with own and downstream routes", () => {
+	test("downstream routes delegate to the catch-all proxy with their own pattern", async () => {
+		const list = await fetchApp("/app/users/")
+		expect(list.status).toBe(200)
+		expect(await list.json()).toEqual({ service: "users", users: [] })
+		const one = await fetchApp("/app/users/7/")
+		expect(await one.json()).toEqual({ id: "7", service: "users" })
+	})
+
+	test("own routes next to the catch-all are served by the gateway", async () => {
+		expect(await (await fetchApp("/app/nl/c/d1/aHR0cHM/")).json()).toEqual({ delivery: "d1", url: "aHR0cHM" })
+		expect(await (await fetchApp("/app/v1/openapi/spec/")).json()).toEqual({ spec: "gateway" })
+	})
+
+	test("a path no route serves is 404, not forwarded", async () => {
+		expect((await fetchApp("/app/nowhere/at/all/")).status).toBe(404)
+	})
+
+	test("the generated documents list own and downstream routes", () => {
+		for (const doc of [internalDoc, publicDoc]) {
+			expect(Object.keys((doc as Doc).paths)).toEqual(
+				expect.arrayContaining(["/ping/", "/nl/c/{delivery}/{url}/", "/users/", "/users/{id}/"]),
+			)
+		}
+	})
+
+	/* GET and HEAD only: without a tree the root `ALL /*` is an ordinary route, so a method miss
+	   on an own route backtracks into it and is forwarded; from the gateway tree the catch-all
+	   serves only delegated leaves, and the miss is a 405 */
+	test("own routes answer GET and HEAD like the runtime trie", async () => {
+		const own = {
+			...routeTree,
+			routes: Object.fromEntries(Object.entries(routeTree.routes).filter(([id]) => !(id in downstream.routes))),
+		}
+		const probes = probesFromTree(own, (p) => `/app${p === "/" ? "" : p}/`).filter(
+			(p) => (p.method === "GET" || p.method === "HEAD") && !p.path.includes("__nope__"),
+		)
 		expect(probes.length).toBeGreaterThan(5)
-		expect(await compareApps(createApp(), createApp(undefined, { routeTree }), probes)).toEqual([])
+		expect(await compareApps(createApp(undefined, { routeTree: null }), createApp(), probes)).toEqual([])
 	})
 })

@@ -191,25 +191,8 @@ describe("WS1 regressions", () => {
 		expect(await body(app, "/u/me", "DELETE")).toEqual({ r: "del" })
 	})
 
-	// regression: M gateway fallthrough with a root /:slug
-	/*
-	 * Skipped: blocked by an open regression found while writing this matrix (GW-OWN-ROUTES in
-	 * docs/regression-matrix/ws1-3.md). A gateway booted from a `codegen.mergeTree` tree (downstream
-	 * routes only) that registers any non-wildcard route of its own throws "Route tree out of date"
-	 * on every request at HEAD. 3ab88ce served it but answered the downstream route with the wrong
-	 * meta (`{}`), which is this finding. Un-skip once GW-OWN-ROUTES is fixed.
-	 */
-	it.skip("M-gateway-slug: a merged downstream route reaches the catch-all with its own meta despite a root /:slug", async () => {
-		const users = honey()
-		users.get("/users/list").handler((c) => c.res.json("ok", {}))
-		const code = generateRouteTreeFromRouteTree(mergeTree([users.toRouteTree(), { worker: "users" }]))
-		const gateway = honey()
-		gateway.routeTree(await evalTree(code))
-		gateway.get("/:slug").handler((c) => c.res.json("ok", { slug: c.params.slug }))
-		gateway.all("/*").handler((c) => c.res.json("ok", { worker: (c.meta as { worker?: string }).worker ?? null }))
-		expect(await body(gateway, "/users/list")).toEqual({ worker: "users" })
-		expect(await body(gateway, "/about")).toEqual({ slug: "about" })
-	})
+	/* M gateway fallthrough with a root /:slug: guarded through the real generation path in
+	 * gw-own-routes.regression.test.ts (the gateway tree must include the gateway's own routes) */
 
 	// regression: gateway catch-all over a downstream-only tree (guards the shape that works today)
 	it("M-gateway-catchall: a downstream-only tree delegates its routes to the gateway catch-all with their meta", async () => {

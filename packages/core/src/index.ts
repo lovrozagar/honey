@@ -1744,6 +1744,77 @@ export class Honey<
 	}
 
 	/**
+	 * @internal — generate-time: the route tree a gateway serves. `source` is the merged
+	 * downstream tree (`codegen.mergeTree`); the gateway's own registered routes join it as
+	 * ordinary leaves, while its root wildcards stay out of the tree — they are the catch-all
+	 * the downstream leaves delegate to. An own route that is also a downstream route, or
+	 * whose topology conflicts with one, throws here instead of at request time. The app is
+	 * rebound to the result, so codegen that runs next (OpenAPI, manifest) sees what it serves.
+	 */
+	_gatewayTree(source: RouteTree): RouteTree {
+		assertTreeFormat(source)
+		const g = this._graph
+		const root = cloneTree(source.root)
+		const routes = dict<RouteEntry>()
+		for (const id of Object.keys(source.routes)) {
+			const { bek, ek, i, mt } = source.routes[id]
+			routes[id] = { bek, ek, i, mt }
+		}
+		const own: { method: string; segments: Segment[]; id: RouteId }[] = []
+		for (const r of [...g.records.values(), ...g.wsRecords.values()]) {
+			if ((r as RouteHandler)._skip === true) continue
+			const id = r.id as RouteId
+			const { method, segments } = patternOf(id)
+			if (!isRootWildcard(segments)) own.push({ id, method, segments })
+		}
+		const overlap = own.filter((o) => o.id in routes)
+		/* a merge source built from this app itself (`app.toRouteTree()`) already holds every own
+		   route; only a partial overlap is a gateway route shadowing a downstream one */
+		if (overlap.length > 0 && overlap.length < own.length) {
+			throw new Error(
+				`Gateway routes are also downstream routes in the merged tree: ${overlap.map((o) => o.id).join(", ")}`,
+			)
+		}
+		if (overlap.length === own.length) own.length = 0
+		for (const { id, method, segments } of own) {
+			for (const v of leafVariants(segments)) insertLeaf(root, v, method, id)
+			routes[id] = {}
+		}
+		this._replaceLoadedTree({ meta: { ...source.meta }, root, routes, v: ROUTE_TREE_VERSION })
+		/* own routes resolved over the rebound tree carry their final error keys and meta */
+		const snapshot = this.toRouteTree()
+		for (const { id } of own) {
+			const { bek, ek, mt } = snapshot.routes[id]
+			routes[id] = { bek, ek, mt }
+		}
+		const tree: RouteTree = { meta: { ...source.meta }, root, routes, v: ROUTE_TREE_VERSION }
+		this._replaceLoadedTree(tree)
+		return tree
+	}
+
+	/** @internal — swap the loaded tree, re-binding every registered route to it. */
+	_replaceLoadedTree(tree: RouteTree): void {
+		const g = this._graph
+		const http = [...g.records.values(), ...g.catchAll.values()]
+		const ws = [...g.wsRecords.values()]
+		g.records.clear()
+		g.catchAll.clear()
+		g.wsRecords.clear()
+		g.unexpected.clear()
+		g.loaded = null
+		g.root = createNode()
+		g.rootShared = false
+		g.hasWs = false
+		this.routeTree(tree)
+		for (const r of http) {
+			delete r.ca
+			const { method, segments } = patternOf(r.id as RouteId)
+			this._addRoute(method, segments, r)
+		}
+		for (const r of ws) this._addWsRoute(patternOf(r.id as RouteId).segments, r)
+	}
+
+	/**
 	 * Set the app's error factory. Like every app setting it applies to every handle of this
 	 * app, whenever it is called; routes mounted from another app keep that app's factory.
 	 */

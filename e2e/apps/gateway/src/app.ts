@@ -2,11 +2,19 @@ import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, honey } from "@lovrozagar/honey"
 import "@lovrozagar/honey/openapi"
+import "@lovrozagar/honey/proxy"
 import * as z from "zod"
+import { routeTree as generatedTree } from "./_gen/routes.gen.ts"
+import { users } from "./users.ts"
 
 /**
  * Reverse-proxy style: public prefix /app is stripped, trailing slashes are required,
  * docs are Swagger (kitchen/defaults use Scalar).
+ *
+ * Also the gateway fixture: like a production edge gateway it boots from a generated tree that
+ * `codegen.mergeTree` builds from the downstream service (`users.ts`, merged in
+ * `route-tree.ts`) plus the gateway's own routes, and forwards the downstream routes through
+ * its root catch-all `proxy()`.
  *
  * Also the metaSpec fixture: a route meta type with a hidden key, a middleware that
  * contributes tenancy, a schema-stamped entity descriptor, and two documents emitted
@@ -68,12 +76,16 @@ const ListQuery = z.object({ cursor: z.string().optional() }).meta({
 /** one line, every route below it — and it cannot disagree with what it enforces */
 const shard = createMiddleware(async (_ctx, next) => next({ shard: "s1" }), { meta: { tenant: "project_id" } })
 
-/** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
-export type AppOptions = { routeTree?: RouteTree }
+/**
+ * `routeTree`: the tree to boot from — the generated `src/_gen/routes.gen.ts` by default, `null`
+ * to build the trie at runtime (the gateway's own routes only answer identically that way).
+ */
+export type AppOptions = { routeTree?: RouteTree | null }
 
 export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	const app = honey().stripPrefix("/app").trailingSlash("enforce").meta<GatewayMeta>()
-	if (options?.routeTree) app.routeTree(options.routeTree)
+	const tree = options?.routeTree === undefined ? generatedTree : options.routeTree
+	if (tree !== null) app.routeTree(tree)
 	if (wsAdapter) app.wsAdapter(wsAdapter)
 
 	app.metaSpec({
@@ -151,6 +163,18 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		.use(shard)
 		.get("/articles/meta/")
 		.handler((ctx) => ctx.res.json("ok", { meta: ctx.meta }))
+
+	/* own routes next to the catch-all, in a production gateway's shape: a param route and a
+	   versioned docs route the downstream services never see */
+	app
+		.get("/nl/c/:delivery/:url/")
+		.handler((ctx) => ctx.res.json("ok", { delivery: ctx.params.delivery, url: ctx.params.url }))
+	app.get("/v1/openapi/spec/").handler((ctx) => ctx.res.json("ok", { spec: "gateway" }))
+
+	/* every downstream route delegates here with its own pattern and meta */
+	app.all("/*").proxy({
+		destination: (_ctx, url, init) => users.fetch(new Request(new URL(url, "http://users.internal"), init), {}),
+	})
 
 	return app.openapi({ docs: "swagger", title: "Honey Gateway", version: "0.0.1" }).manifest()
 }

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { dirname, resolve, sep } from "node:path"
 import { createModuleLoader, honeyConfigOf, type ModuleLoader } from "./codegen-load.ts"
 import {
@@ -375,6 +375,18 @@ function isRouteTree(val: unknown): val is TreeResult {
 
 /* ---- Generation ---- */
 
+/**
+ * The tree a `codegen.mergeTree` gateway serves: the merged downstream tree plus the routes
+ * the gateway app registers itself. Its root wildcard stays out — the downstream leaves
+ * delegate to it. Without a configured app the merged tree is served as is.
+ */
+async function gatewayTree(load: ModuleLoader, source: RouteTree, appPath: string | undefined): Promise<RouteTree> {
+	if (appPath === undefined) return source
+	const exported = await loadAppOrTree(load, appPath)
+	if (!isHoneyApp(exported)) throw new Error(`Expected Honey app default export in ${appPath}`)
+	return exported._gatewayTree(source)
+}
+
 export type GenerateOptions = {
 	/**
 	 * Loads the app, merge tree and type sources. Defaults to a fresh jiti loader per call. Modules
@@ -391,7 +403,7 @@ export async function generateAndWrite(
 ): Promise<void> {
 	await prepareCodegen()
 	const cg = config.codegen
-	const load = options.load ?? (await createModuleLoader({ fresh: true, from: resolve(root, "index.ts") }))
+	let load = options.load ?? (await createModuleLoader({ fresh: true, from: resolve(root, "index.ts") }))
 
 	/* phase 1: route tree — from mergeTree source or app */
 	let mergeSource: TreeResult | undefined
@@ -403,7 +415,20 @@ export async function generateAndWrite(
 		if (isHoneyApp(exported)) {
 			treeCode = generateRouteTreeFromApp(exported)
 		} else if (isRouteTree(exported)) {
-			treeCode = generateRouteTreeFromRouteTree(exported)
+			const appPath = cg.mergeTree && config.app ? resolve(root, config.app) : undefined
+			const treePath = resolve(root, cg.tree)
+			let tree: RouteTree
+			try {
+				tree = await gatewayTree(load, exported, appPath)
+			} catch (err) {
+				/* first run: the gateway app imports the tree this pass writes. Write the merged
+				   downstream tree, then load the app again over it to add its own routes. */
+				if (appPath === undefined || existsSync(treePath)) throw err
+				writeGenFile(treePath, generateRouteTreeFromRouteTree(exported), "honey")
+				load = await createModuleLoader({ fresh: true, from: resolve(root, "index.ts") })
+				tree = await gatewayTree(load, exported, appPath)
+			}
+			treeCode = generateRouteTreeFromRouteTree(tree)
 			mergeSource = exported
 		} else {
 			throw new Error(`Expected Honey app or RouteTree default export in ${treeSrc}`)
@@ -731,7 +756,8 @@ export function honey(config: HoneyVitePluginConfig) {
 				if (isHoneyApp(exported)) {
 					code = generateRouteTreeFromApp(exported)
 				} else if (isRouteTree(exported)) {
-					code = generateRouteTreeFromRouteTree(exported)
+					const appPath = resolved.codegen.mergeTree && config.app ? resolve(root, config.app) : undefined
+					code = generateRouteTreeFromRouteTree(await gatewayTree(load, exported, appPath))
 				} else {
 					throw new Error(`Expected Honey app or RouteTree in ${treeSrc}`)
 				}

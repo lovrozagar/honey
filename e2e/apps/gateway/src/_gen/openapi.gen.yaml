@@ -1,4 +1,4 @@
-x-generated: "honey checksum:5f86de0de2d2"
+x-generated: "honey checksum:4960481a8e33"
 info:
   title: Honey Gateway
   version: "0.0.1"
@@ -48,7 +48,44 @@ paths:
       responses:
         "200":
           description: Success
+  /nl/c/{delivery}/{url}/:
+    get:
+      parameters:
+        - in: path
+          name: delivery
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: url
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
   /ping/:
+    get:
+      responses:
+        "200":
+          description: Success
+  /users/:
+    get:
+      responses:
+        "200":
+          description: Success
+  /users/{id}/:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+  /v1/openapi/spec/:
     get:
       responses:
         "200":

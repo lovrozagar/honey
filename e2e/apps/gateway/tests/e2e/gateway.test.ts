@@ -52,3 +52,27 @@ test.describe("swagger docs behind the prefix", () => {
 		expect(body.routes.some((r) => r.path.includes("ping"))).toBe(true)
 	})
 })
+
+test.describe("gateway served from its generated merged tree", () => {
+	test("a downstream route is forwarded through the catch-all proxy", async ({ request }) => {
+		const res = await request.get("/app/users/7/")
+		expect(res.status()).toBe(200)
+		expect(await res.json()).toEqual({ id: "7", service: "users" })
+	})
+
+	test("an own param route next to the catch-all is served by the gateway", async ({ request }) => {
+		const res = await request.get("/app/nl/c/d1/aHR0cHM/")
+		expect(res.status()).toBe(200)
+		expect(await res.json()).toEqual({ delivery: "d1", url: "aHR0cHM" })
+	})
+
+	test("an own versioned docs route is served by the gateway", async ({ request }) => {
+		const res = await request.get("/app/v1/openapi/spec/")
+		expect(await res.json()).toEqual({ spec: "gateway" })
+	})
+
+	test("a path no route serves is 404, not forwarded", async ({ request }) => {
+		const res = await request.get("/app/nowhere/at/all/")
+		expect(res.status()).toBe(404)
+	})
+})
