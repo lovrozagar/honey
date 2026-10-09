@@ -193,7 +193,7 @@ describe("plugin", () => {
 	}, 60_000)
 
 	// regression: S6
-	it.fails("S6: an openApi path ending in .yml holds YAML and no sibling appears", async () => {
+	it("S6: an openApi path ending in .yml holds YAML and no sibling appears", async () => {
 		writeApp()
 		const config = resolveHoneyConfig({
 			app: "src/app.ts",
@@ -207,7 +207,7 @@ describe("plugin", () => {
 	}, 60_000)
 
 	// regression: S6
-	it.fails("S6: an openApi path ending in .yaml is written once, as YAML", async () => {
+	it("S6: an openApi path ending in .yaml is written once, as YAML", async () => {
 		writeApp()
 		const config = resolveHoneyConfig({
 			app: "src/app.ts",

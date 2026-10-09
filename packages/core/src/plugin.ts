@@ -20,7 +20,7 @@ import { writeGenFile, writeGenJsonFile, writeGenYamlFile, writeOutputDir } from
 import { WATCH_IGNORE_RE, matchesGlob } from "./glob.ts"
 import { overlaySchemas, type RouteTree } from "./tree.ts"
 import type { ExtractedChainTypes } from "./type-extractor.ts"
-import { toYaml, yamlSiblingPath } from "./yaml.ts"
+import { openApiOutputPaths, toYaml } from "./yaml.ts"
 
 export type { InvalidateCheckConfig, InvalidateCheckLevel } from "./invalidate-check.ts"
 
@@ -317,8 +317,9 @@ export function generatedOutputs(config: ResolvedHoneyConfig, root: string): { d
 	if (cg.types) files.push(resolve(root, cg.types.path))
 	if (cg.manifest) files.push(resolve(root, cg.manifest))
 	for (const entry of cg.openApi || []) {
-		const json = resolve(root, entry.path)
-		files.push(json, yamlSiblingPath(json))
+		const out = openApiOutputPaths(resolve(root, entry.path))
+		if (out.json) files.push(out.json)
+		files.push(out.yaml)
 	}
 	if (cg.sdk) {
 		const ports = cg.sdk.ports
@@ -487,9 +488,9 @@ export async function generateAndWrite(
 			if (entry.sanitize) {
 				spec = sanitizeOpenApiSpec(spec, entry.sanitize)
 			}
-			const jsonPath = resolve(root, entry.path)
-			writeGenJsonFile(jsonPath, spec, "honey")
-			writeGenYamlFile(yamlSiblingPath(jsonPath), spec, "honey")
+			const out = openApiOutputPaths(resolve(root, entry.path))
+			if (out.json) writeGenJsonFile(out.json, spec, "honey")
+			writeGenYamlFile(out.yaml, spec, "honey")
 		}
 	}
 

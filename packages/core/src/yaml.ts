@@ -13,6 +13,15 @@ export function yamlSiblingPath(jsonPath: string): string {
 	return jsonPath.endsWith(".json") ? `${jsonPath.slice(0, -5)}.yaml` : `${jsonPath}.yaml`
 }
 
+/**
+ * Where an OpenAPI output configured at `path` is written. A `.yaml`/`.yml` path is that YAML file
+ * alone; any other path is JSON there plus its YAML sibling.
+ */
+export function openApiOutputPaths(path: string): { json: string | null; yaml: string } {
+	if (path.endsWith(".yaml") || path.endsWith(".yml")) return { json: null, yaml: path }
+	return { json: path, yaml: yamlSiblingPath(path) }
+}
+
 export function toYaml(value: unknown): string {
 	const json = JSON.stringify(value)
 	/* JSON.stringify(undefined) is undefined; emit the JSON equivalent of "nothing". */
