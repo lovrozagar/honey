@@ -2,6 +2,13 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.7.1 - 2026-10-09
+
+### Fixed
+
+- `types.gen.d.ts` writes ambient global types by name again. 0.7.0 expanded a type declared in an ambient script, such as `Cloudflare.Env` from wrangler's `worker-configuration.d.ts`, into its structure: overloads and generics were lost, so `c.env.BUCKET` was no longer assignable to `R2Bucket`, and the file grew to twice its size. Types declared in `declare global` are written by name too. Regenerate with `honey generate`.
+- A generic method's type parameter kept its name only at the top of the signature; inside another type it became `unknown` (`json<T>(): Promise<T>` was written as `json: <T>() => Promise<unknown>`).
+
 ## 0.7.0 - 2026-10-09
 
 ### Breaking
