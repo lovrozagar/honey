@@ -658,6 +658,8 @@ type CompileCase = {
 	/** Rust: generate in safe mode (`throwOnError: false`). */
 	rustSafe?: boolean
 	mypy?: boolean
+	/** Red until its fix lands: run with `it.fails`. */
+	fails?: boolean
 }
 
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ properties, required, type: "object" })
@@ -982,6 +984,123 @@ const CASES: CompileCase[] = [
 		),
 	},
 	{
+		// regression: S3
+		id: "S3: a Python path param named uuid or str does not shadow what the method body calls",
+		lang: "python",
+		fails: true,
+		spec: doc({
+			"/items/{uuid}/{str}": {
+				put: {
+					operationId: "items.put",
+					parameters: [pathParam("uuid"), pathParam("str")],
+					responses: jsonOk(),
+					"x-idempotency-key": true,
+				},
+			},
+		}),
+		run: [
+			"import httpx",
+			"import sdk",
+			"from sdk import ClientConfig",
+			"seen = []",
+			"def handler(req):",
+			"    seen.append((req.url.path, req.headers.get('idempotency-key')))",
+			"    return httpx.Response(200, json={'ok': True})",
+			"c = sdk.SDK(ClientConfig(base_url='http://x', sync_transport=httpx.MockTransport(handler)))",
+			"c.items.put('u1', 's1')",
+			"assert seen[0][0] == '/items/u1/s1', seen",
+			"assert seen[0][1], seen",
+			"",
+		].join("\n"),
+	},
+	{
+		// regression: S4
+		id: "S4: NUL, BEL and BOM in spec text keep the generated Go SDK compiling",
+		lang: "go",
+		fails: true,
+		spec: doc(
+			{
+				"/n": get("n.get", {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					responses: jsonOk({ $ref: "#/components/schemas/Note" }),
+					summary: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+				}),
+			},
+			{
+				Note: {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					properties: { a: { description: "line one\u0000nul\n\uFEFFbom and a \u0007bell", type: "string" } },
+					type: "object",
+				},
+			},
+		),
+	},
+	{
+		// regression: S4
+		id: "S4: NUL, BEL and BOM in spec text keep the generated Python SDK compiling",
+		lang: "python",
+		fails: true,
+		spec: doc(
+			{
+				"/n": get("n.get", {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					responses: jsonOk({ $ref: "#/components/schemas/Note" }),
+					summary: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+				}),
+			},
+			{
+				Note: {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					properties: { a: { description: "line one\u0000nul\n\uFEFFbom and a \u0007bell", type: "string" } },
+					type: "object",
+				},
+			},
+		),
+	},
+	{
+		// regression: S4
+		id: "S4: NUL, BEL and BOM in spec text keep the generated Go CLI compiling",
+		lang: "cli",
+		fails: true,
+		spec: doc(
+			{
+				"/n": get("n.get", {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					responses: jsonOk({ $ref: "#/components/schemas/Note" }),
+					summary: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+				}),
+			},
+			{
+				Note: {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					properties: { a: { description: "line one\u0000nul\n\uFEFFbom and a \u0007bell", type: "string" } },
+					type: "object",
+				},
+			},
+		),
+	},
+	{
+		// regression: S4
+		id: "S4: NUL, BEL and BOM in spec text keep the generated Rust SDK compiling",
+		lang: "rust",
+		spec: doc(
+			{
+				"/n": get("n.get", {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					responses: jsonOk({ $ref: "#/components/schemas/Note" }),
+					summary: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+				}),
+			},
+			{
+				Note: {
+					description: "line one\u0000nul\n\uFEFFbom and a \u0007bell",
+					properties: { a: { description: "line one\u0000nul\n\uFEFFbom and a \u0007bell", type: "string" } },
+					type: "object",
+				},
+			},
+		),
+	},
+	{
 		// regression: RUST-BARE-OBJECT
 		id: "NEW (H): a bare object response compiles (HashMap in a resource file)",
 		lang: "rust",
@@ -1009,7 +1128,8 @@ describe("compile findings", () => {
 	const skip = (lang: Lang) => (lang === "go" || lang === "cli" ? !hasGo : lang === "rust" ? !hasCargo : !hasPython)
 
 	for (const c of CASES) {
-		it.skipIf(skip(c.lang) || (c.mypy === true && !hasMypy))(
+		const skipped = skip(c.lang) || (c.mypy === true && !hasMypy)
+		;(skipped ? it.skip : c.fails ? it.fails : it)(
 			c.id,
 			async () => {
 				const dir = mkdtempSync(join(tmpdir(), `honey-regress-${c.lang}-`))
