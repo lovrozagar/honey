@@ -58,8 +58,9 @@ describe("production runtime bundle", () => {
 			expect(js).not.toContain("WebSocketServer")
 			expect(js).not.toMatch(/from"http"|from "http"|createServer/)
 			/* a leak guard, not a budget: codegen or effect would add ~300 KB. The streaming
-			 * lifecycle (one producer primitive, body-kind tags) is ~5 KB of the runtime. */
-			expect(js.length).toBeLessThan(90_000)
+			 * lifecycle (one producer primitive, body-kind tags) is ~5 KB of the runtime, the
+			 * reverse proxy (hop-by-hop, forwarding, timeouts) ~3 KB. */
+			expect(js.length).toBeLessThan(100_000)
 		} finally {
 			rmSync(DIR, { force: true, recursive: true })
 		}

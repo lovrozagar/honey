@@ -250,27 +250,36 @@ describe("proxy", () => {
 
 	/* 101 WS passthrough can't be unit tested — Response(null, {status:101}) is invalid outside real upgrades */
 
-	it("omitted timeout does not set abort signal", async () => {
+	it("always passes a signal that follows the request (client abort propagation)", async () => {
+		let seen: AbortSignal | null | undefined
 		const app = createTestApp()
 			.all("/api/*")
 			.proxy({
-				destination: (_ctx, _url, init) => new Response(init.signal ? "has-signal" : "no-signal"),
+				destination: (_ctx, _url, init) => {
+					seen = init.signal
+					return new Response("ok")
+				},
 			})
 
 		const res = await app.fetch(makeRequest("GET", "/api/test"), {} as never)
-		expect(await res.text()).toBe("no-signal")
+		expect(await res.text()).toBe("ok")
+		expect(seen).toBeInstanceOf(AbortSignal)
+		expect(seen?.aborted).toBe(false)
 	})
 
-	it("non-positive timeout does not set abort signal", async () => {
+	it("non-positive timeout never aborts", async () => {
 		const app = createTestApp()
 			.all("/api/*")
 			.proxy({
-				destination: (_ctx, _url, init) => new Response(init.signal ? "has-signal" : "no-signal"),
+				destination: async (_ctx, _url, init) => {
+					await new Promise((r) => setTimeout(r, 20))
+					return new Response(init.signal?.aborted ? "aborted" : "alive")
+				},
 				timeout: 0,
 			})
 
 		const res = await app.fetch(makeRequest("GET", "/api/test"), {} as never)
-		expect(await res.text()).toBe("no-signal")
+		expect(await res.text()).toBe("alive")
 	})
 
 	it("timeout produces 504 error", async () => {
