@@ -72,7 +72,7 @@ import { getI18nRuntime } from "./i18n-slot.ts"
 import { bindInternalHandler, epochCached, getOpenApiRuntime } from "./openapi/spec-factory.ts"
 import type { ServedArtifact } from "./openapi/spec-factory.ts"
 import type { MetaSpecSource } from "./meta-spec-merge.ts"
-import { getServeRuntime } from "./serve-slot.ts"
+import { getServeRuntime, isCodegenProcess } from "./serve-slot.ts"
 import type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 
 export { clientInfo, HoneyContext } from "./context.ts"
@@ -370,6 +370,8 @@ type HoneyGraph = {
 	settings: AppSettings<unknown>
 	/** registered after routeTree() with no leaf in the loaded tree — stale generated file */
 	unexpected: Set<RouteId>
+	/** the loaded tree came in while `honey generate` loaded the app: a stale one is replaced, not fatal */
+	unloadIfStale: boolean
 	wsRecords: Map<RouteId, WSRouteHandler>
 }
 
@@ -398,6 +400,7 @@ function createGraph(): HoneyGraph {
 		served: new Set(),
 		settings: createSettings(),
 		unexpected: new Set(),
+		unloadIfStale: false,
 		wsRecords: new Map(),
 	}
 }
@@ -1292,6 +1295,11 @@ export class Honey<
 			}
 		}
 		if (problems.length > 0) {
+			/* generation rewrites this file from the registered routes; serving it stale is the error */
+			if (g.unloadIfStale) {
+				this._unloadTree()
+				return this._finalize()
+			}
 			throw new Error(`Route tree out of date — regenerate it (\`honey generate\`):\n  ${problems.join("\n  ")}`)
 		}
 
@@ -1640,6 +1648,16 @@ export class Honey<
 	 * registers as its gateway catch-all. Must be called before any route is registered.
 	 */
 	routeTree(tree: RouteTree): this {
+		/* `honey generate` loads the app that imports the very file it is about to rewrite: a tree
+		   from an older honey is ignored there, and the routes the app registers are used instead */
+		const generating = isCodegenProcess()
+		if (generating) {
+			try {
+				assertTreeFormat(tree)
+			} catch {
+				return this
+			}
+		}
 		assertTreeFormat(tree)
 		const g = this._graph
 		if (g.loaded !== null) throw new Error("routeTree() was already called on this app")
@@ -1657,6 +1675,7 @@ export class Honey<
 		g.root = freezeTree(tree.root)
 		g.rootShared = true
 		g.loaded = new Map()
+		g.unloadIfStale = generating
 		for (const id of Object.keys(tree.routes)) g.loaded.set(id, { ...tree.routes[id] })
 		if (hasWsLeaf(g.root)) g.hasWs = true
 		/* internal routes mounted before the tree was loaded move onto the loaded topology */
@@ -1796,6 +1815,29 @@ export class Honey<
 		const tree: RouteTree = { meta: { ...source.meta }, root, routes, v: ROUTE_TREE_VERSION }
 		this._replaceLoadedTree(tree)
 		return tree
+	}
+
+	/** @internal — drop the loaded tree and route by the registered routes alone. */
+	_unloadTree(): void {
+		const g = this._graph
+		const http = [...g.records.values(), ...g.catchAll.values()]
+		const ws = [...g.wsRecords.values()]
+		g.records.clear()
+		g.catchAll.clear()
+		g.wsRecords.clear()
+		g.unexpected.clear()
+		g.loaded = null
+		g.unloadIfStale = false
+		g.root = createNode()
+		g.rootShared = false
+		g.hasWs = false
+		for (const r of http) {
+			delete r.ca
+			const { method, segments } = patternOf(r.id as RouteId)
+			this._addRoute(method, segments, r)
+		}
+		for (const r of ws) this._addWsRoute(patternOf(r.id as RouteId).segments, r)
+		this._bumpEpoch()
 	}
 
 	/** @internal — swap the loaded tree, re-binding every registered route to it. */
