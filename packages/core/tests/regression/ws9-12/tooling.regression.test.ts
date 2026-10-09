@@ -207,7 +207,9 @@ describe("bin/honey.js picks the CLI it runs", () => {
 
 	function runNode(): Promise<string> {
 		return new Promise((res, rej) => {
-			const child = spawn("node", [join(dir, "bin/honey.js")], { cwd: dir })
+			/* plain Node, as a user starts it: not a child of `bun run`, which would hand over to Bun */
+			const { npm_config_user_agent: _ua, npm_execpath: _exec, ...env } = process.env
+			const child = spawn("node", [join(dir, "bin/honey.js")], { cwd: dir, env })
 			let out = ""
 			child.stdout.on("data", (c: Buffer) => (out += c.toString()))
 			child.on("error", rej)
