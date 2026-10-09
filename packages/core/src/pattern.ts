@@ -182,7 +182,7 @@ function coverVariant(route: readonly Segment[], scope: readonly Segment[]): Sco
 		/* a route wildcard serves paths both inside and outside the rest of the scope */
 		if (r.k === "wildcard") return "some"
 		if (r.k === "static") {
-			if (s.k === "static" && s.v !== r.v && safeDecode(r.v) !== s.v) return "none"
+			if (s.k === "static" && s.v !== r.v && safeDecode(r.v) !== safeDecode(s.v)) return "none"
 			continue
 		}
 		/* route param against a scope literal: inside the scope only when the value matches */
@@ -235,7 +235,9 @@ export function pathInScope(path: string, scope: readonly Segment[]): boolean {
 		if (end === -1) end = len
 		if (s.k === "static") {
 			const seg = path.substring(pos, end)
-			if (seg !== s.v && safeDecode(seg) !== s.v) return false
+			/* both sides decoded: a literal is stored encoded (`%C3%A9`), and a request may spell the
+			 * same bytes with lowercase escapes (`%c3%a9`) or raw */
+			if (seg !== s.v && safeDecode(seg) !== safeDecode(s.v)) return false
 		}
 		pos = end
 	}

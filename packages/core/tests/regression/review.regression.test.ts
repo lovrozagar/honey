@@ -73,7 +73,7 @@ function acceptReq(header: string): Request {
 
 describe("code review regressions", () => {
 	// regression: R1
-	it.fails("R1: a scope over a non-ASCII literal guards lowercase percent-escapes too", async () => {
+	it("R1: a scope over a non-ASCII literal guards lowercase percent-escapes too", async () => {
 		const app = honey()
 		app.use("/é", deny)
 		app.get("/:slug").handler((c) => c.res.json("ok", { slug: c.params.slug }))
@@ -84,7 +84,7 @@ describe("code review regressions", () => {
 	})
 
 	// regression: R1
-	it.fails("R1: a route literal written with lowercase escapes is covered by the scope", async () => {
+	it("R1: a route literal written with lowercase escapes is covered by the scope", async () => {
 		const app = honey()
 		app.use("/é", deny)
 		app.get("/%c3%a9/x").handler((c) => c.res.json("ok", {}))
