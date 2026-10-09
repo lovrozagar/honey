@@ -135,7 +135,7 @@ describe("code review regressions", () => {
 	})
 
 	// regression: R3
-	it.fails("R3: a log sink that throws on the request line never fails the request", async () => {
+	it("R3: a log sink that throws on the request line never fails the request", async () => {
 		const spy = vi.spyOn(console, "error").mockImplementation(() => {})
 		try {
 			const instance = createLogger({
@@ -156,7 +156,7 @@ describe("code review regressions", () => {
 	})
 
 	// regression: R4
-	it.fails("R4: a parameterized range does not override the plain range for a type without those parameters", () => {
+	it("R4: a parameterized range does not override the plain range for a type without those parameters", () => {
 		expect(accepts(acceptReq("application/json;v=2;q=0, application/json"), ["application/json"])).toBe(
 			"application/json",
 		)

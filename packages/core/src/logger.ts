@@ -139,8 +139,13 @@ function logger(options?: LoggerOptions): MiddlewareFn<{ path: string; req: Requ
 				})
 			: noopLogger
 
+		/* a failing sink never fails the request, on the way in or out */
 		if (instance) {
-			child.info(`--> ${method} ${path}`)
+			try {
+				child.info(`--> ${method} ${path}`)
+			} catch (err) {
+				console.error("logger: failed to log request", err)
+			}
 		}
 
 		const response = await next({ log: child })
@@ -154,7 +159,6 @@ function logger(options?: LoggerOptions): MiddlewareFn<{ path: string; req: Requ
 			status: response.status,
 		}
 
-		/* a failing sink or `skip` never turns the response into a 500 */
 		try {
 			if (skip?.(data)) return response
 			if (instance) {

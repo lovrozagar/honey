@@ -1,8 +1,8 @@
 type ParsedType = {
 	/** Position in the header, for stable tie-breaking. */
 	index: number
-	/** Number of media-type parameters other than q (more parameters = more specific). */
-	params: number
+	/** Media-type parameters other than q, names lowercased (more parameters = more specific). */
+	params: Map<string, string>
 	q: number
 	subtype: string
 	type: string
@@ -32,7 +32,7 @@ function parseAccept(header: string): ParsedType[] {
 		if (type === "*" && subtype !== "*") continue
 
 		let q = 1
-		let params = 0
+		const params = new Map<string, string>()
 		for (let i = 1; i < segments.length; i++) {
 			const eq = segments[i].indexOf("=")
 			if (eq === -1) continue
@@ -45,7 +45,7 @@ function parseAccept(header: string): ParsedType[] {
 				/* Parameters after q are accept-extensions, not media-type parameters. */
 				break
 			}
-			params++
+			params.set(name, unquote(value))
 		}
 
 		types.push({ index, params, q, subtype, type })
@@ -53,13 +53,35 @@ function parseAccept(header: string): ParsedType[] {
 	return types
 }
 
-/** 0 = no match; otherwise higher is more specific. */
-function specificity(range: ParsedType, sType: string, sSub: string): number {
+function unquote(value: string): string {
+	return value.length >= 2 && value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value
+}
+
+/** `type/subtype;a=1;b=2` → its parameters, names lowercased. */
+function typeParams(segments: string[]): Map<string, string> {
+	const params = new Map<string, string>()
+	for (let i = 1; i < segments.length; i++) {
+		const eq = segments[i].indexOf("=")
+		if (eq === -1) continue
+		params.set(segments[i].slice(0, eq).trim().toLowerCase(), unquote(segments[i].slice(eq + 1).trim()))
+	}
+	return params
+}
+
+/**
+ * 0 = no match; otherwise higher is more specific. A range with parameters matches only a
+ * supported type that carries every one of them with the same value (RFC 9110 §12.5.1), so
+ * `application/json;v=2;q=0` excludes `application/json;v=2`, never plain `application/json`.
+ */
+function specificity(range: ParsedType, sType: string, sSub: string, sParams: Map<string, string>): number {
 	if (range.type === "*") return 1
 	if (range.type !== sType) return 0
 	if (range.subtype === "*") return 2
 	if (range.subtype !== sSub) return 0
-	return 3 + range.params
+	for (const [name, value] of range.params) {
+		if (sParams.get(name) !== value) return 0
+	}
+	return 3 + range.params.size
 }
 
 /**
@@ -91,15 +113,14 @@ export function accepts(req: Request, supported: string[]): string | null {
 		const slash = lower.indexOf("/")
 		if (slash === -1) continue
 		const sType = lower.slice(0, slash)
-		const sSub = lower
-			.slice(slash + 1)
-			.split(";")[0]
-			.trim()
+		const sSegments = s.slice(slash + 1).split(";")
+		const sSub = sSegments[0].trim().toLowerCase()
+		const sParams = typeParams(sSegments)
 
 		let weight = -1
 		let bestSpecificity = 0
 		for (const range of parsed) {
-			const spec = specificity(range, sType, sSub)
+			const spec = specificity(range, sType, sSub, sParams)
 			if (spec > bestSpecificity) {
 				bestSpecificity = spec
 				weight = range.q
