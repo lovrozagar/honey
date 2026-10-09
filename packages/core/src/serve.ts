@@ -3,7 +3,7 @@ import { cors, type CORSOptions } from "./cors.ts"
 import { detectRuntime, type ServeRuntime } from "./detect-runtime.ts"
 import { DEFAULT_MAX_REQUEST_BODY } from "./request-limits.ts"
 import { setPeerAddress } from "./peer.ts"
-import { hasValidHost } from "./trust.ts"
+import { hasValidHost } from "./client-info.ts"
 import type { WSAdapter } from "./ws/cloudflare.ts"
 
 export type { ServeRuntime }

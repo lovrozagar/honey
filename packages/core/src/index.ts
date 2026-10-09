@@ -2,13 +2,14 @@ import { bodyKind, headResponse, isProducedStream, rawBodyOf } from "./body-kind
 import { clientInfo, HoneyContext } from "./context.ts"
 import { dict } from "./dict.ts"
 import { normalizePath, pathOfUrl, searchOfUrl } from "./request-path.ts"
-import { compileTrust, hasValidHost, TRUST_OFF, type TrustProxy, type TrustSetting } from "./trust.ts"
+import { hasValidHost, TRUST_OFF, type TrustSetting } from "./client-info.ts"
+import type { TrustProxy } from "./trust.ts"
+import { loadFeature, requireFeature } from "./feature-slots.ts"
 import { HoneyError } from "./error.ts"
 import { ERROR_META } from "./errors.ts"
 import type { ChainErrorConverter, MiddlewareFn, RuntimeMiddleware } from "./middleware.ts"
 import { collectMiddlewareMeta, compileChain, RESERVED_CTX_KEYS } from "./middleware.ts"
 import type { ProxyConfig } from "./proxy.ts"
-import { createProxyHandler } from "./proxy.ts"
 import type { CustomErrorFormatter, ErrorFormatter, ResponseOptions, TypedResponse } from "./response.ts"
 import { createErrorResponse, type HoneyRes } from "./response.ts"
 import type { RouteId, Segment } from "./pattern.ts"
@@ -38,11 +39,8 @@ import {
 	matchWsRoute,
 	ROUTE_TREE_VERSION,
 } from "./tree.ts"
-import { createBus } from "./realtime/bus.ts"
 import type { RealtimeBus } from "./realtime/bus.ts"
-import { resolveRealtimeConfig } from "./realtime/route.ts"
 import type { RealtimeConfig, RealtimeRouteOpts } from "./realtime/route.ts"
-import { createRealtimePublisher, createRealtimeSession } from "./realtime/server.ts"
 import type { RealtimePublisher } from "./realtime/server.ts"
 import type {
 	ComputeErrorsByStatus,
@@ -67,20 +65,21 @@ import type {
 import { codeToStatusKey, EK, EMPTY_OBJ, SK } from "./types.ts"
 import { assertBodySchemaAllowed, assertRequestContentType, validateInput, validateOutput } from "./validation.ts"
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts"
-import { createEventQueue, invokeUser, type InvokeLogger } from "./invoke-user.ts"
-import { originAllowed, type WSOriginPolicy, validateOriginPolicy } from "./ws-origin.ts"
+import type { InvokeLogger } from "./invoke-user.ts"
+import { type WSOriginPolicy, validateOriginPolicy } from "./ws-origin.ts"
 import { loadHoneyFeature } from "./feature-load.ts"
 import { getI18nRuntime } from "./i18n-slot.ts"
 import { bindInternalHandler, epochCached, getOpenApiRuntime } from "./openapi/spec-factory.ts"
 import type { ServedArtifact } from "./openapi/spec-factory.ts"
-import { mergeMetaSpec } from "./meta-spec-merge.ts"
+import type { MetaSpecSource } from "./meta-spec-merge.ts"
 import { getServeRuntime } from "./serve-slot.ts"
 import type { HoneyServeOptions, ServeHandle } from "./serve.ts"
 
 export { clientInfo, HoneyContext } from "./context.ts"
 export { toFetchRequest } from "./fetch-request.ts"
 export type { WSOriginPolicy } from "./ws-origin.ts"
-export type { ClientInfo, TrustProxy } from "./trust.ts"
+export type { ClientInfo } from "./client-info.ts"
+export type { TrustProxy } from "./trust.ts"
 /** HoneyContext without internal backing fields — use this for consumer-facing types */
 export type HoneyCtx<TEnv = Record<string, unknown>> = Omit<
 	import("./context.ts").HoneyContext<TEnv>,
@@ -339,7 +338,7 @@ type ScopedEntry = {
  */
 type HoneyGraph = {
 	/** metaSpec policies of mounted sub-apps, merged under `metaSpec` when codegen reads it */
-	absorbedMetaSpecs: MetaSpecConfig[]
+	absorbedMetaSpecs: MetaSpecSource[]
 	/** gateway catch-alls by method — root wildcards registered over a loaded tree that lacks them */
 	catchAll: Map<string, RouteHandler>
 	/** every `use(mw)` handle — one that never registers a route is reported at finalize */
@@ -446,9 +445,6 @@ function isRootWildcard(segments: readonly Segment[]): boolean {
 
 const EMPTY_PARAMS = EMPTY_OBJ as Record<string, string>
 
-/** Messages one websocket connection may have waiting for its handler; more close it with 1008. */
-const WS_PENDING_MAX = 1024
-
 function requestIsWsUpgrade(request: Request): boolean {
 	try {
 		return request.headers.get("upgrade")?.toLowerCase() === "websocket"
@@ -464,30 +460,6 @@ function isDenoServeInfo(env: unknown): boolean {
 }
 
 /** `obj[key]` for an own key only; `undefined` for inherited names such as `constructor`. */
-function ownValue<T>(obj: Record<string, T> | undefined, key: string): T | undefined {
-	return obj !== undefined && Object.hasOwn(obj, key) ? obj[key] : undefined
-}
-
-/** A copy of `error` with a translated message and field paths; same key, status, data and cause. */
-function translatedError(
-	error: HoneyError,
-	message: string | undefined,
-	fields: Record<string, FieldError[]> | undefined,
-): HoneyError {
-	const copy = new HoneyError({
-		cause: error.cause,
-		data: error.data,
-		errorKey: error.errorKey,
-		fields: fields ?? error.fields,
-		headers: error.headers,
-		status: error.statusKey,
-		vars: error.vars,
-	})
-	copy.message = message ?? error.message
-	if (error.stack !== undefined) copy.stack = error.stack
-	return copy
-}
-
 function safeFire(fn: (() => unknown) | undefined, logger?: Logger): void {
 	if (fn === undefined) return
 	try {
@@ -668,13 +640,12 @@ export class Honey<
 	}
 
 	/**
-	 * @internal — read by codegen: the declared policy with every mounted sub-app's merged in,
-	 * in mount order. Merged on read, so `metaSpec()` may come before or after `route(sub)`.
+	 * @internal — read by codegen through `metaSpecOf()`: the declared policy and every mounted
+	 * sub-app's, unmerged. Merged on read, so `metaSpec()` may come before or after `route(sub)`;
+	 * the merge lives with codegen so a served app never loads it.
 	 */
-	private get _metaSpec(): MetaSpecConfig | null {
-		let merged = this._graph.metaSpec
-		for (const sub of this._graph.absorbedMetaSpecs) merged = mergeMetaSpec(merged, sub)
-		return merged
+	private get _metaSpecSource(): MetaSpecSource {
+		return { absorbed: this._graph.absorbedMetaSpecs, declared: this._graph.metaSpec }
 	}
 
 	/** @internal — read by codegen and OpenAPI */
@@ -800,35 +771,8 @@ export class Honey<
 				req: request,
 				search: ctx.search,
 			})
-			/* the locale can come from request data: own keys only */
-			const translations = ownValue(i18n.errors, locale)
-			const template = translations ? ownValue(translations, honeyError.errorKey) : undefined
-			let message: string | undefined
-			if (template) {
-				await loadHoneyFeature("i18n")
-				message = getI18nRuntime().interpolate(template, honeyError.vars ?? {}, locale)
-			}
-
-			const fieldTranslations = ownValue(i18n.fieldNames, locale)
-			let fields: Record<string, FieldError[]> | undefined
-			if (fieldTranslations && Object.keys(honeyError.fields).length > 0) {
-				fields = dict<FieldError[]>()
-				for (const name of Object.keys(honeyError.fields)) {
-					fields[name] = honeyError.fields[name].map((fe) => {
-						let candidate = fe.path
-						while (candidate) {
-							const translated = ownValue(fieldTranslations, candidate)
-							if (translated) return { ...fe, path: translated }
-							const dotIdx = candidate.indexOf(".")
-							if (dotIdx === -1) break
-							candidate = candidate.slice(dotIdx + 1)
-						}
-						return fe
-					})
-				}
-			}
-			if (message === undefined && fields === undefined) return honeyError
-			return translatedError(honeyError, message, fields)
+			await loadHoneyFeature("i18n")
+			return getI18nRuntime().translateError(honeyError, i18n, locale)
 		} catch (e) {
 			log?.warn?.({ err: e }, "i18n resolution failed")
 			return honeyError
@@ -1017,9 +961,12 @@ export class Honey<
 	 *   outermost proxy wrote.
 	 * - addresses and CIDR ranges of your proxies: hops from those addresses are skipped; the
 	 *   first other address is the client.
+	 *
+	 * A hop count or list needs `import "@lovrozagar/honey/trust"` in the app entry.
 	 */
 	trustProxy(value: TrustProxy): this {
-		this._s.trust = compileTrust(value)
+		this._s.trust =
+			value === false || value === 0 ? TRUST_OFF : requireFeature("trust", "app.trustProxy()").compileTrust(value)
 		return this
 	}
 
@@ -2060,10 +2007,10 @@ export class Honey<
 				const { pattern } = splitRouteId(id)
 				this._addWsRoute(parsePattern(at(pattern)), mount(r))
 			}
-			/* merged when codegen reads `_metaSpec` (see `mergeMetaSpec`): the parent wins
+			/* merged when codegen reads the policy (see `metaSpecOf`): the parent wins
 			 * conflicts and keeps its resolved strictness, a sub's `false` still hides */
-			const subPolicy = sub._metaSpec
-			if (subPolicy !== null) this._graph.absorbedMetaSpecs.push(subPolicy)
+			const subSource = sub._metaSpecSource
+			this._graph.absorbedMetaSpecs.push({ absorbed: [...subSource.absorbed], declared: subSource.declared })
 			/* the sub's scopes guard the paths it brought — appended after this app's own */
 			const g = this._graph
 			for (const entry of sub._graph.scoped) {
@@ -2101,7 +2048,9 @@ export class Honey<
 	private _setBus(bus: RealtimeBus): RealtimeBus {
 		const g = this._graph
 		g.realtimeBus = bus
-		g.realtimeCtx = createRealtimePublisher(bus, () => [...g.realtimeRoutes.values()].map((cfg) => cfg.namespace))
+		g.realtimeCtx = requireFeature("realtime", "app.realtime()").createRealtimePublisher(bus, () =>
+			[...g.realtimeRoutes.values()].map((cfg) => cfg.namespace),
+		)
 		return bus
 	}
 
@@ -2294,11 +2243,12 @@ export class Honey<
 	): this {
 		const fullPath = mergePath(this._basePath, path)
 		const g = this._graph
-		const config = resolveRealtimeConfig(fullPath, opts)
+		const rt = requireFeature("realtime", "app.realtime()")
+		const config = rt.resolveRealtimeConfig(fullPath, opts)
 		if (g.realtimeRoutes.has(fullPath)) {
 			throw new Error(`Duplicate realtime route: ${fullPath}`)
 		}
-		if (!g.realtimeBus) this._setBus(createBus())
+		if (!g.realtimeBus) this._setBus(rt.createBus())
 		g.realtimeRoutes.set(fullPath, config)
 		this._markUsed()
 		this._addWsRoute(parsePattern(fullPath), {
@@ -2626,97 +2576,45 @@ export class Honey<
 	}
 
 	/** Reject a cross-origin upgrade the route's origin policy does not allow (403). */
-	private _checkWsOrigin(finalCtx: HoneyContext<TEnv>, policy: WSOriginPolicy | null): void {
+	/** The websocket session runtime; a cross-origin upgrade the route does not allow is a 403. */
+	private async _wsSession(finalCtx: HoneyContext<TEnv>, policy: WSOriginPolicy | null) {
+		const ws = await loadFeature("ws", "a websocket route")
 		const headers = finalCtx.req.headers
 		const origin = headers.get("origin")
-		if (origin === null || policy === "*") return
+		if (origin === null || policy === "*") return ws
 		const credentialed = headers.has("cookie") || headers.has("authorization")
-		if (!originAllowed(policy, origin, clientInfo(finalCtx as unknown as HoneyContext).host, credentialed)) {
+		if (!ws.originAllowed(policy, origin, clientInfo(finalCtx as unknown as HoneyContext).host, credentialed)) {
 			throw this._createError(EK.forbidden, SK.forbidden)
 		}
+		return ws
 	}
 
-	/**
-	 * Terminal of a websocket route's chain: check the origin, upgrade, and wire the handler.
-	 * Every callback runs on one ordered queue per connection (open, each message, close), each
-	 * awaited and contained: a throw or rejection goes to `onError`, or to the app logger when
-	 * there is none or it throws itself, and never into the runtime.
-	 */
 	private async _wsUpgrade(finalCtx: HoneyContext<TEnv>): Promise<Response> {
 		const fc = finalCtx._rq as FetchCtx<TEnv>
 		const wsMatch = fc.ws as { handler: WSRouteHandler; params: Record<string, string> }
-		this._checkWsOrigin(finalCtx, wsMatch.handler.og ?? null)
+		const ws = await this._wsSession(finalCtx, wsMatch.handler.og ?? null)
 		const wsAdapter = this._graph.settings.wsAdapter as WSAdapter
-		const userHandler = wsMatch.handler.fn
-		const log = (this._graph.settings.logger ?? null) as InvokeLogger | null
-		const route = wsMatch.handler.rp
-		const queue = createEventQueue()
-		let pending = 0
-
-		const onOpenFn = userHandler.onOpen
-		const onMsgFn = userHandler.onMessage
-		const onCloseFn = userHandler.onClose
-		const onErrorFn = userHandler.onError
-		const onReconnectFn = userHandler.onReconnect
-		const reconnectToken = fc.url().searchParams.get("reconnect_token")
-
-		const run = (phase: string, ws: WSContext, fn: () => unknown): Promise<unknown> =>
-			invokeUser(fn, {
-				fields: { route },
-				log,
-				onError: onErrorFn ? (err) => onErrorFn(finalCtx, ws, err) : null,
-				phase: `websocket ${phase}`,
-			})
-
-		const wrappedHandler: WSHandler<unknown> = {
-			onClose: (_ctx, ws, code, reason) => {
-				if (onCloseFn) void queue.push(() => run("close", ws, () => onCloseFn(finalCtx, ws, code, reason)))
-			},
-			/* a transport error: tell onError once; if onError throws, that is logged */
-			onError: (_ctx, ws, error) => {
-				void queue.push(() =>
-					invokeUser(() => (onErrorFn ? onErrorFn(finalCtx, ws, error) : Promise.reject(error)), {
-						fields: { route },
-						log,
-						phase: "websocket error",
-					}),
-				)
-			},
-			onMessage: (_ctx, ws, data) => {
-				if (!onMsgFn) return
-				if (pending >= WS_PENDING_MAX) {
-					ws.close(1008, "too many pending messages")
-					return
-				}
-				pending++
-				void queue.push(() =>
-					run("message", ws, () => onMsgFn(finalCtx, ws, data)).finally(() => {
-						pending--
-					}),
-				)
-			},
-			onOpen: (_ctx, ws) => {
-				if (reconnectToken && onReconnectFn) {
-					void queue.push(() => run("open", ws, () => onReconnectFn(finalCtx, ws, reconnectToken)))
-				} else if (onOpenFn) {
-					void queue.push(() => run("open", ws, () => onOpenFn(finalCtx, ws)))
-				}
-			},
-		}
-
-		const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, wrappedHandler)
+		const handler = ws.createWsSession({
+			callbacks: wsMatch.handler.fn,
+			ctx: finalCtx,
+			log: (this._graph.settings.logger ?? null) as InvokeLogger | null,
+			reconnectToken: fc.url().searchParams.get("reconnect_token"),
+			route: wsMatch.handler.rp,
+		})
+		const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, handler)
 		return upgradeResult.response
 	}
 
 	/** Terminal of a realtime route's chain: identify, upgrade, and attach the connection to the bus. */
 	private async _realtimeUpgrade(finalCtx: HoneyContext<TEnv>, config: RealtimeConfig): Promise<Response> {
 		const fc = finalCtx._rq as FetchCtx<TEnv>
-		this._checkWsOrigin(finalCtx, config.allowedOrigins)
+		await this._wsSession(finalCtx, config.allowedOrigins)
 		const wsAdapter = this._graph.settings.wsAdapter as WSAdapter
-		const bus = this._graph.realtimeBus ?? this._setBus(createBus())
+		const rt = requireFeature("realtime", "app.realtime()")
+		const bus = this._graph.realtimeBus ?? this._setBus(rt.createBus())
 		/* a throwing identify rejects the upgrade through the chain's error boundary */
 		const userId = config.identify === null ? null : ((await config.identify(finalCtx)) ?? null)
-		const session = createRealtimeSession({ bus, config, ctx: finalCtx, log: fc.log, userId })
+		const session = rt.createRealtimeSession({ bus, config, ctx: finalCtx, log: fc.log, userId })
 		const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, session.handler)
 		/* Node/CF return an open socket from upgrade(); Bun and Deno deliver it through onOpen */
 		if (upgradeResult.socket && upgradeResult.socket.readyState === 1) session.attach(upgradeResult.socket)
@@ -3508,7 +3406,7 @@ class RouteBuilder<
 		TTaps,
 		TScopedMw
 	> {
-		const proxyHandler = createProxyHandler(config)
+		const proxyHandler = requireFeature("proxy", ".proxy()").createProxyHandler(config)
 		return this.handler(
 			proxyHandler as (
 				ctx: HandlerCtx<

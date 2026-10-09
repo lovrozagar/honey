@@ -4,6 +4,7 @@ import { createMiddleware, honey } from "../../../src/index.ts"
 import { canonical, joinPatterns, normalizePattern, parsePattern } from "../../../src/pattern.ts"
 import type { RouteTree } from "../../../src/tree.ts"
 import type { WSHandler } from "../../../src/ws/cloudflare.ts"
+import "../../../src/realtime/register.ts"
 
 /** Upgrades without a socket — enough to see the route was chosen (101). */
 function testWsAdapter() {

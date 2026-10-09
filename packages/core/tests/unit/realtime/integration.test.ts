@@ -3,6 +3,7 @@ import { honey } from "../../../src/index.ts"
 import type { MiddlewareFn } from "../../../src/middleware.ts"
 import type { WSAdapter, WSHandler } from "../../../src/ws/cloudflare.ts"
 import { WSContextImpl } from "../../../src/ws/cloudflare.ts"
+import "../../../src/realtime/register.ts"
 
 /**
  * Node.js Response constructor rejects status 101 (only 200-599 valid per Fetch spec).

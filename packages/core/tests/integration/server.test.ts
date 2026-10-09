@@ -12,6 +12,7 @@ import { requestId } from "../../src/request-id.ts"
 import { secureHeaders } from "../../src/secure-headers.ts"
 import { serverTiming } from "../../src/server-timing.ts"
 import { timeout } from "../../src/timeout.ts"
+import "../../src/trust.ts"
 
 type Env = { SECRET: string }
 

@@ -8,6 +8,7 @@ import { createMiddleware, honey, toFetchRequest } from "../../src/index.ts"
 import { ipRestrict } from "../../src/ip-restrict.ts"
 import { type HoneyServer, serve } from "../../src/node.ts"
 import { timeout } from "../../src/timeout.ts"
+import "../../src/trust.ts"
 
 function request(
 	port: number,

@@ -5,7 +5,7 @@ import type { SSEOptions, SSEStream, TypedResponse } from "./response.ts"
 import { HoneyRes } from "./response.ts"
 import { dict } from "./dict.ts"
 import { peerAddressOf } from "./peer.ts"
-import { resolveClientInfo, TRUST_OFF, type ClientInfo, type TrustSetting } from "./trust.ts"
+import { resolveClient, TRUST_OFF, type ClientInfo, type TrustSetting } from "./client-info.ts"
 import type { PendingTap } from "./types.ts"
 import { EMPTY_OBJ } from "./types.ts"
 import { parseCookies } from "./validation.ts"
@@ -79,7 +79,7 @@ export function clientInfo(ctx: HoneyContext<never> | HoneyContext): ClientInfo 
 		/* the peer is registered on the request the adapter handed over; headers are read from
 		 * ctx.req, which survives Deno's upgrade (a header snapshot) */
 		const peer = peerAddressOf(src.request ?? c.req, src.env ?? c.env)
-		c._lzClient = resolveClientInfo(src.trust ?? TRUST_OFF, c.req, peer)
+		c._lzClient = resolveClient(src.trust ?? TRUST_OFF, c.req, peer)
 	}
 	return c._lzClient
 }

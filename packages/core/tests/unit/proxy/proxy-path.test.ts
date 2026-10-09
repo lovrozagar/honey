@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { Honey } from "../../../src/index.ts"
+import "../../../src/proxy.ts"
 
 function rawRequest(path: string): Request {
 	/* a runtime that hands the app the raw target (Deno builds request.url from it) */

@@ -1,5 +1,15 @@
+import type { HoneyError } from "./error.ts"
+
+/** The translations `errorI18n()` holds, keyed by locale. */
+export type ErrorTranslations = {
+	errors?: Record<string, Record<string, string>>
+	fieldNames?: Record<string, Record<string, string>>
+}
+
 export type I18nRuntime = {
 	interpolate: (template: string, vars: Record<string, unknown>, locale?: string) => string
+	/** `error` in `locale`, or `error` itself when nothing translates */
+	translateError: (error: HoneyError, translations: ErrorTranslations, locale: string) => HoneyError
 }
 
 const MISSING = 'Honey.errorI18n() requires `import "@lovrozagar/honey/i18n"` in the app entry.'

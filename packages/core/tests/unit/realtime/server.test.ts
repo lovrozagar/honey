@@ -5,6 +5,7 @@ import { truncateUtf8 } from "../../../src/realtime/route.ts"
 import type { ConnContext } from "../../../src/realtime/route.ts"
 import type { WSAdapter, WSHandler } from "../../../src/ws/cloudflare.ts"
 import { WSContextImpl } from "../../../src/ws/cloudflare.ts"
+import "../../../src/realtime/register.ts"
 
 /* Node's Response rejects 101; tests fake it the way the CF adapter's Response allows it. */
 function make101(): Response {

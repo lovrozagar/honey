@@ -1,4 +1,7 @@
-import { registerI18nRuntime } from "./i18n-slot.ts"
+import { dict } from "./dict.ts"
+import { HoneyError } from "./error.ts"
+import { registerI18nRuntime, type ErrorTranslations } from "./i18n-slot.ts"
+import type { FieldError } from "./types.ts"
 
 /**
  * Extracts {varName} patterns from ICU MessageFormat string literals at the type level.
@@ -238,8 +241,60 @@ export async function resolveFieldName(
 	return own(map, fieldPath) ?? fieldPath
 }
 
+/* the locale can come from request data: own keys only */
+function ownValue<T>(obj: Record<string, T> | undefined, key: string): T | undefined {
+	return obj !== undefined && Object.hasOwn(obj, key) ? obj[key] : undefined
+}
+
+/** A copy of `error` with a translated message and field paths; same key, status, data and cause. */
+function translatedError(
+	error: HoneyError,
+	message: string | undefined,
+	fields: Record<string, FieldError[]> | undefined,
+): HoneyError {
+	const copy = new HoneyError({
+		cause: error.cause,
+		data: error.data,
+		errorKey: error.errorKey,
+		fields: fields ?? error.fields,
+		headers: error.headers,
+		status: error.statusKey,
+		vars: error.vars,
+	})
+	copy.message = message ?? error.message
+	if (error.stack !== undefined) copy.stack = error.stack
+	return copy
+}
+
+export function translateError(error: HoneyError, translations: ErrorTranslations, locale: string): HoneyError {
+	const messages = ownValue(translations.errors, locale)
+	const template = messages ? ownValue(messages, error.errorKey) : undefined
+	const message = template ? interpolate(template, error.vars ?? {}, locale) : undefined
+
+	const fieldTranslations = ownValue(translations.fieldNames, locale)
+	let fields: Record<string, FieldError[]> | undefined
+	if (fieldTranslations && Object.keys(error.fields).length > 0) {
+		fields = dict<FieldError[]>()
+		for (const name of Object.keys(error.fields)) {
+			fields[name] = error.fields[name].map((fe) => {
+				let candidate = fe.path
+				while (candidate) {
+					const translated = ownValue(fieldTranslations, candidate)
+					if (translated) return { ...fe, path: translated }
+					const dotIdx = candidate.indexOf(".")
+					if (dotIdx === -1) break
+					candidate = candidate.slice(dotIdx + 1)
+				}
+				return fe
+			})
+		}
+	}
+	if (message === undefined && fields === undefined) return error
+	return translatedError(error, message, fields)
+}
+
 export function enableI18n(): void {
-	registerI18nRuntime({ interpolate })
+	registerI18nRuntime({ interpolate, translateError })
 }
 
 enableI18n()

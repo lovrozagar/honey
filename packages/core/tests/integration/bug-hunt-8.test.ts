@@ -9,6 +9,7 @@ import { honey } from "../../src/index.ts"
 import { createMiddleware } from "../../src/middleware.ts"
 import { type HoneyServer, serve } from "../../src/node.ts"
 import { testClient } from "../../src/testing.ts"
+import "../../src/trust.ts"
 
 function request(
 	port: number,

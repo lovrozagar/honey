@@ -4,6 +4,7 @@ import { createEventQueue, invokeUser } from "../../../src/invoke-user.ts"
 import type { WSAdapter, WSHandler } from "../../../src/ws/cloudflare.ts"
 import { cfWebSocket, WSContextImpl } from "../../../src/ws/cloudflare.ts"
 import { originAllowed, validateOriginPolicy } from "../../../src/ws-origin.ts"
+import "../../../src/realtime/register.ts"
 
 function make101(): Response {
 	const r = new Response(null)

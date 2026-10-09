@@ -1,4 +1,9 @@
+import { directClientInfo, isValidHost, TRUST_OFF, type ClientInfo, type TrustSetting } from "./client-info.ts"
+import { registerFeature } from "./feature-slots.ts"
 import { canonicalIp, ipInRange, parseIp, parseIpRange, type IpRange } from "./ip.ts"
+
+export type { ClientInfo, TrustSetting } from "./client-info.ts"
+export { hasValidHost, isValidHost, TRUST_OFF } from "./client-info.ts"
 
 /**
  * Who sent a request, and over what. One setting, `app.trustProxy()`, decides it for every
@@ -14,12 +19,17 @@ import { canonicalIp, ipInRange, parseIp, parseIpRange, type IpRange } from "./i
  */
 export type TrustProxy = false | number | readonly string[]
 
-export type TrustSetting =
-	| { readonly kind: "off" }
+/** How a compiled setting finds the client: a fixed hop count, or proxies known by address. */
+type TrustRule =
 	| { readonly kind: "hops"; readonly hops: number }
 	| { readonly kind: "ranges"; readonly ranges: readonly IpRange[] }
 
-export const TRUST_OFF: TrustSetting = Object.freeze({ kind: "off" })
+function withResolver(rule: TrustRule): TrustSetting {
+	return Object.freeze({
+		kind: rule.kind,
+		resolve: (req: Request, peer: string | null) => resolveRule(rule, req, peer),
+	})
+}
 
 export function compileTrust(value: TrustProxy): TrustSetting {
 	if (value === false || value === 0) return TRUST_OFF
@@ -27,7 +37,7 @@ export function compileTrust(value: TrustProxy): TrustSetting {
 		if (!Number.isInteger(value) || value < 0) {
 			throw new Error(`trustProxy: a hop count must be a non-negative integer, got ${value}`)
 		}
-		return { hops: value, kind: "hops" }
+		return withResolver({ hops: value, kind: "hops" })
 	}
 	if (!Array.isArray(value) || value.length === 0) {
 		throw new Error("trustProxy: pass false, a hop count, or a non-empty list of proxy addresses and CIDR ranges")
@@ -37,15 +47,7 @@ export function compileTrust(value: TrustProxy): TrustSetting {
 		if (range === null) throw new Error(`trustProxy: ${JSON.stringify(rule)} is not an IP address or CIDR range`)
 		return range
 	})
-	return { kind: "ranges", ranges }
-}
-
-export type ClientInfo = {
-	/** Canonical client address, or `null` when it is unknown or a trusted header holds garbage. */
-	ip: string | null
-	/** Host the client asked for (`host[:port]`), or `null`. */
-	host: string | null
-	protocol: "http" | "https"
+	return withResolver({ kind: "ranges", ranges })
 }
 
 function listHeader(headers: Headers, name: string): string[] {
@@ -64,8 +66,7 @@ function listHeader(headers: Headers, name: string): string[] {
  * Each one appended one `X-Forwarded-For` entry, so the client is the entry `count` from the
  * right. `null` when a hop the walk must read is not an address.
  */
-function trustedHops(trust: TrustSetting, peer: string | null, forwarded: readonly string[]): number | null {
-	if (trust.kind === "off") return 0
+function trustedHops(trust: TrustRule, peer: string | null, forwarded: readonly string[]): number | null {
 	if (trust.kind === "hops") return trust.hops
 	const isTrusted = (text: string): boolean | null => {
 		const addr = parseIp(text)
@@ -92,43 +93,10 @@ function pick(values: readonly string[], count: number): string | undefined {
 	return values[idx < 0 ? 0 : idx]
 }
 
-const HOST = /^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.?)(?::\d{1,5})?$/
-
-/** `host[:port]` as RFC 9110 allows it in `Host`; nothing that could change a URL's meaning. */
-export function isValidHost(host: string): boolean {
-	if (!HOST.test(host)) return false
-	const colon = host.lastIndexOf(":")
-	if (colon !== -1 && host.lastIndexOf("]") < colon) {
-		const port = Number(host.slice(colon + 1))
-		if (port > 65535) return false
-	}
-	return true
-}
-
-/** `false` when the request carries a `Host` header that is not `host[:port]`. */
-export function hasValidHost(req: Request): boolean {
-	const host = req.headers.get("host")
-	return host === null || isValidHost(host)
-}
-
-function hostOfUrl(url: string): string | null {
-	const start = url.indexOf("//")
-	if (start === -1) return null
-	let end = url.indexOf("/", start + 2)
-	if (end === -1) end = url.length
-	const host = url.slice(start + 2, end)
-	return host === "" ? null : host
-}
-
-export function resolveClientInfo(trust: TrustSetting, req: Request, peer: string | null): ClientInfo {
-	const transport = req.url.startsWith("https:") ? "https" : "http"
-	const forwarded = trust.kind === "off" ? [] : listHeader(req.headers, "x-forwarded-for")
-	const count = trustedHops(trust, peer, forwarded)
-	const direct: ClientInfo = {
-		host: hostOfUrl(req.url),
-		ip: peer === null ? null : canonicalIp(peer),
-		protocol: transport,
-	}
+function resolveRule(rule: TrustRule, req: Request, peer: string | null): ClientInfo {
+	const direct = directClientInfo(req, peer)
+	const forwarded = listHeader(req.headers, "x-forwarded-for")
+	const count = trustedHops(rule, peer, forwarded)
 	if (count === null) return { ...direct, ip: null }
 	if (count === 0) return direct
 
@@ -136,8 +104,15 @@ export function resolveClientInfo(trust: TrustSetting, req: Request, peer: strin
 	const ip = client === undefined ? direct.ip : canonicalIp(client)
 
 	const proto = pick(listHeader(req.headers, "x-forwarded-proto"), count)?.toLowerCase()
-	const protocol = proto === "https" || proto === "http" ? proto : transport
+	const protocol = proto === "https" || proto === "http" ? proto : direct.protocol
 	const fwdHost = pick(listHeader(req.headers, "x-forwarded-host"), count)
 	const host = fwdHost !== undefined && isValidHost(fwdHost) ? fwdHost : direct.host
 	return { host, ip, protocol }
 }
+
+/** The client of `req` under `trust`; the same answer `ctx.ip` and `clientInfo()` give. */
+export function resolveClientInfo(trust: TrustSetting, req: Request, peer: string | null): ClientInfo {
+	return trust.kind === "off" ? directClientInfo(req, peer) : trust.resolve(req, peer)
+}
+
+registerFeature("trust", { compileTrust })

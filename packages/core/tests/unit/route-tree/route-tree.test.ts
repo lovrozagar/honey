@@ -5,6 +5,7 @@ import { createMiddleware, defineErrors, honey } from "../../../src/index.ts"
 import { testClient } from "../../../src/testing.ts"
 import type { RouteEntry, RouteTree } from "../../../src/tree.ts"
 import { createNode, insertRoute } from "../../../src/tree.ts"
+import "../../../src/proxy.ts"
 
 /* ---- helpers ---- */
 

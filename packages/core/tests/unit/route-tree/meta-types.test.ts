@@ -6,6 +6,7 @@
 
 import { describe, it } from "vitest"
 import { honey } from "../../../src/index.ts"
+import "../../../src/proxy.ts"
 
 type AppMeta = { auth: string; worker: string }
 

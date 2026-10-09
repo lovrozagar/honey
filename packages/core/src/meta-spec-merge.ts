@@ -60,3 +60,21 @@ export function mergeMetaSpec(own: MetaSpecConfig | null, sub: MetaSpecConfig | 
 		strict: resolvedStrictness(own),
 	}
 }
+
+/** A policy as an app holds it: its own declaration and each mounted sub-app's source, unmerged. */
+export type MetaSpecSource = {
+	readonly declared: MetaSpecConfig | null
+	readonly absorbed: readonly MetaSpecSource[]
+}
+
+function resolveSource(source: MetaSpecSource): MetaSpecConfig | null {
+	let merged = source.declared
+	for (const sub of source.absorbed) merged = mergeMetaSpec(merged, resolveSource(sub))
+	return merged
+}
+
+/** The policy codegen applies to `app`: its own, with every mounted sub-app's merged in mount order. */
+export function metaSpecOf(app: unknown): MetaSpecConfig | null {
+	const source = (app as { _metaSpecSource?: MetaSpecSource })._metaSpecSource
+	return source === undefined ? null : resolveSource(source)
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { Honey } from "../../../src/index.ts"
+import "../../../src/proxy.ts"
 
 function createTestApp() {
 	return new Honey<{ UPSTREAM: { fetch: typeof fetch } }>()

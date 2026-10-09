@@ -4,7 +4,7 @@ import { HoneyError } from "./error.ts"
 import { TO_FETCH_REQUEST } from "./fetch-request.ts"
 import { NODE_OUTBOUND } from "./honey-response.ts"
 import { PEER_ADDRESS } from "./peer.ts"
-import { isValidHost } from "./trust.ts"
+import { isValidHost } from "./client-info.ts"
 import { EK, SK } from "./types.ts"
 
 /** bodyLimit uses this to swap the inbound stream without `new Request(req)`. */

@@ -1,3 +1,4 @@
+import "./session.ts"
 import { invokeUser } from "../invoke-user.ts"
 import { truncateUtf8 } from "../realtime/route.ts"
 import type { WSReadyState } from "../types.ts"

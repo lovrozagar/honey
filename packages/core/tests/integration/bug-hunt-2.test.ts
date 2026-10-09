@@ -9,6 +9,7 @@ import { createMiddleware } from "../../src/middleware.ts"
 import { type HoneyServer, serve } from "../../src/node.ts"
 import { requestId } from "../../src/request-id.ts"
 import { serverTiming } from "../../src/server-timing.ts"
+import "../../src/trust.ts"
 
 function request(
 	port: number,

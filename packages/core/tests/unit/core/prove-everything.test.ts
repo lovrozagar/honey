@@ -10,6 +10,9 @@ import { staticFiles } from "../../../src/static.ts"
 import { otelAdapter } from "../../../src/telemetry/otel.ts"
 import type { WSAdapter, WSHandler } from "../../../src/ws/cloudflare.ts"
 import { WSContextImpl } from "../../../src/ws/cloudflare.ts"
+import "../../../src/proxy.ts"
+import "../../../src/realtime/register.ts"
+import "../../../src/trust.ts"
 
 function make101(): Response {
 	const response = new Response(null, { status: 200 })

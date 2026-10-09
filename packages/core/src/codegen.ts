@@ -26,6 +26,7 @@ import { ERROR_META } from "./errors.ts"
 import type { ErrorMetaEntry } from "./errors.ts"
 import type { InvalidateCheckConfig } from "./invalidate-check.ts"
 import { publishableMetaKeys } from "./meta-spec.ts"
+import { metaSpecOf } from "./meta-spec-merge.ts"
 import type { Honey } from "./index.ts"
 import {
 	generateOpenApiFromTree,
@@ -1381,9 +1382,7 @@ export function generateManifest<TEnv, TCtx>(
 ): RouteManifest {
 	const factory = getErrorFactory(app)
 	const published = options.visibility === "published"
-	const publishable = published
-		? publishableMetaKeys((app as unknown as { _metaSpec?: MetaSpecConfig | null })._metaSpec ?? null)
-		: null
+	const publishable = published ? publishableMetaKeys(metaSpecOf(app)) : null
 	const collected: CollectedRoute[] = collectRoutes(app).filter(({ handler, method, path }) => {
 		if (published && isMetaInternal(handler)) return false
 		return !options.filterRoutes || options.filterRoutes({ meta: handler.mt ?? EMPTY_OBJ, method, path })

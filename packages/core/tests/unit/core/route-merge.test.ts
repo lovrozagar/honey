@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { createMiddleware, honey } from "../../../src/index.ts"
 import type { WSHandler } from "../../../src/ws/cloudflare.ts"
 import { WSContextImpl } from "../../../src/ws/cloudflare.ts"
+import "../../../src/realtime/register.ts"
 
 function make101Response(): Response {
 	const response = new Response(null, { status: 200 })

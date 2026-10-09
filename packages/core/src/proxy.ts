@@ -1,5 +1,6 @@
 import { clientInfo, type HoneyContext } from "./context.ts"
 import { HoneyError } from "./error.ts"
+import { registerFeature } from "./feature-slots.ts"
 import { EK, SK } from "./types.ts"
 
 /* Bodies up to this size with a declared length are forwarded as bytes; larger or unsized ones
@@ -369,3 +370,6 @@ export function createProxyHandler<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx)
 		return result
 	}
 }
+
+/* `import "@lovrozagar/honey/proxy"` is what makes `.proxy()` available; the core never imports this module */
+registerFeature("proxy", { createProxyHandler })

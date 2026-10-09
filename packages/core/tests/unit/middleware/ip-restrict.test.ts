@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { honey } from "../../../src/index.ts"
 import { ipRestrict } from "../../../src/ip-restrict.ts"
 import { setPeerAddress } from "../../../src/peer.ts"
+import "../../../src/trust.ts"
 import type { TrustProxy } from "../../../src/trust.ts"
 
 function makeApp(opts: Parameters<typeof ipRestrict>[0], trust: TrustProxy = false) {

@@ -13,6 +13,7 @@ import {
 	type SchemaMetaHit,
 	type SchemaMetaLookup,
 } from "../meta-spec.ts"
+import { metaSpecOf } from "../meta-spec-merge.ts"
 import { parsePattern, UNNAMED_WILDCARD } from "../pattern.ts"
 import type { RouteHandler } from "../tree.ts"
 import type {
@@ -127,7 +128,7 @@ function getErrorMeta(factory: Record<string, () => HoneyError> | null): Record<
 }
 
 function getMetaSpecConfig(app: unknown): MetaSpecConfig | null {
-	return (app as { _metaSpec?: MetaSpecConfig | null })._metaSpec ?? null
+	return metaSpecOf(app)
 }
 
 function cloneJson<T>(value: T): T {

@@ -10,6 +10,7 @@ import type { AddressInfo } from "node:net"
 import { gzipSync } from "node:zlib"
 import { honey } from "../../../src/index.ts"
 import "../../../src/serve-register.ts"
+import "../../../src/proxy.ts"
 
 /* incompressible-ish text: the gzip stays large, so encoded and decoded lengths differ widely */
 const LARGE = randomBytes(300_000).toString("base64")

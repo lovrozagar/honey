@@ -3,6 +3,7 @@ import { honey } from "../../../src/index.ts"
 import { ipRestrict } from "../../../src/ip-restrict.ts"
 import { setPeerAddress } from "../../../src/peer.ts"
 import { staticFiles } from "../../../src/static.ts"
+import "../../../src/trust.ts"
 
 /**
  * Regressions for the bug classes published against comparable frameworks' static-file and

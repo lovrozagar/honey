@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { honey } from "../../src/index.ts"
 import { issuesToFieldErrors, mapNormalizedCode, normalizeIssues, parseCookies } from "../../src/validation.ts"
+import "../../src/trust.ts"
 
 /* ══════════════════════════════════════════════
  * 1. DECODE — malformed URI fallback in route params

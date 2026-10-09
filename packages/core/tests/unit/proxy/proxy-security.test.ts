@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import { honey } from "../../../src/index.ts"
 import { setPeerAddress } from "../../../src/peer.ts"
 import { timeout } from "../../../src/timeout.ts"
+import "../../../src/proxy.ts"
+import "../../../src/trust.ts"
 
 /**
  * proxy() regressions, from reverse-proxy advisories (hono, elysia, node-http-proxy, nginx):

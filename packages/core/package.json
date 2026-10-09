@@ -35,10 +35,18 @@
 	"sideEffects": [
 		"./src/i18n.ts",
 		"./src/openapi/register.ts",
+		"./src/proxy.ts",
+		"./src/realtime/register.ts",
 		"./src/serve-register.ts",
+		"./src/trust.ts",
+		"./src/ws/session.ts",
 		"./dist/i18n.js",
 		"./dist/openapi/register.js",
-		"./dist/serve-register.js"
+		"./dist/proxy.js",
+		"./dist/realtime/register.js",
+		"./dist/serve-register.js",
+		"./dist/trust.js",
+		"./dist/ws/session.js"
 	],
 	"exports": {
 		".": {
@@ -227,6 +235,12 @@
 			"bun": "./src/proxy.ts",
 			"default": "./dist/proxy.js"
 		},
+		"./realtime": {
+			"honey-source": "./src/realtime/register.ts",
+			"types": "./dist/realtime/register.d.ts",
+			"bun": "./src/realtime/register.ts",
+			"default": "./dist/realtime/register.js"
+		},
 		"./request-to-curl": {
 			"honey-source": "./src/request-to-curl.ts",
 			"types": "./dist/request-to-curl.d.ts",
@@ -281,6 +295,12 @@
 			"bun": "./src/timeout.ts",
 			"default": "./dist/timeout.js"
 		},
+		"./trust": {
+			"honey-source": "./src/trust.ts",
+			"types": "./dist/trust.d.ts",
+			"bun": "./src/trust.ts",
+			"default": "./dist/trust.js"
+		},
 		"./tree": {
 			"honey-source": "./src/tree.ts",
 			"types": "./dist/tree.d.ts",
@@ -310,6 +330,12 @@
 			"types": "./dist/ws/node.d.ts",
 			"bun": "./src/ws/node.ts",
 			"default": "./dist/ws/node.js"
+		},
+		"./ws/session": {
+			"honey-source": "./src/ws/session.ts",
+			"types": "./dist/ws/session.d.ts",
+			"bun": "./src/ws/session.ts",
+			"default": "./dist/ws/session.js"
 		}
 	},
 	"publishConfig": {

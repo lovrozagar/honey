@@ -3,6 +3,7 @@ import * as z from "zod"
 import { honey } from "../../../src/index.ts"
 import type { RouteEntry, RouteTree } from "../../../src/tree.ts"
 import { createNode, insertRoute } from "../../../src/tree.ts"
+import "../../../src/proxy.ts"
 
 function stubSchema() {
 	return {
