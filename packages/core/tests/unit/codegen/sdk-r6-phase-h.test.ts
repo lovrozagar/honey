@@ -316,7 +316,7 @@ describe("#R6-27 _call promotion — Layer B' regression types", () => {
 describe("#R6-27 _call promotion — Layer B' regression client strings", () => {
 	it('Layer B\' post-fix: files.client contains the _call promotion guard (actions.length === 1 && actions[0] === "_call")', () => {
 		const { files } = generateSDK(phaseHFixtureSpec, { name: "TestSDK" })
-		expect(files.client).toContain(`nodeKeys.length === 1 && nodeKeys[0] === "_call"`)
+		expect(files.client).toContain(`nodeKeys.length === 1 && only !== undefined && isEntry(only)`)
 	})
 })
 
@@ -325,14 +325,15 @@ describe("#R6-27 _call promotion — Layer B' regression client strings", () => 
    ═══════════════════════════════════════════════════════════════════ */
 
 describe("#R6-20 path param wrap — Layer B' regression", () => {
-	it("Layer B' post-fix: files.client contains for (const p of entry.params) validation loop", () => {
+	it("Layer B' post-fix: files.client interpolates the path before sending and wraps a path param error", () => {
 		const { files } = generateSDK(phaseHFixtureSpec, { name: "TestSDK" })
-		expect(files.client).toContain("for (const p of entry.params)")
+		expect(files.client).toContain("cp = this.#interpolatePath(path, params)")
+		expect(files.client).toContain("if (!(e instanceof _PathParamError)) throw e")
 	})
 
-	it("Layer B' post-fix: files.client contains Missing required path param descriptive message", () => {
+	it("Layer B' post-fix: files.client contains the Missing path param message", () => {
 		const { files } = generateSDK(phaseHFixtureSpec, { name: "TestSDK" })
-		expect(files.client).toContain("Missing required path param")
+		expect(files.client).toContain("Missing path param")
 	})
 
 	it("Layer B' post-fix: files.client contains status: 0 at least twice (throw + safe returns)", () => {

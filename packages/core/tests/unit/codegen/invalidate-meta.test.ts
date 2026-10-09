@@ -317,7 +317,9 @@ describe("generateTypes emits HoneyCodegen module augmentation", () => {
 			appExport: "app",
 			appImport: "./app",
 		})
-		expect(code).toContain('declare module "honey"')
+		/* the package's real name — an augmentation of "honey" silently applies to nothing (H39) */
+		expect(code).toContain('declare module "@lovrozagar/honey"')
+		expect(code).not.toContain('declare module "honey"')
 		expect(code).toContain("interface HoneyCodegen")
 		expect(code).toContain("routeSelector:")
 		expect(code).toContain('"GET /v1/users"')

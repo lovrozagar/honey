@@ -25,10 +25,11 @@ import {
 } from "./openapi/document.ts"
 import { getJsonSchemaConverter, setJsonSchemaConverter } from "./openapi/json-schema-slot.ts"
 import { collectRoutes, extractParams } from "./openapi/collect.ts"
+import { parsePattern, patternParams } from "./pattern.ts"
 import type { RouteHandler, RouteTree } from "./tree.ts"
 import { forEachLeaf, ROUTE_TREE_VERSION } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
-import { createTypeEmitState, emitSchemaType } from "./type-emitter.ts"
+import { createTypeEmitState, emitSchemaType, quoteKey } from "./type-emitter.ts"
 import type { TypeEmitState } from "./type-emitter.ts"
 import type { InputSchemaEntry, InputSchemasDef, MetaSpecConfig, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
@@ -1757,14 +1758,14 @@ function emitOutputType(handler: RouteHandler, state: TypeEmitState): string {
 		if (contentType === "redirect") {
 			const keys = Object.keys(schemas).filter((k) => schemas[k as keyof typeof schemas])
 			if (keys.length > 0) {
-				ctEntries.push(`"redirect": { ${keys.map((k) => `${k}: true`).join("; ")} }`)
+				ctEntries.push(`"redirect": { ${keys.map((k) => `${quoteKey(k)}: true`).join("; ")} }`)
 			}
 			continue
 		}
 		const statusEntries: string[] = []
 		for (const [statusKey, schema] of Object.entries(schemas)) {
 			if (schema === undefined) continue
-			statusEntries.push(`${statusKey}: ${emitSchemaType(schema as StandardSchemaLike, state)}`)
+			statusEntries.push(`${quoteKey(statusKey)}: ${emitSchemaType(schema as StandardSchemaLike, state)}`)
 		}
 		if (statusEntries.length > 0) {
 			ctEntries.push(`${JSON.stringify(contentType)}: { ${statusEntries.join("; ")} }`)
@@ -1778,8 +1779,7 @@ function emitMetaType(handler: RouteHandler): string {
 	if (!handler.mt) return "{}"
 	const entries: string[] = []
 	for (const [k, v] of Object.entries(handler.mt)) {
-		const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? k : JSON.stringify(k)
-		entries.push(`${key}: ${emitLiteral(v)}`)
+		entries.push(`${quoteKey(k)}: ${emitLiteral(v)}`)
 	}
 	if (entries.length === 0) return "{}"
 	return `{ ${entries.join("; ")} }`
@@ -1789,7 +1789,9 @@ function emitLiteral(value: unknown): string {
 	if (value === null) return "null"
 	if (value === undefined) return "undefined"
 	if (typeof value === "string") return JSON.stringify(value)
-	if (typeof value === "number" || typeof value === "boolean") return String(value)
+	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "number"
+	if (typeof value === "boolean") return String(value)
+	if (typeof value === "bigint") return `${value}n`
 	if (Array.isArray(value)) {
 		if (value.length === 0) return "[]"
 		return `[${value.map((v) => emitLiteral(v)).join(", ")}]`
@@ -1822,9 +1824,9 @@ function emitErrorShapes(
 		const entry = meta?.[key]
 		if (entry?.schema) {
 			const schemaType = emitSchemaType(entry.schema as StandardSchemaLike, state)
-			entries.push(`${key}: ${schemaType}`)
+			entries.push(`${quoteKey(key)}: ${schemaType}`)
 		} else {
-			entries.push(`${key}: null`)
+			entries.push(`${quoteKey(key)}: null`)
 		}
 	}
 	return `{ ${entries.join("; ")} }`
@@ -1874,7 +1876,7 @@ function emitErrorsCtxType(handler: RouteHandler): string {
 		.sort()
 		.map(
 			(k) =>
-				`${k}: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, string | number> }) => HoneyError`,
+				`${quoteKey(k)}: (opts?: { cause?: unknown; fields?: Record<string, { error_key: string; message: string; path: string }[]>; headers?: Record<string, string>; vars?: Record<string, string | number> }) => HoneyError`,
 		)
 	return `readonly errors: { ${entries.join("; ")} }`
 }
@@ -1954,7 +1956,8 @@ export function generateTypes<TEnv, TCtx>(
 		const sorted = [...selectors].sort()
 		lines.push(`export type RouteSelector = ${sorted.map((s) => JSON.stringify(s)).join(" | ")}`)
 		lines.push("")
-		lines.push('declare module "honey" {')
+		/* augment the module consumers import — an augmentation of any other name silently applies to nothing */
+		lines.push('declare module "@lovrozagar/honey" {')
 		lines.push("\tinterface HoneyCodegen {")
 		lines.push(`\t\trouteSelector: RouteSelector`)
 		lines.push("\t}")
@@ -2031,7 +2034,7 @@ export function generateTypes<TEnv, TCtx>(
 	routesLines.push("export type Routes = {")
 
 	for (const [path, methods] of byPath) {
-		routesLines.push(`\t"${path}": {`)
+		routesLines.push(`\t${JSON.stringify(path)}: {`)
 		for (const { handler, method } of methods) {
 			const mwType = buildMwType(method, path)
 			const mwAlias = mwType ? mwTypeMap.get(mwType) : undefined
@@ -2039,9 +2042,10 @@ export function generateTypes<TEnv, TCtx>(
 			const additions: string[] = []
 			const inputType = emitInputType(handler, emitState)
 			if (inputType !== "{}") additions.push(`input: ${inputType}`)
-			const params = extractParams(path)
+			/* the names ctx.params carries at runtime — an unnamed wildcard is "*" */
+			const params = patternParams(parsePattern(path))
 			if (params.length > 0) {
-				const paramEntries = params.map((p) => `${p}: string`).join("; ")
+				const paramEntries = params.map((p) => `${quoteKey(p)}: string`).join("; ")
 				additions.push(`readonly params: { ${paramEntries} }`)
 			}
 			const errorsCtx = emitErrorsCtxType(handler)
@@ -2050,7 +2054,7 @@ export function generateTypes<TEnv, TCtx>(
 			const errorType = emitErrorType(handler)
 			const metaType = emitMetaType(handler)
 			const outputType = emitOutputType(handler, emitState)
-			routesLines.push(`\t\t${method}: {`)
+			routesLines.push(`\t\t${quoteKey(method)}: {`)
 			routesLines.push(`\t\t\tctx: WithOutput<${ctxType}, ${outputType}>`)
 			routesLines.push(`\t\t\terrors: ${errorType}`)
 			/* a mounted sub-app's route keeps its own error factory */
@@ -2245,6 +2249,8 @@ type ServiceEntry = {
 	realtime?: boolean
 	ws?: boolean
 	sse?: boolean
+	/** The path param that is a wildcard: its value may span segments */
+	wildcard?: string
 }
 
 type NestedServiceNode =
@@ -2265,6 +2271,8 @@ type GeneratedSDK = {
 type SDKMethod = {
 	action: string
 	errorsByStatusType: string | null
+	/** Full operationId (explicit or derived) */
+	id: string
 	inputHasMandatory: boolean
 	inputType: string
 	realtime: boolean
@@ -2276,7 +2284,8 @@ type SDKMethod = {
 
 export function extractOpenApiPathParams(path: string): string[] {
 	const params: string[] = []
-	const re = /\{(\w+)\}/g
+	/* any name between braces — `{user-id}` is one parameter, not `{user}` and a literal `-id` */
+	const re = /\{([^{}/]+)\}/g
 	let match: RegExpExecArray | null = re.exec(path)
 	while (match !== null) {
 		params.push(match[1])
@@ -2350,6 +2359,29 @@ function emitSDKInputType(op: Record<string, unknown>, path: string): { hasManda
 		}
 	}
 
+	/* header and cookie params — typed on top of the free-form per-call `headers` / `cookies` */
+	if (parameters) {
+		for (const [location, field] of [
+			["header", "headers"],
+			["cookie", "cookies"],
+		] as const) {
+			const declared = parameters.filter((p) => p.in === location)
+			if (declared.length === 0) continue
+			const entries = declared
+				.slice()
+				.sort((a, b) => compareCodeUnits(String(a.name), String(b.name)))
+				.map((p) => {
+					const schema = p.schema as Record<string, unknown> | undefined
+					/* sent as text: a header or cookie value is a string on the wire */
+					const tsType = schema && schema.enum ? jsonSchemaToTS(schema) : "string"
+					return `${quoteKey(String(p.name))}${p.required === true ? "" : "?"}: ${tsType}`
+				})
+			const entry = `${field}: { ${entries.join("; ")} }`
+			if (declared.some((p) => p.required === true)) mandatoryParts.push(entry)
+			else optionalParts.push(entry)
+		}
+	}
+
 	/* request body */
 	const requestBody = op.requestBody as Record<string, unknown> | undefined
 	if (requestBody) {
@@ -2404,11 +2436,11 @@ function emitSDKResponseType(op: Record<string, unknown>): string {
 			return "AsyncIterable<{ data: string; event?: string; id?: string; retry?: number }>"
 	}
 
-	/* collect success response types (2xx) */
+	/* collect success response types (2xx) — `default` and `4XX`-style keys are never success */
 	const successTypes: string[] = []
 	for (const [status, response] of Object.entries(responses)) {
-		const code = Number.parseInt(status, 10)
-		if (code < 200 || code >= 300) continue
+		if (!/^2(?:[0-9][0-9]|XX)$/i.test(status)) continue
+		const code = /^2XX$/i.test(status) ? 200 : Number(status)
 		if (code === 204) {
 			successTypes.push("null")
 			continue
@@ -2481,8 +2513,9 @@ function emitSDKErrorsByStatusType(op: Record<string, unknown>): string | null {
 
 	const entries: string[] = []
 	for (const [status, response] of Object.entries(responses)) {
-		const code = Number.parseInt(status, 10)
-		if (code < 400) continue /* only error responses */
+		/* only concrete error statuses: `default` and `4XX` have no single status to key on */
+		if (!/^[45][0-9][0-9]$/.test(status)) continue
+		const code = Number(status)
 
 		const content = response.content as Record<string, Record<string, unknown>> | undefined
 		const schema = content?.["application/json"]?.schema as Record<string, unknown> | undefined
@@ -2821,6 +2854,7 @@ function emitNestedMapNode(node: NestedServiceNode, indent: string): string[] {
 		const parts = [`method: ${JSON.stringify(entry.method)}`, `path: ${JSON.stringify(entry.path)}`]
 		if (entry.params) parts.push(`params: ${JSON.stringify(entry.params)}`)
 		if (entry.sse) parts.push("sse: true")
+		if (entry.wildcard) parts.push(`wildcard: ${JSON.stringify(entry.wildcard)}`)
 		if (entry.ws) parts.push("ws: true")
 		if (entry.idempotent) parts.push("idempotent: true")
 		if (entry.invalidate) parts.push(`invalidate: ${JSON.stringify(entry.invalidate)}`)
@@ -3534,6 +3568,7 @@ type _ServiceEntry = {
 \tparams?: readonly string[]
 \tpath: string
 \tsse?: boolean
+\twildcard?: string
 \tws?: boolean
 }
 
@@ -3561,6 +3596,16 @@ type _RequestMeta = {
 \tisStale: boolean
 \tselector: string
 \tseqSnapshot: number
+}
+
+type _StaleEntry = { by: string[]; refreshed?: Set<string>; seq: number; until: number }
+
+/* a path parameter value that would change the request's path once a URL parser normalizes it */
+class _PathParamError extends Error {
+\tconstructor(message: string) {
+\t\tsuper(message)
+\t\tthis.name = "PathParamError"
+\t}
 }
 `
 }
@@ -3606,7 +3651,8 @@ export class ${n}<TThrow extends boolean = false> {
 \t#resourceCache = new Map<string, Record<string, unknown>>()
 \t#searchSerializer: (query: Record<string, unknown>) => URLSearchParams
 \t#staleTime: number
-\t#staleUntil: Map<string, { by: string[]; seq: number; until: number }> | null
+\t#staleUntil: Map<string, _StaleEntry> | null
+\t#stalePatterns = new Map<string, Map<string, _StaleEntry>>()
 \t#patternRegexCache = new Map<string, RegExp>()
 \t#invalidationSeq = 0
 \t#staleMaxEntries: number
@@ -3627,9 +3673,7 @@ function sdkClientConstructor(n: string): string {
 \t\tthis.#fetchFn = config.fetch ?? (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : globalThis.fetch)
 \t\tthis.#searchSerializer = config.buildSearchParams ?? ((q: Record<string, unknown>) => this.#serializeSearch(q))
 \t\tthis.#staleTime = config.invalidation?.staleTime ?? 0
-\t\tthis.#staleUntil = this.#staleTime > 0
-\t\t\t? new Map<string, { by: string[]; seq: number; until: number }>()
-\t\t\t: null
+\t\tthis.#staleUntil = this.#staleTime > 0 ? new Map<string, _StaleEntry>() : null
 \t\tthis.#staleMaxEntries = config.invalidation?.staleMaxEntries ?? 1000
 \t\tthis.#maxSourcesPerTarget = Math.max(config.invalidation?.maxSourcesPerTarget ?? 16, 1)
 \t\tthis.#maxErrorMessageChars = config.maxErrorMessageChars ?? 512
@@ -3640,41 +3684,45 @@ function sdkClientConstructor(n: string): string {
 function sdkClientProxy(n: string): string {
 	return `
 \t\tconst self = this
+\t\tconst callable = (entry: _ServiceEntry, name: string): ((input?: Record<string, unknown>) => unknown) => {
+\t\t\tconst entryPath = self.#toColonParams(entry.path, entry.wildcard)
+\t\t\tlet fn: (input?: Record<string, unknown>) => unknown
+\t\t\tif (entry.ws) {
+\t\t\t\tfn = (input?: Record<string, unknown>) => self.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
+\t\t\t} else if (entry.sse) {
+\t\t\t\tfn = (input?: Record<string, unknown>) => self.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
+\t\t\t} else {
+\t\t\t\tfn = (input?: Record<string, unknown>) => self.#request(entry, input ?? {})
+\t\t\t}
+\t\t\tObject.defineProperty(fn, "name", { value: name })
+\t\t\treturn fn
+\t\t}
+\t\tconst isEntry = (node: unknown): node is _ServiceEntry =>
+\t\t\ttypeof node === "object" && node !== null && Object.hasOwn(node, "method") && typeof (node as Record<string, unknown>)["method"] === "string"
+\t\t/* only the map's own keys are operations — never toString, constructor or then */
+\t\tconst childOf = (node: _ServiceMapNode, key: string): _ServiceMapNode | undefined =>
+\t\t\tObject.hasOwn(node, key) ? (node as Record<string, _ServiceMapNode>)[key] : undefined
+
 \t\tfunction makeNodeProxy(node: _ServiceMapNode, path: string[]): object {
 \t\t\tconst actionCache = new Map<string, (input?: Record<string, unknown>) => unknown>()
 \t\t\tconst childCache = new Map<string, object>()
 \t\t\treturn new Proxy({} as Record<string, unknown>, {
-\t\t\t\tget: (_, key: string | symbol) => {
-\t\t\t\t\tif (typeof key === "symbol") return undefined
-\t\t\t\t\tconst child = (node as Record<string, unknown>)[key]
-\t\t\t\t\tif (child === undefined) return undefined
+\t\t\t\tget: (target, key: string | symbol) => {
+\t\t\t\t\tif (typeof key === "symbol") return Reflect.get(target, key)
+\t\t\t\t\tconst child = childOf(node, key)
+\t\t\t\t\tif (child === undefined) return Reflect.get(target, key)
 
-\t\t\t\t\t/* leaf: entry has a "method" string field */
-\t\t\t\t\tif (typeof (child as Record<string, unknown>)["method"] === "string") {
+\t\t\t\t\tif (isEntry(child)) {
 \t\t\t\t\t\tconst cached = actionCache.get(key)
 \t\t\t\t\t\tif (cached) return cached
-\t\t\t\t\t\tconst entry = child as _ServiceEntry
-\t\t\t\t\t\tconst entryPath = self.#toColonParams(entry.path)
-\t\t\t\t\t\tlet fn: (input?: Record<string, unknown>) => unknown
-\t\t\t\t\t\tif (entry.ws) {
-\t\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\t\tself.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
-\t\t\t\t\t\t} else if (entry.sse) {
-\t\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\t\tself.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
-\t\t\t\t\t\t} else {
-\t\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\t\tself.#request(entry, input ?? {})
-\t\t\t\t\t\t}
-\t\t\t\t\t\tObject.defineProperty(fn, "name", { value: [...path, key].join(".") })
+\t\t\t\t\t\tconst fn = callable(child, [...path, key].join("."))
 \t\t\t\t\t\tactionCache.set(key, fn)
 \t\t\t\t\t\treturn fn
 \t\t\t\t\t}
 
-\t\t\t\t\t/* namespace: recurse */
 \t\t\t\t\tconst cachedChild = childCache.get(key)
 \t\t\t\t\tif (cachedChild) return cachedChild
-\t\t\t\t\tconst childProxy = makeNodeProxy(child as _ServiceMapNode, [...path, key])
+\t\t\t\t\tconst childProxy = makeNodeProxy(child, [...path, key])
 \t\t\t\t\tchildCache.set(key, childProxy)
 \t\t\t\t\treturn childProxy
 \t\t\t\t},
@@ -3683,57 +3731,32 @@ function sdkClientProxy(n: string): string {
 
 \t\treturn new Proxy(this, {
 \t\t\tget: (target, key: string | symbol) => {
-\t\t\t\tif (typeof key === "symbol") return Reflect.get(target, key)
+\t\t\t\t/* the client's own members (state, dispose, toString, ...) always win */
+\t\t\t\tif (typeof key === "symbol" || key in target) return Reflect.get(target, key)
 
 \t\t\t\tconst cached = target.#resourceCache.get(key)
 \t\t\t\tif (cached) return cached
 
-\t\t\t\tconst node = (serviceMap as _ServiceMap)[key]
-\t\t\t\tif (node === undefined) return Reflect.get(target, key)
+\t\t\t\tconst node = childOf(serviceMap as _ServiceMap, key)
+\t\t\t\tif (node === undefined) return undefined
 
 \t\t\t\t/* root-level leaf (single-segment operationId) */
-\t\t\t\tif (typeof (node as Record<string, unknown>)["method"] === "string") {
-\t\t\t\t\tconst entry = node as _ServiceEntry
-\t\t\t\t\tconst entryPath = target.#toColonParams(entry.path)
-\t\t\t\t\tlet fn: (input?: Record<string, unknown>) => unknown
-\t\t\t\t\tif (entry.ws) {
-\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\ttarget.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
-\t\t\t\t\t} else if (entry.sse) {
-\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\ttarget.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
-\t\t\t\t\t} else {
-\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\ttarget.#request(entry, input ?? {})
-\t\t\t\t\t}
-\t\t\t\t\tObject.defineProperty(fn, "name", { value: key })
+\t\t\t\tif (isEntry(node)) {
+\t\t\t\t\tconst fn = callable(node, key)
 \t\t\t\t\ttarget.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 \t\t\t\t\treturn fn
 \t\t\t\t}
 
 \t\t\t\t/* namespace node — check for single _call promotion */
-\t\t\t\tconst nodeRecord = node as Record<string, unknown>
-\t\t\t\tconst nodeKeys = Object.keys(nodeRecord)
-\t\t\t\tif (nodeKeys.length === 1 && nodeKeys[0] === "_call") {
-\t\t\t\t\tconst entry = nodeRecord["_call"] as _ServiceEntry
-\t\t\t\t\tconst entryPath = target.#toColonParams(entry.path)
-\t\t\t\t\tlet fn: (input?: Record<string, unknown>) => unknown
-\t\t\t\t\tif (entry.ws) {
-\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\ttarget.#connectWS(entry, entryPath, (input ?? {}) as _RequestOptions)
-\t\t\t\t\t} else if (entry.sse) {
-\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\ttarget.#requestSSE(entry, entryPath, (input ?? {}) as _RequestOptions)
-\t\t\t\t\t} else {
-\t\t\t\t\t\tfn = (input?: Record<string, unknown>) =>
-\t\t\t\t\t\t\ttarget.#request(entry, input ?? {})
-\t\t\t\t\t}
-\t\t\t\t\tObject.defineProperty(fn, "name", { value: key })
+\t\t\t\tconst nodeKeys = Object.keys(node)
+\t\t\t\tconst only = childOf(node, "_call")
+\t\t\t\tif (nodeKeys.length === 1 && only !== undefined && isEntry(only)) {
+\t\t\t\t\tconst fn = callable(only, key)
 \t\t\t\t\ttarget.#resourceCache.set(key, fn as unknown as Record<string, unknown>)
 \t\t\t\t\treturn fn
 \t\t\t\t}
 
-\t\t\t\tconst proxy = makeNodeProxy(node as _ServiceMapNode, [key])
+\t\t\t\tconst proxy = makeNodeProxy(node, [key])
 \t\t\t\ttarget.#resourceCache.set(key, proxy as Record<string, unknown>)
 \t\t\t\treturn proxy
 \t\t\t},
@@ -3744,44 +3767,113 @@ function sdkClientProxy(n: string): string {
 
 function sdkClientInterpolatePath(): string {
 	return `
-\t#interpolatePath(path: string, params: Record<string, string>): string {
-\t\treturn path.replace(/:(\\w+)/g, (_, key: string) => {
-\t\t\tconst val = params[key]
-\t\t\tif (val === undefined) throw new Error(\`Missing path param: \${key}\`)
-\t\t\treturn encodeURIComponent(val)
-\t\t})
+\t/* Keep in sync with client/path.ts — :name (whole segment), *name (rest), {name} (inside a segment). */
+\t#encodeSegmentValue(key: string, value: string): string {
+\t\tif (value === "" || value === "." || value === "..") {
+\t\t\tthrow new _PathParamError(\`Invalid path param \${JSON.stringify(key)}: \${JSON.stringify(value)} is not a path segment\`)
+\t\t}
+\t\treturn encodeURIComponent(value)
+\t}
+
+\t#encodeWildcardValue(key: string, value: string): string {
+\t\tif (value === "") return ""
+\t\treturn value.split("/").map((part) => this.#encodeSegmentValue(key, part)).join("/")
+\t}
+
+\t#paramValue(params: Record<string, string> | undefined, key: string): string | undefined {
+\t\tif (!params || !Object.hasOwn(params, key)) return undefined
+\t\tconst raw = params[key] as unknown
+\t\tif (raw === undefined || raw === null) return undefined
+\t\treturn typeof raw === "string" ? raw : String(raw)
+\t}
+
+\t#interpolatePath(path: string, params: Record<string, string> | undefined, partial = false): string {
+\t\tconst segments = path.split("/")
+\t\tconst out: string[] = []
+\t\tfor (let i = 0; i < segments.length; i++) {
+\t\t\tconst seg = segments[i] ?? ""
+\t\t\tif (seg.length > 1 && seg.charCodeAt(0) === 58) {
+\t\t\t\tconst optional = seg.endsWith("?")
+\t\t\t\tconst name = optional ? seg.slice(1, -1) : seg.slice(1)
+\t\t\t\tconst value = this.#paramValue(params, name)
+\t\t\t\tif (value === undefined) {
+\t\t\t\t\tif (partial) { out.push(seg); continue }
+\t\t\t\t\tif (optional) continue
+\t\t\t\t\tthrow new _PathParamError(\`Missing path param: \${name}\`)
+\t\t\t\t}
+\t\t\t\tout.push(this.#encodeSegmentValue(name, value))
+\t\t\t\tcontinue
+\t\t\t}
+\t\t\tif (seg.charCodeAt(0) === 42 && i === segments.length - 1) {
+\t\t\t\tconst name = seg.length > 1 ? seg.slice(1) : "*"
+\t\t\t\tconst value = this.#paramValue(params, name)
+\t\t\t\tif (value === undefined) {
+\t\t\t\t\tif (partial) { out.push(seg); continue }
+\t\t\t\t\tif (seg.length === 1) { out.push(""); continue }
+\t\t\t\t\tthrow new _PathParamError(\`Missing path param: \${name}\`)
+\t\t\t\t}
+\t\t\t\tout.push(this.#encodeWildcardValue(name, value))
+\t\t\t\tcontinue
+\t\t\t}
+\t\t\tout.push(
+\t\t\t\tseg.replace(/\\{([^{}/]+)\\}/g, (match: string, name: string) => {
+\t\t\t\t\tconst value = this.#paramValue(params, name)
+\t\t\t\t\tif (value === undefined) {
+\t\t\t\t\t\tif (partial) return match
+\t\t\t\t\t\tthrow new _PathParamError(\`Missing path param: \${name}\`)
+\t\t\t\t\t}
+\t\t\t\t\treturn this.#encodeSegmentValue(name, value)
+\t\t\t\t}),
+\t\t\t)
+\t\t}
+\t\treturn out.join("/")
+\t}
+
+\t#hasPlaceholder(path: string): boolean {
+\t\tfor (const seg of path.split("/")) {
+\t\t\tif (seg.length > 1 && seg.charCodeAt(0) === 58) return true
+\t\t\tif (seg.charCodeAt(0) === 42) return true
+\t\t\tif (/\\{[^{}/]+\\}/.test(seg)) return true
+\t\t}
+\t\treturn false
 \t}
 `
 }
 
 function sdkClientToColonParams(): string {
 	return `
-\t#toColonParams(path: string): string {
-\t\treturn path.replace(/\\{(\\w+)\\}/g, ":$1")
+\t/* OpenAPI template → route pattern: a whole-segment {name} is :name, the wildcard *name; {name} inside a segment stays */
+\t#toColonParams(path: string, wildcard?: string): string {
+\t\treturn path
+\t\t\t.split("/")
+\t\t\t.map((seg) => {
+\t\t\t\tconst m = /^\\{([^{}/]+)\\}$/.exec(seg)
+\t\t\t\tif (!m) return seg
+\t\t\t\treturn m[1] === wildcard ? \`*\${m[1]}\` : \`:\${m[1]}\`
+\t\t\t})
+\t\t\t.join("/")
 \t}
 `
 }
 
 function sdkClientResolveInvalidationTargets(): string {
 	return `
+\t/* params that are present are substituted; a target left partly unresolved stays a narrower pattern */
 \t#resolveInvalidationTargets(
 \t\ttargets: readonly string[],
 \t\tparams: Record<string, string> | undefined,
 \t): string[] {
 \t\tconst resolved: string[] = []
 \t\tfor (const target of targets) {
-\t\t\tif (!params || !target.includes(":")) { resolved.push(target); continue }
 \t\t\tconst spaceIdx = target.indexOf(" ")
+\t\t\tif (spaceIdx <= 0) continue
 \t\t\tconst targetMethod = target.slice(0, spaceIdx)
 \t\t\tconst targetPath = target.slice(spaceIdx + 1)
-\t\t\tlet hasUnresolved = false
-\t\t\tconst replaced = targetPath.replace(/:(\\w+)/g, (match, key: string) => {
-\t\t\t\tconst val = params[key]
-\t\t\t\tif (val === undefined) { hasUnresolved = true; return match }
-\t\t\t\treturn encodeURIComponent(val)
-\t\t\t})
-\t\t\tif (hasUnresolved) continue
-\t\t\tresolved.push(\`\${targetMethod} \${replaced}\`)
+\t\t\ttry {
+\t\t\t\tresolved.push(\`\${targetMethod} \${this.#interpolatePath(targetPath, params, true)}\`)
+\t\t\t} catch {
+\t\t\t\t/* a param value that is not a path segment marks nothing */
+\t\t\t}
 \t\t}
 \t\treturn resolved
 \t}
@@ -3793,11 +3885,27 @@ function sdkClientPathMatchesPattern(): string {
 \t#pathMatchesPattern(concretePath: string, pattern: string): boolean {
 \t\tlet re = this.#patternRegexCache.get(pattern)
 \t\tif (!re) {
-\t\t\tconst escaped = pattern
-\t\t\t\t.replace(/:[^\\/]+/g, "\\x00")
-\t\t\t\t.replace(/[.*+?^\${}()|[\\]\\\\]/g, "\\\\$&")
-\t\t\t\t.replace(/\\x00/g, "[^/]+")
-\t\t\tre = new RegExp(\`^\${escaped}$\`)
+\t\t\tconst esc = (text: string) => text.replace(/[.*+?^\${}()|[\\]\\\\]/g, "\\\\$&")
+\t\t\tconst segments = pattern.split("/")
+\t\t\tlet source = ""
+\t\t\tfor (let i = 0; i < segments.length; i++) {
+\t\t\t\tconst seg = segments[i] ?? ""
+\t\t\t\tconst sep = i === 0 ? "" : "/"
+\t\t\t\tif (seg.length > 1 && seg.charCodeAt(0) === 58) {
+\t\t\t\t\tsource += seg.endsWith("?") ? \`(?:\${sep}[^/]+)?\` : \`\${sep}[^/]+\`
+\t\t\t\t\tcontinue
+\t\t\t\t}
+\t\t\t\tif (seg.charCodeAt(0) === 42 && i === segments.length - 1) {
+\t\t\t\t\tsource += \`(?:\${sep}.*)?\`
+\t\t\t\t\tcontinue
+\t\t\t\t}
+\t\t\t\tsource += sep + seg.split(/\\{[^{}/]+\\}/).map(esc).join("[^/]+")
+\t\t\t}
+\t\t\tre = new RegExp(\`^\${source}$\`)
+\t\t\tif (this.#patternRegexCache.size >= 1024) {
+\t\t\t\tconst oldest = this.#patternRegexCache.keys().next().value
+\t\t\t\tif (oldest !== undefined) this.#patternRegexCache.delete(oldest)
+\t\t\t}
 \t\t\tthis.#patternRegexCache.set(pattern, re)
 \t\t}
 \t\treturn re.test(concretePath)
@@ -3807,35 +3915,31 @@ function sdkClientPathMatchesPattern(): string {
 
 function sdkClientLookupStale(): string {
 	return `
+\t/* Keep in sync with client/sdk.ts StaleIndex — exact keys and pattern keys are kept apart, so a
+\t   concrete path containing ":" is never read as a pattern, and a lookup scans only its method. */
 \t#lookupStale(
 \t\tconcreteSelector: string,
 \t\tconcretePath: string,
 \t\tmethod: string,
 \t\tnow: number,
 \t): { by: string[]; isStale: boolean } {
-\t\tconst allBy: string[] = []
-
+\t\tconst by = new Set<string>()
 \t\tconst exact = this.#staleUntil?.get(concreteSelector)
-\t\tif (exact && exact.until > now) allBy.push(...exact.by)
-\t\telse if (exact) this.#staleUntil?.delete(concreteSelector)
-
-\t\tconst expired: string[] = []
-\t\tif (this.#staleUntil) {
-\t\t\tfor (const [key, entry] of this.#staleUntil) {
-\t\t\t\tif (entry.until <= now) { expired.push(key); continue }
-\t\t\t\tif (!key.includes(":")) continue
-\t\t\t\tconst spaceIdx = key.indexOf(" ")
-\t\t\t\tconst keyMethod = key.slice(0, spaceIdx)
-\t\t\t\tconst keyPattern = key.slice(spaceIdx + 1)
-\t\t\t\tif (keyMethod !== method) continue
-\t\t\t\tif (this.#pathMatchesPattern(concretePath, keyPattern)) {
-\t\t\t\t\tallBy.push(...entry.by)
+\t\tif (exact) {
+\t\t\tif (exact.until > now) for (const m of exact.by) by.add(m)
+\t\t\telse this.#staleUntil?.delete(concreteSelector)
+\t\t}
+\t\tconst table = this.#stalePatterns.get(method)
+\t\tif (table) {
+\t\t\tfor (const [key, entry] of table) {
+\t\t\t\tif (entry.until <= now) { table.delete(key); continue }
+\t\t\t\tif (entry.refreshed?.has(concretePath)) continue
+\t\t\t\tif (this.#pathMatchesPattern(concretePath, key.slice(key.indexOf(" ") + 1))) {
+\t\t\t\t\tfor (const m of entry.by) by.add(m)
 \t\t\t\t}
 \t\t\t}
-\t\t\tfor (const key of expired) this.#staleUntil.delete(key)
 \t\t}
-
-\t\treturn { by: [...new Set(allBy)], isStale: allBy.length > 0 }
+\t\treturn { by: [...by], isStale: by.size > 0 }
 \t}
 `
 }
@@ -3844,7 +3948,8 @@ function sdkClientCreateTypedWebSocket(): string {
 	return `
 \t#createTypedWebSocket(url: string, protocols?: string | string[]): _TypedWebSocket {
 \t\tconst ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url)
-\t\tconst listenerMap = new WeakMap<(...args: never[]) => void, EventListener>()
+\t\t/* keyed by event and handler: one function may listen to several events */
+\t\tconst listenerMap = new Map<string, WeakMap<(...args: never[]) => void, EventListener>>()
 \t\tconst sendBuffer: Array<ArrayBuffer | ArrayBufferView | string> = []
 \t\tlet buffering = true
 
@@ -3853,10 +3958,16 @@ function sdkClientCreateTypedWebSocket(): string {
 \t\t\tfor (const msg of sendBuffer) ws.send(msg as Parameters<WebSocket["send"]>[0])
 \t\t\tsendBuffer.length = 0
 \t\t})
-
-\t\tfunction close(code?: number, reason?: string) {
+\t\t/* a socket that never opens must not hold messages forever */
+\t\tconst drop = () => {
 \t\t\tbuffering = false
 \t\t\tsendBuffer.length = 0
+\t\t}
+\t\tws.addEventListener("close", drop)
+\t\tws.addEventListener("error", drop)
+
+\t\tfunction close(code?: number, reason?: string) {
+\t\t\tdrop()
 \t\t\tws.close(code, reason)
 \t\t}
 
@@ -3864,7 +3975,7 @@ function sdkClientCreateTypedWebSocket(): string {
 \t\t\tlet wrapped: EventListener
 \t\t\tswitch (event) {
 \t\t\t\tcase "message":
-\t\t\t\t\twrapped = (e: Event) => (handler as (data: string) => void)((e as MessageEvent).data)
+\t\t\t\t\twrapped = (e: Event) => (handler as (data: unknown) => void)((e as MessageEvent).data)
 \t\t\t\t\tbreak
 \t\t\t\tcase "open":
 \t\t\t\t\twrapped = () => (handler as () => void)()
@@ -3878,28 +3989,36 @@ function sdkClientCreateTypedWebSocket(): string {
 \t\t\t\tdefault:
 \t\t\t\t\treturn
 \t\t\t}
-\t\t\tlistenerMap.set(handler, wrapped)
+\t\t\tlet byHandler = listenerMap.get(event)
+\t\t\tif (!byHandler) {
+\t\t\t\tbyHandler = new WeakMap()
+\t\t\t\tlistenerMap.set(event, byHandler)
+\t\t\t}
+\t\t\tbyHandler.set(handler, wrapped)
 \t\t\tws.addEventListener(event, wrapped)
 \t\t}
 
 \t\tfunction off(event: string, handler: (...args: never[]) => void): void {
-\t\t\tconst wrapped = listenerMap.get(handler)
+\t\t\tconst byHandler = listenerMap.get(event)
+\t\t\tconst wrapped = byHandler?.get(handler)
 \t\t\tif (wrapped) {
 \t\t\t\tws.removeEventListener(event, wrapped)
-\t\t\t\tlistenerMap.delete(handler)
+\t\t\t\tbyHandler?.delete(handler)
 \t\t\t}
 \t\t}
 
 \t\tfunction send(data: ArrayBuffer | ArrayBufferView | object | string) {
-\t\t\tlet payload: ArrayBuffer | ArrayBufferView | string
+\t\t\tlet payload: ArrayBuffer | ArrayBufferView | string | Blob
 \t\t\tif (typeof data === "string") {
 \t\t\t\tpayload = data
 \t\t\t} else if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
 \t\t\t\tpayload = data
+\t\t\t} else if (typeof Blob !== "undefined" && data instanceof Blob) {
+\t\t\t\tpayload = data
 \t\t\t} else {
 \t\t\t\tpayload = JSON.stringify(data)
 \t\t\t}
-\t\t\tif (buffering) { sendBuffer.push(payload) } else { ws.send(payload as Parameters<WebSocket["send"]>[0]) }
+\t\t\tif (buffering) { sendBuffer.push(payload as ArrayBuffer | ArrayBufferView | string) } else if (ws.readyState === 1) { ws.send(payload as Parameters<WebSocket["send"]>[0]) }
 \t\t}
 
 \t\tconst typed: _TypedWebSocket = { close, off, on, get readyState() { return ws.readyState }, send }
@@ -3957,12 +4076,15 @@ function sdkClientResolveBaseURL(): string {
 function sdkClientBuildURL(): string {
 	return `
 \t#buildURL(path: string, opts: _RequestOptions): string {
-\t\tlet resolvedPath = path
-\t\tif (opts.params) resolvedPath = this.#interpolatePath(path, opts.params)
+\t\tconst resolvedPath = this.#interpolatePath(path, opts.params)
 \t\tconst baseUrl = this.#resolveBaseURL(this.#config.baseURL)
 \t\tconst basePath = baseUrl.pathname.endsWith("/") ? baseUrl.pathname : \`\${baseUrl.pathname}/\`
 \t\tconst relative = resolvedPath.startsWith("/") ? resolvedPath.slice(1) : resolvedPath
 \t\tconst url = new URL(\`\${basePath}\${relative}\`, baseUrl)
+\t\t/* a request (and its credentials) never leaves the configured origin */
+\t\tif (url.origin !== baseUrl.origin) {
+\t\t\tthrow new _PathParamError(\`Invalid path param: \${JSON.stringify(path)} resolves outside \${baseUrl.origin}\`)
+\t\t}
 \t\tfor (const [k, v] of baseUrl.searchParams.entries()) url.searchParams.append(k, v)
 \t\tif (opts.search) {
 \t\t\tconst sp = this.#searchSerializer(opts.search)
@@ -4041,6 +4163,84 @@ function sdkClientBuildHeaders(): string {
 
 function sdkClientDoRequest(): string {
 	return `
+\t/* the body of a request, and the content-type it needs — shared by plain requests and SSE */
+\t#buildBody(opts: _RequestOptions, headers: Headers): BodyInit | undefined {
+\t\tif (opts.body !== undefined) {
+\t\t\tif (!headers.has("content-type")) headers.set("content-type", "application/octet-stream")
+\t\t\treturn opts.body as BodyInit
+\t\t}
+\t\tif (opts.json !== undefined) {
+\t\t\theaders.set("content-type", "application/json")
+\t\t\ttry {
+\t\t\t\treturn JSON.stringify(opts.json)
+\t\t\t} catch (e) {
+\t\t\t\tthrow new _ClientError({
+\t\t\t\t\tbody: opts.json,
+\t\t\t\t\tdata: null,
+\t\t\t\t\tmessage: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
+\t\t\t\t\tresponse: Response.error(),
+\t\t\t\t\tstatus: 0,
+\t\t\t\t})
+\t\t\t}
+\t\t}
+\t\tif (opts.form === undefined) return undefined
+\t\tconst isFile = (v: unknown) =>
+\t\t\t(typeof File !== "undefined" && v instanceof File) || (typeof Blob !== "undefined" && v instanceof Blob)
+\t\tconst hasFiles = Object.values(opts.form).some(
+\t\t\t(v) =>
+\t\t\t\tisFile(v) ||
+\t\t\t\t(typeof FileList !== "undefined" && v instanceof FileList) ||
+\t\t\t\t(Array.isArray(v) && v.some(isFile)),
+\t\t)
+\t\tconst text = (v: unknown): string | null => {
+\t\t\tif (v === undefined || v === null || typeof v === "symbol") return null
+\t\t\tif (v instanceof Date) return v.toISOString()
+\t\t\tif (typeof v === "object") throw new TypeError("form: nested objects cannot be form-encoded; send json instead")
+\t\t\treturn String(v)
+\t\t}
+\t\tif (hasFiles) {
+\t\t\tconst fd = new FormData()
+\t\t\tfor (const [k, v] of Object.entries(opts.form)) {
+\t\t\t\tif (typeof FileList !== "undefined" && v instanceof FileList) {
+\t\t\t\t\tfor (let i = 0; i < v.length; i++) { const f = v[i]; if (f) fd.append(k, f) }
+\t\t\t\t\tcontinue
+\t\t\t\t}
+\t\t\t\tfor (const item of Array.isArray(v) ? v : [v]) {
+\t\t\t\t\tif (isFile(item)) fd.append(k, item as Blob)
+\t\t\t\t\telse {
+\t\t\t\t\t\tconst s = text(item)
+\t\t\t\t\t\tif (s !== null) fd.append(k, s)
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\treturn fd
+\t\t}
+\t\theaders.set("content-type", "application/x-www-form-urlencoded")
+\t\tconst sp = new URLSearchParams()
+\t\t/* arrays repeat the key, as they do in multipart and in the query */
+\t\tfor (const [k, v] of Object.entries(opts.form)) {
+\t\t\tfor (const item of Array.isArray(v) ? v : [v]) {
+\t\t\t\tconst s = text(item)
+\t\t\t\tif (s !== null) sp.append(k, s)
+\t\t\t}
+\t\t}
+\t\treturn sp.toString()
+\t}
+
+\t/* a stream body is sent once and needs duplex: "half" (Node's fetch throws without it) */
+\t#requestInit(init: RequestInit): RequestInit {
+\t\tif (typeof ReadableStream !== "undefined" && init.body instanceof ReadableStream) {
+\t\t\t;(init as RequestInit & { duplex?: string }).duplex = "half"
+\t\t}
+\t\treturn init
+\t}
+
+\t/* the Request a response hook sees; a stream body was consumed by the send, so it is left off */
+\t#hookRequest(url: string, init: RequestInit): Request {
+\t\tconst consumed = typeof ReadableStream !== "undefined" && init.body instanceof ReadableStream
+\t\treturn new Request(url, consumed ? { ...init, body: null } : init)
+\t}
+
 \tasync #doRequest(
 \t\tmethod: string,
 \t\tpath: string,
@@ -4050,68 +4250,7 @@ function sdkClientDoRequest(): string {
 \t): Promise<{ response: Response }> {
 \t\tconst url = this.#buildURL(path, opts)
 \t\tconst headers = await this.#buildHeaders(opts, { method, path })
-\t\tlet body: BodyInit | undefined
-
-\t\tif (opts.body !== undefined) {
-\t\t\theaders.set("content-type", "application/octet-stream")
-\t\t\tbody = opts.body as BodyInit
-\t\t} else if (opts.json !== undefined) {
-\t\t\theaders.set("content-type", "application/json")
-\t\t\ttry {
-\t\t\t\tbody = JSON.stringify(opts.json)
-\t\t\t} catch (e) {
-\t\t\t\tthrow new _ClientError({
-\t\t\t\t\tbody: opts.json,
-\t\t\t\t\tdata: null,
-\t\t\t\t\tmessage: \`JSON serialization failed: \${e instanceof Error ? e.message : String(e)}\`,
-\t\t\t\t\tresponse: new Response(null, { status: 0 }),
-\t\t\t\t\tstatus: 0,
-\t\t\t\t})
-\t\t\t}
-\t\t} else if (opts.form !== undefined) {
-\t\t\tconst hasFiles = Object.values(opts.form).some(
-\t\t\t\t(v) =>
-\t\t\t\t\t(typeof File !== "undefined" && v instanceof File) ||
-\t\t\t\t\t(typeof Blob !== "undefined" && v instanceof Blob) ||
-\t\t\t\t\t(typeof FileList !== "undefined" && v instanceof FileList) ||
-\t\t\t\t\t(Array.isArray(v) &&
-\t\t\t\t\t\tv.some(
-\t\t\t\t\t\t\t(item) =>
-\t\t\t\t\t\t\t\t(typeof File !== "undefined" && item instanceof File) ||
-\t\t\t\t\t\t\t\t(typeof Blob !== "undefined" && item instanceof Blob),
-\t\t\t\t\t\t)),
-\t\t\t)
-
-\t\t\tif (hasFiles) {
-\t\t\t\tconst fd = new FormData()
-\t\t\t\tfor (const [k, v] of Object.entries(opts.form)) {
-\t\t\t\t\tif (v === undefined || v === null) continue
-\t\t\t\t\tif (typeof FileList !== "undefined" && v instanceof FileList) {
-\t\t\t\t\t\tfor (let i = 0; i < v.length; i++) { const f = v[i]; if (f) fd.append(k, f) }
-\t\t\t\t\t} else if (Array.isArray(v)) {
-\t\t\t\t\t\tfor (const item of v) {
-\t\t\t\t\t\t\tif (item instanceof File || item instanceof Blob) fd.append(k, item)
-\t\t\t\t\t\t\telse fd.append(k, String(item))
-\t\t\t\t\t\t}
-\t\t\t\t\t} else if (v instanceof File || v instanceof Blob) {
-\t\t\t\t\t\tfd.append(k, v)
-\t\t\t\t\t} else {
-\t\t\t\t\t\tfd.append(k, String(v))
-\t\t\t\t\t}
-\t\t\t\t}
-\t\t\t\tbody = fd
-\t\t\t} else {
-\t\t\t\theaders.set("content-type", "application/x-www-form-urlencoded")
-\t\t\t\tconst sp = new URLSearchParams()
-\t\t\t\tfor (const [k, v] of Object.entries(opts.form)) {
-\t\t\t\t\tif (v === undefined || v === null) continue
-\t\t\t\t\tif (v instanceof Date) { sp.set(k, v.toISOString()); continue }
-\t\t\t\t\tif (typeof v === "symbol") continue
-\t\t\t\t\tsp.set(k, String(v))
-\t\t\t\t}
-\t\t\t\tbody = sp.toString()
-\t\t\t}
-\t\t}
+\t\tlet body = this.#buildBody(opts, headers)
 
 \t\tif (this.#config.onRequest) {
 \t\t\tconst reqCtx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string } = { body, headers, method, path, state: this.#config.state ?? {}, url }
@@ -4127,7 +4266,7 @@ function sdkClientDoRequest(): string {
 \t\t}
 
 \t\tconst { signal, cleanup } = this.#buildSignal(opts)
-\t\tconst init: RequestInit = { body, headers, method, signal }
+\t\tconst init = this.#requestInit({ body, headers, method, signal })
 \t\tif (this.#config.credentials) init.credentials = this.#config.credentials
 \t\tif (this.#config.mode) init.mode = this.#config.mode
 
@@ -4166,10 +4305,11 @@ function sdkClientDoRequest(): string {
 \t\t\t\t\tisRetry,
 \t\t\t\t\tmethod,
 \t\t\t\t\tpath,
-\t\t\t\t\trequest: new Request(url, init),
+\t\t\t\t\trequest: this.#hookRequest(url, init),
 \t\t\t\t\tresponse,
 \t\t\t\t\tretry: () => {
 \t\t\t\t\t\tif (isRetry) throw new Error("Max 1 retry per request")
+\t\t\t\t\t\tif (body instanceof ReadableStream) throw new Error("A streamed request body cannot be sent again")
 \t\t\t\t\t\treturn this.#doRequest(method, path, opts, true, requestMeta)
 \t\t\t\t\t\t\t.then(async (r) => {
 \t\t\t\t\t\t\t\tif (!r.response.ok) throw await this.#parseAsClientError(r.response)
@@ -4365,33 +4505,33 @@ function sdkClientRequestSafe(): string {
 function sdkClientRequest(): string {
 	return `
 \tasync #request(entry: _ServiceEntry, input: Record<string, unknown>): Promise<unknown> {
-\t\tconst path = this.#toColonParams(entry.path)
+\t\tconst path = this.#toColonParams(entry.path, entry.wildcard)
 \t\tconst method = entry.method
-\t\tconst opts = input as _RequestOptions
+\t\t/* a copy: the caller's input object is never written to, so reusing it never reuses a key */
+\t\tconst opts = { ...input } as _RequestOptions
 \t\tif (entry.idempotent) {
 \t\t\tconst existing = opts.headers?.["Idempotency-Key"] ?? opts.headers?.["idempotency-key"]
 \t\t\tif (existing === undefined) {
-\t\t\t\tconst key = opts.idempotencyKey ?? crypto.randomUUID()
+\t\t\t\tconst key = opts.idempotencyKey ?? this.#newRequestId()
 \t\t\t\topts.headers = { ...(opts.headers ?? {}), "Idempotency-Key": key }
 \t\t\t}
 \t\t}
 \t\tconst params = opts.params
-\t\tif (entry.params) {
-\t\t\tfor (const p of entry.params) {
-\t\t\t\tif (!params || params[p] === undefined) {
-\t\t\t\t\tconst err = new _ClientError({
-\t\t\t\t\t\tbody: null,
-\t\t\t\t\t\tdata: null,
-\t\t\t\t\t\tmessage: \`Missing required path param \\\`\${p}\\\` for \${method} \${entry.path}\`,
-\t\t\t\t\t\tresponse: new Response(null, { status: 0 }),
-\t\t\t\t\t\tstatus: 0,
-\t\t\t\t\t})
-\t\t\t\t\tif (!this.#config.throwOnError) return { data: null, error: err, response: err.response, status: 0 }
-\t\t\t\t\tthrow err
-\t\t\t\t}
-\t\t\t}
+\t\tlet cp: string
+\t\ttry {
+\t\t\tcp = this.#interpolatePath(path, params)
+\t\t} catch (e) {
+\t\t\tif (!(e instanceof _PathParamError)) throw e
+\t\t\tconst err = new _ClientError({
+\t\t\t\tbody: null,
+\t\t\t\tdata: null,
+\t\t\t\tmessage: \`\${e.message} for \${method} \${entry.path}\`,
+\t\t\t\tresponse: Response.error(),
+\t\t\t\tstatus: 0,
+\t\t\t})
+\t\t\tif (!this.#config.throwOnError) return { data: null, error: err, response: err.response, status: 0 }
+\t\t\tthrow err
 \t\t}
-\t\tconst cp = params ? this.#interpolatePath(path, params) : path
 \t\tconst cs = \`\${method} \${cp}\`
 \t\tconst requestMeta = this.#buildRequestMeta(cs, cp, method)
 \t\tif (!this.#config.throwOnError) {
@@ -4421,16 +4561,16 @@ function sdkClientRequestSSE(): string {
 function sdkClientConnectWS(): string {
 	return `
 \t#connectWS(entry: _ServiceEntry, path: string, opts: _RequestOptions): _TypedWebSocket {
-\t\tlet url = this.#buildURL(path, opts).replace(/^https:\\/\\//, "wss://").replace(/^http:\\/\\//, "ws://")
-\t\tif (opts.reconnectToken) {
-\t\t\tconst sep = url.includes("?") ? "&" : "?"
-\t\t\turl = \`\${url}\${sep}reconnect_token=\${encodeURIComponent(opts.reconnectToken)}\`
-\t\t}
-\t\tconst ws = this.#createTypedWebSocket(url, opts.protocols)
+\t\tconst built = new URL(this.#buildURL(path, opts))
+\t\t/* only the scheme changes: an https URL elsewhere in the query is left alone */
+\t\tif (built.protocol === "https:") built.protocol = "wss:"
+\t\telse if (built.protocol === "http:") built.protocol = "ws:"
+\t\tif (opts.reconnectToken) built.searchParams.append("reconnect_token", opts.reconnectToken)
+\t\tconst ws = this.#createTypedWebSocket(built.toString(), opts.protocols)
 \t\tif (entry.invalidate && entry.invalidate.length > 0) {
 \t\t\tconst invalidate = entry.invalidate
 \t\t\tconst params = opts.params
-\t\t\tconst cs = \`WS \${params ? this.#interpolatePath(path, params) : path}\`
+\t\t\tconst cs = \`WS \${this.#interpolatePath(path, params)}\`
 \t\t\tws.on("open", () => this.#markStale(invalidate, params, cs))
 \t\t}
 \t\treturn ws
@@ -4452,43 +4592,66 @@ function sdkClientBuildRequestMeta(): string {
 function sdkClientMarkStale(): string {
 	return `
 \t#markStale(invalidate: readonly string[], params: Record<string, string> | undefined, mutationSelector: string): void {
-\t\tif (!this.#staleUntil || invalidate.length === 0) return
+\t\tconst exactTable = this.#staleUntil
+\t\tif (!exactTable || invalidate.length === 0) return
 \t\tconst seq = ++this.#invalidationSeq
 \t\tconst until = Date.now() + this.#staleTime
-\t\tconst resolved = this.#resolveInvalidationTargets(invalidate, params)
-\t\tfor (const target of resolved) {
-\t\t\tconst existing = this.#staleUntil.get(target)
+\t\tfor (const target of this.#resolveInvalidationTargets(invalidate, params)) {
+\t\t\tconst spaceIdx = target.indexOf(" ")
+\t\t\tconst method = target.slice(0, spaceIdx)
+\t\t\tconst isPattern = this.#hasPlaceholder(target.slice(spaceIdx + 1))
+\t\t\tlet table: Map<string, _StaleEntry>
+\t\t\tif (isPattern) {
+\t\t\t\ttable = this.#stalePatterns.get(method) ?? new Map<string, _StaleEntry>()
+\t\t\t\tthis.#stalePatterns.set(method, table)
+\t\t\t} else {
+\t\t\t\ttable = exactTable
+\t\t\t}
+\t\t\tconst existing = table.get(target)
 \t\t\tif (existing) {
-\t\t\t\tif (!existing.by.includes(mutationSelector) && existing.by.length < this.#maxSourcesPerTarget) existing.by.push(mutationSelector)
+\t\t\t\tif (!existing.by.includes(mutationSelector)) {
+\t\t\t\t\texisting.by.push(mutationSelector)
+\t\t\t\t\tif (existing.by.length > this.#maxSourcesPerTarget) existing.by.shift()
+\t\t\t\t}
 \t\t\t\texisting.until = until
 \t\t\t\texisting.seq = seq
-\t\t\t} else { this.#staleUntil.set(target, { by: [mutationSelector], seq, until }) }
+\t\t\t\t/* a new mutation re-marks every instance */
+\t\t\t\texisting.refreshed?.clear()
+\t\t\t} else {
+\t\t\t\ttable.set(target, { by: [mutationSelector], refreshed: isPattern ? new Set<string>() : undefined, seq, until })
+\t\t\t}
 \t\t}
-\t\tif (this.#staleUntil.size > this.#staleMaxEntries)
-\t\t\tfor (const [k, entry] of this.#staleUntil)
-\t\t\t\tif (entry.until <= Date.now()) this.#staleUntil.delete(k)
+\t\tif (exactTable.size > this.#staleMaxEntries) {
+\t\t\tconst now = Date.now()
+\t\t\tfor (const [k, entry] of exactTable) if (entry.until <= now) exactTable.delete(k)
+\t\t\t/* still over: drop the oldest marks */
+\t\t\tfor (const k of exactTable.keys()) {
+\t\t\t\tif (exactTable.size <= this.#staleMaxEntries) break
+\t\t\t\texactTable.delete(k)
+\t\t\t}
+\t\t}
 \t}
 `
 }
 
 function sdkClientClearStale(): string {
 	return `
+\t/* a successful stale read clears that resource only: its exact mark, and this path's share of a pattern mark */
 \t#clearStale(concreteSelector: string, concretePath: string, method: string, seqSnapshot: number): void {
 \t\tif (!this.#staleUntil) return
 \t\tconst exact = this.#staleUntil.get(concreteSelector)
 \t\tif (exact && exact.seq <= seqSnapshot) this.#staleUntil.delete(concreteSelector)
-\t\tconst toDelete: string[] = []
-\t\tfor (const [key, entry] of this.#staleUntil) {
-\t\t\tif (entry.seq > seqSnapshot) continue
-\t\t\tif (!key.includes(":")) continue
-\t\t\tconst spaceIdx = key.indexOf(" ")
-\t\t\tconst keyMethod = key.slice(0, spaceIdx)
-\t\t\tconst keyPattern = key.slice(spaceIdx + 1)
-\t\t\tif (keyMethod === method && this.#pathMatchesPattern(concretePath, keyPattern)) {
-\t\t\t\ttoDelete.push(key)
+\t\tconst table = this.#stalePatterns.get(method)
+\t\tif (!table) return
+\t\tfor (const [key, entry] of table) {
+\t\t\tif (entry.seq > seqSnapshot || !entry.refreshed) continue
+\t\t\tif (!this.#pathMatchesPattern(concretePath, key.slice(key.indexOf(" ") + 1))) continue
+\t\t\tif (entry.refreshed.size >= 1024) {
+\t\t\t\tconst oldest = entry.refreshed.values().next().value
+\t\t\t\tif (oldest !== undefined) entry.refreshed.delete(oldest)
 \t\t\t}
+\t\t\tentry.refreshed.add(concretePath)
 \t\t}
-\t\tfor (const key of toDelete) this.#staleUntil.delete(key)
 \t}
 `
 }
@@ -4500,6 +4663,7 @@ function sdkClientDispose(): string {
 \t\tthis.#disposed = true
 \t\tthis.#disposeCtrl.abort()
 \t\tthis.#staleUntil?.clear()
+\t\tthis.#stalePatterns.clear()
 \t\tthis.#resourceCache.clear()
 \t\tthis.#patternRegexCache.clear()
 \t}
@@ -4516,23 +4680,25 @@ function sdkClientDoSSE(): string {
 \t\tif (opts.lastEventId) {
 \t\t\theaders.set("last-event-id", opts.lastEventId)
 \t\t}
+\t\t/* a streamed operation carries its body like any other request */
+\t\tlet body = this.#buildBody(opts, headers)
 \t\tconst { signal, cleanup } = this.#buildSignal(opts, true)
-\t\tlet reader: ReadableStreamDefaultReader<Uint8Array> | undefined
 \t\ttry {
 \t\t\tif (this.#config.onRequest) {
-\t\t\t\tconst reqCtx: { headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string } = { headers, method, path, state: this.#config.state ?? {}, url }
+\t\t\t\tconst reqCtx: { body?: BodyInit; headers: Headers; invalidatedBy?: string[]; isStale?: boolean; method: string; path: string; selector?: string; state: Record<string, unknown>; url: string } = { body, headers, method, path, state: this.#config.state ?? {}, url }
 \t\t\t\tfor (const hook of this.#config.onRequest) {
 \t\t\t\t\tawait hook(reqCtx)
 \t\t\t\t}
+\t\t\t\tif (reqCtx.body !== body) body = reqCtx.body
 \t\t\t}
-\t\t\tconst sseInit: RequestInit = { headers, method, signal }
+\t\t\tconst sseInit = this.#requestInit({ body, headers, method, signal })
 \t\t\tif (this.#config.credentials) sseInit.credentials = this.#config.credentials
 \t\t\tif (this.#config.mode) sseInit.mode = this.#config.mode
 \t\t\tsignal?.throwIfAborted()
 \t\t\tlet response = await this.#fetchFn(url, sseInit)
 \t\t\tif (this.#config.onResponse) {
 \t\t\t\tconst resCtx: { invalidatedBy?: string[]; isRetry: boolean; isStale?: boolean; method: string; path: string; request: Request; response: Response; retry: () => Promise<Response>; selector?: string; state: Record<string, unknown>; url: string } = {
-\t\t\t\t\tisRetry: false, method, path, request: new Request(url, sseInit), response,
+\t\t\t\t\tisRetry: false, method, path, request: this.#hookRequest(url, sseInit), response,
 \t\t\t\t\tretry: () => { throw new Error("SSE streams do not support retry") },
 \t\t\t\t\tstate: this.#config.state ?? {}, url,
 \t\t\t\t}
@@ -4545,36 +4711,12 @@ function sdkClientDoSSE(): string {
 \t\t\t\tthrow await this.#parseAsClientError(response)
 \t\t\t}
 \t\t\tif (entry.invalidate && entry.invalidate.length > 0) {
-\t\t\t\tconst cs = \`\${method} \${opts.params ? this.#interpolatePath(path, opts.params) : path}\`
+\t\t\t\tconst cs = \`\${method} \${this.#interpolatePath(path, opts.params)}\`
 \t\t\t\tthis.#markStale(entry.invalidate, opts.params, cs)
 \t\t\t}
 \t\t\tif (!response.body) return
-\t\t\tconst decoder = new TextDecoder()
-\t\t\treader = response.body.getReader()
-\t\t\tlet buffer = ""
-\t\t\tconst maxBuffer = this.#sseMaxBufferChars
-\t\t\twhile (true) {
-\t\t\t\tconst { done, value } = await reader.read()
-\t\t\t\tif (done) break
-\t\t\t\tbuffer += decoder.decode(value, { stream: true })
-\t\t\t\tif (buffer.length > maxBuffer) throw new Error(\`SSE buffer exceeded \${maxBuffer} characters\`)
-\t\t\t\tconst blocks = buffer.split(/\\r\\n\\r\\n|\\r\\n\\r|\\r\\n\\n|\\r\\r\\n|\\n\\r\\n|\\n\\r|\\r\\r|\\n\\n/)
-\t\t\t\tbuffer = blocks.pop() ?? ""
-\t\t\t\tfor (const block of blocks) {
-\t\t\t\t\tif (block.trim() === "") continue
-\t\t\t\t\tconst event = this.#parseSSEBlock(block)
-\t\t\t\t\tif (event) yield event
-\t\t\t\t}
-\t\t\t}
-\t\t\tif (buffer.trim() !== "") {
-\t\t\t\tconst event = this.#parseSSEBlock(buffer)
-\t\t\t\tif (event) yield event
-\t\t\t}
+\t\t\tyield* this.#parseSSE(response.body)
 \t\t} finally {
-\t\t\tif (reader) {
-\t\t\t\ttry { await reader.cancel() } catch {}
-\t\t\t\treader.releaseLock()
-\t\t\t}
 \t\t\tcleanup()
 \t\t}
 \t}
@@ -4583,50 +4725,101 @@ function sdkClientDoSSE(): string {
 
 function sdkClientParseSSEBlock(): string {
 	return `
-\t#parseSSEBlock(block: string): _SSEEvent | undefined {
-\t\tconst lines = block.split(/\\r\\n|\\r|\\n/)
-\t\tlet isComment = true
-\t\tlet data: string | undefined
+\t/* Keep in sync with client/sse.ts — the WHATWG event-stream rules: lines end at CRLF, LF or CR;
+\t   a leading BOM is skipped; id is sticky and ignored if it holds NUL; retry is digits only; an
+\t   event still open when the stream ends is discarded, never dispatched. */
+\tasync *#parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<_SSEEvent> {
+\t\tconst decoder = new TextDecoder()
+\t\tconst reader = stream.getReader()
+\t\tconst maxBuffer = this.#sseMaxBufferChars
+\t\tlet pending = ""
+\t\tlet first = true
+\t\tlet data: string[] = []
+\t\tlet dataSize = 0
+\t\tlet hasData = false
 \t\tlet event: string | undefined
-\t\tlet id: string | undefined
+\t\tlet lastId = ""
 \t\tlet retry: number | undefined
-\t\tfor (const line of lines) {
-\t\t\tif (line.startsWith(":")) continue
-\t\t\tisComment = false
-\t\t\tconst colonIdx = line.indexOf(":")
-\t\t\tlet field: string
-\t\t\tlet val: string
-\t\t\tif (colonIdx === -1) {
-\t\t\t\tfield = line
-\t\t\t\tval = ""
-\t\t\t} else {
-\t\t\t\tfield = line.slice(0, colonIdx)
-\t\t\t\tval = line.slice(colonIdx + 1)
-\t\t\t\tif (val.startsWith(" ")) val = val.slice(1)
+\t\tconst dispatch = (): _SSEEvent | undefined => {
+\t\t\tconst out: _SSEEvent | undefined = hasData ? { data: data.join("\\n") } : undefined
+\t\t\tif (out) {
+\t\t\t\tif (event !== undefined && event !== "") out.event = event
+\t\t\t\tif (lastId !== "") out.id = lastId
+\t\t\t\tif (retry !== undefined) out.retry = retry
+\t\t\t\tretry = undefined
 \t\t\t}
+\t\t\tdata = []
+\t\t\tdataSize = 0
+\t\t\thasData = false
+\t\t\tevent = undefined
+\t\t\treturn out
+\t\t}
+\t\tconst processLine = (line: string): void => {
+\t\t\tif (line.charCodeAt(0) === 58) return
+\t\t\tconst colon = line.indexOf(":")
+\t\t\tconst field = colon === -1 ? line : line.slice(0, colon)
+\t\t\tlet value = colon === -1 ? "" : line.slice(colon + 1)
+\t\t\tif (value.charCodeAt(0) === 32) value = value.slice(1)
 \t\t\tswitch (field) {
 \t\t\t\tcase "data":
-\t\t\t\t\tdata = data === undefined ? val : \`\${data}\\n\${val}\`
+\t\t\t\t\tdataSize += value.length + 1
+\t\t\t\t\tif (dataSize > maxBuffer) throw new Error(\`SSE event exceeded \${maxBuffer} characters\`)
+\t\t\t\t\tdata.push(value)
+\t\t\t\t\thasData = true
 \t\t\t\t\tbreak
 \t\t\t\tcase "event":
-\t\t\t\t\tevent = val
+\t\t\t\t\tevent = value
 \t\t\t\t\tbreak
 \t\t\t\tcase "id":
-\t\t\t\t\tif (!val.includes("\\0")) id = val
+\t\t\t\t\tif (!value.includes("\\0")) lastId = value
 \t\t\t\t\tbreak
-\t\t\t\tcase "retry": {
-\t\t\t\t\tconst nr = Number(val)
-\t\t\t\t\tif (Number.isFinite(nr) && nr >= 0) retry = nr
+\t\t\t\tcase "retry":
+\t\t\t\t\tif (/^\\d+$/.test(value)) retry = Number(value)
 \t\t\t\t\tbreak
-\t\t\t\t}
 \t\t\t}
 \t\t}
-\t\tif (isComment || data === undefined) return undefined
-\t\tconst evt: _SSEEvent = { data }
-\t\tif (event !== undefined) evt.event = event
-\t\tif (id !== undefined) evt.id = id
-\t\tif (retry !== undefined) evt.retry = retry
-\t\treturn evt
+\t\ttry {
+\t\t\twhile (true) {
+\t\t\t\tconst { done, value } = await reader.read()
+\t\t\t\tif (done) break
+\t\t\t\tpending += decoder.decode(value, { stream: true })
+\t\t\t\tif (first && pending.length > 0) {
+\t\t\t\t\tif (pending.charCodeAt(0) === 0xfeff) pending = pending.slice(1)
+\t\t\t\t\tfirst = false
+\t\t\t\t}
+\t\t\t\tlet start = 0
+\t\t\t\twhile (start < pending.length) {
+\t\t\t\t\tlet end = start
+\t\t\t\t\twhile (end < pending.length) {
+\t\t\t\t\t\tconst c = pending.charCodeAt(end)
+\t\t\t\t\t\tif (c === 10 || c === 13) break
+\t\t\t\t\t\tend++
+\t\t\t\t\t}
+\t\t\t\t\tif (end === pending.length) break
+\t\t\t\t\t/* a CR as the last character may be the first half of CRLF */
+\t\t\t\t\tif (pending.charCodeAt(end) === 13 && end === pending.length - 1) break
+\t\t\t\t\tconst line = pending.slice(start, end)
+\t\t\t\t\tstart = end + (pending.charCodeAt(end) === 13 && pending.charCodeAt(end + 1) === 10 ? 2 : 1)
+\t\t\t\t\tif (line === "") {
+\t\t\t\t\t\tconst out = dispatch()
+\t\t\t\t\t\tif (out) yield out
+\t\t\t\t\t} else {
+\t\t\t\t\t\tprocessLine(line)
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t\tpending = pending.slice(start)
+\t\t\t\tif (pending.length > maxBuffer) throw new Error(\`SSE buffer exceeded \${maxBuffer} characters\`)
+\t\t\t}
+\t\t\t/* a lone CR held back at the end of the stream still terminates its line */
+\t\t\tif (pending === "\\r") {
+\t\t\t\tconst out = dispatch()
+\t\t\t\tif (out) yield out
+\t\t\t}
+\t\t\t/* anything else still open is an incomplete event: discard it */
+\t\t} finally {
+\t\t\tawait reader.cancel().catch(() => {})
+\t\t\treader.releaseLock()
+\t\t}
 \t}
 `
 }
@@ -4652,60 +4845,45 @@ export function collectSDKMethods(spec: OpenApiSpecInput): {
 	nestedMap: Map<string, NestedServiceNode>
 	methods: SDKMethod[]
 } {
-	/* toIR validates duplicates + collision; throws before any codegen runs */
-	const ir = toIR(spec)
+	/* toIR validates namespace collisions; an operation without an operationId gets a derived
+	   one instead of silently vanishing from the SDK */
+	const ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" })
 	const resolved = resolveRefs(spec)
-	const serviceMap: Record<string, Record<string, ServiceEntry>> = {}
+	/* null-prototype: an operationId of "__proto__.x" must not reach Object.prototype */
+	const serviceMap: Record<string, Record<string, ServiceEntry>> = Object.create(null)
 	const methods: SDKMethod[] = []
 
-	for (const [path, pathMethods] of Object.entries(resolved.paths)) {
-		for (const [method, operation] of Object.entries(pathMethods)) {
-			const op = operation as Record<string, unknown>
-			const operationId = op.operationId as string | undefined
-			if (!operationId) continue
+	for (const irOp of ir.operations) {
+		const method = irOp.method.toLowerCase()
+		const op = resolved.paths[irOp.path]?.[method] as Record<string, unknown> | undefined
+		if (!op) continue
+		const operationId = irOp.id
+		const path = irOp.path
 
-			const segments = operationId.split(".")
-			const isTopLevel = segments.length === 1
-			const resource = isTopLevel ? operationId : (segments[0] ?? operationId)
-			const action = isTopLevel ? "_call" : segments.slice(1).join(".")
+		const segments = operationId.split(".")
+		const isTopLevel = segments.length === 1
+		const resource = isTopLevel ? operationId : (segments[0] ?? operationId)
+		const action = isTopLevel ? "_call" : segments.slice(1).join(".")
 
-			if (serviceMap[resource] === undefined) {
-				serviceMap[resource] = {}
-			}
+		if (!Object.hasOwn(serviceMap, resource)) serviceMap[resource] = Object.create(null)
+		serviceMap[resource][action] = buildServiceEntryForOp(op, path, method)
 
-			const params = extractOpenApiPathParams(path)
-			const entry: ServiceEntry = {
-				method: method.toUpperCase(),
-				path,
-			}
-			if (params.length > 0) entry.params = params
-			const sse = isSSEOperation(op)
-			if (sse) entry.sse = true
-			if (op["x-websocket"] === true) entry.ws = true
-			if (op["x-realtime"] === true) entry.realtime = true
-			if (op["x-idempotency-key"] === true) entry.idempotent = true
-			const xinv = op["x-invalidate"]
-			if (Array.isArray(xinv) && xinv.length > 0) entry.invalidate = xinv as string[]
-
-			serviceMap[resource][action] = entry
-			const isWs = op["x-websocket"] === true
-			const isRealtime = op["x-realtime"] === true
-			const inputResult = emitSDKInputType(op, path)
-			methods.push({
-				action,
-				errorsByStatusType: emitSDKErrorsByStatusType(op),
-				inputHasMandatory: inputResult.hasMandatory,
-				inputType: inputResult.type,
-				realtime: isRealtime,
-				resource,
-				responseType: emitSDKResponseType(op),
-				sse,
-				ws: isWs,
-			})
-		}
+		const inputResult = emitSDKInputType(op, path)
+		methods.push({
+			action,
+			errorsByStatusType: emitSDKErrorsByStatusType(op),
+			id: operationId,
+			inputHasMandatory: inputResult.hasMandatory,
+			inputType: inputResult.type,
+			realtime: op["x-realtime"] === true,
+			resource,
+			responseType: emitSDKResponseType(op),
+			sse: isSSEOperation(op),
+			ws: op["x-websocket"] === true,
+		})
 	}
 
-	const nestedMap = buildNestedServiceMap(ir.tree, resolved, spec)
+	const nestedMap = buildNestedServiceMap(safeMemberTree(ir.tree, true), resolved)
 	return { methods, nestedMap, serviceMap }
 }
 
@@ -4713,6 +4891,9 @@ function buildServiceEntryForOp(op: Record<string, unknown>, path: string, metho
 	const params = extractOpenApiPathParams(path)
 	const entry: ServiceEntry = { method: method.toUpperCase(), path }
 	if (params.length > 0) entry.params = params
+	const parameters = op.parameters as Array<Record<string, unknown>> | undefined
+	const wildcard = parameters?.find((p) => p.in === "path" && p["x-honey-wildcard"] === true)
+	if (wildcard) entry.wildcard = String(wildcard.name)
 	const sse = isSSEOperation(op)
 	if (sse) entry.sse = true
 	if (op["x-websocket"] === true) entry.ws = true
@@ -4723,29 +4904,61 @@ function buildServiceEntryForOp(op: Record<string, unknown>, path: string, metho
 	return entry
 }
 
+/** Members a generated client already has; a resource of the same name would hide them. */
+const SDK_ROOT_MEMBERS = new Set(["dispose", "state"])
+
+/**
+ * Names JavaScript machinery reads off any object: a `then` member makes the client a
+ * thenable, `toString` breaks `String(sdk)`, `__proto__` sets the prototype.
+ */
+const SDK_OBJECT_MEMBERS = new Set([
+	"__defineGetter__",
+	"__defineSetter__",
+	"__lookupGetter__",
+	"__lookupSetter__",
+	"__proto__",
+	"constructor",
+	"hasOwnProperty",
+	"isPrototypeOf",
+	"propertyIsEnumerable",
+	"then",
+	"toJSON",
+	"toLocaleString",
+	"toString",
+	"valueOf",
+])
+
+/**
+ * The resource tree with every member name a client can expose. A name that would shadow a
+ * client member or an `Object.prototype` name gets a trailing `_` (`state` → `state_`), the
+ * same rename in the interface and the service map, so types and runtime agree.
+ */
+function safeMemberTree(ns: IRNamespace, root: boolean): IRNamespace {
+	const entries = new Map<string, IRNamespace["entries"] extends Map<string, infer E> ? E : never>()
+	const sorted = [...ns.entries.entries()].sort(([a], [b]) => compareCodeUnits(a, b))
+	for (const [key, entry] of sorted) {
+		let name = key
+		if ((root && SDK_ROOT_MEMBERS.has(key)) || SDK_OBJECT_MEMBERS.has(key)) {
+			name = `${key}_`
+			while (ns.entries.has(name) || entries.has(name)) name += "_"
+		}
+		entries.set(name, entry.kind === "namespace" ? { kind: "namespace", ns: safeMemberTree(entry.ns, false) } : entry)
+	}
+	return { entries }
+}
+
 function buildNestedServiceMap(
 	ns: IRNamespace,
 	resolved: ReturnType<typeof resolveRefs>,
-	_spec: OpenApiSpecInput,
 ): Map<string, NestedServiceNode> {
-	/* build a lookup from operationId → (op record, path, method) for leaf nodes */
-	const opLookup = new Map<string, { op: Record<string, unknown>; path: string; method: string }>()
-	for (const [path, pathMethods] of Object.entries(resolved.paths)) {
-		for (const [method, operation] of Object.entries(pathMethods)) {
-			const op = operation as Record<string, unknown>
-			const operationId = op.operationId as string | undefined
-			if (operationId) opLookup.set(operationId, { method, op, path })
-		}
-	}
-
 	function walkNs(namespace: IRNamespace): Map<string, NestedServiceNode> {
 		const map = new Map<string, NestedServiceNode>()
 		for (const [key, entry] of [...namespace.entries.entries()].sort(([a], [b]) => compareCodeUnits(a, b))) {
 			if (entry.kind === "method") {
-				const found = opLookup.get(entry.op.id)
-				if (!found) continue
-				const serviceEntry = buildServiceEntryForOp(found.op, found.path, found.method)
-				map.set(key, { entry: serviceEntry, kind: "leaf" })
+				const method = entry.op.method.toLowerCase()
+				const op = resolved.paths[entry.op.path]?.[method] as Record<string, unknown> | undefined
+				if (!op) continue
+				map.set(key, { entry: buildServiceEntryForOp(op, entry.op.path, method), kind: "leaf" })
 			} else {
 				map.set(key, { children: walkNs(entry.ns), kind: "ns" })
 			}
@@ -4756,19 +4969,30 @@ function buildNestedServiceMap(
 	return walkNs(ns)
 }
 
+const TS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
+/** The SDK class name lands in source, the stem in import specifiers and file names. */
+function validateSdkNames(name: string, stem: string): void {
+	if (!TS_IDENTIFIER.test(name) || SDK_TS_RESERVED.has(name)) {
+		throw new Error(`generateSDK: name ${JSON.stringify(name)} is not a TypeScript identifier`)
+	}
+	if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(stem)) {
+		throw new Error(
+			`generateSDK: stem ${JSON.stringify(stem)} must be a plain file name (letters, digits, ".", "_", "-")`,
+		)
+	}
+}
+
 export function generateSDK(spec: OpenApiSpecInput, options?: { name?: string; stem?: string }): GeneratedSDK {
 	const sdkName = options?.name ?? "SDK"
 	const stem = options?.stem ?? "sdk"
+	validateSdkNames(sdkName, stem)
 	const { methods: sdkMethods, nestedMap, serviceMap } = collectSDKMethods(spec)
 	const hasRealtime = sdkMethods.some((m) => m.realtime)
 
-	const ir = toIR(spec)
-	/* lookup by full operationId — action is already the rest after first segment, joined with "." */
+	const ir = toIR(spec, { deriveOperationIds: true, duplicateOperationIds: "throw" })
 	const fullMethodLookup = new Map<string, SDKMethod>()
-	for (const m of sdkMethods) {
-		const opId = m.action === "_call" ? m.resource : `${m.resource}.${m.action}`
-		fullMethodLookup.set(opId, m)
-	}
+	for (const m of sdkMethods) fullMethodLookup.set(m.id, m)
 
 	return {
 		files: {
@@ -4776,7 +5000,7 @@ export function generateSDK(spec: OpenApiSpecInput, options?: { name?: string; s
 			index: buildSDKIndex(sdkName, stem),
 			map: buildSDKMap(nestedMap),
 			runtime: hasRealtime ? buildSDKRuntime() : null,
-			types: buildSDKTypes(sdkName, sdkMethods, ir.tree, fullMethodLookup),
+			types: buildSDKTypes(sdkName, sdkMethods, safeMemberTree(ir.tree, true), fullMethodLookup),
 		},
 		serviceMap,
 	}

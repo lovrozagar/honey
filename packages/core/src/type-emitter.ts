@@ -3,21 +3,70 @@ import type { StandardSchemaLike } from "./types.ts"
 const SAFE_KEY_RE = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/
 const LAZY_ALIAS_CAP = 64
 
-function quoteKey(key: string): string {
-	return SAFE_KEY_RE.test(key) ? key : `"${key}"`
+/** A property key in a type literal: bare when it is an identifier, a string literal otherwise. */
+export function quoteKey(key: string): string {
+	return SAFE_KEY_RE.test(key) ? key : JSON.stringify(key)
 }
 
-/** Wrap element type in parens when it contains union/intersection before appending [] */
-function arrayOf(el: string): string {
-	return el.includes("|") || el.includes("&") ? `(${el})[]` : `${el}[]`
+/** A TypeScript literal type for a runtime value; anything without one widens to its type. */
+export function literalType(value: unknown): string {
+	if (value === null) return "null"
+	if (value === undefined) return "undefined"
+	if (typeof value === "string") return JSON.stringify(value)
+	if (typeof value === "boolean") return String(value)
+	if (typeof value === "bigint") return `${value}n`
+	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "number"
+	if (typeof value === "symbol") return "symbol"
+	return "unknown"
 }
 
 /**
- * Collects named aliases for recursive `z.lazy` schemas so `generateTypes`
- * can hoist `type _LazyN = …` before `Routes`.
+ * Does `type` contain `token` outside every bracket and string? `A | B` does; `{ a: A | B }`
+ * and `Array<A | B>` do not. Used to parenthesize only where precedence needs it.
+ */
+function hasTopLevel(type: string, token: "|" | "&" | "=>"): boolean {
+	let depth = 0
+	let quote: string | null = null
+	for (let i = 0; i < type.length; i++) {
+		const c = type[i]
+		if (quote !== null) {
+			if (c === "\\") i++
+			else if (c === quote) quote = null
+			continue
+		}
+		if (c === '"' || c === "'" || c === "`") quote = c
+		else if (c === "(" || c === "{" || c === "[" || c === "<") depth++
+		else if (c === ")" || c === "}" || c === "]" || (c === ">" && type[i - 1] !== "=")) depth--
+		else if (depth === 0 && type.startsWith(token, i)) return true
+	}
+	return false
+}
+
+/** Wrap element type in parens when union, intersection or function binds looser than `[]` */
+export function arrayOf(el: string): string {
+	return hasTopLevel(el, "|") || hasTopLevel(el, "&") || hasTopLevel(el, "=>") ? `(${el})[]` : `${el}[]`
+}
+
+export function unionOf(parts: string[]): string {
+	const unique = [...new Set(parts)]
+	if (unique.length === 0) return "never"
+	return unique.map((p) => (hasTopLevel(p, "=>") ? `(${p})` : p)).join(" | ")
+}
+
+/** `(A | B) & C`, never `A | B & C` — `&` binds tighter than `|`. */
+export function intersectionOf(parts: string[]): string {
+	return parts.map((p) => (hasTopLevel(p, "|") || hasTopLevel(p, "=>") ? `(${p})` : p)).join(" & ")
+}
+
+/**
+ * Collects named aliases for recursive schemas — `z.lazy`, and Zod 4 getter recursion
+ * (`get children() { return z.array(Node) }`) — so `generateTypes` can hoist `type _LazyN = …`
+ * before `Routes`.
  */
 export type TypeEmitState = {
 	aliases: Map<string, string>
+	/** Schemas being emitted right now; re-entering one is recursion and gets a name */
+	inProgress: Map<object, { name: string | null }>
 	lazyNames: WeakMap<object, string>
 	nextId: number
 	reserved: Set<string>
@@ -26,6 +75,7 @@ export type TypeEmitState = {
 export function createTypeEmitState(): TypeEmitState {
 	return {
 		aliases: new Map(),
+		inProgress: new Map(),
 		lazyNames: new WeakMap(),
 		nextId: 0,
 		reserved: new Set(),
@@ -43,7 +93,7 @@ export function createTypeEmitState(): TypeEmitState {
 export function emitSchemaType(schema: StandardSchemaLike, state?: TypeEmitState): string {
 	const vendor = schema["~standard"].vendor
 	if (vendor === "zod") return emitZod(schema, state ?? createTypeEmitState())
-	if (vendor === "valibot") return emitValibot(schema)
+	if (vendor === "valibot") return emitValibot(schema, 0)
 	if (vendor === "arktype") return emitArkType(schema)
 	if (vendor === "yup") return emitYup(schema)
 	if (vendor === "effect") return emitEffect(schema)
@@ -62,7 +112,9 @@ function zodIsOptional(def: Record<string, unknown>): boolean {
 		t === "ZodDefault" ||
 		t === "default" ||
 		t === "ZodCatch" ||
-		t === "catch"
+		t === "catch" ||
+		t === "ZodReadonly" ||
+		t === "readonly"
 	) {
 		const inner = def.innerType as unknown
 		if (inner) return zodIsOptional(zodDef(inner))
@@ -129,7 +181,46 @@ function typeRefersToReserved(typeStr: string, state: TypeEmitState): boolean {
 	return false
 }
 
+/** Values of a TS enum object, without the reverse mappings numeric enums carry (`{ A: 0, "0": "A" }`). */
+function enumValues(entries: Record<string, unknown>): unknown[] {
+	return Object.keys(entries)
+		.filter((k) => typeof entries[entries[k] as string] !== "number")
+		.map((k) => entries[k])
+}
+
+/**
+ * Recursion guard for schemas that refer to themselves without `z.lazy` (Zod 4 getters). The
+ * first visit emits the body; a visit while the body is still being emitted names the schema,
+ * and the finished body becomes that alias.
+ */
 function emitZod(schema: unknown, state: TypeEmitState): string {
+	if (schema === null || typeof schema !== "object") return emitZodNode(schema, state)
+	/* a z.lazy names itself before emitting its body */
+	const known = state.lazyNames.get(schema)
+	if (known !== undefined) return known
+	const active = state.inProgress.get(schema)
+	if (active !== undefined) {
+		if (active.name === null) {
+			if (state.nextId >= LAZY_ALIAS_CAP) return "unknown"
+			active.name = `_Lazy${state.nextId++}`
+			state.reserved.add(active.name)
+		}
+		return active.name
+	}
+	const entry: { name: string | null } = { name: null }
+	state.inProgress.set(schema, entry)
+	try {
+		const body = emitZodNode(schema, state)
+		if (entry.name === null) return body
+		state.aliases.set(entry.name, body)
+		state.lazyNames.set(schema, entry.name)
+		return entry.name
+	} finally {
+		state.inProgress.delete(schema)
+	}
+}
+
+function emitZodNode(schema: unknown, state: TypeEmitState): string {
 	const stamped = zodTsTypeMeta(schema)
 	if (stamped) return stamped
 
@@ -140,19 +231,27 @@ function emitZod(schema: unknown, state: TypeEmitState): string {
 	switch (typeName) {
 		case "ZodString":
 		case "string":
+		case "template_literal":
 			return "string"
 		case "ZodNumber":
 		case "number":
+		case "nan":
 			return "number"
 		case "ZodBoolean":
 		case "boolean":
+		case "success":
 			return "boolean"
 		case "ZodBigInt":
 		case "bigint":
 			return "bigint"
+		case "ZodSymbol":
+		case "symbol":
+			return "symbol"
 		case "ZodDate":
 		case "date":
 			return "Date"
+		case "file":
+			return "File"
 		case "ZodUndefined":
 		case "undefined":
 			return "undefined"
@@ -166,30 +265,23 @@ function emitZod(schema: unknown, state: TypeEmitState): string {
 		case "ZodUnknown":
 		case "any":
 		case "unknown":
+		case "custom":
 			return "unknown"
 		case "ZodNever":
 		case "never":
 			return "never"
 		case "ZodLiteral":
 		case "literal": {
-			/* v4: single value, v3: values array */
-			const val = def.value as unknown
-			if (val !== undefined) return typeof val === "string" ? `"${val}"` : String(val)
-			const values = def.values as unknown[]
-			if (values.length === 1) {
-				const v0 = values[0]
-				return typeof v0 === "string" ? `"${v0}"` : String(v0)
-			}
-			return values.map((v0) => (typeof v0 === "string" ? `"${v0}"` : String(v0))).join(" | ")
+			/* v4: values array, v3: single value */
+			const values = Array.isArray(def.values) ? (def.values as unknown[]) : [def.value]
+			return unionOf(values.map(literalType))
 		}
 		case "ZodEnum":
 		case "enum": {
-			/* v4: values array, v3/mini: entries record */
+			/* v4: entries record, v3: values array */
 			const vals = (def.values ?? def.entries) as unknown
-			if (Array.isArray(vals)) return vals.map((v0) => `"${v0}"`).join(" | ")
-			return Object.values(vals as Record<string, string>)
-				.map((v0) => `"${v0}"`)
-				.join(" | ")
+			const list = Array.isArray(vals) ? vals : enumValues(vals as Record<string, unknown>)
+			return unionOf(list.map(literalType))
 		}
 		case "ZodObject":
 		case "object": {
@@ -210,28 +302,46 @@ function emitZod(schema: unknown, state: TypeEmitState): string {
 			return arrayOf(emitZod((def.type ?? def.element) as unknown, state))
 		case "array":
 			return arrayOf(emitZod(def.element as unknown, state))
+		case "ZodSet":
+		case "set":
+			return `Set<${emitZod(def.valueType as unknown, state)}>`
+		case "ZodMap":
+		case "map":
+			return `Map<${emitZod(def.keyType as unknown, state)}, ${emitZod(def.valueType as unknown, state)}>`
+		case "ZodPromise":
+		case "promise":
+			return `Promise<${emitZod(def.innerType as unknown, state)}>`
+		case "ZodFunction":
+		case "function":
+			return "(...args: never[]) => unknown"
 		case "ZodOptional":
 		case "optional":
-			return `${emitZod(def.innerType as unknown, state)} | undefined`
+			return unionOf([emitZod(def.innerType as unknown, state), "undefined"])
+		case "nonoptional":
+			return `Exclude<${emitZod(def.innerType as unknown, state)}, undefined>`
 		case "ZodNullable":
 		case "nullable":
-			return `${emitZod(def.innerType as unknown, state)} | null`
+			return unionOf([emitZod(def.innerType as unknown, state), "null"])
 		case "ZodUnion":
 		case "ZodDiscriminatedUnion":
 		case "union":
-			return (def.options as unknown[]).map((o) => emitZod(o, state)).join(" | ")
+			return unionOf((def.options as unknown[]).map((o) => emitZod(o, state)))
 		case "ZodIntersection":
 		case "intersection":
-			return `${emitZod(def.left as unknown, state)} & ${emitZod(def.right as unknown, state)}`
+			return intersectionOf([emitZod(def.left as unknown, state), emitZod(def.right as unknown, state)])
 		case "ZodRecord":
 		case "record":
 			return emitZodRecord(emitZod(def.keyType as unknown, state), emitZod(def.valueType as unknown, state), state)
 		case "ZodTuple":
-		case "tuple":
-			return `[${(def.items as unknown[]).map((i) => emitZod(i, state)).join(", ")}]`
+		case "tuple": {
+			const items = (def.items as unknown[]).map((i) => emitZod(i, state))
+			if (def.rest) items.push(`...${arrayOf(emitZod(def.rest as unknown, state))}`)
+			return `[${items.join(", ")}]`
+		}
 		case "ZodDefault":
 		case "ZodCatch":
 		case "default":
+		case "prefault":
 		case "catch":
 			return emitZod(def.innerType as unknown, state)
 		case "ZodReadonly":
@@ -246,6 +356,7 @@ function emitZod(schema: unknown, state: TypeEmitState): string {
 		case "lazy":
 			return emitZodLazy(schema, def, state)
 		default:
+			/* a transform's output is whatever the function returns — the schema cannot say */
 			return "unknown"
 	}
 }
@@ -280,22 +391,35 @@ function emitZodLazy(schema: unknown, def: Record<string, unknown>, state: TypeE
 
 /* ---- Valibot emitter ---- */
 
-function emitValibot(schema: unknown): string {
+const VALIBOT_OPTIONAL = new Set(["exact_optional", "nullish", "optional", "undefinedable"])
+/** Lazy schemas can recurse without end; past this depth a node is `unknown`. */
+const VALIBOT_MAX_DEPTH = 32
+
+function emitValibot(schema: unknown, depth: number): string {
+	if (depth > VALIBOT_MAX_DEPTH) return "unknown"
 	const s = schema as Record<string, unknown>
 	const type = s.type as string | undefined
 	if (!type) return "unknown"
+	const walk = (child: unknown): string => emitValibot(child, depth + 1)
 
 	switch (type) {
 		case "string":
 			return "string"
 		case "number":
+		case "nan":
 			return "number"
 		case "boolean":
 			return "boolean"
 		case "bigint":
 			return "bigint"
+		case "symbol":
+			return "symbol"
 		case "date":
 			return "Date"
+		case "file":
+			return "File"
+		case "blob":
+			return "Blob"
 		case "undefined":
 			return "undefined"
 		case "null":
@@ -307,48 +431,68 @@ function emitValibot(schema: unknown): string {
 			return "unknown"
 		case "never":
 			return "never"
-		case "literal": {
-			const val = s.literal as unknown
-			return typeof val === "string" ? `"${val}"` : String(val)
-		}
-		case "enum": {
-			const enumObj = s.enum as Record<string, string>
-			return Object.values(enumObj)
-				.map((val) => `"${val}"`)
-				.join(" | ")
-		}
-		case "picklist": {
-			const options = s.options as unknown[]
-			return options.map((val) => (typeof val === "string" ? `"${val}"` : String(val))).join(" | ")
-		}
-		case "object": {
+		case "literal":
+			return literalType(s.literal)
+		case "enum":
+			return unionOf(enumValues(s.enum as Record<string, unknown>).map(literalType))
+		case "picklist":
+			return unionOf((s.options as unknown[]).map(literalType))
+		case "object":
+		case "strict_object":
+		case "loose_object":
+		case "object_with_rest": {
 			const entries = s.entries as Record<string, unknown>
 			const keys = Object.keys(entries)
-			if (keys.length === 0) return "{}"
-			return `{ ${keys
-				.map((k) => {
-					const propType = (entries[k] as Record<string, unknown>).type as string | undefined
-					const isOpt = propType === "optional" || propType === "nullish"
-					return `${quoteKey(k)}${isOpt ? "?" : ""}: ${emitValibot(entries[k])}`
-				})
-				.join("; ")} }`
+			const fields = keys.map((k) => {
+				const propType = (entries[k] as Record<string, unknown>).type as string | undefined
+				const isOpt = propType !== undefined && VALIBOT_OPTIONAL.has(propType)
+				return `${quoteKey(k)}${isOpt ? "?" : ""}: ${walk(entries[k])}`
+			})
+			if (type === "loose_object") fields.push("[key: string]: unknown")
+			if (type === "object_with_rest") fields.push(`[key: string]: ${unionOf([walk(s.rest), "unknown"])}`)
+			if (fields.length === 0) return "{}"
+			return `{ ${fields.join("; ")} }`
 		}
 		case "array":
-			return arrayOf(emitValibot(s.item as unknown))
+			return arrayOf(walk(s.item))
+		case "set":
+			return `Set<${walk(s.value)}>`
+		case "map":
+			return `Map<${walk(s.key)}, ${walk(s.value)}>`
 		case "optional":
-			return `${emitValibot(s.wrapped as unknown)} | undefined`
+		case "exact_optional":
+		case "undefinedable":
+			return unionOf([walk(s.wrapped), "undefined"])
 		case "nullable":
-			return `${emitValibot(s.wrapped as unknown)} | null`
+			return unionOf([walk(s.wrapped), "null"])
 		case "nullish":
-			return `${emitValibot(s.wrapped as unknown)} | null | undefined`
+			return unionOf([walk(s.wrapped), "null", "undefined"])
+		case "non_optional":
+			return `Exclude<${walk(s.wrapped)}, undefined>`
+		case "non_nullable":
+			return `Exclude<${walk(s.wrapped)}, null>`
+		case "non_nullish":
+			return `NonNullable<${walk(s.wrapped)}>`
 		case "union":
-			return (s.options as unknown[]).map((o) => emitValibot(o)).join(" | ")
+		case "variant":
+			return unionOf((s.options as unknown[]).map(walk))
 		case "intersect":
-			return (s.options as unknown[]).map((o) => emitValibot(o)).join(" & ")
+			return intersectionOf((s.options as unknown[]).map(walk))
 		case "record":
-			return `Record<${emitValibot(s.key as unknown)}, ${emitValibot(s.value as unknown)}>`
+			return `Record<${walk(s.key)}, ${walk(s.value)}>`
 		case "tuple":
-			return `[${(s.items as unknown[]).map((i) => emitValibot(i)).join(", ")}]`
+		case "strict_tuple":
+		case "loose_tuple":
+		case "tuple_with_rest": {
+			const items = (s.items as unknown[]).map(walk)
+			if (type === "tuple_with_rest") items.push(`...${arrayOf(walk(s.rest))}`)
+			if (type === "loose_tuple") items.push("...unknown[]")
+			return `[${items.join(", ")}]`
+		}
+		case "lazy": {
+			const getter = s.getter as ((input: unknown) => unknown) | undefined
+			return typeof getter === "function" ? walk(getter(undefined)) : "unknown"
+		}
 		default:
 			return "unknown"
 	}
@@ -382,17 +526,16 @@ function emitArkJson(node: unknown): string {
 	if (Array.isArray(node)) {
 		if (node.length === 0) return "never"
 		if (isBooleanUnion(node)) return "boolean"
-		return node.map((n) => emitArkJson(n)).join(" | ")
+		return unionOf(node.map((n) => emitArkJson(n)))
 	}
 
 	const obj = node as Record<string, unknown>
 
 	if ("unit" in obj) {
 		const val = obj.unit
-		if (val === null) return "null"
 		/* arktype serializes undefined as the string "undefined" in JSON */
 		if (val === "undefined") return "undefined"
-		return typeof val === "string" ? `"${val}"` : String(val)
+		return literalType(val)
 	}
 
 	if ("sequence" in obj) {
@@ -486,9 +629,8 @@ function emitYup(schema: unknown): string {
 }
 
 function emitYupDesc(desc: YupDesc): string {
-	let base = emitYupBase(desc)
-	if (desc.nullable) base = `${base} | null`
-	return base
+	const base = emitYupBase(desc)
+	return desc.nullable ? unionOf([base, "null"]) : base
 }
 
 function emitYupBase(desc: YupDesc): string {
@@ -522,9 +664,7 @@ function emitYupBase(desc: YupDesc): string {
 			return `[${desc.innerType.map((i) => emitYupDesc(i)).join(", ")}]`
 		}
 		case "mixed": {
-			if (desc.oneOf && desc.oneOf.length > 0) {
-				return desc.oneOf.map((val) => (typeof val === "string" ? `"${val}"` : String(val))).join(" | ")
-			}
+			if (desc.oneOf && desc.oneOf.length > 0) return unionOf(desc.oneOf.map(literalType))
 			return "unknown"
 		}
 		case "lazy":
@@ -543,7 +683,7 @@ type EffectAST = {
 	literal?: unknown
 	propertySignatures?: Array<{
 		isOptional: boolean
-		name: string
+		name: string | symbol
 		type: EffectAST
 	}>
 	rest?: Array<{ type: EffectAST }>
@@ -580,13 +720,10 @@ function emitEffectAst(ast: EffectAST): string {
 			return "never"
 		case "ObjectKeyword":
 			return "object"
-		case "Literal": {
-			const val = ast.literal
-			if (val === null) return "null"
-			return typeof val === "string" ? `"${val}"` : String(val)
-		}
+		case "Literal":
+			return literalType(ast.literal)
 		case "Union":
-			return (ast.types ?? []).map((t) => emitEffectAst(t)).join(" | ")
+			return unionOf((ast.types ?? []).map((t) => emitEffectAst(t)))
 		case "TypeLiteral": {
 			const props = ast.propertySignatures ?? []
 			const idxSigs = ast.indexSignatures ?? []
@@ -594,23 +731,24 @@ function emitEffectAst(ast: EffectAST): string {
 			if (props.length === 0 && idxSigs.length === 1) {
 				return `Record<${emitEffectAst(idxSigs[0].parameter)}, ${emitEffectAst(idxSigs[0].type)}>`
 			}
-			const parts = props.map((p) => {
-				const opt = p.isOptional ? "?" : ""
-				return `${quoteKey(p.name as string)}${opt}: ${emitEffectAst(p.type)}`
-			})
+			const parts = props
+				.filter((p) => typeof p.name === "string")
+				.map((p) => {
+					const opt = p.isOptional ? "?" : ""
+					return `${quoteKey(p.name as string)}${opt}: ${emitEffectAst(p.type)}`
+				})
 			return `{ ${parts.join("; ")} }`
 		}
 		case "TupleType": {
 			const elems = ast.elements ?? []
-			const rest = ast.rest
-			if (elems.length === 0 && rest && rest.length === 1) {
-				return arrayOf(emitEffectAst(rest[0].type))
+			const rest = ast.rest ?? []
+			const items = elems.map((e) => `${emitEffectAst(e.type)}${e.isOptional ? "?" : ""}`)
+			if (rest.length > 0) {
+				if (items.length === 0 && rest.length === 1) return arrayOf(emitEffectAst(rest[0].type))
+				items.push(`...${arrayOf(emitEffectAst(rest[0].type))}`)
+				for (const tail of rest.slice(1)) items.push(emitEffectAst(tail.type))
 			}
-			if (elems.length > 0 && (!rest || rest.length === 0)) {
-				return `[${elems.map((e) => emitEffectAst(e.type)).join(", ")}]`
-			}
-			if (elems.length === 0) return "unknown[]"
-			return `[${elems.map((e) => emitEffectAst(e.type)).join(", ")}]`
+			return `[${items.join(", ")}]`
 		}
 		case "Declaration":
 			return "unknown"

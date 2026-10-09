@@ -24,6 +24,14 @@ function mockFetchRaw(status: number, body: string, contentType: string) {
 }
 
 /* minimal OpenAPI spec used by generated-code tests */
+
+/** The generated method starting at `start`, up to its closing brace at class-member indentation. */
+function bodyFrom(client: string, start: number): string {
+	if (start < 0) return ""
+	const end = client.indexOf("\n\t}\n", start)
+	return end < 0 ? client.slice(start) : client.slice(start, end + 3)
+}
+
 const minimalSpec = {
 	info: { title: "Test", version: "1" },
 	openapi: "3.0.0",
@@ -175,7 +183,7 @@ describe("generated code structure — internal helpers", () => {
 	it("contains #toColonParams private method converting {param} to :param", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		expect(files.client).toContain("#toColonParams(")
-		expect(files.client).toContain("/\\{(\\w+)\\}/g")
+		expect(files.client).toContain("/^\\{([^{}/]+)\\}$/")
 	})
 
 	it("contains #buildURL private method", () => {
@@ -1206,7 +1214,7 @@ describe("bugfix — #connectWS uses typed opts instead of unsafe casts", () => 
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		/* extract the #connectWS method definition (tab-indented, not proxy call) */
 		const wsStart = files.client.indexOf("\t#connectWS(entry:")
-		const wsBody = files.client.slice(wsStart, wsStart + 500)
+		const wsBody = bodyFrom(files.client, wsStart)
 		expect(wsBody).toContain("opts.protocols")
 		expect(wsBody).toContain("opts.reconnectToken")
 		expect(wsBody).not.toContain("as Record<string, unknown>")
@@ -1218,10 +1226,10 @@ describe("bugfix — #clearStale collects keys before deleting", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		/* extract #clearStale method definition */
 		const start = files.client.indexOf("\t#clearStale(concreteSelector:")
-		const body = files.client.slice(start, start + 600)
-		/* should collect keys to delete, then delete in separate loop */
-		expect(body).toContain("toDelete")
-		expect(body).not.toMatch(/for \(const \[key\].*\n.*\.delete\(key\)/)
+		const body = bodyFrom(files.client, start)
+		/* a stale read marks its own path refreshed; it never deletes another path's pattern mark */
+		expect(body).toContain("entry.refreshed.add(concretePath)")
+		expect(body).not.toMatch(/table\.delete/)
 	})
 
 	/* createSDK has the same delete-during-iteration bug — skipped until sdk.ts is fixed */
@@ -1302,14 +1310,14 @@ describe("bugfix — SSE fires onRequest hooks", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		/* find #doSSE method body */
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 800)
+		const sseBody = bodyFrom(files.client, sseStart)
 		expect(sseBody).toContain("this.#config.onRequest")
 	})
 
 	it("generated #doSSE calls onResponse hooks", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 1200)
+		const sseBody = bodyFrom(files.client, sseStart)
 		expect(sseBody).toContain("this.#config.onResponse")
 	})
 })
@@ -1318,7 +1326,7 @@ describe("bugfix — #pathMatchesPattern escapes regex special chars", () => {
 	it("generated #pathMatchesPattern escapes dots and special chars in pattern", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const start = files.client.indexOf("#pathMatchesPattern(")
-		const body = files.client.slice(start, start + 300)
+		const body = bodyFrom(files.client, start)
 		/* should escape regex-special chars in the non-param segments */
 		expect(body).toContain("replace(/[.*+?^${}()|[\\]\\\\]/g")
 	})
@@ -1329,7 +1337,7 @@ describe("bugfix — stale map evicts expired entries", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		/* should have eviction logic — delete expired entries during lookupStale or markStale */
 		const lookupStart = files.client.indexOf("#lookupStale(")
-		const lookupBody = files.client.slice(lookupStart, lookupStart + 600)
+		const lookupBody = bodyFrom(files.client, lookupStart)
 		/* prune expired: if entry.until <= now, delete it */
 		expect(lookupBody).toContain(".delete(")
 	})
@@ -1346,7 +1354,7 @@ describe("bugfix — #doSSE reqCtx type includes optional invalidation fields", 
 	it("SSE reqCtx type annotation contains invalidatedBy?", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 2000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		const reqCtxLine = sseBody.split("\n").find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
 		expect(reqCtxLine).toBeDefined()
 		expect(reqCtxLine).toContain("invalidatedBy?: string[]")
@@ -1355,7 +1363,7 @@ describe("bugfix — #doSSE reqCtx type includes optional invalidation fields", 
 	it("SSE reqCtx type annotation contains isStale?", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 2000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		const reqCtxLine = sseBody.split("\n").find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
 		expect(reqCtxLine).toBeDefined()
 		expect(reqCtxLine).toContain("isStale?: boolean")
@@ -1364,7 +1372,7 @@ describe("bugfix — #doSSE reqCtx type includes optional invalidation fields", 
 	it("SSE reqCtx type annotation contains selector?", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 2000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		const reqCtxLine = sseBody.split("\n").find((l) => l.includes("reqCtx:") && l.includes("headers: Headers"))
 		expect(reqCtxLine).toBeDefined()
 		expect(reqCtxLine).toContain("selector?: string")
@@ -1375,7 +1383,7 @@ describe("bugfix — #doSSE resCtx type includes optional invalidation fields", 
 	it("SSE resCtx type annotation contains invalidatedBy?", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 2000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		const resCtxLine = sseBody.split("\n").find((l) => l.includes("resCtx:") && l.includes("isRetry: boolean"))
 		expect(resCtxLine).toBeDefined()
 		expect(resCtxLine).toContain("invalidatedBy?: string[]")
@@ -1384,7 +1392,7 @@ describe("bugfix — #doSSE resCtx type includes optional invalidation fields", 
 	it("SSE resCtx type annotation contains selector?", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 2000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		const resCtxLine = sseBody.split("\n").find((l) => l.includes("resCtx:") && l.includes("isRetry: boolean"))
 		expect(resCtxLine).toBeDefined()
 		expect(resCtxLine).toContain("selector?: string")
@@ -1426,14 +1434,14 @@ describe("bugfix — #markStale uses .includes() not new Set()", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		/* method definition starts with tab-prefixed signature, not the call site */
 		const markStart = files.client.indexOf("\t#markStale(")
-		const markBody = files.client.slice(markStart, markStart + 600)
+		const markBody = bodyFrom(files.client, markStart)
 		expect(markBody).not.toContain("new Set(")
 	})
 
 	it("generated #markStale contains .includes(mutationSelector)", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const markStart = files.client.indexOf("\t#markStale(")
-		const markBody = files.client.slice(markStart, markStart + 600)
+		const markBody = bodyFrom(files.client, markStart)
 		expect(markBody).toContain(".includes(mutationSelector)")
 	})
 })
@@ -1467,7 +1475,7 @@ describe("bugfix — SSE field-less lines treated as empty-value fields per spec
 	it("generated #parseSSEBlock does not skip field-less lines with continue", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const parseStart = files.client.indexOf("#parseSSEBlock(")
-		const parseBody = files.client.slice(parseStart, parseStart + 800)
+		const parseBody = bodyFrom(files.client, parseStart)
 		expect(parseBody).not.toContain("if (colonIdx === -1) continue")
 	})
 
@@ -1554,17 +1562,19 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 		 * uses entry.path directly. This assertion will fail until fixed.
 		 */
 		const proxyStart = files.client.indexOf("get(target, key)")
-		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
-		const toColonBeforeWS = /const entryPath = target\.#toColonParams\(entry\.path\)[\s\S]*?if \(entry\.ws\)/.test(
-			proxyBody,
-		)
+		const proxyBody = bodyFrom(files.client, proxyStart)
+		void proxyBody
+		const toColonBeforeWS =
+			/const entryPath = self\.#toColonParams\(entry\.path, entry\.wildcard\)[\s\S]*?if \(entry\.ws\)/.test(
+				files.client,
+			)
 		expect(toColonBeforeWS).toBe(true)
 	})
 
 	it("WS branch passes converted path variable, not entry.path", () => {
 		const { files } = generateSDK(ssePathParamSpec, { name: "SSETest" })
 		const proxyStart = files.client.indexOf("get(target, key)")
-		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
+		const proxyBody = bodyFrom(files.client, proxyStart)
 		const wsSection = proxyBody.slice(proxyBody.indexOf("entry.ws"))
 		const wsBranchBody = wsSection.slice(
 			0,
@@ -1576,7 +1586,7 @@ describe("round3 bugfix — SSE/WS paths converted via #toColonParams before bra
 	it("SSE branch passes converted path variable, not entry.path", () => {
 		const { files } = generateSDK(ssePathParamSpec, { name: "SSETest" })
 		const proxyStart = files.client.indexOf("get(target, key)")
-		const proxyBody = files.client.slice(proxyStart, proxyStart + 800)
+		const proxyBody = bodyFrom(files.client, proxyStart)
 		const sseIdx = proxyBody.indexOf("entry.sse")
 		const sseBranchBody = proxyBody.slice(sseIdx, sseIdx + 200)
 		expect(sseBranchBody).not.toContain("entry.path")
@@ -1594,7 +1604,7 @@ describe("round3 bugfix — #clearStale guarded by requestMeta?.isStale", () => 
 	it("#request throwOnError branch wraps #clearStale in requestMeta?.isStale guard", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const requestStart = files.client.indexOf("async #request(")
-		const requestBody = files.client.slice(requestStart, requestStart + 4000)
+		const requestBody = bodyFrom(files.client, requestStart)
 		const guardedPattern = /if \(requestMeta\?\.isStale\) this\.#clearStale/
 		expect(guardedPattern.test(requestBody)).toBe(true)
 	})
@@ -1602,7 +1612,7 @@ describe("round3 bugfix — #clearStale guarded by requestMeta?.isStale", () => 
 	it("#request safe branch wraps #clearStale in requestMeta?.isStale guard", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const requestStart = files.client.indexOf("async #request(")
-		const requestBody = files.client.slice(requestStart, requestStart + 4000)
+		const requestBody = bodyFrom(files.client, requestStart)
 		const matches = requestBody.match(/if \(requestMeta\?\.isStale\) this\.#clearStale/g)
 		expect(matches).toHaveLength(2)
 	})
@@ -1610,7 +1620,7 @@ describe("round3 bugfix — #clearStale guarded by requestMeta?.isStale", () => 
 	it("#request body does NOT contain bare #clearStale call without isStale guard", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const requestStart = files.client.indexOf("async #request(")
-		const requestBody = files.client.slice(requestStart, requestStart + 4000)
+		const requestBody = bodyFrom(files.client, requestStart)
 
 		/* Any line with #clearStale must be preceded on same logical line by isStale guard */
 		const lines = requestBody.split("\n").filter((l) => l.includes("this.#clearStale("))
@@ -1627,7 +1637,7 @@ describe("round3 bugfix — SSE abort handler removed", () => {
 	it("generated #doSSE does NOT contain abortHandler variable", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 3000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		/* Current code has: const abortHandler = signal ? ... : undefined
 		   Fixed code removes it entirely */
 		expect(sseBody).not.toContain("abortHandler")
@@ -1636,7 +1646,7 @@ describe("round3 bugfix — SSE abort handler removed", () => {
 	it('generated #doSSE does NOT contain addEventListener("abort"', () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 3000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		/* Current code registers an abort listener — fixed code must not */
 		expect(sseBody).not.toContain(`addEventListener("abort"`)
 	})
@@ -1644,7 +1654,7 @@ describe("round3 bugfix — SSE abort handler removed", () => {
 	it('generated #doSSE does NOT contain removeEventListener("abort"', () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 3000)
+		const sseBody = bodyFrom(files.client, sseStart)
 		/* Current code removes the abort listener in finally — fixed code must not */
 		expect(sseBody).not.toContain(`removeEventListener("abort"`)
 	})
@@ -1727,7 +1737,7 @@ describe("round3 bugfix — pathMatchesPattern uses regex cache", () => {
 	it("#pathMatchesPattern body contains cache lookup via .get(pattern)", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const matchStart = files.client.indexOf("#pathMatchesPattern(")
-		const matchBody = files.client.slice(matchStart, matchStart + 400)
+		const matchBody = bodyFrom(files.client, matchStart)
 		/* Fixed code: let re = this.#patternRegexCache.get(pattern) */
 		expect(matchBody).toContain(".get(pattern)")
 	})
@@ -1735,7 +1745,7 @@ describe("round3 bugfix — pathMatchesPattern uses regex cache", () => {
 	it("#pathMatchesPattern body contains cache set via .set(pattern, re)", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const matchStart = files.client.indexOf("#pathMatchesPattern(")
-		const matchBody = files.client.slice(matchStart, matchStart + 400)
+		const matchBody = bodyFrom(files.client, matchStart)
 		/* Fixed code: this.#patternRegexCache.set(pattern, re) */
 		expect(matchBody).toContain(".set(pattern,")
 	})
@@ -1744,19 +1754,11 @@ describe("round3 bugfix — pathMatchesPattern uses regex cache", () => {
 /* ── Issue #7 — SSE block-split regex missing \r\n\n combination ── */
 
 describe("round3 bugfix — SSE block-split regex covers \\r\\n\\n pattern", () => {
-	it("generated client SSE block-split regex contains \\\\r\\\\n\\\\n alternative", () => {
+	it("generated client parses SSE line by line (CRLF, LF and CR), with no block-split regex", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
-		/*
-		 * Current regex: /\r\n\r\n|\r\r|\n\n|\r\n\r|\n\r\n|\n\r/
-		 * Missing: \r\n\n
-		 * Fixed regex must include \r\n\n as an alternative.
-		 * In the generated source string the regex appears as:
-		 * /\\r\\n\\r\\n|\\r\\r|\\n\\n|\\r\\n\\r|\\n\\r\\n|\\n\\r/
-		 * Fixed: must also contain \\r\\n\\n
-		 */
-		const sseStart = files.client.indexOf("*#doSSE(")
-		const sseBody = files.client.slice(sseStart, sseStart + 3000)
-		expect(sseBody).toContain("\\r\\n\\n")
+		/* the WHATWG line parser is driven by the shared vectors in tests/conformance/vectors/sse.json */
+		expect(files.client).toContain("async *#parseSSE(stream: ReadableStream<Uint8Array>)")
+		expect(files.client).not.toContain("buffer.split(")
 	})
 
 	it("parseSSEStream correctly splits blocks separated by \\r\\n\\n", async () => {
@@ -1793,7 +1795,7 @@ describe("round3 bugfix — staleUntil size-capped sweep in #markStale", () => {
 	it("generated #markStale body contains a size check for the staleUntil map", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const markStart = files.client.indexOf("\t#markStale(")
-		const markBody = files.client.slice(markStart, markStart + 900)
+		const markBody = bodyFrom(files.client, markStart)
 		/*
 		 * Current code has no size guard.
 		 * Fixed code adds: if (this.#staleUntil.size > 1000) { ... sweep ... }
@@ -1804,7 +1806,7 @@ describe("round3 bugfix — staleUntil size-capped sweep in #markStale", () => {
 	it("generated #markStale size guard triggers a sweep of expired entries", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const markStart = files.client.indexOf("\t#markStale(")
-		const markBody = files.client.slice(markStart, markStart + 900)
+		const markBody = bodyFrom(files.client, markStart)
 		/* Sweep deletes expired entries: entry.until <= now */
 		expect(markBody).toContain("entry.until")
 	})
@@ -1812,7 +1814,7 @@ describe("round3 bugfix — staleUntil size-capped sweep in #markStale", () => {
 	it("generated client contains size threshold constant or literal 1000 in #markStale", () => {
 		const { files } = generateSDK(minimalSpec, { name: "TestSDK" })
 		const markStart = files.client.indexOf("\t#markStale(")
-		const markBody = files.client.slice(markStart, markStart + 900)
+		const markBody = bodyFrom(files.client, markStart)
 		/* The threshold must be a reasonable value — spec says 1000 */
 		expect(markBody).toContain("this.#staleMaxEntries")
 	})

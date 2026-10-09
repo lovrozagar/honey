@@ -381,9 +381,11 @@ describe("#R6-24 Date/Symbol serialize — Layer B' regression", () => {
 		const serializeIdx = files.client.indexOf("#serializeSearch")
 		const formIdx = files.client.indexOf(`"application/x-www-form-urlencoded"`)
 		expect(formIdx).toBeGreaterThan(-1)
-		const formBlock = files.client.slice(formIdx, formIdx + 500)
 		expect(serializeIdx).toBeGreaterThan(-1)
-		expect(formBlock).toContain("instanceof Date")
+		/* form values go through one text() coercion that handles Date */
+		const textIdx = files.client.indexOf("const text = (v: unknown)")
+		expect(textIdx).toBeGreaterThan(-1)
+		expect(files.client.slice(textIdx, textIdx + 300)).toContain("instanceof Date")
 	})
 })
 

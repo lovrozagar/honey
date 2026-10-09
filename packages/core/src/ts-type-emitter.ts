@@ -1,6 +1,10 @@
 /** JSON Schema IR → TypeScript type string emitter. Mirrors jsonSchemaToTS logic case-for-case. */
 
 import type { IRSchema } from "./codegen-ir.ts"
+import { arrayOf, intersectionOf, literalType, unionOf } from "./type-emitter.ts"
+
+/* a cycle guard only — resolved specs carry no cycles, so legitimately deep nesting is kept */
+const MAX_DEPTH = 64
 
 /* TS keywords that are valid identifiers but require quoting as object property keys */
 const TS_RESERVED = new Set([
@@ -80,38 +84,38 @@ const TS_RESERVED = new Set([
  * (File included) inside a multipart form body.
  */
 export function irToTs(ir: IRSchema, depth = 0, binary = "string"): string {
-	if (depth > 8) return "unknown"
+	if (depth > MAX_DEPTH) return "unknown"
 
 	switch (ir.kind) {
 		case "scalar":
 			return emitScalar(ir)
 
 		case "const":
-			return typeof ir.value === "string" ? JSON.stringify(ir.value) : String(ir.value)
+			return literalType(ir.value)
 
 		case "object":
 			return emitObject(ir, depth, binary)
 
 		case "array": {
-			const el = irToTs(ir.items, depth + 1, binary)
-			return el.includes("|") || el.includes("&") ? `(${el})[]` : `${el}[]`
+			return arrayOf(irToTs(ir.items, depth + 1, binary))
 		}
 
 		case "tuple":
 			return `[${ir.items.map((i) => irToTs(i, depth + 1, binary)).join(", ")}]`
 
 		case "union":
-			return ir.variants.map((v) => irToTs(v, depth + 1, binary)).join(" | ")
+			return unionOf(ir.variants.map((v) => irToTs(v, depth + 1, binary)))
 
 		case "allOf":
-			return ir.parts.map((p) => irToTs(p, depth + 1, binary)).join(" & ")
+			/* `(A | B) & C`, never `A | B & C` */
+			return intersectionOf(ir.parts.map((p) => irToTs(p, depth + 1, binary)))
 
+		/* refs are resolved before emit; one left over names nothing this file declares */
 		case "ref":
-			return ir.name
+			return "unknown"
 
 		case "nullable": {
-			const inner = irToTs(ir.inner, depth + 1, binary)
-			return `${inner} | null`
+			return unionOf([irToTs(ir.inner, depth + 1, binary), "null"])
 		}
 
 		/* binary kind arises from {type: "string", format: "binary"}; see `binary` above */
@@ -125,7 +129,7 @@ export function irToTs(ir: IRSchema, depth = 0, binary = "string"): string {
 
 function emitScalar(ir: Extract<IRSchema, { kind: "scalar" }>): string {
 	if (ir.enum) {
-		return ir.enum.map((v) => (typeof v === "string" ? JSON.stringify(v) : String(v))).join(" | ")
+		return unionOf(ir.enum.map(literalType))
 	}
 
 	if (ir.type === "string") return "string"
@@ -145,7 +149,8 @@ function emitObject(ir: Extract<IRSchema, { kind: "object" }>, depth: number, bi
 		return "Record<string, unknown>"
 	}
 
-	const sortedFields = fields.slice().sort((a, b) => a.name.localeCompare(b.name))
+	/* code-unit order: the same output on every machine, whatever its locale */
+	const sortedFields = fields.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 
 	const entries = sortedFields.map((field) => {
 		const opt = field.required ? "" : "?"
@@ -154,8 +159,9 @@ function emitObject(ir: Extract<IRSchema, { kind: "object" }>, depth: number, bi
 		return `${key}${opt}: ${irToTs(field.schema, depth + 1, binary)}`
 	})
 
+	/* an index signature beside fields of other types is TS2411; an intersection says the same thing */
 	if (additional) {
-		entries.push(`[k: string]: ${irToTs(additional, depth + 1, binary)}`)
+		return `{ ${entries.join("; ")} } & { [k: string]: ${irToTs(additional, depth + 1, binary)} }`
 	}
 
 	return `{ ${entries.join("; ")} }`

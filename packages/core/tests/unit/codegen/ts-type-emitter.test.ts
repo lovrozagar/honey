@@ -75,14 +75,14 @@ describe("irToTs — equivalence with jsonSchemaToTS (Layer A inputs)", () => {
 		eq(input)
 	})
 
-	it("{ $ref: '#/components/schemas/Foo' } → 'Foo'", () => {
+	it("{ $ref: '#/components/schemas/Foo' } left unresolved → 'unknown' (the SDK declares no component types)", () => {
 		/*
 		 * jsonSchemaToTS does not handle $ref — returns "unknown".
 		 * schemaToIR correctly resolves $ref → {kind: "ref", name: "Foo"}.
 		 * No eq() here: irToTs is strictly better; equivalence only covers
 		 * cases where both functions agree on the raw schema input.
 		 */
-		expect(irToTs(schemaToIR({ $ref: "#/components/schemas/Foo" }))).toBe("Foo")
+		expect(irToTs(schemaToIR({ $ref: "#/components/schemas/Foo" }))).toBe("unknown")
 	})
 
 	it("object keys sorted alphabetically", () => {
@@ -186,5 +186,38 @@ describe("irToTs — equivalence with jsonSchemaToTS (Layer A inputs)", () => {
 	it("multi-type [string, number, null] → 'string | number | null' (IR amendment)", () => {
 		/* nullable path strips null, multi-type branch emits union, nullable wraps */
 		expect(irToTs(schemaToIR({ type: ["string", "number", "null"] }))).toBe("string | number | null")
+	})
+})
+
+describe("irToTs — precedence, maps beside fields, depth", () => {
+	it("an allOf over a union keeps the union together", () => {
+		const ir = schemaToIR({
+			allOf: [{ anyOf: [{ type: "string" }, { type: "number" }] }, { type: "boolean" }],
+		})
+		expect(irToTs(ir)).toBe("(string | number) & boolean")
+	})
+
+	it("typed additionalProperties beside fields is an intersection, not a conflicting index signature", () => {
+		const ir = schemaToIR({
+			additionalProperties: { type: "number" },
+			properties: { name: { type: "string" } },
+			required: ["name"],
+			type: "object",
+		})
+		expect(irToTs(ir)).toBe("{ name: string } & { [k: string]: number }")
+	})
+
+	it("nesting deeper than 8 levels keeps its type", () => {
+		let schema: Record<string, unknown> = { type: "string" }
+		for (let i = 0; i < 12; i++) schema = { items: schema, type: "array" }
+		expect(irToTs(schemaToIR(schema))).toBe(`string${"[]".repeat(12)}`)
+	})
+
+	it("fields are ordered by code unit, not locale", () => {
+		const ir = schemaToIR({
+			properties: { a: { type: "string" }, B: { type: "string" }, ch: { type: "string" }, c: { type: "string" } },
+			type: "object",
+		})
+		expect(irToTs(ir)).toBe("{ B?: string; a?: string; c?: string; ch?: string }")
 	})
 })

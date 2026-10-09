@@ -108,12 +108,12 @@ describe("#R6-16 SSE/WS x-invalidate — emitter Layer B' regression strings", (
 
 	it("proxy SSE call site passes entry", () => {
 		const { files } = generateSDK(phaseJSpec, { name: "TestSDK" })
-		expect(files.client).toContain("target.#requestSSE(entry,")
+		expect(files.client).toContain("self.#requestSSE(entry,")
 	})
 
 	it("proxy WS call site passes entry", () => {
 		const { files } = generateSDK(phaseJSpec, { name: "TestSDK" })
-		expect(files.client).toContain("target.#connectWS(entry,")
+		expect(files.client).toContain("self.#connectWS(entry,")
 	})
 
 	it("SSE without x-invalidate — no #markStale emitted in #doSSE when no invalidation targets exist", () => {

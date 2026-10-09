@@ -139,9 +139,9 @@ describe("#R6-3 invalidationSeq — emitter Layer B' regression strings", () => 
 		expect(files.client).toContain("seq: number")
 	})
 
-	it("Layer B': files.client contains seq guard in #clearStale: 'if (entry.seq > seqSnapshot) continue'", () => {
+	it("Layer B': files.client contains seq guard in #clearStale: 'entry.seq > seqSnapshot'", () => {
 		const { files } = generateSDK(phaseFixtureSpec, { name: "TestSDK" })
-		expect(files.client).toContain("if (entry.seq > seqSnapshot) continue")
+		expect(files.client).toContain("if (entry.seq > seqSnapshot || !entry.refreshed) continue")
 	})
 
 	it("Layer B': files.client #request passes seqSnapshot into #clearStale call", () => {

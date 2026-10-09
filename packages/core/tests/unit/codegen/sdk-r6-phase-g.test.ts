@@ -371,15 +371,15 @@ describe("#R6-11 onRequest body exposure — emitter Layer B' regression strings
    #R6-12 — unresolved invalidate target drop emitter strings
    ═══════════════════════════════════════════════════════════════════ */
 
-describe("#R6-12 unresolved invalidate target drop — emitter Layer B' regression strings", () => {
-	it("post-fix: files.client #resolveInvalidationTargets uses let hasUnresolved = false", () => {
+describe("#R6-12 partially resolvable invalidate targets — emitter strings (reversed: kept as narrower patterns)", () => {
+	it("files.client #resolveInvalidationTargets substitutes what it can and keeps the rest as placeholders", () => {
 		const { files } = generateSDK(phaseGFixtureSpec, { name: "TestSDK" })
-		expect(files.client).toContain("let hasUnresolved = false")
+		expect(files.client).toContain("this.#interpolatePath(targetPath, params, true)")
 	})
 
-	it("post-fix: files.client contains if (hasUnresolved) continue guard", () => {
+	it("files.client no longer drops a target with an unresolved param", () => {
 		const { files } = generateSDK(phaseGFixtureSpec, { name: "TestSDK" })
-		expect(files.client).toContain("if (hasUnresolved) continue")
+		expect(files.client).not.toContain("if (hasUnresolved) continue")
 	})
 
 	it("post-fix: old return targets.map((target) shape is gone", () => {

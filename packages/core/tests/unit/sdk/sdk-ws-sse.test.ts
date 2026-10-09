@@ -58,7 +58,7 @@ describe("WS: OpenAPI spec generation", () => {
 		expect(params.some((p) => p.name === "roomId" && p.in === "query")).toBe(true)
 	})
 
-	it("WS route without operationId → in OpenAPI but not in SDK", async () => {
+	it("WS route without operationId → in OpenAPI and in the SDK under a derived name", async () => {
 		const app = honey<{}>()
 		app.ws("/ws/internal").handler({ onMessage() {} })
 
@@ -66,8 +66,9 @@ describe("WS: OpenAPI spec generation", () => {
 		expect(spec.paths["/ws/internal"]).toBeDefined()
 		expect(spec.paths["/ws/internal"].get["x-websocket"]).toBe(true)
 
+		/* an operation is never silently dropped from the SDK */
 		const { serviceMap } = generateSDK(spec)
-		expect(Object.keys(serviceMap)).toHaveLength(0)
+		expect(Object.keys(serviceMap)).toEqual(["getWsInternal"])
 	})
 
 	it("WS routes have 101 response", async () => {

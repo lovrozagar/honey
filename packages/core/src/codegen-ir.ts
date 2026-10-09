@@ -601,6 +601,9 @@ export type ToIROptions = {
 	/** Give operations without an `operationId` a derived one instead of dropping them, and disambiguate
 	 * a shared `operationId` by method. The non-TypeScript SDK emitters use this. */
 	deriveOperationIds?: boolean
+	/** A shared `operationId`: `"suffix"` disambiguates by method (default with `deriveOperationIds`),
+	 * `"throw"` refuses the document (default otherwise; the TypeScript SDK always refuses). */
+	duplicateOperationIds?: "suffix" | "throw"
 }
 
 export function toIR(spec: OpenApiSpecInput, options: ToIROptions = {}): IR {
@@ -631,7 +634,8 @@ export function toIR(spec: OpenApiSpecInput, options: ToIROptions = {}): IR {
 			}
 			let finalId = id
 			if (seen.has(id)) {
-				if (!options.deriveOperationIds) throw new Error(`Duplicate operationId: "${id}"`)
+				const onDuplicate = options.duplicateOperationIds ?? (options.deriveOperationIds ? "suffix" : "throw")
+				if (onDuplicate === "throw") throw new Error(`Duplicate operationId: "${id}"`)
 				finalId = `${id}${pascalWords(method)}`
 				for (let i = 2; seen.has(finalId); i++) finalId = `${id}${pascalWords(method)}${i}`
 			}
