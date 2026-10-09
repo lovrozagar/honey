@@ -11,7 +11,7 @@
  * (`HOTPATH_THRESHOLD`, default 0.25). Ratios drift by up to ~20% between Bun versions, so
  * baselines are kept per runtime minor version; a version without one runs as a hint only, and
  * CI gates on the version it pins. It catches a slowdown on the order of the per-request middleware
- * allocations workstream 2 removed (25–50%); a ~100 ns change stays under the threshold.
+ * allocations that compiling chains at finalize removed (25–50%); a ~100 ns change stays under the threshold.
  */
 import { readFileSync, writeFileSync } from "node:fs"
 import { createMiddleware, honey } from "@lovrozagar/honey"
