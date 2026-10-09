@@ -105,10 +105,13 @@ function hex(n: number, width: number): string {
  * line breaks stay; the writers split lines themselves.
  */
 function commentText(s: string): string {
-	return wellFormed(s).replace(
-		/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFEFF]/g,
-		(ch) => `\\u${hex(ch.charCodeAt(0), 4)}`,
-	)
+	let out = ""
+	for (const ch of wellFormed(s)) {
+		const c = ch.codePointAt(0) ?? 0
+		const lineOrTab = c === 0x09 || c === 0x0a || c === 0x0d
+		out += (c < 0x20 && !lineOrTab) || c === 0x7f || c === 0xfeff ? `\\u${hex(c, 4)}` : ch
+	}
+	return out
 }
 
 /* ── Go ── */
