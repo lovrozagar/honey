@@ -409,8 +409,8 @@ describe("bug-hunt-3: prototype pollution guards in validation", () => {
  * Test that body validation is skipped for DELETE.
  * ────────────────────────────────────────────── */
 
-describe("bug-hunt-3: input validation body skip for safe methods", () => {
-	it("DELETE with json schema → body validation skipped, params still validated", async () => {
+describe("bug-hunt-3: a declared body schema applies to DELETE", () => {
+	it("DELETE with json schema → body validated, params still validated", async () => {
 		function okSchema() {
 			return {
 				"~standard": {
@@ -427,14 +427,24 @@ describe("bug-hunt-3: input validation body skip for safe methods", () => {
 			.input({ json: okSchema(), params: okSchema() })
 			.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, input: ctx.input }))
 
-		const res = await app.fetch(new Request("http://localhost/items/42", { method: "DELETE" }), {})
+		/* no body: the declared json schema is not silently skipped */
+		const bare = await app.fetch(new Request("http://localhost/items/42", { method: "DELETE" }), {})
+		expect(bare.status).toBe(415)
+
+		const res = await app.fetch(
+			new Request("http://localhost/items/42", {
+				body: JSON.stringify({ reason: "dup" }),
+				headers: { "content-type": "application/json" },
+				method: "DELETE",
+			}),
+			{},
+		)
 		expect(res.status).toBe(200)
 		const data = (await res.json()) as Record<string, unknown>
 		expect(data.id).toBe("42")
-		/* input should have params but not json */
 		const input = data.input as Record<string, unknown>
 		expect(input.params).toBeTruthy()
-		expect(input.json).toBeUndefined()
+		expect(input.json).toEqual({ reason: "dup" })
 	})
 })
 

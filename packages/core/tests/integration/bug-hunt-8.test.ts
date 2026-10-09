@@ -201,8 +201,9 @@ describe("bug-hunt-8: empty body with json content-type", () => {
 			}),
 			{},
 		)
-		/* empty body → req.json() throws → 500 */
-		expect(res.status).toBe(500)
+		/* empty body is not JSON: a client error, not a server error */
+		expect(res.status).toBe(400)
+		expect(((await res.json()) as { error_key: string }).error_key).toBe("malformed_body")
 	})
 
 	it("POST with valid JSON body → works", async () => {

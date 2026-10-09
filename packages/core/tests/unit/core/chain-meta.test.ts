@@ -350,7 +350,7 @@ describe("chain-level .meta(values) — compile-time type safety", () => {
 			.meta({ security: "jwt" })
 			.context({ region: "eu" })
 			.use(mw)
-			.get("/orgs/:orgId")
+			.post("/orgs/:orgId")
 			.meta({ tags: "Orgs" })
 			.input({ json: z.object({ name: z.string() }) })
 			.handler((ctx) => {

@@ -93,7 +93,7 @@ describe("bug-hunt-6: url-encoded form validation", () => {
 		expect(form.age).toBe("30")
 	})
 
-	it("url-encoded duplicate keys → last value wins", async () => {
+	it("url-encoded duplicate keys → an array for a schema that cannot describe itself", async () => {
 		const app = honey<{}>()
 		app
 			.post("/form")
@@ -110,9 +110,9 @@ describe("bug-hunt-6: url-encoded form validation", () => {
 		)
 		expect(res.status).toBe(201)
 		const data = (await res.json()) as Record<string, unknown>
-		const form = data.form as Record<string, string>
-		/* URLSearchParams.forEach overwrites — last value wins */
-		expect(form.tag).toBe("second")
+		const form = data.form as Record<string, unknown>
+		/* no Standard JSON Schema to say scalar or array: every value is kept, none silently dropped */
+		expect(form.tag).toEqual(["first", "second"])
 	})
 
 	it("url-encoded __proto__ key → stripped by DANGEROUS_KEYS guard", async () => {

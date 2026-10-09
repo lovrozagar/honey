@@ -1,5 +1,6 @@
 import { namedMiddleware } from "./middleware.ts"
 import { HoneyError } from "./error.ts"
+import { parseMediaType } from "./media-type.ts"
 import type { MiddlewareFn } from "./middleware.ts"
 import { EK, SK } from "./types.ts"
 
@@ -31,10 +32,9 @@ export type { BodyLimitOptions }
  * cancelled, so a client cannot hold the connection open with an endless body. */
 const DRAIN_LIMIT = 1_048_576
 
+/* the shared parser lowercases and drops parameters; a malformed type matches no key */
 function mediaType(contentType: string | null): string | null {
-	if (contentType === null) return null
-	const semi = contentType.indexOf(";")
-	return (semi === -1 ? contentType : contentType.slice(0, semi)).trim().toLowerCase()
+	return parseMediaType(contentType)?.essence ?? null
 }
 
 function tooLarge(): HoneyError {

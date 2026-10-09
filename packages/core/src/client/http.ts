@@ -1,6 +1,7 @@
 import { bindDefaultFetch, parseClientBaseURL } from "./defaults.ts"
 import type { ClientError } from "./error.ts"
 import { clientErrorFor } from "./error.ts"
+import { isJsonMediaType, isTextMediaType, parseMediaType } from "../media-type.ts"
 import { interpolatePath } from "./path.ts"
 import type { SSEEvent } from "./sse.ts"
 import { parseSSEStream } from "./sse.ts"
@@ -238,20 +239,8 @@ function isReplayable(body: BodyInit | null | undefined): boolean {
 	return !(typeof ReadableStream !== "undefined" && body instanceof ReadableStream)
 }
 
-function mediaEssence(response: Response): string {
-	return (response.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase() ?? ""
-}
-
-function isJsonType(ct: string): boolean {
-	return ct === "application/json" || ct.endsWith("+json")
-}
-
-function isTextType(ct: string): boolean {
-	return ct.startsWith("text/") || ct === "application/xml" || ct.endsWith("+xml")
-}
-
 export function isEventStream(response: Response): boolean {
-	return mediaEssence(response) === "text/event-stream"
+	return parseMediaType(response.headers.get("content-type"))?.essence === "text/event-stream"
 }
 
 /* oxlint-disable-next-line no-control-regex -- intentional strip of ASCII control characters */
@@ -616,8 +605,8 @@ export class HTTPClient {
 			await response.body?.cancel().catch(() => {})
 			return null
 		}
-		const ct = mediaEssence(response)
-		if (isJsonType(ct)) {
+		const ct = parseMediaType(response.headers.get("content-type"))
+		if (isJsonMediaType(ct)) {
 			const text = await response.text()
 			if (text.length === 0) return null
 			try {
@@ -631,7 +620,7 @@ export class HTTPClient {
 				})
 			}
 		}
-		if (isTextType(ct)) return response.text()
+		if (isTextMediaType(ct)) return response.text()
 		const buffer = await response.arrayBuffer()
 		return buffer.byteLength === 0 ? null : buffer
 	}

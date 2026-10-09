@@ -9,21 +9,59 @@ import { parseCookies, validateInput } from "../../../src/validation.ts"
  * ═══════════════════════════════════════════ */
 
 describe("FormData duplicate keys", () => {
-	it("last value wins for duplicate text fields", async () => {
+	const post = (app: { fetch: (r: Request, e: {}) => Promise<Response> }, fd: FormData) =>
+		app.fetch(new Request("http://localhost/form", { body: fd, method: "POST" }), {})
+
+	it("a scalar field takes the first value, like ctx.search and cookies", async () => {
 		const app = honey<{}>()
 		app
 			.post("/form")
-			.input({ form: z.object({ name: z.string() }) })
+			.input({ form: z.object({ role: z.string() }) })
 			.handler((ctx) => ctx.res.json("created", ctx.input))
 
 		const fd = new FormData()
-		fd.append("name", "first")
-		fd.append("name", "second")
+		fd.append("role", "user")
+		fd.append("role", "admin")
 
-		const res = await app.fetch(new Request("http://localhost/form", { body: fd, method: "POST" }), {})
+		const res = await post(app, fd)
 		expect(res.status).toBe(201)
 		const data = (await res.json()) as Record<string, Record<string, string>>
-		expect(data.form.name).toBe("second")
+		expect(data.form.role).toBe("user")
+	})
+
+	it("an array field always gets an array, so one or many files validate", async () => {
+		const app = honey<{}>()
+		app
+			.post("/form")
+			.input({ form: z.object({ files: z.array(z.instanceof(File)) }) })
+			.handler((ctx) => ctx.res.json("created", { n: ctx.input.form.files.length }))
+
+		const one = new FormData()
+		one.append("files", new File(["a"], "a.txt"))
+		const r1 = await post(app, one)
+		expect(r1.status).toBe(201)
+		expect(await r1.json()).toEqual({ n: 1 })
+
+		const two = new FormData()
+		two.append("files", new File(["a"], "a.txt"))
+		two.append("files", new File(["b"], "b.txt"))
+		const r2 = await post(app, two)
+		expect(r2.status).toBe(201)
+		expect(await r2.json()).toEqual({ n: 2 })
+	})
+
+	it("an untyped key repeats into an array (schema without Standard JSON Schema)", async () => {
+		const passthrough = { "~standard": { validate: (v: unknown) => ({ value: v }), vendor: "test", version: 1 } }
+		const fd = new FormData()
+		fd.append("tag", "a")
+		fd.append("tag", "b")
+		fd.append("one", "x")
+		const result = await validateInput(
+			{ form: passthrough },
+			new Request("http://localhost/form", { body: fd, method: "POST" }),
+			{},
+		)
+		expect(result.form).toEqual({ one: "x", tag: ["a", "b"] })
 	})
 })
 

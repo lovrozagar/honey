@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { HoneyError } from "../../../src/error.ts"
 import type { NormalizedIssue } from "../../../src/types.ts"
 import {
+	assertBodySchemaAllowed,
 	assertRequestContentType,
 	issuesToFieldErrors,
 	mapNormalizedCode,
@@ -108,8 +109,24 @@ describe("assertRequestContentType", () => {
 		assertRequestContentType({ params: okSchema() }, req)
 	})
 
-	it("GET json + no Content-Type → no throw", () => {
-		assertRequestContentType({ json: okSchema() }, new Request("http://localhost/test"))
+	it("GET json + no Content-Type → 415 (a declared body is required on every method)", () => {
+		expect(() => assertRequestContentType({ json: okSchema() }, new Request("http://localhost/test"))).toThrow(
+			HoneyError,
+		)
+	})
+
+	it("matches the media type case-insensitively and accepts +json", () => {
+		for (const ct of ["Application/JSON", "application/json; charset=UTF-8", "application/vnd.api+json"]) {
+			const req = new Request("http://localhost/test", { body: "{}", headers: { "content-type": ct }, method: "POST" })
+			assertRequestContentType({ json: okSchema() }, req)
+		}
+	})
+
+	it("rejects a type that only starts with application/json", () => {
+		for (const ct of ["application/jsonx", "application/json-patch", "json"]) {
+			const req = new Request("http://localhost/test", { body: "{}", headers: { "content-type": ct }, method: "POST" })
+			expect(() => assertRequestContentType({ json: okSchema() }, req)).toThrow(HoneyError)
+		}
 	})
 })
 
@@ -343,41 +360,39 @@ describe("vendor issue code extraction", () => {
 })
 
 describe("body-aware input parsing", () => {
-	it("DELETE with json schema → body not parsed", async () => {
-		const schema = okSchema()
+	it("DELETE with json schema → body parsed and validated", async () => {
 		const req = new Request("http://localhost/test", {
 			body: JSON.stringify({ name: "test" }),
 			headers: { "content-type": "application/json" },
 			method: "DELETE",
 		})
-		const result = await validateInput({ json: schema }, req, {})
-		expect(result.json).toBeUndefined()
+		const result = await validateInput({ json: okSchema() }, req, {})
+		expect(result.json).toEqual({ name: "test" })
 	})
 
-	it("OPTIONS with json schema → body not parsed", async () => {
-		const schema = okSchema()
+	it("DELETE with json schema and no body → 415, never an unvalidated handler", async () => {
+		const req = new Request("http://localhost/test", { method: "DELETE" })
+		await expect(validateInput({ json: okSchema() }, req, {})).rejects.toMatchObject({
+			errorKey: "unsupported_media_type",
+		})
+	})
+
+	it("OPTIONS with json schema → validated like any other method", async () => {
 		const req = new Request("http://localhost/test", {
+			body: "{}",
+			headers: { "content-type": "application/json" },
 			method: "OPTIONS",
 		})
-		const result = await validateInput({ json: schema }, req, {})
-		expect(result.json).toBeUndefined()
+		const result = await validateInput({ json: okSchema() }, req, {})
+		expect(result.json).toEqual({})
 	})
 
-	it("HEAD with json schema → body not parsed", async () => {
-		const schema = okSchema()
-		const req = new Request("http://localhost/test", {
-			method: "HEAD",
-		})
-		const result = await validateInput({ json: schema }, req, {})
-		expect(result.json).toBeUndefined()
-	})
-
-	it("GET with json schema → body not parsed", async () => {
-		const schema = okSchema()
-		const req = new Request("http://localhost/test?q=1")
-		const result = await validateInput({ json: schema, search: schema }, req, {})
-		expect(result.json).toBeUndefined()
-		expect(result.search).toEqual({ q: "1" })
+	it("GET or HEAD with a body schema is rejected when the route registers", () => {
+		expect(() => assertBodySchemaAllowed({ json: okSchema() }, "GET", "/x")).toThrow(/GET \/x declares a json/)
+		expect(() => assertBodySchemaAllowed({ form: okSchema() }, "HEAD", "/x")).toThrow(/HEAD \/x declares a form/)
+		assertBodySchemaAllowed({ json: okSchema() }, "DELETE", "/x")
+		assertBodySchemaAllowed({ search: okSchema() }, "GET", "/x")
+		assertBodySchemaAllowed(null, "GET", "/x")
 	})
 
 	it("POST with json schema → body parsed normally", async () => {

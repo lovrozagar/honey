@@ -96,7 +96,8 @@ describe("adversarial: malformed requests", () => {
 			}),
 			{},
 		)
-		expect([200, 400, 422]).toContain(res.status)
+		/* the joined value "application/json, text/plain" is no single media type */
+		expect(res.status).toBe(415)
 	})
 })
 

@@ -141,6 +141,8 @@ export const EK = {
 	forbidden: "forbidden",
 	gateway_timeout: "gateway_timeout",
 	internal_server_error: "internal_server_error",
+	/** a request body the declared parser cannot read (bad JSON, broken multipart) — 400 */
+	malformed_body: "malformed_body",
 	method_not_allowed: "method_not_allowed",
 	not_found: "not_found",
 	output_content_type_mismatch: "output_content_type_mismatch",

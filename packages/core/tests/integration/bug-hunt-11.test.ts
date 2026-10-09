@@ -1,5 +1,5 @@
 import http from "node:http"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { bodyLimit } from "../../src/body-limit.ts"
 import { cors } from "../../src/cors.ts"
 import type { HoneyError } from "../../src/error.ts"
@@ -62,7 +62,7 @@ afterEach(() => {
  * ══════════════════════════════════════════════ */
 
 describe("bug-hunt-11: malformed JSON body", () => {
-	it("invalid JSON body → 500 (SyntaxError from req.json())", async () => {
+	it("invalid JSON body → 400 malformed_body, a client error rather than a 500", async () => {
 		function okSchema() {
 			return {
 				"~standard": {
@@ -73,7 +73,8 @@ describe("bug-hunt-11: malformed JSON body", () => {
 			}
 		}
 
-		const app = honey<{}>()
+		const onError = vi.fn()
+		const app = honey<{}>().onError(onError)
 		app
 			.post("/api")
 			.input({ json: okSchema() })
@@ -87,7 +88,13 @@ describe("bug-hunt-11: malformed JSON body", () => {
 			}),
 			{},
 		)
-		expect(res.status).toBe(500)
+		expect(res.status).toBe(400)
+		expect(((await res.json()) as { error_key: string }).error_key).toBe("malformed_body")
+		/* onError sees what the client gets: a 400 HoneyError, not an unknown SyntaxError → 500 */
+		for (const [err] of onError.mock.calls) {
+			expect((err as HoneyError).status).toBe(400)
+			expect((err as HoneyError).errorKey).toBe("malformed_body")
+		}
 	})
 
 	it("valid JSON after malformed request → works (no state leak)", async () => {

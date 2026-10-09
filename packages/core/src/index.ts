@@ -63,7 +63,7 @@ import type {
 	TapContext,
 } from "./types.ts"
 import { codeToStatusKey, EK, EMPTY_OBJ, SK } from "./types.ts"
-import { assertRequestContentType, validateInput, validateOutput } from "./validation.ts"
+import { assertBodySchemaAllowed, assertRequestContentType, validateInput, validateOutput } from "./validation.ts"
 import type { WSAdapter, WSContext, WSHandler } from "./ws/cloudflare.ts"
 import { loadHoneyFeature } from "./feature-load.ts"
 import { getI18nRuntime } from "./i18n-slot.ts"
@@ -546,6 +546,7 @@ const FRAMEWORK_EKS = new Set<string>([
 	EK.bad_gateway,
 	EK.forbidden,
 	EK.bad_request,
+	EK.malformed_body,
 ])
 
 function shouldValidateOutput(mode: OutputValidationMode): boolean {
@@ -1433,7 +1434,12 @@ export class Honey<
 		const iv = r.iv
 		if (iv && r.dl !== true) {
 			chain.push((ctx, next) =>
-				validateInput(iv, ctx["req"] as Request, ctx["params"] as Record<string, string>).then((validated) => {
+				validateInput(
+					iv,
+					ctx["req"] as Request,
+					ctx["params"] as Record<string, string>,
+					ctx as { searchAll?: Record<string, string[]> },
+				).then((validated) => {
 					ctx["input"] = validated
 					return next()
 				}),
@@ -1469,7 +1475,12 @@ export class Honey<
 		const iv = r.iv
 		if (iv) {
 			chain.push((ctx, next) =>
-				validateInput(iv, ctx["req"] as Request, ctx["params"] as Record<string, string>).then((validated) => {
+				validateInput(
+					iv,
+					ctx["req"] as Request,
+					ctx["params"] as Record<string, string>,
+					ctx as { searchAll?: Record<string, string[]> },
+				).then((validated) => {
 					ctx["input"] = validated
 					return next()
 				}),
@@ -3415,6 +3426,7 @@ class RouteBuilder<
 		parent._settle(this._s.pending)
 		const segments = parsePattern(this._s.path)
 		const methods = [this._s.method, ...(this._s.extraMethods ?? [])]
+		for (const method of methods) assertBodySchemaAllowed(this._s.inputSchemas, method, this._s.path)
 		for (let i = 0; i < methods.length; i++) {
 			parent._addRoute(methods[i], segments, i === 0 ? base : copyRecord(base))
 		}

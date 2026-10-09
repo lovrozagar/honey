@@ -285,7 +285,7 @@ describe("route builder lifecycle — handler ctx types still correct", () => {
 
 	it("params typed from path after all one-shots", () => {
 		honey<{}>()
-			.get("/users/:id")
+			.post("/users/:id")
 			.input({ json: z.object({ name: z.string() }) })
 			.meta({ summary: "x" })
 			.handler((ctx) => {
