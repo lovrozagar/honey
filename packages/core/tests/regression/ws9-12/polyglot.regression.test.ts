@@ -359,7 +359,7 @@ describe.skipIf(!hasPython)("Python runtime", () => {
 	})
 
 	// regression: R8
-	it.fails("R8: a multipart operation called with no fields still sends an empty multipart body", async () => {
+	it("R8: a multipart operation called with no fields still sends an empty multipart body", async () => {
 		const out = await pyCheck("r8_empty_multipart_body")
 		expect(out.err).toBe("")
 		const rec = records.find((r) => r.url === "/upload")

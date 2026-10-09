@@ -406,6 +406,19 @@ def _multipart_parts(
     return None, out_files
 
 
+def _body_args(
+    content: Any, data: Any, files: Any, headers: dict[str, str],
+) -> tuple[Any, Any, Any, dict[str, str]]:
+    """httpx sends ``files=[]`` as no body at all. A multipart operation called with no fields
+    still sends a multipart body: the empty one, a lone closing boundary."""
+    if files is not None and len(files) == 0 and content is None and not data:
+        boundary = uuid.uuid4().hex
+        out = dict(headers)
+        _set_header(out, "Content-Type", f"multipart/form-data; boundary={boundary}")
+        return f"--{boundary}--\r\n".encode(), None, None, out
+    return content, data, files, headers
+
+
 def _to_ws_url(url: str) -> str:
     """Swap only the scheme; a URL inside the query string is untouched."""
     if url.startswith("https://"):
@@ -544,14 +557,15 @@ async def _do_request_async(
     )
 
     async def _send(ctx: RequestContext) -> httpx.Response:
+        b_content, b_data, b_files, b_headers = _body_args(content, data, files, ctx.headers)
         return await client.request(
             ctx.method,
             ctx.url,
-            headers=ctx.headers,
+            headers=b_headers,
             json=ctx.body if content is None and data is None and files is None else None,
-            content=content,
-            data=data,
-            files=files,
+            content=b_content,
+            data=b_data,
+            files=b_files,
             timeout=_timeout(timeout_val),
         )
 
@@ -659,14 +673,15 @@ def _do_request_sync(
     )
 
     def _send(ctx: RequestContext) -> httpx.Response:
+        b_content, b_data, b_files, b_headers = _body_args(content, data, files, ctx.headers)
         return client.request(
             ctx.method,
             ctx.url,
-            headers=ctx.headers,
+            headers=b_headers,
             json=ctx.body if content is None and data is None and files is None else None,
-            content=content,
-            data=data,
-            files=files,
+            content=b_content,
+            data=b_data,
+            files=b_files,
             timeout=_timeout(timeout_val),
         )
 
@@ -759,14 +774,15 @@ async def _open_stream(
         for hook in config.on_request:
             await hook(req_ctx)
     timeout = httpx.Timeout(config.timeout, read=None)
+    b_content, b_data, b_files, b_headers = _body_args(content, data, files, req_ctx.headers)
     request = client.build_request(
         req_ctx.method,
         req_ctx.url,
-        headers=req_ctx.headers,
+        headers=b_headers,
         json=req_ctx.body if content is None and data is None and files is None else None,
-        content=content,
-        data=data,
-        files=files,
+        content=b_content,
+        data=b_data,
+        files=b_files,
         timeout=timeout,
     )
     response = await client.send(request, stream=True)
