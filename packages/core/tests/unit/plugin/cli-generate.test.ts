@@ -67,6 +67,58 @@ function runGenerate(
 	})
 }
 
+type WatchProcess = {
+	/** resolves once stdout has contained `text` at least `count` times */
+	waitForOutput(text: string, count?: number): Promise<void>
+	/** how many times stdout contained `text` so far */
+	count(text: string): number
+	stop(): Promise<void>
+}
+
+/* Signals, not sleeps: every wait is on a line the CLI prints, with a deadline generous enough for
+ * a loaded machine (each generation is a fresh child process). */
+const WATCH_DEADLINE_MS = 45_000
+
+function startWatch(cwd: string): WatchProcess {
+	const proc = spawn("bun", [CLI, "generate", "--watch"], { cwd })
+	let stdout = ""
+	let stderr = ""
+	const listeners = new Set<() => void>()
+	proc.stdout.on("data", (chunk: Buffer) => {
+		stdout += chunk.toString()
+		for (const l of listeners) l()
+	})
+	proc.stderr.on("data", (chunk: Buffer) => {
+		stderr += chunk.toString()
+	})
+	const closed = new Promise<void>((res) => proc.on("close", () => res()))
+	const count = (text: string): number => stdout.split(text).length - 1
+	return {
+		count,
+		stop: async () => {
+			proc.kill("SIGTERM")
+			await closed
+		},
+		waitForOutput: (text, n = 1) =>
+			new Promise<void>((res, rej) => {
+				const check = (): boolean => {
+					if (count(text) < n) return false
+					clearTimeout(timer)
+					listeners.delete(onData)
+					res()
+					return true
+				}
+				const onData = (): void => void check()
+				const timer = setTimeout(() => {
+					listeners.delete(onData)
+					rej(new Error(`timed out waiting for ${n}× "${text}"\nstdout:\n${stdout}\nstderr:\n${stderr}`))
+				}, WATCH_DEADLINE_MS)
+				if (check()) return
+				listeners.add(onData)
+			}),
+	}
+}
+
 describe("honey generate CLI", () => {
 	beforeEach(() => {
 		mkdirSync(TEMP_ROOT, { recursive: true })
@@ -118,54 +170,28 @@ describe("honey generate CLI", () => {
 	})
 
 	it("--watch regenerates after the app file changes", async () => {
-		const proc = spawn("bun", [CLI, "generate", "--watch"], { cwd: TEMP_ROOT })
-		let started = false
-		const waiters: Array<() => void> = []
-		proc.stdout.on("data", (chunk: Buffer) => {
-			if (chunk.toString().includes("watching")) started = true
-			for (const w of waiters) w()
-		})
-
-		const waitUntil = (pred: () => boolean, ms: number, label: string) =>
-			new Promise<void>((res, rej) => {
-				if (pred()) {
-					res()
-					return
-				}
-				const timer = setTimeout(() => rej(new Error(label)), ms)
-				const tick = () => {
-					if (!pred()) return
-					clearTimeout(timer)
-					res()
-				}
-				waiters.push(tick)
-			})
-
-		await waitUntil(() => started, 15_000, "watch start timeout")
-		await new Promise((r) => setTimeout(r, 200))
-		writeFileSync(
-			join(TEMP_ROOT, "src/app.ts"),
-			[
-				'import { honey } from "@lovrozagar/honey"',
-				"",
-				"export const app = honey()",
-				'  .get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
-				'  .get("/watched").handler((ctx) => ctx.res.text("ok", "w"))',
-				"",
-			].join("\n"),
-			"utf-8",
-		)
-
-		const treePath = join(TEMP_ROOT, "src/_gen/routes.gen.ts")
-		const deadline = Date.now() + 15_000
-		while (Date.now() < deadline) {
-			if (existsSync(treePath) && readFileSync(treePath, "utf-8").includes("watched")) break
-			await new Promise((r) => setTimeout(r, 100))
+		const watcher = startWatch(TEMP_ROOT)
+		try {
+			await watcher.waitForOutput("honey: watching")
+			await watcher.waitForOutput("honey: generated")
+			writeFileSync(
+				join(TEMP_ROOT, "src/app.ts"),
+				[
+					'import { honey } from "@lovrozagar/honey"',
+					"",
+					"export const app = honey()",
+					'  .get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
+					'  .get("/watched").handler((ctx) => ctx.res.text("ok", "w"))',
+					"",
+				].join("\n"),
+				"utf-8",
+			)
+			await watcher.waitForOutput("honey: generated", 2)
+		} finally {
+			await watcher.stop()
 		}
-		proc.kill("SIGTERM")
-		await new Promise<void>((res) => proc.on("close", () => res()))
-		expect(readFileSync(treePath, "utf-8")).toContain("watched")
-	}, 35_000)
+		expect(readFileSync(join(TEMP_ROOT, "src/_gen/routes.gen.ts"), "utf-8")).toContain("watched")
+	}, 120_000)
 
 	// regression: H70
 	it("rejects unknown flags and a missing explicit config, even with --app", async () => {
@@ -276,25 +302,56 @@ describe("honey generate CLI", () => {
 				'export const app = honey().get(`/${extra}`).handler((ctx) => ctx.res.text("ok", "ok"))',
 			].join("\n"),
 		)
-		const proc = spawn("bun", [CLI, "generate", "--watch"], { cwd: TEMP_ROOT })
 		const treePath = join(TEMP_ROOT, "src/_gen/routes.gen.ts")
-		const waitFor = async (text: string): Promise<boolean> => {
-			const deadline = Date.now() + 15_000
-			while (Date.now() < deadline) {
-				if (existsSync(treePath) && readFileSync(treePath, "utf-8").includes(text)) return true
-				await new Promise((r) => setTimeout(r, 100))
-			}
-			return false
-		}
+		const watcher = startWatch(TEMP_ROOT)
 		try {
-			expect(await waitFor("first")).toBe(true)
+			await watcher.waitForOutput("honey: watching")
+			await watcher.waitForOutput("honey: generated")
+			expect(readFileSync(treePath, "utf-8")).toContain("first")
 			writeFileSync(join(TEMP_ROOT, "src/routes.ts"), 'export const extra = "second"\n')
-			expect(await waitFor("second")).toBe(true)
+			await watcher.waitForOutput("honey: generated", 2)
 		} finally {
-			proc.kill("SIGTERM")
-			await new Promise<void>((res) => proc.on("close", () => res()))
+			await watcher.stop()
 		}
-	}, 40_000)
+		expect(readFileSync(treePath, "utf-8")).toContain("second")
+	}, 120_000)
+
+	/* The watcher used to be armed only after the first generation finished, so an edit made while
+	 * it ran was lost for good (only the app entry had an mtime poll). The app below holds the first
+	 * generation open until the test has edited the module it imports. */
+	it("--watch keeps an edit made while the first generation runs", async () => {
+		const started = join(TEMP_ROOT, "generation-started")
+		writeFileSync(join(TEMP_ROOT, "src/routes.ts"), 'export const extra = "first"\n')
+		writeFileSync(
+			join(TEMP_ROOT, "src/app.ts"),
+			[
+				'import { existsSync, writeFileSync } from "node:fs"',
+				'import { honey } from "@lovrozagar/honey"',
+				'import { extra } from "./routes.ts"',
+				`const started = ${JSON.stringify(started)}`,
+				"/* only the first generation waits: it marks itself, then holds until the edit lands */",
+				"if (!existsSync(started)) {",
+				'	writeFileSync(started, "")',
+				"	await new Promise((r) => setTimeout(r, 2_000))",
+				"}",
+				'export const app = honey().get(`/${extra}`).handler((ctx) => ctx.res.text("ok", "ok"))',
+			].join("\n"),
+		)
+		const treePath = join(TEMP_ROOT, "src/_gen/routes.gen.ts")
+		const watcher = startWatch(TEMP_ROOT)
+		try {
+			const deadline = Date.now() + WATCH_DEADLINE_MS
+			while (!existsSync(started)) {
+				if (Date.now() > deadline) throw new Error("first generation never started")
+				await new Promise((r) => setTimeout(r, 20))
+			}
+			writeFileSync(join(TEMP_ROOT, "src/routes.ts"), 'export const extra = "second"\n')
+			await watcher.waitForOutput("honey: generated", 2)
+		} finally {
+			await watcher.stop()
+		}
+		expect(readFileSync(treePath, "utf-8")).toContain("second")
+	}, 120_000)
 
 	it("--watch does not loop on SDK ports written next to the app", async () => {
 		writeFileSync(
@@ -309,21 +366,15 @@ describe("honey generate CLI", () => {
 				"}",
 			].join("\n"),
 		)
-		const proc = spawn("bun", [CLI, "generate", "--watch"], { cwd: TEMP_ROOT })
-		let generations = 0
-		proc.stdout.on("data", (chunk: Buffer) => {
-			generations += chunk.toString().split("honey: generated").length - 1
-		})
+		const watcher = startWatch(TEMP_ROOT)
 		try {
-			const deadline = Date.now() + 15_000
-			const generated = () => generations > 0
-			while (!generated() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100))
-			expect(generations).toBe(1)
+			await watcher.waitForOutput("honey: watching")
+			await watcher.waitForOutput("honey: generated")
+			/* a loop would show within a few debounce cycles; waiting longer only proves less */
 			await new Promise((r) => setTimeout(r, 2_000))
-			expect(generations).toBe(1)
+			expect(watcher.count("honey: generated")).toBe(1)
 		} finally {
-			proc.kill("SIGTERM")
-			await new Promise<void>((res) => proc.on("close", () => res()))
+			await watcher.stop()
 		}
-	}, 30_000)
+	}, 120_000)
 })

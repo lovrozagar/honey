@@ -112,6 +112,8 @@ async function watchAndGenerate(cwd: string, flags: CliFlags, args: string[]): P
 
 	const childArgs = ["generate", ...args.filter((a) => a !== "--watch" && a !== "--watch=true")]
 	const outputs = generatedOutputs(resolved, cwd)
+	/* a generation creating the directory an output lives in is not an edit */
+	const outputParents = new Set(outputs.files.map((file) => dirname(file)))
 
 	let running = false
 	let pending = false
@@ -140,15 +142,15 @@ async function watchAndGenerate(cwd: string, flags: CliFlags, args: string[]): P
 		debounce = setTimeout(() => void generate(), 100)
 	}
 
-	await generate()
-
+	/* Arm the watcher and read the poll baseline before saying so and before the first generation:
+	 * an edit made after "watching" or while the first generation runs queues a rerun instead of
+	 * landing in the gap before the watcher exists. */
 	const appAbs = resolve(cwd, resolved.app)
 	const srcDir = dirname(appAbs)
-	console.log(`honey: watching ${srcDir}`)
 	watch(srcDir, { recursive: true }, (_event, filename) => {
 		if (!filename) return
 		const abs = resolve(srcDir, String(filename))
-		if (WATCH_IGNORE_RE.test(abs) || isGeneratedOutput(abs, outputs)) return
+		if (WATCH_IGNORE_RE.test(abs) || isGeneratedOutput(abs, outputs) || outputParents.has(abs)) return
 		schedule()
 	})
 	/* recursive fs.watch misses replace-by-rename saves on some platforms; poll the entry too */
@@ -159,6 +161,9 @@ async function watchAndGenerate(cwd: string, flags: CliFlags, args: string[]): P
 		lastMtime = mtime
 		schedule()
 	}, 250)
+	console.log(`honey: watching ${srcDir}`)
+
+	await generate()
 }
 
 function mtimeOf(path: string): number {

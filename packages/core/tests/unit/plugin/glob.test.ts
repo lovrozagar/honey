@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { matchesGlob } from "../../../src/glob.ts"
+import { WATCH_IGNORE_RE, matchesGlob } from "../../../src/glob.ts"
 
 const ROOT = "/project"
 const m = (file: string, ...patterns: string[]) => matchesGlob(`${ROOT}/${file}`, patterns, ROOT)
@@ -48,4 +48,25 @@ describe("watch glob matching", () => {
 		expect(m("src/a+b.ts", "src/a+b.ts")).toBe(true)
 		expect(m("src/aab.ts", "src/a+b.ts")).toBe(false)
 	})
+})
+
+describe("WATCH_IGNORE_RE", () => {
+	/* creating the _gen directory fires a watch event for the bare directory path; before the CLI
+	 * armed its watcher ahead of the first generation that event was never seen */
+	it.each([
+		"/app/src/_gen",
+		"/app/src/_gen/routes.gen.ts",
+		"/app/src/routes.gen.ts",
+		"/app/src/routes.gen.ts.ab12cd.tmp",
+		"/app/node_modules/x/index.ts",
+	])("ignores %s", (path) => {
+		expect(WATCH_IGNORE_RE.test(path)).toBe(true)
+	})
+
+	it.each(["/app/src/app.ts", "/app/src/_general.ts", "/app/src/my_gen/x.ts", "/app/src/gen.ts"])(
+		"watches %s",
+		(path) => {
+			expect(WATCH_IGNORE_RE.test(path)).toBe(false)
+		},
+	)
 })
