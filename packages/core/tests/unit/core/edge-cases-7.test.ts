@@ -152,7 +152,7 @@ describe("csrf: origin checks", () => {
 		expect(res.status).toBe(200)
 	})
 
-	it("JSON content-type → skips CSRF check (not a form)", async () => {
+	it("JSON content-type from a foreign origin → 403 (content type does not matter)", async () => {
 		const app = honey<{}>().use(csrf({ origin: "http://app.com" }))
 		app.post("/api").handler((ctx) => ctx.res.json("created", {}))
 
@@ -167,7 +167,7 @@ describe("csrf: origin checks", () => {
 			}),
 			{},
 		)
-		expect(res.status).toBe(201)
+		expect(res.status).toBe(403)
 	})
 
 	it("origin array → matches any in list", async () => {

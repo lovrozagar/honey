@@ -42,7 +42,7 @@ describe("csrf middleware — internal", () => {
 		expect(res.status).toBe(403)
 	})
 
-	it("POST with Content-Type: application/json → allowed (skipped)", async () => {
+	it("POST with Content-Type: application/json from cross-site → 403", async () => {
 		const app = makeApp()
 		const res = await app.fetch(
 			new Request("http://localhost/action", {
@@ -55,7 +55,7 @@ describe("csrf middleware — internal", () => {
 			}),
 			{},
 		)
-		expect(res.status).toBe(200)
+		expect(res.status).toBe(403)
 	})
 
 	it("GET → always allowed regardless of origin", async () => {
@@ -136,10 +136,10 @@ describe("csrf middleware — internal", () => {
 		expect(res.status).toBe(200)
 	})
 
-	it("no Origin header, no Sec-Fetch-Site → 403", async () => {
+	it("no Origin header, no Sec-Fetch-Site → allowed (non-browser client)", async () => {
 		const app = makeApp()
 		const res = await app.fetch(formPost("http://localhost/action"), {})
-		expect(res.status).toBe(403)
+		expect(res.status).toBe(200)
 	})
 })
 
@@ -160,7 +160,7 @@ describe("csrf middleware — consumer", () => {
 		expect(body.done).toBe(true)
 	})
 
-	it("JSON API POST from any origin → allowed", async () => {
+	it("JSON API POST from a foreign origin → 403 (content type does not matter)", async () => {
 		const app = makeApp()
 		const res = await app.fetch(
 			new Request("http://localhost/action", {
@@ -174,6 +174,6 @@ describe("csrf middleware — consumer", () => {
 			}),
 			{},
 		)
-		expect(res.status).toBe(200)
+		expect(res.status).toBe(403)
 	})
 })

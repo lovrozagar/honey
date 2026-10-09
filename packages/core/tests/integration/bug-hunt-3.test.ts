@@ -786,25 +786,15 @@ describe("bug-hunt-3: CSRF sec-fetch-site handling", () => {
 })
 
 /* ──────────────────────────────────────────────
- * 20. CORS credentials + wildcard origin → echoes request origin
+ * 20. CORS credentials + wildcard origin → rejected at construction
  *
- * cors.ts:27-28: credentialWildcard auto-narrows to echo origin.
+ * Echoing any origin with credentials was a cross-site read hole.
  * ────────────────────────────────────────────── */
 
 describe("bug-hunt-3: CORS credentials + wildcard auto-narrowing", () => {
-	it("credentials: true + no origin config → echoes request origin", async () => {
-		const app = honey<{}>().use(cors({ credentials: true }))
-		app.get("/api").handler((ctx) => ctx.res.json("ok", {}))
-		server = serve(app, { env: {}, port: 0 })
-		const addr = server.address() as { port: number }
-
-		const res = await request(addr.port, "/api", {
-			headers: { origin: "http://my-app.com" },
-		})
-		expect(res.status).toBe(200)
-		/* should echo the request origin, not "*" */
-		expect(res.headers["access-control-allow-origin"]).toBe("http://my-app.com")
-		expect(res.headers["access-control-allow-credentials"]).toBe("true")
+	it("credentials: true + no origin config → throws at construction", () => {
+		/* echoing any origin with credentials let every site read authenticated responses */
+		expect(() => cors({ credentials: true })).toThrow(/explicit `origin`/)
 	})
 })
 

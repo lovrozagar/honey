@@ -97,7 +97,13 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			return ctx.res.json("ok", { id: ctx.input.search.id })
 		})
 
-	const corsed = h.use(cors({ credentials: true, origin: "*" }))
+	/* credentialed CORS needs an explicit allow-list: the origins the e2e suites send */
+	const corsed = h.use(
+		cors({
+			credentials: true,
+			origin: ["http://localhost:3000", "http://example.com", "https://example.com", "http://client.test"],
+		}),
+	)
 	const base = corsed.use(withDb)
 	const authed = base.use(withAuth)
 

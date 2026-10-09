@@ -9,7 +9,7 @@ test.describe("health", () => {
 })
 
 test.describe("CORS", () => {
-	test("preflight from browser → echoes origin (credentials + wildcard)", async ({ request }) => {
+	test("preflight from an allowed origin → echoes it (credentials + allow-list)", async ({ request }) => {
 		const res = await request.fetch("/api/echo", {
 			headers: {
 				"access-control-request-method": "POST",
@@ -18,7 +18,7 @@ test.describe("CORS", () => {
 			method: "OPTIONS",
 		})
 		expect(res.status()).toBe(204)
-		/* credentials: true + origin: "*" echoes back the request origin per CORS spec */
+		/* credentials: true echoes an allow-listed origin, never `*` */
 		expect(res.headers()["access-control-allow-origin"]).toBe("http://localhost:3000")
 		expect(res.headers()["access-control-allow-credentials"]).toBe("true")
 		expect(res.headers()["vary"]).toContain("Origin")
