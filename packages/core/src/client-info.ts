@@ -39,6 +39,17 @@ export function isValidHost(host: string): boolean {
 	return true
 }
 
+/**
+ * Bun before 1.4 builds `request.url` by concatenating `Host` and the request target, so a
+ * `Host: x/admin?` picks the routed path. Later versions hand over the target alone.
+ */
+export const BUN_URL_FROM_HOST: boolean = (() => {
+	const version = (globalThis as { Bun?: { version?: string } }).Bun?.version
+	if (version === undefined) return false
+	const [major = 0, minor = 0] = version.split(".").map(Number)
+	return major < 1 || (major === 1 && minor < 4)
+})()
+
 /** `false` when the request carries a `Host` header that is not `host[:port]`. */
 export function hasValidHost(req: Request): boolean {
 	const host = req.headers.get("host")

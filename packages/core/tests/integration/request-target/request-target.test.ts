@@ -18,6 +18,14 @@ const RUNTIMES: Record<string, string[]> = {
 	node: ["node", "--unhandled-rejections=strict", SERVER],
 }
 
+/* the case table's key for a runtime: Bun's URL handling changed in 1.4 */
+function variantOf(name: string): string {
+	if (name !== "bun") return name
+	const version = spawnSync("bun", ["--version"], { encoding: "utf-8" }).stdout.trim()
+	const [major = 0, minor = 0] = version.split(".").map(Number)
+	return major > 1 || (major === 1 && minor >= 4) ? "bun>=1.4" : "bun"
+}
+
 function available(cmd: string): boolean {
 	return spawnSync(cmd, ["--version"], { stdio: "ignore" }).status === 0
 }
@@ -64,14 +72,15 @@ const CASES: Case[] = [
 	{ expect: { status: 404 }, target: "http://admin/secret" },
 	{ expect: { path: "/files/x", pattern: "/files/*rest", rest: "x", status: 200 }, target: "http://other/files/x" },
 	{ expect: BAD, target: "*" },
-	/* hostile Host values never change the routed path. Node and Deno reject them (Deno builds
-	 * request.url from Host, so it must); Bun routes on the target and ignores them. */
-	{ expect: BAD, host: "evil.com/admin/secret?", only: { bun: { status: 404 } }, target: "/nothing" },
-	{ expect: BAD, host: "h/admin", only: { bun: { status: 404 } }, target: "/users" },
+	/* hostile Host values never change the routed path. Node, Deno and Bun before 1.4 reject them
+	 * (Deno and old Bun build request.url from Host, so they must); Bun 1.4+ routes on the target
+	 * and ignores them. */
+	{ expect: BAD, host: "evil.com/admin/secret?", only: { "bun>=1.4": { status: 404 } }, target: "/nothing" },
+	{ expect: BAD, host: "h/admin", only: { "bun>=1.4": { status: 404 } }, target: "/users" },
 	...["a b", "h:99999", "h?", "h#x"].map((host): Case => ({
 		expect: BAD,
 		host,
-		only: { bun: SECRET },
+		only: { "bun>=1.4": SECRET },
 		target: "/admin/secret",
 	})),
 	{
@@ -122,6 +131,7 @@ for (const [name, argv] of Object.entries(RUNTIMES)) {
 	describe.skipIf(!available(argv[0]))(`request target conformance — ${name}`, () => {
 		let child: ChildProcess
 		let port = 0
+		const variant = variantOf(name)
 
 		beforeAll(async () => {
 			child = spawn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "ignore"] })
@@ -143,7 +153,7 @@ for (const [name, argv] of Object.entries(RUNTIMES)) {
 		for (const c of CASES) {
 			const host = c.host ?? "h"
 			it(`${c.target}  Host: ${host}`, async () => {
-				const expected = c.only?.[name] ?? c.expect
+				const expected = c.only?.[variant] ?? c.only?.[name] ?? c.expect
 				expect(await send(port, c.target, host)).toEqual(expected)
 			})
 		}

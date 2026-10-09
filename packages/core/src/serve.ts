@@ -121,9 +121,13 @@ export async function startHoneyServer(
 		return {
 			async close(timeout = DEFAULT_CLOSE_TIMEOUT) {
 				bunWs.closeAll?.(1001, "server shutting down")
-				/* graceful first: in-flight requests finish; then cut what is left */
+				/* graceful first: in-flight requests finish; then cut what is left. Bun before 1.4 keeps
+				 * idle keep-alive connections serving after stop(false), so close those explicitly,
+				 * now and again once in-flight requests have finished and left theirs idle. */
 				const graceful = Promise.resolve(server.stop(false))
+				server.closeIdleConnections?.()
 				if ((await within(graceful, timeout)) === "timeout") await Promise.resolve(server.stop(true))
+				server.closeIdleConnections?.()
 			},
 			hostname,
 			port: bound,
@@ -210,6 +214,7 @@ export async function startHoneyServer(
 type BunWSAdapter = WSAdapter & { websocket: Record<string, unknown> }
 
 type BunServer = {
+	closeIdleConnections?(): void
 	port: number
 	stop(closeActiveConnections?: boolean): void | Promise<void>
 }

@@ -2,7 +2,7 @@ import { bodyKind, headResponse, isProducedStream, rawBodyOf } from "./body-kind
 import { clientInfo, HoneyContext } from "./context.ts"
 import { dict } from "./dict.ts"
 import { normalizePath, pathOfUrl, searchOfUrl } from "./request-path.ts"
-import { hasValidHost, TRUST_OFF, type TrustSetting } from "./client-info.ts"
+import { BUN_URL_FROM_HOST, hasValidHost, TRUST_OFF, type TrustSetting } from "./client-info.ts"
 import type { TrustProxy } from "./trust.ts"
 import { loadFeature, requireFeature } from "./feature-slots.ts"
 import { HoneyError } from "./error.ts"
@@ -2366,10 +2366,11 @@ export class Honey<
 		const wsAdapter = this._graph.settings.wsAdapter
 		const path = normalizePath(pathOfUrl(request.url), this._graph.settings.encodedSlashes)
 		if (path === null) return this._badRequestTarget()
-		/* Deno builds request.url by concatenating Host and the target, so a `Host: x/admin?` would
-		 * choose the routed path. `serve()` checks Host on Deno; this covers `Deno.serve(app.fetch)`,
-		 * which passes its serve info as env. Node's adapter checks it; Bun routes on the target. */
-		if (isDenoServeInfo(env) && !hasValidHost(request)) return this._badRequestTarget()
+		/* Deno and Bun before 1.4 build request.url by concatenating Host and the target, so a
+		 * `Host: x/admin?` would choose the routed path. `serve()` checks Host on Deno; this covers
+		 * `Deno.serve(app.fetch)`, which passes its serve info as env, and every Bun entry point on
+		 * an affected version. Node's adapter checks it; Bun 1.4+ routes on the target. */
+		if ((BUN_URL_FROM_HOST || isDenoServeInfo(env)) && !hasValidHost(request)) return this._badRequestTarget()
 		/* an adapter alone (serve() always installs one) does not need the websocket path */
 		if (!this._graph.hasWs) {
 			return this._doFetch(request, env, executionCtx, path)

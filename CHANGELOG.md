@@ -136,6 +136,7 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 
 ### Fixed
 
+- `serve().close()` on Bun before 1.4 left idle keep-alive connections serving new requests after it resolved; it now closes them.
 - Scoped middleware over a non-ASCII literal (`app.use("/é", auth)`) was skipped for a request that spelled the literal with lowercase percent-escapes (`/%c3%a9`), which still reached a `/:slug` route: the scope literal is stored encoded and was compared with the decoded segment. Both sides are now decoded.
 - A sub-app mounted under a `basePath` kept its realtime routes' default namespace, so `app.route("/v1", sub)` and `app.route("/v2", sub)`, or a parent route at the sub's path, shared topics. A default namespace now follows the mounted full path; a named `namespace` is kept.
 - `logger()`: a log sink that throws on the `--> method path` line turned the request into a 500. The request line is now contained like the response line.
@@ -208,6 +209,7 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 
 ### Security
 
+- On Bun before 1.4, which builds `request.url` from the `Host` header and the target, a request for `/nothing` with `Host: evil.com/admin/secret?` was routed to `/admin/secret`, bypassing path rules in a front proxy. Honey now answers 400 for a `Host` that is not `host[:port]` on those Bun versions, in `serve()` and when `app.fetch` is passed to `Bun.serve` directly. Bun 1.4 and later routes on the target and pays nothing for the check.
 - `createClient` and the generated TypeScript SDK with `redirect: "follow"` sent per-call headers, headers from a function-form `config.headers` and headers set in `onRequest` to the origin a cross-origin redirect pointed at (an API key, say). A cross-origin hop now carries only `Accept`, `Accept-Language` and `User-Agent`.
 - `ipRestrict` no longer trusts `CF-Connecting-IP` by default. Off Cloudflare any client could send it and pass an allow list, or omit it and skip a deny list. A request whose IP cannot be determined is now rejected with 403 for deny-only configs too.
 - `ipRestrict` with a proxy read the leftmost (client-controlled) `X-Forwarded-For` entry; the client is now the entry the outermost trusted proxy wrote. IPv4-mapped IPv6, ports, zones and IPv6 case no longer bypass deny rules; `10.0.0.1abc` no longer matches `10.0.0.0/8`; `/33` is an error instead of a rule that never matches.
