@@ -169,7 +169,7 @@ describe("entries", () => {
 describe("ambient global types are written by name", () => {
 	// regression: 0.7.0 inlined Cloudflare.Env (wrangler's ambient worker-configuration.d.ts) structurally;
 	// generic methods and overloads were lost, so `env.BUCKET` was no longer an R2Bucket
-	it.fails("env typed with an ambient namespace type stays Cloudflare.Env and keeps R2Bucket assignable", async () => {
+	it("env typed with an ambient namespace type stays Cloudflare.Env and keeps R2Bucket assignable", async () => {
 		const ambient = readFileSync(
 			resolve(import.meta.dirname, "../../fixtures/ambient-env/worker-configuration.d.ts"),
 			"utf8",
@@ -206,22 +206,59 @@ describe("ambient global types are written by name", () => {
 				"}",
 			),
 		)
-		const ts = await import("typescript")
-		const program = ts.createProgram([usePath, join(ROOT, "ambient/worker-configuration.d.ts")], {
-			lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
-			module: ts.ModuleKind.ESNext,
-			moduleResolution: ts.ModuleResolutionKind.Bundler,
-			noEmit: true,
-			skipLibCheck: false,
-			strict: true,
-			target: ts.ScriptTarget.ES2022,
-			types: [],
+		const { Project, ts } = await import("ts-morph")
+		const project = new Project({
+			compilerOptions: {
+				lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
+				module: ts.ModuleKind.ESNext,
+				moduleResolution: ts.ModuleResolutionKind.Bundler,
+				noEmit: true,
+				skipLibCheck: false,
+				strict: true,
+				target: ts.ScriptTarget.ES2022,
+				types: [],
+			},
+			skipAddingFilesFromTsConfig: true,
 		})
-		const errors = ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))
+		project.addSourceFileAtPath(join(ROOT, "ambient/worker-configuration.d.ts"))
+		project.addSourceFileAtPath(usePath)
+		const errors = project
+			.getPreEmitDiagnostics()
+			.map((d) => ts.flattenDiagnosticMessageText(d.compilerObject.messageText, "\n"))
 		expect(errors).toEqual([])
 	})
+	it("a type declared in `declare global` is written by name, not imported or inlined", async () => {
+		write(
+			"global-aug/globals.d.ts",
+			lines(
+				"export {}",
+				"declare global {",
+				"\tinterface AppBindings { DB: { query(sql: string): Promise<unknown> } }",
+				"}",
+			),
+		)
+		write(
+			"global-aug/tsconfig.json",
+			JSON.stringify({
+				compilerOptions: {
+					module: "ESNext",
+					moduleResolution: "Bundler",
+					strict: true,
+					target: "ES2022",
+					types: ["./globals.d.ts"],
+				},
+			}),
+		)
+		const entryPath = write(
+			"global-aug/app.ts",
+			lines('import { honey } from "@lovrozagar/honey"', "export const app = honey<AppBindings>()"),
+		)
+		const { envType } = await extractBaseCtx({ entryPath, exportName: "app" })
+		expect(envType).toBe("AppBindings")
+	})
+
 	// regression: a generic method's type parameter inside another type (`Promise<T>`) was written as `unknown`
-	it.fails("a generic method keeps its type parameter inside the return type", async () => {
+	it("a generic method keeps its type parameter inside the return type", async () => {
 		const entryPath = write(
 			"generic-method/app.ts",
 			lines(

@@ -237,6 +237,8 @@ class Serializer {
 	readonly compiler: typeof ts
 	readonly node: ts.Node
 	readonly #active = new Set<ts.Type>()
+	/* type parameters of the signatures being written: inside them a parameter keeps its name */
+	readonly #bound = new Set<ts.Symbol>()
 
 	constructor(checker: ts.TypeChecker, node: ts.Node, compiler: typeof ts) {
 		this.checker = checker
@@ -296,12 +298,6 @@ class Serializer {
 			0
 		/* only reference .d.ts symbols or explicitly declared named types from .ts files */
 		if (!sf.isDeclarationFile && !named) return null
-		/* skip ambient .d.ts scripts (no exports) — import() can't resolve them */
-		if (sf.isDeclarationFile && !(sf as unknown as { externalModuleIndicator?: unknown }).externalModuleIndicator) {
-			return null
-		}
-		/* skip non-exported symbols — import() on them resolves to `any` */
-		if (!isExportedFromFile(sym, sf, checker)) return null
 
 		const typeArgs = type.aliasSymbol ? type.aliasTypeArguments : (type as ts.TypeReference).typeArguments
 		/* a class or interface reference carries its `this` type as a trailing argument */
@@ -311,11 +307,46 @@ class Serializer {
 				? ((declared as { typeParameters?: unknown[] }).typeParameters?.length ?? 0)
 				: (typeArgs?.length ?? 0)
 		const args = (typeArgs ?? []).slice(0, paramCount)
-		if (args.length > 0) {
-			const text = args.map((arg) => this.asRef(arg, depth + 1) ?? this.serialize(arg))
-			return `import("${sf.fileName}").${name}<${text.join(", ")}>`
+		const withArgs = (ref: string): string =>
+			args.length > 0
+				? `${ref}<${args.map((arg) => this.asRef(arg, depth + 1) ?? this.serialize(arg)).join(", ")}>`
+				: ref
+
+		/* a global type (an ambient script such as wrangler's worker-configuration.d.ts, or
+		 * `declare global`) is in scope wherever the app compiles: write its name. Expanding it
+		 * loses overloads and generics, and the copy is not assignable back to the original. */
+		if (named) {
+			const globalName = this.#globalName(sym, decls[0])
+			if (globalName !== null) return withArgs(globalName)
 		}
-		return `import("${sf.fileName}").${name}`
+		/* any other ambient script declaration has no import() path */
+		if (sf.isDeclarationFile && !(sf as unknown as { externalModuleIndicator?: unknown }).externalModuleIndicator) {
+			return null
+		}
+		/* skip non-exported symbols — import() on them resolves to `any` */
+		if (!isExportedFromFile(sym, sf, checker)) return null
+
+		return withArgs(`import("${sf.fileName}").${name}`)
+	}
+
+	/** The name a global declaration is reachable by (`Cloudflare.Env`), or null if it is module-scoped. */
+	#globalName(sym: ts.Symbol, decl: ts.Declaration): string | null {
+		const { compiler } = this
+		let global = false
+		for (let n: ts.Node | undefined = decl.parent; n; n = n.parent) {
+			if (compiler.isModuleDeclaration(n) && n.flags & compiler.NodeFlags.GlobalAugmentation) {
+				global = true
+				break
+			}
+			if (compiler.isSourceFile(n)) {
+				global = !(n as unknown as { externalModuleIndicator?: unknown }).externalModuleIndicator
+				break
+			}
+		}
+		if (!global) return null
+		/* a `declare global` member is qualified as `global.Name`; in scope it is `Name` */
+		const name = this.checker.getFullyQualifiedName(sym).replace(/^global\./, "")
+		return /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(name) ? name : null
 	}
 
 	serialize(type: ts.Type): string {
@@ -365,8 +396,9 @@ class Serializer {
 		if (type.flags & F.BooleanLiteral) return checker.typeToString(type)
 		if (type.flags & F.TemplateLiteral) return "string"
 
-		/* a type parameter with no binding — its constraint, or unknown */
+		/* a type parameter: by name inside the signature that declares it, else its constraint or unknown */
 		if (type.flags & F.TypeParameter) {
+			if (type.symbol && this.#bound.has(type.symbol)) return type.symbol.getName()
 			const constraint = checker.getBaseConstraintOfType(type)
 			return constraint && constraint !== type ? next(constraint) : "unknown"
 		}
@@ -458,8 +490,18 @@ class Serializer {
 
 	/** `<T extends X>(a: A, b?: B, ...rest: C[]) => R`, or the call-signature member form */
 	#signature(sig: ts.Signature, member = false): string {
-		const { checker, compiler, node } = this
 		const typeParams = sig.getTypeParameters() ?? []
+		const added = typeParams.map((t) => t.symbol).filter((s) => s !== undefined && !this.#bound.has(s))
+		for (const s of added) this.#bound.add(s)
+		try {
+			return this.#signatureText(sig, typeParams, member)
+		} finally {
+			for (const s of added) this.#bound.delete(s)
+		}
+	}
+
+	#signatureText(sig: ts.Signature, typeParams: readonly ts.TypeParameter[], member: boolean): string {
+		const { checker, compiler, node } = this
 		const tp =
 			typeParams.length > 0
 				? `<${typeParams
