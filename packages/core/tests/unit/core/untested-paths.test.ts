@@ -176,7 +176,7 @@ describe("WS message queue rejection", () => {
 })
 
 describe("404/405 with global middleware", () => {
-	it("global middleware runs even for 404", async () => {
+	it("middleware every route runs also runs for 404", async () => {
 		let mwCalled = false
 		const app = honey<{}>()
 		const mw = createMiddleware(async (_ctx, next) => {
@@ -188,10 +188,10 @@ describe("404/405 with global middleware", () => {
 			.get("/exists")
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 
-		await app.fetch(new Request("http://localhost/missing"), {})
-		/* global middleware should NOT run for 404 — only route middleware runs */
-		/* 404 is handled before middleware chain */
-		expect(mwCalled).toBe(false)
+		const res = await app.fetch(new Request("http://localhost/missing"), {})
+		/* every route runs mw, so it is app-wide: an unknown path runs it too, whichever handle serves */
+		expect(res.status).toBe(404)
+		expect(mwCalled).toBe(true)
 	})
 })
 

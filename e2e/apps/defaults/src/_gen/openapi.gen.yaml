@@ -1,6 +1,5 @@
-x-generated: honey checksum:4748c662e763
+x-generated: "honey checksum:4748c662e763"
 info:
-  description: null
   title: Honey Defaults
   version: "0.0.1"
 openapi: "3.1.0"

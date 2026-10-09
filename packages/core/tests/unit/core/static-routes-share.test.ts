@@ -27,6 +27,7 @@ describe("use() shares the static route map", () => {
 	it("parent registrations after use() land on the child's map", () => {
 		const app = honey()
 		const child = app.use(async (_ctx, next) => next())
+		child.get("/child").handler((ctx) => ctx.res.text("ok", "child"))
 		app.get("/late").handler((ctx) => ctx.res.text("ok", "late"))
 		expect(statics(child)["GET /late"]).toBeDefined()
 	})

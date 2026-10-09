@@ -21,6 +21,25 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `honey init` writes the `@lovrozagar/honey` dependency (it wrote the unscoped `honey`, owned by a third party on npm) and keeps existing scripts and `type` unless `--force`.
 - `watch` globs are anchored at the project root.
 - Build entries start through `startHoneyServer`; Node and Bun builds keep dependencies external.
+- Middleware is resolved once, when the app finalizes (first request, `toRouteTree()`, codegen), never per request and never from the handle that serves. A route runs, in order: the chain of the handle it was registered on (a mounting handle's chain first), every scope covering it, its own `.use()`, input validation. Serving any handle of an app behaves the same.
+- `app.use(mw)` leaves `app` unchanged (as before), and now a `use(mw)` handle that never registers, mounts or serves anything makes finalize throw — `app.use(auth); app.get("/secret")` used to serve `/secret` without `auth`. A route builder that never got `.handler()` throws the same way.
+- Every `next()` is an error boundary: a throw in a handler or middleware becomes the error response at that layer, so outer middleware always gets a `Response` from `await next()` and its post-`next()` code (CORS, request id, logging, secure headers) runs on errors. A `try/catch` around `next()` no longer sees throws.
+- Scoped middleware guards request paths, in the route grammar: `use("/admin", auth)` now covers `all("/*")` and `/:section/users` for requests under `/admin` (checked per request), `use("/admin/*")` covers `/admin` and below, `use("/orgs/:id")` covers `/orgs/:orgId/members`.
+- 404 and 405 run the middleware every route of the app starts with (an app without routes: the serving handle's) plus the scopes covering the path, with `ctx.errors`, `ctx.path` and context values; they used to run the serving handle's chain only, without scopes. A CORS preflight runs the chain of the route for the requested method (`Access-Control-Request-Method`), scoped and route middleware included — no longer the GET route's chain.
+- `errorFactory`, `defaultErrors`, `defaultBoundary`, `outputValidation`, `onError`, `onNotFound`, `onMethodNotAllowed`, error formatters, `errorI18n`, `logger`, `telemetry`, `tap`, `trailingSlash`, `stripPrefix` and `wsAdapter` are app settings: calling one on any handle applies to every handle and every route, registered before or after. `defaultErrors` used to miss routes registered before the call.
+- `app.route(sub)` runs the mounting handle's chain on the sub's routes (`app.use(auth).route(admin)` protects admin), applies its context values and chain meta under the sub's own, and the sub's routes keep the sub's error factory, default errors, boundary, output validation and taps.
+- Middleware `errors` and `meta` count wherever the middleware runs — chain-level `.use(mw)` now declares its `errors`, mounted routes get contributed meta, and among middleware the one that runs later wins (chain, then scoped, then route level).
+- `context()` rejects every framework key (`searchAll`, `meta`, `path`, `routePattern`, `errors`, `input`, `realtime`, `tap`, ...), and `next({ ... })` additions cannot overwrite them.
+- `forbidden` is a framework error key: `csrf` and `ipRestrict` rejections are 403 under `errorFactory(...).defaultErrors(...)` instead of 500.
+- WebSocket and realtime routes run `chain → scoped → route` like HTTP routes (scoped used to run first), get the app's default error keys, and validate `.input()` (search, headers, cookies) before upgrading.
+- `serve({ cors })` runs `cors` before every route, 404 and preflight of the app (it used to wrap only the handle being served).
+- Cookies: `serializeCookie` encodes `%` as `%25`; with duplicate cookie names the first wins (was the last); names and values are trimmed; `__Host-`/`__Secure-` prefix checks are case-insensitive; `Domain` must be a hostname and `Path` printable ASCII without `;`.
+- Cookie signatures: `sign()` emits v2 `value.~sig`, which binds the cookie name (`{ name }`). `verify(signed, secrets, { name, legacy })` still accepts v1 signatures while `legacy` is true (the default).
+- `createClient`: in safe mode `error` is always truthy on a non-2xx; `""`, `.` and `..` path params throw `PathParamError`; redirects default to same-origin; nested objects in `form` throw; `ctx.retry()` resolves instead of throwing; binary WebSocket frames go to a new `"binary"` event.
+- `etag()`: a truncated SHA-256 (every ETag changes once); only 200 responses get one; an ETag the handler set is kept.
+- `accepts`: a malformed `q` counts as `q=0`.
+- i18n: with a locale set, `#` in plural messages is locale-formatted.
+- The MCP server requires `<PROJECT>_BASE_URL`.
 
 ### Added
 
@@ -29,6 +48,8 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `startHoneyServer` is exported from `@lovrozagar/honey/serve`.
 - SDK and CLI output directories carry an output manifest, so files a later generation no longer writes are removed.
 - `RouteTree.routes`: per-route data keyed by `METHOD /pattern`, and `insertRoute`/`insertWsRoute` in `@lovrozagar/honey/tree` that place a route's leaves by pattern.
+- `createClient`: error subclasses (`BadRequestError` … `GatewayTimeoutError`) and `PathParamError`; `onAuthExpired({ rejectedToken })` (it was accepted and never called), `authHeaderName`/`authHeaderPrefix`, `redirect`, `requestId: false`, and a per-call `timeout`.
+- `ifNoneMatchHits` from `@lovrozagar/honey/etag`.
 
 ### Deprecated
 
@@ -45,6 +66,11 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `use("/admin", mw)` did not cover routes registered as `admin/x`, `//admin/x` or under `basePath("/api/")` / `basePath("api")`.
 - A realtime route no longer shadows an HTTP route on the same path; the 426 is sent only when no HTTP route matches.
 - Spec routes mount even when a `/:slug` or `/*rest` GET exists (only an exact route blocks them).
+- A handler served through a mounted or derived handle could run the chain of whichever handle served it first (the compiled chain was cached on the shared handler): serving a sub-app before mounting it under `use(auth)` left the mounted route unauthenticated. Chain middleware ran twice for routes registered before a later `use()`, scoped and chain order inverted on mounted routes, and mounted sub-apps lost their `errorFactory` and `.context()` values (`ctx.errors.x` was a TypeError).
+- A non-short-circuited CORS preflight ran the chain twice; `telemetry.onResponse` fired twice for handler-thrown errors.
+- Internal routes (spec, docs, manifest) shared the default error-key set, so a scoped middleware's keys leaked into every later route.
+- `HoneyError` with an unknown status key answered with HTTP 200; it is now a 500.
+- Any `use(path, mw)`, `.input()`, an `errorFactory` with `.errors()`, or `telemetry.onMiddleware` sent every request through a slow path that rebuilt middleware arrays and error-factory subsets per request; mounting re-walked every route per scoped entry (21 s for 200 sub-apps). Chains, error subsets and telemetry wrappers are now built once.
 
 ### Security
 
@@ -56,6 +82,10 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - Regenerate route trees (`honey generate`) and call `app.routeTree(routeTree)` before registering routes. A gateway keeps its catch-all: `app.routeTree(routeTree)` then `app.all("/*").proxy(...)`.
 - Code that read the router internals (`app._tree`, `tree.handlers`, handler objects at leaves) reads `RouteTree.routes` instead.
 - `ipRestrict` needs an explicit IP source and throws at construction without one. On Cloudflare, add `trustCloudflare: true`. Behind one reverse proxy, use `trustProxy: true`. Otherwise pass `getIp`.
+- Keep the handle `use(mw)` returns: `const authed = app.use(auth); authed.get(...)`, or chain `honey().use(cors()).get(...)`. If the first request throws "returned a handle that never registers a route", that middleware never ran before this release either.
+- Middleware that caught errors from `await next()` now gets the error response instead: check `res.status` (or use `onError`).
+- If a scope like `use("/admin", auth)` should not run on 404s under `/admin` or on `/:section` routes whose value is `admin`, narrow the scope; the old behavior left those paths unguarded.
+- Pass the same `name` to cookie `sign` and `verify`. Set `legacy: false` once cookies signed by an older release have expired. During a rolling deploy, instances still on an older release cannot verify v2 signatures.
 
 ## 0.6.5 - 2026-10-02
 

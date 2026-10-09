@@ -94,9 +94,8 @@ export function createMiddleware<TReqs = {}, TRet extends Promise<Response> = Pr
 }
 
 /**
- * Merge meta contributed by a middleware chain, in mount order. Resolved once at route
- * registration — never per request, because the precompiled route tree bakes `mt` as a literal
- * and a lazily-derived value would diverge from it.
+ * Merge meta contributed by a middleware chain, in run order (later wins). Resolved once when
+ * the app finalizes, from the chain the route runs — never per request.
  */
 export function collectMiddlewareMeta(
 	groups: ReadonlyArray<ReadonlyArray<RuntimeMiddleware>>,
@@ -114,20 +113,66 @@ export function collectMiddlewareMeta(
 }
 
 /**
- * Context properties that middleware additions must not overwrite.
- * These are set by the framework during request construction.
- * TypeScript prevents this at compile time; this guard catches runtime bypasses.
+ * Every name the framework owns on a request context — fields, lazy getters, methods and
+ * internal backing state. `next({ ... })` additions and `.context()` values may not use them:
+ * an addition would silently replace framework state, and a value assigned over a getter-only
+ * field throws on every request. TypeScript prevents most of this at compile time; this set
+ * is the runtime guard.
  */
-const RESERVED_CTX_KEYS = new Set(["background", "cookies", "env", "headers", "params", "req", "res", "search"])
+export const RESERVED_CTX_KEYS: ReadonlySet<string> = new Set([
+	"background",
+	"cookies",
+	"env",
+	"errors",
+	"executionCtx",
+	"headers",
+	"input",
+	"meta",
+	"params",
+	"path",
+	"realtime",
+	"req",
+	"res",
+	"routePattern",
+	"search",
+	"searchAll",
+	"tap",
+	"_errorToResponse",
+	"_isErrorResponse",
+	"_lzCookies",
+	"_lzHeaders",
+	"_lzSearch",
+	"_lzSearchAll",
+	"_lzUrlFn",
+	"_pendingTaps",
+	"_rq",
+	"_setErrors",
+])
 
 /**
- * Compile a middleware chain + handler into a single function at registration time.
- * Eliminates per-request recursive dispatch, closure allocation, and Promise.resolve wrapping.
+ * Turns a value thrown inside a chain into the Response that stands in for it. Supplied by
+ * the app; must not throw.
+ */
+export type ChainErrorConverter = (thrown: unknown, ctx: object) => Response | Promise<Response>
+
+const NO_RESPONSE_HANDLER = "handler must return a Response — did you forget 'return ctx.res...()'?"
+const NO_RESPONSE_MIDDLEWARE = "middleware must return a Response — did you forget 'return next(...)'?"
+
+/**
+ * Compile a middleware chain + handler into a single function, once.
+ *
+ * With `convert`, every `next()` boundary is an error boundary: whatever the handler or a
+ * middleware throws (or rejects with) becomes a Response at that layer, so the middleware
+ * around it always gets a Response back from `next()` and its post-`next()` code — headers,
+ * logging, timing — runs on error responses too. The compiled function never rejects as long
+ * as `convert` does not. Without `convert`, throws propagate (the bare executor).
  */
 export function compileChain(
 	middlewares: RuntimeMiddleware[],
 	handler: (ctx: object) => Response | Promise<Response>,
+	convert?: ChainErrorConverter,
 ): (ctx: object) => Response | Promise<Response> {
+	if (convert !== undefined) return compileConverting(middlewares, handler, convert)
 	if (middlewares.length === 0) {
 		/* sync fast path — avoids microtask overhead for sync handlers */
 		return (ctx) => {
@@ -136,7 +181,7 @@ export function compileChain(
 				return result.then(validateResponse)
 			}
 			if (result === undefined || result === null) {
-				throw new Error("handler must return a Response — did you forget 'return ctx.res...()'?")
+				throw new Error(NO_RESPONSE_HANDLER)
 			}
 			return result
 		}
@@ -165,6 +210,56 @@ export function compileChain(
 	return (ctx) => executeChain(middlewares, ctx, handler)
 }
 
+function compileConverting(
+	middlewares: readonly RuntimeMiddleware[],
+	handler: (ctx: object) => Response | Promise<Response>,
+	convert: ChainErrorConverter,
+): (ctx: object) => Response | Promise<Response> {
+	const n = middlewares.length
+
+	const runHandler = (ctx: object): Response | Promise<Response> => {
+		let result: Response | Promise<Response>
+		try {
+			result = handler(ctx)
+		} catch (thrown) {
+			return convert(thrown, ctx)
+		}
+		if (result instanceof Promise) {
+			return result.then(
+				(value) => (value === undefined || value === null ? convert(new Error(NO_RESPONSE_HANDLER), ctx) : value),
+				(thrown: unknown) => convert(thrown, ctx),
+			)
+		}
+		if (result === undefined || result === null) return convert(new Error(NO_RESPONSE_HANDLER), ctx)
+		return result
+	}
+
+	const step = (i: number, ctx: object): Response | Promise<Response> => {
+		if (i === n) return runHandler(ctx)
+		const mw = middlewares[i] as RuntimeMiddleware
+		let called = false
+		const next = (additions?: Record<string, unknown>): Promise<Response> => {
+			if (called) throw new Error("next() called multiple times")
+			called = true
+			if (additions) mergeAdditions(ctx, additions)
+			const downstream = step(i + 1, ctx)
+			return downstream instanceof Promise ? downstream : Promise.resolve(downstream)
+		}
+		let out: Promise<Response>
+		try {
+			out = mw(ctx as Record<string, unknown>, next)
+		} catch (thrown) {
+			return convert(thrown, ctx)
+		}
+		return Promise.resolve(out).then(
+			(value) => (value === undefined || value === null ? convert(new Error(NO_RESPONSE_MIDDLEWARE), ctx) : value),
+			(thrown: unknown) => convert(thrown, ctx),
+		)
+	}
+
+	return (ctx) => step(0, ctx)
+}
+
 function mergeAdditions(ctx: object, additions: Record<string, unknown>): void {
 	for (const key in additions) {
 		if (!RESERVED_CTX_KEYS.has(key)) {
@@ -175,14 +270,14 @@ function mergeAdditions(ctx: object, additions: Record<string, unknown>): void {
 
 function validateResponse(result: Response): Response {
 	if (result === undefined || result === null) {
-		throw new Error("handler must return a Response — did you forget 'return ctx.res...()'?")
+		throw new Error(NO_RESPONSE_HANDLER)
 	}
 	return result
 }
 
 function validateMiddlewareResponse(result: Response): Response {
 	if (result === undefined || result === null) {
-		throw new Error("middleware must return a Response — did you forget 'return next(...)'?")
+		throw new Error(NO_RESPONSE_MIDDLEWARE)
 	}
 	return result
 }

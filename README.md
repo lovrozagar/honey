@@ -344,16 +344,17 @@ app
 ### Prefixes and slashes
 
 ```ts
-app.basePath("/api") // every later route is prefixed
+const api = app.basePath("/api") // routes registered on `api` are prefixed
 app.trailingSlash("strip") // 308 /health/ → /health
 app.trailingSlash("enforce") // 308 /health → /health/
 app.trailingSlash("ignore") // both match (default)
 app.stripPrefix("/app") // inbound /app/api/x is matched as /api/x
 ```
 
-- `basePath` only affects routes registered **after** the call, on that chain.
+- `basePath` returns a new handle; only routes registered through it (or handles derived from it) are prefixed.
 - `stripPrefix` is a gateway rewrite. Requests without the prefix still match. It will not strip a partial segment (`/apple` is not stripped by `/app`).
-- `.use()` / `.basePath()` / `.context()` / `.meta()` clone the builder and share the route graph with the parent.
+- `.use(mw)` / `.basePath()` / `.context()` / `.meta()` return a new **handle** on the same app. A route captures its handle's chain, prefix, context values and meta when it is registered; serving any handle of the app behaves the same. The handle you call them on is unchanged, so `app.use(auth)` as a bare statement installs nothing — finalize (the first request, `toRouteTree()` or codegen) throws when a `use(mw)` handle never registers, mounts or serves anything, and when a route builder never got `.handler()`.
+- Settings — `trailingSlash`, `stripPrefix`, `errorFactory`, `defaultErrors`, `defaultBoundary`, `outputValidation`, `onError`, `onNotFound`, `onMethodNotAllowed`, error formatters, `errorI18n`, `logger`, `telemetry`, `tap`, `wsAdapter` — belong to the app: calling one on any handle applies to every handle and every route, registered before or after.
 
 ### Context
 
@@ -707,7 +708,10 @@ Framework-owned keys you do not declare: `validation_failed` (400), `output_vali
 ### Middleware
 
 ```ts
-import { createMiddleware } from "@lovrozagar/honey"
+import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
+
+const errors = defineErrors({ unauthorized: "unauthorized" })
+const app = honey().errorFactory(errors) // ctx.errors exists only with an error factory
 
 const withAuth = createMiddleware(async (ctx, next) => {
 	const token = ctx.req.headers.get("authorization")
@@ -715,25 +719,35 @@ const withAuth = createMiddleware(async (ctx, next) => {
 	return next({ user: { id: "u-1" } })
 })
 
-app.use(withAuth) // global on this chain
-app.use("/admin", withAuth) // prefix-scoped; additions only exist under /admin
+const authed = app.use(withAuth) // routes registered on `authed` run withAuth
+authed.get("/me").handler((ctx) => ctx.res.json("ok", ctx.user))
+
+app.use("/admin", withAuth) // scoped: every request under /admin, whichever handle registered the route
 ```
 
-`createMiddleware` infers additions from `next({ ... })`. Later handlers see `ctx.user`. Return `next()` with no argument to add nothing.
+`createMiddleware` infers additions from `next({ ... })`. Later handlers see `ctx.user`. Return `next()` with no argument to add nothing. Without an `errorFactory`, `ctx.errors` is undefined — throw a `HoneyError` instead.
 
-`.use()` clones the builder. Keep the returned value (or keep chaining) if later routes should see the middleware.
+`.use(mw)` returns a new handle and leaves the one it is called on unchanged: keep the returned value (or keep chaining) and register routes on it. `app.use(mw)` as a bare statement installs nothing, and the first request (or codegen) throws to say so.
+
+What a route runs is fixed when it is registered or mounted, in this order: the chain of the handle it was registered on (a mounting handle's chain first), then every scope that covers it, then its own `.get(...).use(mw)`, then input validation.
+
+- **Scopes guard request paths.** `app.use("/admin", mw)` uses the route grammar (`/orgs/:id`, `/admin/*`) and covers every request whose path is under it — including requests that reach `all("/*")` or `/:section/users`, where the request path is checked at runtime. It applies to routes registered before or after it, on any handle, and to mounted sub-apps.
+- **Errors become responses at every `next()`.** A throw in a handler or a middleware is turned into the error response at that layer, so every middleware around it gets a `Response` from `await next()` and its post-`next()` code (CORS headers, request id, logging, timing) runs on errors too. A `try/catch` around `next()` no longer sees throws: inspect the response status instead.
+- **404, 405 and CORS preflight** run the same pipeline: the middleware every route of the app starts with, plus the scopes covering the request path, with `ctx.errors`, `ctx.path` and context values set. A preflight (`OPTIONS` with `Access-Control-Request-Method`) runs the chain of the route for the requested method, never its handler.
+- Middleware `errors` and `meta` count for every route the middleware runs on — chain, scoped or route level.
+- **Mounting** (`parent.route(sub)`): the sub's routes keep the sub's error factory, default errors, boundary, output validation, taps and context values; the parent's `onError`, formatters, logger and telemetry serve them. A sub-app's own `fetch` keeps serving the sub alone — mounting copies its routes and never changes it.
 
 ### Shipped middleware
 
-Import each from its path. Do **not** `import { cors } from "@lovrozagar/honey"`.
+Import each from its path. Do **not** `import { cors } from "@lovrozagar/honey"`. Each example keeps the handle `use()` returns — register routes on `api`. To run one for the whole app, put it at the start of the chain every route is registered on (`const app = honey().use(cors())`).
 
 #### `cors` — `@lovrozagar/honey/cors`
 
 ```ts
 import { cors } from "@lovrozagar/honey/cors"
 
-app.use(cors())
-app.use(
+const api = app.use(cors())
+const custom = app.use(
 	cors({
 		origin: "https://app.example.com", // or "*" | string[] | (origin) => boolean
 		credentials: true, // wildcard origin is echoed (spec-safe)
@@ -745,14 +759,14 @@ app.use(
 )
 ```
 
-No `Origin` header → middleware is a no-op. Preflight is `OPTIONS` + `access-control-request-method`. `app.serve({ cors: true })` is `cors()` with defaults. `app.serve({ cors: { origin } })` passes the object through.
+No `Origin` header → middleware is a no-op. Preflight is `OPTIONS` + `access-control-request-method`. `app.serve({ cors: true })` runs `cors()` with defaults before every route, 404 and preflight of the app. `app.serve({ cors: { origin } })` passes the object through.
 
 #### `csrf` — `@lovrozagar/honey/csrf`
 
 ```ts
 import { csrf } from "@lovrozagar/honey/csrf"
 
-app.use(csrf({ origin: "https://app.example.com" }))
+const api = app.use(csrf({ origin: "https://app.example.com" }))
 ```
 
 Safe methods (`GET`/`HEAD`/`OPTIONS`) pass. Non-form JSON also passes. Form posts (`urlencoded` / `multipart` / `text/plain`) need `Sec-Fetch-Site: same-origin` or a matching `Origin`. Failure is **403** `forbidden`.
@@ -762,7 +776,7 @@ Safe methods (`GET`/`HEAD`/`OPTIONS`) pass. Non-form JSON also passes. Form post
 ```ts
 import { bodyLimit } from "@lovrozagar/honey/body-limit"
 
-app.use(
+const api = app.use(
 	bodyLimit({
 		maxSize: 1_048_576,
 		limits: { "application/json": 64_000, "multipart/": 10_485_760 },
@@ -784,8 +798,8 @@ const log = createLogger({
 	write: (line) => console.log(line),
 })
 
-app.use(logger())
-app.use(
+const api = app.use(logger())
+const custom = app.use(
 	logger({
 		instance: log, // pino-shaped; sets ctx.log
 		skip: (data) => data.path === "/health",
@@ -804,7 +818,7 @@ app.use(
 ```ts
 import { curlLogger } from "@lovrozagar/honey/curl-logger"
 
-app.use(
+const api = app.use(
 	curlLogger({
 		body: { maxBytes: 2048, allowContentTypes: ["application/json"] },
 		redactHeader: (name, value) => (name === "authorization" ? "Bearer ***" : value),
@@ -819,8 +833,8 @@ app.use(
 ```ts
 import { requestId } from "@lovrozagar/honey/request-id"
 
-app.use(requestId())
-app.use(requestId({ header: "x-request-id", generator: () => crypto.randomUUID() }))
+const api = app.use(requestId())
+const custom = app.use(requestId({ header: "x-request-id", generator: () => crypto.randomUUID() }))
 ```
 
 Adds `ctx.requestId` and echoes the header on the response. Reuses the inbound header when present.
@@ -830,8 +844,8 @@ Adds `ctx.requestId` and echoes the header on the response. Reuses the inbound h
 ```ts
 import { etag } from "@lovrozagar/honey/etag"
 
-app.use(etag()) // weak ETag (default)
-app.use(etag({ weak: false }))
+const api = app.use(etag()) // weak ETag (default)
+const custom = app.use(etag({ weak: false }))
 ```
 
 GET/HEAD only. Skips 4xx and streaming bodies. Responds **304** when `If-None-Match` matches.
@@ -841,7 +855,7 @@ GET/HEAD only. Skips 4xx and streaming bodies. Responds **304** when `If-None-Ma
 ```ts
 import { timeout } from "@lovrozagar/honey/timeout"
 
-app.use(timeout({ duration: 5_000 }))
+const api = app.use(timeout({ duration: 5_000 }))
 ```
 
 Slow handlers reject with **504** `request_timeout`.
@@ -851,8 +865,8 @@ Slow handlers reject with **504** `request_timeout`.
 ```ts
 import { secureHeaders } from "@lovrozagar/honey/secure-headers"
 
-app.use(secureHeaders())
-app.use(
+const api = app.use(secureHeaders())
+const custom = app.use(
 	secureHeaders({
 		contentSecurityPolicy: "default-src 'self'",
 		strictTransportSecurity: "max-age=63072000; includeSubDomains",
@@ -875,8 +889,8 @@ Defaults when omitted: `x-content-type-options: nosniff`, `x-frame-options: SAME
 ```ts
 import { serverTiming } from "@lovrozagar/honey/server-timing"
 
-app.use(serverTiming())
-app.get("/work").handler((ctx) => {
+const api = app.use(serverTiming())
+api.get("/work").handler((ctx) => {
 	ctx.timing.start("db", "query")
 	ctx.timing.end("db")
 	return ctx.res.json("ok", {})
@@ -888,7 +902,7 @@ app.get("/work").handler((ctx) => {
 ```ts
 import { ipRestrict } from "@lovrozagar/honey/ip-restrict"
 
-app.use(
+const api = app.use(
 	ipRestrict({
 		allowList: ["127.0.0.1", "10.0.0.0/8"],
 		denyList: ["192.168.1.50"],
@@ -910,8 +924,8 @@ A request whose IP cannot be determined is **403**, for allow and deny lists ali
 ```ts
 import { poweredBy } from "@lovrozagar/honey/powered-by"
 
-app.use(poweredBy()) // x-powered-by: Honey
-app.use(poweredBy({ name: "api" }))
+const api = app.use(poweredBy()) // x-powered-by: Honey
+const custom = app.use(poweredBy({ name: "api" }))
 ```
 
 #### `pretty-json` — `@lovrozagar/honey/pretty-json`
@@ -919,8 +933,8 @@ app.use(poweredBy({ name: "api" }))
 ```ts
 import { prettyJson } from "@lovrozagar/honey/pretty-json"
 
-app.use(prettyJson()) // ?pretty=
-app.use(prettyJson({ query: "pretty", space: 2 }))
+const api = app.use(prettyJson()) // ?pretty=
+const custom = app.use(prettyJson({ query: "pretty", space: 2 }))
 ```
 
 Only rewrites `application/json` when the query string contains the key.
@@ -936,7 +950,7 @@ const users = honey()
 const app = honey().route(users) // merges routes, realtime, taps, static map
 ```
 
-`.route(sub)` copies the sub-app's tree into this one. Duplicate paths throw.
+`.route(sub)` copies the sub-app's routes into this one, under the chain of the handle you call it on: `app.use(auth).route(admin)` runs `auth` on every admin route. The sub's paths are kept as they are (its own `basePath` applies, the mounting handle's does not). Duplicate paths throw.
 
 ### Taps
 
@@ -984,7 +998,7 @@ app.all("/upstream/*path").proxy({
 ```ts
 import { staticFiles } from "@lovrozagar/honey/static"
 
-app.use(
+const site = app.use(
 	staticFiles({
 		prefix: "/assets",
 		resolve: async (_ctx, filePath) => {
@@ -1243,12 +1257,12 @@ A fact that middleware already enforces should not be retyped on every route it 
 ```ts
 export const shard = createMiddleware(fn, { meta: { tenant: "project_id" } })
 
-app.use(shard) // every route on the chain — or app.use("/orgs", shard), or .get("/x").use(shard)
+const tenant = app.use(shard) // every route registered on `tenant` — or app.use("/orgs", shard), or .get("/x").use(shard)
 ```
 
-Explicit `.meta()` (route, then chain) always outranks a contributed value; among middleware, later mount order wins. Contributed meta lands in the route's `mt`, so it reaches `ctx.meta`, the manifest, and the policy — with `strict: "error"` a middleware cannot contribute a key that has no entry. A path-scoped middleware registered _after_ the routes it covers still back-fills them. `internal` may not be contributed, since a middleware that removed routes from the document would be invisible from both sides.
+Explicit `.meta()` (route, then chain) always outranks a contributed value; among middleware, the one that runs later wins (chain, then scoped, then route level — the order they run in). Contributed meta lands in the route's `mt`, so it reaches `ctx.meta`, the manifest, and the policy — with `strict: "error"` a middleware cannot contribute a key that has no entry. A path-scoped middleware registered _after_ the routes it covers still applies to them, and mounted routes get the meta of the chain they are mounted on. `internal` may not be contributed, since a middleware that removed routes from the document would be invisible from both sides.
 
-Resolved once at registration, never per request: the precompiled route tree bakes `mt` as a literal and patch mode does not overwrite it, so a lazily-derived value would differ between dev and production. Change what a middleware contributes, then regenerate.
+Resolved once when the app finalizes (first request, `toRouteTree()` or codegen), never per request, from the same chain the route runs. Change what a middleware contributes, then regenerate.
 
 ## WebSockets
 
@@ -1409,7 +1423,16 @@ const ws = client.ws("/echo-ws", { reconnectToken: "t" })
 
 Per-call options: `json`, `form`, `search`, `params`, `headers`, `cookies`, `timeout`, `signal`, `lastEventId`.
 
-`throwOnError: true` throws `ClientError` subclasses (`BadRequestError`, `UnauthorizedError`, …). `isClientError(e)` is the guard.
+More config:
+
+- `onAuthExpired({ rejectedToken })` runs on a 401 and returns the new token; the request is retried once with it (not for stream bodies). The token goes in `authHeaderName` (default `Authorization`) with `authHeaderPrefix` (default `"Bearer "`).
+- `redirect` — redirects are followed only to the same origin by default, so custom auth headers never follow a cross-origin redirect.
+- `requestId: false` stops the client from sending `x-request-id` (which makes every cross-origin request preflighted).
+- A path param that is `""`, `.` or `..` throws `PathParamError` before anything is sent.
+
+`throwOnError: true` throws `ClientError` subclasses (`BadRequestError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, … `GatewayTimeoutError`). `isClientError(e)` is the guard. In safe mode, `error` is set (truthy) for every non-2xx, even when the body is empty or not JSON.
+
+Awaiting a call to an SSE route returns an async iterable of events: `for await (const ev of await client.get("/events"))`. On `client.ws(...)`, text frames go to `"message"` and binary frames to `"binary"` (an `ArrayBuffer`).
 
 ### Generated SDK usage
 
@@ -1544,8 +1567,9 @@ import { serializeCookie } from "@lovrozagar/honey/cookie"
 serializeCookie("sid", { value: "abc", httpOnly: true, path: "/" })
 
 import { sign, verify } from "@lovrozagar/honey/cookie-sign"
-const signed = await sign("abc", SECRET)
-const raw = await verify(signed, [SECRET, OLD_SECRET]) // null if none match
+const signed = await sign("abc", SECRET, { name: "sid" }) // binds the cookie name
+const raw = await verify(signed, [SECRET, OLD_SECRET], { name: "sid" }) // null if none match or malformed
+// `legacy: false` stops accepting signatures from earlier releases, which were not bound to a name
 
 import { timingSafeEqual } from "@lovrozagar/honey/crypto"
 await timingSafeEqual(a, b)

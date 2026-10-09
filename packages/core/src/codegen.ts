@@ -1153,7 +1153,8 @@ export function generateManifest<TEnv, TCtx>(
 	const factory = getErrorFactory(app)
 	const collected: CollectedRoute[] = collectRoutes(app)
 
-	const allErrorKeys = new Set<string>()
+	/* each key resolved against the factory of a route that declares it — a mounted sub-app keeps its own */
+	const allErrorKeys = new Map<string, Record<string, () => HoneyError> | null>()
 
 	const routes: RouteManifestEntry[] = collected.map(({ handler, method, path }) => {
 		const entry: RouteManifestEntry = {
@@ -1165,8 +1166,9 @@ export function generateManifest<TEnv, TCtx>(
 			path,
 		}
 
+		const routeFactory = (handler.fac as Record<string, () => HoneyError> | null | undefined) ?? factory
 		for (const ek of handler.ek) {
-			allErrorKeys.add(ek)
+			if (!allErrorKeys.has(ek)) allErrorKeys.set(ek, routeFactory)
 		}
 
 		if (handler.iv) {
@@ -1201,7 +1203,7 @@ export function generateManifest<TEnv, TCtx>(
 	})
 
 	return {
-		errors: Array.from(allErrorKeys).map((key) => resolveErrorInfo(key, factory)),
+		errors: Array.from(allErrorKeys).map(([key, keyFactory]) => resolveErrorInfo(key, keyFactory)),
 		routes,
 	}
 }

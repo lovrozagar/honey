@@ -279,26 +279,26 @@ one, because it makes a consumer confident about the wrong parameter.
 Rules:
 
 - **Explicit always wins.** Chain `.meta()` and route `.meta()` both outrank a contributed value.
-  Among middleware, later mount order wins.
+  Among middleware, the one that runs later wins: chain, then scoped, then route level.
 - **Contributed meta is real meta.** It lands in the route's `mt`, so it appears on `ctx.meta`, in
   the manifest, and — critically — it is subject to the policy. A middleware cannot smuggle an
   untagged fact into the document: with `strict: "error"`, contributing `sla` with no policy entry
   fails the build exactly as writing it on a route would.
-- **A scoped middleware registered after its routes still reaches them.** `.use("/prefix", mw)`
-  back-fills already-registered handlers, mirroring what honey already does for scoped error keys.
-  A tag missing where enforcement happens is the failure direction that matters.
+- **A scoped middleware registered after its routes still reaches them.** Meta is resolved from
+  the chain each route runs when the app finalizes, so registration order does not matter, and a
+  route mounted with `.route(sub)` gets the meta of the chain it is mounted on. A tag missing where
+  enforcement happens is the failure direction that matters.
 - **`internal` may not be contributed.** It controls whether a route appears in generated artifacts
   at all; a middleware that removed 104 routes from the document would be invisible in both the
   route and the middleware. `createMiddleware` throws.
 
-### Why it is resolved at registration, not per request
+### Why it is resolved at finalize, not per request
 
-The precompiled route tree bakes `mt` as a JSON literal (`mw` is never serialized), and
-`.routeTree()` patch mode deliberately does not overwrite `mt` — the baked value is what production
-serves. Contributed meta is therefore collected once, when the route registers, so the JIT and
-precompiled paths cannot disagree. A lazily-derived value would produce one answer in development
-and a different, stale one in production — the exact class of divergence this feature exists to
-remove. The usual contract applies: change what a middleware contributes, regenerate.
+Contributed meta is collected once, when the app finalizes (first request, `toRouteTree()` or
+codegen), from the same resolved chain the route runs — so the request path, `ctx.meta`, the
+manifest and the document cannot disagree, with or without a loaded route tree. A lazily-derived
+value per request would make the served meta depend on timing. The generated `routes.gen.ts` carries
+the meta of the generating build; change what a middleware contributes, then regenerate.
 
 ### Two things to put in a release note
 

@@ -1,6 +1,5 @@
-x-generated: honey checksum:a685c770b312
+x-generated: "honey checksum:a685c770b312"
 info:
-  description: null
   title: Honey Compose
   version: "0.0.1"
 openapi: "3.1.0"
@@ -13,7 +12,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
         "403":
           content:
             application/json:
@@ -34,7 +33,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
         "403":
           content:
             application/json:
@@ -49,7 +48,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
   /feed:
     get:
       parameters:
@@ -65,7 +64,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
   /health:
     get:
       responses:
@@ -74,7 +73,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
   /resources:
     post:
       requestBody:
@@ -89,7 +88,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
         "403":
           content:
             application/json:
@@ -116,7 +115,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
         "403":
           content:
             application/json:
@@ -142,7 +141,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401ExpiredTokenInvalidToken"
-          description: expired_token, invalid_token
+          description: "expired_token, invalid_token"
         "403":
           content:
             application/json:

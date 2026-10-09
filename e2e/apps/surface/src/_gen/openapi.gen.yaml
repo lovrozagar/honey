@@ -1,6 +1,5 @@
-x-generated: honey checksum:c4888131a74a
+x-generated: "honey checksum:c4888131a74a"
 info:
-  description: null
   title: Honey Surface
   version: "1.0.0"
 openapi: "3.1.0"
@@ -1084,7 +1083,6 @@ components:
         name:
           type: string
     ListOutBinaryResponse200:
-      types: null
       vendor: zod
       version: 1
     ListOutCsvResponse200:

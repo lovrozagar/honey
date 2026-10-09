@@ -154,13 +154,13 @@ describe(".route() merges sub-router tree into parent", () => {
 		const child = app.use(async (_ctx, next) => next())
 		app.routeTree(live.toRouteTree())
 
-		const viaParent = await app.fetch(new Request("http://localhost/from-tree"), {})
-		expect(viaParent.status).toBe(200)
-		expect(await viaParent.text()).toBe("tree")
-
 		const viaChild = await child.fetch(new Request("http://localhost/from-tree"), {})
 		expect(viaChild.status).toBe(200)
 		expect(await viaChild.text()).toBe("tree")
+
+		const viaParent = await app.fetch(new Request("http://localhost/from-tree"), {})
+		expect(viaParent.status).toBe(200)
+		expect(await viaParent.text()).toBe("tree")
 	})
 
 	it("parent fetch runs realtime registered on a use() child", async () => {

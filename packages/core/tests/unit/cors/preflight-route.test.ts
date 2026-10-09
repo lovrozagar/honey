@@ -67,10 +67,20 @@ describe("CORS preflight on method-specific routes", () => {
 		expect(res.headers.get("access-control-allow-origin")).toBe("*")
 	})
 
-	it("preflight on an unknown path stays 404 when cors is on a child chain", async () => {
+	it("preflight on an unknown path is answered by cors every route runs", async () => {
 		const app = honey()
 		const corsed = app.use(cors({ origin: "*" }))
 		corsed.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+		const res = await app.fetch(preflight("/missing"), {})
+		expect(res.status).toBe(204)
+		expect(res.headers.get("access-control-allow-origin")).toBe("*")
+	})
+
+	it("preflight on an unknown path stays 404 when only some routes run cors", async () => {
+		const app = honey()
+		const corsed = app.use(cors({ origin: "*" }))
+		corsed.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+		app.get("/internal").handler((ctx) => ctx.res.text("ok", "ok"))
 		const res = await app.fetch(preflight("/missing"), {})
 		expect(res.status).toBe(404)
 	})

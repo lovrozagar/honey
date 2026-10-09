@@ -96,6 +96,9 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	/* tap side-effects — queued by c.tap(), drained after handler */
 	/** @internal */ _pendingTaps: PendingTap[] | null
 
+	/* the request this context serves — read by the error boundary and terminal handlers */
+	/** @internal */ _rq: unknown
+
 	constructor(opts: {
 		env: TEnv
 		executionCtx?: { waitUntil?: (p: Promise<unknown>) => void }
@@ -139,6 +142,8 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 
 		/* taps */
 		this._pendingTaps = null
+
+		this._rq = null
 	}
 
 	/** @internal */

@@ -449,15 +449,18 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 		if (handler.ek.size > 0) {
 			type ErrorEntry = { key: string; schema: Record<string, unknown> | null }
 			const byStatus = new Map<number, ErrorEntry[]>()
+			/* a mounted sub-app's route resolves its keys against its own factory */
+			const routeFactory = (handler.fac as Record<string, () => HoneyError> | null | undefined) ?? factory
+			const routeErrorMeta = routeFactory === factory ? errorMeta : getErrorMeta(routeFactory)
 			for (const ek of handler.ek) {
-				const info = resolveErrorInfo(ek, factory)
+				const info = resolveErrorInfo(ek, routeFactory)
 				if (info.status > 0) {
 					let entries = byStatus.get(info.status)
 					if (!entries) {
 						entries = []
 						byStatus.set(info.status, entries)
 					}
-					const meta = errorMeta?.[ek]
+					const meta = routeErrorMeta?.[ek]
 					let customSchema: Record<string, unknown> | null = null
 					if (meta?.schema) {
 						const converted = asJsonSchema(meta.schema as StandardSchemaLike)

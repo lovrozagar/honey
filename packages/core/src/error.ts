@@ -23,8 +23,10 @@ export class HoneyError extends Error {
 		this.data = opts.data
 		this.errorKey = opts.errorKey
 		this.headers = opts.headers
-		this.statusKey = opts.status
-		this.status = statusKeyToCode[opts.status]
+		/* an unknown status key must not turn an error into a 200 — it is a 500 */
+		const known = Object.hasOwn(statusKeyToCode, opts.status)
+		this.statusKey = known ? opts.status : "internal_server_error"
+		this.status = known ? statusKeyToCode[opts.status] : 500
 		this.fields = opts.fields ?? EMPTY_FIELDS
 		this.vars = opts.vars
 	}

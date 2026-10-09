@@ -7,14 +7,39 @@ export type { HttpMethod, RouteId }
 
 export type OutputValidator = (statusKey: string, data: unknown) => Promise<void>
 
+type ChainMiddleware = (
+	ctx: Record<string, unknown>,
+	next: (additions?: Record<string, unknown>) => Promise<Response>,
+) => Promise<Response>
+
+/**
+ * What a route was registered with, before the app resolves it. Finalize derives the
+ * resolved fields (`ek`, `mt`, `mw`, `bek`, `ef`) from these, so they never depend on the
+ * order of registration and are recomputed whenever the route graph changes.
+ */
+type RecordSource = {
+	/** chain middleware captured at registration (plus any mounting chain) */
+	cm?: ChainMiddleware[]
+	/** `.context()` values of the registering handle (merged with the mounting handle's) */
+	cv?: Record<string, unknown> | null
+	/** error keys the route declared itself (`.errors()`, `.boundary()`) */
+	dk?: Set<string>
+	/** the settings of the app the route was registered on — opaque here */
+	own?: unknown
+	/** route-level boundary key (`.boundary()`) */
+	rb?: string | null
+	/** route-level middleware (`.get(...).use(mw)`) */
+	rm?: ChainMiddleware[]
+	/** explicit meta: chain `.meta()` overlaid by route `.meta()` */
+	xm?: Record<string, unknown> | null
+}
+
 /**
  * A route record — everything one registered route runs. Records live in a per-app table
  * keyed by `RouteId`; the tree only holds ids, so two apps that load the same tree never
  * share a record.
  */
-export type RouteHandler = {
-	/** cached compiled middleware chain (set lazily at first request) */
-	_compiled?: (ctx: object) => Response | Promise<Response>
+export type RouteHandler = RecordSource & {
 	/** internal route (spec, docs, manifest) — excluded from codegen output, never mounted into a parent */
 	_skip?: boolean
 	/** boundary error key — wraps undeclared/unexpected errors (null = use default or internal_server_error) */
@@ -23,10 +48,12 @@ export type RouteHandler = {
 	ca?: boolean
 	/** delegated route: a tree leaf with no local handler, served by the gateway catch-all */
 	dl?: boolean
-	/** pre-computed error factory subset (omit/`null` = use global factory) */
+	/** resolved error factory subset exposed as `ctx.errors` (omit/`null` = none) */
 	ef?: Record<string, (...args: never[]) => unknown> | null
-	/** declared error keys for this route — used for runtime enforcement */
+	/** declared error keys — resolved at finalize from the route, its middleware and the app defaults */
 	ek: Set<string>
+	/** resolved error factory — the route's own app's, or the serving app's */
+	fac?: Record<string, (...args: never[]) => unknown> | null
 	/** handler function */
 	fn: (ctx: unknown) => Response | Promise<Response>
 	/** route identity: `METHOD /canonical/pattern` */
@@ -35,13 +62,8 @@ export type RouteHandler = {
 	iv?: InputSchemasDef | null
 	/** route metadata — frozen object, accessible via ctx.meta */
 	mt: Record<string, unknown> | null
-	/** middleware chain — same as RuntimeMiddleware, inlined to avoid circular dep */
-	mw: Array<
-		(
-			ctx: Record<string, unknown>,
-			next: (additions?: Record<string, unknown>) => Promise<Response>,
-		) => Promise<Response>
-	>
+	/** resolved middleware chain, in run order: chain, scoped, route */
+	mw: ChainMiddleware[]
 	/** output schemas by content-type — missing/`null` = no validation */
 	os?: OutputSchemaDef | null
 	/** output validator function — validates response body against schema */
@@ -52,20 +74,17 @@ export type RouteHandler = {
 
 export type { OutputSchemaDef }
 
-export type WSRouteHandler = {
+export type WSRouteHandler = RecordSource & {
 	bek: string | null
 	ek: Set<string>
+	ef?: Record<string, (...args: never[]) => unknown> | null
+	fac?: Record<string, (...args: never[]) => unknown> | null
 	fn: WSHandler<unknown>
 	id?: RouteId
 	iv: InputSchemasDef | null
 	mt: Record<string, unknown> | null
-	mw: Array<
-		(
-			ctx: Record<string, unknown>,
-			next: (additions?: Record<string, unknown>) => Promise<Response>,
-		) => Promise<Response>
-	>
-	/** canonical ws path pattern — used by scoped-mw prefix filter */
+	mw: ChainMiddleware[]
+	/** canonical ws path pattern */
 	rp: string
 }
 

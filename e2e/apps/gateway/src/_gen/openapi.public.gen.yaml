@@ -1,6 +1,5 @@
-x-generated: honey checksum:79968828f59e
+x-generated: "honey checksum:79968828f59e"
 info:
-  description: null
   title: Honey Gateway (public)
   version: "0.0.1"
 openapi: "3.1.0"

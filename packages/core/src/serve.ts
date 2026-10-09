@@ -40,11 +40,10 @@ export async function startHoneyServer(
 		throw new Error(CF_SERVE_ERROR)
 	}
 
-	let listening: Honey<Record<string, unknown>> = app
-	if (options.cors) {
-		const corsOpts = options.cors === true ? undefined : options.cors
-		listening = app.use(cors(corsOpts)) as Honey<Record<string, unknown>>
-	}
+	const listening: Honey<Record<string, unknown>> = app
+	/* app-wide: every route, 404, 405 and preflight run it first — replaced, not stacked, on a re-serve */
+	const corsMw = options.cors ? cors(options.cors === true ? undefined : options.cors) : null
+	;(app as unknown as { _setGlobal(key: string, mw: unknown): void })._setGlobal("serve:cors", corsMw)
 
 	const hostname = options.hostname ?? (runtime === "deno" ? "127.0.0.1" : "0.0.0.0")
 	const port = options.port ?? 3000

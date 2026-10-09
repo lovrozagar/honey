@@ -146,11 +146,11 @@ describe("scoped middleware — runtime tests", () => {
 
 	it("8. scoped errors land on matching route's errorKeys", async () => {
 		const errors = defineErrors({
-			forbidden: "forbidden",
+			admin_only: "forbidden",
 			internal_server_error: "internal_server_error",
 		})
 		const errorMw = defineMiddleware({
-			errors: [errors, "forbidden"],
+			errors: [errors, "admin_only"],
 			fn: async (_c, next) => next(),
 		})
 
@@ -160,11 +160,11 @@ describe("scoped middleware — runtime tests", () => {
 			.use("/admin", errorMw)
 			.get("/admin/x")
 			.handler((_ctx) => {
-				throw errors.forbidden()
+				throw errors.admin_only()
 			})
 			.get("/public")
 			.handler((_ctx) => {
-				throw errors.forbidden()
+				throw errors.admin_only()
 			})
 
 		const adminRes = await app.fetch(new Request("http://localhost/admin/x"), {})
@@ -174,7 +174,7 @@ describe("scoped middleware — runtime tests", () => {
 		expect(publicRes.status).toBe(500)
 	})
 
-	it("9. scoped middleware not invoked on 404", async () => {
+	it("9. a scope covering an unknown path runs before the 404", async () => {
 		const { mw: spy, calls } = makeSpy()
 		const app = honey<{}>()
 			.use("/admin", spy)
@@ -183,10 +183,13 @@ describe("scoped middleware — runtime tests", () => {
 
 		const res = await app.fetch(new Request("http://localhost/admin/missing"), {})
 		expect(res.status).toBe(404)
-		expect(calls.length).toBe(0)
+		expect(calls.length).toBe(1)
+
+		await app.fetch(new Request("http://localhost/elsewhere"), {})
+		expect(calls.length).toBe(1)
 	})
 
-	it("10. scoped middleware not invoked on 405", async () => {
+	it("10. a scope covering the path runs before the 405", async () => {
 		const { mw: spy, calls } = makeSpy()
 		const app = honey<{}>()
 			.use("/admin", spy)
@@ -195,7 +198,7 @@ describe("scoped middleware — runtime tests", () => {
 
 		const res = await app.fetch(new Request("http://localhost/admin/x", { method: "POST" }), {})
 		expect(res.status).toBe(405)
-		expect(calls.length).toBe(0)
+		expect(calls.length).toBe(1)
 	})
 
 	it("11. .route(sub) — parent scoped mw applies to sub's routes at runtime", async () => {

@@ -176,15 +176,11 @@ describe("app.context() — static type-safe context", () => {
 		expect(body.id).toBe("42")
 	})
 
-	it(".route() merged routes use parent context, not sub context", async () => {
-		/* context is on the app instance, merged at request time —
-		   when parent.fetch() handles a merged sub-app route,
-		   the parent's context applies, not the sub-app's.
-		   Use middleware for per-sub-app values that need to survive .route(). */
-		const sub = honey<{}>().context({ subVal: "from-sub" }).basePath("/sub")
-		sub.get("/test").handler((ctx) => ctx.res.json("ok", { v: ctx.parentVal }))
+	it(".route() merged routes keep the sub's context, under the mounting handle's", async () => {
+		const sub = honey<{}>().context({ shared: "sub", subVal: "from-sub" }).basePath("/sub")
+		sub.get("/test").handler((ctx) => ctx.res.json("ok", { shared: ctx.shared, sub: ctx.subVal }))
 
-		const parent = honey<{}>().context({ parentVal: "from-parent" })
+		const parent = honey<{}>().context({ parentVal: "from-parent", shared: "parent" })
 		parent.get("/test").handler((ctx) => ctx.res.json("ok", { v: ctx.parentVal }))
 		parent.route(sub)
 
@@ -192,10 +188,12 @@ describe("app.context() — static type-safe context", () => {
 		const b1 = (await r1.json()) as Record<string, unknown>
 		expect(b1.v).toBe("from-parent")
 
-		/* sub route also gets parent's context since parent.fetch() handles it */
+		/* the sub's route keeps the sub's values; the mounting handle's apply underneath */
 		const r2 = await parent.fetch(new Request("http://localhost/sub/test"), {})
 		const b2 = (await r2.json()) as Record<string, unknown>
-		expect(b2.v).toBe("from-parent")
+		expect(b2).toEqual({ shared: "sub", sub: "from-sub" })
+		const pv = await parent.fetch(new Request("http://localhost/sub/test"), {})
+		expect(((await pv.json()) as Record<string, unknown>).sub).toBe("from-sub")
 	})
 
 	it("context with env — both accessible without interference", async () => {

@@ -153,3 +153,85 @@ export function toOpenApiTemplate(segments: readonly Segment[]): string {
 	}
 	return out
 }
+
+/*
+ * Scopes. `app.use("/admin", mw)` guards request paths: a path is inside the scope when its
+ * leading segments match the scope pattern — static segments literally, `:param` any one
+ * segment, `*` and an optional last param everything below. The scope uses the route
+ * grammar, so `/orgs/:id` and `/admin/*` mean what they mean in a route.
+ */
+
+/** How much of a route a scope covers: every path it serves, none, or only some. */
+export type ScopeCoverage = "all" | "none" | "some"
+
+function coverVariant(route: readonly Segment[], scope: readonly Segment[]): ScopeCoverage {
+	let uncertain = false
+	for (let i = 0; i < scope.length; i++) {
+		const s = scope[i] as Segment
+		/* a wildcard or optional last param covers everything at and below this depth */
+		if (s.k === "wildcard" || (s.k === "param" && s.o)) return uncertain ? "some" : "all"
+		const r = route[i]
+		/* the route's paths end before the scope's do */
+		if (r === undefined) return "none"
+		/* a route wildcard serves paths both inside and outside the rest of the scope */
+		if (r.k === "wildcard") return "some"
+		if (r.k === "static") {
+			if (s.k === "static" && s.v !== r.v && safeDecode(r.v) !== s.v) return "none"
+			continue
+		}
+		/* route param against a scope literal: inside the scope only when the value matches */
+		if (s.k === "static") uncertain = true
+	}
+	return uncertain ? "some" : "all"
+}
+
+function combine(a: ScopeCoverage, b: ScopeCoverage): ScopeCoverage {
+	return a === b ? a : "some"
+}
+
+/**
+ * Decide at registration time whether a scope covers a route. `"some"` means the answer
+ * depends on the request path (a route param or wildcard can land inside the scope), so the
+ * scope's middleware is guarded by {@link pathInScope} at request time.
+ */
+export function scopeCoverage(route: readonly Segment[], scope: readonly Segment[]): ScopeCoverage {
+	let out: ScopeCoverage | undefined
+	for (const rv of expandOptional(route)) {
+		const c = coverVariant(rv, scope)
+		out = out === undefined ? c : combine(out, c)
+	}
+	return out ?? "none"
+}
+
+function safeDecode(s: string): string {
+	if (s.indexOf("%") === -1) return s
+	try {
+		return decodeURIComponent(s)
+	} catch {
+		return s
+	}
+}
+
+/**
+ * Is a request path inside a scope? Splits the path the way the router does (empty segments
+ * dropped) and compares each segment both as sent and percent-decoded, so a route param that
+ * decodes to a scoped literal is guarded exactly like the literal.
+ */
+export function pathInScope(path: string, scope: readonly Segment[]): boolean {
+	let pos = 0
+	const len = path.length
+	for (let i = 0; i < scope.length; i++) {
+		const s = scope[i] as Segment
+		if (s.k === "wildcard" || (s.k === "param" && s.o)) return true
+		while (pos < len && path.charCodeAt(pos) === 47) pos++
+		if (pos >= len) return false
+		let end = path.indexOf("/", pos)
+		if (end === -1) end = len
+		if (s.k === "static") {
+			const seg = path.substring(pos, end)
+			if (seg !== s.v && safeDecode(seg) !== s.v) return false
+		}
+		pos = end
+	}
+	return true
+}
