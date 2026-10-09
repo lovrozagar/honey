@@ -729,6 +729,11 @@ export type InferBasePath<T> = T extends { readonly $basePath: infer P } ? P : n
 /** Merge two path segments — "/" is identity */
 export type MergePath<A extends string, B extends string> = A extends "/" ? B : B extends "/" ? A : `${A}${B}`
 
+/** The routes of a mounted sub-app, moved under the mounting handle's basePath. */
+export type PrefixRoutes<TBase extends string, TRoutes> = TBase extends "/"
+	? TRoutes
+	: { [P in keyof TRoutes & string as MergePath<TBase, P>]: TRoutes[P] }
+
 /* ── Tap types ── */
 
 /** Queued side-effect emitted by c.tap() inside a handler */

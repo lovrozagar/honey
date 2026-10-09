@@ -12,7 +12,7 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 - `app.routeTree(tree)` must be called before any route is registered, and once. Routes registered afterwards bind to the tree's leaves; each app keeps its own handlers, so two apps loading one generated module no longer serve each other's routes. A registered route the tree lacks makes the first request throw with the routes named (stale generated file). The "patch mode" that mutated the imported module's handler objects is gone.
 - `generateRouteTree()` takes a `RouteTree` (a `mergeTree` result or `app.toRouteTree()`), not a list of route configs.
 - `app.toRouteTree()` returns a copy (topology, route data, live handlers), never the app's live tree. `mergeTree` never mutates or shares its inputs; extra meta lands on copies.
-- `app.route(sub)` copies the sub's routes into the parent. Routes the sub registers after mounting stay the sub's; two parents mounting one sub no longer share nodes. A sub-app's spec, docs and manifest routes are no longer mounted on the parent.
+- `app.route(sub)` copies the sub's routes into the parent. Routes the sub registers after mounting stay the sub's; two parents mounting one sub no longer share nodes. A sub-app's spec, docs and manifest routes are no longer mounted on the parent. The sub's routes, scopes and realtime paths are served under the mounting handle's `basePath`: `app.basePath("/v1").route(sub)` used to drop `/v1` silently and serve the sub at its own paths.
 - `.on([...])` registers one route per method (`GET /x`, `POST /x`).
 - `ctx.routePattern` is the canonical pattern (`/users` for a route registered as `/users/`).
 - The package ships compiled JavaScript (`dist/*.js`) for every export and runs on plain Node (`engines.node >= 22.12`); Bun resolves the TypeScript sources. The bin is `bin/honey.js`.
@@ -98,6 +98,8 @@ All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovr
 
 ### Added
 
+- `ctx.error`: after `await next()`, the `HoneyError` behind an error response (`errorKey`, `status`, `cause` holding the original throw), `undefined` when nothing failed — for metrics, logging and error reporting now that `next()` never throws. `error` is a reserved context key.
+- `app.route(prefix, sub)`, shorthand for `app.basePath(prefix).route(sub)`.
 - `honey generate --plugin <n>` picks one of several `honey()` plugins in a config; flags accept `--flag=value`. `honey init --cloudflare` is an alias of `--cf`.
 - `HoneyBuildConfig.features` forces build features on or off.
 - `startHoneyServer` is exported from `@lovrozagar/honey/serve`.

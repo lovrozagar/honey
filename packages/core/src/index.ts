@@ -59,6 +59,7 @@ import type {
 	MetaSpecConfig,
 	OutputSchemaDef,
 	ParamsFromPath,
+	PrefixRoutes,
 	StandardSchemaLike,
 	StatusKey,
 	TapContext,
@@ -135,6 +136,7 @@ export type {
 	InferRoutes,
 	InputSchemasDef,
 	MergePath,
+	PrefixRoutes,
 	HoneyMetaSpec,
 	MetaSpecConfig,
 	MetaSpecContext,
@@ -414,6 +416,18 @@ function copyRecord<T extends RouteHandler | WSRouteHandler>(r: T): T {
 /** Every leaf a pattern occupies: an optional last param places two. */
 function leafVariants(segments: readonly Segment[]): Segment[][] {
 	return expandOptional(segments)
+}
+
+/** Record the error behind an error response on `ctx.error` (read-only for user code). */
+function setCtxError(ctx: HoneyContext<unknown>, error: HoneyError): void {
+	;(ctx as unknown as Record<string, unknown>)["error"] = error
+}
+
+/** What `ctx.error` holds for a throw the boundary could not resolve: the 500 it became. */
+function asHoneyError(thrown: unknown): HoneyError {
+	return thrown instanceof HoneyError
+		? thrown
+		: new HoneyError({ cause: thrown, errorKey: EK.internal_server_error, status: SK.internal_server_error })
 }
 
 function patternOf(id: RouteId): { method: string; segments: Segment[] } {
@@ -829,16 +843,18 @@ export class Honey<
 		const fc = ctx._rq as FetchCtx<TEnv> | null
 		const plan = fc?.plan
 		if (fc === null || fc === undefined || plan === null || plan === undefined) {
+			setCtxError(ctx, asHoneyError(thrown))
+			return this._safeErrorResponse(thrown)
+		}
+		const fallback = (e: unknown): Response => {
+			fc.log?.warn?.({ err: e }, "error response failed")
+			setCtxError(ctx, asHoneyError(thrown))
 			return this._safeErrorResponse(thrown)
 		}
 		try {
-			return this._resolveErrorResponse(thrown, plan, fc, ctx).catch((e: unknown) => {
-				fc.log?.warn?.({ err: e }, "error response failed")
-				return this._safeErrorResponse(thrown)
-			})
+			return this._resolveErrorResponse(thrown, plan, fc, ctx).catch(fallback)
 		} catch (e) {
-			fc.log?.warn?.({ err: e }, "error response failed")
-			return this._safeErrorResponse(thrown)
+			return fallback(e)
 		}
 	}
 
@@ -902,6 +918,7 @@ export class Honey<
 						() => s.telemetry?.onError?.({ duration: performance.now() - startTime, error: honeyError, method, path }),
 						log,
 					)
+					setCtxError(ctx, honeyError)
 					ctx._isErrorResponse = true
 					return customResult
 				}
@@ -915,6 +932,7 @@ export class Honey<
 			() => s.telemetry?.onError?.({ duration: performance.now() - startTime, error: honeyError, method, path }),
 			log,
 		)
+		setCtxError(ctx, honeyError)
 		ctx._isErrorResponse = true
 		return this._makeErrorCtx(fc).jsonFromError(honeyError)
 	}
@@ -1957,9 +1975,57 @@ export class Honey<
 		return this._derive()
 	}
 
+	/**
+	 * Mount a sub-app: its routes are served under this handle's basePath (and under `prefix`
+	 * when given — `app.route("/v1", sub)` is `app.basePath("/v1").route(sub)`), and this
+	 * handle's chain runs before theirs. The sub's own basePath stays part of each path.
+	 */
 	route<TSubRoutes, TSubMeta, TSubErrorFactory, TSubDefaultErrors extends string, TSubBasePath extends string>(
 		sub: Honey<TEnv, TCtx, TSubRoutes, TSubMeta, TSubErrorFactory, TSubDefaultErrors, TSubBasePath>,
-	): Honey<TEnv, TCtx, TRoutes & TSubRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
+	): Honey<
+		TEnv,
+		TCtx,
+		TRoutes & PrefixRoutes<TBasePath, TSubRoutes>,
+		TMeta,
+		TErrorFactory,
+		TDefaultErrors,
+		TBasePath,
+		TTaps,
+		TScopedMw
+	>
+	route<
+		const TPrefix extends string,
+		TSubRoutes,
+		TSubMeta,
+		TSubErrorFactory,
+		TSubDefaultErrors extends string,
+		TSubBasePath extends string,
+	>(
+		prefix: TPrefix,
+		sub: Honey<TEnv, TCtx, TSubRoutes, TSubMeta, TSubErrorFactory, TSubDefaultErrors, TSubBasePath>,
+	): Honey<
+		TEnv,
+		TCtx,
+		TRoutes & PrefixRoutes<MergePath<TBasePath, TPrefix>, TSubRoutes>,
+		TMeta,
+		TErrorFactory,
+		TDefaultErrors,
+		TBasePath,
+		TTaps,
+		TScopedMw
+	>
+	route(prefixOrSub: unknown, maybeSub?: unknown): unknown {
+		type Sub = Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>
+		if (typeof prefixOrSub === "string") {
+			if (!(maybeSub instanceof Honey)) throw new TypeError("honey: route(prefix, sub) needs the sub-app")
+			this._markUsed()
+			;(this.basePath(prefixOrSub) as unknown as Honey<TEnv, TCtx>)._mount(maybeSub as Sub)
+			return this
+		}
+		return this._mount(prefixOrSub as Sub)
+	}
+
+	private _mount(sub: Honey<TEnv, TCtx, unknown, unknown, unknown, string, string>): this {
 		this._markUsed()
 		/* skip self-merge: .handler() already registered into the shared graph */
 		if (sub._graph !== this._graph) {
@@ -1982,14 +2048,17 @@ export class Honey<
 				c.own = r.own ?? subSettings
 				return c
 			}
+			/* the sub's paths land under this handle's basePath, like Hono's `route("/v1", sub)` */
+			const base = this._basePath
+			const at = (pattern: string): string => (base === "/" ? pattern : mergePath(base, pattern))
 			for (const [id, r] of subFinal.byId) {
 				if (r._skip) continue
-				const { method, segments } = patternOf(id)
-				this._addRoute(method, segments, mount(r))
+				const { method, pattern } = splitRouteId(id)
+				this._addRoute(method, parsePattern(at(pattern)), mount(r))
 			}
 			for (const [id, r] of subFinal.wsById) {
-				const { segments } = patternOf(id)
-				this._addWsRoute(segments, mount(r))
+				const { pattern } = splitRouteId(id)
+				this._addWsRoute(parsePattern(at(pattern)), mount(r))
 			}
 			/* merged when codegen reads `_metaSpec` (see `mergeMetaSpec`): the parent wins
 			 * conflicts and keeps its resolved strictness, a sub's `false` still hides */
@@ -1998,9 +2067,17 @@ export class Honey<
 			/* the sub's scopes guard the paths it brought — appended after this app's own */
 			const g = this._graph
 			for (const entry of sub._graph.scoped) {
-				if (!g.scoped.includes(entry)) g.scoped.push(entry)
+				if (base === "/") {
+					if (!g.scoped.includes(entry)) g.scoped.push(entry)
+					continue
+				}
+				const prefix = at(entry.prefix)
+				if (g.scoped.some((e) => e.mw === entry.mw && e.prefix === prefix)) continue
+				const segs = parsePattern(prefix)
+				g.scoped.push({ errors: entry.errors, guard: scopeGuard(segs, entry.mw), mw: entry.mw, prefix, segs })
 			}
-			for (const [path, cfg] of sub._graph.realtimeRoutes) {
+			for (const [subPath, cfg] of sub._graph.realtimeRoutes) {
+				const path = at(subPath)
 				if (g.realtimeRoutes.has(path)) {
 					throw new Error(`Duplicate realtime route: ${path}`)
 				}
@@ -2018,17 +2095,7 @@ export class Honey<
 			}
 			this._bumpEpoch()
 		}
-		return this as unknown as Honey<
-			TEnv,
-			TCtx,
-			TRoutes & TSubRoutes,
-			TMeta,
-			TErrorFactory,
-			TDefaultErrors,
-			TBasePath,
-			TTaps,
-			TScopedMw
-		>
+		return this
 	}
 
 	private _setBus(bus: RealtimeBus): RealtimeBus {

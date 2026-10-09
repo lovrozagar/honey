@@ -1,4 +1,5 @@
 import { isNodeOutbound } from "./honey-response.ts"
+import type { HoneyError } from "./error.ts"
 import type { ProducerOptions } from "./producer-stream.ts"
 import type { SSEOptions, SSEStream, TypedResponse } from "./response.ts"
 import { HoneyRes } from "./response.ts"
@@ -168,6 +169,13 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	 * `ctx.res.sse()`, `stream()` and `generate()` already end with it.
 	 */
 	declare readonly signal: AbortSignal
+	/**
+	 * The error behind the response, once a handler or a deeper middleware threw and the
+	 * `next()` boundary turned it into an error response; `undefined` while nothing failed.
+	 * Read it after `await next()` for metrics, logs or reporting: `errorKey`, `status`, and
+	 * `cause` (the original throw when it was not a `HoneyError`). Later errors replace it.
+	 */
+	declare readonly error: HoneyError | undefined
 
 	/* backing state for lazy getters — stored directly on instance to avoid extra object allocation */
 	/** @internal */ _ac: AbortController | null
@@ -228,6 +236,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		this._lzUrlFn = opts.urlFn ?? null
 
 		/* error propagation */
+		;(this as Record<string, unknown>)["error"] = undefined
 		this._errorToResponse = null
 		this._isErrorResponse = false
 

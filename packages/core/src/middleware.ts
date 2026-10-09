@@ -123,6 +123,7 @@ export const RESERVED_CTX_KEYS: ReadonlySet<string> = new Set([
 	"background",
 	"cookies",
 	"env",
+	"error",
 	"errors",
 	"executionCtx",
 	"headers",

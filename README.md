@@ -794,7 +794,16 @@ app.use("/admin", withAuth) // scoped: every request under /admin, whichever han
 What a route runs is fixed when it is registered or mounted, in this order: the chain of the handle it was registered on (a mounting handle's chain first), then every scope that covers it, then its own `.get(...).use(mw)`, then input validation.
 
 - **Scopes guard request paths.** `app.use("/admin", mw)` uses the route grammar (`/orgs/:id`, `/admin/*`) and covers every request whose path is under it — including requests that reach `all("/*")` or `/:section/users`, where the request path is checked at runtime. It applies to routes registered before or after it, on any handle, and to mounted sub-apps.
-- **Errors become responses at every `next()`.** A throw in a handler or a middleware is turned into the error response at that layer, so every middleware around it gets a `Response` from `await next()` and its post-`next()` code (CORS headers, request id, logging, timing) runs on errors too. A `try/catch` around `next()` no longer sees throws: inspect the response status instead.
+- **Errors become responses at every `next()`.** A throw in a handler or a middleware is turned into the error response at that layer, so every middleware around it gets a `Response` from `await next()` and its post-`next()` code (CORS headers, request id, logging, timing) runs on errors too. A `try/catch` around `next()` no longer sees throws: read `ctx.error` instead — the `HoneyError` behind the error response (`errorKey`, `status`, and `cause`, the original throw when it was not a `HoneyError`), `undefined` when nothing failed. 404 and 405 are plain responses and leave it unset.
+
+  ```ts
+  const metrics = createMiddleware(async (ctx, next) => {
+  	const res = await next()
+  	record(res.status, ctx.error?.errorKey)
+  	return res
+  })
+  ```
+
 - **404, 405 and CORS preflight** run the same pipeline: the middleware every route of the app starts with, plus the scopes covering the request path, with `ctx.errors`, `ctx.path` and context values set. A preflight (`OPTIONS` with `Access-Control-Request-Method`) runs the chain of the route for the requested method, never its handler.
 - Middleware `errors` and `meta` count for every route the middleware runs on — chain, scoped or route level.
 - **Mounting** (`parent.route(sub)`): the sub's routes keep the sub's error factory, default errors, boundary, output validation, taps and context values; the parent's `onError`, formatters, logger and telemetry serve them. A sub-app's own `fetch` keeps serving the sub alone — mounting copies its routes and never changes it.
@@ -1037,9 +1046,10 @@ const users = honey()
 	.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
 
 const app = honey().route(users) // merges routes, realtime, taps, static map
+const v1 = honey().route("/v1", users) // serves /v1/users/:id
 ```
 
-`.route(sub)` copies the sub-app's routes into this one, under the chain of the handle you call it on: `app.use(auth).route(admin)` runs `auth` on every admin route. The sub's paths are kept as they are (its own `basePath` applies, the mounting handle's does not). Duplicate paths throw.
+`.route(sub)` copies the sub-app's routes into this one, under the chain of the handle you call it on: `app.use(auth).route(admin)` runs `auth` on every admin route. The sub's paths land under that handle's `basePath`, after the sub's own: `app.basePath("/v1").route(users)` serves `/v1/users/:id`, and `route("/v1", users)` is the same thing. The sub's scoped middleware and realtime routes move with it. Duplicate paths throw.
 
 ### Taps
 
