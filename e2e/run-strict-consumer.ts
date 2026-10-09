@@ -175,7 +175,7 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 			'console.log("node import ok")',
 		].join("\n"),
 	)
-	const imported = await run(["node", "node-smoke.mjs"], dir)
+	const imported = await run(["node", "--unhandled-rejections=strict", "node-smoke.mjs"], dir)
 	if (imported.code !== 0) return fail("the core entry does not import on plain Node", imported.out)
 	console.log("runtime smoke ok (node)")
 
@@ -222,7 +222,7 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 	)
 	if (built.code !== 0) return fail("vite build with the honey plugins on Node", built.out)
 
-	const server = Bun.spawn(["node", join("out", "index.js")], {
+	const server = Bun.spawn(["node", "--unhandled-rejections=strict", join("out", "index.js")], {
 		cwd: dir,
 		env: { ...process.env, PORT: String(port + 1) },
 		stderr: "pipe",

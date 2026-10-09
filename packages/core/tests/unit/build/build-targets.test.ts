@@ -142,7 +142,7 @@ describe.sequential("honey/build target artifacts", () => {
 		await viteBuild("node", outDir)
 		const entry = resolve(outDir, "index.js")
 		expect(existsSync(entry)).toBe(true)
-		const child = start("node", [entry], { PORT: String(PORTS.node) })
+		const child = start("node", ["--unhandled-rejections=strict", entry], { PORT: String(PORTS.node) })
 		try {
 			await waitHealthy(`http://127.0.0.1:${PORTS.node}/health`, 20_000)
 		} catch (err) {

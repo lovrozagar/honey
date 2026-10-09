@@ -1,0 +1,19 @@
+{
+	"baselines": {
+		"bun 1.3": {
+			"chain": 2.45,
+			"not-found": 12.73,
+			"param": 1.96,
+			"scoped": 2.16,
+			"static": 1.61
+		},
+		"bun 1.4": {
+			"chain": 2.57,
+			"not-found": 12.49,
+			"param": 2.27,
+			"scoped": 2.39,
+			"static": 1.76
+		}
+	},
+	"note": "app.fetch cost / minimal raw fetch handler, median of interleaved samples, per runtime minor version. Regenerate with `bun bench/src/hotpath.ts --update` (CI gates on the Bun version it pins)."
+}

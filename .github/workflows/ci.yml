@@ -97,6 +97,20 @@ jobs:
           bunx vitest run tests/integration/hostile-client tests/integration/stream-lifecycle
           tests/integration/request-target
 
+  hotpath:
+    name: hot-path benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      # app.fetch cost as a ratio to a raw fetch handler, against bench/hotpath-baseline.json
+      # (recorded with BUN_VERSION). One retry absorbs a noisy neighbor; two failures are a regression.
+      - run: bun run bench:hotpath || bun run bench:hotpath
+
   build:
     name: build (${{ matrix.runtime }})
     runs-on: ubuntu-latest

@@ -17,7 +17,8 @@ const SERVER = fileURLToPath(new URL("./server.ts", import.meta.url))
 
 const RUNTIMES: Record<string, string[]> = {
 	bun: ["bun", SERVER],
-	node: ["node", SERVER],
+	/* strict: an unhandled rejection in the server is a crash the test sees, never a warning */
+	node: ["node", "--unhandled-rejections=strict", SERVER],
 }
 
 function available(cmd: string): boolean {
