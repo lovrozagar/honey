@@ -1,4 +1,4 @@
-/* Behavior checks for the Go, Python and Rust SDK runtimes (runtime-checks/): auth refresh
+/* Behavior checks for the Go, Python and Rust SDK runtimes (tests/integration/sdk-runtime-checks/): auth refresh
  * resends replayable bodies, keeps the token and refreshes once; streams are not retried;
  * timeouts bound calls but not streams; no cross-host redirects; path params validated and
  * the base path kept; one header per name; error messages capped and cleaned; 3xx raises;
@@ -19,7 +19,7 @@ import { generateRustSDK } from "../../../src/codegen-rust.ts"
 import { CARGO_TARGET_DIR } from "../../cargo-env.ts"
 import { loadMockSpec } from "./harness-util.ts"
 
-const check = (name: string) => fileURLToPath(new URL(`./runtime-checks/${name}`, import.meta.url))
+const check = (name: string) => fileURLToPath(new URL(`../sdk-runtime-checks/${name}`, import.meta.url))
 
 function has(cmd: string, args: string[]): boolean {
 	return spawnSync(cmd, args, { stdio: "ignore" }).status === 0

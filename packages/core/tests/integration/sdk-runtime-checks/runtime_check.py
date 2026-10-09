@@ -1,4 +1,4 @@
-# Behavior checks for the generated Python runtime; run by ../polyglot-runtime.test.ts.
+# Behavior checks for the generated Python runtime; run by ../sdk-harness/polyglot-runtime.test.ts.
 import asyncio, json, sys
 sys.path.insert(0, ".")
 import httpx
