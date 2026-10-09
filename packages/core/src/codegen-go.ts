@@ -62,6 +62,7 @@ const RUNTIME_FILES = [
 	"transport.go",
 	"realtime.go",
 	"export.go",
+	"nullable.go",
 ]
 
 /** Reads static .go runtime files from ./client-go/ and caches them. */
@@ -225,7 +226,7 @@ function typesFile(schemaTypes: string, names: GoNames): string {
 
 function buildGoMod(modulePath?: string): string {
 	const mod = modulePath ?? "example.com/sdk"
-	return [`module ${mod}`, ``, `go 1.23`, ``, `require nhooyr.io/websocket v1.8.17`, ``].join("\n")
+	return [`module ${mod}`, ``, `go 1.24`, ``, `require nhooyr.io/websocket v1.8.17`, ``].join("\n")
 }
 
 /* ── buildGoDoc ── */

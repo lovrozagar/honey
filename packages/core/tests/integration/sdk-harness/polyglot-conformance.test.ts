@@ -355,7 +355,7 @@ describe.skipIf(!hasGo)("conformance — Go runtime", () => {
 			writeTree(join(dir, "sdk"), generateGoSDK(conformanceSpec, { modulePath: "example.com/confsdk" }).files)
 			writeFileSync(
 				join(dir, "go.mod"),
-				`module example.com/confrun\n\ngo 1.23\n\nrequire example.com/confsdk v0.0.0\n\nreplace example.com/confsdk => ./sdk\n`,
+				`module example.com/confrun\n\ngo 1.24\n\nrequire example.com/confsdk v0.0.0\n\nreplace example.com/confsdk => ./sdk\n`,
 			)
 			writeFileSync(join(dir, "main.go"), GO_MAIN)
 			const tidy = await run("go", ["mod", "tidy"], dir)

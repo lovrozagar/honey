@@ -30,8 +30,26 @@ export function goIdent(name: string, exported = true): string {
 	return name
 }
 
-export function goTag(jsonKey: string, omitempty: boolean): string {
-	return goJsonTag(jsonKey, omitempty)
+export function goTag(jsonKey: string, omit: boolean | "omitzero"): string {
+	return goJsonTag(jsonKey, omit)
+}
+
+/** An optional field that may also be null: absent, null and a value are three different requests. */
+function isTriState(field: IRField): boolean {
+	return !field.required && field.schema.kind === "nullable"
+}
+
+/** Go type of a struct field: `Nullable[T]` for optional + nullable, else a pointer when optional. */
+function structFieldType(field: IRField, render: (schema: IRSchema) => string): string {
+	if (isTriState(field) && field.schema.kind === "nullable") {
+		/* a cyclic ref stays a pointer: Nullable holds its value inline */
+		return `Nullable[${render(field.schema.inner)}]`
+	}
+	return fieldType(render(field.schema), field.required)
+}
+
+function fieldTag(field: IRField): string {
+	return goTag(field.name, isTriState(field) ? "omitzero" : !field.required)
 }
 
 /** Package-level naming shared by every type the SDK emits. */
@@ -300,14 +318,22 @@ function irRenderAnonStruct(ir: Extract<IRSchema, { kind: "object" }>, ctx: Rend
 			names: ctx.names,
 			parentName: childParent,
 		}
-		const ft = irRenderUse(field.schema, childCtx, depth + 1)
-		lines.push(`\t${fieldGoName} ${fieldType(ft, field.required)} ${goTag(field.name, !field.required)}`)
+		const type = structFieldType(field, (schema) => irRenderUse(schema, childCtx, depth + 1))
+		lines.push(`\t${fieldGoName} ${type} ${fieldTag(field)}`)
 	}
 	lines.push(`}`)
 	return lines.join("\n")
 }
 
-type StructField = { goName: string; key: string; type: string; required: boolean; tagged: boolean }
+type StructField = {
+	goName: string
+	key: string
+	type: string
+	required: boolean
+	tagged: boolean
+	/** Optional + nullable: `Nullable[T]` under `omitzero`. */
+	triState: boolean
+}
 
 /** A struct plus, when needed, (un)marshal methods for keys encoding/json cannot tag and for extra keys. */
 function renderStruct(
@@ -320,15 +346,35 @@ function renderStruct(
 	l.push(`type ${typeName} struct {`)
 	for (const e of embeds) l.push(`\t${e}`)
 	for (const f of fields) {
-		const tag = f.tagged ? goTag(f.key, !f.required) : '`json:"-"`'
+		const tag = f.tagged ? goTag(f.key, f.triState ? "omitzero" : !f.required) : '`json:"-"`'
 		l.push(`\t${f.goName} ${f.type} ${tag}`)
 	}
 	if (extra) l.push(`\t${extra.goName} map[string]${extra.valueType} \`json:"-"\``)
 	l.push(`}`)
 
 	const untagged = fields.filter((f) => !f.tagged)
-	if (untagged.length === 0 && !extra) return l.join("\n")
-
+	/* a required slice or map left nil would encode as null, which the schema does not allow */
+	const emptyWhenNil = fields.filter(
+		(f) => f.required && !f.triState && (f.type.startsWith("[]") || f.type.startsWith("map[")),
+	)
+	const fillNil = (target: string): void => {
+		for (const f of emptyWhenNil) {
+			l.push(`\tif ${target}.${f.goName} == nil {`)
+			l.push(`\t\t${target}.${f.goName} = ${f.type}{}`)
+			l.push(`\t}`)
+		}
+	}
+	if (untagged.length === 0 && !extra) {
+		if (emptyWhenNil.length === 0) return l.join("\n")
+		l.push(``)
+		l.push(`func (s ${typeName}) MarshalJSON() ([]byte, error) {`)
+		l.push(`\ttype plain ${typeName}`)
+		l.push(`\tp := plain(s)`)
+		fillNil("p")
+		l.push(`\treturn json.Marshal(p)`)
+		l.push(`}`)
+		return l.join("\n")
+	}
 	const known = fields.map((f) => goString(f.key))
 	l.push(``)
 	l.push(`func (s *${typeName}) UnmarshalJSON(data []byte) error {`)
@@ -370,7 +416,9 @@ function renderStruct(
 	l.push(``)
 	l.push(`func (s ${typeName}) MarshalJSON() ([]byte, error) {`)
 	l.push(`\ttype plain ${typeName}`)
-	l.push(`\tencoded, err := json.Marshal(plain(s))`)
+	l.push(`\tp := plain(s)`)
+	fillNil("p")
+	l.push(`\tencoded, err := json.Marshal(p)`)
 	l.push(`\tif err != nil {`)
 	l.push(`\t\treturn nil, err`)
 	l.push(`\t}`)
@@ -379,7 +427,7 @@ function renderStruct(
 	l.push(`\t\treturn nil, err`)
 	l.push(`\t}`)
 	if (extra) {
-		l.push(`\tfor k, v := range s.${extra.goName} {`)
+		l.push(`\tfor k, v := range p.${extra.goName} {`)
 		l.push(`\t\tif _, taken := out[k]; taken {`)
 		l.push(`\t\t\tcontinue`)
 		l.push(`\t\t}`)
@@ -392,14 +440,16 @@ function renderStruct(
 	}
 	for (const f of untagged) {
 		const nilable = isNilable(f.type)
-		const indent = nilable ? "\t\t" : "\t"
-		if (nilable) l.push(`\tif s.${f.goName} != nil {`)
-		l.push(`${indent}b, err := json.Marshal(s.${f.goName})`)
+		const guarded = nilable || f.triState
+		const indent = guarded ? "\t\t" : "\t"
+		if (f.triState) l.push(`\tif !p.${f.goName}.IsZero() {`)
+		else if (nilable) l.push(`\tif p.${f.goName} != nil {`)
+		l.push(`${indent}b, err := json.Marshal(p.${f.goName})`)
 		l.push(`${indent}if err != nil {`)
 		l.push(`${indent}\treturn nil, err`)
 		l.push(`${indent}}`)
 		l.push(`${indent}out[${goString(f.key)}] = b`)
-		if (nilable) l.push(`\t}`)
+		if (guarded) l.push(`\t}`)
 	}
 	l.push(`\treturn json.Marshal(out)`)
 	l.push(`}`)
@@ -480,13 +530,13 @@ export function irRenderTopLevel(
 			if (!obj) continue
 			for (const field of sortFields(obj.fields)) {
 				if (fields.some((f) => f.key === field.name)) continue
-				const ft = irRenderUse(field.schema, useCtx(field.name))
 				fields.push({
 					goName: scope.claim(goPascal(field.name)),
 					key: field.name,
 					required: field.required,
 					tagged: goJsonTagNameValid(field.name),
-					type: fieldType(ft, field.required),
+					triState: isTriState(field),
+					type: structFieldType(field, (schema) => irRenderUse(schema, useCtx(field.name))),
 				})
 			}
 		}
@@ -575,15 +625,21 @@ export function irRenderTopLevel(
 		const extraName = additional ? scope.claim("Extra") : ""
 		const out: StructField[] = []
 		for (const field of sortFields(fields)) {
-			const ft = irRenderUse(field.schema, useCtx(field.name))
-			let finalType = fieldType(ft, field.required)
-			/* self-ref → pointer (circular) */
-			if (circularRefs.has(ft.replace(/^\*/, "")) && !finalType.startsWith("*")) finalType = `*${ft}`
+			let finalType: string
+			if (isTriState(field)) {
+				finalType = structFieldType(field, (schema) => irRenderUse(schema, useCtx(field.name)))
+			} else {
+				const ft = irRenderUse(field.schema, useCtx(field.name))
+				finalType = fieldType(ft, field.required)
+				/* self-ref → pointer (circular) */
+				if (circularRefs.has(ft.replace(/^\*/, "")) && !finalType.startsWith("*")) finalType = `*${ft}`
+			}
 			out.push({
 				goName: scope.claim(goPascal(field.name)),
 				key: field.name,
 				required: field.required,
 				tagged: goJsonTagNameValid(field.name),
+				triState: isTriState(field),
 				type: finalType,
 			})
 		}

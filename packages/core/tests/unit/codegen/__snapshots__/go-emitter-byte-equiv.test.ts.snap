@@ -269,6 +269,8 @@ exports[`go-emitter byte-equivalence > crud client + types stable > crud types.g
 
 package sdk
 
+import "encoding/json"
+
 type ErrorEnvelope struct {
 	ErrorKey string \`json:"error_key"\`
 	Fields map[string][]string \`json:"fields"\`
@@ -276,6 +278,15 @@ type ErrorEnvelope struct {
 	Status int64 \`json:"status"\`
 	StatusKey string \`json:"status_key"\`
 	Success bool \`json:"success"\`
+}
+
+func (s ErrorEnvelope) MarshalJSON() ([]byte, error) {
+	type plain ErrorEnvelope
+	p := plain(s)
+	if p.Fields == nil {
+		p.Fields = map[string][]string{}
+	}
+	return json.Marshal(p)
 }
 
 type User struct {

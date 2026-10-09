@@ -56,6 +56,7 @@ export function loadRustRuntimeTemplates(): Map<string, string> {
 		"ws.rs",
 		"realtime.rs",
 		"runtime_sync.rs",
+		"nullable.rs",
 	]
 	const cache = new Map<string, string>()
 	for (const name of names) {
@@ -1031,6 +1032,7 @@ function buildLibRs(hasRealtime: boolean): string {
 		`pub mod errors;`,
 		`pub mod invalidation;`,
 		`pub mod invalidation_sync;`,
+		`pub mod nullable;`,
 		`pub mod resources;`,
 		`pub mod result;`,
 		`pub mod runtime;`,

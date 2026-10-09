@@ -901,7 +901,7 @@ function emitGoMod(options: GoCLIOptions, hasEmbeddedSDK: boolean): string {
 	const l: string[] = []
 	l.push(`module ${mod}`)
 	l.push(``)
-	l.push(`go 1.23`)
+	l.push(`go 1.24`)
 	l.push(``)
 	l.push(`require (`)
 	l.push(`\tgithub.com/spf13/cobra v1.8.1`)

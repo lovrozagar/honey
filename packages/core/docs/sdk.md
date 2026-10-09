@@ -767,8 +767,20 @@ is sent by each generated SDK to the same capture server and compared byte for b
 - **SSE.** WHATWG parsing: CR, LF and CRLF line endings (U+2028 is data), one leading space
   stripped, the id is sticky, `retry` needs digits, a final event without its blank line is
   discarded, lines are capped at 1 MiB.
-- **Operations without `operationId`** (Go, Python, Rust) get a derived name (`GET /users/{id}` →
-  `getUsersById`) instead of being dropped.
+- **Operations without `operationId`** get a derived name (`GET /users/{id}` → `getUsersById`)
+  in every SDK, the TypeScript one and MCP tools included, instead of being dropped.
+- **Optional nullable fields** are tri-state, so "leave it", "clear it" and "set it" are three
+  different requests:
+
+  |                                | absent       | `null`            | value           |
+  | ------------------------------ | ------------ | ----------------- | --------------- |
+  | TypeScript                     | omit the key | `null`            | `v`             |
+  | Python (`TypedDict`)           | omit the key | `None`            | `v`             |
+  | Go (`Nullable[T]`, `omitzero`) | zero value   | `sdk.NullOf[T]()` | `sdk.Some(v)`   |
+  | Rust (`Option<Option<T>>`)     | `None`       | `Some(None)`      | `Some(Some(v))` |
+
+  Decoding keeps the distinction (`IsNull()` / `Get()` in Go). A required array or map left
+  empty is sent as `[]` / `{}`, never `null`.
 
 ## Links
 

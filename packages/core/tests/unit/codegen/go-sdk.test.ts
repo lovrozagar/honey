@@ -146,11 +146,11 @@ describe("Tier 1: scaffold + package header", () => {
 		}
 	})
 
-	it("4. go.mod contains module, go 1.23, and nhooyr.io/websocket require", () => {
+	it("4. go.mod contains module, go 1.24, and nhooyr.io/websocket require", () => {
 		const result = generateGoSDK(minimalSpec, {})
 		const mod = result.files["go.mod"]
 		expect(mod).toContain("module ")
-		expect(mod).toContain("go 1.23")
+		expect(mod).toContain("go 1.24")
 		expect(mod).toContain("require nhooyr.io/websocket v1.8.17")
 	})
 

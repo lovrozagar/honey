@@ -235,7 +235,14 @@ export function irRenderUseRust(ir: IRSchema, ctx: RustRenderUseCtx, depth = 0):
 	}
 }
 
-type RustField = { ident: string; key: string; type: string; required: boolean }
+type RustField = {
+	ident: string
+	key: string
+	type: string
+	required: boolean
+	/** Optional + nullable: `Option<Option<T>>`, absent / null / value. */
+	triState: boolean
+}
 
 function structFields(
 	typeName: string,
@@ -257,10 +264,12 @@ function structFields(
 				names,
 				parentName: typeName,
 			})
+			const triState = !field.required && field.schema.kind === "nullable"
 			let type: string
 			if (field.required) type = circularRefs.has(ft) && !ft.startsWith("Box<") ? `Box<${ft}>` : ft
+			else if (triState) type = `Option<${ft.startsWith("Option<") ? ft : `Option<${ft}>`}>`
 			else type = ft.startsWith("Option<") ? ft : `Option<${ft}>`
-			return { ident: claimField(field.name, scope), key: field.name, required: field.required, type }
+			return { ident: claimField(field.name, scope), key: field.name, required: field.required, triState, type }
 		})
 }
 
@@ -272,7 +281,11 @@ function claimField(key: string, scope: NameScope): string {
 function pushField(l: string[], f: RustField): void {
 	const bare = f.ident.startsWith("r#") ? f.ident.slice(2) : f.ident
 	if (bare !== f.key) l.push(`\t#[serde(rename = ${rustString(f.key)})]`)
-	if (!f.required) l.push(`\t#[serde(skip_serializing_if = "Option::is_none")]`)
+	if (f.triState) {
+		l.push(
+			`\t#[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::nullable::deserialize")]`,
+		)
+	} else if (!f.required) l.push(`\t#[serde(skip_serializing_if = "Option::is_none")]`)
 	l.push(`\tpub ${f.ident}: ${f.type},`)
 }
 

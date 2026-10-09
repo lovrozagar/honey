@@ -44,7 +44,7 @@ describe("examples compile against the generated SDKs", () => {
 				writeTree(join(dir, "sdk"), generateGoSDK(loadMockSpec(), { modulePath: "example.com/mock-sdk" }).files)
 				writeFileSync(
 					join(dir, "go.mod"),
-					"module example.com/ex\n\ngo 1.23\n\nrequire example.com/mock-sdk v0.0.0\n\nreplace example.com/mock-sdk => ./sdk\n",
+					"module example.com/ex\n\ngo 1.24\n\nrequire example.com/mock-sdk v0.0.0\n\nreplace example.com/mock-sdk => ./sdk\n",
 				)
 				copyFileSync(example("go/example.go"), join(dir, "main.go"))
 				const tidy = run("go", ["mod", "tidy"], dir)

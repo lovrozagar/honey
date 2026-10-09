@@ -249,8 +249,8 @@ export function goJsonTagNameValid(key: string): boolean {
 }
 
 /** A Go struct tag carrying a json tag. The tag is an interpreted string so any key text is representable. */
-export function goJsonTag(key: string, omitempty: boolean): string {
-	const value = omitempty ? `${key},omitempty` : key
+export function goJsonTag(key: string, omit: boolean | "omitzero"): string {
+	const value = omit === "omitzero" ? `${key},omitzero` : omit ? `${key},omitempty` : key
 	const inner = `json:${goString(value)}`
 	/* raw-string form when it round-trips: keeps the common case readable */
 	if (!inner.includes("`")) return `\`${inner}\``

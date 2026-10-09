@@ -55,7 +55,7 @@ func main() {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -191,7 +191,7 @@ func mustJSON(v interface{}) string {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -315,7 +315,7 @@ func main() {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -442,7 +442,7 @@ func main() {
 				join(dir, "go.mod"),
 				`module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -534,7 +534,7 @@ func main() {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -653,7 +653,7 @@ func main() {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -796,7 +796,7 @@ func ptrStr(s string) *string { return &s }
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -937,7 +937,7 @@ func main() {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -1052,7 +1052,7 @@ func main() {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -1246,7 +1246,7 @@ loop:
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -1470,7 +1470,7 @@ loop:
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -1635,7 +1635,7 @@ loop:
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -1756,7 +1756,7 @@ func main() {
 
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
@@ -1827,7 +1827,7 @@ replace example.com/mock-sdk => ./sdk
 			writeFileSync(join(dir, "main.go"), mainBody, "utf8")
 			const goMod = `module test-harness
 
-go 1.23
+go 1.24
 
 require example.com/mock-sdk v0.0.0
 
