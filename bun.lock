@@ -8,7 +8,7 @@
         "@clack/prompts": "^0.11.0",
         "@commitlint/cli": "21.2.1",
         "@commitlint/config-conventional": "21.2.0",
-        "@lovrozagar/grunt": "0.10.1",
+        "@lovrozagar/grunt": "0.11.0",
         "oxfmt": "^0.63.0",
         "oxlint": "^1.78.0",
         "rulesync": "16.17.0",
@@ -460,7 +460,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.9", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.0.3", "@jridgewell/sourcemap-codec": "^1.4.10" } }, "sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ=="],
 
-    "@lovrozagar/grunt": ["@lovrozagar/grunt@0.10.1", "", { "dependencies": { "@clack/prompts": "^0.11.0", "cross-spawn": "^7.0.6", "smol-toml": "^1.8.0" }, "bin": { "grunt": "bin/grunt.js" } }, "sha512-RqKJMn8a3c+vgy0+tq6WutR0uNd1SWsZV0a2OQgbJsCNP3+ZQxVusiXRDhaOgMsj8/gmY5FXJss1GetFih7D3w=="],
+    "@lovrozagar/grunt": ["@lovrozagar/grunt@0.11.0", "", { "dependencies": { "@clack/prompts": "^0.11.0", "cross-spawn": "^7.0.6", "smol-toml": "^1.8.0" }, "bin": { "grunt": "bin/grunt.js" } }, "sha512-EWPiI7L4ZcSBhpstUQpedWh73IyGAHWLUJ8tPmLt1Eh1VPgE0Q+AbCSaWo7A2237Btbz6e4142onOnE6WMKjmQ=="],
 
     "@lovrozagar/honey": ["@lovrozagar/honey@workspace:packages/core"],
 
