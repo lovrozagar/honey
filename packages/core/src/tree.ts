@@ -55,6 +55,8 @@ export type RouteHandler = RecordSource & {
 	ek: Set<string>
 	/** resolved error factory — the route's own app's, or the serving app's */
 	fac?: Record<string, (...args: never[]) => unknown> | null
+	/** generate-time: the downstream app's error factory a gateway route's own keys were declared against */
+	sfac?: Record<string, (...args: never[]) => unknown> | null
 	/** handler function */
 	fn: (ctx: unknown) => Response | Promise<Response>
 	/** route identity: `METHOD /canonical/pattern` */
@@ -124,6 +126,8 @@ export type RouteEntry = {
 	mt?: Record<string, unknown> | null
 	/** output schemas — only in live snapshots */
 	os?: OutputSchemaDef | null
+	/** generate-time: the downstream app's error factory, set by a gateway's schema overlay */
+	sfac?: Record<string, (...args: never[]) => unknown> | null
 }
 
 export type MatchResult =

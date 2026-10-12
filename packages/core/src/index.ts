@@ -1263,6 +1263,7 @@ export class Honey<
 					dl.xm = entry.mt ? { ...entry.mt } : null
 					dl.iv = entry.iv ?? null
 					dl.os = entry.os ?? null
+					dl.sfac = entry.sfac ?? null
 					dl.dk = new Set([...(ca.dk ?? []), ...(entry.ek ?? [])])
 					if (entry.bek !== undefined && entry.bek !== null) dl.rb = entry.bek
 					byId.set(id, dl)
@@ -1285,6 +1286,7 @@ export class Honey<
 					rb: entry.bek ?? null,
 					rm: [],
 					rp: pattern,
+					sfac: entry.sfac ?? null,
 					xm: entry.mt ? { ...entry.mt } : null,
 				})
 			}
@@ -1738,26 +1740,24 @@ export class Honey<
 	}
 
 	/**
-	 * @internal — generate-time: copy input/output schemas from `source` onto this app's
-	 * routes that lack them (a gateway serves its generated tree, which carries none).
+	 * @internal — generate-time: copy input/output schemas and the error factory from `source`
+	 * onto this app's routes that lack them (a gateway serves its generated tree, which carries
+	 * none). A downstream route's error keys resolve against its own app's factory, so the
+	 * gateway documents each under the status that app gives it.
 	 */
 	_overlaySchemas(source: RouteTree): void {
 		const g = this._graph
 		for (const [id, entry] of Object.entries(source.routes)) {
-			const iv = entry.iv ?? (entry.h as RouteHandler | undefined)?.iv ?? null
-			const os = entry.os ?? (entry.h as RouteHandler | undefined)?.os ?? null
-			if (iv === null && os === null) continue
-			const record = g.records.get(id)
-			if (record !== undefined) {
-				record.iv ??= iv
-				record.os ??= os
-				continue
-			}
-			const loaded = g.loaded?.get(id)
-			if (loaded !== undefined) {
-				loaded.iv ??= iv
-				loaded.os ??= os
-			}
+			const h = entry.h as RouteHandler | undefined
+			const iv = entry.iv ?? h?.iv ?? null
+			const os = entry.os ?? h?.os ?? null
+			const sfac = h?.fac ?? null
+			if (iv === null && os === null && sfac === null) continue
+			const target = g.records.get(id) ?? g.loaded?.get(id)
+			if (target === undefined) continue
+			target.iv ??= iv
+			target.os ??= os
+			target.sfac ??= sfac
 		}
 		this._bumpEpoch()
 	}

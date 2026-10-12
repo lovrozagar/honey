@@ -648,13 +648,16 @@ export function generateOpenApiFromTree<TMeta = unknown>(
 		}
 
 		if (handler.ek.size > 0) {
-			/* a mounted sub-app's route keeps its own error factory */
+			/* a mounted sub-app's route keeps its own error factory; a gateway route documents the
+			   keys its downstream app declared against that app's factory, the rest against its own */
 			const routeFactory = (handler.fac as Record<string, () => HoneyError> | null | undefined) ?? factory
+			const sourceFactory = (handler.sfac as Record<string, () => HoneyError> | null | undefined) ?? null
+			const factories = sourceFactory === null ? [routeFactory] : [sourceFactory, routeFactory]
 			addErrorResponses(responses, handler, {
 				baseErrorJsonSchema,
 				customErrorAddsSchema,
-				errorMeta: routeFactory === factory ? errorMeta : getErrorMeta(routeFactory),
-				factory: routeFactory,
+				errorMeta: factories.map((f) => (f === factory ? errorMeta : getErrorMeta(f))),
+				factories,
 			})
 		}
 
@@ -809,8 +812,10 @@ function propertyParameters(
 type ErrorResponseContext = {
 	baseErrorJsonSchema: Record<string, unknown>
 	customErrorAddsSchema: Record<string, unknown> | null
-	errorMeta: Record<string, ErrorMetaEntry> | null
-	factory: Record<string, () => HoneyError> | null
+	/** per factory, in the same order */
+	errorMeta: Array<Record<string, ErrorMetaEntry> | null>
+	/** consulted in order: the first that knows a key gives its status and shape */
+	factories: Array<Record<string, () => HoneyError> | null>
 }
 
 function addErrorResponses(
@@ -821,14 +826,18 @@ function addErrorResponses(
 	type ErrorEntry = { key: string; schema: Record<string, unknown> | null }
 	const byStatus = new Map<number, ErrorEntry[]>()
 	for (const ek of handler.ek) {
-		const info = resolveErrorInfo(ek, ctx.factory)
+		const at = Math.max(
+			ctx.factories.findIndex((f) => f?.[ek] !== undefined),
+			0,
+		)
+		const info = resolveErrorInfo(ek, ctx.factories[at] ?? null)
 		if (info.status <= 0) continue
 		let entries = byStatus.get(info.status)
 		if (!entries) {
 			entries = []
 			byStatus.set(info.status, entries)
 		}
-		const meta = ctx.errorMeta?.[ek]
+		const meta = ctx.errorMeta[at]?.[ek]
 		let customSchema: Record<string, unknown> | null = null
 		if (meta?.schema) {
 			const converted = asJsonSchema(meta.schema as StandardSchemaLike)
