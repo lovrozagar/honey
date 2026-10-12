@@ -12,7 +12,13 @@
 		"**/.cache/**",
 		"**/_gen/**",
 		"**/test-results/**",
-		"**/playwright-report/**"
+		"**/playwright-report/**",
+		".agents/**",
+		".claude/**",
+		".codex/**",
+		".gemini/**",
+		".grok/**",
+		".rulesync/**"
 	],
 	"categories": {
 		"correctness": "error",
