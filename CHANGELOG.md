@@ -2,6 +2,12 @@
 
 All notable changes to [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) are documented in this file.
 
+## 0.7.3 - 2026-10-12
+
+### Fixed
+
+- A gateway's OpenAPI document dropped the error keys a downstream route declared against its own app's error factory: a key the gateway's factory did not know resolved to no status and was skipped, so a 409 the downstream app documents as `column_name_taken, optimistic_lock_conflict` reached the gateway document as `optimistic_lock_conflict` alone. The schema overlay now carries each downstream route's factory, and its keys are documented under the status that app gives them, beside the gateway's own.
+
 ## 0.7.2 - 2026-10-09
 
 ### Fixed
