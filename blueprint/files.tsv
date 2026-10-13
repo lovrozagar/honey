@@ -3,6 +3,9 @@
 # budget: all v1 src files are <=300 lines by design; a row that would exceed is already split here.
 # origin: the v0 file(s) this leaf comes from (— = new in v1). The 124 v0 files all appear as an origin at least once; Deno is deleted.
 # A missing row is a missing file. Add a file = add its row + its bit case, before it exists.
+# PATH RESOLUTION (check-tree): a row starting with `packages/`, `bench/`, `blueprint/`, `_v0/` or `.` is repo-relative;
+#   any OTHER path (src/, tests/, lint/, scripts/, …) is relative to `packages/<pkg>/` (pkg = the row's package column). So
+#   `scripts/capture-token-budget.ts` pkg=gen → `packages/gen/scripts/...`; `tests/structure/check-tree.test.ts` pkg=core → `packages/core/tests/structure/...`.
 #
 # ============================== packages/core  (@lovrozagar/honey) ==============================
 path	pkg	kind	bit	responsibility	origin
@@ -270,6 +273,7 @@ packages/gen/vitest.config.ts	gen	config	00	gen vitest + harness config	vitest.h
 .oxlintrc.json	core	config	00	lint config incl. the honey rules	.oxlintrc.json
 # custom oxlint JS-plugin rules — each is a lint/<name>.js rule (wired via .oxlintrc jsPlugins, plugin name "honey") + lint/<name>.test.ts; exclude _v0/**:
 lint/index.js	core	index	00	the honey oxlint plugin entry — re-exports all honey/* rules (the jsPlugins specifier); no sibling test (R5)	—
+lint/rule-harness.ts	core	test	00	shared support the 7 rule tests import: run a rule in-process (oxc-parser) + through the real oxlint binary	—
 lint/no-v8-ignore.js	core	src	00	honey/no-v8-ignore rule	—
 lint/no-v8-ignore.test.ts	core	test	00	unit-run the rule + spawn oxlint with jsPlugins on a fixture	—
 lint/boundaries.js	core	src	00	honey/boundaries — the import-arrow rule	—
@@ -285,7 +289,8 @@ lint/content-type-exact-essence.test.ts	core	test	00	rule test	—
 lint/no-header-mode.js	core	src	00	honey/no-header-mode (H19.7)	—
 lint/no-header-mode.test.ts	core	test	00	rule test	—
 _v0/	—	legacy	00	the complete v0 package at repo ROOT (Option Z): src, tests, bin, scripts, docs, examples, README, tsconfig.{build,src,types}, vitest.{all,harness,harness.rust}, + _v0/package.json named @lovrozagar/honey with v0 exports/bin. STAYS a root-workspaces member so all consumers resolve v0 unchanged (full oracle green). 15 test package-imports rewritten to relative. Cutover = atomic workspace swap after bit 18; deleted bit 20. Outside v1 src/** globs + v1 published files (H21)	packages/core/*
-tests/structure/check-tree.test.ts	core	test	00	the tree matches files.tsv up to the current bit (--complete, H19.4) (gate)	—
+tests/structure/check-tree.ts	core	src	00	pure parseRows(tsv) + checkTree(rows, files, complete); runs on the real tree at COMPLETE=0, each bit raises the constant (H19.4)	—
+tests/structure/check-tree.test.ts	core	test	00	drives checkTree with fixtures + the real tree up to the current bit (--complete, H19.4) (gate)	—
 tests/structure/no-deno.test.ts	core	test	00	no deno token / ws/deno / ./ws/deno export remains outside _v0 history	—
 tests/structure/reorg-coverage-diff.test.ts	core	test	00	post-redistribution case count ≥ v0 per feature (the lose-nothing gate)	—
 tests/structure/oracle-count.ts	core	src	00	a vitest reporter + pure checkOracle(totals, baseline); enforces only when HONEY_ORACLE=1; counts only _v0/tests (R2)	—

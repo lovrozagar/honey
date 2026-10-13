@@ -4,7 +4,7 @@ The `oracle.*` lines are read by packages/core/tests/structure/oracle-count.ts a
 `bun run test`. `passed` counts a listed flaky case as passed whether it passes or fails that
 run; any other failure, a lost case, or one more skip is drift and fails the run.
 
-oracle.scope: packages/core/_v0/tests
+oracle.scope: _v0/tests
 oracle.passed: 6713
 oracle.skipped: 40
 oracle.flaky: _v0/tests/unit/plugin/cli-generate.test.ts > honey generate CLI > an app that serves at top level and leaves a timer still generates and exits, without binding the port
