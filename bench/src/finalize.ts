@@ -34,6 +34,7 @@ function finalizeMicros(routes: number, scopes: number): number {
 	for (let s = 0; s <= SAMPLES; s++) {
 		const app = buildApp(routes, scopes)
 		const start = performance.now()
+		// oxlint-disable-next-line no-underscore-dangle -- v0 exposes finalize only under this name
 		app._finalize()
 		if (s > 0) samples.push((performance.now() - start) * 1000)
 	}
