@@ -284,7 +284,7 @@ lint/content-type-exact-essence.js	core	src	00	honey/content-type-exact-essence 
 lint/content-type-exact-essence.test.ts	core	test	00	rule test	—
 lint/no-header-mode.js	core	src	00	honey/no-header-mode (H19.7)	—
 lint/no-header-mode.test.ts	core	test	00	rule test	—
-packages/core/_v0/	—	legacy	00	parked v0 (src+tests, git mv) — every package.json subpath points here until its v1 bit flips it; deleted bit 20; excluded from coverage/tree-as-source/lint globs and published files (H21)	src,tests
+_v0/	—	legacy	00	parked v0 at repo ROOT (src+tests, git mv; the 15 package-imports rewritten to relative → self-contained); oracle runs _v0/tests directly via its own vitest include; v1 exports never point here; deleted bit 20; outside all src/** globs + published files (H21)	packages/core/{src,tests}
 tests/structure/check-tree.test.ts	core	test	00	the tree matches files.tsv up to the current bit (--complete, H19.4) (gate)	—
 tests/structure/no-deno.test.ts	core	test	00	no deno token / ws/deno / ./ws/deno export remains outside _v0 history	—
 tests/structure/reorg-coverage-diff.test.ts	core	test	00	post-redistribution case count ≥ v0 per feature (the lose-nothing gate)	—

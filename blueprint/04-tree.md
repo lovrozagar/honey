@@ -71,7 +71,7 @@ Each `gen` subpath maps straight to its module file (no `exports/` folder). The 
 
 ## `_v0` (during the rewrite)
 
-v0 is parked at **`packages/core/_v0/{src,tests}`** (one `git mv` of src+tests, preserving all relative test imports) and stays there until bit 20 deletes it (H21). Every `package.json` subpath points into `_v0/src` at bit 00; each flips to its v1 module in the bit that completes it (`.` at end of bit 08; codegen/client/cli subpaths in bits 09–18). `_v0/**` is outside every `src/**` glob (coverage, tree-as-source, the `honey/*` lint rules) and the published `files`, so v0's console calls and module state don't trip v1's gates.
+v0 is parked at the **repo root `/_v0/{src,tests}`** (one `git mv` of src+tests; the 15 `@lovrozagar/honey` test imports rewritten to relative, so `_v0` is self-contained and the oracle runs `/_v0/tests` directly via its own vitest include). The live `packages/core` holds only v1. v1 `package.json` exports are built fresh — a subpath appears when its v1 module lands, never pointed at `_v0`. `_v0/**` is outside every `src/**` glob (coverage, tree-as-source, `honey/*` lint) and the published `files`, so v0's console calls and module state don't trip v1's gates. `_v0` is deleted at bit 20.
 
 ## Line-budget note
 
