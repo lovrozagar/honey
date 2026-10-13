@@ -92,6 +92,11 @@ describe("checkTree --complete 00", () => {
 		])
 	})
 
+	it("lets the bit in progress land file by file, but nothing past it", () => {
+		const files = [...BIT_00_FILES, "packages/core/src/routing/app.ts", "packages/core/src/routing/app.test.ts"]
+		expect(checkTree(rows, files, 0)).toEqual([])
+	})
+
 	it("ignores files outside the checked roots", () => {
 		const files = [
 			...BIT_00_FILES,

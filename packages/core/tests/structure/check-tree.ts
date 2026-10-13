@@ -1,7 +1,8 @@
 /**
  * The phase-aware tree check (H19.4): files.tsv is the file list, and up to the completed bit the
  * tree matches it exactly. A row whose bit has run must exist (a `src` row with its colocated
- * test); a file under a checked root must have a row, and that row's bit must have run.
+ * test); a file under a checked root must have a row whose bit has run or is the one in progress
+ * (`COMPLETE + 1`), which lands file by file before it completes.
  */
 
 /** The bit construction has completed. Each bit raises it in the change that completes it; the tree
@@ -85,7 +86,7 @@ export function checkTree(rows: readonly Row[], files: readonly string[], comple
 		if (!CHECKED_ROOTS.some((root) => file.startsWith(root))) continue
 		const bits = entries.filter((entry) => covers(entry.pattern, file)).map((entry) => entry.bit)
 		if (bits.length === 0) errors.push(`unlisted: ${file}`)
-		else if (Math.min(...bits) > complete) {
+		else if (Math.min(...bits) > complete + 1) {
 			errors.push(`early: ${file} (bit ${pad(Math.min(...bits))}, complete ${pad(complete)})`)
 		}
 	}

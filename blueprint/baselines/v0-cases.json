@@ -41536,6 +41536,11 @@
 		"20-docs": 53
 	},
 	"note": "every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → feature a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept.",
-	"reassigned": {},
+	"reassigned": {
+		"5c7ec6062c": "07-security-middleware",
+		"90eb46f0fe": "07-security-middleware",
+		"970f25e183": "07-security-middleware",
+		"c59db5a3e0": "07-security-middleware"
+	},
 	"retired": {}
 }
