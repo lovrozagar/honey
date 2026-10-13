@@ -292,7 +292,9 @@ _v0/	—	legacy	00	the complete v0 package at repo ROOT (Option Z): src, tests, 
 tests/structure/check-tree.ts	core	src	00	pure parseRows(tsv) + checkTree(rows, files, complete); runs on the real tree at COMPLETE=0, each bit raises the constant (H19.4)	—
 tests/structure/check-tree.test.ts	core	test	00	drives checkTree with fixtures + the real tree up to the current bit (--complete, H19.4) (gate)	—
 tests/structure/no-deno.test.ts	core	test	00	no deno token / ws/deno / ./ws/deno export remains outside _v0 history	—
-tests/structure/reorg-coverage-diff.test.ts	core	test	00	post-redistribution case count ≥ v0 per feature (the lose-nothing gate)	—
+tests/structure/v0-inventory.ts	core	src	00	pure: parse every _v0/tests file (oxc-parser) → classify each case (file>describe>name) by feature → v0-cases.json. _v0/tests stays byte-frozen, no reshuffle (H13)	—
+tests/structure/v0-inventory.test.ts	core	test	00	the classifier over fixtures (stable case extraction + feature assignment); regenerates v0-cases.json and asserts it matches the committed baseline (drift fails)	—
+tests/structure/reorg-coverage-diff.test.ts	core	test	00	the lose-nothing gate: each completed feature's v0 cases are ported (v1 test tagged // v0: <id>) or retired (reason in inventory); unaccounted for a completed feature fails; global unaccounted = 0 before bit-20 _v0 delete (H13)	—
 tests/structure/oracle-count.ts	core	src	00	a vitest reporter + pure checkOracle(totals, baseline); enforces only when HONEY_ORACLE=1; counts only _v0/tests (R2)	—
 tests/structure/oracle-count.test.ts	core	test	00	unit-tests the pure checkOracle: drift, silent-skip, flaky-tolerant (G-oracle)	—
 tests/structure/mutation-harness.ts	core	src	00	run the adversarial/security suite with each guard disabled → must go red (failing-input-first enforced)	—
@@ -303,10 +305,12 @@ bench/src/significance.ts	core	src	00	the perf significance decision (median + s
 bench/src/significance.test.ts	core	test	00	unit-tests the significance decision (R6)	—
 bench/src/finalize.ts	core	test	00	finalize-cost bench — _resolve O(routes×scopes), separate from the warm per-request loop (G-perf)	—
 scripts/capture-token-budget.ts	gen	script	00	run the tokenizer over v0 output → write blueprint/baselines/tokens.json ceilings	—
+scripts/capture-token-budget.test.ts	gen	test	00	the pure token-count + ceiling-math over fixtures (00-rules requires a sibling test for a script row)	—
 blueprint/baselines/oracle-baseline.txt	core	corpus	00	committed oracle count (stepped 6767−N) the oracle-count test asserts	—
 blueprint/baselines/perf-baseline.txt	core	corpus	00	committed perf notes (this-machine ratios; CI-runner is the real home)	—
 blueprint/baselines/hotpath.json	core	corpus	00	committed hotpath baseline (11 scenarios, this machine, named as such) — hotpath.ts reads it	bench/hotpath-baseline.json
 blueprint/baselines/tokens.json	gen	corpus	00	committed per-operation token ceilings (from capture-token-budget)	—
+blueprint/baselines/v0-cases.json	core	corpus	00	committed v0 case inventory (file>describe>name classified by feature, from v0-inventory.ts) — the port/retire gate reads it (H13)	—
 blueprint/baselines/e2e-expected.json	core	corpus	00	committed 30-cell expected pass set (25 local + 5 cf-prod CI-captured)	—
 tests/e2e/run.ts	core	test	00	the 30-cell runner (node/bun/cf × dev/prod × 5 apps)	e2e/run.ts
 tests/e2e/differential.ts	core	test	00	differential e2e	e2e/apps/differential.ts
@@ -339,10 +343,13 @@ tests/e2e/{bun,node,cf-workers,strict-consumer}/	core	app	00	per-runtime e2e har
 #   typetest -> tests/types; mock-server,fixtures,*-env.ts,*specs.ts,_assert.ts,harness-util.ts -> corpus/support by owner.
 #   unit/fuzz/* (4 .fuzz.test.ts + rng.ts) -> tests/integration/security (the fuzz corpus; rng.ts = corpus support) (bit 07/gates).
 #   unit/on/*, unit/integration/* -> tests/integration/<feature> by what they exercise.
-# REDISTRIBUTE (reorg rule, bit 00, coverage-diff gate) — split by feature, number dropped: integration/bug-hunt.test.ts,
+# INVENTORY (H13 reorg rule, bit 00 — classify, do NOT physically reshuffle; _v0/tests stays byte-frozen, deleted bit 20).
+#   v0-inventory.ts classifies each case in these session-dump files by the feature it exercises → v0-cases.json;
+#   reorg-coverage-diff then gates port(// v0: <id>)/retire per feature-bit. The files it classifies: integration/bug-hunt.test.ts,
 #   bug-hunt-2..21 (20), edge-cases, client-edge-cases(+2..5) (5), payloads, server; unit/audit/audit-bugs, audit-v2;
 #   unit/codegen/type-emitter-debug(+2..5) (5); unit/codegen/sdk-r4/r5/r6-* phase files; unit/client/http-r6-phase-g;
 #   unit/core/edge-cases-2..10; AND all other unit/core/* cross-cutting files (adversarial, basepath-adversarial, bizarre,
 #   broken-world, prove-everything, stress-test, interactions, deep-edge-cases, developer-mistakes, production-weird,
-#   untested-paths, sse-backpressure, sse-keepalive, … ~35) -> the feature suite each case exercises (sse-* -> streaming/realtime;
-#   adversarial/bizarre/broken-world/production-weird -> security or the owning feature). Each case lands by feature; count preserved before delete.
+#   untested-paths, sse-backpressure, sse-keepalive, … ~35) -> feature-classified per case (sse-* -> streaming/realtime;
+#   adversarial/bizarre/broken-world/production-weird -> security or the owning feature). Every case is accounted by feature;
+#   its v1 home is a ported test tagged // v0: <id> (or a retire reason) by the owning bit — not a moved v0 file.
