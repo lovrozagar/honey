@@ -206,6 +206,24 @@
       "name": "@honey/e2e-strict-consumer",
       "version": "0.0.1",
     },
+    "packages/gen": {
+      "name": "@lovrozagar/honey-codegen",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@total-typescript/ts-reset": "catalog:",
+        "@types/node": "catalog:",
+        "@vitest/coverage-v8": "4.1.10",
+        "ts-morph": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "ts-morph": ">=28.0.0",
+      },
+      "optionalPeers": [
+        "ts-morph",
+      ],
+    },
   },
   "catalog": {
     "@cloudflare/workers-types": "5.20260710.1",
@@ -460,6 +478,8 @@
     "@lovrozagar/grunt": ["@lovrozagar/grunt@0.11.0", "", { "dependencies": { "@clack/prompts": "^0.11.0", "cross-spawn": "^7.0.6", "smol-toml": "^1.8.0" }, "bin": { "grunt": "bin/grunt.js" } }, "sha512-EWPiI7L4ZcSBhpstUQpedWh73IyGAHWLUJ8tPmLt1Eh1VPgE0Q+AbCSaWo7A2237Btbz6e4142onOnE6WMKjmQ=="],
 
     "@lovrozagar/honey": ["@lovrozagar/honey@workspace:_v0"],
+
+    "@lovrozagar/honey-codegen": ["@lovrozagar/honey-codegen@workspace:packages/gen"],
 
     "@lukeed/csprng": ["@lukeed/csprng@1.1.0", "", {}, "sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA=="],
 

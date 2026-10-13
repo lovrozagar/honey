@@ -20,7 +20,8 @@
 		".gemini/**",
 		".grok/**",
 		".rulesync/**",
-		"_v0/**"
+		"_v0/**",
+		"packages/gen/src/_tokenizer/**"
 	],
 	"categories": {
 		"correctness": "error",

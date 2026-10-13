@@ -25,5 +25,7 @@
 		".grok/**",
 		".rulesync/**",
 		".mcp.json",
+		/* third-party code kept byte-identical to its tarball */
+		"packages/gen/src/_tokenizer/**",
 	],
 }

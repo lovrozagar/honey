@@ -1,0 +1,39 @@
+{
+	"name": "@lovrozagar/honey-codegen",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Generates SDKs (TypeScript, Go, Rust, Python, C#, Java), a CLI and an MCP server from any OpenAPI 3.x document.",
+	"license": "MIT",
+	"author": "lovrozagar",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/lovrozagar/honey.git",
+		"directory": "packages/gen"
+	},
+	"type": "module",
+	"exports": {},
+	"scripts": {
+		"capture:tokens": "bun scripts/capture-token-budget.ts",
+		"test": "vitest run --coverage",
+		"type:check": "tsc --noEmit -p tsconfig.json"
+	},
+	"devDependencies": {
+		"@total-typescript/ts-reset": "catalog:",
+		"@types/node": "catalog:",
+		"@vitest/coverage-v8": "4.1.10",
+		"ts-morph": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"peerDependencies": {
+		"ts-morph": ">=28.0.0"
+	},
+	"peerDependenciesMeta": {
+		"ts-morph": {
+			"optional": true
+		}
+	},
+	"engines": {
+		"node": ">=20"
+	}
+}
