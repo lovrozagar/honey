@@ -82,7 +82,11 @@ Units colocated beside source; feature-named integration suites in `tests/integr
 
 ## H14 — e2e matrix: 30 cells, Deno dropped
 
-node / bun / cf × {dev = source, prod = built bundle} × {compose, defaults, gateway, kitchen, surface} = 30 cells. `cf dev` = wrangler/miniflare local; `cf prod` = deployed worker (CF creds in CI). `tests/e2e/run.ts` already supports `--env/--app/--mode`; v1 codifies the matrix, removes the deno env, and moves apps+runner under `packages/core/tests/e2e/`. All 30 pass identically to v0.
+node / bun / cf × {dev, prod} × {compose, defaults, gateway, kitchen, surface} = 30 cells. `tests/e2e/run.ts` already supports `--env/--app/--mode`; v1 removes the deno env and moves apps+runner under `packages/core/tests/e2e/`.
+
+**v0's `prod` is a no-op (verified, bit 00):** `run.ts --mode prod` only flips the Playwright `grepInvert` between `@prod-only`/`@dev-only`, and **no** e2e test carries either tag — so `prod ≡ dev`, and `cf` is always local wrangler/miniflare, never a deployed worker. The bit-00 oracle therefore captures all 30 cells **locally** with `prod ≡ dev` (`blueprint/baselines/e2e-expected.json`), faithful to what v0 does — this is the baseline, recorded as a known v0 limitation.
+
+**v1 requirement (owned by bit 19, cutover/release):** v0's no-op `prod` must not become v1's accepted behavior. The v1 runner makes `prod = the built bundle served end-to-end` (the full Playwright suite drives real requests against the *shipped* artifact — catching bundler externalization / tree-shake / side-effect divergences that import-time `test:build` and dev-from-source both miss) and `cf prod = a deployed worker` (CF creds in CI). At bit 19 the baseline is re-recorded against v1, the 5 `cf-prod` cells move to CI, and the ≥1 genuine `@prod-only` assertion (built-bundle-only behavior) that makes `prod` distinct is added. Until then, dev and prod are the same run.
 
 ## H15 — Deno is deleted
 
