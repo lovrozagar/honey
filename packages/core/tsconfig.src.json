@@ -1,4 +1,0 @@
-{
-	"extends": "./tsconfig.json",
-	"include": ["_v0/src/**/*"]
-}

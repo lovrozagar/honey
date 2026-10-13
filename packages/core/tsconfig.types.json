@@ -1,4 +1,0 @@
-{
-	"extends": "./tsconfig.json",
-	"include": ["_v0/src/**/*", "_v0/tests/typetest/**/*.ts", "_v0/tests/unit/types/output-safety.typetest.ts"]
-}

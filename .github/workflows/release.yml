@@ -23,7 +23,7 @@ permissions:
 env:
   BUN_VERSION: "1.3.11"
   PACKAGE_NAME: "@lovrozagar/honey"
-  PACKAGE_DIR: packages/core
+  PACKAGE_DIR: _v0
 
 jobs:
   test:

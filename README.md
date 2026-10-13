@@ -1395,7 +1395,7 @@ const app = honey<Env>()
 
 Every key of the app's meta type needs an entry — mapped, or `false` — enforced by the type of the `meta` section and again at codegen. Route meta beats schema-derived facts; `meta.extensions` (a record of `x-*` keys) is the escape hatch and outranks both. `profile` on `app.openapi()` or on a `codegen.openApi` entry emits several documents with different extension sets from one policy. Codegen-time only; nothing runs per request.
 
-Full reference, precedence rules, error taxonomy and migration path: [packages/core/docs/meta-spec.md](packages/core/docs/meta-spec.md).
+Full reference, precedence rules, error taxonomy and migration path: [_v0/docs/meta-spec.md](_v0/docs/meta-spec.md).
 
 #### Middleware-contributed meta
 
@@ -1719,7 +1719,7 @@ const user = await sdk.createUser({ json: { email: "a@b.com", name: "Ada" } })
 
 Python / Go / Rust: point `ports.*.outDir` at a folder and import that package (`replace` in `go.mod`, `path =` in Cargo). Sync clients exist for Python and Rust only.
 
-Capability details and four-language snippets: [packages/core/docs/sdk.md](packages/core/docs/sdk.md) and [packages/core/examples](packages/core/examples).
+Capability details and four-language snippets: [_v0/docs/sdk.md](_v0/docs/sdk.md) and [_v0/examples](_v0/examples).
 
 ### Go CLI
 
@@ -1874,7 +1874,8 @@ Import features from their path.
 ## Repository layout
 
 ```
-packages/core/     published `honey` package (src, tests, docs, examples)
+_v0/              published `honey` package, v0 (frozen until the v1 cutover)
+packages/core/    v1 rewrite (src, tests, lint)
 packages/core/tests/e2e/apps/                 consumer apps (kitchen, defaults, compose, surface, gateway)
 packages/core/tests/e2e/{bun,node,cf-workers}/ runtime hosts + Playwright
 packages/core/tests/e2e/run.ts                env × app runner
@@ -1915,7 +1916,7 @@ bun run test:all           # default suite + language harnesses
 ```
 
 The harness needs Go, cargo and `python3` on PATH. Python packages come from
-`packages/core/_v0/tests/python-requirements.txt`: on first run the harness creates
+`_v0/tests/python-requirements.txt`: on first run the harness creates
 `.cache/python-venv` and installs them there, then reuses it until the file changes.
 Set `HONEY_PYTHON` to use your own interpreter instead. Without a usable Python
 (no `python3`, no `venv` module, or offline on first run) the Python tests skip
@@ -1988,7 +1989,7 @@ Python runtime tests skip without `httpx` (`pip install httpx`). Rust cargo test
 
 ## Releases
 
-The published package is [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey). That URL is the repository website. GitHub Releases match npm versions. Pushing a tag `vX.Y.Z` (same as `packages/core/package.json` `version`) runs [`.github/workflows/release.yml`](./.github/workflows/release.yml): unit + typecheck + consumer tests, `npm publish` via trusted publishing, GitHub Packages, then a GitHub Release.
+The published package is [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey). That URL is the repository website. GitHub Releases match npm versions. Pushing a tag `vX.Y.Z` (same as `_v0/package.json` `version`) runs [`.github/workflows/release.yml`](./.github/workflows/release.yml): unit + typecheck + consumer tests, `npm publish` via trusted publishing, GitHub Packages, then a GitHub Release.
 
 There is no `NPM_TOKEN` in repo secrets. npm authenticates with GitHub OIDC. Configure the trusted publisher **once**:
 
@@ -2004,8 +2005,8 @@ There is no `NPM_TOKEN` in repo secrets. npm authenticates with GitHub OIDC. Con
 | Allowed actions      | Allow npm publish |
 
 ```bash
-# 1. set packages/core/package.json version to X.Y.Z
-git add packages/core/package.json
+# 1. set _v0/package.json version to X.Y.Z
+git add _v0/package.json
 git commit -m "chore: release X.Y.Z"
 git push origin main
 

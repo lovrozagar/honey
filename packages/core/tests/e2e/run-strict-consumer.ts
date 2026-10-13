@@ -19,7 +19,8 @@ import { fileURLToPath } from "node:url"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, "../../../..")
-const corePath = join(repoRoot, "packages", "core")
+/* the package under test is v0 until the cutover swap (H21) */
+const corePath = join(repoRoot, "_v0")
 const fixture = join(here, "strict-consumer")
 const sandbox = join(repoRoot, ".cache", "strict-consumer")
 const keep = process.argv.includes("--keep")

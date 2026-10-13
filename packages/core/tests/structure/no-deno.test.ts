@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { detectRuntime } from "@lovrozagar/honey"
+/* the purge ran in the frozen v0 package (H21); its detection is the one consumers run until cutover */
+import { detectRuntime } from "../../../../_v0/src/detect-runtime.ts"
 import { describe, expect, it } from "vitest"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
@@ -12,7 +13,7 @@ const SELF = "packages/core/tests/structure/no-deno.test.ts"
 const EXEMPT = [
 	/^CHANGELOG\.md$/,
 	/^blueprint\//,
-	/^packages\/core\/docs\/regression-matrix\//,
+	/^_v0\/docs\/regression-matrix\//,
 	/^\.(agents|claude|codex|gemini|grok|rulesync)\//,
 	/^(AGENTS|CLAUDE|GEMINI)\.md$/,
 ]

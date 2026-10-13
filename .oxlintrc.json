@@ -20,7 +20,7 @@
 		".gemini/**",
 		".grok/**",
 		".rulesync/**",
-		"packages/core/_v0/**"
+		"_v0/**"
 	],
 	"categories": {
 		"correctness": "error",

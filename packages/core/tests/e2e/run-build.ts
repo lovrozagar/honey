@@ -170,12 +170,13 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 /* builds bundle honey the way a consumer does, from the compiled dist/ — so build it first */
 {
 	const proc = Bun.spawn(["bun", "run", "build"], {
-		cwd: join(import.meta.dir, "..", ".."),
+		/* the package under test is v0 until the cutover swap (H21) */
+		cwd: join(import.meta.dir, "..", "..", "..", "..", "_v0"),
 		stderr: "inherit",
 		stdout: verbose ? "inherit" : "ignore",
 	})
 	if ((await proc.exited) !== 0) {
-		console.error("building packages/core failed")
+		console.error("building the honey package failed")
 		process.exit(1)
 	}
 }
