@@ -8,7 +8,7 @@
  *     bun bench/src/hotpath.ts --update   # record a new baseline (commit it with the change that moved it)
  *
  * Exits 1 when a scenario regressed by `judge` (significance.ts): its median ratio is past the
- * baseline by more than `HOTPATH_THRESHOLD` (default 0.25) AND the rise is outside the 95% band
+ * baseline by more than `HOTPATH_THRESHOLD` (default 0.10) AND the rise is outside the 95% band
  * of its own samples. A rise inside the band prints as `noise`, never as a silent pass. Ratios
  * drift by up to ~20% between Bun versions, so baselines are kept per runtime minor version; a
  * version without one runs as a hint only, and CI gates on the version it pins.
@@ -22,7 +22,7 @@ import "@lovrozagar/honey/trust"
 import { judge, median } from "./significance.ts"
 
 const BASELINE_FILE = new URL("../../blueprint/baselines/hotpath.json", import.meta.url)
-const THRESHOLD = Number(process.env.HOTPATH_THRESHOLD ?? 0.25)
+const THRESHOLD = Number(process.env.HOTPATH_THRESHOLD ?? 0.1)
 const SAMPLES = Number(process.env.HOTPATH_SAMPLES ?? 15)
 const ITERATIONS = Number(process.env.HOTPATH_ITERATIONS ?? 50_000)
 
