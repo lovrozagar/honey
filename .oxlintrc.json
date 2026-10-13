@@ -1,6 +1,7 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 	"plugins": ["typescript", "unicorn", "oxc"],
+	"jsPlugins": [{ "name": "honey", "specifier": "./packages/core/lint/index.js" }],
 	"env": {
 		"node": true
 	},
@@ -40,6 +41,54 @@
 			],
 			"rules": {
 				"typescript/no-explicit-any": "off"
+			}
+		},
+		{
+			"files": [
+				"packages/core/src/**",
+				"packages/core/lint/**",
+				"packages/core/tests/structure/**",
+				"packages/core/tests/integration/**",
+				"packages/core/tests/types/**",
+				"packages/core/tests/regression/**",
+				"packages/gen/src/**",
+				"packages/gen/tests/**",
+				"bench/src/significance.ts",
+				"bench/src/significance.test.ts",
+				"bench/src/finalize.ts"
+			],
+			"plugins": ["typescript", "unicorn", "oxc", "vitest"],
+			"rules": {
+				"complexity": ["error", 15],
+				"max-depth": ["error", 4],
+				"max-lines": ["error", 300],
+				"max-lines-per-function": ["error", 60],
+				"max-params": ["error", 4],
+				"vitest/expect-expect": "error",
+				"vitest/no-conditional-expect": "error",
+				"vitest/no-disabled-tests": "error",
+				"vitest/no-focused-tests": "error",
+				"honey/boundaries": "error",
+				"honey/no-console": "error",
+				"honey/no-module-side-effects": "error",
+				"honey/no-module-state": "error",
+				"honey/no-v8-ignore": "error"
+			}
+		},
+		{
+			"files": [
+				"packages/core/src/**/*.test.ts",
+				"packages/core/lint/**/*.test.ts",
+				"packages/core/tests/structure/**",
+				"packages/core/tests/integration/**",
+				"packages/core/tests/types/**",
+				"packages/core/tests/regression/**",
+				"packages/gen/src/**/*.test.ts",
+				"packages/gen/tests/**",
+				"bench/src/significance.test.ts"
+			],
+			"rules": {
+				"max-lines": ["error", 500]
 			}
 		}
 	]

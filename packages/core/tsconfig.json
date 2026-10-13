@@ -1,6 +1,7 @@
 {
 	"compilerOptions": {
 		"allowImportingTsExtensions": true,
+		"allowJs": true,
 		"customConditions": ["honey-source"],
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
