@@ -1,14 +1,5 @@
-import { InternPool } from "./codegen-route-tree-intern.ts"
-import {
-	deriveErrorEnvelopeName,
-	deriveSchemaName,
-	isErrorEnvelope,
-	sanitizeComponentName,
-	shortHash,
-} from "./codegen-schema-naming.ts"
-import type { SchemaNameContext } from "./codegen-schema-naming.ts"
-import { effectJsonSchemaFn, loadEffectJsonSchema, loadToJSONSchema, toJSONSchemaFn } from "./codegen-loaders.ts"
-import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
+import { CROSS_ORIGIN_SAFE_HEADERS } from "./client/redirect-policy.ts"
+import type { IR, IRBody, IRNamespace, IROperation, IRSchema } from "./codegen-ir.ts"
 import {
 	bodiesOf,
 	irErrorEnvelope,
@@ -19,15 +10,26 @@ import {
 	schemaToIR,
 	toIR,
 } from "./codegen-ir.ts"
-import type { IR, IRBody, IRNamespace, IROperation, IRSchema } from "./codegen-ir.ts"
+import { effectJsonSchemaFn, loadEffectJsonSchema, loadToJSONSchema, toJSONSchemaFn } from "./codegen-loaders.ts"
+import { InternPool } from "./codegen-route-tree-intern.ts"
+import { sanitizeZodJsonSchema } from "./codegen-sanitize.ts"
+import type { SchemaNameContext } from "./codegen-schema-naming.ts"
+import {
+	deriveErrorEnvelopeName,
+	deriveSchemaName,
+	isErrorEnvelope,
+	sanitizeComponentName,
+	shortHash,
+} from "./codegen-schema-naming.ts"
 import { isJsonMedia, isTextMedia, mediaEssence } from "./codegen-sdk-model.ts"
 import type { HoneyError } from "./error.ts"
-import { ERROR_META } from "./errors.ts"
 import type { ErrorMetaEntry } from "./errors.ts"
-import type { InvalidateCheckConfig } from "./invalidate-check.ts"
-import { publishableMetaKeys } from "./meta-spec.ts"
-import { metaSpecOf } from "./meta-spec-merge.ts"
+import { ERROR_META } from "./errors.ts"
 import type { Honey } from "./index.ts"
+import type { InvalidateCheckConfig } from "./invalidate-check.ts"
+import { metaSpecOf } from "./meta-spec-merge.ts"
+import { publishableMetaKeys } from "./meta-spec.ts"
+import { collectRoutes, extractParams } from "./openapi/collect.ts"
 import {
 	generateOpenApiFromTree,
 	type OpenApiInfo,
@@ -35,21 +37,19 @@ import {
 	type OpenApiSpec,
 } from "./openapi/document.ts"
 import { getJsonSchemaConverter, setJsonSchemaConverter } from "./openapi/json-schema-slot.ts"
-import { collectRoutes, extractParams } from "./openapi/collect.ts"
 import { parsePattern, patternParams } from "./pattern.ts"
 import type { RouteHandler, RouteTree } from "./tree.ts"
 import { forEachLeaf, ROUTE_TREE_VERSION } from "./tree.ts"
 import { irToTs } from "./ts-type-emitter.ts"
-import { createTypeEmitState, emitSchemaType, quoteKey } from "./type-emitter.ts"
 import type { TypeEmitState } from "./type-emitter.ts"
-import type { InputSchemaEntry, InputSchemasDef, MetaSpecConfig, OutputSchemaDef, StandardSchemaLike } from "./types.ts"
+import { createTypeEmitState, emitSchemaType, quoteKey } from "./type-emitter.ts"
+import type { InputSchemaEntry, StandardSchemaLike } from "./types.ts"
 import { EMPTY_OBJ, statusKeyToCode } from "./types.ts"
-import { CROSS_ORIGIN_SAFE_HEADERS } from "./client/redirect-policy.ts"
 
 export { prepareCodegen } from "./codegen-loaders.ts"
 export type { InvalidateCheckConfig, InvalidateCheckLevel } from "./invalidate-check.ts"
-export { toYaml, yamlSiblingPath } from "./yaml.ts"
 export { DEFAULT_ERROR_JSON_SCHEMA } from "./openapi/document.ts"
+export { toYaml, yamlSiblingPath } from "./yaml.ts"
 export type { OpenApiInfo, OpenApiRouteInfo, OpenApiSpec }
 
 /* Status → typed error subclass. Single source of truth shared between the

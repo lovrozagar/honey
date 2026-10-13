@@ -233,7 +233,7 @@ describe("WS5 Node server lifecycle", () => {
 
 	// regression: WS5 (M) ws/node.ts:50 + package.json
 	it("M: `ws` is declared as an optional peer dependency", () => {
-		const pkg = JSON.parse(readFileSync(`${import.meta.dirname}/../../../package.json`, "utf-8")) as {
+		const pkg = JSON.parse(readFileSync(`${import.meta.dirname}/../../../../package.json`, "utf-8")) as {
 			peerDependencies?: Record<string, string>
 			peerDependenciesMeta?: Record<string, { optional?: boolean }>
 		}

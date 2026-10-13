@@ -3,7 +3,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 /** Shared cargo target on the workspace disk — /tmp is an 8GB tmpfs that cargo fills. */
-export const CARGO_TARGET_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../.cache/cargo-target")
+export const CARGO_TARGET_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../../.cache/cargo-target")
 
 mkdirSync(CARGO_TARGET_DIR, { recursive: true })
 

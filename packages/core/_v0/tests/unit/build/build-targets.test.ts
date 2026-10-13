@@ -4,8 +4,8 @@ import { resolve } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
 import { createBuildPlugin } from "../../../src/build/index.ts"
 
-const CORE_ROOT = resolve(import.meta.dirname, "../../..")
-const FIXTURE_ENTRY = "tests/unit/build/fixture/src/app.ts"
+const CORE_ROOT = resolve(import.meta.dirname, "../../../..")
+const FIXTURE_ENTRY = "_v0/tests/unit/build/fixture/src/app.ts"
 const OUT_ROOT = resolve(CORE_ROOT, ".tmp-build-targets")
 
 const PORTS = {

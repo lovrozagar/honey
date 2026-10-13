@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { NPM_README, ROOT_README, npmReadme } from "../../../scripts/sync-readme.ts"
+import { NPM_README, ROOT_README, npmReadme } from "../../../../scripts/sync-readme.ts"
 
 describe("npm README", () => {
 	// regression: S11 — the npm copy drifted from the root README (missing ctx.error, route(prefix, sub), honey/trust)

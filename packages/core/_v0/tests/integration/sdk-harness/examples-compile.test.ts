@@ -15,7 +15,7 @@ import { CARGO_TARGET_DIR } from "../../cargo-env.ts"
 import { loadMockSpec } from "./harness-util.ts"
 import { PYTHON } from "../../python-env.ts"
 
-const example = (rel: string) => fileURLToPath(new URL(`../../../examples/${rel}`, import.meta.url))
+const example = (rel: string) => fileURLToPath(new URL(`../../../../examples/${rel}`, import.meta.url))
 
 function has(cmd: string, args: string[]): boolean {
 	return spawnSync(cmd, args, { stdio: "ignore" }).status === 0

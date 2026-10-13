@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Builds `dist/`: JavaScript, declarations and source maps for every module under `src/`, plus
+ * Builds `dist/`: JavaScript, declarations and source maps for every module under `_v0/src/`, plus
  * the non-TypeScript assets codegen reads at run time (SDK runtimes, CLI and MCP templates).
  * `prepack` runs this, so a tarball cannot ship without it. See docs/packaging.md.
  *
@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const src = join(pkgRoot, "src")
+const src = join(pkgRoot, "_v0", "src")
 const dist = join(pkgRoot, "dist")
 
 /** Directories codegen reads as text through `new URL("./<dir>/…", import.meta.url)`. */
@@ -33,7 +33,7 @@ if (tsc.status !== 0) {
 
 for (const dir of ASSET_DIRS) {
 	const from = join(src, dir)
-	if (!existsSync(from)) throw new Error(`build: missing asset directory src/${dir}`)
+	if (!existsSync(from)) throw new Error(`build: missing asset directory _v0/src/${dir}`)
 	cpSync(from, join(dist, dir), { recursive: true })
 }
 

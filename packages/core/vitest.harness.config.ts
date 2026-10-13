@@ -1,6 +1,6 @@
 import { defaultClientConditions, defaultServerConditions } from "vite"
 import { defineConfig } from "vitest/config"
-import { CARGO_TARGET_DIR } from "./tests/cargo-env.ts"
+import { CARGO_TARGET_DIR } from "./_v0/tests/cargo-env.ts"
 import { harness } from "./vitest.config.ts"
 
 export default defineConfig({
@@ -10,7 +10,7 @@ export default defineConfig({
 	test: {
 		env: { CARGO_TARGET_DIR },
 		/* provisions .cache/python-venv once, before any worker (see tests/python-env.ts) */
-		globalSetup: ["./tests/python-setup.ts"],
+		globalSetup: ["./_v0/tests/python-setup.ts"],
 		include: harness,
 		passWithNoTests: true,
 	},

@@ -156,7 +156,7 @@ describe("extractBaseCtx", () => {
 
 	it("accepts custom tsconfigPath", async () => {
 		/* use the project's own tsconfig so module resolution works */
-		const tsconfigPath = resolve(TEMP_ROOT, "../tsconfig.json")
+		const tsconfigPath = resolve(TEMP_ROOT, "../../tsconfig.json")
 		const entryPath = writeTempFile(
 			TEMP_ROOT,
 			"app.ts",

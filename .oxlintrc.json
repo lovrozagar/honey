@@ -18,7 +18,8 @@
 		".codex/**",
 		".gemini/**",
 		".grok/**",
-		".rulesync/**"
+		".rulesync/**",
+		"packages/core/_v0/**"
 	],
 	"categories": {
 		"correctness": "error",

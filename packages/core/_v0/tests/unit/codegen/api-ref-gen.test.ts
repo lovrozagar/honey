@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { generateApiRef, type Lang } from "../../../scripts/gen-api-ref.ts"
+import { generateApiRef, type Lang } from "../../../../scripts/gen-api-ref.ts"
 import { toIR } from "../../../src/codegen-ir.ts"
 import type { OpenApiSpecInput } from "../../../src/codegen.ts"
 

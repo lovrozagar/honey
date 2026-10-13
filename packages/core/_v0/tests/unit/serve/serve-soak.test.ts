@@ -6,7 +6,7 @@ import "@lovrozagar/honey/serve"
 import { detectRuntime, honey } from "../../../src/index.ts"
 
 const RUNNER = resolve(import.meta.dirname, "./soak-runner.ts")
-const WORKER = resolve(import.meta.dirname, "../../../../../e2e/cf-workers/src/worker.ts")
+const WORKER = resolve(import.meta.dirname, "../../../../../../e2e/cf-workers/src/worker.ts")
 
 function hasCmd(cmd: string): boolean {
 	const result = spawnSync(cmd, ["--version"], { encoding: "utf8" })
@@ -15,7 +15,7 @@ function hasCmd(cmd: string): boolean {
 
 function run(cmd: string, args: string[]): Promise<{ exitCode: number; stderr: string; stdout: string }> {
 	return new Promise((resolveProc, reject) => {
-		const proc = spawn(cmd, args, { cwd: resolve(import.meta.dirname, "../../..") })
+		const proc = spawn(cmd, args, { cwd: resolve(import.meta.dirname, "../../../..") })
 		let stdout = ""
 		let stderr = ""
 		proc.stdout.on("data", (c: Buffer) => {

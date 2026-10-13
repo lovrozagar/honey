@@ -37,3 +37,4 @@ node_modules
 
 # cargo target for rust SDK / harness (do not use /tmp — it is a small tmpfs)
 .cache/
+.tmp/

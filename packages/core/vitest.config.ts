@@ -3,20 +3,23 @@ import { defineConfig } from "vitest/config"
 
 /** Language SDK harnesses — go/python/rust/mcp. Opt-in via `test:harness`. */
 export const harness = [
-	"tests/integration/sdk-harness/**",
-	"tests/unit/codegen/go-cli/**",
-	"tests/unit/codegen/go-sdk.test.ts",
-	"tests/unit/codegen/python-sdk.test.ts",
-	"tests/unit/codegen/rust-sdk.test.ts",
-	"tests/unit/codegen/*-emitter-byte-equiv.test.ts",
-	"tests/regression/ws9-12/polyglot.regression.test.ts",
+	"_v0/tests/integration/sdk-harness/**",
+	"_v0/tests/unit/codegen/go-cli/**",
+	"_v0/tests/unit/codegen/go-sdk.test.ts",
+	"_v0/tests/unit/codegen/python-sdk.test.ts",
+	"_v0/tests/unit/codegen/rust-sdk.test.ts",
+	"_v0/tests/unit/codegen/*-emitter-byte-equiv.test.ts",
+	"_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
 ]
 
 /**
  * Rust-only subset of `harness`. `test:harness:rust` still exists for a cargo-only run.
  * Cargo artifacts go to the workspace `.cache/cargo-target`, not /tmp.
  */
-export const harnessRust = ["tests/unit/codegen/rust-sdk.test.ts", "tests/integration/sdk-harness/rust-harness.test.ts"]
+export const harnessRust = [
+	"_v0/tests/unit/codegen/rust-sdk.test.ts",
+	"_v0/tests/integration/sdk-harness/rust-harness.test.ts",
+]
 
 /** Empty — leftover extract reds have been restored. */
 export const stale: string[] = []
@@ -27,7 +30,7 @@ export default defineConfig({
 	ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
 	test: {
 		exclude: ["**/node_modules/**", "**/dist/**", ...harness, ...harnessRust, ...stale],
-		include: ["tests/**/*.test.ts"],
+		include: ["_v0/tests/**/*.test.ts"],
 		passWithNoTests: true,
 	},
 })

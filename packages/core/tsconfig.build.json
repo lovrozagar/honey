@@ -7,10 +7,10 @@
 		"noEmit": false,
 		"outDir": "./dist",
 		"rewriteRelativeImportExtensions": true,
-		"rootDir": "./src",
+		"rootDir": "./_v0/src",
 		"sourceMap": true,
 		"types": []
 	},
-	"include": ["src/**/*.ts"],
-	"exclude": ["src/client-mcp/**"]
+	"include": ["_v0/src/**/*.ts"],
+	"exclude": ["_v0/src/client-mcp/**"]
 }

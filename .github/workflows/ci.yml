@@ -228,11 +228,11 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             .cache/cargo-target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/core/src/client-rust/**', 'packages/core/src/codegen-rust.ts') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/core/_v0/src/client-rust/**', 'packages/core/_v0/src/codegen-rust.ts') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
       # one pinned list for CI and local runs (locally the harness fills .cache/python-venv from it)
-      - run: pip install -r packages/core/tests/python-requirements.txt
+      - run: pip install -r packages/core/_v0/tests/python-requirements.txt
       - run: bun install --frozen-lockfile
       - run: bun run test:harness
         env:

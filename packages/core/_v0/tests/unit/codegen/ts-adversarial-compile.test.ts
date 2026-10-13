@@ -14,7 +14,7 @@ import { generateOpenApi, generateSDK, generateTypes } from "../../../src/codege
 import { defineErrors } from "../../../src/errors.ts"
 import { honey } from "../../../src/index.ts"
 
-const CORE = join(dirname(fileURLToPath(import.meta.url)), "../../..")
+const CORE = join(dirname(fileURLToPath(import.meta.url)), "../../../..")
 const TSC = join(CORE, "../../node_modules/.bin/tsc")
 const DIR = join(CORE, "tests", `.tmp-ts-adversarial-${process.pid}`)
 

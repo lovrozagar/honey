@@ -31,10 +31,10 @@ if (bun) {
 	if (run.signal) process.kill(process.pid, run.signal)
 	process.exit(run.status ?? 1)
 } else if (isBun) {
-	await import("../src/cli.ts")
+	await import("../_v0/src/cli.ts")
 } else if (checkout) {
 	const { createJiti } = await import("jiti")
-	await createJiti(import.meta.url).import("../src/cli.ts")
+	await createJiti(import.meta.url).import("../_v0/src/cli.ts")
 } else {
 	try {
 		await import("../dist/cli.js")

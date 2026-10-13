@@ -13,7 +13,7 @@ import { generateOpenApi, generateRouteTreeFromApp } from "../../src/codegen.ts"
 import { honey } from "../../src/index.ts"
 import { generateAndWrite, resolveHoneyConfig } from "../../src/plugin.ts"
 
-const CORE = resolve(import.meta.dirname, "../..")
+const CORE = resolve(import.meta.dirname, "../../..")
 const ROOT = resolve(CORE, `.tmp-v072-${process.pid}`)
 
 afterAll(() => rmSync(ROOT, { force: true, recursive: true }))

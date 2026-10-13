@@ -187,19 +187,19 @@ describe("workstream 12 regressions", () => {
 
 // regression: GEN-STALE-DIST
 describe("bin/honey.js picks the CLI it runs", () => {
-	const BIN = resolve(import.meta.dirname, "../../../bin/honey.js")
+	const BIN = resolve(import.meta.dirname, "../../../../bin/honey.js")
 	const JITI = dirname(createRequire(import.meta.url).resolve("jiti/package.json"))
 	const dir = join(ROOT, "bin-pick")
 
 	beforeEach(() => {
 		rmSync(dir, { force: true, recursive: true })
 		mkdirSync(join(dir, "bin"), { recursive: true })
-		mkdirSync(join(dir, "src"), { recursive: true })
+		mkdirSync(join(dir, "_v0/src"), { recursive: true })
 		mkdirSync(join(dir, "dist"), { recursive: true })
 		mkdirSync(join(dir, "node_modules"), { recursive: true })
 		writeFileSync(join(dir, "bin/honey.js"), readFileSync(BIN, "utf-8"))
 		writeFileSync(join(dir, "package.json"), '{ "type": "module" }')
-		writeFileSync(join(dir, "src/cli.ts"), 'const from: string = "source"\nconsole.log(from)\n')
+		writeFileSync(join(dir, "_v0/src/cli.ts"), 'const from: string = "source"\nconsole.log(from)\n')
 		writeFileSync(join(dir, "dist/cli.js"), 'console.log("dist")\n')
 		symlinkSync(JITI, join(dir, "node_modules/jiti"), "dir")
 	})

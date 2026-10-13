@@ -23,10 +23,10 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { join, resolve } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
 
-const CORE = resolve(import.meta.dirname, "../../..")
+const CORE = resolve(import.meta.dirname, "../../../..")
 const REPO = resolve(CORE, "../..")
 const TSC = join(REPO, "node_modules/.bin/tsc")
-const DIR = join(CORE, "tests", `.tmp-snippets-${process.pid}`)
+const DIR = join(CORE, "_v0", "tests", `.tmp-snippets-${process.pid}`)
 
 /** sdk.md is generated-SDK reference with four languages; its TS blocks are shapes, not programs. */
 const DOCS = [

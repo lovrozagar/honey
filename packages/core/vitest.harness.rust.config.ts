@@ -1,6 +1,6 @@
 import { defaultClientConditions, defaultServerConditions } from "vite"
 import { defineConfig } from "vitest/config"
-import { CARGO_TARGET_DIR } from "./tests/cargo-env.ts"
+import { CARGO_TARGET_DIR } from "./_v0/tests/cargo-env.ts"
 import { harnessRust } from "./vitest.config.ts"
 
 export default defineConfig({

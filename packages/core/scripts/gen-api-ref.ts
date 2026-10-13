@@ -11,9 +11,9 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import type { IR, IROperation, IRParam, IRSchema } from "../src/codegen-ir.ts"
-import { toIR } from "../src/codegen-ir.ts"
-import type { OpenApiSpecInput } from "../src/codegen.ts"
+import type { IR, IROperation, IRParam, IRSchema } from "../_v0/src/codegen-ir.ts"
+import { toIR } from "../_v0/src/codegen-ir.ts"
+import type { OpenApiSpecInput } from "../_v0/src/codegen.ts"
 
 export type Lang = "typescript" | "python" | "go" | "rust"
 
@@ -509,7 +509,7 @@ function scriptMain(): void {
 	const args = process.argv.slice(2)
 	const scriptDir = dirname(fileURLToPath(import.meta.url))
 	const coreRoot = resolve(scriptDir, "..")
-	let specPath = resolve(coreRoot, "tests/mock-server/spec.json")
+	let specPath = resolve(coreRoot, "_v0/tests/mock-server/spec.json")
 	for (let i = 0; i < args.length; i++) {
 		const next = args[i + 1]
 		if (args[i] === "--spec" && next) {

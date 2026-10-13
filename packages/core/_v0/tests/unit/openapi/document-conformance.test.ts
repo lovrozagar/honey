@@ -16,7 +16,7 @@ import { honey } from "../../../src/index.ts"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FIXTURES = join(HERE, "../../fixtures/oas31")
-const E2E_APPS = join(HERE, "../../../../../e2e/apps")
+const E2E_APPS = join(HERE, "../../../../../../e2e/apps")
 
 type Doc = {
 	paths: Record<string, Record<string, { parameters?: Array<Record<string, unknown>> }>>

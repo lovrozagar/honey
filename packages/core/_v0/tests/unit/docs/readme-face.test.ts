@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
-const CORE = resolve(import.meta.dirname, "../../..")
+const CORE = resolve(import.meta.dirname, "../../../..")
 const REPO = resolve(CORE, "../..")
 
 function read(abs: string): string {
