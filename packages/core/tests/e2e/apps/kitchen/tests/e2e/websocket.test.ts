@@ -23,8 +23,8 @@ function connectWs(url: string): {
 
 	const ws = new WebSocket(url)
 
-	ws.onopen = () => openResolve?.()
-	ws.onmessage = async (evt) => {
+	ws.addEventListener("open", () => openResolve?.())
+	ws.addEventListener("message", async (evt) => {
 		if (typeof evt.data === "string") {
 			messages.push(evt.data)
 		} else if (evt.data instanceof Blob) {
@@ -33,8 +33,8 @@ function connectWs(url: string): {
 			messages.push(String(evt.data))
 		}
 		for (const cb of messageListeners) cb()
-	}
-	ws.onclose = (evt) => closeResolve?.({ code: evt.code, reason: evt.reason })
+	})
+	ws.addEventListener("close", (evt) => closeResolve?.({ code: evt.code, reason: evt.reason }))
 
 	return {
 		close(code?: number, reason?: string) {
@@ -76,7 +76,7 @@ function connectWs(url: string): {
 					return
 				}
 				openResolve = resolve
-				ws.onerror = (evt) => reject(evt)
+				ws.addEventListener("error", (evt) => reject(evt))
 			})
 		},
 	}
@@ -142,8 +142,8 @@ test.describe("WebSocket", () => {
 		   The WebSocket client sees a connection error. */
 		const ws = new WebSocket(`${WS_BASE}/api/v1/socket`)
 		const closed = new Promise<number>((resolve) => {
-			ws.onclose = (evt) => resolve(evt.code)
-			ws.onerror = () => resolve(-1)
+			ws.addEventListener("close", (evt) => resolve(evt.code))
+			ws.addEventListener("error", () => resolve(-1))
 		})
 
 		const code = await closed

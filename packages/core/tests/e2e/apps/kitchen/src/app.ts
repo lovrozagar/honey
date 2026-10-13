@@ -114,12 +114,12 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	type AuthedCtx = InferCtx<typeof authed>
 
 	/* compile-time proof: each branch carries its accumulated middleware context */
-	const _typeChecks = {
+	const typeChecks = {
 		authedHasUser: null as unknown as AuthedCtx extends { user: { id: string } } ? true : never,
 		dbHasOrgs: null as unknown as DbCtx_ extends { db: { orgs: Org[] } } ? true : never,
 		publicHasReq: null as unknown as PublicCtx extends { req: Request } ? true : never,
 	}
-	void _typeChecks
+	void typeChecks
 
 	/* ---- routes ---- */
 

@@ -15,11 +15,11 @@ function connectWs(path: string): {
 	const listeners: Array<() => void> = []
 	let closeResolve: ((v: { code: number; reason: string }) => void) | null = null
 	const ws = new WebSocket(`${WS_BASE}${path}`)
-	ws.onmessage = (evt) => {
+	ws.addEventListener("message", (evt) => {
 		messages.push(typeof evt.data === "string" ? evt.data : String(evt.data))
 		for (const cb of listeners) cb()
-	}
-	ws.onclose = (evt) => closeResolve?.({ code: evt.code, reason: evt.reason })
+	})
+	ws.addEventListener("close", (evt) => closeResolve?.({ code: evt.code, reason: evt.reason }))
 	return {
 		close(code?: number, reason?: string) {
 			ws.close(code, reason)

@@ -153,17 +153,17 @@ if (inPackage.length === 0 && inConsumer.length === 0) {
 if (!keep) rmSync(sandbox, { force: true, recursive: true })
 else console.log(`\nsandbox kept at ${sandbox}`)
 
+function fail(what: string, out: string): false {
+	console.log(`FAIL  ${what}`)
+	console.log(out)
+	return false
+}
+
 /**
  * Plain Node, no tsx and no type stripping of node_modules: the package entry, the CLI and the
  * Vite plugin must all run from the compiled dist/. Bun runs source, so it cannot see this.
  */
 async function nodeConsumer(dir: string): Promise<boolean> {
-	const fail = (what: string, out: string): false => {
-		console.log(`FAIL  ${what}`)
-		console.log(out)
-		return false
-	}
-
 	await Bun.write(
 		join(dir, "node-smoke.mjs"),
 		[
