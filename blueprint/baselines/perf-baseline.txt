@@ -1,0 +1,54 @@
+v1 perf baseline — honey's own benchmarks must not regress.
+Captured: 2026-10-13 (HEAD 3727a32, v0.7.3, bun 1.4.3), before any v1 source exists.
+
+== Hot-path gate (bench/src/hotpath.ts) ==
+In-process app.fetch cost / minimal raw fetch handler, median of 9 interleaved
+samples x 50k iterations. The ratio cancels machine/runtime speed, so one
+committed baseline holds on a laptop and in CI. Per runtime minor version.
+Threshold: +25% over baseline (HOTPATH_THRESHOLD=0.25). Committed baseline:
+bench/hotpath-baseline.json. Update only with `--update` and commit the move.
+
+Run: bun bench/src/hotpath.ts   (exit 0 = within threshold)
+
+bun 1.4 baseline ratios (honey app.fetch / raw handler):
+  static    1.76   (measured 1.97, limit 2.20)  ok
+  param     2.27   (measured 2.17, limit 2.84)  ok
+  scoped    2.39   (measured 2.46, limit 2.99)  ok
+  chain     2.57   (measured 3.17, limit 3.21)  ok
+  not-found 12.49  (measured 11.68, limit 15.61) ok
+bun 1.3 baseline also committed. 2026-10-13 run: all 5 scenarios ok, exit 0.
+
+== Competitive throughput (bench/src/run.sh) ==
+honey vs hono / elysia / express / nest, naked + zod variants, bun + node,
+scenarios json/params/validate/middleware, driven by bombardier
+(10s x 100 connections). Not run here (bombardier not installed); runs in CI.
+  bun run bench        # bun, both variants
+  bun run bench:node   # node, both variants
+
+== v1 rule ==
+A v1 run may not regress the hot-path ratio beyond +25% per scenario. A
+regression fails the bit. Baselines are per-runtime-minor-version; the one
+that moved is re-recorded with `--update` in the same change that moved it,
+with a one-line reason. The split of the Honey god-class into pure decision
+functions is expected to hold or improve the ratios (v0 already removed the
+per-request middleware allocations by compiling chains at finalize).
+
+== Added scenarios (2026-10-13, bun 1.4.3, this machine — advisory; commit baseline on the pinned CI runner) ==
+  body   honey 7122ns / raw 3155ns  ratio 2.20  — POST /echo: input validate + body read once + output validate from retained raw (no clone)
+  trust  honey 3530ns / raw 1665ns  ratio 2.16  — GET /whoami: trustProxy(1) resolves ctx.ip from X-Forwarded-For
+Both land in the same 2.1–2.4x band as plain routing (param 2.09, scoped 2.37): no clone/copy blowup.
+The hot-path gate now covers 7 scenarios (chain, not-found, param, scoped, static, body, trust).
+To gate them: run `bun bench/src/hotpath.ts --update` on the pinned CI runner so their ratios enter bench/hotpath-baseline.json.
+
+== 3 more scenarios added (2026-10-13, bun 1.4.3, from the perf audit — advisory) ==
+  mw-stack        honey 2857ns / raw 1443ns  ratio 1.99  — 5 response-header-mutating middleware on one response
+  many-routes     honey 1469ns / raw  991ns  ratio 1.61  — deep backtracking match over 300+ routes
+  large-response  honey 25965ns / raw 25019ns ratio 1.01 — multi-KB JSON; honey ~= raw (no extra large-body copy)
+Hot-path gate now covers 10 scenarios. All in-band; the three audit-flagged risk paths show no blowup at v0.
+These gate on the pinned CI runner via `bun bench/src/hotpath.ts --update`.
+
+== Round-2 bench corrections (2026-10-13, bun 1.4.3) — scenarios now exercise their stated targets ==
+  mw-stack        honey 1641ns / raw 878ns  ratio 1.87  — REAL cors+secureHeaders+requestId (was synthetic setHeader); compress+rateLimit join in v1
+  mw-sync         honey  846ns / raw 482ns  ratio 1.76  — sync-written middleware (the only scenario that can show the bit-02 sync-spine win)
+  large-response  honey 16661ns / raw 15935ns ratio 1.06 — NOW with .output() schema, so no-clone output-validation decode-at-scale runs (+6% over raw)
+Hot-path gate now 11 scenarios. TODO (bit 00/perf): a finalize-cost benchmark for _resolve O(routes×scopes), separate from the warm per-request loop.

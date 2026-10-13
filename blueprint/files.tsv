@@ -1,0 +1,343 @@
+# files.tsv — normative v1 file list (both packages), per leaf. Every src row has a colocated <name>.test.ts (kind=src).
+# kind: src | index (re-export only, no test) | types (type-only, no test) | app | corpus | test.
+# budget: all v1 src files are <=300 lines by design; a row that would exceed is already split here.
+# origin: the v0 file(s) this leaf comes from (— = new in v1). The 124 v0 files all appear as an origin at least once; Deno is deleted.
+# A missing row is a missing file. Add a file = add its row + its bit case, before it exists.
+#
+# ============================== packages/core  (@lovrozagar/honey) ==============================
+path	pkg	kind	bit	responsibility	origin
+src/routing/app.ts	core	src	01	the Honey app surface + honey() factory; delegates to the modules below	index.ts
+src/routing/settings.ts	core	src	01	AppSettings, defaults, chain (basePath/context/onError/trustProxy)	index.ts
+src/routing/register.ts	core	src	01	route registration per method; builder wiring; mount	index.ts
+src/routing/route-builder.ts	core	src	01	RouteBuilder: input/output/meta/errors/handler	index.ts
+src/routing/ws-builder.ts	core	src	06	WSRouteBuilder: handler/errors/input/meta/origins/use	index.ts
+src/routing/finalize.ts	core	src	01	_finalize → FinalTable; dangling-builder + unused-use reports	index.ts
+src/routing/dispatch.ts	core	src	01	the fetch pipeline: match → mw → validate → handler → finalize	index.ts
+src/routing/middleware-chain.ts	core	src	01	scopeGuard, timedMiddleware, commonPrefix, errorsOf, describeMw	index.ts
+src/routing/match.ts	core	src	01	matchRoute over the tree; method/path resolution	index.ts,tree.ts
+src/routing/record.ts	core	src	01	RouteRecord + leaf types; per-graph record copy	index.ts
+src/routing/tree.ts	core	src	01	the route tree structure	tree.ts
+src/routing/tree-merge.ts	core	src	01	mergeTree (sub-app mount)	tree.ts
+src/routing/pattern.ts	core	src	01	path pattern compile + match	pattern.ts
+src/routing/request-path.ts	core	src	01	canonicalization, strip-prefix, trailing slash	request-path.ts
+src/routing/invoke-user.ts	core	src	01	call the user handler with the built ctx	invoke-user.ts
+src/routing/invalidate-check.ts	core	src	01	invalidation meta check	invalidate-check.ts
+src/routing/types.ts	core	types	01	HoneyCtx, Infer* ladder, RouteRecord types	index.ts,types.ts
+src/context/context.ts	core	src	02	HoneyContext + ctx builder; ctx extension	context.ts
+src/context/cookie.ts	core	src	02	cookie get/set/attributes	cookie.ts
+src/context/cookie-sign.ts	core	src	02	signed-cookie round-trip	cookie-sign.ts
+src/input/input.ts	core	src	08	.input() assembly	input.ts
+src/input/params.ts	core	src	08	typed path params	input.ts,validation.ts
+src/input/query.ts	core	src	08	typed query	input.ts,validation.ts
+src/input/headers.ts	core	src	08	typed request headers	input.ts,validation.ts
+src/input/json.ts	core	src	08	JSON body + content-type assert	validation.ts
+src/input/form.ts	core	src	08	multipart/urlencoded body	validation.ts
+src/input/binary.ts	core	src	08	.input({ binary }) raw-body slot (A1)	—
+src/input/body-limit.ts	core	src	08	request body size cap	body-limit.ts
+src/input/body-kind.ts	core	src	08	body-kind detection	body-kind.ts
+src/input/request-limits.ts	core	src	08	request limit constants	request-limits.ts
+src/input/accepts.ts	core	src	08	Accept negotiation	accepts.ts
+src/validation/validate-input.ts	core	src	08	run input standard-schema	validation.ts
+src/validation/validate-output.ts	core	src	08	run output standard-schema	validation.ts
+src/validation/content-type.ts	core	src	08	assert request/response content types	validation.ts
+src/response/response.ts	core	src	08	HoneyRes core + helper dispatch	response.ts
+src/response/builder.ts	core	src	08	response construction + finalize	honey-response.ts
+src/response/media-type.ts	core	src	08	media-type parse + Accept negotiation	media-type.ts
+src/response/binary.ts	core	src	08	ctx.res.binary typed bytes (A1)	response.ts
+src/response/response-headers.ts	core	src	08	declared per-status response headers (A2)	—
+src/response/sse.ts	core	src	05	text/event-stream emitter + typed events	response.ts,producer-stream.ts
+src/response/range.ts	core	src	05	Range / 206 / Accept-Ranges (A3)	—
+src/response/etag.ts	core	src	08	ETag + If-None-Match	etag.ts
+src/response/cache-control.ts	core	src	08	cacheControl + Last-Modified/If-Modified-Since (A4)	—
+src/response/with-headers.ts	core	src	08	apply declared headers	with-headers.ts
+src/response/pretty-json.ts	core	src	08	pretty JSON option	pretty-json.ts
+src/response/static.ts	core	src	07	static files + range	static.ts
+src/errors/error.ts	core	src	08	HoneyError	error.ts
+src/errors/errors.ts	core	src	08	defineErrors + ERROR_META	errors.ts
+src/errors/projector.ts	core	src	08	thrown value → response projector	index.ts
+src/errors/problem-json.ts	core	src	08	opt-in RFC 9457 formatter (A7)	—
+src/errors/on-error.ts	core	src	07	app.onError: awaited, response-shaping (returns HoneyError/Response/undefined) (H17)	index.ts
+src/middleware/middleware.ts	core	src	02	createMiddleware/defineMiddleware, compose, short-circuit	middleware.ts
+src/middleware/cors.ts	core	src	07	CORS + preflight	cors.ts
+src/middleware/secure-headers.ts	core	src	07	security headers	secure-headers.ts
+src/middleware/csrf.ts	core	src	07	CSRF check	csrf.ts
+src/middleware/rate-limit.ts	core	src	07	rateLimit middleware (A5)	—
+src/middleware/compress.ts	core	src	07	compress middleware (A6)	—
+src/middleware/request-id.ts	core	src	07	requestId: reuse inbound only when ctx.trustsForwarded (bit-03 seam); trace-id-wins when a tracer is set (H17)	request-id.ts
+src/middleware/timeout.ts	core	src	07	handler timeout	timeout.ts
+src/middleware/server-timing.ts	core	src	07	Server-Timing header	server-timing.ts
+src/middleware/powered-by.ts	core	src	07	X-Powered-By	powered-by.ts
+src/middleware/ip-restrict.ts	core	src	07	IP allow/deny	ip-restrict.ts
+src/trust/trust.ts	core	src	03	trustProxy compile + effective client resolution; exposes ctx.trustsForwarded (the seam requestId reuse + traceparent continuation read)	trust.ts
+src/trust/ip.ts	core	src	03	client IP extraction	ip.ts
+src/trust/client-info.ts	core	src	03	clientInfo()	client-info.ts
+src/runtime/detect-runtime.ts	core	src	04	node|bun|cf detection (no Deno)	detect-runtime.ts
+src/runtime/feature-detect.ts	core	src	04	runtime feature detection	feature-detect.ts
+src/runtime/feature-load.ts	core	src	04	lazy feature load	feature-load.ts
+src/runtime/feature-slots.ts	core	src	04	feature slot registry	feature-slots.ts
+src/runtime/peer.ts	core	src	04	optional-peer load guard	peer.ts
+src/adapters/node/serve.ts	core	src	04	Node http serve (node:* here only)	node.ts
+src/adapters/node/request.ts	core	src	04	node:http ↔ Fetch Request bridge	node-request.ts
+src/adapters/bun/serve.ts	core	src	04	Bun.serve	node.ts,serve.ts
+src/adapters/workers/serve.ts	core	src	04	Workers fetch(request,env,ctx)	serve.ts
+src/adapters/serve.ts	core	src	04	runtime-agnostic serve entry	serve.ts
+src/adapters/serve-slot.ts	core	src	04	serve slot registration	serve-slot.ts
+src/adapters/init.ts	core	src	04	app init	init.ts
+src/adapters/fetch-request.ts	core	src	04	toFetchRequest	fetch-request.ts
+src/adapters/serve-register.ts	core	index	04	./serve export	serve-register.ts
+src/streaming/producer-stream.ts	core	src	05	Web-Streams body drive + abort	producer-stream.ts
+src/realtime/bus.ts	core	src	06	RealtimeBus pub/sub	realtime/bus.ts
+src/realtime/route.ts	core	src	06	realtime route	realtime/route.ts
+src/realtime/server.ts	core	src	06	RealtimePublisher + resume server	realtime/server.ts
+src/realtime/reference-server.ts	core	src	06	reference resume/conformance server (H8)	—
+src/realtime/register.ts	core	index	06	./realtime export	realtime/register.ts
+src/ws/node.ts	core	src	06	Node ws adapter	ws/node.ts
+src/ws/bun.ts	core	src	06	Bun ws adapter	ws/bun.ts
+src/ws/cloudflare.ts	core	src	06	Workers ws adapter	ws/cloudflare.ts
+src/ws/session.ts	core	src	06	runtime-agnostic ws session	ws/session.ts
+src/ws/shared.ts	core	src	06	shared ws helpers	ws/shared.ts
+src/ws/origin.ts	core	src	06	ws origin policy	ws-origin.ts
+src/telemetry/logger.ts	core	src	07	createLogger: levels, child, pino shape (H17)	logger.ts
+src/telemetry/log-format.ts	core	src	07	json + pretty formatters	logger.ts
+src/telemetry/request-log.ts	core	src	07	optional request log (off by default) (H17)	logger.ts
+src/telemetry/fields.ts	core	src	07	privacy-safe log/span field catalog (H17)	—
+src/telemetry/otel.ts	core	src	07	otelAdapter: nested spans, parent-passing	telemetry/otel.ts
+src/telemetry/traceparent.ts	core	src	07	parse/validate/emit W3C traceparent+tracestate (G1)	—
+src/telemetry/span-lifecycle.ts	core	src	07	span ends at body finish/cancel; aborted	—
+src/telemetry/otel-subpath.ts	core	index	07	./telemetry/otel export; optional @opentelemetry/api peer	telemetry/otel.ts
+src/observability/curl-logger.ts	core	src	07	curl log	curl-logger.ts
+src/observability/request-to-curl.ts	core	src	07	request → curl	request-to-curl.ts
+src/proxy/proxy.ts	core	src	07	proxy/gateway core	proxy.ts
+src/proxy/upstream.ts	core	src	07	upstream request + traceparent forward	proxy.ts
+src/proxy/headers.ts	core	src	07	hop header handling	proxy.ts
+src/security/crypto.ts	core	src	07	crypto helpers	crypto.ts
+src/i18n/i18n.ts	core	src	07	i18n core	i18n.ts
+src/i18n/slot.ts	core	src	07	i18n slot	i18n-slot.ts
+src/i18n/dict.ts	core	src	07	dictionary	dict.ts
+src/schema/to-json-schema.ts	core	src	09	standard-schema → JSON Schema dispatch	codegen.ts
+src/schema/zod.ts	core	src	09	Zod → JSON Schema	codegen.ts
+src/schema/valibot.ts	core	src	09	Valibot → JSON Schema	codegen.ts
+src/schema/arktype.ts	core	src	09	ArkType → JSON Schema	codegen.ts
+src/schema/yup.ts	core	src	09	Yup → JSON Schema	codegen.ts
+src/schema/effect.ts	core	src	09	Effect → JSON Schema	codegen.ts
+src/schema/slots.ts	core	src	09	collect slots, hoist, dedup, ref-rewrite	codegen.ts
+src/schema/canonicalize.ts	core	src	09	canonicalizeSchema + compareCodeUnits	codegen.ts
+src/schema/resolve-refs.ts	core	src	09	resolveRefs/resolveSchemaDeep	codegen.ts
+src/schema/sanitize-spec.ts	core	src	09	sanitizeOpenApiSpec	codegen.ts
+src/openapi/collect.ts	core	src	09	walk finalized routes → operation records	openapi/collect.ts
+src/openapi/generate.ts	core	src	10	generateOpenApi orchestration (app → 3.1 document)	codegen.ts
+src/openapi/manifest.ts	core	src	10	generateManifest (route manifest)	codegen.ts
+src/openapi/extract-schemas.ts	core	src	09	extractSchemas (per-route schema extraction)	codegen.ts
+src/openapi/document.ts	core	src	10	assemble the 3.1 document	openapi/document.ts
+src/openapi/paths.ts	core	src	10	paths + operations	openapi/document.ts
+src/openapi/components.ts	core	src	10	components/schemas	openapi/document.ts
+src/openapi/security.ts	core	src	10	security schemes	openapi/document.ts
+src/openapi/servers.ts	core	src	10	servers + variables (B1)	—
+src/openapi/tags.ts	core	src	10	tags + externalDocs (B2)	—
+src/openapi/webhooks.ts	core	src	10	webhooks (B3)	—
+src/openapi/spec-factory.ts	core	src	10	spec factory	openapi/spec-factory.ts
+src/openapi/spec.ts	core	src	10	spec entry	openapi/spec.ts
+src/openapi/json-schema-slot.ts	core	src	09	json-schema slot	openapi/json-schema-slot.ts
+src/openapi/scalar.ts	core	src	10	Scalar docs page	openapi/scalar.ts
+src/openapi/swagger.ts	core	src	10	Swagger docs page	openapi/swagger.ts
+src/openapi/docs-page.ts	core	src	10	docs page shell	openapi/docs-page.ts
+src/openapi/serve.ts	core	src	10	serve the document/docs	openapi/serve.ts
+src/openapi/register.ts	core	index	10	./openapi export	openapi/register.ts
+src/meta/meta-spec.ts	core	src	09	meta-spec core	meta-spec.ts
+src/meta/meta-spec-merge.ts	core	src	09	meta merge + conflict	meta-spec-merge.ts
+src/meta/meta-spec-validate.ts	core	src	09	meta validation + x- extension gate	meta-spec.ts
+src/build/index.ts	core	index	19	./build export	build/index.ts
+src/build/plugin.ts	core	src	19	the build plugin	plugin.ts
+src/build/loaders.ts	core	src	19	config/codegen loaders (jiti)	plugin.ts,codegen-load.ts,codegen-loaders.ts
+src/build/cli.ts	core	src	19	serve-time CLI	cli.ts
+src/build/cli-args.ts	core	src	19	CLI arg parse	cli-args.ts
+src/build/glob.ts	core	src	19	glob	glob.ts
+src/build/yaml.ts	core	src	19	YAML emit/parse	yaml.ts
+src/build/targets.ts	core	src	19	build target selection (node/bun/cf; no Deno)	build/index.ts
+src/testing/testing.ts	core	src	20	the testing helper	testing.ts
+# ============================== packages/gen  (@lovrozagar/honey-codegen) ==============================
+src/ir/model.ts	gen	src	09	the IR types	codegen-ir.ts,codegen-sdk-model.ts
+src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
+src/ir/resource-tree.ts	gen	src	09	resource tree from dotted operationId	codegen-ir.ts
+src/ir/slots.ts	gen	src	09	request/response slots + realtime/sse/ws markers	codegen-ir.ts
+src/ir/sdk-model.ts	gen	src	09	the SDK model over the IR	codegen-sdk-model.ts
+src/ir/schema-naming.ts	gen	src	09	schema name derivation	codegen-schema-naming.ts
+src/ir/route-tree-intern.ts	gen	src	09	route-tree interning	codegen-route-tree-intern.ts
+src/ir/load.ts	gen	src	09	load an openapi.json	codegen-load.ts
+src/ir/loaders.ts	gen	src	09	spec loaders	codegen-loaders.ts
+src/emit/shared/lang.ts	gen	src	09	per-language naming (pascal/snake/camel)	codegen-lang.ts
+src/emit/shared/literals.ts	gen	src	09	literal/string writers	codegen-lang.ts
+src/emit/shared/escape.ts	gen	src	09	the one shared fuzzed string-escape layer (F2)	codegen-lang.ts,codegen-sanitize.ts
+src/emit/shared/hash.ts	gen	src	09	content hash	codegen-hash.ts
+src/emit/shared/type-emitter.ts	gen	src	09	shared type emission	type-emitter.ts
+src/emit/shared/format.ts	gen	src	11	formatter post-pass dispatch (gofmt/rustfmt/ruff/…)	—
+src/emit/shared/webhooks.ts	gen	src	10	webhook generator: typed payload parser + signature-verify emitted per SDK (B3)	—
+src/emit/ts/sdk.ts	gen	src	11	TS SDK	client/sdk.ts
+src/emit/ts/http.ts	gen	src	11	TS fetch client core	client/http.ts
+src/emit/ts/request.ts	gen	src	11	request build + retry	client/http.ts
+src/emit/ts/response.ts	gen	src	11	response parse + raw accessor	client/http.ts
+src/emit/ts/path.ts	gen	src	11	path/url helpers	client/path.ts
+src/emit/ts/types.ts	gen	types	11	emitted TS types	client/types.ts,ts-type-emitter.ts
+src/emit/ts/error.ts	gen	src	11	typed errors	client/error.ts
+src/emit/ts/defaults.ts	gen	src	11	client defaults	client/defaults.ts
+src/emit/ts/redirect-policy.ts	gen	src	11	redirect policy	client/redirect-policy.ts
+src/emit/ts/sse.ts	gen	src	11	TS SSE client	client/sse.ts
+src/emit/ts/ws.ts	gen	src	11	TS WebSocket client	client/ws.ts
+src/emit/ts/realtime.ts	gen	src	11	resume client: createResumableConnection, keepalive, fallback chain, RealtimeError types (H8)	codegen.ts
+src/emit/ts/type-gen.ts	gen	src	11	generateTypes/jsonSchemaToTS: JSON Schema → TS declarations	codegen.ts
+src/emit/ts/route-tree.ts	gen	src	11	generateRouteTree/FromApp/FromRouteTree: the typed route tree for honey/plugin	plugin.ts,codegen.ts
+src/emit/ts/index.ts	gen	index	11	TS SDK entry/exports	client/index.ts
+src/emit/go/sdk.ts	gen	src	12	Go SDK	codegen-go.ts
+src/emit/go/types.ts	gen	src	12	Go types	go-type-emitter.ts
+src/emit/go/http.ts	gen	src	12	Go net/http client	codegen-go.ts
+src/emit/go/sse.ts	gen	src	12	Go SSE	codegen-go.ts
+src/emit/go/ws.ts	gen	src	12	Go WebSocket	codegen-go.ts
+src/emit/go/errors.ts	gen	src	12	Go errors	codegen-go.ts
+src/emit/rust/sdk.ts	gen	src	13	Rust SDK	codegen-rust.ts
+src/emit/rust/types.ts	gen	src	13	Rust types	rust-type-emitter.ts
+src/emit/rust/http.ts	gen	src	13	Rust reqwest client	codegen-rust.ts
+src/emit/rust/sse.ts	gen	src	13	Rust SSE	codegen-rust.ts
+src/emit/rust/ws.ts	gen	src	13	Rust WebSocket	codegen-rust.ts
+src/emit/rust/errors.ts	gen	src	13	Rust errors	codegen-rust.ts
+src/emit/rust/realtime.ts	gen	src	13	Rust realtime/reconnect	codegen-rust.ts
+src/emit/python/sdk.ts	gen	src	14	Python SDK (sync+async)	codegen-python.ts
+src/emit/python/types.ts	gen	src	14	Python models	python-type-emitter.ts
+src/emit/python/transport.ts	gen	src	14	Python httpx transport	codegen-python.ts
+src/emit/python/sse.ts	gen	src	14	Python SSE	codegen-python.ts
+src/emit/python/ws.ts	gen	src	14	Python WebSocket	codegen-python.ts
+src/emit/python/errors.ts	gen	src	14	Python errors	codegen-python.ts
+src/emit/csharp/sdk.ts	gen	src	15	C# SDK	—
+src/emit/csharp/models.ts	gen	src	15	C# record models	—
+src/emit/csharp/http.ts	gen	src	15	HttpClient core	—
+src/emit/csharp/json.ts	gen	src	15	System.Text.Json source-gen	—
+src/emit/csharp/sse.ts	gen	src	15	C# SSE	—
+src/emit/csharp/ws.ts	gen	src	15	C# WebSocket	—
+src/emit/csharp/errors.ts	gen	src	15	C# errors	—
+src/emit/csharp/csproj.ts	gen	src	15	.csproj + NuGet	—
+src/emit/java/sdk.ts	gen	src	16	Java SDK	—
+src/emit/java/models.ts	gen	src	16	Java record models	—
+src/emit/java/http.ts	gen	src	16	java.net.http client	—
+src/emit/java/json.ts	gen	src	16	Jackson binding	—
+src/emit/java/sse.ts	gen	src	16	Java SSE	—
+src/emit/java/ws.ts	gen	src	16	Java WebSocket	—
+src/emit/java/errors.ts	gen	src	16	Java errors	—
+src/emit/java/gradle.ts	gen	src	16	Gradle build	—
+src/emit/cli/commands.ts	gen	src	17	one command per operation	codegen-go-cli.ts
+src/emit/cli/flags.ts	gen	src	17	global flags + precedence	codegen-go-cli.ts
+src/emit/cli/output.ts	gen	src	17	json/ndjson/yaml/table + compact	codegen-go-cli.ts
+src/emit/cli/discovery.ts	gen	src	17	agent command discovery (E1)	—
+src/emit/cli/completion.ts	gen	src	17	shell completion (E1)	—
+src/emit/cli/skills.ts	gen	src	17	agent skills/docs bundle (E1)	—
+src/emit/cli/binary.ts	gen	src	17	binary stdout / --output (A1)	—
+src/emit/cli/indicator.ts	gen	src	17	local/remote command indicator (E1)	—
+src/emit/mcp/server.ts	gen	src	18	MCP server	client-mcp/server.ts,codegen-mcp.ts
+src/emit/mcp/tools.ts	gen	src	18	tools + inputSchema	codegen-mcp.ts
+src/emit/mcp/output-schema.ts	gen	src	18	outputSchema + structuredContent (D1)	—
+src/emit/mcp/annotations.ts	gen	src	18	tool annotations (D1)	—
+src/emit/mcp/binary.ts	gen	src	18	image/blob result (D1)	—
+src/emit/mcp/errors.ts	gen	src	18	tool errors	client-mcp/server.ts
+src/emit/mcp/types.ts	gen	types	18	emitted MCP types	client-mcp/types.ts
+src/emit/go/index.ts	gen	index	12	Go SDK entry/exports	—
+src/emit/rust/index.ts	gen	index	13	Rust SDK entry/exports	—
+src/emit/python/index.ts	gen	index	14	Python SDK entry/exports	—
+src/emit/csharp/index.ts	gen	index	15	C# SDK entry/exports	—
+src/emit/java/index.ts	gen	index	16	Java SDK entry/exports	—
+src/emit/cli/index.ts	gen	index	17	CLI entry (main)	—
+src/emit/mcp/index.ts	gen	index	18	MCP server entry/exports	—
+src/extract/extract.ts	gen	src	09	extract ctx/chain types (ts-morph)	type-extractor.ts
+src/extract/walk.ts	gen	src	09	type-node walk	type-extractor.ts
+src/extract/serialize.ts	gen	src	09	type serialize	type-extractor.ts
+src/extract/chain.ts	gen	src	09	middleware chain extraction	type-extractor.ts
+src/cli.ts	gen	src	17	the honey-codegen generate CLI	cli.ts
+src/gen/process.ts	gen	src	09	generate orchestration (target selection + write)	gen-process.ts
+src/gen/write.ts	gen	src	09	write artifacts to disk	gen-write.ts
+# vendored runtime templates (H9) — one subtree per language, each with its own sibling golden-output test (bits 11–18):
+src/runtime/ts/*	gen	runtime	11	vendored TS fetch runtime template	client/*
+src/runtime/go/*	gen	runtime	12	vendored Go net/http runtime template	client-go/*
+src/runtime/rust/*	gen	runtime	13	vendored Rust reqwest runtime template	client-rust/*
+src/runtime/python/*	gen	runtime	14	vendored Python httpx runtime template	client-python/*
+src/runtime/csharp/*	gen	runtime	15	vendored C# BCL runtime template	—
+src/runtime/java/*	gen	runtime	16	vendored Java HttpClient+Jackson runtime template	—
+src/runtime/mcp/*	gen	runtime	18	vendored MCP server runtime template	client-mcp/*
+#
+# ============================== repo infrastructure (exhaustive, flare-parity — bit 00 designs these) ==============================
+packages/core/package.json	core	config	00	core manifest + exports map (subpath → module: ., ./accepts→input/accepts, ./logger→telemetry/logger, …, ./rate-limit, ./compress, ./cache-control, ./range; ./ws/deno removed); optional peers ts-morph/ws	package.json
+packages/gen/package.json	gen	config	00	honey-codegen manifest + exports map (. , ./cli); optional peer ts-morph	—
+packages/core/tsconfig.json	core	config	00	core tsconfig	tsconfig.json
+packages/gen/tsconfig.json	gen	config	00	gen tsconfig	—
+packages/core/vitest.config.ts	core	config	00	core vitest + 100% coverage thresholds	vitest.config.ts
+packages/gen/vitest.config.ts	gen	config	00	gen vitest + harness config	vitest.harness.config.ts
+.oxlintrc.json	core	config	00	lint config incl. the honey rules	.oxlintrc.json
+# custom oxlint JS-plugin rules — each is a lint/<name>.js rule (wired via .oxlintrc jsPlugins, plugin name "honey") + lint/<name>.test.ts; exclude _v0/**:
+lint/index.js	core	index	00	the honey oxlint plugin entry — re-exports all honey/* rules (the jsPlugins specifier); no sibling test (R5)	—
+lint/no-v8-ignore.js	core	src	00	honey/no-v8-ignore rule	—
+lint/no-v8-ignore.test.ts	core	test	00	unit-run the rule + spawn oxlint with jsPlugins on a fixture	—
+lint/boundaries.js	core	src	00	honey/boundaries — the import-arrow rule	—
+lint/boundaries.test.ts	core	test	00	rule test	—
+lint/no-console.js	core	src	00	honey/no-console — console only in telemetry/logger	—
+lint/no-console.test.ts	core	test	00	rule test	—
+lint/no-module-state.js	core	src	00	honey/no-module-state — per-process-constant allowlist (H19.3)	—
+lint/no-module-state.test.ts	core	test	00	rule test	—
+lint/no-module-side-effects.js	core	src	00	honey/no-module-side-effects (H19.3)	—
+lint/no-module-side-effects.test.ts	core	test	00	rule test	—
+lint/content-type-exact-essence.js	core	src	00	honey/content-type-exact-essence — ban startsWith on a media type (H18.2)	—
+lint/content-type-exact-essence.test.ts	core	test	00	rule test	—
+lint/no-header-mode.js	core	src	00	honey/no-header-mode (H19.7)	—
+lint/no-header-mode.test.ts	core	test	00	rule test	—
+packages/core/_v0/	—	legacy	00	parked v0 (src+tests, git mv) — every package.json subpath points here until its v1 bit flips it; deleted bit 20; excluded from coverage/tree-as-source/lint globs and published files (H21)	src,tests
+tests/structure/check-tree.test.ts	core	test	00	the tree matches files.tsv up to the current bit (--complete, H19.4) (gate)	—
+tests/structure/no-deno.test.ts	core	test	00	no deno token / ws/deno / ./ws/deno export remains outside _v0 history	—
+tests/structure/reorg-coverage-diff.test.ts	core	test	00	post-redistribution case count ≥ v0 per feature (the lose-nothing gate)	—
+tests/structure/oracle-count.ts	core	src	00	a vitest reporter + pure checkOracle(totals, baseline); enforces only when HONEY_ORACLE=1; counts only _v0/tests (R2)	—
+tests/structure/oracle-count.test.ts	core	test	00	unit-tests the pure checkOracle: drift, silent-skip, flaky-tolerant (G-oracle)	—
+tests/structure/mutation-harness.ts	core	src	00	run the adversarial/security suite with each guard disabled → must go red (failing-input-first enforced)	—
+tests/structure/mutation-harness.test.ts	core	test	00	proves the harness mechanism against a fixture guard (no v1 guard exists yet at bit 00) (R4)	—
+tests/integration/security/adversarial.test.ts	core	test	00	the in-process app.fetch adversarial scaffold (scope-bypass/proto-pollution/CORS/header-injection/SSE-WS-memory) + a mechanism smoke; middleware bits (07, …) add cases (R3)	hostile-client
+packages/gen/src/_tokenizer/	gen	corpus	00	vendored o200k_base tokenizer (pinned) for the token-budget gate (G-tok)	—
+bench/src/significance.ts	core	src	00	the perf significance decision (median + sample CI → fail only beyond +10% AND outside the band); used by hotpath.ts	—
+bench/src/significance.test.ts	core	test	00	unit-tests the significance decision (R6)	—
+bench/src/finalize.ts	core	test	00	finalize-cost bench — _resolve O(routes×scopes), separate from the warm per-request loop (G-perf)	—
+scripts/capture-token-budget.ts	gen	script	00	run the tokenizer over v0 output → write blueprint/baselines/tokens.json ceilings	—
+blueprint/baselines/oracle-baseline.txt	core	corpus	00	committed oracle count (stepped 6767−N) the oracle-count test asserts	—
+blueprint/baselines/perf-baseline.txt	core	corpus	00	committed perf notes (this-machine ratios; CI-runner is the real home)	—
+blueprint/baselines/hotpath.json	core	corpus	00	committed hotpath baseline (11 scenarios, this machine, named as such) — hotpath.ts reads it	bench/hotpath-baseline.json
+blueprint/baselines/tokens.json	gen	corpus	00	committed per-operation token ceilings (from capture-token-budget)	—
+blueprint/baselines/e2e-expected.json	core	corpus	00	committed 30-cell expected pass set (25 local + 5 cf-prod CI-captured)	—
+tests/e2e/run.ts	core	test	00	the 30-cell runner (node/bun/cf × dev/prod × 5 apps)	e2e/run.ts
+tests/e2e/differential.ts	core	test	00	differential e2e	e2e/apps/differential.ts
+tests/e2e/builds.ts	core	test	00	build-matrix e2e	e2e/apps/builds.ts
+tests/e2e/load.ts	core	test	00	load e2e	e2e/apps/load.ts
+tests/e2e/apps/{compose,defaults,gateway,kitchen,surface}	core	app	00	the 5 consumer apps (exercised by run.ts)	e2e/apps/*
+tests/e2e/{run-build,run-strict-consumer,playwright-app,stub-ws}.ts	core	app	00	e2e runner/support (build matrix, strict-consumer, playwright harness, ws stub) (R1)	e2e/*
+tests/e2e/{bun,node,cf-workers,strict-consumer}/	core	app	00	per-runtime e2e harness dirs (R1)	e2e/*
+#
+# ============================== DELETED (H15) ==============================
+# ws/deno.ts, the ./ws/deno export, e2e/deno/, test:e2e:deno — removed; node/bun/cf detection kept with guard tests (bit 00/03).
+#
+# ============================== tests ==============================
+# Unit: each src row above has a colocated <name>.test.ts (kind=src), written first, seen red (00-rules TDD).
+# Integration (core, tests/integration/, feature-named): auth, routing, middleware, streaming, cookies, cors, errors,
+#   proxy, static, realtime, validation, i18n, telemetry, trust, observability-matrix (96 cases, H17).
+# Integration (gen, tests/integration/): ts/go/rust/python/csharp/java/mcp/cli harness, polyglot compile/runtime/conformance.
+#   SDK conformance matrix (dx/conformance.md): tests/integration/conformance/{app,matrix}.ts (the reference app + the feature×target grid) + per-target conformance/<ts|go|rust|python|csharp|java|cli|mcp>.test.ts — each target drives the shared scenarios against the LIVE reference server; feature × target is complete-or-red; auth-not-resent-on-cross-origin-redirect (H18.10), SSE/WS reconnect vs the bit-06 reference server, binary in/out, typed headers, errors, overrides, raw-response all asserted for every target.
+# Cross-cutting telemetry tests (kind=test, tests/integration/telemetry/, span many files — not colocated siblings):
+#   correlation, privacy, silent-failure, observability-matrix (96 cases, H17). The colocated unit siblings are
+#   telemetry/{logger,request-log,otel,traceparent,span-lifecycle,fields}.test.ts and errors/on-error.test.ts.
+# e2e: tests/e2e/apps/{compose,defaults,gateway,kitchen,surface} + run.ts (30-cell: node/bun/cf × dev/prod), differential.ts, builds.ts, load.ts.
+# types: tests/types/*.typetest.ts. regression: tests/regression/* (frozen 313-finding guard; names kept for regression-matrix traceability).
+#
+# v0 test re-home (all 440 accounted): by rule —
+#   unit/<feature> -> colocated src sibling; unit/client,unit/sdk,unit/codegen -> gen colocated/harness;
+#   integration/<feature> -> tests/integration/<feature>; integration/sdk-harness -> gen tests/integration;
+#   integration/hostile-client -> tests/integration/security (the F1 hostile-client suite);
+#   conformance,regression/ws9-12 -> gen tests/integration/conformance; regression/* -> tests/regression (frozen);
+#   typetest -> tests/types; mock-server,fixtures,*-env.ts,*specs.ts,_assert.ts,harness-util.ts -> corpus/support by owner.
+#   unit/fuzz/* (4 .fuzz.test.ts + rng.ts) -> tests/integration/security (the fuzz corpus; rng.ts = corpus support) (bit 07/gates).
+#   unit/on/*, unit/integration/* -> tests/integration/<feature> by what they exercise.
+# REDISTRIBUTE (reorg rule, bit 00, coverage-diff gate) — split by feature, number dropped: integration/bug-hunt.test.ts,
+#   bug-hunt-2..21 (20), edge-cases, client-edge-cases(+2..5) (5), payloads, server; unit/audit/audit-bugs, audit-v2;
+#   unit/codegen/type-emitter-debug(+2..5) (5); unit/codegen/sdk-r4/r5/r6-* phase files; unit/client/http-r6-phase-g;
+#   unit/core/edge-cases-2..10; AND all other unit/core/* cross-cutting files (adversarial, basepath-adversarial, bizarre,
+#   broken-world, prove-everything, stress-test, interactions, deep-edge-cases, developer-mistakes, production-weird,
+#   untested-paths, sse-backpressure, sse-keepalive, … ~35) -> the feature suite each case exercises (sse-* -> streaming/realtime;
+#   adversarial/bizarre/broken-world/production-weird -> security or the owning feature). Each case lands by feature; count preserved before delete.
