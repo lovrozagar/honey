@@ -13,7 +13,6 @@ const EXEMPT = [
 	/^CHANGELOG\.md$/,
 	/^blueprint\//,
 	/^packages\/core\/docs\/regression-matrix\//,
-	/^packages\/core\/\.claude\//,
 	/^\.(agents|claude|codex|gemini|grok|rulesync)\//,
 	/^(AGENTS|CLAUDE|GEMINI)\.md$/,
 ]

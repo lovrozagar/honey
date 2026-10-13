@@ -17,7 +17,6 @@ const RUNTIME_FILES = [
 const GLOBALS = new Map([
 	["Buffer", ["node", "build", "gen"]],
 	["Bun", ["bun"]],
-	["Deno", []],
 	["WebSocketPair", ["workers"]],
 	["document", []],
 	["process", ["node", "build", "gen"]],
