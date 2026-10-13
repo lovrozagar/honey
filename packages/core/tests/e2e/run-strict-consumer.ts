@@ -1,0 +1,249 @@
+#!/usr/bin/env bun
+/**
+ * Packaging tier. Packs @lovrozagar/honey exactly as npm would, installs the tarball into a
+ * throwaway consumer whose tsconfig turns on every strictness flag we could plausibly meet,
+ * and fails on any diagnostic originating inside the package.
+ *
+ * This exists because a package that ships raw TypeScript inherits the *consumer's* compiler
+ * flags. `skipLibCheck` does not help — it covers `.d.ts` only — and there is no per-directory
+ * suppression for `.ts` under node_modules, so a consumer cannot opt out of our lint posture.
+ * Nothing else in the test matrix can see that: every other tier compiles honey with honey's
+ * own tsconfig.
+ *
+ *   bun run packages/core/tests/e2e/run-strict-consumer.ts
+ *   bun run packages/core/tests/e2e/run-strict-consumer.ts --keep     # leave the sandbox for inspection
+ */
+import { mkdirSync, readdirSync, rmSync } from "node:fs"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const here = dirname(fileURLToPath(import.meta.url))
+const repoRoot = resolve(here, "../../../..")
+const corePath = join(repoRoot, "packages", "core")
+const fixture = join(here, "strict-consumer")
+const sandbox = join(repoRoot, ".cache", "strict-consumer")
+const keep = process.argv.includes("--keep")
+
+const PKG = "@lovrozagar/honey"
+
+async function run(cmd: string[], cwd: string): Promise<{ code: number; out: string }> {
+	const proc = Bun.spawn(cmd, { cwd, stderr: "pipe", stdin: "ignore", stdout: "pipe" })
+	const [code, stdout, stderr] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+	])
+	return { code, out: stdout + stderr }
+}
+
+rmSync(sandbox, { force: true, recursive: true })
+mkdirSync(sandbox, { recursive: true })
+
+/* 1. pack exactly what npm would publish */
+console.log("packing …")
+const packed = await run(["npm", "pack", "--pack-destination", sandbox, "--silent"], corePath)
+if (packed.code !== 0) {
+	console.error(packed.out)
+	process.exit(1)
+}
+const tarball = readdirSync(sandbox).find((f) => f.endsWith(".tgz"))
+if (!tarball) {
+	console.error("npm pack produced no tarball")
+	process.exit(1)
+}
+
+/* 2. a consumer that depends on the tarball, not the workspace */
+const consumer = join(sandbox, "consumer")
+mkdirSync(join(consumer, "src"), { recursive: true })
+await Bun.write(join(consumer, "src", "app.ts"), await Bun.file(join(fixture, "src", "app.ts")).text())
+await Bun.write(join(consumer, "tsconfig.json"), await Bun.file(join(fixture, "tsconfig.json")).text())
+await Bun.write(
+	join(consumer, "package.json"),
+	`${JSON.stringify(
+		{
+			dependencies: { [PKG]: `file:${join(sandbox, tarball)}`, zod: "4.3.6" },
+			devDependencies: { typescript: "7.0.2", vite: "8.1.4" },
+			name: "strict-consumer-sandbox",
+			private: true,
+			type: "module",
+			version: "0.0.0",
+		},
+		null,
+		2,
+	)}\n`,
+)
+
+console.log("installing the tarball …")
+const installed = await run(["npm", "install", "--no-audit", "--no-fund", "--silent"], consumer)
+if (installed.code !== 0) {
+	console.error(installed.out)
+	process.exit(1)
+}
+
+/* 3. type-check under maximal strictness */
+console.log("type-checking under maximal strictness …\n")
+const checked = await run(["npx", "tsc", "--noEmit", "-p", "tsconfig.json"], consumer)
+
+const lines = checked.out.split("\n").filter((l) => l.includes("error TS"))
+const inPackage = lines.filter((l) => l.includes(`node_modules/${PKG}/`))
+const inConsumer = lines.filter((l) => !l.includes(`node_modules/${PKG}/`))
+
+if (inPackage.length > 0) {
+	const byCode = new Map<string, number>()
+	for (const line of inPackage) {
+		const code = /error (TS\d+)/.exec(line)?.[1] ?? "TS?"
+		byCode.set(code, (byCode.get(code) ?? 0) + 1)
+	}
+	console.log(`FAIL  ${inPackage.length} diagnostics originate inside ${PKG}\n`)
+	for (const [code, n] of [...byCode].sort((a, b) => b[1] - a[1])) {
+		console.log(`  ${String(n).padStart(5)}  ${code}`)
+	}
+	console.log("\nfirst few:")
+	for (const line of inPackage.slice(0, 5)) console.log(`  ${line.trim()}`)
+	console.log(
+		`\nA consumer cannot suppress these: skipLibCheck covers .d.ts only, and there is no\n` +
+			`per-directory opt-out for .ts under node_modules.`,
+	)
+}
+
+if (inConsumer.length > 0) {
+	console.log(`\n${inConsumer.length} diagnostics in the fixture itself (these are ours to fix):`)
+	for (const line of inConsumer.slice(0, 10)) console.log(`  ${line.trim()}`)
+}
+
+/* 4. and it must actually run — types passing while the exports map is wrong is a real
+   failure mode, since `types` and `default` resolve independently */
+if (inPackage.length === 0 && inConsumer.length === 0) {
+	await Bun.write(
+		join(consumer, "smoke.ts"),
+		[
+			'import { honey } from "@lovrozagar/honey"',
+			'import "@lovrozagar/honey/openapi"',
+			'import * as z from "zod"',
+			"const app = honey<{}>()",
+			'app.get("/hi").output({ "application/json": { ok: z.object({ ok: z.boolean() }) } })',
+			'\t.handler((c) => c.res.json("ok", { ok: true }))',
+			'app.openapi({ title: "T", version: "1" })',
+			'const res = await app.fetch(new Request("http://x/hi"), {})',
+			"if (res.status !== 200) throw new Error(`route returned ${res.status}`)",
+			'const spec = await app.fetch(new Request("http://x/openapi.json"), {})',
+			"if (spec.status !== 200) throw new Error(`openapi returned ${spec.status}`)",
+			'if (!("/hi" in ((await spec.json()) as { paths: Record<string, unknown> }).paths)) {',
+			'\tthrow new Error("route missing from the generated document")',
+			"}",
+			'console.log("runtime ok")',
+		].join("\n"),
+	)
+	const smoked = await run(["bun", "run", "smoke.ts"], consumer)
+	if (smoked.code !== 0) {
+		console.log("FAIL  the installed package does not run")
+		console.log(smoked.out)
+		if (!keep) rmSync(sandbox, { force: true, recursive: true })
+		process.exit(1)
+	}
+	console.log("runtime smoke ok (bun)")
+
+	if (!(await nodeConsumer(consumer))) {
+		if (!keep) rmSync(sandbox, { force: true, recursive: true })
+		process.exit(1)
+	}
+}
+
+if (!keep) rmSync(sandbox, { force: true, recursive: true })
+else console.log(`\nsandbox kept at ${sandbox}`)
+
+/**
+ * Plain Node, no tsx and no type stripping of node_modules: the package entry, the CLI and the
+ * Vite plugin must all run from the compiled dist/. Bun runs source, so it cannot see this.
+ */
+async function nodeConsumer(dir: string): Promise<boolean> {
+	const fail = (what: string, out: string): false => {
+		console.log(`FAIL  ${what}`)
+		console.log(out)
+		return false
+	}
+
+	await Bun.write(
+		join(dir, "node-smoke.mjs"),
+		[
+			'import { honey } from "@lovrozagar/honey"',
+			'import "@lovrozagar/honey/openapi"',
+			"const app = honey()",
+			'app.get("/hi").handler((c) => c.res.text("ok", "hi"))',
+			'const res = await app.fetch(new Request("http://x/hi"), {})',
+			'if (res.status !== 200 || (await res.text()) !== "hi") throw new Error(`route returned ${res.status}`)',
+			'console.log("node import ok")',
+		].join("\n"),
+	)
+	const imported = await run(["node", "--unhandled-rejections=strict", "node-smoke.mjs"], dir)
+	if (imported.code !== 0) return fail("the core entry does not import on plain Node", imported.out)
+	console.log("runtime smoke ok (node)")
+
+	/* an app in the README "Start" shape: it serves at top level, which generation must survive */
+	const port = 46_123
+	await Bun.write(
+		join(dir, "src", "server-app.ts"),
+		[
+			'import { honey } from "@lovrozagar/honey"',
+			'import "@lovrozagar/honey/serve"',
+			'export const app = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
+			"export default app",
+			`await app.serve({ port: ${port} })`,
+		].join("\n"),
+	)
+	await Bun.write(
+		join(dir, "vite.config.ts"),
+		[
+			'import { honey } from "@lovrozagar/honey/plugin"',
+			'export default { plugins: [honey({ app: "src/server-app.ts", codegen: { openApi: { title: "T", version: "1" } } })] }',
+		].join("\n"),
+	)
+	const generated = await run(["node", join("node_modules", ".bin", "honey"), "generate"], dir)
+	if (generated.code !== 0 || !(await Bun.file(join(dir, "src", "_gen", "routes.gen.ts")).exists())) {
+		return fail("honey generate on Node", generated.out)
+	}
+	console.log("cli ok (node)")
+
+	await Bun.write(
+		join(dir, "vite.build.config.ts"),
+		[
+			'import { createBuildPlugin } from "@lovrozagar/honey/build"',
+			'import base from "./vite.config.ts"',
+			"export default {",
+			"  ...base,",
+			'  logLevel: "error",',
+			'  plugins: [...base.plugins, createBuildPlugin({ outDir: "out", target: "node" }, { entry: "src/server-app.ts", export: "app" })],',
+			"}",
+		].join("\n"),
+	)
+	const built = await run(
+		["node", join("node_modules", "vite", "bin", "vite.js"), "build", "--config", "vite.build.config.ts"],
+		dir,
+	)
+	if (built.code !== 0) return fail("vite build with the honey plugins on Node", built.out)
+
+	const server = Bun.spawn(["node", "--unhandled-rejections=strict", join("out", "index.js")], {
+		cwd: dir,
+		env: { ...process.env, PORT: String(port + 1) },
+		stderr: "pipe",
+		stdout: "pipe",
+	})
+	try {
+		const deadline = Date.now() + 10_000
+		while (Date.now() < deadline) {
+			const res = await fetch(`http://127.0.0.1:${port + 1}/health`).catch(() => undefined)
+			if (res?.status === 200) {
+				console.log("vite build ok (node)")
+				return true
+			}
+			await Bun.sleep(100)
+		}
+		server.kill()
+		return fail("the built server never answered /health", await new Response(server.stderr).text())
+	} finally {
+		server.kill()
+	}
+}
+
+if (inPackage.length > 0 || inConsumer.length > 0) process.exit(1)
+console.log(`pass  0 diagnostics from ${PKG} under maximal strictness`)

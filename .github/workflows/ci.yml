@@ -136,7 +136,7 @@ jobs:
       - run: bun run generate
       # --check-generated: the checkout is clean here, so a build that rewrites a
       # committed generated file means it is stale or codegen is not deterministic.
-      - run: bun e2e/run-build.ts --runtime ${{ matrix.runtime }} --check-generated
+      - run: bun packages/core/tests/e2e/run-build.ts --runtime ${{ matrix.runtime }} --check-generated
 
   packaging:
     name: packaging (node ${{ matrix.node }})

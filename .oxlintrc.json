@@ -32,7 +32,12 @@
 	},
 	"overrides": [
 		{
-			"files": ["**/*.{test,typetest}.ts", "packages/core/tests/**/*.ts", "e2e/**/*.ts", "bench/**/*.ts"],
+			"files": [
+				"**/*.{test,typetest}.ts",
+				"packages/core/tests/**/*.ts",
+				"packages/core/tests/e2e/**/*.ts",
+				"bench/**/*.ts"
+			],
 			"rules": {
 				"typescript/no-explicit-any": "off"
 			}

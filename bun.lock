@@ -42,124 +42,6 @@
         "typescript": "catalog:",
       },
     },
-    "e2e/apps/compose": {
-      "name": "@honey/e2e-compose",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lovrozagar/honey": "workspace:*",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "e2e/apps/defaults": {
-      "name": "@honey/e2e-defaults",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lovrozagar/honey": "workspace:*",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "e2e/apps/gateway": {
-      "name": "@honey/e2e-gateway",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lovrozagar/honey": "workspace:*",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "e2e/apps/kitchen": {
-      "name": "@honey/e2e-kitchen",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lovrozagar/honey": "workspace:*",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "e2e/apps/surface": {
-      "name": "@honey/e2e-surface",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lovrozagar/honey": "workspace:*",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "e2e/bun": {
-      "name": "@honey/e2e-bun",
-      "version": "0.0.1",
-      "dependencies": {
-        "@honey/e2e-compose": "workspace:*",
-        "@honey/e2e-defaults": "workspace:*",
-        "@honey/e2e-gateway": "workspace:*",
-        "@honey/e2e-kitchen": "workspace:*",
-        "@honey/e2e-surface": "workspace:*",
-        "@lovrozagar/honey": "workspace:*",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "bun-types": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "e2e/cf-workers": {
-      "name": "@honey/e2e-cf-workers",
-      "version": "0.0.1",
-      "dependencies": {
-        "@honey/e2e-compose": "workspace:*",
-        "@honey/e2e-defaults": "workspace:*",
-        "@honey/e2e-gateway": "workspace:*",
-        "@honey/e2e-kitchen": "workspace:*",
-        "@honey/e2e-surface": "workspace:*",
-        "@lovrozagar/honey": "workspace:*",
-      },
-      "devDependencies": {
-        "@cloudflare/workers-types": "catalog:",
-        "@playwright/test": "catalog:",
-        "typescript": "catalog:",
-        "wrangler": "catalog:",
-      },
-    },
-    "e2e/node": {
-      "name": "@honey/e2e-node",
-      "version": "0.0.1",
-      "dependencies": {
-        "@honey/e2e-compose": "workspace:*",
-        "@honey/e2e-defaults": "workspace:*",
-        "@honey/e2e-gateway": "workspace:*",
-        "@honey/e2e-kitchen": "workspace:*",
-        "@honey/e2e-surface": "workspace:*",
-        "@lovrozagar/honey": "workspace:*",
-        "ws": "catalog:",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "@types/node": "catalog:",
-        "tsx": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "e2e/strict-consumer": {
-      "name": "@honey/e2e-strict-consumer",
-      "version": "0.0.1",
-    },
     "packages/core": {
       "name": "@lovrozagar/honey",
       "version": "0.7.3",
@@ -198,6 +80,124 @@
         "ts-morph",
         "ws",
       ],
+    },
+    "packages/core/tests/e2e/apps/compose": {
+      "name": "@honey/e2e-compose",
+      "version": "0.0.1",
+      "dependencies": {
+        "@lovrozagar/honey": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/apps/defaults": {
+      "name": "@honey/e2e-defaults",
+      "version": "0.0.1",
+      "dependencies": {
+        "@lovrozagar/honey": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/apps/gateway": {
+      "name": "@honey/e2e-gateway",
+      "version": "0.0.1",
+      "dependencies": {
+        "@lovrozagar/honey": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/apps/kitchen": {
+      "name": "@honey/e2e-kitchen",
+      "version": "0.0.1",
+      "dependencies": {
+        "@lovrozagar/honey": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/apps/surface": {
+      "name": "@honey/e2e-surface",
+      "version": "0.0.1",
+      "dependencies": {
+        "@lovrozagar/honey": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/bun": {
+      "name": "@honey/e2e-bun",
+      "version": "0.0.1",
+      "dependencies": {
+        "@honey/e2e-compose": "workspace:*",
+        "@honey/e2e-defaults": "workspace:*",
+        "@honey/e2e-gateway": "workspace:*",
+        "@honey/e2e-kitchen": "workspace:*",
+        "@honey/e2e-surface": "workspace:*",
+        "@lovrozagar/honey": "workspace:*",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "bun-types": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/cf-workers": {
+      "name": "@honey/e2e-cf-workers",
+      "version": "0.0.1",
+      "dependencies": {
+        "@honey/e2e-compose": "workspace:*",
+        "@honey/e2e-defaults": "workspace:*",
+        "@honey/e2e-gateway": "workspace:*",
+        "@honey/e2e-kitchen": "workspace:*",
+        "@honey/e2e-surface": "workspace:*",
+        "@lovrozagar/honey": "workspace:*",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "catalog:",
+        "@playwright/test": "catalog:",
+        "typescript": "catalog:",
+        "wrangler": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/node": {
+      "name": "@honey/e2e-node",
+      "version": "0.0.1",
+      "dependencies": {
+        "@honey/e2e-compose": "workspace:*",
+        "@honey/e2e-defaults": "workspace:*",
+        "@honey/e2e-gateway": "workspace:*",
+        "@honey/e2e-kitchen": "workspace:*",
+        "@honey/e2e-surface": "workspace:*",
+        "@lovrozagar/honey": "workspace:*",
+        "ws": "catalog:",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "@types/node": "catalog:",
+        "tsx": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/core/tests/e2e/strict-consumer": {
+      "name": "@honey/e2e-strict-consumer",
+      "version": "0.0.1",
     },
   },
   "catalog": {
@@ -354,23 +354,23 @@
 
     "@honey/bench": ["@honey/bench@workspace:bench"],
 
-    "@honey/e2e-bun": ["@honey/e2e-bun@workspace:e2e/bun"],
+    "@honey/e2e-bun": ["@honey/e2e-bun@workspace:packages/core/tests/e2e/bun"],
 
-    "@honey/e2e-cf-workers": ["@honey/e2e-cf-workers@workspace:e2e/cf-workers"],
+    "@honey/e2e-cf-workers": ["@honey/e2e-cf-workers@workspace:packages/core/tests/e2e/cf-workers"],
 
-    "@honey/e2e-compose": ["@honey/e2e-compose@workspace:e2e/apps/compose"],
+    "@honey/e2e-compose": ["@honey/e2e-compose@workspace:packages/core/tests/e2e/apps/compose"],
 
-    "@honey/e2e-defaults": ["@honey/e2e-defaults@workspace:e2e/apps/defaults"],
+    "@honey/e2e-defaults": ["@honey/e2e-defaults@workspace:packages/core/tests/e2e/apps/defaults"],
 
-    "@honey/e2e-gateway": ["@honey/e2e-gateway@workspace:e2e/apps/gateway"],
+    "@honey/e2e-gateway": ["@honey/e2e-gateway@workspace:packages/core/tests/e2e/apps/gateway"],
 
-    "@honey/e2e-kitchen": ["@honey/e2e-kitchen@workspace:e2e/apps/kitchen"],
+    "@honey/e2e-kitchen": ["@honey/e2e-kitchen@workspace:packages/core/tests/e2e/apps/kitchen"],
 
-    "@honey/e2e-node": ["@honey/e2e-node@workspace:e2e/node"],
+    "@honey/e2e-node": ["@honey/e2e-node@workspace:packages/core/tests/e2e/node"],
 
-    "@honey/e2e-strict-consumer": ["@honey/e2e-strict-consumer@workspace:e2e/strict-consumer"],
+    "@honey/e2e-strict-consumer": ["@honey/e2e-strict-consumer@workspace:packages/core/tests/e2e/strict-consumer"],
 
-    "@honey/e2e-surface": ["@honey/e2e-surface@workspace:e2e/apps/surface"],
+    "@honey/e2e-surface": ["@honey/e2e-surface@workspace:packages/core/tests/e2e/apps/surface"],
 
     "@hono/node-server": ["@hono/node-server@2.1.1", "", { "peerDependencies": { "hono": "^4" } }, "sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg=="],
 

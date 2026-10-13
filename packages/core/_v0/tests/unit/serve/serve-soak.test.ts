@@ -6,7 +6,7 @@ import "@lovrozagar/honey/serve"
 import { detectRuntime, honey } from "../../../src/index.ts"
 
 const RUNNER = resolve(import.meta.dirname, "./soak-runner.ts")
-const WORKER = resolve(import.meta.dirname, "../../../../../../e2e/cf-workers/src/worker.ts")
+const WORKER = resolve(import.meta.dirname, "../../../../tests/e2e/cf-workers/src/worker.ts")
 
 function run(cmd: string, args: string[]): Promise<{ exitCode: number; stderr: string; stdout: string }> {
 	return new Promise((resolveProc, reject) => {

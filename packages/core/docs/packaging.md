@@ -90,8 +90,8 @@ Bun and debugging, and gate it with a packaging test that runs on plain Node.
 
 ## The regression test
 
-`bun run test:packaging` (`e2e/run-strict-consumer.ts`) packs the tarball exactly as npm would,
-installs it into a throwaway consumer, type-checks against `e2e/strict-consumer/` — a fixture with
+`bun run test:packaging` (`packages/core/tests/e2e/run-strict-consumer.ts`) packs the tarball exactly as npm would,
+installs it into a throwaway consumer, type-checks against `packages/core/tests/e2e/strict-consumer/` — a fixture with
 `strict`, `exactOptionalPropertyTypes`, `noPropertyAccessFromIndexSignature`,
 `noUncheckedIndexedAccess`, `verbatimModuleSyntax` and friends — and fails on any diagnostic whose
 path is inside the package.

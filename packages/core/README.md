@@ -1875,17 +1875,17 @@ Import features from their path.
 
 ```
 packages/core/     published `honey` package (src, tests, docs, examples)
-e2e/apps/          consumer apps (kitchen, defaults, compose, surface, gateway)
-e2e/{bun,node,cf-workers}/   runtime hosts + Playwright
-e2e/run.ts         env × app runner
+packages/core/tests/e2e/apps/                 consumer apps (kitchen, defaults, compose, surface, gateway)
+packages/core/tests/e2e/{bun,node,cf-workers}/ runtime hosts + Playwright
+packages/core/tests/e2e/run.ts                env × app runner
 bench/             bombardier vs Hono / Elysia / Express / Nest (bun + node)
 ```
 
-`e2e/apps/*` own the tests. Runtimes only listen. `HONEY_E2E_APP` and `HONEY_E2E_ENV` select which app and host.
+`packages/core/tests/e2e/apps/*` own the tests. Runtimes only listen. `HONEY_E2E_APP` and `HONEY_E2E_ENV` select which app and host.
 
 ## Develop
 
-`packages/core` is the published package. `e2e/*` imports `honey` over `workspace:*`.
+`packages/core` is the published package. `packages/core/tests/e2e/*` imports `honey` over `workspace:*`.
 
 Requires [Bun](https://bun.sh) 1.3+.
 
@@ -1936,13 +1936,13 @@ Typecheck stays strict. Do not weaken `strict` or add `as any` to make it pass.
 | `bun run test:harness`   | Generated SDKs compile and behave.                                               |
 
 ```bash
-bun e2e/run.ts --env node --app kitchen
-bun e2e/run.ts --env all --app surface
-bun e2e/run.ts --env bun --mode prod
+bun packages/core/tests/e2e/run.ts --env node --app kitchen
+bun packages/core/tests/e2e/run.ts --env all --app surface
+bun packages/core/tests/e2e/run.ts --env bun --mode prod
 
-bun e2e/run-build.ts --app kitchen --target cloudflare
-bun e2e/run-build.ts --runtime all           # run the builds under node and bun
-bun e2e/run-build.ts --check-generated       # CI: a build must not rewrite committed files
+bun packages/core/tests/e2e/run-build.ts --app kitchen --target cloudflare
+bun packages/core/tests/e2e/run-build.ts --runtime all           # run the builds under node and bun
+bun packages/core/tests/e2e/run-build.ts --check-generated       # CI: a build must not rewrite committed files
 ```
 
 The build tier builds each e2e app through its own `vite.config.ts` plus
@@ -1962,13 +1962,13 @@ dynamically, and a bundler that resolves one of those dynamic imports silently a
 | `surface`  | Every input source, output type, method, SSE, WS, uploads            |
 | `gateway`  | `stripPrefix` + enforce slash, Swagger behind a prefix               |
 
-Runtimes: `e2e/bun`, `e2e/node`, `e2e/cf-workers`.
+Runtimes: `packages/core/tests/e2e/bun`, `packages/core/tests/e2e/node`, `packages/core/tests/e2e/cf-workers`.
 
 ### Live Cloudflare proof
 
 Same kitchen app on workerd: https://honey-cf-e2e.lovro-zagar5.workers.dev
 
-See `e2e/cf-workers/README.md`. Redeploy with `bun run deploy:e2e:cf`. Live soak: `bun run test:live:cf`.
+See `packages/core/tests/e2e/cf-workers/README.md`. Redeploy with `bun run deploy:e2e:cf`. Live soak: `bun run test:live:cf`.
 
 ### Bench
 

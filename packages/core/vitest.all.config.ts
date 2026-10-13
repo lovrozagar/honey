@@ -7,6 +7,7 @@ export default defineConfig({
 	ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
 	test: {
 		include: ["_v0/tests/**/*.test.ts", "src/**/*.test.ts", "tests/**/*.test.ts", "lint/**/*.test.ts"],
+		exclude: ["**/node_modules/**", "**/dist/**", "tests/e2e/**"],
 		passWithNoTests: true,
 	},
 })
