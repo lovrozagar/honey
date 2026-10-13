@@ -261,7 +261,7 @@ src/runtime/java/*	gen	runtime	16	vendored Java HttpClient+Jackson runtime templ
 src/runtime/mcp/*	gen	runtime	18	vendored MCP server runtime template	client-mcp/*
 #
 # ============================== repo infrastructure (exhaustive, flare-parity — bit 00 designs these) ==============================
-packages/core/package.json	core	config	00	core manifest + exports map (subpath → module: ., ./accepts→input/accepts, ./logger→telemetry/logger, …, ./rate-limit, ./compress, ./cache-control, ./range; ./ws/deno removed); optional peers ts-morph/ws	package.json
+packages/core/package.json	core	config	00	core manifest + exports map (subpath → module: ., ./accepts→input/accepts, ./logger→telemetry/logger, …, ./rate-limit, ./compress, ./cache-control, ./range; ./ws/deno removed); optional peer: ws only (ts-morph is gen's — boundaries enforces it); dep jiti; sideEffects:false	package.json
 packages/gen/package.json	gen	config	00	honey-codegen manifest + exports map (. , ./cli); optional peer ts-morph	—
 packages/core/tsconfig.json	core	config	00	core tsconfig	tsconfig.json
 packages/gen/tsconfig.json	gen	config	00	gen tsconfig	—

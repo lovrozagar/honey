@@ -18,7 +18,7 @@
 
 | value | required | default | outcome | pitfall | test |
 | --- | --- | --- | --- | --- | --- |
-| `.output({ [status]: { "application/json": schema } })` | no | — | typed, validated JSON response for that status | the status key is the SDK's return-type discriminator | `response/response.test.ts` |
+| `.output({ "application/json": { [status]: schema } })` | no | — | typed, validated JSON response per status — **media type is the OUTER key, status the INNER** (matches v0; DX unchanged) | the inner status key is the SDK's return-type discriminator | `response/response.test.ts` |
 | `.output` known media types (text/html, text/csv, text/xml, text/plain, application/pdf, application/cbor, application/msgpack, octet-stream, text/event-stream, redirect) | no | — | keep helper affinity (stringify / stream / binary / redirect) | the 11 keep their helpers; everything else is a bytes body | `response/media-type.test.ts` |
 | `.output` open media type `` `${string}/${string}` `` | no | — | **[A1]** any media type (image/gif, font/woff2, video/\*, application/zip) as a typed bytes body `{ format: binary }` carrying its content-type to OpenAPI/SDKs/CLI/MCP | multiple types per status negotiate via `Accept` | `response/media-type.test.ts`, `integration/streaming.test.ts` |
 | `.output` per-status `headers` schema | no | — | **[A2]** declared, typed response headers → OpenAPI response `headers` → SDK `response.headers` accessors (ETag, Location, Retry-After, X-RateLimit-\*, Link) | an undeclared header is not in the contract | `response/response-headers.test.ts` |

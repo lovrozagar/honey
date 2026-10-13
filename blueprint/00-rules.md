@@ -98,11 +98,11 @@ Runtime detection (`detect-runtime`) returns a pure value; adapters branch on it
 
 `@lovrozagar/honey` keeps its runtime lean. Required runtime deps stay minimal; a library the package imports conditionally is an **optional `peerDependency`** with `peerDependenciesMeta.optional = true`, and a `devDependency` pinned to the exact tested version.
 
-| package | role | devDependency (exact) | peerDependency | imported from |
-| --- | --- | --- | --- | --- |
-| `jiti` | runtime dep | 2.7.0 | — | config/plugin loading |
-| `ws` | optional peer | the exact tested version | `>=` that version | the Node WebSocket adapter only |
-| `ts-morph` | optional peer | the exact tested version | `>=` that version | `honey-codegen` type-extraction entry only |
+| package | role | manifest | devDependency (exact) | peerDependency | imported from |
+| --- | --- | --- | --- | --- | --- |
+| `jiti` | runtime dep | core | 2.7.0 | — | config/plugin loading |
+| `ws` | optional peer | **core** | the exact tested version | `>=` that version | the Node WebSocket adapter only |
+| `ts-morph` | optional peer | **gen** (not core) | the exact tested version | `>=` that version | `honey-codegen` type-extraction entry only — `honey/boundaries` keeps it out of core |
 
 (Exact dev versions are filled from the repo's lockfile at bit 00; the shape — exact dev + `>=` peer — is the pin.) `@lovrozagar/honey` declares `"sideEffects": false` for tree-shakeability (H19.3).
 
