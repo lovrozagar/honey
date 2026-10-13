@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test"
-import { e2eAppName, e2eAppTestDir } from "../playwright-app.ts"
+import { e2eAppName, e2eAppTestDir, e2eReporter } from "../playwright-app.ts"
 
 const PORT = "4102"
 process.env.PORT = PORT
@@ -10,6 +10,7 @@ const isDev = mode === "dev"
 const app = e2eAppName()
 
 export default defineConfig({
+	...e2eReporter(),
 	expect: { timeout: 10_000 },
 	forbidOnly: true,
 	grepInvert: isDev ? /@prod-only/ : /@dev-only/,
