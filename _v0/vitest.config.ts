@@ -29,5 +29,7 @@ export default defineConfig({
 		exclude: ["**/node_modules/**", "**/dist/**", ...harness, ...harnessRust, ...stale],
 		include: ["tests/**/*.test.ts"],
 		passWithNoTests: true,
+		/* the oracle count (00-rules): the v0 suite keeps the committed passed/skipped totals */
+		reporters: ["default", "../packages/core/tests/structure/oracle-count.ts"],
 	},
 })

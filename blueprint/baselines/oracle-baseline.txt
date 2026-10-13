@@ -25,6 +25,8 @@ oracle.flaky: _v0/tests/unit/plugin/cli-generate.test.ts > honey generate CLI > 
             build-plugin noExternal/custom port/Bun.serve scan, client-ip Bun env, request-path `^`,
             runtime-bundle, ws-keepalive defaults, realtime onOpen.
             oracle.passed = 6712 + the flaky case = 6713.
+2026-10-14  bit 00 root move (packages/core/_v0 → /_v0, the complete v0 package, H21 option Z):
+            unchanged, 6712 passed | 1 flaky | 40 skipped; oracle.scope is now _v0/tests
 
 Known flake (NOT a regression; pre-existing):
   _v0/tests/unit/plugin/cli-generate.test.ts:274
