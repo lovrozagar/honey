@@ -69,7 +69,9 @@
 				"vitest/no-disabled-tests": "error",
 				"vitest/no-focused-tests": "error",
 				"honey/boundaries": "error",
+				"honey/content-type-exact-essence": "error",
 				"honey/no-console": "error",
+				"honey/no-header-mode": "error",
 				"honey/no-module-side-effects": "error",
 				"honey/no-module-state": "error",
 				"honey/no-v8-ignore": "error"
