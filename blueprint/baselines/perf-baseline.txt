@@ -16,7 +16,7 @@ entry was dropped (5 scenarios, stale).
 
   scenario         baseline  what it runs
   chain            2.06      two passthrough middleware before the handler
-  not-found        10.57     miss path: full ctx + miss plan (bit 01 targets a precomputed 404)
+  not-found        10.57     miss path: full ctx + miss plan (bit 02 targets a precomputed 404)
   param            1.81      one path param
   scoped           1.92      50 unrelated scopes + one covering scope, chain compiled at finalize
   static           1.44      static route, JSON response
@@ -48,7 +48,8 @@ sees it. Same machine and pinning, 2026-10-14:
   1000    10       1876.6      187.7
   1000    100      7109.6       71.1
 
-Bit 01 (finalize split) holds or improves these; it is a measurement, not yet a gate.
+Bit 02 (dispatch + finalize split) holds or improves these; it is a measurement, not yet a gate.
+(The finalize/dispatch split is bit 02, re-cut from bit 01 by dependency; bit 01 is the pure route model with no app.fetch path.)
 
 == Competitive throughput (bench/src/run.sh) ==
 honey vs hono / elysia / express / nest, naked + zod, bun + node, json/params/validate/middleware,
