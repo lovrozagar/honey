@@ -9,21 +9,21 @@
 #
 # ============================== packages/core  (@lovrozagar/honey) ==============================
 path	pkg	kind	bit	responsibility	origin
-src/routing/app.ts	core	src	01	the Honey app surface + honey() factory; delegates to the modules below	index.ts
+src/routing/app.ts	core	src	02	the Honey app surface + honey() factory; delegates to the modules below	index.ts
 src/routing/settings.ts	core	src	01	AppSettings, defaults, chain (basePath/context/onError/trustProxy)	index.ts
 src/routing/register.ts	core	src	01	route registration per method; builder wiring; mount	index.ts
 src/routing/route-builder.ts	core	src	01	RouteBuilder: input/output/meta/errors/handler	index.ts
 src/routing/ws-builder.ts	core	src	06	WSRouteBuilder: handler/errors/input/meta/origins/use	index.ts
-src/routing/finalize.ts	core	src	01	_finalize → FinalTable; dangling-builder + unused-use reports	index.ts
-src/routing/dispatch.ts	core	src	01	the fetch pipeline: match → mw → validate → handler → finalize	index.ts
-src/routing/middleware-chain.ts	core	src	01	scopeGuard, timedMiddleware, commonPrefix, errorsOf, describeMw	index.ts
+src/routing/finalize.ts	core	src	02	_finalize → FinalTable; dangling-builder + unused-use reports	index.ts
+src/routing/dispatch.ts	core	src	02	the fetch pipeline: match → mw → validate → handler → finalize	index.ts
+src/routing/middleware-chain.ts	core	src	02	scopeGuard, timedMiddleware, commonPrefix, errorsOf, describeMw	index.ts
 src/routing/match.ts	core	src	01	matchRoute over the tree; method/path resolution	index.ts,tree.ts
 src/routing/record.ts	core	src	01	RouteRecord + leaf types; per-graph record copy	index.ts
 src/routing/tree.ts	core	src	01	the route tree structure	tree.ts
 src/routing/tree-merge.ts	core	src	01	mergeTree (sub-app mount)	tree.ts
 src/routing/pattern.ts	core	src	01	path pattern compile + match	pattern.ts
 src/routing/request-path.ts	core	src	01	canonicalization, strip-prefix, trailing slash	request-path.ts
-src/routing/invoke-user.ts	core	src	01	call the user handler with the built ctx	invoke-user.ts
+src/routing/invoke-user.ts	core	src	02	call the user handler with the built ctx	invoke-user.ts
 src/routing/invalidate-check.ts	core	src	01	invalidation meta check	invalidate-check.ts
 src/routing/types.ts	core	types	01	HoneyCtx, Infer* ladder, RouteRecord types	index.ts,types.ts
 src/context/context.ts	core	src	02	HoneyContext + ctx builder; ctx extension	context.ts
@@ -43,8 +43,8 @@ src/input/accepts.ts	core	src	08	Accept negotiation	accepts.ts
 src/validation/validate-input.ts	core	src	08	run input standard-schema	validation.ts
 src/validation/validate-output.ts	core	src	08	run output standard-schema	validation.ts
 src/validation/content-type.ts	core	src	08	assert request/response content types	validation.ts
-src/response/response.ts	core	src	08	HoneyRes core + helper dispatch	response.ts
-src/response/builder.ts	core	src	08	response construction + finalize	honey-response.ts
+src/response/response.ts	core	src	02	HoneyRes core + helper dispatch	response.ts
+src/response/builder.ts	core	src	02	response construction + finalize	honey-response.ts
 src/response/media-type.ts	core	src	08	media-type parse + Accept negotiation	media-type.ts
 src/response/binary.ts	core	src	08	ctx.res.binary typed bytes (A1)	response.ts
 src/response/response-headers.ts	core	src	08	declared per-status response headers (A2)	—
@@ -55,9 +55,9 @@ src/response/cache-control.ts	core	src	08	cacheControl + Last-Modified/If-Modifi
 src/response/with-headers.ts	core	src	08	apply declared headers	with-headers.ts
 src/response/pretty-json.ts	core	src	08	pretty JSON option	pretty-json.ts
 src/response/static.ts	core	src	07	static files + range	static.ts
-src/errors/error.ts	core	src	08	HoneyError	error.ts
-src/errors/errors.ts	core	src	08	defineErrors + ERROR_META	errors.ts
-src/errors/projector.ts	core	src	08	thrown value → response projector	index.ts
+src/errors/error.ts	core	src	02	HoneyError	error.ts
+src/errors/errors.ts	core	src	02	defineErrors + ERROR_META	errors.ts
+src/errors/projector.ts	core	src	02	thrown value → response projector	index.ts
 src/errors/problem-json.ts	core	src	08	opt-in RFC 9457 formatter (A7)	—
 src/errors/on-error.ts	core	src	07	app.onError: awaited, response-shaping (returns HoneyError/Response/undefined) (H17)	index.ts
 src/middleware/middleware.ts	core	src	02	createMiddleware/defineMiddleware, compose, short-circuit	middleware.ts

@@ -1,27 +1,46 @@
-# Bit 02 — middleware + context
+# Bit 02 — request lifecycle (finalize, middleware, context, dispatch, response/error core)
 
-Closes: — · splits v0 `middleware.ts` 331, `context.ts` 325
-Oracle kept green: `tests/integration/middleware.test.ts`, `tests/integration/cookies.test.ts`, ws2-middleware regression.
+Closes: — · splits v0 `middleware.ts` 331, `context.ts` 325, the request-execution half of `index.ts` (dispatch/finalize/`honey()`), `response.ts`/`builder.ts` core, `errors/*` core
+Oracle kept green: `tests/integration/middleware.test.ts`, `tests/integration/cookies.test.ts`, `tests/integration/routing.test.ts` (the `app.fetch` cases), ws2-middleware regression.
 
 ## Scope
-The middleware core (`use`, compose, short-circuit, telemetry wrap) and the request context (`HoneyContext`, cookies, cookie signing). The edge/security middlewares themselves are bit 07; this bit is the mechanism they plug into.
+The full **request lifecycle** — everything that turns a matched route into a response. The middleware core (`use`, compose, short-circuit, telemetry wrap), the request context (`HoneyContext`, cookies, cookie signing), **and (re-cut from bit 01) the request-execution spine**: `app.ts` (`honey()`), `finalize.ts` (compile the `FinalTable` once), `dispatch.ts` (match → middleware → validate-hook → handler → response), `middleware-chain.ts`, `invoke-user.ts`.
+
+**Response/error core moved here from bit 08 (dependency re-cut).** Dispatch cannot produce a response or turn a thrown value into one without them, so this bit owns `response/response.ts` (`HoneyRes` core + `json`/`text`/`html`/`redirect` helper dispatch), `response/builder.ts` (response construction), and `errors/{error,errors,projector}.ts` (`HoneyError`, `defineErrors`/`ERROR_META`, thrown-value → response projector). **Bit 08 adds cases to these born-here files** — RAW_BODY (H18.1), output validation + exact-essence content-type (H18.2), media-type affinity — alongside the rest of io; adding cases to an earlier-born file is allowed (H13). The edge/security middlewares are bit 07; this bit is the mechanism they plug into.
 
 ## Files (from files.tsv)
 - `src/middleware/middleware.ts` (+test) — `createMiddleware`/`defineMiddleware`, order, short-circuit, per-mw telemetry.
+- `src/middleware/middleware-chain.ts` (+test) — `scopeGuard`, `timedMiddleware`, `commonPrefix`, `errorsOf`, `describeMw`.
 - `src/context/context.ts` (+test) — `HoneyContext`, `ctx` extension via `.context(fn)`, typed input access.
 - `src/context/cookie.ts` (+test), `src/context/cookie-sign.ts` (+test).
+- `src/routing/app.ts` (+test) — the `honey()` factory + `app.fetch` surface, delegating to the modules.
+- `src/routing/finalize.ts` (+test) — compile the `FinalTable` once; dangling-builder / unused-`use()` reports.
+- `src/routing/dispatch.ts` (+test) — the fetch pipeline; `onRequest` once, every exit pairs one `onResponse`/`onError`.
+- `src/routing/invoke-user.ts` (+test) — call the user handler with the built ctx.
+- `src/response/response.ts` (+test), `src/response/builder.ts` (+test) — the response core (helpers; bit 08 adds RAW_BODY/output-validation cases).
+- `src/errors/error.ts` (+test), `src/errors/errors.ts` (+test), `src/errors/projector.ts` (+test) — error model + thrown→response projection.
 
 ## Tests (named, written first)
 - `middleware/middleware.test.ts` — registration order, short-circuit stops the chain, a `use()` with no route is reported at finalize, telemetry sees each mw's duration + throw.
 - `context/context.test.ts` — `.context(fn)` extends the handler type; a pure context runs once per request.
 - `context/cookie.test.ts` — set/get, attributes, signing round-trip, tamper rejected.
+- `routing/finalize.test.ts` — finalize runs once; re-runs when registrations move.
+- `routing/dispatch.test.ts` — `onRequest` fires once; **every exit pairs one `onResponse`/`onError`** (a thrown error becomes a response via the projector).
+- `response/response.test.ts` / `errors/projector.test.ts` — `json`/`text`/`html`/`redirect` helpers; a thrown `HoneyError` and an unknown throw both project to a response.
 
-## Perf (v1 improvement — from the audit)
-- Keep a **sync middleware spine**: v0 always routes the request path through the converting compiler (`middleware.ts:241-264`, forced by `index.ts:1455`), allocating a `called` flag + `next` closure + `Promise.resolve().then()` wrapper **per middleware per request** even when the middleware ran synchronously (the sync/single-mw fast paths in `compileChain` are dead on the request path). v1 returns a non-Promise through layers whose middleware returned sync, and boxes only on an actual `await`/throw. **Caveat (H18/round 2):** this only unboxes a **non-`async`** middleware — a language-`async` function always returns a Promise, so async middleware still carries the boundary. It is still worth doing (sync middleware are common: header setters, guards), but the gate needs a **sync-written-middleware bench scenario** (`mw-sync`) to measure the win — the existing `chain`/`mw-stack` scenarios use async middleware and cannot show it.
+## Perf (v1 improvements — the hot-path gate activates here)
+Bit 01 has no `app.fetch`; the 11-scenario hot-path gate and the `finalize` bench first run at this bit, against the v0 ratio baseline. Dispatch-level targets (re-cut from bit 01):
+- Static lookup as a nested map `statics[method]?.[path]` instead of building `` `${method} ${path}` `` (and a second `` `GET ${path}` `` for HEAD) per request (v0 `index.ts:2574` — hottest path).
+- Precompute the default 404 Response at finalize when the miss chain is empty and telemetry is off (v0 `_handleMiss` builds a full ctx + runs the miss plan — `index.ts:2749`; worst ratio 12.49×).
+- Gate `performance.now()` at dispatch start on `telemetry !== null` (v0 `index.ts:2501` runs it unconditionally though telemetry defaults off — H17 "cost nothing unconfigured").
+- Avoid per-request throwaway: the `getUrl` closure built even for routes that never parse the URL (`index.ts:2508`), the discarded ctx-options literal (`index.ts:2659`), the second `ContextRes` alloc (`context.ts:211`) — pass positionally, parse URL lazily.
+- Keep dispatch monomorphic: the split into `routing/{dispatch,match,middleware-chain,...}` must not introduce megamorphic call sites — one ctx shape, resist over-splitting the dispatch spine; `mw-stack`/`many-routes` guard it.
+- **Sync middleware spine:** v0 always routes through the converting compiler (`middleware.ts:241-264`, forced by `index.ts:1455`), allocating a `called` flag + `next` closure + `Promise.resolve().then()` wrapper **per middleware per request** even when the middleware ran synchronously. v1 returns a non-Promise through layers whose middleware returned sync, boxing only on an actual `await`/throw. **Caveat (H18/round 2):** this only unboxes a **non-`async`** middleware — a language-`async` function always returns a Promise. Worth doing (sync middleware are common: header setters, guards); the `mw-sync` bench scenario measures the win (`chain`/`mw-stack` use async middleware and cannot show it).
 
 ## Security corpus
 - cookie codec fuzz (malformed attributes, oversized, injection into `Set-Cookie`); signed-cookie tamper.
+- the `app.fetch` path-normalization scope-bypass cases (re-cut from bit 01: `//`, `..`, encoded separators drive a full request and must not escape the mount).
 
 ## Budget
-- perf: middleware compose adds no per-request allocation beyond the chain; benchmark ratio within threshold.
+- perf: the hot-path ratios (all 11 scenarios expressible here are gated) + the `finalize` O(routes×scopes) bench within threshold; middleware compose adds no per-request allocation beyond the chain.
 - token: n/a.
