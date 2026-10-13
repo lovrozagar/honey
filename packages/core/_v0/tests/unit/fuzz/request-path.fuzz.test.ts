@@ -70,7 +70,7 @@ function randomTarget(r: ReturnType<typeof rng>): string {
 function whatwg(target: string): string | null {
 	let pathname: string
 	try {
-		/* WHATWG parsers disagree on `^` (Node 26 encodes it, Node 22 and Deno leave it raw);
+		/* WHATWG parsers disagree on `^` (Node 26 encodes it, Node 22 leaves it raw);
 		 * normalizePath always encodes it, so the oracle applies the same rule */
 		pathname = new URL(target, "http://h").pathname.replaceAll("^", "%5E")
 	} catch {
@@ -90,7 +90,7 @@ function hasEncodedSlash(s: string): boolean {
  * Inputs a WHATWG comparison cannot speak for: a URL parser strips tabs and newlines and trims
  * trailing controls and spaces (an HTTP request target cannot hold any of them), and it
  * resolves `..` against empty segments where this policy collapses them first. No runtime
- * hands the app such a target raw — Node's adapter, Bun, Deno and Workers all parse the target
+ * hands the app such a target raw — Node's adapter, Bun and Workers all parse the target
  * with a URL parser before `fetch` — so the router only ever sees the parsed form, whose dot
  * segments are already resolved.
  */

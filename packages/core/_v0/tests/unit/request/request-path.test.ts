@@ -64,7 +64,7 @@ describe("normalizePath", () => {
 		expect(normalizePath("/files/%")).toBe("/files/%")
 	})
 
-	it("encodes ^ as Node and Bun do, so a raw target on Deno routes the same", () => {
+	it("encodes ^ whatever the runtime's URL parser does with it", () => {
 		expect(normalizePath("/a^b")).toBe("/a%5Eb")
 		expect(normalizePath(new URL("http://h/a^b").pathname)).toBe("/a%5Eb")
 	})

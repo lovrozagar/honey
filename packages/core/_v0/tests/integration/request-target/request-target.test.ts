@@ -6,14 +6,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 /**
  * Raw-socket conformance: the same bytes on the wire get the same routing decision and the
  * same `ctx.path` on every runtime, whether the runtime parses the request URL before the app
- * sees it (Bun, Node through the adapter) or builds it from `Host` and the raw target (Deno).
+ * sees it (Bun 1.4+, Node through the adapter) or builds it from `Host` and the raw target
+ * (Bun before 1.4).
  */
 
 const SERVER = fileURLToPath(new URL("./server.ts", import.meta.url))
 
 const RUNTIMES: Record<string, string[]> = {
 	bun: ["bun", SERVER],
-	deno: ["deno", "run", "-A", SERVER],
 	/* strict: an unhandled rejection in the server is a crash the test sees, never a warning */
 	node: ["node", "--unhandled-rejections=strict", SERVER],
 }
@@ -72,9 +72,9 @@ const CASES: Case[] = [
 	{ expect: { status: 404 }, target: "http://admin/secret" },
 	{ expect: { path: "/files/x", pattern: "/files/*rest", rest: "x", status: 200 }, target: "http://other/files/x" },
 	{ expect: BAD, target: "*" },
-	/* hostile Host values never change the routed path. Node, Deno and Bun before 1.4 reject them
-	 * (Deno and old Bun build request.url from Host, so they must); Bun 1.4+ routes on the target
-	 * and ignores them. */
+	/* hostile Host values never change the routed path. Node and Bun before 1.4 reject them
+	 * (old Bun builds request.url from Host, so it must); Bun 1.4+ routes on the target and
+	 * ignores them. */
 	{ expect: BAD, host: "evil.com/admin/secret?", only: { "bun>=1.4": { status: 404 } }, target: "/nothing" },
 	{ expect: BAD, host: "h/admin", only: { "bun>=1.4": { status: 404 } }, target: "/users" },
 	...["a b", "h:99999", "h?", "h#x"].map((host): Case => ({

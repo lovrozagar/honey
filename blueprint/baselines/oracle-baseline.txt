@@ -1,0 +1,50 @@
+v1 oracle baseline — the number v1 is held to pass identically.
+
+The `oracle.*` lines are read by packages/core/tests/structure/oracle-count.ts at the end of
+`bun run test`. `passed` counts a listed flaky case as passed whether it passes or fails that
+run; any other failure, a lost case, or one more skip is drift and fails the run.
+
+oracle.scope: packages/core/_v0/tests
+oracle.passed: 6713
+oracle.skipped: 40
+oracle.flaky: _v0/tests/unit/plugin/cli-generate.test.ts > honey generate CLI > an app that serves at top level and leaves a timer still generates and exits, without binding the port
+
+== Steps (each is a committed change with its reason) ==
+
+2026-10-13  6767 passed | 1 failed | 40 skipped  (captured at HEAD 3727a32, v0.7.3, before any v1 source)
+2026-10-14  bit 00 park (v0 → packages/core/_v0): unchanged, 6767 | 1 | 40
+2026-10-14  bit 00 Deno purge (H15, H21): 6767 → 6712 passed (N = 55), skipped unchanged at 40.
+            The 55 deleted cases, all Deno-only:
+              38  the Deno runtime row of the raw-socket suites
+                  (hostile-client 8, request-target 24, stream-lifecycle 6; each case ran once per runtime)
+              12  unit/ws/ws-deno.test.ts (the deleted denoWebSocket adapter)
+               3  unit/build/build-plugin.test.ts (deno webworker target, deno server entry, Deno.env PORT)
+               1  unit/build/build-targets.test.ts (vite build then deno dist)
+               1  unit/serve/serve-soak.test.ts (deno runner)
+            Mixed cases that also named Deno keep running with the Deno half removed:
+            build-plugin noExternal/custom port/Bun.serve scan, client-ip Bun env, request-path `^`,
+            runtime-bundle, ws-keepalive defaults, realtime onOpen.
+            oracle.passed = 6712 + the flaky case = 6713.
+
+Known flake (NOT a regression; pre-existing):
+  _v0/tests/unit/plugin/cli-generate.test.ts:274
+  Cause: the test hardcodes a port (45987) and asserts the spawned server is
+  gone after shutdown; it collides / races under load. This is the single
+  real follow-up identified in the v0 review (TODO/regression work).
+  v1 target: port-collision fix is a TDD bug-fix during bit 19 (build/cli),
+  after which the flaky line is removed and the count is unchanged (6713).
+
+Commands (from repo root):
+  bun run generate   -> exit 0 (all e2e app clients regenerated)
+  bun run typecheck  -> exit 0
+  bun run test       -> the oracle-count check runs at the end of the run
+
+Oracle rule (00-rules.md "The oracle"):
+  - e2e 30-cell matrix (node/bun/cf x dev/prod x 5 apps) must pass identically
+    (expected set: blueprint/baselines/e2e-expected.json).
+  - test:consumers, differential.ts, builds.ts must stay green.
+  - Unit + regression suites stay green; unit tests change only for file
+    splits or a TDD fix. A changed count is a regression, not a drift.
+
+Not captured here (need extra toolchains / CI): test:harness (go/python/rust/mcp),
+test:packaging. These are part of the oracle and run in CI.

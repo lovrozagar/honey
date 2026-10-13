@@ -71,7 +71,6 @@
 		"test:e2e": "bun e2e/run.ts --env bun",
 		"test:e2e:all": "bun e2e/run.ts --env all",
 		"test:e2e:cf": "bun e2e/run.ts --env cf",
-		"test:e2e:deno": "bun e2e/run.ts --env deno",
 		"test:e2e:node": "bun e2e/run.ts --env node",
 		"test:harness": "bun run --filter @lovrozagar/honey test:harness",
 		"test:harness:rust": "bun run --filter @lovrozagar/honey test:harness:rust",

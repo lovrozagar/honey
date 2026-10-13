@@ -1,6 +1,6 @@
 /**
  * Fixture for request-target.test.ts: one app, served by `serve()` on whatever runtime runs
- * this file (Node, Bun, Deno). Prints `PORT <n>` once listening.
+ * this file (Node, Bun). Prints `PORT <n>` once listening.
  */
 import { honey } from "../../../src/index.ts"
 import "../../../src/serve-register.ts"

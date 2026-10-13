@@ -34,7 +34,7 @@ This README is the full usage manual. An agent that reads only this file should 
   - [Static files](#static-files)
   - [Logging, telemetry, production tree](#logging-telemetry-production-tree)
 - [Serve](#serve)
-  - [Bun, Node, Deno](#bun-node-deno)
+  - [Bun, Node](#bun-node)
   - [Cloudflare Workers](#cloudflare-workers)
   - [Feature auto-load](#feature-auto-load)
 - [OpenAPI, docs, and manifest](#openapi-docs-and-manifest)
@@ -92,7 +92,7 @@ curl http://127.0.0.1:3000/openapi.json
 
 `honey generate` loads the app in a fresh process with `app.serve()` stubbed, so the one-file shape above does not start a listener while generating, and the process exits when it is done. Other top-level side effects in the app module (database clients, timers) still run during generation; keep them behind a function or in `src/server.ts`.
 
-`app.serve()` detects bun / node / deno and loads only that WebSocket adapter. Pass `runtime` to pin it. Cloudflare Workers cannot listen — export `fetch: (req, env, ctx) => app.fetch(req, env, ctx)`.
+`app.serve()` detects bun / node and loads only that WebSocket adapter. Pass `runtime` to pin it. Cloudflare Workers cannot listen — export `fetch: (req, env, ctx) => app.fetch(req, env, ctx)`.
 
 `app.serve()`, `app.openapi()`, and `app.errorI18n()` load their implementations when called. A fetch-only production bundle does not include listen adapters, spec generation, or i18n. Spec and docs routes stay out of the generated document.
 
@@ -103,7 +103,7 @@ honey generate --watch
 
 ## What Honey is
 
-Honey is a single TypeScript builder that becomes a Web-standard `fetch(request, env)` handler. The same app runs on Bun, Node, Deno, and Cloudflare Workers.
+Honey is a single TypeScript builder that becomes a Web-standard `fetch(request, env)` handler. The same app runs on Bun, Node, and Cloudflare Workers.
 
 - **Builder DX.** `honey().get("/users/:id").input(...).handler(...)` is how you write routes. Types flow from path params, Standard Schema input, output maps, and middleware additions into `ctx`.
 - **Radix tree.** Routes compile into a radix tree. Production can load a generated tree so unknown paths 404 without walking a catch-all.
@@ -115,7 +115,7 @@ Honey is not Express with types bolted on. There is no `req.body` parser stack. 
 
 ## Install
 
-Requires [Bun](https://bun.sh) 1.3+ to develop this repo. The published package runs on Node 22.12 or later, Bun, Deno, and Cloudflare Workers; it ships compiled JavaScript, so plain Node imports it from `node_modules` without a TypeScript loader. The `honey` CLI and the Vite plugin run on Node from npm as well as on Bun.
+Requires [Bun](https://bun.sh) 1.3+ to develop this repo. The published package runs on Node 22.12 or later, Bun, and Cloudflare Workers; it ships compiled JavaScript, so plain Node imports it from `node_modules` without a TypeScript loader. The `honey` CLI and the Vite plugin run on Node from npm as well as on Bun.
 
 ```bash
 bun add @lovrozagar/honey
@@ -134,7 +134,7 @@ honey generate
 
 The published package depends only on `jiti` (for generate/watch). Validation libraries are your choice. Two optional peer dependencies:
 
-- `ws`, for WebSocket and realtime routes on **Node** (`npm install ws`). Bun, Deno and Workers have WebSockets built in. Without it, a WebSocket upgrade on Node answers 500 and logs the install hint.
+- `ws`, for WebSocket and realtime routes on **Node** (`npm install ws`). Bun and Workers have WebSockets built in. Without it, a WebSocket upgrade on Node answers 500 and logs the install hint.
 - `ts-morph`, as a **dev** dependency, for type generation (`codegen.types`).
 
 ## First app
@@ -345,12 +345,12 @@ Every request path is normalized once, before anything looks at it. The router, 
 
 - Empty segments collapse: `//admin///users` is `/admin/users`.
 - Dot segments resolve: `/files/../admin` is `/admin`, never above the root; `%2e` counts as a dot.
-- A backslash is a `/`, and characters a URL path cannot hold raw (space, controls, `"`, `<`, `>`, `` ` ``, `{`, `}`, non-ASCII) are percent-encoded — what URL parsing does, so Deno (which hands the app the raw target) and Bun or Node (which parse it) route the same bytes the same way.
+- A backslash is a `/`, and characters a URL path cannot hold raw (space, controls, `"`, `<`, `>`, `` ` ``, `{`, `}`, non-ASCII) are percent-encoded — what URL parsing does, so `ctx.path` does not depend on which runtime parsed the target.
 - An encoded `/` or `\` (`%2F`, `%5C`) is **400**: a segment that decodes to a separator means one thing to this router and another to a proxy upstream or a file system. `app.encodedSlashes("allow")` keeps them encoded in the path so they decode into a param (`/repos/group%2Fproject` gives `id === "group/project"`); only allow them when nothing downstream treats a decoded slash as a separator.
 - Everything else stays percent-encoded in `ctx.path`; params are decoded when extracted.
 - A trailing slash is kept; `trailingSlash()` decides what it means.
 
-On Node, `serve()` also answers **400** for a `Host` header that is not `host[:port]` and for request targets other than `/path` or `http(s)://host/path`; on Deno, `serve()` (and `Deno.serve(app.fetch)`) reject such a `Host`, since Deno builds the request URL from it.
+On Node, `serve()` also answers **400** for a `Host` header that is not `host[:port]` and for request targets other than `/path` or `http(s)://host/path`.
 
 Optional extra validation of params (beyond “it is a string”):
 
@@ -422,7 +422,7 @@ app.trustProxy(1) // one reverse proxy in front, appending to X-Forwarded-For (n
 app.trustProxy(["10.0.0.0/8", "fd00::/8"]) // proxies recognized by address; the first other hop is the client
 ```
 
-- The peer address comes from the runtime: the socket on Node, `server.requestIP()` on Bun, `info.remoteAddr` on Deno, `CF-Connecting-IP` on Cloudflare Workers (the edge sets it; a client cannot). `app.fetch(req, env)` without a server reports no peer; in tests pass `testClient(app, { env, ip: "203.0.113.1" })`.
+- The peer address comes from the runtime: the socket on Node, `server.requestIP()` on Bun, `CF-Connecting-IP` on Cloudflare Workers (the edge sets it; a client cannot). `app.fetch(req, env)` without a server reports no peer; in tests pass `testClient(app, { env, ip: "203.0.113.1" })`.
 - With a hop count, the client is the `X-Forwarded-For` entry the outermost trusted proxy wrote; entries further left were sent by the client and are never read. With ranges, trusted hops are skipped from the right. `X-Forwarded-Proto` and `X-Forwarded-Host` are read only through a trusted hop.
 - A value at the position the setting reads that is not an address makes `ctx.ip` `null`, never a guess. `X-Real-IP`, `Forwarded` and `True-Client-IP` are not read.
 
@@ -1200,7 +1200,7 @@ export const tree = mergeTree([usersApp.toRouteTree(), { worker: "users" }])
 
 ## Serve
 
-### Bun, Node, Deno
+### Bun, Node
 
 ```ts
 const handle = await app.serve({
@@ -1214,11 +1214,11 @@ const handle = await app.serve({
 handle.url // http://127.0.0.1:3000
 handle.port
 handle.hostname
-handle.runtime // "bun" | "node" | "deno"
+handle.runtime // "bun" | "node"
 await handle.close() // or close(timeoutMs), default 1000
 ```
 
-Defaults: `port` 3000, `hostname` `0.0.0.0` (Deno defaults to `127.0.0.1`). Bound `0.0.0.0` / `::` is printed as `127.0.0.1` in `url`.
+Defaults: `port` 3000, `hostname` `0.0.0.0`. Bound `0.0.0.0` / `::` is printed as `127.0.0.1` in `url`.
 
 More options:
 
@@ -1230,7 +1230,7 @@ More options:
 | `keepAliveTimeout`   | Node      | `server.keepAliveTimeout` (ms)                                                           |
 | `upgradeTimeout`     | Node      | How long an upgrade request may take to become a WebSocket (ms). Default 30 000.         |
 
-`close(timeout?)` is the same on every runtime: stop accepting connections, close WebSockets with 1001, let in-flight requests finish for up to `timeout` ms, then cut what is left (Deno has no forced close: a request still running finishes on its own).
+`close(timeout?)` is the same on every runtime: stop accepting connections, close WebSockets with 1001, let in-flight requests finish for up to `timeout` ms, then cut what is left.
 
 `app.serve()` keeps an adapter you set with `app.wsAdapter(...)` (for example `nodeWebSocket({ keepalive })`), and attaches the runtime's default adapter otherwise.
 
@@ -1238,7 +1238,6 @@ More options:
 | ------- | --------------------------------------------- |
 | Bun     | `Bun.serve({ fetch })` + `honey/ws/bun`       |
 | Node    | `node:http` + `honey/serve` + `honey/ws/node` |
-| Deno    | `Deno.serve` + `honey/ws/deno`                |
 
 On Node, import `honey/serve` (or call `app.serve()`, which loads it) so the listen implementation is registered. The Node adapter wraps `IncomingMessage` instead of `new Request()` on the inbound hot path, and writes known JSON/text bodies with `res.end` instead of draining a Fetch `Response`.
 
@@ -1264,7 +1263,7 @@ Detect without serving:
 
 ```ts
 import { detectRuntime } from "@lovrozagar/honey"
-detectRuntime() // "bun" | "node" | "deno" | "cloudflare"
+detectRuntime() // "bun" | "node" | "cloudflare"
 ```
 
 ### Cloudflare Workers
@@ -1282,7 +1281,7 @@ export default {
 
 `honey init --cf` writes this stub. Local e2e uses wrangler / workerd. The live proof worker is documented under [Live Cloudflare proof](#live-cloudflare-proof).
 
-Adapters if you wire them yourself: `bunWebSocket` (`honey/ws/bun`), `nodeWebSocket` (`honey/ws/node`), `denoWebSocket` (`honey/ws/deno`), `cfWebSocket` (`honey/ws/cloudflare`). `app.serve()` attaches the matching one.
+Adapters if you wire them yourself: `bunWebSocket` (`honey/ws/bun`), `nodeWebSocket` (`honey/ws/node`), `cfWebSocket` (`honey/ws/cloudflare`). `app.serve()` attaches the matching one.
 
 ### Feature auto-load
 
@@ -1297,7 +1296,7 @@ Adapters if you wire them yourself: `bunWebSocket` (`honey/ws/bun`), `nodeWebSoc
 
 Production bundles that only call `app.fetch` do not pull listen, OpenAPI, or i18n code. The load uses an opaque `import(["@lovrozagar/honey", name].join("/"))` so bundlers do not follow unused feature entries.
 
-`createBuildPlugin` (`honey/build`) is a Vite plugin that injects those imports per target (`bun` | `node` | `deno` | `cloudflare`).
+`createBuildPlugin` (`honey/build`) is a Vite plugin that injects those imports per target (`bun` | `node` | `cloudflare`).
 
 ```ts
 import { createBuildPlugin } from "@lovrozagar/honey/build"
@@ -1454,13 +1453,13 @@ app.realtime("/rt", { allowedOrigins: ["https://app.example.com"], handler })
 
 **Adapter options.** Every adapter takes the same options with the same defaults:
 
-| Option               | Default       | Meaning                                                                                                                                                                              |
-| -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `maxPayload`         | 1 MiB         | Largest inbound message; bigger closes with 1009 (Bun drops the connection: 1006).                                                                                                   |
-| `backpressureLimit`  | 8 MiB         | Unsent outbound bytes before `backpressurePolicy` applies to the next `send()`.                                                                                                      |
-| `backpressurePolicy` | `"close"`     | `"close"` closes with 1013 (try again later); `"drop"` discards the message.                                                                                                         |
-| `idleTimeout`        | 120 000 ms    | Close a connection that received nothing (message or pong) for this long; quiet peers are pinged. `0` disables. Bun and Deno take whole seconds; Workers evicts idle sockets itself. |
-| `protocol`           | first offered | `(offered, req) => string \| null`: the subprotocol to answer with.                                                                                                                  |
+| Option               | Default       | Meaning                                                                                                                                                                      |
+| -------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxPayload`         | 1 MiB         | Largest inbound message; bigger closes with 1009 (Bun drops the connection: 1006).                                                                                           |
+| `backpressureLimit`  | 8 MiB         | Unsent outbound bytes before `backpressurePolicy` applies to the next `send()`.                                                                                              |
+| `backpressurePolicy` | `"close"`     | `"close"` closes with 1013 (try again later); `"drop"` discards the message.                                                                                                 |
+| `idleTimeout`        | 120 000 ms    | Close a connection that received nothing (message or pong) for this long; quiet peers are pinged. `0` disables. Bun takes whole seconds; Workers evicts idle sockets itself. |
+| `protocol`           | first offered | `(offered, req) => string \| null`: the subprotocol to answer with.                                                                                                          |
 
 `nodeWebSocket()` also takes `keepalive: { interval, timeout }`: ping every `interval` ms and terminate a peer whose pong is `timeout` ms late. Binary messages arrive as `ArrayBuffer` on every runtime.
 
@@ -1599,7 +1598,7 @@ All three share one lifecycle:
 - **Errors.** A callback or generator that throws breaks the body (the client sees an aborted transfer, not a clean end) and is logged through the app logger, or `console.error` without one.
 - **Flushing.** `ctx.res.stream()` ends the body after queued writes flush when the callback returns, whether or not you closed the writable.
 
-`ctx.signal` is the same signal for any handler: it aborts when the client disconnects, when `timeout()` fires, or when the server shuts down. On Deno, `request.signal` also aborts once a response has been delivered (Deno's legacy behavior; it prints a notice the first time a handler listens), so treat an abort after the response as normal.
+`ctx.signal` is the same signal for any handler: it aborts when the client disconnects, when `timeout()` fires, or when the server shuts down.
 
 ## Generated clients
 
@@ -1846,7 +1845,7 @@ Import features from their path.
 | Export                                                                                                                                                                                                                                                 | Purpose                                                                                                                |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | `@lovrozagar/honey`                                                                                                                                                                                                                                    | `honey`, `defineErrors`, `HoneyError`, `createMiddleware`, `HoneyRes`, Infer* types, `mergeTree`, `detectRuntime`      |
-| `honey/serve`                                                                                                                                                                                                                                          | Register Node/Bun/Deno listen                                                                                          |
+| `honey/serve`                                                                                                                                                                                                                                          | Register Node/Bun listen                                                                                               |
 | `honey/node`                                                                                                                                                                                                                                           | Low-level Node `serve()`                                                                                               |
 | `honey/openapi`                                                                                                                                                                                                                                        | Register live spec generation (pulls codegen)                                                                          |
 | `honey/openapi/spec`                                                                                                                                                                                                                                   | Runtime spec walker — live tree, no codegen. Intern omits JSON Schema                                                  |
@@ -1860,7 +1859,7 @@ Import features from their path.
 | `honey/trust`                                                                                                                                                                                                                                          | Registers hop counts and address lists for `app.trustProxy()` (import once)                                            |
 | `honey/input`                                                                                                                                                                                                                                          | `readableStream()`                                                                                                     |
 | `honey/testing`                                                                                                                                                                                                                                        | `testClient`                                                                                                           |
-| `honey/ws/bun` `honey/ws/node` `honey/ws/deno` `honey/ws/cloudflare`                                                                                                                                                                                   | WS adapters                                                                                                            |
+| `honey/ws/bun` `honey/ws/node` `honey/ws/cloudflare`                                                                                                                                                                                                   | WS adapters                                                                                                            |
 | `honey/ws/session`                                                                                                                                                                                                                                     | The websocket session runtime. Every honey adapter imports it; a custom `WSAdapter` in a bundled build imports it once |
 | `honey/accepts` `honey/cookie` `honey/cookie-sign` `honey/crypto` `honey/request-to-curl`                                                                                                                                                              | Utilities                                                                                                              |
 | `honey/telemetry/otel`                                                                                                                                                                                                                                 | `otelAdapter`                                                                                                          |
@@ -1877,7 +1876,7 @@ Import features from their path.
 ```
 packages/core/     published `honey` package (src, tests, docs, examples)
 e2e/apps/          consumer apps (kitchen, defaults, compose, surface, gateway)
-e2e/{bun,node,deno,cf-workers}/   runtime hosts + Playwright
+e2e/{bun,node,cf-workers}/   runtime hosts + Playwright
 e2e/run.ts         env × app runner
 bench/             bombardier vs Hono / Elysia / Express / Nest (bun + node)
 ```
@@ -1897,9 +1896,8 @@ bun run test            # core unit + in-process integration (default CI)
 bun run test:consumers  # e2e apps import honey like a real app
 bun run test:e2e        # Playwright, bun × every e2e app
 bun run test:e2e:node   # same matrix against Node (tsx)
-bun run test:e2e:deno   # same matrix against Deno
 bun run test:e2e:cf     # same matrix against local wrangler / workerd
-bun run test:e2e:all    # bun + node + deno + local cf × every e2e app
+bun run test:e2e:all    # bun + node + local cf × every e2e app
 bun run typecheck            # core src (TypeScript 7)
 bun run typecheck:consumers  # every e2e app + generated types
 bun run lint                 # oxlint
@@ -1917,7 +1915,7 @@ bun run test:all           # default suite + language harnesses
 ```
 
 The harness needs Go, cargo and `python3` on PATH. Python packages come from
-`packages/core/tests/python-requirements.txt`: on first run the harness creates
+`packages/core/_v0/tests/python-requirements.txt`: on first run the harness creates
 `.cache/python-venv` and installs them there, then reuses it until the file changes.
 Set `HONEY_PYTHON` to use your own interpreter instead. Without a usable Python
 (no `python3`, no `venv` module, or offline on first run) the Python tests skip
@@ -1933,7 +1931,6 @@ Typecheck stays strict. Do not weaken `strict` or add `as any` to make it pass.
 | `bun run test:consumers` | Each e2e app imports `honey` and hits a few routes in-process.                   |
 | `bun run test:e2e`       | Playwright against Bun listen, every app.                                        |
 | `bun run test:e2e:node`  | Same tests, Node (`tsx`) listen.                                                 |
-| `bun run test:e2e:deno`  | Same tests, Deno listen.                                                         |
 | `bun run test:e2e:cf`    | Same tests, local workerd. Kitchen REST publish is skipped (`HONEY_E2E_ENV=cf`). |
 | `bun run test:build`     | Every app builds for every deploy target; artifacts and size budgets hold.       |
 | `bun run test:harness`   | Generated SDKs compile and behave.                                               |
@@ -1949,7 +1946,7 @@ bun e2e/run-build.ts --check-generated       # CI: a build must not rewrite comm
 ```
 
 The build tier builds each e2e app through its own `vite.config.ts` plus
-`createBuildPlugin`, once per target (`node`, `bun`, `deno`, `cloudflare`). A cell
+`createBuildPlugin`, once per target (`node`, `bun`, `cloudflare`). A cell
 passes when the build exits 0, emits `dist/<target>/index.js`, and stays under its
 gzipped size budget. The budget is not decoration: honey loads `zod` and `effect`
 dynamically, and a bundler that resolves one of those dynamic imports silently adds
@@ -1965,7 +1962,7 @@ dynamically, and a bundler that resolves one of those dynamic imports silently a
 | `surface`  | Every input source, output type, method, SSE, WS, uploads            |
 | `gateway`  | `stripPrefix` + enforce slash, Swagger behind a prefix               |
 
-Runtimes: `e2e/bun`, `e2e/node`, `e2e/deno`, `e2e/cf-workers`.
+Runtimes: `e2e/bun`, `e2e/node`, `e2e/cf-workers`.
 
 ### Live Cloudflare proof
 

@@ -148,17 +148,10 @@ describe("createBuildPlugin", () => {
 			expect(ssr("node")).toBeUndefined()
 			expect(ssr("bun")).toBeUndefined()
 			expect(ssr("cloudflare")).toBe(true)
-			expect(ssr("deno")).toBe(true)
 		})
 
 		it("uses webworker target for cloudflare", () => {
 			const plugin = makePlugin("cloudflare")
-			const cfg = plugin.config() as { ssr: { target: string } }
-			expect(cfg.ssr.target).toBe("webworker")
-		})
-
-		it("uses webworker target for deno", () => {
-			const plugin = makePlugin("deno")
 			const cfg = plugin.config() as { ssr: { target: string } }
 			expect(cfg.ssr.target).toBe("webworker")
 		})
@@ -199,7 +192,7 @@ describe("createBuildPlugin", () => {
 	})
 
 	describe("server entries start like app.serve()", () => {
-		for (const target of ["node", "bun", "deno"] as const) {
+		for (const target of ["node", "bun"] as const) {
 			// regression: M (build/index.ts:52-65), for the bun target
 			it(`${target}: startHoneyServer with the runtime, env and 0.0.0.0`, async () => {
 				const entry = await getEntry(makePlugin(target))
@@ -220,13 +213,6 @@ describe("createBuildPlugin", () => {
 		it("uses a custom port", async () => {
 			expect(await getEntry(makePlugin("node", { port: 8080 }))).toContain("process.env.PORT ?? 8080")
 			expect(await getEntry(makePlugin("bun", { port: 4000 }))).toContain("process.env.PORT ?? 4000")
-			expect(await getEntry(makePlugin("deno", { port: 5000 }))).toContain('"5000"')
-		})
-
-		it("deno reads PORT and env from Deno.env", async () => {
-			const entry = await getEntry(makePlugin("deno"))
-			expect(entry).toContain('Deno.env.get("PORT")')
-			expect(entry).toContain("env: Deno.env.toObject()")
 		})
 	})
 
@@ -283,7 +269,7 @@ describe("createBuildPlugin", () => {
 			expect(entry).not.toContain("enableServe")
 		})
 
-		it("never injects serve into a Worker, and ignores Bun.serve / Deno.serve", async () => {
+		it("never injects serve into a Worker, and ignores Bun.serve", async () => {
 			const files = {
 				"src/app.ts": [
 					'import { honey } from "@lovrozagar/honey"',
@@ -293,7 +279,7 @@ describe("createBuildPlugin", () => {
 			}
 			expect(await entryFor("cloudflare", files)).not.toContain("enableServe")
 			expect(await entryFor("node", files)).toContain("enableServe()")
-			const runtimeServe = { "src/app.ts": "Bun.serve({ fetch() {} })\nDeno.serve(() => new Response())\n" }
+			const runtimeServe = { "src/app.ts": "Bun.serve({ fetch() {} })\n" }
 			expect(await entryFor("node", runtimeServe)).not.toContain("enableServe")
 		})
 

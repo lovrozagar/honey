@@ -4,7 +4,6 @@
  *
  * - Node (`serve()` from `/node`): the socket's `remoteAddress`
  * - Bun: `server.requestIP(req)`, whether `serve()` or `Bun.serve({ fetch: app.fetch })` passed the server
- * - Deno: `info.remoteAddr`, whether `serve()` or `Deno.serve(app.fetch)` passed the info
  * - Cloudflare Workers: `CF-Connecting-IP`, which the edge sets and a client cannot
  */
 
@@ -37,7 +36,7 @@ export function peerAddressOf(req: Request, env: unknown): string | null {
 		return resolved
 	}
 	if (env !== null && typeof env === "object") {
-		const e = env as BunServerLike & { server?: BunServerLike; remoteAddr?: { hostname?: unknown } }
+		const e = env as BunServerLike & { server?: BunServerLike }
 		const server = typeof e.requestIP === "function" ? e : e.server
 		if (server !== undefined && typeof server.requestIP === "function") {
 			try {
@@ -46,7 +45,6 @@ export function peerAddressOf(req: Request, env: unknown): string | null {
 				return null
 			}
 		}
-		if (typeof e.remoteAddr?.hostname === "string") return e.remoteAddr.hostname
 	}
 	if (isWorkers()) return req.headers.get("cf-connecting-ip")
 	return null

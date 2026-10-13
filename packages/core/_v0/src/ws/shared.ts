@@ -1,5 +1,5 @@
 /**
- * Options every WebSocket adapter takes, with the same meaning and defaults on Node, Bun, Deno
+ * Options every WebSocket adapter takes, with the same meaning and defaults on Node, Bun
  * and Workers. Each adapter enforces what its runtime does not.
  */
 export type WSAdapterOptions = {
@@ -21,7 +21,7 @@ export type WSAdapterOptions = {
 	/**
 	 * Close a connection that has received nothing (no message, no pong) for this many
 	 * milliseconds. Idle peers are pinged first where the runtime allows it. `0` disables.
-	 * Default 120 000 (Bun's default). Deno and Bun take whole seconds.
+	 * Default 120 000 (Bun's default). Bun takes whole seconds.
 	 */
 	idleTimeout?: number
 	/**

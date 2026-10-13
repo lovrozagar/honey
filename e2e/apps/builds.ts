@@ -16,7 +16,7 @@ export const RUNTIME_IDS = ["node", "bun"] as const
 export type RuntimeId = (typeof RUNTIME_IDS)[number]
 
 /** Deploy target the bundle is produced for — honey/build's `target`. */
-export const TARGET_IDS = ["node", "bun", "deno", "cloudflare"] as const
+export const TARGET_IDS = ["node", "bun", "cloudflare"] as const
 export type TargetId = (typeof TARGET_IDS)[number]
 
 const e2eRoot = join(dirname(fileURLToPath(import.meta.url)), "..")
@@ -62,14 +62,13 @@ type AppBuild = {
 }
 
 /**
- * Node and bun keep dependencies external, so their bundles are small. Deno and
- * cloudflare bundle everything, which is why they carry the looser ceiling — and why
- * they are the two that regress first when a dynamic import stops being opaque.
+ * Node and bun keep dependencies external, so their bundles are small. Cloudflare
+ * bundles everything, which is why it is the target that regresses first when a
+ * dynamic import stops being opaque.
  */
 const DEFAULT_MAX_GZIP_KB: Record<TargetId, number> = {
 	bun: 110,
 	cloudflare: 110,
-	deno: 110,
 	node: 110,
 }
 

@@ -39,7 +39,7 @@ function manualAdapter(opts: { openOnUpgrade: boolean }) {
 			const raw = {
 				bufferedAmount: 0,
 				close: vi.fn<(code?: number, reason?: string) => void>(),
-				/* Bun and Deno: the socket is not open until onOpen fires */
+				/* Bun: the socket is not open until onOpen fires */
 				readyState: opts.openOnUpgrade ? 1 : 0,
 				send: vi.fn<(data: unknown) => void>(),
 			}

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { bunWebSocket } from "../../../src/ws/bun.ts"
 import { cfWebSocket } from "../../../src/ws/cloudflare.ts"
-import { denoWebSocket } from "../../../src/ws/deno.ts"
 import { nodeWebSocket } from "../../../src/ws/node.ts"
 
 describe("WebSocket adapter options", () => {
@@ -14,7 +13,7 @@ describe("WebSocket adapter options", () => {
 	})
 
 	it("every adapter resolves the same defaults", () => {
-		for (const adapter of [nodeWebSocket(), bunWebSocket(), denoWebSocket(), cfWebSocket()]) {
+		for (const adapter of [nodeWebSocket(), bunWebSocket(), cfWebSocket()]) {
 			expect(adapter.options).toMatchObject({
 				backpressureLimit: 8 * 1024 * 1024,
 				backpressurePolicy: "close",

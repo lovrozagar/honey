@@ -2,7 +2,7 @@ import { createBuildPlugin } from "@lovrozagar/honey/build"
 import base from "./vite.config.ts"
 
 /** Deploy target, set by e2e/run-build.ts. Defaults to node for a bare `vite build`. */
-const target = (process.env.HONEY_BUILD_TARGET ?? "node") as "bun" | "cloudflare" | "deno" | "node"
+const target = (process.env.HONEY_BUILD_TARGET ?? "node") as "bun" | "cloudflare" | "node"
 
 /* the app's own config supplies honey() codegen — the build goes through the real path */
 export default {

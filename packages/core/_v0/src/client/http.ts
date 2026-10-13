@@ -165,7 +165,7 @@ function defaultSearchParams(query: Record<string, unknown>): URLSearchParams {
 
 /**
  * RFC 4122 §4.4 UUID for `x-request-id`. Prefer `crypto.randomUUID` (browser,
- * Node 19+, Bun, Deno, CF Workers). Fall back to `getRandomValues` when
+ * Node 19+, Bun, CF Workers). Fall back to `getRandomValues` when
  * `randomUUID` is missing so older runtimes still work without node:crypto.
  */
 export function newClientRequestId(): string {

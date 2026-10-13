@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process"
+import { spawn } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -7,11 +7,6 @@ import { detectRuntime, honey } from "../../../src/index.ts"
 
 const RUNNER = resolve(import.meta.dirname, "./soak-runner.ts")
 const WORKER = resolve(import.meta.dirname, "../../../../../../e2e/cf-workers/src/worker.ts")
-
-function hasCmd(cmd: string): boolean {
-	const result = spawnSync(cmd, ["--version"], { encoding: "utf8" })
-	return result.error === undefined && (result.status === 0 || result.status === null)
-}
 
 function run(cmd: string, args: string[]): Promise<{ exitCode: number; stderr: string; stdout: string }> {
 	return new Promise((resolveProc, reject) => {
@@ -95,37 +90,17 @@ describe("Honey.serve() soak — node", () => {
 	})
 })
 
-describe("Honey.serve() soak — bun / deno", () => {
+describe("Honey.serve() soak — bun", () => {
 	it("bun runner bind/abort/close/rebind", async () => {
 		const { exitCode, stderr, stdout } = await run("bun", [RUNNER, "bun"])
 		expect(exitCode, `${stdout}\n${stderr}`).toBe(0)
 		expect(stdout).toContain('"ok":true')
 		expect(stdout).toContain('"runtime":"bun"')
 	}, 15_000)
-
-	it.skipIf(!hasCmd("deno"))(
-		"deno runner bind/abort/close/rebind",
-		async () => {
-			const { exitCode, stderr, stdout } = await run("deno", [
-				"run",
-				"--allow-env",
-				"--allow-net",
-				"--allow-read",
-				/* resolve the package to its source, as the rest of this repo does */
-				"--conditions=honey-source",
-				RUNNER,
-				"deno",
-			])
-			expect(exitCode, `${stdout}\n${stderr}`).toBe(0)
-			expect(stdout).toContain('"ok":true')
-			expect(stdout).toContain('"runtime":"deno"')
-		},
-		20_000,
-	)
 })
 
 describe("Honey.serve() cloudflare is not a listen", () => {
-	it("detectRuntime reads workerd UA when Bun/Deno are absent", () => {
+	it("detectRuntime reads workerd UA when Bun is absent", () => {
 		expect(
 			detectRuntime({
 				navigator: { userAgent: "Cloudflare-Workers" },

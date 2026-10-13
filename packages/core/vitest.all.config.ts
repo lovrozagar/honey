@@ -6,7 +6,7 @@ export default defineConfig({
 	resolve: { conditions: ["honey-source", ...defaultClientConditions] },
 	ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
 	test: {
-		include: ["_v0/tests/**/*.test.ts"],
+		include: ["_v0/tests/**/*.test.ts", "src/**/*.test.ts", "tests/**/*.test.ts", "lint/**/*.test.ts"],
 		passWithNoTests: true,
 	},
 })

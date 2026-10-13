@@ -137,22 +137,6 @@
         "wrangler": "catalog:",
       },
     },
-    "e2e/deno": {
-      "name": "@honey/e2e-deno",
-      "version": "0.0.1",
-      "dependencies": {
-        "@honey/e2e-compose": "workspace:*",
-        "@honey/e2e-defaults": "workspace:*",
-        "@honey/e2e-gateway": "workspace:*",
-        "@honey/e2e-kitchen": "workspace:*",
-        "@honey/e2e-surface": "workspace:*",
-        "@lovrozagar/honey": "workspace:*",
-      },
-      "devDependencies": {
-        "@playwright/test": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "e2e/node": {
       "name": "@honey/e2e-node",
       "version": "0.0.1",
@@ -377,8 +361,6 @@
     "@honey/e2e-compose": ["@honey/e2e-compose@workspace:e2e/apps/compose"],
 
     "@honey/e2e-defaults": ["@honey/e2e-defaults@workspace:e2e/apps/defaults"],
-
-    "@honey/e2e-deno": ["@honey/e2e-deno@workspace:e2e/deno"],
 
     "@honey/e2e-gateway": ["@honey/e2e-gateway@workspace:e2e/apps/gateway"],
 

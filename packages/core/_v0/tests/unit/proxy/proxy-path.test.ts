@@ -3,7 +3,7 @@ import { Honey } from "../../../src/index.ts"
 import "../../../src/proxy.ts"
 
 function rawRequest(path: string): Request {
-	/* a runtime that hands the app the raw target (Deno builds request.url from it) */
+	/* a runtime that hands the app the raw target (Bun before 1.4 builds request.url from it) */
 	const req = new Request("http://localhost/")
 	Object.defineProperty(req, "url", { value: `http://localhost${path}` })
 	return req

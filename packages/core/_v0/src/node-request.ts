@@ -143,7 +143,7 @@ function isPlainTarget(target: string): boolean {
  * path and query from the request target. Anything but an origin-form (`/path`) or http(s)
  * absolute-form target, and any `Host` that is not `host[:port]`, returns `null`: the request
  * gets 400. A target that needs it is parsed the way `new URL()` parses it, so the path matches
- * what Bun, Deno and Workers hand the app for the same bytes.
+ * what Bun and Workers hand the app for the same bytes.
  */
 export function nodeRequestUrl(incoming: IncomingMessage): string | null {
 	const scheme = (incoming.socket as { encrypted?: boolean } | null)?.encrypted === true ? "https" : "http"

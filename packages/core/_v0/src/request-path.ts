@@ -21,8 +21,7 @@ CHAR_CLASS[47] = SLASH
  * - a trailing slash is kept (the router and `trailingSlash()` decide what it means)
  * - a backslash is a `/`, and characters a URL path cannot hold raw (space, controls, `"`, `<`,
  *   `>`, `` ` ``, `{`, `}`, non-ASCII) are percent-encoded as UTF-8 — what WHATWG URL parsing
- *   does, so a runtime that hands the app the raw target (Deno) and one that parses it first
- *   (Bun, Node) route the same bytes the same way
+ *   does, so `ctx.path` does not depend on which runtime parsed the target
  * - an encoded `/` or `\` (`%2F`, `%5C`) is rejected unless `encodedSlashes` is `"allow"`: a
  *   segment that decodes to a path separator means one thing to this router and another to
  *   whatever the path is forwarded to (a proxy upstream, a file system). Allowed, it stays
@@ -83,8 +82,7 @@ export function normalizePath(raw: string, encodedSlashes: "allow" | "reject" = 
 
 /**
  * The WHATWG path percent-encode set, plus every non-ASCII code unit. `^` joined the set in
- * 2023; Node and Bun encode it, Deno's parser does not yet, so it is encoded here to keep
- * `ctx.path` the same on all three.
+ * 2023; it is encoded here so `ctx.path` does not depend on the runtime's URL parser version.
  */
 function needsEncoding(c: number): boolean {
 	return (

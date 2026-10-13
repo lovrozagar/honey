@@ -56,7 +56,7 @@ export type WSAdapter = {
 		handler: WSHandler<unknown>,
 	): Promise<{ response: Response; socket: WSContext }> | { response: Response; socket: WSContext }
 	/**
-	 * Deno requires `Deno.upgradeWebSocket` in the same turn as the serve
+	 * For a runtime that must upgrade in the same turn as the serve
 	 * callback. When present, Honey calls this synchronously from `fetch`
 	 * and returns `response` before any middleware Promise.
 	 */

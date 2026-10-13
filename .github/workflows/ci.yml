@@ -90,18 +90,15 @@ jobs:
         with:
           node-version: current
           package-manager-cache: false
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      # the same app over raw sockets on Node (current and 22.12), Bun and Deno
+      # the same app over raw sockets on Node (current and 22.12) and Bun
       - working-directory: packages/core
         run: >-
-          bunx vitest run tests/integration/hostile-client tests/integration/stream-lifecycle
-          tests/integration/request-target
+          bunx vitest run _v0/tests/integration/hostile-client _v0/tests/integration/stream-lifecycle
+          _v0/tests/integration/request-target
 
   hotpath:
     name: hot-path benchmark
@@ -179,8 +176,6 @@ jobs:
           - runtime: node
             node: "current"
             script: test:e2e:node
-          - runtime: deno
-            script: test:e2e:deno
           - runtime: cf-workers
             script: test:e2e:cf
     steps:
@@ -188,15 +183,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      # deno and cf-workers still run node for wrangler, playwright and the type-stripped fixtures
+      # cf-workers still runs node for wrangler, playwright and the type-stripped fixtures
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node || 'current' }}
           package-manager-cache: false
-      - uses: denoland/setup-deno@v2
-        if: matrix.runtime == 'deno'
-        with:
-          deno-version: v2.x
       - run: bun install --frozen-lockfile
       - run: bun run generate
       - run: bun run ${{ matrix.script }}

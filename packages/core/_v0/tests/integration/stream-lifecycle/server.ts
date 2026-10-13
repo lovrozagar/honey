@@ -1,6 +1,6 @@
 /**
  * Fixture for stream-lifecycle.test.ts: one app with endless producers, served by `serve()` on
- * whatever runtime runs this file (Node, Bun, Deno). Prints `PORT <n>` once listening.
+ * whatever runtime runs this file (Node, Bun). Prints `PORT <n>` once listening.
  * `GET /state` reports which producers started and finished, and how many intervals are live.
  */
 import { honey } from "../../../src/index.ts"

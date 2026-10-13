@@ -51,7 +51,7 @@ Ship source, declarations _and_ compiled JavaScript, and split the conditions:
 
 - **TypeScript** resolves `types` → generated `.d.ts`, which `skipLibCheck` covers. The consumer
   never type-checks our source, so our lint posture is ours alone.
-- **Node, Deno, Workers bundlers and Vite** resolve `default` → `./dist/*.js`. Node refuses to strip
+- **Node, Workers bundlers and Vite** resolve `default` → `./dist/*.js`. Node refuses to strip
   types from `.ts` files under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so
   a package whose runtime entry is `.ts` cannot be imported on plain Node at all — not the core
   entry, not the Vite plugin, not the CLI. Shipping only source made the package Bun-only in
@@ -62,7 +62,7 @@ Ship source, declarations _and_ compiled JavaScript, and split the conditions:
   through jiti, so `honey generate` never runs a stale `dist/`.
 - **`honey-source`** is this repository's own condition. Every tool here resolves it first —
   `customConditions` in the tsconfigs, `resolve.conditions` in the vitest configs,
-  `--conditions=honey-source` for Node and Deno, `WRANGLER_BUILD_CONDITIONS` for wrangler — so
+  `--conditions=honey-source` for Node, `WRANGLER_BUILD_CONDITIONS` for wrangler — so
   development and tests always run the source and never a stale `dist/`. A consumer never sets it.
 - **`declarationMap` and `sourceMap` are emitted and `src` still ships**, so go-to-definition and
   stack traces land in real source.

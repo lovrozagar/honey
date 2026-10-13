@@ -82,7 +82,7 @@ describe("ctx.ip and clientInfo()", () => {
 		expect((await who(infoApp(), "10.0.0.1", {}, "https://secure.example/who")).protocol).toBe("https")
 	})
 
-	it("reads the Bun server and the Deno serve info when they are the env", async () => {
+	it("reads the Bun server when it is the env", async () => {
 		const app = infoApp()
 		const bunServer = { requestIP: () => ({ address: "::ffff:192.0.2.1" }) }
 		const viaServe = (await (await app.fetch(new Request("http://h/who"), { server: bunServer } as never)).json()) as {
@@ -93,9 +93,6 @@ describe("ctx.ip and clientInfo()", () => {
 			ip: string
 		}
 		expect(viaBunFetch.ip).toBe("192.0.2.1")
-		const deno = { remoteAddr: { hostname: "2001:DB8::1", port: 1, transport: "tcp" } }
-		const viaDeno = (await (await app.fetch(new Request("http://h/who"), deno as never)).json()) as { ip: string }
-		expect(viaDeno.ip).toBe("2001:db8::1")
 	})
 
 	it("testClient can set the peer", async () => {

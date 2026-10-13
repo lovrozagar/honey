@@ -60,7 +60,6 @@ describe("production runtime bundle", () => {
 			expect(js).not.toContain("createApiReference")
 			expect(js).not.toContain("swagger-ui")
 			expect(js).not.toContain("TranslationRegistry")
-			expect(js).not.toContain("Deno.upgradeWebSocket")
 			expect(js).not.toContain("WebSocketServer")
 			expect(js).not.toMatch(/from"http"|from "http"|createServer/)
 			for (const [feature, marker] of Object.entries(OPTIONAL_FEATURES)) {

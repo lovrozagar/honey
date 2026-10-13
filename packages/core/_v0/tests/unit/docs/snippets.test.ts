@@ -119,7 +119,7 @@ function withPrelude(code: string): { prelude: number; source: string } {
 /** Runnable: nothing left undefined, no listener, no network, no relative modules. */
 function runnable(s: Snippet, unresolved: boolean): boolean {
 	if (!s.run || unresolved) return false
-	return !/\.serve\(|\bserve\(|\bfetch\(|Bun\.|Deno\.|process\.env|from\s+"\.{1,2}\/|import\("\.{1,2}\/|\bsetInterval\(|honey\/plugin|honey\/build|honey\/codegen|honey\/cli/.test(
+	return !/\.serve\(|\bserve\(|\bfetch\(|Bun\.|process\.env|from\s+"\.{1,2}\/|import\("\.{1,2}\/|\bsetInterval\(|honey\/plugin|honey\/build|honey\/codegen|honey\/cli/.test(
 		s.code,
 	)
 }

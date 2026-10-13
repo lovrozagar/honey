@@ -14,5 +14,5 @@
 		"target": "ESNext",
 		"types": ["@total-typescript/ts-reset", "node"]
 	},
-	"include": ["_v0/src/**/*", "_v0/tests/**/*"]
+	"include": ["src/**/*", "tests/**/*", "lint/**/*"]
 }

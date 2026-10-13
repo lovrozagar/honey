@@ -1,17 +1,15 @@
 /**
- * Spawned by serve-soak.test.ts for bun / deno.
+ * Spawned by serve-soak.test.ts for bun.
  * Usage: bun soak-runner.ts bun
- *        deno run --allow-net --allow-read --allow-env soak-runner.ts deno
  */
 import "@lovrozagar/honey/serve"
 import { honey } from "../../../src/index.ts"
 
-const runtimeArg = (typeof Deno !== "undefined" ? Deno.args[0] : process.argv[2]) as "bun" | "deno" | "node" | undefined
+const runtimeArg = process.argv[2] as "bun" | "node" | undefined
 const runtime = runtimeArg ?? "node"
 
 function fail(msg: string): never {
 	console.error(`soak ${runtime}: ${msg}`)
-	if (typeof Deno !== "undefined") Deno.exit(1)
 	process.exit(1)
 }
 

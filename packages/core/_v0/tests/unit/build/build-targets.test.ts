@@ -11,7 +11,6 @@ const OUT_ROOT = resolve(CORE_ROOT, ".tmp-build-targets")
 const PORTS = {
 	bun: 45911,
 	cloudflare: 45910,
-	deno: 45913,
 	node: 45912,
 } as const
 
@@ -31,7 +30,7 @@ async function which(bin: string): Promise<boolean> {
 	})
 }
 
-async function viteBuild(target: "bun" | "cloudflare" | "deno" | "node", outDir: string): Promise<void> {
+async function viteBuild(target: "bun" | "cloudflare" | "node", outDir: string): Promise<void> {
 	const { build, defaultServerConditions } = await import("vite")
 	await build({
 		configFile: false,
@@ -165,16 +164,5 @@ describe.sequential("honey/build target artifacts", () => {
 			throw new Error(`${err instanceof Error ? err.message : String(err)}${extra ? `\n${extra}` : ""}`)
 		}
 		await smokeHttp(`http://127.0.0.1:${PORTS.bun}`)
-	}, 60_000)
-
-	it("deno: vite build then deno dist serves health + openapi", async (ctx) => {
-		if (!(await which("deno"))) ctx.skip("deno not installed")
-		const outDir = resolve(OUT_ROOT, "deno")
-		await viteBuild("deno", outDir)
-		const entry = resolve(outDir, "index.js")
-		expect(existsSync(entry)).toBe(true)
-		start("deno", ["run", "--allow-all", entry], { PORT: String(PORTS.deno) })
-		await waitHealthy(`http://127.0.0.1:${PORTS.deno}/health`)
-		await smokeHttp(`http://127.0.0.1:${PORTS.deno}`)
 	}, 60_000)
 })

@@ -14,7 +14,6 @@ const SERVER = fileURLToPath(new URL("./server.ts", import.meta.url))
 
 const RUNTIMES: Record<string, string[]> = {
 	bun: ["bun", SERVER],
-	deno: ["deno", "run", "-A", SERVER],
 	node: ["node", SERVER],
 }
 /* a Node without `shouldUpgradeCallback` (22.12 has none) takes the 'upgrade' fallback path */
@@ -149,14 +148,9 @@ for (const [name, argv] of Object.entries(RUNTIMES)) {
 				"POST /echo HTTP/1.1\r\nHost: h\r\nConnection: Upgrade, close\r\nUpgrade: h2c\r\n" +
 					"Content-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello",
 			)
-			if (name === "deno") {
-				/* Deno's HTTP server refuses an h2c upgrade itself, before the app sees it */
-				expect(raw.slice(0, 12)).toBe("HTTP/1.1 400")
-			} else {
-				expect(raw.slice(0, 15)).toBe("HTTP/1.1 200 OK")
-				expect(raw.toLowerCase()).toContain("content-type: text/plain")
-				expect(raw.endsWith("hello")).toBe(true)
-			}
+			expect(raw.slice(0, 15)).toBe("HTTP/1.1 200 OK")
+			expect(raw.toLowerCase()).toContain("content-type: text/plain")
+			expect(raw.endsWith("hello")).toBe(true)
 			await alive(port)
 		})
 
@@ -241,9 +235,8 @@ for (const [name, argv] of Object.entries(RUNTIMES)) {
 				headers: { cookie: "sid=1", origin: "https://evil.example" },
 				ms: 1_500,
 			})
-			/* Node and Bun answer 403; Deno has already sent the 101 (preUpgrade) and closes with 1008 */
-			if (out.opened) expect(out.closeCode).toBe(1008)
-			else expect(out.status).toBe(403)
+			expect(out.opened).toBe(false)
+			expect(out.status).toBe(403)
 			expect((await state(port)).opened).toBe(before.opened)
 
 			const same = await wsSession(`ws://127.0.0.1:${port}/cross`, {

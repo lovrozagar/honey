@@ -2,8 +2,6 @@ import type { Honey } from "./index.ts"
 import { cors, type CORSOptions } from "./cors.ts"
 import { detectRuntime, type ServeRuntime } from "./detect-runtime.ts"
 import { DEFAULT_MAX_REQUEST_BODY } from "./request-limits.ts"
-import { setPeerAddress } from "./peer.ts"
-import { hasValidHost } from "./client-info.ts"
 import type { WSAdapter } from "./ws/cloudflare.ts"
 
 export type { ServeRuntime }
@@ -12,7 +10,7 @@ export { detectRuntime }
 export type ServeHandle = {
 	/**
 	 * Stop accepting connections, close WebSockets with 1001, and let in-flight requests finish
-	 * for up to `timeout` ms (default 1000); then every connection is cut. Same on Node, Bun and Deno.
+	 * for up to `timeout` ms (default 1000); then every connection is cut. Same on Node and Bun.
 	 */
 	close(timeout?: number): Promise<void>
 	hostname: string
@@ -29,7 +27,7 @@ export type HoneyServeOptions = {
 	runtime?: ServeRuntime
 	/**
 	 * Largest request body, in bytes; a bigger one is answered 413. Default 128 MiB on Node and
-	 * Bun. Deno has no cap of its own.
+	 * Bun.
 	 */
 	maxRequestBodySize?: number
 	/** Node only: `server.headersTimeout`, ms. */
@@ -88,7 +86,7 @@ export async function startHoneyServer(
 	const corsMw = options.cors ? cors(options.cors === true ? undefined : options.cors) : null
 	;(app as unknown as { _setGlobal(key: string, mw: unknown): void })._setGlobal("serve:cors", corsMw)
 
-	const hostname = options.hostname ?? (runtime === "deno" ? "127.0.0.1" : "0.0.0.0")
+	const hostname = options.hostname ?? "0.0.0.0"
 	const port = options.port ?? 3000
 	const env = (options.env ?? {}) as Record<string, unknown>
 
@@ -128,49 +126,6 @@ export async function startHoneyServer(
 				server.closeIdleConnections?.()
 				if ((await within(graceful, timeout)) === "timeout") await Promise.resolve(server.stop(true))
 				server.closeIdleConnections?.()
-			},
-			hostname,
-			port: bound,
-			runtime,
-			url: `http://${publicHost(hostname)}:${bound}`,
-		}
-	}
-
-	if (runtime === "deno") {
-		if (ownAdapter(listening) === null) {
-			const { denoWebSocket } = await import("./ws/deno.ts")
-			listening.wsAdapter(denoWebSocket())
-		}
-		const DenoNs = (
-			globalThis as unknown as {
-				Deno: {
-					serve: (
-						opts: { hostname: string; port: number; signal?: AbortSignal },
-						handler: (req: Request, info: { remoteAddr?: { hostname?: string } }) => Response | Promise<Response>,
-					) => { addr?: { port?: number }; finished?: Promise<void>; shutdown?: () => Promise<void> }
-				}
-			}
-		).Deno
-		const ac = new AbortController()
-		const server = DenoNs.serve({ hostname, port, signal: ac.signal }, (req, info) => {
-			/* Deno builds req.url from Host and the target: a `Host: x/admin?` would pick the path */
-			if (!hasValidHost(req)) return (listening as unknown as { _badRequestTarget(): Response })._badRequestTarget()
-			const peer = info?.remoteAddr?.hostname
-			if (typeof peer === "string") setPeerAddress(req, peer)
-			return listening.fetch(req, env)
-		})
-		const bound = server.addr?.port ?? port
-		return {
-			async close(timeout = DEFAULT_CLOSE_TIMEOUT) {
-				ownAdapter(listening)?.closeAll?.(1001, "server shutting down")
-				if (server.shutdown) {
-					/* graceful: in-flight requests finish. Deno has no forced close, so a request still
-					 * running after `timeout` ends on its own (aborting the signal now would throw) */
-					await within(server.shutdown(), timeout)
-					return
-				}
-				ac.abort()
-				await within(server.finished ?? Promise.resolve(), timeout)
 			},
 			hostname,
 			port: bound,

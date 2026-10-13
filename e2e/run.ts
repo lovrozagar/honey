@@ -3,13 +3,12 @@ import { existsSync, readdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const ENVS = ["bun", "node", "deno", "cf"] as const
+const ENVS = ["bun", "node", "cf"] as const
 type EnvName = (typeof ENVS)[number]
 
 const FILTER: Record<EnvName, string> = {
 	bun: "@honey/e2e-bun",
 	cf: "@honey/e2e-cf-workers",
-	deno: "@honey/e2e-deno",
 	node: "@honey/e2e-node",
 }
 
@@ -28,7 +27,7 @@ function printHelp(): void {
 	process.stdout.write(`Run Playwright e2e for one environment × one or all consumer apps.
 
 Usage:
-  bun e2e/run.ts [--env bun|node|deno|cf|all] [--app <name>|all] [--mode dev|prod]
+  bun e2e/run.ts [--env bun|node|cf|all] [--app <name>|all] [--mode dev|prod]
 
 Defaults:
   --env bun --app all --mode dev

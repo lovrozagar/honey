@@ -319,12 +319,6 @@
 			"bun": "./_v0/src/ws/cloudflare.ts",
 			"default": "./dist/ws/cloudflare.js"
 		},
-		"./ws/deno": {
-			"honey-source": "./_v0/src/ws/deno.ts",
-			"types": "./dist/ws/deno.d.ts",
-			"bun": "./_v0/src/ws/deno.ts",
-			"default": "./dist/ws/deno.js"
-		},
 		"./ws/node": {
 			"honey-source": "./_v0/src/ws/node.ts",
 			"types": "./dist/ws/node.d.ts",
@@ -348,8 +342,8 @@
 		"test:harness": "vitest run --config vitest.harness.config.ts",
 		"test:harness:rust": "vitest run --config vitest.harness.rust.config.ts",
 		"test:watch": "vitest",
-		"type:check": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit -p tsconfig.types.json",
-		"type:check:tests": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit",
+		"type:check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.src.json && tsc --noEmit -p tsconfig.types.json",
+		"type:check:tests": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit -p _v0",
 		"type:check:types": "tsc --noEmit -p tsconfig.types.json",
 		"build": "bun scripts/build.ts"
 	},

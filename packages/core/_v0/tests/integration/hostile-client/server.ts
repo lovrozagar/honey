@@ -1,6 +1,6 @@
 /**
  * Fixture for hostile-client.test.ts: one app served by `serve()` on whatever runtime runs this
- * file (Node, Bun, Deno). Prints `PORT <n>` once listening. Every route is something a hostile or
+ * file (Node, Bun). Prints `PORT <n>` once listening. Every route is something a hostile or
  * broken client can poke at; `GET /state` reports what the app saw.
  */
 import { createMiddleware, honey } from "../../../src/index.ts"

@@ -452,14 +452,9 @@ function requestIsWsUpgrade(request: Request): boolean {
 	try {
 		return request.headers.get("upgrade")?.toLowerCase() === "websocket"
 	} catch {
-		/* Deno closes the Request after upgradeWebSocket */
+		/* a preUpgrade adapter may close the Request when it upgrades */
 		return false
 	}
-}
-
-/** The info object `Deno.serve` passes as the second handler argument. */
-function isDenoServeInfo(env: unknown): boolean {
-	return env !== null && typeof env === "object" && (env as { remoteAddr?: unknown }).remoteAddr !== undefined
 }
 
 /** `obj[key]` for an own key only; `undefined` for inherited names such as `constructor`. */
@@ -494,9 +489,9 @@ type FetchCtx<TEnv> = {
 	url: () => URL
 	/** matched websocket route, for the upgrade terminal */
 	ws: { handler: WSRouteHandler; params: Record<string, string> } | null
-	/** Already known from fetch() before Deno.upgradeWebSocket consumes the request. */
+	/** Already known from fetch() before a preUpgrade adapter consumes the request. */
 	wsUpgrade?: boolean
-	/** Headers copied before Deno.upgradeWebSocket closes the Request. */
+	/** Headers copied before a preUpgrade adapter closes the Request. */
 	headerSnap?: Headers
 }
 
@@ -2391,9 +2386,9 @@ export class Honey<
 	}
 
 	/**
-	 * Deno must call `Deno.upgradeWebSocket` in the same turn as the serve
-	 * callback. When the adapter implements `preUpgrade`, we do that here
-	 * and return the 101 response before any middleware Promise.
+	 * An adapter that must upgrade in the same turn as the serve callback
+	 * implements `preUpgrade`; we call it here and return the 101 response
+	 * before any middleware Promise.
 	 */
 	fetch(
 		request: Request,
@@ -2408,11 +2403,10 @@ export class Honey<
 		const wsAdapter = this._graph.settings.wsAdapter
 		const path = normalizePath(pathOfUrl(request.url), this._graph.settings.encodedSlashes)
 		if (path === null) return this._badRequestTarget()
-		/* Deno and Bun before 1.4 build request.url by concatenating Host and the target, so a
-		 * `Host: x/admin?` would choose the routed path. `serve()` checks Host on Deno; this covers
-		 * `Deno.serve(app.fetch)`, which passes its serve info as env, and every Bun entry point on
-		 * an affected version. Node's adapter checks it; Bun 1.4+ routes on the target. */
-		if ((BUN_URL_FROM_HOST || isDenoServeInfo(env)) && !hasValidHost(request)) return this._badRequestTarget()
+		/* Bun before 1.4 builds request.url by concatenating Host and the target, so a
+		 * `Host: x/admin?` would choose the routed path. This covers every Bun entry point on an
+		 * affected version. Node's adapter checks it; Bun 1.4+ routes on the target. */
+		if (BUN_URL_FROM_HOST && !hasValidHost(request)) return this._badRequestTarget()
 		/* an adapter alone (serve() always installs one) does not need the websocket path */
 		if (!this._graph.hasWs) {
 			return this._doFetch(request, env, executionCtx, path)
@@ -2423,7 +2417,7 @@ export class Honey<
 			wsAdapter?.preUpgrade !== undefined &&
 			!this.trailingSlashRedirects(path) &&
 			this._matchWs(this._finalize(), this.pathAfterPrefix(path)) !== null
-		/* Deno closes the Request in preUpgrade: snapshot the headers the chain will read first */
+		/* preUpgrade may close the Request: snapshot the headers the chain will read first */
 		const headerSnap = canPreUpgrade ? new Headers(request.headers) : undefined
 		let pre: ReturnType<NonNullable<WSAdapter["preUpgrade"]>>
 		try {
@@ -2433,7 +2427,7 @@ export class Honey<
 			this._graph.settings.logger?.warn?.({ err }, "websocket preUpgrade failed")
 			pre = undefined
 		}
-		/* After Deno.upgradeWebSocket the Request is closed. A sync throw here
+		/* After preUpgrade the Request may be closed. A sync throw here
 		 * used to be boxed by async _doFetch; keep 101 returning either way. */
 		let work: Response | Promise<Response>
 		try {
@@ -2561,7 +2555,7 @@ export class Honey<
 		fc.path = path
 		const root = this._graph.root
 
-		/* WebSocket route check — do not re-read headers after Deno.upgradeWebSocket */
+		/* WebSocket route check — do not re-read headers after a preUpgrade */
 		const isWsUpgrade = knownWsUpgrade || requestIsWsUpgrade(request)
 		if (isWsUpgrade) {
 			const wsMatch = this._matchWs(final, path)
@@ -2737,7 +2731,7 @@ export class Honey<
 		const userId = config.identify === null ? null : ((await config.identify(finalCtx)) ?? null)
 		const session = rt.createRealtimeSession({ bus, config, ctx: finalCtx, log: fc.log, userId })
 		const upgradeResult = await wsAdapter.upgrade(fc.request, fc.env, session.handler)
-		/* Node/CF return an open socket from upgrade(); Bun and Deno deliver it through onOpen */
+		/* Node/CF return an open socket from upgrade(); Bun delivers it through onOpen */
 		if (upgradeResult.socket && upgradeResult.socket.readyState === 1) session.attach(upgradeResult.socket)
 		return upgradeResult.response
 	}

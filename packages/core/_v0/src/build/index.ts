@@ -15,7 +15,7 @@ export type HoneyBuildConfig = {
 	minify?: boolean
 	outDir?: string
 	port?: number
-	target: "bun" | "cloudflare" | "deno" | "node"
+	target: "bun" | "cloudflare" | "node"
 }
 
 /* ---- Internal types ---- */
@@ -43,7 +43,7 @@ function importApp(entry: string, exportName: string): string {
 }
 
 /* server targets start through the same code path as `app.serve()`: WS adapter, env, hostname */
-function serverEntry(config: ResolvedBuildConfig, runtime: "bun" | "deno" | "node", env: string, port: string): string {
+function serverEntry(config: ResolvedBuildConfig, runtime: "bun" | "node", env: string, port: string): string {
 	return [
 		'import { startHoneyServer } from "@lovrozagar/honey/serve"',
 		importApp(config.entry, config.export),
@@ -75,12 +75,6 @@ const adapters: Record<HoneyBuildConfig["target"], BuildAdapterDef> = {
 		noExternal: true,
 		/* a Worker cannot listen; serve would pull node:http into the bundle */
 		skipFeatures: ["serve"],
-		ssrTarget: "webworker",
-	},
-	deno: {
-		entry: (config) => serverEntry(config, "deno", "Deno.env.toObject()", `Deno.env.get("PORT") ?? "${config.port}"`),
-		noExternal: true,
-		skipFeatures: [],
 		ssrTarget: "webworker",
 	},
 	node: {

@@ -77,7 +77,7 @@ export function clientInfo(ctx: HoneyContext<never> | HoneyContext): ClientInfo 
 	if (c._lzClient === null) {
 		const src = (c._rq ?? {}) as ClientSource
 		/* the peer is registered on the request the adapter handed over; headers are read from
-		 * ctx.req, which survives Deno's upgrade (a header snapshot) */
+		 * ctx.req, which survives a preUpgrade (a header snapshot) */
 		const peer = peerAddressOf(src.request ?? c.req, src.env ?? c.env)
 		c._lzClient = resolveClient(src.trust ?? TRUST_OFF, c.req, peer)
 	}

@@ -72,7 +72,7 @@ const NETWORK_CODES = /^(?:E[A-Z0-9_]+|Connection\w*|UND_ERR\w*|UNABLE_\w+|CERT_
 /**
  * Whether `error` means the upstream failed (502), as opposed to a bug in user code (500).
  * Fetch reports network failures as a `TypeError` — so does a typo in `destination` — and the
- * runtimes tell them apart differently: undici and Deno say "fetch failed" (with a `cause`),
+ * runtimes tell them apart differently: undici says "fetch failed" (with a `cause`),
  * Bun puts a `code` on the error (`ConnectionRefused`, `ENOTFOUND`), Workers say the network
  * connection was lost. An invalid URL is the destination's bug.
  */

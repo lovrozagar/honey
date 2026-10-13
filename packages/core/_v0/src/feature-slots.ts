@@ -55,7 +55,7 @@ export function requireFeature<K extends FeatureName>(name: K, caller: string): 
 
 /**
  * The registered feature, importing its entry first when nothing registered it yet. Works where
- * modules load at run time (Node, Bun, Deno from `node_modules`); a bundle cannot follow the
+ * modules load at run time (Node, Bun from `node_modules`); a bundle cannot follow the
  * opaque specifier, so there the entry must be imported (honey's WebSocket adapters do).
  */
 export async function loadFeature<K extends FeatureName>(name: K, caller: string): Promise<FeatureSlots[K]> {

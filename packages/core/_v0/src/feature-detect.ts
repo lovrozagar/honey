@@ -22,7 +22,7 @@ const METHOD_FEATURE: Record<string, HoneyFeature> = {
 }
 
 /** Globals whose `.serve()` is the runtime's own server, not `Honey.serve()`. */
-const RUNTIME_SERVE_OWNERS = new Set(["Bun", "Deno"])
+const RUNTIME_SERVE_OWNERS = new Set(["Bun"])
 
 function blank(s: string): string {
 	return s.replace(/[^\n]/g, " ")

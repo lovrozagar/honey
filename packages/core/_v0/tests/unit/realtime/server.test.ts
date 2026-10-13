@@ -661,7 +661,7 @@ describe("realtime: identify", () => {
 	})
 })
 
-describe("realtime: socket delivered through onOpen (Bun, Deno)", () => {
+describe("realtime: socket delivered through onOpen (Bun)", () => {
 	it("starts the connection when the socket opens", async () => {
 		const { adapter, sockets } = testAdapter({ openOnUpgrade: false })
 		const started = vi.fn()
