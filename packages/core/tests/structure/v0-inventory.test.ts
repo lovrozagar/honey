@@ -95,7 +95,7 @@ describe("unaccounted", () => {
 	})
 
 	it("follows a case a bit owner reassigned to another feature", () => {
-		const reassigned = { bbbbbbbbbb: "08-io" } as const
+		const reassigned = { bbbbbbbbbb: { feature: "08-io", reason: "asserts through input validation" } } as const
 		expect(unaccounted(cases, { complete: 1, ported: new Set(["aaaaaaaaaa"]), reassigned, retired: {} })).toEqual([])
 		expect(unaccounted(cases, { complete: 8, ported: new Set(["aaaaaaaaaa"]), reassigned, retired: {} })).toEqual([
 			"08-io bbbbbbbbbb y",

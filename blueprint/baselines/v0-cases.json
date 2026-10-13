@@ -41537,10 +41537,1638 @@
 	},
 	"note": "every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → feature a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept.",
 	"reassigned": {
-		"5c7ec6062c": "07-security-middleware",
-		"90eb46f0fe": "07-security-middleware",
-		"970f25e183": "07-security-middleware",
-		"c59db5a3e0": "07-security-middleware"
+		"3424191595": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0064d66a63": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"008d960bed": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"02a96b4dbf": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"035b84d974": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"041e37f17e": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"04ac84d67d": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"053ac894d6": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"059275d8dd": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"06475db60a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"06cc087020": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"0710389897": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"07ae8ac903": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"07bfdc76ba": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"086c7815fe": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"088d9fe73f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0aa60ff52e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0b40b00bfb": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0c2f68e8cc": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"0c6e33b336": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0c96e1482b": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"0d8247d678": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0da4f01fb4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0e84e508c7": {
+			"feature": "19-release-provenance",
+			"reason": "generate-time manifest handling in the CLI: build/cli is bit 19"
+		},
+		"0ee59c5582": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0f86482838": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1119079a6a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"11f9af4e6f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"12cc903f7e": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"14c341508e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"157bb796b6": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1606b2c8cb": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"16b03bc5b2": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"16d54aad19": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"17759e784b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"18167919d0": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"18ec8dd64f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"191f79b6a7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1942e04d85": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"1966113e74": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"197c28b9ca": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"199a5285b1": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"1a7aaf5581": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1b2318a124": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"1b616ea954": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1c2b55f706": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"1d0d61b024": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1de1e2d100": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1e5e0839cb": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"1e85992454": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"1e94f0a7a2": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"1f3e4d0b21": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"1f8522a378": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"204706c5e1": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"21ddd9fda7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"22ee825969": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"25cca07c4b": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"276f7119ea": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"27a2cae06c": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2925cec087": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2b0757df51": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2b0d4ffadd": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2b3a524b7d": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"2b93176f37": {
+			"feature": "07-security-middleware",
+			"reason": "a v0 fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
+		},
+		"2c0da000c9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2cb9b31b34": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2d028b4aa8": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"2d308b01b9": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"2d3f20a531": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"2dccaca6b1": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2e2f81028c": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2fa5d0c8f3": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"2feb2fc30d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"30a1012a5a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"316a2b15d7": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"31703df14c": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"329409fbc2": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"33cccc4f70": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"351797f6cf": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"353ce2b379": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"35d8feadcd": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"37425c7390": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"38d3832a4c": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"3a91894d74": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3b3d75f55a": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"3ba595eaeb": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3c2b1bb0f7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3c96901855": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3cd87b9b79": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3cdd42041d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3cf829405e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3d10541706": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"3d818d0bd8": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"3df075f168": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"3e4b3afe6e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3e4d6038b9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3ed539499b": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"3f6106e491": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"3fe44ac07c": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"3fff9f50df": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"40cd065c97": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"40d0c4778e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"414eea7e5f": {
+			"feature": "07-security-middleware",
+			"reason": "the crypto helper: security is bit 07"
+		},
+		"4168bd9e45": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"420f680ef2": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"430a60eb5b": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"43479ee78c": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"435dfc0a98": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"438e928517": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"4420fbc747": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"44ec7ed497": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"45c989439c": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"465177e22c": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"46a4e97aa3": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"46c948e313": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"494247cfce": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"4a2cfc2a5a": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"4bb887656f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"4bcc6a8d59": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"4c790a7ac0": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"4dd3f6c1e7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"4df2cd8ea8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"4e11d0b655": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"4e57dd4126": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"4fb2a147db": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"500fe0c015": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"506e0c6f5c": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"50a9734c31": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"514a52588d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"51e66f3a69": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"52889f76ac": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"53061962a5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"534a25e43b": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"53d4a45f90": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"557604c912": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"55e540a914": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"56527a95bd": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"5746507eaa": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"57575ddf02": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"57d46ed32b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"583196ca6b": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"589f759aaa": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"5a7d946385": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"5a96d675c2": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"5ab1605dec": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"5acb87fe58": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"5b0a5d6bda": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"5c7ec6062c": {
+			"feature": "07-security-middleware",
+			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
+		},
+		"5ce9740e32": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"5d19aab6ff": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"5f3fb6b7f4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"5fc748f9b0": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"5fd4c0bc30": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"609319e1ab": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6098a315b7": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"6217b769b1": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"6229e730cd": {
+			"feature": "04-adapters",
+			"reason": "runtime feature slots: runtime/ is bit 04"
+		},
+		"6240fc17bc": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"626265f3f4": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"62fc72d2e4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"640a7466f5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"64792abcb5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"64fe70ad2e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6640339d88": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"671eb497a3": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6770071363": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"67e1958891": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"68707d2262": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"68ecfacfe9": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"68ed5d6d3a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6927ae9908": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6a604d84d5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6abfdc07c5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6d7a217670": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"6e6392a52f": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"6e7976882b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6f4fc025ea": {
+			"feature": "07-security-middleware",
+			"reason": "a v0 fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
+		},
+		"70b534a172": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7121db6861": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"71226efd86": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"713989d8d3": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"71c3765f03": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"722ff22ccb": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"731db302e5": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"743f4ab13c": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"754ffde8ad": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"757503a9f7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"75cec192da": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"761c2524a7": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"765d7ff2b3": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"77099d2ea8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"77c1590a86": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7855303525": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"798c9c2519": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"79d2385579": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"79eee98eb5": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"79fcd571fd": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7a10e3def8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7a8ae71e94": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7a9e1deef3": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"7b54ed3e26": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7c0132f759": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7c336dbf9e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7cc46f169f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7d2cfa81ae": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7d340887cd": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"7ec4562329": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7fb3c85b81": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"814476e66c": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8151808266": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8217438ad1": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"826cf2dd72": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"82ee5419be": {
+			"feature": "08-io",
+			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"82f8d40099": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"8345fd903e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"848e7b45f9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"85569eeaad": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"859dd0e9ef": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"85d5006667": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"86b79fd22f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"870a6969bc": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"87b16f8028": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8884c869d8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"897e6d10e7": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"8a79392e36": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8ac0edfc93": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8c6407be66": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8c78b7a444": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8cce2d79a9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8e41e2e4c8": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"8e7138fed3": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8e994bd41c": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8eb192eeb4": {
+			"feature": "07-security-middleware",
+			"reason": "the crypto helper: security is bit 07"
+		},
+		"8f635df394": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"903360137b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"90392c4dac": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"909a8f727d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"90d5fa2c11": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"90eb46f0fe": {
+			"feature": "07-security-middleware",
+			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
+		},
+		"919329d5ad": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"91b842ec94": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"923e952ede": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"93535ff147": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"9378529aee": {
+			"feature": "07-security-middleware",
+			"reason": "the crypto helper: security is bit 07"
+		},
+		"93bcdb64a8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"93f4126e4b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"943be6e637": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"952afed163": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"953ed12238": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"957e2e41fc": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"96d6f69d98": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"97099ec2ee": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"970f25e183": {
+			"feature": "07-security-middleware",
+			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
+		},
+		"97255d8731": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"97f2d31012": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"983307d2e3": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"98baced32e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"98bf3d6a4b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"98e0f243fd": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"992303233d": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"9ab6453be8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"9c2d38b4ed": {
+			"feature": "10-openapi-emit",
+			"reason": "asserts the generated OpenAPI document of a gateway: OpenAPI emission is bit 10"
+		},
+		"9f6ab846cd": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"9fcfe5e40d": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"9fd398499c": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"9fed2e3c95": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a0aee81a59": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a116eca180": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a13a2b1446": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a2c7ef2bb4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a38209a0e3": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a3eb33f2a3": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"a414a2c8c8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a44e143d94": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a53e5a8a45": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a53f920a23": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a57bbf193e": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"a62ff22a0d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a6b65809b4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a836b6bac8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a85cd7425e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a8d57951ba": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"a8d598ea9a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a8e9297de5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a9d8773b18": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a9fc43d983": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"aa12d63617": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"aa339b4531": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"aa9b10eb21": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"ab6b7bc42a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"aba963c487": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"ac10ff582e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"ad44f238f5": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"ae47f23316": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"aeff0f4b4d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"af851d64d4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b107988f66": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b179cf8c99": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b2703a71c5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b38e74e3ba": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b399066b8d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b4486ba413": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b5d1ab2ad1": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b6cb7c9c8b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b748dd1251": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b79e634bd7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b7dd87de75": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b8488bc5a6": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b95e759b55": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"b987b43110": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"ba3eadf318": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"ba3f8329bb": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"ba99826af9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"bb001daba7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"bb01275b04": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"bba7582b67": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"bbc08090bf": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"bc9f716611": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"bdd89b07d3": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"be39cb4e06": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"bf19ac5e14": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c0233a6aa4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c07a5aad74": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c0868205b1": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"c250d239b9": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"c3c5f182af": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c3cfdb34b5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c41bbf815d": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c4b3cdf794": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c59db5a3e0": {
+			"feature": "07-security-middleware",
+			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
+		},
+		"c6637bcd0c": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"c7bf49ba30": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c938683aa6": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c9ee50eee6": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"ca0b63a843": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"cdef041f42": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"ce007f0a3e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d097b40cac": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d0c6553a65": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d24350022c": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"d3abcffb88": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d4a541c2b8": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"d586d2d1ad": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d65a10e773": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d6cc3e11ca": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d7f2ce4c3a": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"d950b79ac5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d96623e492": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"db5153c492": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"dc053efc6e": {
+			"feature": "10-openapi-emit",
+			"reason": "asserts the generated OpenAPI document of a gateway: OpenAPI emission is bit 10"
+		},
+		"dccba08be1": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"ddd8a7fc9a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"de2ac9c5b7": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"deedce5700": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"def1f2bf1b": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"df1aa9adc6": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"dff98d40b5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e01a588c7e": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e17e181fbb": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e17e9607a9": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"e3076a2112": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"e39db192a9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e4887f8a9a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e4980f2aea": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e4fa75babc": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e4fbd0feca": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e5126955a5": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e5e2ce62c3": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"e76708eb15": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e792c8dc20": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e96839041f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"ea1334b3f4": {
+			"feature": "02-finalize-middleware",
+			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+		},
+		"ebb0d677ab": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"eca8ef3252": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"ee339cf151": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"eeaca59f7f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"ef306ac48f": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f001baa200": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f02f59de07": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f12280f631": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"f14bd5e990": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f162bcef3f": {
+			"feature": "07-security-middleware",
+			"reason": "the crypto helper: security is bit 07"
+		},
+		"f2b6580525": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f34b479d8b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f39f07caa8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f4a4d8751a": {
+			"feature": "02-finalize-middleware",
+			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"f51c6362b8": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"f545ccb873": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"f54a65f0c8": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f569aee4b9": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"f57a7960d4": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f60a27ed85": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f69441538b": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f6abbb637b": {
+			"feature": "08-io",
+			"reason": "input/output schema types: io is bit 08"
+		},
+		"f794ba99e7": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f84705bad9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f9344b7c53": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"fa0bee710c": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"faccadd062": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"fb38591fdd": {
+			"feature": "11-ts-client",
+			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"fb7413b2c0": {
+			"feature": "11-ts-client",
+			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"fbc1f0d93c": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"fbf7ced595": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"fc6222ab83": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"fd12cfc088": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"fdb922499a": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"fdbbe06e29": {
+			"feature": "08-io",
+			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"fde3ba9be9": {
+			"feature": "02-finalize-middleware",
+			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		}
 	},
 	"retired": {}
 }

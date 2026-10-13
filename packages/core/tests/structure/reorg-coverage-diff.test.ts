@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { COMPLETE } from "./check-tree.ts"
-import { type Feature, unaccounted, type V0Case } from "./v0-inventory.ts"
+import { type Reassignment, unaccounted, type V0Case } from "./v0-inventory.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 const V1_ROOTS = [
@@ -20,7 +20,7 @@ const V1_ROOTS = [
 ]
 const TAG = /\/\/ v0: ([0-9a-f]{10})\b/g
 
-type Inventory = { cases: V0Case[]; reassigned: Record<string, Feature>; retired: Record<string, string> }
+type Inventory = { cases: V0Case[]; reassigned: Record<string, Reassignment>; retired: Record<string, string> }
 
 const inventory = JSON.parse(readFileSync(join(REPO, "blueprint/baselines/v0-cases.json"), "utf8")) as Inventory
 const known = new Set(inventory.cases.map((c) => c.id))

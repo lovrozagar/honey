@@ -14,6 +14,9 @@ import { parseSync } from "oxc-parser"
 
 export type V0Case = { feature: Feature; file: string; id: string; name: string }
 
+/** A bit owner's correction: the feature that really owns a case, and why. */
+export type Reassignment = { feature: Feature; reason: string }
+
 export const FEATURES = [
 	"01-core-route-model",
 	"02-finalize-middleware",
@@ -153,7 +156,7 @@ type Accounting = {
 	complete: number
 	ported: ReadonlySet<string>
 	/** id → the feature a bit owner moved a misfiled case to */
-	reassigned?: Readonly<Record<string, Feature>>
+	reassigned?: Readonly<Record<string, Reassignment>>
 	retired: Readonly<Record<string, string>>
 }
 
@@ -163,7 +166,7 @@ export function unaccounted(
 	{ complete, ported, reassigned = {}, retired }: Accounting,
 ): string[] {
 	return cases
-		.map((c) => ({ ...c, feature: reassigned[c.id] ?? c.feature }))
+		.map((c) => ({ ...c, feature: reassigned[c.id]?.feature ?? c.feature }))
 		.filter((c) => Number(c.feature.slice(0, 2)) <= complete && !ported.has(c.id) && retired[c.id] === undefined)
 		.map((c) => `${c.feature} ${c.id} ${c.name}`)
 }
@@ -171,13 +174,13 @@ export function unaccounted(
 function regenerate(repo: string): void {
 	const file = join(repo, "blueprint/baselines/v0-cases.json")
 	const previous = JSON.parse(readFileSync(file, "utf8").trim() || "{}") as {
-		reassigned?: Record<string, Feature>
+		reassigned?: Record<string, Reassignment>
 		retired?: Record<string, string>
 	}
 	const { cases } = buildInventory(repo)
 	const features = Object.fromEntries(FEATURES.map((f) => [f, cases.filter((c) => c.feature === f).length]))
 	const note =
-		"every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → feature a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept."
+		"every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → { feature, reason } a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept."
 	const inventory = { cases, features, note, reassigned: previous.reassigned ?? {}, retired: previous.retired ?? {} }
 	writeFileSync(file, `${JSON.stringify(inventory, null, "\t")}\n`)
 	process.stdout.write(`${cases.length} v0 cases inventoried\n`)
