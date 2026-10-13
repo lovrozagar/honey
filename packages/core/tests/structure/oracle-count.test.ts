@@ -71,8 +71,9 @@ describe("checkOracle", () => {
 	})
 })
 
+const testCase = (name: string, state: string) => ({ fullName: name, result: () => ({ state }) })
+
 describe("OracleReporter", () => {
-	const testCase = (name: string, state: string) => ({ fullName: name, result: () => ({ state }) })
 	const testModule = (file: string, cases: ReturnType<typeof testCase>[]) => ({
 		children: { allTests: () => cases },
 		moduleId: join(REPO, file),
