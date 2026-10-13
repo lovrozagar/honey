@@ -10,23 +10,23 @@ The **pure route model** — the side-effect-free routing data structures, with 
 
 Decide A8 (typed/constrained path params in the grammar) — **not now**: `.input({ params })` validates values already; constrained params (`:id(\d+)`) buy only match-time disambiguation (numeric-vs-slug) at a real match-path cost. Decision recorded; stays a bit-01 (route-grammar) call.
 
+**Re-cut part 2 (one layer up, same dependency).** `route-builder.ts`, `register.ts`, `settings.ts` **moved to bit 02** with `app.ts`: v0's `RouteBuilder` (`index.ts:3214`) is 17 type-parameters whose every method returns `BuilderChain<…>` and whose `.handler()` returns `HandlerReturn<…> = Honey<…>` — the app type. The builder's whole value is that typed DX, so it can't be typed honestly without `app.ts`; `register.ts`'s observable cases (dangling builder, mount, duplicate) assert through `app.get(...)`; `settings.ts` is the app's settings object. A builder generic over a placeholder app would change its public type shape twice — a placeholder by another name. The `Infer*` ladder + `HoneyCtx` (they read the app's phantom `$routes`/`$ctx`/`$meta`) also move to bit 02. Bit 01 keeps only what stands alone and is unit-testable with no `app.fetch`.
+
 ## Files (from files.tsv — `routing` folder)
-- `src/routing/route-builder.ts` (+test) — the builder up to `.handler()`.
-- `src/routing/register.ts` (+test) — per-method registration, builder wiring, mount.
-- `src/routing/settings.ts` (+test) — `AppSettings`, defaults, the `basePath/context/onError/trustProxy` option shapes (shape + defaults only; no execution).
-- `src/routing/match.ts` (+test), `src/routing/record.ts` (+test), `src/routing/tree.ts` (+test), `src/routing/tree-merge.ts` (+test).
+- `src/routing/match.ts` (+test), `src/routing/record.ts` (+test) — `matchRoute`, `RouteRecord` + leaf types.
+- `src/routing/tree.ts` (+test), `src/routing/tree-merge.ts` (+test) — the route tree + `mergeTree`.
 - `src/routing/pattern.ts` (+test), `src/routing/request-path.ts` (+test), `src/routing/invalidate-check.ts` (+test).
-- `src/routing/types.ts` (kind=types) — the `Infer*`/record types split from v0 `types.ts`.
+- `src/routing/types.ts` (kind=types) — **route-level types only**: `HttpMethod`, `ParamKeys`/`ParamsFromPath`, `MergePath`, `PrefixRoutes` (no app reference; the `Infer*` ladder + `HoneyCtx` are bit 02).
 
 ## Tests (named, written first)
 - `routing/pattern.test.ts` — named params, trailing slash, catch-all, stale-tree marking.
 - `routing/tree.test.ts` / `routing/match.test.ts` — tree insert/lookup, method/path resolution, backtracking.
 - `routing/tree-merge.test.ts` — `mergeTree` sub-app mount at a prefix.
 - `routing/request-path.test.ts` — canonicalization, strip-prefix, trailing slash.
-- `routing/route-builder.test.ts` + `routing/register.test.ts` — registration per method, dangling-builder report.
-- `tests/types/*.typetest.ts` — the infer ladder, params→input, verbs→client, basepath (ported from v0 typetest).
+- `routing/invalidate-check.test.ts` — the missing-invalidate report (v1 returns the report; only `telemetry/logger.ts` owns `console`).
+- `tests/types/route-model.typetest.ts` — `ParamKeys`/`ParamsFromPath`, `MergePath`, `PrefixRoutes` (ported from v0 `param-types` + `basepath-types`). (The app-level infer-ladder typetest is bit 02.)
 
-(Dispatch/finalize/`onRequest`-pairing tests move to bit 02 with the modules they exercise.)
+(Builder/register/settings and dispatch/finalize/`onRequest`-pairing tests move to bit 02 with the modules they exercise.)
 
 ## Perf
 Bit 01 has no `app.fetch` path, so the 11-scenario hot-path gate does not run here — it activates at **bit 02** when `dispatch`/`app`/response land (the `match+dispatch` ratio and all dispatch-level targets — nested-static map, precomputed 404, telemetry-gated `performance.now()`, lazy URL, monomorphic dispatch — move to bit 02). Bit 01's only perf concern is the pure match/tree cost; a `match`-only microbench may guard it, but there is no v0-ratio gate until dispatch exists.

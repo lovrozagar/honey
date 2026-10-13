@@ -13,7 +13,10 @@ The full **request lifecycle** — everything that turns a matched route into a 
 - `src/middleware/middleware-chain.ts` (+test) — `scopeGuard`, `timedMiddleware`, `commonPrefix`, `errorsOf`, `describeMw`.
 - `src/context/context.ts` (+test) — `HoneyContext`, `ctx` extension via `.context(fn)`, typed input access.
 - `src/context/cookie.ts` (+test), `src/context/cookie-sign.ts` (+test).
-- `src/routing/app.ts` (+test) — the `honey()` factory + `app.fetch` surface, delegating to the modules.
+- `src/routing/app.ts` (+test) — the `honey()` factory + `app.fetch` surface, delegating to the modules. Homes the app type `Honey<…>`, `HoneyCtx`, and the `Infer*` ladder (they read the app's phantom `$routes`/`$ctx`/`$meta`); if that pushes `app.ts` past the 300-line limit, the type machinery splits into a sibling types module (own files.tsv row, added when born).
+- `src/routing/route-builder.ts` (+test) — **(re-cut from bit 01)** the `RouteBuilder` up to `.handler()`; every method returns `BuilderChain<…>` and `.handler()` returns `Honey<…>`, so it can only be typed with the app.
+- `src/routing/register.ts` (+test) — **(re-cut from bit 01)** per-method registration, builder wiring, mount; observable cases (dangling builder, mount, duplicate) assert through `app.get(...)`.
+- `src/routing/settings.ts` (+test) — **(re-cut from bit 01)** the app `AppSettings` object + defaults. Born here with the fields whose types exist now (`stripPrefix`/`trailingSlash`/`encodedSlashes`, `errorFactory`/`onError`); **feature-specific fields are added by their feature bit** extending this file (H13) — `trust` (03), `wsAdapter` (06), `telemetry`/`logger`/`i18n` (07), `outputValidation` (08) — so no earlier→later import.
 - `src/routing/finalize.ts` (+test) — compile the `FinalTable` once; dangling-builder / unused-`use()` reports.
 - `src/routing/dispatch.ts` (+test) — the fetch pipeline; `onRequest` once, every exit pairs one `onResponse`/`onError`.
 - `src/routing/invoke-user.ts` (+test) — call the user handler with the built ctx.
@@ -26,7 +29,9 @@ The full **request lifecycle** — everything that turns a matched route into a 
 - `context/cookie.test.ts` — set/get, attributes, signing round-trip, tamper rejected.
 - `routing/finalize.test.ts` — finalize runs once; re-runs when registrations move.
 - `routing/dispatch.test.ts` — `onRequest` fires once; **every exit pairs one `onResponse`/`onError`** (a thrown error becomes a response via the projector).
+- `routing/route-builder.test.ts` + `routing/register.test.ts` — registration per method, dangling-builder report, `mergeTree` mount, duplicate-route detection (through `honey()`).
 - `response/response.test.ts` / `errors/projector.test.ts` — `json`/`text`/`html`/`redirect` helpers; a thrown `HoneyError` and an unknown throw both project to a response.
+- `tests/types/*.typetest.ts` — the app-level infer ladder (`InferRoutes`/`InferCtx`/…), params→input, verbs→client (ported from v0 typetest; moved from bit 01 because they read the app's phantom types).
 
 ## Perf (v1 improvements — the hot-path gate activates here)
 Bit 01 has no `app.fetch`; the 11-scenario hot-path gate and the `finalize` bench first run at this bit, against the v0 ratio baseline. Dispatch-level targets (re-cut from bit 01):
