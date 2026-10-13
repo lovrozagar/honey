@@ -15,6 +15,7 @@
 		"bench:middleware": "bash src/run.sh bun zod middleware",
 		"bench:params": "bash src/run.sh bun zod params",
 		"bench:validate": "bash src/run.sh bun zod validate",
+		"test": "vitest run src",
 		"build": "bash src/build.sh bun both",
 		"build:bun": "bash src/build.sh bun both",
 		"build:node": "bash src/build.sh node both",
@@ -41,6 +42,7 @@
 		"@types/ws": "8.18.1",
 		"bun-types": "catalog:",
 		"tsx": "4.23.12",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "catalog:"
 	}
 }

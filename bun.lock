@@ -40,6 +40,7 @@
         "bun-types": "catalog:",
         "tsx": "4.23.12",
         "typescript": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "packages/core": {

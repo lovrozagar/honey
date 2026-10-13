@@ -16,5 +16,11 @@
 		"target": "ESNext",
 		"types": ["bun-types"]
 	},
-	"include": ["src/apps/bun/**/*.ts", "src/apps/node/**/*.ts", "src/hotpath.ts"]
+	"include": [
+		"src/apps/bun/**/*.ts",
+		"src/apps/node/**/*.ts",
+		"src/hotpath.ts",
+		"src/significance.ts",
+		"src/significance.test.ts"
+	]
 }
