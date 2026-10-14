@@ -41537,13 +41537,25 @@
 	},
 	"note": "every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → feature a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept.",
 	"reassigned": {
+		"2488556684": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
 		"3424191595": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"001353fae8": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"002c05f8ea": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
 		"0064d66a63": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "08-io",
+			"reason": "asserts HEAD's empty body: headResponse in body-kind.ts (H18.1 HEAD reader, bit 08); HEAD→GET routing itself is ported at 02 (dispatch.test.ts)"
 		},
 		"008d960bed": {
 			"feature": "02-finalize-middleware",
@@ -41557,9 +41569,17 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"038723d574": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
 		"041e37f17e": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"043d466d0b": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"04ac84d67d": {
 			"feature": "11-ts-client",
@@ -41573,25 +41593,61 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"05dba8c08a": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"06475db60a": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"06a428d1ef": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"06cc087020": {
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
+		"06e85b323e": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"06f369abe3": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"0710389897": {
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
+		"0768e86e14": {
+			"feature": "06-realtime",
+			"reason": "uses WSContextImpl (ws/cloudflare.ts, bit 06)"
+		},
+		"0798132be9": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"07ae8ac903": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"07bfdc76ba": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"07cf0d14fc": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"07e1febb41": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"0864de0f54": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"086c7815fe": {
 			"feature": "02-finalize-middleware",
@@ -41601,13 +41657,37 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"09552c968b": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"09ae17016b": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
+		"0a3d596143": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"0aa60ff52e": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"0b1c12acb4": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"0b40b00bfb": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"0bb3f8b0bc": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"0c054d5b1d": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
 		"0c2f68e8cc": {
 			"feature": "11-ts-client",
@@ -41621,29 +41701,65 @@
 			"feature": "08-io",
 			"reason": "input/output schema types: io is bit 08"
 		},
+		"0d3cd7287e": {
+			"feature": "06-realtime",
+			"reason": "uses WSContextImpl (ws/cloudflare.ts, bit 06)"
+		},
 		"0d8247d678": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"0da4f01fb4": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"0da51d81f1": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"0e84e508c7": {
 			"feature": "19-release-provenance",
 			"reason": "generate-time manifest handling in the CLI: build/cli is bit 19"
 		},
+		"0e91063a38": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"0eb29e082c": {
+			"feature": "09-ir-seam",
+			"reason": "loads a tree with routeTree()/toRouteTree() (bit 09)"
+		},
 		"0ee59c5582": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"0f86482838": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "overlaySchemas copies schemas from a loaded route tree (bit 09)"
+		},
+		"0f942cb812": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"0fcde92333": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
+		"0fe35fc4f6": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
 		"1119079a6a": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"11b4d16e64": {
+			"feature": "08-io",
+			"reason": "uses withHeaders (with-headers.ts, bit 08)"
+		},
+		"11ea33dd3e": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
 		},
 		"11f9af4e6f": {
 			"feature": "02-finalize-middleware",
@@ -41653,6 +41769,14 @@
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
+		"1343f7a649": {
+			"feature": "08-io",
+			"reason": "ctx.res.binary() is response/binary.ts (A1), bit 08"
+		},
+		"139ad39433": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
+		},
 		"14c341508e": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -41660,6 +41784,10 @@
 		"157bb796b6": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"15a2a6865f": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"1606b2c8cb": {
 			"feature": "11-ts-client",
@@ -41678,12 +41806,16 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"18167919d0": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
+		},
+		"18d4adb0e5": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"18ec8dd64f": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "08-io",
+			"reason": "asserts the builder carries .input()/.output() (bit 08) and .proxy() (bit 07); the one-shot hiding of the bit-02 methods is ported (route-builder.test.ts)"
 		},
 		"191f79b6a7": {
 			"feature": "02-finalize-middleware",
@@ -41710,24 +41842,44 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"1b2318a124": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
 		"1b616ea954": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"1bbd51da1b": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
 		"1c2b55f706": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"1ca342352b": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"1cc17afe94": {
+			"feature": "08-io",
+			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
 		},
 		"1d0d61b024": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"1d3f256c8b": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
+		"1d917a8ed4": {
+			"feature": "08-io",
+			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
+		},
 		"1de1e2d100": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"1e5e0839cb": {
 			"feature": "08-io",
@@ -41742,8 +41894,8 @@
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
 		"1f3e4d0b21": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
 		},
 		"1f8522a378": {
 			"feature": "02-finalize-middleware",
@@ -41753,6 +41905,18 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"20cb28519d": {
+			"feature": "06-realtime",
+			"reason": "uses WSContextImpl (ws/cloudflare.ts, bit 06)"
+		},
+		"2149fadd7e": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"21b3df6299": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"21ddd9fda7": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -41761,9 +41925,41 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"2343a4cd3e": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"23b65028a6": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 07)"
+		},
+		"2538cf731f": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"25a03cb2b4": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
 		"25cca07c4b": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"26681dec69": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
+		"269fbb17ea": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"2700653e0c": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08), etag (etag.ts, bit 08)"
+		},
+		"2703ec4026": {
+			"feature": "07-security-middleware",
+			"reason": "uses imports request-id.ts (bit 07)"
 		},
 		"276f7119ea": {
 			"feature": "11-ts-client",
@@ -41773,17 +41969,25 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"28e3dd9d18": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"2925cec087": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"295881875c": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"2b0757df51": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"2b0d4ffadd": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"2b3a524b7d": {
 			"feature": "11-ts-client",
@@ -41793,13 +41997,25 @@
 			"feature": "07-security-middleware",
 			"reason": "a v0 fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
 		},
+		"2bd756bd5c": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
+		},
 		"2c0da000c9": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"2caae9959c": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"2cb9b31b34": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"2cf4b77ec2": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"2d028b4aa8": {
 			"feature": "08-io",
@@ -41833,6 +42049,14 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"30bb7ae4c0": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"315781587c": {
+			"feature": "05-streaming-sse-range",
+			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
+		},
 		"316a2b15d7": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
@@ -41841,41 +42065,109 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"32781d0574": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"329409fbc2": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"32aded0191": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
+		"339d1aec69": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"33cccc4f70": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"33e035d172": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"34107187cc": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"351797f6cf": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"353ce2b379": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"35707c9e48": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"35d8feadcd": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"35f9728ea3": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"36f5ca835f": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"36f87443a4": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+		},
+		"3733c24ddb": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
+		},
 		"37425c7390": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"374e29d19f": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"379e3b2a6f": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"37b8d1a621": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
 		"38d3832a4c": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
+		"3a6be2952e": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 07)"
+		},
 		"3a91894d74": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"3af9d98d6e": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
+		},
+		"3b3a3b34f5": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"3b3d75f55a": {
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
+		},
+		"3b5e030334": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08), etag (etag.ts, bit 08)"
 		},
 		"3ba595eaeb": {
 			"feature": "02-finalize-middleware",
@@ -41886,16 +42178,16 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"3c96901855": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"3cd87b9b79": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses ipRestrict (ip-restrict.ts, bit 07)"
 		},
 		"3cdd42041d": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "08-io",
+			"reason": "asserts the builder carries .input()/.output() (bit 08) and .proxy() (bit 07); the one-shot hiding of the bit-02 methods is ported (route-builder.test.ts)"
 		},
 		"3cf829405e": {
 			"feature": "02-finalize-middleware",
@@ -41909,9 +42201,21 @@
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
+		"3d9489273a": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
 		"3df075f168": {
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"3e07faac56": {
+			"feature": "09-ir-seam",
+			"reason": "imports codegen's generateTypes dynamically (bit 09)"
+		},
+		"3e32c59f4d": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"3e4b3afe6e": {
 			"feature": "02-finalize-middleware",
@@ -41921,9 +42225,17 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"3ed41ffaeb": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
+		},
 		"3ed539499b": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"3f39d6e7bc": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"3f6106e491": {
 			"feature": "02-finalize-middleware",
@@ -41937,6 +42249,18 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"4003bbad46": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"400a47a12e": {
+			"feature": "05-streaming-sse-range",
+			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
+		},
+		"408931ac24": {
+			"feature": "06-realtime",
+			"reason": "uses WSContextImpl (ws/cloudflare.ts, bit 06)"
+		},
 		"40cd065c97": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -41944,6 +42268,10 @@
 		"40d0c4778e": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"414a75178f": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
 		},
 		"414eea7e5f": {
 			"feature": "07-security-middleware",
@@ -41970,20 +42298,52 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"438e928517": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"43e433dd73": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+		},
+		"43e64d3be2": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"43f200ac82": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"4420fbc747": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
+		},
+		"4451425ccc": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"4482dfb319": {
+			"feature": "08-io",
+			"reason": "uses withHeaders (with-headers.ts, bit 08)"
+		},
+		"4490cead2b": {
+			"feature": "08-io",
+			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
 		},
 		"44ec7ed497": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "10-openapi-emit",
+			"reason": "uses openapi/manifest (bit 10)"
+		},
+		"450936df41": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"45360d3a8c": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
 		"45c989439c": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"465177e22c": {
 			"feature": "08-io",
@@ -41993,17 +42353,41 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"46bf9b7c9c": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"46c6acc621": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
 		"46c948e313": {
 			"feature": "08-io",
 			"reason": "input/output schema types: io is bit 08"
 		},
+		"47f2b00718": {
+			"feature": "08-io",
+			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
+		},
+		"487bb2d797": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"48dc7f2688": {
+			"feature": "08-io",
+			"reason": "uses withHeaders (with-headers.ts, bit 08)"
+		},
 		"494247cfce": {
-			"feature": "02-finalize-middleware",
-			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"4a2cfc2a5a": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"4b7706da43": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"4bb887656f": {
 			"feature": "02-finalize-middleware",
@@ -42016,6 +42400,10 @@
 		"4c790a7ac0": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"4cffdc3207": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"4dd3f6c1e7": {
 			"feature": "02-finalize-middleware",
@@ -42037,9 +42425,17 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"4fd3f7f538": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 07)"
+		},
 		"500fe0c015": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"503b33d0d7": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"506e0c6f5c": {
 			"feature": "02-finalize-middleware",
@@ -42049,13 +42445,25 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"50fd66947b": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
 		"514a52588d": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"51a93aa401": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"51e66f3a69": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"51f229a974": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"52889f76ac": {
 			"feature": "02-finalize-middleware",
@@ -42101,13 +42509,33 @@
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
+		"58930b1de8": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
 		"589f759aaa": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
-		"5a7d946385": {
+		"58ec114a32": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"591e67855c": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+		},
+		"59780c02bb": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"5a721126c3": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 07)"
+		},
+		"5a7d946385": {
+			"feature": "07-security-middleware",
+			"reason": "uses imports ip-restrict.ts (bit 07)"
 		},
 		"5a96d675c2": {
 			"feature": "11-ts-client",
@@ -42117,13 +42545,17 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"5abd4c2b42": {
+			"feature": "06-realtime",
+			"reason": "uses WSContextImpl (ws/cloudflare.ts, bit 06)"
+		},
 		"5acb87fe58": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"5b0a5d6bda": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"5c7ec6062c": {
 			"feature": "07-security-middleware",
@@ -42134,8 +42566,20 @@
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
 		"5d19aab6ff": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses createLogger (logger.ts, bit 07), logger (logger.ts, bit 07)"
+		},
+		"5d8012c8c8": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"5df78d907c": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
+		"5e1b76c5c4": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"5f3fb6b7f4": {
 			"feature": "02-finalize-middleware",
@@ -42149,6 +42593,18 @@
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
+		"5fee202827": {
+			"feature": "05-streaming-sse-range",
+			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
+		},
+		"6053b5e91c": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"60913cc86e": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"609319e1ab": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -42156,6 +42612,18 @@
 		"6098a315b7": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"60ef649f55": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"61583f2251": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"619448690f": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
 		"6217b769b1": {
 			"feature": "08-io",
@@ -42165,13 +42633,13 @@
 			"feature": "04-adapters",
 			"reason": "runtime feature slots: runtime/ is bit 04"
 		},
-		"6240fc17bc": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
-		},
 		"626265f3f4": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"6265a25f30": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"62fc72d2e4": {
 			"feature": "02-finalize-middleware",
@@ -42181,9 +42649,13 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"645fa8268f": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"64792abcb5": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"64fe70ad2e": {
 			"feature": "02-finalize-middleware",
@@ -42197,9 +42669,17 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"6765925003": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
 		"6770071363": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"679adf64e2": {
+			"feature": "07-security-middleware",
+			"reason": "uses requestId (request-id.ts, bit 07), secureHeaders (secure-headers.ts, bit 07)"
 		},
 		"67e1958891": {
 			"feature": "02-finalize-middleware",
@@ -42210,8 +42690,8 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"68ecfacfe9": {
-			"feature": "02-finalize-middleware",
-			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"68ed5d6d3a": {
 			"feature": "02-finalize-middleware",
@@ -42221,6 +42701,14 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"6998bb3ec2": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08), etag (etag.ts, bit 08)"
+		},
+		"69bcc49cbd": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"6a604d84d5": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -42228,6 +42716,34 @@
 		"6abfdc07c5": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"6b097e878d": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"6b3f8bc280": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"6c6c854912": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"6cbbf83e2a": {
+			"feature": "08-io",
+			"reason": "asserts ctx.res.binary (bit 08) and ctx.res.sse/stream (bit 05) exist"
+		},
+		"6d05acb711": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"6d3883e8c6": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"6d4061927d": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"6d7a217670": {
 			"feature": "11-ts-client",
@@ -42245,6 +42761,18 @@
 			"feature": "07-security-middleware",
 			"reason": "a v0 fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
 		},
+		"6fea98e765": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"70675800b8": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"70ad0e5d91": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"70b534a172": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -42261,25 +42789,41 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"714aa07ba3": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
+		},
 		"71c3765f03": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7203eb98be": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
 		},
 		"722ff22ccb": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"731db302e5": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
+		},
+		"741f939aca": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"743f4ab13c": {
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
+		"74bc76f994": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"754ffde8ad": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
 		"757503a9f7": {
 			"feature": "02-finalize-middleware",
@@ -42289,6 +42833,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"760a6c9347": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 07)"
+		},
 		"761c2524a7": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
@@ -42296,6 +42844,10 @@
 		"765d7ff2b3": {
 			"feature": "08-io",
 			"reason": "input/output schema types: io is bit 08"
+		},
+		"76b261e2e5": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
 		},
 		"77099d2ea8": {
 			"feature": "02-finalize-middleware",
@@ -42313,9 +42865,13 @@
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
-		"79d2385579": {
+		"799e851332": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
+		"79d2385579": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"79eee98eb5": {
 			"feature": "08-io",
@@ -42337,9 +42893,21 @@
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
+		"7b2670bde7": {
+			"feature": "07-security-middleware",
+			"reason": "exercises requestId/secureHeaders/poweredBy/serverTiming, all bit 07"
+		},
+		"7b4fc60dc6": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
 		"7b54ed3e26": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"7bf16a3c75": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
 		"7c0132f759": {
 			"feature": "02-finalize-middleware",
@@ -42349,9 +42917,17 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
-		"7cc46f169f": {
+		"7caa6b9ffb": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
+		"7cc46f169f": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"7d2670cf02": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
 		"7d2cfa81ae": {
 			"feature": "02-finalize-middleware",
@@ -42361,9 +42937,33 @@
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
+		"7e14c5dd5b": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"7e83182c09": {
+			"feature": "08-io",
+			"reason": "uses imports etag.ts (bit 08)"
+		},
+		"7e845ebda7": {
+			"feature": "07-security-middleware",
+			"reason": "the preflight case runs cors() (bit 07); the miss pipeline it rides on is ported at 02 (finalize.test.ts)"
+		},
 		"7ec4562329": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"7ed08f4048": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+		},
+		"7f804f0944": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"7f99cd7b75": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"7fb3c85b81": {
 			"feature": "08-io",
@@ -42377,13 +42977,25 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"81e21b1f3b": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
 		"8217438ad1": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
+		"824712583d": {
+			"feature": "05-streaming-sse-range",
+			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
+		},
 		"826cf2dd72": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"82c8527a37": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"82ee5419be": {
 			"feature": "08-io",
@@ -42394,16 +43006,44 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"8345fd903e": {
+			"feature": "07-security-middleware",
+			"reason": "uses ipRestrict (ip-restrict.ts, bit 07)"
+		},
+		"8390d48c77": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyOutHeaders is response/out-headers.ts, born at bit 02"
+		},
+		"83c49ae0f2": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"8444cc701a": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"848e7b45f9": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"84a8323bad": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 07)"
+		},
+		"84b6b52388": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"84dccc7642": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"85569eeaad": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"859201c776": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"859dd0e9ef": {
 			"feature": "08-io",
@@ -42414,12 +43054,16 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"86b79fd22f": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"870a6969bc": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+		},
+		"87415c6ed3": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"87b16f8028": {
 			"feature": "02-finalize-middleware",
@@ -42428,6 +43072,10 @@
 		"8884c869d8": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"893099299f": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
 		},
 		"897e6d10e7": {
 			"feature": "08-io",
@@ -42441,17 +43089,29 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"8bb7b91e96": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"8c6407be66": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07)"
 		},
 		"8c78b7a444": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"8cce2d79a9": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"8d71ead0e3": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"8dce7abe58": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"8e41e2e4c8": {
 			"feature": "08-io",
@@ -42468,6 +43128,10 @@
 		"8eb192eeb4": {
 			"feature": "07-security-middleware",
 			"reason": "the crypto helper: security is bit 07"
+		},
+		"8ed9b6b01a": {
+			"feature": "08-io",
+			"reason": "ctx.res.binary() is response/binary.ts (A1), bit 08"
 		},
 		"8f635df394": {
 			"feature": "02-finalize-middleware",
@@ -42493,6 +43157,10 @@
 			"feature": "07-security-middleware",
 			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
 		},
+		"9100f11b22": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
 		"919329d5ad": {
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
@@ -42504,6 +43172,10 @@
 		"923e952ede": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"931239c157": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"93535ff147": {
 			"feature": "02-finalize-middleware",
@@ -42521,29 +43193,53 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"941994b43f": {
+			"feature": "02-finalize-middleware",
+			"reason": "replaceResponse is response/builder.ts, born at bit 02 (re-cut)"
+		},
 		"943be6e637": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"94fbabc2d8": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
+		},
+		"952178b9f4": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"952afed163": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
 		"953ed12238": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"95608bc273": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"957e2e41fc": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"9645e8daf6": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"96b7a09811": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"96d6f69d98": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"97099ec2ee": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"970f25e183": {
 			"feature": "07-security-middleware",
@@ -42557,9 +43253,13 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"97f511c813": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"983307d2e3": {
-			"feature": "02-finalize-middleware",
-			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"98baced32e": {
 			"feature": "02-finalize-middleware",
@@ -42577,17 +43277,53 @@
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
+		"9983e44d3f": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"9a127e8035": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"9a356bf11d": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"9a8e35727c": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+		},
 		"9ab6453be8": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"9aff5039d2": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"9b1bc502c2": {
+			"feature": "07-security-middleware",
+			"reason": "mounts tap handlers: app.tap/ctx.tap are bit 07"
+		},
+		"9c2d380a3c": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"9c2d38b4ed": {
 			"feature": "10-openapi-emit",
 			"reason": "asserts the generated OpenAPI document of a gateway: OpenAPI emission is bit 10"
 		},
+		"9f5d7cad5f": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"9f6ab846cd": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses extractSchemas (codegen.ts, bit 09)"
+		},
+		"9f73d9ed54": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
 		"9fcfe5e40d": {
 			"feature": "08-io",
@@ -42598,8 +43334,12 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"9fed2e3c95": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"a07820cbf9": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"a0aee81a59": {
 			"feature": "02-finalize-middleware",
@@ -42609,13 +43349,33 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"a1380035f9": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
 		"a13a2b1446": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"a18485a7ce": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"a18775314c": {
+			"feature": "08-io",
+			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
+		},
+		"a21ed4877e": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
 		"a2c7ef2bb4": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a351da1510": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"a38209a0e3": {
 			"feature": "02-finalize-middleware",
@@ -42626,20 +43386,32 @@
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
 		"a414a2c8c8": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"a44e143d94": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"a48572d3c4": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"a4cdf6a778": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"a53e5a8a45": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses imports ip-restrict.ts (bit 07)"
 		},
 		"a53f920a23": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a566eaf468": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"a57bbf193e": {
 			"feature": "08-io",
@@ -42649,9 +43421,29 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"a66409cf0d": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"a68f79eb2b": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
 		"a6b65809b4": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a6dc3175d9": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"a7371abdfc": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 06)"
+		},
+		"a7f88979aa": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"a836b6bac8": {
 			"feature": "02-finalize-middleware",
@@ -42662,8 +43454,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"a8d57951ba": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
 		"a8d598ea9a": {
 			"feature": "02-finalize-middleware",
@@ -42672,6 +43464,10 @@
 		"a8e9297de5": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"a9cdacf82e": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"a9d8773b18": {
 			"feature": "02-finalize-middleware",
@@ -42682,16 +43478,36 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"aa12d63617": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
+		},
+		"aa14fe5ac7": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08), etag (etag.ts, bit 08)"
+		},
+		"aa1849f9a7": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"aa339b4531": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"aa3e6437d5": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
 		"aa9b10eb21": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"ab1bdcfc0d": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"ab3d027267": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
 		},
 		"ab6b7bc42a": {
 			"feature": "02-finalize-middleware",
@@ -42701,25 +43517,45 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"ac022fcb2b": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
 		"ac10ff582e": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"ac27224138": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"ad44f238f5": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"ae1feb3a09": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
 		},
 		"ae47f23316": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
-		"aeff0f4b4d": {
+		"aea1af3ba3": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 04)"
+		},
+		"aeff0f4b4d": {
+			"feature": "17-cli-gold-standard",
+			"reason": "runs the honey bin's generate command under Bun (the codegen CLI, bit 17)"
 		},
 		"af851d64d4": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"afdb9eb301": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"b107988f66": {
 			"feature": "02-finalize-middleware",
@@ -42729,9 +43565,21 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"b24e95281c": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"b2703a71c5": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b32dd577d7": {
+			"feature": "08-io",
+			"reason": "uses ifNoneMatchHits (etag.ts, bit 08)"
+		},
+		"b38764561f": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
 		},
 		"b38e74e3ba": {
 			"feature": "02-finalize-middleware",
@@ -42741,13 +43589,45 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"b399142eba": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"b4066894fa": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
+		"b415d83716": {
+			"feature": "10-openapi-emit",
+			"reason": "uses openapi/manifest (bit 10)"
+		},
+		"b43feb38d8": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
 		"b4486ba413": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"b5516e2d7b": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"b5c3db911c": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"b5d1ab2ad1": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b5d3cfdba4": {
+			"feature": "08-io",
+			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
+		},
+		"b677cfaf2a": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"b6cb7c9c8b": {
 			"feature": "02-finalize-middleware",
@@ -42764,6 +43644,10 @@
 		"b7dd87de75": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"b805d0a175": {
+			"feature": "08-io",
+			"reason": "uses validateInput (validation.ts, bit 08)"
 		},
 		"b8488bc5a6": {
 			"feature": "02-finalize-middleware",
@@ -42782,8 +43666,12 @@
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
 		},
 		"ba3f8329bb": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
+		},
+		"ba6960580f": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"ba99826af9": {
 			"feature": "02-finalize-middleware",
@@ -42794,8 +43682,12 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"bb01275b04": {
-			"feature": "02-finalize-middleware",
-			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"bb15bc3392": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
 		"bba7582b67": {
 			"feature": "02-finalize-middleware",
@@ -42804,6 +43696,14 @@
 		"bbc08090bf": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"bc13d010d8": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"bc34668616": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
 		},
 		"bc9f716611": {
 			"feature": "02-finalize-middleware",
@@ -42814,28 +43714,44 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"be39cb4e06": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"bf19ac5e14": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"c0233a6aa4": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses generateManifest (codegen.ts, bit 09)"
+		},
+		"c04a9f5797": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"c07a5aad74": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"c0868205b1": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
+		"c1b08aeb6d": {
+			"feature": "11-ts-client",
+			"reason": "HoneyMeta carries codegen-augmented invalidate selectors (HoneyCodegen, bit 11)"
+		},
+		"c1b2030271": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
 		"c250d239b9": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"c311184c8e": {
+			"feature": "06-realtime",
+			"reason": "uses WSContextImpl (ws/cloudflare.ts, bit 06)"
 		},
 		"c3c5f182af": {
 			"feature": "02-finalize-middleware",
@@ -42853,6 +43769,22 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"c4cca48881": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"c4ff883b76": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
+		},
+		"c551b10135": {
+			"feature": "02-finalize-middleware",
+			"reason": "replaceResponse is response/builder.ts, born at bit 02 (re-cut)"
+		},
+		"c5991fd973": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"c59db5a3e0": {
 			"feature": "07-security-middleware",
 			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
@@ -42864,6 +43796,14 @@
 		"c7bf49ba30": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"c81529e274": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"c884d2e967": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"c938683aa6": {
 			"feature": "02-finalize-middleware",
@@ -42877,25 +43817,53 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"cc63f9d186": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"cc7ac8806e": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08), bodyLimit (body-limit.ts, bit 08)"
+		},
 		"cdef041f42": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
 		"ce007f0a3e": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"cf10d5e0cb": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"cfbe24cde5": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
 		"d097b40cac": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "08-io",
+			"reason": "asserts the builder carries .input()/.output() (bit 08) and .proxy() (bit 07); the one-shot hiding of the bit-02 methods is ported (route-builder.test.ts)"
 		},
 		"d0c6553a65": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"d18a0c2de1": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"d211912876": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"d24350022c": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"d33ab29fdf": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"d3abcffb88": {
 			"feature": "02-finalize-middleware",
@@ -42905,17 +43873,41 @@
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
 		},
+		"d551a5be83": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"d57e7166a3": {
+			"feature": "08-io",
+			"reason": "uses bodyLimit (body-limit.ts, bit 08), input/output (bit 08)"
+		},
 		"d586d2d1ad": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"d61bb1924d": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"d63932cc79": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"d63fdb6ada": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateRouteTreeFromApp (codegen.ts, bit 09), route tree loading (bit 09)"
 		},
 		"d65a10e773": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"d6cc3e11ca": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d6f8f70709": {
+			"feature": "05-streaming-sse-range",
+			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
 		},
 		"d7f2ce4c3a": {
 			"feature": "08-io",
@@ -42925,9 +43917,29 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"d963093c83": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
 		"d96623e492": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"d98286050c": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
+		},
+		"d9c2f4b86f": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"d9c850a487": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
+		},
+		"daddedc5ca": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"db5153c492": {
 			"feature": "02-finalize-middleware",
@@ -42940,6 +43952,10 @@
 		"dccba08be1": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"dcf1d551cf": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
 		"ddd8a7fc9a": {
 			"feature": "02-finalize-middleware",
@@ -42954,8 +43970,8 @@
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
 		"def1f2bf1b": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
 		"df1aa9adc6": {
 			"feature": "08-io",
@@ -42969,13 +43985,21 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"e12d894fa2": {
+			"feature": "08-io",
+			"reason": "uses withHeaders (with-headers.ts, bit 08)"
+		},
 		"e17e181fbb": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"e17e9607a9": {
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
+		},
+		"e265953b21": {
 			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"e3076a2112": {
 			"feature": "11-ts-client",
@@ -42998,12 +44022,20 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"e4fbd0feca": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"e5126955a5": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"e52161eadf": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"e5d79c3445": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
 		},
 		"e5e2ce62c3": {
 			"feature": "08-io",
@@ -43022,8 +44054,16 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"ea1334b3f4": {
-			"feature": "02-finalize-middleware",
-			"reason": "builds a whole app and asserts through app.fetch: the request lifecycle is bit 02"
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
+		},
+		"ea707a5bf3": {
+			"feature": "04-adapters",
+			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"ea83f7a469": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"ebb0d677ab": {
 			"feature": "02-finalize-middleware",
@@ -43032,6 +44072,14 @@
 		"eca8ef3252": {
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"edabe155f3": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
+		"edc731afad": {
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
 		"ee339cf151": {
 			"feature": "02-finalize-middleware",
@@ -43045,13 +44093,41 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"ef3d085579": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"efbdd5d766": {
+			"feature": "08-io",
+			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
+		},
+		"efd8986f2d": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"effd5c43d4": {
+			"feature": "08-io",
+			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
 		"f001baa200": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"f02f59de07": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"f0760bf795": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"f0c7183d59": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
+		},
+		"f0e7d816a5": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"f12280f631": {
 			"feature": "11-ts-client",
@@ -43066,8 +44142,16 @@
 			"reason": "the crypto helper: security is bit 07"
 		},
 		"f2b6580525": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
+		"f2de8a85e5": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyResponse body reads are response/builder.ts, born at bit 02 (re-cut)"
+		},
+		"f33c24d889": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"f34b479d8b": {
 			"feature": "02-finalize-middleware",
@@ -43076,6 +44160,10 @@
 		"f39f07caa8": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f49b814aa4": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
 		},
 		"f4a4d8751a": {
 			"feature": "02-finalize-middleware",
@@ -43101,33 +44189,65 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"f5a21f5cb4": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"f60a27ed85": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
 		},
 		"f69441538b": {
+			"feature": "07-security-middleware",
+			"reason": "uses cors (cors.ts, bit 07), imports secure-headers.ts (bit 07), imports request-id.ts (bit 07)"
+		},
+		"f695a4237e": {
 			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"f6abbb637b": {
 			"feature": "08-io",
 			"reason": "input/output schema types: io is bit 08"
 		},
 		"f794ba99e7": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses generateManifest (codegen.ts, bit 09)"
 		},
 		"f84705bad9": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "08-io",
+			"reason": "asserts the builder carries .input()/.output() (bit 08) and .proxy() (bit 07); the one-shot hiding of the bit-02 methods is ported (route-builder.test.ts)"
+		},
+		"f915401cb1": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"f9344b7c53": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
+		"f97c4880f6": {
+			"feature": "05-streaming-sse-range",
+			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
+		},
+		"f9ca57d13f": {
+			"feature": "02-finalize-middleware",
+			"reason": "HoneyResponse.clone is response/builder.ts, born at bit 02 (re-cut)"
+		},
 		"fa0bee710c": {
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"fa37f1b147": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"fa8a4feb7d": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
+		},
+		"fab8b17479": {
+			"feature": "08-io",
+			"reason": "uses input/output (bit 08)"
 		},
 		"faccadd062": {
 			"feature": "02-finalize-middleware",
@@ -43137,6 +44257,10 @@
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
+		"fb4d1f631e": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
 		"fb7413b2c0": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
@@ -43145,17 +44269,37 @@
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
+		"fbdb1481f5": {
+			"feature": "09-ir-seam",
+			"reason": "uses route tree loading (bit 09)"
+		},
 		"fbf7ced595": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"fc6222ab83": {
-			"feature": "02-finalize-middleware",
-			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+			"feature": "09-ir-seam",
+			"reason": "uses generateOpenApi (codegen.ts, bit 09)"
+		},
+		"fc68a018ed": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"fc6b22a456": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
 		},
 		"fd12cfc088": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"fd328851d9": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"fd59a590d5": {
+			"feature": "08-io",
+			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
 		},
 		"fdb922499a": {
 			"feature": "02-finalize-middleware",
@@ -43168,7 +44312,23 @@
 		"fde3ba9be9": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"fe9637b053": {
+			"feature": "07-security-middleware",
+			"reason": "uses taps (bit 07)"
+		},
+		"fea9249d24": {
+			"feature": "08-io",
+			"reason": "uses etag (etag.ts, bit 08)"
 		}
 	},
-	"retired": {}
+	"retired": {
+		"011b51b268": "covered-by: asserts only {} extends object as a drift guard; the @ts-expect-error cases in middleware-scoped.typetest.ts fail typecheck if they drift",
+		"416fa38434": "covered-by: asserts only {} extends object as an import check; every typetest file compiling under typecheck is that check",
+		"6240fc17bc": "v1 parses the query from req.url as a string; there is no urlFn hook to pre-parse it",
+		"c15787dab6": "v1 parses the query from req.url as a string; there is no urlFn hook to pre-parse it",
+		"c53335a22f": "v1 dispatch always hands the context its path in the request state; there is no default to fall back to",
+		"ec806ce613": "v1 parses the query from req.url as a string (searchOfUrl); there is no URL object and no urlFn hook",
+		"f94bb1b63e": "covered-by: every bit-02 suite serves routes on scope-less apps across repeated requests (routing, middleware, context); the empty-scope fast path is the perf gate's concern"
+	}
 }
