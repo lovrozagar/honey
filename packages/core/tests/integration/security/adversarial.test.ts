@@ -33,6 +33,9 @@ const { createMiddleware } = (await import(
 const { serve: serveNode } = (await import(
 	resolve(REPO, "packages/core/src/adapters/node/serve.ts")
 )) as typeof import("../../../src/adapters/node/serve.ts")
+const { rangeResponse } = (await import(
+	resolve(REPO, "packages/core/src/response/range.ts")
+)) as typeof import("../../../src/response/range.ts")
 const { createCookieSigner } = (await import(
 	resolve(REPO, "packages/core/src/context/cookie-sign.ts")
 )) as typeof import("../../../src/context/cookie-sign.ts")
@@ -378,5 +381,72 @@ describe("v1 adversarial: response framing at the node:http bridge", () => {
 				true,
 			])
 		})
+	})
+})
+
+/** Streaming routes for the memory and injection cases; `seen` records what each producer did. */
+function streamingRoutes() {
+	const seen = { produced: 0, released: false }
+	const app = v1.honey<{}>()
+	app.get("/flood").handler((ctx) =>
+		ctx.res.stream(async (writable, signal) => {
+			signal.addEventListener("abort", () => (seen.released = true))
+			const writer = writable.getWriter()
+			/* bounded so a mutant without backpressure ends instead of spinning */
+			for (let i = 0; i < 5_000 && !signal.aborted; i++) {
+				await writer.write(new Uint8Array(1024))
+				seen.produced++
+			}
+		}),
+	)
+	app.get("/events").handler((ctx) =>
+		ctx.res.sse(async (stream) => {
+			await stream.send({ data: "ok", event: "m", id: ctx.search.id ?? "1" })
+		}),
+	)
+	return { app, seen }
+}
+
+describe("v1 adversarial: a slow or departed client never grows the server's memory", () => {
+	it("a producer facing a reader that stopped reading waits: one chunk past demand, no more", async () => {
+		const { app, seen } = streamingRoutes()
+		const reader = (
+			(await app.fetch(new Request("http://app.test/flood"), {})).body as ReadableStream<Uint8Array>
+		).getReader()
+		await reader.read()
+		await new Promise((done) => setTimeout(done, 30))
+		const held = seen.produced
+		await reader.cancel()
+		expect([held <= 1, seen.released]).toEqual([true, true])
+	})
+})
+
+describe("v1 adversarial: SSE field injection", () => {
+	it.each([
+		["CRLF and a data field", "1\r\ndata: injected"],
+		["LF and a retry field", "1\nretry: 1"],
+		["CR and an event field", "1\revent: admin"],
+	])("an id from the request carrying %s breaks the stream instead of writing the field", async (_case, id) => {
+		const { app } = streamingRoutes()
+		/* a query value can carry CR and LF; a header value cannot */
+		const send = async (value: string) =>
+			(await app.fetch(new Request(`http://app.test/events?id=${encodeURIComponent(value)}`), {}))
+				.text()
+				.catch(() => "broken")
+		expect([await send("safe"), await send(id)]).toEqual(["event: m\ndata: ok\nid: safe\n\n", "broken"])
+	})
+})
+
+describe("v1 adversarial: absurd ranges", () => {
+	const TEN = new TextEncoder().encode("0123456789")
+
+	it.each([
+		["a 10 000-digit position", `bytes=${"9".repeat(10_000)}-`],
+		["100 000 ranges", `bytes=${"0-0,".repeat(100_000)}0-0`],
+		["a 10 000-digit suffix", `bytes=-${"1".repeat(10_000)}`],
+	])("%s: the whole body, 200, answered at once", async (_case, range) => {
+		const started = performance.now()
+		const res = rangeResponse(new Request("http://app.test/f", { headers: { range } }), TEN)
+		expect([res.status, await res.text(), performance.now() - started < 50]).toEqual([200, "0123456789", true])
 	})
 })

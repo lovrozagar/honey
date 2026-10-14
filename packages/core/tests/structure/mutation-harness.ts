@@ -10,6 +10,8 @@ import { spawnSync } from "node:child_process"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
+import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
+import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
 
 export type Guard = {
 	/** what the suite must catch once this guard is gone */
@@ -131,7 +133,67 @@ export const GUARDS: readonly Guard[] = [
 		id: "v1-node-stream-length",
 		module: "packages/core/src/adapters/node/response.ts",
 	},
+	{
+		catches: "v1: a producer running ahead of a reader that stopped reading",
+		disable: (original) => ({ producerStream: withoutBackpressure(original.producerStream as typeof producerStream) }),
+		id: "v1-producer-backpressure",
+		module: "packages/core/src/streaming/producer-stream.ts",
+	},
+	{
+		catches: "v1: an SSE id or event name carrying CR/LF written as another field",
+		disable: () => ({ sseBody: unvalidatedSse }),
+		id: "v1-sse-field-injection",
+		module: "packages/core/src/response/sse.ts",
+	},
 ]
+
+/** producerStream whose writes resolve at once, demand or not. */
+function withoutBackpressure(real: typeof producerStream): typeof producerStream {
+	return (start, options) =>
+		real((sink) => {
+			const eager: ProducerSink = {
+				close: () => sink.close(),
+				get closed() {
+					return sink.closed
+				},
+				error: (error) => sink.error(error),
+				onEnd: (fn) => sink.onEnd(fn),
+				signal: sink.signal,
+				write: (chunk) => {
+					sink.write(chunk).catch(() => {})
+					return Promise.resolve()
+				},
+			}
+			return start(eager)
+		}, options)
+}
+
+/** An event framed with no newline check. */
+function rawFrame(event: SSEEvent): string {
+	return `event: ${event.event}\ndata: ${String(event.data)}\n${event.id === undefined ? "" : `id: ${event.id}\n`}\n`
+}
+
+/** sseBody that writes the id and event name as given, newlines and all. */
+function unvalidatedSse(
+	callback: (stream: SSEStream) => Promise<void>,
+	options: SSEOptions,
+	producer: ProducerOptions,
+): ReadableStream<Uint8Array> {
+	const encoder = new TextEncoder()
+	return producerStream(
+		(sink) =>
+			callback({
+				close: () => sink.close(),
+				get closed() {
+					return sink.closed
+				},
+				lastEventId: options.lastEventId,
+				send: (event) => sink.write(encoder.encode(rawFrame(event))),
+				signal: sink.signal,
+			}),
+		producer,
+	)
+}
 
 const CORE = resolve(import.meta.dirname, "../..")
 const SUITE = "tests/integration/security"
