@@ -55,6 +55,11 @@ function idleSeconds(ms: number): number {
 	return ms === 0 ? 0 : Math.min(Math.max(Math.ceil(ms / 1000), 1), 960)
 }
 
+/**
+ * The Bun WebSocket adapter. Bun enforces `maxPayload` itself (`maxPayloadLength`), so the memory
+ * bound holds before honey sees a byte; past it Bun force-closes with 1006 and no close frame,
+ * where Node and Workers close with 1009.
+ */
 export function bunWebSocket(options?: WSAdapterOptions): BunWSAdapter {
 	const resolved = resolveWSOptions(options)
 	const open = new Set<BunSocket>()

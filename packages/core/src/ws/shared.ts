@@ -4,7 +4,10 @@
  */
 
 export type WSAdapterOptions = {
-	/** Largest inbound message in bytes; a bigger one closes the connection with 1009. Default 1 MiB. */
+	/**
+	 * Largest inbound message in bytes; a bigger one closes the connection with 1009 (on Bun, 1006:
+	 * Bun enforces the limit itself and force-closes without a close frame). Default 1 MiB.
+	 */
 	maxPayload?: number
 	/** Outbound bytes a socket may hold unsent before `backpressurePolicy` applies to the next `send()`. Default 8 MiB. */
 	backpressureLimit?: number
