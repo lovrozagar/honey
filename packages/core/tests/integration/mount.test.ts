@@ -1,407 +1,264 @@
+/**
+ * Composing an app: basePath prefixes, handles that share one app, and mounting sub-apps with
+ * route(). A mounted route runs the mounting chain before its own, keeps its own settings and
+ * context, and is a copy: neither side's later registrations leak into the other.
+ */
 import { describe, expect, it } from "vitest"
+import type { HoneyContext } from "../../src/context/context.ts"
 import { HoneyError } from "../../src/errors/error.ts"
-import { honey } from "../../src/routing/app.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
+import { type Honey, honey } from "../../src/routing/app.ts"
 
-describe("root route /", () => {
-	// v0: f34b479d8b
-	it("root route with basePath", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/").handler((ctx) => ctx.res.json("ok", { root: true }))
+type App = Honey<{}>
 
-		const res = await app.fetch(new Request("http://localhost/api"), {})
-		expect(res.status).toBe(200)
-	})
-})
+async function send(app: { fetch: (r: Request, env: never) => Response | Promise<Response> }, target: string) {
+	const res = await app.fetch(new Request(`http://localhost${target}`), {} as never)
+	return { body: await res.text(), location: res.headers.get("location"), status: res.status }
+}
 
-describe("use() preserves all settings", () => {
-	// v0: f36fd2d49c
-	it("onNotFound survives use()", async () => {
-		const app = honey<{}>()
-		app.onNotFound(() => new Response("custom 404", { status: 404 }))
+/** A handle of a plain app, under any basePath. */
+type Handle<TBase extends string> = Honey<{}, HoneyContext<{}>, {}, never, never, never, TBase>
 
-		const authed = app.use(createMiddleware(async (_ctx, next) => next()))
-		authed.get("/exists").handler((ctx) => ctx.res.json("ok", {}))
+/** A route answering with its full pattern. */
+function pattern<TBase extends string>(app: Handle<TBase>, path: string) {
+	app.get(path).handler((ctx) => ctx.res.text("ok", ctx.routePattern))
+}
 
-		const res = await authed.fetch(new Request("http://localhost/nope"), {})
-		expect(res.status).toBe(404)
-		expect(await res.text()).toBe("custom 404")
+/** A middleware that records `name` each time it runs. */
+const tracer = (trace: string[], name: string) =>
+	createMiddleware((_ctx, next) => {
+		trace.push(name)
+		return next()
 	})
 
-	// v0: 7229de28b0
-	it("onMethodNotAllowed survives use()", async () => {
-		const app = honey<{}>()
-		app.onMethodNotAllowed(() => new Response("custom 405", { status: 405 }))
+const deny = (status: number) => createMiddleware(async () => new Response("denied", { status }))
 
-		const authed = app.use(createMiddleware(async (_ctx, next) => next()))
-		authed.get("/resource").handler((ctx) => ctx.res.json("ok", {}))
-
-		const res = await authed.fetch(new Request("http://localhost/resource", { method: "DELETE" }), {})
-		expect(res.status).toBe(405)
-		expect(await res.text()).toBe("custom 405")
-	})
-
-	// v0: 0565c75477
-	it("errorFormatter survives use()", async () => {
-		const app = honey<{}>()
-		app.defaultErrorFormatter((_err, _shape) => ({ custom_format: true }))
-
-		const authed = app.use(createMiddleware(async (_ctx, next) => next()))
-		authed.get("/fail").handler(() => {
-			throw new HoneyError({ errorKey: "test", status: "bad_request" })
-		})
-
-		const res = await authed.fetch(new Request("http://localhost/fail"), {})
-		expect(res.status).toBe(400)
-		const data = (await res.json()) as Record<string, boolean>
-		expect(data.custom_format).toBe(true)
-	})
-
-	// v0: 079c03dde6
-	it("defaults survives use()", async () => {
-		const app = honey<{}>().basePath("/api")
-		const authed = app.use(createMiddleware(async (_ctx, next) => next()))
-		authed.get("/users").handler((ctx) => ctx.res.json("ok", {}))
-
-		const res = await authed.fetch(new Request("http://localhost/api/users"), {})
-		expect(res.status).toBe(200)
-	})
-})
-
-describe("basePath stacks via MergePath", () => {
-	// v0: 157bb796b6
-	it("chained basePath calls compose paths", async () => {
-		const app = honey<{}>().basePath("/v1").basePath("/v2")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", {}))
-
-		/* basePath stacks: /v1 + /v2 = /v1/v2, so route is /v1/v2/users */
-		const r1 = await app.fetch(new Request("http://localhost/v1/v2/users"), {})
-		expect(r1.status).toBe(200)
-
-		/* /v2/users alone should NOT match */
-		const r2 = await app.fetch(new Request("http://localhost/v2/users"), {})
-		expect(r2.status).toBe(404)
-	})
-})
-
-describe("basePath prefixes routes at registration", () => {
-	// v0: c9ee50eee6
-	it("request without basePath prefix → 404", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", {}))
-
-		/* route registered as /api/users — /users alone is 404 */
-		const res = await app.fetch(new Request("http://localhost/users"), {})
-		expect(res.status).toBe(404)
-
-		/* /api/users matches */
-		const res2 = await app.fetch(new Request("http://localhost/api/users"), {})
-		expect(res2.status).toBe(200)
-	})
-})
-
-describe("basePath edge — exact match to root", () => {
-	// v0: a0aee81a59
-	it("basePath=/api, request /api → matches / route", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/").handler((ctx) => ctx.res.json("ok", { root: true }))
-
-		const res = await app.fetch(new Request("http://localhost/api"), {})
-		expect(res.status).toBe(200)
-	})
-
-	// v0: fde3ba9be9
-	it("basePath=/api, request /api/ → matches / route", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/").handler((ctx) => ctx.res.json("ok", { root: true }))
-
-		const res = await app.fetch(new Request("http://localhost/api/"), {})
-		expect(res.status).toBe(200)
-	})
-})
-
-describe("basePath edge cases", () => {
-	// v0: f39f07caa8
-	it("basePath without trailing slash works correctly", async () => {
-		const app = honey<{}>().basePath("/api/v1")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", { users: [] }))
-
-		const res = await app.fetch(new Request("http://localhost/api/v1/users"), {})
-		expect(res.status).toBe(200)
-	})
-
-	// v0: ee339cf151
-	it("basePath with trailing slash → routes should still match", async () => {
-		const app = honey<{}>().basePath("/api/v1/")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", { users: [] }))
-
-		const res = await app.fetch(new Request("http://localhost/api/v1/users"), {})
-		/* this will likely fail — trailing slash in basePath breaks matching */
-		expect(res.status).toBe(200)
-	})
-
-	// v0: 008d960bed
-	it("basePath exact match → root route", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/").handler((ctx) => ctx.res.json("ok", { root: true }))
-
-		const res = await app.fetch(new Request("http://localhost/api"), {})
-		expect(res.status).toBe(200)
-	})
-})
-
-describe("sub-app route merging via mergeTree", () => {
-	// v0: 3fff9f50df
-	it("route() merges sub-router tree into parent at runtime", async () => {
-		const child = honey<{}>()
-		child.get("/child").handler((ctx) => ctx.res.json("ok", { from: "child" }))
-
-		const parent = honey<{}>()
-		parent.route(child)
-
-		/* child route IS accessible via parent fetch after merge */
-		const res = await parent.fetch(new Request("http://localhost/child"), {})
-		expect(res.status).toBe(200)
-		const body = (await res.json()) as Record<string, unknown>
-		expect(body.from).toBe("child")
-	})
-})
-
-describe("basePath prefixing", () => {
-	// v0: c4b3cdf794
-	it("basePath prefixes routes at registration time", async () => {
-		const app = honey<{ BASE: string }>().basePath("/api")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", { env: ctx.env.BASE }))
-
-		const res1 = await app.fetch(new Request("http://localhost/api/users"), {
-			BASE: "/api",
-		})
-		expect(res1.status).toBe(200)
-		const d1 = (await res1.json()) as Record<string, string>
-		expect(d1.env).toBe("/api")
-	})
-})
-
-describe("use() chain shares root tree", () => {
-	// v0: 2c2daa6f20
-	it("routes registered after use() visible on original app", async () => {
-		const mw = createMiddleware(async (_ctx, next) => {
-			return next({ auth: true })
-		})
-
-		const base = honey<{}>()
-		base.get("/public").handler((ctx) => ctx.res.json("ok", { public: true }))
-
-		const authed = base.use(mw)
-		authed.get("/private").handler((ctx) => ctx.res.json("ok", { auth: ctx.auth }))
-
-		/* both routes should be on the shared root tree */
-		const pubRes = await base.fetch(new Request("http://localhost/public"), {})
-		expect(pubRes.status).toBe(200)
-
-		/* /private is registered on the root tree, but middleware only runs on authed chain.
-		 * When fetched via base, handler runs without the middleware context */
-		const privRes = await base.fetch(new Request("http://localhost/private"), {})
-		expect(privRes.status).toBe(200)
-	})
-})
-
-describe("what if multiple apps share routes accidentally", () => {
-	// v0: 40d0c4778e
-	it("two separate honey() instances → completely isolated trees", async () => {
-		const app1 = honey<{}>()
-		app1.get("/shared").handler((ctx) => ctx.res.text("ok", "app1"))
-
-		const app2 = honey<{}>()
-		app2.get("/shared").handler((ctx) => ctx.res.text("ok", "app2"))
-
-		const r1 = await app1.fetch(new Request("http://localhost/shared"), {})
-		const r2 = await app2.fetch(new Request("http://localhost/shared"), {})
-		expect(await r1.text()).toBe("app1")
-		expect(await r2.text()).toBe("app2")
-	})
-})
-
-describe("what if the route path is just /", () => {
-	// v0: 814476e66c
-	it("root route with basePath → basePath exact match maps to /", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/").handler((ctx) => ctx.res.text("ok", "api-root"))
-
-		const res = await app.fetch(new Request("http://localhost/api"), {})
-		expect(res.status).toBe(200)
-		expect(await res.text()).toBe("api-root")
-	})
-})
-
-describe("empty string in various places", () => {
-	// v0: 87b16f8028
-	it("empty basePath '' → no prefix change", async () => {
-		const app = honey<{}>().basePath("")
-		app.get("/test").handler((ctx) => ctx.res.text("ok", "ok"))
-
-		const res = await app.fetch(new Request("http://localhost/test"), {})
-		expect(res.status).toBe(200)
-	})
-})
-
-describe("basePath via defaults", () => {
+describe("basePath: prefixing", () => {
 	// v0: c3cfdb34b5
-	it("basePath strips prefix from matching requests", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", { from: "users" }))
-
-		const res = await app.fetch(new Request("http://localhost/api/users"), {})
-		expect(res.status).toBe(200)
-		const data = (await res.json()) as Record<string, string>
-		expect(data.from).toBe("users")
-	})
-
-	// v0: b6cb7c9c8b
-	it("basePath → request without prefix returns 404", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", {}))
-
-		/* basePath prefixes routes at registration, so /users without prefix is 404 */
-		const res = await app.fetch(new Request("http://localhost/users"), {})
-		expect(res.status).toBe(404)
-	})
-
-	// v0: dff98d40b5
-	it("basePath root request → matches /", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/").handler((ctx) => ctx.res.json("ok", { root: true }))
-
-		const res = await app.fetch(new Request("http://localhost/api"), {})
-		expect(res.status).toBe(200)
-	})
-
 	// v0: 713989d8d3
-	it("basePath with trailing slash in config", async () => {
-		const app = honey<{}>().basePath("/api/")
-		app.get("/users").handler((ctx) => ctx.res.json("ok", {}))
-
-		const res = await app.fetch(new Request("http://localhost/api/users"), {})
-		expect(res.status).toBe(200)
-	})
-})
-
-describe("feature interactions", () => {
-	describe("route merge + middleware propagation", () => {
-		// v0: a2f656dadb
-		it("parent chain middleware DOES run on merged sub-router routes", async () => {
-			let parentMwCalled = false
-			const parentMw = createMiddleware(async (_ctx, next) => {
-				parentMwCalled = true
-				return next()
-			})
-
-			const sub = honey<{}>()
-				.get("/sub")
-				.handler((ctx) => ctx.res.text("ok", "from-sub"))
-
-			const app = honey<{}>()
-				.use(parentMw)
-				.get("/parent")
-				.handler((ctx) => ctx.res.text("ok", "from-parent"))
-				.route(sub)
-
-			/* sub route — parent chain middleware runs (auth applies to all routes) */
-			parentMwCalled = false
-			const subRes = await app.fetch(new Request("http://localhost/sub"), {})
-			expect(subRes.status).toBe(200)
-			expect(parentMwCalled).toBe(true)
-
-			/* parent route — parent chain middleware also runs */
-			parentMwCalled = false
-			await app.fetch(new Request("http://localhost/parent"), {})
-			expect(parentMwCalled).toBe(true)
-		})
-	})
-})
-
-describe("basePath registration-time prefix", () => {
+	// v0: f39f07caa8
+	// v0: ee339cf151
+	// v0: 7ec4562329
+	// v0: 351797f6cf
+	// v0: 87b16f8028
+	// v0: c4b3cdf794
 	// v0: 909a8f727d
-	it("basePath prefixes routes at registration time", async () => {
-		const app = honey<{ BASE: string }>().basePath("/api")
-		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+	// v0: c9ee50eee6
+	// v0: b6cb7c9c8b
+	// v0: bdd89b07d3
+	it.each([
+		["/api", "/api/users", "/users"],
+		["/api/", "/api/users", "/users"],
+		["api", "/api/users", "/users"],
+		["/api/v2", "/api/v2/users", "/api/users"],
+		["", "/users", "/api/users"],
+	])("basePath(%j) serves /users at %s, not at %s", async (base, served, missed) => {
+		const app = honey<{}>()
+		pattern(app.basePath(base), "/users")
+		expect(await send(app, served)).toMatchObject({ body: served, status: 200 })
+		expect((await send(app, missed)).status).toBe(404)
+	})
 
-		const res = await app.fetch(new Request("http://localhost/api/health"), {
-			BASE: "/api",
-		})
-		expect(res.status).toBe(200)
+	// v0: 157bb796b6
+	it("chained basePath calls compose", async () => {
+		const app = honey<{}>()
+		pattern(app.basePath("/api").basePath("/v2"), "/users")
+		expect(await send(app, "/api/v2/users")).toMatchObject({ body: "/api/v2/users", status: 200 })
+		expect((await send(app, "/v2/users")).status).toBe(404)
 	})
 })
 
-describe("basePath edge cases", () => {
+describe("basePath: the bare prefix and segment boundaries", () => {
+	// v0: f34b479d8b
+	// v0: a0aee81a59
+	// v0: fde3ba9be9
+	// v0: 008d960bed
 	// v0: b987b43110
-	it("basePath exact match → root route", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/").handler((ctx) => ctx.res.text("ok", "root"))
-
-		const res = await app.fetch(new Request("http://localhost/api"), {})
-		expect(res.status).toBe(200)
-		expect(await res.text()).toBe("root")
+	// v0: dff98d40b5
+	// v0: 814476e66c
+	// v0: a44e143d94
+	it("the root route under a basePath answers the bare prefix, with or without a trailing slash", async () => {
+		const app = honey<{}>()
+		pattern(app.basePath("/api"), "/")
+		for (const target of ["/api", "/api/"]) expect(await send(app, target)).toMatchObject({ body: "/api", status: 200 })
+		expect((await send(app, "/")).status).toBe(404)
 	})
 
-	// v0: bdd89b07d3
-	it("request without basePath prefix → 404", async () => {
-		const app = honey<{}>().basePath("/api")
-		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
-
-		/* basePath prefixes routes at registration, so /health without prefix is 404 */
-		const res = await app.fetch(new Request("http://localhost/health"), {})
-		expect(res.status).toBe(404)
+	// v0: e792c8dc20
+	// v0: a8e9297de5
+	// v0: 11f9af4e6f
+	it("a basePath matches whole segments only", async () => {
+		const app = honey<{}>()
+		const api = app.basePath("/api")
+		pattern(api, "/health")
+		pattern(api, "/-docs")
+		pattern(api, "/ary")
+		expect((await send(app, "/api/health")).status).toBe(200)
+		expect((await send(app, "/api-docs")).status).toBe(404)
+		expect((await send(app, "/apiary")).status).toBe(404)
 	})
 
 	// v0: 4e11d0b655
-	it("basePath + trailing slash strip interaction", async () => {
-		const app = honey<{}>().basePath("/api").trailingSlash("strip")
-		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
-
-		const res = await app.fetch(new Request("http://localhost/api/health/"), {})
-		/* trailing slash stripped first, then basePath stripped */
-		expect(res.status).toBe(308) /* redirect to strip trailing slash */
+	it("the trailing-slash policy redirects the full path, prefix included", async () => {
+		const app = honey<{}>().trailingSlash("strip")
+		pattern(app.basePath("/api"), "/health")
+		expect(await send(app, "/api/health/")).toMatchObject({ location: "/api/health", status: 308 })
 	})
 })
 
-describe("route composition", () => {
+describe("handles share one app", () => {
+	// v0: f36fd2d49c
+	// v0: 7229de28b0
+	// v0: 0565c75477
+	// v0: 079c03dde6
+	it("a setting made on one handle applies to routes on every handle", async () => {
+		const root = honey<{}>()
+			.onNotFound(() => new Response("custom 404", { status: 404 }))
+			.onMethodNotAllowed(() => new Response("custom 405", { status: 405 }))
+			.defaultErrorFormatter((error) => ({ formatted: error.errorKey }))
+		const authed = root.basePath("/api").use(createMiddleware((_ctx, next) => next()))
+		authed.get("/fail").handler(() => {
+			throw new HoneyError({ errorKey: "test", status: "bad_request" })
+		})
+		expect(await send(authed, "/nope")).toMatchObject({ body: "custom 404", status: 404 })
+		const wrong = await authed.fetch(new Request("http://localhost/api/fail", { method: "POST" }), {})
+		expect([wrong.status, await wrong.text()]).toEqual([405, "custom 405"])
+		expect(await send(authed, "/api/fail")).toEqual({ body: '{"formatted":"test"}', location: null, status: 400 })
+	})
+
+	// v0: 2c2daa6f20
+	it("a route registered on any handle is served by every handle, running the chain it was registered with", async () => {
+		const base = honey<{}>()
+		base.get("/public").handler((ctx) => ctx.res.json("ok", { public: true }))
+		const authed = base.use(createMiddleware((_ctx, next) => next({ auth: true })))
+		authed.get("/private").handler((ctx) => ctx.res.json("ok", { auth: ctx.auth }))
+		for (const handle of [base, authed]) {
+			expect(JSON.parse((await send(handle, "/public")).body)).toEqual({ public: true })
+			expect(JSON.parse((await send(handle, "/private")).body)).toEqual({ auth: true })
+		}
+	})
+
+	// v0: 40d0c4778e
+	it("separate apps share nothing", async () => {
+		const a = honey<{}>()
+		const b = honey<{}>()
+		a.get("/shared").handler((ctx) => ctx.res.text("ok", "a"))
+		b.get("/shared").handler((ctx) => ctx.res.text("ok", "b"))
+		a.get("/only-a").handler((ctx) => ctx.res.text("ok", "a"))
+		expect([(await send(a, "/shared")).body, (await send(b, "/shared")).body]).toEqual(["a", "b"])
+		expect((await send(b, "/only-a")).status).toBe(404)
+	})
+})
+
+describe("mounting a sub-app: what is served", () => {
+	// v0: 3fff9f50df
 	// v0: a9d8773b18
-	it(".route() merges separate sub-router tree into parent", async () => {
-		const sub = honey<{}>()
-			.get("/health")
-			.handler((ctx) => ctx.res.text("ok", "sub"))
-
+	// v0: 68ed5d6d3a
+	// v0: 98e0f243fd
+	// v0: 7a10e3def8
+	it("route(sub) serves every sub's routes, params included, beside the parent's own", async () => {
+		const auth = honey<{}>()
+		auth.get("/login").handler((ctx) => ctx.res.text("ok", "login"))
+		const orgs = honey<{}>()
+		orgs.get("/orgs/:orgId").handler((ctx) => ctx.res.json("ok", { id: ctx.params.orgId }))
 		const app = honey<{}>()
-			.get("/main")
-			.handler((ctx) => ctx.res.text("ok", "main"))
-			.route(sub)
+		app.get("/").handler((ctx) => ctx.res.text("ok", "root"))
+		app.route(auth).route(orgs)
+		expect((await send(app, "/")).body).toBe("root")
+		expect((await send(app, "/login")).body).toBe("login")
+		expect(JSON.parse((await send(app, "/orgs/o-1")).body)).toEqual({ id: "o-1" })
+	})
 
-		const mainRes = await app.fetch(new Request("http://localhost/main"), {})
-		expect(await mainRes.text()).toBe("main")
+	// v0: dccba08be1
+	// v0: 4fb2a147db
+	// v0: a8d598ea9a
+	// v0: 90392c4dac
+	it.each([
+		["route(sub)", (app: App, sub: App) => app.route(sub), ["/users", "/admin/x", "/"], "/v1/users"],
+		[
+			"basePath('/v1').route(sub)",
+			(app: App, sub: App) => app.basePath("/v1").route(sub),
+			["/v1/users", "/v1/admin/x", "/v1"],
+			"/users",
+		],
+		["route('/v2', sub)", (app: App, sub: App) => app.route("/v2", sub), ["/v2/users", "/v2/admin/x", "/v2"], "/users"],
+	] as const)(
+		"%s serves the sub's routes, its own basePath kept, under the mount",
+		async (_label, mount, paths, missed) => {
+			const sub = honey<{}>()
+			pattern(sub, "/users")
+			pattern(sub, "/")
+			pattern(sub.basePath("/admin"), "/x")
+			const app = honey<{}>()
+			mount(app, sub)
+			for (const path of paths) expect(await send(app, path)).toMatchObject({ body: path, status: 200 })
+			expect((await send(app, missed)).status).toBe(404)
+		},
+	)
 
-		const subRes = await app.fetch(new Request("http://localhost/health"), {})
-		expect(await subRes.text()).toBe("sub")
+	// v0: 97f2d31012
+	// v0: 4bb887656f
+	it("a route both sides register, or route(prefix) with no sub, is an error", () => {
+		const sub = honey<{}>()
+		pattern(sub, "/health")
+		const app = honey<{}>()
+		pattern(app, "/health")
+		expect(() => app.route(sub)).toThrow("Duplicate route: GET /health")
+		expect(() => (app as unknown as { route: (p: string) => unknown }).route("/x")).toThrow(/needs the sub-app/)
 	})
 })
 
-describe("basePath edge cases", () => {
-	// v0: 7ec4562329
-	it("basePath without leading slash", async () => {
-		const app = honey<{}>().basePath("/v1")
-		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+describe("mounting a sub-app: chains and scopes", () => {
+	// v0: a2f656dadb
+	// v0: 6de3a06f3e
+	// v0: 93450d5123
+	// v0: 0147d10cc1
+	it("mounted routes run the mounting chain, then their own chain and scopes; the parent's routes run neither", async () => {
+		const trace: string[] = []
+		const sub = honey<{}>()
+		sub.use("/secret", deny(403))
+		sub
+			.use(tracer(trace, "sub"))
+			.get("/guarded")
+			.handler((ctx) => ctx.res.text("ok", ctx.path))
+		sub.get("/secret/a").handler((ctx) => ctx.res.text("ok", "secret"))
+		const app = honey<{}>()
+		const withParent = app.use(tracer(trace, "parent"))
+		withParent.get("/parent").handler((ctx) => ctx.res.text("ok", "parent"))
+		withParent.route("/api", sub)
+		expect(await send(app, "/api/guarded")).toMatchObject({ body: "/api/guarded", status: 200 })
+		expect(trace).toEqual(["parent", "sub"])
+		trace.length = 0
+		expect((await send(app, "/parent")).status).toBe(200)
+		expect(trace).toEqual(["parent"])
+		expect((await send(app, "/api/secret/a")).status).toBe(403)
+	})
+})
 
-		const res = await app.fetch(new Request("http://localhost/v1/health"), {})
-		expect(res.status).toBe(200)
+describe("a mounted route is a copy", () => {
+	// v0: 84fe069da7
+	it("two parents mounting one sub each keep their own scopes", async () => {
+		const sub = honey<{}>()
+		pattern(sub, "/api/users")
+		const p1 = honey<{}>()
+		p1.use("/api/admin", deny(403))
+		p1.route(sub)
+		pattern(p1, "/api/admin")
+		const p2 = honey<{}>().route(sub)
+		expect((await send(p1, "/api/admin")).status).toBe(403)
+		expect((await send(p2, "/api/admin")).status).toBe(404)
+		expect((await send(sub, "/api/admin")).status).toBe(404)
+		for (const app of [p1, p2, sub]) expect((await send(app, "/api/users")).status).toBe(200)
 	})
 
-	// v0: 351797f6cf
-	it("basePath with nested prefix /api/v2", async () => {
-		const app = honey<{}>().basePath("/api/v2")
-		app.get("/users").handler((ctx) => ctx.res.text("ok", "users"))
-
-		const res = await app.fetch(new Request("http://localhost/api/v2/users"), {})
-		expect(res.status).toBe(200)
-		expect(await res.text()).toBe("users")
+	// v0: e5126955a5
+	it("routes the sub registers after mounting stay its own", async () => {
+		const sub = honey<{}>()
+		pattern(sub, "/a")
+		const parent = honey<{}>().route(sub)
+		pattern(sub, "/b")
+		expect((await send(parent, "/a")).status).toBe(200)
+		expect((await send(parent, "/b")).status).toBe(404)
+		expect((await send(sub, "/b")).status).toBe(200)
 	})
 })
