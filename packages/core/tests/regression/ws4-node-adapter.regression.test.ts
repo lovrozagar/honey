@@ -8,6 +8,7 @@ import { connect } from "node:net"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { WebSocket as WsClient } from "ws"
 import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
+import { cors } from "../../src/middleware/cors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { realtime } from "../../src/realtime/realtime.ts"
 import { type Honey, honey } from "../../src/routing/app.ts"
@@ -261,5 +262,35 @@ describe("WS6: realtime on Node", () => {
 			})
 		})
 		expect([errors, ...(await alive(base))]).toEqual([[new Error("rejected")], [], 200, "alive"])
+	})
+})
+
+describe("WS5: cors in front of a WebSocket route", () => {
+	// regression: H29
+	// v0: 47af53fc4a
+	it("H29: the socket still opens through a chain with cors, and exchanges frames", async () => {
+		const app = honey<{}>()
+		app
+			.use(cors({ origin: "http://app.example" }))
+			.ws("/ws-cors")
+			.handler({
+				onMessage: (_ctx, ws, data) => ws.send(`echo:${String(data)}`),
+				onOpen: (_ctx, ws) => ws.send("ready"),
+			})
+		const { base, port } = await listen(app)
+		const messages = await new Promise<string[]>((resolve, reject) => {
+			const got: string[] = []
+			const client = new WsClient(`ws://127.0.0.1:${port}/ws-cors`, { origin: "http://app.example" })
+			client.on("open", () => client.send("hi"))
+			client.on("message", (data) => {
+				got.push(String(data))
+				if (got.length === 2) {
+					client.close()
+					resolve(got)
+				}
+			})
+			client.on("error", reject)
+		})
+		expect([messages, ...(await alive(base))]).toEqual([["ready", "echo:hi"], [], 200, "alive"])
 	})
 })
