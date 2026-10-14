@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createMiddleware } from "../middleware/middleware.ts"
+import { NODE_OUTBOUND } from "../response/builder.ts"
 import { honey } from "../routing/app.ts"
 import type { OnErrorFn } from "../routing/settings.ts"
 import { createLogger } from "../telemetry/logger.ts"
@@ -138,6 +139,15 @@ describe("onError: its helpers and its place in the chain", () => {
 		const { app } = throwing(new Error("x"))
 		app.onError((_error, ctx) => ctx.jsonFromError(new HoneyError({ errorKey: "teapot", status: "im_a_teapot" })))
 		const res = await app.fetch(get("/boom/1"), {})
+		expect([res.status, ((await res.json()) as { error_key: string }).error_key]).toEqual([418, "teapot"])
+	})
+
+	it("jsonFromError's answer is the answer on the Node path too, where it is a HoneyResponse", async () => {
+		const { app } = throwing(new Error("x"))
+		app.onError((_error, ctx) => ctx.jsonFromError(new HoneyError({ errorKey: "teapot", status: "im_a_teapot" })))
+		const req = get("/boom/1")
+		Object.defineProperty(req, NODE_OUTBOUND, { value: true })
+		const res = await app.fetch(req, {})
 		expect([res.status, ((await res.json()) as { error_key: string }).error_key]).toEqual([418, "teapot"])
 	})
 

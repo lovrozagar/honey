@@ -9,7 +9,7 @@
  */
 import { type HoneyContext, REQUEST, setCtxError } from "../context/context.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
-import { isNodeOutbound } from "../response/builder.ts"
+import { isHoneyResponse, isNodeOutbound } from "../response/builder.ts"
 import type { FetchState } from "../routing/dispatch.ts"
 import type { AppSettings, ErrorCtx, ErrorI18n } from "../routing/settings.ts"
 import { invokeUser } from "../realtime/invoke-user.ts"
@@ -147,9 +147,10 @@ function onErrorFailed(s: AppSettings<unknown>, t: Throw, failure: unknown): May
 function settleOnError(s: AppSettings<unknown>, t: Throw, result: unknown): MaybePromise<Response> {
 	if (result instanceof HoneyError)
 		return answer(s, t.ctx, hasUnknownStatus(result) ? projectThrown(result, stateOf(t.ctx).plan.policy) : result)
-	if (result instanceof Response) {
+	/* jsonFromError answers a HoneyResponse on the Node path: a Response all the same */
+	if (result instanceof Response || isHoneyResponse(result)) {
 		setCtxError(t.ctx as HoneyContext, t.error)
-		return result
+		return result as Response
 	}
 	return unhandled(s, t)
 }
