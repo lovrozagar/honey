@@ -92,13 +92,14 @@ src/realtime/bus.ts	core	src	06	RealtimeBus pub/sub	realtime/bus.ts
 src/realtime/route.ts	core	src	06	realtime route	realtime/route.ts
 src/realtime/server.ts	core	src	06	RealtimePublisher + resume server	realtime/server.ts
 src/realtime/reference-server.ts	core	src	06	reference resume/conformance server (H8)	—
-src/realtime/register.ts	core	index	06	./realtime export	realtime/register.ts
-src/ws/node.ts	core	src	06	Node ws adapter	ws/node.ts
-src/ws/bun.ts	core	src	06	Bun ws adapter	ws/bun.ts
-src/ws/cloudflare.ts	core	src	06	Workers ws adapter	ws/cloudflare.ts
-src/ws/session.ts	core	src	06	runtime-agnostic ws session	ws/session.ts
-src/ws/shared.ts	core	src	06	shared ws helpers	ws/shared.ts
-src/ws/origin.ts	core	src	06	ws origin policy	ws-origin.ts
+src/realtime/realtime.ts	core	src	06	realtime(app, path, opts) → RealtimePublisher; the ./realtime export — a plain function wiring app.ws(path) + bus/session/publisher, NOT a self-registering slot (H23 — feature-slots.ts is cut, never recreated). Core never imports it; an app without realtime bundles none of it	realtime/register.ts
+src/ws/contract.ts	core	src	06	the shared ws contract (WSContext/WSHandler/WSAdapter/WSPreUpgrade/RawSocket types + WSContextImpl send-buffer/backpressure socket + fireHandler); a plain module every adapter imports — v0 wrongly housed these in cloudflare.ts behind an `import "./session.ts"` side-effect feeding the slot. No registerFeature, no side-effect import	ws/cloudflare.ts
+src/ws/node.ts	core	src	06	Node ws adapter (ws optional peer, lazy, not cached on failure); reads the upgrade off the NODE_UPGRADE symbol on the request view (like PEER_ADDRESS), not env.__nodeUpgrade — ctx.env stays the user's; keepalive ping/pong, idle, handshake-fail reject	ws/node.ts
+src/ws/bun.ts	core	src	06	Bun ws adapter + the websocket handler object for Bun.serve (serve passes it at creation); server.upgrade, idleTimeout clamp, 101 sentinel, lazy socket	ws/bun.ts
+src/ws/cloudflare.ts	core	src	06	Workers ws adapter: WebSocketPair + server.accept + 101 with webSocket; imports the contract, no side-effect import, no slot	ws/cloudflare.ts
+src/ws/session.ts	core	src	06	runtime-agnostic ws session: createWsSession ordered queue (open→message→close), containment, pending cap (1008); NO registerFeature (H23) — adapters import it directly	ws/session.ts
+src/ws/shared.ts	core	src	06	shared ws helpers: resolveWSOptions, protocol selection, payload check, close-code sanitizing, bufferedAmount, toArrayBuffer, truncateUtf8 (moved here from realtime/route.ts — close-reason truncation is a ws-transport concern)	ws/shared.ts
+src/ws/origin.ts	core	src	06	ws origin policy + H18.12 full-origin same-origin (scheme+host+port) compared to the request's own canonical origin (new URL(ctx.req.url).origin); no trustProxy-derived host (trust cut, H23); fails closed behind untrusted TLS termination (such apps use an explicit allowlist)	ws-origin.ts
 src/telemetry/logger.ts	core	src	07	createLogger: levels, child, pino shape (H17)	logger.ts
 src/telemetry/log-format.ts	core	src	07	json + pretty formatters	logger.ts
 src/telemetry/request-log.ts	core	src	07	optional request log (off by default) (H17)	logger.ts
@@ -185,12 +186,15 @@ tests/integration/client-ip.test.ts	core	test	03	ctx.ip through app.fetch (H23):
 tests/integration/node-adapter.test.ts	core	test	04	a real node:http round trip: request target vs Host header, absolute-form target, malformed Host → 400, body streamed both ways, Set-Cookie list kept, HEAD, keep-alive, socket peer → ctx.ip, client abort	node-adapter*,node-request-url*
 tests/integration/serve.test.ts	core	test	04	serve(app) on node/bun: the returned handle (port, shutdown), graceful drain, Workers via app.fetch (export default app); detect → adapter	serve-soak*,server*
 tests/integration/streaming.test.ts	core	test	05	ctx.res.stream/generate/sse/range through app.fetch: stream completes + client-abort cancels the producer (no leak), generate, SSE framing + Last-Event-ID resume, Range → 206/416/200; split named (streaming/sse/range) only if >500	streaming*,stream-lifecycle*
+tests/integration/websockets.test.ts	core	test	06	app.ws(path) through each adapter: upgrade + 101, origin check (H18.12), subprotocol select, message echo + binary, close codes/reason truncation, ordered callback queue + containment, pending-cap 1008, payload-too-big 1009; node via a real node:http upgrade, bun spawned, cf via WebSocketPair; split named (websockets/ws-origin/ws-containment) only if >500	ws*,containment*,stream-lifecycle*
+tests/integration/realtime.test.ts	core	test	06	realtime(app, path, opts) end to end: bus pub/sub across connections, namespace isolation, identify→userId, join/leave, limits (maxTopics/maxPendingFrames/maxBufferedBytes/slowConsumer), origin, resume (H8) against the reference server	realtime*,bus*
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder (InferCtx/Env/BasePath/Meta/ErrorFactory/Methods/RoutePaths/RouteMethods/RouteCtx), context() typing, meta<T>(), public surface (internals hidden), base/routes/services split, ComputeErrorsByStatus	typetest/*
 tests/types/app-routes.typetest.ts	core	test	02	$routes/MergeRoute depth + same-path methods, basePath + MergePath registration, route(sub) merging, meta carried in $routes	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	ctx.params, routePattern literal, errors (declared + defaults, factory form, boundary), meta narrowing + readonly, req/env, no input without .input(), per-route use() accumulation	typetest/*
 tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddleware deps + TReqs ordering, parameter-annotation inference, next() addition + union types, errors tied to the factory, builder one-shot hiding	typetest/*
 tests/types/middleware-scoped.typetest.ts	core	test	02	use(path, mw) types: scoped adds on matching vs non-matching routes, segment boundary, composition, basePath merge, registration order, chain TCtx unpolluted, route(sub), overload dispatch, T16/T28 positional-generic compat	typetest/*
 tests/types/streaming.typetest.ts	core	test	05	ctx.res.stream/generate/sse/rangeResponse return-type branding: the Response the methods yield, sse() event-emitter shape (untyped at 05), generate() AsyncGenerator acceptance; the typed SSE event schema is bit 08 (H10)	typetest/*
+tests/types/websockets.typetest.ts	core	test	06	app.ws(path) builder typing (handler/onOpen/onMessage/onClose ctx + WSContext, origins, meta, input), WSContext/WSHandler/WSAdapter shapes, realtime() ConnContext + RealtimePublisher typing, wsAdapter() accepts an adapter value	typetest/*
 # TRANSITIONAL (fold + delete): pre-H22 numbered typetest dumps still on disk; the implementer folds each into
 #   the named files above and deletes it (app-2 → app/app-routes; middleware-2/-3 → middleware/middleware-scoped).
 #
@@ -203,6 +207,8 @@ tests/regression/ws2-middleware.regression.test.ts	core	test	02	16 bit-02 cases 
 tests/regression/ws1-route-model.regression.test.ts	core	test	02	2 bit-02 cases (bit-01 cases already ported, tagged, in routing)	regression/ws1-route-model.regression.test.ts
 tests/regression/review.regression.test.ts	core	test	02	2 bit-02 cases; grown by later bits	regression/review.regression.test.ts
 tests/regression/ws3-request.regression.test.ts	core	test	02	1 bit-02 case; the bulk is bit 03 (request/trust)	regression/ws3-request.regression.test.ts
+tests/regression/ws4-node-adapter.regression.test.ts	core	test	06	the deferred node:http upgrade path (14 cases): real-socket upgrade handshake, handshake failure, keepalive, NODE_UPGRADE hand-off; v1-named port of v0 regression/ws4-8/node-adapter, each // v0: tagged	regression/ws4-8/node-adapter.regression.test.ts,regression/ws4-8/node-fixture.ts
+tests/regression/ws4-in-process.regression.test.ts	core	test	06	in-process ws cases (6): adapter contract exercised without a socket; v1-named port of v0 regression/ws4-8/in-process, each // v0: tagged	regression/ws4-8/in-process.regression.test.ts,regression/ws4-8/harness.ts
 tests/regression/v072.regression.test.ts	core	test	17	no bit-02 case left (V072-2 aeff0f4b4d is CLI, bit 17); born there	regression/v072.regression.test.ts
 # ============================== packages/gen  (@lovrozagar/honey-codegen) ==============================
 src/ir/model.ts	gen	src	09	the IR types	codegen-ir.ts,codegen-sdk-model.ts
