@@ -20,7 +20,10 @@
  */
 import { readFileSync, writeFileSync } from "node:fs"
 import { createMiddleware, honey } from "@lovrozagar/honey"
+import { cors as corsV1 } from "../../packages/core/src/middleware/cors.ts"
 import { createMiddleware as createV1Middleware } from "../../packages/core/src/middleware/middleware.ts"
+import { requestId as requestIdV1 } from "../../packages/core/src/middleware/request-id.ts"
+import { secureHeaders as secureHeadersV1 } from "../../packages/core/src/middleware/secure-headers.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
 import { cors } from "@lovrozagar/honey/cors"
 import { requestId } from "@lovrozagar/honey/request-id"
@@ -38,7 +41,6 @@ const TARGET = process.env.HOTPATH_TARGET === "v0" ? "v0" : "v1"
 const PENDING_V1: Readonly<Record<string, string>> = {
 	body: "pending bit 08",
 	"large-response": "pending bit 08",
-	"mw-stack": "pending bit 07",
 	/* trustProxy is cut (H23): v1 has no forwarded-client resolution to measure */
 	trust: "cut (H23)",
 }
@@ -121,6 +123,13 @@ function buildV1App() {
 		createV1Middleware((_ctx, next) => next()),
 	)
 	app.get("/sync/item").handler((ctx) => ctx.res.json("ok", { ok: true }))
+	/* mw-stack: the same edge middleware as v0's, writing their headers through withHeaders */
+	app
+		.use(requestIdV1())
+		.use(secureHeadersV1())
+		.use(corsV1())
+		.get("/stack")
+		.handler((ctx) => ctx.res.json("ok", { ok: true }))
 	for (let i = 0; i < 300; i++) app.get(`/r${i}/:a/:b`).handler((ctx) => ctx.res.json("ok", { a: ctx.params.a }))
 	app.get("/deep/:a/:b/:c/:d/:e").handler((ctx) => ctx.res.json("ok", { e: ctx.params.e }))
 	return app
