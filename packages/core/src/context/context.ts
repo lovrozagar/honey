@@ -25,6 +25,8 @@ export type RequestState<TEnv> = {
 
 /** What a context reads from its route, computed once at finalize. */
 export type RouteInfo = {
+	/** the route's id (`GET /users/:id`); empty for a request no route serves */
+	readonly id: string
 	readonly errors: Readonly<Record<string, (...args: never[]) => unknown>> | null
 	readonly meta: Readonly<Record<string, unknown>>
 	readonly pattern: string
@@ -33,7 +35,7 @@ export type RouteInfo = {
 const EMPTY: Readonly<Record<string, never>> = /* @__PURE__ */ Object.freeze({})
 
 /** The route info of a context that serves no route (a miss, a bare context). */
-export const NO_ROUTE: RouteInfo = /* @__PURE__ */ Object.freeze({ errors: null, meta: EMPTY, pattern: "" })
+export const NO_ROUTE: RouteInfo = /* @__PURE__ */ Object.freeze({ errors: null, id: "", meta: EMPTY, pattern: "" })
 
 /** The context's slot for its request state: not exported from the package, so user code cannot reach it. */
 export const REQUEST: unique symbol = /* @__PURE__ */ Symbol("honey.request")

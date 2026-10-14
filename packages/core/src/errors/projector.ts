@@ -19,6 +19,9 @@ export type ErrorFactoryRecord = {
 	readonly [ERROR_META]?: Readonly<Record<string, ErrorMetaEntry>>
 }
 
+/** The digest an unknown error's 500 carries: the same value is on the operator's log line. */
+export const DIGEST: unique symbol = /* @__PURE__ */ Symbol("honey.digest")
+
 /** What a route allows to reach the client. */
 export type ErrorPolicy = {
 	/** The error an undeclared or unknown throw becomes; `null`: a 500. */
@@ -75,6 +78,8 @@ function errorBody(error: HoneyError, defaultFormatter: ErrorFormatter, customFo
 		status_key: error.statusKey,
 		success: false,
 	}
+	const digest = (error as { [DIGEST]?: string })[DIGEST]
+	if (digest !== undefined) defaultShape.digest = digest
 	try {
 		return defaultFormatter(error, defaultShape)
 	} catch {

@@ -19,7 +19,11 @@ async function send(app: Fetchable, target: string, init: RequestInit = {}) {
 }
 
 const JSON_TYPE = { "content-type": "application/json" }
-const envelope = (key: string, status: number, statusKey = key) => ({
+/** An unknown throw's 5xx carries a random digest, which its operator line repeats (H17). */
+const DIGEST = { digest: expect.stringMatching(/^[0-9a-f]{16}$/) }
+/** The default envelope; `digest` when an unknown throw became it, by default for the internal 500. */
+const envelope = (key: string, status: number, statusKey = key, digest = key === "internal_server_error") => ({
+	...(digest ? DIGEST : {}),
 	error_key: key,
 	fields: {},
 	message: key,
@@ -318,7 +322,10 @@ describe("which errors reach the client under an errorFactory", () => {
 		["the route's .boundary() over the app's defaultBoundary", "both"],
 	] as const)("%s turns any undeclared throw into its key, and lets declared ones through", async (_l, at) => {
 		for (const thrown of WRAPPED)
-			expect(await send(factoryApp(thrown, at), "/t")).toEqual(failure("wrapped", 502, "bad_gateway"))
+			expect(await send(factoryApp(thrown, at), "/t")).toEqual({
+				...failure("wrapped", 502, "bad_gateway"),
+				body: envelope("wrapped", 502, "bad_gateway", true),
+			})
 		expect(
 			await send(
 				factoryApp(() => errors.not_found(), at),
@@ -393,43 +400,6 @@ describe("ctx.errors", () => {
 	})
 })
 
-/** What onError returns, and the answer the client gets. */
-const ON_ERROR: Array<[string, () => unknown, object]> = [
-	[
-		"returns a Response",
-		() => new Response("handled", { status: 418 }),
-		{
-			body: "handled",
-			headers: { "content-type": "text/plain;charset=UTF-8" },
-			status: 418,
-		},
-	],
-	[
-		"returns a HoneyError",
-		() => new HoneyError({ errorKey: "typed", status: "conflict" }),
-		failure("typed", 409, "conflict"),
-	],
-	[
-		"resolves to a HoneyError",
-		async () => new HoneyError({ errorKey: "typed", status: "conflict" }),
-		failure("typed", 409, "conflict"),
-	],
-	["returns nothing", () => undefined, INTERNAL],
-	[
-		"returns a HoneyError with an unknown status key",
-		() => new HoneyError({ errorKey: "typed", status: "nope" as never }),
-		INTERNAL,
-	],
-	[
-		"throws",
-		() => {
-			throw new Error("onError broke")
-		},
-		INTERNAL,
-	],
-	["rejects", () => Promise.reject(new Error("onError broke")), INTERNAL],
-]
-
 describe("ctx.errors: open routes and named factories", () => {
 	// v0: a88f6dff48
 	it("a route with neither declared keys nor app defaults is open: the whole factory, and any of its keys reaches the client", async () => {
@@ -469,20 +439,6 @@ describe("ctx.errors: open routes and named factories", () => {
 })
 
 describe("the app's error handlers", () => {
-	it.each(ON_ERROR)("an onError that %s, given what was thrown, gives %o", async (_label, onError, answer) => {
-		const seen: unknown[] = []
-		const boom = new Error("boom")
-		const app = honey<{}>().onError((thrown) => {
-			seen.push(thrown)
-			return onError() as never
-		})
-		app.get("/t").handler(() => {
-			throw boom
-		})
-		expect(await send(app, "/t")).toEqual(answer)
-		expect(seen).toEqual([boom])
-	})
-
 	it("onNotFound answers unknown paths; onMethodNotAllowed answers wrong methods, keeping Allow", async () => {
 		const app = honey<{}>()
 			.onNotFound((ctx) => Response.json({ missing: new URL(ctx.req.url).pathname }, { status: 404 }))

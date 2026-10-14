@@ -69,7 +69,7 @@ describe("HoneyContext > constructor", () => {
 
 	it("reads path from the request state and pattern, meta and errors from the route", () => {
 		const errors = { gone: () => new HoneyError({ errorKey: "gone", status: "gone" }) }
-		const route: RouteInfo = { errors, meta: Object.freeze({ tag: "a" }), pattern: "/users/:id" }
+		const route: RouteInfo = { errors, id: "GET /users/:id", meta: Object.freeze({ tag: "a" }), pattern: "/users/:id" }
 		const state: RequestState<{ DB: string }> = {
 			env: { DB: "x" },
 			executionCtx: undefined,
@@ -239,7 +239,7 @@ describe("HoneyContext > meta", () => {
 	// v0: 74a5d9783d
 	it("accepts custom meta and preserves it", () => {
 		const meta = Object.freeze({ version: "1.0" })
-		expect(makeCtx(undefined, { errors: null, meta, pattern: "" }).meta).toBe(meta)
+		expect(makeCtx(undefined, { errors: null, id: "", meta, pattern: "" }).meta).toBe(meta)
 	})
 })
 

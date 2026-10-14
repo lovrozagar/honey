@@ -22,8 +22,18 @@ async function send(app: Fetchable, target: string, init: RequestInit = {}) {
 const denied = { body: "denied", status: 401 }
 const deny = createMiddleware(() => new Response("denied", { status: 401 }))
 
+/** An unknown error's 500 carries a random digest; its operator line carries the same (H17). */
+const DIGEST = { digest: expect.stringMatching(/^[0-9a-f]{16}$/) }
 const envelope = (key: string, status: number, statusKey = key) => ({
-	body: { error_key: key, fields: {}, message: key, status, status_key: statusKey, success: false },
+	body: {
+		...(key === "internal_server_error" ? DIGEST : {}),
+		error_key: key,
+		fields: {},
+		message: key,
+		status,
+		status_key: statusKey,
+		success: false,
+	},
 	status,
 })
 

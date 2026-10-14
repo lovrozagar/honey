@@ -21,7 +21,10 @@ async function send(app: Fetchable, target: string, cookie?: string) {
 /** The name=value pair a client sends back for a Set-Cookie header. */
 const sentBack = (setCookie: string) => setCookie.split(";")[0] as string
 
+/** An unknown error's 500 carries a random digest; its operator line carries the same (H17). */
+const DIGEST = { digest: expect.stringMatching(/^[0-9a-f]{16}$/) }
 const internal = {
+	...DIGEST,
 	error_key: "internal_server_error",
 	fields: {},
 	message: "internal_server_error",

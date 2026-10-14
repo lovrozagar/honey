@@ -28,8 +28,22 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =
 	status,
 })
 /** The answer an error gets. */
+/** An unknown error's 500 carries a random digest; its operator line carries the same (H17). */
+const DIGEST = { digest: expect.stringMatching(/^[0-9a-f]{16}$/) }
 const failure = (key: string, status: number, extra?: Record<string, string>) =>
-	json({ error_key: key, fields: {}, message: key, status, status_key: key, success: false }, status, extra)
+	json(
+		{
+			...(key === "internal_server_error" ? DIGEST : {}),
+			error_key: key,
+			fields: {},
+			message: key,
+			status,
+			status_key: key,
+			success: false,
+		},
+		status,
+		extra,
+	)
 
 /** A middleware that records `name` each time it runs, and `/name` after next() when `around`. */
 const tracer = (trace: string[], name: string, around = false) =>

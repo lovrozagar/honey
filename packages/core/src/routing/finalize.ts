@@ -147,7 +147,7 @@ function planRoute(
 		pf: null,
 		pfChain: chain,
 		policy,
-		route: { errors, meta: meta ?? EMPTY_META, pattern: r.rp },
+		route: { errors, id: r.id, meta: meta ?? EMPTY_META, pattern: r.rp },
 		run: compileChain(chain, r.fn, hooks.convert),
 	}
 }
@@ -169,7 +169,7 @@ function planMiss(g: HoneyGraph, hooks: FinalizeHooks): Plan {
 		pf: null,
 		pfChain: chain,
 		policy,
-		route: { errors, meta: meta ?? EMPTY_META, pattern: "" },
+		route: { errors, id: "", meta: meta ?? EMPTY_META, pattern: "" },
 		run: compileChain(chain, hooks.miss, hooks.convert),
 	}
 }

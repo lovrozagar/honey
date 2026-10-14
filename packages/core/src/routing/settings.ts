@@ -7,6 +7,7 @@
 import type { HoneyError } from "../errors/error.ts"
 import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
+import { createLogger, type Logger, SILENT } from "../telemetry/logger.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import type { WSAdapter } from "../ws/contract.ts"
 
@@ -37,6 +38,8 @@ export type AppSettings<TEnv = unknown> = {
 	errorFormatter: ErrorFormatter
 	/** the body schema of standard errors, for the OpenAPI document */
 	errorSchema: StandardSchemaLike | null
+	/** where every server-side line goes: the default createLogger(), the app's own, or SILENT */
+	logger: Logger
 	onError: OnErrorFn<TEnv> | null
 	onMethodNotAllowed: OnMethodNotAllowedFn<TEnv> | null
 	onNotFound: OnNotFoundFn<TEnv> | null
@@ -63,6 +66,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		errorFactory: null,
 		errorFormatter: defaultErrorFormatter,
 		errorSchema: null,
+		logger: createLogger(),
 		onError: null,
 		onMethodNotAllowed: null,
 		onNotFound: null,
@@ -106,6 +110,15 @@ export abstract class SettingsChain<TEnv> {
 	/** Strip a URL path prefix before matching: whole segments only; a path without it passes through. */
 	stripPrefix(prefix: string): this {
 		this.settings.stripPrefix = normalizeStripPrefix(prefix)
+		return this
+	}
+
+	/**
+	 * Where every server-side line goes: unhandled errors, failing callbacks, the request log.
+	 * Default: `createLogger()`, whose level and format follow NODE_ENV. `false` writes nothing.
+	 */
+	logger(logger: Logger | false): this {
+		this.settings.logger = logger === false ? SILENT : logger
 		return this
 	}
 
