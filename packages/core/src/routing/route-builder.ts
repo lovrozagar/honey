@@ -1,10 +1,11 @@
 /**
- * The route builder: what `app.get(path)` returns. `.meta()`, `.errors()`, `.boundary()` and `.use()`
- * shape the route; `.handler()` registers it (one record per method) and returns the app typed with
- * the new route. A one-shot method disappears from the chain once called.
+ * The route builder: what `app.get(path)` returns. `.meta()`, `.errors()`, `.boundary()`, `.use()`,
+ * `.input()` and `.output()` shape the route; `.handler()` registers it (one record per method) and
+ * returns the app typed with the new route. A one-shot method disappears from the chain once called.
  */
 import type { ERROR_META } from "../errors/errors.ts"
 import { compileInput, type InferInputMap, type InputSchemas, type InputStep } from "../input/input.ts"
+import type { OutputSchemas } from "./output-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { TypedResponse } from "../response/response.ts"
@@ -36,6 +37,8 @@ export type BuilderTypes = {
 	errorKeys: string
 	/** ctx.input once `.input()` ran; `never` before */
 	input: unknown
+	/** what `.output()` declares; `never` before */
+	output: unknown
 	meta: unknown
 	method: string
 	path: string
@@ -79,7 +82,8 @@ export type RouteHandlerCtx<B extends BuilderTypes> = HandlerCtx<
 	B["errorKeys"] | B["defaultErrors"],
 	B["path"],
 	B["taps"],
-	B["input"]
+	B["input"],
+	B["output"]
 >
 
 /** The app `.handler()` returns: the same handle, typed with the new route. */
@@ -93,7 +97,7 @@ export type HandlerReturn<B extends BuilderTypes> = Honey<
 				B["path"],
 				B["method"],
 				[B["input"]] extends [never] ? {} : B["input"],
-				{},
+				[B["output"]] extends [never] ? {} : B["output"],
 				RouteHandlerCtx<B>,
 				RouteMeta<B["accMeta"]>,
 				B["errorKeys"] | B["defaultErrors"],
@@ -131,6 +135,7 @@ export type StartOf<H, TPath extends string, TMethod extends string> =
 				errorKeys: never
 				input: never
 				meta: TMeta
+				output: never
 				method: TMethod
 				path: MergePath<TBase, TPath>
 				routes: TRoutes
@@ -151,6 +156,8 @@ export type BuilderState = {
 	readonly graph: HoneyGraph
 	/** the compiled `.input()` step */
 	readonly input: InputStep | null
+	/** what `.output()` declared */
+	readonly output: OutputSchemas | null
 	/** explicit meta: chain `.meta()` overlaid by route `.meta()` */
 	readonly meta: Readonly<Record<string, unknown>> | null
 	readonly method: string
@@ -221,17 +228,19 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ meta: merged })
 	}
 
-	/**
-	 * Validate what the request carries: params, search, headers, cookies, and one body (json or
-	 * form). Each source lands on ctx.input as its schema produced it; the first that fails answers
-	 * 400 (415 for a body of another media type). A body schema on a route only GET or HEAD reach
-	 * throws here.
-	 */
+	/** Validate params, query, headers, cookies and one body onto ctx.input: the first failure is a 400 (415). */
 	input<const TSchemas extends InputSchemas>(
 		schemas: TSchemas,
 	): BuilderChain<Next<B, { input: InferInputMap<TSchemas>; used: B["used"] | "input" }>> {
 		const s = this.#s
 		return this.#next({ input: compileInput(schemas, [s.method, ...s.extraMethods], s.path) })
+	}
+
+	/** Declare what the route answers: ctx.res narrows to it, and `outputValidation` checks it. */
+	output<const TOutput extends OutputSchemas>(
+		schemas: TOutput,
+	): BuilderChain<Next<B, { output: TOutput; used: B["used"] | "output" }>> {
+		return this.#next({ output: schemas })
 	}
 
 	/** Route-level middleware, after the chain and the scopes. */
@@ -250,6 +259,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 			ef: s.errorSource,
 			fn: fn as unknown as RouteSource["fn"],
 			in: s.input,
+			out: s.output,
 			own: s.graph.settings,
 			rb: s.boundaryKey,
 			rm: s.middlewares,
@@ -261,10 +271,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 	}
 }
 
-/**
- * The builder for a route on `view`'s handle: `method` (and `extraMethods`) at `path` under the
- * handle's basePath, pending until `.handler()`.
- */
+/** The builder for `method` (and `extraMethods`) at `path` under `view`'s basePath, pending until `.handler()`. */
 export function startRoute(
 	graph: HoneyGraph,
 	view: HandleView,
@@ -281,6 +288,7 @@ export function startRoute(
 		input: null,
 		meta: view.chainMeta,
 		method: route.method,
+		output: null,
 		middlewares: [],
 		parent,
 		path: fullPath,

@@ -5,6 +5,7 @@
  */
 import type { HoneyContext, REQUEST } from "../context/context.ts"
 import type { Honey } from "./app.ts"
+import type { ApplyOutput } from "./output-types.ts"
 import type { TapMethod } from "./tap.ts"
 import type { StatusKey } from "../response/status.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
@@ -33,10 +34,7 @@ export type DefaultMeta = OpenApiMeta
 /** A middleware scoped by path at the type level: what it adds to routes under `path`. */
 export type ScopedMwEntry = { readonly adds: unknown; readonly path: string }
 
-/**
- * The additions of every scoped middleware whose path is `TFullPath` or one of its ancestors. A
- * widened (non-literal) scope path is skipped: `"/anywhere" extends string` would match every route.
- */
+/** The additions of every scoped middleware at `TFullPath` or an ancestor; a widened scope path is skipped. */
 export type ApplyScoped<
 	TScopedMw extends readonly ScopedMwEntry[],
 	TFullPath extends string,
@@ -60,10 +58,7 @@ export type ApplyParams<TCtx, TParams> = [keyof TParams] extends [string]
 		: TCtx & { readonly params: TParams }
 	: TCtx
 
-/**
- * The full handler ctx: chain ctx, typed params, meta, pattern, declared errors and, after
- * `.input()`, ctx.input. With a factory, `errors` holds only the declared keys (as at runtime).
- */
+/** The handler ctx: params, meta, pattern, declared errors (as at runtime), input, ctx.res narrowed by output. */
 export type HandlerCtx<
 	TCtx,
 	TParams,
@@ -73,24 +68,28 @@ export type HandlerCtx<
 	TPath extends string = string,
 	TTaps = {},
 	TInput = never,
-> = ApplyParams<
-	[TErrorFactory] extends [never]
-		? [keyof TTaps] extends [never]
-			? TCtx
-			: Omit<TCtx, "tap">
-		: Omit<TCtx, [keyof TTaps] extends [never] ? "errors" : "errors" | "tap">,
-	TParams
-> &
-	/* declared taps replace the context's any-key tap; without them the context stays as it is */
-	([keyof TTaps] extends [never] ? {} : TapMethod<TTaps>) & {
-		readonly meta: Readonly<Omit<TAccMeta, "openApi" | typeof CHAIN_META>>
-		readonly routePattern: TPath
-	} & ([TErrorFactory] extends [never]
-		? {}
-		: [TErrorKeys] extends [never]
-			? { readonly errors: TErrorFactory }
-			: { readonly errors: Pick<TErrorFactory, TErrorKeys & keyof TErrorFactory> }) &
-	([TInput] extends [never] ? {} : { readonly input: TInput })
+	TOutput = never,
+> = ApplyOutput<
+	ApplyParams<
+		[TErrorFactory] extends [never]
+			? [keyof TTaps] extends [never]
+				? TCtx
+				: Omit<TCtx, "tap">
+			: Omit<TCtx, [keyof TTaps] extends [never] ? "errors" : "errors" | "tap">,
+		TParams
+	> &
+		/* declared taps replace the context's any-key tap; without them the context stays as it is */
+		([keyof TTaps] extends [never] ? {} : TapMethod<TTaps>) & {
+			readonly meta: Readonly<Omit<TAccMeta, "openApi" | typeof CHAIN_META>>
+			readonly routePattern: TPath
+		} & ([TErrorFactory] extends [never]
+			? {}
+			: [TErrorKeys] extends [never]
+				? { readonly errors: TErrorFactory }
+				: { readonly errors: Pick<TErrorFactory, TErrorKeys & keyof TErrorFactory> }) &
+		([TInput] extends [never] ? {} : { readonly input: TInput }),
+	TOutput
+>
 
 /** One route at the type level, for the RPC client and codegen. */
 export type RouteRecord<

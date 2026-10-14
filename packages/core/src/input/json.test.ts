@@ -46,6 +46,7 @@ describe("jsonInput: the JSON body, read once and validated", () => {
 
 	// v0: 62502397c2
 	// v0: 9ef908a0b6
+	// v0: 2cd7f9188e
 	it("an empty or unparseable body is a 400 malformed_body, and the next request parses as usual", async () => {
 		const empty = await rejected(() => jsonInput(passing, post("")))
 		const broken = await rejected(() => jsonInput(passing, post("{ invalid json !!!")))

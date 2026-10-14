@@ -89,6 +89,7 @@ describe("route .input(): each source validated before the handler", () => {
 	// v0: 23b1eda7b9
 	// v0: 9b27914e17
 	// v0: 9fe7088757
+	// v0: fc72b85ad2
 	it("puts every declared source on ctx.input, as its schema produced it", async () => {
 		const app = honey<{}>()
 		app

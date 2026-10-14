@@ -6,7 +6,15 @@
 import { type CookieOptions, serializeCookie } from "../context/cookie.ts"
 import { generatorStream, type ProducerOptions, producerStream } from "../streaming/producer-stream.ts"
 import type { Logger } from "../telemetry/logger.ts"
-import { createHoneyResponse, isHoneyResponse, rawBodyOf, type RawBody, withRawBody } from "./builder.ts"
+import {
+	createHoneyResponse,
+	isHoneyResponse,
+	isProducedStream,
+	rawBodyOf,
+	type RawBody,
+	withProducedBody,
+	withRawBody,
+} from "./builder.ts"
 import type { HeaderMap } from "./out-headers.ts"
 import { SSE_HEADERS, type SSEOptions, type SSEStream, sseBody } from "./sse.ts"
 import { type StatusKey, statusKeyToCode } from "./status.ts"
@@ -144,7 +152,7 @@ export class HoneyRes {
 	/** A streamed body under `base` headers plus the options' headers and cookies. */
 	#streamed(body: ReadableStream<Uint8Array>, base: Readonly<Record<string, string>>, opts?: ResponseOptions) {
 		const headers = hasOptions(opts) ? applyNative(new Headers(base), opts) : base
-		return new Response(body, { headers, status: opts?.status ?? 200 })
+		return withProducedBody(new Response(body, { headers, status: opts?.status ?? 200 }))
 	}
 
 	/** A response with a body and no extra headers. */
@@ -203,7 +211,8 @@ export class HoneyRes {
 	raw(response: Response): TypedResponse {
 		if (response.bodyUsed)
 			throw new TypeError("raw(): this response's body was already read — build a new Response per request")
-		if (response.status === 101 || isHoneyResponse(response) || rawBodyOf(response) !== null) return typed(response)
+		const built = isHoneyResponse(response) || rawBodyOf(response) !== null || isProducedStream(response)
+		if (response.status === 101 || built) return typed(response)
 		return typed(new Response(response.body, response))
 	}
 

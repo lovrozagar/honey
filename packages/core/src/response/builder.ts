@@ -16,9 +16,13 @@ const encoder = /* @__PURE__ */ new TextEncoder()
 // per-process-constant: text-codec
 const decoder = /* @__PURE__ */ new TextDecoder()
 
-/* weak keys: a response's entry goes with the response; no property is defined on the host object */
+/* weak keys: a response's entry goes with the response; no property is defined on the host object.
+ * A stream honey produced (sse, stream, generate) is recorded under PRODUCED instead of a body. */
 // per-process-constant: raw-body
-const rawBodies = /* @__PURE__ */ new WeakMap<Response, string | Uint8Array>()
+const rawBodies = /* @__PURE__ */ new WeakMap<Response, string | Uint8Array | typeof PRODUCED>()
+
+/** The entry of a response whose body is a stream honey produced: possibly endless, never buffered. */
+const PRODUCED: unique symbol = /* @__PURE__ */ Symbol("honey.produced")
 
 export type RawBody = string | Uint8Array
 
@@ -42,7 +46,19 @@ export function withRawBody(response: Response, body: RawBody): Response {
 /** The buffered body a response was built from, or `null` for a streamed or foreign one. */
 export function rawBodyOf(response: Response): RawBody | null {
 	if (isHoneyResponse(response)) return response.rawBody
-	return rawBodies.get(response) ?? null
+	const raw = rawBodies.get(response)
+	return raw === undefined || raw === PRODUCED ? null : raw
+}
+
+/** Record that `response` streams a body honey produced (sse, stream, generate). */
+export function withProducedBody(response: Response): Response {
+	rawBodies.set(response, PRODUCED)
+	return response
+}
+
+/** Whether `response` streams a body honey produced: one never to be buffered, as it may not end. */
+export function isProducedStream(response: Response): boolean {
+	return rawBodies.get(response) === PRODUCED
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

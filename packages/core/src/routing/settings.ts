@@ -4,6 +4,7 @@
  * A route keeps the settings of the app it was registered on, so a mounted sub-app's routes keep
  * their own error factory, default errors and boundary. Feature bits add their own fields.
  */
+import type { OutputValidationMode } from "../validation/validate-output.ts"
 import type { HoneyError } from "../errors/error.ts"
 import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
@@ -31,10 +32,7 @@ export type ResolveLocaleCtx<TEnv> = {
 	readonly search: Readonly<Record<string, string>>
 }
 
-/**
- * Error-message translation as `app.errorI18n` carries it: `errorI18n()` from `@lovrozagar/honey/i18n`
- * builds it, so core never imports i18n. `translate` answers a translated copy, never changing `error`.
- */
+/** `app.errorI18n`, built by `errorI18n()` from `@lovrozagar/honey/i18n`; `translate` answers a copy. */
 export type ErrorI18n<TEnv = unknown> = {
 	readonly resolveLocale: (ctx: ResolveLocaleCtx<TEnv>) => MaybePromise<string>
 	translate(error: HoneyError, locale: string): HoneyError
@@ -68,6 +66,8 @@ export type AppSettings<TEnv = unknown> = {
 	errorSchema: StandardSchemaLike | null
 	/** where every server-side line goes: the default createLogger(), the app's own, or SILENT */
 	logger: Logger
+	/** whether `.output()` routes check what they answer: resolved per route at finalize */
+	outputValidation: OutputValidationMode
 	onError: OnErrorFn<TEnv> | null
 	onMethodNotAllowed: OnMethodNotAllowedFn<TEnv> | null
 	onNotFound: OnNotFoundFn<TEnv> | null
@@ -92,6 +92,7 @@ export function defaultErrorFormatter(
 
 export function createSettings<TEnv>(): AppSettings<TEnv> {
 	return {
+		outputValidation: "off",
 		customErrorFormatter: null,
 		customErrorSchema: null,
 		defaultBoundaryKey: null,
@@ -145,6 +146,13 @@ export abstract class SettingsChain<TEnv> {
 	/** Type only: each tap key's payload, for `ctx.tap()`, tap handlers and route meta. */
 	taps<TNewTaps extends Record<string, unknown>>(): WithTaps<this, TNewTaps> {
 		return this as never
+	}
+
+	/** Check `.output()` answers: `"off"` (default), `"always"`, or `"dev"` (not production; never without a process). */
+	outputValidation(mode: OutputValidationMode): this {
+		this.settings.outputValidation = mode
+		this.invalidate()
+		return this
 	}
 
 	/** `"strip"` redirects `/a/` to `/a`, `"enforce"` redirects `/a` to `/a/` (308); `"ignore"` serves both. */

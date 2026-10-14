@@ -119,6 +119,7 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 			ef: s.errorSource,
 			fn: upgrader(callbacks as WSHandler<unknown>, s.origins, s.path),
 			in: s.input,
+			out: null,
 			own: s.graph.settings,
 			rb: null,
 			rm: s.middlewares,
