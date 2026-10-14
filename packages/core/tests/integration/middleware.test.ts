@@ -120,20 +120,25 @@ describe("run order", () => {
 
 describe("what next() adds to ctx", () => {
 	// v0: cf0b992a69
+	// v0: ba5b946902
+	// v0: 5b31b6f015
 	// v0: fcc562aa1a
 	// v0: 48ec040348
 	// v0: 31b9b2ca5c
 	// v0: 07e91fb5ad
 	// v0: 55605e9620
-	it("each middleware's additions, of any value kind, reach the handler together", async () => {
+	it("each middleware's additions, chain or route, of any value kind, reach the handler together", async () => {
 		const app = honey<{}>()
 			.use(adds({ count: 42, tags: ["a", "b"] }))
 			.use(adds({ isAdmin: true, nothing: null }))
-			.use(adds({ db: "postgres", userId: "u-1" }))
-		app.get("/t").handler((ctx) => {
-			const { count, db, isAdmin, nothing, tags, userId } = ctx
-			return ctx.res.json("ok", { count, db, isAdmin, nothing, tags, userId })
-		})
+		app
+			.get("/t")
+			.use(adds({ db: "postgres" }))
+			.use(adds({ userId: "u-1" }))
+			.handler((ctx) => {
+				const { count, db, isAdmin, nothing, tags, userId } = ctx
+				return ctx.res.json("ok", { count, db, isAdmin, nothing, tags, userId })
+			})
 		expect(await send(app, "/t")).toEqual(
 			json({ count: 42, db: "postgres", isAdmin: true, nothing: null, tags: ["a", "b"], userId: "u-1" }),
 		)

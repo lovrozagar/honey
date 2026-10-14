@@ -246,15 +246,19 @@ const errors = defineErrors({
 	wrapped: "bad_gateway",
 })
 
-/** A /t route on `errors`, with auth_failed a default error, that declares not_found and throws `thrown`. */
-function factoryApp(thrown: () => unknown, boundary: "app" | "none" | "route" = "none") {
+/**
+ * A /t route on `errors`, with auth_failed a default error, that declares not_found and throws
+ * `thrown`; `boundary` sets the app's defaultBoundary (auth_failed under "both"), the route's, or both.
+ */
+function factoryApp(thrown: () => unknown, boundary: "app" | "both" | "none" | "route" = "none") {
 	const app = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
 	if (boundary === "app") app.defaultBoundary("wrapped")
+	if (boundary === "both") app.defaultBoundary("auth_failed")
 	const route = app.get("/t").errors("not_found")
 	const handler = () => {
 		throw thrown()
 	}
-	if (boundary === "route") route.boundary("wrapped").handler(handler)
+	if (boundary === "route" || boundary === "both") route.boundary("wrapped").handler(handler)
 	else route.handler(handler)
 	return app
 }
@@ -272,31 +276,37 @@ const REACHES: Array<[string, () => unknown, object]> = [
 	["a plain Error", () => new Error("raw"), INTERNAL],
 ]
 
+/** What a boundary turns into its key. */
+const WRAPPED: Array<() => unknown> = [
+	() => new Error("raw"),
+	() => errors.rate_limited(),
+	() => new HoneyError({ errorKey: "teapot", status: "conflict" }),
+	() => "oops",
+]
+
 describe("which errors reach the client under an errorFactory", () => {
 	// v0: 57575ddf02
 	// v0: ce007f0a3e
+	// v0: 02a96b4dbf
+	// v0: 0c6e33b336
 	it.each(REACHES)("%s gives %o", async (_label, thrown, answer) => {
 		expect(await send(factoryApp(thrown), "/t")).toEqual(answer)
 	})
 
 	// v0: 8a8c5fae41
+	// v0: 98bf3d6a4b
+	// v0: a85cd7425e
+	// v0: b4486ba413
+	// v0: a116eca180
+	// v0: 1d0d61b024
+	// v0: e4980f2aea
 	it.each([
 		["the app's defaultBoundary", "app"],
 		["the route's .boundary()", "route"],
-	] as const)("%s turns plain and undeclared throws into its key, and lets declared ones through", async (_l, at) => {
-		const wrapped = failure("wrapped", 502, "bad_gateway")
-		expect(
-			await send(
-				factoryApp(() => new Error("raw"), at),
-				"/t",
-			),
-		).toEqual(wrapped)
-		expect(
-			await send(
-				factoryApp(() => errors.rate_limited(), at),
-				"/t",
-			),
-		).toEqual(wrapped)
+		["the route's .boundary() over the app's defaultBoundary", "both"],
+	] as const)("%s turns any undeclared throw into its key, and lets declared ones through", async (_l, at) => {
+		for (const thrown of WRAPPED)
+			expect(await send(factoryApp(thrown, at), "/t")).toEqual(failure("wrapped", 502, "bad_gateway"))
 		expect(
 			await send(
 				factoryApp(() => errors.not_found(), at),
@@ -306,6 +316,7 @@ describe("which errors reach the client under an errorFactory", () => {
 	})
 
 	// v0: b2dda0df3a
+	// v0: cc8702d138
 	it("a middleware's declared errors reach the client on the routes that use it", async () => {
 		const own = defineErrors({ auth_required: "unauthorized", rate_limited: "too_many_requests" })
 		const auth = defineMiddleware({
@@ -326,25 +337,47 @@ describe("which errors reach the client under an errorFactory", () => {
 	})
 })
 
+/** What a handler sees of ctx.errors. */
+const errorsOf = (errs: object) => ({ frozen: Object.isFrozen(errs), keys: Object.keys(errs).sort() })
+
 describe("ctx.errors", () => {
 	// v0: 7241a672c9
-	it("holds the route's declared keys and the app's default keys, and nothing else", async () => {
+	// v0: e536dc6e3f
+	// v0: ce588ead87
+	// v0: e7cd539ce9
+	// v0: d8b2121635
+	// v0: 14c568d896
+	it("holds, frozen, the route's declared and boundary keys (named alone or with the factory) and the app's defaults", async () => {
 		const app = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
 		app
 			.get("/declared")
 			.errors("not_found")
-			.handler((ctx) => ctx.res.json("ok", { keys: Object.keys(ctx.errors) }))
-		app.get("/none").handler((ctx) => ctx.res.json("ok", { keys: Object.keys(ctx.errors) }))
+			.handler((ctx) => ctx.res.json("ok", errorsOf(ctx.errors)))
+		app
+			.get("/bounded")
+			.boundary("wrapped")
+			.handler((ctx) => ctx.res.json("ok", errorsOf(ctx.errors)))
+		app
+			.get("/named")
+			.errors(errors, "rate_limited")
+			.handler((ctx) => ctx.res.json("ok", errorsOf(ctx.errors)))
+		app.get("/none").handler((ctx) => ctx.res.json("ok", errorsOf(ctx.errors)))
 		app
 			.get("/throw")
 			.errors("not_found")
 			.handler((ctx) => {
 				throw ctx.errors.not_found()
 			})
-		const keys = (list: string[]) => ({ body: { keys: list }, headers: JSON_TYPE, status: 200 })
+		app.get("/default").handler((ctx) => {
+			throw ctx.errors.auth_failed()
+		})
+		const keys = (list: string[]) => ({ body: { frozen: true, keys: list }, headers: JSON_TYPE, status: 200 })
 		expect(await send(app, "/declared")).toEqual(keys(["auth_failed", "not_found"]))
+		expect(await send(app, "/bounded")).toEqual(keys(["auth_failed", "wrapped"]))
+		expect(await send(app, "/named")).toEqual(keys(["auth_failed", "rate_limited"]))
 		expect(await send(app, "/none")).toEqual(keys(["auth_failed"]))
 		expect(await send(app, "/throw")).toEqual(failure("not_found", 404))
+		expect(await send(app, "/default")).toEqual(failure("auth_failed", 401, "unauthorized"))
 	})
 })
 

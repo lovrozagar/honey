@@ -254,6 +254,7 @@ describe("middleware factories and meta", () => {
 		)
 	})
 
+	// v0: e83975eeb1
 	it("defineMiddleware stores the error keys it names and its meta", () => {
 		const factory = { gone: () => new HoneyError({ errorKey: "gone", status: "gone" }), nope: () => null }
 		const mw = defineMiddleware({ errors: [factory, "gone"], fn: (_ctx, next) => next(), meta: { a: 1 } })
