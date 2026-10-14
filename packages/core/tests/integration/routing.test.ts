@@ -44,6 +44,7 @@ describe("method resolution", () => {
 	const verbs = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"] as const
 
 	// v0: 0b40b00bfb
+	// v0: bba7582b67
 	// v0: c938683aa6
 	// v0: 16d54aad19
 	it.each(verbs)("%s on a path every verb registered reaches its own route", async (method) => {
@@ -68,6 +69,7 @@ describe("method resolution", () => {
 	})
 
 	// v0: 93535ff147
+	// v0: 53061962a5
 	// v0: 191f79b6a7
 	it("ALL answers any method, and an exact method on the same path wins over it", async () => {
 		const app = echoApp([
@@ -80,8 +82,42 @@ describe("method resolution", () => {
 	})
 })
 
+describe("method resolution: on() with several methods", () => {
+	// v0: 903360137b
+	// v0: f57a7960d4
+	// v0: c36bee0bde
+	// v0: ae47f23316
+	// v0: 77c1590a86
+	it("on() registers one route per listed method, with its chain and meta; any other method is 405", async () => {
+		const app = honey<{}>()
+		app
+			.meta<{ tag?: string }>()
+			.use(createMiddleware((_ctx, next) => next({ injected: "yes" })))
+			.on(["PUT", "PATCH"], "/items/:id")
+			.meta({ tag: "items" })
+			.handler((ctx) =>
+				ctx.res.json("ok", { id: ctx.params.id, injected: ctx.injected, method: ctx.req.method, tag: ctx.meta.tag }),
+			)
+		app.on(["DELETE"], "/items/:id").handler((ctx) => ctx.res.json("ok", { deleted: ctx.params.id }))
+		for (const method of ["PUT", "PATCH"])
+			expect(await send(app, "/items/42", { method })).toEqual({
+				allow: null,
+				body: JSON.stringify({ id: "42", injected: "yes", method, tag: "items" }),
+				status: 200,
+			})
+		expect(await send(app, "/items/42", { method: "DELETE" })).toEqual({
+			allow: null,
+			body: '{"deleted":"42"}',
+			status: 200,
+		})
+		const wrong = await send(app, "/items/42")
+		expect([wrong.status, sortedAllow(wrong.allow)]).toEqual([405, ["DELETE", "PATCH", "PUT"]])
+	})
+})
+
 describe("404 and 405", () => {
 	// v0: ebb0d677ab
+	// v0: e4fa75babc
 	// v0: 3424191595
 	// v0: e96839041f
 	// v0: ac10ff582e

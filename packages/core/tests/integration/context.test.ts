@@ -1,9 +1,10 @@
 /**
  * The handler's ctx: the request as sent, where it matched (path, pattern, params), the request
- * headers, and env, all belonging to their own request. The query is in context-query.test.ts;
- * route meta and background work in context-extension.test.ts.
+ * headers, and env, all belonging to their own request; and the framework keys next() cannot
+ * replace. The query is in context-query.test.ts; meta and background work in context-extension.test.ts.
  */
 import { describe, expect, it } from "vitest"
+import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 
 type Fetchable = { fetch: (r: Request, env: never, executionCtx?: never) => Response | Promise<Response> }
@@ -135,5 +136,75 @@ describe("each request has its own ctx", () => {
 		const ids = Array.from({ length: 100 }, (_, i) => String(i))
 		const answers = await Promise.all(ids.map((id) => send(app, `/users/${id}?mutate=${Number(id) % 2}`)))
 		expect(answers).toEqual(ids.map((id) => ok({ now: Number(id) % 2 ? "hacked" : id, seen: id })))
+	})
+})
+
+/** Every key the framework owns on ctx. */
+const RESERVED = [
+	"background",
+	"cookies",
+	"env",
+	"error",
+	"errors",
+	"executionCtx",
+	"headers",
+	"meta",
+	"params",
+	"path",
+	"req",
+	"res",
+	"routePattern",
+	"search",
+	"searchAll",
+	"signal",
+] as const
+
+const kind = (v: unknown) =>
+	v === null ? "null" : typeof v === "object" ? (v.constructor?.name ?? "Object") : typeof v
+
+/** A route that reports every framework key's kind and the values a request decides. */
+function reportCtx(app: ReturnType<typeof honey<{ DB: string }>>) {
+	app.get("/items/:id").handler((ctx) => {
+		const own = ctx as unknown as Record<string, unknown>
+		const kinds = Object.fromEntries(RESERVED.map((key) => [key, kind(own[key])]))
+		const { env, params, path, routePattern, search } = ctx
+		return ctx.res.json("ok", { env, kinds, params, path, routePattern, search, url: ctx.req.url, userId: own.userId })
+	})
+}
+
+describe("framework keys on ctx", () => {
+	// v0: 6cdeb245fc
+	// v0: ef201b14c6
+	// v0: 5ff8a09ee1
+	// v0: b2c973584c
+	// v0: 5ccc558c7c
+	// v0: 7c9e100a0f
+	// v0: 29fd214dac
+	// v0: a2a82f9c2a
+	// v0: ae9413ff7d
+	// v0: 7c3d73cf11
+	// v0: 7b0b7ae2b7
+	// v0: 2b0757df51
+	it("next() drops every framework key and applies the rest", async () => {
+		const hijack = { ...Object.fromEntries(RESERVED.map((key) => [key, "hijacked"])), req: new Request("http://evil/") }
+		const hijacked = honey<{ DB: string }>()
+		reportCtx(hijacked.use(createMiddleware((_ctx, next) => next({ ...hijack, userId: "u-1" }))))
+		const control = honey<{ DB: string }>()
+		reportCtx(control.use(createMiddleware((_ctx, next) => next({ userId: "u-1" }))))
+		const target = "/items/42?q=real"
+		const answer = await send(hijacked, target, { env: { DB: "real-db" } })
+		expect(answer).toEqual(await send(control, target, { env: { DB: "real-db" } }))
+		expect(answer).toMatchObject({
+			body: {
+				env: { DB: "real-db" },
+				params: { id: "42" },
+				path: "/items/42",
+				routePattern: "/items/:id",
+				search: { q: "real" },
+				url: "http://localhost/items/42?q=real",
+				userId: "u-1",
+			},
+			status: 200,
+		})
 	})
 })

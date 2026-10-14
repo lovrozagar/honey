@@ -31,11 +31,13 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =
 const failure = (key: string, status: number, extra?: Record<string, string>) =>
 	json({ error_key: key, fields: {}, message: key, status, status_key: key, success: false }, status, extra)
 
-/** A middleware that records `name` each time it runs. */
-const tracer = (trace: string[], name: string) =>
-	createMiddleware((_ctx, next) => {
+/** A middleware that records `name` each time it runs, and `/name` after next() when `around`. */
+const tracer = (trace: string[], name: string, around = false) =>
+	createMiddleware(async (_ctx, next) => {
 		trace.push(name)
-		return next()
+		const res = await next()
+		if (around) trace.push(`/${name}`)
+		return res
 	})
 
 /** A middleware that adds `values` to ctx. */
@@ -57,6 +59,8 @@ function observedApp() {
 
 describe("run order", () => {
 	// v0: 218eee8dac
+	// v0: 1dbac94283
+	// v0: 597d267652
 	// v0: 066c4587f9
 	// v0: 619e672b14
 	// v0: e73c0454ac
@@ -83,28 +87,40 @@ describe("run order", () => {
 	)
 
 	// v0: c30939bc66
+	// v0: 810e8e8e6b
 	// v0: 36dad156f7
 	// v0: 8d9c33c410
-	it("chain middleware runs first, then the route's own use() calls in order, then the handler", async () => {
+	it("chain middleware runs first, then the route's own use() calls, then the handler; after next() it unwinds", async () => {
 		const trace: string[] = []
 		const app = honey<{}>()
 		app
-			.use(tracer(trace, "chain1"))
-			.use(tracer(trace, "chain2"))
+			.use(tracer(trace, "chain1", true))
+			.use(tracer(trace, "chain2", true))
 			.get("/t")
-			.use(tracer(trace, "route1"))
-			.use(tracer(trace, "route2"))
+			.use(tracer(trace, "route1", true))
+			.use(tracer(trace, "route2", true))
 			.handler((ctx) => {
 				trace.push("handler")
 				return ctx.res.text("ok", "done")
 			})
 		expect(await send(app, "/t")).toEqual({ body: "done", headers: TEXT_TYPE, status: 200 })
-		expect(trace).toEqual(["chain1", "chain2", "route1", "route2", "handler"])
+		expect(trace).toEqual([
+			"chain1",
+			"chain2",
+			"route1",
+			"route2",
+			"handler",
+			"/route2",
+			"/route1",
+			"/chain2",
+			"/chain1",
+		])
 	})
 })
 
 describe("what next() adds to ctx", () => {
 	// v0: cf0b992a69
+	// v0: fcc562aa1a
 	// v0: 48ec040348
 	// v0: 31b9b2ca5c
 	// v0: 07e91fb5ad
@@ -143,76 +159,6 @@ describe("what next() adds to ctx", () => {
 	})
 })
 
-/** Every key the framework owns on ctx. */
-const RESERVED = [
-	"background",
-	"cookies",
-	"env",
-	"error",
-	"errors",
-	"executionCtx",
-	"headers",
-	"meta",
-	"params",
-	"path",
-	"req",
-	"res",
-	"routePattern",
-	"search",
-	"searchAll",
-	"signal",
-] as const
-
-const kind = (v: unknown) =>
-	v === null ? "null" : typeof v === "object" ? (v.constructor?.name ?? "Object") : typeof v
-
-/** A route that reports every framework key's kind and the values a request decides. */
-function reportCtx(app: ReturnType<typeof honey<{ DB: string }>>) {
-	app.get("/items/:id").handler((ctx) => {
-		const own = ctx as unknown as Record<string, unknown>
-		const kinds = Object.fromEntries(RESERVED.map((key) => [key, kind(own[key])]))
-		const { env, params, path, routePattern, search } = ctx
-		return ctx.res.json("ok", { env, kinds, params, path, routePattern, search, url: ctx.req.url, userId: own.userId })
-	})
-}
-
-describe("what next() adds to ctx: framework keys", () => {
-	// v0: 6cdeb245fc
-	// v0: ef201b14c6
-	// v0: 5ff8a09ee1
-	// v0: b2c973584c
-	// v0: 5ccc558c7c
-	// v0: 7c9e100a0f
-	// v0: 29fd214dac
-	// v0: a2a82f9c2a
-	// v0: ae9413ff7d
-	// v0: 7c3d73cf11
-	// v0: 7b0b7ae2b7
-	// v0: 2b0757df51
-	it("next() drops every framework key and applies the rest", async () => {
-		const hijack = { ...Object.fromEntries(RESERVED.map((key) => [key, "hijacked"])), req: new Request("http://evil/") }
-		const hijacked = honey<{ DB: string }>()
-		reportCtx(hijacked.use(createMiddleware((_ctx, next) => next({ ...hijack, userId: "u-1" }))))
-		const control = honey<{ DB: string }>()
-		reportCtx(control.use(adds({ userId: "u-1" })))
-		const target = "/items/42?q=real"
-		const answer = await send(hijacked, target, {}, { DB: "real-db" })
-		expect(answer).toEqual(await send(control, target, {}, { DB: "real-db" }))
-		expect(answer).toMatchObject({
-			body: {
-				env: { DB: "real-db" },
-				params: { id: "42" },
-				path: "/items/42",
-				routePattern: "/items/:id",
-				search: { q: "real" },
-				url: "http://localhost/items/42?q=real",
-				userId: "u-1",
-			},
-			status: 200,
-		})
-	})
-})
-
 describe("answering and rewriting the response", () => {
 	// v0: 013c02744a
 	it("a middleware can answer some requests itself and pass the rest on", async () => {
@@ -233,6 +179,7 @@ describe("answering and rewriting the response", () => {
 	})
 
 	// v0: 8eaf16daf6
+	// v0: 205bbd2d9d
 	// v0: 1f5d595ad4
 	// v0: ae4cef7f27
 	it.each([
