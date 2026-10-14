@@ -12,7 +12,10 @@ type Attributes = Omit<CookieOptions, "value">
 describe("serializeCookie: names", () => {
 	// v0: ece34ba16b
 	// v0: 12a8441d56
-	it.each(["session123", "my-cookie_name"])("%j is a valid name", (name) => {
+	// v0: e02e3900ee
+	// v0: 451fc6704f
+	// v0: 06320b684a
+	it.each(["session123", "my-cookie_name", "also-valid.name"])("%j is a valid name", (name) => {
 		expect(serializeCookie(name, { value: "x" })).toBe(`${name}=x`)
 	})
 
@@ -21,7 +24,13 @@ describe("serializeCookie: names", () => {
 	// v0: 0aeba08f6e
 	// v0: 156640eaba
 	// v0: c672e080d0
-	it.each(["bad name", "bad=name", "bad;name", ""])("%j is refused", (name) => {
+	// v0: 55497e815c
+	// v0: 37735249bb
+	// v0: 01cbac5c85
+	// v0: 612ba20416
+	// v0: 3bef1e472e
+	// v0: af8eee528a
+	it.each(["bad name", "bad=name", "bad;name", "bad\tname", "bad,name", ""])("%j is refused", (name) => {
 		expect(() => serializeCookie(name, { value: "x" })).toThrow("Invalid cookie name")
 	})
 })
@@ -36,8 +45,12 @@ describe("serializeCookie: values", () => {
 	// v0: 3b4d5015e7
 	// v0: d9c2c8b2f1
 	// v0: 1bf111f8c0
+	// v0: 9cb78022d1
+	// v0: 7750e4ac8f
+	// v0: 75c679a2fe
 	it.each([
 		["abc123", "abc123"],
+		["abc123-_.~", "abc123-_.~"],
 		["", ""],
 		["hello world", "hello%20world"],
 		["a;b;c", "a%3Bb%3Bc"],
@@ -56,6 +69,9 @@ describe("serializeCookie: values", () => {
 describe("serializeCookie: attributes", () => {
 	// v0: 691690c966
 	// v0: cd2f470bf5
+	// v0: 8ec07e2fe0
+	// v0: 5a721126c3
+	// v0: 23b65028a6
 	it.each<[Attributes, string]>([
 		[{ maxAge: 0 }, "Max-Age=0"],
 		[{ maxAge: 3600 }, "Max-Age=3600"],
@@ -63,6 +79,7 @@ describe("serializeCookie: attributes", () => {
 		[{ httpOnly: true }, "HttpOnly"],
 		[{ sameSite: "strict" }, "SameSite=Strict"],
 		[{ domain: "example.com", path: "/app" }, "Domain=example.com; Path=/app"],
+		[{ domain: ".example.com", path: "/api/v1" }, "Domain=.example.com; Path=/api/v1"],
 		[
 			{ domain: "example.com", httpOnly: true, maxAge: 60, path: "/app", sameSite: "lax", secure: true },
 			"Domain=example.com; Path=/app; Max-Age=60; HttpOnly; Secure; SameSite=Lax",
@@ -74,6 +91,21 @@ describe("serializeCookie: attributes", () => {
 	// v0: 76bcf6013e
 	// v0: 2cbe4d1b56
 	// v0: 1b05d3ca4e
+	// v0: 3a6be2952e
+	// v0: 4fd3f7f538
+	// v0: 760a6c9347
+	// v0: 84a8323bad
+	// v0: b3e8705bfe
+	it.each<[Attributes, string]>([
+		[{ path: "/; Secure; HttpOnly" }, "Cookie path contains invalid characters"],
+		[{ path: "/\r\nX-Injected: yes" }, "Cookie path contains invalid characters"],
+		[{ domain: "evil.com; Path=/" }, "Cookie domain contains invalid characters"],
+		[{ domain: "evil.com\r\nX-Injected: yes" }, "Cookie domain contains invalid characters"],
+		[{ expires: new Date("invalid") }, "Invalid cookie Expires: date is invalid"],
+	])("%o, which would inject an attribute or cannot be written, is refused", (attributes, message) => {
+		expect(() => serializeCookie("s", { ...attributes, value: "x" })).toThrow(message)
+	})
+
 	it.each([Infinity, Number.NaN, -1])("Max-Age %d is refused", (maxAge) => {
 		expect(() => serializeCookie("s", { maxAge, value: "x" })).toThrow("Invalid cookie Max-Age")
 	})
@@ -84,6 +116,9 @@ describe("serializeCookie: prefixes and SameSite=None", () => {
 	// v0: 079fbe5355
 	// v0: 90472b5873
 	// v0: ef40476dcb
+	// v0: 1ca1590427
+	// v0: 1889abf7bd
+	// v0: 1fc20c6185
 	it.each<[string, Attributes, string]>([
 		["__Host-session", { secure: true }, "__Host-session=abc; Path=/; Secure"],
 		["__Host-session", { path: "/", secure: true }, "__Host-session=abc; Path=/; Secure"],
@@ -98,6 +133,10 @@ describe("serializeCookie: prefixes and SameSite=None", () => {
 	// v0: 4e2862707c
 	// v0: db00d8ea00
 	// v0: ce5bc350cf
+	// v0: 72a3784846
+	// v0: e559b68f33
+	// v0: e64fa6a7d3
+	// v0: 7c486e5769
 	it.each<[string, Attributes, string]>([
 		["__Host-session", {}, "__Host- cookies require secure: true"],
 		["__Host-session", { domain: "example.com", secure: true }, "__Host- cookies must not set domain"],
