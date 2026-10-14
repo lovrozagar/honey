@@ -3,8 +3,9 @@
  * included), and bound into `ctx.log` and the request log. An inbound id is never trusted by
  * default: a client could pick it. `trustInbound` opts in, always or per request (a gateway's peer,
  * a shared secret), and the id must still pass `validate` (H23: trust is plain code, never a
- * proxy count).
+ * proxy count). With telemetry on, the id is the root span's `honey.request_id`.
  */
+import { type HoneyContext, TRACE } from "../context/context.ts"
 import { withHeaders } from "../response/with-headers.ts"
 import { type MiddlewareFn, namedMiddleware } from "./middleware.ts"
 
@@ -46,6 +47,8 @@ export function requestId(
 		const inbound = trust === false ? null : ctx.req.headers.get(header)
 		const reused = inbound !== null && validate(inbound) && (typeof trust === "function" ? trust(ctx) : trust)
 		const id = reused ? inbound : generate()
+		/* the id names the request's root span; it never becomes, or comes from, the trace id */
+		;(ctx as unknown as HoneyContext)[TRACE]?.annotate("honey.request_id", id)
 		return withHeaders(await next({ requestId: id }), (headers) => headers.set(header, id))
 	})
 }

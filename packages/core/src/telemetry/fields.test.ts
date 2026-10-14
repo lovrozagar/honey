@@ -15,13 +15,16 @@ describe("pathOf: a path is logged without its query or fragment", () => {
 })
 
 describe("requestBindings: what a per-request logger binds", () => {
-	it("method, the path without its query, the route id, and the request id only when there is one", () => {
+	it("method, the path without its query, the route id, and the request and trace ids only when there are", () => {
+		const trace = { spanId: "00f067aa0ba902b7", traceId: "4bf92f3577b34da6a3ce929d0e0e4736" }
 		expect([
-			requestBindings("GET", "/users/7?token=secret", "GET /users/:id", "r-1"),
-			requestBindings("POST", "/upload", "POST /upload", undefined),
+			requestBindings("GET", "/users/7?token=secret", "GET /users/:id", { requestId: "r-1" }),
+			requestBindings("POST", "/upload", "POST /upload"),
+			requestBindings("GET", "/a", "GET /a", { trace }),
 		]).toEqual([
 			{ method: "GET", path: "/users/7", requestId: "r-1", routeId: "GET /users/:id" },
 			{ method: "POST", path: "/upload", routeId: "POST /upload" },
+			{ method: "GET", path: "/a", routeId: "GET /a", span_id: trace.spanId, trace_id: trace.traceId },
 		])
 	})
 })

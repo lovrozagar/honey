@@ -9,14 +9,12 @@
  * A tracer that throws is a warn and never touches the answer; a root that does not record builds
  * nothing below it.
  */
-import { type HoneyContext, REQUEST, type RouteInfo } from "../context/context.ts"
-import { ipOf, type PeerSource } from "../context/peer.ts"
+import type { RouteInfo } from "../context/context.ts"
 import { HoneyError } from "../errors/error.ts"
-import type { MaybePromise, RuntimeMiddleware } from "../middleware/middleware.ts"
+import type { MaybePromise } from "../middleware/middleware.ts"
 import type { InboundTrust } from "../middleware/request-id.ts"
 import type { AppSettings } from "../routing/settings.ts"
-import { pathOf } from "./fields.ts"
-import { inboundTrace, type RemoteContext } from "./traceparent.ts"
+import { formatTraceparent, type RemoteContext, type TraceIds } from "./traceparent.ts"
 
 export type AttributeValue = boolean | number | string
 export type Attributes = Readonly<Record<string, AttributeValue>>
@@ -74,24 +72,27 @@ export type Telemetry = {
 
 /** OpenTelemetry's `SpanStatusCode.ERROR`. */
 const ERROR = 2
-const NO_LINKS: readonly RemoteContext[] = /* @__PURE__ */ Object.freeze([])
-
-const nothing = (): undefined => undefined
-
-/** The root of a request whose tracer failed to start one: records nothing. */
-const UNRECORDED: Span = /* @__PURE__ */ Object.freeze({
-	addEvent: nothing,
-	end: nothing,
-	isRecording: () => false,
-	setAttribute: nothing,
-	setStatus: nothing,
-	spanContext: () => ({ spanId: "0000000000000000", traceFlags: 0, traceId: "00000000000000000000000000000000" }),
-	updateName: nothing,
-})
+export const NO_LINKS: readonly RemoteContext[] = /* @__PURE__ */ Object.freeze([])
 
 /** What was thrown, by its class alone: never its message. */
 function typeOf(thrown: unknown): string {
 	return thrown instanceof Error ? thrown.constructor.name || thrown.name : typeof thrown
+}
+
+/** An outbound call's trace: the headers that carry it, and its span's end. */
+export type Outbound = {
+	/** `null` when the request has no trace ids to pass on */
+	readonly traceparent: string | null
+	/** the tracestate of a trace continued from a trusted hop */
+	readonly tracestate: string | undefined
+	/** make the call inside the span, ending it with the answer's status or the failure */
+	send(call: () => Promise<Response> | Response): Promise<Response>
+}
+
+/** A span's ids, or `null` for the all-zero ids of one that has none. */
+function idsOf(span: Span): TraceIds | null {
+	const { spanId, traceFlags, traceId } = span.spanContext()
+	return /^0+$/.test(traceId) ? null : { flags: traceFlags, spanId, traceId }
 }
 
 /** One request's spans: the root, and where in the onion the request is now. */
@@ -105,13 +106,22 @@ export class RequestTrace {
 	readonly recording: boolean
 	readonly root: Span
 	readonly started: number
+	/** the tracestate of a trace continued from a trusted hop */
+	readonly #state: string | undefined
 
-	constructor(s: AppSettings<unknown>, tracer: Tracer, root: Span, started: number) {
+	/** `started` is when the request came in; `state` the tracestate of a continued trace */
+	constructor(
+		s: AppSettings<unknown>,
+		tracer: Tracer,
+		root: Span,
+		{ started, state }: { readonly started: number; readonly state: string | undefined },
+	) {
 		this.#s = s
 		this.#tracer = tracer
 		this.root = root
 		this.#current = root
 		this.started = started
+		this.#state = state
 		this.recording = this.#safe(() => root.isRecording(), false)
 	}
 
@@ -127,8 +137,53 @@ export class RequestTrace {
 
 	/** The root's trace and span ids, or `null` when it has none. */
 	ids(): { spanId: string; traceId: string } | null {
-		const ids = this.#safe(() => this.root.spanContext(), null)
-		return ids === null || /^0+$/.test(ids.traceId) ? null : { spanId: ids.spanId, traceId: ids.traceId }
+		const ids = this.#safe(() => idsOf(this.root), null)
+		return ids === null ? null : { spanId: ids.spanId, traceId: ids.traceId }
+	}
+
+	/** An attribute on the root (`honey.request_id`), when it records. */
+	annotate(key: string, value: AttributeValue): void {
+		if (this.recording) this.#safe(() => this.root.setAttribute(key, value), undefined)
+	}
+
+	/**
+	 * A CLIENT span for an outbound call under the current span, and the headers that carry it on.
+	 * A root that does not record starts none and passes its own ids on, so the next hop drops too.
+	 */
+	outbound(name: string, method: string): Outbound {
+		const parent = this.#current
+		const options: SpanOptions = {
+			attributes: { "http.request.method": method },
+			kind: "client",
+			links: NO_LINKS,
+			parent,
+		}
+		const span = this.recording ? this.#safe(() => this.#tracer.startSpan(name, options), null) : null
+		const ids = this.#safe(() => idsOf(span ?? this.root), null)
+		const settle = (status: number | null, thrown: unknown) =>
+			this.#safe(() => {
+				if (span === null) return
+				if (status === null) {
+					span.setStatus({ code: ERROR })
+					span.setAttribute("exception.type", typeOf(thrown))
+				} else span.setAttribute("http.response.status_code", status)
+				span.end()
+			}, undefined)
+		return {
+			async send(call) {
+				let response: Response
+				try {
+					response = await call()
+				} catch (thrown) {
+					settle(null, thrown)
+					throw thrown
+				}
+				settle(response.status, undefined)
+				return response
+			},
+			traceparent: ids === null ? null : formatTraceparent(ids),
+			tracestate: this.#state,
+		}
 	}
 
 	/** Name the root after the route it runs; a request no route serves keeps the method alone. */
@@ -235,59 +290,5 @@ export class RequestTrace {
 			}
 			this.root.end()
 		}, undefined)
-	}
-}
-
-/** The root span of `request`, under or linked to its inbound trace as the hop is trusted. */
-export function startTrace(
-	s: AppSettings<unknown>,
-	telemetry: Telemetry,
-	request: Request,
-	env: unknown,
-): RequestTrace {
-	const started = performance.now()
-	const peer: PeerSource = { env, req: request }
-	const source = {
-		get ip() {
-			return ipOf(peer)
-		},
-		req: request,
-	}
-	const inbound = inboundTrace(source, telemetry.trustInbound, (error) =>
-		s.logger.warn({ err: HoneyError.serialize(error) }, "telemetry trust check failed"),
-	)
-	const options: SpanOptions = {
-		attributes: { "http.request.method": request.method, "url.path": pathOf(request.url) },
-		kind: "server",
-		links: inbound === null || inbound.continued ? NO_LINKS : [inbound.remote],
-		parent: inbound?.continued === true ? inbound.remote : null,
-	}
-	let root = UNRECORDED
-	try {
-		root = telemetry.tracer.startSpan(request.method, options)
-	} catch (error) {
-		s.logger.warn({ err: HoneyError.serialize(error) }, "telemetry failed")
-	}
-	return new RequestTrace(s, telemetry.tracer, root, started)
-}
-
-/** The request's trace: an app with telemetry traces every request it serves, and only its chains are wrapped. */
-function traceOf(ctx: object): RequestTrace {
-	return (ctx as HoneyContext<unknown>)[REQUEST].trace as RequestTrace
-}
-
-/** `mw` inside a `middleware.<name>` span on a traced request. */
-export function tracedMiddleware(mw: RuntimeMiddleware): RuntimeMiddleware {
-	const name = `middleware.${mw.name || "anonymous"}`
-	return (ctx, next) => traceOf(ctx).within(name, () => mw(ctx, next))
-}
-
-/** The route handler inside an `http.handler` span, active for the app's own instrumentation. */
-export function tracedHandler(
-	handler: (ctx: object) => MaybePromise<Response>,
-): (ctx: object) => MaybePromise<Response> {
-	return (ctx) => {
-		const trace = traceOf(ctx)
-		return trace.within("http.handler", (span) => trace.run(span, () => handler(ctx)))
 	}
 }

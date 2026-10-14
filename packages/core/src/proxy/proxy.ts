@@ -11,6 +11,7 @@
  * the client, never followed. On the Node bridge the answer is a HoneyResponse, so the header
  * middleware in front of the route stay on the plain map.
  */
+import { type HoneyContext, TRACE } from "../context/context.ts"
 import { createHoneyResponse, isNodeOutbound } from "../response/builder.ts"
 import { headersToRecord, HoneyOutHeaders } from "../response/out-headers.ts"
 import type { TypedResponse } from "../response/response.ts"
@@ -95,6 +96,25 @@ function applyRequestHeaders<TCtx>(edit: ProxyConfig<TCtx>["requestHeaders"], ct
 	for (const [name, value] of Object.entries(edit ?? {})) headers.set(name, value)
 }
 
+type Send = (call: () => Promise<Response> | Response) => Promise<Response> | Response
+
+/** An untraced request's call: made as it is, its headers as they came. */
+const untraced: Send = (call) => call()
+
+/**
+ * How the call is made: on a traced request inside its `http.proxy` span, the upstream getting the
+ * request's trace, never the caller's (a trusted caller's tracestate goes on with it).
+ */
+function traced(ctx: unknown, method: string, headers: Headers): Send {
+	const outbound = (ctx as HoneyContext)[TRACE]?.outbound("http.proxy", method)
+	if (outbound === undefined) return untraced
+	if (outbound.traceparent === null) headers.delete("traceparent")
+	else headers.set("traceparent", outbound.traceparent)
+	if (outbound.tracestate === undefined) headers.delete("tracestate")
+	else headers.set("tracestate", outbound.tracestate)
+	return (call) => outbound.send(call)
+}
+
 export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<TypedResponse> {
 	const decoded = config.decoded !== false
 	const forwarded = config.forwardedHeaders !== false
@@ -104,6 +124,8 @@ export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<T
 		const pathQuery = path + searchOfUrl(req.url)
 		const url = config.rewriteUrl ? config.rewriteUrl(pathQuery, ctx) : pathQuery
 		const headers = upstreamHeaders(req, { client: forwarded ? ip : undefined, websocket })
+		/* requestHeaders below still has the last word */
+		const send = traced(ctx, req.method, headers)
 		const body = await forwardBody(req)
 		/* no body, or bytes whose length fetch() computes itself */
 		if (!(body instanceof ReadableStream)) headers.delete("content-length")
@@ -119,7 +141,9 @@ export function proxy<TCtx>(config: ProxyConfig<TCtx>): (ctx: TCtx) => Promise<T
 		/* a streamed request body needs it on Node; Workers imply it */
 		if (body instanceof ReadableStream) init.duplex = "half"
 		const headerMs = websocket ? undefined : msOf(config.timeout, ctx, DEFAULT_TIMEOUT_MS)
-		const response = await within({ client: signal, headerMs, upstream }, () => config.destination(ctx, url, init))
+		const response = await within({ client: signal, headerMs, upstream }, () =>
+			send(() => config.destination(ctx, url, init)),
+		)
 		if (response.status === 101) return response as TypedResponse
 		const idleMs = websocket ? undefined : msOf(config.idleTimeout, ctx)
 		const stream =

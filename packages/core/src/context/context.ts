@@ -52,6 +52,9 @@ export const REQUEST: unique symbol = /* @__PURE__ */ Symbol("honey.request")
 /** Abort `ctx.signal` from inside honey (a timeout): not exported from the package. */
 export const ABORT_CONTEXT: unique symbol = /* @__PURE__ */ Symbol("honey.abortContext")
 
+/** The request's trace when the app has telemetry: read by requestId and proxy, never part of the package API. */
+export const TRACE: unique symbol = /* @__PURE__ */ Symbol("honey.trace")
+
 /** The taps `ctx.tap()` queued, and whether the route's handler answered: read by routing/tap.ts only. */
 export const TAPS: unique symbol = /* @__PURE__ */ Symbol("honey.taps")
 
@@ -146,6 +149,10 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 			: (p) => void p.catch((error: unknown) => this.log.error({ err: error }, "background task failed"))
 	}
 
+	get [TRACE](): RequestTrace | null {
+		return this[REQUEST].trace ?? null
+	}
+
 	/** The peer the platform reports, canonical (H23): CF-Connecting-IP on Workers, the socket on Bun and Node. */
 	get ip(): string | null {
 		return ipOf(this[REQUEST])
@@ -153,11 +160,14 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 
 	/**
 	 * This request's logger: a child of the app's that binds method, path (without its query), route
-	 * id, and the request id when one is set. Built on first use.
+	 * id, the request id when one is set, and the trace's ids when traced. Built on first use.
 	 */
 	get log(): Logger {
 		this.#log ??= this[REQUEST].logger.child(
-			requestBindings(this.req.method, this.path, this.#routeId, (this as { requestId?: string }).requestId),
+			requestBindings(this.req.method, this.path, this.#routeId, {
+				requestId: (this as { requestId?: string }).requestId,
+				trace: this[REQUEST].trace?.ids(),
+			}),
 		)
 		return this.#log
 	}

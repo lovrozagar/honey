@@ -71,14 +71,27 @@ export function pathOf(target: string): string {
 	return path === "" ? "/" : path
 }
 
-/** What a per-request logger binds: method, the path without its query, the route id, the request id when set. */
+/** The ids a request may carry: its request id, and its trace's ids when it is traced. */
+export type RequestIds = {
+	readonly requestId?: string | undefined
+	readonly trace?: { readonly spanId: string; readonly traceId: string } | null
+}
+
+/**
+ * What a per-request logger binds: method, the path without its query, the route id, the request
+ * id when set, and the trace's ids when the request is traced (so a line joins its trace).
+ */
 export function requestBindings(
 	method: string,
 	path: string,
 	routeId: string,
-	requestId: string | undefined,
+	{ requestId, trace }: RequestIds = {},
 ): Record<string, string> {
 	const bindings: Record<string, string> = { method, path: pathOf(path), routeId }
 	if (requestId !== undefined) bindings.requestId = requestId
+	if (trace != null) {
+		bindings.trace_id = trace.traceId
+		bindings.span_id = trace.spanId
+	}
 	return bindings
 }

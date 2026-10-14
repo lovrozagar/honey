@@ -4,7 +4,7 @@
  * factory and meta come from that chain and the app it was registered on. Re-runs whenever a
  * registration moved the graph's epoch.
  */
-import type { RouteInfo } from "../context/context.ts"
+import { type HoneyContext, REQUEST, type RouteInfo } from "../context/context.ts"
 import type { ErrorPolicy } from "../errors/projector.ts"
 import {
 	type ChainErrorConverter,
@@ -26,7 +26,7 @@ import {
 } from "./pattern.ts"
 import { assertNothingDiscarded, chainErrorKeys, type HoneyGraph, type RouteHandler } from "./register.ts"
 import { type AppSettings, assertSettingsAgree, type ErrorFactories } from "./settings.ts"
-import { tracedHandler, tracedMiddleware } from "../telemetry/request-trace.ts"
+import type { RequestTrace } from "../telemetry/request-trace.ts"
 import { answering, firing, tapsFor } from "./tap.ts"
 import { dict } from "./tree.ts"
 
@@ -131,6 +131,25 @@ function scopesFor(g: HoneyGraph, variants: readonly (readonly Segment[])[]): Ru
 		else if (coverage === "some") out.push(entry.guard)
 	}
 	return out
+}
+
+/** The request's trace: an app with telemetry traces every request it serves, and only its chains are wrapped. */
+function traceOf(ctx: object): RequestTrace {
+	return (ctx as HoneyContext<unknown>)[REQUEST].trace as RequestTrace
+}
+
+/** `mw` inside a `middleware.<name>` span on a traced request. */
+function tracedMiddleware(mw: RuntimeMiddleware): RuntimeMiddleware {
+	const name = `middleware.${mw.name || "anonymous"}`
+	return (ctx, next) => traceOf(ctx).within(name, () => mw(ctx, next))
+}
+
+/** The route handler inside an `http.handler` span, active for the app's own instrumentation. */
+function tracedHandler(handler: (ctx: object) => MaybePromise<Response>): (ctx: object) => MaybePromise<Response> {
+	return (ctx) => {
+		const trace = traceOf(ctx)
+		return trace.within("http.handler", (span) => trace.run(span, () => handler(ctx)))
+	}
 }
 
 function planRoute(

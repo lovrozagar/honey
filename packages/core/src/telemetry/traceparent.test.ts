@@ -7,8 +7,9 @@
 import { defaultTextMapGetter, ROOT_CONTEXT, trace } from "@opentelemetry/api"
 import { W3CTraceContextPropagator } from "@opentelemetry/core"
 import { describe, expect, it, vi } from "vitest"
+import { proxy } from "../proxy/proxy.ts"
 import { honey } from "../routing/app.ts"
-import { recorder } from "./__fixtures__/recording-tracer.ts"
+import { type Recorded, recorder } from "./__fixtures__/recording-tracer.ts"
 import { createLogger } from "./logger.ts"
 import { formatTraceparent, inboundTrace, parseTraceparent, parseTracestate } from "./traceparent.ts"
 
@@ -244,5 +245,125 @@ describe("the trust gate through an app: the root span", () => {
 			null,
 			[[40, "telemetry trust check failed"]],
 		])
+	})
+})
+
+/** A proxied app whose upstream records the headers it was sent. */
+function proxied(configure: (app: ReturnType<typeof honey<{}>>) => void, requestHeaders?: Record<string, string>) {
+	const sent: Headers[] = []
+	const app = honey<{}>()
+	configure(app)
+	app.all("/api/*rest").handler(
+		proxy({
+			destination: (_ctx, _url, init) => {
+				sent.push(new Headers(init.headers))
+				return new Response("up")
+			},
+			...(requestHeaders && { requestHeaders }),
+		}),
+	)
+	return { app, sent }
+}
+
+/** What a caller sent: its own trace, and its vendor's tracestate. */
+const CALLER = { traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", tracestate: "congo=t61" }
+
+describe("outbound: the proxy forwards the trace of its http.proxy span", () => {
+	it("an untrusted caller's trace is replaced by the request's own, its tracestate dropped", async () => {
+		const { spans, telemetry } = recorder()
+		const { app, sent } = proxied((a) => a.telemetry(telemetry))
+		await (await app.fetch(get("/api/x", { headers: CALLER }), {})).text()
+		const client = spans.find((s) => s.name === "http.proxy") as Recorded
+		expect([
+			client.kind,
+			(client.parent as Recorded).name,
+			client.attributes,
+			sent[0]?.get("traceparent"),
+			sent[0]?.get("tracestate"),
+		]).toEqual([
+			"client",
+			"http.handler",
+			{ "http.request.method": "GET", "http.response.status_code": 200 },
+			formatTraceparent({ flags: 1, spanId: client.spanContext().spanId, traceId: TRACE }),
+			null,
+		])
+	})
+
+	it("a trusted caller's tracestate goes on with the trace it continued", async () => {
+		const { telemetry } = recorder()
+		const { app, sent } = proxied((a) => a.telemetry({ ...telemetry, trustInbound: true }))
+		await (await app.fetch(get("/api/x", { headers: CALLER }), {})).text()
+		expect(sent[0]?.get("tracestate")).toBe("congo=t61")
+	})
+
+	it("requestHeaders still has the last word", async () => {
+		const { telemetry } = recorder()
+		const { app, sent } = proxied((a) => a.telemetry(telemetry), { traceparent: "set-by-the-app" })
+		await (await app.fetch(get("/api/x"), {})).text()
+		expect(sent[0]?.get("traceparent")).toBe("set-by-the-app")
+	})
+})
+
+describe("outbound: sampling, failure, and telemetry off", () => {
+	it("a sampled-out request forwards its root's ids, unsampled, and starts no span", async () => {
+		const { spans, telemetry } = recorder({ recording: false })
+		const unsampled = {
+			...telemetry,
+			tracer: {
+				startSpan: (name: string, options: Parameters<typeof telemetry.tracer.startSpan>[1]) =>
+					Object.assign(telemetry.tracer.startSpan(name, options), {
+						spanContext: () => ({ spanId: "00f067aa0ba902b7", traceFlags: 0, traceId: TRACE }),
+					}),
+			},
+		}
+		const { app, sent } = proxied((a) => a.telemetry(unsampled))
+		await (await app.fetch(get("/api/x"), {})).text()
+		expect([spans.map((s) => s.name), sent[0]?.get("traceparent")]).toEqual([
+			["GET"],
+			`00-${TRACE}-00f067aa0ba902b7-00`,
+		])
+	})
+
+	it("an upstream that fails: the http.proxy span ends ERROR with the failure's type", async () => {
+		const { spans, telemetry } = recorder()
+		const app = honey<{}>().telemetry(telemetry).logger(false)
+		app.all("/api/*rest").handler(
+			proxy({
+				destination: () => {
+					throw new TypeError("fetch failed")
+				},
+			}),
+		)
+		const res = await app.fetch(get("/api/x"), {})
+		const client = spans.find((s) => s.name === "http.proxy")
+		expect([res.status, client?.status, client?.attributes["exception.type"], client?.ended]).toEqual([
+			502,
+			2,
+			"TypeError",
+			1,
+		])
+	})
+
+	it("a request with no trace ids (its tracer failed): the upstream gets no trace at all, not the caller's", async () => {
+		const { telemetry } = recorder()
+		const broken = {
+			...telemetry,
+			tracer: {
+				startSpan: () => {
+					throw new Error("tracer down")
+				},
+			},
+		}
+		const { app, sent } = proxied((a) => a.logger(false).telemetry(broken))
+		await (await app.fetch(get("/api/x", { headers: CALLER }), {})).text()
+		expect([sent[0]?.get("traceparent"), sent[0]?.get("tracestate")]).toEqual([null, null])
+	})
+})
+
+describe("outbound with telemetry off", () => {
+	it("telemetry off: the proxy passes the caller's headers on as they came", async () => {
+		const { app, sent } = proxied(() => {})
+		await (await app.fetch(get("/api/x", { headers: CALLER }), {})).text()
+		expect([sent[0]?.get("traceparent"), sent[0]?.get("tracestate")]).toEqual([CALLER.traceparent, CALLER.tracestate])
 	})
 })

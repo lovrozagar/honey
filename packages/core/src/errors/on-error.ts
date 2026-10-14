@@ -32,7 +32,7 @@ function stateOf(ctx: object): FetchState {
 /** A crashed error formatter, logged with the request it answered (when there is one). */
 export function formatterReport(s: AppSettings<unknown>, state: FetchState | null): FormatterReport {
 	return (failure) => {
-		const where = state === null ? {} : requestBindings(state.req.method, state.path, state.plan.route.id, undefined)
+		const where = state === null ? {} : requestBindings(state.req.method, state.path, state.plan.route.id)
 		s.logger.error({ ...where, err: HoneyError.serialize(failure) }, "error formatter failed")
 	}
 }
@@ -101,7 +101,10 @@ type Throw = { readonly ctx: object; readonly error: HoneyError; readonly thrown
 /** What an operator line says about the request: method, path without its query, route id. */
 function bindings(ctx: object): Record<string, string> {
 	const state = stateOf(ctx)
-	return requestBindings(state.req.method, state.path, state.plan.route.id, (ctx as { requestId?: string }).requestId)
+	return requestBindings(state.req.method, state.path, state.plan.route.id, {
+		requestId: (ctx as { requestId?: string }).requestId,
+		trace: state.trace?.ids(),
+	})
 }
 
 /** Sixteen hex characters, random per occurrence: it names the line, it says nothing about the error. */
