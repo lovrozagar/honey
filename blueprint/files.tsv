@@ -180,6 +180,17 @@ tests/integration/edge-cases-2.test.ts	core	test	02	cross-topic ports, continued
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder, $routes/MergeRoute, ComputeErrorsByStatus	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	HandlerCtx, params, meta, errors, routePattern	typetest/*
 tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddleware deps + next() types, use-scoped types, builder one-shot hiding	typetest/*
+#
+# --- regression suites: named identically to the v0 session files so the regression matrix
+#     (_v0/docs/regression-matrix/) stays traceable. The _v0 copies are byte-FROZEN and run in the
+#     oracle until bit 20; these v1 files are the ported homes, born at the earliest bit with cases
+#     and GROWN per bit, each case // v0: tagged. A ws-N file is session-based (cross-feature), so its
+#     later-bit cases (03/06/07/09/10) arrive with those bits. ---
+tests/regression/ws2-middleware.regression.test.ts	core	test	02	16 bit-02 cases (the bit-02 oracle); later-bit cases grow in	regression/ws2-middleware.regression.test.ts
+tests/regression/ws1-route-model.regression.test.ts	core	test	02	2 bit-02 cases (bit-01 cases already ported, tagged, in routing)	regression/ws1-route-model.regression.test.ts
+tests/regression/review.regression.test.ts	core	test	02	2 bit-02 cases; grown by later bits	regression/review.regression.test.ts
+tests/regression/ws3-request.regression.test.ts	core	test	02	1 bit-02 case; the bulk is bit 03 (request/trust)	regression/ws3-request.regression.test.ts
+tests/regression/v072.regression.test.ts	core	test	02	1 bit-02 case; grown by later bits	regression/v072.regression.test.ts
 # ============================== packages/gen  (@lovrozagar/honey-codegen) ==============================
 src/ir/model.ts	gen	src	09	the IR types	codegen-ir.ts,codegen-sdk-model.ts
 src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
@@ -355,13 +366,13 @@ tests/e2e/{bun,node,cf-workers,strict-consumer}/	core	app	00	per-runtime e2e har
 #   correlation, privacy, silent-failure, observability-matrix (96 cases, H17). The colocated unit siblings are
 #   telemetry/{logger,request-log,otel,traceparent,span-lifecycle,fields}.test.ts and errors/on-error.test.ts.
 # e2e: tests/e2e/apps/{compose,defaults,gateway,kitchen,surface} + run.ts (30-cell: node/bun/cf × dev/prod), differential.ts, builds.ts, load.ts.
-# types: tests/types/*.typetest.ts. regression: tests/regression/* (frozen 313-finding guard; names kept for regression-matrix traceability).
+# types: tests/types/*.typetest.ts. regression: tests/regression/* — v1 files named identically to the v0 session files (regression-matrix traceability, _v0/docs/regression-matrix/), ported per bit + // v0: tagged; the _v0 copies stay byte-frozen in the oracle until bit 20.
 #
 # v0 test re-home (all 440 accounted): by rule —
 #   unit/<feature> -> colocated src sibling; unit/client,unit/sdk,unit/codegen -> gen colocated/harness;
 #   integration/<feature> -> tests/integration/<feature>; integration/sdk-harness -> gen tests/integration;
 #   integration/hostile-client -> tests/integration/security (the F1 hostile-client suite);
-#   conformance,regression/ws9-12 -> gen tests/integration/conformance; regression/* -> tests/regression (frozen);
+#   conformance,regression/ws9-12 -> gen tests/integration/conformance; regression/* -> tests/regression (v1 named-ported, _v0 frozen in oracle);
 #   typetest -> tests/types; mock-server,fixtures,*-env.ts,*specs.ts,_assert.ts,harness-util.ts -> corpus/support by owner.
 #   unit/fuzz/* (4 .fuzz.test.ts + rng.ts) -> tests/integration/security (the fuzz corpus; rng.ts = corpus support) (bit 07/gates).
 #   unit/on/*, unit/integration/* -> tests/integration/<feature> by what they exercise.
