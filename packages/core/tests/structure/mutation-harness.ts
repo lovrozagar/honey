@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
+import type { CompressOptions } from "../../src/middleware/compress.ts"
 import type { IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
@@ -209,6 +210,12 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/middleware/ip-restrict.ts",
 	},
 	{
+		catches: "v1: compression of a credentialed answer, its length an oracle for the secret it carries (BREACH)",
+		disable: (original) => ({ compress: credentialedCompress(original.compress as Compress) }),
+		id: "v1-compress-breach",
+		module: "packages/core/src/middleware/compress.ts",
+	},
+	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",
 		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
 		id: "v1-out-headers-validation",
@@ -287,6 +294,13 @@ function forwardedIp(real: IpRestrict): IpRestrict {
 		const mw = real(options)
 		return (ctx, next) => mw({ ...ctx, ip: ctx.req.headers.get("x-forwarded-for") } as typeof ctx, next)
 	}
+}
+
+type Compress = (options?: CompressOptions) => unknown
+
+/** compress that encodes credentialed answers too. */
+function credentialedCompress(real: Compress): Compress {
+	return (options) => real({ ...options, credentialed: true })
 }
 
 type RateLimit = (options: RateLimitOptions) => unknown

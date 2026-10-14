@@ -47,6 +47,9 @@ const { PEER_ADDRESS } = (await import(
 const { ipRestrict } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/ip-restrict.ts")
 )) as typeof import("../../../src/middleware/ip-restrict.ts")
+const { compress } = (await import(
+	resolvePath(REPO, "packages/core/src/middleware/compress.ts")
+)) as typeof import("../../../src/middleware/compress.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -224,5 +227,31 @@ describe("v1 adversarial: ipRestrict sees only the platform peer", () => {
 			statuses.push((await app.fetch(fromPeer(peer), {})).status)
 		}
 		expect(statuses).toEqual([403, 403, 403])
+	})
+})
+
+describe("v1 adversarial: compressed length is no oracle for a secret (BREACH)", () => {
+	it("two same-length guesses reflected beside a session's token answer the same number of bytes", async () => {
+		const token = "f3a9c2e17b4d8a6052c9e1f7a3b8d4c6"
+		const app = honey<{}>()
+		app
+			.use(compress())
+			.get("/search")
+			.handler((ctx) => {
+				const q = new URL(ctx.req.url).searchParams.get("q") ?? ""
+				const page = `<form><input name="csrf" value="${token}"></form>${"<p>results</p>".repeat(100)}`
+				return ctx.res.html("ok", `${page}<p>you searched: value="${q}"</p>`)
+			})
+		const lengthFor = async (guess: string) => {
+			const res = await app.fetch(
+				new Request(`http://app.test/search?q=${guess}`, {
+					headers: { "accept-encoding": "gzip, br", cookie: "sid=victim" },
+				}),
+				{},
+			)
+			return (await res.arrayBuffer()).byteLength
+		}
+		const wrong = "0123456789abcdef0123456789abcdef"
+		expect(await lengthFor(token)).toBe(await lengthFor(wrong))
 	})
 })
