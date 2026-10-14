@@ -21,6 +21,9 @@
 		"jiti": "2.7.0"
 	},
 	"devDependencies": {
+		"@opentelemetry/api": "1.9.1",
+		"@opentelemetry/core": "2.11.0",
+		"@opentelemetry/sdk-trace-base": "2.11.0",
 		"@total-typescript/ts-reset": "catalog:",
 		"@types/node": "catalog:",
 		"@vitest/coverage-v8": "4.1.10",

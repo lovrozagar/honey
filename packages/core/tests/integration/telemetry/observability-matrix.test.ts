@@ -4,11 +4,11 @@
  */
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
-import { realtime } from "../../src/realtime/realtime.ts"
-import { honey } from "../../src/routing/app.ts"
-import { createLogger } from "../../src/telemetry/logger.ts"
-import type { WSAdapter, WSContext, WSHandler } from "../../src/ws/contract.ts"
+import { type HoneyServer, serve } from "../../../src/adapters/node/serve.ts"
+import { realtime } from "../../../src/realtime/realtime.ts"
+import { honey } from "../../../src/routing/app.ts"
+import { createLogger } from "../../../src/telemetry/logger.ts"
+import type { WSAdapter, WSContext, WSHandler } from "../../../src/ws/contract.ts"
 
 /** A json logger at trace whose lines are parsed into `lines`. */
 function recording() {

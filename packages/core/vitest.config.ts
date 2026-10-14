@@ -5,7 +5,11 @@ import { defineConfig } from "vitest/config"
  * resolves to v0, so a structure test that imports it reads v0's source, never a stale dist/. */
 export default defineConfig({
 	resolve: { conditions: ["honey-source", ...defaultClientConditions] },
-	ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
+	ssr: {
+		/* tests run on Node, so packages resolve as Node resolves them: "module" names bundler-only
+		 * builds (OpenTelemetry's has extensionless imports Node cannot load) */
+		resolve: { conditions: ["honey-source", ...defaultServerConditions.filter((c) => c !== "module")] },
+	},
 	test: {
 		coverage: {
 			/* 00-rules "Coverage": every v1 source file at 100%; index and type-only files carry no statements */
