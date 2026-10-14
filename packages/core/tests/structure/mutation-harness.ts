@@ -33,6 +33,53 @@ export const GUARDS: readonly Guard[] = [
 		id: "encoded-separator",
 		module: "_v0/src/request-path.ts",
 	},
+	{
+		catches: "v1: an encoded / or \\ reaching a route param",
+		disable: (original) => {
+			const normalizePath = original.normalizePath as NormalizePath
+			return { normalizePath: (raw: string) => normalizePath(raw, "allow") }
+		},
+		id: "v1-encoded-separator",
+		module: "packages/core/src/routing/request-path.ts",
+	},
+	{
+		catches: "v1: a dot segment or doubled slash slipping past a scope",
+		disable: (original) => {
+			const normalizePath = original.normalizePath as NormalizePath
+			return {
+				normalizePath: (raw: string, encodedSlashes?: "allow" | "reject") =>
+					normalizePath(raw, encodedSlashes) === null ? null : raw,
+			}
+		},
+		id: "v1-path-canonical",
+		module: "packages/core/src/routing/request-path.ts",
+	},
+	{
+		catches: "v1: a cookie value written raw into Set-Cookie",
+		disable: () => ({ serializeCookie: (name: string, opts: { value: string }) => `${name}=${opts.value}` }),
+		id: "v1-cookie-octets",
+		module: "packages/core/src/context/cookie.ts",
+	},
+	{
+		catches: "v1: a cookie record with a prototype",
+		disable: (original) => {
+			const parse = original.parseCookieHeader as (header: string) => Record<string, string>
+			return { parseCookieHeader: (header: string) => ({ ...parse(header) }) }
+		},
+		id: "v1-cookie-record",
+		module: "packages/core/src/context/cookie.ts",
+	},
+	{
+		catches: "v1: a tampered signed cookie accepted",
+		disable: () => ({
+			createCookieSigner: () => ({
+				sign: async (value: string) => `${value}.~sig`,
+				verify: async (signed: string) => signed.slice(0, Math.max(0, signed.lastIndexOf("."))) || null,
+			}),
+		}),
+		id: "v1-cookie-signature",
+		module: "packages/core/src/context/cookie-sign.ts",
+	},
 ]
 
 const CORE = resolve(import.meta.dirname, "../..")

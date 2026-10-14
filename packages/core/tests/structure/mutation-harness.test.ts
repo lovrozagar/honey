@@ -35,7 +35,11 @@ describe("the adversarial suite against each guard", () => {
 		expect(runSuite(undefined)).toBe(0)
 	}, 60_000)
 
-	it("goes red with the encoded-separator guard disabled", () => {
-		expect(runSuite("encoded-separator")).not.toBe(0)
-	}, 60_000)
+	it.each(GUARDS.map((g) => g.id))(
+		"goes red with the %s guard disabled",
+		(id) => {
+			expect(runSuite(id)).not.toBe(0)
+		},
+		60_000,
+	)
 })
