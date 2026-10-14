@@ -62,27 +62,34 @@ const adapterOf = (app: unknown) => (app as { settings: { wsAdapter: { runtime: 
 const HANDSHAKE = (path: string, extra = "") =>
 	`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n${extra}\r\n`
 
-/** Every byte the server writes after `bytes`, up to `quiet` ms of silence; the socket stays open. */
-function afterHandshake(port: number, bytes: string, quiet = 50): Promise<string> {
+/**
+ * Every byte the server writes after `bytes`: from its first byte up to `quiet` ms of silence, or
+ * whatever arrived within `ceiling` ms. The silence is timed from the answer, not the write, so a
+ * slow server under load is not read as a silent one.
+ */
+function afterHandshake(port: number, bytes: string, quiet = 50, ceiling = 2000): Promise<string> {
 	return new Promise((resolve) => {
 		const socket = connect(port, "127.0.0.1")
 		let out = ""
 		let timer: ReturnType<typeof setTimeout> | undefined
-		const settle = () => {
+		const done = () => {
 			clearTimeout(timer)
-			timer = setTimeout(() => {
-				socket.destroy()
-				resolve(out)
-			}, quiet)
+			clearTimeout(limit)
+			socket.destroy()
+			resolve(out)
 		}
+		const limit = setTimeout(done, ceiling)
 		socket.on("data", (chunk) => {
 			out += chunk.toString("latin1")
-			settle()
+			clearTimeout(timer)
+			timer = setTimeout(done, quiet)
 		})
-		socket.on("close", () => resolve(out))
+		socket.on("close", () => {
+			clearTimeout(limit)
+			resolve(out)
+		})
 		socket.on("error", () => {})
 		socket.write(bytes)
-		settle()
 	})
 }
 
