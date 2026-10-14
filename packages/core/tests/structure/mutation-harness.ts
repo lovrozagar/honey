@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
+import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
 import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
 import type { WSContext, WSHandler } from "../../src/ws/contract.ts"
@@ -183,6 +184,18 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/middleware/server-timing.ts",
 	},
 	{
+		catches: "v1: a rate limit keyed on X-Forwarded-For, so a client rotates its window at will",
+		disable: (original) => ({ rateLimit: forwardedKey(original.rateLimit as RateLimit) }),
+		id: "v1-rate-limit-key",
+		module: "packages/core/src/middleware/rate-limit.ts",
+	},
+	{
+		catches: "v1: a rate-limit memory store a key spray grows without bound",
+		disable: (original) => ({ memoryStore: uncappedStore(original.memoryStore as MemoryStoreFactory) }),
+		id: "v1-rate-limit-bounded",
+		module: "packages/core/src/middleware/rate-limit.ts",
+	},
+	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",
 		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
 		id: "v1-out-headers-validation",
@@ -240,6 +253,20 @@ const rawServerTiming: Mw = async (_ctx, next) => {
 	const out = new Response(res.body, res)
 	out.headers.set("server-timing", [...parts, "total;dur=0"].join(", "))
 	return out
+}
+
+type RateLimit = (options: RateLimitOptions) => unknown
+type MemoryStoreFactory = (options: MemoryStoreOptions) => unknown
+
+/** rateLimit keyed on the client's own X-Forwarded-For. */
+function forwardedKey(real: RateLimit): RateLimit {
+	return (options) =>
+		real({ ...options, key: (ctx) => ctx.req.headers.get("x-forwarded-for") ?? ctx.ip ?? "" } as RateLimitOptions)
+}
+
+/** memoryStore with no cap on its windows. */
+function uncappedStore(real: MemoryStoreFactory): MemoryStoreFactory {
+	return (options) => real({ ...options, maxKeys: Number.MAX_SAFE_INTEGER })
 }
 
 type HeaderMap = Record<string, string | string[]>

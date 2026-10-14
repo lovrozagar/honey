@@ -38,6 +38,12 @@ const { timeout } = (await import(
 const { serverTiming } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/server-timing.ts")
 )) as typeof import("../../../src/middleware/server-timing.ts")
+const { memoryStore, rateLimit } = (await import(
+	resolvePath(REPO, "packages/core/src/middleware/rate-limit.ts")
+)) as typeof import("../../../src/middleware/rate-limit.ts")
+const { PEER_ADDRESS } = (await import(
+	resolvePath(REPO, "packages/core/src/context/peer.ts")
+)) as typeof import("../../../src/context/peer.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -151,5 +157,41 @@ describe("v1 adversarial: a timing name cannot forge a metric", () => {
 		/* split outside quoted strings: the metrics a browser's devtools would show */
 		const metrics = header.match(/(?:[^,"]|"(?:[^"\\]|\\.)*")+/g)?.map((metric) => metric.trim().split(";")[0])
 		expect(metrics).toEqual(["db__cache-hit_dur_0", "total"])
+	})
+})
+
+/** A request from `peer`, as the Node adapter reports it. */
+function fromPeer(peer: string, headers?: Record<string, string>): Request {
+	const req = new Request("http://app.test/t", { headers })
+	Object.defineProperty(req, PEER_ADDRESS, { value: peer })
+	return req
+}
+
+describe("v1 adversarial: a client cannot rotate its rate-limit key", () => {
+	it("past the limit, a fresh X-Forwarded-For on every request is still 429", async () => {
+		const app = honey<{}>()
+		app
+			.use(rateLimit({ limit: 2, windowMs: 60_000 }))
+			.get("/t")
+			.handler((ctx) => ctx.res.text("ok", "x"))
+		const statuses: number[] = []
+		for (let i = 0; i < 5; i += 1) {
+			const res = await app.fetch(fromPeer("203.0.113.7", { "x-forwarded-for": `198.51.100.${i}` }), {})
+			statuses.push(res.status)
+		}
+		expect(statuses).toEqual([200, 200, 429, 429, 429])
+	})
+})
+
+describe("v1 adversarial: a key spray cannot grow the rate-limit store", () => {
+	it("20 000 distinct peers (an IPv6 /64 walk) leave the store at its cap", async () => {
+		const store = memoryStore({ maxKeys: 1000, windowMs: 60_000 })
+		const app = honey<{}>()
+		app
+			.use(rateLimit({ limit: 1, store }))
+			.get("/t")
+			.handler((ctx) => ctx.res.text("ok", "x"))
+		for (let i = 0; i < 20_000; i += 1) await app.fetch(fromPeer(`2001:db8::${i.toString(16)}`), {})
+		expect(store.size).toBe(1000)
 	})
 })
