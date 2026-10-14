@@ -11,6 +11,7 @@ import { createErrorResponse } from "../errors/projector.ts"
 import { compileChain, type MaybePromise } from "../middleware/middleware.ts"
 import { replaceResponse, withRawBody } from "../response/builder.ts"
 import type { StatusKey } from "../response/status.ts"
+import { logRequest, type Seen } from "../telemetry/request-log.ts"
 import { finalize, type FinalizeHooks, type FinalTable, type Plan } from "./finalize.ts"
 import { matchRoute, matchWsRoute } from "./match.ts"
 import type { HoneyGraph } from "./register.ts"
@@ -195,13 +196,25 @@ function onlyWs(g: HoneyGraph, final: FinalTable, state: FetchState, matched: bo
 	return !matched && final.ws && state.req.method === "GET" && matchWsRoute(g.root, state.path) !== null
 }
 
+/** One request as it arrived; `seen` is where the request log wants its state recorded. */
+type Incoming = {
+	readonly env: unknown
+	readonly executionCtx: RequestState<unknown>["executionCtx"]
+	readonly request: Request
+	readonly seen: Seen | undefined
+}
+
+/** The request state of `incoming`, recorded for the request log when it is on. */
+function newState(s: AppSettings<unknown>, incoming: Incoming, path: string, plan: Plan): FetchState {
+	const { env, executionCtx, request, seen } = incoming
+	const state: FetchState = { allowed: null, env, executionCtx, logger: s.logger, path, plan, req: request }
+	if (seen !== undefined) seen.state = state
+	return state
+}
+
 /** Serve one request from the graph. */
-export function dispatch(
-	g: HoneyGraph,
-	request: Request,
-	env: unknown,
-	executionCtx: RequestState<unknown>["executionCtx"],
-) {
+function route(g: HoneyGraph, incoming: Incoming) {
+	const { request } = incoming
 	const s = g.settings
 	const fullPath = normalizePath(pathOfUrl(request.url), s.encodedSlashes)
 	if (fullPath === null) return badRequestTarget(s)
@@ -213,15 +226,7 @@ export function dispatch(
 	}
 	const path = afterPrefix(s.stripPrefix, fullPath)
 	const method = request.method.toUpperCase()
-	const state: FetchState = {
-		allowed: null,
-		env,
-		executionCtx,
-		logger: s.logger,
-		path,
-		plan: final.miss,
-		req: request,
-	}
+	const state = newState(s, incoming, path, final.miss)
 	/* a ws upgrade goes to the ws route on its path; an app without one never reads the header */
 	const upgraded = upgrade(g, final, state, method)
 	if (upgraded !== null) return upgraded
@@ -235,4 +240,20 @@ export function dispatch(
 		return answered ?? miss(s, final, state, match.allowed)
 	}
 	return run(state, final.plans.get(match.id) as Plan, match.params)
+}
+
+/** Serve one request from the graph, and log it when the request log is on. */
+export function dispatch(
+	g: HoneyGraph,
+	request: Request,
+	env: unknown,
+	executionCtx: RequestState<unknown>["executionCtx"],
+): MaybePromise<Response> {
+	const s = g.settings
+	if (s.requestLog === null) return route(g, { env, executionCtx, request, seen: undefined })
+	const seen: Seen = { request, started: performance.now(), state: null }
+	const answer = route(g, { env, executionCtx, request, seen })
+	return answer instanceof Promise
+		? answer.then((response) => logRequest(s, seen, response))
+		: logRequest(s, seen, answer)
 }
