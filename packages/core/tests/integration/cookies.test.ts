@@ -48,6 +48,36 @@ describe("ctx.cookies", () => {
 	})
 })
 
+describe("ctx.cookies: a long header", () => {
+	// v0: 84c2d77289
+	it("a hundred cookies are all read", async () => {
+		const app = honey<{}>()
+		app
+			.get("/t")
+			.handler((ctx) =>
+				ctx.res.json("ok", { count: Object.keys(ctx.cookies).length, first: ctx.cookies.c0, last: ctx.cookies.c99 }),
+			)
+		const cookie = Array.from({ length: 100 }, (_, i) => `c${i}=v${i}`).join("; ")
+		expect((await send(app, "/t", cookie)).body).toEqual({ count: 100, first: "v0", last: "v99" })
+	})
+
+	// v0: f03ee55186
+	// v0: 152af6048e
+	// v0: 9269971ab8
+	// v0: 9148c1d5fa
+	it("keeps spaces and an empty value; nothing but separators is none; a thousand pairs all", async () => {
+		const app = honey<{}>()
+		app.get("/t").handler((ctx) => ctx.res.json("ok", { count: Object.keys(ctx.cookies).length, ...ctx.cookies }))
+		const many = Array.from({ length: 1000 }, (_, i) => `k${i}=v${i}`).join("; ")
+		const thousand = (await send(app, "/t", many)).body as Record<string, unknown>
+		expect([
+			(await send(app, "/t", "msg=hello world; other=test; empty=")).body,
+			(await send(app, "/t", ";;;")).body,
+			[thousand.count, thousand.k0, thousand.k999],
+		]).toEqual([{ count: 3, empty: "", msg: "hello world", other: "test" }, { count: 0 }, [1000, "v0", "v999"]])
+	})
+})
+
 describe("ctx.cookies: names that shadow Object.prototype", () => {
 	it("are read as plain cookies, and nothing else answers to them", async () => {
 		const names = ["__proto__", "constructor", "toString", "hasOwnProperty"]
@@ -118,6 +148,18 @@ describe("cookies and error answers", () => {
 		const app = honey<{}>()
 		app.get("/t").handler((ctx) => ctx.res.json("ok", {}, { cookies: { s: { maxAge, value: "x" } } }))
 		expect(await send(app, "/t")).toEqual(answer)
+	})
+
+	// v0: cbe0ffcff7
+	it("the Set-Cookie of a Response onError answers with goes out with it", async () => {
+		const app = honey<{}>().onError(
+			() => new Response("{}", { headers: { "set-cookie": "error_tracked=1; Path=/" }, status: 500 }),
+		)
+		app.get("/t").handler(() => {
+			throw new Error("boom")
+		})
+		const { setCookie, status } = await send(app, "/t")
+		expect([status, setCookie]).toEqual([500, ["error_tracked=1; Path=/"]])
 	})
 
 	// v0: 4e6984c802

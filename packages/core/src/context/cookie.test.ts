@@ -436,6 +436,7 @@ describe("parseCookieHeader", () => {
 	})
 
 	// v0: 587b90b244
+	// v0: 08983c32f3
 	it("keeps prototype names as plain keys on a record with no prototype", () => {
 		const parsed = parseCookieHeader("__proto__=x; constructor=y; prototype=z; ok=1")
 		expect(Object.getPrototypeOf(parsed)).toBeNull()
@@ -452,6 +453,11 @@ describe("parseCookieHeader", () => {
 	it("strips one pair of surrounding quotes before decoding", () => {
 		expect(parseCookieHeader('a="x%22y"; b="; c=""').a).toBe('x"y')
 		expect(parseCookieHeader('b="; c=""')).toEqual({ b: '"', c: "" })
+	})
+
+	// v0: ff36609e4f
+	it("keeps a raw unicode value as sent", () => {
+		expect({ ...parseCookieHeader("name=日本語; emoji=🍯") }).toEqual({ emoji: "🍯", name: "日本語" })
 	})
 
 	it("skips a pair without = and an empty header", () => {

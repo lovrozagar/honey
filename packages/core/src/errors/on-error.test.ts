@@ -92,6 +92,7 @@ describe("onError: what it returns shapes the response", () => {
 	// v0: e33409b851
 	// v0: 2c4091a70b
 	// v0: 74d71d8fb9
+	// v0: 5dc0e0637a
 	it.each<[string, OnErrorFn<{}>, [number, string | undefined, string | null, boolean]]>([
 		[
 			"a HoneyError replaces the error, status and headers kept",
@@ -159,6 +160,27 @@ describe("onError: its helpers and its place in the chain", () => {
 		app.onError(() => new Response("mapped", { status: 503 }))
 		const res = await app.fetch(get("/boom"), {})
 		expect([res.status, res.headers.get("x-stamped")]).toEqual([503, "yes"])
+	})
+})
+
+describe("onError: beside a factory and a formatter", () => {
+	// v0: 55f152e6c2
+	it("a factory error reaches onError once; nothing returned, the app's formatter shapes its answer", async () => {
+		const errors = defineErrors({ not_found: "not_found" })
+		const seen: unknown[] = []
+		const app = honey<{}>()
+			.errorFactory(errors)
+			.onError((error) => void seen.push(error))
+			.defaultErrorFormatter((_error, shape) => ({ ...shape, custom: true }))
+		app
+			.get("/test")
+			.errors("not_found")
+			.handler(() => {
+				throw errors.not_found()
+			})
+		const res = await app.fetch(get("/test"), {})
+		const body = (await res.json()) as { custom?: boolean; error_key: string }
+		expect([seen.length, res.status, body.custom, body.error_key]).toEqual([1, 404, true, "not_found"])
 	})
 })
 

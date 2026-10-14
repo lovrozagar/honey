@@ -108,6 +108,26 @@ const THROWS: Array<{ answer: ReturnType<typeof failure> | object; label: string
 				.get("/t")
 				.handler((ctx) => ctx.res.json("ok", {})),
 	},
+	...[
+		// v0: 6837dc095b
+		["null", null],
+		// v0: 8af1d68f74
+		["a number", 42],
+		// v0: e68dc68a36
+		["a string", "string error"],
+	].map(([what, thrown]) => ({
+		answer: failure("internal_server_error", 500, "internal_server_error", STAMPS),
+		label: `a middleware throws ${String(what)}, not an Error`,
+		route: (app: App) =>
+			app
+				.use(
+					createMiddleware(() => {
+						throw thrown
+					}),
+				)
+				.get("/t")
+				.handler((ctx) => ctx.res.json("ok", {})),
+	})),
 	{
 		answer: failure("internal_server_error", 500, "internal_server_error", STAMPS),
 		label: "a middleware throws after next() answered",
@@ -358,6 +378,27 @@ describe("which errors reach the client under an errorFactory", () => {
 
 /** What a handler sees of ctx.errors. */
 const errorsOf = (errs: object) => ({ frozen: Object.isFrozen(errs), keys: Object.keys(errs).sort() })
+
+describe("what a factory error's answer leaves out", () => {
+	// v0: f08e5dd7b8
+	it("its cause, and any secret in it, never reaches the client; its key does", async () => {
+		const dbErrors = defineErrors({ db_error: "internal_server_error" })
+		const app = honey<{}>().errorFactory(dbErrors).logger(false)
+		app
+			.get("/test")
+			.errors("db_error")
+			.handler(() => {
+				throw dbErrors.db_error({ cause: new Error("connection refused to postgres://admin:s3cr3t@prod-db:5432") })
+			})
+		const res = await app.fetch(new Request("http://localhost/test"), {})
+		const text = await res.text()
+		expect([res.status, text.includes("db_error"), /postgres|s3cr3t|connection refused/.test(text)]).toEqual([
+			500,
+			true,
+			false,
+		])
+	})
+})
 
 describe("ctx.errors", () => {
 	// v0: 7241a672c9

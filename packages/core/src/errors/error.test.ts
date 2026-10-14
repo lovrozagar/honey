@@ -63,6 +63,7 @@ describe("HoneyError options", () => {
 		expect(new HoneyError({ errorKey: "org_slug_taken", status: "conflict" }).message).toBe("org_slug_taken")
 	})
 
+	// v0: 5f33129599
 	it("an unknown status key is a 500, never a 200", () => {
 		const err = new HoneyError({ errorKey: "x", status: "made_up" as never })
 		expect(err.status).toBe(500)
