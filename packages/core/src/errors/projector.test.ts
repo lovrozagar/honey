@@ -137,11 +137,10 @@ describe("createErrorResponse: deep coverage", () => {
 		expect(seen).toEqual([err, { reason: "test", suggestions: ["a"] }])
 		expect(body).toEqual({ injected: true, reason: "test", suggestions: ["a"] })
 	})
-
-	// v0: 030f58a717
 })
 
 describe("createErrorResponse: deep coverage, formatter routing", () => {
+	// v0: 030f58a717
 	it("customFormatter does NOT fire for standard errors", () => {
 		let customCalled = false
 		createErrorResponse(errors.email_taken(), identity, (_e, data) => {

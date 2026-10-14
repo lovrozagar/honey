@@ -149,13 +149,13 @@ describe("HoneyError.serialize: vars, fields and cause", () => {
 		expect(rootSerialized).not.toHaveProperty("cause")
 	})
 
-	// v0: 3531245a59
 	it("leaves out a falsy cause, as v0 does", () => {
 		expect(
 			HoneyError.serialize(new HoneyError({ cause: null, errorKey: "x", status: "bad_request" })),
 		).not.toHaveProperty("cause")
 	})
 
+	// v0: 3531245a59
 	it("handles non-Error cause values", () => {
 		const result = HoneyError.serialize(
 			new HoneyError({ cause: "string cause", errorKey: "fail", status: "internal_server_error" }),

@@ -198,11 +198,11 @@ describe("HoneyContext > lazy search", () => {
 		expect(ctx.searchAll.tag).toEqual(["a", "b", "c"])
 	})
 
-	// v0: 6398e2edc8
 	it("searchAll parses on its own when read first", () => {
 		expect(makeCtx({ req: makeReq("http://localhost/test?q=1&q=2") }).searchAll.q).toEqual(["1", "2"])
 	})
 
+	// v0: 6398e2edc8
 	it("cached after first access", () => {
 		const ctx = makeCtx({ req: makeReq("http://localhost/test?q=1") })
 		expect(ctx.search).toBe(ctx.search)
