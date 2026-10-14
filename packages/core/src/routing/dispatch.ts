@@ -2,11 +2,12 @@
  * The fetch pipeline: normalize the request path, redirect a non-canonical trailing slash, strip
  * the app prefix, find the route (statics first), and run its compiled chain. Every exit — 400,
  * redirect, 404, 405, preflight, a handler, a throw — yields one Response. A throw becomes a
- * response at the `next()` boundary through the projector and `onError`; the boundary never rejects.
+ * response at the `next()` boundary (`errors/on-error.ts`); the boundary never rejects.
  */
-import { HoneyContext, REQUEST, type RequestState, setCtxError } from "../context/context.ts"
-import { HoneyError, hasUnknownStatus } from "../errors/error.ts"
-import { asHoneyError, createErrorResponse, projectThrown, safeErrorResponse } from "../errors/projector.ts"
+import { HoneyContext, REQUEST, type RequestState } from "../context/context.ts"
+import { HoneyError } from "../errors/error.ts"
+import { boundary, errorCtx } from "../errors/on-error.ts"
+import { createErrorResponse } from "../errors/projector.ts"
 import { compileChain, type MaybePromise } from "../middleware/middleware.ts"
 import { replaceResponse, withRawBody } from "../response/builder.ts"
 import type { StatusKey } from "../response/status.ts"
@@ -14,7 +15,7 @@ import { finalize, type FinalizeHooks, type FinalTable, type Plan } from "./fina
 import { matchRoute, matchWsRoute } from "./match.ts"
 import type { HoneyGraph } from "./register.ts"
 import { normalizePath, pathOfUrl, searchOfUrl } from "./request-path.ts"
-import { type AppSettings, defaultErrorFormatter, type ErrorCtx } from "./settings.ts"
+import { type AppSettings, defaultErrorFormatter } from "./settings.ts"
 import type { WSAdapter } from "../ws/contract.ts"
 
 /** The request state of one fetch: the context's request fields, the plan it runs, the 405 answer. */
@@ -31,69 +32,10 @@ function stateOf(ctx: object): FetchState {
 	return (ctx as HoneyContext<unknown>)[REQUEST] as FetchState
 }
 
-function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<unknown> {
-	return {
-		env: state.env,
-		jsonFromError: (err) => createErrorResponse(err, s.errorFormatter, s.customErrorFormatter),
-		req: state.req,
-	}
-}
-
 /** The app's error for a framework condition: its factory's, else a plain one. */
 function frameworkError(s: AppSettings<unknown>, errorKey: string, status: StatusKey): HoneyError {
 	const make = s.errorFactory?.[errorKey]
 	return typeof make === "function" ? (make as () => HoneyError)() : new HoneyError({ errorKey, status })
-}
-
-/** Answer with `error`, recording it on `ctx.error`. */
-function answer(s: AppSettings<unknown>, ctx: object, error: HoneyError): Response {
-	setCtxError(ctx as HoneyContext, error)
-	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter)
-}
-
-/** Apply what `onError` returned: a HoneyError replaces the error, a Response answers, nothing falls through. */
-function settleOnError(s: AppSettings<unknown>, ctx: object, error: HoneyError, result: unknown): Response {
-	if (result instanceof HoneyError)
-		return answer(s, ctx, hasUnknownStatus(result) ? projectThrown(result, stateOf(ctx).plan.policy) : result)
-	if (result instanceof Response) {
-		setCtxError(ctx as HoneyContext, error)
-		return result
-	}
-	return answer(s, ctx, error)
-}
-
-function convertWith(s: AppSettings<unknown>, thrown: unknown, ctx: object): MaybePromise<Response> {
-	const error = projectThrown(thrown, stateOf(ctx).plan.policy)
-	const onError = s.onError
-	if (onError === null) return answer(s, ctx, error)
-	let result: unknown
-	try {
-		result = onError(thrown, errorCtx(s, stateOf(ctx)))
-	} catch {
-		/* a throwing onError falls back to the native projection */
-		return answer(s, ctx, error)
-	}
-	if (!(result instanceof Promise)) return settleOnError(s, ctx, error, result)
-	return result.then(
-		(value: unknown) => settleOnError(s, ctx, error, value),
-		() => answer(s, ctx, error),
-	)
-}
-
-/** The error boundary of every `next()`: what was thrown becomes the Response that replaces it. Never rejects. */
-function boundary(s: AppSettings<unknown>): (thrown: unknown, ctx: object) => MaybePromise<Response> {
-	const fallback = (thrown: unknown, ctx: object): Response => {
-		setCtxError(ctx as HoneyContext, asHoneyError(thrown))
-		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter)
-	}
-	return (thrown, ctx) => {
-		try {
-			const res = convertWith(s, thrown, ctx)
-			return res instanceof Promise ? res.catch(() => fallback(thrown, ctx)) : res
-		} catch {
-			return fallback(thrown, ctx)
-		}
-	}
 }
 
 /** Add `Allow` to a 405, rebuilding a response whose headers are immutable. */
