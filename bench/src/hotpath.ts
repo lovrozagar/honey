@@ -15,7 +15,7 @@
  *
  * Until the cutover (H21) the code under test is v1, built from packages/core/src, and the
  * committed baseline is v0's ratios: v1 must not be slower than v0 on any scenario it can
- * express. A scenario whose feature lands in a later bit prints as `pending bit NN`, never as a
+ * express. A scenario whose feature lands in a later bit prints as `pending bit NN`, one whose feature was cut as `cut`, never as a
  * pass. `HOTPATH_TARGET=v0` measures the v0 package, the only target `--update` records.
  */
 import { readFileSync, writeFileSync } from "node:fs"
@@ -34,12 +34,13 @@ const SAMPLES = Number(process.env.HOTPATH_SAMPLES ?? 15)
 const ITERATIONS = Number(process.env.HOTPATH_ITERATIONS ?? 50_000)
 const TARGET = process.env.HOTPATH_TARGET === "v0" ? "v0" : "v1"
 
-/** Scenarios v1 cannot express yet, and the bit whose feature they need. */
+/** Scenarios v1 does not run, and why: the bit whose feature they need, or the cut that removed it. */
 const PENDING_V1: Readonly<Record<string, string>> = {
-	body: "08",
-	"large-response": "08",
-	"mw-stack": "07",
-	trust: "03",
+	body: "pending bit 08",
+	"large-response": "pending bit 08",
+	"mw-stack": "pending bit 07",
+	/* trustProxy is cut (H23): v1 has no forwarded-client resolution to measure */
+	trust: "cut (H23)",
 }
 
 type Fetch = (req: Request) => Response | Promise<Response>
@@ -314,7 +315,7 @@ const rows = verdicts.map(([name, r, v]) => ({
 }))
 const pending = Object.keys(SCENARIOS)
 	.filter((name) => results[name] === undefined)
-	.map((name) => ({ baseline: against[name] ?? "—", scenario: name, status: `pending bit ${PENDING_V1[name]}` }))
+	.map((name) => ({ baseline: against[name] ?? "—", scenario: name, status: PENDING_V1[name] }))
 console.log(
 	`hotpath ${TARGET} on ${runtime} (${version}) vs baseline ${againstName}, threshold +${Math.round(THRESHOLD * 100)}%`,
 )
