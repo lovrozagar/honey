@@ -102,8 +102,11 @@ describe("ctx.res under .output(): what stays and what goes", () => {
 				return ctx.res.sse(async () => {})
 			})
 	})
+})
 
+describe("ctx.res without .output()", () => {
 	// v0: b66220dc50
+	// v0: 6cbbf83e2a
 	it("without .output() every helper is there, unconstrained", () => {
 		honey<{}>()
 			.get("/any")
@@ -115,7 +118,91 @@ describe("ctx.res under .output(): what stays and what goes", () => {
 				ctx.res.csv("ok", "")
 				expectTypeOf(ctx.res.sse).toBeFunction()
 				expectTypeOf(ctx.res.generate).toBeFunction()
+				expectTypeOf(ctx.res.binary("accepted", new Uint8Array(0))).toEqualTypeOf<
+					TypedResponse<"application/octet-stream", "accepted">
+				>()
+				expectTypeOf(ctx.res.binary("ok", new Uint8Array(0), { contentType: "image/gif" })).toEqualTypeOf<
+					TypedResponse<"image/gif", "ok">
+				>()
 				return ctx.res.json("ok", {})
+			})
+	})
+})
+
+describe("ctx.res.binary under .output()", () => {
+	// v0: 3fd4c69ed9
+	// v0: ab93a3efc3
+	// v0: c3adbd0a15
+	it("takes octet-stream's declared status keys and answers their brand; only binary and the universals stay", () => {
+		honey<{}>()
+			.get("/file")
+			.output({ "application/octet-stream": { accepted: true, ok: true } })
+			.handler((ctx) => {
+				expectTypeOf(ctx.res.binary("accepted", new Uint8Array(0))).toEqualTypeOf<
+					TypedResponse<"application/octet-stream", "accepted">
+				>()
+				// @ts-expect-error a status key octet-stream does not declare
+				ctx.res.binary("created", new Uint8Array(0))
+				expectTypeOf(ctx.res).not.toHaveProperty("json")
+				expectTypeOf(ctx.res).not.toHaveProperty("text")
+				expectTypeOf(ctx.res.noContent).toBeFunction()
+				return ctx.res.binary("ok", new ArrayBuffer(0))
+			})
+	})
+
+	// v0: fa32164ff3
+	it("sits beside the other declared helpers", () => {
+		honey<{}>()
+			.get("/export")
+			.output({
+				"application/json": { ok: z.object({ id: z.string() }) },
+				"application/octet-stream": { created: true },
+				"text/csv": { accepted: z.string() },
+			})
+			.handler((ctx) => {
+				expectTypeOf(ctx.res.json).toBeFunction()
+				expectTypeOf(ctx.res.csv).toBeFunction()
+				expectTypeOf(ctx.res.binary("created", new Uint8Array(0))).toEqualTypeOf<
+					TypedResponse<"application/octet-stream", "created">
+				>()
+				return ctx.res.json("ok", { id: "1" })
+			})
+	})
+
+	it("an open media type is answered through binary, its content type one of the declared ones", () => {
+		honey<{}>()
+			.get("/image")
+			.output({ "image/gif": { ok: true }, "image/png": { created: true } })
+			.handler((ctx) => {
+				expectTypeOf(ctx.res.binary("created", new Uint8Array(0), { contentType: "image/png" })).toEqualTypeOf<
+					TypedResponse<"image/png", "created">
+				>()
+				// @ts-expect-error no octet-stream is declared: the content type is required
+				ctx.res.binary("ok", new Uint8Array(0))
+				// @ts-expect-error a media type the output does not declare
+				ctx.res.binary("ok", new Uint8Array(0), { contentType: "image/jpeg" })
+				// @ts-expect-error a status key image/gif does not declare
+				ctx.res.binary("created", new Uint8Array(0), { contentType: "image/gif" })
+				return ctx.res.binary("ok", new Uint8Array(0), { contentType: "image/gif" })
+			})
+	})
+})
+
+describe("declared response headers", () => {
+	it("a status declaring headers takes them in its options, typed; another status keeps its options optional", () => {
+		honey<{}>()
+			.post("/users")
+			.output({
+				"application/json": { created: z.object({ id: z.string() }), ok: z.object({ id: z.string() }) },
+				headers: { created: z.object({ location: z.string() }) },
+			})
+			.handler((ctx) => {
+				// @ts-expect-error created declares a location header
+				ctx.res.json("created", { id: "1" })
+				// @ts-expect-error the declared header is missing
+				ctx.res.json("created", { id: "1" }, { headers: { etag: "x" } })
+				expectTypeOf(ctx.res.json("ok", { id: "1" })).toEqualTypeOf<TypedResponse<"application/json", "ok">>()
+				return ctx.res.json("created", { id: "1" }, { headers: { location: "/users/1", "x-extra": "1" } })
 			})
 	})
 })
@@ -130,6 +217,10 @@ describe("AllowedResMethods", () => {
 			"json" | "text"
 		>()
 		expectTypeOf<AllowedResMethods<{ "text/event-stream": unknown }>>().toEqualTypeOf<"sse">()
+		expectTypeOf<AllowedResMethods<{ "application/octet-stream": unknown }>>().toEqualTypeOf<"binary">()
+		expectTypeOf<AllowedResMethods<{ "application/json": unknown; "image/gif": unknown }>>().toEqualTypeOf<
+			"binary" | "json"
+		>()
 	})
 })
 

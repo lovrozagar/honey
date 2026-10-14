@@ -11,6 +11,7 @@ import type { MaybePromise } from "../middleware/middleware.ts"
 import { isHoneyResponse, isProducedStream, rawBodyOf } from "../response/builder.ts"
 import { parseMediaType } from "../response/media-type.ts"
 import { codeToStatusKey } from "../response/status.ts"
+import type { HeadersCheck } from "../response/response-headers.ts"
 import type { OutputSchemas, StatusSchemas } from "../routing/output-types.ts"
 import type { StandardSchemaLike, StandardSchemaResult } from "./standard-schema.ts"
 
@@ -72,17 +73,18 @@ function bodiless(response: Response): boolean {
 }
 
 /**
- * The check for a route declaring `schemas`, for an app whose mode is on. The declared media types
- * are fixed here, once; `redirect` and `headers` name no body type.
+ * The check for a route declaring `schemas`, for an app whose mode is on: `headers`, its declared
+ * headers' check, first, whatever the answer carries. The declared media types are fixed here,
+ * once; `redirect` and `headers` name no body type.
  */
-export function compileOutput(schemas: OutputSchemas): OutputCheck {
+export function compileOutput(schemas: OutputSchemas, headers: HeadersCheck | null): OutputCheck {
 	const declared = new Set<string>()
 	for (const key of Object.keys(schemas)) {
 		const mt = key.includes("/") ? parseMediaType(key) : null
 		if (mt !== null) declared.add(mt.essence)
 	}
 	const json = (schemas as Record<string, StatusSchemas | undefined>)["application/json"]
-	return (response) => {
+	const body = (response: Response): MaybePromise<Response> => {
 		if (bodiless(response)) return response
 		const type = response.headers.get("content-type")
 		if (type === null) return response
@@ -105,6 +107,11 @@ export function compileOutput(schemas: OutputSchemas): OutputCheck {
 			.json()
 			.then((data: unknown) => validateOutput(schema, statusKey as string, data))
 			.then(() => response)
+	}
+	if (headers === null) return body
+	return (response) => {
+		const pending = headers(response)
+		return pending === undefined ? body(response) : pending.then(() => body(response))
 	}
 }
 

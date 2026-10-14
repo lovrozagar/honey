@@ -15,6 +15,7 @@ import {
 	withProducedBody,
 	withRawBody,
 } from "./builder.ts"
+import { BINARY_HEADERS, type BinaryBody, binaryBytes, binaryHeaders, type BinaryOptions } from "./binary.ts"
 import type { HeaderMap } from "./out-headers.ts"
 import { SSE_HEADERS, type SSEOptions, type SSEStream, sseBody } from "./sse.ts"
 import { type StatusKey, statusKeyToCode } from "./status.ts"
@@ -53,7 +54,6 @@ const TEXT_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "text/plain
 const HTML_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "text/html; charset=utf-8" })
 const CSV_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "text/csv; charset=utf-8" })
 const XML_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "application/xml" })
-const BINARY_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "application/octet-stream" })
 
 function hasOptions(opts: ResponseOptions | undefined): opts is ResponseOptions {
 	return opts?.headers !== undefined || opts?.cookies !== undefined
@@ -181,6 +181,15 @@ export class HoneyRes {
 		return new Response(null, { headers: applyNative(new Headers(headers), opts), status })
 	}
 
+	/** Bytes as `opts.contentType` (`application/octet-stream` by default), kept as the raw body. */
+	binary<SK extends StatusKey, CT extends string = "application/octet-stream">(
+		statusKey: SK,
+		body: BinaryBody,
+		opts?: BinaryOptions<CT>,
+	): TypedResponse<CT, SK> {
+		return this.#known(statusKeyToCode[statusKey], binaryHeaders(opts?.contentType), binaryBytes(body), opts)
+	}
+
 	csv<SK extends StatusKey>(statusKey: SK, body: string, opts?: ResponseOptions): TypedResponse<"text/csv", SK> {
 		return this.#known(statusKeyToCode[statusKey], CSV_HEADERS, body, opts)
 	}
@@ -223,7 +232,7 @@ export class HoneyRes {
 	 * so its `finally` runs; a throw mid-stream breaks the body instead of ending it cleanly.
 	 */
 	generate(generator: Generated, opts?: GenerateOptions): TypedResponse<string, "ok"> {
-		const base = opts?.contentType === undefined ? BINARY_HEADERS : { "content-type": opts.contentType }
+		const base = binaryHeaders(opts?.contentType)
 		return typed(this.#streamed(generatorStream(generator, this.#producer()), base, opts))
 	}
 

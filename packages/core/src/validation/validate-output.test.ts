@@ -1,5 +1,7 @@
+import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as z from "zod"
+import { serve } from "../adapters/node/serve.ts"
 import { HoneyError } from "../errors/error.ts"
 import { rangeResponse } from "../response/range.ts"
 import { HoneyRes } from "../response/response.ts"
@@ -293,7 +295,7 @@ describe("output validation through the app: where the body is read from", () =>
 	})
 
 	it("an empty body honey built is validated as null, on the native and the Node path", async () => {
-		const check = compileOutput({ "application/json": { created: z.null(), ok: z.object({ id: z.string() }) } })
+		const check = compileOutput({ "application/json": { created: z.null(), ok: z.object({ id: z.string() }) } }, null)
 		const answers = await Promise.all(
 			[new HoneyRes(), new HoneyRes(true)].map(async (res) => {
 				const passed = await check(res.json("created", undefined))
@@ -348,10 +350,18 @@ describe("compileOutput: answers it lets through unread", () => {
 	const failing = { "application/json": { ok: schemaOf([{ message: "always fails" }]) } }
 
 	it("a body with no content type, and a status no status key names, pass unread", () => {
-		const check = compileOutput(failing)
+		const check = compileOutput(failing, null)
 		const untyped = new Response(new Blob(["{}"]).stream())
 		const unnamed = new Response("{}", { headers: { "content-type": "application/json" }, status: 299 })
 		expect([check(untyped), check(unnamed)]).toEqual([untyped, unnamed])
+	})
+
+	it("checks the declared headers first: an async header check makes the answer a promise", async () => {
+		const later = vi.fn(async () => undefined)
+		const check = compileOutput({ "application/json": { ok: schemaOf() } }, later)
+		const response = new HoneyRes().json("ok", {})
+		const answered = check(response)
+		expect([answered instanceof Promise, await answered, later.mock.calls]).toEqual([true, response, [[response]]])
 	})
 
 	it("a handler that answered nothing is not checked, sync or async", async () => {
@@ -456,5 +466,33 @@ describe("output validation beside the rest of the request", () => {
 			)
 		const [bad, good] = [await send('{"name":1}'), await answer(send('{"name":"ada"}'))]
 		expect([bad.status, good, validate.mock.calls]).toEqual([400, [201, { name: "ADA" }], [[{ name: "ADA" }]]])
+	})
+})
+
+describe("output validation over real HTTP", () => {
+	// v0: 9c1b0baf81
+	// v0: 9b32e7fceb
+	it("a valid answer arrives as sent; an invalid one arrives as a 500 output_validation_failed", async () => {
+		const app = validating()
+		const out = { "application/json": { ok: z.object({ id: z.string() }) } }
+		app
+			.get("/valid")
+			.output(out)
+			.handler((ctx) => ctx.res.json("ok", { id: "abc" }))
+		app
+			.get("/bad")
+			.output(out)
+			.handler((ctx) => ctx.res.raw(foreign("application/json")))
+		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		await new Promise((resolve) => server.once("listening", resolve))
+		const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+		try {
+			expect([await answer(fetch(`${base}/valid`)), (await answer(fetch(`${base}/bad`)))[1].error_key]).toEqual([
+				[200, { id: "abc" }],
+				"output_validation_failed",
+			])
+		} finally {
+			await server.shutdown(0)
+		}
 	})
 })
