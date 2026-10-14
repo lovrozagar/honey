@@ -190,7 +190,6 @@ tests/integration/cookie-codec.test.ts	core	test	02	serializeCookie attribute/pr
 #   relabel still exist and hold coverage their base file doesn't yet. The implementer collapses each into its
 #   named map home and DELETES it: scoped-2 → scoped; errors-2 → errors; cookies-2 → cookies/cookie-codec.
 #   Rows kept only so check-tree is green while that happens; no new numbered file is ever added.
-tests/integration/scoped-2.test.ts	core	test	02	TRANSITIONAL dump — fold into scoped.test.ts and delete	scoped*
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder, $routes/MergeRoute, ComputeErrorsByStatus	typetest/*
 tests/types/app-2.typetest.ts	core	test	02	app ports, continued (500-line cap split)	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	HandlerCtx, params, meta, errors, routePattern	typetest/*
