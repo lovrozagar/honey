@@ -103,16 +103,19 @@ jobs:
   hotpath:
     name: hot-path benchmark
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      # app.fetch cost as a ratio to a raw fetch handler, against bench/hotpath-baseline.json
-      # (recorded with BUN_VERSION). One retry absorbs a noisy neighbor; two failures are a regression.
+      # v1's app.fetch cost as a ratio to a raw fetch handler, against v0's ratios in
+      # blueprint/baselines/hotpath.json (recorded with BUN_VERSION). One retry absorbs a noisy
+      # neighbor; two failures are a regression.
       - run: bun run bench:hotpath || bun run bench:hotpath
+      # v1's finalize cost against v0's, in the same process: no baseline, no machine dependence
+      - run: bun run bench:finalize || bun run bench:finalize
 
   build:
     name: build (${{ matrix.runtime }})

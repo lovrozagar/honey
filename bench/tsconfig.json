@@ -19,6 +19,7 @@
 	"include": [
 		"src/apps/bun/**/*.ts",
 		"src/apps/node/**/*.ts",
+		"src/finalize.ts",
 		"src/hotpath.ts",
 		"src/significance.ts",
 		"src/significance.test.ts"
