@@ -34,6 +34,8 @@ describe("ipRestrict(): the allow list", () => {
 	// v0: 57f303a66a
 	// v0: 4aff2d77bd
 	// v0: a865b31aab
+	// v0: 5a7d946385
+	// v0: a53e5a8a45
 	it.each([
 		["172.16.0.0/16", "172.16.255.1", 200],
 		["172.16.0.0/16", "172.17.0.1", 403],
@@ -46,6 +48,8 @@ describe("ipRestrict(): the allow list", () => {
 		["fe80::/10", "fe80::1", 200],
 		["fe80::/10", "fd00::1", 403],
 		["2001:db8::/32", "2001:db8:ffff::1", 200],
+		["2001:db8::/32", "2001:db8::1", 200],
+		["::1/128", "::1", 200],
 	])("rule %s, peer %s: %i", async (rule, peer, status) => {
 		expect(await statusOf({ allowList: [rule] }, peer)).toBe(status)
 	})
@@ -84,6 +88,9 @@ describe("ipRestrict(): the address is ctx.ip, the platform peer", () => {
 	// v0: 5bd7eb84e9
 	// v0: 2e696ae03d
 	// v0: 57d318b56c
+	// v0: 1e111b2995
+	// v0: 30e4163536
+	// v0: 6a037cbf6c
 	it("no forwarding header a client sends can stand in for the peer", async () => {
 		const statuses = []
 		for (const header of ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "true-client-ip", "forwarded"]) {
@@ -98,6 +105,7 @@ describe("ipRestrict(): fails closed", () => {
 	// v0: 62496e8795
 	// v0: 61927a174a
 	// v0: b469c1615b
+	// v0: 6a037cbf6c
 	it("no peer reported: 403 under an allow list and under a deny-only list", async () => {
 		expect([await statusOf({ allowList: ["10.0.0.1"] }), await statusOf({ denyList: ["10.0.0.1"] })]).toEqual([
 			403, 403,

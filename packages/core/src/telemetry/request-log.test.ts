@@ -92,6 +92,7 @@ describe("requestLog: one line per request, from the field catalog", () => {
 	// v0: b104e364f1
 	// v0: 28c838ff81
 	// v0: 238cf0a144
+	// v0: dfd70438f2
 	it("a buffered body: method, path without its query, status, route id, kind, bytes, runtime, a duration", async () => {
 		const { app: a, lines } = app()
 		await (await a.fetch(get("/json/7?token=secret"), {})).text()

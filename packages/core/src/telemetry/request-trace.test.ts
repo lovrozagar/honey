@@ -369,6 +369,7 @@ describe("a tracer that throws never touches the answer", () => {
 	// v0: f1546ee38c
 	// v0: 49b1cba0f8
 	// v0: 841ce5eb49
+	// v0: 594bbd09c3
 	it.each([
 		["startSpan", "startSpan"],
 		["a child's startSpan", "child"],

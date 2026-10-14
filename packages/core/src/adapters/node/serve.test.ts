@@ -285,6 +285,9 @@ describe("shutdown(): what would never finish on its own", () => {
 	})
 
 	// v0: 1367cdc6b5
+	// v0: bc6ba8c719
+	// v0: 582ed0c32d
+	// v0: 4bad1a6c6b
 	it("after the timeout, aborts what is still working and closes every connection", async () => {
 		const { app, arrived, reasons } = untilAborted()
 		const { base, server } = await listen(app)

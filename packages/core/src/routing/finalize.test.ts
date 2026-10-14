@@ -423,7 +423,6 @@ describe("the statics table: literal routes without the tree", () => {
 	// v0: 3bd187b5a9
 	// v0: 34caa430ed
 	// v0: 1af0b5e4c6
-	// v0: 56132a5175
 	// v0: 031efcf0eb
 	it("literal routes answer from the table, the rest from the tree, alike to every method", async () => {
 		const sub = honey<{}>()

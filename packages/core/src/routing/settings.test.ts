@@ -164,6 +164,7 @@ describe("the logger and requestLog settings", () => {
 })
 
 describe("ctx.log: the request's own logger", () => {
+	// v0: 84f3f8dac4
 	it("binds method, the path without its query, the route id and the request id when set", async () => {
 		const { lines, logger } = recordingLogger()
 		const app = honey<{}>().logger(logger)

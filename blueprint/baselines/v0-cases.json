@@ -44632,6 +44632,10 @@
 		"fea9249d24": {
 			"feature": "08-io",
 			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"56132a5175": {
+			"feature": "08-io",
+			"reason": "HEAD empty body in-process (await res.text()===\"\") needs body-kind.ts (bit 08); the table fallback (200 + GET content-type) stays asserted in finalize statics-table"
 		}
 	},
 	"retired": {
