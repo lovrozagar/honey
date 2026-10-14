@@ -240,8 +240,8 @@ describe("bodyLimit: limits per media type", () => {
 	// v0: 381c4aea1d
 	it("matches the parsed essence whatever its case or parameters, then its type's family key; anything else gets maxSize", async () => {
 		const app = limited({ limits: { "application/": 1000, "application/json": 10 }, maxSize: 20 })
-		const status = async (type: string, size: number) =>
-			(await app.fetch(to("POST", "x".repeat(size), type === "" ? {} : { "content-type": type }), {})).status
+		const status = async (type: string, bytes: number) =>
+			(await app.fetch(to("POST", "x".repeat(bytes), type === "" ? {} : { "content-type": type }), {})).status
 		expect([
 			await status("Application/JSON", 50),
 			await status("application/json; charset=utf-8", 50),
