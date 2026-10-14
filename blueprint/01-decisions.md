@@ -174,6 +174,15 @@ The single thing v0 is the **spec** for is **behavior**: the oracle (the 6713 ru
 
 This is why the reorg is an inventory, not a reshuffle (H13), and why "port" throughout the blueprint means **cover-the-behavior-with-a-clean-test or retire**, never copy. When a choice is between fidelity to v0's shape and the best v1, the best v1 wins — behavior stays identical, the rest improves.
 
+**What "best-possible" means concretely (so it is not re-read as "rename and move").** A feature suite is *authored*, not assembled from v0 cases:
+- **Organized by sub-behavior.** Describes name feature areas (routing → "path params", "method resolution", "wildcards", "trailing slash", "encoded segments"), each grouping its related assertions. **Not one describe per historical v0 bug.**
+- **Shared setup.** A local app factory / helper (or `beforeEach`); a test does not rebuild `honey()` inline when its neighbors do. Parametric cases use `it.each` / table-driven assertions.
+- **Consolidated.** Redundant v0 cases merge into one thorough test; the duplicates **retire** in `v0-cases.json` (`covered-by <test>`). The case count **drops** — that is the goal, not a loss.
+- **Comprehensive.** The suite covers the *feature* (the 100%/file gate plus the edge cases a careful author adds), using the inventory as a **checklist** that nothing v0 proved is missing — never as the test list.
+- `// v0: <id>` tags ride the covering test (one test may carry several ids it subsumes).
+
+**The dump tell (a gate for the reviewer):** a suite where `#describes ≈ #its ≈ #inline honey() builds ≈ #v0 tags` is a relabeled dump and **fails this bar** — stripping `bug-hunt-N:` off a v0 describe and moving the verbatim body into a feature file is exactly the thing H22 forbids. The reviewer verifies suites by **reading them**, not by trusting a "redistributed / renamed" report.
+
 ---
 
 ## Deep-dive gaps A1–G1
