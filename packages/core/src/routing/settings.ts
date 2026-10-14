@@ -4,6 +4,7 @@
  * A route keeps the settings of the app it was registered on, so a mounted sub-app's routes keep
  * their own error factory, default errors and boundary. Feature bits add their own fields.
  */
+import type { ErrorFormat } from "../errors/problem-json.ts"
 import type { OutputValidationMode } from "../validation/validate-output.ts"
 import type { HoneyError } from "../errors/error.ts"
 import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
@@ -59,6 +60,7 @@ export type AppSettings<TEnv = unknown> = {
 	defaultErrorKeys: Set<string>
 	encodedSlashes: "allow" | "reject"
 	errorFactory: ErrorFactories | null
+	errorFormat: ErrorFormat
 	errorFormatter: ErrorFormatter
 	/** translates the answer to an unhandled throw and to an onError HoneyError; `null`: off */
 	errorI18n: ErrorI18n<TEnv> | null
@@ -99,6 +101,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		defaultErrorKeys: new Set(),
 		encodedSlashes: "reject",
 		errorFactory: null,
+		errorFormat: "honey",
 		errorFormatter: defaultErrorFormatter,
 		errorI18n: null,
 		errorSchema: null,
@@ -161,11 +164,7 @@ export abstract class SettingsChain<TEnv> {
 		return this
 	}
 
-	/**
-	 * Request paths containing an encoded `/` or `\` (`%2F`, `%5C`) answer 400 by default. `"allow"`
-	 * keeps them encoded in the path, so they decode into a param value. Only allow them when nothing
-	 * downstream treats a decoded slash as a separator.
-	 */
+	/** An encoded `/` or `\` in the path is a 400 by default; `"allow"` decodes it into a param value. */
 	encodedSlashes(mode: "allow" | "reject"): this {
 		this.settings.encodedSlashes = mode
 		return this
@@ -177,20 +176,13 @@ export abstract class SettingsChain<TEnv> {
 		return this
 	}
 
-	/**
-	 * Where every server-side line goes: unhandled errors, failing callbacks, the request log.
-	 * Default: `createLogger()`, whose level and format follow NODE_ENV. `false` writes nothing.
-	 */
+	/** Where every server-side line goes; default `createLogger()` (by NODE_ENV), `false` for none. */
 	logger(logger: Logger | false): this {
 		this.settings.logger = logger === false ? SILENT : logger
 		return this
 	}
 
-	/**
-	 * One `info` line per request after its body ends (or `"aborted"` when the client leaves):
-	 * method, path without its query, status, duration, route id, body kind, request id, runtime.
-	 * Off by default; `skip` answers true for a line not to write.
-	 */
+	/** One `info` line per request once its body ends (or is aborted); off by default, `skip` drops a line. */
 	requestLog(options: boolean | RequestLogOptions): this {
 		this.settings.requestLog = options === false ? null : options === true ? {} : options
 		return this
@@ -247,6 +239,12 @@ export abstract class SettingsChain<TEnv> {
 	 */
 	wsAdapter(adapter: WSAdapter): this {
 		this.settings.wsAdapter = adapter
+		return this
+	}
+
+	/** Answer errors as honey's envelope (the default) or RFC 9457 Problem Details; schema errors keep their body. */
+	errorFormat(format: ErrorFormat): this {
+		this.settings.errorFormat = format
 		return this
 	}
 

@@ -20,6 +20,7 @@ import {
 	asHoneyError,
 	createErrorResponse,
 	DIGEST,
+	type ErrorAnswer,
 	type FormatterReport,
 	projectThrown,
 	safeErrorResponse,
@@ -43,6 +44,7 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 		env: state.env,
 		jsonFromError: (err) =>
 			createErrorResponse(err, s.errorFormatter, s.customErrorFormatter, {
+				format: s.errorFormat,
 				nodeOut: isNodeOutbound(state.req),
 				report: formatterReport(s, state),
 			}),
@@ -50,14 +52,21 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 	}
 }
 
+/** How an error answers for `ctx`: its format, its request id as the instance, its bridge. */
+function answerFor(s: AppSettings<unknown>, ctx: object): ErrorAnswer {
+	const state = stateOf(ctx)
+	return {
+		format: s.errorFormat,
+		instance: (ctx as { requestId?: string }).requestId ?? null,
+		nodeOut: isNodeOutbound(state.req),
+		report: formatterReport(s, state),
+	}
+}
+
 /** The response for `error`, recording it on `ctx.error`. */
 function respond(s: AppSettings<unknown>, ctx: object, error: HoneyError): Response {
 	setCtxError(ctx as HoneyContext, error)
-	const state = stateOf(ctx)
-	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, {
-		nodeOut: isNodeOutbound(state.req),
-		report: formatterReport(s, state),
-	})
+	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, answerFor(s, ctx))
 }
 
 /**
@@ -197,7 +206,7 @@ export function boundary(s: AppSettings<unknown>): (thrown: unknown, ctx: object
 	const reportAndAnswer = (thrown: unknown, ctx: object, failure: unknown): Response => {
 		s.logger.error({ ...bindings(ctx), err: HoneyError.serialize(failure) }, "error response failed")
 		setCtxError(ctx as HoneyContext, asHoneyError(thrown))
-		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter, isNodeOutbound(stateOf(ctx).req))
+		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter, answerFor(s, ctx))
 	}
 	const answered = (thrown: unknown, ctx: object): MaybePromise<Response> => {
 		try {

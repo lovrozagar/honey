@@ -118,6 +118,7 @@ export function finalTable(g: HoneyGraph): FinalTable {
 export function badRequestTarget(s: AppSettings<unknown>, request: Request): Response {
 	const error = frameworkError(s, "bad_request", "bad_request")
 	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, {
+		format: s.errorFormat,
 		nodeOut: isNodeOutbound(request),
 		report: formatterReport(s, null),
 	})

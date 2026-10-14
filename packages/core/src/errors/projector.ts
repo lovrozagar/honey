@@ -6,6 +6,7 @@
 import { createHoneyResponse, withRawBody } from "../response/builder.ts"
 import { EK, HoneyError, hasUnknownStatus, isFrameworkErrorKey } from "./error.ts"
 import { ERROR_META, type ErrorMetaEntry } from "./errors.ts"
+import { type ErrorFormat, PROBLEM_JSON, problemDetails } from "./problem-json.ts"
 
 /** Shapes a standard error's default body. */
 export type ErrorFormatter = (error: HoneyError, defaultShape: Record<string, unknown>) => Record<string, unknown>
@@ -64,10 +65,16 @@ export function projectThrown(thrown: unknown, policy: ErrorPolicy): HoneyError 
 export type FormatterReport = (failure: unknown) => void
 
 /**
- * How an error answer is built: who hears a crashed formatter, and whether it goes out over the
- * Node bridge, where it is a HoneyResponse so a middleware's header write stays on the plain map (b4).
+ * How an error answer is built: who hears a crashed formatter, whether it goes out over the Node
+ * bridge (a HoneyResponse, so a middleware's header write stays on the plain map, b4), its format,
+ * and the request id a Problem Details document names as its instance.
  */
-export type ErrorAnswer = { readonly nodeOut?: boolean; readonly report?: FormatterReport | undefined }
+export type ErrorAnswer = {
+	readonly format?: ErrorFormat
+	readonly instance?: string | null
+	readonly nodeOut?: boolean
+	readonly report?: FormatterReport | undefined
+}
 
 /** A JSON answer built the way the bridge it goes out over writes it fastest. */
 export function jsonAnswer(
@@ -80,12 +87,26 @@ export function jsonAnswer(
 	return withRawBody(new Response(payload, { headers, status }), payload)
 }
 
+/** The default shape of a standard error: honey's envelope, or a Problem Details document. */
+function defaultShapeOf(error: HoneyError, answer: ErrorAnswer): Record<string, unknown> {
+	if (answer.format === "problem+json") return problemDetails(error, answer.instance ?? null)
+	return {
+		error_key: error.errorKey,
+		fields: error.fields,
+		message: error.message,
+		status: error.status,
+		status_key: error.statusKey,
+		success: false,
+	}
+}
+
 function errorBody(
 	error: HoneyError,
 	defaultFormatter: ErrorFormatter,
-	customFormatter?: CustomErrorFormatter | null,
-	report?: FormatterReport,
+	customFormatter: CustomErrorFormatter | null | undefined,
+	answer: ErrorAnswer,
 ) {
+	const report = answer.report
 	if (error.data !== undefined) {
 		const data = error.data as Record<string, unknown>
 		if (!customFormatter) return data
@@ -97,14 +118,7 @@ function errorBody(
 			return data
 		}
 	}
-	const defaultShape: Record<string, unknown> = {
-		error_key: error.errorKey,
-		fields: error.fields,
-		message: error.message,
-		status: error.status,
-		status_key: error.statusKey,
-		success: false,
-	}
+	const defaultShape = defaultShapeOf(error, answer)
 	const digest = (error as { [DIGEST]?: string })[DIGEST]
 	if (digest !== undefined) defaultShape.digest = digest
 	try {
@@ -123,8 +137,10 @@ export function createErrorResponse(
 	customFormatter?: CustomErrorFormatter | null,
 	answer: ErrorAnswer = {},
 ): Response {
-	const payload = JSON.stringify(errorBody(error, defaultFormatter, customFormatter, answer.report))
-	const headers: Record<string, string> = { "content-type": "application/json", ...error.headers }
+	const payload = JSON.stringify(errorBody(error, defaultFormatter, customFormatter, answer))
+	/* a schema error keeps its declared body, and so its type */
+	const type = answer.format === "problem+json" && error.data === undefined ? PROBLEM_JSON : "application/json"
+	const headers: Record<string, string> = { "content-type": type, ...error.headers }
 	return jsonAnswer(payload, headers, error.status, answer.nodeOut === true)
 }
 
@@ -136,14 +152,14 @@ export function safeErrorResponse(
 	thrown: unknown,
 	defaultFormatter: ErrorFormatter,
 	customFormatter: CustomErrorFormatter | null,
-	nodeOut = false,
+	answer: ErrorAnswer = {},
 ): Response {
 	try {
 		return createErrorResponse(
 			thrown instanceof HoneyError ? thrown : internalError(undefined),
 			defaultFormatter,
 			customFormatter,
-			{ nodeOut },
+			answer,
 		)
 	} catch {
 		/* the last resort: the boundary logs what failed (on-error.ts); this only keeps the answer well-formed */
