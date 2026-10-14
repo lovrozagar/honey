@@ -208,7 +208,7 @@ tests/regression/ws2-middleware.regression.test.ts	core	test	02	16 bit-02 cases 
 tests/regression/ws1-route-model.regression.test.ts	core	test	02	2 bit-02 cases (bit-01 cases already ported, tagged, in routing)	regression/ws1-route-model.regression.test.ts
 tests/regression/review.regression.test.ts	core	test	02	2 bit-02 cases; grown by later bits	regression/review.regression.test.ts
 tests/regression/ws3-request.regression.test.ts	core	test	02	1 bit-02 case; the bulk is bit 03 (request/trust)	regression/ws3-request.regression.test.ts
-tests/regression/v072.regression.test.ts	core	test	02	1 bit-02 case; grown by later bits	regression/v072.regression.test.ts
+tests/regression/v072.regression.test.ts	core	test	17	no bit-02 case left (V072-2 aeff0f4b4d is CLI, bit 17); born there	regression/v072.regression.test.ts
 # ============================== packages/gen  (@lovrozagar/honey-codegen) ==============================
 src/ir/model.ts	gen	src	09	the IR types	codegen-ir.ts,codegen-sdk-model.ts
 src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
