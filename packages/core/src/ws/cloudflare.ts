@@ -53,6 +53,7 @@ export function cfWebSocket(options?: WSAdapterOptions): WSAdapter {
 	const resolved = resolveWSOptions(options)
 	return {
 		options: resolved,
+		runtime: "workers",
 		upgrade(req, _env, handler) {
 			const Pair = (globalThis as unknown as { WebSocketPair: new () => [PairSocket, PairSocket] }).WebSocketPair
 			const [client, server] = new Pair()

@@ -70,6 +70,7 @@ export function bunWebSocket(options?: WSAdapterOptions): BunWSAdapter {
 			}
 		},
 		options: resolved,
+		runtime: "bun",
 		upgrade(req, env, handler) {
 			const protocol = selectProtocol(req, resolved)
 			const headers = protocol === null ? undefined : { "sec-websocket-protocol": protocol }

@@ -11,15 +11,7 @@ type FetchApp = { fetch(request: Request, env: unknown): Response | Promise<Resp
 const servers: HoneyServer[] = []
 
 afterEach(async () => {
-	await Promise.all(
-		servers.splice(0).map(
-			(server) =>
-				new Promise<void>((resolve) => {
-					server.closeAllConnections()
-					server.close(() => resolve())
-				}),
-		),
-	)
+	await Promise.all(servers.splice(0).map((server) => (server.listening ? server.shutdown(0) : Promise.resolve())))
 	vi.restoreAllMocks()
 })
 

@@ -45,6 +45,8 @@ export type WSAdapter = {
 	/** Close every open connection (graceful shutdown). */
 	closeAll?(code: number, reason: string): void
 	readonly options?: ResolvedWSOptions
+	/** The runtime the adapter upgrades on; `serve(app)` refuses another runtime's adapter. */
+	readonly runtime?: "bun" | "node" | "workers"
 }
 
 export type RawSocket = {

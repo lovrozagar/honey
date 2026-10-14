@@ -66,7 +66,7 @@ function settingsOf(app: unknown): AppSettings | null {
 /** The app's ws adapter for Bun: the one it was given, else `bunWebSocket()`, set on the app. */
 function bunAdapterOf(settings: AppSettings): BunWSAdapter {
 	settings.wsAdapter ??= bunWebSocket()
-	if (!("websocket" in settings.wsAdapter)) {
+	if (settings.wsAdapter.runtime !== "bun") {
 		throw new Error("serve() on Bun needs a bunWebSocket() adapter, but app.wsAdapter() was given another")
 	}
 	return settings.wsAdapter as BunWSAdapter

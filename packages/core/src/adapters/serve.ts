@@ -29,6 +29,8 @@ export type ServeOptions<TEnv> = {
 	requestTimeout?: number
 	/** Node only: `server.keepAliveTimeout`, in ms. */
 	keepAliveTimeout?: number
+	/** Node only: how long an upgrade request may take to become a WebSocket or be answered, in ms. Default 30 000. */
+	upgradeTimeout?: number
 }
 
 export type ServeHandle = {
