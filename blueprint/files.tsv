@@ -171,6 +171,7 @@ src/testing/testing.ts	core	src	20	the testing helper	testing.ts
 tests/integration/routing.test.ts	core	test	02	methods, on/all, 404/405, HEAD→GET, statics, params, trailing slash, stripPrefix, encoded slashes, path normalization through app.fetch	bug-hunt*,edge-cases*
 tests/integration/middleware.test.ts	core	test	02	chain order, short-circuit, next() additions, double next(), ctx.error, use() handles, finalize reports (unused use, dangling builder)	middleware*
 tests/integration/scoped.test.ts	core	test	02	use(path, mw) coverage + guards, across mounts and basePath	scoped*
+tests/integration/scoped-2.test.ts	core	test	02	use(path, mw) ports, continued (500-line cap split)	scoped*
 tests/integration/mount.test.ts	core	test	02	route()/route(prefix), basePath composition, sub settings/context kept, duplicates	mergeTree*
 tests/integration/errors.test.ts	core	test	02	native projection through the chain, boundary/defaultBoundary, defaultErrors, errorFactory, onError/onNotFound/onMethodNotAllowed (problem+json formatter joins at bit 08)	errors*
 tests/integration/context.test.ts	core	test	02	ctx through the app: search/searchAll, executionCtx/background binding, context(), meta, errors	context*
