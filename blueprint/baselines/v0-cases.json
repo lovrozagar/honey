@@ -41537,10 +41537,6 @@
 	},
 	"note": "every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → feature a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept.",
 	"reassigned": {
-		"2488556684": {
-			"feature": "08-io",
-			"reason": "uses parseCookies (validation.ts, bit 08)"
-		},
 		"3424191595": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -41574,8 +41570,8 @@
 			"reason": "uses route tree loading (bit 09)"
 		},
 		"041e37f17e": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"043d466d0b": {
 			"feature": "07-security-middleware",
@@ -41634,8 +41630,8 @@
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"07bfdc76ba": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"07cf0d14fc": {
 			"feature": "08-io",
@@ -41700,10 +41696,6 @@
 		"0c6e33b336": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
-		},
-		"0c96e1482b": {
-			"feature": "08-io",
-			"reason": "input/output schema types: io is bit 08"
 		},
 		"0d3cd7287e": {
 			"feature": "06-realtime",
@@ -41910,12 +41902,12 @@
 			"reason": "asserts ipRestrict allow/deny over ctx.ip; ipRestrict is built in bit 07"
 		},
 		"1e5e0839cb": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"1e85992454": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"1e94f0a7a2": {
 			"feature": "08-io",
@@ -42070,8 +42062,8 @@
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"2d028b4aa8": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"2d308b01b9": {
 			"feature": "08-io",
@@ -42206,8 +42198,8 @@
 			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
 		"38d3832a4c": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"3a6be2952e": {
 			"feature": "02-finalize-middleware",
@@ -42422,8 +42414,8 @@
 			"reason": "uses route tree loading (bit 09)"
 		},
 		"465177e22c": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"465791bf1c": {
 			"feature": "08-io",
@@ -42470,8 +42462,8 @@
 			"reason": "uses input/output (bit 08)"
 		},
 		"4a2cfc2a5a": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"4b7706da43": {
 			"feature": "07-security-middleware",
@@ -42494,8 +42486,8 @@
 			"reason": "a generated tree module staying untouched is generated-tree loading (bit 11, with 8217438ad1)"
 		},
 		"4c790a7ac0": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "10-openapi-emit",
+			"reason": "asserts the emitted OpenAPI document has no dangling refs: schema hoisting is bit 10"
 		},
 		"4cffdc3207": {
 			"feature": "04-adapters",
@@ -42570,8 +42562,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"534a25e43b": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"53d4a45f90": {
 			"feature": "08-io",
@@ -42590,8 +42582,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"55e540a914": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"56527a95bd": {
 			"feature": "11-ts-client",
@@ -42678,8 +42670,8 @@
 			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
 		},
 		"5ce9740e32": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"5d19aab6ff": {
 			"feature": "07-security-middleware",
@@ -42778,8 +42770,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"6640339d88": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"671eb497a3": {
 			"feature": "02-finalize-middleware",
@@ -43022,8 +43014,8 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"798c9c2519": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"799e851332": {
 			"feature": "02-finalize-middleware",
@@ -43250,8 +43242,8 @@
 			"reason": "uses bodyLimit (body-limit.ts, bit 08)"
 		},
 		"897e6d10e7": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"89cb956860": {
 			"feature": "08-io",
@@ -43290,8 +43282,8 @@
 			"reason": "uses taps (bit 07)"
 		},
 		"8e41e2e4c8": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"8e7138fed3": {
 			"feature": "02-finalize-middleware",
@@ -43390,8 +43382,8 @@
 			"reason": "uses taps (bit 07)"
 		},
 		"952afed163": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"953ed12238": {
 			"feature": "09-ir-seam",
@@ -43522,8 +43514,8 @@
 			"reason": "bodyLimit's REPLACE_BODY hook on the Node request lands with bodyLimit (bit 08)"
 		},
 		"9fcfe5e40d": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"9fd398499c": {
 			"feature": "11-ts-client",
@@ -43578,8 +43570,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"a3eb33f2a3": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"a40d4a499b": {
 			"feature": "07-security-middleware",
@@ -43878,8 +43870,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"b95e759b55": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"b987b43110": {
 			"feature": "02-finalize-middleware",
@@ -43970,8 +43962,8 @@
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"c0868205b1": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"c1b08aeb6d": {
 			"feature": "11-ts-client",
@@ -43986,8 +43978,8 @@
 			"reason": "bodyLimit on FormData is bodyLimit behavior (bit 08)"
 		},
 		"c250d239b9": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"c311184c8e": {
 			"feature": "06-realtime",
@@ -44030,8 +44022,8 @@
 			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
 		},
 		"c6637bcd0c": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"c669b3cf9a": {
 			"feature": "09-ir-seam",
@@ -44118,8 +44110,8 @@
 			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"d24350022c": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"d33ab29fdf": {
 			"feature": "07-security-middleware",
@@ -44174,8 +44166,8 @@
 			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
 		},
 		"d7f2ce4c3a": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"d950b79ac5": {
 			"feature": "02-finalize-middleware",
@@ -44234,16 +44226,16 @@
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
 		},
 		"deedce5700": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"def1f2bf1b": {
 			"feature": "07-security-middleware",
 			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
 		"df1aa9adc6": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"dff98d40b5": {
 			"feature": "02-finalize-middleware",
@@ -44482,8 +44474,8 @@
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
 		"f545ccb873": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"f54a65f0c8": {
 			"feature": "02-finalize-middleware",
@@ -44534,8 +44526,8 @@
 			"reason": "uses input/output (bit 08)"
 		},
 		"f9344b7c53": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"f97c4880f6": {
 			"feature": "05-streaming-sse-range",
@@ -44578,8 +44570,8 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"fbc1f0d93c": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"fbdb1481f5": {
 			"feature": "09-ir-seam",
@@ -44618,8 +44610,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"fdbbe06e29": {
-			"feature": "08-io",
-			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"fde3ba9be9": {
 			"feature": "02-finalize-middleware",
@@ -44872,6 +44864,118 @@
 		"943e56dc6a": {
 			"feature": "09-ir-seam",
 			"reason": "middleware meta baked into the generated route tree, bit 09"
+		},
+		"0b67c3421d": {
+			"feature": "09-ir-seam",
+			"reason": "re-registering a route over a loaded tree's handler map (.toRouteTree / .routeTree patch mode): bit 09"
+		},
+		"53a74fcb51": {
+			"feature": "09-ir-seam",
+			"reason": "a delegated route's content type from its own schemas: routeTree delegation, bit 09"
+		},
+		"f7a9dfe9e8": {
+			"feature": "09-ir-seam",
+			"reason": "a delegated route's content type from its own schemas: routeTree delegation, bit 09"
+		},
+		"039d645295": {
+			"feature": "09-ir-seam",
+			"reason": "a delegated route's content type from its own schemas: routeTree delegation, bit 09"
+		},
+		"220d30ae89": {
+			"feature": "09-ir-seam",
+			"reason": "a delegated route's content type from its own schemas: routeTree delegation, bit 09"
+		},
+		"a9c6c544b1": {
+			"feature": "09-ir-seam",
+			"reason": "a delegated route's content type from its own schemas: routeTree delegation, bit 09"
+		},
+		"dc076737af": {
+			"feature": "09-ir-seam",
+			"reason": "a delegated route's content type from its own schemas: routeTree delegation, bit 09"
+		},
+		"b27299f29a": {
+			"feature": "09-ir-seam",
+			"reason": "input schemas through .routeTree() hydration: bit 09"
+		},
+		"c87c554a26": {
+			"feature": "10-openapi-emit",
+			"reason": "extractSchemas / generateManifest: the manifest is src/openapi/manifest.ts, bit 10"
+		},
+		"7ce5c80e46": {
+			"feature": "10-openapi-emit",
+			"reason": "extractSchemas / generateManifest: the manifest is src/openapi/manifest.ts, bit 10"
+		},
+		"5f07005556": {
+			"feature": "10-openapi-emit",
+			"reason": "extractSchemas / generateManifest: the manifest is src/openapi/manifest.ts, bit 10"
+		},
+		"2f51fcbb53": {
+			"feature": "10-openapi-emit",
+			"reason": "extractSchemas / generateManifest: the manifest is src/openapi/manifest.ts, bit 10"
+		},
+		"9fde34a1fe": {
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
+		},
+		"79cc6e081b": {
+			"feature": "11-ts-client",
+			"reason": "emitSchemaType: the TS type emitter is bit 11"
+		},
+		"1536604e85": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"ea350bfcbb": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"40eafd8316": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"02b51894ad": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"7781b94f4e": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"d49771fc13": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"6513cd416b": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"1047fa78b8": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"bbd3ed2282": {
+			"feature": "11-ts-client",
+			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
+		},
+		"765a8e1e33": {
+			"feature": "11-ts-client",
+			"reason": "drives createClient: the TS client is bit 11"
+		},
+		"ba5748a9eb": {
+			"feature": "11-ts-client",
+			"reason": "generated TypeScript source: bit 11"
+		},
+		"680e667162": {
+			"feature": "11-ts-client",
+			"reason": "drives createClient: the TS client is bit 11"
+		},
+		"69ad843cfd": {
+			"feature": "11-ts-client",
+			"reason": "ErrorsFor is a client utility type (_v0/src/client/types.ts)"
+		},
+		"5b1194dad8": {
+			"feature": "11-ts-client",
+			"reason": "PathsForMethod is a client utility type (_v0/src/client/types.ts)"
 		}
 	},
 	"retired": {
@@ -44919,6 +45023,9 @@
 		"f8ac6700ef": "v0 internal _registerStatic on the public type; v1 keeps graph state in a private #field, nothing to hide",
 		"9f9e7f0d32": "v0 serve({ cors: true }) option; v1 serve takes no middleware (cors is app.use(cors()), b rulings), covered by cors over a real listen",
 		"c4c263973e": "v0 serve({ cors: true }) option; v1 serve takes no middleware (cors is app.use(cors()), b rulings), covered by cors over a real listen",
-		"e76f7ba03c": "a wall-clock comparison of 404 timings: load-fragile, proves nothing stable; every v1 miss is one table lookup and one fixed answer"
+		"e76f7ba03c": "a wall-clock comparison of 404 timings: load-fragile, proves nothing stable; every v1 miss is one table lookup and one fixed answer",
+		"0c96e1482b": "v1 keeps route meta in the route map: InferRouteMeta is the route's meta (62fc72d2e4, app-routes.typetest); v0's never would assert the opposite",
+		"7e777fa89f": "documents v0's missing runtime check (a plain object passed through as the answer); v1's handler type forbids it (762541a430) and the pass-through is not a guarantee to pin",
+		"2488556684": "v0 drops a `constructor` cookie (result.constructor === Object); v1 keeps prototype-named cookies as plain keys on a null-prototype record (587b90b244), as ruled for 78c407f3ba"
 	}
 }
