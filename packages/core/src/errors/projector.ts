@@ -67,6 +67,7 @@ function errorBody(error: HoneyError, defaultFormatter: ErrorFormatter, customFo
 		try {
 			return customFormatter(error, data)
 		} catch {
+			/* a crashed custom formatter: the client still gets the error's data; reporting the crash awaits a bit-07 ruling */
 			return data
 		}
 	}
@@ -115,6 +116,7 @@ export function safeErrorResponse(
 			customFormatter,
 		)
 	} catch {
+		/* the last resort: the boundary logs what failed (on-error.ts); this only keeps the answer well-formed */
 		return new Response(JSON.stringify({ error: { errorKey: EK.internal_server_error } }), {
 			headers: { "content-type": "application/json" },
 			status: 500,

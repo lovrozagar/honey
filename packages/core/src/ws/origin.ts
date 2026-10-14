@@ -21,6 +21,7 @@ function parseUrl(text: string): URL | null {
 	try {
 		return new URL(text)
 	} catch {
+		/* not a URL: an Origin no policy can match, which the caller refuses */
 		return null
 	}
 }

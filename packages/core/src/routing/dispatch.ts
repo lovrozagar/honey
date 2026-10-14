@@ -46,6 +46,7 @@ function withAllow(res: Response, allowed: string[]): Response {
 		res.headers.set("allow", value)
 		return res
 	} catch {
+		/* immutable headers (a fetch() response): not a failure, the response is rebuilt with Allow */
 		const headers = new Headers(res.headers)
 		headers.set("allow", value)
 		return replaceResponse(res, { headers })

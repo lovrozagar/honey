@@ -92,6 +92,7 @@ async function pipeBody(stream: ReadableStream<Uint8Array>, res: ServerResponse)
 	} catch {
 		/* the client left, or the stream failed after the headers went out: cut the connection */
 		res.destroy()
+		/* the connection is cut already: a cancel failing has no one left to tell */
 		await stream.cancel().catch(ignore)
 	}
 }
@@ -105,6 +106,7 @@ function writeHeadOnly(res: ServerResponse, response: Response, body: ReadableSt
 	if (!isHoneyResponse(response) && !isSmallDeclared(response)) delete headers["content-length"]
 	writeHead(res, response, headers)
 	res.end()
+	/* a HEAD's body is never sent: a cancel failing changes nothing the client sees */
 	body.cancel().catch(ignore)
 }
 

@@ -258,3 +258,22 @@ describe("the default logger: unconfigured errors are not swallowed (H17)", () =
 		expect(calls).toBe(0)
 	})
 })
+
+describe("the last resort: answering the error failed itself", () => {
+	it("what failed is logged once, and a well-formed 500 still goes out", async () => {
+		const { app, lines } = throwing(new Error("db down"))
+		app.defaultErrorFormatter((_error, shape) => {
+			const cyclic: Record<string, unknown> = { ...shape }
+			cyclic.self = cyclic
+			return cyclic
+		})
+		const res = await app.fetch(get("/boom/1"), {})
+		const failed = lines.filter((line) => line.msg === "error response failed")
+		expect([res.status, res.headers.get("content-type"), failed.length, failed[0]?.routeId]).toEqual([
+			500,
+			"application/json",
+			1,
+			"GET /boom/:id",
+		])
+	})
+})

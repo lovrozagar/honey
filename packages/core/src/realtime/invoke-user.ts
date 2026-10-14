@@ -97,6 +97,7 @@ export function createEventQueue(): { push(task: () => unknown): Promise<void> }
 			try {
 				result = task()
 			} catch {
+				/* lane tasks report their own failures (invokeUser); one that throws anyway must not stop the lane */
 				result = undefined
 			}
 			running = false

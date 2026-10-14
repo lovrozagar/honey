@@ -41,6 +41,7 @@ function importKey(secret: string): Promise<CryptoKey> {
 		"sign",
 		"verify",
 	])
+	/* marked handled here; every caller awaits the key, and verify() answers false for one that failed */
 	key.catch(() => undefined)
 	return key
 }

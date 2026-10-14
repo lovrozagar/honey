@@ -100,16 +100,18 @@ function convertWith(s: AppSettings<unknown>, thrown: unknown, ctx: object): May
 
 /** The error boundary of every `next()`: what was thrown becomes the Response that replaces it. Never rejects. */
 export function boundary(s: AppSettings<unknown>): (thrown: unknown, ctx: object) => MaybePromise<Response> {
-	const fallback = (thrown: unknown, ctx: object): Response => {
+	/* answering the error failed itself: what failed is logged, and the last-resort answer goes out */
+	const reportAndAnswer = (thrown: unknown, ctx: object, failure: unknown): Response => {
+		s.logger.error({ ...bindings(ctx), err: HoneyError.serialize(failure) }, "error response failed")
 		setCtxError(ctx as HoneyContext, asHoneyError(thrown))
 		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter)
 	}
 	return (thrown, ctx) => {
 		try {
 			const res = convertWith(s, thrown, ctx)
-			return res instanceof Promise ? res.catch(() => fallback(thrown, ctx)) : res
-		} catch {
-			return fallback(thrown, ctx)
+			return res instanceof Promise ? res.catch((failure: unknown) => reportAndAnswer(thrown, ctx, failure)) : res
+		} catch (failure) {
+			return reportAndAnswer(thrown, ctx, failure)
 		}
 	}
 }

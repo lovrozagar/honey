@@ -28,6 +28,7 @@ function decode(s: string): string {
 	try {
 		return decodeURIComponent(s)
 	} catch {
+		/* a malformed escape is client data: the param keeps it as written */
 		return s
 	}
 }

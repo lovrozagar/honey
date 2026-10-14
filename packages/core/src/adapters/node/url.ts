@@ -26,6 +26,7 @@ function parseUrl(text: string): URL | null {
 	try {
 		return new URL(text)
 	} catch {
+		/* not a URL: the answer, not a failure; the caller refuses it with a 400 */
 		return null
 	}
 }

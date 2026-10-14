@@ -45,6 +45,7 @@ function swallow(): void {}
 /** A rejection marked handled: awaiting it still throws, leaving it unawaited never surfaces. */
 function handledRejection(reason: unknown): Promise<never> {
 	const rejected = Promise.reject(reason)
+	/* handled, not hidden: the caller who awaits it still gets the rejection */
 	rejected.catch(swallow)
 	return rejected
 }
@@ -115,6 +116,7 @@ class Producer implements ProducerSink {
 		/* the queue holds nothing ahead of demand (high-water mark 0): every write waits for the next read */
 		this.#controller.enqueue(chunk)
 		const waiter = Promise.withResolvers<void>()
+		/* handled, not hidden: a writer that awaits it still gets the rejection */
 		waiter.promise.catch(swallow)
 		this.#waiting.push(waiter)
 		return waiter.promise

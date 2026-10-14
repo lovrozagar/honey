@@ -124,6 +124,7 @@ export function switchingProtocols(headers: Record<string, string>, init?: Recor
 	try {
 		return new Response(null, { ...init, headers, status: 101 })
 	} catch {
+		/* Fetch refuses 101 outside Workers: expected, not a failure; the runtime writes the real handshake */
 		const response = new Response(null, { headers })
 		Object.defineProperty(response, "status", { value: 101 })
 		return response

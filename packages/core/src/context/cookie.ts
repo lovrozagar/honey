@@ -58,10 +58,12 @@ export function decodeCookieValue(value: string): string {
 	try {
 		return decodeURIComponent(value)
 	} catch {
+		/* a malformed escape is client data, not a failure: every run that decodes is decoded, the rest kept */
 		return value.replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
 			try {
 				return decodeURIComponent(run)
 			} catch {
+				/* this run is not UTF-8: kept as written */
 				return run
 			}
 		})

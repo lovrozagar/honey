@@ -102,6 +102,7 @@ export function sseBody(
 			signal: sink.signal,
 		}
 		if (isRetry(options.defaultRetry)) {
+			/* a failed write means the stream ended: the producer's own end reports it */
 			sink.write(encoder.encode(`retry: ${Math.floor(options.defaultRetry)}\n\n`)).catch(swallow)
 		}
 		if (options.keepalive !== undefined && options.keepalive > 0) keepAlive(sink, options.keepalive, encoder)

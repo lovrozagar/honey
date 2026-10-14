@@ -32,6 +32,7 @@ export function peerAddressOf(req: Request, env: unknown): string | null {
 			try {
 				return server.requestIP(req)?.address ?? null
 			} catch {
+				/* a request Bun did not see (a test or a shim): there is no peer, which is the answer */
 				return null
 			}
 		}

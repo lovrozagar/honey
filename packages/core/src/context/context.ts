@@ -205,6 +205,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		try {
 			request = this.req.signal
 		} catch {
+			/* a request shim with no usable signal: the controller stands alone, nothing failed */
 			return ac
 		}
 		if (request?.aborted) ac.abort(request.reason)
