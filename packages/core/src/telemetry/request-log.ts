@@ -89,14 +89,11 @@ function counted(
 				return reader.cancel(reason)
 			},
 			async pull(controller) {
-				let chunk: ReadableStreamReadResult<Uint8Array>
-				try {
-					chunk = await reader.read()
-				} catch (error) {
+				const chunk = await reader.read().catch((error: unknown) => {
 					/* the body broke: the client got a cut stream, which the line records as aborted */
 					settle(false)
 					throw error
-				}
+				})
 				if (chunk.done) {
 					/* before close(): a cancel racing the end has already settled it as aborted */
 					settle(true)
