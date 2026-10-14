@@ -83,3 +83,34 @@ describe("createEventQueue: one ordered lane", () => {
 		expect(order).toEqual(["first", "third"])
 	})
 })
+
+describe("createEventQueue: a task with nothing ahead of it", () => {
+	it("runs at once when it answers at once; a sync throw never stops the lane", async () => {
+		const queue = createEventQueue()
+		const order: string[] = []
+		void queue.push(() => void order.push("sync"))
+		const ranAtOnce = [...order]
+		void queue.push(() => {
+			throw boom
+		})
+		await queue.push(() => void order.push("after"))
+		expect([ranAtOnce, order]).toEqual([["sync"], ["sync", "after"]])
+	})
+
+	it.each([
+		["answers at once", () => {}],
+		["returns a promise", async () => {}],
+	])("what it pushes while it runs waits until it %s, in push order", async (_name, finish) => {
+		const queue = createEventQueue()
+		const order: string[] = []
+		const outer = queue.push(() => {
+			void queue.push(() => void order.push("nested 1"))
+			void queue.push(() => void order.push("nested 2"))
+			order.push("outer")
+			return finish()
+		})
+		await outer
+		await queue.push(() => void order.push("later"))
+		expect(order).toEqual(["outer", "nested 1", "nested 2", "later"])
+	})
+})

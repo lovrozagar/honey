@@ -27,7 +27,11 @@ export function createWsSession(options: WsSessionOptions): WSHandler<unknown> {
 	const queue = createEventQueue()
 	let pending = 0
 
-	const run = (phase: string, ws: WSContext, fn: () => unknown): Promise<boolean> =>
+	const handled = (): void => {
+		pending--
+	}
+
+	const run = (phase: string, ws: WSContext, fn: () => unknown): boolean | Promise<boolean> =>
 		invokeUser(fn, {
 			fields: { route },
 			log,
@@ -53,11 +57,10 @@ export function createWsSession(options: WsSessionOptions): WSHandler<unknown> {
 			if (!onMessage) return
 			if (pending >= WS_PENDING_MAX) return ws.close(CLOSE_POLICY, "too many pending messages")
 			pending++
-			void queue.push(() =>
-				run("message", ws, () => onMessage(ctx, ws, data)).finally(() => {
-					pending--
-				}),
-			)
+			void queue.push(() => {
+				const ran = run("message", ws, () => onMessage(ctx, ws, data))
+				return typeof ran === "boolean" ? handled() : ran.then(handled)
+			})
 		},
 		onOpen: (_ctx, ws) => {
 			/* an empty token is no token */

@@ -14,7 +14,7 @@ import {
 	exceedsPayload,
 } from "../ws/shared.ts"
 import { encodeRealtimeFrame, type RealtimeBus } from "./bus.ts"
-import { createEventQueue, invokeUser, type InvokeLogger, reportUserError } from "./invoke-user.ts"
+import { createEventQueue, type InvokeLogger, type InvokeOptions, invokeUser, reportUserError } from "./invoke-user.ts"
 import type { ConnContext, RealtimeConfig } from "./route.ts"
 
 /** What `realtime()` returns: publish into its route's namespace, or another namespace on its bus. */
@@ -73,6 +73,8 @@ class Session implements RealtimeSession {
 	#socket: WSContext | null = null
 	#closed = false
 	#closeQueued = false
+	#drainScheduled = false
+	readonly #options: Record<"close" | "handler" | "message", InvokeOptions>
 
 	constructor(options: SessionOptions) {
 		this.#config = options.config
@@ -80,6 +82,15 @@ class Session implements RealtimeSession {
 		this.#log = options.log
 		this.#fields = { connId: this.#id, namespace: options.config.namespace, route: options.config.path }
 		this.#conn = this.#connContext(options.userId)
+		const { onError } = options.config
+		const report = onError ? (error: unknown) => onError(error, this.#conn) : null
+		const invokeAs = (phase: string): InvokeOptions => ({
+			fields: this.#fields,
+			log: this.#log,
+			onError: report,
+			phase: `realtime ${phase}`,
+		})
+		this.#options = { close: invokeAs("close"), handler: invokeAs("handler"), message: invokeAs("message") }
 	}
 
 	attach(ws: WSContext): void {
@@ -91,11 +102,13 @@ class Session implements RealtimeSession {
 			if (!ok) this.#closeSocket(ws, CLOSE_INTERNAL, "internal error")
 		})
 		/* frames that beat the open run after the handler, ahead of later ones */
-		if (this.#inbox.length > 0) void this.#lane.push(this.#drain)
+		if (this.#inbox.length > 0) this.#scheduleDrain()
 	}
 
 	close(reason: string): void {
 		this.#teardown()
+		/* frames still waiting for a message handler are dropped: none can come for a closed connection */
+		if (this.#onMessage === null) this.#inbox.length = 0
 		if (this.#closeQueued) return
 		this.#closeQueued = true
 		/* after every frame queued before it */
@@ -131,26 +144,23 @@ class Session implements RealtimeSession {
 			return
 		}
 		this.#inbox.push(payload)
-		if (ws !== null) void this.#lane.push(this.#drain)
+		if (ws !== null) this.#scheduleDrain()
 	}
 
-	#invoke(phase: string, fn: () => unknown): Promise<boolean> {
-		const { onError } = this.#config
-		return invokeUser(fn, {
-			fields: this.#fields,
-			log: this.#log,
-			onError: onError ? (error) => onError(error, this.#conn) : null,
-			phase: `realtime ${phase}`,
-		})
+	#invoke(phase: "close" | "handler" | "message", fn: () => unknown): boolean | Promise<boolean> {
+		return invokeUser(fn, this.#options[phase])
 	}
 
 	/** A transport failure is not the route's error: it is logged, never handed to onError. */
-	#transport(phase: string, fn: () => void): void {
-		try {
-			fn()
-		} catch (error) {
-			reportUserError(error, { fields: this.#fields, log: this.#log, phase: `realtime ${phase}` })
-		}
+	#transportFailed(phase: "close" | "send", error: unknown): void {
+		reportUserError(error, { fields: this.#fields, log: this.#log, phase: `realtime ${phase}` })
+	}
+
+	/* one drain at a time: a running drain takes every frame that arrives while it runs */
+	#scheduleDrain(): void {
+		if (this.#drainScheduled) return
+		this.#drainScheduled = true
+		void this.#lane.push(this.#drain)
 	}
 
 	/** Drop the connection from the bus; runs once, before any close handler. */
@@ -163,7 +173,11 @@ class Session implements RealtimeSession {
 
 	#closeSocket(ws: WSContext, code: number, reason: string): void {
 		this.#teardown()
-		this.#transport("close", () => ws.close(code, reason))
+		try {
+			ws.close(code, reason)
+		} catch (error) {
+			this.#transportFailed("close", error)
+		}
 	}
 
 	/* the bus's sink for this connection */
@@ -175,19 +189,24 @@ class Session implements RealtimeSession {
 			if (limits.slowConsumer === "close") this.#closeSocket(ws, CLOSE_TRY_AGAIN, "slow consumer")
 			return
 		}
-		this.#transport("send", () => ws.send(frame))
+		try {
+			ws.send(frame)
+		} catch (error) {
+			this.#transportFailed("send", error)
+		}
 	}
 
-	/* frames wait until a message handler exists; at the close, waiting frames with none are dropped */
+	/* frames wait until a message handler exists */
 	readonly #drain = async (): Promise<void> => {
-		while (this.#inbox.length > 0) {
-			const fn = this.#onMessage
-			if (fn === null) {
-				if (this.#closed) this.#inbox.length = 0
-				return
+		try {
+			while (this.#inbox.length > 0) {
+				const fn = this.#onMessage
+				if (fn === null) return
+				const payload = this.#inbox.shift()
+				await this.#invoke("message", () => fn(payload))
 			}
-			const payload = this.#inbox.shift()
-			await this.#invoke("message", () => fn(payload))
+		} finally {
+			this.#drainScheduled = false
 		}
 	}
 
@@ -195,7 +214,7 @@ class Session implements RealtimeSession {
 		if (typeof fn !== "function") throw new TypeError("conn.on: handler must be a function")
 		if (event === "message") {
 			this.#onMessage = fn as MessageFn
-			if (this.#inbox.length > 0) void this.#lane.push(this.#drain)
+			if (this.#inbox.length > 0) this.#scheduleDrain()
 		} else if (event === "close") {
 			this.#onClose = fn as CloseFn
 		} else {

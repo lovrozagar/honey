@@ -45,11 +45,15 @@ export function reportUserError(error: unknown, options: InvokeOptions): void {
 	}
 }
 
-/** Call `fn`; resolves `true` when it succeeded, `false` when it threw or rejected (reported). Never rejects. */
-export function invokeUser(fn: () => unknown, options: InvokeOptions): Promise<boolean> {
+/**
+ * Call `fn`: `true` when it succeeded, `false` when it threw or rejected (reported). A callback that
+ * answers at once is answered at once; one that returns a promise is answered by a promise. Never
+ * throws, never rejects.
+ */
+export function invokeUser(fn: () => unknown, options: InvokeOptions): boolean | Promise<boolean> {
 	try {
 		const result = fn()
-		if (!isThenable(result)) return Promise.resolve(true)
+		if (!isThenable(result)) return true
 		return Promise.resolve(result).then(
 			() => true,
 			(error: unknown) => {
@@ -59,21 +63,54 @@ export function invokeUser(fn: () => unknown, options: InvokeOptions): Promise<b
 		)
 	} catch (error) {
 		reportUserError(error, options)
-		return Promise.resolve(false)
+		return false
 	}
 }
 
-function settled(): undefined {
-	return undefined
-}
+const IDLE: Promise<void> = /* @__PURE__ */ Promise.resolve()
 
-/** One ordered lane: each task starts after the previous one settled; a failing task never stops the rest. */
-export function createEventQueue(): { push(task: () => Promise<unknown>): Promise<void> } {
-	let tail: Promise<void> = Promise.resolve()
+/**
+ * One ordered lane: each task starts after the previous one settled; a failing task never stops the
+ * rest. A task pushed while nothing is waiting runs at once, so a callback that answers at once costs
+ * no turn of the queue; what it pushes while it runs waits until it settled.
+ */
+export function createEventQueue(): { push(task: () => unknown): Promise<void> } {
+	let tail = IDLE
+	let waiting = 0
+	let running = false
+	/* opens the gate pushes made during a running task wait behind; null until one is made */
+	let open: (() => void) | null = null
+	const settled = (): void => {
+		waiting--
+	}
 	return {
 		push(task) {
-			tail = tail.then(task).then(settled, settled)
-			return tail
+			if (running && open === null) tail = new Promise<void>((resolve) => (open = resolve))
+			if (waiting > 0) {
+				waiting++
+				tail = tail.then(task).then(settled, settled)
+				return tail
+			}
+			waiting++
+			running = true
+			let result: unknown
+			try {
+				result = task()
+			} catch {
+				result = undefined
+			}
+			running = false
+			const gate = open
+			open = null
+			if (!isThenable(result)) {
+				waiting--
+				gate?.()
+				return IDLE
+			}
+			const done = Promise.resolve(result).then(settled, settled)
+			if (gate === null) tail = done
+			else void done.then(gate)
+			return done
 		},
 	}
 }
