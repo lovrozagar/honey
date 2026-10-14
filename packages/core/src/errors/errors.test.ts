@@ -17,6 +17,8 @@ function schemaOf<T>() {
 
 describe("defineErrors", () => {
 	// v0: 71b9a86b01
+	// v0: b05608688e
+	// v0: 934d2fcdb5
 	it("creates factory with correct keys", () => {
 		const errors = defineErrors({ invalid_email: "bad_request", user_not_found: "not_found" })
 		expect(errors.invalid_email).toBeTypeOf("function")
@@ -24,8 +26,15 @@ describe("defineErrors", () => {
 	})
 
 	// v0: fa4dc9ccf0
+	// v0: aa1659aa9a
+	// v0: e39e69ae6d
 	it("each key returns a function that creates HoneyError", () => {
 		expect(defineErrors({ something_broke: "internal_server_error" }).something_broke()).toBeInstanceOf(HoneyError)
+		expect(defineErrors({ user_not_found: "not_found" }).user_not_found()).toMatchObject({
+			errorKey: "user_not_found",
+			status: 404,
+			statusKey: "not_found",
+		})
 	})
 
 	// v0: e4e769948d
@@ -48,13 +57,17 @@ describe("defineErrors", () => {
 		expect(errors.gone_resource().status).toBe(410)
 		expect(errors.server_fail().status).toBe(500)
 	})
+})
 
+describe("defineErrors: each error's key, status and vars", () => {
 	// v0: 072a31d246
 	it("error has correct statusKey", () => {
 		expect(defineErrors({ rate_limited: "too_many_requests" }).rate_limited().statusKey).toBe("too_many_requests")
 	})
 
 	// v0: ed8479919f
+	// v0: 031acbb57a
+	// v0: 6a6627d231
 	it("supports vars parameter for i18n", () => {
 		const err = defineErrors({ quota_exceeded: "bad_request" }).quota_exceeded({
 			vars: { limit: 100, resource: "files" },
@@ -78,6 +91,7 @@ describe("defineErrors options", () => {
 	})
 
 	// v0: d2b739e8f9
+	// v0: a0e072cc9f
 	it("supports cause parameter", () => {
 		const cause = new Error("connection refused")
 		expect(defineErrors({ db_error: "internal_server_error" }).db_error({ cause }).cause).toBe(cause)
@@ -98,13 +112,16 @@ describe("defineErrors options", () => {
 		expect(err.vars).toBeUndefined()
 		expect(err.cause).toBeUndefined()
 	})
+})
 
+describe("defineErrors options: messages, instances and what passes through", () => {
 	// v0: 1d79b9cfea
 	it("error message equals errorKey", () => {
 		expect(defineErrors({ my_custom_error: "forbidden" }).my_custom_error().message).toBe("my_custom_error")
 	})
 
 	// v0: a8cced71c2
+	// v0: c5176a28ca
 	it("errors are independent instances", () => {
 		const errors = defineErrors({ reusable: "bad_request" })
 		const e1 = errors.reusable({ vars: { x: 1 } })
@@ -115,6 +132,7 @@ describe("defineErrors options", () => {
 	})
 
 	// v0: e90b769661
+	// v0: 254ffb4bfd
 	it("factory headers passed through", () => {
 		const errors = defineErrors({ org_slug_taken: "conflict" })
 		expect(errors.org_slug_taken({ headers: { "x-custom": "value" } }).headers).toEqual({ "x-custom": "value" })
@@ -128,12 +146,15 @@ describe("defineErrors options", () => {
 	})
 })
 
-describe("defineErrors with custom schemas", () => {
-	const errors = defineErrors({
+const schemaErrors = () =>
+	defineErrors({
 		email_taken: "conflict",
 		item_not_found: { schema: schemaOf<{ reason: string; suggestions: string[] }>(), status: "not_found" },
 		unauthorized: "unauthorized",
 	})
+
+describe("defineErrors with custom schemas", () => {
+	const errors = schemaErrors()
 
 	// v0: efcf6e515a
 	it("standard error factory works as before", () => {
@@ -158,6 +179,38 @@ describe("defineErrors with custom schemas", () => {
 		expect(err.headers).toEqual({ "x-a": "1" })
 		expect(err.data).toEqual({ reason: "not found", suggestions: [] })
 	})
+})
+
+describe("defineErrors with custom schemas: the error itself", () => {
+	const errors = schemaErrors()
+
+	// v0: 55d47c1a77
+	// v0: 486423a06e
+	// v0: 59901fa255
+	// v0: 2b6499a285
+	// v0: 39e68a711e
+	it("a schema error is an Error and a HoneyError, fresh per call, keeping its payload by reference", () => {
+		const nested = { reason: "deep", suggestions: ["/a"] }
+		const [first, second] = [errors.item_not_found(nested), errors.item_not_found({ reason: "b", suggestions: [] })]
+		const empty = defineErrors({ empty_body: { schema: schemaOf<object>(), status: "bad_request" } }).empty_body({})
+		expect([first instanceof Error, first instanceof HoneyError, first.stack?.includes("item_not_found")]).toEqual([
+			true,
+			true,
+			true,
+		])
+		expect([first === second, first.data === nested, second.data, empty.data, empty.status]).toEqual([
+			false,
+			true,
+			{ reason: "b", suggestions: [] },
+			{},
+			400,
+		])
+		expect([errors.email_taken().data, errors.email_taken().errorKey]).toEqual([undefined, "email_taken"])
+	})
+})
+
+describe("defineErrors with custom schemas: what a schema error leaves out, and its metadata", () => {
+	const errors = schemaErrors()
 
 	// v0: a779c3cd99
 	it("custom schema error has no fields/vars (those are standard-only)", () => {
@@ -175,6 +228,7 @@ describe("defineErrors with custom schemas", () => {
 	})
 
 	// v0: 5ab50ccc16
+	// v0: 0bf85a7506
 	it("ERROR_META is not enumerable", () => {
 		expect(Object.keys(errors)).toEqual(["email_taken", "item_not_found", "unauthorized"])
 		expect(Object.getOwnPropertyDescriptor(errors, ERROR_META)).toMatchObject({ enumerable: false, writable: false })

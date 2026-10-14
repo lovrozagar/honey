@@ -119,6 +119,23 @@ describe("ctx.errors", () => {
 			})
 	})
 
+	// v0: 4016db1f41
+	it("takes only keys of the factory it names, or of the app's factory, beside each other", () => {
+		const other = defineErrors({ special_error: "bad_request" })
+		const app = honey<{}>().errorFactory(errors)
+		// @ts-expect-error not a key of the app's factory
+		app.get("/a").errors("nope")
+		// @ts-expect-error not a key of the named factory
+		app.get("/b").errors(other, "email_taken")
+		app
+			.get("/c")
+			.errors(other, "special_error")
+			.handler((ctx) => {
+				expectTypeOf(ctx.errors.special_error).toEqualTypeOf(other.special_error)
+				return ctx.res.text("ok", "ok")
+			})
+	})
+
 	// v0: 7754770a73
 	// v0: c2d52dc9ad
 	it("always holds the app's default keys, which a route may not declare again", () => {

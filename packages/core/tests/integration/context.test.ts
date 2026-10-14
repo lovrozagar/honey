@@ -62,6 +62,23 @@ describe("ctx.req: the request as sent", () => {
 	})
 })
 
+describe("ctx.req: a body is read once", () => {
+	// v0: df30aa6018
+	it("a second read of the body rejects, for the handler to catch", async () => {
+		const app = honey<{}>()
+		app.post("/twice").handler(async (ctx) => {
+			const first = (await ctx.req.json()) as unknown
+			const second = await ctx.req.json().then(
+				() => "read again",
+				(error: unknown) => (error as Error).name,
+			)
+			return ctx.res.json("ok", { first, second })
+		})
+		const init = { body: '{"data":1}', headers: { "content-type": "application/json" }, method: "POST" }
+		expect(await send(app, "/twice", { init })).toEqual(ok({ first: { data: 1 }, second: "TypeError" }))
+	})
+})
+
 describe("ctx.path, ctx.routePattern and ctx.params", () => {
 	// v0: 7419f98248
 	// v0: ccd34081e7

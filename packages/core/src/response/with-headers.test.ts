@@ -34,6 +34,7 @@ describe("withHeaders: which response it edits, and how", () => {
 		])
 	})
 
+	// v0: e12d894fa2
 	it("a response with immutable headers is copied: body, status, status text and headers kept, then edited", async () => {
 		const redirect = Response.redirect("https://elsewhere.example/", 307)
 		const edited = withHeaders(redirect, stamp)

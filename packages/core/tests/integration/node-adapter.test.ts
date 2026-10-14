@@ -369,6 +369,8 @@ describe("many requests at once stay apart", () => {
 
 	// v0: ff9890ae7d
 	// v0: 6a9ee60038
+	// v0: f2aee336b7
+	// v0: 326d31ba20
 	it("handler errors one after another leave the server serving", async () => {
 		const app = honey<{}>()
 		app.get("/boom").handler(() => {
@@ -378,6 +380,20 @@ describe("many requests at once stay apart", () => {
 		const { base } = await listen(app)
 		const statuses = await Promise.all(Array.from({ length: 10 }, async () => (await fetch(`${base}/boom`)).status))
 		expect([statuses, await (await fetch(`${base}/ok`)).text()]).toEqual([Array(10).fill(500), "alive"])
+		expect(((await (await fetch(`${base}/boom`)).json()) as { error_key: string }).error_key).toBe(
+			"internal_server_error",
+		)
+	})
+
+	// v0: 6332b0e78e
+	it("a wrong method under a basePath answers 405 with Allow on the wire", async () => {
+		const app = honey<{}>()
+		const api = app.basePath("/api/v1")
+		api.get("/users").handler((ctx) => ctx.res.json("ok", { users: [] }))
+		api.post("/users").handler((ctx) => ctx.res.json("created", { id: 1 }))
+		const { base } = await listen(app)
+		const res = await fetch(`${base}/api/v1/users`, { method: "DELETE" })
+		expect([res.status, res.headers.get("allow")]).toEqual([405, "GET, POST"])
 	})
 })
 

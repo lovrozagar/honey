@@ -324,6 +324,7 @@ const failures = (lines: Record<string, unknown>[]) =>
 	lines.filter((line) => line.msg === "error formatter failed").map((line) => (line.err as { message: string }).message)
 
 describe("a crashing error formatter is reported, and the client still gets a well-formed error (a7)", () => {
+	// v0: d2fc16c706
 	it("the default formatter: the default shape answers, one line per crash", async () => {
 		const { app, lines } = throwing(new HoneyError({ errorKey: "slug_taken", status: "conflict" }))
 		app.defaultErrorFormatter(broken)
@@ -335,6 +336,7 @@ describe("a crashing error formatter is reported, and the client still gets a we
 		])
 	})
 
+	// v0: 7b3cb9fff2
 	it("the custom formatter of a data error: the error's data answers, one line", async () => {
 		const { app, lines } = throwing(
 			new HoneyError({ data: { reason: "kept" }, errorKey: "slug_taken", status: "conflict" }),

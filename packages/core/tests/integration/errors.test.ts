@@ -212,6 +212,7 @@ describe("a layer that answers nothing, or throws mid-chain", () => {
 	// v0: 866c9b8ca8
 	// v0: 7512c45a97
 	// v0: 4c71266875
+	// v0: 062a5d47b5
 	it.each(EMPTY_ANSWERS)("when %s, the answer is a 500 whose cause names the mistake", async (_label, route, hint) => {
 		const { app, causes } = observedApp()
 		route(app)

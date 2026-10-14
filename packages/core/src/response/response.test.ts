@@ -114,10 +114,18 @@ describe("status", () => {
 	// v0: 33cccc4f70
 	// v0: 7bcc1bb352
 	// v0: b17f54b76d
+	// v0: e9968dbe32
+	// v0: 2b61ec535b
 	it.each([
+		["ok", 200],
 		["created", 201],
 		["accepted", 202],
+		["bad_request", 400],
+		["unauthorized", 401],
+		["forbidden", 403],
 		["not_found", 404],
+		["conflict", 409],
+		["gone", 410],
 		["internal_server_error", 500],
 	] as const)("the status key %s answers %i on every helper; opts.status overrides it", (key, code) => {
 		expect([res.json(key, {}).status, res.text(key, "x").status, res.html(key, "x").status]).toEqual([code, code, code])
@@ -134,6 +142,7 @@ describe("status", () => {
 
 describe("noContent and redirect", () => {
 	// v0: f0c7183d59
+	// v0: 4bb2aaa052
 	// v0: 056eba13d8
 	// v0: 019a8e1ca2
 	// v0: a468a75bef
@@ -145,6 +154,8 @@ describe("noContent and redirect", () => {
 
 	// v0: 9100f11b22
 	// v0: 09ae17016b
+	// v0: 73664f5f7b
+	// v0: eeed2976ab
 	// v0: 21b10a6514
 	// v0: 082ea36bd9
 	// v0: 1e20ef1b3f
@@ -389,6 +400,7 @@ describe("generate(): a body pulled from a generator", () => {
 	// v0: 4b5023e1fc
 	// v0: f97c4880f6
 	// v0: 23a6d10f34
+	// v0: 6941ca3642
 	it("yields every value, under octet-stream unless a content type is given, with a status", async () => {
 		const plain = res.generate((function* () {})())
 		const typed = res.generate(ndjson(), { contentType: "application/x-ndjson", status: 202 })

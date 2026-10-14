@@ -58,6 +58,7 @@ describe("dispatch: request targets and routing", () => {
 })
 
 describe("dispatch: 404", () => {
+	// v0: 78fb6faf0b
 	it("a miss nothing observes is the fixed 404, fresh each time", async () => {
 		const app = appWith()
 		const a = await app.fetch(req("/nope"), {})
@@ -74,6 +75,8 @@ describe("dispatch: 404", () => {
 		expect(a.headers.get("content-type")).toBe("application/json")
 	})
 
+	// v0: 8cd23e0071
+	// v0: 02e1e88bda
 	it("a late onNotFound, a custom formatter or a factory still apply, with no middleware", async () => {
 		const app = appWith()
 		await app.fetch(req("/nope"), {})
@@ -87,6 +90,25 @@ describe("dispatch: 404", () => {
 		expect((await factory.fetch(req("/nope"), {})).status).toBe(410)
 		const custom = appWith((a) => a.customErrorFormatter((_e, data) => data))
 		expect((await custom.fetch(req("/nope"), {})).status).toBe(404)
+	})
+})
+
+describe("dispatch: onNotFound, and a miss under middleware", () => {
+	// v0: 9050a9dda6
+	// v0: e8ecd7169e
+	// v0: 14aeadf723
+	it("onNotFound answers with its own response, or an error rendered through jsonFromError", async () => {
+		const own = appWith((a) => a.onNotFound(() => Response.json({ custom: true }, { status: 404 })))
+		const rendered = appWith((a) =>
+			a.onNotFound((ctx) => ctx.jsonFromError(new HoneyError({ errorKey: "custom_not_found", status: "not_found" }))),
+		)
+		const [mine, theirs] = [await own.fetch(req("/nope"), {}), await rendered.fetch(req("/nope"), {})]
+		expect([mine.status, await body(mine), theirs.status, (await body(theirs)).error_key]).toEqual([
+			404,
+			{ custom: true },
+			404,
+			"custom_not_found",
+		])
 	})
 
 	it("a miss with middleware runs the pipeline", async () => {
@@ -104,9 +126,16 @@ describe("dispatch: 404", () => {
 })
 
 describe("dispatch: 405 and preflight", () => {
+	// v0: c4f86b8380
+	// v0: fb6a3bb8fb
+	// v0: 37432e7747
+	// v0: fc726db541
+	// v0: 70f5618296
 	it("a 405 carries Allow; onMethodNotAllowed answers sync or async, with Allow added", async () => {
 		const res = await appWith().fetch(req("/x", { method: "POST" }), {})
 		expect([res.status, res.headers.get("allow")]).toEqual([405, "GET"])
+		const both = appWith((a) => a.post("/x").handler((ctx) => ctx.res.text("ok", "p")))
+		expect((await both.fetch(req("/x", { method: "DELETE" }), {})).headers.get("allow")).toBe("GET, POST")
 		const sync = appWith((a) => a.onMethodNotAllowed(({ allowed }) => new Response(allowed.join("|"), { status: 405 })))
 		const mapped = await sync.fetch(req("/x", { method: "POST" }), {})
 		expect([await mapped.text(), mapped.headers.get("allow")]).toEqual(["GET", "GET"])
@@ -200,6 +229,7 @@ describe("dispatch: the error boundary", () => {
 	})
 
 	// v0: c372a0f19d
+	// v0: 81b77f180c
 	it("a json body that cannot be serialized is an internal error, answered as one", async () => {
 		const app = honey<{}>()
 		app.get("/circular").handler((ctx) => {
@@ -216,6 +246,79 @@ describe("dispatch: the error boundary", () => {
 		expect([sync.status, await sync.json()]).toEqual([500, { error: { errorKey: "internal_server_error" } }])
 		const viaHook = throwing((a) => a.onError(async () => unserializable()), unserializable)
 		expect((await viaHook.fetch(req("/t"), {})).status).toBe(500)
+	})
+})
+
+const internal = { error_key: "internal_server_error", status: 500 }
+
+describe("dispatch: what a handler's throw answers", () => {
+	// v0: 90eb819584
+	// v0: b1bfb49fa5
+	// v0: 2c06e411e3
+	// v0: dc968e1f18
+	// v0: e0e6c20935
+	// v0: c16d1f303e
+	// v0: 416188aeb6
+	// v0: ea1d035fc4
+	// v0: 82b12899d1
+	// v0: d1cf59c9e3
+	// v0: 52e3df013d
+	// v0: 580b93481c
+	it.each<[string, (ctx: { res: { json(key: "ok", data: unknown): Response } }) => unknown]>([
+		["a TypeError from reading through undefined", () => (({}) as { a: { b: number } }).a.b],
+		["a string", () => Promise.reject("string error")],
+		["undefined", () => Promise.reject(undefined)],
+		["a rejection after an await", async () => Promise.reject(new Error("async fail"))],
+		[
+			"an Error after building an answer",
+			(ctx) => {
+				ctx.res.json("ok", { partial: true })
+				throw new Error("oops after creating response")
+			},
+		],
+		[
+			"a getter that throws while json serializes",
+			(ctx) =>
+				ctx.res.json(
+					"ok",
+					Object.defineProperty({}, "n", {
+						enumerable: true,
+						get: () => {
+							throw new Error("getter exploded during stringify")
+						},
+					}),
+				),
+		],
+		["a toJSON that throws", (ctx) => ctx.res.json("ok", { toJSON: () => JSON.parse("{") as unknown })],
+	])("%s is a 500 internal_server_error", async (_label, fn) => {
+		const app = honey<{}>().logger(false)
+		app.get("/t").handler(fn as never)
+		const res = await app.fetch(req("/t"), {})
+		expect(await body(res)).toMatchObject(internal)
+	})
+})
+
+describe("dispatch: a HoneyError a handler throws", () => {
+	// v0: 3c83c5ddcf
+	// v0: 2829bd54b7
+	// v0: 10bcea3353
+	// v0: 1cab861952
+	// v0: f9ad988ecb
+	it.each([
+		["org_slug_taken", "conflict", 409],
+		["forbidden", "forbidden", 403],
+		["gone", "gone", 410],
+		["rate_limited", "too_many_requests", 429],
+	] as const)("a HoneyError %s with status %s answers %i with its key", async (errorKey, status, code) => {
+		const app = honey<{}>()
+		app.post("/t").handler(() => {
+			throw new HoneyError({ errorKey, status })
+		})
+		const res = await app.fetch(req("/t", { method: "POST" }), {})
+		expect([res.status, await body(res)]).toEqual([
+			code,
+			{ error_key: errorKey, fields: {}, message: errorKey, status: code, status_key: status, success: false },
+		])
 	})
 })
 
