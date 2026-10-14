@@ -82,7 +82,7 @@ src/trust/client-info.ts	core	src	03	clientInfo()	client-info.ts
 src/runtime/detect-runtime.ts	core	src	04	node|bun|cf detection (no Deno)	detect-runtime.ts
 src/runtime/feature-detect.ts	core	src	04	runtime feature detection	feature-detect.ts
 src/runtime/feature-load.ts	core	src	04	lazy feature load	feature-load.ts
-src/runtime/feature-slots.ts	core	src	04	feature slot registry	feature-slots.ts
+src/runtime/feature-slots.ts	core	src	03	feature slot registry — born here because trust is the first OPTIONAL entry (`@lovrozagar/honey/trust` registers its slot so trust.ts isn't eagerly bundled into core); later features (adapters 04, ws 06) add their own slots	feature-slots.ts
 src/runtime/peer.ts	core	src	04	optional-peer load guard	peer.ts
 src/adapters/node/serve.ts	core	src	04	Node http serve (node:* here only)	node.ts
 src/adapters/node/request.ts	core	src	04	node:http ↔ Fetch Request bridge	node-request.ts
@@ -186,6 +186,7 @@ tests/integration/context-query.test.ts	core	test	02	search / searchAll: query p
 tests/integration/context-extension.test.ts	core	test	02	context() extension + typing, executionCtx / background binding, meta access through ctx	context*
 tests/integration/cookies.test.ts	core	test	02	cookies through the app: get/set, caching, multiple Set-Cookie, kept on error responses, set→send-back round trip; signed via the signer	cookie*
 tests/integration/cookie-codec.test.ts	core	test	02	serializeCookie attribute/prefix/SameSite/Max-Age/Expires validation, value encoding (multi-byte, emoji, separators), Cookie-header parse edges	cookie*
+tests/integration/trust.test.ts	core	test	03	trustProxy off/hops/ranges resolution through app.fetch, X-Forwarded-* Nth-from-right, ctx.trustsForwarded (H18.4: forwarded value actually consumed), resolve-once-per-request caching (N reads = 1 compute), XFF-spoofing rejected; split by named sub-area only if >500 (trust-forwarding/…), never trust-N	trust*
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder (InferCtx/Env/BasePath/Meta/ErrorFactory/Methods/RoutePaths/RouteMethods/RouteCtx), context() typing, meta<T>(), public surface (internals hidden), base/routes/services split, ComputeErrorsByStatus	typetest/*
 tests/types/app-routes.typetest.ts	core	test	02	$routes/MergeRoute depth + same-path methods, basePath + MergePath registration, route(sub) merging, meta carried in $routes	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	ctx.params, routePattern literal, errors (declared + defaults, factory form, boundary), meta narrowing + readonly, req/env, no input without .input(), per-route use() accumulation	typetest/*
@@ -346,6 +347,7 @@ tests/structure/oracle-count.test.ts	core	test	00	unit-tests the pure checkOracl
 tests/structure/mutation-harness.ts	core	src	00	run the adversarial/security suite with each guard disabled → must go red (failing-input-first enforced)	—
 tests/structure/mutation-harness.test.ts	core	test	00	proves the harness mechanism against a fixture guard (no v1 guard exists yet at bit 00) (R4)	—
 tests/integration/security/adversarial.test.ts	core	test	00	the in-process app.fetch adversarial scaffold (scope-bypass/proto-pollution/CORS/header-injection/SSE-WS-memory) + a mechanism smoke; middleware bits (07, …) add cases (R3)	hostile-client
+tests/integration/security/trust-fuzz.test.ts	core	test	03	seeded ip-trust fuzz: ip parse/canonicalize vs node:net/WHATWG reference, CIDR membership vs a bit-by-bit reference, hop-walk — property-based, distinct from adversarial's hostile-input cases (v0 unit/fuzz ip-trust)	fuzz
 packages/gen/src/_tokenizer/	gen	corpus	00	vendored o200k_base tokenizer (pinned) for the token-budget gate (G-tok)	—
 bench/src/significance.ts	core	src	00	the perf significance decision (median + sample CI → fail only beyond +10% AND outside the band); used by hotpath.ts	—
 bench/src/significance.test.ts	core	test	00	unit-tests the significance decision (R6)	—
