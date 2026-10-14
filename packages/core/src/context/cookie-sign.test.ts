@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest"
-import { sign, verify } from "./cookie-sign.ts"
+import { describe, expect, it, vi } from "vitest"
+import { createCookieSigner, sign, verify } from "./cookie-sign.ts"
 
 const secret = "test-secret-key-at-least-32-chars-long"
 const oldSecret = "old-secret-key-for-rotation-purposes"
@@ -144,5 +144,38 @@ describe("cookie signing — unusable secrets", () => {
 		const signed = await sign("v", "good")
 		expect(await verify(signed, ["", "good"])).toBe("v")
 		expect(await verify(signed, [""])).toBeNull()
+	})
+})
+
+describe("createCookieSigner: keys imported once per signer", () => {
+	it("imports each secret once, however many values it signs and verifies", async () => {
+		const importKey = vi.spyOn(crypto.subtle, "importKey")
+		try {
+			const signer = createCookieSigner(["new", "old"])
+			const signed = await signer.sign("v", { name: "sid" })
+			for (let i = 0; i < 5; i++) expect(await signer.verify(signed, { name: "sid" })).toBe("v")
+			expect(await signer.verify(await sign("w", "old"))).toBe("w")
+			/* "new" and "old" once each for the signer; "old" once more for the standalone sign */
+			expect(importKey).toHaveBeenCalledTimes(3)
+		} finally {
+			importKey.mockRestore()
+		}
+	})
+
+	it("signs with the first secret, verifies with any, and matches the standalone functions", async () => {
+		const signer = createCookieSigner(["new", "old"])
+		const signed = await signer.sign("v", { name: "sid" })
+		expect(signed).toBe(await sign("v", "new", { name: "sid" }))
+		expect(await verify(signed, ["new"], { name: "sid" })).toBe("v")
+		expect(await signer.verify(signed, { name: "other" })).toBeNull()
+		expect(await signer.verify("v.tampered")).toBeNull()
+	})
+
+	it("an unusable secret is skipped for verify; signing with one rejects", async () => {
+		const good = await sign("v", "good")
+		expect(await createCookieSigner(["", "good"]).verify(good)).toBe("v")
+		await expect(createCookieSigner(["", "good"]).sign("v")).rejects.toThrow()
+		await expect(createCookieSigner([]).sign("v")).rejects.toThrow("no secret to sign with")
+		expect(await createCookieSigner([]).verify(good)).toBeNull()
 	})
 })

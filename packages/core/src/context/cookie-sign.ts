@@ -32,11 +32,17 @@ export type VerifyOptions = {
 	name?: string
 }
 
+/**
+ * Import a secret's HMAC key. The rejection is observed here, so an unused unusable secret raises
+ * no unhandled rejection; awaiting the key still throws.
+ */
 function importKey(secret: string): Promise<CryptoKey> {
-	return crypto.subtle.importKey("raw", encoder.encode(secret), { hash: "SHA-256", name: "HMAC" }, false, [
+	const key = crypto.subtle.importKey("raw", encoder.encode(secret), { hash: "SHA-256", name: "HMAC" }, false, [
 		"sign",
 		"verify",
 	])
+	key.catch(() => undefined)
+	return key
 }
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -60,27 +66,10 @@ function v2Payload(name: string, value: string): Uint8Array<ArrayBuffer> {
 	return encoder.encode(`${V2_DOMAIN}${name}\0${value}`)
 }
 
-export async function sign(value: string, secret: string, opts: SignOptions = {}): Promise<string> {
-	const key = await importKey(secret)
-	const signature = await crypto.subtle.sign("HMAC", key, v2Payload(opts.name ?? "", value))
-	return `${value}.${V2_MARKER}${toBase64Url(new Uint8Array(signature))}`
-}
+type Parsed = { payload: Uint8Array<ArrayBuffer>; sig: Uint8Array<ArrayBuffer>; value: string }
 
-async function verifiesWith(
-	secret: string,
-	sig: Uint8Array<ArrayBuffer>,
-	payload: Uint8Array<ArrayBuffer>,
-): Promise<boolean> {
-	try {
-		return await crypto.subtle.verify("HMAC", await importKey(secret), sig, payload)
-	} catch {
-		/* an unusable secret never verifies */
-		return false
-	}
-}
-
-/** Returns the original value, or `null` when no secret verifies it or the input is malformed. */
-export async function verify(signed: string, secrets: string[], opts: VerifyOptions = {}): Promise<string | null> {
+/** Split a signed value into the value, its tag and the payload the tag covers; `null` when malformed. */
+function parseSigned(signed: string, opts: VerifyOptions): Parsed | null {
 	if (typeof signed !== "string" || signed.length === 0) return null
 	const lastDot = signed.lastIndexOf(".")
 	if (lastDot === -1) return null
@@ -91,7 +80,58 @@ export async function verify(signed: string, secrets: string[], opts: VerifyOpti
 	else if (opts.legacy === false) return null
 	const sig = fromBase64Url(sigText)
 	if (sig === null) return null
-	const payload = isV2 ? v2Payload(opts.name ?? "", value) : encoder.encode(value)
-	for (const secret of secrets) if (await verifiesWith(secret, sig, payload)) return value
-	return null
+	return { payload: isV2 ? v2Payload(opts.name ?? "", value) : encoder.encode(value), sig, value }
+}
+
+async function verifiesWith(
+	key: Promise<CryptoKey>,
+	sig: Uint8Array<ArrayBuffer>,
+	payload: Uint8Array<ArrayBuffer>,
+): Promise<boolean> {
+	try {
+		return await crypto.subtle.verify("HMAC", await key, sig, payload)
+	} catch {
+		/* an unusable secret never verifies */
+		return false
+	}
+}
+
+export type CookieSigner = {
+	/** Sign with the first secret. */
+	sign(value: string, opts?: SignOptions): Promise<string>
+	/** The original value, or `null` when no secret verifies it or the input is malformed. */
+	verify(signed: string, opts?: VerifyOptions): Promise<string | null>
+}
+
+/**
+ * A signer over a secret list: the first signs, any verifies. Each key is imported once, on first
+ * use, and held by the signer, so a per-request verify costs no key import. Build one per app.
+ */
+export function createCookieSigner(secrets: readonly string[]): CookieSigner {
+	let keys: Promise<CryptoKey>[] | null = null
+	const keysOf = (): Promise<CryptoKey>[] => (keys ??= secrets.map(importKey))
+	return {
+		async sign(value, opts = {}) {
+			const first = keysOf()[0]
+			if (first === undefined) throw new TypeError("no secret to sign with")
+			const signature = await crypto.subtle.sign("HMAC", await first, v2Payload(opts.name ?? "", value))
+			return `${value}.${V2_MARKER}${toBase64Url(new Uint8Array(signature))}`
+		},
+		async verify(signed, opts = {}) {
+			const parsed = parseSigned(signed, opts)
+			if (parsed === null) return null
+			for (const key of keysOf()) if (await verifiesWith(key, parsed.sig, parsed.payload)) return parsed.value
+			return null
+		},
+	}
+}
+
+/** Sign one value; imports the key each call. A hot path holds a `createCookieSigner` instead. */
+export function sign(value: string, secret: string, opts: SignOptions = {}): Promise<string> {
+	return createCookieSigner([secret]).sign(value, opts)
+}
+
+/** Verify one value; imports the keys each call. A hot path holds a `createCookieSigner` instead. */
+export function verify(signed: string, secrets: readonly string[], opts: VerifyOptions = {}): Promise<string | null> {
+	return createCookieSigner(secrets).verify(signed, opts)
 }
