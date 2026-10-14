@@ -19,9 +19,9 @@ import {
 	canonical,
 	expandOptional,
 	isStaticPattern,
-	parsePattern,
+	type Segment,
 	type RouteId,
-	scopeCoverage,
+	variantsCoverage,
 	splitRouteId,
 } from "./pattern.ts"
 import { assertNothingDiscarded, chainErrorKeys, type HoneyGraph, type RouteHandler } from "./register.ts"
@@ -119,20 +119,24 @@ function resolveErrors(
 }
 
 /** The scoped middleware a pattern runs: whole where the scope covers it, behind the path check where it covers part. */
-function scopesFor(g: HoneyGraph, pattern: string): RuntimeMiddleware[] {
-	const segments = parsePattern(pattern)
+function scopesFor(g: HoneyGraph, variants: readonly (readonly Segment[])[]): RuntimeMiddleware[] {
 	const out: RuntimeMiddleware[] = []
 	for (const entry of g.scoped) {
-		const coverage = scopeCoverage(segments, entry.segs)
+		const coverage = variantsCoverage(variants, entry.segs)
 		if (coverage === "all") out.push(entry.mw)
 		else if (coverage === "some") out.push(entry.guard)
 	}
 	return out
 }
 
-function planRoute(g: HoneyGraph, r: RouteHandler, hooks: FinalizeHooks): Plan {
+function planRoute(
+	g: HoneyGraph,
+	r: RouteHandler,
+	variants: readonly (readonly Segment[])[],
+	hooks: FinalizeHooks,
+): Plan {
 	const src = r.own.errorFactory === null ? g.settings : r.own
-	const chain = [...r.cm, ...scopesFor(g, r.rp), ...r.rm]
+	const chain = [...r.cm, ...scopesFor(g, variants), ...r.rm]
 	const { errors, policy } = resolveErrors(src, chain, r)
 	const meta = routeMeta(chain, r.xm)
 	r.mt = meta
@@ -175,10 +179,11 @@ export function finalize(g: HoneyGraph, hooks: FinalizeHooks): FinalTable {
 	const plans = new Map<RouteId, Plan>()
 	const statics: Record<string, Record<string, Plan>> = dict()
 	for (const [id, r] of g.records) {
-		const plan = planRoute(g, r, hooks)
+		const variants = expandOptional(r.sg)
+		const plan = planRoute(g, r, variants, hooks)
 		plans.set(id, plan)
-		const { method, pattern } = splitRouteId(id)
-		for (const variant of expandOptional(parsePattern(pattern))) {
+		const { method } = splitRouteId(id)
+		for (const variant of variants) {
 			if (isStaticPattern(variant)) (statics[method] ??= dict())[canonical(variant)] = plan
 		}
 	}

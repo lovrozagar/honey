@@ -111,9 +111,9 @@ describe("mergeTree", () => {
 	})
 
 	it("carries extra meta onto a snapshot's live record too", () => {
-		const record: RouteRecord = { id: "GET /a", mt: { k: 1 }, rp: "/a" }
+		const record: RouteRecord = { id: "GET /a", mt: { k: 1 }, rp: "/a", sg: [{ k: "static", v: "a" }] }
 		const merged = mergeTree([treeOf([["GET", "/a", { h: record, mt: record.mt }]]), { worker: "w" }])
-		expect(merged.routes["GET /a"]?.h).toEqual({ id: "GET /a", mt: { k: 1, worker: "w" }, rp: "/a" })
+		expect(merged.routes["GET /a"]?.h).toEqual({ ...record, mt: { k: 1, worker: "w" } })
 		expect(record.mt).toEqual({ k: 1 })
 	})
 

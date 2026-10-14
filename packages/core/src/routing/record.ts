@@ -3,7 +3,7 @@
  * `RouteId`; the tree only holds ids, so two apps that load the same tree, or a sub-app mounted
  * into two parents, never share a record.
  */
-import type { RouteId } from "./pattern.ts"
+import type { RouteId, Segment } from "./pattern.ts"
 
 export type RouteRecord = {
 	/** route identity: `METHOD /canonical/pattern` */
@@ -12,6 +12,8 @@ export type RouteRecord = {
 	mt: Readonly<Record<string, unknown>> | null
 	/** canonical route pattern, e.g. `/users/:id` */
 	readonly rp: string
+	/** the pattern's segments, parsed once at registration so finalize never parses again */
+	readonly sg: readonly Segment[]
 }
 
 /** A fresh record for another graph; the meta object is frozen, so it is shared, not copied. */

@@ -43,7 +43,7 @@ export type RouteHandler = RouteRecord & {
 }
 
 /** What a builder hands over; the graph gives it its id and pattern. */
-export type RouteSource = Omit<RouteHandler, "id" | "mt" | "rp">
+export type RouteSource = Omit<RouteHandler, "id" | "mt" | "rp" | "sg">
 
 /** One `app.use(mw)`: the handle it returns has to register a route, or `mw` runs nowhere. */
 export type ChainNode = { readonly mw: RuntimeMiddleware; readonly parent: ChainNode | null; used: boolean }
@@ -134,7 +134,7 @@ export function addRoute(g: HoneyGraph, method: string, segments: readonly Segme
 	const id = routeId(method, pattern)
 	if (g.records.has(id)) throw new Error(`Duplicate route: ${id}`)
 	for (const variant of expandOptional(segments)) insertLeaf(g.root, variant, method, id)
-	g.records.set(id, { ...source, id, mt: null, rp: pattern })
+	g.records.set(id, { ...source, id, mt: null, rp: pattern, sg: segments })
 	g.epoch++
 	return id
 }

@@ -177,7 +177,8 @@ function sameLiteral(a: string, b: string): boolean {
 
 function coverVariant(route: readonly Segment[], scope: readonly Segment[]): ScopeCoverage {
 	let uncertain = false
-	for (const [i, s] of scope.entries()) {
+	for (let i = 0; i < scope.length; i++) {
+		const s = scope[i] as Segment
 		if (isOpenEnded(s)) return uncertain ? "some" : "all"
 		const r = route[i]
 		/* the route's paths end before the scope's do */
@@ -197,8 +198,15 @@ function coverVariant(route: readonly Segment[], scope: readonly Segment[]): Sco
  * guarded by {@link pathInScope} at request time.
  */
 export function scopeCoverage(route: readonly Segment[], scope: readonly Segment[]): ScopeCoverage {
-	const [first, ...rest] = expandOptional(route).map((variant) => coverVariant(variant, scope))
-	return rest.reduce<ScopeCoverage>((a, b) => (a === b ? a : "some"), first as ScopeCoverage)
+	return variantsCoverage(expandOptional(route), scope)
+}
+
+/** {@link scopeCoverage} for a route already expanded into its optional-param variants, so finalize expands each route once, not once per scope. */
+export function variantsCoverage(variants: readonly (readonly Segment[])[], scope: readonly Segment[]): ScopeCoverage {
+	const first = coverVariant(variants[0] as readonly Segment[], scope)
+	for (let i = 1; i < variants.length; i++)
+		if (coverVariant(variants[i] as readonly Segment[], scope) !== first) return "some"
+	return first
 }
 
 /**
