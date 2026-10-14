@@ -60,3 +60,25 @@ absolute gate (00-rules "Perf gate" step 3); run in CI.
 A v1 change may not regress a scenario significantly (hotpath.ts exits 1). An intended move is a
 committed `--update` with a one-line reason in this file, so even a change inside the noise band
 is visible in review.
+
+== Gating v1 before cutover (ruled; _v0 would otherwise be gated, proving nothing) ==
+Until the cutover (end bit 18), `@lovrozagar/honey` resolves to _v0, so the bench must reach v1 by
+building from `packages/core/src` directly:
+- hotpath.ts builds each scenario it CAN express from `packages/core/src` and judges it against the
+  committed v0 ratio with the existing significance test (+10% AND outside the band). A scenario
+  v1 cannot express yet prints `pending bit NN` — never a silent pass. `--update` keeps recording
+  the v0 reference (HOTPATH_TARGET=v0) until cutover, when hotpath re-points at the package.
+  Expressible now (bit 02): chain, not-found, param, scoped, static, mw-sync, many-routes; body +
+  large-response need bit 08, trust bit 03, mw-stack bit 07.
+- finalize.ts is a machine-INDEPENDENT gate: it builds a v0 and a v1 app side by side in one process
+  per (routes×scopes) grid point and fails when v1 > v0 × 1.10 (significance-gated). No committed
+  baseline file — the comparison is in-process, so it runs anywhere.
+First v1 capture (bun 1.4, taskset 2,3): v1 beats or matches v0 on all 7 expressible scenarios
+(e.g. not-found 6.84 vs 10.57, mw-sync 1.40 vs 1.81); finalize is 2-4× faster than v0 (1000×100:
+~1715 µs vs 3868) after fixing a v1 regression that re-parsed patterns + allocated per route×scope.
+
+== Deferred perf note (NOT bit-02 scope; v1 already beats v0 here) ==
+not-found is ~3.2 µs at 6.8× with 51 scopes because the miss plan runs every scope guard, so the
+precomputed-404 fast path can't apply. Indexing scopes by their first literal segment would cut it.
+Deferred: v1 already beats v0 on not-found and the miss path is not the hot path, so this is a focused
+later optimization with its own `not-found × many-scopes` scenario, not a bit-02 add-on.
