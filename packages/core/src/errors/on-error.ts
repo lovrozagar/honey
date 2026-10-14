@@ -56,7 +56,7 @@ type Throw = { readonly ctx: object; readonly error: HoneyError; readonly thrown
 /** What an operator line says about the request: method, path without its query, route id. */
 function bindings(ctx: object): Record<string, string> {
 	const state = stateOf(ctx)
-	return requestBindings(state.req.method, state.path, state.plan.route.id, undefined)
+	return requestBindings(state.req.method, state.path, state.plan.route.id, (ctx as { requestId?: string }).requestId)
 }
 
 /** Sixteen hex characters, random per occurrence: it names the line, it says nothing about the error. */
