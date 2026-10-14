@@ -283,7 +283,11 @@ describe("when the app or the write fails", () => {
 		const onError = vi.fn()
 		const { port } = await listen(answering(headerInjection), { onError })
 		const raw = await exchange(port, GET("/"))
-		expect([raw.startsWith("HTTP/1.1 500"), raw.includes("pwned"), onError.mock.calls.length]).toEqual([true, false, 1])
+		expect([raw.split("\r\n")[0], raw.includes("pwned"), onError.mock.calls.length]).toEqual([
+			"HTTP/1.1 500 Internal Server Error",
+			false,
+			1,
+		])
 	})
 
 	it("cuts the connection when a stream fails after the headers went out", async () => {

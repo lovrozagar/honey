@@ -140,7 +140,8 @@ async function writeResponse(response: Response, res: ServerResponse): Promise<v
 
 function answerPlain(res: ServerResponse, status: 400 | 500 | 503, text: string, close: boolean): void {
 	const headers = { "content-length": String(text.length), "content-type": "text/plain" }
-	res.writeHead(status, close ? { connection: "close", ...headers } : headers)
+	/* the reason phrase is explicit: a writeHead that threw on a bad header already set "OK" */
+	res.writeHead(status, text, close ? { connection: "close", ...headers } : headers)
 	res.end(text)
 }
 
