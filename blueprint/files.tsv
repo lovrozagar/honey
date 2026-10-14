@@ -17,6 +17,7 @@ src/routing/route-builder.ts	core	src	02	RouteBuilder: input/output/meta/errors/
 src/routing/ws-builder.ts	core	src	06	WSRouteBuilder: handler/errors/input/meta/origins/use	index.ts
 src/routing/finalize.ts	core	src	02	_finalize → FinalTable; dangling-builder + unused-use reports	index.ts
 src/routing/dispatch.ts	core	src	02	the fetch pipeline: match → mw → validate → handler → finalize	index.ts
+src/routing/tap.ts	core	src	07	app.tap(key, handler) + ctx.tap: a post-response observation hook that fires after a successful handler response, contained through invokeUser (never delays or shapes the response). Core (settings map + post-response hook), not middleware; 74 cases moved here from bit 02	tap.ts
 src/routing/middleware-chain.ts	core	src	02	scopeGuard, timedMiddleware, commonPrefix, errorsOf, describeMw	index.ts
 src/routing/match.ts	core	src	01	matchRoute over the tree; method/path resolution	index.ts,tree.ts
 src/routing/record.ts	core	src	01	RouteRecord + leaf types; per-graph record copy	index.ts
@@ -104,18 +105,18 @@ src/telemetry/logger.ts	core	src	07	createLogger: levels, child, pino shape (H17
 src/telemetry/log-format.ts	core	src	07	json + pretty formatters	logger.ts
 src/telemetry/request-log.ts	core	src	07	optional request log (off by default) (H17)	logger.ts
 src/telemetry/fields.ts	core	src	07	privacy-safe log/span field catalog (H17)	—
-src/telemetry/otel.ts	core	src	07	otelAdapter: nested spans, parent-passing	telemetry/otel.ts
+src/telemetry/otel.ts	core	src	07	otelAdapter(api) takes the user's OpenTelemetry API ({trace,context,propagation}) as a value — honey never imports @opentelemetry/api, which also guarantees one shared OTel instance (no duplicate-module split-brain); nested spans, parent-passing	telemetry/otel.ts
 src/telemetry/traceparent.ts	core	src	07	parse/validate/emit W3C traceparent+tracestate (G1)	—
 src/telemetry/span-lifecycle.ts	core	src	07	span ends at body finish/cancel; aborted	—
-src/telemetry/otel-subpath.ts	core	index	07	./telemetry/otel export; optional @opentelemetry/api peer	telemetry/otel.ts
+src/telemetry/otel-subpath.ts	core	index	07	./telemetry export (otelAdapter + the telemetry middleware); a plain subpath for tree-shaking, NOT an optional-peer isolation — honey imports no @opentelemetry/api, so there is nothing to load and no import-time hint	telemetry/otel.ts
 src/observability/curl-logger.ts	core	src	07	curl log	curl-logger.ts
 src/observability/request-to-curl.ts	core	src	07	request → curl	request-to-curl.ts
-src/proxy/proxy.ts	core	src	07	proxy/gateway core	proxy.ts
+src/proxy/proxy.ts	core	src	07	proxy/gateway: a plain handler factory, proxy(opts) → a route handler used as app.all("/api/*rest").handler(proxy({upstream,…})). NO .proxy() builder method and NO registerFeature slot (v0's self-registering proxy slot is CUT with feature-slots, H23); core never imports proxy — the ./proxy subpath exports it. Its response is the passthrough brand TypedResponse<string,string> (upstream decides status+type; the SDK gets a raw accessor at bit 11+)	proxy.ts
 src/proxy/upstream.ts	core	src	07	upstream request + traceparent forward	proxy.ts
 src/proxy/headers.ts	core	src	07	hop header handling	proxy.ts
 src/security/crypto.ts	core	src	07	crypto helpers	crypto.ts
-src/i18n/i18n.ts	core	src	07	i18n core	i18n.ts
-src/i18n/slot.ts	core	src	07	i18n slot	i18n-slot.ts
+src/i18n/i18n.ts	core	src	07	i18n core (ICU/plural/interpolate engine); pluralRules memo is a per-instance field, never module state	i18n.ts
+src/i18n/error-i18n.ts	core	src	07	errorI18n({errors,fieldNames,resolveLocale}) → a value {resolveLocale, translate(error, locale)} the app.errorI18n(value) setting carries; core calls settings.errorI18n?.translate and never imports i18n. Replaces v0's i18n-slot.ts (the let-runtime register/get module slot — CUT, H23); may fold into i18n.ts if under 300	i18n-slot.ts
 src/i18n/dict.ts	core	src	07	dictionary	dict.ts
 src/schema/to-json-schema.ts	core	src	09	standard-schema → JSON Schema dispatch	codegen.ts
 src/schema/zod.ts	core	src	09	Zod → JSON Schema	codegen.ts
@@ -196,6 +197,7 @@ tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddlewar
 tests/types/middleware-scoped.typetest.ts	core	test	02	use(path, mw) types: scoped adds on matching vs non-matching routes, segment boundary, composition, basePath merge, registration order, chain TCtx unpolluted, route(sub), overload dispatch, T16/T28 positional-generic compat	typetest/*
 tests/types/streaming.typetest.ts	core	test	05	ctx.res.stream/generate/sse/rangeResponse return-type branding: the Response the methods yield, sse() event-emitter shape (untyped at 05), generate() AsyncGenerator acceptance; the typed SSE event schema is bit 08 (H10)	typetest/*
 tests/types/websockets.typetest.ts	core	test	06	app.ws(path) builder typing (handler/onOpen/onMessage/onClose ctx + WSContext, origins, meta, input), WSContext/WSHandler/WSAdapter shapes, realtime() ConnContext + RealtimePublisher typing, wsAdapter() accepts an adapter value	typetest/*
+tests/types/tap.typetest.ts	core	test	07	app.tap(key, handler) + ctx.tap typing: the tap handler's ctx (response + the tap key's typed value), key inference, ctx.tap(key, value) accepts only declared keys (24 v0 tap typetests)	typetest/*
 # TRANSITIONAL (fold + delete): pre-H22 numbered typetest dumps still on disk; the implementer folds each into
 #   the named files above and deletes it (app-2 → app/app-routes; middleware-2/-3 → middleware/middleware-scoped).
 #
