@@ -7,6 +7,7 @@
  *     bun packages/core/tests/structure/mutation-harness.ts
  */
 import { spawnSync } from "node:child_process"
+import type { IncomingMessage, ServerResponse } from "node:http"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
 
@@ -21,6 +22,27 @@ export type Guard = {
 }
 
 type NormalizePath = (raw: string, encodedSlashes?: "allow" | "reject") => string | null
+
+const HOP_BY_HOP = /^(?:connection|keep-alive|proxy-connection|te|trailer|transfer-encoding|upgrade)$/
+
+/**
+ * A response writer without one of the bridge's framing checks: every header the response carries
+ * goes out (`keepHopByHop`), or a stream keeps the length it declares (`trustLength`).
+ */
+function naiveWriter(mutation: { keepHopByHop: boolean; trustLength: boolean }) {
+	return async (response: Response, res: ServerResponse): Promise<void> => {
+		const named = (response.headers.get("connection") ?? "").toLowerCase().split(/\s*,\s*/)
+		const headers: Record<string, string> = {}
+		response.headers.forEach((value, name) => {
+			if (mutation.keepHopByHop || !(HOP_BY_HOP.test(name) || named.includes(name))) headers[name] = value
+		})
+		const body = response.body
+		if (!mutation.trustLength && body !== null) delete headers["content-length"]
+		res.writeHead(response.status, headers)
+		if (body !== null) for await (const chunk of body) res.write(chunk)
+		res.end()
+	}
+}
 
 export const GUARDS: readonly Guard[] = [
 	{
@@ -79,6 +101,35 @@ export const GUARDS: readonly Guard[] = [
 		}),
 		id: "v1-cookie-signature",
 		module: "packages/core/src/context/cookie-sign.ts",
+	},
+	{
+		catches: "v1: a request URL built from whatever Host the client sent (a second one, or one carrying a path)",
+		disable: () => ({
+			nodeRequestUrl: (incoming: IncomingMessage) => `http://${incoming.headers.host}${incoming.url}`,
+		}),
+		id: "v1-node-host",
+		module: "packages/core/src/adapters/node/url.ts",
+	},
+	{
+		catches: "v1: a request body read past maxRequestBodySize",
+		disable: (original) => {
+			const nodeRequest = original.nodeRequest as (incoming: IncomingMessage, url: string, maxBody: number) => Request
+			return { nodeRequest: (incoming: IncomingMessage, url: string) => nodeRequest(incoming, url, 0) }
+		},
+		id: "v1-node-body-cap",
+		module: "packages/core/src/adapters/node/request.ts",
+	},
+	{
+		catches: "v1: an upstream's hop-by-hop or Connection-named headers written onto this connection",
+		disable: () => ({ writeResponse: naiveWriter({ keepHopByHop: true, trustLength: false }) }),
+		id: "v1-node-hop-by-hop",
+		module: "packages/core/src/adapters/node/response.ts",
+	},
+	{
+		catches: "v1: a stream's declared length trusted, desynchronizing keep-alive",
+		disable: () => ({ writeResponse: naiveWriter({ keepHopByHop: false, trustLength: true }) }),
+		id: "v1-node-stream-length",
+		module: "packages/core/src/adapters/node/response.ts",
 	},
 ]
 

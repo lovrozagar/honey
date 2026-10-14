@@ -4,6 +4,8 @@
  * bit adds its cases; the mutation harness reruns this file with each guard disabled and requires
  * it to go red.
  */
+import type { AddressInfo } from "node:net"
+import { connect } from "node:net"
 import { resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import { guardNamed } from "../../structure/mutation-harness.ts"
@@ -28,6 +30,9 @@ const v1 = (await import(
 const { createMiddleware } = (await import(
 	resolve(REPO, "packages/core/src/middleware/middleware.ts")
 )) as typeof import("../../../src/middleware/middleware.ts")
+const { serve: serveNode } = (await import(
+	resolve(REPO, "packages/core/src/adapters/node/serve.ts")
+)) as typeof import("../../../src/adapters/node/serve.ts")
 const { createCookieSigner } = (await import(
 	resolve(REPO, "packages/core/src/context/cookie-sign.ts")
 )) as typeof import("../../../src/context/cookie-sign.ts")
@@ -230,5 +235,148 @@ describe("v1 adversarial: signed-cookie tamper", () => {
 		expect(await signer.verify(signed, { legacy: false, name: "sid" })).toBe("u-42")
 		expect(await signer.verify(rotated, { legacy: false, name: "sid" })).toBe("u-42")
 		for (const value of tampered) expect(await signer.verify(value, { legacy: false, name: "sid" }), value).toBeNull()
+	})
+})
+
+/**
+ * The Node bridge on a real socket: /public and /admin record that they ran; /echo reads the body;
+ * /inject sets a header value carrying CR/LF. `use` gets raw bytes in, every byte out.
+ */
+async function withBridge(use: (send: (bytes: string) => Promise<string>, ran: string[]) => Promise<void>) {
+	const ran: string[] = []
+	const app = v1.honey<{}>()
+	for (const path of ["/public", "/admin"]) {
+		app.all(path).handler((ctx) => {
+			ran.push(path)
+			return ctx.res.text("ok", path)
+		})
+	}
+	app.post("/echo").handler(async (ctx) => {
+		ran.push(`echo:${(await ctx.req.text()).length}`)
+		return ctx.res.text("ok", "read")
+	})
+	app.get("/inject").handler((ctx) => ctx.res.text("ok", "x", { headers: { "x-a": "1\r\nset-cookie: pwned=1" } }))
+	/* what a proxied upstream can hand back: its own framing, its connection's headers, a length it decoded */
+	app
+		.get("/framed")
+		.handler((ctx) =>
+			ctx.res.raw(new Response("abc", { headers: { "content-length": "3", "transfer-encoding": "chunked" } })),
+		)
+	app
+		.get("/leaky")
+		.handler((ctx) =>
+			ctx.res.raw(new Response("abc", { headers: { connection: "x-internal", "x-internal": "secret" } })),
+		)
+	app
+		.get("/lying")
+		.handler((ctx) =>
+			ctx.res.raw(new Response(new Blob(["abc"]).stream(), { headers: { "content-length": "999999" } })),
+		)
+	const server = serveNode(app, { env: {}, hostname: "127.0.0.1", maxRequestBodySize: 64, onError: () => {}, port: 0 })
+	await new Promise((done) => server.once("listening", done))
+	const { port } = server.address() as AddressInfo
+	const send = (bytes: string) =>
+		new Promise<string>((done) => {
+			const socket = connect(port, "127.0.0.1")
+			let out = ""
+			socket.on("data", (chunk) => (out += chunk.toString("latin1")))
+			socket.on("close", () => done(out))
+			socket.on("error", () => {})
+			socket.end(bytes)
+		})
+	try {
+		await use(send, ran)
+	} finally {
+		await server.shutdown(0)
+	}
+}
+
+const head = (raw: string) => raw.split("\r\n")[0]
+
+describe("v1 adversarial: request smuggling at the node:http bridge", () => {
+	it.each([
+		[
+			"Content-Length beside Transfer-Encoding",
+			"POST /public HTTP/1.1\r\nHost: h\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nGET /admin HTTP/1.1\r\nHost: h\r\n\r\n",
+		],
+		[
+			"two different Content-Lengths",
+			"POST /public HTTP/1.1\r\nHost: h\r\nContent-Length: 4\r\nContent-Length: 5\r\n\r\nabcde",
+		],
+		["a folded header line", "GET /public HTTP/1.1\r\nHost: h\r\nX-A: a\r\n b\r\n\r\n"],
+		[
+			"a Transfer-Encoding not ending in chunked",
+			"POST /public HTTP/1.1\r\nHost: h\r\nTransfer-Encoding: chunked, identity\r\n\r\n0\r\n\r\n",
+		],
+		["bare LF line endings", "GET /public HTTP/1.1\nHost: h\n\n"],
+		["whitespace before a header colon", "GET /public HTTP/1.1\r\nHost : h\r\n\r\n"],
+		["a second Host header", "GET /public HTTP/1.1\r\nHost: h\r\nHost: evil.example\r\n\r\n"],
+		["a Host that moves the path", "GET /public HTTP/1.1\r\nHost: h/admin?\r\n\r\n"],
+	])("%s: 400, and no route runs", async (_case, bytes) => {
+		await withBridge(async (send, ran) => {
+			expect([head(await send(bytes)), ran]).toEqual(["HTTP/1.1 400 Bad Request", []])
+		})
+	})
+
+	it("an oversized header set: 431, and the server keeps serving", async () => {
+		await withBridge(async (send, ran) => {
+			const huge = await send(`GET /public HTTP/1.1\r\nHost: h\r\nX-Big: ${"a".repeat(20_000)}\r\n\r\n`)
+			const next = await send("GET /public HTTP/1.1\r\nHost: h\r\n\r\n")
+			expect([head(huge), head(next), ran]).toEqual([
+				"HTTP/1.1 431 Request Header Fields Too Large",
+				"HTTP/1.1 200 OK",
+				["/public"],
+			])
+		})
+	})
+
+	it("a body over the cap: 413, and the handler never holds the bytes", async () => {
+		await withBridge(async (send, ran) => {
+			const raw = await send(`POST /echo HTTP/1.1\r\nHost: h\r\nContent-Length: 1000\r\n\r\n${"x".repeat(1000)}`)
+			expect([head(raw), ran]).toEqual(["HTTP/1.1 413 Payload Too Large", []])
+		})
+	})
+})
+
+describe("v1 adversarial: response splitting at the node:http bridge", () => {
+	it("a header value carrying CR/LF: 500, one response, no injected header", async () => {
+		await withBridge(async (send) => {
+			const raw = await send("GET /inject HTTP/1.1\r\nHost: h\r\n\r\n")
+			expect([head(raw), raw.split("HTTP/1.1 ").length - 1, raw.includes("pwned")]).toEqual([
+				"HTTP/1.1 500 Internal Server Error",
+				1,
+				false,
+			])
+		})
+	})
+})
+
+describe("v1 adversarial: response framing at the node:http bridge", () => {
+	it("an upstream's Transfer-Encoding beside its Content-Length: one framing on the wire, Node's", async () => {
+		await withBridge(async (send) => {
+			const raw = (await send("GET /framed HTTP/1.1\r\nHost: h\r\n\r\n")).toLowerCase()
+			expect([
+				raw.includes("transfer-encoding"),
+				raw.includes("content-length: 3"),
+				raw.endsWith("\r\n\r\nabc"),
+			]).toEqual([false, true, true])
+		})
+	})
+
+	it("a header the upstream's Connection named stays on the upstream's connection", async () => {
+		await withBridge(async (send) => {
+			expect((await send("GET /leaky HTTP/1.1\r\nHost: h\r\n\r\n")).toLowerCase()).not.toContain("x-internal")
+		})
+	})
+
+	it("a decoded stream's stale length never desynchronizes keep-alive: two answers, each whole", async () => {
+		await withBridge(async (send) => {
+			const raw = await send("GET /lying HTTP/1.1\r\nHost: h\r\n\r\nGET /public HTTP/1.1\r\nHost: h\r\n\r\n")
+			expect([raw.includes("999999"), raw.split("HTTP/1.1 200 OK").length - 1, raw.includes("/public")]).toEqual([
+				false,
+				2,
+				true,
+			])
+		})
 	})
 })
