@@ -2,6 +2,12 @@
  * The Bun adapter: `Bun.serve` with the app's fetch, the server passed in the env so `ctx.ip` and
  * the WebSocket upgrade read it. Bun takes the `websocket` handlers at creation, so a honey app's
  * ws adapter is fixed here: its own `bunWebSocket()`, or one set before `serve()`.
+ *
+ * A known residual: when a response body stream errors (a proxied upstream cut by its idle
+ * timeout, a producer that fails), Bun itself prints the error to stderr, outside both the
+ * `error` handler and the app's logger. The stream erroring is correct, since closing it would
+ * pass a cut body off as complete; redirecting Bun's own diagnostic would mean wrapping every
+ * response body, a per-response cost for a sink change, so it is left as Bun reports it.
  */
 import { HoneyError } from "../../errors/error.ts"
 import { GRAPH } from "../../routing/app.ts"
