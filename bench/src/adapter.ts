@@ -1,6 +1,7 @@
 /**
  * Adapter-overhead gate (bit 04 budget): what the node:http bridge adds per request, which the
- * in-process hotpath never sees. Each scenario is served three ways on loopback: a bare node:http
+ * in-process hotpath never sees. `stacked-json` puts requestId + secureHeaders + cors in front of
+ * the routed answer: on the bridge v1 writes their headers to the plain map (bit 07 gate D). Each scenario is served three ways on loopback: a bare node:http
  * handler writing the same bytes (raw), v0's Node adapter, and v1's. A client pipelines a batch of
  * requests on one keep-alive connection, so the server's work dominates the time.
  *
@@ -14,8 +15,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { connect, type AddressInfo } from "node:net"
 import { honey } from "@lovrozagar/honey"
+import { cors } from "@lovrozagar/honey/cors"
+import { requestId } from "@lovrozagar/honey/request-id"
+import { secureHeaders } from "@lovrozagar/honey/secure-headers"
 import { serve as serveV0 } from "@lovrozagar/honey/node"
 import { serve as serveV1 } from "../../packages/core/src/adapters/node/serve.ts"
+import { cors as corsV1 } from "../../packages/core/src/middleware/cors.ts"
+import { requestId as requestIdV1 } from "../../packages/core/src/middleware/request-id.ts"
+import { secureHeaders as secureHeadersV1 } from "../../packages/core/src/middleware/secure-headers.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
 import { judge, median } from "./significance.ts"
 
@@ -50,6 +57,23 @@ function routed(app: { get(path: string): { handler(fn: (ctx: never) => Response
 	return app as unknown as FetchApp
 }
 
+/** The routed JSON behind the edge middleware that write headers: on v1, through the plain header map. */
+function stacked(app: { use(mw: unknown): unknown }, middleware: readonly unknown[]): FetchApp {
+	let scope = app
+	for (const mw of middleware) scope = scope.use(mw) as typeof app
+	routed(scope as never)
+	return app as unknown as FetchApp
+}
+
+/** What the stack adds, written by hand: a request id, the security headers, the CORS origin. */
+const STACK_HEADERS = {
+	"access-control-allow-origin": "*",
+	"referrer-policy": "strict-origin-when-cross-origin",
+	"x-content-type-options": "nosniff",
+	"x-frame-options": "SAMEORIGIN",
+	"x-xss-protection": "0",
+}
+
 /** Reads the body as text, then answers its length. */
 const echoLength: FetchApp = {
 	fetch: async (request) => {
@@ -78,6 +102,18 @@ const SCENARIOS: readonly Scenario[] = [
 			res.end(JSON_BODY)
 		},
 		request: "GET /items/42 HTTP/1.1\r\nHost: bench\r\n\r\n",
+	},
+	{
+		apps: {
+			v0: stacked(honey() as never, [requestId(), secureHeaders(), cors()]),
+			v1: stacked(honeyV1<{}>() as never, [requestIdV1(), secureHeadersV1(), corsV1()]),
+		},
+		name: "stacked-json",
+		raw: (_req, res) => {
+			res.writeHead(200, { ...JSON_HEADERS, ...STACK_HEADERS, "x-request-id": crypto.randomUUID() })
+			res.end(JSON_BODY)
+		},
+		request: "GET /items/42 HTTP/1.1\r\nHost: bench\r\nOrigin: https://app.example\r\n\r\n",
 	},
 	{
 		apps: { v0: echoLength, v1: echoLength },
