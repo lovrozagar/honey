@@ -1,4 +1,12 @@
-/** The Bun adapter: `Bun.serve` with the app's fetch, the server passed in the env so `ctx.ip` reads it. */
+/**
+ * The Bun adapter: `Bun.serve` with the app's fetch, the server passed in the env so `ctx.ip` and
+ * the WebSocket upgrade read it. Bun takes the `websocket` handlers at creation, so a honey app's
+ * ws adapter is fixed here: its own `bunWebSocket()`, or one set before `serve()`.
+ */
+import { GRAPH } from "../../routing/app.ts"
+import type { HoneyGraph } from "../../routing/register.ts"
+import type { AppSettings } from "../../routing/settings.ts"
+import { bunWebSocket, type BunWebSocketHandlers, type BunWSAdapter } from "../../ws/bun.ts"
 
 type FetchApp<TEnv> = { fetch(request: Request, env: TEnv): Response | Promise<Response> }
 
@@ -11,10 +19,11 @@ type BunServer = {
 type BunGlobal = {
 	serve(options: {
 		error?: (error: unknown) => Response
-		fetch(request: Request, server: BunServer): Response | Promise<Response>
+		fetch(request: Request, server: BunServer): Response | Promise<Response | undefined> | undefined
 		hostname: string
 		maxRequestBodySize: number
 		port: number
+		websocket?: BunWebSocketHandlers
 	}): BunServer
 }
 
@@ -46,8 +55,36 @@ async function within(work: Promise<void>, ms: number): Promise<"done" | "timeou
 	}
 }
 
+const SWAPPED =
+	"honey: app.wsAdapter() changed after serve(app) on Bun, where Bun.serve took the first adapter's handlers: set app.wsAdapter() before serve()"
+
+/** The honey app's settings, where its ws adapter lives; `null` for a plain fetch handler. */
+function settingsOf(app: unknown): AppSettings | null {
+	return (app as { [GRAPH]?: HoneyGraph })[GRAPH]?.settings ?? null
+}
+
+/** The app's ws adapter for Bun: the one it was given, else `bunWebSocket()`, set on the app. */
+function bunAdapterOf(settings: AppSettings): BunWSAdapter {
+	settings.wsAdapter ??= bunWebSocket()
+	if (!("websocket" in settings.wsAdapter)) {
+		throw new Error("serve() on Bun needs a bunWebSocket() adapter, but app.wsAdapter() was given another")
+	}
+	return settings.wsAdapter as BunWSAdapter
+}
+
+function isWebSocketUpgrade(request: Request): boolean {
+	return request.headers.get("upgrade")?.toLowerCase() === "websocket"
+}
+
+/** Bun expects nothing back from a fetch that upgraded the request. */
+function unlessUpgraded(response: Response): Response | undefined {
+	return response.status === 101 ? undefined : response
+}
+
 export function serve<TEnv>(app: FetchApp<TEnv>, options: BunServeOptions<TEnv>): BunListener {
 	const { onError } = options
+	const settings = settingsOf(app)
+	const adapter = settings === null ? null : bunAdapterOf(settings)
 	/* the server is the same object on every request: the env carrying it is built once */
 	let env: TEnv | undefined
 	const server = (globalThis as unknown as { Bun: BunGlobal }).Bun.serve({
@@ -59,10 +96,16 @@ export function serve<TEnv>(app: FetchApp<TEnv>, options: BunServeOptions<TEnv>)
 						return new Response("Internal Server Error", { status: 500 })
 					},
 				}),
-		fetch: (request, bun) => app.fetch(request, (env ??= { ...options.env, server: bun })),
+		fetch: (request, bun) => {
+			/* an adapter set after Bun.serve took the first one's handlers can never upgrade: say so */
+			if (settings !== null && settings.wsAdapter !== adapter && isWebSocketUpgrade(request)) throw new Error(SWAPPED)
+			const answer = app.fetch(request, (env ??= { ...options.env, server: bun }))
+			return answer instanceof Promise ? answer.then(unlessUpgraded) : unlessUpgraded(answer)
+		},
 		hostname: options.hostname,
 		maxRequestBodySize: options.maxRequestBodySize,
 		port: options.port,
+		...(adapter === null ? {} : { websocket: adapter.websocket }),
 	})
 	return {
 		async close(timeout) {

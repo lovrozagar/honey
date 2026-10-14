@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { createMiddleware } from "../../middleware/middleware.ts"
 import { honey } from "../../routing/app.ts"
+import { cfWebSocket } from "../../ws/cloudflare.ts"
+import { bunWebSocket } from "../../ws/bun.ts"
 import { serve } from "./serve.ts"
 
 type BunOptions = {
 	error?: (error: unknown) => Response
-	fetch(req: Request, server: unknown): Response | Promise<Response>
+	fetch(req: Request, server: unknown): Response | Promise<Response | undefined> | undefined
+	websocket?: unknown
 	hostname: string
 	maxRequestBodySize: number
 	port: number
@@ -19,6 +23,7 @@ function fakeBun(drained: Promise<void> = Promise.resolve()) {
 		},
 		port: 4321,
 		requestIP: () => ({ address: "::ffff:192.0.2.1" }),
+		upgrade: () => true,
 		stop: (force: boolean) => {
 			calls.stops.push(force)
 			return force ? Promise.resolve() : drained
@@ -58,7 +63,7 @@ describe("serve on Bun: what Bun.serve is given", () => {
 		})
 		serve(app, options)
 		const { fetch } = calls.options as BunOptions
-		const first = await (await fetch(new Request("http://h/who"), server)).json()
+		const first = await ((await fetch(new Request("http://h/who"), server)) as Response).json()
 		await fetch(new Request("http://h/who"), server)
 		expect([first, envs[0], envs[0] === envs[1]]).toEqual([{ db: "x", ip: "192.0.2.1" }, { db: "x", server }, true])
 	})
@@ -84,5 +89,67 @@ describe("serve on Bun: close(timeout)", () => {
 		const { calls } = fakeBun(new Promise(() => {}))
 		await serve({ fetch: () => new Response() }, options).close(10)
 		expect(calls.stops).toEqual([false, true])
+	})
+})
+
+/** A WebSocket handshake for `path`. */
+const handshake = (path: string) =>
+	new Request(`http://127.0.0.1${path}`, { headers: { connection: "Upgrade", upgrade: "websocket" } })
+
+describe("serve on Bun: WebSockets", () => {
+	it("an app without an adapter gets bunWebSocket(), set on the app, its handlers given to Bun.serve", () => {
+		const { calls } = fakeBun()
+		const app = honey<{}>()
+		serve(app, options)
+		const set = (app as unknown as { settings: { wsAdapter: { websocket: unknown } } }).settings.wsAdapter
+		expect([set !== null, calls.options?.websocket === set.websocket]).toEqual([true, true])
+	})
+
+	it("keeps a bunWebSocket() the app was given, and refuses another runtime's adapter", () => {
+		const { calls } = fakeBun()
+		const own = bunWebSocket({ maxPayload: 10 })
+		serve(honey<{}>().wsAdapter(own), options)
+		expect(calls.options?.websocket).toBe(own.websocket)
+		expect(() => serve(honey<{}>().wsAdapter(cfWebSocket()), options)).toThrow(
+			"serve() on Bun needs a bunWebSocket() adapter, but app.wsAdapter() was given another",
+		)
+	})
+
+	it("a plain fetch handler, not a honey app, is served without WebSocket handlers", () => {
+		const { calls } = fakeBun()
+		serve({ fetch: () => new Response("ok") }, options)
+		expect(calls.options?.websocket).toBeUndefined()
+	})
+
+	it("answers Bun nothing once a request was upgraded, as Bun expects; other answers pass through", async () => {
+		const { calls, server } = fakeBun()
+		const app = honey<{}>()
+		app.ws("/live").handler({})
+		app.get("/page").handler((ctx) => ctx.res.text("ok", "page"))
+		app
+			.use(createMiddleware(async (_ctx, next) => next()))
+			.get("/async")
+			.handler(async (ctx) => ctx.res.text("ok", "later"))
+		serve(app, options)
+		const { fetch } = calls.options as BunOptions
+		const [live, page, later] = await Promise.all([
+			fetch(handshake("/live"), server),
+			fetch(new Request("http://127.0.0.1/page"), server),
+			fetch(new Request("http://127.0.0.1/async"), server),
+		])
+		expect([live, await page?.text(), await later?.text()]).toEqual([undefined, "page", "later"])
+	})
+
+	it("an adapter swapped after serve() cannot reach Bun: the upgrade fails loudly, naming the fix", async () => {
+		const { calls, server } = fakeBun()
+		const app = honey<{}>()
+		app.ws("/live").handler({})
+		serve(app, options)
+		app.wsAdapter(bunWebSocket())
+		const { fetch } = calls.options as BunOptions
+		expect(() => fetch(handshake("/live"), server)).toThrow(
+			"honey: app.wsAdapter() changed after serve(app) on Bun, where Bun.serve took the first adapter's handlers: set app.wsAdapter() before serve()",
+		)
+		expect(await (fetch(new Request("http://127.0.0.1/live"), server) as Response).text()).toBe("Upgrade Required")
 	})
 })
