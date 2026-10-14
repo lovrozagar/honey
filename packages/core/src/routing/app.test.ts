@@ -18,6 +18,8 @@ describe("the app handle", () => {
 		expect(app.meta()).toBe(app)
 	})
 
+	// v0: 87e5890e24
+	// v0: 99663bbb93
 	it("context() refuses a key the framework owns, and merges over earlier values", async () => {
 		expect(() => honey<{}>().context({ req: 1 })).toThrow('context() cannot set reserved key "req"')
 		const app = honey<{}>().context({ a: 1, b: 1 }).context({ b: 2 })
@@ -48,7 +50,9 @@ describe("the app handle", () => {
 		expect((await app.fetch(req("/anything"), {})).status).toBe(404)
 		expect(seen).toEqual(["logged", "logged"])
 	})
+})
 
+describe("the app handle: method verbs and env", () => {
 	it("registers each method verb under its own method", async () => {
 		const app = honey<{}>()
 		app.delete("/v").handler((ctx) => ctx.res.text("ok", "delete"))

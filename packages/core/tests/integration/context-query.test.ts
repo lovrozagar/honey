@@ -44,6 +44,13 @@ describe("ctx.search and ctx.searchAll", () => {
 		expect(await send(queryApp(), `/q${query}`)).toEqual(ok({ search, searchAll }))
 	})
 
+	// v0: f53f84ed17
+	it("a thousand params are all readable", async () => {
+		const query = Array.from({ length: 1000 }, (_, i) => `p${i}=v${i}`).join("&")
+		const { search } = (await send(queryApp(), `/q?${query}`)).body as { search: Record<string, string> }
+		expect([Object.keys(search).length, search.p0, search.p999]).toEqual([1000, "v0", "v999"])
+	})
+
 	// v0: 78e98994c3
 	// v0: 4f155bcec2
 	// v0: cecf528269

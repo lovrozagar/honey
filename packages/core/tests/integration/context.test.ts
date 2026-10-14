@@ -103,6 +103,15 @@ describe("ctx.headers", () => {
 			ok({ headers: { authorization: "Bearer tok", "x-custom": "hello" } }),
 		)
 	})
+
+	// v0: 33ce257712
+	it("fifty custom headers are all readable", async () => {
+		const app = honey<{}>()
+		app.get("/h").handler((ctx) => ctx.res.json("ok", { headers: { ...ctx.headers } }))
+		const sent = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`x-h${i}`, `v${i}`]))
+		const { headers } = (await send(app, "/h", { init: { headers: sent } })).body as { headers: Record<string, string> }
+		expect(Object.fromEntries(Object.entries(headers).filter(([name]) => name.startsWith("x-h")))).toEqual(sent)
+	})
 })
 
 describe("each request has its own ctx", () => {
@@ -185,6 +194,7 @@ describe("framework keys on ctx", () => {
 	// v0: 7c3d73cf11
 	// v0: 7b0b7ae2b7
 	// v0: 2b0757df51
+	// v0: b05747747d
 	it("next() drops every framework key and applies the rest", async () => {
 		const hijack = { ...Object.fromEntries(RESERVED.map((key) => [key, "hijacked"])), req: new Request("http://evil/") }
 		const hijacked = honey<{ DB: string }>()
@@ -206,5 +216,85 @@ describe("framework keys on ctx", () => {
 			},
 			status: 200,
 		})
+	})
+})
+
+describe("app.context(): values every request's ctx carries", () => {
+	// v0: c9a9aaa2d7
+	// v0: 4d6f2acbc4
+	// v0: 474f6803c7
+	// v0: befc00f081
+	// v0: 180f818dfb
+	// v0: 5f480b5d68
+	// v0: 7eb6038fa2
+	it("reach app middleware, route middleware and the handler, beside additions, env and params, under a basePath", async () => {
+		const seen: unknown[] = []
+		const app = honey<{ SECRET: string }>().context({ db: "sqlite", prefix: "org" })
+		app
+			.use(
+				createMiddleware(async (ctx: { db: string }, next) => {
+					seen.push(["app", ctx.db])
+					return next({ added: "fromMw" })
+				}),
+			)
+			.basePath("/v1")
+			.get("/items/:id")
+			.use(
+				createMiddleware(async (ctx: { db: string }, next) => {
+					seen.push(["route", ctx.db])
+					return next({ checked: true })
+				}),
+			)
+			.handler((ctx) =>
+				ctx.res.json("ok", {
+					added: ctx.added,
+					checked: ctx.checked,
+					db: ctx.db,
+					id: ctx.params.id,
+					prefix: ctx.prefix,
+					secret: ctx.env.SECRET,
+				}),
+			)
+		const answer = await send(app, "/v1/items/42", { env: { SECRET: "s3cr3t" } })
+		expect([answer.body, seen]).toEqual([
+			{ added: "fromMw", checked: true, db: "sqlite", id: "42", prefix: "org", secret: "s3cr3t" },
+			[
+				["app", "sqlite"],
+				["route", "sqlite"],
+			],
+		])
+	})
+
+	// v0: 6359961642
+	it("are the same references on every request, never copies", async () => {
+		const shared = { count: 0 }
+		const app = honey<{}>().context({ shared })
+		app.get("/inc").handler((ctx) => {
+			ctx.shared.count++
+			return ctx.res.json("ok", { count: ctx.shared.count, same: ctx.shared === shared })
+		})
+		await send(app, "/inc")
+		expect((await send(app, "/inc")).body).toEqual({ count: 2, same: true })
+	})
+})
+
+describe("app.context(): mounts and the framework's keys", () => {
+	// v0: 93f5d173a2
+	it("a mounted sub's routes keep the sub's values, the parent's routes the parent's", async () => {
+		const sub = honey<{}>().context({ shared: "sub", subVal: "from-sub" }).basePath("/sub")
+		sub.get("/test").handler((ctx) => ctx.res.json("ok", { shared: ctx.shared, sub: ctx.subVal }))
+		const parent = honey<{}>().context({ shared: "parent" })
+		parent.get("/test").handler((ctx) => ctx.res.json("ok", { shared: ctx.shared }))
+		parent.route(sub)
+		expect([(await send(parent, "/test")).body, (await send(parent, "/sub/test")).body]).toEqual([
+			{ shared: "parent" },
+			{ shared: "sub", sub: "from-sub" },
+		])
+	})
+
+	// v0: 329636cf2d
+	// v0: 6ffd201bbd
+	it.each([...RESERVED, "ip", "log", "tap"])("refuse %s, a key the framework owns, at registration", (key) => {
+		expect(() => honey<{}>().context({ [key]: 1 })).toThrow(`context() cannot set reserved key "${key}"`)
 	})
 })
