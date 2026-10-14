@@ -193,8 +193,6 @@ tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddlewar
 tests/types/middleware-scoped.typetest.ts	core	test	02	use(path, mw) types: scoped adds on matching vs non-matching routes, segment boundary, composition, basePath merge, registration order, chain TCtx unpolluted, route(sub), overload dispatch, T16/T28 positional-generic compat	typetest/*
 # TRANSITIONAL (fold + delete): pre-H22 numbered typetest dumps still on disk; the implementer folds each into
 #   the named files above and deletes it (app-2 → app/app-routes; middleware-2/-3 → middleware/middleware-scoped).
-tests/types/middleware-2.typetest.ts	core	test	02	TRANSITIONAL dump — fold into middleware/middleware-scoped and delete	typetest/*
-tests/types/middleware-3.typetest.ts	core	test	02	TRANSITIONAL dump — fold into middleware/middleware-scoped and delete	typetest/*
 #
 # --- regression suites: named identically to the v0 session files so the regression matrix
 #     (_v0/docs/regression-matrix/) stays traceable. The _v0 copies are byte-FROZEN and run in the
