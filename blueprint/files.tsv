@@ -164,27 +164,28 @@ src/build/yaml.ts	core	src	19	YAML emit/parse	yaml.ts
 src/build/targets.ts	core	src	19	build target selection (node/bun/cf; no Deno)	build/index.ts
 src/testing/testing.ts	core	src	20	the testing helper	testing.ts
 #
-# --- app-level integration + type suites (feature-named, assert through honey()/app.fetch; H13). Born at the
+# --- app-level integration + type suites (feature-named, assert through honey()/app.fetch; H13/H22). Born at the
 #     bit that owns the feature, GROWN by later bits (errors gains problem+json at 08, routing gains static/proxy, …).
-#     HARD RULE (no dumps): every v0 case ports into the FEATURE suite it exercises, describe named by BEHAVIOR —
-#     NEVER a session-named or overflow-numbered catch-all (no edge-cases-N, no bug-hunt-N describes). The v0
-#     session dumps (bug-hunt/edge-cases/bizarre/broken-world/production-weird) are DISSOLVED by feature, not copied.
-#     A genuine multi-feature interaction with no single home goes in tests/integration/interactions.test.ts named
-#     by the interaction (added on request). 500-line cap: a FEATURE suite that overflows splits into
-#     <feature>-<n>.test.ts, same bit — feature splits are pre-authorized; a catch-all split is not. ---
-tests/integration/routing.test.ts	core	test	02	methods, on/all, 404/405, HEAD→GET, statics, params, trailing slash, stripPrefix, encoded slashes, wildcard, path normalization through app.fetch	bug-hunt*,edge-cases*
-tests/integration/middleware.test.ts	core	test	02	chain order, short-circuit, next() additions, double next(), ctx.error, ctx-key overwrite/accumulate, status-wrap, use() handles, finalize reports (unused use, dangling builder)	middleware*
+#     THE MAP IS REVIEWER-OWNED AND COMPLETE HERE (H22). Every file below is named by its SUB-BEHAVIOR; the
+#     implementer fills the defined files and does NOT invent names or numbered splits. HARD RULES:
+#       - every v0 case is covered by a clean test in the file whose sub-behavior it exercises, or retired; no copy.
+#       - describe blocks name BEHAVIOR; no session names (bug-hunt-N), no edge-cases dump, no catch-all.
+#       - a file that would exceed the 500-line cap after genuine consolidation is SPLIT BY A FINER NAMED SUB-AREA
+#         (routing-params → routing-params-decode, …), proposed to the reviewer — NEVER <feature>-<number>.
+#       - a genuine multi-feature interaction with no single home: tests/integration/interactions.test.ts (on request).
+#     Model to match: middleware.test.ts (grouped describes, shared factory, it.each, full-behavior asserts). ---
+tests/integration/routing.test.ts	core	test	02	method resolution: verbs, ALL, HEAD→GET, OPTIONS, 404, 405+Allow; and registration: per-method, dangling-builder report, duplicate route, invalid pattern	bug-hunt*,edge-cases*
+tests/integration/routing-params.test.ts	core	test	02	path params, decode + raw-fallback, wildcards, optional params, catch-all	bug-hunt*,edge-cases*
+tests/integration/routing-paths.test.ts	core	test	02	trailing-slash policy, path normalization/canonicalization, static-vs-tree priority, deep/many-routes backtracking	bug-hunt*,edge-cases*
+tests/integration/middleware.test.ts	core	test	02	run order, what next() adds (values + framework keys), answering/rewriting before+after next(), unknown paths + wrong methods, ctx.error, chain mistakes, concurrency	middleware*
 tests/integration/scoped.test.ts	core	test	02	use(path, mw) coverage + guards, across mounts and basePath	scoped*
-tests/integration/scoped-2.test.ts	core	test	02	use(path, mw) ports, continued (500-line cap split)	scoped*
-tests/integration/mount.test.ts	core	test	02	route()/route(prefix), basePath/MergePath composition, sub settings/context kept, duplicates	mergeTree*
+tests/integration/mount.test.ts	core	test	02	basePath prefixing + segment boundaries, handles share one app, mounting a sub-app (served routes, chains+scopes), a mounted route is a copy	mergeTree*
 tests/integration/errors.test.ts	core	test	02	native projection through the chain, boundary/defaultBoundary, defaultErrors, errorFactory, onError/onNotFound/onMethodNotAllowed (problem+json formatter joins at bit 08)	errors*
-tests/integration/errors-2.test.ts	core	test	02	errors ports, continued (500-line cap split)	errors*
-tests/integration/context.test.ts	core	test	02	ctx through the app: search/searchAll, executionCtx/background binding, context(), meta, errors	context*
-tests/integration/context-2.test.ts	core	test	02	context ports, continued (500-line cap split)	context*
-tests/integration/context-3.test.ts	core	test	02	context ports, continued (500-line cap split)	context*
-tests/integration/context-4.test.ts	core	test	02	context ports, continued (500-line cap split)	context*
-tests/integration/cookies.test.ts	core	test	02	app-level cookie behavior: name validation, get/set through the app, signed-cookie round-trip via the signer	cookie*
-tests/integration/cookies-2.test.ts	core	test	02	cookies ports, continued (500-line cap split)	cookie*
+tests/integration/context.test.ts	core	test	02	the ctx shape + lazy fields (req/path/headers/signal/env), reserved-key guards, one ctx per request	context*
+tests/integration/context-query.test.ts	core	test	02	search / searchAll: query parsing, arrays, repeated keys, decode/coercion edges	context*
+tests/integration/context-extension.test.ts	core	test	02	context() extension + typing, executionCtx / background binding, meta access through ctx	context*
+tests/integration/cookies.test.ts	core	test	02	cookies through the app: get/set, caching, multiple Set-Cookie, kept on error responses, set→send-back round trip; signed via the signer	cookie*
+tests/integration/cookie-codec.test.ts	core	test	02	serializeCookie attribute/prefix/SameSite/Max-Age/Expires validation, value encoding (multi-byte, emoji, separators), Cookie-header parse edges	cookie*
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder, $routes/MergeRoute, ComputeErrorsByStatus	typetest/*
 tests/types/app-2.typetest.ts	core	test	02	app ports, continued (500-line cap split)	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	HandlerCtx, params, meta, errors, routePattern	typetest/*

@@ -244,8 +244,12 @@ describe("middleware factories and meta", () => {
 		expect(createMiddleware(async (_ctx, next) => next()).meta).toBeUndefined()
 	})
 
-	it("middleware meta may not set internal", () => {
+	// v0: 989f510b71
+	it("middleware meta may not set internal, to either value", () => {
 		expect(() => createMiddleware((_ctx, next) => next(), { meta: { internal: true } })).toThrow(
+			'cannot set "internal"',
+		)
+		expect(() => defineMiddleware({ fn: (_ctx, next) => next(), meta: { internal: false } })).toThrow(
 			'cannot set "internal"',
 		)
 	})
