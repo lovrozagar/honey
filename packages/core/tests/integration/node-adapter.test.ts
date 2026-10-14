@@ -358,3 +358,96 @@ describe("many requests at once stay apart", () => {
 		expect([statuses, await (await fetch(`${base}/ok`)).text()]).toEqual([Array(10).fill(500), "alive"])
 	})
 })
+
+/** An app that streams: a large generate(), one that waits after its first chunk, and an endless writer. */
+function streamingNodeApp() {
+	const release = Promise.withResolvers<void>()
+	const seen = { aborted: false, produced: 0 }
+	const app = honey<{}>()
+	app.get("/large").handler((ctx) =>
+		ctx.res.generate(
+			(function* () {
+				for (let i = 0; i < 20_000; i++) yield `line ${i}\n`
+			})(),
+			{ contentType: "text/plain" },
+		),
+	)
+	app.get("/first").handler((ctx) =>
+		ctx.res.generate(
+			(async function* () {
+				yield "first chunk\n"
+				await release.promise
+				yield "rest\n"
+			})(),
+			{ contentType: "text/plain" },
+		),
+	)
+	app.get("/flood").handler((ctx) =>
+		ctx.res.stream(async (writable) => {
+			const writer = writable.getWriter()
+			const chunk = new Uint8Array(64 * 1024)
+			for (;;) {
+				await writer.write(chunk)
+				seen.produced++
+			}
+		}),
+	)
+	app.post("/watch").handler(async (ctx) => {
+		await ctx.req.text()
+		return ctx.res.sse(async (stream) => {
+			stream.signal.addEventListener("abort", () => (seen.aborted = true))
+			await stream.send({ data: "ready", event: "m" })
+			await new Promise((resolve) => stream.signal.addEventListener("abort", resolve))
+		})
+	})
+	return { app, release, seen }
+}
+
+describe("streaming over node:http", () => {
+	// v0: 06bf64ed3c
+	// v0: 0f24187776
+	it("a large generate() arrives whole", async () => {
+		const { base } = await listen(streamingNodeApp().app)
+		const text = await (await fetch(`${base}/large`)).text()
+		expect([text.split("\n").length - 1, text.endsWith("line 19999\n")]).toEqual([20_000, true])
+	})
+
+	// v0: 916e1d90bd
+	// v0: 87c59a4915
+	it("a text/plain generate() of unknown length sends its first chunk before the rest exists", async () => {
+		const { app, release } = streamingNodeApp()
+		const { base } = await listen(app)
+		const reader = ((await fetch(`${base}/first`)).body as ReadableStream<Uint8Array>).getReader()
+		const first = new TextDecoder().decode((await reader.read()).value)
+		release.resolve()
+		await reader.cancel()
+		expect(first).toBe("first chunk\n")
+	})
+
+	// v0: 08f9deb182
+	it("a reader that stops reading holds the producer back: no unbounded buffering", async () => {
+		const { app, seen } = streamingNodeApp()
+		const { port } = await listen(app)
+		const socket = connect(port, "127.0.0.1")
+		socket.write("GET /flood HTTP/1.1\r\nHost: h\r\n\r\n")
+		socket.pause()
+		await new Promise((resolve) => setTimeout(resolve, 200))
+		const held = seen.produced
+		socket.destroy()
+		/* socket buffers hold a few MB at most; 64 KB chunks with no backpressure would be thousands */
+		expect(held * 64 * 1024).toBeLessThan(16 * 1024 * 1024)
+	})
+
+	// v0: 6536868605
+	// v0: 9de61ca77f
+	it("a client that leaves after its body was read still aborts the stream's signal (POST, then SSE)", async () => {
+		const { app, seen } = streamingNodeApp()
+		const { port } = await listen(app)
+		const socket = connect(port, "127.0.0.1")
+		const ready = new Promise((resolve) => socket.once("data", resolve))
+		socket.write("POST /watch HTTP/1.1\r\nHost: h\r\nContent-Length: 4\r\n\r\nbody")
+		await ready
+		socket.destroy()
+		await expect.poll(() => seen.aborted).toBe(true)
+	})
+})
