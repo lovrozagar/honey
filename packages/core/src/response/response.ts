@@ -121,9 +121,12 @@ export class HoneyRes {
 	 * Return a native Response. `fetch()`, `Fetcher.fetch`, `cache.match`, and `Response.redirect`
 	 * return guarded headers that throw on `set`, which breaks response middleware. Copy status and
 	 * headers into a new Response; the body streams through unread. WebSocket upgrades and responses
-	 * Honey built pass through as-is.
+	 * Honey built pass through as-is. A response whose body was already read is a bug, usually one
+	 * kept across requests: it throws instead of answering 200 with an unreadable body (H18.18).
 	 */
 	raw(response: Response): TypedResponse {
+		if (response.bodyUsed)
+			throw new TypeError("raw(): this response's body was already read — build a new Response per request")
 		if (response.status === 101 || isHoneyResponse(response) || rawBodyOf(response) !== null) return typed(response)
 		return typed(new Response(response.body, response))
 	}

@@ -152,6 +152,18 @@ describe("raw()", () => {
 	})
 })
 
+describe("raw(): a body already read", () => {
+	it("is refused, on a plain response, one Honey built, and the Node path, naming the fix", async () => {
+		const plain = new Response("cached")
+		const built = res.json("ok", { cached: true })
+		const node = new HoneyRes(true).json("ok", { cached: true })
+		for (const used of [plain, built, node]) {
+			await used.text()
+			expect(() => res.raw(used)).toThrow("raw(): this response's body was already read")
+		}
+	})
+})
+
 describe("the Node path", () => {
 	const nodeRes = new HoneyRes(true)
 

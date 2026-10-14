@@ -157,6 +157,15 @@ describe("a throw anywhere in the chain becomes one error answer", () => {
 
 /** A layer that answers nothing, and the hint its 500 carries. */
 const EMPTY_ANSWERS: Array<[string, (app: App) => void, string]> = [
+	[
+		"a handler returns a response whose body an earlier request read",
+		(app) => {
+			const cached = new Response("cached")
+			void cached.text()
+			app.get("/t").handler((ctx) => ctx.res.raw(cached))
+		},
+		"body was already read",
+	],
 	["a handler returns null", (app) => app.get("/t").handler((() => null) as never), "handler must return"],
 	["a handler returns nothing", (app) => app.get("/t").handler((() => undefined) as never), "handler must return"],
 	[
@@ -178,15 +187,13 @@ describe("a layer that answers nothing, or throws mid-chain", () => {
 	// v0: 35d8feadcd
 	// v0: 866c9b8ca8
 	// v0: 7512c45a97
-	it.each(EMPTY_ANSWERS)(
-		"when %s, the answer is a 500 whose cause says what to return",
-		async (_label, route, hint) => {
-			const { app, causes } = observedApp()
-			route(app)
-			expect(await send(app, "/t")).toEqual(INTERNAL)
-			expect(causes).toEqual([expect.objectContaining({ message: expect.stringContaining(hint) })])
-		},
-	)
+	// v0: 4c71266875
+	it.each(EMPTY_ANSWERS)("when %s, the answer is a 500 whose cause names the mistake", async (_label, route, hint) => {
+		const { app, causes } = observedApp()
+		route(app)
+		expect(await send(app, "/t")).toEqual(INTERNAL)
+		expect(causes).toEqual([expect.objectContaining({ message: expect.stringContaining(hint) })])
+	})
 
 	// v0: e96926060d
 	it("a throw stops the chain: later middleware and the handler never run", async () => {
