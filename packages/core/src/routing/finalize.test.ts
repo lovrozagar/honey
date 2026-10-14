@@ -106,6 +106,7 @@ describe("what a route runs does not depend on the serving handle", () => {
 	})
 
 	// v0: a14d999e54
+	// v0: 2703ec4026
 	it("H11: routes mounted on a chain run the chain, like routes registered on it", async () => {
 		const app = honey<{}>()
 		const authed = app.use(deny)
@@ -327,20 +328,23 @@ describe("errors and meta come from the chain that runs", () => {
 	})
 
 	// v0: 8bd49ebdaa
-	it("contributed meta merges in run order and explicit meta wins; mounted routes get it too", () => {
+	// v0: 1f6f240192
+	it("contributed meta merges in run order and explicit meta wins; mounted routes get it too", async () => {
 		const a = createMiddleware(async (_c, next) => next(), { meta: { owner: "chain", tier: 1 } })
 		const s = createMiddleware(async (_c, next) => next(), { meta: { tier: 2 } })
 		const sub = honey<{}>().meta<{ owner: string }>()
 		sub
 			.get("/s/x")
 			.meta({ owner: "route" })
-			.handler((ctx) => ctx.res.text("ok", "x"))
+			.handler((ctx) => ctx.res.json("ok", { meta: ctx.meta }))
 		const app = honey<{}>()
 		app.use("/s", s)
 		app.use(a).route(sub)
 		const plan = planOf(app as App, "GET /s/x")
 		expect(plan?.route.meta).toEqual({ owner: "route", tier: 2 })
 		expect(plan?.pfChain).toHaveLength(2)
+		/* the handler reads the same merged meta at runtime */
+		expect(await (await app.fetch(req("/s/x"), {})).json()).toEqual({ meta: { owner: "route", tier: 2 } })
 	})
 })
 
@@ -399,14 +403,70 @@ describe("finalize compiles once per registration epoch", () => {
 		expect((await app.fetch(req("/b"), {})).status).toBe(200)
 	})
 
+	// v0: d65278f417
 	it("keeps static patterns in a method → path map; an optional param places both paths", () => {
 		const app = honey<{}>()
 		app.get("/users/:id?").handler((ctx) => ctx.res.text("ok", "u"))
 		app.post("/users").handler((ctx) => ctx.res.text("ok", "u"))
+		app.get("/items/:id").handler((ctx) => ctx.res.text("ok", "i"))
+		app.get("/files/*rest").handler((ctx) => ctx.res.text("ok", "f"))
 		const { plans, statics } = finalTable(app[GRAPH])
 		expect(Object.keys(statics).sort()).toEqual(["GET", "POST"])
 		expect(Object.keys(statics.GET ?? {})).toEqual(["/users"])
 		expect(statics.GET?.["/users"]).toBe(plans.get("GET /users/:id?"))
 		expect(statics.POST?.["/users"]).toBe(plans.get("POST /users"))
+	})
+})
+
+describe("the statics table: literal routes without the tree", () => {
+	// v0: 056c5b5067
+	// v0: 3bd187b5a9
+	// v0: 34caa430ed
+	// v0: 1af0b5e4c6
+	// v0: 56132a5175
+	// v0: 031efcf0eb
+	it("literal routes answer from the table, the rest from the tree, alike to every method", async () => {
+		const sub = honey<{}>()
+		sub.get("/mounted").handler((ctx) => ctx.res.text("ok", "mounted"))
+		const app = honey<{}>()
+		app.get("/json").handler((ctx) => ctx.res.json("ok", { static: true }))
+		app.get("/a").handler((ctx) => ctx.res.text("ok", "a"))
+		app.post("/a").handler((ctx) => ctx.res.text("ok", "a-post"))
+		app.get("/b").handler((ctx) => ctx.res.text("ok", "b"))
+		app.get("/users/:id").handler((ctx) => ctx.res.text("ok", ctx.params.id))
+		app.all("/catch").handler((ctx) => ctx.res.text("ok", ctx.req.method))
+		app.route(sub)
+		const { statics } = finalTable(app[GRAPH])
+		expect([Object.keys(statics.GET ?? {}).sort(), Object.keys(statics.POST ?? {})]).toEqual([
+			["/a", "/b", "/json", "/mounted"],
+			["/a"],
+		])
+		const answers = []
+		for (const [method, path] of [
+			["GET", "/json"],
+			["GET", "/a"],
+			["POST", "/a"],
+			["GET", "/b"],
+			["GET", "/users/42"],
+			["GET", "/catch"],
+			["PATCH", "/catch"],
+			["GET", "/mounted"],
+		] as const) {
+			const res = await app.fetch(req(path, { method }), {})
+			answers.push([method, path, res.status, await res.text()])
+		}
+		/* HEAD reaches a literal GET route through the same table */
+		const head = await app.fetch(req("/b", { method: "HEAD" }), {})
+		expect([head.status, head.headers.get("content-type")]).toEqual([200, "text/plain; charset=utf-8"])
+		expect(answers).toEqual([
+			["GET", "/json", 200, '{"static":true}'],
+			["GET", "/a", 200, "a"],
+			["POST", "/a", 200, "a-post"],
+			["GET", "/b", 200, "b"],
+			["GET", "/users/42", 200, "42"],
+			["GET", "/catch", 200, "GET"],
+			["PATCH", "/catch", 200, "PATCH"],
+			["GET", "/mounted", 200, "mounted"],
+		])
 	})
 })

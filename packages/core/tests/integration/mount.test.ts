@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest"
 import type { HoneyContext } from "../../src/context/context.ts"
 import { HoneyError } from "../../src/errors/error.ts"
+import { cors } from "../../src/middleware/cors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { type Honey, honey } from "../../src/routing/app.ts"
 
@@ -129,14 +130,19 @@ describe("handles share one app", () => {
 	})
 
 	// v0: 2c2daa6f20
+	// v0: b1a781301c
+	// v0: edaea58d24
 	it("a route registered on any handle is served by every handle, running the chain it was registered with", async () => {
 		const base = honey<{}>()
 		base.get("/public").handler((ctx) => ctx.res.json("ok", { public: true }))
 		const authed = base.use(createMiddleware((_ctx, next) => next({ auth: true })))
 		authed.get("/private").handler((ctx) => ctx.res.json("ok", { auth: ctx.auth }))
+		/* registered on the parent after the child handle exists */
+		base.get("/late").handler((ctx) => ctx.res.json("ok", { late: true }))
 		for (const handle of [base, authed]) {
 			expect(JSON.parse((await send(handle, "/public")).body)).toEqual({ public: true })
 			expect(JSON.parse((await send(handle, "/private")).body)).toEqual({ auth: true })
+			expect(JSON.parse((await send(handle, "/late")).body)).toEqual({ late: true })
 		}
 	})
 
@@ -262,5 +268,49 @@ describe("a mounted route is a copy", () => {
 		expect((await send(parent, "/a")).status).toBe(200)
 		expect((await send(parent, "/b")).status).toBe(404)
 		expect((await send(sub, "/b")).status).toBe(200)
+	})
+})
+
+describe("a mounted app under concurrent requests", () => {
+	// v0: 75644bc34e
+	it("route() beside a scoped use and an app-wide CORS: every answer right, preflights on unknown paths included", async () => {
+		const parent = honey<{}>().use(cors({ origin: "*" }))
+		parent
+			.use(
+				"/admin",
+				createMiddleware(async (_ctx, next) => next({ rid: "r1" })),
+			)
+			.get("/admin/x")
+			.handler((ctx) => ctx.res.json("ok", { rid: ctx.rid }))
+		const extra = honey<{}>()
+		extra.get("/extra").handler((ctx) => ctx.res.text("ok", "extra"))
+		parent.route(extra)
+		const origin = { origin: "http://app.example" }
+		const preflight = { headers: { ...origin, "access-control-request-method": "GET" }, method: "OPTIONS" }
+		const jobs = Array.from({ length: 60 }, (_, i) =>
+			[
+				() => parent.fetch(new Request("http://localhost/admin/x", { headers: origin }), {}),
+				() => parent.fetch(new Request("http://localhost/extra"), {}),
+				() => parent.fetch(new Request("http://localhost/missing", preflight), {}),
+			][i % 3]?.(),
+		)
+		const answers = await Promise.all(
+			jobs.map(async (job) => {
+				const res = (await job) as Response
+				return [res.status, res.headers.get("access-control-allow-origin"), await res.text()]
+			}),
+		)
+		expect(answers).toEqual(
+			Array.from(
+				{ length: 60 },
+				(_, i) =>
+					[
+						[200, "*", '{"rid":"r1"}'],
+						/* same-origin: CORS has nothing to say */
+						[200, null, "extra"],
+						[204, "*", ""],
+					][i % 3],
+			),
+		)
 	})
 })
