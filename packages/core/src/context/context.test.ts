@@ -19,7 +19,7 @@ function makeReq(url = "http://localhost/test", headers?: Record<string, string>
 
 function makeCtx(state?: Partial<RequestState<{ DB: string }>>, route: RouteInfo = NO_ROUTE, params = { id: "42" }) {
 	return new HoneyContext(
-		{ env: { DB: "test" }, executionCtx: undefined, path: "/test", req: makeReq(), ...state },
+		{ env: { DB: "test" }, executionCtx: undefined, logger: SILENT, path: "/test", req: makeReq(), ...state },
 		route,
 		params,
 	)
@@ -74,6 +74,7 @@ describe("HoneyContext > constructor", () => {
 		const state: RequestState<{ DB: string }> = {
 			env: { DB: "x" },
 			executionCtx: undefined,
+			logger: SILENT,
 			path: "/users/1",
 			req: makeReq(),
 		}
@@ -123,7 +124,7 @@ describe("HoneyContext > defaults", () => {
 })
 
 describe("HoneyContext > log", () => {
-	it("a context no app serves logs nowhere", () => {
+	it("is a child of the request state's logger", () => {
 		expect(makeCtx().log).toBe(SILENT)
 	})
 })

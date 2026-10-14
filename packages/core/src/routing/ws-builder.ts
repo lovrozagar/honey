@@ -49,7 +49,7 @@ function upgrader(callbacks: WSHandler<unknown>, policy: WSOriginPolicy | null, 
 		const adapter = (context[REQUEST] as { ws?: WSAdapter | null }).ws
 		if (adapter == null) throw new Error(NO_ADAPTER)
 		const reconnectToken = url.searchParams.get("reconnect_token")
-		const handler = createWsSession({ callbacks, ctx, log: null, reconnectToken, route })
+		const handler = createWsSession({ callbacks, ctx, log: context[REQUEST].logger, reconnectToken, route })
 		return (await adapter.upgrade(req, context.env, handler)).response
 	}
 }

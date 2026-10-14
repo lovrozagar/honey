@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { isHoneyResponse, rawBodyOf } from "./builder.ts"
+import { SILENT } from "../telemetry/logger.ts"
 import { HoneyRes, type ResLink, type ResponseOptions } from "./response.ts"
 
 const res = new HoneyRes()
@@ -226,6 +227,7 @@ function link(headers: Record<string, string> = {}): ResLink & { abort(reason?: 
 	const request = new AbortController()
 	return {
 		abort: (reason) => request.abort(reason),
+		log: SILENT,
 		req: new Request("http://h/", { headers }),
 		signal: request.signal,
 	}

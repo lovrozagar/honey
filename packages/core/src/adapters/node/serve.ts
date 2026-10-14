@@ -10,6 +10,8 @@ import { GRAPH } from "../../routing/app.ts"
 import type { HoneyGraph } from "../../routing/register.ts"
 import type { AppSettings } from "../../routing/settings.ts"
 import { NODE_UPGRADE, type NodeUpgrade, nodeWebSocket } from "../../ws/node.ts"
+import { HoneyError } from "../../errors/error.ts"
+import { createLogger, type Logger } from "../../telemetry/logger.ts"
 import { DEFAULT_MAX_REQUEST_BODY } from "../serve.ts"
 import { ABORT_REQUEST, BODY_OVERFLOW, nodeRequest } from "./request.ts"
 import { writeResponse } from "./response.ts"
@@ -30,7 +32,7 @@ export type NodeServeOptions<TEnv> = {
 	keepAliveTimeout?: number
 	/** How long an upgrade request may take to become a WebSocket or be answered, in ms. Default 30 000. */
 	upgradeTimeout?: number
-	/** Errors the adapter could not hand to the app (it then answers 500). Default: a process warning. */
+	/** Errors the adapter could not hand to the app (it then answers 500). Default: the app's logger. */
 	onError?: (error: unknown) => void
 }
 
@@ -53,9 +55,6 @@ function shuttingDown(): DOMException {
 	return new DOMException("The server is shutting down", "AbortError")
 }
 
-function reportAsWarning(error: unknown): void {
-	process.emitWarning(error instanceof Error ? error : String(error), "HoneyAdapterError")
-}
 function answerPlain(res: ServerResponse, status: 400 | 500 | 503, text: string, close: boolean): void {
 	const headers = { "content-length": String(text.length), "content-type": "text/plain" }
 	/* the reason phrase is explicit: a writeHead that threw on a bad header already set "OK" */
@@ -120,6 +119,11 @@ function shutdown(server: Server, drain: Drain, timeout: number | undefined): Pr
 			}, timeout)
 		}
 	})
+}
+
+/** The default serve failure reporter: the app's logger, or a default one for a plain fetch handler. */
+function reportTo(logger: Logger): (error: unknown) => void {
+	return (error) => logger.error({ err: HoneyError.serialize(error) }, "serve failed")
 }
 
 /** Hand `error` to the operator's onError; one that throws itself must not become an unhandled rejection. */
@@ -227,7 +231,7 @@ export function serve<TEnv>(app: FetchApp<TEnv>, options: NodeServeOptions<TEnv>
 		drain,
 		env: options.env,
 		maxBody: options.maxRequestBodySize ?? DEFAULT_MAX_REQUEST_BODY,
-		onError: options.onError ?? reportAsWarning,
+		onError: options.onError ?? reportTo(drain.settings?.logger ?? createLogger()),
 		server,
 	}
 	server.on("request", (incoming: IncomingMessage, res: ServerResponse) => {

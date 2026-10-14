@@ -21,7 +21,7 @@ export type ServeOptions<TEnv> = {
 	port?: number
 	/** The largest request body a read accepts, in bytes; over it the answer is 413. Default 128 MiB. */
 	maxRequestBodySize?: number
-	/** Errors the adapter could not hand to the app (it then answers 500). */
+	/** Errors the adapter could not hand to the app (it then answers 500). Default on Node: the app's logger. */
 	onError?: (error: unknown) => void
 	/** Node only: `server.headersTimeout`, in ms. */
 	headersTimeout?: number

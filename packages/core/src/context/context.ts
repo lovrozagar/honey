@@ -9,7 +9,7 @@ import { HoneyRes } from "../response/response.ts"
 import { searchOfUrl } from "../routing/request-path.ts"
 import { dict } from "../routing/tree.ts"
 import { requestBindings } from "../telemetry/fields.ts"
-import { type Logger, SILENT } from "../telemetry/logger.ts"
+import type { Logger } from "../telemetry/logger.ts"
 import { parseCookieHeader } from "./cookie.ts"
 import { ipOf } from "./peer.ts"
 
@@ -19,8 +19,8 @@ export type ExecutionCtx = { waitUntil?: (p: Promise<unknown>) => void }
 export type RequestState<TEnv> = {
 	readonly env: TEnv
 	readonly executionCtx: ExecutionCtx | undefined
-	/** the app's logger; a context no app serves has none */
-	readonly logger?: Logger
+	/** the app's logger */
+	readonly logger: Logger
 	readonly path: string
 	readonly req: Request
 	/** `ctx.ip` once something asked: the canonical peer, or `null` when no runtime reports one */
@@ -74,17 +74,16 @@ export function isReservedCtxKey(key: string): boolean {
 	return Object.hasOwn(RESERVED, key)
 }
 
-function swallow(p: Promise<unknown>): void {
-	p.catch(() => undefined)
-}
-
 /** Record the error behind the response on `ctx.error`, read-only for user code. */
 export function setCtxError(ctx: HoneyContext<never> | HoneyContext, error: HoneyError): void {
 	;(ctx as { error: HoneyError | undefined }).error = error
 }
 
 export class HoneyContext<TEnv = Record<string, unknown>> {
-	/** Keep a promise running past the response: `waitUntil` on Workers, else its rejection is swallowed. */
+	/**
+	 * Keep a promise running past the response: `waitUntil` on Workers, which reports a rejection
+	 * itself; elsewhere a rejection goes to the request's logger.
+	 */
 	readonly background: (p: Promise<unknown>) => void
 	readonly env: TEnv
 	/**
@@ -126,7 +125,9 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		/* called on its owner: workerd's waitUntil throws "Illegal invocation" when detached */
 		const executionCtx = state.executionCtx
 		const waitUntil = executionCtx?.waitUntil
-		this.background = waitUntil ? (p) => waitUntil.call(executionCtx, p) : swallow
+		this.background = waitUntil
+			? (p) => waitUntil.call(executionCtx, p)
+			: (p) => void p.catch((error: unknown) => this.log.error({ err: error }, "background task failed"))
 	}
 
 	/** The peer the platform reports, canonical (H23): CF-Connecting-IP on Workers, the socket on Bun and Node. */
@@ -136,10 +137,10 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 
 	/**
 	 * This request's logger: a child of the app's that binds method, path (without its query), route
-	 * id, and the request id when one is set. Built on first use; a context no app serves logs nowhere.
+	 * id, and the request id when one is set. Built on first use.
 	 */
 	get log(): Logger {
-		this.#log ??= (this[REQUEST].logger ?? SILENT).child(
+		this.#log ??= this[REQUEST].logger.child(
 			requestBindings(this.req.method, this.path, this.#routeId, (this as { requestId?: string }).requestId),
 		)
 		return this.#log

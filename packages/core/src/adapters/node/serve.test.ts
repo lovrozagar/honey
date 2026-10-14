@@ -143,14 +143,25 @@ describe("when the app or the write fails", () => {
 		])
 	})
 
-	it("reports through a process warning when no onError is given, a thrown non-Error as text", async () => {
+	/* bit 07 (H17): the default reporter is a logger, never a process warning */
+	it("with no onError, a plain fetch app's failures go to a default logger, a thrown non-Error as text", async () => {
+		vi.stubEnv("NODE_ENV", "production")
 		const warn = vi.spyOn(process, "emitWarning").mockImplementation(() => {})
-		const boom = new Error("boom")
-		const { base } = await listen(throwing(boom, "plain"))
-		expect([(await fetch(base)).status, (await fetch(base)).status]).toEqual([500, 500])
-		expect(warn.mock.calls).toEqual([
-			[boom, "HoneyAdapterError"],
-			["plain", "HoneyAdapterError"],
+		const { base } = await listen(throwing(new Error("boom"), "plain"))
+		const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+		const statuses = [(await fetch(base)).status, (await fetch(base)).status]
+		const lines = write.mock.calls.map(
+			([line]) => JSON.parse(String(line)) as { err: { message: string }; msg: string },
+		)
+		write.mockRestore()
+		vi.unstubAllEnvs()
+		expect([statuses, lines.map((line) => [line.msg, line.err.message]), warn.mock.calls]).toEqual([
+			[500, 500],
+			[
+				["serve failed", "boom"],
+				["serve failed", "plain"],
+			],
+			[],
 		])
 	})
 })

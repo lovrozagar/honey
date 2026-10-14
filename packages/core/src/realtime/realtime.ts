@@ -9,6 +9,7 @@
  * given here, as written: a sub-app mounted twice runs one `realtime()` call, so both mounts share
  * its bus and namespace; call `realtime()` per mount to keep them apart.
  */
+import { type HoneyContext, REQUEST } from "../context/context.ts"
 import type { MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { Honey } from "../routing/app.ts"
 import type { ApplyScoped, ScopedMwEntry } from "../routing/app-types.ts"
@@ -50,7 +51,10 @@ export function realtime<TApp extends Honey<any, any, any, any, any, any, any, a
 	/* after the route's middleware, before the origin check and the upgrade; a throw rejects the upgrade */
 	const connect: RuntimeMiddleware = async (ctx, next) => {
 		const userId = identify === null ? null : ((await identify(ctx)) ?? null)
-		sessions.set(ctx, createRealtimeSession({ config, ctx, log: null, userId }))
+		sessions.set(
+			ctx,
+			createRealtimeSession({ config, ctx, log: (ctx as unknown as HoneyContext)[REQUEST].logger, userId }),
+		)
 		return next()
 	}
 	let route = app.ws(path) as WSRouteBuilder<unknown, string, unknown>

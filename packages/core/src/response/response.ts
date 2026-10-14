@@ -5,6 +5,7 @@
  */
 import { type CookieOptions, serializeCookie } from "../context/cookie.ts"
 import { generatorStream, type ProducerOptions, producerStream } from "../streaming/producer-stream.ts"
+import type { Logger } from "../telemetry/logger.ts"
 import { createHoneyResponse, isHoneyResponse, rawBodyOf, type RawBody, withRawBody } from "./builder.ts"
 import type { HeaderMap } from "./out-headers.ts"
 import { SSE_HEADERS, type SSEOptions, type SSEStream, sseBody } from "./sse.ts"
@@ -17,7 +18,7 @@ export type ResponseOptions = {
 }
 
 /** What `ctx.res` reads from its request, only when a stream needs it: the context itself is one. */
-export type ResLink = { readonly req: Request; readonly signal: AbortSignal }
+export type ResLink = { readonly log: Logger; readonly req: Request; readonly signal: AbortSignal }
 
 export type GenerateOptions = ResponseOptions & { contentType?: string }
 
@@ -130,10 +131,14 @@ export class HoneyRes {
 		this.#link = link
 	}
 
-	/** Producers end with the request; their failures break the body (the logger is wired at bit 07). */
+	/** Producers end with the request; a failure breaks the body and goes to the request's logger. */
 	#producer(): ProducerOptions {
 		const link = this.#link
-		return link === undefined ? {} : { signal: () => link.signal }
+		if (link === undefined) return {}
+		return {
+			report: (error) => link.log.error({ err: error }, "stream producer failed"),
+			signal: () => link.signal,
+		}
 	}
 
 	/** A streamed body under `base` headers plus the options' headers and cookies. */
