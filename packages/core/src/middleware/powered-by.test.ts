@@ -8,6 +8,7 @@ function app(name?: string) {
 	routes.get("/t").handler((ctx) => ctx.res.text("ok", "x"))
 	routes.post("/t").handler((ctx) => ctx.res.text("ok", "x"))
 	routes.get("/own").handler((ctx) => ctx.res.text("ok", "x", { headers: { "x-powered-by": "Their stack" } }))
+	routes.get("/custom").handler((ctx) => ctx.res.text("ok", "x", { headers: { "x-custom": "mine" } }))
 	return a
 }
 
@@ -27,6 +28,11 @@ describe("poweredBy()", () => {
 	})
 
 	// v0: 8d379a4571
+	it("the handler's other headers come through beside it", async () => {
+		const res = await app().fetch(new Request("https://app.example.com/custom"), {})
+		expect([res.headers.get("x-custom"), res.headers.get("x-powered-by")]).toEqual(["mine", "Honey"])
+	})
+
 	it("a value the handler set itself is kept", async () => {
 		expect(await poweredOf(app(), "/own")).toBe("Their stack")
 	})
