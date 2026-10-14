@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as z from "zod"
 import { HoneyError } from "../errors/error.ts"
-import { createHoneyResponse } from "../response/builder.ts"
 import { rangeResponse } from "../response/range.ts"
-import type { HoneyRes } from "../response/response.ts"
+import { HoneyRes } from "../response/response.ts"
 import { honey } from "../routing/app.ts"
 import { recorder } from "../telemetry/__fixtures__/recording-tracer.ts"
 import type { StandardSchemaLike } from "./standard-schema.ts"
@@ -293,6 +292,23 @@ describe("output validation through the app: where the body is read from", () =>
 		]).toEqual([[200, { id: "a" }], "output_validation_failed"])
 	})
 
+	it("an empty body honey built is validated as null, on the native and the Node path", async () => {
+		const check = compileOutput({ "application/json": { created: z.null(), ok: z.object({ id: z.string() }) } })
+		const answers = await Promise.all(
+			[new HoneyRes(), new HoneyRes(true)].map(async (res) => {
+				const passed = await check(res.json("created", undefined))
+				const failed = (await Promise.resolve()
+					.then(() => check(res.json("ok", undefined)))
+					.catch((e: unknown) => e)) as HoneyError
+				return [passed.status, failed.errorKey]
+			}),
+		)
+		expect(answers).toEqual([
+			[201, "output_validation_failed"],
+			[201, "output_validation_failed"],
+		])
+	})
+
 	it("a body honey did not build is read from a clone, and the client still gets it whole", async () => {
 		const app = validating()
 		app
@@ -330,11 +346,6 @@ describe("output validation through the app: a stream honey produced", () => {
 
 describe("compileOutput: answers it lets through unread", () => {
 	const failing = { "application/json": { ok: schemaOf([{ message: "always fails" }]) } }
-
-	it("an empty raw body is no body, as json(undefined) is where honey does not retain one", () => {
-		const empty = createHoneyResponse({ headers: { "content-type": "application/json" }, raw: "", status: 200 })
-		expect(compileOutput(failing)(empty)).toBe(empty)
-	})
 
 	it("a body with no content type, and a status no status key names, pass unread", () => {
 		const check = compileOutput(failing)

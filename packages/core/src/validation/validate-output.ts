@@ -59,18 +59,15 @@ export type OutputCheck = (response: Response) => MaybePromise<Response>
 // per-process-constant: text-codec
 const decoder = /* @__PURE__ */ new TextDecoder()
 
+/** The retained body as data: an empty one, as `json(undefined)` writes, is `null`. */
 function parse(raw: string | Uint8Array): unknown {
-	return JSON.parse(typeof raw === "string" ? raw : decoder.decode(raw)) as unknown
+	const text = typeof raw === "string" ? raw : decoder.decode(raw)
+	return text.length === 0 ? null : (JSON.parse(text) as unknown)
 }
 
-/**
- * Whether `response` carries no body, read from how it was built, never from `.body` (a stream on
- * Node). An empty raw body is none, as `json(undefined)` is on the fetch path.
- */
+/** Whether `response` carries no body, read from how it was built, never from `.body` (a stream on Node). */
 function bodiless(response: Response): boolean {
-	const raw = rawBodyOf(response)
-	if (raw != null) return raw.length === 0
-	if (isProducedStream(response)) return false
+	if (rawBodyOf(response) !== null || isProducedStream(response)) return false
 	return isHoneyResponse(response) || response.body === null
 }
 
