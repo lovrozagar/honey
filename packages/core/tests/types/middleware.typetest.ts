@@ -79,6 +79,8 @@ describe("requirements are checked where use() is called", () => {
 	// v0: 052bb182bf
 	// v0: 3a11f14189
 	// v0: c50b024531
+	// v0: cf11bc1e7b
+	// v0: fb9d3b3996
 	it("a middleware without requirements fits any chain; one with them fits only after its providers", () => {
 		const anon = createMiddleware((_ctx, next) => next({ userId: "anon" }))
 		honey().use(anon)

@@ -92,6 +92,8 @@ describe("ctx.errors", () => {
 	// v0: a53900b1cd
 	// v0: 055a967c28
 	// v0: 04f36d619c
+	// v0: bc151ee4be
+	// v0: 1922b0e9c8
 	it("holds exactly the keys the route declares, named alone or with their factory", () => {
 		const app = honey<{}>().errorFactory(errors)
 		app
@@ -114,6 +116,7 @@ describe("ctx.errors", () => {
 	})
 
 	// v0: 7754770a73
+	// v0: c2d52dc9ad
 	it("always holds the app's default keys, which a route may not declare again", () => {
 		const route = honey<{}>().errorFactory(errors).defaultErrors("invalid_input").get("/t")
 		// @ts-expect-error invalid_input is already a default error
@@ -133,6 +136,7 @@ describe("ctx.meta", () => {
 	// v0: 6a2f0d03de
 	// v0: cc3ecf16f8
 	// v0: 22d95f2a17
+	// v0: 7c336dbf9e
 	it("is narrowed to each route's own values, and readonly", () => {
 		const base = honey<{}>().meta<AppMeta>()
 		base

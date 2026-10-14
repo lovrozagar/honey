@@ -1,5 +1,11 @@
 import { describe, expectTypeOf, it } from "vitest"
-import type { InferRouteMeta, MergeRoute } from "../../src/routing/app-types.ts"
+import type {
+	InferBasePath,
+	InferRouteMeta,
+	InferRouteMethods,
+	InferRoutePaths,
+	MergeRoute,
+} from "../../src/routing/app-types.ts"
 import { honey } from "../../src/routing/app.ts"
 
 type Chain10 = MergeRoute<
@@ -304,5 +310,134 @@ describe("meta preserved across routes", () => {
 		/* the route record carries its meta (MergeRoute) */
 		type Meta = InferRouteMeta<typeof app, "/r6", "get">
 		expectTypeOf<Meta>().toEqualTypeOf<{ summary: string; tags: string[] }>()
+	})
+})
+
+describe("type safety — .route() preserves types", () => {
+	// v0: b38e74e3ba
+	it("sub-router routes appear in parent's type", () => {
+		const sub = honey<{}>()
+			.get("/sub")
+			.handler((ctx) => ctx.res.text("ok", "sub"))
+
+		const app = honey<{}>()
+			.get("/main")
+			.handler((ctx) => ctx.res.text("ok", "main"))
+			.route(sub)
+
+		type Paths = InferRoutePaths<typeof app>
+		expectTypeOf<Paths>().toEqualTypeOf<"/main" | "/sub">()
+	})
+})
+
+describe("InferBasePath", () => {
+	// v0: 5fc748f9b0
+	it("default basePath is /", () => {
+		const app = honey<{}>()
+		expectTypeOf<InferBasePath<typeof app>>().toEqualTypeOf<"/">()
+	})
+
+	// v0: 97255d8731
+	it("single basePath", () => {
+		const app = honey<{}>().basePath("/api")
+		expectTypeOf<InferBasePath<typeof app>>().toEqualTypeOf<"/api">()
+	})
+
+	// v0: 671eb497a3
+	it("nested basePath", () => {
+		const app = honey<{}>().basePath("/v1").basePath("/api")
+		expectTypeOf<InferBasePath<typeof app>>().toEqualTypeOf<"/v1/api">()
+	})
+})
+
+describe("basePath + route registration", () => {
+	// v0: 1966113e74
+	it("routes registered under basePath appear with prefix", () => {
+		const app = honey<{}>()
+			.basePath("/api")
+			.get("/users")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+
+		expectTypeOf<InferRoutePaths<typeof app>>().toEqualTypeOf<"/api/users">()
+	})
+
+	// v0: 91b842ec94
+	it("method constrained to prefixed path", () => {
+		const app = honey<{}>()
+			.basePath("/api")
+			.get("/users")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+
+		expectTypeOf<InferRouteMethods<typeof app, "/api/users">>().toEqualTypeOf<"get">()
+	})
+
+	// v0: 1f8522a378
+	it("multiple basePath branches", () => {
+		const v1 = honey<{}>()
+			.basePath("/v1")
+			.get("/items")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+
+		const v2 = honey<{}>()
+			.basePath("/v2")
+			.get("/items")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+
+		const app = honey<{}>().route(v1).route(v2)
+
+		type Paths = InferRoutePaths<typeof app>
+		expectTypeOf<"/v1/items">().toMatchTypeOf<Paths>()
+		expectTypeOf<"/v2/items">().toMatchTypeOf<Paths>()
+	})
+})
+
+describe("MergePath edge cases", () => {
+	// v0: 943be6e637
+	it("deep triple nesting via chained basePath", () => {
+		const app = honey<{}>().basePath("/a").basePath("/b").basePath("/c")
+		expectTypeOf<InferBasePath<typeof app>>().toEqualTypeOf<"/a/b/c">()
+	})
+})
+
+describe("basePath + routePattern literal", () => {
+	// v0: 957e2e41fc
+	it("handler routePattern includes basePath prefix", () => {
+		honey<{}>()
+			.basePath("/api")
+			.get("/users/:id")
+			.handler((ctx) => {
+				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/api/users/:id">()
+				return ctx.res.text("ok", "ok")
+			})
+	})
+
+	// v0: 93bcdb64a8
+	it("nested basePath + routePattern", () => {
+		honey<{}>()
+			.basePath("/v1")
+			.basePath("/api")
+			.get("/items")
+			.handler((ctx) => {
+				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/v1/api/items">()
+				return ctx.res.text("ok", "ok")
+			})
+	})
+})
+
+describe("basePath with .route() sub-app", () => {
+	// v0: 7d2cfa81ae
+	it("sub-app basePath merges with parent", () => {
+		const sub = honey<{}>()
+			.basePath("/users")
+			.get("/")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+			.get("/:id")
+			.handler((ctx) => ctx.res.text("ok", ctx.params.id))
+
+		const app = honey<{}>().basePath("/api").route(sub)
+
+		/* the sub's basePath lands under the mounting basePath, as at runtime */
+		type Paths = InferRoutePaths<typeof app>
+		expectTypeOf<Paths>().toEqualTypeOf<"/api/users" | "/api/users/:id">()
 	})
 })
