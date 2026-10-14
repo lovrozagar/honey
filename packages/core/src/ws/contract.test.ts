@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { fireHandler, type RawSocket, WS_SEND_BUFFER_MAX, WSContextImpl } from "./contract.ts"
+import { fireHandler, type RawSocket, switchingProtocols, WS_SEND_BUFFER_MAX, WSContextImpl } from "./contract.ts"
 
 /** A socket stand-in that records what was sent and how it was closed; `open()` fires its open listeners. */
 function rawSocket(readyState: number, bufferedAmount = 0) {
@@ -132,5 +132,37 @@ describe("fireHandler: an adapter event never throws into the runtime", () => {
 		fireHandler("open", () => "fine")
 		await vi.waitFor(() => expect(log.error).toHaveBeenCalledTimes(2))
 		expect(log.error.mock.calls.map(([fields]) => fields.phase)).toEqual(["websocket message", "websocket close"])
+	})
+})
+
+describe("switchingProtocols: the 101 an adapter answers with", () => {
+	it("where Fetch refuses 101 (Node, Bun), an empty response that reports 101 with the handshake headers", () => {
+		const response = switchingProtocols({ "sec-websocket-protocol": "chat", upgrade: "websocket" })
+		expect([response.status, Object.fromEntries(response.headers), response.body]).toEqual([
+			101,
+			{ "sec-websocket-protocol": "chat", upgrade: "websocket" },
+			null,
+		])
+	})
+
+	it("where Fetch builds a 101 (Workers), the real one, with the runtime's socket in its init", () => {
+		const built: unknown[] = []
+		vi.stubGlobal(
+			"Response",
+			class {
+				readonly status: number
+				constructor(_body: null, init: { status: number; webSocket: unknown }) {
+					built.push(init)
+					this.status = init.status
+				}
+			},
+		)
+		const client = { side: "client" }
+		const response = switchingProtocols({ upgrade: "websocket" }, { webSocket: client })
+		vi.unstubAllGlobals()
+		expect([response.status, built]).toEqual([
+			101,
+			[{ headers: { upgrade: "websocket" }, status: 101, webSocket: client }],
+		])
 	})
 })

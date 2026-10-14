@@ -113,6 +113,21 @@ export class WSContextImpl<T extends RawSocket = RawSocket> implements WSContext
 	}
 }
 
+/**
+ * The 101 an adapter answers an upgrade with. Workers builds a real one, carrying its socket in
+ * `init`; Fetch elsewhere refuses status 101, so there it is an empty response that reports 101:
+ * dispatch passes it on unchanged and the runtime writes the real handshake itself.
+ */
+export function switchingProtocols(headers: Record<string, string>, init?: Record<string, unknown>): Response {
+	try {
+		return new Response(null, { ...init, headers, status: 101 })
+	} catch {
+		const response = new Response(null, { headers })
+		Object.defineProperty(response, "status", { value: 101 })
+		return response
+	}
+}
+
 /** Call an adapter event on the handler; what it throws or rejects is logged, never thrown into the runtime. */
 export function fireHandler(phase: string, fn: () => unknown, log?: InvokeLogger | null): void {
 	void invokeUser(fn, { log, phase: `websocket ${phase}` })
