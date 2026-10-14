@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest"
-import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
+import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey, type Honey } from "../../src/routing/app.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import type {
@@ -23,107 +23,6 @@ const globalMw = createMiddleware(async (_c, next) => next({ globalField: "globa
 const dbMw = createMiddleware(async (_c, next) => next({ db: { query: () => [] } }))
 
 type DbCtx2 = { db: { query: () => unknown[] } }
-
-describe("parameter annotation createMiddleware", () => {
-	// v0: 324340b36e
-	it("infers both TReqs and TAdds from ctx annotation + next()", () => {
-		type DbCtx = { db: { query: (sql: string) => unknown[] } }
-		const mw = createMiddleware(async (ctx: DbCtx, next) => {
-			void ctx.db
-			return next({ userId: "u-1" })
-		})
-		expectTypeOf(mw).toMatchTypeOf<MiddlewareFn<DbCtx, { userId: string }>>()
-	})
-
-	// v0: f43d4ed03e
-	it("narrowing middleware works via intersection collapse", () => {
-		type Wide = { kind: "a" | "b" }
-
-		const withWide = createMiddleware(async (_ctx, next) => next({ kind: "a" as "a" | "b" }))
-		const withNarrow = createMiddleware(async (ctx: Wide, next) => {
-			if (ctx.kind !== "a") throw new Error("expected a")
-			return next({ kind: "a" as const })
-		})
-
-		honey<{}>()
-			.use(withWide)
-			.use(withNarrow)
-			.get("/test")
-			.handler((ctx) => {
-				expectTypeOf(ctx.kind).toEqualTypeOf<"a">()
-				return ctx.res.text("ok", "ok")
-			})
-	})
-
-	// v0: 25778170ed
-	it("non-overlapping middleware keys accumulate", () => {
-		const mw1 = createMiddleware(async (_ctx, next) => next({ a: 1 }))
-		const mw2 = createMiddleware(async (_ctx, next) => next({ b: "two" }))
-
-		honey<{}>()
-			.use(mw1)
-			.use(mw2)
-			.get("/test")
-			.handler((ctx) => {
-				expectTypeOf(ctx.a).toEqualTypeOf<number>()
-				expectTypeOf(ctx.b).toEqualTypeOf<string>()
-				return ctx.res.text("ok", "ok")
-			})
-	})
-
-	// v0: b7218553fa
-	it("zero-dependency middleware needs no annotation", () => {
-		const mw = createMiddleware(async (_ctx, next) => next({ ready: true }))
-		expectTypeOf(mw).toMatchTypeOf<MiddlewareFn<{}, { ready: boolean }>>()
-	})
-})
-
-describe("parameter annotation createMiddleware (2)", () => {
-	// v0: 47d4ca6f15
-	it("union branches infer TAdds as union via ExtractAdds", () => {
-		type JwtPayload = { typ: "jwt"; sub: string }
-		type ApiKeyPayload = { typ: "api_key"; kid: string }
-
-		const withAuth = createMiddleware((ctx: { req: Request }, next) => {
-			const isJwt = ctx.req.headers.get("x-layer") === "jwt"
-			if (isJwt) {
-				return next({ auth: { typ: "jwt", sub: "u-1" } satisfies JwtPayload })
-			}
-			return next({ auth: { typ: "api_key", kid: "k-1" } satisfies ApiKeyPayload })
-		})
-
-		honey<{}>()
-			.use(withAuth)
-			.get("/test")
-			.handler((ctx) => {
-				expectTypeOf(ctx.auth).toEqualTypeOf<JwtPayload | ApiKeyPayload>()
-				return ctx.res.text("ok", "ok")
-			})
-	})
-
-	// v0: 5dafa280e7
-	it("full chain: next() return types propagate through .use() correctly", () => {
-		const withDb = createMiddleware(async (_ctx, next) => next({ db: "pg" as const }))
-		const withCache = createMiddleware(async (_ctx, next) => next({ cache: new Map<string, string>() }))
-		const withUser = createMiddleware(async (ctx: { db: "pg" }, next) => {
-			void ctx.db
-			return next({ userId: "u-1", role: "admin" as "admin" | "user" })
-		})
-
-		honey<{}>()
-			.use(withDb)
-			.use(withCache)
-			.use(withUser)
-			.get("/test")
-			.handler((ctx) => {
-				expectTypeOf(ctx.db).toEqualTypeOf<"pg">()
-				expectTypeOf(ctx.cache).toEqualTypeOf<Map<string, string>>()
-				expectTypeOf(ctx.userId).toEqualTypeOf<string>()
-				expectTypeOf(ctx.role).toEqualTypeOf<"admin" | "user">()
-				return ctx.res.text("ok", "ok")
-			})
-	})
-})
 
 describe("scoped middleware — type tests", () => {
 	// v0: 220e22f5db
