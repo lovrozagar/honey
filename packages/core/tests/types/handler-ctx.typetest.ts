@@ -46,6 +46,8 @@ describe("ctx.params", () => {
 	})
 
 	// v0: 3f6106e491
+	// v0: 53e40a6f53
+	// v0: d3321a93dd
 	it("is Record<string, string> on a route without params", () => {
 		honey<{}>()
 			.get("/static")

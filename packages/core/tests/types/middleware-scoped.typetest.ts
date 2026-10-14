@@ -51,7 +51,6 @@ describe("which routes see a scope's additions", () => {
 				return ctx.res.text("ok", "root scope covers all")
 			})
 	})
-
 	// v0: 9f44961611
 	// v0: c3a74f4b4c
 	it("overlapping scopes compose on the deep route, and only the covering ones type a shallow route", () => {
@@ -78,6 +77,22 @@ describe("which routes see a scope's additions", () => {
 		api.get("/public").handler((ctx) => {
 			expectTypeOf(ctx).not.toHaveProperty("adminOnly")
 			return ctx.res.text("ok", "p")
+		})
+	})
+})
+
+describe("a scope path known only as a string", () => {
+	// v0: 43f7136fef
+	it("a scope path typed only as string covers no route's type: nothing can be proven covered", () => {
+		const path: string = "/admin"
+		const app = honey<{}>().use(path, adminMw)
+		app.get("/admin/x").handler((ctx) => {
+			expectTypeOf(ctx).not.toHaveProperty("adminOnly")
+			return ctx.res.text("ok", "unproven")
+		})
+		app.get("/unrelated").handler((ctx) => {
+			expectTypeOf(ctx).not.toHaveProperty("adminOnly")
+			return ctx.res.text("ok", "outside")
 		})
 	})
 })
