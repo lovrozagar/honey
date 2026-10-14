@@ -4,7 +4,7 @@
  * formatters. Pure: dispatch wraps it with onError, i18n and telemetry.
  */
 import { withRawBody } from "../response/builder.ts"
-import { EK, HoneyError, isFrameworkErrorKey } from "./error.ts"
+import { EK, HoneyError, hasUnknownStatus, isFrameworkErrorKey } from "./error.ts"
 import { ERROR_META, type ErrorMetaEntry } from "./errors.ts"
 
 /** Shapes a standard error's default body. */
@@ -49,7 +49,7 @@ export function boundaryError(errorKey: string, cause: unknown, factory: ErrorFa
 
 /** The error a throw becomes under the route's policy. */
 export function projectThrown(thrown: unknown, policy: ErrorPolicy): HoneyError {
-	if (thrown instanceof HoneyError) {
+	if (thrown instanceof HoneyError && !hasUnknownStatus(thrown)) {
 		const allowed =
 			policy.declared === null || isFrameworkErrorKey(thrown.errorKey) || policy.declared.has(thrown.errorKey)
 		if (allowed) return thrown

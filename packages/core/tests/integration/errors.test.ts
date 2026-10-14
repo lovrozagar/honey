@@ -274,6 +274,11 @@ const REACHES: Array<[string, () => unknown, object]> = [
 		INTERNAL,
 	],
 	["a plain Error", () => new Error("raw"), INTERNAL],
+	[
+		"a HoneyError with an unknown status key",
+		() => new HoneyError({ errorKey: "not_found", status: "nope" as never }),
+		INTERNAL,
+	],
 ]
 
 /** What a boundary turns into its key. */
@@ -381,37 +386,45 @@ describe("ctx.errors", () => {
 	})
 })
 
+/** What onError returns, and the answer the client gets. */
+const ON_ERROR: Array<[string, () => unknown, object]> = [
+	[
+		"returns a Response",
+		() => new Response("handled", { status: 418 }),
+		{
+			body: "handled",
+			headers: { "content-type": "text/plain;charset=UTF-8" },
+			status: 418,
+		},
+	],
+	[
+		"returns a HoneyError",
+		() => new HoneyError({ errorKey: "typed", status: "conflict" }),
+		failure("typed", 409, "conflict"),
+	],
+	[
+		"resolves to a HoneyError",
+		async () => new HoneyError({ errorKey: "typed", status: "conflict" }),
+		failure("typed", 409, "conflict"),
+	],
+	["returns nothing", () => undefined, INTERNAL],
+	[
+		"returns a HoneyError with an unknown status key",
+		() => new HoneyError({ errorKey: "typed", status: "nope" as never }),
+		INTERNAL,
+	],
+	[
+		"throws",
+		() => {
+			throw new Error("onError broke")
+		},
+		INTERNAL,
+	],
+	["rejects", () => Promise.reject(new Error("onError broke")), INTERNAL],
+]
+
 describe("the app's error handlers", () => {
-	it.each<[string, () => unknown, object]>([
-		[
-			"returns a Response",
-			() => new Response("handled", { status: 418 }),
-			{
-				body: "handled",
-				headers: { "content-type": "text/plain;charset=UTF-8" },
-				status: 418,
-			},
-		],
-		[
-			"returns a HoneyError",
-			() => new HoneyError({ errorKey: "typed", status: "conflict" }),
-			failure("typed", 409, "conflict"),
-		],
-		[
-			"resolves to a HoneyError",
-			async () => new HoneyError({ errorKey: "typed", status: "conflict" }),
-			failure("typed", 409, "conflict"),
-		],
-		["returns nothing", () => undefined, INTERNAL],
-		[
-			"throws",
-			() => {
-				throw new Error("onError broke")
-			},
-			INTERNAL,
-		],
-		["rejects", () => Promise.reject(new Error("onError broke")), INTERNAL],
-	])("an onError that %s, given what was thrown, gives %o", async (_label, onError, answer) => {
+	it.each(ON_ERROR)("an onError that %s, given what was thrown, gives %o", async (_label, onError, answer) => {
 		const seen: unknown[] = []
 		const boom = new Error("boom")
 		const app = honey<{}>().onError((thrown) => {

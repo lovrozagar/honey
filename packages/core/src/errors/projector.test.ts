@@ -229,6 +229,21 @@ describe("projectThrown: the route's error boundary", () => {
 		expect(bounded.cause).toBe(undeclared)
 	})
 
+	it("a HoneyError with an unknown status key is masked as a 500 on any route, or takes the boundary", () => {
+		const unknown = new HoneyError({ errorKey: "weird", status: "not_a_status" as never })
+		for (const policy of [open, { boundaryKey: null, declared: new Set(["weird"]), factory: null }]) {
+			const masked = projectThrown(unknown, policy)
+			expect(masked).toMatchObject({
+				errorKey: "internal_server_error",
+				status: 500,
+				statusKey: "internal_server_error",
+			})
+			expect(masked.cause).toBe(unknown)
+		}
+		const bounded = projectThrown(unknown, { boundaryKey: "api_error", declared: null, factory: errors })
+		expect(bounded).toMatchObject({ cause: unknown, errorKey: "api_error" })
+	})
+
 	it("an unknown throw takes the boundary error when one is set", () => {
 		const policy = { boundaryKey: "api_error", declared: null, factory: errors }
 		expect(projectThrown("oops", policy)).toMatchObject({ cause: "oops", errorKey: "api_error" })

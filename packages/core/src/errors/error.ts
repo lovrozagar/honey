@@ -55,6 +55,14 @@ export type HoneyErrorOptions = {
 	vars?: Record<string, number | string>
 }
 
+/** Marks an error built with a status key that names no status: not representable to a client (H18.17). */
+const UNKNOWN_STATUS = /* @__PURE__ */ Symbol("honey.unknownStatus")
+
+/** Whether `error` was built with a status key that names no status. */
+export function hasUnknownStatus(error: HoneyError): boolean {
+	return Object.hasOwn(error, UNKNOWN_STATUS)
+}
+
 export class HoneyError extends Error {
 	readonly data?: unknown
 	readonly errorKey: string
@@ -74,6 +82,7 @@ export class HoneyError extends Error {
 		const known = Object.hasOwn(statusKeyToCode, options.status)
 		this.statusKey = known ? options.status : "internal_server_error"
 		this.status = known ? statusKeyToCode[options.status] : 500
+		if (!known) Object.defineProperty(this, UNKNOWN_STATUS, { value: true })
 		this.fields = options.fields ?? EMPTY_FIELDS
 		this.vars = options.vars
 	}

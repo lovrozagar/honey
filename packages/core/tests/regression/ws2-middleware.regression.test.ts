@@ -197,12 +197,12 @@ describe("errors keep their shape through the chain", () => {
 
 	// regression: L unknown status key
 	// v0: 245588843b
-	it("L-status-key: an unknown status key answers 500 with its error key, never 200", async () => {
+	it("L-status-key: an unknown status key answers the full internal error, never 200 (H18.17)", async () => {
 		const app = honey<{}>()
 		app.get("/e").handler(() => {
 			throw new HoneyError({ errorKey: "weird", status: "not_a_status" as never })
 		})
-		expect(await send(app, "/e")).toEqual(envelope("weird", 500, "internal_server_error"))
+		expect(await send(app, "/e")).toEqual(envelope("internal_server_error", 500))
 	})
 })
 

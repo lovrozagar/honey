@@ -5,7 +5,7 @@
  * response at the `next()` boundary through the projector and `onError`; the boundary never rejects.
  */
 import { HoneyContext, REQUEST, type RequestState, setCtxError } from "../context/context.ts"
-import { HoneyError } from "../errors/error.ts"
+import { HoneyError, hasUnknownStatus } from "../errors/error.ts"
 import { asHoneyError, createErrorResponse, projectThrown, safeErrorResponse } from "../errors/projector.ts"
 import { compileChain, type MaybePromise } from "../middleware/middleware.ts"
 import { replaceResponse, withRawBody } from "../response/builder.ts"
@@ -47,7 +47,8 @@ function answer(s: AppSettings<unknown>, ctx: object, error: HoneyError): Respon
 
 /** Apply what `onError` returned: a HoneyError replaces the error, a Response answers, nothing falls through. */
 function settleOnError(s: AppSettings<unknown>, ctx: object, error: HoneyError, result: unknown): Response {
-	if (result instanceof HoneyError) return answer(s, ctx, result)
+	if (result instanceof HoneyError)
+		return answer(s, ctx, hasUnknownStatus(result) ? projectThrown(result, stateOf(ctx).plan.policy) : result)
 	if (result instanceof Response) {
 		setCtxError(ctx as HoneyContext, error)
 		return result
