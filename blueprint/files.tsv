@@ -190,6 +190,7 @@ tests/types/app-routes.typetest.ts	core	test	02	$routes/MergeRoute depth + same-
 tests/types/handler-ctx.typetest.ts	core	test	02	ctx.params, routePattern literal, errors (declared + defaults, factory form, boundary), meta narrowing + readonly, req/env, no input without .input(), per-route use() accumulation	typetest/*
 tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddleware deps + TReqs ordering, parameter-annotation inference, next() addition + union types, errors tied to the factory, builder one-shot hiding	typetest/*
 tests/types/middleware-scoped.typetest.ts	core	test	02	use(path, mw) types: scoped adds on matching vs non-matching routes, segment boundary, composition, basePath merge, registration order, chain TCtx unpolluted, route(sub), overload dispatch, T16/T28 positional-generic compat	typetest/*
+tests/types/streaming.typetest.ts	core	test	05	ctx.res.stream/generate/sse/rangeResponse return-type branding: the Response the methods yield, sse() event-emitter shape (untyped at 05), generate() AsyncGenerator acceptance; the typed SSE event schema is bit 08 (H10)	typetest/*
 # TRANSITIONAL (fold + delete): pre-H22 numbered typetest dumps still on disk; the implementer folds each into
 #   the named files above and deletes it (app-2 → app/app-routes; middleware-2/-3 → middleware/middleware-scoped).
 #
