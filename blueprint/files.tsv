@@ -78,8 +78,10 @@ src/middleware/ip-restrict.ts	core	src	07	IP allow/deny	ip-restrict.ts
 src/context/peer.ts	core	src	03	ctx.ip = the canonical platform peer (H23): CF-Connecting-IP on Workers, PEER_ADDRESS symbol on node (adapter sets it, bit 04), server.requestIP on Bun; unwrap ::ffff:, lowercase IPv6; lazy + cached per request; `ip` reserved. No trustProxy/XFF/CIDR (cut)	peer.ts,client-ip.ts
 src/runtime/detect-runtime.ts	core	src	04	node|bun|cf detection (no Deno)	detect-runtime.ts
 src/runtime/optional-peer.ts	core	src	06	optional-peer-dependency guard: a friendly error when an optional npm peer (e.g. ws) is missing — a dynamic import of a real dependency, NOT a registry (H23). Renamed from runtime/peer.ts to avoid colliding with context/peer.ts (ctx.ip)	peer.ts
-src/adapters/node/serve.ts	core	src	04	Node http serve (node:* here only)	node.ts
-src/adapters/node/request.ts	core	src	04	node:http ↔ Fetch Request bridge: nodeRequestUrl + the request view (headers split to node/headers.ts for the 300-line cap)	node-request.ts
+src/adapters/node/serve.ts	core	src	04	Node http server lifecycle + request handling + drain (writeResponse split to node/response.ts)	node.ts
+src/adapters/node/response.ts	core	src	04	write a Fetch Response to a ServerResponse: HoneyResponse fast path, hop-by-hop + Connection-named headers dropped, a stream's declared length never trusted, small known bodies buffered. Split from serve.ts so the framing guard crosses a module boundary (mutation-testable)	node.ts
+src/adapters/node/request.ts	core	src	04	node:http ↔ Fetch Request bridge: the request view + body (URL split to node/url.ts for the 300-line cap)	node-request.ts
+src/adapters/node/url.ts	core	src	04	the Request URL from what the client sent: scheme from TLS state, exactly one Host (canonical, as Bun/Workers spell it) or an absolute-form authority, target path+query; >1 Host → 400 (RFC 9112 §3.2); anything else null → 400	node-request.ts
 src/adapters/node/headers.ts	core	src	04	Fetch Headers view over IncomingMessage (get/has from headersDistinct, native Headers built only on iterate/mutate; repeated values joined identically pre/post-iterate, pseudo-headers skipped)	node-request.ts
 src/adapters/node/__fixtures__/parsed.ts	core	test	04	shared support (kind=test, rule-harness precedent): raw request bytes over a loopback socket → the IncomingMessage node:http actually parsed (not a hand-faked map via private _addHeaderLines). Also reveals which inputs Node rejects itself	—
 src/adapters/bun/serve.ts	core	src	04	Bun.serve	node.ts,serve.ts

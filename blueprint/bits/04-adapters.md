@@ -26,7 +26,8 @@ The three runtime adapters and a **plain `serve(app, options)`**. Each adapter m
 - `tests/e2e/run.ts` — the 30-cell matrix passes identically (no Deno cell), CI (toolchains).
 
 ## Security corpus
-- request smuggling / header-injection at the `node:http` bridge; oversized header set.
+- request smuggling / header-injection at the `node:http` bridge; oversized header set (431).
+- **Duplicate `Host` → 400 (RFC 9112 §3.2, v1 fix).** Node's parser accepts two `Host` headers; `req.headers.host` keeps the first while a distinct read sees both, so the URL and the Host the app sees disagree — the classic Host-ambiguity smuggling setup. `node/url.ts` rejects any request with more than one `Host` line (one pass over `rawHeaders`, no distinct-map build), absolute-form included, before the app runs. The other probes (CL+TE, duplicate CL, obs-fold, "chunked, identity", bare LF, space-before-colon) already fail in Node's parser and are pinned.
 
 ## Budget
 - perf: adapter overhead vs raw runtime within threshold. token: n/a.
