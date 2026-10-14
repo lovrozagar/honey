@@ -30,7 +30,10 @@ export function isHoneyResponse(value: unknown): value is HoneyResponse {
 	return typeof value === "object" && value !== null && HONEY_RESPONSE in value
 }
 
-/** Record the buffered body a native response was built from. */
+/**
+ * Record the buffered body a native response was built from. Only for a response honey constructed:
+ * a recorded body also tells withHeaders the headers are mutable.
+ */
 export function withRawBody(response: Response, body: RawBody): Response {
 	rawBodies.set(response, body)
 	return response

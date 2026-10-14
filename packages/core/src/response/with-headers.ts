@@ -4,7 +4,7 @@
  * `Headers` is built. A plain native response is edited in place; one whose headers are immutable
  * (`fetch()`, `Response.redirect()`) is copied first; a 101 upgrade is never touched.
  */
-import { isHoneyResponse } from "./builder.ts"
+import { isHoneyResponse, rawBodyOf } from "./builder.ts"
 
 /** What an edit may do to the headers: read, set and delete, never walk them. */
 export type HeaderEdit = {
@@ -31,7 +31,8 @@ function hasImmutableHeaders(response: Response): boolean {
 export function withHeaders(response: Response, edit: (headers: HeaderEdit) => void): Response {
 	/* an upgrade belongs to the runtime: rebuilding it throws or drops the socket */
 	if (response.status === 101) return response
-	if (isHoneyResponse(response) || !hasImmutableHeaders(response)) {
+	/* a raw body means honey built it, so its headers are its own: no probe (a native delete per edit) */
+	if (isHoneyResponse(response) || rawBodyOf(response) !== null || !hasImmutableHeaders(response)) {
 		edit(response.headers)
 		return response
 	}
