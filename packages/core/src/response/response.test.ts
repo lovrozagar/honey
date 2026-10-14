@@ -36,6 +36,12 @@ describe("body helpers", () => {
 	// v0: 794aeec471
 	// v0: 9b9d66294a
 	// v0: 8f2b994e56
+	// v0: b416e4f748
+	// v0: f431b4f8e3
+	// v0: ed70e2ac27
+	// v0: 806499f9d1
+	// v0: 19127db454
+	// v0: 7afdd6db20
 	it.each(HELPERS)(
 		"%s answers 200 with its content type and body, with no request in sight",
 		async (_n, call, type, body) => {
@@ -55,6 +61,8 @@ describe("body helpers", () => {
 	// v0: 497c097810
 	// v0: 25cda3810d
 	// v0: 8b7e6d5a31
+	// v0: 9f79a93bb7
+	// v0: 0bafb3f051
 	it.each(HELPERS)(
 		"%s with headers and cookies keeps its content type, adds the headers and each cookie",
 		async (_n, call, type, body) => {
@@ -68,6 +76,36 @@ describe("body helpers", () => {
 			expect(await response.text()).toBe(body)
 		},
 	)
+})
+
+describe("body helpers: the options' content type, and json's serialization", () => {
+	// v0: 9122573f2c
+	it("a content type in the options replaces the helper's own, on the native and the Node path", () => {
+		for (const helper of [new HoneyRes(), new HoneyRes(true)]) {
+			const response = helper.json(
+				"ok",
+				{ data: 1 },
+				{ headers: { "Content-Type": "application/json; charset=utf-8" } },
+			)
+			expect([...response.headers]).toEqual([["content-type", "application/json; charset=utf-8"]])
+		}
+	})
+
+	// v0: 0d12f86daf
+	// v0: 80b75f430a
+	// v0: 33bc48b851
+	// v0: d4ab685006
+	// v0: 340e1c496f
+	it("json writes what JSON.stringify writes, a fresh body on every call", async () => {
+		const shaped = { secret: "hidden", toJSON: () => ({ public: "visible" }) }
+		const data = { gone: undefined, inf: Number.POSITIVE_INFINITY, nan: Number.NaN, shaped }
+		const [first, second] = [res.json("ok", data), res.json("ok", data)]
+		expect([first === second, await first.text(), await second.text()]).toEqual([
+			false,
+			'{"inf":null,"nan":null,"shaped":{"public":"visible"}}',
+			'{"inf":null,"nan":null,"shaped":{"public":"visible"}}',
+		])
+	})
 })
 
 describe("status", () => {
@@ -96,6 +134,9 @@ describe("status", () => {
 
 describe("noContent and redirect", () => {
 	// v0: f0c7183d59
+	// v0: 056eba13d8
+	// v0: 019a8e1ca2
+	// v0: a468a75bef
 	it("noContent answers 204 with no body, and takes headers and cookies", () => {
 		expect([res.noContent().status, res.noContent().body]).toEqual([204, null])
 		const empty = res.noContent({ cookies: { a: { value: "1" } }, headers: { "x-a": "1" } })
@@ -104,16 +145,28 @@ describe("noContent and redirect", () => {
 
 	// v0: 9100f11b22
 	// v0: 09ae17016b
-	it("redirect answers 302 to the location, or the status the options give", () => {
+	// v0: 21b10a6514
+	// v0: 082ea36bd9
+	// v0: 1e20ef1b3f
+	// v0: d2fb3a1809
+	// v0: 6698aaeaa5
+	// v0: 40feefa5e3
+	it("redirect answers 302 to the location with no body, or the status the options give", () => {
 		const found = res.redirect("/new")
-		expect([found.status, found.headers.get("location")]).toEqual([302, "/new"])
-		expect(res.redirect("/new", { status: 307 }).status).toBe(307)
+		expect([found.status, found.headers.get("location"), found.body]).toEqual([302, "/new", null])
+		const moved = [301, 307, 308].map((status) => res.redirect("/new", { status }))
+		expect(moved.map((r) => [r.status, r.headers.get("location")])).toEqual([
+			[301, "/new"],
+			[307, "/new"],
+			[308, "/new"],
+		])
 	})
 })
 
 describe("raw()", () => {
 	// v0: a68f79eb2b
 	// v0: 81e21b1f3b
+	// v0: 840d82ead0
 	it("keeps a plain response's status, statusText, headers and streamed body", async () => {
 		const plain = new Response("asset", {
 			headers: { "content-type": "application/json", etag: '"v1"' },
@@ -128,6 +181,9 @@ describe("raw()", () => {
 			'"v1"',
 			"asset",
 		])
+		class Custom extends Response {}
+		const custom = res.raw(new Custom("custom", { status: 201 }))
+		expect([custom.status, await custom.text()]).toEqual([201, "custom"])
 	})
 
 	// v0: b4066894fa

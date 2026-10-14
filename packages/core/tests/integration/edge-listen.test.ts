@@ -2,7 +2,8 @@
  * The edge middleware over a real node:http listen: what a client gets on the wire from an app
  * with security headers, CORS, request ids and server timing (on a route and on a 404), a CORS
  * preflight, ipRestrict deciding on the socket's own peer whatever the client claims, context
- * values, concurrent mixed requests each answered as their own, and csrf on a form POST.
+ * values, concurrent mixed requests each answered as their own, csrf on a form POST, and each
+ * header middleware over a redirect, an upgrade and an immutable fetch() answer.
  */
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
@@ -307,5 +308,67 @@ describe("csrf on a real socket", () => {
 			return [res.status, await res.text()]
 		}
 		expect([await post("same-origin"), (await post("cross-site"))[0]]).toEqual([[200, "data=safe"], 403])
+	})
+})
+
+/** Each middleware that edits the headers of the answer it gets back from next(). */
+const HEADER_MIDDLEWARE = [
+	["requestId", requestId()],
+	["poweredBy", poweredBy()],
+	["secureHeaders", secureHeaders()],
+	["serverTiming", serverTiming()],
+	["cors", cors({ origin: "http://app.test" })],
+] as const
+
+describe("header middleware over answers it cannot edit in place", () => {
+	// v0: 5771b583ff
+	it.each(HEADER_MIDDLEWARE)("%s over Response.redirect() answers its 302 and location", async (_name, mw) => {
+		const app = honey<{}>()
+		app
+			.use(mw as never)
+			.get("/go")
+			.handler(() => Response.redirect("http://example.com/next", 302) as never)
+		const res = await app.fetch(new Request("http://localhost/go", { headers: { origin: "http://app.test" } }), {})
+		expect([res.status, res.headers.get("location")]).toEqual([302, "http://example.com/next"])
+	})
+
+	// v0: 87ad46cd4d
+	it.each(HEADER_MIDDLEWARE)("%s passes a 101 upgrade through as the same response", async (_name, mw) => {
+		const upgraded = new Response(null)
+		Object.defineProperty(upgraded, "status", { value: 101 })
+		const socket = { close() {}, raw: null, readyState: 1 as const, send() {} }
+		const app = honey<{}>().wsAdapter({ upgrade: () => ({ response: upgraded, socket }) })
+		app
+			.use(mw as never)
+			.ws("/live")
+			.handler({})
+		const headers = { connection: "Upgrade", origin: "http://app.test", upgrade: "websocket" }
+		expect(await app.fetch(new Request("http://localhost/live", { headers }), {})).toBe(upgraded)
+	})
+
+	// v0: f411af65ff
+	it("all of them on Node over a fetch() answer, whose headers are immutable, add every header", async () => {
+		const origin = honey<{}>()
+		origin.get("/").handler((ctx) => ctx.res.text("ok", "from upstream"))
+		const upstream = await listen(origin)
+		const app = honey<{}>()
+		app
+			.use(requestId())
+			.use(poweredBy())
+			.use(secureHeaders())
+			.use(serverTiming())
+			.use(cors({ origin: "http://app.test" }))
+			.get("/p")
+			.handler(() => fetch(`${upstream}/`) as never)
+		const res = await fetch(`${await listen(app)}/p`, { headers: { origin: "http://app.test" } })
+		expect([
+			res.status,
+			await res.text(),
+			UUID.test(res.headers.get("x-request-id") ?? ""),
+			res.headers.get("x-powered-by"),
+			res.headers.get("x-content-type-options"),
+			res.headers.get("server-timing")?.includes("total;dur="),
+			res.headers.get("access-control-allow-origin"),
+		]).toEqual([200, "from upstream", true, "Honey", "nosniff", true, "http://app.test"])
 	})
 })

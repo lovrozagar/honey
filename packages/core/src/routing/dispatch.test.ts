@@ -199,6 +199,18 @@ describe("dispatch: the error boundary", () => {
 		expect(seen).toEqual([true, "http://localhost/t", { e: 1 }])
 	})
 
+	// v0: c372a0f19d
+	it("a json body that cannot be serialized is an internal error, answered as one", async () => {
+		const app = honey<{}>()
+		app.get("/circular").handler((ctx) => {
+			const cycle: Record<string, unknown> = { a: 1 }
+			cycle.self = cycle
+			return ctx.res.json("ok", cycle)
+		})
+		const res = await app.fetch(req("/circular"), {})
+		expect([res.status, (await body(res)).error_key]).toEqual([500, "internal_server_error"])
+	})
+
 	it("an error response that cannot be built falls back to the fixed 500, sync or async", async () => {
 		const sync = await throwing(() => undefined, unserializable).fetch(req("/t"), {})
 		expect([sync.status, await sync.json()]).toEqual([500, { error: { errorKey: "internal_server_error" } }])
@@ -232,5 +244,20 @@ describe("dispatch: every exit is exactly one Response", () => {
 		const res = await exits.fetch(request, {})
 		expect(res).toBeInstanceOf(Response)
 		expect(res.status).toBe(status)
+	})
+
+	// v0: 378b389470
+	it("a promise the handler never awaits still runs; the answer does not wait for it", async () => {
+		const ran: string[] = []
+		const gate = Promise.withResolvers<void>()
+		const app = honey<{}>()
+		app.get("/t").handler((ctx) => {
+			void gate.promise.then(() => ran.push("background"))
+			return ctx.res.text("ok", "immediate")
+		})
+		const res = await app.fetch(req("/t"), {})
+		ran.push(await res.text())
+		gate.resolve()
+		await expect.poll(() => ran).toEqual(["immediate", "background"])
 	})
 })

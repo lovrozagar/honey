@@ -12,6 +12,7 @@ const stamp = (headers: HeaderEdit) => headers.set("x-stamped", "yes")
 const inject = (headers: HeaderEdit) => headers.set("x-echo", "a\r\nx-injected: 1")
 
 describe("withHeaders: which response it edits, and how", () => {
+	// v0: 11b4d16e64
 	it("a HoneyResponse is edited on its plain map: the same object, no native Headers built", () => {
 		const response = createHoneyResponse({ headers: { "content-type": "application/json" }, raw: "{}", status: 200 })
 		vi.stubGlobal("Headers", function NativeHeaders() {
@@ -22,6 +23,7 @@ describe("withHeaders: which response it edits, and how", () => {
 		expect([edited === response, isHoneyResponse(edited), edited.headers.get("x-stamped")]).toEqual([true, true, "yes"])
 	})
 
+	// v0: 4482dfb319
 	it("a native response with mutable headers is edited in place", () => {
 		const response = new Response("x", { headers: { "x-a": "1" } })
 		const edited = withHeaders(response, stamp)
@@ -95,6 +97,7 @@ describe("withHeaders over a real fetch() response", () => {
 })
 
 describe("withHeaders: what it never does", () => {
+	// v0: 7175f64c43
 	it("a 101 upgrade is never touched", () => {
 		const upgraded = new Response(null)
 		Object.defineProperty(upgraded, "status", { value: 101 })
