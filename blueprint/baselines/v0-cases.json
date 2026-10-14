@@ -42046,8 +42046,8 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"2b93176f37": {
-			"feature": "07-security-middleware",
-			"reason": "a v0 fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
+			"feature": "09-ir-seam",
+			"reason": "runtime vs snapshot vs generated trees: two of the three are bit 09"
 		},
 		"2bd756bd5c": {
 			"feature": "08-io",
@@ -44640,6 +44640,238 @@
 		"0671a18e4d": {
 			"feature": "08-io",
 			"reason": "asserts res.headers.etag truthy (etag/conditional-GET is bit 08, A4); the 200 + healthy body + nosniff/SAMEORIGIN/referrer + UUID x-request-id + server-timing total;dur= are asserted untagged on the wire in edge-listen.test (83aaa2098d); the full case ports at bit 08 once etag exists"
+		},
+		"740a227711": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"e3e940e1d3": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"ccfd3d3c19": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"d3867759a6": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"e5f4964230": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"3b4eaa9ff1": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"8909d51c36": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"59632093db": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"7701c5fa63": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"869ac2591d": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"ddc57889a9": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"f499098c4e": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"8196b9bff1": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"931a464cbb": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"a8e03f60b0": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"381e76f483": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"c722aca93d": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"452e3079a4": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"2424b76a7f": {
+			"feature": "09-ir-seam",
+			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+		},
+		"1f7789b984": {
+			"feature": "08-io",
+			"reason": "composes the request command logger after bodyLimit, which is bit 08 (input/body-limit.ts); the clone-never-starves-a-reader property is ported in bit 07"
+		},
+		"b9d77ddfe3": {
+			"feature": "08-io",
+			"reason": "asserts bodyLimit rejecting before the request command logger runs; bodyLimit is bit 08"
+		},
+		"bce4fc21e6": {
+			"feature": "08-io",
+			"reason": "an optional input field absent raises no validation error: input validation is bit 08; no translation runs"
+		},
+		"fdde3375b0": {
+			"feature": "08-io",
+			"reason": "telemetry hears the error of a failed output validation: output validation is bit 08"
+		},
+		"058a9d652e": {
+			"feature": "08-io",
+			"reason": "composes etag (src/response/etag.ts, bit 08)"
+		},
+		"47fadf3741": {
+			"feature": "08-io",
+			"reason": "composes etag (src/response/etag.ts, bit 08)"
+		},
+		"f6283147e7": {
+			"feature": "08-io",
+			"reason": "composes etag (src/response/etag.ts, bit 08)"
+		},
+		"081548c2f4": {
+			"feature": "08-io",
+			"reason": "composes etag (src/response/etag.ts, bit 08)"
+		},
+		"4dc9c5373b": {
+			"feature": "08-io",
+			"reason": "composes etag (src/response/etag.ts, bit 08)"
+		},
+		"3eba97996a": {
+			"feature": "08-io",
+			"reason": "composes bodyLimit / body validation (bit 08)"
+		},
+		"a436c055db": {
+			"feature": "08-io",
+			"reason": "composes bodyLimit / body validation (bit 08)"
+		},
+		"2bd120b92c": {
+			"feature": "08-io",
+			"reason": "context + input + middleware: .input() is bit 08"
+		},
+		"71240de8ff": {
+			"feature": "08-io",
+			"reason": "middleware meta on a route with input/output schemas: bit 08"
+		},
+		"9b8b8cb2ae": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"7dcc70112c": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"79214a84a5": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"6fae7b1048": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"b73d5c0994": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"6372571efb": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"faf85a3afa": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"4f4ef87777": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"7e590cf653": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"316b370201": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"21c0fcb869": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"815fdb0bc2": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"42722b87d7": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"625e8203d5": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"dbf8eabd0b": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"1e48af5c6f": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"456f94cfeb": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"62e4e38c06": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"a4ac13ba34": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"bfd749ed65": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"625ae89a64": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"5b019221ea": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"381c4aea1d": {
+			"feature": "08-io",
+			"reason": "JSON/form/content-type parsing, body limits, validation: bit 08 (input/, validation/)"
+		},
+		"38e39d817e": {
+			"feature": "09-ir-seam",
+			"reason": "asserts the loaded/generated route tree (routeTree), bit 09"
+		},
+		"cfefaa8126": {
+			"feature": "09-ir-seam",
+			"reason": "asserts the loaded/generated route tree (routeTree), bit 09"
+		},
+		"943e56dc6a": {
+			"feature": "09-ir-seam",
+			"reason": "middleware meta baked into the generated route tree, bit 09"
 		}
 	},
 	"retired": {
@@ -44679,6 +44911,14 @@
 		"efbc236424": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"f94bb1b63e": "covered-by: every bit-02 suite serves routes on scope-less apps across repeated requests (routing, middleware, context); the empty-scope fast path is the perf gate's concern",
 		"3bf523e3e8": "v1 defineErrors has no translations generic (errorI18n holds translations, I7); ExtractICUVars is type-tested directly in icu.test.ts (ExtractICUVars describe)",
-		"78c407f3ba": "v0 DROPPED a prototype-named cookie (Object.hasOwn(result,\"constructor\")===false) via a blocklist, silently losing legitimate client data. v1 bit-02 design (587b90b244) parses onto a null-prototype record: pollution is structurally impossible for ANY key (stronger than a blocklist) and every cookie the client sent stays readable. The safety goal is covered by 08983c32f3 (null proto, toString undefined, no Object.prototype leak). The literal drop assertion contradicts the superior v1 design."
+		"78c407f3ba": "v0 DROPPED a prototype-named cookie (Object.hasOwn(result,\"constructor\")===false) via a blocklist, silently losing legitimate client data. v1 bit-02 design (587b90b244) parses onto a null-prototype record: pollution is structurally impossible for ANY key (stronger than a blocklist) and every cookie the client sent stays readable. The safety goal is covered by 08983c32f3 (null proto, toString undefined, no Object.prototype leak). The literal drop assertion contradicts the superior v1 design.",
+		"b97af65655": "the proxy feature slot is cut (H23): proxy is a plain import, nothing to register",
+		"833002e49d": "the .proxy() builder method is cut (H23): proxy(cfg) mounts with .handler()",
+		"3d9bf5de02": "v0's otelAdapter kept each request's span in a WeakMap keyed by the request; v1 keeps the root on the request state (F2); concurrency is a40a735c7f",
+		"9ee60ae121": "v0's WeakMap entry removed after onResponse: a v0 internal with no v1 counterpart (F2)",
+		"f8ac6700ef": "v0 internal _registerStatic on the public type; v1 keeps graph state in a private #field, nothing to hide",
+		"9f9e7f0d32": "v0 serve({ cors: true }) option; v1 serve takes no middleware (cors is app.use(cors()), b rulings), covered by cors over a real listen",
+		"c4c263973e": "v0 serve({ cors: true }) option; v1 serve takes no middleware (cors is app.use(cors()), b rulings), covered by cors over a real listen",
+		"e76f7ba03c": "a wall-clock comparison of 404 timings: load-fragile, proves nothing stable; every v1 miss is one table lookup and one fixed answer"
 	}
 }
