@@ -5,6 +5,7 @@
  * Scoped use(path, mw) types are in middleware-scoped.typetest.ts. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
+import * as z from "zod"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, defineMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -208,5 +209,80 @@ describe("the route builder's one-shot methods", () => {
 			.use(createMiddleware((_ctx, next) => next({ b: 2 })))
 		expectTypeOf(used).toHaveProperty("use")
 		expectTypeOf(used).toHaveProperty("handler")
+	})
+})
+
+const ONE_SHOTS = ["boundary", "errors", "input", "meta", "output"] as const
+
+describe("the route builder's one-shots: what stays and what goes", () => {
+	// v0: 3cdd42041d
+	// v0: f84705bad9
+	// v0: d097b40cac
+	it("a fresh builder has every one-shot, use() and handler(), whatever its methods", () => {
+		for (const builder of [honey<{}>().get("/t"), honey<{}>().post("/t"), honey<{}>().on(["GET", "POST"], "/t")]) {
+			for (const method of [...ONE_SHOTS, "use", "handler"] as const) expectTypeOf(builder).toHaveProperty(method)
+		}
+	})
+
+	// v0: 424196d93d
+	// v0: d80b5d7c80
+	// v0: 2d8fde8b4b
+	// v0: d936b826ba
+	// v0: 18ec8dd64f
+	it("each one-shot goes once used, every other one stays", () => {
+		const errs = defineErrors({
+			forbidden: "forbidden",
+			internal_server_error: "internal_server_error",
+			not_found: "not_found",
+		})
+		const route = honey<{}>().errorFactory(errs).get("/t")
+		const input = route.input({ json: z.object({ name: z.string() }) })
+		const errors = route.errors("not_found", "forbidden")
+		const boundary = route.boundary("internal_server_error")
+		expectTypeOf(input).not.toHaveProperty("input")
+		expectTypeOf(errors).not.toHaveProperty("errors")
+		expectTypeOf(boundary).not.toHaveProperty("boundary")
+		for (const method of ["boundary", "errors", "meta", "output", "use", "handler"] as const) {
+			expectTypeOf(input).toHaveProperty(method)
+		}
+		for (const method of ["boundary", "input", "meta", "output", "handler"] as const) {
+			expectTypeOf(errors).toHaveProperty(method)
+		}
+		for (const method of ["errors", "input", "meta", "output", "handler"] as const) {
+			expectTypeOf(boundary).toHaveProperty(method)
+		}
+	})
+})
+
+describe("the route builder's one-shots through later calls", () => {
+	// v0: 07cf0d14fc
+	// v0: 3e32c59f4d
+	// v0: 83c49ae0f2
+	// v0: 8444cc701a
+	it("a used one-shot stays gone through later calls; use() stays through all of them", () => {
+		const errs = defineErrors({ bad_request: "bad_request" })
+		const pass = createMiddleware((_ctx, next) => next({ x: 1 }))
+		const afterErrors = honey<{}>()
+			.errorFactory(errs)
+			.get("/t")
+			.input({ json: z.object({ n: z.string() }) })
+			.errors("bad_request")
+		const afterUse = honey<{}>()
+			.get("/t")
+			.input({ json: z.object({ n: z.string() }) })
+			.use(pass)
+		const afterOutput = honey<{}>()
+			.get("/t")
+			.meta({ summary: "x" })
+			.output({ "application/json": { ok: z.object({ id: z.string() }) } })
+		const everything = afterOutput.input({ json: z.object({ n: z.string() }) }).use(pass)
+		expectTypeOf(afterErrors).not.toHaveProperty("input")
+		expectTypeOf(afterErrors).not.toHaveProperty("errors")
+		expectTypeOf(afterUse).not.toHaveProperty("input")
+		expectTypeOf(afterOutput).not.toHaveProperty("meta")
+		expectTypeOf(afterOutput).not.toHaveProperty("output")
+		expectTypeOf(afterOutput).toHaveProperty("input")
+		expectTypeOf(everything).toHaveProperty("use")
+		expectTypeOf(everything).toHaveProperty("handler")
 	})
 })

@@ -3,7 +3,8 @@
  * with security headers, CORS, request ids and server timing (on a route and on a 404), a CORS
  * preflight, ipRestrict deciding on the socket's own peer whatever the client claims, context
  * values, concurrent mixed requests each answered as their own, csrf on a form POST, and each
- * header middleware over a redirect, an upgrade and an immutable fetch() answer.
+ * header middleware over a redirect, an upgrade and an immutable fetch() answer; and an app with all
+ * of it at once beside bodyLimit, etag, validation, translated errors and telemetry.
  */
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
@@ -15,7 +16,14 @@ import { poweredBy } from "../../src/middleware/powered-by.ts"
 import { requestId } from "../../src/middleware/request-id.ts"
 import { secureHeaders } from "../../src/middleware/secure-headers.ts"
 import { serverTiming } from "../../src/middleware/server-timing.ts"
+import * as z from "zod"
 import { HoneyError } from "../../src/errors/error.ts"
+import { defineErrors } from "../../src/errors/errors.ts"
+import { errorI18n } from "../../src/i18n/error-i18n.ts"
+import { bodyLimit } from "../../src/input/body-limit.ts"
+import { createMiddleware } from "../../src/middleware/middleware.ts"
+import { etag } from "../../src/response/etag.ts"
+import { recorder } from "../../src/telemetry/__fixtures__/recording-tracer.ts"
 import { honey } from "../../src/routing/app.ts"
 
 type App = { fetch(request: Request, env: {}): Response | Promise<Response> }
@@ -370,5 +378,117 @@ describe("header middleware over answers it cannot edit in place", () => {
 			res.headers.get("server-timing")?.includes("total;dur="),
 			res.headers.get("access-control-allow-origin"),
 		]).toEqual([200, "from upstream", true, "Honey", "nosniff", true, "http://app.test"])
+	})
+})
+
+/** A production-shaped app: every edge middleware, an auth chain, validated routes, translated errors, telemetry. */
+function productionApp() {
+	const errors = defineErrors({ item_not_found: "not_found", rate_limited: "too_many_requests" })
+	const { spans, telemetry } = recorder()
+	const auth = createMiddleware((ctx, next) => {
+		if ((ctx as { req: Request }).req.headers.get("authorization") === null) {
+			throw new HoneyError({ errorKey: "unauthorized", status: "unauthorized" })
+		}
+		return next({ userId: "u-1" })
+	})
+	const app = honey<{}>()
+		.logger(false)
+		.errorFactory(errors)
+		.defaultErrors("rate_limited")
+		.outputValidation("always")
+		.telemetry(telemetry)
+		.errorI18n(errorI18n({ errors: { en: { item_not_found: "Item not found" } }, resolveLocale: () => "en" }))
+		/* the auth middleware's refusal is no route's declared error: the app answers it as it is */
+		.onError((error, ctx) =>
+			error instanceof HoneyError && error.errorKey === "unauthorized" ? ctx.jsonFromError(error) : undefined,
+		)
+	const api = app
+		.use(cors({ credentials: true, origin: "http://app.com" }))
+		.use(bodyLimit({ maxSize: 50_000 }))
+		.use(etag())
+		.use(requestId())
+		.use(serverTiming())
+		.use(secureHeaders())
+		.basePath("/api")
+	api.get("/health").handler((ctx) => ctx.res.text("ok", "healthy"))
+	const authed = api.use(auth)
+	authed
+		.get("/items")
+		.output({ "application/json": { ok: z.array(z.object({ id: z.number(), name: z.string() })) } })
+		.handler((ctx) => {
+			ctx.timing.start("db")
+			ctx.timing.end("db")
+			return ctx.res.json("ok", [{ id: 1, name: "Widget" }])
+		})
+	authed
+		.post("/items")
+		.input({ json: z.object({ name: z.string() }) })
+		.handler((ctx) => ctx.res.json("created", { name: ctx.input.json.name, userId: ctx.userId }))
+	authed
+		.get("/items/:id")
+		.errors("item_not_found")
+		.handler((ctx) => {
+			if (ctx.params.id === "0") throw ctx.errors.item_not_found()
+			return ctx.res.json("ok", { id: ctx.params.id })
+		})
+	return { app, spans }
+}
+
+describe("a production-shaped app on the wire", () => {
+	// v0: e5e2ce62c3
+	it("answers public, authed, conditional, created, missing, refused, wrong-method and preflight requests, traced", async () => {
+		const { app, spans } = productionApp()
+		const base = await listen(app)
+		const auth = { authorization: "Bearer tok", origin: "http://app.com" }
+		const health = await fetch(`${base}/api/health`)
+		const list = await fetch(`${base}/api/items`, { headers: auth })
+		const tag = list.headers.get("etag") ?? ""
+		const again = await fetch(`${base}/api/items`, { headers: { ...auth, "if-none-match": tag } })
+		const created = await fetch(`${base}/api/items`, {
+			body: '{"name":"Gadget"}',
+			headers: { ...auth, "content-type": "application/json" },
+			method: "POST",
+		})
+		const notFound = await fetch(`${base}/api/items/0`, { headers: auth })
+		const preflight = await fetch(`${base}/api/items`, {
+			headers: {
+				"access-control-request-headers": "content-type, authorization",
+				"access-control-request-method": "POST",
+				origin: "http://app.com",
+			},
+			method: "OPTIONS",
+		})
+		expect([
+			[
+				health.status,
+				await health.text(),
+				health.headers.has("x-request-id"),
+				health.headers.get("x-content-type-options"),
+			],
+			[
+				list.status,
+				list.headers.get("access-control-allow-credentials"),
+				tag.startsWith('W/"'),
+				list.headers.get("server-timing")?.includes("db"),
+				await list.json(),
+			],
+			[again.status, again.headers.get("access-control-allow-origin")],
+			[created.status, await created.json()],
+			[notFound.status, ((await notFound.json()) as { message: string }).message],
+			(await fetch(`${base}/api/items`)).status,
+			[(await fetch(`${base}/api/items`, { method: "PATCH" })).headers.has("allow")],
+			[preflight.status, preflight.headers.get("access-control-allow-headers")?.includes("content-type")],
+			spans.some((span) => span.name.startsWith("GET") || span.name.startsWith("http")),
+		]).toEqual([
+			[200, "healthy", true, "nosniff"],
+			[200, "true", true, true, [{ id: 1, name: "Widget" }]],
+			[304, "http://app.com"],
+			[201, { name: "Gadget", userId: "u-1" }],
+			[404, "Item not found"],
+			401,
+			[true],
+			[204, true],
+			true,
+		])
 	})
 })

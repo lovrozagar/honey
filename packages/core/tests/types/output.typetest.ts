@@ -9,8 +9,9 @@ import * as z from "zod"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import type { TypedResponse } from "../../src/response/response.ts"
 import { honey } from "../../src/routing/app.ts"
-import type { InferRouteInput, InferRouteOutput } from "../../src/routing/app-types.ts"
-import type { AllowedResMethods } from "../../src/routing/output-types.ts"
+import { defineErrors } from "../../src/errors/errors.ts"
+import type { InferRouteInput, InferRouteOutput, InferRoutes } from "../../src/routing/app-types.ts"
+import type { AllowedResMethods, OutputSchemas } from "../../src/routing/output-types.ts"
 
 const withDb = createMiddleware((_ctx, next) => next({ db: "test-db" }))
 
@@ -211,6 +212,7 @@ describe("AllowedResMethods", () => {
 	// v0: ced2d39aba
 	// v0: 775d5ac0c7
 	// v0: ac79fc4742
+	// v0: 4e57dd4126
 	it("is the helpers a declaration allows", () => {
 		expectTypeOf<AllowedResMethods<{ "application/json": unknown }>>().toEqualTypeOf<"json">()
 		expectTypeOf<AllowedResMethods<{ "application/json": unknown; "text/plain": unknown }>>().toEqualTypeOf<
@@ -221,6 +223,70 @@ describe("AllowedResMethods", () => {
 		expectTypeOf<AllowedResMethods<{ "application/json": unknown; "image/gif": unknown }>>().toEqualTypeOf<
 			"binary" | "json"
 		>()
+		expectTypeOf<
+			AllowedResMethods<{
+				"application/json": unknown
+				"application/octet-stream": unknown
+				"application/xml": unknown
+				"text/csv": unknown
+				"text/event-stream": unknown
+				"text/html": unknown
+				"text/plain": unknown
+			}>
+		>().toEqualTypeOf<"binary" | "csv" | "html" | "json" | "sse" | "text" | "xml">()
+	})
+})
+
+describe("OutputSchemas: what .output() takes", () => {
+	// v0: e57fdba151
+	// v0: a6c79b6852
+	// v0: 8659650f52
+	it("a media type's status keys, each with a schema; an event stream; several media types at once", () => {
+		expectTypeOf({ "application/json": { ok: z.object({ id: z.string() }) } }).toExtend<OutputSchemas>()
+		expectTypeOf({ "text/event-stream": { ok: z.object({ data: z.string() }) } }).toExtend<OutputSchemas>()
+		expectTypeOf({
+			"application/json": { ok: z.object({ id: z.string() }) },
+			"text/plain": { ok: z.string() },
+		}).toExtend<OutputSchemas>()
+	})
+})
+
+describe("errorsByStatus: a route's declared errors by status code", () => {
+	const errs = defineErrors({
+		email_taken: "conflict",
+		item_not_found: { schema: z.object({ reason: z.string(), suggestions: z.array(z.string()) }), status: "not_found" },
+		rate_limited: { schema: z.object({ retryAfter: z.number() }), status: "too_many_requests" },
+	})
+	const app = honey<{}>()
+		.errorFactory(errs)
+		.get("/items/:id")
+		.errors("item_not_found")
+		.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
+		.post("/register")
+		.errors("email_taken", "rate_limited")
+		.handler((ctx) => ctx.res.json("created", {}))
+	type Routes = InferRoutes<typeof app>
+
+	// v0: 2233bc7f78
+	it("defineErrors answers a factory per declared key, and none for another", () => {
+		expectTypeOf(errs.email_taken).toBeFunction()
+		expectTypeOf(errs.item_not_found).toBeFunction()
+		expectTypeOf(errs.rate_limited).toBeFunction()
+		expectTypeOf(errs).not.toHaveProperty("org_limit")
+	})
+
+	// v0: de5b6ae4ed
+	// v0: c8954a3f00
+	// v0: f37a0b0523
+	// v0: 028e12d305
+	it("keys each declared error by its status code: a schema error by its body, a standard one as null", () => {
+		expectTypeOf<Routes["/items/:id"]["get"]["errorsByStatus"]>().toEqualTypeOf<{
+			404: { reason: string; suggestions: string[] }
+		}>()
+		expectTypeOf<Routes["/register"]["post"]["errorsByStatus"]>().toEqualTypeOf<{
+			409: null
+			429: { retryAfter: number }
+		}>()
 	})
 })
 

@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
+import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
+import { createMiddleware } from "../middleware/middleware.ts"
 import { GRAPH, honey } from "./app.ts"
 import { finalTable } from "./dispatch.ts"
 
@@ -45,5 +47,43 @@ describe("RouteBuilder runtime", () => {
 		expect([...finalTable(app[GRAPH]).plans.keys()]).toEqual(["GET /both", "POST /both"])
 		const res = await app.fetch(new Request("http://localhost/both", { method: "POST" }), {})
 		expect(await res.text()).toBe("POST")
+	})
+})
+
+describe("RouteBuilder: every one-shot at once", () => {
+	// v0: fa8a4feb7d
+	// v0: c1a034e3f0
+	// v0: 0798132be9
+	it("every one-shot together answers as declared, beside middleware, a declared error and a boundary", async () => {
+		const errs = defineErrors({ internal_server_error: "internal_server_error", not_found: "not_found" })
+		const app = honey<{}>()
+			.errorFactory(errs)
+			.use(createMiddleware((_ctx, next) => next({ userId: "u-1" })))
+		app
+			.post("/items")
+			.input({ json: z.object({ name: z.string() }) })
+			.output({ "application/json": { created: z.object({ id: z.string(), name: z.string(), user: z.string() }) } })
+			.meta({ summary: "Create item" })
+			.handler((ctx) => ctx.res.json("created", { id: "i-1", name: ctx.input.json.name, user: ctx.userId }))
+		app
+			.get("/item")
+			.errors("not_found")
+			.boundary("internal_server_error")
+			.handler((ctx) => {
+				throw ctx.errors.not_found()
+			})
+		const created = await app.fetch(
+			new Request("http://localhost/items", {
+				body: '{"name":"item1"}',
+				headers: { "content-type": "application/json" },
+				method: "POST",
+			}),
+			{},
+		)
+		expect([created.status, await created.json(), (await fetchJson(app, "/item")).status]).toEqual([
+			201,
+			{ id: "i-1", name: "item1", user: "u-1" },
+			404,
+		])
 	})
 })

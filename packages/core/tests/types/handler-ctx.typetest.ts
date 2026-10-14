@@ -1,9 +1,11 @@
 /**
  * The handler's ctx, as typed: params and routePattern from the pattern (basePath included),
  * ctx.errors from the declared and default keys, ctx.meta narrowed per route, what context(),
- * chain and route middleware add, and the request fields. Checked by typecheck.
+ * chain and route middleware add, the request fields, and all of them at once beside .input(),
+ * .output(), .errors(), .meta() and taps. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
+import * as z from "zod"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -298,6 +300,98 @@ describe("the request fields", () => {
 				expectTypeOf(ctx.env).toEqualTypeOf<{ API_KEY: string; DB_URL: string }>()
 				expectTypeOf(ctx).not.toHaveProperty("input")
 				return ctx.res.text("ok", "ok")
+			})
+	})
+})
+
+const withUser = createMiddleware((_ctx, next) => next({ userId: "u-1" }))
+const withTenant = createMiddleware((_ctx, next) => next({ tenant: "t-1" }))
+
+describe("the whole ctx at once", () => {
+	// v0: b5d3cfdba4
+	// v0: 87415c6ed3
+	// v0: 32781d0574
+	it("env, context(), middleware, params, input, routePattern and an output-narrowed res, together", () => {
+		honey<{ SECRET: string }>()
+			.context({ region: "eu" })
+			.use(withUser)
+			.post("/orgs/:orgId/members/:memberId")
+			.input({ json: z.object({ name: z.string() }), search: z.object({ q: z.string() }) })
+			.output({ "application/json": { created: z.object({ id: z.string() }) } })
+			.handler((ctx) => {
+				expectTypeOf(ctx.env.SECRET).toEqualTypeOf<string>()
+				expectTypeOf(ctx.region).toEqualTypeOf<string>()
+				expectTypeOf(ctx.userId).toEqualTypeOf<string>()
+				expectTypeOf(ctx.params.orgId).toEqualTypeOf<string>()
+				expectTypeOf(ctx.params.memberId).toEqualTypeOf<string>()
+				expectTypeOf(ctx.input.json.name).toEqualTypeOf<string>()
+				expectTypeOf(ctx.input.search.q).toEqualTypeOf<string>()
+				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/orgs/:orgId/members/:memberId">()
+				expectTypeOf(ctx.res.noContent).toBeFunction()
+				expectTypeOf(ctx.res).not.toHaveProperty("text")
+				return ctx.res.json("created", { id: "1" })
+			})
+	})
+
+	// v0: 0b1c12acb4
+	it("under a basePath, with an optional search field and errors named with their factory", () => {
+		const errs = defineErrors({ not_found: "not_found" })
+		honey<{ SECRET: string }>()
+			.basePath("/api/v1")
+			.use(withTenant)
+			.get("/users/:id")
+			.input({ search: z.object({ fields: z.string().optional() }) })
+			.output({ "application/json": { ok: z.object({ id: z.string(), name: z.string() }) } })
+			.errors(errs, "not_found")
+			.handler((ctx) => {
+				expectTypeOf(ctx.tenant).toEqualTypeOf<string>()
+				expectTypeOf(ctx.input.search.fields).toEqualTypeOf<string | undefined>()
+				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/api/v1/users/:id">()
+				expectTypeOf(ctx.errors.not_found).toBeFunction()
+				expectTypeOf(ctx.res).not.toHaveProperty("text")
+				return ctx.res.json("ok", { id: "1", name: "test" })
+			})
+	})
+})
+
+describe("the whole ctx with taps, meta and empty declarations", () => {
+	// v0: 0e91063a38
+	it("with taps and meta too: a declared tap takes its payload, nothing else", () => {
+		const errs = defineErrors({ not_found: "not_found" })
+		honey<{}>()
+			.taps<{ audit: { action: string; actor_id: string }; webhook: { event: string } }>()
+			.use(withUser)
+			.post("/orgs/:orgId/members")
+			.input({ json: z.object({ email: z.string() }) })
+			.output({ "application/json": { created: z.object({ id: z.string() }) } })
+			.errors(errs, "not_found")
+			.meta({ audit: { action: "member.invite", actor_id: "sys" } })
+			.handler((ctx) => {
+				expectTypeOf(ctx.input.json.email).toEqualTypeOf<string>()
+				expectTypeOf(ctx.errors.not_found).toBeFunction()
+				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/orgs/:orgId/members">()
+				ctx.tap("audit", { action: "member.invite", actor_id: ctx.userId })
+				ctx.tap("webhook", { event: "member.invited" })
+				// @ts-expect-error a key the taps do not declare
+				ctx.tap("invalid", {})
+				// @ts-expect-error another key's payload
+				ctx.tap("audit", { event: "wrong" })
+				expectTypeOf(ctx.res).not.toHaveProperty("text")
+				return ctx.res.json("created", { id: "mem_1" })
+			})
+	})
+
+	// v0: b677cfaf2a
+	it("routePattern stays the literal through empty .input() and .output(); an empty output leaves the universal helpers", () => {
+		honey<{}>()
+			.use(withUser)
+			.get("/")
+			.input({})
+			.output({})
+			.handler((ctx) => {
+				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/">()
+				expectTypeOf(ctx.res).not.toHaveProperty("json")
+				return ctx.res.noContent()
 			})
 	})
 })
