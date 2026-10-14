@@ -3,8 +3,8 @@
  * the exact string v0 returned for it (captured by running those suites unchanged), so v1 must
  * reproduce v0 byte for byte. Grouped by behavior; the stress inputs are rebuilt, not inlined.
  */
-import { afterEach, describe, expect, it } from "vitest"
-import { createInterpolator, interpolate } from "./icu.ts"
+import { afterEach, describe, expect, expectTypeOf, it } from "vitest"
+import { createInterpolator, type ExtractICUVars, interpolate } from "./icu.ts"
 
 type Row = readonly [template: string, vars: Record<string, unknown>, locale: string | undefined, expected: string]
 
@@ -224,6 +224,94 @@ const NUMBER: readonly Row[] = [
 	// v0: 2c261fe2ed
 	["{n, number}", { n: "999" }, "en", "999"],
 ]
+
+const BASICS: readonly Row[] = [
+	// v0: 6903ccce32
+	["{field} is required", { field: "Email" }, undefined, "Email is required"],
+	// v0: fae748139c
+	["{field} must be at least {min} chars", { field: "Name", min: 3 }, undefined, "Name must be at least 3 chars"],
+	// v0: 458cdff331
+	["{field} is required", {}, undefined, "{field} is required"],
+	// v0: 7bc72b5800
+	["Something went wrong", {}, undefined, "Something went wrong"],
+	// v0: 05d421daea
+	["{x}", { x: "<script>alert(1)</script>" }, undefined, "<script>alert(1)</script>"],
+	// v0: 034cbd7e91
+	["", {}, undefined, ""],
+	// v0: 7e007eb581
+	["{x}", { x: "hello" }, undefined, "hello"],
+	// v0: a4b41019a7
+	["{{x}}", { x: "val" }, undefined, "{{x}}"],
+	// v0: 162a1ea923
+	["{count} items", { count: 0 }, undefined, "0 items"],
+	// v0: 9afb1d8a5f
+	["offset: {n}", { n: -5 }, undefined, "offset: -5"],
+	// v0: 7986a8032f
+	["{a}{b}{c}", { a: "X", b: "Y", c: "Z" }, undefined, "XYZ"],
+	// v0: 3752c99b87
+	["{field1} and {field2}", { field1: "A", field2: "B" }, undefined, "A and B"],
+	// v0: 11836fe14c
+	["{my_var}", { my_var: "ok" }, undefined, "ok"],
+	// v0: 4d70d36a68
+	["{cause} happened", { cause: "timeout" }, undefined, "timeout happened"],
+	// v0: d6e7e93ec0
+	["Fehler: {msg} 🔥", { msg: "kaputt" }, undefined, "Fehler: kaputt 🔥"],
+	// v0: b245b17d9b
+	["{x} is great", { x: "Honey" }, undefined, "Honey is great"],
+	// v0: d077d63778
+	["Hello {x}", { x: "World" }, undefined, "Hello World"],
+	// v0: 0d919d937c
+	["{x}", { extra: "nope", x: "yes" }, undefined, "yes"],
+	// v0: 328a1a3b61
+	["[{x}]", { x: "" }, undefined, "[]"],
+	// v0: 387b3c2533
+	["{} is empty", {}, undefined, "{} is empty"],
+	// v0: 2b88dcd1d6
+	["{unclosed is broken", {}, undefined, "{unclosed is broken"],
+	// v0: 95f2e6bc82
+	["{x}{x}{x}", { x: "a" }, undefined, "aaa"],
+]
+
+describe("interpolate(): simple vars, as the first i18n suite pinned them", () => {
+	it.each(BASICS)("%j with %j in %s", (template, vars, locale, expected) => {
+		expect(interpolate(template, vars, locale)).toBe(expected)
+	})
+})
+
+describe("ExtractICUVars: a message literal's vars as a type", () => {
+	// v0: 32b2e07d5b
+	// v0: 0a6b5e035a
+	// v0: b8f222025e
+	// v0: 5839823181
+	// v0: 2526e75f76
+	// v0: 5cb845ef1e
+	it("each {var} a key of string or number, a repeated one once", () => {
+		expectTypeOf<ExtractICUVars<"{field} is required">>().toEqualTypeOf<{ field: number | string }>()
+		expectTypeOf<ExtractICUVars<"{field} must be at least {min}">>().toEqualTypeOf<{
+			field: number | string
+			min: number | string
+		}>()
+		expectTypeOf<ExtractICUVars<"{a} {b} {c}">>().toEqualTypeOf<{
+			a: number | string
+			b: number | string
+			c: number | string
+		}>()
+		expectTypeOf<ExtractICUVars<"{a}{b}">>().toEqualTypeOf<{ a: number | string; b: number | string }>()
+		expectTypeOf<ExtractICUVars<"{x}">>().toEqualTypeOf<{ x: number | string }>()
+		expectTypeOf<ExtractICUVars<"{x} and {x}">>().toEqualTypeOf<{ x: number | string }>()
+	})
+
+	// v0: 35d48dd6ae
+	// v0: 4b273795b1
+	// v0: b3f90f168f
+	// v0: 145647891a
+	it("no vars is {}, so vars can be left out; cause is HoneyError's own, never a var", () => {
+		expectTypeOf<ExtractICUVars<"Something went wrong">>().toEqualTypeOf<{}>()
+		expectTypeOf<ExtractICUVars<"{cause} error">>().toEqualTypeOf<{}>()
+		expectTypeOf<ExtractICUVars<"{cause} then {field}">>().toEqualTypeOf<{ field: number | string }>()
+		expectTypeOf<ExtractICUVars<"{a} {cause} {b}">>().toEqualTypeOf<{ a: number | string; b: number | string }>()
+	})
+})
 
 describe("interpolate(): plural: CLDR categories, exact matches, # and its locale", () => {
 	it.each(PLURAL)("%j with %j in %s", (template, vars, locale, expected) => {
