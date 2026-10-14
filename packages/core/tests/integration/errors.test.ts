@@ -328,7 +328,6 @@ describe("which errors reach the client under an errorFactory", () => {
 
 describe("ctx.errors", () => {
 	// v0: 7241a672c9
-	// v0: a88f6dff48
 	it("holds the route's declared keys and the app's default keys, and nothing else", async () => {
 		const app = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
 		app
