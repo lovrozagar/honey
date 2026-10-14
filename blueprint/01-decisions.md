@@ -183,6 +183,8 @@ This is why the reorg is an inventory, not a reshuffle (H13), and why "port" thr
 
 **The dump tell (a gate for the reviewer):** a suite where `#describes ≈ #its ≈ #inline honey() builds ≈ #v0 tags` is a relabeled dump and **fails this bar** — stripping `bug-hunt-N:` off a v0 describe and moving the verbatim body into a feature file is exactly the thing H22 forbids. The reviewer verifies suites by **reading them**, not by trusting a "redistributed / renamed" report.
 
+**The test-file map is reviewer-owned and named by sub-behavior.** `files.tsv` carries the complete set of test files for each bit — one file per feature when it fits the 500-line cap, otherwise split into **named sub-area files** (`routing-params`, `context-query`), **never** `<feature>-<number>` (a numbered split is a dump by another name). The reviewer defines this map **before** the implementer authors; the implementer fills the named files and does not invent filenames or numbered splits. A file that overflows the cap after genuine consolidation gets a finer named sub-area, proposed to the reviewer. (The earlier `<feature>-<n>` split pre-authorization is **revoked**.)
+
 ---
 
 ## Deep-dive gaps A1–G1
