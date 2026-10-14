@@ -8,7 +8,8 @@
  */
 import { EK, HoneyError } from "../errors/error.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
-import { isHoneyResponse, isProducedStream, rawBodyOf } from "../response/builder.ts"
+import { bodyKind } from "../input/body-kind.ts"
+import { isProducedStream, rawBodyOf } from "../response/builder.ts"
 import { parseMediaType } from "../response/media-type.ts"
 import { codeToStatusKey } from "../response/status.ts"
 import type { HeadersCheck } from "../response/response-headers.ts"
@@ -66,12 +67,6 @@ function parse(raw: string | Uint8Array): unknown {
 	return text.length === 0 ? null : (JSON.parse(text) as unknown)
 }
 
-/** Whether `response` carries no body, read from how it was built, never from `.body` (a stream on Node). */
-function bodiless(response: Response): boolean {
-	if (rawBodyOf(response) !== null || isProducedStream(response)) return false
-	return isHoneyResponse(response) || response.body === null
-}
-
 /**
  * The check for a route declaring `schemas`, for an app whose mode is on: `headers`, its declared
  * headers' check, first, whatever the answer carries. The declared media types are fixed here,
@@ -85,7 +80,7 @@ export function compileOutput(schemas: OutputSchemas, headers: HeadersCheck | nu
 	}
 	const json = (schemas as Record<string, StatusSchemas | undefined>)["application/json"]
 	const body = (response: Response): MaybePromise<Response> => {
-		if (bodiless(response)) return response
+		if (bodyKind(response) === "empty") return response
 		const type = response.headers.get("content-type")
 		if (type === null) return response
 		const essence = parseMediaType(type)?.essence

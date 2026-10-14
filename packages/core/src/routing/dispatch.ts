@@ -4,6 +4,7 @@
  * redirect, 404, 405, preflight, a handler, a throw — yields one Response. A throw becomes a
  * response at the `next()` boundary (`errors/on-error.ts`); the boundary never rejects.
  */
+import { headResponse } from "../input/body-kind.ts"
 import { HoneyContext, REQUEST, type RequestState } from "../context/context.ts"
 import { HoneyError } from "../errors/error.ts"
 import { boundary, errorCtx, formatterReport } from "../errors/on-error.ts"
@@ -253,6 +254,13 @@ function route(g: HoneyGraph, incoming: Incoming) {
 	return run(state, final.plans.get(match.id) as Plan, match.params)
 }
 
+/** The routed answer; a HEAD request's without its body, as GET's answer would be sent. */
+function routed(g: HoneyGraph, incoming: Incoming): MaybePromise<Response> {
+	const answer = route(g, incoming)
+	if (incoming.request.method !== "HEAD") return answer
+	return answer instanceof Promise ? answer.then(headResponse) : headResponse(answer)
+}
+
 /**
  * Serve one request from the graph, observed until its body ends when the request log or telemetry
  * is on. Routing never rejects; a throw (an app that cannot finalize) ends the root and goes on.
@@ -264,12 +272,12 @@ export function dispatch(
 	executionCtx: RequestState<unknown>["executionCtx"],
 ): MaybePromise<Response> {
 	const s = g.settings
-	if (s.requestLog === null && s.telemetry === null) return route(g, { env, executionCtx, request, seen: undefined })
+	if (s.requestLog === null && s.telemetry === null) return routed(g, { env, executionCtx, request, seen: undefined })
 	const trace = s.telemetry === null ? undefined : startTrace(s, s.telemetry, request, env)
 	const seen: Seen = { request, started: performance.now(), state: null, trace }
 	let answer: MaybePromise<Response>
 	try {
-		answer = route(g, { env, executionCtx, request, seen })
+		answer = routed(g, { env, executionCtx, request, seen })
 	} catch (thrown) {
 		trace?.fail(thrown)
 		throw thrown

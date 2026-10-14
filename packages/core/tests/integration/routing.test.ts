@@ -17,7 +17,11 @@ function echoApp(routes: ReadonlyArray<readonly [HttpMethod | "ALL", string]>): 
 		app
 			.on([method], pattern)
 			.handler((ctx) =>
-				ctx.res.json("ok", { method: ctx.req.method, params: ctx.params, path: ctx.path, pattern: ctx.routePattern }),
+				ctx.res.json(
+					"ok",
+					{ method: ctx.req.method, params: ctx.params, path: ctx.path, pattern: ctx.routePattern },
+					{ headers: { "x-method": ctx.req.method } },
+				),
 			)
 	}
 	return app
@@ -50,10 +54,9 @@ describe("method resolution", () => {
 	// v0: a9d2529e11
 	it.each(verbs)("%s on a path every verb registered reaches its own route", async (method) => {
 		const app = echoApp(verbs.map((v) => [v, "/m"] as const))
-		const res = await send(app, "/m", { method })
-		expect(res.status).toBe(200)
-		/* HEAD keeps its body until body-kind strips it (bit 08); the route it reached is what matters here */
-		expect((JSON.parse(res.body) as Echo).method).toBe(method)
+		const res = await app.fetch(new Request("http://localhost/m", { method }), {})
+		/* a HEAD answer has no body: the header names the route it reached */
+		expect([res.status, res.headers.get("x-method")]).toEqual([200, method])
 	})
 
 	// v0: 923e952ede
@@ -63,7 +66,8 @@ describe("method resolution", () => {
 		app.get("/page").handler((ctx) => ctx.res.text("ok", "get"))
 		app.get("/both").handler((ctx) => ctx.res.text("ok", "get"))
 		app.head("/both").handler((ctx) => ctx.res.noContent({ headers: { "x-route": "head" } }))
-		expect(await send(app, "/page", { method: "HEAD" })).toMatchObject({ body: "get", status: 200 })
+		const page = await app.fetch(new Request("http://localhost/page", { method: "HEAD" }), {})
+		expect([page.status, page.headers.get("content-length"), await page.text()]).toEqual([200, "3", ""])
 		const own = await app.fetch(new Request("http://localhost/both", { method: "HEAD" }), {})
 		expect([own.status, own.headers.get("x-route")]).toEqual([204, "head"])
 		expect((await send(app, "/nope", { method: "HEAD" })).status).toBe(404)

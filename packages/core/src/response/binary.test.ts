@@ -96,13 +96,25 @@ describe("ctx.res.binary: the content type and the options", () => {
 describe("ctx.res.binary on the wire", () => {
 	// v0: 2b6091c2f4
 	// v0: 56a59c4e16
-	it("1MB arrives byte for byte, its content length the byte length", async () => {
+	// v0: 53d0c13436
+	it("1MB arrives byte for byte, its content length the byte length, beside every other helper", async () => {
 		const megabyte = counting(1024 * 1024)
 		const app = honey<{}>()
 		app.get("/bin").handler((ctx) => ctx.res.binary("ok", megabyte))
 		app.get("/gif").handler((ctx) => ctx.res.binary("created", counting(5), { contentType: "image/gif" }))
+		app.get("/json").handler((ctx) => ctx.res.json("ok", { type: "json" }))
+		app.get("/text").handler((ctx) => ctx.res.text("ok", "plain text"))
+		app.get("/html").handler((ctx) => ctx.res.html("ok", "<b>bold</b>"))
+		app.get("/csv").handler((ctx) => ctx.res.csv("ok", "a,b\n1,2"))
+		app.get("/xml").handler((ctx) => ctx.res.xml("ok", "<root/>"))
 		const base = await listen(app)
 		const [bin, gif] = await Promise.all([fetch(`${base}/bin`), fetch(`${base}/gif`)])
+		const others = await Promise.all(
+			["/json", "/text", "/html", "/csv", "/xml"].map(async (path) => {
+				const res = await fetch(`${base}${path}`)
+				return [res.headers.get("content-type"), await res.text()]
+			}),
+		)
 		const received = new Uint8Array(await bin.arrayBuffer())
 		expect([
 			bin.status,
@@ -110,7 +122,21 @@ describe("ctx.res.binary on the wire", () => {
 			received.length,
 			received.every((byte, i) => byte === i % 256),
 			await bytesOf(gif),
-		]).toEqual([200, "1048576", 1024 * 1024, true, [201, "image/gif", [0, 1, 2, 3, 4]]])
+			others,
+		]).toEqual([
+			200,
+			"1048576",
+			1024 * 1024,
+			true,
+			[201, "image/gif", [0, 1, 2, 3, 4]],
+			[
+				["application/json", '{"type":"json"}'],
+				["text/plain; charset=utf-8", "plain text"],
+				["text/html; charset=utf-8", "<b>bold</b>"],
+				["text/csv; charset=utf-8", "a,b\n1,2"],
+				["application/xml", "<root/>"],
+			],
+		])
 	})
 })
 
