@@ -32,6 +32,9 @@ const { requestId } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/request-id.ts")
 )) as typeof import("../../../src/middleware/request-id.ts")
 
+const { timeout } = (await import(
+	resolvePath(REPO, "packages/core/src/middleware/timeout.ts")
+)) as typeof import("../../../src/middleware/timeout.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -114,5 +117,18 @@ describe("v1 adversarial: a client never picks its request id", () => {
 			{},
 		)
 		expect([await res.text(), res.headers.get("x-request-id")].includes("attacker-chosen")).toBe(false)
+	})
+})
+
+describe("v1 adversarial: a handler that never answers cannot hold the request", () => {
+	it("timeout answers 504 within its duration, not when (or if) the handler does", async () => {
+		const app = honey<{}>()
+		app
+			.use(timeout({ duration: 20 }))
+			.get("/stall")
+			.handler(() => new Promise<never>(() => {}))
+		const answered = Promise.resolve(app.fetch(new Request("http://app.test/stall"), {})).then((res) => res.status)
+		const deadline = new Promise((resolve) => setTimeout(() => resolve("still waiting"), 500))
+		expect(await Promise.race([answered, deadline])).toBe(504)
 	})
 })

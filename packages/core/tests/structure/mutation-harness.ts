@@ -171,6 +171,12 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/middleware/request-id.ts",
 	},
 	{
+		catches: "v1: a stalled handler holding the request past its timeout",
+		disable: () => ({ timeout: () => passThrough }),
+		id: "v1-timeout",
+		module: "packages/core/src/middleware/timeout.ts",
+	},
+	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",
 		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
 		id: "v1-out-headers-validation",

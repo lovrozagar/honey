@@ -44,6 +44,9 @@ export const NO_ROUTE: RouteInfo = /* @__PURE__ */ Object.freeze({ errors: null,
 /** The context's slot for its request state: not exported from the package, so user code cannot reach it. */
 export const REQUEST: unique symbol = /* @__PURE__ */ Symbol("honey.request")
 
+/** Abort `ctx.signal` from inside honey (a timeout): not exported from the package. */
+export const ABORT_CONTEXT: unique symbol = /* @__PURE__ */ Symbol("honey.abortContext")
+
 /**
  * Every name the framework owns on a context. `next({ ... })` additions and `.context()` values may
  * not use them: an addition would silently replace framework state, and one assigned over a
@@ -180,6 +183,12 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	get signal(): AbortSignal {
 		this.#ac ??= this.#linkSignal()
 		return this.#ac.signal
+	}
+
+	/** Abort `signal` with `reason`, so work that takes it stops (a timeout answered for it). */
+	[ABORT_CONTEXT](reason: unknown): void {
+		this.#ac ??= this.#linkSignal()
+		this.#ac.abort(reason)
 	}
 
 	#parseSearch(): void {
