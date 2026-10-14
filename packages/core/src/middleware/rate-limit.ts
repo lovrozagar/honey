@@ -86,20 +86,34 @@ export function rateLimit(options: RateLimitOptions): MiddlewareFn<KeyContext, {
 	if (!(Number.isInteger(limit) && limit > 0)) throw new TypeError("rateLimit: limit must be a positive integer")
 	const store = options.store ?? memoryStore(options)
 	const keyOf = options.key ?? peerKey
-	const mw: MiddlewareFn<KeyContext, {}, "too_many_requests"> = async (ctx, next) => {
-		const { count, resetAt } = await store.hit(keyOf(ctx))
-		const headers: Record<string, string> = {
-			"x-ratelimit-limit": String(limit),
-			"x-ratelimit-remaining": String(Math.max(0, limit - count)),
-			"x-ratelimit-reset": String(Math.ceil(resetAt / 1000)),
-		}
-		if (count > limit) {
-			headers["retry-after"] = String(Math.max(0, Math.ceil((resetAt - Date.now()) / 1000)))
-			throw new HoneyError({ errorKey: "too_many_requests", headers, status: "too_many_requests" })
+	const limitText = String(limit)
+	/** The answer for a counted request: 429 past the limit, else the chain's with the headers. */
+	const answer = async (hit: RateLimitHit, next: () => Promise<Response> | Response): Promise<Response> => {
+		const remaining = String(Math.max(0, limit - hit.count))
+		const reset = String(Math.ceil(hit.resetAt / 1000))
+		if (hit.count > limit) {
+			const retryAfter = String(Math.max(0, Math.ceil((hit.resetAt - Date.now()) / 1000)))
+			throw new HoneyError({
+				errorKey: "too_many_requests",
+				headers: {
+					"retry-after": retryAfter,
+					"x-ratelimit-limit": limitText,
+					"x-ratelimit-remaining": remaining,
+					"x-ratelimit-reset": reset,
+				},
+				status: "too_many_requests",
+			})
 		}
 		return withHeaders(await next(), (out) => {
-			for (const name in headers) out.set(name, headers[name] as string)
+			out.set("x-ratelimit-limit", limitText)
+			out.set("x-ratelimit-remaining", remaining)
+			out.set("x-ratelimit-reset", reset)
 		})
+	}
+	/* a sync store (the memory default) is answered without an extra await */
+	const mw: MiddlewareFn<KeyContext, {}, "too_many_requests"> = (ctx, next) => {
+		const hit = store.hit(keyOf(ctx))
+		return hit instanceof Promise ? hit.then((counted) => answer(counted, next)) : answer(hit, next)
 	}
 	mw.errors = ["too_many_requests"]
 	return namedMiddleware("rateLimit", mw)

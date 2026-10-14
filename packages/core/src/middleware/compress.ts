@@ -68,13 +68,14 @@ function hasBrotli(): boolean {
 }
 
 function compressible(response: Response, threshold: number, raw: RawBody): boolean {
+	/* the size first: most answers are small JSON, and it costs no header lookup */
+	if ((typeof raw === "string" ? raw.length : raw.byteLength) < threshold) return false
 	const status = response.status
 	if (status < 200 || status === 204 || status === 206 || status === 304) return false
 	const headers = response.headers
 	if (headers.has("content-encoding") || headers.has("content-range")) return false
 	if (NO_TRANSFORM.test(headers.get("cache-control") ?? "")) return false
-	if (!COMPRESSIBLE.test(essenceOf(headers.get("content-type")))) return false
-	return (typeof raw === "string" ? raw.length : raw.byteLength) >= threshold
+	return COMPRESSIBLE.test(essenceOf(headers.get("content-type")))
 }
 
 async function encode(raw: RawBody, encoding: Encoding): Promise<Uint8Array<ArrayBuffer>> {
