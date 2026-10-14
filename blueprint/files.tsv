@@ -163,6 +163,22 @@ src/build/glob.ts	core	src	19	glob	glob.ts
 src/build/yaml.ts	core	src	19	YAML emit/parse	yaml.ts
 src/build/targets.ts	core	src	19	build target selection (node/bun/cf; no Deno)	build/index.ts
 src/testing/testing.ts	core	src	20	the testing helper	testing.ts
+#
+# --- app-level integration + type suites (feature-named, assert through honey()/app.fetch; H13). Born at the
+#     bit that owns the feature, GROWN by later bits (errors gains problem+json at 08, routing gains static/proxy, …).
+#     The 500-line test cap: a topic that overflows splits into <topic>-<n>.test.ts, same bit — those splits are
+#     pre-authorized at bit 02 (the implementer enumerates them here as created; ratified at the bit gate). ---
+tests/integration/routing.test.ts	core	test	02	methods, on/all, 404/405, HEAD→GET, statics, params, trailing slash, stripPrefix, encoded slashes, path normalization through app.fetch	bug-hunt*,edge-cases*
+tests/integration/middleware.test.ts	core	test	02	chain order, short-circuit, next() additions, double next(), ctx.error, use() handles, finalize reports (unused use, dangling builder)	middleware*
+tests/integration/scoped.test.ts	core	test	02	use(path, mw) coverage + guards, across mounts and basePath	scoped*
+tests/integration/mount.test.ts	core	test	02	route()/route(prefix), basePath composition, sub settings/context kept, duplicates	mergeTree*
+tests/integration/errors.test.ts	core	test	02	native projection through the chain, boundary/defaultBoundary, defaultErrors, errorFactory, onError/onNotFound/onMethodNotAllowed (problem+json formatter joins at bit 08)	errors*
+tests/integration/context.test.ts	core	test	02	ctx through the app: search/searchAll, executionCtx/background binding, context(), meta, errors	context*
+tests/integration/edge-cases.test.ts	core	test	02	cross-topic bug-hunt/broken-world/bizarre/production-weird ports (app-level)	bug-hunt*,broken-world*
+tests/integration/edge-cases-2.test.ts	core	test	02	cross-topic ports, continued (500-line cap split)	bug-hunt*
+tests/types/app.typetest.ts	core	test	02	the Infer* ladder, $routes/MergeRoute, ComputeErrorsByStatus	typetest/*
+tests/types/handler-ctx.typetest.ts	core	test	02	HandlerCtx, params, meta, errors, routePattern	typetest/*
+tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddleware deps + next() types, use-scoped types, builder one-shot hiding	typetest/*
 # ============================== packages/gen  (@lovrozagar/honey-codegen) ==============================
 src/ir/model.ts	gen	src	09	the IR types	codegen-ir.ts,codegen-sdk-model.ts
 src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
