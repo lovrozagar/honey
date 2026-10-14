@@ -1,16 +1,15 @@
 # Bit 03 — request trust
 
-Closes: — · (Deno removed in bit 00) · trust as the first optional entry
+Closes: — · (Deno removed in bit 00)
 Oracle kept green: `tests/integration/trust.test.ts` (the bit-03 oracle); `_v0`'s frozen `ws3-request` regression stays green automatically (bit 03 doesn't touch `_v0`), and ws3's v1 cases are owned by bits 04/08, not 03.
 
 ## Scope
-Client identity and trust: `trustProxy` resolution, effective client IP/scheme/host from `X-Forwarded-*` within the trusted hop count, and `clientInfo`. **Trust is the first OPTIONAL entry (`@lovrozagar/honey/trust`):** hops/ranges compile only after that subpath import registers a feature slot, so `trust.ts` is not eagerly bundled into core (H1 lean/tree-shakeable). `feature-slots.ts` (the minimal slot registry) is pulled to this bit because trust is the first consumer; later features (adapters bit 04, ws bit 06) add their own slots. `ipRestrict` allow/deny is middleware, bit 07. `detect-runtime.ts` stays bit 04 (adapter-side, born with its consumers; bit-00 `no-deno.test` already guards that node/bun/cf detection survived the purge).
+Client identity and trust: `trustProxy` resolution, effective client IP/scheme/host from `X-Forwarded-*` within the trusted hop count, and `clientInfo`. **Trust is plain core code** — no opt-in entry, no self-registration, no feature registry, no dependency injection (ruled bit 03; ~1 KB gz in core is not worth any of that machinery). `app.trustProxy(value)` stores config; `ctx.ip`/`clientInfo` call a pure `resolveClient(req, config)` imported normally; `trust.ts` is side-effect-free. `ipRestrict` allow/deny is middleware, bit 07. `detect-runtime.ts` stays bit 04 (adapter-side, born with its consumers; bit-00 `no-deno.test` already guards that node/bun/cf detection survived the purge).
 
-## Files (from files.tsv — `trust` + `runtime`)
-- `src/trust/trust.ts` (+test) — compile a `TrustProxy` setting (config-time validation); resolve the effective client per H18.4. The optional `@lovrozagar/honey/trust` entry registers the feature slot.
+## Files (from files.tsv — `trust`)
+- `src/trust/trust.ts` (+test) — compile a `TrustProxy` setting (config-time validation); resolve the effective client per H18.4. Pure; reached through an ordinary import, no self-registration.
 - `src/trust/ip.ts` (+test) — parse/format/canonical IP (RFC 5952, IPv4-mapped + `IPv4:port` unwrapped), CIDR parse + membership.
 - `src/trust/client-info.ts` (+test) — `ClientInfo {host, ip, protocol}` + `trustsForwarded`, `clientInfo(ctx)`, the peer lookup (`PEER_ADDRESS` symbol the Node adapter sets in bit 04, or Bun's `server.requestIP`). Exposes `ctx.trustsForwarded` — the seam `requestId` reuse + `traceparent` continuation read (H17).
-- `src/runtime/feature-slots.ts` (+test) — the slot registry (born here; see Scope).
 
 ## Tests (named, written first)
 - `trust/trust.test.ts` — compile + config-time validation; off by default = direct peer only; N trusted hops reads the Nth-from-right `X-Forwarded-For`; hop and range walks.
