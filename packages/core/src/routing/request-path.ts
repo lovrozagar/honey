@@ -118,6 +118,10 @@ export function normalizePath(raw: string, encodedSlashes: "allow" | "reject" = 
  * every runtime hands the app.
  */
 export function encodeSegment(seg: string): string {
+	/* most segments need nothing: return them without building a copy */
+	let plain = true
+	for (let i = 0; i < seg.length && plain; i++) plain = !needsEncoding(seg.charCodeAt(i))
+	if (plain) return seg
 	let out = ""
 	for (const ch of seg) {
 		if (!needsEncoding(ch.codePointAt(0) as number)) {

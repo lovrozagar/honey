@@ -7,7 +7,7 @@
 
 /** The bit construction has completed. Each bit raises it in the change that completes it; the tree
  * check and the lose-nothing gate both read it. */
-export const COMPLETE = 0
+export const COMPLETE = 1
 
 export type Row = { bit: number; kind: string; path: string; pkg: string }
 
