@@ -13,17 +13,33 @@ import type { FetchState } from "../routing/dispatch.ts"
 import type { AppSettings, ErrorCtx } from "../routing/settings.ts"
 import { requestBindings } from "../telemetry/fields.ts"
 import { HoneyError, hasUnknownStatus } from "./error.ts"
-import { asHoneyError, createErrorResponse, DIGEST, projectThrown, safeErrorResponse } from "./projector.ts"
+import {
+	asHoneyError,
+	createErrorResponse,
+	DIGEST,
+	type FormatterReport,
+	projectThrown,
+	safeErrorResponse,
+} from "./projector.ts"
 
 function stateOf(ctx: object): FetchState {
 	return (ctx as HoneyContext<unknown>)[REQUEST] as FetchState
+}
+
+/** A crashed error formatter, logged with the request it answered (when there is one). */
+export function formatterReport(s: AppSettings<unknown>, state: FetchState | null): FormatterReport {
+	return (failure) => {
+		const where = state === null ? {} : requestBindings(state.req.method, state.path, state.plan.route.id, undefined)
+		s.logger.error({ ...where, err: HoneyError.serialize(failure) }, "error formatter failed")
+	}
 }
 
 /** What `onError`, `onNotFound` and `onMethodNotAllowed` receive. */
 export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<unknown> {
 	return {
 		env: state.env,
-		jsonFromError: (err) => createErrorResponse(err, s.errorFormatter, s.customErrorFormatter),
+		jsonFromError: (err) =>
+			createErrorResponse(err, s.errorFormatter, s.customErrorFormatter, formatterReport(s, state)),
 		req: state.req,
 	}
 }
@@ -31,7 +47,7 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 /** Answer with `error`, recording it on `ctx.error`. */
 function answer(s: AppSettings<unknown>, ctx: object, error: HoneyError): Response {
 	setCtxError(ctx as HoneyContext, error)
-	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter)
+	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, formatterReport(s, stateOf(ctx)))
 }
 
 /** One throw on its way to a response: the context, what was thrown, and the error it projects to. */

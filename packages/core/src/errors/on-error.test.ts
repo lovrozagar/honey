@@ -277,3 +277,43 @@ describe("the last resort: answering the error failed itself", () => {
 		])
 	})
 })
+
+describe("a crashing error formatter is reported, and the client still gets a well-formed error (a7)", () => {
+	const broken = () => {
+		throw new Error("formatter broke")
+	}
+	const failures = (lines: Record<string, unknown>[]) =>
+		lines
+			.filter((line) => line.msg === "error formatter failed")
+			.map((line) => (line.err as { message: string }).message)
+
+	it("the default formatter: the default shape answers, one line per crash", async () => {
+		const { app, lines } = throwing(new HoneyError({ errorKey: "slug_taken", status: "conflict" }))
+		app.defaultErrorFormatter(broken)
+		const res = await app.fetch(get("/boom/1"), {})
+		expect([res.status, ((await res.json()) as { error_key: string }).error_key, failures(lines)]).toEqual([
+			409,
+			"slug_taken",
+			["formatter broke"],
+		])
+	})
+
+	it("the custom formatter of a data error: the error's data answers, one line", async () => {
+		const { app, lines } = throwing(
+			new HoneyError({ data: { reason: "kept" }, errorKey: "slug_taken", status: "conflict" }),
+		)
+		app.customErrorFormatter(broken)
+		const res = await app.fetch(get("/boom/1"), {})
+		expect([res.status, await res.json(), failures(lines)]).toEqual([409, { reason: "kept" }, ["formatter broke"]])
+	})
+
+	it.each([
+		["a 404", "/nowhere", 404],
+		["a bad-path 400", "/a%2Fb", 400],
+	])("%s rendered by a crashing formatter is reported too", async (_name, path, status) => {
+		const { app, lines } = throwing(new Error("unused"))
+		app.defaultErrorFormatter(broken)
+		const res = await app.fetch(get(path), {})
+		expect([res.status, failures(lines)]).toEqual([status, ["formatter broke"]])
+	})
+})

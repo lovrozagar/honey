@@ -6,7 +6,7 @@
  */
 import { HoneyContext, REQUEST, type RequestState } from "../context/context.ts"
 import { HoneyError } from "../errors/error.ts"
-import { boundary, errorCtx } from "../errors/on-error.ts"
+import { boundary, errorCtx, formatterReport } from "../errors/on-error.ts"
 import { createErrorResponse } from "../errors/projector.ts"
 import { compileChain, type MaybePromise } from "../middleware/middleware.ts"
 import { replaceResponse, withRawBody } from "../response/builder.ts"
@@ -115,7 +115,8 @@ export function finalTable(g: HoneyGraph): FinalTable {
 
 /** 400 for a request path the normalization policy rejects. No boundary, no onError. */
 export function badRequestTarget(s: AppSettings<unknown>): Response {
-	return createErrorResponse(frameworkError(s, "bad_request", "bad_request"), s.errorFormatter, s.customErrorFormatter)
+	const error = frameworkError(s, "bad_request", "bad_request")
+	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, formatterReport(s, null))
 }
 
 /** The canonical path a non-canonical trailing slash redirects to, or `null`. */

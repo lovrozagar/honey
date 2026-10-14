@@ -60,14 +60,23 @@ export function projectThrown(thrown: unknown, policy: ErrorPolicy): HoneyError 
 	return policy.boundaryKey === null ? internalError(thrown) : boundaryError(policy.boundaryKey, thrown, policy.factory)
 }
 
-function errorBody(error: HoneyError, defaultFormatter: ErrorFormatter, customFormatter?: CustomErrorFormatter | null) {
+/** Hears a formatter that crashed; the answer still falls back to a well-formed body. */
+export type FormatterReport = (failure: unknown) => void
+
+function errorBody(
+	error: HoneyError,
+	defaultFormatter: ErrorFormatter,
+	customFormatter?: CustomErrorFormatter | null,
+	report?: FormatterReport,
+) {
 	if (error.data !== undefined) {
 		const data = error.data as Record<string, unknown>
 		if (!customFormatter) return data
 		try {
 			return customFormatter(error, data)
-		} catch {
-			/* a crashed custom formatter: the client still gets the error's data; reporting the crash awaits a bit-07 ruling */
+		} catch (failure) {
+			/* a crashed custom formatter: reported, and the client still gets the error's data */
+			report?.(failure)
 			return data
 		}
 	}
@@ -83,8 +92,9 @@ function errorBody(error: HoneyError, defaultFormatter: ErrorFormatter, customFo
 	if (digest !== undefined) defaultShape.digest = digest
 	try {
 		return defaultFormatter(error, defaultShape)
-	} catch {
-		/* a crashed formatter falls back to the default shape */
+	} catch (failure) {
+		/* a crashed formatter: reported, and the client still gets the default shape */
+		report?.(failure)
 		return defaultShape
 	}
 }
@@ -94,8 +104,9 @@ export function createErrorResponse(
 	error: HoneyError,
 	defaultFormatter: ErrorFormatter,
 	customFormatter?: CustomErrorFormatter | null,
+	report?: FormatterReport,
 ): Response {
-	const payload = JSON.stringify(errorBody(error, defaultFormatter, customFormatter))
+	const payload = JSON.stringify(errorBody(error, defaultFormatter, customFormatter, report))
 	const headers: Record<string, string> = { "content-type": "application/json", ...error.headers }
 	return withRawBody(new Response(payload, { headers, status: error.status }), payload)
 }
