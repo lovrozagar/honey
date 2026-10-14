@@ -4,7 +4,5 @@ WebCrypto-based helpers used by cookie signing and anywhere an app needs a safe 
 
 | value | required | default | outcome | pitfall | test |
 | --- | --- | --- | --- | --- | --- |
-| HMAC sign / verify | — | — | sign + **constant-time** verify (the cookie-sign + webhook-verify primitive) | verify must use a timing-safe compare, never `===` on the digest | `security/crypto.test.ts` |
-| random id / token | — | — | `crypto.randomUUID()` / random bytes | never `Math.random` for anything security-relevant | `security/crypto.test.ts` |
-| base64url encode/decode | — | — | url-safe encoding for signed values | reject malformed input rather than throw | `security/crypto.test.ts` |
+| `timingSafeEqual(a, b)` | — | — | the one exported helper (v0 had only this): HMACs both sides under a **fresh random key per call** (no module state, H23) and compares via `subtle.verify`, so neither content nor length leaks; strings compare by UTF-16 code unit (lone surrogates don't collapse), a string never equals bytes | never `===` on a digest; timing itself isn't deterministically testable, so the guard pins the surrogate property (a UTF-8-bytes compare equates two different lone surrogates) | `security/crypto.test.ts` |
 | runtime | — | WebCrypto | works on node/bun/cf without `node:crypto` | — | `security/crypto.test.ts` |
