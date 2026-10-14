@@ -194,7 +194,9 @@ export class HoneyRes {
 		data: unknown,
 		opts?: ResponseOptions,
 	): TypedResponse<"application/json", SK> {
-		return this.#known(statusKeyToCode[statusKey], JSON_HEADERS, JSON.stringify(data), opts)
+		/* JSON.stringify answers undefined for undefined, a function or a symbol: an empty body, kept as one */
+		const body = JSON.stringify(data) as string | undefined
+		return this.#known(statusKeyToCode[statusKey], JSON_HEADERS, body ?? "", opts)
 	}
 
 	noContent(opts?: ResponseOptions): TypedResponse<"none", "no_content"> {

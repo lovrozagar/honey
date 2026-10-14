@@ -106,6 +106,19 @@ describe("body helpers: the options' content type, and json's serialization", ()
 			'{"inf":null,"nan":null,"shaped":{"public":"visible"}}',
 		])
 	})
+
+	it("json of a value JSON.stringify leaves out writes an empty body, kept as an empty raw body on both paths", async () => {
+		const answers = [res, new HoneyRes(true)].flatMap((helper) => [
+			helper.json("ok", undefined),
+			helper.json("ok", () => 1),
+		])
+		expect(await Promise.all(answers.map(async (r) => [rawBodyOf(r), await r.text()]))).toEqual([
+			["", ""],
+			["", ""],
+			["", ""],
+			["", ""],
+		])
+	})
 })
 
 describe("status", () => {
