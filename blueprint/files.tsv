@@ -186,12 +186,16 @@ tests/integration/context-query.test.ts	core	test	02	search / searchAll: query p
 tests/integration/context-extension.test.ts	core	test	02	context() extension + typing, executionCtx / background binding, meta access through ctx	context*
 tests/integration/cookies.test.ts	core	test	02	cookies through the app: get/set, caching, multiple Set-Cookie, kept on error responses, set→send-back round trip; signed via the signer	cookie*
 tests/integration/cookie-codec.test.ts	core	test	02	serializeCookie attribute/prefix/SameSite/Max-Age/Expires validation, value encoding (multi-byte, emoji, separators), Cookie-header parse edges	cookie*
-tests/types/app.typetest.ts	core	test	02	the Infer* ladder, $routes/MergeRoute, ComputeErrorsByStatus	typetest/*
-tests/types/app-2.typetest.ts	core	test	02	app ports, continued (500-line cap split)	typetest/*
-tests/types/handler-ctx.typetest.ts	core	test	02	HandlerCtx, params, meta, errors, routePattern	typetest/*
-tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddleware deps + next() types, use-scoped types, builder one-shot hiding	typetest/*
-tests/types/middleware-2.typetest.ts	core	test	02	middleware ports, continued (500-line cap split)	typetest/*
-tests/types/middleware-3.typetest.ts	core	test	02	middleware ports, continued (500-line cap split)	typetest/*
+tests/types/app.typetest.ts	core	test	02	the Infer* ladder (InferCtx/Env/BasePath/Meta/ErrorFactory/Methods/RoutePaths/RouteMethods/RouteCtx), context() typing, meta<T>(), public surface (internals hidden), base/routes/services split, ComputeErrorsByStatus	typetest/*
+tests/types/app-routes.typetest.ts	core	test	02	$routes/MergeRoute depth + same-path methods, basePath + MergePath registration, route(sub) merging, meta carried in $routes	typetest/*
+tests/types/handler-ctx.typetest.ts	core	test	02	ctx.params, routePattern literal, errors (declared + defaults, factory form, boundary), meta narrowing + readonly, req/env, no input without .input(), per-route use() accumulation	typetest/*
+tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddleware deps + TReqs ordering, parameter-annotation inference, next() addition + union types, errors tied to the factory, builder one-shot hiding	typetest/*
+tests/types/middleware-scoped.typetest.ts	core	test	02	use(path, mw) types: scoped adds on matching vs non-matching routes, segment boundary, composition, basePath merge, registration order, chain TCtx unpolluted, route(sub), overload dispatch, T16/T28 positional-generic compat	typetest/*
+# TRANSITIONAL (fold + delete): pre-H22 numbered typetest dumps still on disk; the implementer folds each into
+#   the named files above and deletes it (app-2 → app/app-routes; middleware-2/-3 → middleware/middleware-scoped).
+tests/types/app-2.typetest.ts	core	test	02	TRANSITIONAL dump — fold into app/app-routes and delete	typetest/*
+tests/types/middleware-2.typetest.ts	core	test	02	TRANSITIONAL dump — fold into middleware/middleware-scoped and delete	typetest/*
+tests/types/middleware-3.typetest.ts	core	test	02	TRANSITIONAL dump — fold into middleware/middleware-scoped and delete	typetest/*
 #
 # --- regression suites: named identically to the v0 session files so the regression matrix
 #     (_v0/docs/regression-matrix/) stays traceable. The _v0 copies are byte-FROZEN and run in the
