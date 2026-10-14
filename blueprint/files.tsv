@@ -46,6 +46,7 @@ src/validation/validate-output.ts	core	src	08	run output standard-schema	validat
 src/validation/content-type.ts	core	src	08	assert request/response content types	validation.ts
 src/response/response.ts	core	src	02	HoneyRes core + helper dispatch	response.ts
 src/response/builder.ts	core	src	02	response construction + finalize	honey-response.ts
+src/response/status.ts	core	src	02	status vocabulary: StatusKey (snake_case 2xx–5xx names), statusKeyToCode, codeToStatusKey — read by errors/error.ts, response.ts, later OpenAPI/SDK; standalone so the response core needn't depend on the error class (v0 types.ts:8-133)	types.ts
 src/response/media-type.ts	core	src	08	media-type parse + Accept negotiation	media-type.ts
 src/response/binary.ts	core	src	08	ctx.res.binary typed bytes (A1)	response.ts
 src/response/response-headers.ts	core	src	08	declared per-status response headers (A2)	—
@@ -56,6 +57,7 @@ src/response/cache-control.ts	core	src	08	cacheControl + Last-Modified/If-Modifi
 src/response/with-headers.ts	core	src	08	apply declared headers	with-headers.ts
 src/response/pretty-json.ts	core	src	08	pretty JSON option	pretty-json.ts
 src/response/static.ts	core	src	07	static files + range	static.ts
+src/validation/standard-schema.ts	core	types	02	Standard Schema V1 interface (type-only): StandardSchemaLike, StandardSchemaIssue, InferInput/InferOutput — vendor-neutral contract zod/valibot/arktype/effect implement; defineErrors (bit 02) types `data` as InferOutput<schema>, bit 08 input/output validation import the same types. kind=types, no sibling test (v0 types.ts)	types.ts
 src/errors/error.ts	core	src	02	HoneyError	error.ts
 src/errors/errors.ts	core	src	02	defineErrors + ERROR_META	errors.ts
 src/errors/projector.ts	core	src	02	thrown value → response projector	index.ts

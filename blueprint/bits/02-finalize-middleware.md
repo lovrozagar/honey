@@ -10,7 +10,7 @@ The full **request lifecycle** — everything that turns a matched route into a 
 
 ## Files (from files.tsv)
 - `src/middleware/middleware.ts` (+test) — `createMiddleware`/`defineMiddleware`, order, short-circuit, per-mw telemetry.
-- `src/middleware/middleware-chain.ts` (+test) — `scopeGuard`, `timedMiddleware`, `commonPrefix`, `errorsOf`, `describeMw`.
+- `src/routing/middleware-chain.ts` (+test) — `scopeGuard`, `timedMiddleware`, `commonPrefix`, `errorsOf`, `describeMw` (dispatch-side: scope guards + chain compilation live with routing, not the `middleware/` primitive).
 - `src/context/context.ts` (+test) — `HoneyContext`, `ctx` extension via `.context(fn)`, typed input access.
 - `src/context/cookie.ts` (+test), `src/context/cookie-sign.ts` (+test).
 - `src/routing/app.ts` (+test) — the `honey()` factory + `app.fetch` surface, delegating to the modules. Homes the app type `Honey<…>`, `HoneyCtx`, and the `Infer*` ladder (they read the app's phantom `$routes`/`$ctx`/`$meta`); if that pushes `app.ts` past the 300-line limit, the type machinery splits into a sibling types module (own files.tsv row, added when born).
@@ -21,7 +21,11 @@ The full **request lifecycle** — everything that turns a matched route into a 
 - `src/routing/dispatch.ts` (+test) — the fetch pipeline; `onRequest` once, every exit pairs one `onResponse`/`onError`.
 - `src/routing/invoke-user.ts` (+test) — call the user handler with the built ctx.
 - `src/response/response.ts` (+test), `src/response/builder.ts` (+test) — the response core (helpers; bit 08 adds RAW_BODY/output-validation cases).
-- `src/errors/error.ts` (+test), `src/errors/errors.ts` (+test), `src/errors/projector.ts` (+test) — error model + thrown→response projection.
+- `src/response/status.ts` (+test) — the status vocabulary (`StatusKey`, `statusKeyToCode`, `codeToStatusKey`); standalone so the response core doesn't depend on the error class to know codes (v0 `types.ts:8-133`).
+- `src/validation/standard-schema.ts` (kind=types) — the Standard Schema V1 interface (`StandardSchemaLike`, `InferInput`/`InferOutput`); here because `defineErrors` types its `data` as `InferOutput<schema>`, and bit 08's io imports the same vendor-neutral types (an early home avoids a bit-02→bit-08 import).
+- `src/errors/error.ts` (+test), `src/errors/errors.ts` (+test), `src/errors/projector.ts` (+test) — error model + thrown→response projection. `defineErrors`'s i18n-typed `vars` (`ExtractICUVars`) arrive with **bit 07** extending `errors.ts` (settings.ts pattern); at bit 02 error vars type as `Record<string, string | number>` (v0's untranslated branch).
+
+**Builder scope at bit 02 (`.input`/`.output` are bit 08).** `route-builder.ts` ships `.meta()`, `.errors()`, `.use()`, `.handler()` here. `.input()`/`.output()` and dispatch's validate step are **added by bit 08** extending `route-builder.ts`/`dispatch.ts` — their types (`InputSchemasDef`, `OutputSchemaDef`) and the validation runner are io. This is additive (new chain methods, not a reshape of the bit-02 methods), so it does not re-type the public surface twice; a stubbed validator at bit 02 would be a placeholder and is rejected. The ~60 v0 `.input`/`.output` cases are already reassigned to bit 08.
 
 ## Tests (named, written first)
 - `middleware/middleware.test.ts` — registration order, short-circuit stops the chain, a `use()` with no route is reported at finalize, telemetry sees each mw's duration + throw.
