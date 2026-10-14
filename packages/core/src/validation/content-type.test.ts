@@ -22,6 +22,7 @@ describe("assertRequestContentType: the request's media type against the declare
 	// v0: 9762fb29e6
 	// v0: a61103ff4b
 	// v0: 8cd96a7dcc
+	// v0: f5eb0f89c1
 	it("selects the declared parser by essence, whatever the case, suffix or parameters, without reading the body", () => {
 		expect(
 			[

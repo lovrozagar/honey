@@ -208,6 +208,7 @@ describe("route .input(): the declared body against the request", () => {
 	// v0: 9524a2da76
 	// v0: 421370fc01
 	// v0: 10ae07be0f
+	// v0: a0ed558af4
 	it("answers 415 for a body its media type does not declare, 400 for one the schema refuses", async () => {
 		const app = honey<{}>()
 		app
@@ -224,10 +225,12 @@ describe("route .input(): the declared body against the request", () => {
 				post("/json", "just text", "text/plain"),
 				post("/form", "{}", "application/json"),
 				post("/json", '{"name":1}', "application/json"),
-				post("/json", '{"name":"a"}', "application/json"),
+				...["application/json", "Application/JSON", "application/vnd.api+json", "application/jsonx"].map((type) =>
+					post("/json", '{"name":"a"}', type),
+				),
 			].map(async (req) => (await app.fetch(req, {})).status),
 		)
-		expect(statuses).toEqual([415, 415, 415, 400, 201])
+		expect(statuses).toEqual([415, 415, 415, 400, 201, 201, 201, 415])
 	})
 
 	// v0: 2595655908

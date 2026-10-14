@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import type { HoneyError } from "../errors/error.ts"
+import { honey } from "../routing/app.ts"
 import { formInput } from "./form.ts"
+import { readableStream } from "./input.ts"
 
 /** A POST carrying `body` as an urlencoded form. */
 const urlencoded = (body: string) =>
@@ -132,5 +134,41 @@ describe("formInput: dangerous keys", () => {
 			Object.getPrototypeOf(parts),
 			({} as Record<string, unknown>).polluted,
 		]).toEqual([["my__proto__field", "name"], ["normal"], null, undefined])
+	})
+})
+
+describe("a form's file on a route, beside a body left to the handler", () => {
+	// v0: 9a8fa7b812
+	it("a multipart File reaches the handler whole beside its fields; a readableStream body as it was sent", async () => {
+		const app = honey<{}>()
+		app
+			.post("/upload")
+			.input({ form: z.object({ blob: z.file(), title: z.string() }) })
+			.handler((ctx) => {
+				const { blob, title } = ctx.input.form
+				return ctx.res.json("created", { name: blob.name, size: blob.size, title, type: blob.type })
+			})
+		app
+			.post("/stream")
+			.input({ json: readableStream(passing) })
+			.handler(async (ctx) => ctx.res.text("ok", await ctx.req.text()))
+		const form = new FormData()
+		form.set("title", "pic")
+		form.set("blob", new File(["PNGDATA"], "a.png", { type: "image/png" }))
+		const upload = await app.fetch(new Request("http://localhost/upload", { body: form, method: "POST" }), {})
+		const streamed = await app.fetch(
+			new Request("http://localhost/stream", {
+				body: '{"raw":true}',
+				headers: { "content-type": "application/json" },
+				method: "POST",
+			}),
+			{},
+		)
+		expect([upload.status, await upload.json(), streamed.status, await streamed.text()]).toEqual([
+			201,
+			{ name: "a.png", size: 7, title: "pic", type: "image/png" },
+			200,
+			'{"raw":true}',
+		])
 	})
 })
