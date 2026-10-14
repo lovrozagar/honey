@@ -20,6 +20,7 @@ const repeated = [
 
 describe("NodeHeaders: reading Node's parsed headers", () => {
 	// v0: bbbebf177f
+	// v0: 62b3c50f48
 	it("reports every value of a repeated header, the same before and after iteration", async () => {
 		const view = await viewOf(repeated)
 		const read = () => [view.get("authorization"), view.get("X-MULTI"), view.get("missing")]

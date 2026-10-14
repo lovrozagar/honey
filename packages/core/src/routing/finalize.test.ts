@@ -230,6 +230,7 @@ describe("errors thrown inside the chain still pass through outer middleware", (
 	})
 
 	// v0: 30a86b5632
+	// v0: d551a5be83
 	it("the 404 and 405 pipelines convert errors the same way", async () => {
 		const failing = createMiddleware(async (ctx, next) => {
 			if ((ctx as { path: string }).path.startsWith("/locked")) throw forbidden()

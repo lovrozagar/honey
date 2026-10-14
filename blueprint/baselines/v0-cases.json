@@ -42673,10 +42673,6 @@
 			"feature": "08-io",
 			"reason": "input/output schema types: io is bit 08"
 		},
-		"6229e730cd": {
-			"feature": "04-adapters",
-			"reason": "runtime feature slots: runtime/ is bit 04"
-		},
 		"626265f3f4": {
 			"feature": "02-finalize-middleware",
 			"reason": "the app-level infer ladder ($routes/$ctx/$meta): app.ts is bit 02"
@@ -42852,6 +42848,10 @@
 		"7203eb98be": {
 			"feature": "08-io",
 			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
+		},
+		"7216697725": {
+			"feature": "06-realtime",
+			"reason": "serve() keeping the adapter the app was given is ws wiring, which lands with the ws adapters (bit 06)"
 		},
 		"722ff22ccb": {
 			"feature": "02-finalize-middleware",
@@ -43381,6 +43381,10 @@
 			"feature": "08-io",
 			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
+		"9f87d702c3": {
+			"feature": "08-io",
+			"reason": "bodyLimit's REPLACE_BODY hook on the Node request lands with bodyLimit (bit 08)"
+		},
 		"9fcfe5e40d": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
@@ -43669,6 +43673,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"b5373bde7d": {
+			"feature": "11-ts-client",
+			"reason": "two apps loading one generated route tree needs generateRouteTreeFromApp (emit/ts/route-tree, bit 11)"
+		},
 		"b5516e2d7b": {
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
@@ -43708,6 +43716,10 @@
 		"b805d0a175": {
 			"feature": "08-io",
 			"reason": "uses validateInput (validation.ts, bit 08)"
+		},
+		"b8231ea031": {
+			"feature": "07-security-middleware",
+			"reason": "tap (meta + ctx.tap on a real listen) is observability, born with telemetry at bit 07"
 		},
 		"b8488bc5a6": {
 			"feature": "02-finalize-middleware",
@@ -43788,6 +43800,14 @@
 		"c04a9f5797": {
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
+		},
+		"c04f791e79": {
+			"feature": "06-realtime",
+			"reason": "serve() keeping a user-set wsAdapter is ws wiring, which lands with the ws adapters (bit 06)"
+		},
+		"c05eda8bee": {
+			"feature": "08-io",
+			"reason": "validation under concurrency needs .input (bit 08); concurrency, bodies and typed errors are covered at 04 (node-adapter)"
 		},
 		"c07a5aad74": {
 			"feature": "04-adapters",
@@ -44394,12 +44414,14 @@
 		"3e5e802259": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"4014d67f6b": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"416fa38434": "covered-by: asserts only {} extends object as an import check; every typetest file compiling under typecheck is that check",
+		"6229e730cd": "H23: no feature slots or self-registering entries; features are plain imports",
 		"6240fc17bc": "v1 parses the query from req.url as a string; there is no urlFn hook to pre-parse it",
 		"832009247d": "H23: no optional feature entries or feature slots; ctx.ip is plain core code",
 		"84ce753217": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"8c6850c8fe": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"9ae447fb8e": "H23: trustProxy is cut, and with it CIDR ranges and the trusted-hop walk",
 		"a4191ee348": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
+		"acce08ec14": "H23: app.serve() and its runtime slot are cut; serve(app) is a plain import of ./serve",
 		"acd0949f0b": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"ae639ced61": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"b6deaeab8c": "H23: trustProxy is cut, and with it CIDR ranges and the trusted-hop walk",

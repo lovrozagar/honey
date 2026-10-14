@@ -88,6 +88,7 @@ function declaredOf(size: number): Response {
 }
 
 describe("writing Honey's own responses", () => {
+	// v0: bd8b40ea47
 	it.each([
 		["text", { raw: "héllo" }, "héllo", "6"],
 		["bytes", { raw: encode("bytes") }, "bytes", "5"],

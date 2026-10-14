@@ -66,6 +66,7 @@ describe("serve(app) on Node", () => {
 		expect([again.port, (await fetch(`${again.url}/who`)).status]).toEqual([first.port, 200])
 	})
 
+	// v0: f939b64bc5
 	it("close() lets an in-flight request finish before the server stops", async () => {
 		const handle = await started()
 		const slow = fetch(`${handle.url}/slow`)

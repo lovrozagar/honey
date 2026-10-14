@@ -46,6 +46,8 @@ describe("basePath: prefixing", () => {
 	// v0: c9ee50eee6
 	// v0: b6cb7c9c8b
 	// v0: bdd89b07d3
+	// v0: c07a5aad74
+	// v0: 319c8086b7
 	it.each([
 		["/api", "/api/users", "/users"],
 		["/api/", "/api/users", "/users"],

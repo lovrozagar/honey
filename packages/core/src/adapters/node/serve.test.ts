@@ -111,6 +111,8 @@ function untilAborted() {
 describe("answering Node", () => {
 	// v0: e10dc5cd9b
 	// v0: 03a50e035a
+	// v0: 1dce41eac3
+	// v0: 099219a434
 	it("the app answers Node with a HoneyResponse, written without a Fetch Response; fetch() still gets a native one", async () => {
 		const app = honey<{}>()
 		app.get("/json").handler((ctx) => ctx.res.json("ok", { a: "é" }))

@@ -24,6 +24,8 @@ const addUser: RuntimeMiddleware = (_ctx, next) => next({ user: "alice" })
 const addA: RuntimeMiddleware = (_ctx, next) => next({ a: 1 })
 const addB: RuntimeMiddleware = (_ctx, next) => next({ b: 2 })
 const addCustom: RuntimeMiddleware = async (_ctx, next) => next({ customKey: "value", userId: 123 })
+/* frozen additions with a reserved key among them */
+const frozenAdditions: RuntimeMiddleware = async (_ctx, next) => next(Object.freeze({ db: "pg", req: "evil" }))
 const passFn = (_ctx: object, next: () => Response | Promise<Response>) => next()
 
 const nextTwice: RuntimeMiddleware = async (_ctx, next) => {
@@ -71,6 +73,7 @@ describe("compileChain > 0 middleware", () => {
 	})
 
 	// v0: ed36da9f9a
+	// v0: 07ae8ac903
 	it("handler returns undefined throws helpful error", async () => {
 		expect(await (await run(compileChain([], () => undefined as unknown as Response, convert))).text()).toContain(
 			"handler must return a Response",
@@ -213,6 +216,8 @@ describe("compileChain > reserved keys", () => {
 	for (const key of ["background", "cookies", "env", "headers", "params", "req", "res", "search"]) {
 		// v0: 425dab9d38
 		// v0: 39e01ebfb2
+		// v0: aa1849f9a7
+		// v0: d963093c83
 		it(`"${key}" is NOT merged into context`, async () => {
 			const mw: RuntimeMiddleware = async (_ctx, next) => next({ [key]: "overwritten" })
 			const ctx: Record<string, unknown> = { [key]: "original" }
@@ -224,7 +229,18 @@ describe("compileChain > reserved keys", () => {
 		})
 	}
 
+	// v0: 25a03cb2b4
+	it("frozen additions with a reserved key: the rest merges, the reserved key is dropped", async () => {
+		const ctx: Record<string, unknown> = { req: "original" }
+		const res = await run(
+			compileChain([frozenAdditions], () => ok(), convert),
+			ctx,
+		)
+		expect([res.status, ctx]).toEqual([200, { db: "pg", req: "original" }])
+	})
+
 	// v0: 63c031cebf
+	// v0: 7b4fc60dc6
 	it("non-reserved keys ARE merged into context", async () => {
 		const ctx: Record<string, unknown> = {}
 		await run(

@@ -106,6 +106,7 @@ function echoApp() {
 describe("bodies, both ways", () => {
 	// v0: c4c9cdbbc9
 	// v0: 7b97e6801b
+	// v0: 4ef99888bb
 	it("a large POST arrives whole, read at once or streamed straight back", async () => {
 		const { base } = await listen(echoApp())
 		const big = "x".repeat(50_000) + "é".repeat(10_000)
@@ -197,6 +198,15 @@ const tag = (name: string) =>
 	})
 
 describe("answers on the wire: HEAD and middleware", () => {
+	// v0: b02c133215
+	it("an unknown path is 404; a known path with another method is 405 with Allow", async () => {
+		const app = honey<{}>()
+		app.get("/x").handler((ctx) => ctx.res.text("ok", "x"))
+		const { base } = await listen(app)
+		const [missing, wrong] = await Promise.all([fetch(`${base}/nope`), fetch(`${base}/x`, { method: "POST" })])
+		expect([missing.status, wrong.status, wrong.headers.get("allow")]).toEqual([404, 405, "GET"])
+	})
+
 	// v0: adf3f8f66b
 	it("HEAD answers GET's headers and no body", async () => {
 		const app = honey<{}>()
@@ -336,6 +346,7 @@ describe("many requests at once stay apart", () => {
 	})
 
 	// v0: ff9890ae7d
+	// v0: 6a9ee60038
 	it("handler errors one after another leave the server serving", async () => {
 		const app = honey<{}>()
 		app.get("/boom").handler(() => {

@@ -13,6 +13,7 @@ describe("serializeCookie — basic", () => {
 	})
 
 	// v0: 557d7c0db5
+	// v0: ba6960580f
 	it("all options set", () => {
 		const result = serializeCookie("full", {
 			domain: "example.com",
@@ -218,6 +219,7 @@ describe("serializeCookie — SameSite", () => {
 	})
 
 	// v0: 75482fc723
+	// v0: 8d71ead0e3
 	it("rejects SameSite=None without secure", () => {
 		expect(() => serializeCookie("x", { sameSite: "none", value: "v" })).toThrow(
 			"SameSite=None cookies require secure: true",
