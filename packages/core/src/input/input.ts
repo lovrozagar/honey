@@ -8,6 +8,7 @@
 import type { MaybePromise } from "../middleware/middleware.ts"
 import type { BodyParser } from "../response/media-type.ts"
 import { assertBodySchemaAllowed, assertRequestContentType } from "../validation/content-type.ts"
+import { type BinaryBody, binaryInput, binaryRanges, type BinaryTypes, binaryType } from "./binary.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import { type Shape, shapeOf } from "../validation/validate-input.ts"
 import { cookiesInput } from "./cookies.ts"
@@ -39,16 +40,28 @@ export type NonBodyInput = {
 	readonly search?: InputEntry
 }
 
-/** What `.input()` takes: json and form are exclusive, as a request carries one body. */
+/** What `.input()` takes: json, form and binary are exclusive, as a request carries one body. */
 export type InputSchemas =
-	| (NonBodyInput & { readonly form?: InputEntry; readonly json?: never })
-	| (NonBodyInput & { readonly form?: never; readonly json?: InputEntry })
+	| (NonBodyInput & { readonly binary?: never; readonly form?: InputEntry; readonly json?: never })
+	| (NonBodyInput & { readonly binary?: never; readonly form?: never; readonly json?: InputEntry })
+	| (NonBodyInput & { readonly binary?: BinaryTypes; readonly form?: never; readonly json?: never })
+
+/** The media type ctx.input.binary names: a declared essence, or any subtype of a `type/*` range. */
+type BinaryTypeOf<T> = (T extends readonly (infer U)[] ? U : T) extends infer E
+	? E extends `${infer Type}/*`
+		? `${Type}/${string}`
+		: E
+	: never
 
 /** What an unvalidated non-body source carries: the record as parsed. */
 type RawSource<K> = K extends "search" ? Record<string, string | string[]> : Record<string, string>
 
 /** One source on ctx.input: the schema's output, or the raw record a `readableStream()` entry passes. */
-type SourceValue<K, E> = E extends ReadableStreamSchema<unknown> ? RawSource<K> : InferOutput<E>
+type SourceValue<K, E> = K extends "binary"
+	? BinaryBody<Extract<BinaryTypeOf<E>, string>>
+	: E extends ReadableStreamSchema<unknown>
+		? RawSource<K>
+		: InferOutput<E>
 
 /** The keys ctx.input carries: every declared source except a body left unread. */
 type InputKey<T> = {
@@ -113,7 +126,10 @@ export function compileInput(schemas: InputSchemas, methods: readonly string[], 
 	if (headers !== null) reads.push(["headers", (ctx) => headersInput(headers.schema, ctx.headers)])
 	if (cookies !== null) reads.push(["cookies", (ctx) => cookiesInput(cookies.schema, ctx.cookies)])
 	const body = json ?? form
-	if (body !== null) {
+	if (schemas.binary !== undefined) {
+		const ranges = binaryRanges(schemas.binary, methods[0] as string, path)
+		reads.push(["binary", (ctx) => binaryInput(ctx.req, binaryType(ranges, ctx.req.headers.get("content-type")))])
+	} else if (body !== null) {
 		reads.push([
 			json !== null ? "json" : "form",
 			(ctx) =>

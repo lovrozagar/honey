@@ -8,19 +8,29 @@ import { EK, HoneyError } from "../errors/error.ts"
 import { type BodyParser, bodyParserFor } from "../response/media-type.ts"
 
 /** The body sources a route may declare; any other key is a non-body source. */
-type BodySchemas = { readonly [source: string]: unknown; readonly form?: unknown; readonly json?: unknown }
+type BodySchemas = {
+	readonly [source: string]: unknown
+	readonly binary?: unknown
+	readonly form?: unknown
+	readonly json?: unknown
+}
+
+const BODIES = ["binary", "form", "json"] as const
 
 /**
  * Throws when `schemas` declare a body that `methods` at `path` can never receive (every method
- * GET or HEAD), or both json and form. A route that also takes another method keeps its schema:
+ * GET or HEAD), or more than one body. A route that also takes another method keeps its schema:
  * a GET reaching it without a body answers 415.
  */
 export function assertBodySchemaAllowed(schemas: BodySchemas, methods: readonly string[], path: string): void {
-	const kind = schemas.json !== undefined ? "json" : schemas.form !== undefined ? "form" : null
-	if (kind === null) return
+	const declared = BODIES.filter((kind) => schemas[kind] !== undefined)
+	const kind = declared[0]
+	if (kind === undefined) return
 	const method = methods[0] as string
-	if (schemas.json !== undefined && schemas.form !== undefined) {
-		throw new Error(`${method} ${path} declares both a json and a form body schema; a request carries one body.`)
+	if (declared.length > 1) {
+		throw new Error(
+			`${method} ${path} declares more than one body (${declared.join(", ")}); a request carries one body.`,
+		)
 	}
 	if (!methods.every((m) => m === "GET" || m === "HEAD")) return
 	throw new Error(

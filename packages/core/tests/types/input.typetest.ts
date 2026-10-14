@@ -116,6 +116,36 @@ describe("ctx.input: readableStream() entries and the body", () => {
 	})
 })
 
+describe("ctx.input.binary: the bytes and the declared media type", () => {
+	it("types the bytes, and the type as the declared literals, a range as its family", () => {
+		honey<{}>()
+			.post("/a")
+			.input({ binary: ["image/png", "image/jpeg"] })
+			.handler((ctx) => {
+				expectTypeOf(ctx.input.binary).toEqualTypeOf<{
+					readonly bytes: Uint8Array<ArrayBuffer>
+					readonly type: "image/jpeg" | "image/png"
+				}>()
+				return ctx.res.text("ok", "ok")
+			})
+		honey<{}>()
+			.post("/b")
+			.input({ binary: "image/*" })
+			.handler((ctx) => {
+				expectTypeOf(ctx.input.binary.type).toEqualTypeOf<`image/${string}`>()
+				return ctx.res.text("ok", "ok")
+			})
+	})
+
+	it("takes binary alone as the body: not beside json or form", () => {
+		const route = honey<{}>().post("/t")
+		const beside = { binary: "image/png", json: z.object({}) } as const
+		expectTypeOf(route.input).toBeCallableWith({ binary: "image/png" })
+		// @ts-expect-error a request carries one body
+		route.input(beside)
+	})
+})
+
 describe("ws .input(): the non-body sources only", () => {
 	it("types ctx.input on the socket's callbacks; a body source is refused", () => {
 		const app = honey<{}>()

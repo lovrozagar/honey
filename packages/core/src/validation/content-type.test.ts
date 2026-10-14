@@ -91,7 +91,7 @@ describe("assertBodySchemaAllowed: a body schema the route can never receive", (
 
 	it("refuses json and form together: a request carries one body", () => {
 		expect(thrown(() => assertBodySchemaAllowed({ form: schema, json: schema }, ["POST"], "/x")).message).toBe(
-			"POST /x declares both a json and a form body schema; a request carries one body.",
+			"POST /x declares more than one body (form, json); a request carries one body.",
 		)
 	})
 })
