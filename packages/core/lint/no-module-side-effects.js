@@ -64,10 +64,27 @@ function firstEffect(context, node) {
 	return null
 }
 
+/* an optional feature's entry registers itself on import (H19.3); the package's sideEffects list
+ * names exactly the files carrying this marker, which tests/structure/side-effects.test.ts holds */
+const FEATURE_ENTRY = /^feature-entry:\s*[a-z][a-z0-9-]*$/
+
+/** A top-level call statement marked `// feature-entry: <name>` on its line or the line above. */
+function isFeatureEntry(context, statement) {
+	if (statement.type !== "ExpressionStatement" || statement.expression.type !== "CallExpression") return false
+	const text = context.sourceCode.getText()
+	const sameLine = context.sourceCode
+		.getCommentsAfter(statement)
+		.filter((comment) => !text.slice(statement.end, comment.start).includes("\n"))
+	return [...context.sourceCode.getCommentsBefore(statement), ...sameLine].some((comment) =>
+		FEATURE_ENTRY.test(comment.value.trim()),
+	)
+}
+
 function check(context, statement) {
 	const inner = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement
 	if (inner === null || inner === undefined || DECLARATIONS.has(inner.type)) return
 	if (inner.type === "ExpressionStatement" && typeof inner.directive === "string") return
+	if (isFeatureEntry(context, inner)) return
 	if (inner.type === "VariableDeclaration") {
 		for (const declarator of inner.declarations) {
 			const effect = firstEffect(context, declarator.init)

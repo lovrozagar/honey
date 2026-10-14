@@ -1,10 +1,10 @@
 /* H19.3: request state lives on the request context. A module-scope let, var or constructed
  * object outlives the request and leaks between requests, so it needs one of the reasons the
  * blueprint allows, written on its line or the line above. */
-const REASON = /^per-process-constant:\s*(?:raw-body|text-codec|rate-limit-store|i18n-dict|build-id)\b/
+const REASON = /^per-process-constant:\s*(?:raw-body|text-codec|rate-limit-store|i18n-dict|build-id|feature-slot)\b/
 
 const MESSAGE =
-	"module-scope state needs `// per-process-constant: <reason>` with an allowlisted reason (raw-body, text-codec, rate-limit-store, i18n-dict, build-id)"
+	"module-scope state needs `// per-process-constant: <reason>` with an allowlisted reason (raw-body, text-codec, rate-limit-store, i18n-dict, build-id, feature-slot)"
 
 const WRAPPERS = new Set(["ParenthesizedExpression", "TSAsExpression", "TSNonNullExpression", "TSSatisfiesExpression"])
 
