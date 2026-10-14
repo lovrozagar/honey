@@ -132,11 +132,13 @@ describe("close frames", () => {
 		expect(sendableCloseCode(code)).toBe(sent)
 	})
 
+	// v0: 3396868484
 	it.each([
 		["a short reason", "bye", 123, "bye"],
 		["ASCII past the limit", "x".repeat(130), 123, "x".repeat(123)],
 		["multi-byte text, cut on a code point", "é".repeat(70), 123, "é".repeat(61)],
 		["an emoji that would not fit whole", `${"x".repeat(121)}🍯`, 123, "x".repeat(121)],
+		["four-byte code points, never split", "😀".repeat(40), 123, "😀".repeat(30)],
 		["text whose units overstate its bytes", "é".repeat(50), 123, "é".repeat(50)],
 	])("truncateUtf8: %s", (_case, reason, max, cut) => {
 		const out = truncateUtf8(reason, max)
