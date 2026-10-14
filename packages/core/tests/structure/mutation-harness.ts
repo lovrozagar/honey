@@ -216,6 +216,18 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/middleware/compress.ts",
 	},
 	{
+		catches: "v1: a proxy handing destination the raw request target, so //host leaves the upstream's origin (SSRF)",
+		disable: (original) => ({ proxy: rawTargetProxy(original.proxy as ProxyFactory) }),
+		id: "v1-proxy-ssrf",
+		module: "packages/core/src/proxy/proxy.ts",
+	},
+	{
+		catches: "v1: a proxy forwarding the client's Host, forwarding and hop-by-hop headers to the upstream",
+		disable: () => ({ upstreamHeaders: (request: Request) => new Headers(request.headers) }),
+		id: "v1-proxy-header-smuggling",
+		module: "packages/core/src/proxy/headers.ts",
+	},
+	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",
 		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
 		id: "v1-out-headers-validation",
@@ -297,6 +309,22 @@ function forwardedIp(real: IpRestrict): IpRestrict {
 }
 
 type Compress = (options?: CompressOptions) => unknown
+type ProxyFactory = (config: never) => (ctx: { req: Request }) => Promise<Response>
+
+/** proxy whose ctx.path is the raw request target, as if the router never normalized it. */
+function rawTargetProxy(real: ProxyFactory): ProxyFactory {
+	return (config) => {
+		const handler = real(config)
+		return (ctx) => {
+			const url = ctx.req.url
+			const raw = url.slice(url.indexOf("/", url.indexOf("://") + 3)).split("?")[0]
+			/* a Proxy, not a copy: ctx's getters read its private fields */
+			return handler(
+				new Proxy(ctx, { get: (target, key) => (key === "path" ? raw : Reflect.get(target, key, target)) }),
+			)
+		}
+	}
+}
 
 /** compress that encodes credentialed answers too. */
 function credentialedCompress(real: Compress): Compress {

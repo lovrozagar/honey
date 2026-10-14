@@ -50,6 +50,9 @@ const { ipRestrict } = (await import(
 const { compress } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/compress.ts")
 )) as typeof import("../../../src/middleware/compress.ts")
+const { proxy } = (await import(
+	resolvePath(REPO, "packages/core/src/proxy/proxy.ts")
+)) as typeof import("../../../src/proxy/proxy.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -253,5 +256,67 @@ describe("v1 adversarial: compressed length is no oracle for a secret (BREACH)",
 		}
 		const wrong = "0123456789abcdef0123456789abcdef"
 		expect(await lengthFor(token)).toBe(await lengthFor(wrong))
+	})
+})
+
+/** A request whose url is the raw target, as a runtime that does not normalize it hands it over. */
+function rawTarget(path: string, headers?: Record<string, string>): Request {
+	const req = new Request("http://app.test/", { headers })
+	Object.defineProperty(req, "url", { value: `http://app.test${path}` })
+	return req
+}
+
+describe("v1 adversarial: a proxied path never leaves the upstream's origin (SSRF)", () => {
+	it("//host and \\host targets reach destination as paths on the upstream; an encoded slash is a 400", async () => {
+		const seen: string[] = []
+		const app = honey<{}>()
+		app.all("/api/*rest").handler(
+			proxy({
+				destination: (_ctx, url) => {
+					seen.push(new URL(url, "http://up.internal").origin)
+					return new Response("ok")
+				},
+				/* a gateway strips its own prefix: what is left must still be a path */
+				rewriteUrl: (url) => url.slice("/api".length),
+			}),
+		)
+		const statuses = []
+		for (const path of ["/api//evil.example/x", "/api/\\evil.example/x", "/api/%2F%2Fevil.example/x"]) {
+			statuses.push((await app.fetch(rawTarget(path), {})).status)
+		}
+		expect([statuses, seen]).toEqual([
+			[200, 200, 400],
+			["http://up.internal", "http://up.internal"],
+		])
+	})
+})
+
+describe("v1 adversarial: nothing the client says about itself or the hop reaches the upstream", () => {
+	it("Host, forwarding headers, hop-by-hop and Connection-named headers, TE and Expect stay behind", async () => {
+		let sent: Record<string, string> = {}
+		const app = honey<{}>()
+		app.all("/api/*rest").handler(
+			proxy({
+				destination: (_ctx, _url, init) => {
+					sent = Object.fromEntries(new Headers(init.headers).entries())
+					return new Response("ok")
+				},
+			}),
+		)
+		await app.fetch(
+			rawTarget("/api/x", {
+				connection: "x-internal-auth",
+				expect: "100-continue",
+				forwarded: "for=10.0.0.1;host=admin.internal",
+				host: "admin.internal",
+				te: "trailers",
+				"x-forwarded-for": "10.0.0.1",
+				"x-forwarded-host": "admin.internal",
+				"x-internal-auth": "admin",
+				"x-real-ip": "10.0.0.1",
+			}),
+			{},
+		)
+		expect(sent).toEqual({ "x-forwarded-host": "app.test", "x-forwarded-proto": "http" })
 	})
 })

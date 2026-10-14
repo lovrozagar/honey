@@ -33,6 +33,7 @@ describe("ipRestrict(): the allow list", () => {
 	// v0: dc291495fd
 	// v0: 57f303a66a
 	// v0: 4aff2d77bd
+	// v0: a865b31aab
 	it.each([
 		["172.16.0.0/16", "172.16.255.1", 200],
 		["172.16.0.0/16", "172.17.0.1", 403],
@@ -81,6 +82,8 @@ describe("ipRestrict(): the deny list", () => {
 
 describe("ipRestrict(): the address is ctx.ip, the platform peer", () => {
 	// v0: 5bd7eb84e9
+	// v0: 2e696ae03d
+	// v0: 57d318b56c
 	it("no forwarding header a client sends can stand in for the peer", async () => {
 		const statuses = []
 		for (const header of ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "true-client-ip", "forwarded"]) {
