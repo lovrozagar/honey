@@ -50,8 +50,20 @@ describe("isSensitiveHeader: what never reaches a log line or a span", () => {
 		["Authorization", true],
 		["proxy-authorization", true],
 		["x-api-key", true],
+		["x-auth-token", true],
+		["X-CSRF-Token", true],
+		["x-xsrf-token", true],
+		["x-session-id", true],
+		["x-refresh-token", true],
+		["x-client-secret", true],
+		["x-password", true],
+		["apikey", true],
+		["x-api-key-id", true],
 		["content-type", false],
 		["x-request-id", false],
+		["x-tokenizer", false],
+		["x-secretary", false],
+		["cache-control", false],
 	])("%s: %s", (name, sensitive) => {
 		expect(isSensitiveHeader(name)).toBe(sensitive)
 	})

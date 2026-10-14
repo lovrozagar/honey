@@ -41,11 +41,19 @@ const SENSITIVE: Readonly<Record<string, true>> = /* @__PURE__ */ Object.freeze(
 	"set-cookie": true,
 	"x-api-key": true,
 	"x-auth-token": true,
+	"x-csrf-token": true,
+	"x-xsrf-token": true,
 })
 
-/** A header whose value is a credential or a cookie: never logged, never a span attribute. */
+/* a name with a token, secret, API key, password or session as a whole dash-separated part */
+const SENSITIVE_PART = /(?:^|-)(?:token|secret|api-?key|password|session)(?:$|-)/i
+
+/**
+ * A header whose value is a credential, a cookie or a session: never logged, never a span
+ * attribute. One definition for the request log, spans and curlLogger's redaction.
+ */
 export function isSensitiveHeader(name: string): boolean {
-	return Object.hasOwn(SENSITIVE, name.toLowerCase())
+	return Object.hasOwn(SENSITIVE, name.toLowerCase()) || SENSITIVE_PART.test(name)
 }
 
 /** The path of `target` (a URL or a path) without its query or fragment; `/` when empty. */

@@ -75,7 +75,12 @@ describe("a request full of secrets leaves none in the log", () => {
 		const res = await app.fetch(
 			new Request("https://app.example.com/orders/7?token=QUERY-SECRET", {
 				body: '{"card":"BODY-SECRET"}',
-				headers: { authorization: "Bearer AUTH-SECRET", cookie: "sid=COOKIE-SECRET" },
+				headers: {
+					authorization: "Bearer AUTH-SECRET",
+					cookie: "sid=COOKIE-SECRET",
+					"x-csrf-token": "CSRF-SECRET",
+					"x-session-id": "SESSION-SECRET",
+				},
 				method: "POST",
 			}),
 			{},

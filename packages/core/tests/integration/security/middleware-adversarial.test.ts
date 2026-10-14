@@ -59,6 +59,9 @@ const { staticFiles } = (await import(
 const { timingSafeEqual } = (await import(
 	resolvePath(REPO, "packages/core/src/security/crypto.ts")
 )) as typeof import("../../../src/security/crypto.ts")
+const { curlLogger } = (await import(
+	resolvePath(REPO, "packages/core/src/observability/curl-logger.ts")
+)) as typeof import("../../../src/observability/curl-logger.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -368,5 +371,31 @@ describe("v1 adversarial: a near-miss secret never compares equal", () => {
 		const presented = ["Tok_9f3a\ud800", "tok_9f3a\ud801", "tok_9f3a", "tok_9f3a\udfff", "tok_9f3a\ufffd"]
 		const results = await Promise.all(presented.map((guess) => timingSafeEqual(stored, guess)))
 		expect([results, await timingSafeEqual(stored, stored)]).toEqual([[false, false, false, false, false], true])
+	})
+})
+
+describe("v1 adversarial: the request logger leaks no credential", () => {
+	it("Authorization, Cookie, a CSRF token, a session header, a token query and a non-text body never reach the line", async () => {
+		const lines: string[] = []
+		const app = honey<{}>()
+		app
+			.use(curlLogger({ body: true, log: (data) => lines.push(data.curl) }))
+			.post("/login")
+			.handler((ctx) => ctx.res.text("ok", "in"))
+		await app.fetch(
+			new Request("http://app.test/login?access_token=TOKEN-SECRET&next=/home", {
+				body: "password=BODY-SECRET",
+				headers: {
+					authorization: "Bearer AUTH-SECRET",
+					"content-type": "multipart/form-data; boundary=x",
+					cookie: "sid=COOKIE-SECRET",
+					"x-csrf-token": "CSRF-SECRET",
+					"x-session-id": "SESSION-SECRET",
+				},
+				method: "POST",
+			}),
+			{},
+		)
+		expect([lines.length, lines.join("\n").match(/[A-Z]+-SECRET/g)]).toEqual([1, null])
 	})
 })

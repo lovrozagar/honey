@@ -26,6 +26,7 @@ import {
 	type Compress,
 	type CreateWsSession,
 	type IpRestrict,
+	type LoggerFactory,
 	type MemoryStoreFactory,
 	type NormalizePath,
 	type ProxyFactory,
@@ -33,6 +34,7 @@ import {
 	uncapped,
 	uncappedStore,
 	uncheckedStatic,
+	unredacted,
 	utf8Equal,
 	unvalidatedSse,
 	withoutBackpressure,
@@ -236,6 +238,12 @@ export const GUARDS: readonly Guard[] = [
 		disable: () => ({ timingSafeEqual: utf8Equal }),
 		id: "v1-timing-safe-code-units",
 		module: "packages/core/src/security/crypto.ts",
+	},
+	{
+		catches: "v1: a request log line carrying the credentials, cookies and CSRF tokens the request sent",
+		disable: (original) => ({ curlLogger: unredacted(original.curlLogger as LoggerFactory) }),
+		id: "v1-curl-logger-redaction",
+		module: "packages/core/src/observability/curl-logger.ts",
 	},
 	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",

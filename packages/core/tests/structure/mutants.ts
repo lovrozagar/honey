@@ -270,3 +270,10 @@ export async function utf8Equal(a: string | Uint8Array, b: string | Uint8Array):
 	const [x, y] = [utf8Bytes(a), utf8Bytes(b)]
 	return x.length === y.length && x.every((byte, i) => byte === y[i])
 }
+
+export type LoggerFactory = (options?: { redactHeader?: (name: string, value: string) => string | null }) => unknown
+
+/** curlLogger that logs every header value as it came. */
+export function unredacted(real: LoggerFactory): LoggerFactory {
+	return (options) => real({ ...options, redactHeader: (_name, value) => value })
+}
