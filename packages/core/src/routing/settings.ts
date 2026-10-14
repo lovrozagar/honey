@@ -8,6 +8,7 @@ import type { HoneyError } from "../errors/error.ts"
 import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
+import type { WSAdapter } from "../ws/contract.ts"
 
 /** An app's error factory (`defineErrors`), as its settings hold it. */
 export type ErrorFactories = Readonly<Record<string, (...args: never[]) => unknown>>
@@ -41,6 +42,7 @@ export type AppSettings<TEnv = unknown> = {
 	onNotFound: OnNotFoundFn<TEnv> | null
 	stripPrefix: string | null
 	trailingSlash: "enforce" | "ignore" | "strip"
+	wsAdapter: WSAdapter | null
 }
 
 /** The default shape, unchanged. Identity, so finalize can tell a formatter was never set. */
@@ -66,6 +68,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		onNotFound: null,
 		stripPrefix: null,
 		trailingSlash: "ignore",
+		wsAdapter: null,
 	}
 }
 
@@ -118,6 +121,16 @@ export abstract class SettingsChain<TEnv> {
 
 	onNotFound(handler: OnNotFoundFn<TEnv>): this {
 		this.settings.onNotFound = handler
+		return this
+	}
+
+	/**
+	 * The runtime's WebSocket adapter, which ws routes upgrade through: `cfWebSocket()` on
+	 * Workers. `serve(app)` sets the runtime's own on Node and Bun when none is set; on Bun, set
+	 * it before `serve()`.
+	 */
+	wsAdapter(adapter: WSAdapter): this {
+		this.settings.wsAdapter = adapter
 		return this
 	}
 

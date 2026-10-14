@@ -19,7 +19,7 @@ import type {
 	ScopedMwEntry,
 	SkipRouteRecord,
 } from "./app-types.ts"
-import { parsePattern } from "./pattern.ts"
+import { joinPatterns, parsePattern } from "./pattern.ts"
 import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, type RouteSource, settle } from "./register.ts"
 import type { MergePath, ParamsFromPath } from "./types.ts"
 
@@ -237,4 +237,31 @@ export class RouteBuilder<B extends BuilderTypes> {
 		for (const method of [s.method, ...s.extraMethods]) addRoute(s.graph, method, segments, source)
 		return s.parent as HandlerReturn<B>
 	}
+}
+
+/**
+ * The builder for a route on `view`'s handle: `method` (and `extraMethods`) at `path` under the
+ * handle's basePath, pending until `.handler()`.
+ */
+export function startRoute(
+	graph: HoneyGraph,
+	view: HandleView,
+	parent: unknown,
+	route: { readonly extraMethods: readonly string[]; readonly method: string; readonly path: string },
+): unknown {
+	const fullPath = joinPatterns(view.basePath, route.path)
+	const pending: PendingRoute = { id: `${[route.method, ...route.extraMethods].join(",")} ${fullPath}` }
+	graph.pending.add(pending)
+	return new RouteBuilder({
+		...undeclared(),
+		extraMethods: route.extraMethods,
+		graph,
+		meta: view.chainMeta,
+		method: route.method,
+		middlewares: [],
+		parent,
+		path: fullPath,
+		pending,
+		view,
+	})
 }

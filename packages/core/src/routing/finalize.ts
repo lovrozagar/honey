@@ -57,6 +57,8 @@ export type FinalTable = {
 	readonly plans: ReadonlyMap<RouteId, Plan>
 	/** method → path → plan, for patterns without params or wildcards */
 	readonly statics: Readonly<Record<string, Readonly<Record<string, Plan>>>>
+	/** whether any WebSocket route exists: an app without one never reads the Upgrade header */
+	readonly ws: boolean
 }
 
 const EMPTY_META: Readonly<Record<string, unknown>> = /* @__PURE__ */ Object.freeze({})
@@ -178,16 +180,18 @@ export function finalize(g: HoneyGraph, hooks: FinalizeHooks): FinalTable {
 	assertNothingDiscarded(g)
 	const plans = new Map<RouteId, Plan>()
 	const statics: Record<string, Record<string, Plan>> = dict()
+	let ws = false
 	for (const [id, r] of g.records) {
 		const variants = expandOptional(r.sg)
 		const plan = planRoute(g, r, variants, hooks)
 		plans.set(id, plan)
 		const { method } = splitRouteId(id)
+		if (method === "WS") ws = true
 		for (const variant of variants) {
 			if (isStaticPattern(variant)) (statics[method] ??= dict())[canonical(variant)] = plan
 		}
 	}
 	const miss = planMiss(g, hooks)
-	g.final = { epoch: g.epoch, miss, notFound: miss.pfChain.length === 0 ? hooks.notFound : null, plans, statics }
+	g.final = { epoch: g.epoch, miss, notFound: miss.pfChain.length === 0 ? hooks.notFound : null, plans, statics, ws }
 	return g.final
 }

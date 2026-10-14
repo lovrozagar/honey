@@ -5,7 +5,7 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
+import type { ApplyScoped, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -16,12 +16,12 @@ import {
 	type HoneyGraph,
 	markUsed,
 	mount,
-	type PendingRoute,
 	ROOT_VIEW,
 } from "./register.ts"
-import { RouteBuilder, type StartOf, undeclared } from "./route-builder.ts"
+import { type StartOf, startRoute } from "./route-builder.ts"
 import { type AppSettings, SettingsChain } from "./settings.ts"
 import type { HttpMethod, MergePath, PrefixRoutes } from "./types.ts"
+import { startWsRoute, type WSRouteBuilder } from "./ws-builder.ts"
 
 /** An app's graph slot: not exported from the package; finalize readers (tests, codegen) reach the graph through it. */
 export const GRAPH: unique symbol = /* @__PURE__ */ Symbol("honey.graph")
@@ -230,21 +230,7 @@ export class Honey<
 	}
 
 	#builder(method: string, path: string, extraMethods: readonly string[] = []): unknown {
-		const fullPath = joinPatterns(this.#view.basePath, path)
-		const pending: PendingRoute = { id: `${[method, ...extraMethods].join(",")} ${fullPath}` }
-		this.#graph.pending.add(pending)
-		return new RouteBuilder({
-			...undeclared(),
-			extraMethods,
-			graph: this.#graph,
-			meta: this.#view.chainMeta,
-			method,
-			middlewares: [],
-			parent: this,
-			path: fullPath,
-			pending,
-			view: this.#view,
-		})
+		return startRoute(this.#graph, this.#view, this, { extraMethods, method, path })
 	}
 
 	/** One route for several methods: one record per method. */
@@ -279,6 +265,13 @@ export class Honey<
 	}
 	put<const TPath extends string>(path: TPath): StartOf<this, TPath, "PUT"> {
 		return this.#builder("PUT", path) as never
+	}
+
+	/** A WebSocket route: `.handler({ onOpen, onMessage, onClose, … })` registers it. */
+	ws<const TPath extends string>(
+		path: TPath,
+	): WSRouteBuilder<TCtx & ApplyScoped<TScopedMw, MergePath<TBasePath, TPath>>, MergePath<TBasePath, TPath>, this> {
+		return startWsRoute(this.#graph, this.#view, this, path)
 	}
 
 	/** The Fetch handler an adapter calls. Finalizes once; a later registration re-finalizes. */

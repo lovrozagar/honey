@@ -36,21 +36,12 @@ export type WSHandler<TCtx = unknown> = {
 	onReconnect?(ctx: TCtx, ws: WSContext, token: string): Promise<void> | void
 }
 
-export type WSPreUpgrade = {
-	response: Response
-	socket: WSContext
-	/** Run `fn` now if the socket is open, else on its next open. */
-	whenOpen(fn: () => void): void
-}
-
 export type WSAdapter = {
 	upgrade(
 		req: Request,
 		env: unknown,
 		handler: WSHandler<unknown>,
 	): Promise<{ response: Response; socket: WSContext }> | { response: Response; socket: WSContext }
-	/** For a runtime that must upgrade in the same turn as its fetch callback (Bun, Workers). */
-	preUpgrade?(req: Request): WSPreUpgrade | undefined
 	/** Close every open connection (graceful shutdown). */
 	closeAll?(code: number, reason: string): void
 	readonly options?: ResolvedWSOptions

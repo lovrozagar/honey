@@ -11,13 +11,19 @@ import { compileChain, type MaybePromise } from "../middleware/middleware.ts"
 import { replaceResponse, withRawBody } from "../response/builder.ts"
 import type { StatusKey } from "../response/status.ts"
 import { finalize, type FinalizeHooks, type FinalTable, type Plan } from "./finalize.ts"
-import { matchRoute } from "./match.ts"
+import { matchRoute, matchWsRoute } from "./match.ts"
 import type { HoneyGraph } from "./register.ts"
 import { normalizePath, pathOfUrl, searchOfUrl } from "./request-path.ts"
 import { type AppSettings, defaultErrorFormatter, type ErrorCtx } from "./settings.ts"
+import type { WSAdapter } from "../ws/contract.ts"
 
 /** The request state of one fetch: the context's request fields, the plan it runs, the 405 answer. */
-export type FetchState<TEnv = unknown> = RequestState<TEnv> & { allowed: string[] | null; plan: Plan }
+export type FetchState<TEnv = unknown> = RequestState<TEnv> & {
+	allowed: string[] | null
+	plan: Plan
+	/** on a ws upgrade, the serving app's adapter (`null` when none is set) */
+	ws?: WSAdapter | null
+}
 
 const EMPTY_PARAMS: Record<string, string> = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null))
 
@@ -224,6 +230,29 @@ function preflight(
 	return plan.pf(new HoneyContext(state, plan.route, hit.params))
 }
 
+function isWebSocketUpgrade(request: Request): boolean {
+	return request.headers.get("upgrade")?.toLowerCase() === "websocket"
+}
+
+/** A plain GET to a ws-only path: the client must ask for the upgrade. */
+function upgradeRequired(): Response {
+	return new Response("Upgrade Required", { headers: { upgrade: "websocket" }, status: 426 })
+}
+
+/** A ws upgrade on a ws route's path runs that route with the serving app's adapter; `null` when it is not one. */
+function upgrade(g: HoneyGraph, final: FinalTable, state: FetchState, method: string): MaybePromise<Response> | null {
+	if (!final.ws || method !== "GET" || !isWebSocketUpgrade(state.req)) return null
+	const ws = matchWsRoute(g.root, state.path)
+	if (ws === null) return null
+	state.ws = g.settings.wsAdapter
+	return run(state, final.plans.get(ws.id) as Plan, ws.params)
+}
+
+/** A plain GET that no HTTP route answers, on a path a ws route serves. */
+function onlyWs(g: HoneyGraph, final: FinalTable, state: FetchState, matched: boolean): boolean {
+	return !matched && final.ws && state.req.method === "GET" && matchWsRoute(g.root, state.path) !== null
+}
+
 /** Serve one request from the graph. */
 export function dispatch(
 	g: HoneyGraph,
@@ -243,9 +272,13 @@ export function dispatch(
 	const path = afterPrefix(s.stripPrefix, fullPath)
 	const method = request.method.toUpperCase()
 	const state: FetchState = { allowed: null, env, executionCtx, path, plan: final.miss, req: request }
+	/* a ws upgrade goes to the ws route on its path; an app without one never reads the header */
+	const upgraded = upgrade(g, final, state, method)
+	if (upgraded !== null) return upgraded
 	const hit = final.statics[method]?.[path] ?? (method === "HEAD" ? final.statics.GET?.[path] : undefined)
 	if (hit !== undefined) return run(state, hit, EMPTY_PARAMS)
 	const match = matchRoute(g.root, method, path)
+	if (onlyWs(g, final, state, match?.matched === true)) return upgradeRequired()
 	if (match === null) return miss(s, final, state, null)
 	if (!match.matched) {
 		const answered = method === "OPTIONS" ? preflight(g, final, state, match.allowed) : null
