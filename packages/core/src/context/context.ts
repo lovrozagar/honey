@@ -93,6 +93,14 @@ export function isReservedCtxKey(key: string): boolean {
 	return Object.hasOwn(RESERVED, key)
 }
 
+/**
+ * Put `req` in place of `ctx.req`: bodyLimit's counted body. The headers, method and URL stay what
+ * they were, so ctx's parsed views (headers, cookies, the query) still describe it.
+ */
+export function replaceRequest(ctx: object, req: Request): void {
+	;(ctx as { req: Request }).req = req
+}
+
 /** Record the error behind the response on `ctx.error`, read-only for user code. */
 export function setCtxError(ctx: HoneyContext<never> | HoneyContext, error: HoneyError): void {
 	;(ctx as { error: HoneyError | undefined }).error = error
