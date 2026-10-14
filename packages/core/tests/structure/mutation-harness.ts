@@ -12,6 +12,7 @@ import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
 import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
+import type { WSContext, WSHandler } from "../../src/ws/contract.ts"
 
 export type Guard = {
 	/** what the suite must catch once this guard is gone */
@@ -145,7 +146,44 @@ export const GUARDS: readonly Guard[] = [
 		id: "v1-sse-field-injection",
 		module: "packages/core/src/response/sse.ts",
 	},
+	{
+		catches: "v1: a cross-site WebSocket upgrade carrying credentials let through",
+		disable: () => ({ originAllowed: () => true }),
+		id: "v1-ws-origin",
+		module: "packages/core/src/ws/origin.ts",
+	},
+	{
+		catches: "v1: a flood of WebSocket messages queued without bound for a handler that never drains",
+		disable: (original) => ({ createWsSession: uncapped(original.createWsSession as CreateWsSession) }),
+		id: "v1-ws-pending-cap",
+		module: "packages/core/src/ws/session.ts",
+	},
 ]
+
+type CreateWsSession = (options: never) => WSHandler<unknown>
+
+/** `ws` with its 1008 close ignored. */
+function keptOpen(ws: WSContext): WSContext {
+	return {
+		get bufferedAmount() {
+			return ws.bufferedAmount
+		},
+		close: (code, reason) => (code === 1008 ? undefined : ws.close(code, reason)),
+		raw: ws.raw,
+		get readyState() {
+			return ws.readyState
+		},
+		send: (data) => ws.send(data),
+	}
+}
+
+/** createWsSession whose pending cap never closes the connection: the flood just keeps arriving. */
+function uncapped(real: CreateWsSession): CreateWsSession {
+	return (options) => {
+		const handler = real(options)
+		return { ...handler, onMessage: (ctx, ws, data) => handler.onMessage?.(ctx, keptOpen(ws), data) }
+	}
+}
 
 /** producerStream whose writes resolve at once, demand or not. */
 function withoutBackpressure(real: typeof producerStream): typeof producerStream {
