@@ -40,31 +40,6 @@ describe("honey/no-module-side-effects", () => {
 	})
 })
 
-describe("honey/no-module-side-effects: optional feature entries", () => {
-	it("accepts a call statement marked `// feature-entry: <name>`, on its line or the line above", () => {
-		const fixture = {
-			"packages/core/src/trust/trust.ts": "// feature-entry: trust\nregisterFeature('trust', { compileTrust })\n",
-			"packages/core/src/proxy/proxy.ts": "registerFeature('proxy', {}) // feature-entry: proxy\n",
-		}
-		expect(reportsOf(rule, fixture)).toEqual([])
-	})
-
-	it("exempts nothing but a marked call statement, and needs a feature name", () => {
-		const fixture = {
-			"packages/core/src/a.ts": "// feature-entry: a\nglobalThis.flag = 1\n",
-			"packages/core/src/b.ts": "// feature-entry:\nregisterFeature('b', {})\n",
-			"packages/core/src/c.ts": "// feature-entry: c\nconst slot = registerFeature('c', {})\n",
-			"packages/core/src/d.ts": "// feature-entry: d\nregisterFeature('d', {})\nsetup()\n",
-		}
-		expect(reportsOf(rule, fixture)).toEqual([
-			{ file: "packages/core/src/a.ts", message: MESSAGE },
-			{ file: "packages/core/src/b.ts", message: MESSAGE },
-			{ file: "packages/core/src/c.ts", message: MESSAGE },
-			{ file: "packages/core/src/d.ts", message: MESSAGE },
-		])
-	})
-})
-
 describe("honey/no-module-side-effects: scope", () => {
 	it("allows declarations, literals, functions and types", () => {
 		const fixture = {

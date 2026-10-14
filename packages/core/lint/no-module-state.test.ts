@@ -4,7 +4,7 @@ import { oxlintReports, reportsOf } from "./rule-harness.ts"
 
 const rule = plugin.rules["no-module-state"]
 const MESSAGE =
-	"module-scope state needs `// per-process-constant: <reason>` with an allowlisted reason (raw-body, text-codec, rate-limit-store, i18n-dict, build-id, feature-slot)"
+	"module-scope state needs `// per-process-constant: <reason>` with an allowlisted reason (raw-body, text-codec, rate-limit-store, i18n-dict, build-id)"
 
 describe("honey/no-module-state", () => {
 	it("rejects module-scope let, var and constructed state", () => {
@@ -31,8 +31,6 @@ describe("honey/no-module-state", () => {
 				"// per-process-constant: text-codec\nconst decoder = new TextDecoder()\nexport const decode = (b: Uint8Array) => decoder.decode(b)\n",
 			"packages/core/src/build/plugin.ts":
 				"let buildId = '' // per-process-constant: build-id\nexport const id = () => buildId\n",
-			"packages/core/src/runtime/feature-slots.ts":
-				"// per-process-constant: feature-slot\nconst slots = new Map<string, unknown>()\nexport const get = (k: string) => slots.get(k)\n",
 		}
 		expect(reportsOf(rule, fixture)).toEqual([])
 	})

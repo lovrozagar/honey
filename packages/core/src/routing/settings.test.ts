@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { HoneyError } from "../errors/error.ts"
 import type { StandardSchemaLike } from "../validation/standard-schema.ts"
-import { registerFeature, resetFeature } from "../runtime/feature-slots.ts"
-import { TRUST_OFF } from "../trust/client-info.ts"
-import { compileTrust } from "../trust/trust.ts"
 import { type Honey, honey } from "./app.ts"
 import { createSettings, defaultErrorFormatter, normalizeStripPrefix } from "./settings.ts"
 
@@ -108,27 +105,5 @@ describe("settings setters: handles and formatters", () => {
 		})
 		expect(JSON.parse((await get(mapped, "/std"))[1])).toEqual({ code: "gone" })
 		expect(JSON.parse((await get(mapped, "/data"))[1])).toEqual({ code: "x", d: 1 })
-	})
-})
-
-describe("settings: trustProxy", () => {
-	it("compiles through the trust entry, returning the handle it was called on", () => {
-		const app = honey<{}>()
-		expect(app.trustProxy(1)).toBe(app)
-		expect(() => app.trustProxy(["nope"])).toThrow('trustProxy: "nope" is not an IP address or CIDR range')
-	})
-
-	it("needs the entry for anything but off, and names the import", () => {
-		resetFeature("trust")
-		try {
-			expect(() => honey<{}>().trustProxy(1)).toThrow(
-				'honey: app.trustProxy() requires `import "@lovrozagar/honey/trust"` in the app entry.',
-			)
-			const off = honey<{}>()
-			expect(off.trustProxy(false).trustProxy(0)).toBe(off)
-			expect(createSettings().trust).toBe(TRUST_OFF)
-		} finally {
-			registerFeature("trust", { compileTrust })
-		}
 	})
 })
