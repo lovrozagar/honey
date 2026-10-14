@@ -4,6 +4,7 @@
  * the new route. A one-shot method disappears from the chain once called.
  */
 import type { ERROR_META } from "../errors/errors.ts"
+import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { TypedResponse } from "../response/response.ts"
 import type { Honey } from "./app.ts"
@@ -55,6 +56,16 @@ export type BuilderChain<B extends BuilderTypes> = Omit<RouteBuilder<B>, B["used
 type DeclarableKey<B extends BuilderTypes> = [B["errorFactory"]] extends [never]
 	? never
 	: Exclude<keyof B["errorFactory"] & string, B["defaultErrors"]>
+
+type ErrorMetaOf<F> = F extends { readonly [ERROR_META]: infer M } ? M : {}
+
+/** The route's factory once `.errors(named, ...)` ran: the named factory's keys and meta over the app's. */
+type WithNamedFactory<TApp, TNamed> = [TApp] extends [never]
+	? TNamed
+	: Omit<TApp, keyof TNamed> &
+			Omit<TNamed, typeof ERROR_META> & {
+				readonly [ERROR_META]: Omit<ErrorMetaOf<TApp>, keyof ErrorMetaOf<TNamed>> & ErrorMetaOf<TNamed>
+			}
 
 /** The handler's ctx for the route `B` describes. */
 export type RouteHandlerCtx<B extends BuilderTypes> = HandlerCtx<
@@ -128,6 +139,8 @@ export type BuilderState = {
 	readonly boundaryKey: string | null
 	/** keys the route declares itself */
 	readonly errorKeys: ReadonlySet<string>
+	/** the factory `.errors(factory, ...keys)` named */
+	readonly errorSource: ErrorFactories | null
 	readonly extraMethods: readonly string[]
 	readonly graph: HoneyGraph
 	/** explicit meta: chain `.meta()` overlaid by route `.meta()` */
@@ -140,6 +153,11 @@ export type BuilderState = {
 	readonly path: string
 	readonly pending: PendingRoute
 	readonly view: HandleView
+}
+
+/** A new route's error declarations: no keys, no boundary, no named factory. */
+export function undeclared(): Pick<BuilderState, "boundaryKey" | "errorKeys" | "errorSource"> {
+	return { boundaryKey: null, errorKeys: new Set(), errorSource: null }
 }
 
 export class RouteBuilder<B extends BuilderTypes> {
@@ -160,13 +178,23 @@ export class RouteBuilder<B extends BuilderTypes> {
 	>(
 		factory: TFactory,
 		...keys: TKeys[]
-	): BuilderChain<Next<B, { errorKeys: B["errorKeys"] | TKeys; used: B["used"] | "errors" }>>
+	): BuilderChain<
+		Next<
+			B,
+			{
+				errorFactory: WithNamedFactory<B["errorFactory"], TFactory>
+				errorKeys: B["errorKeys"] | TKeys
+				used: B["used"] | "errors"
+			}
+		>
+	>
 	errors<TKeys extends DeclarableKey<B>>(
 		...keys: TKeys[]
 	): BuilderChain<Next<B, { errorKeys: B["errorKeys"] | TKeys; used: B["used"] | "errors" }>>
 	errors(...args: unknown[]): unknown {
-		const keys = (typeof args[0] === "object" && args[0] !== null ? args.slice(1) : args) as string[]
-		return this.#next({ errorKeys: new Set([...this.#s.errorKeys, ...keys]) })
+		const named = typeof args[0] === "object" && args[0] !== null ? (args[0] as ErrorFactories) : null
+		const keys = (named === null ? args : args.slice(1)) as string[]
+		return this.#next({ errorKeys: new Set([...this.#s.errorKeys, ...keys]), errorSource: named })
 	}
 
 	/** The error an undeclared or unknown throw becomes on this route. */
@@ -198,6 +226,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 			cm: s.view.chain,
 			cv: s.view.contextValues,
 			dk: s.errorKeys,
+			ef: s.errorSource,
 			fn: fn as unknown as RouteSource["fn"],
 			own: s.graph.settings,
 			rb: s.boundaryKey,

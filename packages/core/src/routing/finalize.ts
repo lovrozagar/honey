@@ -70,27 +70,52 @@ function routeMeta(chain: readonly RuntimeMiddleware[], explicit: Readonly<Recor
 
 type Resolved = { errors: ErrorFactories | null; policy: ErrorPolicy }
 
+/** What a route declares about its errors: its own keys, its boundary and the factory it named. */
+type RouteErrors = Pick<RouteHandler, "dk" | "ef" | "rb">
+
+/** The keys a route may throw: the app's defaults, its chain's, its own and its boundary. */
+function declaredKeys(
+	src: AppSettings<unknown>,
+	chain: readonly RuntimeMiddleware[],
+	own: ReadonlySet<string>,
+	boundaryKey: string | null,
+): Set<string> {
+	const declared = new Set<string>([...src.defaultErrorKeys, ...chainErrorKeys(chain), ...own])
+	if (boundaryKey !== null) declared.add(boundaryKey)
+	return declared
+}
+
+/**
+ * ctx.errors: a frozen copy, so a handler never reaches a factory itself. An open route (nothing
+ * declared) gets every key of the app's factory; a declared key comes from the factory the route
+ * named, else the app's.
+ */
+function ctxErrors(
+	factory: ErrorFactories | null,
+	named: ErrorFactories | null,
+	declared: ReadonlySet<string> | null,
+): ErrorFactories | null {
+	if (factory === null && named === null) return null
+	const subset: Record<string, (...args: never[]) => unknown> = Object.create(null)
+	if (declared === null) return Object.freeze(Object.assign(subset, factory))
+	for (const key of declared) {
+		const from = named !== null && Object.hasOwn(named, key) ? named : factory
+		if (from !== null && Object.hasOwn(from, key)) subset[key] = from[key]
+	}
+	return Object.freeze(subset)
+}
+
 /** The error keys, boundary and factory a chain resolves to under `src`'s defaults. */
 function resolveErrors(
 	src: AppSettings<unknown>,
 	chain: readonly RuntimeMiddleware[],
-	own: Resolved["policy"]["declared"],
-	rb: string | null,
+	route: RouteErrors | null,
 ): Resolved {
-	const declared = new Set<string>(src.defaultErrorKeys)
-	for (const key of chainErrorKeys(chain)) declared.add(key)
-	if (own !== null) for (const key of own) declared.add(key)
-	const boundaryKey = rb ?? src.defaultBoundaryKey
-	if (boundaryKey !== null) declared.add(boundaryKey)
-	const factory = src.errorFactory
-	const enforce = declared.size > 0
-	let errors: ErrorFactories | null = factory
-	if (factory !== null && enforce) {
-		const subset: Record<string, (...args: never[]) => unknown> = Object.create(null)
-		for (const key of declared) if (Object.hasOwn(factory, key)) subset[key] = factory[key]
-		errors = Object.freeze(subset)
-	}
-	return { errors, policy: { boundaryKey, declared: enforce ? declared : null, factory } }
+	const boundaryKey = route?.rb ?? src.defaultBoundaryKey
+	const keys = declaredKeys(src, chain, route?.dk ?? new Set(), boundaryKey)
+	const declared = keys.size > 0 ? keys : null
+	const errors = ctxErrors(src.errorFactory, route?.ef ?? null, declared)
+	return { errors, policy: { boundaryKey, declared, factory: src.errorFactory } }
 }
 
 /** The scoped middleware a pattern runs: whole where the scope covers it, behind the path check where it covers part. */
@@ -108,7 +133,7 @@ function scopesFor(g: HoneyGraph, pattern: string): RuntimeMiddleware[] {
 function planRoute(g: HoneyGraph, r: RouteHandler, hooks: FinalizeHooks): Plan {
 	const src = r.own.errorFactory === null ? g.settings : r.own
 	const chain = [...r.cm, ...scopesFor(g, r.rp), ...r.rm]
-	const { errors, policy } = resolveErrors(src, chain, r.dk, r.rb)
+	const { errors, policy } = resolveErrors(src, chain, r)
 	const meta = routeMeta(chain, r.xm)
 	r.mt = meta
 	return {
@@ -131,7 +156,7 @@ function planMiss(g: HoneyGraph, hooks: FinalizeHooks): Plan {
 	const chains = [...g.records.values()].map((r) => r.cm)
 	const prefix = commonPrefix(chains.length > 0 ? chains : [...g.served])
 	const chain = [...prefix, ...g.scoped.map((entry) => entry.guard)]
-	const { errors, policy } = resolveErrors(g.settings, chain, null, null)
+	const { errors, policy } = resolveErrors(g.settings, chain, null)
 	const meta = routeMeta(chain, null)
 	return {
 		cv: null,

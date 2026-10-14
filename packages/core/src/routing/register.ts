@@ -18,7 +18,7 @@ import {
 	splitRouteId,
 } from "./pattern.ts"
 import type { RouteRecord } from "./record.ts"
-import { type AppSettings, createSettings } from "./settings.ts"
+import { type AppSettings, createSettings, type ErrorFactories } from "./settings.ts"
 import { createNode, insertLeaf, type TreeNode } from "./tree.ts"
 
 /** A registered route: what it was registered with, before finalize resolves it against the graph. */
@@ -29,6 +29,8 @@ export type RouteHandler = RouteRecord & {
 	readonly cv: Readonly<Record<string, unknown>> | null
 	/** error keys the route declared itself (`.errors()`, `.boundary()`) */
 	readonly dk: ReadonlySet<string>
+	/** the factory `.errors(factory, ...keys)` named; its keys come from it, not the app's */
+	readonly ef: ErrorFactories | null
 	readonly fn: (ctx: object) => MaybePromise<Response>
 	/** the settings of the app the route was registered on */
 	readonly own: AppSettings<unknown>

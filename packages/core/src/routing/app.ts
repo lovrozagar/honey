@@ -19,7 +19,7 @@ import {
 	type PendingRoute,
 	ROOT_VIEW,
 } from "./register.ts"
-import { RouteBuilder, type StartOf } from "./route-builder.ts"
+import { RouteBuilder, type StartOf, undeclared } from "./route-builder.ts"
 import { type AppSettings, SettingsChain } from "./settings.ts"
 import type { HttpMethod, MergePath, PrefixRoutes } from "./types.ts"
 
@@ -234,8 +234,7 @@ export class Honey<
 		const pending: PendingRoute = { id: `${[method, ...extraMethods].join(",")} ${fullPath}` }
 		this.#graph.pending.add(pending)
 		return new RouteBuilder({
-			boundaryKey: null,
-			errorKeys: new Set(),
+			...undeclared(),
 			extraMethods,
 			graph: this.#graph,
 			meta: this.#view.chainMeta,

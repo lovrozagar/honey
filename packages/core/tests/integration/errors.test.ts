@@ -423,6 +423,44 @@ const ON_ERROR: Array<[string, () => unknown, object]> = [
 	["rejects", () => Promise.reject(new Error("onError broke")), INTERNAL],
 ]
 
+describe("ctx.errors: open routes and named factories", () => {
+	// v0: a88f6dff48
+	it("a route with neither declared keys nor app defaults is open: the whole factory, and any of its keys reaches the client", async () => {
+		const app = honey<{}>().errorFactory(errors)
+		app.get("/open").handler((ctx) => ctx.res.json("ok", errorsOf(ctx.errors)))
+		app.get("/throw").handler(() => {
+			throw errors.rate_limited()
+		})
+		const all = ["auth_failed", "not_found", "rate_limited", "wrapped"]
+		expect(await send(app, "/open")).toEqual({ body: { frozen: true, keys: all }, headers: JSON_TYPE, status: 200 })
+		expect(await send(app, "/throw")).toEqual(failure("rate_limited", 429, "too_many_requests"))
+	})
+
+	it("errors(factory, ...keys) puts those keys of that factory on ctx.errors, beside the app's defaults", async () => {
+		const named = defineErrors({ email_taken: "conflict", org_limit: "forbidden" })
+		const bare = honey<{}>()
+		bare
+			.get("/keys")
+			.errors(named, "email_taken")
+			.handler((ctx) => ctx.res.json("ok", errorsOf(ctx.errors)))
+		bare
+			.get("/throw")
+			.errors(named, "email_taken")
+			.handler((ctx) => {
+				throw ctx.errors.email_taken()
+			})
+		const withDefaults = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
+		withDefaults
+			.get("/keys")
+			.errors(named, "email_taken")
+			.handler((ctx) => ctx.res.json("ok", errorsOf(ctx.errors)))
+		const keys = (list: string[]) => ({ body: { frozen: true, keys: list }, headers: JSON_TYPE, status: 200 })
+		expect(await send(bare, "/keys")).toEqual(keys(["email_taken"]))
+		expect(await send(bare, "/throw")).toEqual(failure("email_taken", 409, "conflict"))
+		expect(await send(withDefaults, "/keys")).toEqual(keys(["auth_failed", "email_taken"]))
+	})
+})
+
 describe("the app's error handlers", () => {
 	it.each(ON_ERROR)("an onError that %s, given what was thrown, gives %o", async (_label, onError, answer) => {
 		const seen: unknown[] = []

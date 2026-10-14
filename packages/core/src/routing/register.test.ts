@@ -24,6 +24,7 @@ function source(): RouteSource {
 		cm: [],
 		cv: null,
 		dk: new Set(),
+		ef: null,
 		fn: () => new Response("x"),
 		own: createGraph().settings,
 		rb: null,

@@ -109,8 +109,10 @@ describe("ctx.errors", () => {
 			.get("/b")
 			.errors(errors, "email_taken", "org_limit")
 			.handler((ctx) => {
-				expectTypeOf(ctx.errors.email_taken).toBeFunction()
-				expectTypeOf(ctx.errors.org_limit).toBeFunction()
+				expectTypeOf(ctx.errors.email_taken).toEqualTypeOf(errors.email_taken)
+				expectTypeOf(ctx.errors.org_limit).toEqualTypeOf(errors.org_limit)
+				expectTypeOf(ctx.errors).not.toHaveProperty("invalid_input")
+				expectTypeOf(ctx.errors).not.toHaveProperty("other")
 				return ctx.res.text("ok", "ok")
 			})
 	})
