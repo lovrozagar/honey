@@ -44678,6 +44678,7 @@
 		"ec806ce613": "v1 parses the query from req.url as a string (searchOfUrl); there is no URL object and no urlFn hook",
 		"efbc236424": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"f94bb1b63e": "covered-by: every bit-02 suite serves routes on scope-less apps across repeated requests (routing, middleware, context); the empty-scope fast path is the perf gate's concern",
-		"3bf523e3e8": "v1 defineErrors has no translations generic (errorI18n holds translations, I7); ExtractICUVars is type-tested directly in icu.test.ts (ExtractICUVars describe)"
+		"3bf523e3e8": "v1 defineErrors has no translations generic (errorI18n holds translations, I7); ExtractICUVars is type-tested directly in icu.test.ts (ExtractICUVars describe)",
+		"78c407f3ba": "v0 DROPPED a prototype-named cookie (Object.hasOwn(result,\"constructor\")===false) via a blocklist, silently losing legitimate client data. v1 bit-02 design (587b90b244) parses onto a null-prototype record: pollution is structurally impossible for ANY key (stronger than a blocklist) and every cookie the client sent stays readable. The safety goal is covered by 08983c32f3 (null proto, toString undefined, no Object.prototype leak). The literal drop assertion contradicts the superior v1 design."
 	}
 }
