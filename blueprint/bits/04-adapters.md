@@ -31,4 +31,4 @@ The three runtime adapters and a **plain `serve(app, options)`**. Each adapter m
 - **Duplicate `Host` → 400 (RFC 9112 §3.2, v1 fix).** Node's parser accepts two `Host` headers; `req.headers.host` keeps the first while a distinct read sees both, so the URL and the Host the app sees disagree — the classic Host-ambiguity smuggling setup. `node/url.ts` rejects any request with more than one `Host` line (one pass over `rawHeaders`, no distinct-map build), absolute-form included, before the app runs. The other probes (CL+TE, duplicate CL, obs-fold, "chunked, identity", bare LF, space-before-colon) already fail in Node's parser and are pinned.
 
 ## Budget
-- perf: adapter overhead vs raw runtime within threshold. token: n/a.
+- perf: adapter overhead vs raw runtime within threshold, gated by `bench/src/adapter.ts` (+test) — node/serve's per-request cost vs a bare `node:http` handler on the same box, significance-gated and machine-independent like `finalize.ts` (an in-process ratio, no committed baseline). `hotpath.ts` measures `app.fetch` in-process and cannot see the socket layer, so this is the bridge's own gate. token: n/a.
