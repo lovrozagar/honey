@@ -74,7 +74,10 @@ function isNullBodyStatus(status: number): boolean {
 	return status === 101 || status === 103 || status === 204 || status === 205 || status === 304
 }
 
-function toBytes(chunk: unknown, encoder: TextEncoder): Uint8Array {
+// per-process-constant: text-codec
+const encoder = /* @__PURE__ */ new TextEncoder()
+
+function toBytes(chunk: unknown): Uint8Array {
 	if (chunk instanceof Uint8Array) return chunk
 	if (typeof chunk === "string") return encoder.encode(chunk)
 	if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk)
@@ -87,20 +90,19 @@ function toBytes(chunk: unknown, encoder: TextEncoder): Uint8Array {
  * `flushed()` waits for every queued write even when the callback returned without closing.
  */
 function writableOver(write: (bytes: Uint8Array) => Promise<void>, end: { close(): void; error(e: unknown): void }) {
-	const encoder = new TextEncoder()
 	let queued = 0
 	let written = 0
-	const drained = Promise.withResolvers<void>()
+	let onDrained: (() => void) | undefined
 	const writable = new WritableStream<unknown>(
 		{
 			abort: (reason) => end.error(reason),
 			close: () => end.close(),
 			write: async (chunk) => {
 				try {
-					await write(toBytes(chunk, encoder))
+					await write(toBytes(chunk))
 				} finally {
 					written++
-					if (written === queued) drained.resolve()
+					if (written === queued) onDrained?.()
 				}
 			},
 		},
@@ -112,7 +114,10 @@ function writableOver(write: (bytes: Uint8Array) => Promise<void>, end: { close(
 			},
 		},
 	)
-	return { flushed: () => (written === queued ? Promise.resolve() : drained.promise), writable }
+	/* a promise only when writes are still queued: most callbacks close or await their writes */
+	const pending = (): Promise<void> | undefined =>
+		written === queued ? undefined : new Promise<void>((resolve) => (onDrained = resolve))
+	return { pending, writable }
 }
 
 export class HoneyRes {
@@ -133,7 +138,8 @@ export class HoneyRes {
 
 	/** A streamed body under `base` headers plus the options' headers and cookies. */
 	#streamed(body: ReadableStream<Uint8Array>, base: Readonly<Record<string, string>>, opts?: ResponseOptions) {
-		return new Response(body, { headers: applyNative(new Headers(base), opts), status: opts?.status ?? 200 })
+		const headers = hasOptions(opts) ? applyNative(new Headers(base), opts) : base
+		return new Response(body, { headers, status: opts?.status ?? 200 })
 	}
 
 	/** A response with a body and no extra headers. */
@@ -225,9 +231,10 @@ export class HoneyRes {
 		opts?: ResponseOptions,
 	): TypedResponse<"application/octet-stream", "ok"> {
 		const body = producerStream(async (sink) => {
-			const { flushed, writable } = writableOver((bytes) => sink.write(bytes), sink)
+			const { pending, writable } = writableOver((bytes) => sink.write(bytes), sink)
 			await callback(writable, sink.signal)
-			await Promise.race([flushed(), new Promise<void>((resolve) => sink.onEnd(resolve))])
+			const flushing = pending()
+			if (flushing !== undefined) await Promise.race([flushing, new Promise<void>((resolve) => sink.onEnd(resolve))])
 		}, this.#producer())
 		return typed(this.#streamed(body, BINARY_HEADERS, opts))
 	}

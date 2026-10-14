@@ -71,7 +71,7 @@ function closeQuietly(controller: ReadableStreamDefaultController<Uint8Array>): 
 /** The state of one push-driven body: its end, the writers waiting on demand, its cleanups. */
 class Producer implements ProducerSink {
 	readonly #abort = new AbortController()
-	readonly #cleanups: (() => void)[] = []
+	#cleanups: (() => void)[] = []
 	#controller!: ReadableStreamDefaultController<Uint8Array>
 	#ended = false
 	#waiting: PromiseWithResolvers<void>[] = []
@@ -124,13 +124,18 @@ class Producer implements ProducerSink {
 	cancel(reason: unknown): void {
 		this.#ended = true
 		this.#abort.abort(reason ?? new StreamEnded("stream cancelled"))
-		for (const waiter of this.#waiting.splice(0)) waiter.reject(this.signal.reason)
+		const waiting = this.#waiting
+		this.#waiting = []
+		for (const waiter of waiting) waiter.reject(this.signal.reason)
 		this.#release()
 	}
 
 	/** The reader asked for more: every waiting writer may go on. */
 	demand(): void {
-		for (const waiter of this.#waiting.splice(0)) waiter.resolve()
+		if (this.#waiting.length === 0) return
+		const waiting = this.#waiting
+		this.#waiting = []
+		for (const waiter of waiting) waiter.resolve()
 	}
 
 	run(start: (sink: ProducerSink) => void | Promise<void>, options: ProducerOptions | undefined): void {
@@ -167,7 +172,9 @@ class Producer implements ProducerSink {
 		this.demand()
 		this.#detach()
 		this.#detach = swallow
-		for (const fn of this.#cleanups.splice(0)) {
+		const cleanups = this.#cleanups
+		this.#cleanups = []
+		for (const fn of cleanups) {
 			try {
 				fn()
 			} catch {

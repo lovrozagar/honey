@@ -36,6 +36,7 @@
 	"scripts": {
 		"bench:adapter": "node --conditions=honey-source bench/src/adapter.ts",
 		"bench:finalize": "bun bench/src/finalize.ts",
+		"bench:streaming": "bun bench/src/streaming.ts",
 		"bench:hotpath": "bun bench/src/hotpath.ts",
 		"deploy:e2e:cf": "bun run --filter @honey/e2e-cf-workers deploy",
 		"fmt": "oxfmt",

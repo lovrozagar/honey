@@ -57,7 +57,8 @@
 				"bench/src/significance.ts",
 				"bench/src/significance.test.ts",
 				"bench/src/finalize.ts",
-				"bench/src/adapter.ts"
+				"bench/src/adapter.ts",
+				"bench/src/streaming.ts"
 			],
 			"plugins": ["typescript", "unicorn", "oxc", "vitest"],
 			"rules": {
