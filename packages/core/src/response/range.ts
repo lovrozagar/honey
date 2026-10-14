@@ -78,7 +78,8 @@ function answer(request: Request, part: Part | null, headers: Record<string, str
 		if (part === null || part instanceof Uint8Array) return createHoneyResponse({ headers, raw: part, status })
 		return createHoneyResponse({ headers, status, stream: part instanceof Blob ? part.stream() : part })
 	}
-	const response = new Response(part, { headers, status })
+	/* as pairs, not a record: Node's Headers drops a record key named __proto__ */
+	const response = new Response(part, { headers: Object.entries(headers), status })
 	return part instanceof Uint8Array ? withRawBody(response, part) : response
 }
 

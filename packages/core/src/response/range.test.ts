@@ -129,6 +129,17 @@ describe("rangeResponse: headers", () => {
 		expect(rangeResponse(get("bytes=0-1"), body, { contentType }).headers.get("content-type")).toBe(expected)
 	})
 
+	it("a header named __proto__ is just a header: no prototype is reached", () => {
+		const res = rangeResponse(get(), TEN, {
+			headers: JSON.parse('{"__proto__":"x","x-kept":"1"}') as Record<string, string>,
+		})
+		expect([
+			res.headers.get("__proto__"),
+			res.headers.get("x-kept"),
+			Object.prototype.hasOwnProperty.call({}, "x-kept"),
+		]).toEqual(["x", "1", false])
+	})
+
 	it("keeps the headers it is given beside its own", () => {
 		const response = rangeResponse(get("bytes=0-1"), TEN, { headers: { "cache-control": "max-age=60", etag: '"v1"' } })
 		expect([response.headers.get("cache-control"), response.headers.get("etag"), response.status]).toEqual([
