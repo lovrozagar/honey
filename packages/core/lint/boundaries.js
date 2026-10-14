@@ -25,6 +25,10 @@ const GLOBALS = new Map([
 
 const ADAPTER_BUCKETS = new Set(["node", "bun", "workers"])
 
+/* serve(app) detects the runtime and loads that runtime's adapter on demand: the one portable
+ * file that may reach an adapter, and only through import(), so no runtime's code loads elsewhere */
+const DISPATCHER = "adapters/serve.ts"
+
 const MESSAGES = {
 	adapter: "only the same runtime's adapter may import an adapter",
 	codegen: "core reaches honey-codegen from build/ only",
@@ -68,12 +72,12 @@ function isNodeBuiltin(spec) {
 	return spec.startsWith("node:") || NODE_BUILTINS.has(spec.split("/")[0])
 }
 
-function relativeProblem(where, spec) {
+function relativeProblem(where, spec, dynamic) {
 	const target = resolveRel(where.rel, spec)
 	if (target === null) return "escape"
 	const to = bucketOf(where.pkg, target)
-	if (ADAPTER_BUCKETS.has(to) && to !== where.bucket) return "adapter"
-	return null
+	if (!ADAPTER_BUCKETS.has(to) || to === where.bucket) return null
+	return dynamic && where.pkg === "core" && where.rel === DISPATCHER ? null : "adapter"
 }
 
 function packageProblem(where, spec) {
@@ -87,8 +91,8 @@ function packageProblem(where, spec) {
 	return null
 }
 
-function problemOf(where, spec) {
-	if (spec.startsWith(".")) return relativeProblem(where, spec)
+function problemOf(where, spec, dynamic) {
+	if (spec.startsWith(".")) return relativeProblem(where, spec, dynamic)
 	if (isNodeBuiltin(spec))
 		return where.bucket === "node" || where.bucket === "build" || where.pkg === "gen" ? null : "node"
 	return packageProblem(where, spec)
@@ -102,7 +106,7 @@ export const rule = {
 		const checkSource = (node) => {
 			const spec = node.source?.type === "Literal" ? node.source.value : null
 			if (typeof spec !== "string") return
-			const problem = problemOf(where, spec)
+			const problem = problemOf(where, spec, node.type === "ImportExpression")
 			if (problem !== null) context.report({ message: MESSAGES[problem], node })
 		}
 		const checkGlobal = (node, identifier) => {
