@@ -28,6 +28,14 @@ const encoder = /* @__PURE__ */ new TextEncoder()
 
 function noop(): void {}
 
+/** Cancel `response`'s body, unread, unless it is one honey kept: an answer about to go out without it. */
+export function discardBody(response: Response): void {
+	if (rawBodyOf(response) !== null) return
+	const body = response.body
+	/* the body is never sent: a cancel failing changes nothing the client sees */
+	if (body !== null && !body.locked) body.cancel().catch(noop)
+}
+
 /**
  * The answer to a HEAD request: GET's status and headers, no body. A body honey built keeps its
  * length in `content-length`, so HEAD states what GET would send; any other body is cancelled
@@ -36,11 +44,8 @@ function noop(): void {}
 export function headResponse(response: Response): Response {
 	const raw = rawBodyOf(response)
 	const headers = new Headers(response.headers as HeadersInit)
-	if (raw === null) {
-		const body = response.body
-		/* a HEAD's body is never sent: a cancel failing changes nothing the client sees */
-		if (body !== null && !body.locked) body.cancel().catch(noop)
-	} else if (!headers.has("content-length")) {
+	discardBody(response)
+	if (raw !== null && !headers.has("content-length")) {
 		headers.set("content-length", String(typeof raw === "string" ? encoder.encode(raw).byteLength : raw.byteLength))
 	}
 	return replaceResponse(response, { body: null, headers })
