@@ -9,6 +9,7 @@ import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.t
 import type { MaybePromise } from "../middleware/middleware.ts"
 import type { RequestLogEntry } from "../telemetry/fields.ts"
 import { createLogger, type Logger, SILENT } from "../telemetry/logger.ts"
+import type { Telemetry } from "../telemetry/request-trace.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import type { WSAdapter } from "../ws/contract.ts"
 import type { WithTaps } from "./app-types.ts"
@@ -72,6 +73,8 @@ export type AppSettings<TEnv = unknown> = {
 	onNotFound: OnNotFoundFn<TEnv> | null
 	/** one info line per request after its body ends; `null`: off */
 	requestLog: RequestLogOptions | null
+	/** spans per request and the error reporter; `null`: off, at the cost of one check */
+	telemetry: Telemetry | null
 	stripPrefix: string | null
 	/** `app.tap()` handlers by key; `null` until one is registered */
 	taps: Map<string, TapFn<TEnv>> | null
@@ -103,6 +106,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		onMethodNotAllowed: null,
 		onNotFound: null,
 		requestLog: null,
+		telemetry: null,
 		stripPrefix: null,
 		taps: null,
 		trailingSlash: "ignore",
@@ -181,6 +185,21 @@ export abstract class SettingsChain<TEnv> {
 	 */
 	requestLog(options: boolean | RequestLogOptions): this {
 		this.settings.requestLog = options === false ? null : options === true ? {} : options
+		return this
+	}
+
+	/**
+	 * Trace every request (a root span, the middleware and the handler under it) and report thrown
+	 * errors in the background. Pass `otelAdapter(api, options)` from `@lovrozagar/honey/telemetry`.
+	 */
+	telemetry(value: Telemetry): this {
+		if (typeof (value as Partial<Telemetry> | null)?.tracer?.startSpan !== "function") {
+			throw new TypeError(
+				"app.telemetry(): pass otelAdapter(api) from @lovrozagar/honey/telemetry, or a value with a tracer",
+			)
+		}
+		this.settings.telemetry = value
+		this.invalidate()
 		return this
 	}
 

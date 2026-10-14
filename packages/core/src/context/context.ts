@@ -10,6 +10,7 @@ import { searchOfUrl } from "../routing/request-path.ts"
 import { dict } from "../routing/tree.ts"
 import { requestBindings } from "../telemetry/fields.ts"
 import type { Logger } from "../telemetry/logger.ts"
+import type { RequestTrace } from "../telemetry/request-trace.ts"
 import { parseCookieHeader } from "./cookie.ts"
 import { ipOf } from "./peer.ts"
 
@@ -27,6 +28,8 @@ export type RequestState<TEnv> = {
 	ip?: string | null
 	/** set when the route's handler answered, on a route with taps only: they fire on nothing else */
 	answered?: true
+	/** this request's spans, when the app has telemetry */
+	trace?: RequestTrace
 }
 
 /** What a context reads from its route, computed once at finalize. */

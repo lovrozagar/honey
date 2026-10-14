@@ -1,7 +1,7 @@
 /**
  * The adversarial suite's edge-middleware cases (F1): security headers on every exit, CORS
  * credential reflection, csrf bypasses, rate-limit key spray and spoofing, the BREACH oracle, proxy
- * SSRF and Host spoofing, curlLogger leaks, taps that fail or hang. Each is a failing input first and the guard that answers
+ * SSRF and Host spoofing, curlLogger leaks, taps that fail or hang, a client-picked trace. Each is a failing input first and the guard that answers
  * it second; the mutation harness reruns this directory with each guard disabled.
  */
 import { resolve as resolvePath } from "node:path"
@@ -68,6 +68,9 @@ const { errorI18n } = (await import(
 const { HoneyError } = (await import(
 	resolvePath(REPO, "packages/core/src/errors/error.ts")
 )) as typeof import("../../../src/errors/error.ts")
+const { recorder } = (await import(
+	resolvePath(REPO, "packages/core/src/telemetry/__fixtures__/recording-tracer.ts")
+)) as typeof import("../../../src/telemetry/__fixtures__/recording-tracer.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -467,5 +470,23 @@ describe("v1 adversarial: a tap never delays, changes or fails the answer", () =
 		await new Promise((resolve) => setTimeout(resolve, 10))
 		/* onError sees the failed handler alone, never a tap */
 		expect([answers, fired, onError.mock.calls.length]).toEqual([[200, 200, 500], ["throws", "hangs"], 1])
+	})
+})
+
+describe("v1 adversarial: a client never picks the trace its request joins", () => {
+	it("an untrusted caller's traceparent and tracestate are only linked: the root starts its own trace", async () => {
+		const { spans, telemetry } = recorder()
+		const app = honey<{}>().telemetry(telemetry)
+		app.get("/a").handler((ctx) => ctx.res.text("ok", "a"))
+		const headers = {
+			traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+			tracestate: "evil=injected",
+		}
+		await (await app.fetch(new Request("http://app.test/a", { headers }), {})).text()
+		const root = spans[0]
+		expect([root?.parent, root?.links.map((l) => [l.traceId, l.state])]).toEqual([
+			null,
+			[["0af7651916cd43dd8448eb211c80319c", undefined]],
+		])
 	})
 })

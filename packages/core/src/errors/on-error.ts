@@ -12,7 +12,9 @@ import type { MaybePromise } from "../middleware/middleware.ts"
 import { isNodeOutbound } from "../response/builder.ts"
 import type { FetchState } from "../routing/dispatch.ts"
 import type { AppSettings, ErrorCtx, ErrorI18n } from "../routing/settings.ts"
-import { requestBindings } from "../telemetry/fields.ts"
+import { invokeUser } from "../realtime/invoke-user.ts"
+import { pathOf, requestBindings } from "../telemetry/fields.ts"
+import type { RequestTrace, Telemetry, TelemetryErrorReport } from "../telemetry/request-trace.ts"
 import { HoneyError, hasUnknownStatus } from "./error.ts"
 import {
 	asHoneyError,
@@ -157,6 +159,35 @@ function convertWith(s: AppSettings<unknown>, thrown: unknown, ctx: object): May
 	)
 }
 
+/**
+ * A thrown error whose answer is decided: its `http.error` span, and `telemetry.onError` in the
+ * request's background, contained (a failure is a warn). Never throws.
+ */
+function reportThrow(s: AppSettings<unknown>, telemetry: Telemetry, ctx: object, thrown: unknown): void {
+	const c = ctx as HoneyContext<unknown>
+	const state = stateOf(ctx)
+	/* the boundary has answered: ctx.error holds what it answered as */
+	const honeyError = c.error as HoneyError
+	const digest = (honeyError as { [DIGEST]?: string })[DIGEST]
+	/* telemetry on: every request it serves has a trace */
+	const trace = state.trace as RequestTrace
+	trace.error(honeyError, thrown, digest)
+	const onError = telemetry.onError
+	if (onError === null) return
+	const report: TelemetryErrorReport = {
+		durationMs: Math.round((performance.now() - trace.started) * 1000) / 1000,
+		error: thrown,
+		honeyError,
+		method: state.req.method,
+		path: pathOf(state.req.url),
+		routeId: state.plan.route.id,
+		...(digest !== undefined && { digest }),
+		...trace.ids(),
+	}
+	const warn = (error: unknown) => s.logger.warn({ err: HoneyError.serialize(error) }, "telemetry onError failed")
+	c.background(Promise.resolve().then(() => invokeUser(() => onError(report), { onError: warn, phase: "telemetry" })))
+}
+
 /** The error boundary of every `next()`: what was thrown becomes the Response that replaces it. Never rejects. */
 export function boundary(s: AppSettings<unknown>): (thrown: unknown, ctx: object) => MaybePromise<Response> {
 	/* answering the error failed itself: what failed is logged, and the last-resort answer goes out */
@@ -165,12 +196,26 @@ export function boundary(s: AppSettings<unknown>): (thrown: unknown, ctx: object
 		setCtxError(ctx as HoneyContext, asHoneyError(thrown))
 		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter, isNodeOutbound(stateOf(ctx).req))
 	}
-	return (thrown, ctx) => {
+	const answered = (thrown: unknown, ctx: object): MaybePromise<Response> => {
 		try {
 			const res = convertWith(s, thrown, ctx)
 			return res instanceof Promise ? res.catch((failure: unknown) => reportAndAnswer(thrown, ctx, failure)) : res
 		} catch (failure) {
 			return reportAndAnswer(thrown, ctx, failure)
 		}
+	}
+	/* telemetry hears the error once its answer is decided, and never changes it */
+	return (thrown, ctx) => {
+		const res = answered(thrown, ctx)
+		const telemetry = s.telemetry
+		if (telemetry === null) return res
+		if (!(res instanceof Promise)) {
+			reportThrow(s, telemetry, ctx, thrown)
+			return res
+		}
+		return res.then((settled) => {
+			reportThrow(s, telemetry, ctx, thrown)
+			return settled
+		})
 	}
 }

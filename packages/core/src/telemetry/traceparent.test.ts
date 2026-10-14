@@ -1,11 +1,15 @@
 /**
  * W3C trace context, level 1: which `traceparent` values parse, checked case by case and against
  * OpenTelemetry's reference propagator on the same inputs; which `tracestate` values survive; and
- * the trust gate deciding whether an inbound trace is continued, only linked, or ignored.
+ * the trust gate deciding whether an inbound trace is continued, only linked, or ignored, alone and
+ * through an app's root span.
  */
 import { defaultTextMapGetter, ROOT_CONTEXT, trace } from "@opentelemetry/api"
 import { W3CTraceContextPropagator } from "@opentelemetry/core"
 import { describe, expect, it, vi } from "vitest"
+import { honey } from "../routing/app.ts"
+import { recorder } from "./__fixtures__/recording-tracer.ts"
+import { createLogger } from "./logger.ts"
 import { formatTraceparent, inboundTrace, parseTraceparent, parseTracestate } from "./traceparent.ts"
 
 const TRACE = "4bf92f3577b34da6a3ce929d0e0e4736"
@@ -180,5 +184,65 @@ describe("inboundTrace: the trust gate", () => {
 			report,
 		)
 		expect([decided?.continued, report.mock.calls]).toEqual([false, [[boom]]])
+	})
+})
+
+const get = (path: string, init: RequestInit = {}) => new Request(`http://app.test${path}`, init)
+
+/** A trust predicate that fails. */
+function brokenTrust(): boolean {
+	throw new Error("trust check broke")
+}
+
+describe("the trust gate through an app: the root span", () => {
+	const inbound = { traceparent: VALID, tracestate: "congo=t61" }
+
+	it("untrusted (the default): a fresh root linked to it", async () => {
+		const { spans, telemetry } = recorder()
+		const app = honey<{}>().telemetry(telemetry)
+		app.get("/a").handler((ctx) => ctx.res.text("ok", "a"))
+		await app.fetch(get("/a", { headers: inbound }), {})
+		expect([spans[0]?.parent, spans[0]?.links]).toEqual([
+			null,
+			[{ flags: 1, spanId: SPAN, state: undefined, traceId: TRACE }],
+		])
+	})
+
+	it("trusted: the root continues it, tracestate included", async () => {
+		const { spans, telemetry } = recorder()
+		const app = honey<{}>().telemetry({ ...telemetry, trustInbound: true })
+		app.get("/a").handler((ctx) => ctx.res.text("ok", "a"))
+		await app.fetch(get("/a", { headers: inbound }), {})
+		expect([spans[0]?.parent, spans[0]?.links]).toEqual([
+			{ flags: 1, spanId: SPAN, state: "congo=t61", traceId: TRACE },
+			[],
+		])
+	})
+
+	it("a predicate sees the peer the platform reports (none here)", async () => {
+		const { spans, telemetry } = recorder()
+		const app = honey<{}>().telemetry({ ...telemetry, trustInbound: ({ ip }) => ip === null })
+		app.get("/a").handler((ctx) => ctx.res.text("ok", "a"))
+		await app.fetch(get("/a", { headers: inbound }), {})
+		expect(spans[0]?.links).toEqual([])
+	})
+
+	it("a trust predicate that throws: linked, and a warn", async () => {
+		const lines: Record<string, unknown>[] = []
+		const logger = createLogger({
+			format: "json",
+			level: "info",
+			write: (line) => lines.push(JSON.parse(line) as Record<string, unknown>),
+		})
+		const { spans, telemetry } = recorder()
+		const app = honey<{}>()
+			.logger(logger)
+			.telemetry({ ...telemetry, trustInbound: brokenTrust })
+		app.get("/a").handler((ctx) => ctx.res.text("ok", "a"))
+		await app.fetch(get("/a", { headers: inbound }), {})
+		expect([spans[0]?.parent, lines.map((l) => [l.level, l.msg])]).toEqual([
+			null,
+			[[40, "telemetry trust check failed"]],
+		])
 	})
 })

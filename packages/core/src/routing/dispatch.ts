@@ -11,7 +11,9 @@ import { createErrorResponse, jsonAnswer } from "../errors/projector.ts"
 import { compileChain, type MaybePromise } from "../middleware/middleware.ts"
 import { isNodeOutbound, replaceResponse } from "../response/builder.ts"
 import type { StatusKey } from "../response/status.ts"
-import { logRequest, type Seen } from "../telemetry/request-log.ts"
+import type { Seen } from "../telemetry/request-log.ts"
+import { startTrace } from "../telemetry/request-trace.ts"
+import { observe } from "../telemetry/span-lifecycle.ts"
 import { finalize, type FinalizeHooks, type FinalTable, type Plan } from "./finalize.ts"
 import { matchRoute, matchWsRoute } from "./match.ts"
 import type { HoneyGraph } from "./register.ts"
@@ -138,6 +140,7 @@ function afterPrefix(prefix: string | null, path: string): string {
 
 function run(state: FetchState, plan: Plan, params: Record<string, string>): MaybePromise<Response> {
 	state.plan = plan
+	state.trace?.routed(plan.route, state.req.method)
 	const ctx = new HoneyContext(state, plan.route, params)
 	if (plan.cv !== null) Object.assign(ctx, plan.cv)
 	return plan.run(ctx)
@@ -149,6 +152,8 @@ function miss(
 	state: FetchState,
 	allowed: string[] | null,
 ): MaybePromise<Response> {
+	if (allowed === null) state.trace?.event("not_found")
+	else state.trace?.event("method_not_allowed", { "http.allowed_methods": allowed.join(", ") })
 	if (allowed === null && final.notFound !== null && plainNotFound(s)) return final.notFound(isNodeOutbound(state.req))
 	state.allowed = allowed
 	return run(state, final.miss, EMPTY_PARAMS)
@@ -208,11 +213,14 @@ type Incoming = {
 	readonly seen: Seen | undefined
 }
 
-/** The request state of `incoming`, recorded for the request log when it is on. */
+/** The request state of `incoming`, recorded for the request log and given its trace when they are on. */
 function newState(s: AppSettings<unknown>, incoming: Incoming, path: string, plan: Plan): FetchState {
 	const { env, executionCtx, request, seen } = incoming
 	const state: FetchState = { allowed: null, env, executionCtx, logger: s.logger, path, plan, req: request }
-	if (seen !== undefined) seen.state = state
+	if (seen !== undefined) {
+		seen.state = state
+		if (seen.trace !== undefined) state.trace = seen.trace
+	}
 	return state
 }
 
@@ -246,7 +254,10 @@ function route(g: HoneyGraph, incoming: Incoming) {
 	return run(state, final.plans.get(match.id) as Plan, match.params)
 }
 
-/** Serve one request from the graph, and log it when the request log is on. */
+/**
+ * Serve one request from the graph, observed until its body ends when the request log or telemetry
+ * is on. Routing never rejects; a throw (an app that cannot finalize) ends the root and goes on.
+ */
 export function dispatch(
 	g: HoneyGraph,
 	request: Request,
@@ -254,10 +265,15 @@ export function dispatch(
 	executionCtx: RequestState<unknown>["executionCtx"],
 ): MaybePromise<Response> {
 	const s = g.settings
-	if (s.requestLog === null) return route(g, { env, executionCtx, request, seen: undefined })
-	const seen: Seen = { request, started: performance.now(), state: null }
-	const answer = route(g, { env, executionCtx, request, seen })
-	return answer instanceof Promise
-		? answer.then((response) => logRequest(s, seen, response))
-		: logRequest(s, seen, answer)
+	if (s.requestLog === null && s.telemetry === null) return route(g, { env, executionCtx, request, seen: undefined })
+	const trace = s.telemetry === null ? undefined : startTrace(s, s.telemetry, request, env)
+	const seen: Seen = { request, started: performance.now(), state: null, trace }
+	let answer: MaybePromise<Response>
+	try {
+		answer = route(g, { env, executionCtx, request, seen })
+	} catch (thrown) {
+		trace?.fail(thrown)
+		throw thrown
+	}
+	return answer instanceof Promise ? answer.then((response) => observe(s, seen, response)) : observe(s, seen, answer)
 }

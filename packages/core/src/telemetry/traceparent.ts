@@ -42,7 +42,11 @@ const MEMBER_KEY = /^(?:[a-z][_0-9a-z*/-]{0,255}|[a-z0-9][_0-9a-z*/-]{0,240}@[a-
 /* printable ASCII but `,` and `=`, not ending in a space */
 const MEMBER_VALUE = /^[\x20-\x2b\x2d-\x3c\x3e-\x7e]{0,255}[\x21-\x2b\x2d-\x3c\x3e-\x7e]$/
 
-/** The `tracestate` to carry on, normalized, or `undefined` when any of it is invalid. */
+/**
+ * The `tracestate` to carry on, normalized, or `undefined` when any of it is invalid. Deliberately
+ * stricter than OpenTelemetry, which drops bad members one by one: a failed parse must not
+ * propagate (W3C), and the trace still continues through `traceparent`.
+ */
 export function parseTracestate(header: string | null): string | undefined {
 	if (header === null || header.length > 512) return undefined
 	const kept: string[] = []

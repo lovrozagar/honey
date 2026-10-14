@@ -1,25 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { createMiddleware, defineMiddleware, type RuntimeMiddleware } from "../middleware/middleware.ts"
-import {
-	commonPrefix,
-	describeMw,
-	errorsOf,
-	type MiddlewareSample,
-	scopeGuard,
-	timedMiddleware,
-} from "./middleware-chain.ts"
+import { defineMiddleware, type RuntimeMiddleware } from "../middleware/middleware.ts"
+import { commonPrefix, describeMw, errorsOf, scopeGuard } from "./middleware-chain.ts"
 import { parsePattern } from "./pattern.ts"
 
 const ok = (): Response => new Response("ok")
 const pass: RuntimeMiddleware = (_ctx, next) => next()
-function recorder() {
-	const samples: MiddlewareSample[] = []
-	return { report: (s: MiddlewareSample) => samples.push(s), samples }
-}
 
-const authMw: RuntimeMiddleware = async function auth(_c, next) {
-	return next()
-}
 const corsMw = function cors() {} as unknown as RuntimeMiddleware
 const a: RuntimeMiddleware = (_c, next) => next()
 const b: RuntimeMiddleware = (_c, next) => next()
@@ -51,53 +37,6 @@ describe("scopeGuard", () => {
 		const plain = scopeGuard(parsePattern("/x"), pass)
 		expect(errorsOf(plain)).toBeUndefined()
 		expect((plain as { meta?: unknown }).meta).toBeUndefined()
-	})
-})
-
-describe("timedMiddleware", () => {
-	it("reports a sync middleware's duration and stays sync", () => {
-		const { report, samples } = recorder()
-		const timed = timedMiddleware(createMiddleware((_c, next) => next()) as unknown as RuntimeMiddleware, report)
-		const out = timed({}, ok)
-		expect(out).toBeInstanceOf(Response)
-		expect(samples).toHaveLength(1)
-		expect(samples[0]?.duration).toBeGreaterThanOrEqual(0)
-		expect(samples[0]?.name).toBe("anonymous")
-		expect(samples[0]).not.toHaveProperty("error")
-	})
-
-	it("reports an async middleware once it settles, with its name", async () => {
-		const { report, samples } = recorder()
-		const out = timedMiddleware(authMw, report)({}, ok)
-		expect(out).toBeInstanceOf(Promise)
-		await out
-		expect(samples.map((s) => s.name)).toEqual(["auth"])
-	})
-
-	it("reports a sync throw and a rejection with the error, and rethrows", async () => {
-		const { report, samples } = recorder()
-		const boom = new Error("boom")
-		const syncThrow: RuntimeMiddleware = () => {
-			throw boom
-		}
-		const asyncThrow: RuntimeMiddleware = async () => Promise.reject(boom)
-		expect(() => timedMiddleware(syncThrow, report)({}, ok)).toThrow(boom)
-		await expect(timedMiddleware(asyncThrow, report)({}, ok)).rejects.toBe(boom)
-		expect(samples.map((s) => s.error)).toEqual([boom, boom])
-	})
-
-	it("a reporter that throws never breaks the request", async () => {
-		const timed = timedMiddleware(pass, () => {
-			throw new Error("telemetry down")
-		})
-		expect(timed({}, ok)).toBeInstanceOf(Response)
-		const asyncTimed = timedMiddleware(
-			async (_c, next) => next(),
-			() => {
-				throw new Error("telemetry down")
-			},
-		)
-		expect(await asyncTimed({}, ok)).toBeInstanceOf(Response)
 	})
 })
 

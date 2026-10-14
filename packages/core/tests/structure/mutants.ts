@@ -317,3 +317,10 @@ export const inlineFiring: Firing = (run, taps) => async (ctx) => {
 	}
 	return response
 }
+
+export type InboundTraceFn = (source: never, trust: unknown, report: (error: unknown) => void) => unknown
+
+/** inboundTrace that trusts every hop: a client's traceparent and tracestate are continued. */
+export function trustingEveryHop(real: InboundTraceFn): InboundTraceFn {
+	return (source, _trust, report) => real(source, true, report)
+}

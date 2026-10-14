@@ -26,6 +26,7 @@ import {
 } from "./pattern.ts"
 import { assertNothingDiscarded, chainErrorKeys, type HoneyGraph, type RouteHandler } from "./register.ts"
 import { type AppSettings, assertSettingsAgree, type ErrorFactories } from "./settings.ts"
+import { tracedHandler, tracedMiddleware } from "../telemetry/request-trace.ts"
 import { answering, firing, tapsFor } from "./tap.ts"
 import { dict } from "./tree.ts"
 
@@ -145,16 +146,21 @@ function planRoute(
 	r.mt = meta
 	/* only a route with taps pays for them: the handler marks its answer, the chain fires after */
 	const taps = tapsFor(g.settings, r.own)
+	const traced = g.settings.telemetry !== null
+	const run = traced ? chain.map(tracedMiddleware) : chain
+	const handler = traced
+		? tracedHandler(taps === null ? r.fn : answering(r.fn))
+		: taps === null
+			? r.fn
+			: answering(r.fn)
+	const compiled = compileChain(run, handler, hooks.convert)
 	return {
 		cv: r.cv,
 		pf: null,
-		pfChain: chain,
+		pfChain: run,
 		policy,
 		route: { errors, id: r.id, meta: meta ?? EMPTY_META, pattern: r.rp },
-		run:
-			taps === null
-				? compileChain(chain, r.fn, hooks.convert)
-				: firing(compileChain(chain, answering(r.fn), hooks.convert), taps),
+		run: taps === null ? compiled : firing(compiled, taps),
 	}
 }
 
@@ -170,13 +176,14 @@ function planMiss(g: HoneyGraph, hooks: FinalizeHooks): Plan {
 	const chain = [...prefix, ...g.scoped.map((entry) => entry.guard)]
 	const { errors, policy } = resolveErrors(g.settings, chain, null)
 	const meta = routeMeta(chain, null)
+	const run = g.settings.telemetry === null ? chain : chain.map(tracedMiddleware)
 	return {
 		cv: null,
 		pf: null,
-		pfChain: chain,
+		pfChain: run,
 		policy,
 		route: { errors, id: "", meta: meta ?? EMPTY_META, pattern: "" },
-		run: compileChain(chain, hooks.miss, hooks.convert),
+		run: compileChain(run, hooks.miss, hooks.convert),
 	}
 }
 
