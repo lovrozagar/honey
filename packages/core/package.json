@@ -11,8 +11,15 @@
 		"directory": "packages/core"
 	},
 	"type": "module",
-	"sideEffects": false,
-	"exports": {},
+	"sideEffects": [
+		"./src/trust/trust.ts"
+	],
+	"exports": {
+		"./trust": {
+			"honey-source": "./src/trust/trust.ts",
+			"default": "./src/trust/trust.ts"
+		}
+	},
 	"scripts": {
 		"test": "vitest run --coverage",
 		"type:check": "tsc --noEmit -p tsconfig.json"
