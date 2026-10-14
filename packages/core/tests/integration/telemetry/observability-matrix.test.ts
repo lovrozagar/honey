@@ -1,12 +1,19 @@
 /**
  * Observability end to end (H17): every reporting seam writes through the app's logger, the one
- * sink, and nothing reaches the console or process warnings around it.
+ * sink, and nothing reaches the console or process warnings around it. Then the configuration
+ * matrix (dx/observability.md): 96 cells of logger × onError × requestLog × tracer × trustInbound
+ * × mode, each serving a plain answer, a handler error, a stream, SSE and a proxy hop, its answers
+ * identical to an unconfigured server's, every line and span where the contract puts it, and no
+ * query or credential in any of them.
  */
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { type HoneyServer, serve } from "../../../src/adapters/node/serve.ts"
+import { requestId } from "../../../src/middleware/request-id.ts"
+import { proxy } from "../../../src/proxy/proxy.ts"
 import { realtime } from "../../../src/realtime/realtime.ts"
 import { honey } from "../../../src/routing/app.ts"
+import { type Recorded, recorder } from "../../../src/telemetry/__fixtures__/recording-tracer.ts"
 import { createLogger } from "../../../src/telemetry/logger.ts"
 import type { WSAdapter, WSContext, WSHandler } from "../../../src/ws/contract.ts"
 
@@ -134,39 +141,88 @@ describe("the app logger reaches the request's producers, background tasks and t
 	})
 })
 
-/* the reduced configuration matrix: logger × onError × requestLog × mode; the full 96 waits for tracing */
+/* logger × onError × requestLog × tracer × trustInbound × mode: 96 cells */
 const MATRIX = (["default", "custom", "off"] as const).flatMap((logger) =>
 	[false, true].flatMap((onError) =>
 		[false, true].flatMap((requestLog) =>
-			(["development", "production"] as const).map((mode) => [logger, onError, requestLog, mode] as const),
+			[false, true].flatMap((tracer) =>
+				[false, true].flatMap((trustInbound) =>
+					(["development", "production"] as const).map((mode) => ({
+						logger,
+						mode,
+						onError,
+						requestLog,
+						tracer,
+						trustInbound,
+					})),
+				),
+			),
 		),
 	),
 )
-/* requestLog with logger(false) cannot work: those four cells refuse to serve instead */
-const REFUSED = MATRIX.filter(([logger, , requestLog]) => logger === "off" && requestLog)
-const SERVED = MATRIX.filter(([logger, , requestLog]) => !(logger === "off" && requestLog))
+/* requestLog with logger(false) cannot work: those cells refuse to serve instead */
+type Cell = (typeof MATRIX)[number]
+const REFUSED = MATRIX.filter((cell) => cell.logger === "off" && cell.requestLog)
+const SERVED = MATRIX.filter((cell) => !(cell.logger === "off" && cell.requestLog))
 
-/** Serve the matrix's three requests: a plain answer, a handler error, a streamed body. */
-async function serveThree(app: ReturnType<typeof honey<{}>>) {
-	app.get("/ok").handler((ctx) => ctx.res.json("ok", { ok: true }))
-	app.get("/fail").handler(() => {
+/** The cell's app, its custom sink, what its onError saw, and the spans its tracer recorded. */
+function configured({ logger, onError, requestLog, tracer, trustInbound }: Cell) {
+	const custom: string[] = []
+	const app = honey<{}>().requestLog(requestLog)
+	if (logger === "custom")
+		app.logger(createLogger({ format: "json", level: "info", write: (line) => void custom.push(line) }))
+	if (logger === "off") app.logger(false)
+	const seen: unknown[] = []
+	if (onError) app.onError((error) => void seen.push(error))
+	const { spans, telemetry } = recorder()
+	if (tracer) app.telemetry({ ...telemetry, trustInbound })
+	return { app, custom, seen, spans }
+}
+
+const INBOUND_TRACE = "0af7651916cd43dd8448eb211c80319c"
+/** What every request carries: a query, credentials, and an id and a trace a client picked. */
+const INBOUND = {
+	authorization: "Bearer SECRET-TOKEN",
+	cookie: "session=SECRET-SESSION",
+	traceparent: `00-${INBOUND_TRACE}-b7ad6b7169203331-01`,
+	"x-request-id": "client-picked-id",
+}
+const PATHS = ["/ok", "/fail", "/stream", "/sse", "/api/up"]
+
+/** The upstream a proxy hop reaches. */
+const upstream = honey<{}>()
+upstream.all("/*rest").handler((ctx) => ctx.res.text("ok", `upstream ${ctx.path}`))
+
+/** Serve the matrix's five requests: a plain answer, a handler error, a stream, SSE and a proxy hop. */
+async function serveFive(app: ReturnType<typeof honey<{}>>, trustInbound: boolean) {
+	const routed = app.use(requestId({ trustInbound }))
+	routed.get("/ok").handler((ctx) => ctx.res.json("ok", { ok: true }))
+	routed.get("/fail").handler(() => {
 		throw new Error("db down")
 	})
-	app.get("/stream").handler((ctx) =>
+	routed.get("/stream").handler((ctx) =>
 		ctx.res.stream(async (writable) => {
 			const writer = writable.getWriter()
 			await writer.write(new TextEncoder().encode("chunk"))
 			await writer.close()
 		}),
 	)
+	routed.get("/sse").handler((ctx) => ctx.res.sse(async (stream) => stream.send({ data: "one", event: "m" })))
+	routed
+		.all("/api/*rest")
+		.handler(
+			proxy({ destination: (_ctx, url, init) => upstream.fetch(new Request(`http://upstream.test${url}`, init), {}) }),
+		)
 	const answers = []
-	for (const path of ["/ok", "/fail", "/stream"]) {
-		const res = await app.fetch(new Request(`https://app.example.com${path}?q=1`), {})
+	const ids = []
+	for (const path of PATHS) {
+		const res = await app.fetch(new Request(`https://app.example.com${path}?q=1`, { headers: INBOUND }), {})
 		const text = await res.text()
+		ids.push(res.headers.get("x-request-id"))
 		/* the digest is random per occurrence: everything else must match */
 		answers.push([res.status, text.replace(/"digest":"[0-9a-f]{16}",?/, "")])
 	}
-	return answers
+	return { answers, ids }
 }
 
 /** How many of `lines` carry `msg`, in json or pretty form. */
@@ -174,38 +230,82 @@ const count = (lines: string[], msg: string) =>
 	lines.filter((line) => line.includes(`"msg":"${msg}"`) || line.includes(` ${msg} `) || line.endsWith(` ${msg}`))
 		.length
 
-describe("the reduced observability matrix: logger × onError × requestLog × mode", () => {
-	it.each(REFUSED)(
-		"logger %s, onError %s, requestLog %s, %s: refuses to serve, naming both",
-		async (_l, _o, _r, mode) => {
-			vi.stubEnv("NODE_ENV", mode)
-			const app = honey<{}>().requestLog(true).logger(false)
-			await expect(async () => serveThree(app)).rejects.toThrow("requestLog() is on, but logger(false) writes nothing")
-			vi.unstubAllEnvs()
-		},
-	)
+/** The spans by name, sorted, each with how many times it ended; and whether the roots continued the trace. */
+function spanSet(spans: readonly Recorded[]) {
+	const roots = spans.filter((s) => s.kind === "server")
+	return {
+		continued: roots.map((r) => r.parent !== null),
+		ended: spans.every((s) => s.ended === 1),
+		names: spans.map((s) => s.name).sort(),
+	}
+}
 
-	it.each(SERVED)("logger %s, onError %s, requestLog %s, %s", async (logger, onError, requestLog, mode) => {
+const TRACED_NAMES = [
+	"GET /api/*rest",
+	"GET /fail",
+	"GET /ok",
+	"GET /sse",
+	"GET /stream",
+	"http.error",
+	"http.handler",
+	"http.handler",
+	"http.handler",
+	"http.handler",
+	"http.handler",
+	"http.proxy",
+	...Array.from({ length: 5 }, () => "middleware.requestId"),
+]
+
+const NAME =
+	"logger $logger, onError $onError, requestLog $requestLog, tracer $tracer, trustInbound $trustInbound, $mode"
+
+describe("the observability matrix: refused cells", () => {
+	it.each(REFUSED)(`${NAME}: refuses to serve, naming both`, async ({ mode, trustInbound }) => {
 		vi.stubEnv("NODE_ENV", mode)
-		const baseline = await serveThree(honey<{}>().logger(false))
+		const app = honey<{}>().requestLog(true).logger(false)
+		await expect(async () => serveFive(app, trustInbound)).rejects.toThrow(
+			"requestLog() is on, but logger(false) writes nothing",
+		)
+		vi.unstubAllEnvs()
+	})
+})
+
+describe("the observability matrix: logger × onError × requestLog × tracer × trustInbound × mode", () => {
+	it.each(SERVED)(NAME, async (cell) => {
+		const { logger, onError, requestLog, tracer, trustInbound } = cell
+		vi.stubEnv("NODE_ENV", cell.mode)
+		const baseline = await serveFive(honey<{}>().logger(false), trustInbound)
 		const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
-		const custom: string[] = []
-		const app = honey<{}>().requestLog(requestLog)
-		if (logger === "custom")
-			app.logger(createLogger({ format: "json", level: "info", write: (line) => void custom.push(line) }))
-		if (logger === "off") app.logger(false)
-		const seen: unknown[] = []
-		if (onError) app.onError((error) => void seen.push(error))
-		const answers = await serveThree(app)
+		const { app, custom, seen, spans } = configured(cell)
+		const { answers, ids } = await serveFive(app, trustInbound)
+		await new Promise((resolve) => setTimeout(resolve, 0))
 		const written = logger === "custom" ? custom : stdout.mock.calls.map(([line]) => String(line))
 		stdout.mockRestore()
 		vi.unstubAllEnvs()
+		const unhandled = written.filter((line) => line.includes("unhandled error"))
+		const exported = JSON.stringify(spans.map((s) => [s.name, s.attributes, s.events]))
 		expect([
 			answers,
+			ids.every((id) => id !== null && /^[\w.:+/=-]{1,128}$/.test(id)),
+			ids.every((id) => (id === "client-picked-id") === trustInbound),
 			seen.length,
-			count(written, "unhandled error"),
+			unhandled.length,
+			unhandled.every((line) => line.includes("trace_id") === tracer),
 			count(written, "request"),
-			written.some((line) => line.includes("q=1")),
-		]).toEqual([baseline, onError ? 1 : 0, logger === "off" ? 0 : 1, requestLog ? 3 : 0, false])
+			[...written, exported].some((text) => text.includes("q=1") || text.includes("SECRET")),
+			spanSet(spans),
+		]).toEqual([
+			baseline.answers,
+			true,
+			true,
+			onError ? 1 : 0,
+			logger === "off" ? 0 : 1,
+			true,
+			requestLog ? PATHS.length : 0,
+			false,
+			tracer
+				? { continued: PATHS.map(() => trustInbound), ended: true, names: TRACED_NAMES }
+				: { continued: [], ended: true, names: [] },
+		])
 	})
 })

@@ -19,7 +19,11 @@ import { formatTraceparent, type RemoteContext, type TraceIds } from "./tracepar
 export type AttributeValue = boolean | number | string
 export type Attributes = Readonly<Record<string, AttributeValue>>
 
-/** A span as honey uses one: the part of an OpenTelemetry span it calls, so an OTel span is one as it is. */
+/**
+ * A span as honey uses one: the part of an OpenTelemetry span it calls, so an OTel span is one as
+ * it is. Its context gives ids only: an outbound call carries the tracestate honey validated on the
+ * way in, not entries a vendor SDK added to the span afterwards.
+ */
 export type Span = {
 	addEvent(name: string, attributes?: Attributes): unknown
 	end(): void
