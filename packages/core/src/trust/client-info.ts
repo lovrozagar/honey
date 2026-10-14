@@ -108,3 +108,31 @@ export function directClientInfo(req: Request, peer: string | null): ClientInfo 
 export function resolveClient(trust: TrustSetting, req: Request, peer: string | null): ClientInfo {
 	return trust.kind === "off" ? directClientInfo(req, peer) : trust.resolve(req, peer)
 }
+
+/**
+ * What one request carries for client resolution: the request, the env (which may be a Bun
+ * server), the serving app's trust setting, and the resolved client once something asked.
+ */
+export type ClientSource = {
+	readonly env: unknown
+	readonly req: Request
+	readonly trust?: TrustSetting
+	client?: ClientInfo
+}
+
+/**
+ * The client of a request, resolved on first read and kept on its state: however many readers
+ * ask (`ctx.ip`, `clientInfo()`, loggers, `proxy()`), headers are read once and never cloned.
+ */
+export function clientOf(source: ClientSource): ClientInfo {
+	source.client ??= resolveClient(source.trust ?? TRUST_OFF, source.req, peerAddressOf(source.req, source.env))
+	return source.client
+}
+
+/** Where a context exposes its client; `clientInfo(ctx)` reads it without importing the context. */
+export const CLIENT: unique symbol = /* @__PURE__ */ Symbol("honey.client")
+
+/** The client address, scheme and host of the request `ctx` serves, under the app's `trustProxy()`. */
+export function clientInfo(ctx: { readonly [CLIENT]: ClientInfo }): ClientInfo {
+	return ctx[CLIENT]
+}

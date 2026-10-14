@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 import { HoneyError } from "../errors/error.ts"
 import { HoneyRes } from "../response/response.ts"
+import { clientInfo, PEER_ADDRESS } from "../trust/client-info.ts"
+import { compileTrust } from "../trust/trust.ts"
 import {
 	HoneyContext,
 	isReservedCtxKey,
@@ -279,6 +281,45 @@ describe("HoneyContext > signal", () => {
 	})
 })
 
+/** A request from `peer` carrying `headers`, counting how often its headers are read. */
+function fromPeer(peer: string | null, headers: Record<string, string> = {}) {
+	const req = makeReq("http://app.internal/who", headers)
+	Object.defineProperty(req, PEER_ADDRESS, { value: peer })
+	const get = vi.spyOn(req.headers, "get")
+	return { get, req }
+}
+
+describe("HoneyContext > the client", () => {
+	it("is the peer with no trust setting, and null without a peer", () => {
+		expect(makeCtx({ req: fromPeer("::ffff:203.0.113.7").req }).ip).toBe("203.0.113.7")
+		expect(makeCtx({ req: fromPeer(null).req }).ip).toBeNull()
+		expect(makeCtx({ req: fromPeer(null).req }).trustsForwarded).toBe(false)
+	})
+
+	it("follows the request's trust setting, and clientInfo() reads the same client", () => {
+		const { req } = fromPeer("10.0.0.1", { "x-forwarded-for": "198.51.100.7", "x-forwarded-proto": "https" })
+		const ctx = makeCtx({ req, trust: compileTrust(1) })
+		expect([ctx.ip, ctx.trustsForwarded]).toEqual(["198.51.100.7", true])
+		expect(clientInfo(ctx)).toEqual({
+			host: "app.internal",
+			ip: "198.51.100.7",
+			protocol: "https",
+			trustsForwarded: true,
+		})
+	})
+
+	it("is resolved once per request, however often it is read, and never before", () => {
+		const { get, req } = fromPeer("10.0.0.1", { "x-forwarded-for": "198.51.100.7" })
+		const ctx = makeCtx({ req, trust: compileTrust(1) })
+		expect(get).not.toHaveBeenCalled()
+		for (let i = 0; i < 5; i++)
+			expect([ctx.ip, clientInfo(ctx).ip, ctx.trustsForwarded]).toEqual(["198.51.100.7", "198.51.100.7", true])
+		const reads = get.mock.calls.length
+		expect([ctx.ip, clientInfo(ctx)]).toBeDefined()
+		expect(get.mock.calls.length).toBe(reads)
+	})
+})
+
 describe("isReservedCtxKey", () => {
 	it("names every framework-owned context field", () => {
 		for (const key of [
@@ -295,7 +336,7 @@ describe("isReservedCtxKey", () => {
 		]) {
 			expect(isReservedCtxKey(key), key).toBe(true)
 		}
-		for (const key of ["req", "res", "routePattern", "search", "searchAll", "signal"])
+		for (const key of ["ip", "req", "res", "routePattern", "search", "searchAll", "signal", "trustsForwarded"])
 			expect(isReservedCtxKey(key), key).toBe(true)
 		expect(isReservedCtxKey("user")).toBe(false)
 		expect(isReservedCtxKey("toString")).toBe(false)

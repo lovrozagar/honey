@@ -8,6 +8,7 @@ import { isNodeOutbound } from "../response/builder.ts"
 import { HoneyRes } from "../response/response.ts"
 import { searchOfUrl } from "../routing/request-path.ts"
 import { dict } from "../routing/tree.ts"
+import { CLIENT, type ClientInfo, clientOf, type TrustSetting } from "../trust/client-info.ts"
 import { parseCookieHeader } from "./cookie.ts"
 
 export type ExecutionCtx = { waitUntil?: (p: Promise<unknown>) => void }
@@ -18,6 +19,10 @@ export type RequestState<TEnv> = {
 	readonly executionCtx: ExecutionCtx | undefined
 	readonly path: string
 	readonly req: Request
+	/** the serving app's `trustProxy()` setting; off when absent */
+	readonly trust?: TrustSetting
+	/** the resolved client, once something asked (`ctx.ip`, `clientInfo()`) */
+	client?: ClientInfo
 }
 
 /** What a context reads from its route, computed once at finalize. */
@@ -48,6 +53,7 @@ const RESERVED: Readonly<Record<string, true>> = /* @__PURE__ */ Object.freeze({
 	errors: true,
 	executionCtx: true,
 	headers: true,
+	ip: true,
 	meta: true,
 	params: true,
 	path: true,
@@ -57,6 +63,7 @@ const RESERVED: Readonly<Record<string, true>> = /* @__PURE__ */ Object.freeze({
 	search: true,
 	searchAll: true,
 	signal: true,
+	trustsForwarded: true,
 })
 
 export function isReservedCtxKey(key: string): boolean {
@@ -112,6 +119,20 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		const executionCtx = state.executionCtx
 		const waitUntil = executionCtx?.waitUntil
 		this.background = waitUntil ? (p) => waitUntil.call(executionCtx, p) : swallow
+	}
+
+	/** The client's canonical address under the app's `trustProxy()` setting, or `null` when unknown. */
+	get ip(): string | null {
+		return clientOf(this[REQUEST]).ip
+	}
+
+	/** Whether `ip` is an `X-Forwarded-For` entry a trusted proxy wrote, not the peer (H18.4). */
+	get trustsForwarded(): boolean {
+		return clientOf(this[REQUEST]).trustsForwarded
+	}
+
+	get [CLIENT](): ClientInfo {
+		return clientOf(this[REQUEST])
 	}
 
 	get cookies(): Record<string, string> {

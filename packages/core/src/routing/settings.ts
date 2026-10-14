@@ -7,6 +7,9 @@
 import type { HoneyError } from "../errors/error.ts"
 import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
+import { requireFeature } from "../runtime/feature-slots.ts"
+import { TRUST_OFF, type TrustSetting } from "../trust/client-info.ts"
+import type { TrustProxy } from "../trust/trust.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 
 /** An app's error factory (`defineErrors`), as its settings hold it. */
@@ -41,6 +44,8 @@ export type AppSettings<TEnv = unknown> = {
 	onNotFound: OnNotFoundFn<TEnv> | null
 	stripPrefix: string | null
 	trailingSlash: "enforce" | "ignore" | "strip"
+	/** `trustProxy()`: how far forwarding headers are believed for `ctx.ip`, scheme and host */
+	trust: TrustSetting
 }
 
 /** The default shape, unchanged. Identity, so finalize can tell a formatter was never set. */
@@ -66,6 +71,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		onNotFound: null,
 		stripPrefix: null,
 		trailingSlash: "ignore",
+		trust: TRUST_OFF,
 	}
 }
 
@@ -103,6 +109,17 @@ export abstract class SettingsChain<TEnv> {
 	/** Strip a URL path prefix before matching: whole segments only; a path without it passes through. */
 	stripPrefix(prefix: string): this {
 		this.settings.stripPrefix = normalizeStripPrefix(prefix)
+		return this
+	}
+
+	/**
+	 * How far `X-Forwarded-*` is believed for `ctx.ip`, the scheme and the host: off (the
+	 * default, the peer is the client), a hop count, or the addresses and CIDR ranges of trusted
+	 * proxies. Anything but off needs `import "@lovrozagar/honey/trust"`; an invalid value throws here.
+	 */
+	trustProxy(value: TrustProxy): this {
+		this.settings.trust =
+			value === false || value === 0 ? TRUST_OFF : requireFeature("trust", "app.trustProxy()").compileTrust(value)
 		return this
 	}
 

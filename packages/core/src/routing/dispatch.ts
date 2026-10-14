@@ -242,7 +242,7 @@ export function dispatch(
 	}
 	const path = afterPrefix(s.stripPrefix, fullPath)
 	const method = request.method.toUpperCase()
-	const state: FetchState = { allowed: null, env, executionCtx, path, plan: final.miss, req: request }
+	const state: FetchState = { allowed: null, env, executionCtx, path, plan: final.miss, req: request, trust: s.trust }
 	const hit = final.statics[method]?.[path] ?? (method === "HEAD" ? final.statics.GET?.[path] : undefined)
 	if (hit !== undefined) return run(state, hit, EMPTY_PARAMS)
 	const match = matchRoute(g.root, method, path)
