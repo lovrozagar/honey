@@ -147,6 +147,30 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/response/sse.ts",
 	},
 	{
+		catches: "v1: security headers missing from an answer",
+		disable: () => ({ secureHeaders: () => passThrough }),
+		id: "v1-secure-headers",
+		module: "packages/core/src/middleware/secure-headers.ts",
+	},
+	{
+		catches: "v1: CORS reflecting any Origin, the opaque null included, with credentials",
+		disable: () => ({ cors: () => reflectingCors }),
+		id: "v1-cors-origin",
+		module: "packages/core/src/middleware/cors.ts",
+	},
+	{
+		catches: "v1: a cross-site unsafe request let through",
+		disable: () => ({ csrf: () => passThrough }),
+		id: "v1-csrf",
+		module: "packages/core/src/middleware/csrf.ts",
+	},
+	{
+		catches: "v1: a client-chosen request id adopted",
+		disable: () => ({ requestId: () => adoptingRequestId }),
+		id: "v1-request-id-trust",
+		module: "packages/core/src/middleware/request-id.ts",
+	},
+	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",
 		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
 		id: "v1-out-headers-validation",
@@ -165,6 +189,31 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/ws/session.ts",
 	},
 ]
+
+type Mw = (ctx: { req: Request }, next: (adds?: Record<string, unknown>) => Promise<Response>) => Promise<Response>
+
+/** A middleware that does nothing: the guard it replaces is gone. */
+const passThrough: Mw = (_ctx, next) => next()
+
+/** CORS that reflects whatever Origin came, with credentials. */
+const reflectingCors: Mw = async (ctx, next) => {
+	const res = await next()
+	const origin = ctx.req.headers.get("origin")
+	if (origin === null) return res
+	const out = new Response(res.body, res)
+	out.headers.set("access-control-allow-origin", origin)
+	out.headers.set("access-control-allow-credentials", "true")
+	return out
+}
+
+/** requestId that adopts any inbound id. */
+const adoptingRequestId: Mw = async (ctx, next) => {
+	const id = ctx.req.headers.get("x-request-id") ?? crypto.randomUUID()
+	const res = await next({ requestId: id })
+	const out = new Response(res.body, res)
+	out.headers.set("x-request-id", id)
+	return out
+}
 
 type HeaderMap = Record<string, string | string[]>
 
