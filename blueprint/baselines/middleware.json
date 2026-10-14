@@ -1,0 +1,11 @@
+{
+	"baselines": {
+		"bun 1.4": {
+			"compress-gzip-4k": 7.22,
+			"compress-skip": 1.38,
+			"rateLimit": 2.52,
+			"stack-10": 7.04
+		}
+	},
+	"note": "rateLimit / compress (no v0) per-request cost: v1 app.fetch with the middleware / the same route without it, median of interleaved samples, per runtime minor version. Regenerate with `taskset -c 2,3 bun bench/src/middleware.ts --update` on a quiet machine and commit the move with its reason."
+}
