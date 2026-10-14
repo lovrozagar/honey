@@ -1,25 +1,20 @@
-# Bit 03 — request trust
+# Bit 03 — client IP
 
-Closes: — · (Deno removed in bit 00)
-Oracle kept green: `tests/integration/trust.test.ts` (the bit-03 oracle); `_v0`'s frozen `ws3-request` regression stays green automatically (bit 03 doesn't touch `_v0`), and ws3's v1 cases are owned by bits 04/08, not 03.
+Closes: — · (Deno removed in bit 00) · `trustProxy` CUT (H23)
+Oracle kept green: `tests/integration/client-ip.test.ts` (the bit-03 oracle); `_v0`'s frozen `ws3-request` regression stays green automatically (bit 03 doesn't touch `_v0`), and ws3's v1 cases are owned by bits 04/08, not 03.
 
 ## Scope
-Client identity and trust: `trustProxy` resolution, effective client IP/scheme/host from `X-Forwarded-*` within the trusted hop count, and `clientInfo`. **Trust is plain core code** — no opt-in entry, no self-registration, no feature registry, no dependency injection (ruled bit 03; ~1 KB gz in core is not worth any of that machinery). `app.trustProxy(value)` stores config; `ctx.ip`/`clientInfo` call a pure `resolveClient(req, config)` imported normally; `trust.ts` is side-effect-free. `ipRestrict` allow/deny is middleware, bit 07. `detect-runtime.ts` stays bit 04 (adapter-side, born with its consumers; bit-00 `no-deno.test` already guards that node/bun/cf detection survived the purge).
+Just `ctx.ip`: the client address, resolved from the **platform peer** and canonicalized. **`trustProxy` is cut (H23)** — no `X-Forwarded-*`, no CIDR ranges, no hop counting, no `trustsForwarded`, no config, no `clientInfo` host/proto-from-forwarded. The peer is whatever the runtime reports: `CF-Connecting-IP` on Workers (edge-set, unspoofable; read only when `navigator.userAgent === "Cloudflare-Workers"`, else it is client text and ignored), the socket `remoteAddress` on node (the bit-04 adapter exposes it via the `PEER_ADDRESS` symbol), `server.requestIP(req)` on Bun. Behind a self-hosted reverse proxy that is the proxy's address — correct-by-default, since honey never trusts a client-supplied header. (If a self-hosting consumer ever needs the `X-Forwarded-For` override, it comes back as plain code, never machinery — H23.) No import side effects, no registry, no injection (H23/H19.3). `detect-runtime.ts` is bit 04 (adapter-side).
 
-## Files (from files.tsv — `trust`)
-- `src/trust/trust.ts` (+test) — compile a `TrustProxy` setting (config-time validation); resolve the effective client per H18.4. Pure; reached through an ordinary import, no self-registration.
-- `src/trust/ip.ts` (+test) — parse/format/canonical IP (RFC 5952, IPv4-mapped + `IPv4:port` unwrapped), CIDR parse + membership.
-- `src/trust/client-info.ts` (+test) — `ClientInfo {host, ip, protocol}` + `trustsForwarded`, `clientInfo(ctx)`, the peer lookup (`PEER_ADDRESS` symbol the Node adapter sets in bit 04, or Bun's `server.requestIP`). Exposes `ctx.trustsForwarded` — the seam `requestId` reuse + `traceparent` continuation read (H17).
+## Files (from files.tsv)
+- `src/context/peer.ts` (+test) — `ctx.ip` = the canonical platform peer. `PEER_ADDRESS` symbol (the node adapter sets it in bit 04), `peerAddressOf(req, env)` over the three sources above, and canonical form (unwrap `::ffff:a.b.c.d`, lowercase IPv6) so a client reads identically on every runtime. Lazy, resolved once per request and cached on the request state; `ip` is a reserved ctx key. Pure, side-effect-free, reached through an ordinary import.
 
 ## Tests (named, written first)
-- `trust/trust.test.ts` — compile + config-time validation; off by default = direct peer only; N trusted hops reads the Nth-from-right `X-Forwarded-For`; hop and range walks.
-- `trust/ip.test.ts` — parse/canonicalize vs the platform, CIDR membership.
-- `trust/client-info.test.ts` — `clientInfo()` and `ctx.trustsForwarded` reflect whether a forwarded value was **actually consumed** this request (H18.4), one extra field on the already-cached `ClientInfo` — not a static "is trustProxy configured" flag. Cases: `| ranges mode, peer out of range | trustsForwarded=false |`; `| hops:1, no X-Forwarded-For | trustsForwarded=false (fell back to direct peer) |`; `| hops:1, one XFF entry | true |`. So `requestId`/traceparent never reuse a client-supplied id on a direct hit against a `trustProxy:N` app. (`ipRestrict` allow/deny is tested in bit 07.)
-- `tests/integration/trust.test.ts` — `ctx.ip`/`clientInfo()`/`trustsForwarded` through `app.fetch`: off by default; hops; ranges; garbage at the read position → null; scheme/host only via a trusted hop; a Bun-server env peer; `ctx.ip` reserved; and **resolve-once** (the client is resolved once per request, cached on the request state — N reads via `ctx.ip`/logger/`proxy()` = 1 compute, no `Request` clone, headers read in place). resolve-once is a describe here, not a separate file.
-- `tests/integration/security/trust-fuzz.test.ts` — seeded ip-trust fuzz (ip parse/canonicalize vs `node:net`/WHATWG, CIDR vs a bit-by-bit reference, hop walk); property-based, distinct from the hostile-input cases in `adversarial.test.ts`.
+- `context/peer.test.ts` — `peerAddressOf` over each source (a manually-set `PEER_ADDRESS` = the node-adapter contract; a Bun `env.server.requestIP`; `CF-Connecting-IP` only under the Workers UA, ignored otherwise); canonicalization (`::ffff:1.2.3.4` → `1.2.3.4`, IPv6 lowercased); missing peer → `null`.
+- `tests/integration/client-ip.test.ts` — `ctx.ip` through `app.fetch`: the Workers header path, the Bun env peer, a set `PEER_ADDRESS` (node-adapter sim), canonical cross-runtime, **resolve-once** (the client is read once per request and cached on the request state — N reads of `ctx.ip` = 1 compute, no `Request` clone), behind-a-proxy `ctx.ip` = the proxy address (no trust), and `ip` reserved (`context()` refuses it).
 
 ## Security corpus
-- `X-Forwarded-*` spoofing: an untrusted hop must not set the client IP; header-injection via forwarded values rejected.
+- `ctx.ip` never reads a client-suppliable header off-Workers: a request setting `CF-Connecting-IP` on node/bun does not move `ctx.ip` off the real peer (the Workers-UA guard). (The `X-Forwarded-*` spoofing surface is gone with `trustProxy` — H23.)
 
 ## Budget
-- perf: trust off (default) = free; resolution is O(hops), computed once per request and cached, within threshold. No `Request` clone on the trust/ip path. token: n/a.
+- perf: `ctx.ip` unread = free (lazy); read = one peer lookup + canonicalize, cached per request, no `Request` clone. token: n/a.
