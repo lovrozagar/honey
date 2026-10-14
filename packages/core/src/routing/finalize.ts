@@ -25,7 +25,7 @@ import {
 	splitRouteId,
 } from "./pattern.ts"
 import { assertNothingDiscarded, chainErrorKeys, type HoneyGraph, type RouteHandler } from "./register.ts"
-import type { AppSettings, ErrorFactories } from "./settings.ts"
+import { type AppSettings, assertSettingsAgree, type ErrorFactories } from "./settings.ts"
 import { dict } from "./tree.ts"
 
 /** Everything a matched route runs, compiled once. */
@@ -178,6 +178,7 @@ function planMiss(g: HoneyGraph, hooks: FinalizeHooks): Plan {
 export function finalize(g: HoneyGraph, hooks: FinalizeHooks): FinalTable {
 	if (g.final !== null && g.final.epoch === g.epoch) return g.final
 	assertNothingDiscarded(g)
+	assertSettingsAgree(g.settings)
 	const plans = new Map<RouteId, Plan>()
 	const statics: Record<string, Record<string, Plan>> = dict()
 	let ws = false

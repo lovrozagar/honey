@@ -3,6 +3,24 @@
  * go without their query or fragment; cookies, credentials and bodies never appear at all.
  */
 
+/** One request-log line's fields (the catalog below), as `requestLog({ skip })` sees them. */
+export type RequestLogEntry = {
+	/** body bytes sent, when the body was counted */
+	readonly bytes?: number
+	readonly durationMs: number
+	/** what the body is: json, text, binary, stream, sse, generate or empty */
+	readonly kind: string
+	readonly method: string
+	/** without its query */
+	readonly path: string
+	readonly requestId?: string
+	/** the route that served it; empty for a request no route served */
+	readonly routeId: string
+	readonly runtime: string
+	/** the status sent, or "aborted" when the client left before the body ended */
+	readonly status: number | "aborted"
+}
+
 /** Every field a request-log line carries; nothing outside it is ever written. */
 export const REQUEST_LOG_FIELDS: readonly string[] = /* @__PURE__ */ Object.freeze([
 	"bytes",

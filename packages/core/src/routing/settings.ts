@@ -7,6 +7,7 @@
 import type { HoneyError } from "../errors/error.ts"
 import type { CustomErrorFormatter, ErrorFormatter } from "../errors/projector.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
+import type { RequestLogEntry } from "../telemetry/fields.ts"
 import { createLogger, type Logger, SILENT } from "../telemetry/logger.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import type { WSAdapter } from "../ws/contract.ts"
@@ -27,6 +28,9 @@ export type OnMethodNotAllowedFn<TEnv> = (ctx: ErrorCtx<TEnv> & { allowed: strin
 
 export type OnNotFoundFn<TEnv> = (ctx: ErrorCtx<TEnv>) => MaybePromise<Response>
 
+/** The request log's options: `skip` answers true for a line not to write. */
+export type RequestLogOptions = { readonly skip?: (entry: RequestLogEntry) => boolean }
+
 export type AppSettings<TEnv = unknown> = {
 	customErrorFormatter: CustomErrorFormatter | null
 	/** the body schema of schema errors, for the OpenAPI document */
@@ -43,6 +47,8 @@ export type AppSettings<TEnv = unknown> = {
 	onError: OnErrorFn<TEnv> | null
 	onMethodNotAllowed: OnMethodNotAllowedFn<TEnv> | null
 	onNotFound: OnNotFoundFn<TEnv> | null
+	/** one info line per request after its body ends; `null`: off */
+	requestLog: RequestLogOptions | null
 	stripPrefix: string | null
 	trailingSlash: "enforce" | "ignore" | "strip"
 	wsAdapter: WSAdapter | null
@@ -70,6 +76,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		onError: null,
 		onMethodNotAllowed: null,
 		onNotFound: null,
+		requestLog: null,
 		stripPrefix: null,
 		trailingSlash: "ignore",
 		wsAdapter: null,
@@ -119,6 +126,16 @@ export abstract class SettingsChain<TEnv> {
 	 */
 	logger(logger: Logger | false): this {
 		this.settings.logger = logger === false ? SILENT : logger
+		return this
+	}
+
+	/**
+	 * One `info` line per request after its body ends (or `"aborted"` when the client leaves):
+	 * method, path without its query, status, duration, route id, body kind, request id, runtime.
+	 * Off by default; `skip` answers true for a line not to write.
+	 */
+	requestLog(options: boolean | RequestLogOptions): this {
+		this.settings.requestLog = options === false ? null : options === true ? {} : options
 		return this
 	}
 
@@ -184,5 +201,12 @@ export abstract class SettingsChain<TEnv> {
 			this.settings.customErrorFormatter = (error, data) => mapper(error, data)
 		}
 		return this
+	}
+}
+
+/** Settings that cannot work together, refused before the first request is served. */
+export function assertSettingsAgree(s: AppSettings<unknown>): void {
+	if (s.requestLog !== null && s.logger === SILENT) {
+		throw new Error("honey: requestLog() is on, but logger(false) writes nothing: set a logger, or turn requestLog off")
 	}
 }

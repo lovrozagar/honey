@@ -213,7 +213,15 @@ export function dispatch(
 	}
 	const path = afterPrefix(s.stripPrefix, fullPath)
 	const method = request.method.toUpperCase()
-	const state: FetchState = { allowed: null, env, executionCtx, path, plan: final.miss, req: request }
+	const state: FetchState = {
+		allowed: null,
+		env,
+		executionCtx,
+		logger: s.logger,
+		path,
+		plan: final.miss,
+		req: request,
+	}
 	/* a ws upgrade goes to the ws route on its path; an app without one never reads the header */
 	const upgraded = upgrade(g, final, state, method)
 	if (upgraded !== null) return upgraded

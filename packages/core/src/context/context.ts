@@ -8,6 +8,8 @@ import { isNodeOutbound } from "../response/builder.ts"
 import { HoneyRes } from "../response/response.ts"
 import { searchOfUrl } from "../routing/request-path.ts"
 import { dict } from "../routing/tree.ts"
+import { requestBindings } from "../telemetry/fields.ts"
+import { type Logger, SILENT } from "../telemetry/logger.ts"
 import { parseCookieHeader } from "./cookie.ts"
 import { ipOf } from "./peer.ts"
 
@@ -17,6 +19,8 @@ export type ExecutionCtx = { waitUntil?: (p: Promise<unknown>) => void }
 export type RequestState<TEnv> = {
 	readonly env: TEnv
 	readonly executionCtx: ExecutionCtx | undefined
+	/** the app's logger; a context no app serves has none */
+	readonly logger?: Logger
 	readonly path: string
 	readonly req: Request
 	/** `ctx.ip` once something asked: the canonical peer, or `null` when no runtime reports one */
@@ -54,6 +58,7 @@ const RESERVED: Readonly<Record<string, true>> = /* @__PURE__ */ Object.freeze({
 	executionCtx: true,
 	headers: true,
 	ip: true,
+	log: true,
 	meta: true,
 	params: true,
 	path: true,
@@ -100,6 +105,8 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	#ac: AbortController | null = null
 	#cookies: Record<string, string> | null = null
 	#headers: Record<string, string> | null = null
+	#log: Logger | null = null
+	readonly #routeId: string
 	#search: Record<string, string> | null = null
 	#searchAll: Record<string, string[]> | null = null
 
@@ -114,6 +121,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		/* the context is the res's link to its request: signal and headers read only when a stream needs them */
 		this.res = new HoneyRes(isNodeOutbound(state.req), this)
 		this.routePattern = route.pattern
+		this.#routeId = route.id
 		this[REQUEST] = state
 		/* called on its owner: workerd's waitUntil throws "Illegal invocation" when detached */
 		const executionCtx = state.executionCtx
@@ -124,6 +132,17 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	/** The peer the platform reports, canonical (H23): CF-Connecting-IP on Workers, the socket on Bun and Node. */
 	get ip(): string | null {
 		return ipOf(this[REQUEST])
+	}
+
+	/**
+	 * This request's logger: a child of the app's that binds method, path (without its query), route
+	 * id, and the request id when one is set. Built on first use; a context no app serves logs nowhere.
+	 */
+	get log(): Logger {
+		this.#log ??= (this[REQUEST].logger ?? SILENT).child(
+			requestBindings(this.req.method, this.path, this.#routeId, (this as { requestId?: string }).requestId),
+		)
+		return this.#log
 	}
 
 	get cookies(): Record<string, string> {

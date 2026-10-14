@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import { HoneyError } from "../errors/error.ts"
 import { HoneyRes } from "../response/response.ts"
+import { SILENT } from "../telemetry/logger.ts"
 import { PEER_ADDRESS } from "./peer.ts"
 import {
 	HoneyContext,
@@ -118,6 +119,12 @@ describe("HoneyContext > defaults", () => {
 		expect(ctx.errors).toEqual({})
 		expect(Object.isFrozen(ctx.errors)).toBe(true)
 		expect(ctx.error).toBeUndefined()
+	})
+})
+
+describe("HoneyContext > log", () => {
+	it("a context no app serves logs nowhere", () => {
+		expect(makeCtx().log).toBe(SILENT)
 	})
 })
 
@@ -336,7 +343,7 @@ describe("isReservedCtxKey", () => {
 		]) {
 			expect(isReservedCtxKey(key), key).toBe(true)
 		}
-		for (const key of ["ip", "req", "res", "routePattern", "search", "searchAll", "signal"])
+		for (const key of ["ip", "log", "req", "res", "routePattern", "search", "searchAll", "signal"])
 			expect(isReservedCtxKey(key), key).toBe(true)
 		expect(isReservedCtxKey("user")).toBe(false)
 		expect(isReservedCtxKey("toString")).toBe(false)
