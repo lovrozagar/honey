@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
+import * as z from "zod"
 import type { FieldError } from "./error.ts"
 import { HoneyError } from "./error.ts"
 import { defineErrors, ERROR_META } from "./errors.ts"
@@ -247,5 +248,39 @@ describe("defineErrors with custom schemas: what a schema error leaves out, and 
 	it("ERROR_META is not enumerable", () => {
 		expect(Object.keys(errors)).toEqual(["email_taken", "item_not_found", "unauthorized"])
 		expect(Object.getOwnPropertyDescriptor(errors, ERROR_META)).toMatchObject({ enumerable: false, writable: false })
+	})
+})
+
+describe("defineErrors with zod schemas", () => {
+	const itemSchema = z.object({ reason: z.string(), suggestions: z.array(z.string()) })
+	const errors = defineErrors({
+		email_taken: "conflict",
+		item_not_found: { schema: itemSchema, status: "not_found" },
+		rate_limited: { schema: z.object({ retry_after: z.number() }), status: "too_many_requests" },
+	})
+
+	// v0: 60e63be38d
+	// v0: d948910a55
+	it("ERROR_META holds each schema itself, and null for a standard error", () => {
+		const meta = errors[ERROR_META]
+		expect([
+			meta.item_not_found.schema === itemSchema,
+			meta.rate_limited.schema === null,
+			meta.email_taken.schema,
+		]).toEqual([true, false, null])
+	})
+
+	// v0: 7e1b6a73cd
+	it("each schema error carries its own status and payload", () => {
+		const [notFound, limited] = [
+			errors.item_not_found({ reason: "x", suggestions: [] }),
+			errors.rate_limited({ retry_after: 60 }),
+		]
+		expect([notFound.status, notFound.data, limited.status, limited.data]).toEqual([
+			404,
+			{ reason: "x", suggestions: [] },
+			429,
+			{ retry_after: 60 },
+		])
 	})
 })

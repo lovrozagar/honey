@@ -71,18 +71,31 @@ describe("isJsonMediaType and isTextMediaType", () => {
 
 describe("bodyParserFor", () => {
 	// v0: 7748564d59
+	// v0: 839a0d4b5d
+	// v0: 6da60fe45e
+	// v0: 0d41ba4a94
+	// v0: 342b801330
+	// v0: 2bf41878d7
+	// v0: 5678fb100a
+	// v0: d5576ffdcd
+	// v0: 743f4ab13c
+	// v0: c16ddbd30d
+	// v0: 1e94f0a7a2
+	// v0: 53d4a45f90
 	it("selects the parser by essence, whatever the case or the parameters", () => {
 		expect(
 			[
+				"application/json",
 				"application/json; charset=utf-8",
 				"application/ld+json",
 				"Multipart/Form-Data; boundary=x",
 				"application/x-www-form-urlencoded;charset=UTF-8",
 				"multipart/mixed; boundary=x",
 				"text/plain",
+				"application/xml",
 				null,
 				undefined,
 			].map(bodyParserFor),
-		).toEqual(["json", "json", "multipart", "urlencoded", null, null, null, null])
+		).toEqual(["json", "json", "json", "multipart", "urlencoded", null, null, null, null, null])
 	})
 })

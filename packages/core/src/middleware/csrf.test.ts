@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
+import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
 import { honey } from "../routing/app.ts"
 import { cors } from "./cors.ts"
+import { createMiddleware } from "./middleware.ts"
 import { csrf, type CSRFOptions } from "./csrf.ts"
 
 const SELF = "https://app.example.com"
@@ -214,5 +216,51 @@ describe("csrf() beside cors()", () => {
 			allowed.headers.get("access-control-allow-origin"),
 			foreign.status,
 		]).toEqual([204, 200, partner, 403])
+	})
+})
+
+describe("csrf()'s refusal beside other errors in the chain", () => {
+	/** Middleware that copies the answer and sets x-outer, as outer post-next() code does. */
+	const stamp = createMiddleware(async (_ctx, next) => {
+		const res = await next()
+		const out = new Response(res.body, res)
+		out.headers.set("x-outer", "1")
+		return out
+	})
+
+	// v0: a436c055db
+	it("csrf, a refused .input() and a handler throw all keep the outer middleware's headers", async () => {
+		const app = honey<{}>()
+			.use(stamp)
+			.use(csrf({ origin: "https://app.example" }))
+		app.post("/form").handler((ctx) => ctx.res.text("ok", "x"))
+		app
+			.post("/json")
+			.input({ json: z.object({ n: z.number() }) })
+			.handler((ctx) => ctx.res.json("ok", ctx.input.json))
+		app.get("/boom").handler(() => {
+			throw new Error("boom")
+		})
+		const form = {
+			body: "a=1",
+			headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://evil.example" },
+		}
+		const answers = await Promise.all([
+			app.fetch(new Request("http://localhost/form", { ...form, method: "POST" }), {}),
+			app.fetch(
+				new Request("http://localhost/json", {
+					body: '{"n":"x"}',
+					headers: { "content-type": "application/json" },
+					method: "POST",
+				}),
+				{},
+			),
+			app.fetch(new Request("http://localhost/boom"), {}),
+		])
+		expect(answers.map((res) => [res.status, res.headers.get("x-outer")])).toEqual([
+			[403, "1"],
+			[400, "1"],
+			[500, "1"],
+		])
 	})
 })

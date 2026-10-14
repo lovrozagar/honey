@@ -6,6 +6,7 @@
  * formatter as well, never leaked when a boundary wraps it; and which key answers under a factory.
  */
 import { describe, expect, it } from "vitest"
+import * as z from "zod"
 import { HoneyError } from "../../src/errors/error.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { type Honey, honey } from "../../src/routing/app.ts"
@@ -170,6 +171,84 @@ describe("the custom formatter beside the default one", () => {
 			{ body: { reason: "gone", source: "custom" }, status: 404 },
 		])
 		expect(Object.keys((await send(app, `${base}/custom`)).body).sort()).toEqual(["reason", "source"])
+	})
+})
+
+/** A factory with zod-typed errors beside standard ones, as an app declares it. */
+const zodErrors = defineErrors({
+	api_error: "internal_server_error",
+	item_not_found: { schema: z.object({ reason: z.string() }), status: "not_found" },
+	validation_error: "unprocessable_entity",
+})
+
+const zodBase = () => honey<{}>().errorFactory(zodErrors).defaultBoundary("api_error").logger(false)
+
+/** /declared throws item_not_found declared, /undeclared undeclared, /std a standard error. */
+function zodApp(configure: (app: ReturnType<typeof zodBase>) => void = () => undefined) {
+	const app = zodBase()
+	configure(app)
+	app
+		.get("/declared")
+		.errors("item_not_found")
+		.handler(() => {
+			throw zodErrors.item_not_found({ reason: "intact" })
+		})
+	app.get("/undeclared").handler(() => {
+		throw zodErrors.item_not_found({ reason: "should be wrapped" })
+	})
+	app
+		.get("/std")
+		.errors("validation_error")
+		.handler(() => {
+			throw zodErrors.validation_error()
+		})
+	return app
+}
+
+describe("an error typed by a zod schema", () => {
+	// v0: 3b7581bcf1
+	// v0: c658a45d66
+	// v0: 71298c781b
+	// v0: 5bb206bd23
+	// v0: 582400f945
+	it("answers its payload when declared; a boundary wraps it, payload gone, when not; a standard one the envelope", async () => {
+		const app = zodApp()
+		const [declared, undeclared, standard] = [
+			await send(app, "/declared"),
+			await send(app, "/undeclared"),
+			await send(app, "/std"),
+		]
+		expect([
+			declared.status,
+			declared.body,
+			undeclared.status,
+			undeclared.body.error_key,
+			"reason" in undeclared.body,
+		]).toEqual([404, { reason: "intact" }, 500, "api_error", false])
+		expect([standard.status, standard.body.error_key, standard.body.success]).toEqual([422, "validation_error", false])
+	})
+
+	// v0: 1527976bfb
+	// v0: a62e463a99
+	// v0: 13fb6e63b4
+	it("the custom formatter post-processes its payload, schema overload too; the default formatter never touches it", async () => {
+		const custom = zodApp((a) => a.customErrorFormatter((_e, data) => ({ ...(data as object), request_id: "req-123" })))
+		const overload = zodApp((a) =>
+			a.customErrorFormatter(z.object({ trace_id: z.string() }), (_e, data) => ({
+				...(data as object),
+				trace_id: "trace-abc",
+			})),
+		)
+		const plain = zodApp((a) => a.defaultErrorFormatter((_e, shape) => ({ ...shape, wrapped: true })))
+		expect([
+			(await send(custom, "/declared")).body,
+			(await send(overload, "/declared")).body,
+			(await send(plain, "/declared")).body,
+		]).toEqual([
+			{ reason: "intact", request_id: "req-123" },
+			{ reason: "intact", trace_id: "trace-abc" },
+			{ reason: "intact" },
+		])
 	})
 })
 

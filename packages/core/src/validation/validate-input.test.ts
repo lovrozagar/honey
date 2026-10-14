@@ -77,6 +77,11 @@ describe("normalizeIssues: the vendor's code and the issue's path", () => {
 	// v0: 2743e6d090
 	// v0: aee8d7681c
 	// v0: 6e97333efe
+	// v0: 06cc087020
+	// v0: 199a5285b1
+	// v0: 3fe44ac07c
+	// v0: 7d340887cd
+	// v0: 3b3d75f55a
 	it.each<[string, StandardSchemaIssue & { code?: unknown; type?: unknown }, string]>([
 		["zod", { code: "too_small", message: "Too short", path: ["name"] }, "too_small"],
 		["arktype", { code: "invalid_type", message: "Expected string", path: ["age"] }, "invalid_type"],

@@ -4,6 +4,7 @@
  * becomes an answer that the middleware around it still sees through ctx.error.
  */
 import { describe, expect, it } from "vitest"
+import * as z from "zod"
 import { HoneyError } from "../../src/errors/error.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -376,6 +377,19 @@ const MISTAKES = [
 		"ctx.res.text is not a function",
 	],
 ] as const
+
+describe("ctx.error after next(): input validation", () => {
+	// v0: ea83f7a469
+	it("holds the 400 a refused .input() became", async () => {
+		const { app, seen } = observedApp()
+		app
+			.get("/v")
+			.input({ search: z.object({ n: z.coerce.number() }) })
+			.handler((ctx) => ctx.res.json("ok", {}))
+		expect((await send(app, "/v?n=x")).status).toBe(400)
+		expect(seen).toEqual([{ cause: undefined, errorKey: "validation_failed", status: 400 }])
+	})
+})
 
 describe("ctx.error after next(): mistakes inside the chain", () => {
 	// v0: 58a7509d07

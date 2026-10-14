@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import * as z from "zod"
 import { HoneyError } from "../errors/error.ts"
 import { defineErrors } from "../errors/errors.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
@@ -275,5 +276,27 @@ describe("taps fire only after a handler's answer, never on an error answer", ()
 		const res = await app.fetch(get(route as string, { method: query === "m=post" ? "POST" : "GET" }), { REGION: "eu" })
 		await settle()
 		expect([res.status, received]).toEqual([status, []])
+	})
+})
+
+describe("taps and .input()", () => {
+	// v0: 5d8012c8c8
+	// v0: 60ef649f55
+	it("a tap fires after input validation passed, with the validated value; never when it failed", async () => {
+		const received: unknown[] = []
+		const app = honey<{}>()
+		app.tap("audit", (_ctx, payload) => void received.push(payload))
+		app
+			.post("/users")
+			.input({ json: z.object({ name: z.string() }) })
+			.handler((ctx) => {
+				ctx.tap("audit", { action: "create", name: ctx.input.json.name })
+				return ctx.res.json("created", { ok: true })
+			})
+		const create = (body: string) =>
+			app.fetch(get("/users", { body, headers: { "content-type": "application/json" }, method: "POST" }), {})
+		const [bad, good] = [await create('{"name":123}'), await create('{"name":"Alice"}')]
+		await settle()
+		expect([bad.status, good.status, received]).toEqual([400, 201, [{ action: "create", name: "Alice" }]])
 	})
 })
