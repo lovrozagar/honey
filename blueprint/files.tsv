@@ -9,7 +9,8 @@
 #
 # ============================== packages/core  (@lovrozagar/honey) ==============================
 path	pkg	kind	bit	responsibility	origin
-src/routing/app.ts	core	src	02	the Honey app surface + honey() factory; delegates to the modules below	index.ts
+src/routing/app.ts	core	src	02	the Honey app surface + honey() factory; delegates to the modules below. Keeps only the generic-changing surface; the type machinery is app-types.ts	index.ts
+src/routing/app-types.ts	core	types	02	app-level type machinery split from app.ts for the 300-line limit (nine positional generics kept — v0 typetests T16/T28 pin them): HandlerCtx/ApplyParams/ApplyScoped/ScopedMwEntry, RouteEntry/MergeRoute/ComputeErrorsByStatus, the Infer* ladder, HoneyCtx, DefaultMeta. Route entry keeps input/output typed {} at 02 so bit 08 fills them without reshaping	index.ts,types.ts
 src/routing/settings.ts	core	src	02	AppSettings, defaults, chain (basePath/context/onError/trustProxy)	index.ts
 src/routing/register.ts	core	src	02	route registration per method; builder wiring; mount	index.ts
 src/routing/route-builder.ts	core	src	02	RouteBuilder: input/output/meta/errors/handler	index.ts
@@ -23,7 +24,7 @@ src/routing/tree.ts	core	src	01	the route tree structure	tree.ts
 src/routing/tree-merge.ts	core	src	01	mergeTree (sub-app mount)	tree.ts
 src/routing/pattern.ts	core	src	01	path pattern compile + match	pattern.ts
 src/routing/request-path.ts	core	src	01	canonicalization, strip-prefix, trailing slash	request-path.ts
-src/routing/invoke-user.ts	core	src	02	call the user handler with the built ctx	invoke-user.ts
+src/realtime/invoke-user.ts	core	src	06	callback containment for ws/realtime: invokeUser (fire callback, catch, report), reportUserError, createEventQueue; console fallback uses the bit-07 logger. NOT the request-handler path (that is runHandler inside compileChain, middleware.ts, bit 02)	invoke-user.ts
 src/routing/invalidate-check.ts	core	src	01	invalidation meta check	invalidate-check.ts
 src/routing/types.ts	core	types	01	route-level types only: HttpMethod, ParamKeys/ParamsFromPath, MergePath, PrefixRoutes (no app reference). HoneyCtx + the Infer* ladder read the app phantom types → bit 02	types.ts
 tests/types/route-model.typetest.ts	core	test	01	route-level typetest: ParamKeys/ParamsFromPath, MergePath, PrefixRoutes (31 cases ported from v0 param-types + basepath-types); checked by typecheck	typetest/param-types.ts,typetest/basepath-types.ts

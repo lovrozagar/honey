@@ -12,6 +12,7 @@ Core emits the OpenAPI 3.1 document from the collected operations. Split v0 `ope
 - `src/openapi/tags.ts` (+test) — tags/externalDocs from the resource tree (B2).
 - `src/openapi/webhooks.ts` (+test) — 3.1 `webhooks` declaration (B3).
 - `src/openapi/{scalar,swagger,docs-page,serve}.ts` (+test each), `src/openapi/register.ts` (index).
+- consumes `routing/invalidate-check.ts` (the pure `missingInvalidate*` analysis, born bit 01): the emitter runs it over the **emitted operations** and logs/throws the report per `InvalidateCheckLevel` through the **bit-07 logger** (not finalize — finalize has no operations). Add a case asserting a mutation with no declared invalidate targets is reported at `warn`/`error` per config.
 
 ## Tests (named, written first)
 - `openapi/servers.test.ts` — multiple environments + variables render; basePath composition correct.

@@ -9,6 +9,7 @@ The resume client and server stay; fix the gaps. The WS adapters (node/bun/cf �
 ## Files (from files.tsv — `realtime` + `ws`)
 - `src/realtime/bus.ts` (+test), `src/realtime/route.ts` (+test), `src/realtime/server.ts` (+test), `src/realtime/register.ts` (index).
 - `src/realtime/reference-server.ts` (+test) — the conformance target (new, H8).
+- `src/realtime/invoke-user.ts` (+test) — callback containment (`invokeUser`/`reportUserError`/`createEventQueue`) for ws/realtime event callbacks (re-homed from bit 02; its consumers are ws/realtime, and the request-handler path is `runHandler` in `middleware.ts`). The console fallback routes through the bit-07 logger.
 - `src/ws/{node,bun,cloudflare}.ts` (+test each), `src/ws/session.ts` (+test), `src/ws/shared.ts` (+test), `src/ws/origin.ts` (+test).
 - the TS resume-client runtime emitted by codegen (`gen/emit/ts/realtime.ts`: `createResumableConnection`, keepalive loop, fallback chain, `RealtimeError` types) is built with the TS SDK in bit 11; this bit owns the server + reference server it talks to.
 
