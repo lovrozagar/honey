@@ -78,18 +78,13 @@ src/middleware/powered-by.ts	core	src	07	X-Powered-By	powered-by.ts
 src/middleware/ip-restrict.ts	core	src	07	IP allow/deny	ip-restrict.ts
 src/context/peer.ts	core	src	03	ctx.ip = the canonical platform peer (H23): CF-Connecting-IP on Workers, PEER_ADDRESS symbol on node (adapter sets it, bit 04), server.requestIP on Bun; unwrap ::ffff:, lowercase IPv6; lazy + cached per request; `ip` reserved. No trustProxy/XFF/CIDR (cut)	peer.ts,client-ip.ts
 src/runtime/detect-runtime.ts	core	src	04	node|bun|cf detection (no Deno)	detect-runtime.ts
-src/runtime/feature-detect.ts	core	src	04	runtime feature detection	feature-detect.ts
-src/runtime/feature-load.ts	core	src	04	lazy feature load	feature-load.ts
-src/runtime/peer.ts	core	src	04	optional-peer load guard	peer.ts
+src/runtime/optional-peer.ts	core	src	04	optional-peer-dependency guard: a friendly error when an optional npm peer (e.g. ws) is missing — a dynamic import of a real dependency, NOT a registry (H23). Renamed from runtime/peer.ts to avoid colliding with context/peer.ts (ctx.ip)	peer.ts
 src/adapters/node/serve.ts	core	src	04	Node http serve (node:* here only)	node.ts
 src/adapters/node/request.ts	core	src	04	node:http ↔ Fetch Request bridge	node-request.ts
 src/adapters/bun/serve.ts	core	src	04	Bun.serve	node.ts,serve.ts
 src/adapters/workers/serve.ts	core	src	04	Workers fetch(request,env,ctx)	serve.ts
-src/adapters/serve.ts	core	src	04	runtime-agnostic serve entry	serve.ts
-src/adapters/serve-slot.ts	core	src	04	serve slot registration	serve-slot.ts
-src/adapters/init.ts	core	src	04	app init	init.ts
+src/adapters/serve.ts	core	src	04	plain serve(app, options): detect runtime → call node/bun adapter → return a handle (port, shutdown). The `./serve` export. No slot, no self-registration, no side effect (H23)	serve.ts
 src/adapters/fetch-request.ts	core	src	04	toFetchRequest	fetch-request.ts
-src/adapters/serve-register.ts	core	index	04	./serve export	serve-register.ts
 src/streaming/producer-stream.ts	core	src	05	Web-Streams body drive + abort	producer-stream.ts
 src/realtime/bus.ts	core	src	06	RealtimeBus pub/sub	realtime/bus.ts
 src/realtime/route.ts	core	src	06	realtime route	realtime/route.ts
@@ -156,6 +151,7 @@ src/build/plugin.ts	core	src	19	the build plugin	plugin.ts
 src/build/loaders.ts	core	src	19	config/codegen loaders (jiti)	plugin.ts,codegen-load.ts,codegen-loaders.ts
 src/build/cli.ts	core	src	19	serve-time CLI	cli.ts
 src/build/cli-args.ts	core	src	19	CLI arg parse	cli-args.ts
+src/build/init.ts	core	src	19	`honey init` project scaffolding — honey's own dev CLI, not an adapter (moved from bit 04)	init.ts
 src/build/glob.ts	core	src	19	glob	glob.ts
 src/build/yaml.ts	core	src	19	YAML emit/parse	yaml.ts
 src/build/targets.ts	core	src	19	build target selection (node/bun/cf; no Deno)	build/index.ts
@@ -184,6 +180,8 @@ tests/integration/context-extension.test.ts	core	test	02	context() extension + t
 tests/integration/cookies.test.ts	core	test	02	cookies through the app: get/set, caching, multiple Set-Cookie, kept on error responses, set→send-back round trip; signed via the signer	cookie*
 tests/integration/cookie-codec.test.ts	core	test	02	serializeCookie attribute/prefix/SameSite/Max-Age/Expires validation, value encoding (multi-byte, emoji, separators), Cookie-header parse edges	cookie*
 tests/integration/client-ip.test.ts	core	test	03	ctx.ip through app.fetch (H23): CF-Connecting-IP on Workers (and ignored off-Workers), Bun env peer, PEER_ADDRESS set (node-adapter sim), canonical cross-runtime, resolve-once per request, behind-a-proxy = proxy address (no trust). `ip` reserved	client-ip*
+tests/integration/node-adapter.test.ts	core	test	04	a real node:http round trip: request target vs Host header, absolute-form target, malformed Host → 400, body streamed both ways, Set-Cookie list kept, HEAD, keep-alive, socket peer → ctx.ip, client abort	node-adapter*,node-request-url*
+tests/integration/serve.test.ts	core	test	04	serve(app) on node/bun: the returned handle (port, shutdown), graceful drain, Workers via app.fetch (export default app); detect → adapter	serve-soak*,server*
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder (InferCtx/Env/BasePath/Meta/ErrorFactory/Methods/RoutePaths/RouteMethods/RouteCtx), context() typing, meta<T>(), public surface (internals hidden), base/routes/services split, ComputeErrorsByStatus	typetest/*
 tests/types/app-routes.typetest.ts	core	test	02	$routes/MergeRoute depth + same-path methods, basePath + MergePath registration, route(sub) merging, meta carried in $routes	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	ctx.params, routePattern literal, errors (declared + defaults, factory form, boundary), meta narrowing + readonly, req/env, no input without .input(), per-route use() accumulation	typetest/*
