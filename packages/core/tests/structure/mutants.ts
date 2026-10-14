@@ -277,3 +277,23 @@ export type LoggerFactory = (options?: { redactHeader?: (name: string, value: st
 export function unredacted(real: LoggerFactory): LoggerFactory {
 	return (options) => real({ ...options, redactHeader: (_name, value) => value })
 }
+
+export type ErrorI18nFactory = (config: never) => {
+	resolveLocale: unknown
+	translate(error: unknown, locale: string): unknown
+}
+
+/** errorI18n whose translate writes the message into the thrown error itself, and returns it. */
+export function translatingInPlace(real: ErrorI18nFactory): ErrorI18nFactory {
+	return (config) => {
+		const value = real(config)
+		return {
+			resolveLocale: value.resolveLocale,
+			translate(error: unknown, locale: string) {
+				const copy = value.translate(error, locale) as { message: string }
+				;(error as { message: string }).message = copy.message
+				return error
+			},
+		}
+	}
+}

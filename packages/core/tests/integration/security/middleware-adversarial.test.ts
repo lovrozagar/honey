@@ -62,6 +62,12 @@ const { timingSafeEqual } = (await import(
 const { curlLogger } = (await import(
 	resolvePath(REPO, "packages/core/src/observability/curl-logger.ts")
 )) as typeof import("../../../src/observability/curl-logger.ts")
+const { errorI18n } = (await import(
+	resolvePath(REPO, "packages/core/src/i18n/error-i18n.ts")
+)) as typeof import("../../../src/i18n/error-i18n.ts")
+const { HoneyError } = (await import(
+	resolvePath(REPO, "packages/core/src/errors/error.ts")
+)) as typeof import("../../../src/errors/error.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -397,5 +403,31 @@ describe("v1 adversarial: the request logger leaks no credential", () => {
 			{},
 		)
 		expect([lines.length, lines.join("\n").match(/[A-Z]+-SECRET/g)]).toEqual([1, null])
+	})
+})
+
+describe("v1 adversarial: one request's locale never leaks into another's answer", () => {
+	it("a shared error thrown in German, then in a locale with no templates and in __proto__, answers each as its own", async () => {
+		const shared = new HoneyError({ errorKey: "item_gone", status: "gone", vars: { name: "Order 7" } })
+		const app = honey<{}>()
+		app.errorI18n(
+			errorI18n({
+				errors: { de: { item_gone: "{name} ist weg" } },
+				resolveLocale: ({ search }) => search.lang ?? "en",
+			}),
+		)
+		app.get("/x").handler(() => {
+			throw shared
+		})
+		const messages = []
+		for (const lang of ["de", "fr", "__proto__"]) {
+			const res = await app.fetch(new Request(`http://app.test/x?lang=${lang}`), {})
+			messages.push(((await res.json()) as { message: string }).message)
+		}
+		expect([messages, shared.message, Object.prototype.hasOwnProperty.call({}, "item_gone")]).toEqual([
+			["Order 7 ist weg", "item_gone", "item_gone"],
+			"item_gone",
+			false,
+		])
 	})
 })

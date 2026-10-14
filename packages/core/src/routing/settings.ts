@@ -18,6 +18,25 @@ export type ErrorFactories = Readonly<Record<string, (...args: never[]) => unkno
 /** What the error and miss hooks receive. */
 export type ErrorCtx<TEnv> = { env: TEnv; jsonFromError: (err: HoneyError) => Response; req: Request }
 
+/** What `resolveLocale` reads the request's locale from. */
+export type ResolveLocaleCtx<TEnv> = {
+	readonly cookies: Readonly<Record<string, string>>
+	readonly env: TEnv
+	readonly headers: Readonly<Record<string, string>>
+	readonly params: Readonly<Record<string, string>>
+	readonly req: Request
+	readonly search: Readonly<Record<string, string>>
+}
+
+/**
+ * Error-message translation as `app.errorI18n` carries it: `errorI18n()` from `@lovrozagar/honey/i18n`
+ * builds it, so core never imports i18n. `translate` answers a translated copy, never changing `error`.
+ */
+export type ErrorI18n<TEnv = unknown> = {
+	readonly resolveLocale: (ctx: ResolveLocaleCtx<TEnv>) => MaybePromise<string>
+	translate(error: HoneyError, locale: string): HoneyError
+}
+
 /** Map a thrown value: a HoneyError replaces the error, a Response answers, nothing falls through. */
 export type OnErrorFn<TEnv> = (
 	error: unknown,
@@ -40,6 +59,8 @@ export type AppSettings<TEnv = unknown> = {
 	encodedSlashes: "allow" | "reject"
 	errorFactory: ErrorFactories | null
 	errorFormatter: ErrorFormatter
+	/** translates the answer to an unhandled throw and to an onError HoneyError; `null`: off */
+	errorI18n: ErrorI18n<TEnv> | null
 	/** the body schema of standard errors, for the OpenAPI document */
 	errorSchema: StandardSchemaLike | null
 	/** where every server-side line goes: the default createLogger(), the app's own, or SILENT */
@@ -71,6 +92,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		encodedSlashes: "reject",
 		errorFactory: null,
 		errorFormatter: defaultErrorFormatter,
+		errorI18n: null,
 		errorSchema: null,
 		logger: createLogger(),
 		onError: null,
@@ -136,6 +158,20 @@ export abstract class SettingsChain<TEnv> {
 	 */
 	requestLog(options: boolean | RequestLogOptions): this {
 		this.settings.requestLog = options === false ? null : options === true ? {} : options
+		return this
+	}
+
+	/**
+	 * Translate error answers per request: the message from the locale's template, field paths to
+	 * display names. Pass `errorI18n({ errors, fieldNames, resolveLocale })` from
+	 * `@lovrozagar/honey/i18n`; a raw config object is refused here, at startup.
+	 */
+	errorI18n(value: ErrorI18n<TEnv>): this {
+		const candidate = value as Partial<ErrorI18n<TEnv>> | null
+		if (typeof candidate?.translate !== "function" || typeof candidate.resolveLocale !== "function") {
+			throw new TypeError("app.errorI18n(): pass errorI18n({ ... }) from @lovrozagar/honey/i18n, not its config")
+		}
+		this.settings.errorI18n = value
 		return this
 	}
 

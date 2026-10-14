@@ -11,7 +11,7 @@ import { type HoneyContext, REQUEST, setCtxError } from "../context/context.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
 import { isNodeOutbound } from "../response/builder.ts"
 import type { FetchState } from "../routing/dispatch.ts"
-import type { AppSettings, ErrorCtx } from "../routing/settings.ts"
+import type { AppSettings, ErrorCtx, ErrorI18n } from "../routing/settings.ts"
 import { requestBindings } from "../telemetry/fields.ts"
 import { HoneyError, hasUnknownStatus } from "./error.ts"
 import {
@@ -48,14 +48,49 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 	}
 }
 
-/** Answer with `error`, recording it on `ctx.error`. */
-function answer(s: AppSettings<unknown>, ctx: object, error: HoneyError): Response {
+/** The response for `error`, recording it on `ctx.error`. */
+function respond(s: AppSettings<unknown>, ctx: object, error: HoneyError): Response {
 	setCtxError(ctx as HoneyContext, error)
 	const state = stateOf(ctx)
 	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, {
 		nodeOut: isNodeOutbound(state.req),
 		report: formatterReport(s, state),
 	})
+}
+
+/**
+ * `error` in the request's locale: a translated copy, the thrown error never changed. A failing
+ * `resolveLocale` or `translate` is a warn, and the error answers untranslated. Never rejects.
+ */
+async function translated(
+	s: AppSettings<unknown>,
+	i18n: ErrorI18n,
+	ctx: object,
+	error: HoneyError,
+): Promise<HoneyError> {
+	try {
+		const c = ctx as HoneyContext
+		const state = stateOf(ctx)
+		const locale = await i18n.resolveLocale({
+			cookies: c.cookies,
+			env: state.env,
+			headers: c.headers,
+			params: c.params,
+			req: state.req,
+			search: c.search,
+		})
+		return i18n.translate(error, locale)
+	} catch (failure) {
+		s.logger.warn({ ...bindings(ctx), err: HoneyError.serialize(failure) }, "error i18n failed")
+		return error
+	}
+}
+
+/** Answer with `error`, translated first when the app has errorI18n (only then asynchronously). */
+function answer(s: AppSettings<unknown>, ctx: object, error: HoneyError): MaybePromise<Response> {
+	const i18n = s.errorI18n
+	if (i18n === null) return respond(s, ctx, error)
+	return translated(s, i18n, ctx, error).then((localized) => respond(s, ctx, localized))
 }
 
 /** One throw on its way to a response: the context, what was thrown, and the error it projects to. */
@@ -79,7 +114,7 @@ function newDigest(): string {
  * Answer an error nothing handled. An unknown throw that became a 5xx gets a digest, and the
  * operator's line; a HoneyError the app threw itself answers as it is.
  */
-function unhandled(s: AppSettings<unknown>, { ctx, error, thrown }: Throw): Response {
+function unhandled(s: AppSettings<unknown>, { ctx, error, thrown }: Throw): MaybePromise<Response> {
 	if (error !== thrown && error.status >= 500) {
 		const digest = newDigest()
 		Object.defineProperty(error, DIGEST, { value: digest })
@@ -89,13 +124,13 @@ function unhandled(s: AppSettings<unknown>, { ctx, error, thrown }: Throw): Resp
 }
 
 /** A failing onError: logged once, then the native projection answers. */
-function onErrorFailed(s: AppSettings<unknown>, t: Throw, failure: unknown): Response {
+function onErrorFailed(s: AppSettings<unknown>, t: Throw, failure: unknown): MaybePromise<Response> {
 	s.logger.error({ ...bindings(t.ctx), err: HoneyError.serialize(failure) }, "onError failed")
 	return unhandled(s, t)
 }
 
 /** Apply what `onError` returned: a HoneyError replaces the error, a Response answers, nothing falls through. */
-function settleOnError(s: AppSettings<unknown>, t: Throw, result: unknown): Response {
+function settleOnError(s: AppSettings<unknown>, t: Throw, result: unknown): MaybePromise<Response> {
 	if (result instanceof HoneyError)
 		return answer(s, t.ctx, hasUnknownStatus(result) ? projectThrown(result, stateOf(t.ctx).plan.policy) : result)
 	if (result instanceof Response) {
