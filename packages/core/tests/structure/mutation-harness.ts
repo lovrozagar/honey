@@ -177,6 +177,12 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/middleware/timeout.ts",
 	},
 	{
+		catches: "v1: a Server-Timing name or description forging a metric the server never timed",
+		disable: () => ({ serverTiming: () => rawServerTiming }),
+		id: "v1-server-timing-token",
+		module: "packages/core/src/middleware/server-timing.ts",
+	},
+	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",
 		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
 		id: "v1-out-headers-validation",
@@ -218,6 +224,21 @@ const adoptingRequestId: Mw = async (ctx, next) => {
 	const res = await next({ requestId: id })
 	const out = new Response(res.body, res)
 	out.headers.set("x-request-id", id)
+	return out
+}
+
+/** serverTiming that writes names and descriptions as given. */
+const rawServerTiming: Mw = async (_ctx, next) => {
+	const parts: string[] = []
+	const timing = {
+		end() {},
+		start(name: string, description?: string) {
+			parts.push(description ? `${name};desc="${description}";dur=0` : `${name};dur=0`)
+		},
+	}
+	const res = await next({ timing })
+	const out = new Response(res.body, res)
+	out.headers.set("server-timing", [...parts, "total;dur=0"].join(", "))
 	return out
 }
 

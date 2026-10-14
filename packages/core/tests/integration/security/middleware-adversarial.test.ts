@@ -35,6 +35,9 @@ const { requestId } = (await import(
 const { timeout } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/timeout.ts")
 )) as typeof import("../../../src/middleware/timeout.ts")
+const { serverTiming } = (await import(
+	resolvePath(REPO, "packages/core/src/middleware/server-timing.ts")
+)) as typeof import("../../../src/middleware/server-timing.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -130,5 +133,23 @@ describe("v1 adversarial: a handler that never answers cannot hold the request",
 		const answered = Promise.resolve(app.fetch(new Request("http://app.test/stall"), {})).then((res) => res.status)
 		const deadline = new Promise((resolve) => setTimeout(() => resolve("still waiting"), 500))
 		expect(await Promise.race([answered, deadline])).toBe(504)
+	})
+})
+
+describe("v1 adversarial: a timing name cannot forge a metric", () => {
+	it("a name or description carrying `,` `;` `=` and quotes stays one metric, not several", async () => {
+		const app = honey<{}>()
+		app
+			.use(serverTiming())
+			.get("/t")
+			.handler((ctx) => {
+				ctx.timing.start("db, cache-hit;dur=0", 'q", auth;dur=9999')
+				return ctx.res.text("ok", "x")
+			})
+		const res = await app.fetch(new Request("http://app.test/t"), {})
+		const header = res.headers.get("server-timing") ?? ""
+		/* split outside quoted strings: the metrics a browser's devtools would show */
+		const metrics = header.match(/(?:[^,"]|"(?:[^"\\]|\\.)*")+/g)?.map((metric) => metric.trim().split(";")[0])
+		expect(metrics).toEqual(["db__cache-hit_dur_0", "total"])
 	})
 })
