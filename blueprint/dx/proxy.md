@@ -4,12 +4,12 @@
 
 | value | required | default | outcome | pitfall | test |
 | --- | --- | --- | --- | --- | --- |
-| `proxy({ target })` | yes | — | forward the request to `target`, stream the response back | `target` is resolved under `trustProxy`; an open target is an SSRF vector [F1] | `proxy/proxy.test.ts`, `integration/proxy.test.ts` |
-| `requestHeaders(ctx, headers)` | no | pass-through | mutate forwarded request headers (auth, client info, consistency) | hop-by-hop headers are stripped; do not forward `Host` blindly | `proxy/headers.test.ts` |
-| `responseHeaders` | no | pass-through | mutate the upstream response headers | upstream error-key JSON surfaces as honey errors | `proxy/proxy.test.ts` |
-| `timeout(ctx)` | no | app default | per-request upstream deadline | a streaming upstream needs no timeout | `proxy/upstream.test.ts` |
+| `proxy({ destination, … })` | yes | — | `destination(ctx, url, init)` returns the upstream `Response` — a `fetch()`, a service binding (`c.env.SVC.fetch(...)`) or a DO stub — and honey streams it back. `destination` is a **function**, not a `target: string`, because the gateway consumers (anyrow, lifeonomous) dispatch via service bindings, which a string can't express | `url` is a **single-leading-slash normalized path** (`ctx.path`, so `//`/`\`/`%2F`/`%5C` are already collapsed or 400'd) — that is the SSRF defense, not a host allowlist [F1] | `proxy/proxy.test.ts`, `integration/proxy.test.ts` |
+| `requestHeaders` (record or `(ctx) => record`) | no | pass-through | add/override forwarded request headers | the client's `Host`, `Forwarded`, `X-Forwarded-*`, `X-Real-IP`, hop-by-hop (incl. `Connection`-named), `TE`, `Expect` never reach `destination`; honey sets `X-Forwarded-For`=`ctx.ip` (omitted when null), `-Proto`/`-Host` from the request URL; `CF-Connecting-IP` passes through untouched (H23: no `trustProxy`) | `proxy/headers.test.ts` |
+| `onResponse` | no | pass-through | mutate the upstream response (mutable `HoneyOutHeaders`: `set`/`delete`) before it streams back | upstream error-key JSON surfaces byte-for-byte | `proxy/proxy.test.ts` |
+| `timeout` / `idleTimeout` | no | 60 s / — | per-request upstream deadline (header + idle); network failure → 502 `bad_gateway`, timeout → 504 `gateway_timeout` | a streaming upstream uses the idle timeout | `proxy/upstream.test.ts` |
 | traceparent forwarding | — | on when a span is active | forwards `traceparent` for the current span (G1) | the downstream continues the trace | `telemetry/traceparent.test.ts` |
 | downstream error keys | — | surfaced | the gateway documents each downstream route's own error keys (v0 fix `5c20cfb`) | — | `integration/proxy.test.ts` |
 
 ## Security corpus
-- SSRF (target host allowlist/resolution), host spoofing, header smuggling to upstream, hop-by-hop leakage — all in the bit-07 `app.fetch` adversarial suite.
+- SSRF (the `url` passed to `destination` is the single-leading-slash normalized `ctx.path`, so `//evil`/`/\evil`/`/%2F%2Fevil` can't escape the upstream origin under either `` `http://x.internal${url}` `` or `new URL(url, base)`; guard: a mutant building `url` from the raw request target), host spoofing, header smuggling to upstream, hop-by-hop leakage — all in the bit-07 `app.fetch` adversarial suite.
