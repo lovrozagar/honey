@@ -190,6 +190,7 @@ describe("the app handle", () => {
 		expect(await (await app.fetch(req("/c"), {})).json()).toEqual({ a: 1, b: 2 })
 	})
 
+	// v0: 500fe0c015
 	it("the settings setters return the handle they were called on, typed the same", () => {
 		const app = honey<{ k: string }>()
 		const same = app

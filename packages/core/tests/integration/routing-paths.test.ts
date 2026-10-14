@@ -168,3 +168,69 @@ describe("request path normalization: ctx.path and patterns", () => {
 		})
 	})
 })
+
+/** An app behind stripPrefix(`prefix`) whose routes echo what they saw. */
+const stripped = (prefix: string) => {
+	const app = honey<{}>().stripPrefix(prefix)
+	for (const pattern of ["/", "/health", "/users", "/other", "/api/deep", "/-docs", "/ary", "/test"])
+		app.get(pattern).handler((ctx) => ctx.res.json("ok", { path: ctx.path, pattern: ctx.routePattern }))
+	return app
+}
+
+describe("stripPrefix", () => {
+	// v0: 43479ee78c
+	// v0: 2dccaca6b1
+	// v0: 420f680ef2
+	// v0: 51e66f3a69
+	// v0: 035b84d974
+	// v0: ab6b7bc42a
+	// v0: 5f3fb6b7f4
+	// v0: ba99826af9
+	// v0: f54a65f0c8
+	// v0: c7bf49ba30
+	// v0: 22ee825969
+	it.each([
+		["/api", "/api/health", "/health"],
+		["/api", "/api", "/"],
+		["/api", "/api/", "/"],
+		["/api", "/other", "/other"],
+		["/api", "/", "/"],
+		["/api", "/api/api/deep", "/api/deep"],
+		["/api/v1", "/api/v1/users", "/users"],
+		["/api/", "/api/health", "/health"],
+		["api", "/api/health", "/health"],
+		["", "/health", "/health"],
+		["/", "/health", "/health"],
+	])("stripPrefix(%j) serves %s as %s, stripping once", async (prefix, target, path) => {
+		const res = await stripped(prefix).fetch(new Request(`http://localhost${target}`), {})
+		expect([res.status, await res.json()]).toEqual([200, { path, pattern: path }])
+	})
+
+	// v0: 3e4b3afe6e
+	// v0: e39db192a9
+	// v0: fdb922499a
+	// v0: 204706c5e1
+	it.each([
+		["/other/users", 404],
+		["/api-docs", 404],
+		["/apiary", 404],
+		["/api%2Ftest", 400],
+	])('stripPrefix("/api") strips whole segments only: %s answers %i', async (target, status) => {
+		expect((await stripped("/api").fetch(new Request(`http://localhost${target}`), {})).status).toBe(status)
+	})
+
+	// v0: 3a91894d74
+	// v0: ca0b63a843
+	it.each([
+		["/gateway", "/gateway/v1/users"],
+		["", "/v1/users"],
+	])("stripPrefix(%j) runs before basePath: %s reaches /v1/users", async (prefix, target) => {
+		const app = honey<{}>().stripPrefix(prefix)
+		app
+			.basePath("/v1")
+			.get("/users")
+			.handler((ctx) => ctx.res.json("ok", { path: ctx.path, pattern: ctx.routePattern }))
+		const res = await app.fetch(new Request(`http://localhost${target}`), {})
+		expect([res.status, await res.json()]).toEqual([200, { path: "/v1/users", pattern: "/v1/users" }])
+	})
+})
