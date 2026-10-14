@@ -22,6 +22,7 @@ const offering = (protocols?: string) =>
 	new Request("http://h/ws", { headers: protocols === undefined ? {} : { "sec-websocket-protocol": protocols } })
 
 describe("resolveWSOptions: one meaning and one default on every runtime", () => {
+	// v0: 7b33224074
 	it("fills the defaults: 1 MiB payload, 8 MiB backpressure that closes, 120 s idle, the first protocol offered", () => {
 		const resolved = resolveWSOptions(undefined)
 		expect({ ...resolved, protocol: resolved.protocol(["a", "b"], offering()) }).toEqual({

@@ -169,6 +169,7 @@ describe("mergeInto", () => {
 })
 
 describe("mergeInto", () => {
+	// v0: becb3889a5
 	it("reports a wildcard, websocket or root conflict", () => {
 		expect(() => mergeInto(nodeWith("GET", "/f/*a"), nodeWith("GET", "/f/*b"))).toThrow(
 			'Merge conflict: wildcard name mismatch at /f: "a" vs "b"',

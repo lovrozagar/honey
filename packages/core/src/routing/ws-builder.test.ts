@@ -43,6 +43,8 @@ function handshake(path: string, headers: Record<string, string> = {}): Request 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5))
 
 describe("app.ws(path): a WebSocket route", () => {
+	// v0: 4996752415
+	// v0: bc6ba373c4
 	it("an upgrade request runs the route: the adapter upgrades with the request and env, and its 101 goes out untouched", async () => {
 		const { adapter, upgrades } = fakeAdapter(["hi"])
 		const seen: unknown[] = []
@@ -65,6 +67,11 @@ describe("app.ws(path): a WebSocket route", () => {
 		expect(Object.fromEntries(res.headers)).toEqual({ connection: "Upgrade", upgrade: "websocket" })
 	})
 
+	// v0: 5b2828255d
+	// v0: 684055496b
+	// v0: 608d0f7913
+	// v0: 4c4e621ed5
+	// v0: b0cf67d28a
 	it("a plain GET to a ws path no HTTP GET serves is 426 Upgrade Required; an HTTP GET on the same path answers it", async () => {
 		const { adapter } = fakeAdapter()
 		const app = honey<{}>().wsAdapter(adapter)
@@ -81,7 +88,10 @@ describe("app.ws(path): a WebSocket route", () => {
 		const seen = [live.status, live.headers.get("upgrade"), both.status, await both.text(), posts.status, other.status]
 		expect(seen).toEqual([426, "websocket", 200, "http", 426, 404])
 	})
+})
 
+describe("app.ws(path): which requests reach the route", () => {
+	// v0: 2cdb172a14
 	it("an upgrade request to a path with no ws route is an ordinary request", async () => {
 		const { adapter, upgrades } = fakeAdapter()
 		const app = honey<{}>().wsAdapter(adapter)
@@ -128,6 +138,10 @@ describe("app.ws(path): reconnect and registration", () => {
 })
 
 describe("app.ws(path): what runs before the upgrade", () => {
+	// v0: 685a5f9bee
+	// v0: 63ea23180b
+	// v0: 9e222bc620
+	// v0: 9aaca7bc1c
 	it("chain middleware, scoped middleware and route middleware run first, in order, and what they add reaches the callbacks", async () => {
 		const { adapter } = fakeAdapter()
 		const order: string[] = []
@@ -143,9 +157,12 @@ describe("app.ws(path): what runs before the upgrade", () => {
 			.ws("/rooms/:id")
 			.use(step("route"))
 			.handler({ onOpen: (ctx) => void order.push(`open:${(ctx as unknown as { user: string }).user}`) })
+		app.ws("/elsewhere").handler({ onOpen: () => void order.push("open:elsewhere") })
 		await app.fetch(handshake("/rooms/7"), {})
 		await settle()
-		expect(order).toEqual(["chain", "scoped", "route", "open:u1"])
+		await app.fetch(handshake("/elsewhere"), {})
+		await settle()
+		expect(order).toEqual(["chain", "scoped", "route", "open:u1", "open:elsewhere"])
 	})
 
 	it("middleware that answers itself refuses the upgrade: the adapter is never asked", async () => {
@@ -218,6 +235,7 @@ describe("app.ws(path): declared errors and meta", () => {
 })
 
 describe("app.ws(path): the origin check comes before the adapter (H18.12)", () => {
+	// v0: a0a15d4670
 	it.each([
 		["same-origin with credentials", { cookie: "s=1", origin: "https://app.example.com" }, undefined, 101],
 		["cross-origin with credentials", { cookie: "s=1", origin: "https://evil.example.com" }, undefined, 403],
@@ -245,12 +263,16 @@ describe("app.ws(path): the origin check comes before the adapter (H18.12)", () 
 		expect([res.status, upgrades.length]).toEqual([status, status === 101 ? 1 : 0])
 	})
 
+	// v0: 6330ae1544
 	it("origins() refuses a policy that is not one", () => {
 		expect(() => honey<{}>().ws("/live").origins(["partner.example.org"])).toThrow("is not an origin")
 	})
 })
 
 describe("app.ws(path): with no adapter", () => {
+	// v0: cc7811f122
+	// v0: 0a85fbff32
+	// v0: b04bba9c7d
 	it("answers 500, and onError hears the fix: set app.wsAdapter()", async () => {
 		const onError = vi.fn()
 		const app = honey<{}>().onError((error) => void onError((error as Error).message))

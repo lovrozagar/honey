@@ -103,21 +103,25 @@ describe("WebSockets on Node: the 'upgrade' path", () => {
 		)
 	})
 
-	it("an upgrade the app refuses, or one to a path with no ws route, gets the app's answer on the socket, which then closes", async () => {
+	// v0: e35f393f78
+	it("an upgrade the app refuses, or one to a path with no ws route, gets the app's whole answer on the socket, which then closes", async () => {
 		const app = wsApp()
+		const refusal = { "www-authenticate": "Bearer", "x-reason": "locked" }
 		app
-			.use(createMiddleware(() => new Response("no", { status: 401 })))
+			.use(createMiddleware(() => new Response("no", { headers: refusal, status: 401 })))
 			.ws("/locked")
 			.handler({})
 		const { port } = await listen(app as unknown as FetchApp)
 		const [locked, page] = await Promise.all([exchange(port, HANDSHAKE("/locked")), exchange(port, HANDSHAKE("/page"))])
 		/* the refusal is a native stream, so Node chunks it; the page is buffered */
+		const head = locked.slice(0, locked.indexOf("\r\n\r\n")).split("\r\n")
 		expect([
-			locked.split("\r\n")[0],
+			head[0],
+			head.includes("www-authenticate: Bearer") && head.includes("x-reason: locked"),
 			locked.endsWith("2\r\nno\r\n0\r\n\r\n"),
 			page.split("\r\n")[0],
 			page.endsWith("page"),
-		]).toEqual(["HTTP/1.1 401 Unauthorized", true, "HTTP/1.1 200 OK", true])
+		]).toEqual(["HTTP/1.1 401 Unauthorized", true, true, "HTTP/1.1 200 OK", true])
 	})
 
 	it("hands the adapter the socket on the request view (NODE_UPGRADE); ctx.env stays the app's own", async () => {
@@ -158,6 +162,7 @@ describe("WebSockets on Node: answered on the socket", () => {
 		expect([raw.split("\r\n")[0], onError.mock.calls]).toEqual(["HTTP/1.1 500 Internal Server Error", [[boom]]])
 	})
 
+	// v0: d9a07c1832
 	it("an upgrade the app never answers is cut at upgradeTimeout", async () => {
 		const { port } = await listen(
 			answering(() => new Promise(() => {})),
@@ -322,4 +327,75 @@ describe("Node without shouldUpgradeCallback: an Upgrade that is not WebSocket",
 		)
 		expect(raw.split("\r\n")[0]).toBe("HTTP/1.1 400 Bad Request")
 	})
+})
+
+/** An open client on `url` and the next message it receives, in order. */
+async function openClient(url: string) {
+	const ws = new WsClient(url)
+	const inbox: string[] = []
+	const waiting: ((text: string) => void)[] = []
+	ws.on("message", (data) => {
+		const text = String(data)
+		const take = waiting.shift()
+		if (take) take(text)
+		else inbox.push(text)
+	})
+	await new Promise((resolve, reject) => {
+		ws.once("open", resolve)
+		ws.once("error", reject)
+	})
+	const next = () =>
+		new Promise<string>((resolve) => (inbox.length > 0 ? resolve(inbox.shift() as string) : waiting.push(resolve)))
+	return { next, ws }
+}
+
+describe("WebSockets on Node: a storm of sockets", () => {
+	// v0: c5aac44ec5
+	it("50 sockets each get their own echo and every broadcast; a client's close code arrives; a new socket joins after", async () => {
+		const room = new Set<{ send(data: string): void }>()
+		const closes: [number, string][] = []
+		const app = honey<{}>()
+		app.ws("/echo").handler({
+			onClose: (_ctx, ws, code, reason) => {
+				room.delete(ws)
+				closes.push([code, reason])
+			},
+			onMessage: (_ctx, ws, data) => {
+				if (data === "boom") for (const peer of room) peer.send("all:boom")
+				else ws.send(`echo:${String(data)}`)
+			},
+			onOpen: (_ctx, ws) => {
+				room.add(ws)
+				ws.send("hi")
+			},
+		})
+		const { port } = await listen(app as unknown as FetchApp)
+		const url = `ws://127.0.0.1:${port}/echo`
+		const clients = await Promise.all(Array.from({ length: 50 }, () => openClient(url)))
+		const hellos = await Promise.all(clients.map((c) => c.next()))
+		const echoes = await Promise.all(
+			clients.map((c, i) => {
+				const reply = c.next()
+				c.ws.send(`n${i}`)
+				return reply
+			}),
+		)
+		const blasts = clients.map((c) => c.next())
+		clients[0]?.ws.send("boom")
+		const all = await Promise.all(blasts)
+		clients[0]?.ws.close(4000, "done")
+		await new Promise((resolve) => clients[0]?.ws.once("close", resolve))
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		const again = await openClient(url)
+		const rejoined = await again.next()
+		for (const c of [...clients, again]) c.ws.terminate()
+		expect([
+			new Set(hellos),
+			echoes.every((text, i) => text === `echo:n${i}`),
+			new Set(all),
+			closes[0],
+			room.size >= 50,
+			rejoined,
+		]).toEqual([new Set(["hi"]), true, new Set(["all:boom"]), [4000, "done"], true, "hi"])
+	}, 20_000)
 })

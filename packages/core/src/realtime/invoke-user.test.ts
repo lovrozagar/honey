@@ -4,6 +4,7 @@ import { createEventQueue, invokeUser, reportUserError } from "./invoke-user.ts"
 const boom = new Error("boom")
 
 describe("invokeUser: a user callback never throws into the runtime", () => {
+	// v0: 312b0b5231
 	it.each([
 		["returns", () => "ok", true],
 		["resolves", async () => "ok", true],
@@ -34,6 +35,7 @@ describe("reportUserError: where the failure goes", () => {
 		])
 	})
 
+	// v0: a2f8be2a64
 	it("an onError that throws or rejects is logged under its own phase, and not called again", async () => {
 		const log = { error: vi.fn() }
 		const second = new Error("onError failed")
@@ -49,6 +51,7 @@ describe("reportUserError: where the failure goes", () => {
 		])
 	})
 
+	// v0: 424a6a33f8
 	it("a logger that throws, or no logger at all, never takes the failure's place as what escapes", () => {
 		const broken = {
 			error: () => {
@@ -62,6 +65,7 @@ describe("reportUserError: where the failure goes", () => {
 })
 
 describe("createEventQueue: one ordered lane", () => {
+	// v0: 963d2bb6da
 	it("runs each task after the previous one settled, and a failing task never stops the rest", async () => {
 		const queue = createEventQueue()
 		const order: string[] = []

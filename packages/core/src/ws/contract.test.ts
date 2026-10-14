@@ -30,6 +30,13 @@ function rawSocket(readyState: number, bufferedAmount = 0) {
 const limits = (backpressurePolicy: "close" | "drop") => ({ backpressureLimit: 100, backpressurePolicy })
 
 describe("WSContextImpl: sending", () => {
+	// v0: 0d3cd7287e
+	// v0: 0768e86e14
+	// v0: c311184c8e
+	// v0: 5abd4c2b42
+	// v0: 1a12fb53f2
+	// v0: 0436fee7e3
+	// v0: 557e8afa3d
 	it("sends strings and bytes as they are, and other values as JSON", () => {
 		const raw = rawSocket(1)
 		const ws = new WSContextImpl(raw)
@@ -43,6 +50,7 @@ describe("WSContextImpl: sending", () => {
 		expect(raw.sent).toEqual(["text", bytes, buffer, '{"n":1}', '[1,"x"]'])
 	})
 
+	// v0: 55868f34ad
 	it("queues what is sent while the socket opens, keeps the newest 32, and sends them on open", () => {
 		const raw = rawSocket(0)
 		const ws = new WSContextImpl(raw)
@@ -61,6 +69,7 @@ describe("WSContextImpl: sending", () => {
 		expect(raw.sent).toEqual(["waiting"])
 	})
 
+	// v0: bddce02aef
 	it("drops what is sent once the socket is closing or closed", () => {
 		const closing = rawSocket(2)
 		const closed = rawSocket(3)
@@ -71,6 +80,7 @@ describe("WSContextImpl: sending", () => {
 })
 
 describe("WSContextImpl: backpressure", () => {
+	// v0: 92ead6cea3
 	it("over the limit, the close policy closes 1013 and sends nothing", () => {
 		const raw = rawSocket(1, 101)
 		new WSContextImpl(raw, limits("close")).send("x")
@@ -95,6 +105,9 @@ describe("WSContextImpl: backpressure", () => {
 })
 
 describe("WSContextImpl: closing and state", () => {
+	// v0: af82d0e92b
+	// v0: 20cb28519d
+	// v0: 3a77f5a582
 	it("close() cuts the reason to 123 UTF-8 bytes and clears the open queue", () => {
 		const raw = rawSocket(0)
 		const ws = new WSContextImpl(raw)
@@ -111,6 +124,8 @@ describe("WSContextImpl: closing and state", () => {
 		])
 	})
 
+	// v0: 408931ac24
+	// v0: 7c538c83ee
 	it("reports the socket's readyState and bufferedAmount", () => {
 		const raw = rawSocket(1, 42)
 		const ws = new WSContextImpl(raw)

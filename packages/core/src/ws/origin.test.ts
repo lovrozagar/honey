@@ -6,6 +6,7 @@ const SERVER = "https://app.example.com"
 const predicate = () => true
 
 describe("originAllowed: same-origin is the full origin (H18.12)", () => {
+	// v0: 19f086b6c9
 	it.each([
 		["the same scheme, host and port", "https://app.example.com", true],
 		["the same origin spelled with uppercase", "https://APP.example.com", true],
@@ -13,12 +14,14 @@ describe("originAllowed: same-origin is the full origin (H18.12)", () => {
 		["another port", "https://app.example.com:8443", false],
 		["a sibling host", "https://evil.example.com", false],
 		["a host that merely starts the same", "https://app.example.com.evil.net", false],
+		['the opaque "null" origin, never the server\'s', "null", false],
 	])("%s, with credentials and no allowlist: %s", (_case, origin, allowed) => {
 		expect(originAllowed(null, origin, SERVER, true)).toBe(allowed)
 	})
 })
 
 describe("originAllowed: the default policy", () => {
+	// v0: 7a5f5b5c82
 	it.each([
 		["a cross-origin upgrade with credentials", "https://evil.example.com", true, false],
 		["a cross-origin upgrade without credentials", "https://evil.example.com", false, true],
@@ -33,6 +36,8 @@ describe("originAllowed: the default policy", () => {
 describe("originAllowed: an explicit policy", () => {
 	const list = validateOriginPolicy(["https://partner.example.org", "http://localhost:5173"])
 
+	// v0: 4ddee157d8
+	// v0: 03c3f9a9ea
 	it.each([
 		["* allows any origin", "*", "https://evil.example.com", true],
 		["a listed origin", list, "https://partner.example.org", true],

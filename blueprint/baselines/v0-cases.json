@@ -41721,6 +41721,10 @@
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
 		},
+		"0e1fa478be": {
+			"feature": "08-io",
+			"reason": "WS invalid search answering 400 before the upgrade is the input layer (bit 08)"
+		},
 		"0e84e508c7": {
 			"feature": "19-release-provenance",
 			"reason": "generate-time manifest handling in the CLI: build/cli is bit 19"
@@ -41949,6 +41953,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"21ff53e8fc": {
+			"feature": "09-ir-seam",
+			"reason": "middleware meta on a ws route's operation is metaSpec emission (bit 09, with its siblings)"
+		},
 		"22ee825969": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -41964,6 +41972,10 @@
 		"23beeac98c": {
 			"feature": "08-io",
 			"reason": "etag() leaving a stream() body unconsumed is etag behavior (response/etag.ts, bit 08)"
+		},
+		"23dabab196": {
+			"feature": "08-io",
+			"reason": "WS input validated before the upgrade is the input layer (bit 08, ruled)"
 		},
 		"23fbe77289": {
 			"feature": "08-io",
@@ -42437,6 +42449,10 @@
 			"feature": "04-adapters",
 			"reason": "asserts ctx.ip over a real Node socket, which the bit-04 Node adapter sets"
 		},
+		"47af53fc4a": {
+			"feature": "07-security-middleware",
+			"reason": "cors() in front of a ws route on Node is cors() behavior (bit 07)"
+		},
 		"47f2b00718": {
 			"feature": "08-io",
 			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
@@ -42468,6 +42484,14 @@
 		"4bcc6a8d59": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"4c238eef1c": {
+			"feature": "11-ts-client",
+			"reason": "the mock server's WS echo is mock-server behavior (bit 11, with its siblings)"
+		},
+		"4c53d6cec5": {
+			"feature": "11-ts-client",
+			"reason": "a generated tree module staying untouched is generated-tree loading (bit 11, with 8217438ad1)"
 		},
 		"4c790a7ac0": {
 			"feature": "08-io",
@@ -42553,6 +42577,10 @@
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
+		"54b2848b30": {
+			"feature": "08-io",
+			"reason": "WS .input() validated before the upgrade is the input layer (bit 08, as 23dabab196)"
+		},
 		"54b74ee5d4": {
 			"feature": "07-security-middleware",
 			"reason": "asserts proxy() forwarding, built in bit 07"
@@ -42576,6 +42604,10 @@
 		"57575ddf02": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"5771b583ff": {
+			"feature": "08-io",
+			"reason": "header middleware over Response.redirect() is response/with-headers.ts (bit 08)"
 		},
 		"57864cc3aa": {
 			"feature": "07-security-middleware",
@@ -42877,6 +42909,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"70f86e44bd": {
+			"feature": "07-security-middleware",
+			"reason": "the proxy keeping Upgrade/Connection on a WebSocket upgrade is proxy behavior (bit 07)"
+		},
 		"7121db6861": {
 			"feature": "08-io",
 			"reason": "input/output schema types: io is bit 08"
@@ -42892,6 +42928,10 @@
 		"714aa07ba3": {
 			"feature": "08-io",
 			"reason": "uses prettyJson (pretty-json.ts, bit 08)"
+		},
+		"7175f64c43": {
+			"feature": "08-io",
+			"reason": "withHeaders passing a 101 through is response/with-headers.ts (bit 08)"
 		},
 		"71c3765f03": {
 			"feature": "02-finalize-middleware",
@@ -43077,6 +43117,10 @@
 			"feature": "09-ir-seam",
 			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
+		"7f2b5465a1": {
+			"feature": "07-security-middleware",
+			"reason": "the proxy detecting a WebSocket upgrade is proxy behavior (proxy/proxy.ts, bit 07)"
+		},
 		"7f804f0944": {
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
@@ -43185,6 +43229,10 @@
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
 		},
+		"87ad46cd4d": {
+			"feature": "08-io",
+			"reason": "header middleware passing a 101 through is response/with-headers.ts (bit 08)"
+		},
 		"87b16f8028": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -43204,6 +43252,10 @@
 		"897e6d10e7": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"89cb956860": {
+			"feature": "08-io",
+			"reason": "WS search input validated before the upgrade is the input layer (bit 08)"
 		},
 		"8a79392e36": {
 			"feature": "02-finalize-middleware",
@@ -43528,6 +43580,10 @@
 		"a3eb33f2a3": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"a40d4a499b": {
+			"feature": "07-security-middleware",
+			"reason": "route() composing taps and i18n over a ws child needs i18n (bit 07)"
 		},
 		"a414a2c8c8": {
 			"feature": "09-ir-seam",
@@ -43977,6 +44033,14 @@
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
 		},
+		"c669b3cf9a": {
+			"feature": "09-ir-seam",
+			"reason": "scoped middleware meta back-filling a ws operation is metaSpec emission (bit 09, with its siblings)"
+		},
+		"c66efc187c": {
+			"feature": "07-security-middleware",
+			"reason": "cors() in front of a ws route letting the upgrade through is cors() behavior (bit 07)"
+		},
 		"c7bf49ba30": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -44305,6 +44369,10 @@
 			"feature": "09-ir-seam",
 			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
 		},
+		"ee2ab1f762": {
+			"feature": "07-security-middleware",
+			"reason": "curlLogger with a malformed Host is curlLogger behavior (observability, bit 07)"
+		},
 		"ee339cf151": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -44328,6 +44396,10 @@
 		"efbdd5d766": {
 			"feature": "08-io",
 			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
+		},
+		"efc1b0fa61": {
+			"feature": "07-security-middleware",
+			"reason": "curlLogger({ body: true }) before bodyLimit is curlLogger behavior (observability, bit 07)"
 		},
 		"efd8986f2d": {
 			"feature": "07-security-middleware",
@@ -44392,6 +44464,10 @@
 		"f39f07caa8": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"f411af65ff": {
+			"feature": "08-io",
+			"reason": "header middleware over an immutable upstream response is response/with-headers.ts (bit 08)"
 		},
 		"f49b814aa4": {
 			"feature": "07-security-middleware",
@@ -44562,11 +44638,13 @@
 		"011b51b268": "covered-by: asserts only {} extends object as a drift guard; the @ts-expect-error cases in middleware-scoped.typetest.ts fail typecheck if they drift",
 		"05533ac9c0": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"0e1a3fa08e": "H23: trustProxy is cut, and with it CIDR ranges and the trusted-hop walk",
+		"155af471e5": "preUpgrade is cut (bit-06 ruling)",
 		"201c5d0daa": "H23: the trust fuzz corpus is cut; peer canonicalization is pinned by the src/context/peer.test.ts tables",
 		"29768702f9": "H23: trustProxy is cut; ipRestrict \"behind one proxy\" depended on trusting a forwarded client",
 		"3e5e802259": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"4014d67f6b": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"416fa38434": "covered-by: asserts only {} extends object as an import check; every typetest file compiling under typecheck is that check",
+		"50c810aa71": "preUpgrade is cut (bit-06 ruling)",
 		"6229e730cd": "H23: no feature slots or self-registering entries; features are plain imports",
 		"6240fc17bc": "v1 parses the query from req.url as a string; there is no urlFn hook to pre-parse it",
 		"832009247d": "H23: no optional feature entries or feature slots; ctx.ip is plain core code",
@@ -44585,8 +44663,10 @@
 		"c15787dab6": "v1 parses the query from req.url as a string; there is no urlFn hook to pre-parse it",
 		"c433e4df35": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"c53335a22f": "v1 dispatch always hands the context its path in the request state; there is no default to fall back to",
+		"c85e90712b": "a placeholder that passes only when skipped; workerd WebSockets run in the cf e2e app (test:e2e:cf, CI)",
 		"cc1f1e9fd6": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"d113ded1c5": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
+		"e97bc8a13b": "H23: feature slots are cut; realtime() is a plain function, so there is no entry to name at registration",
 		"ec806ce613": "v1 parses the query from req.url as a string (searchOfUrl); there is no URL object and no urlFn hook",
 		"efbc236424": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"f94bb1b63e": "covered-by: every bit-02 suite serves routes on scope-less apps across repeated requests (routing, middleware, context); the empty-scope fast path is the perf gate's concern"

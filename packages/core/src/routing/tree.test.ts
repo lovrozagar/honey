@@ -108,6 +108,8 @@ describe("insertRoute", () => {
 
 describe("websocket leaves", () => {
 	// v0: 2b4a8364e1
+	// v0: 8fff7915ba
+	// v0: 56c735670a
 	it("places a ws route in its own slot and rejects a duplicate or a wildcard", () => {
 		const root = createNode()
 		expect(insertWsRoute(root, "/chat/:room")).toBe("WS /chat/:room")

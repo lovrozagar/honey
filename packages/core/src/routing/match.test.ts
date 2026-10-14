@@ -361,11 +361,13 @@ describe("wildcard percent-decoding", () => {
 
 describe("matchWsRoute — path walking", () => {
 	// v0: 188e108e01
+	// v0: 25297505b7
 	it("simple WS path /ws matches", () => {
 		expect(matchWsRoute(wsTree("/ws"), "/ws")).toEqual({ id: "WS /ws", params: {} })
 	})
 
 	// v0: 7cc911a5b6
+	// v0: ae5c4c02ba
 	it("WS path with param /chat/:roomId extracts param", () => {
 		expect(matchWsRoute(wsTree("/chat/:roomId"), "/chat/room-42")).toEqual({
 			id: "WS /chat/:roomId",
@@ -374,6 +376,7 @@ describe("matchWsRoute — path walking", () => {
 	})
 
 	// v0: a72bc0d4a3
+	// v0: becd4b7140
 	it("WS path with no match returns null", () => {
 		expect(matchWsRoute(wsTree("/ws"), "/missing")).toBeNull()
 	})
@@ -388,6 +391,7 @@ describe("matchWsRoute — path walking", () => {
 		expect(matchWsRoute(wsTree("/chat/:id"), "/chat//abc")).toEqual({ id: "WS /chat/:id", params: { id: "abc" } })
 	})
 
+	// v0: 55b9892839
 	it("backtracks from a static ws branch that dead-ends to the param branch", () => {
 		const root = wsTree("/chat/lobby/x", "/chat/:room")
 		expect(matchWsRoute(root, "/chat/lobby")).toEqual({ id: "WS /chat/:room", params: { room: "lobby" } })
