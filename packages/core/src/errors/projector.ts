@@ -3,7 +3,7 @@
  * route's error boundary allows, and that error becomes a JSON response through the app's
  * formatters. Pure: dispatch wraps it with onError, i18n and telemetry.
  */
-import { withRawBody } from "../response/builder.ts"
+import { createHoneyResponse, withRawBody } from "../response/builder.ts"
 import { EK, HoneyError, hasUnknownStatus, isFrameworkErrorKey } from "./error.ts"
 import { ERROR_META, type ErrorMetaEntry } from "./errors.ts"
 
@@ -63,6 +63,23 @@ export function projectThrown(thrown: unknown, policy: ErrorPolicy): HoneyError 
 /** Hears a formatter that crashed; the answer still falls back to a well-formed body. */
 export type FormatterReport = (failure: unknown) => void
 
+/**
+ * How an error answer is built: who hears a crashed formatter, and whether it goes out over the
+ * Node bridge, where it is a HoneyResponse so a middleware's header write stays on the plain map (b4).
+ */
+export type ErrorAnswer = { readonly nodeOut?: boolean; readonly report?: FormatterReport | undefined }
+
+/** A JSON answer built the way the bridge it goes out over writes it fastest. */
+export function jsonAnswer(
+	payload: string,
+	headers: Record<string, string>,
+	status: number,
+	nodeOut: boolean,
+): Response {
+	if (nodeOut) return createHoneyResponse({ headers, raw: payload, status })
+	return withRawBody(new Response(payload, { headers, status }), payload)
+}
+
 function errorBody(
 	error: HoneyError,
 	defaultFormatter: ErrorFormatter,
@@ -104,11 +121,11 @@ export function createErrorResponse(
 	error: HoneyError,
 	defaultFormatter: ErrorFormatter,
 	customFormatter?: CustomErrorFormatter | null,
-	report?: FormatterReport,
+	answer: ErrorAnswer = {},
 ): Response {
-	const payload = JSON.stringify(errorBody(error, defaultFormatter, customFormatter, report))
+	const payload = JSON.stringify(errorBody(error, defaultFormatter, customFormatter, answer.report))
 	const headers: Record<string, string> = { "content-type": "application/json", ...error.headers }
-	return withRawBody(new Response(payload, { headers, status: error.status }), payload)
+	return jsonAnswer(payload, headers, error.status, answer.nodeOut === true)
 }
 
 /**
@@ -119,12 +136,14 @@ export function safeErrorResponse(
 	thrown: unknown,
 	defaultFormatter: ErrorFormatter,
 	customFormatter: CustomErrorFormatter | null,
+	nodeOut = false,
 ): Response {
 	try {
 		return createErrorResponse(
 			thrown instanceof HoneyError ? thrown : internalError(undefined),
 			defaultFormatter,
 			customFormatter,
+			{ nodeOut },
 		)
 	} catch {
 		/* the last resort: the boundary logs what failed (on-error.ts); this only keeps the answer well-formed */

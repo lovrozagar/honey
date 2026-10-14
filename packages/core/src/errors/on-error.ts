@@ -9,6 +9,7 @@
  */
 import { type HoneyContext, REQUEST, setCtxError } from "../context/context.ts"
 import type { MaybePromise } from "../middleware/middleware.ts"
+import { isNodeOutbound } from "../response/builder.ts"
 import type { FetchState } from "../routing/dispatch.ts"
 import type { AppSettings, ErrorCtx } from "../routing/settings.ts"
 import { requestBindings } from "../telemetry/fields.ts"
@@ -39,7 +40,10 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 	return {
 		env: state.env,
 		jsonFromError: (err) =>
-			createErrorResponse(err, s.errorFormatter, s.customErrorFormatter, formatterReport(s, state)),
+			createErrorResponse(err, s.errorFormatter, s.customErrorFormatter, {
+				nodeOut: isNodeOutbound(state.req),
+				report: formatterReport(s, state),
+			}),
 		req: state.req,
 	}
 }
@@ -47,7 +51,11 @@ export function errorCtx(s: AppSettings<unknown>, state: FetchState): ErrorCtx<u
 /** Answer with `error`, recording it on `ctx.error`. */
 function answer(s: AppSettings<unknown>, ctx: object, error: HoneyError): Response {
 	setCtxError(ctx as HoneyContext, error)
-	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, formatterReport(s, stateOf(ctx)))
+	const state = stateOf(ctx)
+	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, {
+		nodeOut: isNodeOutbound(state.req),
+		report: formatterReport(s, state),
+	})
 }
 
 /** One throw on its way to a response: the context, what was thrown, and the error it projects to. */
@@ -120,7 +128,7 @@ export function boundary(s: AppSettings<unknown>): (thrown: unknown, ctx: object
 	const reportAndAnswer = (thrown: unknown, ctx: object, failure: unknown): Response => {
 		s.logger.error({ ...bindings(ctx), err: HoneyError.serialize(failure) }, "error response failed")
 		setCtxError(ctx as HoneyContext, asHoneyError(thrown))
-		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter)
+		return safeErrorResponse(thrown, s.errorFormatter, s.customErrorFormatter, isNodeOutbound(stateOf(ctx).req))
 	}
 	return (thrown, ctx) => {
 		try {

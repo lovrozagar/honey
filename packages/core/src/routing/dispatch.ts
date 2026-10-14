@@ -7,9 +7,9 @@
 import { HoneyContext, REQUEST, type RequestState } from "../context/context.ts"
 import { HoneyError } from "../errors/error.ts"
 import { boundary, errorCtx, formatterReport } from "../errors/on-error.ts"
-import { createErrorResponse } from "../errors/projector.ts"
+import { createErrorResponse, jsonAnswer } from "../errors/projector.ts"
 import { compileChain, type MaybePromise } from "../middleware/middleware.ts"
-import { replaceResponse, withRawBody } from "../response/builder.ts"
+import { isNodeOutbound, replaceResponse } from "../response/builder.ts"
 import type { StatusKey } from "../response/status.ts"
 import { logRequest, type Seen } from "../telemetry/request-log.ts"
 import { finalize, type FinalizeHooks, type FinalTable, type Plan } from "./finalize.ts"
@@ -71,7 +71,7 @@ function make405(s: AppSettings<unknown>, state: FetchState, allowed: string[]):
  * nothing (finalize decides) and, checked per request since a setter may come later, no
  * `onNotFound`, the default formatter (a custom one may stamp each body) and no factory override.
  */
-function fixedNotFound(): () => Response {
+function fixedNotFound(): (nodeOut: boolean) => Response {
 	const error = new HoneyError({ errorKey: "not_found", status: "not_found" })
 	const payload = JSON.stringify({
 		error_key: error.errorKey,
@@ -81,8 +81,7 @@ function fixedNotFound(): () => Response {
 		status_key: error.statusKey,
 		success: false,
 	})
-	return () =>
-		withRawBody(new Response(payload, { headers: { "content-type": "application/json" }, status: 404 }), payload)
+	return (nodeOut) => jsonAnswer(payload, { "content-type": "application/json" }, 404, nodeOut)
 }
 
 function plainNotFound(s: AppSettings<unknown>): boolean {
@@ -114,9 +113,12 @@ export function finalTable(g: HoneyGraph): FinalTable {
 }
 
 /** 400 for a request path the normalization policy rejects. No boundary, no onError. */
-export function badRequestTarget(s: AppSettings<unknown>): Response {
+export function badRequestTarget(s: AppSettings<unknown>, request: Request): Response {
 	const error = frameworkError(s, "bad_request", "bad_request")
-	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, formatterReport(s, null))
+	return createErrorResponse(error, s.errorFormatter, s.customErrorFormatter, {
+		nodeOut: isNodeOutbound(request),
+		report: formatterReport(s, null),
+	})
 }
 
 /** The canonical path a non-canonical trailing slash redirects to, or `null`. */
@@ -147,7 +149,7 @@ function miss(
 	state: FetchState,
 	allowed: string[] | null,
 ): MaybePromise<Response> {
-	if (allowed === null && final.notFound !== null && plainNotFound(s)) return final.notFound()
+	if (allowed === null && final.notFound !== null && plainNotFound(s)) return final.notFound(isNodeOutbound(state.req))
 	state.allowed = allowed
 	return run(state, final.miss, EMPTY_PARAMS)
 }
@@ -219,7 +221,7 @@ function route(g: HoneyGraph, incoming: Incoming) {
 	const { request } = incoming
 	const s = g.settings
 	const fullPath = normalizePath(pathOfUrl(request.url), s.encodedSlashes)
-	if (fullPath === null) return badRequestTarget(s)
+	if (fullPath === null) return badRequestTarget(s, request)
 	const final = finalTable(g)
 	const target = trailingSlashTarget(s, fullPath)
 	if (target !== null) {

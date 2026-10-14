@@ -46,14 +46,14 @@ export type FinalizeHooks = {
 	readonly convert: ChainErrorConverter
 	readonly miss: (ctx: object) => MaybePromise<Response>
 	/** the fixed 404, for a miss whose chain runs nothing */
-	readonly notFound: () => Response
+	readonly notFound: (nodeOut: boolean) => Response
 }
 
 /** What one graph serves. */
 export type FinalTable = {
 	readonly epoch: number
 	readonly miss: Plan
-	readonly notFound: (() => Response) | null
+	readonly notFound: ((nodeOut: boolean) => Response) | null
 	readonly plans: ReadonlyMap<RouteId, Plan>
 	/** method → path → plan, for patterns without params or wildcards */
 	readonly statics: Readonly<Record<string, Readonly<Record<string, Plan>>>>
