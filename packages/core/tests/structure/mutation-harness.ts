@@ -147,6 +147,12 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/response/sse.ts",
 	},
 	{
+		catches: "v1: a header value carrying CR/LF written through the plain header path",
+		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
+		id: "v1-out-headers-validation",
+		module: "packages/core/src/response/out-headers.ts",
+	},
+	{
 		catches: "v1: a cross-site WebSocket upgrade carrying credentials let through",
 		disable: () => ({ originAllowed: () => true }),
 		id: "v1-ws-origin",
@@ -159,6 +165,51 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/ws/session.ts",
 	},
 ]
+
+type HeaderMap = Record<string, string | string[]>
+
+/** HoneyOutHeaders without Fetch's name and value checks: a plain map that takes anything. */
+class NaiveOutHeaders {
+	#map: HeaderMap
+	constructor(map: HeaderMap) {
+		this.#map = { ...map }
+	}
+	append(name: string, value: string): void {
+		const key = name.toLowerCase()
+		const old = this.#map[key]
+		this.#map[key] = old === undefined ? value : [...(Array.isArray(old) ? old : [old]), value]
+	}
+	delete(name: string): void {
+		delete this.#map[name.toLowerCase()]
+	}
+	get(name: string): string | null {
+		const value = this.#map[name.toLowerCase()]
+		if (value === undefined) return null
+		return Array.isArray(value) ? value.join(", ") : value
+	}
+	getSetCookie(): string[] {
+		const value = this.#map["set-cookie"]
+		return value === undefined ? [] : Array.isArray(value) ? value : [value]
+	}
+	has(name: string): boolean {
+		return this.get(name) !== null
+	}
+	set(name: string, value: string): void {
+		this.#map[name.toLowerCase()] = value
+	}
+	toRecord(): HeaderMap {
+		return this.#map
+	}
+	forEach(callback: (value: string, key: string) => void): void {
+		for (const [key, value] of this) callback(value, key)
+	}
+	*[Symbol.iterator](): IterableIterator<[string, string]> {
+		for (const key in this.#map) {
+			const value = this.#map[key] as string | string[]
+			for (const item of Array.isArray(value) ? value : [value]) yield [key, item]
+		}
+	}
+}
 
 type CreateWsSession = (options: never) => WSHandler<unknown>
 

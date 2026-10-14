@@ -36,6 +36,9 @@ const { serve: serveNode } = (await import(
 const { rangeResponse } = (await import(
 	resolve(REPO, "packages/core/src/response/range.ts")
 )) as typeof import("../../../src/response/range.ts")
+const { withHeaders } = (await import(
+	resolve(REPO, "packages/core/src/response/with-headers.ts")
+)) as typeof import("../../../src/response/with-headers.ts")
 const { createCookieSigner } = (await import(
 	resolve(REPO, "packages/core/src/context/cookie-sign.ts")
 )) as typeof import("../../../src/context/cookie-sign.ts")
@@ -351,6 +354,26 @@ describe("v1 adversarial: response splitting at the node:http bridge", () => {
 				false,
 			])
 		})
+	})
+})
+
+describe("v1 adversarial: response splitting through a middleware's header edit", () => {
+	it("a CR/LF reaching the plain header path of a HoneyResponse is refused: 500, and no header carries it", async () => {
+		const app = v1.honey<{}>()
+		const echo = createMiddleware(async (ctx: { req: Request }, next) => {
+			const value = new URL(ctx.req.url).searchParams.get("v") ?? ""
+			return withHeaders(await next(), (headers) => headers.set("x-echo", value))
+		})
+		app
+			.use(echo)
+			.get("/echo")
+			.handler((ctx) => ctx.res.text("ok", "x"))
+		const req = new Request("http://app.test/echo?v=a%0d%0ax-injected:%201")
+		/* marked as the node bridge marks its requests, so ctx.res builds the plain-map HoneyResponse */
+		Object.defineProperty(req, Symbol.for("honey.nodeOut"), { value: true })
+		const res = await app.fetch(req, {})
+		const carried = [...res.headers].some(([, value]) => /[\r\n]/.test(value))
+		expect([res.status, res.headers.get("x-injected"), carried]).toEqual([500, null, false])
 	})
 })
 
