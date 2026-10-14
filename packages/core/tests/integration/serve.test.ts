@@ -15,11 +15,14 @@ const handles: ServeHandle[] = []
 afterEach(async () => {
 	await Promise.all(handles.splice(0).map((handle) => handle.close(0)))
 	aborts.length = 0
+	slowStarted.length = 0
 	vi.unstubAllGlobals()
 })
 
 /** Reasons /hang saw its signal abort with. */
 const aborts: unknown[] = []
+/** One entry per /slow request the server began handling. */
+const slowStarted: true[] = []
 
 /** /who answers with ctx.ip; /hang answers only once its signal aborts; /slow after 50 ms. */
 function app() {
@@ -35,6 +38,7 @@ function app() {
 			),
 	)
 	a.get("/slow").handler(async (ctx) => {
+		slowStarted.push(true)
 		await new Promise((resolve) => setTimeout(resolve, 50))
 		return ctx.res.text("ok", "slow done")
 	})
@@ -70,7 +74,8 @@ describe("serve(app) on Node", () => {
 	it("close() lets an in-flight request finish before the server stops", async () => {
 		const handle = await started()
 		const slow = fetch(`${handle.url}/slow`)
-		await new Promise((resolve) => setTimeout(resolve, 10))
+		/* in flight means the handler began: a fixed sleep loses that race under load */
+		await vi.waitFor(() => expect(slowStarted).toHaveLength(1))
 		await handle.close()
 		const res = await slow
 		expect([res.status, await res.text()]).toEqual([200, "slow done"])
