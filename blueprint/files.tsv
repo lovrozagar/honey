@@ -18,6 +18,7 @@ src/routing/ws-builder.ts	core	src	06	WSRouteBuilder: handler/errors/input/meta/
 src/routing/finalize.ts	core	src	02	_finalize → FinalTable; dangling-builder + unused-use reports	index.ts
 src/routing/dispatch.ts	core	src	02	the fetch pipeline: match → mw → validate → handler → finalize	index.ts
 src/routing/tap.ts	core	src	07	app.tap(key, handler) + ctx.tap: a post-response observation hook that fires after a successful handler response, contained through invokeUser (never delays or shapes the response). Core (settings map + post-response hook), not middleware; 74 cases moved here from bit 02	tap.ts
+src/routing/tap-delivery.test.ts	core	test	07	tap delivery (second co-located test for tap.ts, split at the 500-line cap): a failing/slow tap never touches the answer (warn "tap failed", routeId bound), what TapContext sees, when taps run (background/waitUntil, after the whole chain), methods, mounted apps (serving over source), taps beside errorI18n, over a real Node listen	tap*
 src/routing/middleware-chain.ts	core	src	02	scopeGuard, timedMiddleware, commonPrefix, errorsOf, describeMw	index.ts
 src/routing/match.ts	core	src	01	matchRoute over the tree; method/path resolution	index.ts,tree.ts
 src/routing/record.ts	core	src	01	RouteRecord + leaf types; per-graph record copy	index.ts
