@@ -369,6 +369,7 @@ tests/structure/privacy.test.ts	core	test	07	codebase-wide invariant (H17): no c
 tests/structure/v0-inventory.ts	core	src	00	pure: parse every _v0/tests file (oxc-parser) → classify each case (file>describe>name) by feature → v0-cases.json. _v0/tests stays byte-frozen, no reshuffle (H13)	—
 tests/structure/v0-inventory.test.ts	core	test	00	the classifier over fixtures (stable case extraction + feature assignment); regenerates v0-cases.json and asserts it matches the committed baseline (drift fails)	—
 tests/structure/reorg-coverage-diff.test.ts	core	test	00	the lose-nothing gate: each completed feature's v0 cases are ported (v1 test tagged // v0: <id>) or retired (reason in inventory); unaccounted for a completed feature fails; global unaccounted = 0 before bit-20 _v0 delete (H13)	—
+tests/structure/vendor-free.test.ts	core	test	08	codebase-wide invariant (F2): no src/ file imports a validator vendor (zod, valibot, arktype, effect, yup); honey validates only through Standard Schema	—
 tests/structure/oracle-count.ts	core	src	00	a vitest reporter + pure checkOracle(totals, baseline); enforces only when HONEY_ORACLE=1; counts only _v0/tests (R2)	—
 tests/structure/oracle-count.test.ts	core	test	00	unit-tests the pure checkOracle: drift, silent-skip, flaky-tolerant (G-oracle)	—
 tests/structure/mutation-harness.ts	core	src	00	the GUARDS registry + runner: run the adversarial/security suite with each guard disabled → must go red (failing-input-first enforced); mutant implementations live in mutants.ts	—

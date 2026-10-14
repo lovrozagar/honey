@@ -44976,9 +44976,18 @@
 		"5b1194dad8": {
 			"feature": "11-ts-client",
 			"reason": "PathsForMethod is a client utility type (_v0/src/client/types.ts)"
+		},
+		"5f2ebb8e8a": {
+			"feature": "08-io",
+			"reason": "duplicate-search-key shape policy (zod array/scalar/union), sibling of e840afdede; tagged on shapedRecord in validate-input.test. Misclassified to 10 on \"json schema\""
+		},
+		"371882dde5": {
+			"feature": "08-io",
+			"reason": "duplicate-key shape for a schema without Standard JSON Schema (valibot: one value scalar, repeats array); tagged on shapedRecord. Misclassified to 10 on \"Standard JSON Schema\""
 		}
 	},
 	"retired": {
+		"2488556684": "v0 drops a `constructor` cookie (result.constructor === Object); v1 keeps prototype-named cookies as plain keys on a null-prototype record (587b90b244), as ruled for 78c407f3ba",
 		"011b51b268": "covered-by: asserts only {} extends object as a drift guard; the @ts-expect-error cases in middleware-scoped.typetest.ts fail typecheck if they drift",
 		"05533ac9c0": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"0e1a3fa08e": "H23: trustProxy is cut, and with it CIDR ranges and the trusted-hop walk",
@@ -45026,6 +45035,6 @@
 		"e76f7ba03c": "a wall-clock comparison of 404 timings: load-fragile, proves nothing stable; every v1 miss is one table lookup and one fixed answer",
 		"0c96e1482b": "v1 keeps route meta in the route map: InferRouteMeta is the route's meta (62fc72d2e4, app-routes.typetest); v0's never would assert the opposite",
 		"7e777fa89f": "documents v0's missing runtime check (a plain object passed through as the answer); v1's handler type forbids it (762541a430) and the pass-through is not a guarantee to pin",
-		"2488556684": "v0 drops a `constructor` cookie (result.constructor === Object); v1 keeps prototype-named cookies as plain keys on a null-prototype record (587b90b244), as ruled for 78c407f3ba"
+		"66aa708e60": "v0 asserts the search constructor value is kept ({constructor:\"x\"}); v1 extends the dangerous-key filter to search (H18.13), dropping __proto__/constructor/prototype before the validator. The no-pollution guarantee is covered by 4259eb4c23 (validator never sees them, null-proto result); the literal \"constructor is just a value\" contradicts the deliberate v1 hardening (same precedent as 78c407f3ba/2488556684)"
 	}
 }
