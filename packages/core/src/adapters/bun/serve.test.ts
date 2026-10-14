@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createMiddleware } from "../../middleware/middleware.ts"
 import { honey } from "../../routing/app.ts"
+import { createLogger } from "../../telemetry/logger.ts"
 import { cfWebSocket } from "../../ws/cloudflare.ts"
 import { bunWebSocket } from "../../ws/bun.ts"
 import { serve } from "./serve.ts"
@@ -46,11 +47,32 @@ afterEach(() => {
 })
 
 describe("serve on Bun: what Bun.serve is given", () => {
-	it("the hostname, the port and the body cap; Bun's own error page unless onError is set", () => {
+	it("the hostname, the port and the body cap", () => {
 		const { calls } = fakeBun()
 		const listener = serve({ fetch: () => new Response() }, options)
-		const { hostname, maxRequestBodySize, port, error } = calls.options as BunOptions
-		expect([hostname, maxRequestBodySize, port, error, listener.port]).toEqual(["127.0.0.1", 1024, 0, undefined, 4321])
+		const { hostname, maxRequestBodySize, port } = calls.options as BunOptions
+		expect([hostname, maxRequestBodySize, port, listener.port]).toEqual(["127.0.0.1", 1024, 0, 4321])
+	})
+
+	/* bit 07 (H17): the same sink and the same 500 as Node, never Bun's own error page with its stack */
+	it("with no onError, a failure goes to the app's logger and answers a plain 500", async () => {
+		const { calls } = fakeBun()
+		const lines: Record<string, unknown>[] = []
+		const app = honey<{}>().logger(
+			createLogger({
+				format: "json",
+				level: "info",
+				write: (line) => void lines.push(JSON.parse(line) as Record<string, unknown>),
+			}),
+		)
+		app.get("/").handler((ctx) => ctx.res.text("ok", "x"))
+		serve(app, options)
+		const res = (calls.options as BunOptions).error?.("plain") as Response
+		expect([
+			res.status,
+			await res.text(),
+			lines.map((line) => [line.msg, (line.err as { message: string }).message]),
+		]).toEqual([500, "Internal Server Error", [["serve failed", "plain"]]])
 	})
 
 	it("a fetch that hands the app the env with the server, built once, so ctx.ip resolves", async () => {

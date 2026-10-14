@@ -3,9 +3,11 @@
  * the WebSocket upgrade read it. Bun takes the `websocket` handlers at creation, so a honey app's
  * ws adapter is fixed here: its own `bunWebSocket()`, or one set before `serve()`.
  */
+import { HoneyError } from "../../errors/error.ts"
 import { GRAPH } from "../../routing/app.ts"
 import type { HoneyGraph } from "../../routing/register.ts"
 import type { AppSettings } from "../../routing/settings.ts"
+import { createLogger, type Logger } from "../../telemetry/logger.ts"
 import { bunWebSocket, type BunWebSocketHandlers, type BunWSAdapter } from "../../ws/bun.ts"
 
 type FetchApp<TEnv> = { fetch(request: Request, env: TEnv): Response | Promise<Response> }
@@ -77,25 +79,27 @@ function isWebSocketUpgrade(request: Request): boolean {
 }
 
 /** Bun expects nothing back from a fetch that upgraded the request. */
+/** The default failure reporter: the app's logger, or a default one for a plain fetch handler. */
+function reportTo(logger: Logger): (error: unknown) => void {
+	return (error) => logger.error({ err: HoneyError.serialize(error) }, "serve failed")
+}
+
 function unlessUpgraded(response: Response): Response | undefined {
 	return response.status === 101 ? undefined : response
 }
 
 export function serve<TEnv>(app: FetchApp<TEnv>, options: BunServeOptions<TEnv>): BunListener {
-	const { onError } = options
 	const settings = settingsOf(app)
+	/* no onError: the app's logger, never Bun's own error page (a stack in development, outside the sink) */
+	const onError = options.onError ?? reportTo(settings?.logger ?? createLogger())
 	const adapter = settings === null ? null : bunAdapterOf(settings)
 	/* the server is the same object on every request: the env carrying it is built once */
 	let env: TEnv | undefined
 	const server = (globalThis as unknown as { Bun: BunGlobal }).Bun.serve({
-		...(onError === undefined
-			? {}
-			: {
-					error: (error: unknown) => {
-						onError(error)
-						return new Response("Internal Server Error", { status: 500 })
-					},
-				}),
+		error: (error: unknown) => {
+			onError(error)
+			return new Response("Internal Server Error", { status: 500 })
+		},
 		fetch: (request, bun) => {
 			/* an adapter set after Bun.serve took the first one's handlers can never upgrade: say so */
 			if (settings !== null && settings.wsAdapter !== adapter && isWebSocketUpgrade(request)) throw new Error(SWAPPED)
