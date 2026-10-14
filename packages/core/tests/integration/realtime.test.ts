@@ -1,16 +1,21 @@
 /**
- * Realtime end to end on a real node:http server: resume through the reference server (H8), on
- * the two public hooks alone, SSE `Last-Event-ID` and the WebSocket `reconnect_token`.
+ * Realtime end to end on a real node:http server: fan-out, namespaces and a slow consumer through
+ * realtime(), and resume through the reference server (H8), on the two public hooks alone, SSE
+ * `Last-Event-ID` and the WebSocket `reconnect_token`.
  */
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
 import { WebSocket as WsClient } from "ws"
 import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
+import { createBus } from "../../src/realtime/bus.ts"
+import { realtime } from "../../src/realtime/realtime.ts"
+import type { ConnContext } from "../../src/realtime/route.ts"
+import { type Honey, honey } from "../../src/routing/app.ts"
 import { createReferenceServer } from "./conformance/reference-server.ts"
 
 const servers: HoneyServer[] = []
 
-const quiet = () => new Promise((resolve) => setTimeout(resolve, 50))
+const quiet = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms))
 
 afterEach(async () => {
 	await Promise.all(servers.splice(0).map((server) => server.shutdown(0)))
@@ -66,6 +71,101 @@ async function sseEvents(url: string, count: number, headers: Record<string, str
 	abort.abort()
 	return [res.headers.get("content-type"), events.slice(0, count)] as const
 }
+
+/** `app` served on a free loopback port; the ws:// base. */
+async function listen(app: Honey<{}>) {
+	const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+	servers.push(server)
+	await new Promise((resolve) => server.once("listening", resolve))
+	return `ws://127.0.0.1:${(server.address() as AddressInfo).port}`
+}
+
+/** A client on `url`, open, with every frame it receives parsed into `got`. */
+async function socketTo(url: string) {
+	const ws = new WsClient(url)
+	const got: unknown[] = []
+	ws.on("message", (data) => void got.push(JSON.parse(String(data))))
+	await new Promise((resolve, reject) => {
+		ws.once("open", resolve)
+		ws.once("error", reject)
+	})
+	return { got, ws }
+}
+
+/** Join `events`, and echo each frame to it. */
+const join = (_ctx: unknown, conn: ConnContext) => {
+	conn.join("events")
+	conn.on("message", (payload) => conn.publish("events", payload))
+}
+
+/** Until `check` holds, or 2 s pass. */
+async function until(check: () => boolean) {
+	for (let waited = 0; !check() && waited < 2_000; waited += 10) await quiet(10)
+}
+
+describe("realtime() on real sockets", () => {
+	it("fans a REST publish and a connection's publish out to every joined client, in order", async () => {
+		const app = honey<{}>()
+		const live = realtime(app, "/rt", {
+			handler: (_ctx, conn) => {
+				conn.join("room")
+				conn.on("message", (payload) => conn.publish("room", payload))
+			},
+		})
+		app.post("/say").handler(async (ctx) => {
+			live.publish("room", await ctx.req.json())
+			return ctx.res.text("ok", "sent")
+		})
+		const base = await listen(app)
+		const clients = await Promise.all([1, 2, 3].map(() => socketTo(`${base}/rt`)))
+		await quiet(20)
+		clients[0]?.ws.send(JSON.stringify("hello"))
+		await until(() => clients.every((c) => c.got.length === 1))
+		await fetch(`${base.replace("ws", "http")}/say`, { body: JSON.stringify({ n: 2 }), method: "POST" })
+		await until(() => clients.every((c) => c.got.length === 2))
+		for (const c of clients) c.ws.close()
+		expect(clients.map((c) => c.got)).toEqual([1, 2, 3].map(() => ["hello", { n: 2 }]))
+	})
+
+	// v0: d8d9f8fecf
+	// v0: 18acc29391
+	it("two routes keep a topic name apart; routes that share a bus and name one namespace share it", async () => {
+		const app = honey<{}>()
+		const bus = createBus()
+		realtime(app, "/public", { handler: join })
+		realtime(app, "/admin", { handler: join })
+		realtime(app, "/a", { bus, handler: join, namespace: "chat" })
+		realtime(app, "/b", { bus, handler: join, namespace: "chat" })
+		const base = await listen(app)
+		const [pub, admin, a, b] = await Promise.all(["/public", "/admin", "/a", "/b"].map((path) => socketTo(base + path)))
+		await quiet(20)
+		pub?.ws.send(JSON.stringify("public"))
+		a?.ws.send(JSON.stringify("chat"))
+		await until(() => b?.got.length === 1)
+		await quiet(20)
+		for (const c of [pub, admin, a, b]) c?.ws.close()
+		expect([pub?.got, admin?.got, a?.got, b?.got]).toEqual([["public"], [], ["chat"], ["chat"]])
+	})
+})
+
+describe("realtime() with a slow consumer", () => {
+	it("a client that stops reading is closed 1013 once its backlog passes maxBufferedBytes", async () => {
+		const app = honey<{}>()
+		const live = realtime(app, "/rt", {
+			handler: (_ctx, conn) => conn.join("feed"),
+			limits: { maxBufferedBytes: 64 * 1024 },
+		})
+		const base = await listen(app)
+		const slow = await socketTo(`${base}/rt`)
+		const closed = new Promise<number>((resolve) => slow.ws.on("close", (code) => resolve(code)))
+		await quiet(20)
+		slow.ws.pause()
+		const chunk = "x".repeat(64 * 1024)
+		for (let i = 0; i < 400; i++) live.publish("feed", chunk)
+		slow.ws.resume()
+		expect(await closed).toBe(1013)
+	})
+})
 
 describe("the reference server: WebSocket resume through onReconnect", () => {
 	it("a fresh socket gets the whole log, then live events", async () => {

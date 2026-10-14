@@ -279,3 +279,27 @@ describe("registration fails loudly, and stays fast", () => {
 		expect(performance.now() - started).toBeLessThan(3_000)
 	}, 30_000)
 })
+
+describe("websocket routes run the same order", () => {
+	// regression: NEW-H WS route middleware order
+	// v0: f55ae6b3a6
+	it("NEW-H ws-order: a WS route runs the chain before scoped middleware, before the upgrade", async () => {
+		const trace: string[] = []
+		const socket = { close() {}, raw: null, readyState: 1 as const, send() {} }
+		const app = honey<{}>().wsAdapter({
+			upgrade() {
+				trace.push("upgrade")
+				const response = new Response(null)
+				Object.defineProperty(response, "status", { value: 101 })
+				return { response, socket }
+			},
+		})
+		app.use("/rooms", tracer(trace, "scoped"))
+		app.use(tracer(trace, "chain")).ws("/rooms/:id").handler({})
+		const res = await app.fetch(
+			new Request("http://x/rooms/1", { headers: { connection: "Upgrade", upgrade: "websocket" } }),
+			{},
+		)
+		expect([res.status, trace]).toEqual([101, ["chain", "scoped", "upgrade"]])
+	})
+})
