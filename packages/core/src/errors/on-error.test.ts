@@ -4,6 +4,7 @@ import { honey } from "../routing/app.ts"
 import type { OnErrorFn } from "../routing/settings.ts"
 import { createLogger } from "../telemetry/logger.ts"
 import { HoneyError } from "./error.ts"
+import { defineErrors } from "./errors.ts"
 
 /** A json logger at trace whose lines are parsed into `lines`. */
 function recording() {
@@ -46,6 +47,22 @@ describe("onError: every thrown error reaches it, no framework answer does", () 
 		app.onError((error) => void seen.push(error))
 		await app.fetch(get("/boom/1"), {})
 		expect(seen).toEqual([thrown])
+	})
+
+	// v0: f9ef8ae17b
+	it("an undeclared factory error the default boundary wraps still reaches onError as thrown", async () => {
+		const errors = defineErrors({ api_error: "internal_server_error", item_gone: "gone" })
+		const thrown = errors.item_gone()
+		const seen: unknown[] = []
+		const app = honey<{}>()
+			.errorFactory(errors)
+			.defaultBoundary("api_error")
+			.onError((error) => void seen.push(error))
+		app.get("/undeclared").handler(() => {
+			throw thrown
+		})
+		const res = await app.fetch(get("/undeclared"), {})
+		expect([seen, res.status]).toEqual([[thrown], 500])
 	})
 
 	it.each([

@@ -177,6 +177,9 @@ async function body(res: Response) {
 }
 
 describe("app.errorI18n: the answer to a thrown error is translated", () => {
+	// v0: 49a823e88a
+	// v0: 37a053d1c2
+	// v0: 4710aa35ae
 	it("each request in its own locale; one shared error instance, never changed", async () => {
 		const shared = gone()
 		const a = app(
@@ -204,6 +207,11 @@ describe("app.errorI18n: the answer to a thrown error is translated", () => {
 		])
 	})
 
+	// v0: d0104b5a96
+	// v0: 2fa26d92e9
+	// v0: bdff50f741
+	// v0: 429d3f0e3f
+	// v0: 6185b6de4b
 	it("resolveLocale gets the request: cookies, env, headers, params, req and search", async () => {
 		const seen = vi.fn((_ctx: unknown) => "en")
 		await app(gone, seen).fetch(
@@ -230,6 +238,7 @@ describe("app.errorI18n: the answer to a thrown error is translated", () => {
 })
 
 describe("app.errorI18n: resolveLocale and the operator's line", () => {
+	// v0: e3afc9e519
 	it("resolveLocale may answer later", async () => {
 		const answer = await body(
 			await app(gone, async () => "de").fetch(new Request("http://app.test/x"), { TENANT: "t" }),
@@ -252,6 +261,7 @@ describe("app.errorI18n: resolveLocale and the operator's line", () => {
 })
 
 describe("app.errorI18n: when it cannot translate", () => {
+	// v0: 226ffacef3
 	it.each([
 		[
 			"throws",
@@ -275,6 +285,8 @@ describe("app.errorI18n: when it cannot translate", () => {
 		])
 	})
 
+	// v0: 259e1818fa
+	// v0: 5eeb80e3fc
 	it("not set: the message stays the key, and the body never carries vars", async () => {
 		const answer = await body(await app(gone).fetch(new Request("http://app.test/x"), { TENANT: "t" }))
 		expect([answer.message, "vars" in answer]).toEqual(["item_gone", false])
@@ -302,6 +314,9 @@ describe("app.errorI18n with onError", () => {
 		return a
 	}
 
+	// v0: 945dace406
+	// v0: f83c28920e
+	// v0: 717a9b904b
 	it("a HoneyError onError returns is translated in its turn", async () => {
 		const answer = await body(
 			await withOnError(() => new HoneyError({ errorKey: "item_gone", status: "gone", vars: { name: "Other" } })).fetch(
@@ -312,6 +327,7 @@ describe("app.errorI18n with onError", () => {
 		expect(answer.message).toBe("Other ist weg")
 	})
 
+	// v0: 2ae8803f7f
 	it("onError sees the raw thrown error, and a Response it returns goes out as it is", async () => {
 		const seen: unknown[] = []
 		const res = await withOnError((error) => {
@@ -321,6 +337,7 @@ describe("app.errorI18n with onError", () => {
 		expect([res.status, await res.text(), (seen[0] as HoneyError).message]).toEqual([418, "custom", "item_gone"])
 	})
 
+	// v0: 2c4091a70b
 	it("nothing returned: the thrown error's translated answer", async () => {
 		const answer = await body(
 			await withOnError(() => undefined).fetch(new Request("http://app.test/x"), { TENANT: "t" }),

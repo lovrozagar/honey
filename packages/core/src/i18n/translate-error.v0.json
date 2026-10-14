@@ -1,0 +1,2142 @@
+[
+	{
+		"case": "506a4af4b7",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid email: Received \"bad\"",
+						"path": "json.email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid length: Expected >=2 but received 0",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid email: Received \"bad\"",
+						"path": "Email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid length: Expected >=2 but received 0",
+						"path": "Name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.email": "Email",
+					"json.name": "Name"
+				}
+			}
+		}
+	},
+	{
+		"case": "b2eb9eccd6",
+		"error": {
+			"errorKey": "nope",
+			"fields": {},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {},
+			"message": "Nein",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"nope": "Nein"
+				}
+			}
+		}
+	},
+	{
+		"case": "38fac19435",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=5 characters",
+						"path": "json.x"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=5 characters",
+						"path": "Field X"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.x": "Field X"
+				}
+			}
+		}
+	},
+	{
+		"case": "38fac19435",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid length: Expected >=5 but received 2",
+						"path": "json.x"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid length: Expected >=5 but received 2",
+						"path": "Field X"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.x": "Field X"
+				}
+			}
+		}
+	},
+	{
+		"case": "4710aa35ae",
+		"error": {
+			"errorKey": "gone",
+			"fields": {},
+			"status": "not_found",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {},
+			"message": "Weg",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"gone": "Weg"
+				},
+				"fr": {
+					"gone": "Parti"
+				}
+			}
+		}
+	},
+	{
+		"case": "4710aa35ae",
+		"error": {
+			"errorKey": "gone",
+			"fields": {},
+			"status": "not_found",
+			"vars": null
+		},
+		"locale": "fr",
+		"out": {
+			"fields": {},
+			"message": "Parti",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"gone": "Weg"
+				},
+				"fr": {
+					"gone": "Parti"
+				}
+			}
+		}
+	},
+	{
+		"case": "31ddfce4cc",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"constructor": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received function",
+						"path": "json.constructor"
+					}
+				],
+				"email": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.email"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {
+				"constructor": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received function",
+						"path": "json.constructor"
+					}
+				],
+				"email": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "E-Mail"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"de": {
+					"email": "E-Mail"
+				}
+			}
+		}
+	},
+	{
+		"case": "43131a7a20",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"1": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.tags.1"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"1": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.tags.1"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {}
+			}
+		}
+	},
+	{
+		"case": "6861aa5803",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.items.1.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.items.1.name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {}
+			}
+		}
+	},
+	{
+		"case": "d52c7070a2",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"nickname": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=3 characters",
+						"path": "json.nickname"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"nickname": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=3 characters",
+						"path": "Nickname"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.nickname": "Nickname"
+				}
+			}
+		}
+	},
+	{
+		"case": "4dca9324d8",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "json.email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=2 characters",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "Email Address"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=2 characters",
+						"path": "Full Name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.email": "Email Address",
+					"json.name": "Full Name"
+				}
+			}
+		}
+	},
+	{
+		"case": "54894c4b3b",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"payload": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received number",
+						"path": "json.payload"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"payload": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received number",
+						"path": "json.payload"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {}
+			}
+		}
+	},
+	{
+		"case": "b0cfdf04f1",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received number",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received number",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Input validation failed for your request",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"validation_failed": "Input validation failed for your request"
+				}
+			}
+		}
+	},
+	{
+		"case": "37a053d1c2",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Eingabevalidierung fehlgeschlagen",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Eingabevalidierung fehlgeschlagen"
+				},
+				"en": {
+					"validation_failed": "Validation failed"
+				}
+			}
+		}
+	},
+	{
+		"case": "bb3df94a24",
+		"error": {
+			"errorKey": "rate_limited",
+			"fields": {},
+			"status": "too_many_requests",
+			"vars": {
+				"current": 150,
+				"limit": 100,
+				"window": 60
+			}
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Rate limited: 150/100 requests in 60s",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"rate_limited": "Rate limited: {current}/{limit} requests in {window}s"
+				}
+			}
+		}
+	},
+	{
+		"case": "37a053d1c2",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Validation failed",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Eingabevalidierung fehlgeschlagen"
+				},
+				"en": {
+					"validation_failed": "Validation failed"
+				}
+			}
+		}
+	},
+	{
+		"case": "fbf8b9213d",
+		"error": {
+			"errorKey": "low_balance",
+			"fields": {},
+			"status": "payment_required",
+			"vars": {
+				"amount": 0
+			}
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Balance is 0",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"low_balance": "Balance is {amount}"
+				}
+			}
+		}
+	},
+	{
+		"case": "8e1e427879",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "fr",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": true
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"validation_failed": "Validation failed"
+				}
+			}
+		}
+	},
+	{
+		"case": "897b892c10",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"message": "Error",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Fehler"
+				},
+				"en": {
+					"validation_failed": "Error"
+				}
+			}
+		}
+	},
+	{
+		"case": "e8e81595f6",
+		"error": {
+			"errorKey": "limit",
+			"fields": {},
+			"status": "bad_request",
+			"vars": {
+				"max": 1234567
+			}
+		},
+		"locale": "de",
+		"out": {
+			"fields": {},
+			"message": "Höchstens 1.234.567 Einträge",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"limit": "Höchstens {max, number} Einträge"
+				}
+			}
+		}
+	},
+	{
+		"case": "897b892c10",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"message": "Fehler",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Fehler"
+				},
+				"en": {
+					"validation_failed": "Error"
+				}
+			}
+		}
+	},
+	{
+		"case": "66c00a9167",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"age": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected number to be >=18",
+						"path": "json.age"
+					}
+				],
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "json.email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"age": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected number to be >=18",
+						"path": "Age"
+					}
+				],
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "Email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "Name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.age": "Age",
+					"json.email": "Email",
+					"json.name": "Name"
+				}
+			}
+		}
+	},
+	{
+		"case": "251d20f792",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"password": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=8 characters",
+						"path": "json.password"
+					},
+					{
+						"error_key": "field_invalid_format",
+						"message": "must contain uppercase",
+						"path": "json.password"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"password": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=8 characters",
+						"path": "Password"
+					},
+					{
+						"error_key": "field_invalid_format",
+						"message": "must contain uppercase",
+						"path": "Password"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.password": "Password"
+				}
+			}
+		}
+	},
+	{
+		"case": "4ad452e983",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "json.email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "Email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.email": "Email"
+				}
+			}
+		}
+	},
+	{
+		"case": "d6f42f0c17",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"page": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected number to be >=1",
+						"path": "search.page"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"page": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected number to be >=1",
+						"path": "Page Number"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"search.page": "Page Number"
+				}
+			}
+		}
+	},
+	{
+		"case": "e93b44dd50",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "json.email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=2 characters",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "Email Address"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=2 characters",
+						"path": "Full Name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"email": "Email Address",
+					"name": "Full Name"
+				}
+			}
+		}
+	},
+	{
+		"case": "93a5c51e4c",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"page": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected number to be >=1",
+						"path": "search.page"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"page": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected number to be >=1",
+						"path": "Page Number"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"page": "Page Number"
+				}
+			}
+		}
+	},
+	{
+		"case": "ce6dec0b9a",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=2 characters",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=2 characters",
+						"path": "JSON-specific Name"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.name": "JSON-specific Name",
+					"name": "Generic Name"
+				}
+			}
+		}
+	},
+	{
+		"case": "adccf98065",
+		"error": {
+			"errorKey": "slug_taken",
+			"fields": {},
+			"status": "conflict",
+			"vars": {
+				"orgId": 42,
+				"slug": "my-org"
+			}
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "The slug 'my-org' is already taken by org 42",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"slug_taken": "The slug '{slug}' is already taken by org {orgId}"
+				}
+			}
+		}
+	},
+	{
+		"case": "cecda267fb",
+		"error": {
+			"errorKey": "custom_err",
+			"fields": {},
+			"status": "bad_request",
+			"vars": {
+				"x": "y"
+			}
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "custom_err",
+			"same": true
+		},
+		"translations": {
+			"errors": {
+				"en": {}
+			}
+		}
+	},
+	{
+		"case": "e3afc9e519",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "fr",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Entrée invalide",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"validation_failed": "Invalid input"
+				},
+				"fr": {
+					"validation_failed": "Entrée invalide"
+				}
+			}
+		}
+	},
+	{
+		"case": "945dace406",
+		"error": {
+			"errorKey": "internal_server_error",
+			"fields": {},
+			"status": "internal_server_error",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Server boom",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"internal_server_error": "Server boom"
+				}
+			}
+		}
+	},
+	{
+		"case": "6185b6de4b",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Ungültige Eingabe",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Ungültige Eingabe"
+				},
+				"en": {
+					"validation_failed": "Invalid input"
+				}
+			}
+		}
+	},
+	{
+		"case": "945dace406",
+		"error": {
+			"errorKey": "internal_server_error",
+			"fields": {},
+			"status": "internal_server_error",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Server boom",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"internal_server_error": "Server boom"
+				}
+			}
+		}
+	},
+	{
+		"case": "d0104b5a96",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "fr",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Entrée invalide",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"fr": {
+					"validation_failed": "Entrée invalide"
+				}
+			}
+		}
+	},
+	{
+		"case": "2fa26d92e9",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Ungültig",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Ungültig"
+				}
+			}
+		}
+	},
+	{
+		"case": "bdff50f741",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "fr",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Invalide",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"fr": {
+					"validation_failed": "Invalide"
+				}
+			}
+		}
+	},
+	{
+		"case": "429d3f0e3f",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {
+				"name": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.name"
+					}
+				]
+			},
+			"message": "Ungültig",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Ungültig"
+				}
+			}
+		}
+	},
+	{
+		"case": "717a9b904b",
+		"error": {
+			"errorKey": "internal_server_error",
+			"fields": {},
+			"status": "internal_server_error",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Async boom",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"internal_server_error": "Async boom"
+				}
+			}
+		}
+	},
+	{
+		"case": "717a9b904b",
+		"error": {
+			"errorKey": "internal_server_error",
+			"fields": {},
+			"status": "internal_server_error",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Async boom",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"internal_server_error": "Async boom"
+				}
+			}
+		}
+	},
+	{
+		"case": "eec5be3c7f",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"city": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.address.city"
+					}
+				],
+				"zip": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=5 characters",
+						"path": "json.address.zip"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"city": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "City"
+					}
+				],
+				"zip": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=5 characters",
+						"path": "Zip Code"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"json.address.city": "City",
+					"json.address.zip": "Zip Code"
+				}
+			}
+		}
+	},
+	{
+		"case": "6b7bfd4b0f",
+		"error": {
+			"errorKey": "internal_server_error",
+			"fields": {},
+			"status": "internal_server_error",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "internal_server_error",
+			"same": true
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"item_gone": "Item is gone: {reason}"
+				}
+			}
+		}
+	},
+	{
+		"case": "6b7bfd4b0f",
+		"error": {
+			"errorKey": "item_gone",
+			"fields": {},
+			"status": "gone",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Item is gone: {reason}",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"item_gone": "Item is gone: {reason}"
+				}
+			}
+		}
+	},
+	{
+		"case": "211f158821",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"session": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=10 characters",
+						"path": "cookies.session"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"session": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=10 characters",
+						"path": "Session Token"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"cookies.session": "Session Token"
+				}
+			}
+		}
+	},
+	{
+		"case": "f83c28920e",
+		"error": {
+			"errorKey": "internal_server_error",
+			"fields": {},
+			"status": "internal_server_error",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "internal_server_error",
+			"same": true
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"custom_replacement": "Replaced!"
+				}
+			}
+		}
+	},
+	{
+		"case": "f83c28920e",
+		"error": {
+			"errorKey": "custom_replacement",
+			"fields": {},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Replaced!",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"custom_replacement": "Replaced!"
+				}
+			}
+		}
+	},
+	{
+		"case": "ac90e71691",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"authorization": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid string: must start with \"Bearer \"",
+						"path": "headers.authorization"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"authorization": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid string: must start with \"Bearer \"",
+						"path": "Authorization Header"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"headers.authorization": "Authorization Header"
+				}
+			}
+		}
+	},
+	{
+		"case": "d95b2b044b",
+		"error": {
+			"errorKey": "item_not_found",
+			"fields": {},
+			"status": "not_found",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Item not found: {reason}",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"api_error": "Internal server error",
+					"item_not_found": "Item not found: {reason}",
+					"std_error": "Bad request"
+				}
+			},
+			"fieldNames": {
+				"en": {}
+			}
+		}
+	},
+	{
+		"case": "96dc1af4f6",
+		"error": {
+			"errorKey": "std_error",
+			"fields": {},
+			"status": "bad_request",
+			"vars": {
+				"field": "email"
+			}
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Bad request",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"api_error": "Internal server error",
+					"item_not_found": "Item not found: {reason}",
+					"std_error": "Bad request"
+				}
+			},
+			"fieldNames": {
+				"en": {}
+			}
+		}
+	},
+	{
+		"case": "49a823e88a",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"message": "Error",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Fehler"
+				},
+				"en": {
+					"validation_failed": "Error"
+				},
+				"es": {
+					"validation_failed": "Fallo"
+				}
+			}
+		}
+	},
+	{
+		"case": "49a823e88a",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "de",
+		"out": {
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"message": "Fehler",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Fehler"
+				},
+				"en": {
+					"validation_failed": "Error"
+				},
+				"es": {
+					"validation_failed": "Fallo"
+				}
+			}
+		}
+	},
+	{
+		"case": "49a823e88a",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "es",
+		"out": {
+			"fields": {
+				"x": [
+					{
+						"error_key": "field_invalid",
+						"message": "Invalid input: expected string, received undefined",
+						"path": "json.x"
+					}
+				]
+			},
+			"message": "Fallo",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"de": {
+					"validation_failed": "Fehler"
+				},
+				"en": {
+					"validation_failed": "Error"
+				},
+				"es": {
+					"validation_failed": "Fallo"
+				}
+			}
+		}
+	},
+	{
+		"case": "4496179d35",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "json.email"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "json.name"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "Email Address"
+					}
+				],
+				"name": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=1 characters",
+						"path": "Full Name"
+					}
+				]
+			},
+			"message": "Please fix the following errors",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"validation_failed": "Please fix the following errors"
+				}
+			},
+			"fieldNames": {
+				"en": {
+					"json.email": "Email Address",
+					"json.name": "Full Name"
+				}
+			}
+		}
+	},
+	{
+		"case": "b0e018dade",
+		"error": {
+			"errorKey": "item_not_found",
+			"fields": {},
+			"status": "not_found",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "Item not found: {reason}",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"api_error": "Internal server error",
+					"item_not_found": "Item not found: {reason}",
+					"std_error": "Bad request"
+				}
+			},
+			"fieldNames": {
+				"en": {}
+			}
+		}
+	},
+	{
+		"case": "6debd6b2fe",
+		"error": {
+			"errorKey": "boundary",
+			"fields": {},
+			"status": "internal_server_error",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {},
+			"message": "An unexpected error occurred. Please try again.",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"boundary": "An unexpected error occurred. Please try again."
+				}
+			}
+		}
+	},
+	{
+		"case": "3c47274c65",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"title": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=3 characters",
+						"path": "form.title"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"title": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=3 characters",
+						"path": "Document Title"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"form.title": "Document Title"
+				}
+			}
+		}
+	},
+	{
+		"case": "efc3e91c83",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"username": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=3 characters",
+						"path": "form.username"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"username": [
+					{
+						"error_key": "field_too_small",
+						"message": "Too small: expected string to have >=3 characters",
+						"path": "Username"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"form.username": "Username"
+				}
+			}
+		}
+	},
+	{
+		"case": "8c571d55dd",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"id": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid UUID",
+						"path": "params.id"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"id": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid UUID",
+						"path": "Resource ID"
+					}
+				]
+			},
+			"message": "validation_failed",
+			"same": false
+		},
+		"translations": {
+			"fieldNames": {
+				"en": {
+					"params.id": "Resource ID"
+				}
+			}
+		}
+	},
+	{
+		"case": "c2b9785752",
+		"error": {
+			"errorKey": "validation_failed",
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "json.email"
+					}
+				]
+			},
+			"status": "bad_request",
+			"vars": null
+		},
+		"locale": "en",
+		"out": {
+			"fields": {
+				"email": [
+					{
+						"error_key": "field_invalid_format",
+						"message": "Invalid email address",
+						"path": "Email"
+					}
+				]
+			},
+			"message": "Validation error",
+			"same": false
+		},
+		"translations": {
+			"errors": {
+				"en": {
+					"validation_failed": "Validation error"
+				}
+			},
+			"fieldNames": {
+				"en": {
+					"json.email": "Email"
+				}
+			}
+		}
+	}
+]
