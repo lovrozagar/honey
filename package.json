@@ -39,6 +39,7 @@
 		"bench:streaming": "bun bench/src/streaming.ts",
 		"bench:websockets": "bun bench/src/websockets.ts",
 		"bench:hotpath": "bun bench/src/hotpath.ts",
+		"bench:middleware": "bun bench/src/middleware.ts",
 		"deploy:e2e:cf": "bun run --filter @honey/e2e-cf-workers deploy",
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check",
