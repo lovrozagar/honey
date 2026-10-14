@@ -11,9 +11,13 @@ import type { IncomingMessage } from "node:http"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
 import type { producerStream } from "../../src/streaming/producer-stream.ts"
+import { parseMediaType } from "../../src/response/media-type.ts"
 import {
 	NaiveOutHeaders,
 	adoptingRequestId,
+	bufferingEtag,
+	lengthOnlyBodyLimit,
+	plainRecord,
 	credentialedCompress,
 	forwardedIp,
 	forwardedKey,
@@ -285,6 +289,71 @@ export const GUARDS: readonly Guard[] = [
 		disable: (original) => ({ createWsSession: uncapped(original.createWsSession as CreateWsSession) }),
 		id: "v1-ws-pending-cap",
 		module: "packages/core/src/ws/session.ts",
+	},
+	{
+		catches: "v1: a __proto__ or constructor key from a query or a form reaching a schema",
+		disable: () => ({ shapedRecord: plainRecord }),
+		id: "v1-input-dangerous-keys",
+		module: "packages/core/src/validation/validate-input.ts",
+	},
+	{
+		catches: "v1: a body parsed as the declared type when its media type only resembles it",
+		disable: () => ({
+			assertRequestContentType: (schemas: { form?: unknown; json?: unknown }) =>
+				schemas.json !== undefined ? "json" : schemas.form !== undefined ? "urlencoded" : null,
+		}),
+		id: "v1-content-type-essence",
+		module: "packages/core/src/validation/content-type.ts",
+	},
+	{
+		catches: "v1: a body over its limit let through because it declares no length",
+		disable: () => ({ bodyLimit: lengthOnlyBodyLimit }),
+		id: "v1-body-limit-count",
+		module: "packages/core/src/input/body-limit.ts",
+	},
+	{
+		catches: "v1: a binary body of an undeclared media type read",
+		disable: () => ({
+			binaryType: (_ranges: unknown, contentType: string | null) =>
+				parseMediaType(contentType)?.essence ?? "application/octet-stream",
+		}),
+		id: "v1-binary-declared",
+		module: "packages/core/src/input/binary.ts",
+	},
+	{
+		catches: "v1: an answer of an undeclared media type or a body breaking its schema sent as it is",
+		disable: () => ({ compileOutput: () => (response: Response) => response }),
+		id: "v1-output-check",
+		module: "packages/core/src/validation/validate-output.ts",
+	},
+	{
+		catches: "v1: a declared response header's schema skipped (an open redirect through Location)",
+		disable: () => ({ compileResponseHeaders: () => null }),
+		id: "v1-response-headers",
+		module: "packages/core/src/response/response-headers.ts",
+	},
+	{
+		catches: "v1: etag reading an endless stream to the end before it answers",
+		disable: () => ({ etag: () => bufferingEtag }),
+		id: "v1-etag-stream",
+		module: "packages/core/src/response/etag.ts",
+	},
+	{
+		catches: "v1: a problem+json field named like a member replacing it",
+		disable: (original) => {
+			const problemDetails = original.problemDetails as (
+				error: { fields: Record<string, unknown> },
+				instance: string | null,
+			) => Record<string, unknown>
+			return {
+				problemDetails: (error: { fields: Record<string, unknown> }, instance: string | null) => ({
+					...problemDetails(error, instance),
+					...error.fields,
+				}),
+			}
+		},
+		id: "v1-problem-fields-nested",
+		module: "packages/core/src/errors/problem-json.ts",
 	},
 ]
 

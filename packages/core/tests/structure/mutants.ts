@@ -324,3 +324,29 @@ export type InboundTraceFn = (source: never, trust: unknown, report: (error: unk
 export function trustingEveryHop(real: InboundTraceFn): InboundTraceFn {
 	return (source, _trust, report) => real(source, true, report)
 }
+
+/** bodyLimit that trusts a declared Content-Length and counts nothing: a body without one passes whole. */
+export function lengthOnlyBodyLimit(options: { maxSize: number }): Mw {
+	return async (ctx, next) => {
+		const length = Number(ctx.req.headers.get("content-length") ?? 0)
+		if (length > options.maxSize) return new Response(null, { status: 413 })
+		return next()
+	}
+}
+
+/** etag that reads every 200 answer to the end to hash it, a stream included. */
+export const bufferingEtag: Mw = async (_ctx, next) => {
+	const res = await next()
+	if (res.status !== 200) return res
+	const bytes = new Uint8Array(await res.arrayBuffer())
+	const out = new Response(bytes, res)
+	out.headers.set("etag", `W/"${bytes.length}"`)
+	return out
+}
+
+/** A record of every entry as given: a dangerous key kept, the record an ordinary object. */
+export function plainRecord<T>(entries: Iterable<[string, T]>): Record<string, T> {
+	const out: Record<string, T> = {}
+	for (const [key, value] of entries) out[key] = value
+	return out
+}
