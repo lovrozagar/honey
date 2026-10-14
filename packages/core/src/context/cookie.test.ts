@@ -387,9 +387,11 @@ describe("cookie value round-trip", () => {
 	})
 
 	// v0: bf13036a91
+	// v0: 70ad0e5d91
 	it("percent sequences survive (`%41` stays `%41`)", () => {
 		expect(roundTrip("%41")).toBe("%41")
 		expect(roundTrip("100%")).toBe("100%")
+		expect(roundTrip("a%2Fb")).toBe("a%2Fb")
 		expect(roundTrip("%zz%41")).toBe("%zz%41")
 	})
 

@@ -2,12 +2,13 @@
  * The edge middleware over a real node:http listen: what a client gets on the wire from an app
  * with security headers, CORS, request ids and server timing (on a route and on a 404), a CORS
  * preflight, ipRestrict deciding on the socket's own peer whatever the client claims, context
- * values, and concurrent mixed requests each answered as their own.
+ * values, concurrent mixed requests each answered as their own, and csrf on a form POST.
  */
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
 import { type HoneyServer, serve } from "../../src/adapters/node/serve.ts"
 import { cors } from "../../src/middleware/cors.ts"
+import { csrf } from "../../src/middleware/csrf.ts"
 import { ipRestrict } from "../../src/middleware/ip-restrict.ts"
 import { poweredBy } from "../../src/middleware/powered-by.ts"
 import { requestId } from "../../src/middleware/request-id.ts"
@@ -219,6 +220,30 @@ describe("ipRestrict on a real socket", () => {
 	})
 })
 
+describe("request ids on a real socket", () => {
+	// v0: 0e6419f4a8
+	it("10 concurrent requests each get their own request id", async () => {
+		const app = honey<{}>()
+		app
+			.use(requestId())
+			.get("/ping")
+			.handler((ctx) => ctx.res.json("ok", { pong: true }))
+		const base = await listen(app)
+		const answers = await Promise.all(
+			Array.from({ length: 10 }, async () => {
+				const res = await fetch(`${base}/ping`)
+				return { body: (await res.json()) as unknown, id: res.headers.get("x-request-id") ?? "", status: res.status }
+			}),
+		)
+		const ids = answers.map((answer) => answer.id)
+		expect([
+			answers.every((answer) => answer.status === 200 && JSON.stringify(answer.body) === '{"pong":true}'),
+			ids.every((id) => UUID.test(id)),
+			new Set(ids).size,
+		]).toEqual([true, true, 10])
+	})
+})
+
 describe("context values and concurrency on a real socket", () => {
 	// v0: 0c1527197c
 	it("app.context() values reach the handler", async () => {
@@ -229,6 +254,7 @@ describe("context values and concurrency on a real socket", () => {
 	})
 
 	// v0: 8c6407be66
+	// v0: 99895f5e73
 	it("50 concurrent GETs and POSTs each get their own answer, CORS on every one", async () => {
 		const app = honey<{}>()
 		const corsed = app.use(cors({ origin: "*" }))
@@ -260,5 +286,26 @@ describe("context values and concurrency on a real socket", () => {
 					: [201, "*", { body: { n: i }, id: String(i), method: "POST" }],
 			),
 		)
+	})
+})
+
+describe("csrf on a real socket", () => {
+	// v0: 2700653e0c
+	it("a same-origin form POST reaches the handler; a cross-site one is refused before it", async () => {
+		const app = honey<{}>()
+		app
+			.use(csrf())
+			.post("/echo")
+			.handler(async (ctx) => ctx.res.text("ok", await ctx.req.text()))
+		const base = await listen(app)
+		const post = async (site: string) => {
+			const res = await fetch(`${base}/echo`, {
+				body: "data=safe",
+				headers: { "content-type": "application/x-www-form-urlencoded", "sec-fetch-site": site },
+				method: "POST",
+			})
+			return [res.status, await res.text()]
+		}
+		expect([await post("same-origin"), (await post("cross-site"))[0]]).toEqual([[200, "data=safe"], 403])
 	})
 })

@@ -160,6 +160,21 @@ describe("ctx.meta", () => {
 			})
 	})
 
+	// v0: 29490a6c91
+	it("is narrowed beside an error factory and the route's declared errors", () => {
+		honey<{}>()
+			.meta<AppMeta>()
+			.errorFactory(defineErrors({ email_taken: "conflict" }))
+			.get("/orgs")
+			.meta({ auth: "required" })
+			.errors("email_taken")
+			.handler((ctx) => {
+				expectTypeOf(ctx.meta.auth).toEqualTypeOf<"required">()
+				expectTypeOf(ctx.errors).toHaveProperty("email_taken")
+				return ctx.res.text("ok", "ok")
+			})
+	})
+
 	// v0: 1460dc840b
 	it("is the app's meta type on a route that sets none, a catch-all included", () => {
 		honey<{}>()

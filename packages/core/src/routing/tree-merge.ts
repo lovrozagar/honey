@@ -31,7 +31,7 @@ function mergeParam(target: TreeNode, source: TreeNode, path: string): void {
 		return
 	}
 	if (target.d.n !== source.d.n) {
-		throw new Error(`Merge conflict: param name mismatch at ${path}: "${target.d.n}" vs "${source.d.n}"`)
+		throw new Error(`Merge conflict: param name mismatch at ${path || "/"}: "${target.d.n}" vs "${source.d.n}"`)
 	}
 	mergeNodes(target.d.c, source.d.c, `${path}/:${target.d.n}`)
 }
@@ -43,7 +43,7 @@ function mergeWildcard(target: TreeNode, source: TreeNode, path: string): void {
 		return
 	}
 	if (target.w.n !== source.w.n) {
-		throw new Error(`Merge conflict: wildcard name mismatch at ${path}: "${target.w.n}" vs "${source.w.n}"`)
+		throw new Error(`Merge conflict: wildcard name mismatch at ${path || "/"}: "${target.w.n}" vs "${source.w.n}"`)
 	}
 	mergeMethodMap(target.w.m, source.w.m, `${path}/*${target.w.n}`)
 }

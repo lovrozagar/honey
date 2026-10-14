@@ -52,6 +52,7 @@ function urlApp() {
 
 describe("the request target routes the request, never the Host header", () => {
 	// v0: 93242cab9d
+	// v0: 5a9f2051bc
 	it.each([
 		["/x?q=1", "app.example", "http://app.example/x?q=1"],
 		["/a/../admin", "app.example", "admin http://app.example/admin"],
@@ -63,8 +64,12 @@ describe("the request target routes the request, never the Host header", () => {
 		expect([statusLine(raw), bodyOf(raw)]).toEqual(["HTTP/1.1 200 OK", seen])
 	})
 
+	// v0: ca73606464
+	// v0: cf695f134a
 	it.each([
 		["a Host carrying a path", "GET /x HTTP/1.1\r\nHost: h/admin?\r\n\r\n"],
+		["a Host carrying a path and a query", "GET /nothing HTTP/1.1\r\nHost: evil.example/admin/secret?\r\n\r\n"],
+		["a Host with a space", "GET /users?x=1 HTTP/1.1\r\nHost: a b\r\n\r\n"],
 		["a Host that is no address", "GET /x HTTP/1.1\r\nHost: 1.2.3.256\r\n\r\n"],
 		["an asterisk-form target", "OPTIONS * HTTP/1.1\r\nHost: h\r\n\r\n"],
 		["no Host on HTTP/1.1 (Node's parser)", "GET /x HTTP/1.1\r\n\r\n"],
@@ -162,6 +167,20 @@ describe("answers on the wire: bodies, redirects and cookies", () => {
 			[200, "plain"],
 			[302, "/there", ["s=1"]],
 			[201, "t1", ["a=1"], { id: 7 }],
+		])
+	})
+})
+
+describe("answers on the wire: a trailing-slash redirect", () => {
+	// v0: a3bd349391
+	it("a trailing-slash redirect reaches the wire as a 308 with a relative Location", async () => {
+		const app = honey<{}>().trailingSlash("strip")
+		app.get("/users").handler((ctx) => ctx.res.json("ok", { users: [] }))
+		const { port } = await listen(app)
+		const lines = (await exchange(port, "GET /users/ HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n")).split("\r\n")
+		expect([lines[0], lines.filter((line) => line.toLowerCase().startsWith("location:"))]).toEqual([
+			"HTTP/1.1 308 Permanent Redirect",
+			["location: /users"],
 		])
 	})
 
@@ -328,6 +347,9 @@ describe("many requests at once stay apart", () => {
 	// v0: 34107187cc
 	// v0: bf19ac5e14
 	// v0: ea707a5bf3
+	// v0: 7b4dd27b62
+	// v0: 8559a0dbe9
+	// v0: aa14fe5ac7
 	it("100 concurrent requests: each gets its own context, its own body back, and failures their own error", async () => {
 		const { base } = await listen(busyApp())
 		const answers = await Promise.all(

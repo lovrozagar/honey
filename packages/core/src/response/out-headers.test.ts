@@ -7,6 +7,7 @@ afterEach(() => {
 
 describe("HoneyOutHeaders reads the plain map", () => {
 	// v0: 8390d48c77
+	// v0: 9f4bc62973
 	it("HoneyOutHeaders only reads own keys", () => {
 		const headers = new HoneyOutHeaders({ "content-type": "text/plain" })
 		expect(headers.get("constructor")).toBeNull()

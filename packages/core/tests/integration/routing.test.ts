@@ -47,6 +47,7 @@ describe("method resolution", () => {
 	// v0: bba7582b67
 	// v0: c938683aa6
 	// v0: 16d54aad19
+	// v0: a9d2529e11
 	it.each(verbs)("%s on a path every verb registered reaches its own route", async (method) => {
 		const app = echoApp(verbs.map((v) => [v, "/m"] as const))
 		const res = await send(app, "/m", { method })

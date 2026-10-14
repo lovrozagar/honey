@@ -1,3 +1,5 @@
+import { createServer } from "node:http"
+import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createHoneyResponse, isHoneyResponse } from "./builder.ts"
 import { addVary, type HeaderEdit, withHeaders } from "./with-headers.ts"
@@ -63,6 +65,32 @@ describe("withHeaders: which response it edits, and how", () => {
 			copied.headers.get("x-a"),
 			copied.headers.get("x-stamped"),
 		]).toEqual([false, "body bytes", 201, "Made", "1", "yes"])
+	})
+})
+
+describe("withHeaders over a real fetch() response", () => {
+	// v0: 48dc7f2688
+	it("a fetch() response is copied with every Set-Cookie, its status text and its body", async () => {
+		const server = createServer((_req, res) => {
+			res.setHeader("set-cookie", ["a=1", "b=2"])
+			res.statusMessage = "Fine"
+			res.end("upstream")
+		})
+		await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+		try {
+			const { port } = server.address() as AddressInfo
+			const upstream = await fetch(`http://127.0.0.1:${port}/`)
+			const out = withHeaders(upstream, stamp)
+			expect([
+				out === upstream,
+				out.headers.get("x-stamped"),
+				out.headers.getSetCookie(),
+				out.statusText,
+				await out.text(),
+			]).toEqual([false, "yes", ["a=1", "b=2"], "Fine", "upstream"])
+		} finally {
+			server.close()
+		}
 	})
 })
 

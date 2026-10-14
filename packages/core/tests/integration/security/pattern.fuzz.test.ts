@@ -1,5 +1,6 @@
 /**
- * Fuzz: the route-pattern grammar behind registration, the tree and scopes. Joining two patterns
+ * Fuzz: the route-pattern grammar behind registration, the tree and scopes. A pattern parses or is
+ * refused with a pattern error, and its canonical text is a fixed point. Joining two patterns
  * gives what parsing their concatenation gives, and its result always parses; and a scope's static
  * coverage decision agrees with the runtime guard on every concrete path the route serves, so a
  * route finalize thinks a scope covers (or misses) is guarded (or not) on every request.
@@ -10,6 +11,7 @@ import {
 	expandOptional,
 	joinPatterns,
 	normalizePattern,
+	parsePattern,
 	pathInScope,
 	scopeCoverage,
 	type Segment,
@@ -50,6 +52,30 @@ function attempt(make: () => string): string | { refused: true } {
 		throw error
 	}
 }
+
+describe("fuzz: parsing patterns", () => {
+	// v0: 0b9fa2e1d3
+	it("a pattern parses or is refused with a pattern error, and its canonical text re-parses to the same segments", () => {
+		const r = rng(21)
+		const wrong: string[] = []
+		for (let i = 0; i < runs(5000); i++) {
+			const raw = stringOf(r, PATTERN_ALPHABET, 8)
+			const parsed = attempt(() => JSON.stringify(parsePattern(raw)))
+			if (typeof parsed !== "string") continue
+			const segments = JSON.parse(parsed) as Segment[]
+			const text = canonical(segments)
+			const sound =
+				JSON.stringify(parsePattern(text)) === parsed &&
+				normalizePattern(text) === text &&
+				text.startsWith("/") &&
+				(text === "/" || !text.endsWith("/")) &&
+				!text.includes("//") &&
+				expandOptional(segments).every((variant) => variant.every((seg) => seg.k !== "param" || !seg.o))
+			if (!sound) wrong.push(caseLabel(21, i, raw))
+		}
+		expect(wrong).toEqual([])
+	})
+})
 
 describe("fuzz: joining patterns", () => {
 	// v0: 6f4fc025ea

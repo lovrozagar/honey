@@ -154,12 +154,35 @@ describe("the Cookie request header", () => {
 	// v0: 6b31db1278
 	// v0: 6a1f31a18b
 	// v0: 97756099ee
+	// v0: 6765925003
+	// v0: edabe155f3
+	// v0: aa3e6437d5
+	// v0: 9f73d9ed54
+	// v0: 0fe35fc4f6
+	// v0: bb15bc3392
+	// v0: 1d3f256c8b
+	// v0: 002c05f8ea
+	// v0: a21ed4877e
+	// v0: 50fd66947b
+	// v0: 37b8d1a621
+	// v0: 7d2670cf02
+	// v0: 32aded0191
+	// v0: effd5c43d4
+	// v0: 5df78d907c
+	// v0: 0fcde92333
+	// v0: 26681dec69
 	it.each([
 		["session=abc; theme=dark; lang=en", { lang: "en", session: "abc", theme: "dark" }],
+		["token=abc123; path=/api", { path: "/api", token: "abc123" }],
+		["  name = Alice ;  age = 30  ", { age: "30", name: "Alice" }],
+		["a=1;\tb=2;\tc=3", { a: "1", b: "2", c: "3" }],
 		["token=abc=def=ghi", { token: "abc=def=ghi" }],
 		["empty=; other=val", { empty: "", other: "val" }],
 		["malformed; valid=yes; also_bad", { valid: "yes" }],
+		["", {}],
+		['session="abc=def"; token="hello world"', { session: "abc=def", token: "hello world" }],
 		["msg=hello%20world%21", { msg: "hello world!" }],
+		["b=%ZZbad; c=abc%ZZdef; d=hello%ZZworld; e=abc%", { b: "%ZZbad", c: "abc%ZZdef", d: "hello%ZZworld", e: "abc%" }],
 	])("%j is read as %j", async (header, cookies) => {
 		const app = honey<{}>()
 		app.get("/read").handler((ctx) => ctx.res.json("ok", { ...ctx.cookies }))

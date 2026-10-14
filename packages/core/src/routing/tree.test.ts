@@ -81,16 +81,21 @@ describe("insertRoute", () => {
 		expect(findLeaf(root, parsePattern("/a"), "POST")).toBe("custom")
 	})
 
+	// v0: 578aa3caac
 	it("places both variants of an optional last param under one id", () => {
 		const root = createNode()
 		expect(insertRoute(root, "GET", "/u/:id?")).toBe("GET /u/:id?")
 		expect(leaves(root)).toEqual(["GET /u -> GET /u/:id?", "GET /u/:id -> GET /u/:id?"])
 		expect(() => insertRoute(root, "GET", "/u")).toThrow("Duplicate route: GET /u")
+		expect(() => insertRoute(root, "GET", "/u/:id?")).toThrow("Duplicate route: GET /u")
 	})
 
+	// v0: c7bfeb18ec
+	// v0: 92b3cd8527
 	it("rejects a second wildcard name at one node", () => {
 		const root = createNode()
 		insertRoute(root, "GET", "/f/*rest")
+		expect(() => insertRoute(root, "GET", "/f/*rest")).toThrow("Duplicate route: GET /f/*rest")
 		expect(() => insertRoute(root, "POST", "/f/*path")).toThrow('Wildcard name conflict: "rest" vs "path"')
 		insertRoute(root, "POST", "/f/*rest")
 		expect(() => insertLeaf(root, parsePattern("/f/*rest"), "POST", "other")).toThrow("Duplicate route: POST /f/*rest")

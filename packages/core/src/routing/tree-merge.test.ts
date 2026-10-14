@@ -39,6 +39,7 @@ describe("mergeTree", () => {
 	})
 
 	// v0: c77bf2a0de
+	// v0: 00968d6802
 	it("conflict on param name mismatch throws", () => {
 		expect(() => mergeTree(treeOf([["GET", "/users/:id"]]), treeOf([["POST", "/users/:userId"]]))).toThrow(
 			'Merge conflict: param name mismatch at /users: "id" vs "userId"',
@@ -181,5 +182,19 @@ describe("mergeInto", () => {
 			"Merge conflict: duplicate WebSocket handler at /",
 		)
 		expect(() => mergeInto(nodeWith("GET", "/"), nodeWith("GET", "/"))).toThrow("Merge conflict: duplicate GET /")
+	})
+
+	// v0: 65f9bc79b6
+	// v0: e6bc86c46f
+	it("names the root as / in a wildcard or param conflict there", () => {
+		expect(() => mergeInto(nodeWith("GET", "/*path"), nodeWith("GET", "/*path"))).toThrow(
+			"Merge conflict: duplicate GET /*path",
+		)
+		expect(() => mergeInto(nodeWith("GET", "/*foo"), nodeWith("POST", "/*bar"))).toThrow(
+			'Merge conflict: wildcard name mismatch at /: "foo" vs "bar"',
+		)
+		expect(() => mergeInto(nodeWith("GET", "/:a"), nodeWith("POST", "/:b"))).toThrow(
+			'Merge conflict: param name mismatch at /: "a" vs "b"',
+		)
 	})
 })

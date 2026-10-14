@@ -236,3 +236,108 @@ describe("stripPrefix", () => {
 		expect([res.status, await res.json()]).toEqual([200, { path: "/v1/users", pattern: "/v1/users" }])
 	})
 })
+
+/** The status, Location and body an app answers `target` with, the target sent from `origin`. */
+async function answer(app: App, target: string, init?: RequestInit, origin = "http://localhost") {
+	const res = await app.fetch(new Request(`${origin}${target}`, init), {})
+	return { body: await res.text(), location: res.headers.get("location"), status: res.status }
+}
+
+/** `app` with a GET route on `pattern` answering with ctx.path. */
+function serving(app: App, pattern: string): App {
+	app.get(pattern).handler((ctx) => ctx.res.text("ok", ctx.path))
+	return app
+}
+
+describe("trailing-slash redirects: the spelling and the Location", () => {
+	// v0: bc05bd7560
+	// v0: 1e22a811cc
+	// v0: f114a4f84d
+	// v0: e5ad351574
+	// v0: e4cdf6ccc2
+	// v0: 9efd7a1195
+	// v0: 0b793c65e5
+	// v0: 5d82f987a3
+	it("strip and enforce answer 308 to the other spelling; the root is never redirected", async () => {
+		const strip = serving(serving(honey<{}>().trailingSlash("strip"), "/users"), "/")
+		const enforce = serving(honey<{}>().trailingSlash("enforce"), "/users/")
+		expect([
+			await answer(strip, "/users/"),
+			await answer(strip, "/users"),
+			await answer(strip, "/"),
+			await answer(enforce, "/users"),
+			await answer(enforce, "/users/"),
+		]).toEqual([
+			{ body: "", location: "/users", status: 308 },
+			{ body: "/users", location: null, status: 200 },
+			{ body: "/", location: null, status: 200 },
+			{ body: "", location: "/users/", status: 308 },
+			{ body: "/users/", location: null, status: 200 },
+		])
+	})
+
+	// v0: 6961fc12f2
+	// v0: 1727be37b4
+	// v0: 61069fa2f8
+	it("Location is relative to the origin the request came from and keeps the query", async () => {
+		const strip = serving(honey<{}>().trailingSlash("strip"), "/users")
+		const enforce = serving(honey<{}>().trailingSlash("enforce"), "/users/")
+		expect([
+			(await answer(strip, "/users/?q=hello&page=2", undefined, "https://api.example.com:8443")).location,
+			(await answer(strip, "/users/?page=2", undefined, "http://internal.host:8080")).location,
+			(await answer(enforce, "/users", undefined, "http://internal:3000")).location,
+		]).toEqual(["/users?q=hello&page=2", "/users?page=2", "/users/"])
+	})
+
+	// v0: 66cc284aa5
+	it("never reflects the Host header or answers with a protocol-relative Location", async () => {
+		const app = serving(honey<{}>().trailingSlash("strip"), "/evil.example/x")
+		expect(await answer(app, "//evil.example/x/", undefined, "http://attacker.example")).toEqual({
+			body: "",
+			location: "/evil.example/x",
+			status: 308,
+		})
+	})
+
+	// v0: e5c86046d1
+	it("HEAD is redirected like GET, without a body", async () => {
+		const app = serving(honey<{}>().trailingSlash("strip"), "/items")
+		expect(await answer(app, "/items/", { method: "HEAD" })).toEqual({ body: "", location: "/items", status: 308 })
+	})
+})
+
+describe("trailing-slash redirects under a stripped prefix or a basePath", () => {
+	// v0: 42a51b8a43
+	// v0: dc1b045f33
+	// v0: 95ccdeeb6e
+	// v0: 38b426c677
+	it("keeps the prefix stripPrefix removed, and the redirected spelling then matches", async () => {
+		const strip = serving(honey<{}>().stripPrefix("/api").trailingSlash("strip"), "/health")
+		const enforce = serving(honey<{}>().stripPrefix("/api").trailingSlash("enforce"), "/health/")
+		expect([
+			await answer(strip, "/api/health/"),
+			await answer(strip, "/api/health"),
+			await answer(enforce, "/api/health"),
+			await answer(enforce, "/api/health/"),
+		]).toEqual([
+			{ body: "", location: "/api/health", status: 308 },
+			{ body: "/health", location: null, status: 200 },
+			{ body: "", location: "/api/health/", status: 308 },
+			{ body: "/health/", location: null, status: 200 },
+		])
+	})
+
+	// v0: e71ddc88a3
+	// v0: 3526c7a0e4
+	it("keeps the basePath, and the redirected spelling then matches", async () => {
+		const app = honey<{}>().trailingSlash("strip")
+		app
+			.basePath("/api")
+			.get("/health")
+			.handler((ctx) => ctx.res.text("ok", ctx.path))
+		expect([await answer(app, "/api/health/"), await answer(app, "/api/health")]).toEqual([
+			{ body: "", location: "/api/health", status: 308 },
+			{ body: "/api/health", location: null, status: 200 },
+		])
+	})
+})

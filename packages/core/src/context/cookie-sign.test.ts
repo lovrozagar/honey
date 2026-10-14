@@ -117,8 +117,10 @@ describe("cookie signing — v2 format", () => {
 
 describe("cookie signing — malformed input", () => {
 	// v0: 05c081e30f
+	// v0: 5688e4cb61
 	it("returns null instead of throwing on malformed signatures", async () => {
-		for (const bad of ["v.%%%", "v.~", "v.~!!!", "v.a", "v.====", `v.${"A".repeat(44)}`, "v.~😀"]) {
+		const malformed = ["v.%%%", "v.~", "v.~!!!", "v.a", "v.====", `v.${"A".repeat(44)}`, "v.~😀"]
+		for (const bad of [...malformed, "value.!!!not-base64!!!", "value.~@@@"]) {
 			expect(await verify(bad, [secret])).toBeNull()
 		}
 	})
