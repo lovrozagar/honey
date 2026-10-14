@@ -44,6 +44,9 @@ const { memoryStore, rateLimit } = (await import(
 const { PEER_ADDRESS } = (await import(
 	resolvePath(REPO, "packages/core/src/context/peer.ts")
 )) as typeof import("../../../src/context/peer.ts")
+const { ipRestrict } = (await import(
+	resolvePath(REPO, "packages/core/src/middleware/ip-restrict.ts")
+)) as typeof import("../../../src/middleware/ip-restrict.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -193,5 +196,33 @@ describe("v1 adversarial: a key spray cannot grow the rate-limit store", () => {
 			.handler((ctx) => ctx.res.text("ok", "x"))
 		for (let i = 0; i < 20_000; i += 1) await app.fetch(fromPeer(`2001:db8::${i.toString(16)}`), {})
 		expect(store.size).toBe(1000)
+	})
+})
+
+describe("v1 adversarial: ipRestrict sees only the platform peer", () => {
+	it("a forwarding header naming an allowed address, CF-Connecting-IP off Workers included, is 403", async () => {
+		const app = honey<{}>()
+		app
+			.use(ipRestrict({ allowList: ["10.0.0.0/8"] }))
+			.get("/t")
+			.handler((ctx) => ctx.res.text("ok", "admin"))
+		const statuses = []
+		for (const header of ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "true-client-ip"]) {
+			statuses.push((await app.fetch(fromPeer("203.0.113.9", { [header]: "10.0.0.1" }), {})).status)
+		}
+		expect(statuses).toEqual([403, 403, 403, 403])
+	})
+
+	it("another spelling of a denied address (IPv4-mapped, zero-expanded, upper case) is still denied", async () => {
+		const app = honey<{}>()
+		app
+			.use(ipRestrict({ denyList: ["::ffff:203.0.113.9", "2001:0DB8:0:0:0:0:0:1"] }))
+			.get("/t")
+			.handler((ctx) => ctx.res.text("ok", "admin"))
+		const statuses = []
+		for (const peer of ["203.0.113.9", "2001:db8::1", "[2001:db8::1]:443"]) {
+			statuses.push((await app.fetch(fromPeer(peer), {})).status)
+		}
+		expect(statuses).toEqual([403, 403, 403])
 	})
 })

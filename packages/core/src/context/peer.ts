@@ -59,7 +59,8 @@ const HEX_GROUP = /^[0-9A-Fa-f]{1,4}$/
 const PORT = /^\d{1,5}$/
 const BRACKET_TAIL = /^:\d{1,5}$/
 
-function parseIpv4(s: string): number | null {
+/** Dotted IPv4, strict: four decimal octets, no leading zero; `null` otherwise. */
+export function parseIpv4(s: string): number | null {
 	const parts = s.split(".")
 	if (parts.length !== 4) return null
 	let n = 0
@@ -85,7 +86,8 @@ function groupsOf(side: string): number[] | null {
 	return groups
 }
 
-function parseIpv6(s: string): bigint | null {
+/** IPv6 text (an embedded IPv4 tail allowed) as its 128-bit value; no brackets, zone or port; `null` otherwise. */
+export function parseIpv6(s: string): bigint | null {
 	let head = s
 	const tail: number[] = []
 	const lastColon = s.lastIndexOf(":")

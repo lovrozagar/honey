@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
+import type { IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
 import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
@@ -196,6 +197,18 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/core/src/middleware/rate-limit.ts",
 	},
 	{
+		catches: "v1: an IP rule compared as text, so another spelling of a denied address passes",
+		disable: () => ({ ipRestrict: textIpRestrict }),
+		id: "v1-ip-restrict-canonical",
+		module: "packages/core/src/middleware/ip-restrict.ts",
+	},
+	{
+		catches: "v1: ipRestrict reading the client's own forwarding header as its address",
+		disable: (original) => ({ ipRestrict: forwardedIp(original.ipRestrict as IpRestrict) }),
+		id: "v1-ip-restrict-peer",
+		module: "packages/core/src/middleware/ip-restrict.ts",
+	},
+	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",
 		disable: () => ({ HoneyOutHeaders: NaiveOutHeaders }),
 		id: "v1-out-headers-validation",
@@ -253,6 +266,27 @@ const rawServerTiming: Mw = async (_ctx, next) => {
 	const out = new Response(res.body, res)
 	out.headers.set("server-timing", [...parts, "total;dur=0"].join(", "))
 	return out
+}
+
+/** ipRestrict that compares ctx.ip with each rule as text. */
+function textIpRestrict(options: IpRestrictOptions): Mw {
+	return (ctx, next) => {
+		const ip = (ctx as { ip?: string | null }).ip ?? ""
+		const denied = options.denyList?.includes(ip) ?? false
+		const admitted = options.allowList === undefined || options.allowList.includes(ip)
+		if (denied || !admitted) return Promise.resolve(new Response(null, { status: 403 }))
+		return next()
+	}
+}
+
+type IpRestrict = (options: IpRestrictOptions) => Mw
+
+/** ipRestrict that takes the client's X-Forwarded-For as its address. */
+function forwardedIp(real: IpRestrict): IpRestrict {
+	return (options) => {
+		const mw = real(options)
+		return (ctx, next) => mw({ ...ctx, ip: ctx.req.headers.get("x-forwarded-for") } as typeof ctx, next)
+	}
 }
 
 type RateLimit = (options: RateLimitOptions) => unknown
