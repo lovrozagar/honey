@@ -49,6 +49,7 @@ describe("basePath: prefixing", () => {
 	// v0: bdd89b07d3
 	// v0: c07a5aad74
 	// v0: 319c8086b7
+	// v0: 426d350836
 	it.each([
 		["/api", "/api/users", "/users"],
 		["/api/", "/api/users", "/users"],
@@ -69,6 +70,14 @@ describe("basePath: prefixing", () => {
 		expect(await send(app, "/api/v2/users")).toMatchObject({ body: "/api/v2/users", status: 200 })
 		expect((await send(app, "/v2/users")).status).toBe(404)
 	})
+
+	// v0: 2a015ca6dc
+	it("a route that repeats the prefix is served under it once more, the prefix never stripped twice", async () => {
+		const app = honey<{}>()
+		pattern(app.basePath("/api"), "/api/deep")
+		expect(await send(app, "/api/api/deep")).toMatchObject({ body: "/api/api/deep", status: 200 })
+		expect((await send(app, "/api/deep")).status).toBe(404)
+	})
 })
 
 describe("basePath: the bare prefix and segment boundaries", () => {
@@ -80,6 +89,7 @@ describe("basePath: the bare prefix and segment boundaries", () => {
 	// v0: dff98d40b5
 	// v0: 814476e66c
 	// v0: a44e143d94
+	// v0: 5dccddb08d
 	it("the root route under a basePath answers the bare prefix, with or without a trailing slash", async () => {
 		const app = honey<{}>()
 		pattern(app.basePath("/api"), "/")
@@ -90,7 +100,9 @@ describe("basePath: the bare prefix and segment boundaries", () => {
 	// v0: e792c8dc20
 	// v0: a8e9297de5
 	// v0: 11f9af4e6f
-	it("a basePath matches whole segments only", async () => {
+	// v0: 7232f16606
+	// v0: 850e20cc92
+	it("a basePath matches whole segments only, and an encoded slash never makes one", async () => {
 		const app = honey<{}>()
 		const api = app.basePath("/api")
 		pattern(api, "/health")
@@ -99,13 +111,32 @@ describe("basePath: the bare prefix and segment boundaries", () => {
 		expect((await send(app, "/api/health")).status).toBe(200)
 		expect((await send(app, "/api-docs")).status).toBe(404)
 		expect((await send(app, "/apiary")).status).toBe(404)
+		expect((await send(app, "/api%2Fhealth")).status).toBe(400)
+	})
+
+	// v0: 11e02c0725
+	it("a dot segment resolves before the prefix is matched: it cannot climb out of the prefix", async () => {
+		const app = honey<{}>()
+		pattern(app.basePath("/api"), "/secret")
+		expect((await send(app, "/api/../secret")).status).toBe(404)
+		/* a target the runtime left unresolved resolves the same way */
+		const raw = new Request("http://localhost/")
+		Object.defineProperty(raw, "url", { value: "http://localhost/api/../secret" })
+		expect((await app.fetch(raw, {})).status).toBe(404)
+		expect((await send(app, "/api/x/../secret")).status).toBe(200)
 	})
 
 	// v0: 4e11d0b655
+	// v0: a5e2e64182
+	// v0: 40b5b2f749
 	it("the trailing-slash policy redirects the full path, prefix included", async () => {
 		const app = honey<{}>().trailingSlash("strip")
 		pattern(app.basePath("/api"), "/health")
 		expect(await send(app, "/api/health/")).toMatchObject({ location: "/api/health", status: 308 })
+		const enforced = honey<{}>().trailingSlash("enforce")
+		pattern(enforced.basePath("/api"), "/")
+		expect(await send(enforced, "/api")).toMatchObject({ location: "/api/", status: 308 })
+		expect(await send(enforced, "/api/")).toMatchObject({ body: "/api", status: 200 })
 	})
 })
 
