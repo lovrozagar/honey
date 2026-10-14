@@ -17,6 +17,7 @@ import type {
 	InferMeta,
 	InferMethods,
 	InferRouteCtx,
+	InferRouteErrors,
 	InferRouteMethods,
 	InferRoutePaths,
 	InferRoutes,
@@ -43,6 +44,7 @@ describe("InferCtx", () => {
 	// v0: d65ed4ba6b
 	// v0: 6ed512cbb4
 	// v0: 22f939dce9
+	// v0: 61583f2251
 	it("accumulates what each use() adds, beside context() values", () => {
 		const app = honey<TestEnv>()
 			.context({ region: "eu" })
@@ -91,6 +93,7 @@ describe("the rest of the ladder through use(), context() and meta<T>()", () => 
 	// v0: 4bcc6a8d59
 	// v0: 4c28e4b845
 	// v0: 12aa68c1c5
+	// v0: 46c948e313
 	it("InferMeta is the meta<T>() type wherever use() and context() sit, and never without it", () => {
 		const auth = createMiddleware((_ctx, next) => next({ userId: "u-1" }))
 		expectTypeOf<InferMeta<ReturnType<typeof honey<TestEnv>>>>().toBeNever()
@@ -101,10 +104,15 @@ describe("the rest of the ladder through use(), context() and meta<T>()", () => 
 	})
 
 	// v0: dbe17bc0c7
-	it("InferErrorFactory survives use(), so a route on the chain declares the factory's keys", () => {
+	// v0: e89b534fd3
+	// v0: 106673ab1b
+	// v0: 415c216e89
+	// v0: 75fe2e249d
+	it("InferErrorFactory survives use(), so a route on the chain declares the factory's keys; never without one", () => {
 		const errors = defineErrors({ email_taken: "conflict" })
 		const chain = honey<{}>().errorFactory(errors).use(withDb)
 		expectTypeOf<InferErrorFactory<typeof chain>>().toEqualTypeOf<typeof errors>()
+		expectTypeOf<InferErrorFactory<ReturnType<typeof honey<TestEnv>>>>().toBeNever()
 		chain
 			.get("/t")
 			.errors("email_taken")
@@ -118,6 +126,8 @@ describe("methods, paths and a route's ctx", () => {
 	// v0: b107988f66
 	// v0: 96d6f69d98
 	// v0: db0a6948ec
+	// v0: 35f9728ea3
+	// v0: c5991fd973
 	it("InferMethods, InferRoutePaths and InferRouteMethods list what was registered, once each", () => {
 		const app = honey<TestEnv>()
 			.get("/health")
@@ -148,6 +158,54 @@ describe("methods, paths and a route's ctx", () => {
 		expectTypeOf<InferRouteCtx<typeof app, "/nope", "get">>().not.toBeNever()
 		// @ts-expect-error "post" is not registered for /orgs/:orgId
 		expectTypeOf<InferRouteCtx<typeof app, "/orgs/:orgId", "post">>().not.toBeNever()
+	})
+})
+
+const errs = defineErrors({ a: "bad_request", b: "forbidden", c: "not_found", sub_err: "gone" })
+
+describe("InferRouteErrors", () => {
+	// v0: c4cca48881
+	// v0: b387308a03
+	// v0: 63f68628c4
+	it("is the app's default keys beside the route's declared ones", () => {
+		const app = honey<{}>()
+			.errorFactory(errs)
+			.defaultErrors("a")
+			.get("/defaults")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+			.get("/both")
+			.errors("b", "c")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+		expectTypeOf<InferRouteErrors<typeof app, "/defaults", "get">>().toEqualTypeOf<"a">()
+		expectTypeOf<InferRouteErrors<typeof app, "/both", "get">>().toEqualTypeOf<"a" | "b" | "c">()
+	})
+
+	// v0: 26687b1a63
+	// v0: 541352432f
+	// v0: cbd135878d
+	// v0: 2364c08270
+	// v0: 5ec31325fa
+	// v0: 6d05acb711
+	// v0: e74a5a0747
+	it("is each route's own keys, named with their factory; never for a route with none; kept through route(sub)", () => {
+		const app = honey<{}>()
+			.get("/a")
+			.errors(errs, "a", "b")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+			.post("/b")
+			.errors(errs, "c")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+			.get("/health")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+		expectTypeOf<InferRouteErrors<typeof app, "/a", "get">>().toEqualTypeOf<"a" | "b">()
+		expectTypeOf<InferRouteErrors<typeof app, "/b", "post">>().toEqualTypeOf<"c">()
+		expectTypeOf<InferRouteErrors<typeof app, "/health", "get">>().toBeNever()
+		const sub = honey<{}>()
+			.get("/items")
+			.errors(errs, "sub_err")
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+		const mounted = honey<{}>().route(sub)
+		expectTypeOf<InferRouteErrors<typeof mounted, "/items", "get">>().toEqualTypeOf<"sub_err">()
 	})
 })
 

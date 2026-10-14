@@ -219,6 +219,21 @@ describe("defineErrors with custom schemas: what a schema error leaves out, and 
 		expect(err.vars).toBeUndefined()
 	})
 
+	// v0: 0c49253646
+	// v0: 8f05ffa447
+	// v0: 90e055d862
+	// v0: 8f002a863a
+	it("every factory returns a HoneyError: a standard one given cause, fields and vars, a schema one its payload", () => {
+		const standard = defineErrors({ email_taken: "conflict" })
+		expectTypeOf(standard.email_taken()).toEqualTypeOf<HoneyError>()
+		expectTypeOf(
+			standard.email_taken({ cause: "test", fields: {}, vars: { email: "a@b.c", message: "custom" } }),
+		).toEqualTypeOf<HoneyError>()
+		expectTypeOf(errors.item_not_found({ reason: "gone", suggestions: [] })).toEqualTypeOf<HoneyError>()
+		// @ts-expect-error a schema error takes its payload, not the standard options
+		errors.item_not_found({ vars: {} })
+	})
+
 	// v0: 03c988163b
 	it("ERROR_META exposes schema metadata for codegen", () => {
 		const meta = errors[ERROR_META]

@@ -64,6 +64,7 @@ describe("ctx.routePattern", () => {
 	// v0: 8511e270c9
 	// v0: 1a48196937
 	// v0: c6543756c1
+	// v0: c04a9f5797
 	it("is the full pattern as a literal: plain, param, root, and under a basePath", () => {
 		const app = honey<{}>()
 		app.get("/users").handler((ctx) => {
@@ -85,6 +86,14 @@ describe("ctx.routePattern", () => {
 				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/api/users/:id">()
 				return ctx.res.text("ok", "ok")
 			})
+		app
+			.use(createMiddleware((_ctx, next) => next({ userId: "u1" })))
+			.basePath("/api")
+			.get("/items/:id")
+			.handler((ctx) => {
+				expectTypeOf(ctx.routePattern).toEqualTypeOf<"/api/items/:id">()
+				return ctx.res.text("ok", "ok")
+			})
 	})
 })
 
@@ -96,6 +105,7 @@ describe("ctx.errors", () => {
 	// v0: 04f36d619c
 	// v0: bc151ee4be
 	// v0: 1922b0e9c8
+	// v0: 8fc75cdd10
 	it("holds exactly the keys the route declares, named alone or with their factory", () => {
 		const app = honey<{}>().errorFactory(errors)
 		app
@@ -118,7 +128,9 @@ describe("ctx.errors", () => {
 				return ctx.res.text("ok", "ok")
 			})
 	})
+})
 
+describe("ctx.errors: which keys .errors() takes", () => {
 	// v0: 4016db1f41
 	it("takes only keys of the factory it names, or of the app's factory, beside each other", () => {
 		const other = defineErrors({ special_error: "bad_request" })

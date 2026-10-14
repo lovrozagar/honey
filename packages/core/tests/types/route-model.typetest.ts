@@ -3,7 +3,14 @@
  * `bun run typecheck`; the app-level infer ladder is bit 02's.
  */
 import { describe, expectTypeOf, it } from "vitest"
-import type { MergePath, ParamKeys, ParamsFromPath, PrefixRoutes } from "../../src/routing/types.ts"
+import type { HttpMethod, MergePath, ParamKeys, ParamsFromPath, PrefixRoutes } from "../../src/routing/types.ts"
+
+describe("HttpMethod", () => {
+	// v0: 24476769a9
+	it("is exactly the seven methods a route registers on", () => {
+		expectTypeOf<HttpMethod>().toEqualTypeOf<"DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT">()
+	})
+})
 
 describe("ParamKeys", () => {
 	// v0: 58828108cc

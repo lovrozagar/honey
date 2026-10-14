@@ -21,6 +21,7 @@ describe("the streaming helpers brand what they return", () => {
 		expectTypeOf(res.stream(async () => {})).toEqualTypeOf<TypedResponse<"application/octet-stream", "ok">>()
 	})
 
+	// v0: 52feb8c24d
 	it("generate() is ok, its content type whatever it was given", () => {
 		expectTypeOf(res.generate((function* () {})())).toEqualTypeOf<TypedResponse<string, "ok">>()
 	})

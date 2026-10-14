@@ -72,9 +72,11 @@ describe("app.ws(path): the ctx and the socket its callbacks get", () => {
 })
 
 describe("the socket, the handler and the adapter", () => {
+	// v0: 3277130810
 	it("WSContext sends text, bytes or a JSON value, never a bare number", () => {
 		const ws = {} as WSContext
 		expectTypeOf(ws.readyState).toEqualTypeOf<WSReadyState>()
+		expectTypeOf<WSReadyState>().toEqualTypeOf<0 | 1 | 2 | 3>()
 		expectTypeOf(ws.send).toBeCallableWith("text")
 		expectTypeOf(ws.send).toBeCallableWith(new ArrayBuffer(1))
 		expectTypeOf(ws.send).toBeCallableWith(new Uint8Array(1))
