@@ -301,3 +301,137 @@ describe("isReservedCtxKey", () => {
 		expect(isReservedCtxKey("toString")).toBe(false)
 	})
 })
+
+describe("HoneyContext — lazy parsing", () => {
+	// v0: 726d3a4875
+	it("search built from URL on first access, cached (first value per key)", () => {
+		const ctx = makeCtx({ req: makeReq("http://localhost/test?a=1&b=2&a=3") })
+		const first = ctx.search
+		expect(first).toEqual({ a: "1", b: "2" })
+		expect(ctx.search).toBe(first)
+	})
+
+	// v0: 3304c135a8
+	it("headers lowercased on first access, cached", () => {
+		const ctx = makeCtx({ req: makeReq("http://localhost/test", { "X-Custom": "val" }) })
+		expect(ctx.headers["x-custom"]).toBe("val")
+		expect(ctx.headers).toBe(ctx.headers)
+	})
+
+	// v0: a94cba5f31
+	it("cookies parsed on first access, cached", () => {
+		const ctx = makeCtx({ req: makeReq("http://localhost/test", { cookie: "a=1; b=2" }) })
+		expect(ctx.cookies).toEqual({ a: "1", b: "2" })
+		expect(ctx.cookies).toBe(ctx.cookies)
+	})
+
+	// v0: 60203bf331
+	it("search returns first value, searchAll returns all", () => {
+		const ctx = makeCtx({ req: makeReq("http://localhost/test?tag=a&tag=b&page=1") })
+		expect(ctx.search).toEqual({ page: "1", tag: "a" })
+		expect(ctx.searchAll).toEqual({ page: ["1"], tag: ["a", "b"] })
+	})
+})
+
+describe("HoneyContext — background", () => {
+	// v0: aaa3a51277
+	it("delegates to executionCtx.waitUntil", () => {
+		const waitUntil = vi.fn<(p: Promise<unknown>) => void>()
+		const p = Promise.resolve()
+		makeCtx({ executionCtx: { waitUntil } }).background(p)
+		expect(waitUntil).toHaveBeenCalledWith(p)
+	})
+
+	// v0: 1938d91347
+	it("fire-and-forget without waitUntil", () => {
+		expect(() => makeCtx().background(Promise.reject(new Error("test")))).not.toThrow()
+	})
+})
+
+describe("HoneyContext — response helpers", () => {
+	// v0: 4276efecb7
+	it("json(ok, data) → 200 application/json", () => {
+		const res = makeCtx().res.json("ok", { id: 1 })
+		expect([res.status, res.headers.get("content-type")]).toEqual([200, "application/json"])
+	})
+
+	// v0: 0cd028f1d7
+	it("json(created, data) → 201", () => {
+		expect(makeCtx().res.json("created", {}).status).toBe(201)
+	})
+
+	// v0: 1da781408a
+	it("json with custom headers", () => {
+		expect(
+			makeCtx()
+				.res.json("ok", {}, { headers: { "x-custom": "val" } })
+				.headers.get("x-custom"),
+		).toBe("val")
+	})
+
+	// v0: b89138f0aa
+	it("text(hello) → 200 text/plain", async () => {
+		const res = makeCtx().res.text("ok", "hello")
+		expect(res.headers.get("content-type")).toContain("text/plain")
+		expect([res.status, await res.text()]).toEqual([200, "hello"])
+	})
+
+	// v0: d7abc8456b
+	it("noContent → 204", () => {
+		expect(makeCtx().res.noContent().status).toBe(204)
+	})
+
+	// v0: f73edeefbf
+	it("redirect(/x) → 302", () => {
+		const res = makeCtx().res.redirect("/x")
+		expect([res.status, res.headers.get("location")]).toEqual([302, "/x"])
+	})
+
+	// v0: 511cc3ba03
+	it("redirect with status 307", () => {
+		expect(makeCtx().res.redirect("/x", { status: 307 }).status).toBe(307)
+	})
+})
+
+describe("HoneyContext — response helpers: html and cookies", () => {
+	// v0: 70311d6b4b
+	it("html → 200 text/html", async () => {
+		const res = makeCtx().res.html("ok", "<h1>hi</h1>")
+		expect(res.headers.get("content-type")).toContain("text/html")
+		expect(await res.text()).toBe("<h1>hi</h1>")
+	})
+
+	// v0: dcabf119de
+	it("cookie serialization", () => {
+		const session = {
+			domain: ".example.com",
+			httpOnly: true,
+			maxAge: 86400,
+			path: "/",
+			sameSite: "strict",
+			secure: true,
+			value: "abc",
+		} as const
+		const cookie = makeCtx().res.json("ok", {}, { cookies: { session } }).headers.get("set-cookie")
+		for (const part of [
+			"session=abc",
+			"HttpOnly",
+			"Secure",
+			"Max-Age=86400",
+			"SameSite=Strict",
+			"Domain=.example.com",
+			"Path=/",
+		]) {
+			expect(cookie).toContain(part)
+		}
+	})
+
+	// v0: e54fcf4bd5
+	it("cookie deletion: maxAge 0", () => {
+		expect(
+			makeCtx()
+				.res.json("ok", {}, { cookies: { session: { maxAge: 0, value: "" } } })
+				.headers.get("set-cookie"),
+		).toContain("Max-Age=0")
+	})
+})

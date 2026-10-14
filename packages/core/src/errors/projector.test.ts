@@ -273,3 +273,15 @@ describe("safeErrorResponse: the last resort", () => {
 		expect(await bodyOf(res)).toEqual({ error: { errorKey: "internal_server_error" } })
 	})
 })
+
+describe("HoneyContext — response helpers", () => {
+	// v0: 7781a04c11
+	it("createErrorResponse", async () => {
+		const res = createErrorResponse(
+			new HoneyError({ errorKey: "not_found", status: "not_found" }),
+			(_e, shape) => shape,
+		)
+		expect(res.status).toBe(404)
+		expect(await bodyOf(res)).toMatchObject({ error_key: "not_found", success: false })
+	})
+})

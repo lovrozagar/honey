@@ -1,0 +1,210 @@
+/**
+ * The route builder: what `app.get(path)` returns. `.meta()`, `.errors()`, `.boundary()` and `.use()`
+ * shape the route; `.handler()` registers it (one record per method) and returns the app typed with
+ * the new route. A one-shot method disappears from the chain once called.
+ */
+import type { ERROR_META } from "../errors/errors.ts"
+import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
+import type { TypedResponse } from "../response/response.ts"
+import type { Honey } from "./app.ts"
+import type {
+	ApplyScoped,
+	ComputeErrorsByStatus,
+	DefaultMeta,
+	HandlerCtx,
+	InitAccMeta,
+	MergeRoute,
+	ScopedMwEntry,
+	SkipRouteRecord,
+} from "./app-types.ts"
+import { parsePattern } from "./pattern.ts"
+import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, type RouteSource, settle } from "./register.ts"
+import type { MergePath, ParamsFromPath } from "./types.ts"
+
+/** Everything a builder carries at the type level. */
+export type BuilderTypes = {
+	accMeta: unknown
+	baseCtx: unknown
+	basePath: string
+	ctx: unknown
+	defaultErrors: string
+	env: unknown
+	errorFactory: unknown
+	errorKeys: string
+	meta: unknown
+	method: string
+	path: string
+	routes: unknown
+	scopedMw: readonly ScopedMwEntry[]
+	taps: Record<string, unknown>
+	used: string
+}
+
+/** `B` with the fields of `U` replaced. */
+type Next<B extends BuilderTypes, U extends Partial<BuilderTypes>> = {
+	[K in keyof BuilderTypes]: K extends keyof U ? U[K] : B[K]
+}
+
+type OneShotKey = "boundary" | "errors" | "input" | "meta" | "output"
+
+/** The builder with the one-shot methods already used removed. */
+export type BuilderChain<B extends BuilderTypes> = Omit<RouteBuilder<B>, B["used"] & OneShotKey>
+
+/** The keys a route may still declare: the factory's, minus the app defaults. */
+type DeclarableKey<B extends BuilderTypes> = [B["errorFactory"]] extends [never]
+	? never
+	: Exclude<keyof B["errorFactory"] & string, B["defaultErrors"]>
+
+/** The handler's ctx for the route `B` describes. */
+export type RouteHandlerCtx<B extends BuilderTypes> = HandlerCtx<
+	B["ctx"],
+	ParamsFromPath<B["path"]>,
+	B["accMeta"],
+	B["errorFactory"],
+	B["errorKeys"] | B["defaultErrors"],
+	B["path"]
+>
+
+/** The app `.handler()` returns: the same handle, typed with the new route. */
+export type HandlerReturn<B extends BuilderTypes> = Honey<
+	B["env"],
+	B["baseCtx"],
+	SkipRouteRecord<B["accMeta"]> extends true
+		? B["routes"]
+		: MergeRoute<
+				B["routes"],
+				B["path"],
+				B["method"],
+				{},
+				{},
+				RouteHandlerCtx<B>,
+				B["accMeta"],
+				B["errorKeys"] | B["defaultErrors"],
+				ComputeErrorsByStatus<B["errorFactory"], B["errorKeys"] | B["defaultErrors"], typeof ERROR_META>
+			>,
+	B["meta"],
+	B["errorFactory"],
+	B["defaultErrors"],
+	B["basePath"],
+	B["taps"],
+	B["scopedMw"]
+>
+
+/** The builder `app.get(path)` starts, from the app handle's own type. */
+export type StartOf<H, TPath extends string, TMethod extends string> =
+	H extends Honey<
+		infer TEnv,
+		infer TCtx,
+		infer TRoutes,
+		infer TMeta,
+		infer TFactory,
+		infer TDefaults extends string,
+		infer TBase extends string,
+		infer TTaps extends Record<string, unknown>,
+		infer TScoped extends readonly ScopedMwEntry[]
+	>
+		? BuilderChain<{
+				accMeta: InitAccMeta<TMeta>
+				baseCtx: TCtx
+				basePath: TBase
+				ctx: TCtx & ApplyScoped<TScoped, MergePath<TBase, TPath>>
+				defaultErrors: TDefaults
+				env: TEnv
+				errorFactory: TFactory
+				errorKeys: never
+				meta: TMeta
+				method: TMethod
+				path: MergePath<TBase, TPath>
+				routes: TRoutes
+				scopedMw: TScoped
+				taps: TTaps
+				used: never
+			}>
+		: never
+
+/** What a builder carries at runtime. */
+export type BuilderState = {
+	readonly boundaryKey: string | null
+	/** keys the route declares itself */
+	readonly errorKeys: ReadonlySet<string>
+	readonly extraMethods: readonly string[]
+	readonly graph: HoneyGraph
+	/** explicit meta: chain `.meta()` overlaid by route `.meta()` */
+	readonly meta: Readonly<Record<string, unknown>> | null
+	readonly method: string
+	readonly middlewares: readonly RuntimeMiddleware[]
+	/** the handle `.handler()` returns */
+	readonly parent: unknown
+	/** canonical full pattern */
+	readonly path: string
+	readonly pending: PendingRoute
+	readonly view: HandleView
+}
+
+export class RouteBuilder<B extends BuilderTypes> {
+	readonly #s: BuilderState
+
+	constructor(state: BuilderState) {
+		this.#s = state
+	}
+
+	#next<N extends BuilderTypes>(changes: Partial<BuilderState>): BuilderChain<N> {
+		return new RouteBuilder<N>({ ...this.#s, ...changes }) as unknown as BuilderChain<N>
+	}
+
+	/** Declare the error keys this route may throw, from a factory or the app's. */
+	errors<
+		TFactory extends Record<string, (...args: never[]) => unknown>,
+		TKeys extends Exclude<keyof TFactory & string, B["defaultErrors"]>,
+	>(
+		factory: TFactory,
+		...keys: TKeys[]
+	): BuilderChain<Next<B, { errorKeys: B["errorKeys"] | TKeys; used: B["used"] | "errors" }>>
+	errors<TKeys extends DeclarableKey<B>>(
+		...keys: TKeys[]
+	): BuilderChain<Next<B, { errorKeys: B["errorKeys"] | TKeys; used: B["used"] | "errors" }>>
+	errors(...args: unknown[]): unknown {
+		const keys = (typeof args[0] === "object" && args[0] !== null ? args.slice(1) : args) as string[]
+		return this.#next({ errorKeys: new Set([...this.#s.errorKeys, ...keys]) })
+	}
+
+	/** The error an undeclared or unknown throw becomes on this route. */
+	boundary<TKey extends DeclarableKey<B>>(
+		key: TKey,
+	): BuilderChain<Next<B, { errorKeys: B["errorKeys"] | TKey; used: B["used"] | "boundary" }>> {
+		return this.#next({ boundaryKey: key, errorKeys: new Set([...this.#s.errorKeys, key]) })
+	}
+
+	meta<TRouteMeta extends Partial<DefaultMeta> & ([B["meta"]] extends [never] ? {} : B["meta"])>(
+		meta: TRouteMeta,
+	): BuilderChain<Next<B, { accMeta: B["accMeta"] & TRouteMeta; used: B["used"] | "meta" }>> {
+		const merged: Record<string, unknown> = { ...this.#s.meta, ...meta }
+		const invalidate = merged.invalidate
+		if (Array.isArray(invalidate) && invalidate.length > 1) merged.invalidate = [...new Set(invalidate)]
+		return this.#next({ meta: merged })
+	}
+
+	/** Route-level middleware, after the chain and the scopes. */
+	use<TAdds>(mw: MiddlewareFn<B["ctx"], TAdds>): BuilderChain<Next<B, { ctx: B["ctx"] & TAdds }>> {
+		return this.#next({ middlewares: [...this.#s.middlewares, mw as unknown as RuntimeMiddleware] })
+	}
+
+	/** Register the route, once per method, and return the app typed with it. */
+	handler(fn: (ctx: RouteHandlerCtx<B>) => MaybePromise<TypedResponse>): HandlerReturn<B> {
+		const s = this.#s
+		settle(s.graph, s.pending, s.view.node)
+		const source: RouteSource = {
+			cm: s.view.chain,
+			cv: s.view.contextValues,
+			dk: s.errorKeys,
+			fn: fn as unknown as RouteSource["fn"],
+			own: s.graph.settings,
+			rb: s.boundaryKey,
+			rm: s.middlewares,
+			xm: s.meta,
+		}
+		const segments = parsePattern(s.path)
+		for (const method of [s.method, ...s.extraMethods]) addRoute(s.graph, method, segments, source)
+		return s.parent as HandlerReturn<B>
+	}
+}
