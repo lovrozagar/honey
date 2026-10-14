@@ -83,7 +83,7 @@ describe("StatusKey ↔ code mapping", () => {
 	})
 })
 
-describe("bug-hunt-9: codeToStatusKey mapping", () => {
+describe("codeToStatusKey reverse lookup", () => {
 	// v0: d26a051f75
 	it("all status codes map correctly", () => {
 		for (const [key, code] of Object.entries(statusKeyToCode)) expect(codeToStatusKey[code]).toBe(key)

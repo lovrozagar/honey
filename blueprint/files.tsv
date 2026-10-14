@@ -173,16 +173,31 @@ src/testing/testing.ts	core	src	20	the testing helper	testing.ts
 #     by the interaction (added on request). 500-line cap: a FEATURE suite that overflows splits into
 #     <feature>-<n>.test.ts, same bit — feature splits are pre-authorized; a catch-all split is not. ---
 tests/integration/routing.test.ts	core	test	02	methods, on/all, 404/405, HEAD→GET, statics, params, trailing slash, stripPrefix, encoded slashes, wildcard, path normalization through app.fetch	bug-hunt*,edge-cases*
+tests/integration/routing-2.test.ts	core	test	02	routing ports, continued (500-line cap split)	bug-hunt*,edge-cases*
+tests/integration/routing-3.test.ts	core	test	02	routing ports, continued (500-line cap split)	bug-hunt*,edge-cases*
+tests/integration/routing-4.test.ts	core	test	02	routing ports, continued (500-line cap split)	bug-hunt*,edge-cases*
+tests/integration/routing-5.test.ts	core	test	02	routing ports, continued (500-line cap split)	bug-hunt*,edge-cases*
+tests/integration/routing-6.test.ts	core	test	02	routing ports, continued (500-line cap split)	bug-hunt*,edge-cases*
 tests/integration/middleware.test.ts	core	test	02	chain order, short-circuit, next() additions, double next(), ctx.error, ctx-key overwrite/accumulate, status-wrap, use() handles, finalize reports (unused use, dangling builder)	middleware*
+tests/integration/middleware-2.test.ts	core	test	02	middleware ports, continued (500-line cap split)	middleware*
+tests/integration/middleware-3.test.ts	core	test	02	middleware ports, continued (500-line cap split)	middleware*
 tests/integration/scoped.test.ts	core	test	02	use(path, mw) coverage + guards, across mounts and basePath	scoped*
 tests/integration/scoped-2.test.ts	core	test	02	use(path, mw) ports, continued (500-line cap split)	scoped*
 tests/integration/mount.test.ts	core	test	02	route()/route(prefix), basePath/MergePath composition, sub settings/context kept, duplicates	mergeTree*
 tests/integration/errors.test.ts	core	test	02	native projection through the chain, boundary/defaultBoundary, defaultErrors, errorFactory, onError/onNotFound/onMethodNotAllowed (problem+json formatter joins at bit 08)	errors*
+tests/integration/errors-2.test.ts	core	test	02	errors ports, continued (500-line cap split)	errors*
 tests/integration/context.test.ts	core	test	02	ctx through the app: search/searchAll, executionCtx/background binding, context(), meta, errors	context*
+tests/integration/context-2.test.ts	core	test	02	context ports, continued (500-line cap split)	context*
+tests/integration/context-3.test.ts	core	test	02	context ports, continued (500-line cap split)	context*
+tests/integration/context-4.test.ts	core	test	02	context ports, continued (500-line cap split)	context*
 tests/integration/cookies.test.ts	core	test	02	app-level cookie behavior: name validation, get/set through the app, signed-cookie round-trip via the signer	cookie*
+tests/integration/cookies-2.test.ts	core	test	02	cookies ports, continued (500-line cap split)	cookie*
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder, $routes/MergeRoute, ComputeErrorsByStatus	typetest/*
+tests/types/app-2.typetest.ts	core	test	02	app ports, continued (500-line cap split)	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	HandlerCtx, params, meta, errors, routePattern	typetest/*
 tests/types/middleware.typetest.ts	core	test	02	createMiddleware/defineMiddleware deps + next() types, use-scoped types, builder one-shot hiding	typetest/*
+tests/types/middleware-2.typetest.ts	core	test	02	middleware ports, continued (500-line cap split)	typetest/*
+tests/types/middleware-3.typetest.ts	core	test	02	middleware ports, continued (500-line cap split)	typetest/*
 #
 # --- regression suites: named identically to the v0 session files so the regression matrix
 #     (_v0/docs/regression-matrix/) stays traceable. The _v0 copies are byte-FROZEN and run in the
