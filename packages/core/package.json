@@ -29,8 +29,10 @@
 		"@vitest/coverage-v8": "4.1.10",
 		"oxc-parser": "0.152.0",
 		"typescript": "catalog:",
+		"valibot": "catalog:",
 		"vitest": "catalog:",
-		"ws": "catalog:"
+		"ws": "catalog:",
+		"zod": "catalog:"
 	},
 	"peerDependencies": {
 		"ws": ">=8.21.0"

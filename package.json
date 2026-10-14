@@ -107,7 +107,9 @@
 		"rulesync": "16.17.0",
 		"smol-toml": "^1.8.0",
 		"typescript": "catalog:",
-		"vitest": "catalog:"
+		"valibot": "catalog:",
+		"vitest": "catalog:",
+		"zod": "catalog:"
 	},
 	"packageManager": "bun@1.3.11"
 }

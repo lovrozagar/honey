@@ -21,7 +21,9 @@
         "rulesync": "16.17.0",
         "smol-toml": "^1.8.0",
         "typescript": "catalog:",
+        "valibot": "catalog:",
         "vitest": "catalog:",
+        "zod": "catalog:",
       },
     },
     "_v0": {
