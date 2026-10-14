@@ -33,6 +33,7 @@ import {
 	uncapped,
 	uncappedStore,
 	uncheckedStatic,
+	utf8Equal,
 	unvalidatedSse,
 	withoutBackpressure,
 } from "./mutants.ts"
@@ -229,6 +230,12 @@ export const GUARDS: readonly Guard[] = [
 		disable: () => ({ staticFiles: uncheckedStatic }),
 		id: "v1-static-traversal",
 		module: "packages/core/src/response/static.ts",
+	},
+	{
+		catches: "v1: a secret comparison by UTF-8 bytes, where a different lone surrogate matches the stored token",
+		disable: () => ({ timingSafeEqual: utf8Equal }),
+		id: "v1-timing-safe-code-units",
+		module: "packages/core/src/security/crypto.ts",
 	},
 	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",

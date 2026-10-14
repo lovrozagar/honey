@@ -56,6 +56,9 @@ const { proxy } = (await import(
 const { staticFiles } = (await import(
 	resolvePath(REPO, "packages/core/src/response/static.ts")
 )) as typeof import("../../../src/response/static.ts")
+const { timingSafeEqual } = (await import(
+	resolvePath(REPO, "packages/core/src/security/crypto.ts")
+)) as typeof import("../../../src/security/crypto.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -356,5 +359,14 @@ describe("v1 adversarial: staticFiles never hands resolve a path that leaves the
 		const unsafe = /[\\\0:]/
 		const escapes = seen.filter((path) => path.split("/").some((part) => part === ".." || unsafe.test(part)))
 		expect([escapes, seen.includes("/ok/file.css")]).toEqual([[], true])
+	})
+})
+
+describe("v1 adversarial: a near-miss secret never compares equal", () => {
+	it("the first or last unit wrong, a prefix, and a token whose lone surrogate UTF-8 would turn into U+FFFD all fail", async () => {
+		const stored = "tok_9f3a\ud800"
+		const presented = ["Tok_9f3a\ud800", "tok_9f3a\ud801", "tok_9f3a", "tok_9f3a\udfff", "tok_9f3a\ufffd"]
+		const results = await Promise.all(presented.map((guess) => timingSafeEqual(stored, guess)))
+		expect([results, await timingSafeEqual(stored, stored)]).toEqual([[false, false, false, false, false], true])
 	})
 })

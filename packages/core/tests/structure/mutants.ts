@@ -259,3 +259,14 @@ export function uncheckedStatic(config: StaticConfig<unknown>): Mw {
 		return file instanceof Response ? file : next()
 	}
 }
+
+function utf8Bytes(value: string | Uint8Array): Uint8Array {
+	return typeof value === "string" ? new TextEncoder().encode(value) : value
+}
+
+/** timingSafeEqual that compares the UTF-8 encodings: every lone surrogate becomes U+FFFD, so different strings match. */
+export async function utf8Equal(a: string | Uint8Array, b: string | Uint8Array): Promise<boolean> {
+	if ((typeof a === "string") !== (typeof b === "string")) return false
+	const [x, y] = [utf8Bytes(a), utf8Bytes(b)]
+	return x.length === y.length && x.every((byte, i) => byte === y[i])
+}
