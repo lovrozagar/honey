@@ -105,6 +105,7 @@ describe("nodeRequest: reading the body", () => {
 		expect([await req.text(), await req.text(), (await req.bytes()).byteLength]).toEqual(["", "", 0])
 	})
 
+	// v0: 9abdde74bc
 	it("fails json() on an empty body with a SyntaxError, as Fetch does", async () => {
 		await expect((await post([])).json()).rejects.toThrow(SyntaxError)
 	})
@@ -133,6 +134,7 @@ describe("nodeRequest: the Fetch Request behind the view", () => {
 		await expect(req.text()).rejects.toThrow(TypeError)
 	})
 
+	// v0: 6ee4244152
 	it("reads through it once one exists, so a clone and the original both get the body", async () => {
 		const req = await post(["shared"])
 		const copy = req.clone()
@@ -209,6 +211,7 @@ describe("nodeRequest: the body cap (maxRequestBodySize)", () => {
 		}
 	})
 
+	// v0: 34d829e16d
 	it("accepts a body of exactly the cap, and 0 turns the cap off", async () => {
 		const exact = await post(["12345", "67890"], {}, 10)
 		const streamed = await post(["12345", "67890"], {}, 10)

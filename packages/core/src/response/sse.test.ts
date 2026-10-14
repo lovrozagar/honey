@@ -20,6 +20,7 @@ describe("encodeEvent: framing", () => {
 	// v0: a1b6c62bc8
 	// v0: a46441de93
 	// v0: 54f0235240
+	// v0: 65d8d0439f
 	it.each([
 		["one line", { data: "hi", event: "msg" }, "event: msg\ndata: hi\n\n"],
 		[
@@ -81,6 +82,7 @@ describe("encodeEvent: what it refuses", () => {
 describe("sseBody: the stream a callback writes", () => {
 	// v0: 58aa4627b2
 	// v0: c5b44d84af
+	// v0: b3b381b21e
 	it("sends defaultRetry first, then the events, and ends when the callback returns", async () => {
 		const body = await bodyOf(
 			async (stream) => {
@@ -121,6 +123,23 @@ describe("sseBody: ending, and sending to an ended stream", () => {
 			states.push(stream.closed, stream.signal.aborted)
 		})
 		expect([body, states]).toEqual(["event: m\ndata: x\n\n", [true, false]])
+	})
+})
+
+describe("sseBody: a callback that throws after it closed", () => {
+	// v0: d8638482e6
+	// v0: a61f99b57c
+	it("close() then a throw: the stream already ended cleanly, and nothing surfaces", async () => {
+		const unhandled = vi.fn()
+		process.on("unhandledRejection", unhandled)
+		const body = await bodyOf(async (stream) => {
+			await stream.send({ data: "x", event: "m" })
+			stream.close()
+			throw new Error("after close")
+		})
+		await new Promise((resolve) => setTimeout(resolve, 10))
+		process.off("unhandledRejection", unhandled)
+		expect([body, unhandled.mock.calls.length]).toEqual(["event: m\ndata: x\n\n", 0])
 	})
 
 	// v0: ac93aea49b
@@ -251,6 +270,7 @@ describe("sseBody: the heartbeat timer ends with the stream", () => {
 		expect(await liveAfter(end)).toBe(1)
 	})
 
+	// v0: b14e2c399d
 	it("cleared when the callback throws, with the body broken", async () => {
 		vi.useFakeTimers()
 		const cleared = vi.spyOn(globalThis, "clearInterval")

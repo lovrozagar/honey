@@ -41657,6 +41657,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"094ef36e38": {
+			"feature": "07-security-middleware",
+			"reason": "timeout() answering 504 and aborting ctx.signal is timeout() behavior (bit 07)"
+		},
 		"09552c968b": {
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
@@ -41813,6 +41817,10 @@
 			"feature": "07-security-middleware",
 			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
+		"185fed5dbb": {
+			"feature": "08-io",
+			"reason": "rejecting a malformed q is accepts() behavior (input/accepts.ts, bit 08)"
+		},
 		"18d4adb0e5": {
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
@@ -41885,6 +41893,10 @@
 			"feature": "08-io",
 			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
 		},
+		"1ddefb0c21": {
+			"feature": "08-io",
+			"reason": "Accept media-range precedence is accepts() behavior (input/accepts.ts, bit 08)"
+		},
 		"1de1e2d100": {
 			"feature": "09-ir-seam",
 			"reason": "uses route tree loading (bit 09)"
@@ -41949,6 +41961,14 @@
 			"feature": "02-finalize-middleware",
 			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 07)"
 		},
+		"23beeac98c": {
+			"feature": "08-io",
+			"reason": "etag() leaving a stream() body unconsumed is etag behavior (response/etag.ts, bit 08)"
+		},
+		"23fbe77289": {
+			"feature": "08-io",
+			"reason": "Accept media-range parameters are accepts() behavior (input/accepts.ts, bit 08)"
+		},
 		"2538cf731f": {
 			"feature": "04-adapters",
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
@@ -41964,6 +41984,10 @@
 		"26681dec69": {
 			"feature": "08-io",
 			"reason": "uses parseCookies (validation.ts, bit 08)"
+		},
+		"2670221d49": {
+			"feature": "07-security-middleware",
+			"reason": "SSE through the proxy past the header timeout is proxy behavior (proxy/, bit 07)"
 		},
 		"269fbb17ea": {
 			"feature": "07-security-middleware",
@@ -42076,6 +42100,10 @@
 		"30e4163536": {
 			"feature": "07-security-middleware",
 			"reason": "asserts ipRestrict allow/deny over ctx.ip; ipRestrict is built in bit 07"
+		},
+		"30e8f744b2": {
+			"feature": "08-io",
+			"reason": "bodyLimit cutting a stream mid-way is bodyLimit behavior (bit 08)"
 		},
 		"315781587c": {
 			"feature": "05-streaming-sse-range",
@@ -42265,6 +42293,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"3fd4c69ed9": {
+			"feature": "08-io",
+			"reason": "binary() branding is typed with binary I/O (A1, bit 08)"
+		},
 		"3fe44ac07c": {
 			"feature": "08-io",
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
@@ -42353,6 +42385,10 @@
 			"feature": "08-io",
 			"reason": "uses withHeaders (with-headers.ts, bit 08)"
 		},
+		"448426b1ab": {
+			"feature": "08-io",
+			"reason": "etag() leaving a generate() body unconsumed is etag behavior (response/etag.ts, bit 08)"
+		},
 		"4490cead2b": {
 			"feature": "08-io",
 			"reason": "declares .input()/.output(): those builder methods and their validation are bit 08 (extending route-builder.ts)"
@@ -42376,6 +42412,10 @@
 		"465177e22c": {
 			"feature": "08-io",
 			"reason": "asserts through .input()/.output() schemas: io is bit 08"
+		},
+		"465791bf1c": {
+			"feature": "08-io",
+			"reason": "etag() answering an SSE route without buffering is etag behavior (bit 08, needs the body-kind tag)"
 		},
 		"46a4e97aa3": {
 			"feature": "02-finalize-middleware",
@@ -42625,6 +42665,10 @@
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
 		},
+		"5e40ffd882": {
+			"feature": "08-io",
+			"reason": "typed SSE output constraining ctx.res is the response model (H10, bit 08)"
+		},
 		"5f3fb6b7f4": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -42769,6 +42813,10 @@
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
 		},
+		"6b3d8b6bc0": {
+			"feature": "07-security-middleware",
+			"reason": "forwarding a POST body as a stream is proxy behavior (proxy/, bit 07)"
+		},
 		"6b3f8bc280": {
 			"feature": "09-ir-seam",
 			"reason": "uses route tree loading (bit 09)"
@@ -42796,6 +42844,10 @@
 		"6d7a217670": {
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
+		},
+		"6e390a38f0": {
+			"feature": "08-io",
+			"reason": "res.binary() is a response helper born with binary I/O (A1, bit 08)"
 		},
 		"6e6392a52f": {
 			"feature": "11-ts-client",
@@ -42861,6 +42913,10 @@
 			"feature": "07-security-middleware",
 			"reason": "uses cors (cors.ts, bit 07), error i18n (bit 07)"
 		},
+		"739857836c": {
+			"feature": "07-security-middleware",
+			"reason": "ruled at bit 05: a producer failure reaches the app logger once bit 07 wires it"
+		},
 		"741f939aca": {
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
@@ -42897,6 +42953,10 @@
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
+		"7636f0177e": {
+			"feature": "08-io",
+			"reason": "etag() over a zero-length body is etag behavior (bit 08)"
+		},
 		"765d7ff2b3": {
 			"feature": "08-io",
 			"reason": "input/output schema types: io is bit 08"
@@ -42908,6 +42968,10 @@
 		"77099d2ea8": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"77a94438c3": {
+			"feature": "08-io",
+			"reason": "a q=0 range excluding a type is accepts() behavior (input/accepts.ts, bit 08)"
 		},
 		"77c1590a86": {
 			"feature": "02-finalize-middleware",
@@ -43125,6 +43189,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"87c015322b": {
+			"feature": "07-security-middleware",
+			"reason": "secureHeaders on a stream response is secureHeaders() behavior (bit 07)"
+		},
 		"8884c869d8": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -43249,6 +43317,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"940f3b0637": {
+			"feature": "07-security-middleware",
+			"reason": "timeout() aborting ctx.signal is timeout() behavior (bit 07)"
+		},
 		"941994b43f": {
 			"feature": "02-finalize-middleware",
 			"reason": "replaceResponse is response/builder.ts, born at bit 02 (re-cut)"
@@ -43305,6 +43377,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"97a20f8e38": {
+			"feature": "08-io",
+			"reason": "bodyLimit keeping the request's headers and method is bodyLimit behavior (bit 08)"
+		},
 		"97f2d31012": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -43333,6 +43409,10 @@
 			"feature": "11-ts-client",
 			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
+		"997ddde7ff": {
+			"feature": "07-security-middleware",
+			"reason": "forwarding a small known-length body as bytes is proxy behavior (proxy/, bit 07)"
+		},
 		"9983e44d3f": {
 			"feature": "04-adapters",
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
@@ -43348,6 +43428,10 @@
 		"9a8e35727c": {
 			"feature": "09-ir-seam",
 			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+		},
+		"9a8fa7b812": {
+			"feature": "08-io",
+			"reason": "a multipart File and a raw stream body are request input (input/, bit 08)"
 		},
 		"9ab6453be8": {
 			"feature": "02-finalize-middleware",
@@ -43493,6 +43577,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"a6c79b6852": {
+			"feature": "08-io",
+			"reason": "OutputSchemaDef accepting SSE output is the response model (H10, bit 08)"
+		},
 		"a6dc3175d9": {
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
@@ -43592,6 +43680,14 @@
 		"ac27224138": {
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
+		},
+		"ac79fc4742": {
+			"feature": "08-io",
+			"reason": "SSE output allowing the sse method is the response model (H10, bit 08)"
+		},
+		"acccc3f555": {
+			"feature": "08-io",
+			"reason": "bodyLimit answering 413 mid-stream is bodyLimit behavior (bit 08)"
 		},
 		"ad44f238f5": {
 			"feature": "09-ir-seam",
@@ -43789,6 +43885,10 @@
 			"feature": "09-ir-seam",
 			"reason": "uses route tree loading (bit 09)"
 		},
+		"be6ccf73ce": {
+			"feature": "08-io",
+			"reason": "ruled at bit 05: the BODY_KIND stream tag is born with body-kind at bit 08"
+		},
 		"bf19ac5e14": {
 			"feature": "04-adapters",
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
@@ -43824,6 +43924,10 @@
 		"c1b2030271": {
 			"feature": "04-adapters",
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
+		},
+		"c2364a0f22": {
+			"feature": "08-io",
+			"reason": "bodyLimit on FormData is bodyLimit behavior (bit 08)"
 		},
 		"c250d239b9": {
 			"feature": "08-io",
@@ -43897,6 +44001,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"cbe2b801a4": {
+			"feature": "08-io",
+			"reason": "etag() passing a native stream through is etag behavior (bit 08)"
+		},
 		"cc63f9d186": {
 			"feature": "08-io",
 			"reason": "uses etag (etag.ts, bit 08)"
@@ -43936,6 +44044,10 @@
 		"d18a0c2de1": {
 			"feature": "08-io",
 			"reason": "uses etag (etag.ts, bit 08)"
+		},
+		"d20324ce95": {
+			"feature": "11-ts-client",
+			"reason": "the generated mock server's SSE route is codegen output (mock-server, with the TS client at bit 11)"
 		},
 		"d211912876": {
 			"feature": "02-finalize-middleware",
@@ -43980,6 +44092,10 @@
 		"d63fdb6ada": {
 			"feature": "09-ir-seam",
 			"reason": "uses generateRouteTreeFromApp (codegen.ts, bit 09), route tree loading (bit 09)"
+		},
+		"d64bac1e58": {
+			"feature": "08-io",
+			"reason": "bodyLimit with a non-numeric Content-Length is bodyLimit behavior (bit 08)"
 		},
 		"d65a10e773": {
 			"feature": "09-ir-seam",
@@ -44029,6 +44145,10 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"dbf68f8c8b": {
+			"feature": "07-security-middleware",
+			"reason": "a streaming body surviving CORS reconstruction is cors() behavior (bit 07)"
+		},
 		"dc053efc6e": {
 			"feature": "10-openapi-emit",
 			"reason": "asserts the generated OpenAPI document of a gateway: OpenAPI emission is bit 10"
@@ -44073,6 +44193,10 @@
 			"feature": "08-io",
 			"reason": "uses withHeaders (with-headers.ts, bit 08)"
 		},
+		"e17355da20": {
+			"feature": "08-io",
+			"reason": "UniversalResMethods is the typed response model (H10, bit 08)"
+		},
 		"e17e181fbb": {
 			"feature": "09-ir-seam",
 			"reason": "uses route tree loading (bit 09)"
@@ -44088,6 +44212,10 @@
 		"e3076a2112": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"e32ec4b0bb": {
+			"feature": "07-security-middleware",
+			"reason": "streaming a body over the proxy buffer limit is proxy behavior (proxy/, bit 07)"
 		},
 		"e39db192a9": {
 			"feature": "02-finalize-middleware",
@@ -44133,6 +44261,14 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"e8dabb0319": {
+			"feature": "08-io",
+			"reason": "bodyLimit streaming a body under the limit through is bodyLimit behavior (bit 08)"
+		},
+		"e8fcde46ad": {
+			"feature": "08-io",
+			"reason": "bodyLimit with no Content-Length is bodyLimit behavior (input/body-limit.ts, bit 08)"
+		},
 		"e96839041f": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -44148,6 +44284,10 @@
 		"ea83f7a469": {
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
+		},
+		"eb0e74b674": {
+			"feature": "08-io",
+			"reason": "etag() never buffering an endless SSE is etag behavior (bit 08)"
 		},
 		"ebb0d677ab": {
 			"feature": "02-finalize-middleware",
@@ -44172,6 +44312,10 @@
 		"eeaca59f7f": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
+		},
+		"eec46a3793": {
+			"feature": "07-security-middleware",
+			"reason": "curlLogger omitting an oversized streaming body is observability (observability/, bit 07)"
 		},
 		"ef306ac48f": {
 			"feature": "02-finalize-middleware",
@@ -44216,6 +44360,10 @@
 		"f12280f631": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+		},
+		"f1332c7afd": {
+			"feature": "08-io",
+			"reason": "etag() skipping a streaming response is etag behavior (bit 08)"
 		},
 		"f14bd5e990": {
 			"feature": "02-finalize-middleware",
@@ -44300,6 +44448,10 @@
 		"f84705bad9": {
 			"feature": "08-io",
 			"reason": "asserts the builder carries .input()/.output() (bit 08) and .proxy() (bit 07); the one-shot hiding of the bit-02 methods is ported (route-builder.test.ts)"
+		},
+		"f89b233cae": {
+			"feature": "08-io",
+			"reason": "the most specific range setting the weight is accepts() behavior (input/accepts.ts, bit 08)"
 		},
 		"f915401cb1": {
 			"feature": "08-io",
@@ -44411,6 +44563,7 @@
 		"05533ac9c0": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"0e1a3fa08e": "H23: trustProxy is cut, and with it CIDR ranges and the trusted-hop walk",
 		"201c5d0daa": "H23: the trust fuzz corpus is cut; peer canonicalization is pinned by the src/context/peer.test.ts tables",
+		"29768702f9": "H23: trustProxy is cut; ipRestrict \"behind one proxy\" depended on trusting a forwarded client",
 		"3e5e802259": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"4014d67f6b": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
 		"416fa38434": "covered-by: asserts only {} extends object as an import check; every typetest file compiling under typecheck is that check",

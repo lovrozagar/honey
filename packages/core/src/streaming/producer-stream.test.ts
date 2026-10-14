@@ -184,6 +184,7 @@ describe("producerStream: failures", () => {
 		expect(report.mock.calls).toEqual([[boom], [boom]])
 	})
 
+	// v0: 48572c159f
 	it("an abort the producer rethrows after a cancel is not reported", async () => {
 		const report = vi.fn()
 		const body = producerStream(
@@ -251,6 +252,7 @@ describe("generatorStream: values", () => {
 })
 
 describe("generatorStream: ending early", () => {
+	// v0: 41f85937d3
 	it("runs the generator's finally when the reader cancels", async () => {
 		const cleaned = Promise.withResolvers<string>()
 		async function* endless() {

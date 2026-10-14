@@ -64,6 +64,7 @@ describe("each helper streams to completion through app.fetch", () => {
 	// v0: 1e31f960f7
 	// v0: d1b522c721
 	// v0: 953556cdbd
+	// v0: 21ec26e9f8
 	it("stream(), generate() and sse() answer their body, type and status", async () => {
 		const { app, log } = streamingApp()
 		const answers = await Promise.all(
@@ -192,6 +193,7 @@ describe("streams at scale", () => {
 	// v0: c2d2de0e1e
 	// v0: b8fba75cd1
 	// v0: 87b0437813
+	// v0: 315781587c
 	it("large and many: 1000 events of 10 KB, 100k generated chunks, a 1 MB write, unicode intact", async () => {
 		const app = honey<{}>()
 		const big = "é".repeat(5_000) + "🍯".repeat(1_250)

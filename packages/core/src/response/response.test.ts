@@ -74,6 +74,7 @@ describe("status", () => {
 	// v0: d211912876
 	// v0: 33cccc4f70
 	// v0: 7bcc1bb352
+	// v0: b17f54b76d
 	it.each([
 		["created", 201],
 		["accepted", 202],
@@ -84,6 +85,7 @@ describe("status", () => {
 		expect(res.text(key, "x", { status: 299 }).status).toBe(299)
 	})
 
+	// v0: b3c80a24ec
 	it("a body on a null-body status throws, on the native and the Node path", () => {
 		for (const helper of [new HoneyRes(), new HoneyRes(true)])
 			for (const status of [101, 103, 204, 205, 304])
@@ -128,6 +130,7 @@ describe("raw()", () => {
 	})
 
 	// v0: b4066894fa
+	// v0: 8d3e7dd310
 	it("copies a response whose headers are immutable, so middleware can still set them", () => {
 		/* fetch(), Fetcher.fetch, cache.match and Response.redirect return guarded headers */
 		const guarded = Response.redirect("https://example.com/next", 302)
@@ -180,6 +183,7 @@ describe("the Node path", () => {
 		expect([isHoneyResponse(text), text.status, await text.text()]).toEqual([true, 201, "hi"])
 	})
 
+	// v0: 669a65fbb2
 	it("lower-cases option headers and appends cookies after a set-cookie header", async () => {
 		const response = nodeRes.json("ok", 1, {
 			cookies: { b: { value: "2" } },
@@ -340,6 +344,7 @@ describe("generate(): a body pulled from a generator", () => {
 	})
 
 	// v0: 400a47a12e
+	// v0: e9c54e748f
 	it("a generator that throws breaks the body after the values before it", async () => {
 		await expect(res.generate(failing()).text()).rejects.toThrow("boom")
 	})

@@ -261,6 +261,7 @@ describe("shutdown(): draining", () => {
 })
 
 describe("shutdown(): what would never finish on its own", () => {
+	// v0: 5b9b50da7b
 	it("aborts the signal of a response already streaming, so it ends", async () => {
 		const ticking = answering(
 			(req) =>
@@ -280,6 +281,7 @@ describe("shutdown(): what would never finish on its own", () => {
 		expect(await reader.read()).toEqual({ done: true, value: undefined })
 	})
 
+	// v0: 1367cdc6b5
 	it("after the timeout, aborts what is still working and closes every connection", async () => {
 		const { app, arrived, reasons } = untilAborted()
 		const { base, server } = await listen(app)
