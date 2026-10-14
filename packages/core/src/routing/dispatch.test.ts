@@ -206,3 +206,31 @@ describe("dispatch: the error boundary", () => {
 		expect((await viaHook.fetch(req("/t"), {})).status).toBe(500)
 	})
 })
+
+describe("dispatch: every exit is exactly one Response", () => {
+	const exits = honey<{}>().trailingSlash("strip")
+	exits.get("/ok").handler((ctx) => ctx.res.text("ok", "ok"))
+	exits.get("/throws").handler(() => {
+		throw new Error("boom")
+	})
+	exits.get("/mapped").handler(() => {
+		throw new RangeError("mapped")
+	})
+	exits.onError((thrown) => (thrown instanceof RangeError ? new Response("mapped", { status: 418 }) : undefined))
+	const preflight = { headers: { "access-control-request-method": "DELETE" }, method: "OPTIONS" }
+
+	it.each([
+		["a target the policy rejects", req("/a%2Fb"), 400],
+		["a trailing-slash redirect", req("/ok/"), 308],
+		["a miss", req("/nope"), 404],
+		["a wrong method", req("/ok", { method: "POST" }), 405],
+		["a preflight nothing answers", req("/ok", preflight), 405],
+		["a handler", req("/ok"), 200],
+		["a throw", req("/throws"), 500],
+		["a throw onError maps", req("/mapped"), 418],
+	])("%s answers with one Response", async (_exit, request, status) => {
+		const res = await exits.fetch(request, {})
+		expect(res).toBeInstanceOf(Response)
+		expect(res.status).toBe(status)
+	})
+})
