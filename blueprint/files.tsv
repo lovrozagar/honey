@@ -186,10 +186,6 @@ tests/integration/context-query.test.ts	core	test	02	search / searchAll: query p
 tests/integration/context-extension.test.ts	core	test	02	context() extension + typing, executionCtx / background binding, meta access through ctx	context*
 tests/integration/cookies.test.ts	core	test	02	cookies through the app: get/set, caching, multiple Set-Cookie, kept on error responses, set→send-back round trip; signed via the signer	cookie*
 tests/integration/cookie-codec.test.ts	core	test	02	serializeCookie attribute/prefix/SameSite/Max-Age/Expires validation, value encoding (multi-byte, emoji, separators), Cookie-header parse edges	cookie*
-# TRANSITIONAL (delete on re-author — not part of the map): these numbered dump files from the pre-H22
-#   relabel still exist and hold coverage their base file doesn't yet. The implementer collapses each into its
-#   named map home and DELETES it: scoped-2 → scoped; errors-2 → errors; cookies-2 → cookies/cookie-codec.
-#   Rows kept only so check-tree is green while that happens; no new numbered file is ever added.
 tests/types/app.typetest.ts	core	test	02	the Infer* ladder, $routes/MergeRoute, ComputeErrorsByStatus	typetest/*
 tests/types/app-2.typetest.ts	core	test	02	app ports, continued (500-line cap split)	typetest/*
 tests/types/handler-ctx.typetest.ts	core	test	02	HandlerCtx, params, meta, errors, routePattern	typetest/*
