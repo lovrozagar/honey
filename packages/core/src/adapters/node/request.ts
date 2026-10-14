@@ -8,7 +8,7 @@ import { Readable } from "node:stream"
 import { PEER_ADDRESS } from "../../context/peer.ts"
 import { EK, HoneyError } from "../../errors/error.ts"
 import { NODE_OUTBOUND } from "../../response/builder.ts"
-import { TO_FETCH_REQUEST } from "../fetch-request.ts"
+import { REPLACE_BODY, TO_FETCH_REQUEST } from "../fetch-request.ts"
 import { NodeHeaders } from "./headers.ts"
 
 /** The serve side calls this when the response closed before it finished: client gone, or shutdown. */
@@ -113,6 +113,11 @@ class NodeRequest {
 	[ABORT_REQUEST](reason: unknown = new DOMException("The client disconnected", "AbortError")): void {
 		if (this.#controller !== undefined) this.#controller.abort(reason)
 		else this.#abortReason ??= { reason }
+	}
+
+	/** Swap the body for `body` (bodyLimit's counted stream) and stay the view: nothing has read it yet. */
+	[REPLACE_BODY](body: ReadableStream<Uint8Array>): void {
+		this.#stream = body
 	}
 
 	/** The real Fetch `Request` behind the view: `new Request(x)`, `fetch(x)` and `instanceof` take it. */

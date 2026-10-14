@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { PEER_ADDRESS } from "../../context/peer.ts"
 import { HoneyError } from "../../errors/error.ts"
 import { isNodeOutbound } from "../../response/builder.ts"
-import { toFetchRequest } from "../fetch-request.ts"
+import { toFetchRequest, withBody } from "../fetch-request.ts"
 import { httpParser, type RawRequest } from "./__fixtures__/parsed.ts"
 import { ABORT_REQUEST, BODY_OVERFLOW, nodeRequest } from "./request.ts"
 
@@ -230,5 +230,36 @@ describe("nodeRequest: the body cap (maxRequestBodySize)", () => {
 		await reader.read()
 		await reader.cancel()
 		expect(msg.destroyed).toBe(true)
+	})
+})
+
+describe("nodeRequest: a body swapped in place (withBody)", () => {
+	it("reads the new body through every reader, and keeps method, URL, headers and the view itself", async () => {
+		for (const read of [(r: Request) => r.text(), async (r: Request) => new TextDecoder().decode(await r.bytes())]) {
+			const req = await post(["old body"], {
+				headers: [
+					["Host", "app.example"],
+					["Authorization", "Bearer t"],
+				],
+			})
+			const next = withBody(req, new Response("new body").body as ReadableStream<Uint8Array>)
+			expect([
+				next === req,
+				next instanceof Request,
+				next.method,
+				next.url,
+				next.headers.get("authorization"),
+				await read(next),
+			]).toEqual([true, false, "POST", "http://app.example/in", "Bearer t", "new body"])
+		}
+	})
+
+	it("hands the new body to .body and to the Fetch Request built afterwards", async () => {
+		const first = await post(["old"])
+		const body = new Response("swapped").body as ReadableStream<Uint8Array>
+		withBody(first, body)
+		const second = await post(["old"])
+		withBody(second, new Response("fetched").body as ReadableStream<Uint8Array>)
+		expect([first.body === body, await toFetchRequest(second).text()]).toEqual([true, "fetched"])
 	})
 })
