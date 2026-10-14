@@ -133,3 +133,79 @@ describe("the app logger reaches the request's producers, background tasks and t
 		])
 	})
 })
+
+/* the reduced configuration matrix: logger × onError × requestLog × mode; the full 96 waits for tracing */
+const MATRIX = (["default", "custom", "off"] as const).flatMap((logger) =>
+	[false, true].flatMap((onError) =>
+		[false, true].flatMap((requestLog) =>
+			(["development", "production"] as const).map((mode) => [logger, onError, requestLog, mode] as const),
+		),
+	),
+)
+/* requestLog with logger(false) cannot work: those four cells refuse to serve instead */
+const REFUSED = MATRIX.filter(([logger, , requestLog]) => logger === "off" && requestLog)
+const SERVED = MATRIX.filter(([logger, , requestLog]) => !(logger === "off" && requestLog))
+
+/** Serve the matrix's three requests: a plain answer, a handler error, a streamed body. */
+async function serveThree(app: ReturnType<typeof honey<{}>>) {
+	app.get("/ok").handler((ctx) => ctx.res.json("ok", { ok: true }))
+	app.get("/fail").handler(() => {
+		throw new Error("db down")
+	})
+	app.get("/stream").handler((ctx) =>
+		ctx.res.stream(async (writable) => {
+			const writer = writable.getWriter()
+			await writer.write(new TextEncoder().encode("chunk"))
+			await writer.close()
+		}),
+	)
+	const answers = []
+	for (const path of ["/ok", "/fail", "/stream"]) {
+		const res = await app.fetch(new Request(`https://app.example.com${path}?q=1`), {})
+		const text = await res.text()
+		/* the digest is random per occurrence: everything else must match */
+		answers.push([res.status, text.replace(/"digest":"[0-9a-f]{16}",?/, "")])
+	}
+	return answers
+}
+
+/** How many of `lines` carry `msg`, in json or pretty form. */
+const count = (lines: string[], msg: string) =>
+	lines.filter((line) => line.includes(`"msg":"${msg}"`) || line.includes(` ${msg} `) || line.endsWith(` ${msg}`))
+		.length
+
+describe("the reduced observability matrix: logger × onError × requestLog × mode", () => {
+	it.each(REFUSED)(
+		"logger %s, onError %s, requestLog %s, %s: refuses to serve, naming both",
+		async (_l, _o, _r, mode) => {
+			vi.stubEnv("NODE_ENV", mode)
+			const app = honey<{}>().requestLog(true).logger(false)
+			await expect(async () => serveThree(app)).rejects.toThrow("requestLog() is on, but logger(false) writes nothing")
+			vi.unstubAllEnvs()
+		},
+	)
+
+	it.each(SERVED)("logger %s, onError %s, requestLog %s, %s", async (logger, onError, requestLog, mode) => {
+		vi.stubEnv("NODE_ENV", mode)
+		const baseline = await serveThree(honey<{}>().logger(false))
+		const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+		const custom: string[] = []
+		const app = honey<{}>().requestLog(requestLog)
+		if (logger === "custom")
+			app.logger(createLogger({ format: "json", level: "info", write: (line) => void custom.push(line) }))
+		if (logger === "off") app.logger(false)
+		const seen: unknown[] = []
+		if (onError) app.onError((error) => void seen.push(error))
+		const answers = await serveThree(app)
+		const written = logger === "custom" ? custom : stdout.mock.calls.map(([line]) => String(line))
+		stdout.mockRestore()
+		vi.unstubAllEnvs()
+		expect([
+			answers,
+			seen.length,
+			count(written, "unhandled error"),
+			count(written, "request"),
+			written.some((line) => line.includes("q=1")),
+		]).toEqual([baseline, onError ? 1 : 0, logger === "off" ? 0 : 1, requestLog ? 3 : 0, false])
+	})
+})
