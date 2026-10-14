@@ -278,15 +278,13 @@ describe("the last resort: answering the error failed itself", () => {
 	})
 })
 
-describe("a crashing error formatter is reported, and the client still gets a well-formed error (a7)", () => {
-	const broken = () => {
-		throw new Error("formatter broke")
-	}
-	const failures = (lines: Record<string, unknown>[]) =>
-		lines
-			.filter((line) => line.msg === "error formatter failed")
-			.map((line) => (line.err as { message: string }).message)
+const broken = (): never => {
+	throw new Error("formatter broke")
+}
+const failures = (lines: Record<string, unknown>[]) =>
+	lines.filter((line) => line.msg === "error formatter failed").map((line) => (line.err as { message: string }).message)
 
+describe("a crashing error formatter is reported, and the client still gets a well-formed error (a7)", () => {
 	it("the default formatter: the default shape answers, one line per crash", async () => {
 		const { app, lines } = throwing(new HoneyError({ errorKey: "slug_taken", status: "conflict" }))
 		app.defaultErrorFormatter(broken)
