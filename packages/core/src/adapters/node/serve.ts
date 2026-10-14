@@ -97,7 +97,7 @@ export function serve<TEnv>(app: FetchApp<TEnv>, options: NodeServeOptions<TEnv>
 			const response = answer instanceof Promise ? await answer : answer
 			/* a body over the cap was left on the socket; while draining, the connection ends here */
 			if (drain.draining || (request as unknown as Record<symbol, boolean>)[BODY_OVERFLOW]) res.shouldKeepAlive = false
-			await writeResponse(response, res)
+			await writeResponse(response, res, incoming.method === "HEAD")
 		} catch (error) {
 			onError(error)
 			/* every failure before this point comes before writeHead; a failing body pipe cuts the connection itself */

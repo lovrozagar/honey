@@ -10,6 +10,9 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web"
 import { isHoneyResponse, type RawBody, rawBodyOf } from "../../response/builder.ts"
 import type { HeaderMap } from "../../response/out-headers.ts"
 
+/** A cancel that rejects (the stream had already failed) has nothing left to stop. */
+function ignore(): void {}
+
 /** A known-size native body up to this many bytes is buffered and sent in one write. */
 const BUFFER_BODY_MAX = 256 * 1024
 
@@ -89,12 +92,27 @@ async function pipeBody(stream: ReadableStream<Uint8Array>, res: ServerResponse)
 	} catch {
 		/* the client left, or the stream failed after the headers went out: cut the connection */
 		res.destroy()
-		await stream.cancel().catch(() => {})
+		await stream.cancel().catch(ignore)
 	}
 }
 
-/** Write `response` to `res`: headers for this connection, the body buffered or piped. */
-export async function writeResponse(response: Response, res: ServerResponse): Promise<void> {
+/**
+ * The head GET would send, then the end: the body is cancelled unread, so a streaming route's
+ * producer never runs. A stream GET would chunk keeps no length; one GET buffers keeps its own.
+ */
+function writeHeadOnly(res: ServerResponse, response: Response, body: ReadableStream<Uint8Array>): void {
+	const headers = ownHeaders(response)
+	if (!isHoneyResponse(response) && !isSmallDeclared(response)) delete headers["content-length"]
+	writeHead(res, response, headers)
+	res.end()
+	body.cancel().catch(ignore)
+}
+
+/**
+ * Write `response` to `res`: headers for this connection, the body buffered or piped. For a
+ * HEAD (`head`), Node writes no body; a body still unread is never read.
+ */
+export async function writeResponse(response: Response, res: ServerResponse, head = false): Promise<void> {
 	const raw = rawBodyOf(response)
 	if (raw !== null) return writeBuffered(res, response, raw)
 	const body = response.body
@@ -103,6 +121,7 @@ export async function writeResponse(response: Response, res: ServerResponse): Pr
 		res.end()
 		return
 	}
+	if (head) return writeHeadOnly(res, response, body)
 	if (isHoneyResponse(response)) {
 		writeHead(res, response, headersOf(response))
 		return pipeBody(body, res)

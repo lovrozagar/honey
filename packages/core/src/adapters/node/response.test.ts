@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net"
 import { connect } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
 import { createHoneyResponse, withRawBody } from "../../response/builder.ts"
+import { HoneyRes } from "../../response/response.ts"
 import type { HeaderMap } from "../../response/out-headers.ts"
 import { writeResponse } from "./response.ts"
 
@@ -23,7 +24,7 @@ afterEach(async () => {
 /** A node:http server that writes `make(path)` for every request. */
 async function writing(make: (path: string) => Response) {
 	const server = createServer((req, res) => {
-		void writeResponse(make(req.url as string), res)
+		void writeResponse(make(req.url as string), res, req.method === "HEAD")
 	})
 	servers.push(server)
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
@@ -43,6 +44,7 @@ function exchange(port: number, bytes: string): Promise<string> {
 	})
 }
 
+const HEAD = (path: string) => `HEAD ${path} HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n`
 const GET = (path: string) => `GET ${path} HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n`
 
 /** The header block of a raw response, lowercased names, in wire order. */
@@ -200,5 +202,54 @@ describe("when the body fails mid-way", () => {
 		const res = await fetch(base)
 		expect(res.status).toBe(200)
 		await expect(res.text()).rejects.toThrow()
+	})
+})
+
+describe("HEAD: the head GET would send, and no body is read", () => {
+	// v0: 583268d9f0
+	// v0: 40d6fd580a
+	// v0: 4ed7ba1182
+	// v0: eba2a8cacc
+	// v0: 38b62aecf2
+	it("a streaming route's producer never runs, sse, stream or generate", async () => {
+		let runs = 0
+		const res = new HoneyRes()
+		const counted = function* () {
+			runs++
+			yield "x"
+		}
+		const bodies: Record<string, () => Response> = {
+			"/generate": () => res.generate(counted()),
+			"/sse": () => res.sse(async () => void runs++),
+			"/stream": () => res.stream(async () => void runs++),
+		}
+		const { port } = await writing((path) => (bodies[path] as () => Response)())
+		const raws = await Promise.all(Object.keys(bodies).map((path) => exchange(port, HEAD(path))))
+		await new Promise((resolve) => setTimeout(resolve, 10))
+		expect([raws.map((raw) => [raw.split("\r\n")[0], raw.endsWith("\r\n\r\n")]), runs]).toEqual([
+			[
+				["HTTP/1.1 200 OK", true],
+				["HTTP/1.1 200 OK", true],
+				["HTTP/1.1 200 OK", true],
+			],
+			0,
+		])
+	})
+
+	// v0: 02b6bb3219
+	// v0: dfb8639cdb
+	// v0: 135a32c2ee
+	it.each([
+		["a Honey response", () => createHoneyResponse({ headers: {}, raw: "héllo", status: 200 }), "6"],
+		["a small body of declared length, unread", () => declaredOf(10), "10"],
+		["a stream GET would chunk", () => declaredOf(300_000), null],
+	])("%s keeps the content-length GET sends", async (_case, make, length) => {
+		const { port } = await writing(make)
+		const raw = await exchange(port, HEAD("/"))
+		const declared = headerLines(raw).find((line) => line.startsWith("content-length:"))
+		expect([declared ?? null, raw.endsWith("\r\n\r\n")]).toEqual([
+			length === null ? null : `content-length: ${length}`,
+			true,
+		])
 	})
 })
