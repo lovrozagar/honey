@@ -4,8 +4,10 @@
  * Node it builds the `HoneyResponse` bag instead of a Fetch `Response`.
  */
 import { type CookieOptions, serializeCookie } from "../context/cookie.ts"
+import { generatorStream, type ProducerOptions, producerStream } from "../streaming/producer-stream.ts"
 import { createHoneyResponse, isHoneyResponse, rawBodyOf, type RawBody, withRawBody } from "./builder.ts"
 import type { HeaderMap } from "./out-headers.ts"
+import { SSE_HEADERS, type SSEOptions, type SSEStream, sseBody } from "./sse.ts"
 import { type StatusKey, statusKeyToCode } from "./status.ts"
 
 export type ResponseOptions = {
@@ -13,6 +15,13 @@ export type ResponseOptions = {
 	headers?: Record<string, string>
 	status?: number
 }
+
+/** What `ctx.res` reads from its request, only when a stream needs it: the context itself is one. */
+export type ResLink = { readonly req: Request; readonly signal: AbortSignal }
+
+export type GenerateOptions = ResponseOptions & { contentType?: string }
+
+type Generated = AsyncGenerator<string | Uint8Array, void, unknown> | Generator<string | Uint8Array, void, unknown>
 
 /* phantom brands: they exist only at the type level, never assigned at runtime */
 declare const CONTENT_TYPE: unique symbol
@@ -35,6 +44,7 @@ const TEXT_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "text/plain
 const HTML_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "text/html; charset=utf-8" })
 const CSV_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "text/csv; charset=utf-8" })
 const XML_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "application/xml" })
+const BINARY_HEADERS = /* @__PURE__ */ Object.freeze({ "content-type": "application/octet-stream" })
 
 function hasOptions(opts: ResponseOptions | undefined): opts is ResponseOptions {
 	return opts?.headers !== undefined || opts?.cookies !== undefined
@@ -64,11 +74,66 @@ function isNullBodyStatus(status: number): boolean {
 	return status === 101 || status === 103 || status === 204 || status === 205 || status === 304
 }
 
+function toBytes(chunk: unknown, encoder: TextEncoder): Uint8Array {
+	if (chunk instanceof Uint8Array) return chunk
+	if (typeof chunk === "string") return encoder.encode(chunk)
+	if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk)
+	if (ArrayBuffer.isView(chunk)) return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+	throw new TypeError("ctx.res.stream() chunks must be strings, ArrayBuffers or typed arrays")
+}
+
+/**
+ * A WritableStream over a producer sink. `size()` counts each write as it enters the queue, so
+ * `flushed()` waits for every queued write even when the callback returned without closing.
+ */
+function writableOver(write: (bytes: Uint8Array) => Promise<void>, end: { close(): void; error(e: unknown): void }) {
+	const encoder = new TextEncoder()
+	let queued = 0
+	let written = 0
+	const drained = Promise.withResolvers<void>()
+	const writable = new WritableStream<unknown>(
+		{
+			abort: (reason) => end.error(reason),
+			close: () => end.close(),
+			write: async (chunk) => {
+				try {
+					await write(toBytes(chunk, encoder))
+				} finally {
+					written++
+					if (written === queued) drained.resolve()
+				}
+			},
+		},
+		{
+			highWaterMark: 1,
+			size: () => {
+				queued++
+				return 1
+			},
+		},
+	)
+	return { flushed: () => (written === queued ? Promise.resolve() : drained.promise), writable }
+}
+
 export class HoneyRes {
 	protected readonly nodeOut: boolean
+	readonly #link: ResLink | undefined
 
-	constructor(nodeOut = false) {
+	/** `link` is the request a per-request res streams for; a bare res has none (no signal, no Last-Event-ID). */
+	constructor(nodeOut = false, link?: ResLink) {
 		this.nodeOut = nodeOut
+		this.#link = link
+	}
+
+	/** Producers end with the request; their failures break the body (the logger is wired at bit 07). */
+	#producer(): ProducerOptions {
+		const link = this.#link
+		return link === undefined ? {} : { signal: () => link.signal }
+	}
+
+	/** A streamed body under `base` headers plus the options' headers and cookies. */
+	#streamed(body: ReadableStream<Uint8Array>, base: Readonly<Record<string, string>>, opts?: ResponseOptions) {
+		return new Response(body, { headers: applyNative(new Headers(base), opts), status: opts?.status ?? 200 })
 	}
 
 	/** A response with a body and no extra headers. */
@@ -129,6 +194,42 @@ export class HoneyRes {
 			throw new TypeError("raw(): this response's body was already read — build a new Response per request")
 		if (response.status === 101 || isHoneyResponse(response) || rawBodyOf(response) !== null) return typed(response)
 		return typed(new Response(response.body, response))
+	}
+
+	/**
+	 * Stream a generator's values. A disconnect or the request ending calls `generator.return()`,
+	 * so its `finally` runs; a throw mid-stream breaks the body instead of ending it cleanly.
+	 */
+	generate(generator: Generated, opts?: GenerateOptions): TypedResponse<string, "ok"> {
+		const base = opts?.contentType === undefined ? BINARY_HEADERS : { "content-type": opts.contentType }
+		return typed(this.#streamed(generatorStream(generator, this.#producer()), base, opts))
+	}
+
+	/** An event stream; the client resumes from its `Last-Event-ID` unless `lastEventId` is given. */
+	sse(
+		callback: (stream: SSEStream) => Promise<void>,
+		opts?: ResponseOptions & SSEOptions,
+	): TypedResponse<"text/event-stream", "ok"> {
+		const lastEventId = opts?.lastEventId ?? this.#link?.req.headers.get("last-event-id") ?? undefined
+		const body = sseBody(callback, { ...opts, lastEventId }, this.#producer())
+		return typed(this.#streamed(body, SSE_HEADERS, opts))
+	}
+
+	/**
+	 * Write the body through a `WritableStream`. The callback starts when the body is first read
+	 * (never for HEAD); `signal` aborts when the client leaves or the request ends. Returning ends
+	 * the body once queued writes flush, closed or not; throwing breaks it, even with a writer held.
+	 */
+	stream(
+		callback: (writable: WritableStream, signal: AbortSignal) => Promise<void>,
+		opts?: ResponseOptions,
+	): TypedResponse<"application/octet-stream", "ok"> {
+		const body = producerStream(async (sink) => {
+			const { flushed, writable } = writableOver((bytes) => sink.write(bytes), sink)
+			await callback(writable, sink.signal)
+			await Promise.race([flushed(), new Promise<void>((resolve) => sink.onEnd(resolve))])
+		}, this.#producer())
+		return typed(this.#streamed(body, BINARY_HEADERS, opts))
 	}
 
 	redirect(url: string, opts?: ResponseOptions): TypedResponse<"none", "found"> {

@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { isHoneyResponse, rawBodyOf } from "./builder.ts"
-import { HoneyRes, type ResponseOptions } from "./response.ts"
+import { HoneyRes, type ResLink, type ResponseOptions } from "./response.ts"
 
 const res = new HoneyRes()
 
@@ -214,5 +214,180 @@ describe("the raw-body record", () => {
 		expect(rawBodyOf(response)).toBe('{"id":1}')
 		expect(Object.getOwnPropertySymbols(response)).toEqual([])
 		expect(rawBodyOf(res.html("ok", "<p/>", { headers: { "x-a": "1" } }))).toBe("<p/>")
+	})
+})
+
+/** What a request hands ctx.res: its headers and a signal the test aborts. */
+function link(headers: Record<string, string> = {}): ResLink & { abort(reason?: unknown): void } {
+	const request = new AbortController()
+	return {
+		abort: (reason) => request.abort(reason),
+		req: new Request("http://h/", { headers }),
+		signal: request.signal,
+	}
+}
+
+describe("stream(): a body written through a WritableStream", () => {
+	// v0: 8f920de9aa
+	// v0: e753f85ea8
+	// v0: 6e218a132d
+	// v0: d3b9d3791a
+	// v0: 3534671b97
+	it("takes strings, ArrayBuffers and views, in order, under octet-stream by default", async () => {
+		const response = res.stream(async (writable) => {
+			const writer = writable.getWriter()
+			await writer.write("a")
+			await writer.write(new TextEncoder().encode("b").buffer)
+			await writer.write(new Uint8Array([99]))
+			await writer.write(new DataView(new TextEncoder().encode("d").buffer))
+			await writer.close()
+		})
+		expect([response.status, response.headers.get("content-type"), await response.text()]).toEqual([
+			200,
+			"application/octet-stream",
+			"abcd",
+		])
+	})
+
+	// v0: 578c554fa4
+	// v0: eadb867a34
+	it("takes a status, headers (content-type included) and cookies", async () => {
+		const response = res.stream(async () => {}, {
+			cookies: { s: { value: "1" } },
+			headers: { "content-type": "text/plain", "x-a": "1" },
+			status: 201,
+		})
+		const seen = [response.status, response.headers.get("content-type"), response.headers.get("x-a")]
+		expect([...seen, response.headers.getSetCookie()]).toEqual([201, "text/plain", "1", ["s=1"]])
+	})
+})
+
+describe("stream(): flushing and failing", () => {
+	// v0: 5a3089f3ab
+	it("flushes queued writes when the callback returns without closing", async () => {
+		const response = res.stream(async (writable) => {
+			const writer = writable.getWriter()
+			void writer.write("x")
+			void writer.write("y")
+		})
+		expect(await response.text()).toBe("xy")
+	})
+
+	it("a chunk that is not text or bytes breaks the body with a TypeError", async () => {
+		const response = res.stream(async (writable) => {
+			await writable.getWriter().write(42)
+		})
+		await expect(response.text()).rejects.toThrow(
+			"ctx.res.stream() chunks must be strings, ArrayBuffers or typed arrays",
+		)
+	})
+
+	// v0: c3d2114a90
+	// v0: 8e2a54c2c6
+	// v0: 1fbac3e84b
+	// v0: e4fbd9a78a
+	// v0: 43f007dbec
+	it("a callback that throws, even while holding the writer, breaks the body after what it wrote", async () => {
+		const response = res.stream(async (writable) => {
+			const writer = writable.getWriter()
+			await writer.write("partial")
+			throw new Error("callback failed")
+		})
+		const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+		expect(new TextDecoder().decode((await reader.read()).value)).toBe("partial")
+		await expect(reader.read()).rejects.toThrow("callback failed")
+	})
+
+	it("aborting the writable breaks the body", async () => {
+		const response = res.stream(async (writable) => {
+			await writable.abort(new Error("gave up"))
+		})
+		await expect(response.text()).rejects.toThrow("gave up")
+	})
+})
+
+async function* ndjson() {
+	yield '{"n":1}\n'
+	yield '{"n":2}\n'
+}
+
+function* failing() {
+	yield "before"
+	throw new Error("boom")
+}
+
+async function* endless() {
+	for (;;) yield "tick"
+}
+
+describe("generate(): a body pulled from a generator", () => {
+	// v0: 824712583d
+	// v0: 5fee202827
+	// v0: d6f8f70709
+	// v0: 4b5023e1fc
+	// v0: f97c4880f6
+	// v0: 23a6d10f34
+	it("yields every value, under octet-stream unless a content type is given, with a status", async () => {
+		const plain = res.generate((function* () {})())
+		const typed = res.generate(ndjson(), { contentType: "application/x-ndjson", status: 202 })
+		expect([
+			[plain.status, plain.headers.get("content-type"), await plain.text()],
+			[typed.status, typed.headers.get("content-type"), await typed.text()],
+		]).toEqual([
+			[200, "application/octet-stream", ""],
+			[202, "application/x-ndjson", '{"n":1}\n{"n":2}\n'],
+		])
+	})
+
+	// v0: 400a47a12e
+	it("a generator that throws breaks the body after the values before it", async () => {
+		await expect(res.generate(failing()).text()).rejects.toThrow("boom")
+	})
+})
+
+describe("sse(): the event stream response", () => {
+	// v0: 6d6d110a3d
+	// v0: 9d3394f383
+	it("answers text/event-stream, no-cache, with a status, headers and cookies, never Connection", async () => {
+		const response = res.sse(
+			async (stream) => {
+				await stream.send({ data: "hi", event: "msg" })
+			},
+			{ cookies: { s: { value: "1" } }, headers: { "x-a": "1" }, status: 200 },
+		)
+		const headers = Object.fromEntries(response.headers)
+		expect([response.status, headers, await response.text()]).toEqual([
+			200,
+			{ "cache-control": "no-cache", "content-type": "text/event-stream", "set-cookie": "s=1", "x-a": "1" },
+			"event: msg\ndata: hi\n\n",
+		])
+	})
+})
+
+describe("ctx.res linked to its request", () => {
+	it("sse() resumes from the Last-Event-ID header; an explicit lastEventId wins; a bare res has none", async () => {
+		const seen: unknown[] = []
+		const record = async (stream: { lastEventId: string | undefined }) => void seen.push(stream.lastEventId)
+		const linked = new HoneyRes(false, link({ "last-event-id": "41" }))
+		await linked.sse(record).text()
+		await linked.sse(record, { lastEventId: "7" }).text()
+		await res.sse(record).text()
+		expect(seen).toEqual(["41", "7", undefined])
+	})
+
+	// v0: 1c5f096151
+	it("every producer ends when the request's signal aborts", async () => {
+		const request = link()
+		const linked = new HoneyRes(false, request)
+		const bodies = [
+			linked.sse((stream) => new Promise((resolve) => stream.signal.addEventListener("abort", () => resolve()))),
+			linked.stream((_writable, signal) => new Promise((resolve) => signal.addEventListener("abort", () => resolve()))),
+			linked.generate(endless()),
+		].map((response) => (response.body as ReadableStream<Uint8Array>).getReader())
+		const started = bodies.map((reader) => reader.read())
+		await new Promise((resolve) => setTimeout(resolve, 5))
+		request.abort(new DOMException("gone", "AbortError"))
+		await Promise.all(started)
+		expect(await Promise.all(bodies.map(async (reader) => (await reader.read()).done))).toEqual([true, true, true])
 	})
 })

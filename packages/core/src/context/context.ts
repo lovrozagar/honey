@@ -109,7 +109,8 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 		this.params = params
 		this.path = state.path
 		this.req = state.req
-		this.res = new HoneyRes(isNodeOutbound(state.req))
+		/* the context is the res's link to its request: signal and headers read only when a stream needs them */
+		this.res = new HoneyRes(isNodeOutbound(state.req), this)
 		this.routePattern = route.pattern
 		this[REQUEST] = state
 		/* called on its owner: workerd's waitUntil throws "Illegal invocation" when detached */

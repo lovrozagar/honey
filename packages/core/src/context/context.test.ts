@@ -301,6 +301,24 @@ describe("HoneyContext > ip", () => {
 	})
 })
 
+describe("HoneyContext > res is linked to the request", () => {
+	it("sse() resumes from the request's Last-Event-ID, and its stream ends when the request does", async () => {
+		const client = new AbortController()
+		const req = new Request("http://app.internal/events", { headers: { "last-event-id": "41" }, signal: client.signal })
+		const seen: unknown[] = []
+		const response = makeCtx({ req }).res.sse(async (stream) => {
+			seen.push(stream.lastEventId)
+			await new Promise((resolve) => stream.signal.addEventListener("abort", resolve))
+			seen.push("producer ended")
+		})
+		const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+		const pending = reader.read()
+		await new Promise((resolve) => setTimeout(resolve, 5))
+		client.abort()
+		expect([await pending, seen]).toEqual([{ done: true, value: undefined }, ["41", "producer ended"]])
+	})
+})
+
 describe("isReservedCtxKey", () => {
 	it("names every framework-owned context field", () => {
 		for (const key of [
