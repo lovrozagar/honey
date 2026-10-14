@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { type FieldError, HoneyError } from "./error.ts"
+import { EK, type FieldError, HoneyError, isFrameworkErrorKey } from "./error.ts"
 
 describe("HoneyError", () => {
 	// v0: f022ad7dc1
@@ -161,5 +161,57 @@ describe("HoneyError.serialize: vars, fields and cause", () => {
 			new HoneyError({ cause: "string cause", errorKey: "fail", status: "internal_server_error" }),
 		)
 		expect((result.cause as Record<string, unknown>).message).toBe("string cause")
+	})
+})
+
+describe("HoneyError.data", () => {
+	// v0: 78e6b6cbfc
+	it("data is undefined when not provided", () => {
+		const err = new HoneyError({ errorKey: "test", status: "bad_request" })
+		expect(err.data).toBeUndefined()
+	})
+
+	// v0: 7b8597247f
+	it("data is set when provided", () => {
+		const data = { reason: "not found", suggestions: [] }
+		expect(new HoneyError({ data, errorKey: "item_not_found", status: "not_found" }).data).toBe(data)
+	})
+})
+
+describe("HoneyError.data: edge cases", () => {
+	// v0: fa461ef39e
+	it("data: undefined means standard error (no data)", () => {
+		const err = new HoneyError({ errorKey: "x", status: "bad_request" })
+		expect(err.data).toBeUndefined()
+		expect("data" in err).toBe(true)
+	})
+
+	// v0: d837cd74ae
+	it("data: explicit value preserved exactly", () => {
+		const arr = [1, 2, 3]
+		expect(new HoneyError({ data: arr, errorKey: "x", status: "bad_request" }).data).toBe(arr)
+	})
+
+	// v0: 829daec36d
+	it("data: string payload", () => {
+		expect(new HoneyError({ data: "plain text", errorKey: "x", status: "bad_request" }).data).toBe("plain text")
+	})
+
+	// v0: d10e4af942
+	it("data: number payload", () => {
+		expect(new HoneyError({ data: 42, errorKey: "x", status: "bad_request" }).data).toBe(42)
+	})
+})
+
+describe("framework error keys", () => {
+	it("EK names the keys the framework throws on its own behalf", () => {
+		expect(EK.validation_failed).toBe("validation_failed")
+		expect(Object.isFrozen(EK)).toBe(true)
+	})
+
+	it("every framework key but internal_server_error passes a route's declared-error check", () => {
+		for (const key of Object.values(EK)) expect(isFrameworkErrorKey(key)).toBe(key !== "internal_server_error")
+		expect(isFrameworkErrorKey("email_taken")).toBe(false)
+		expect(isFrameworkErrorKey("toString")).toBe(false)
 	})
 })

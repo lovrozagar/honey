@@ -16,6 +16,35 @@ const EMPTY_FIELDS: Readonly<Record<string, FieldError[]>> = /* @__PURE__ */ Obj
 	/* @__PURE__ */ Object.create(null),
 )
 
+/** The error keys the framework throws on its own behalf. */
+export const EK = /* @__PURE__ */ Object.freeze({
+	bad_gateway: "bad_gateway",
+	bad_request: "bad_request",
+	content_too_large: "content_too_large",
+	forbidden: "forbidden",
+	gateway_timeout: "gateway_timeout",
+	internal_server_error: "internal_server_error",
+	/** a request body the declared parser cannot read (bad JSON, broken multipart): 400 */
+	malformed_body: "malformed_body",
+	method_not_allowed: "method_not_allowed",
+	not_found: "not_found",
+	output_content_type_mismatch: "output_content_type_mismatch",
+	output_validation_failed: "output_validation_failed",
+	request_timeout: "request_timeout",
+	too_many_requests: "too_many_requests",
+	unsupported_media_type: "unsupported_media_type",
+	validation_failed: "validation_failed",
+} as const)
+
+/**
+ * A key the framework owns (validation, negotiation, routing, the shipped middleware): it always
+ * passes a route's declared-error check, since users never declare it via `.errors()`. A plain
+ * `internal_server_error` is not one: an undeclared throw of it still goes through the boundary.
+ */
+export function isFrameworkErrorKey(key: string): boolean {
+	return key !== EK.internal_server_error && Object.hasOwn(EK, key)
+}
+
 export type HoneyErrorOptions = {
 	cause?: unknown
 	data?: unknown
