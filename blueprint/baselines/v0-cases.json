@@ -44636,6 +44636,10 @@
 		"56132a5175": {
 			"feature": "08-io",
 			"reason": "HEAD empty body in-process (await res.text()===\"\") needs body-kind.ts (bit 08); the table fallback (200 + GET content-type) stays asserted in finalize statics-table"
+		},
+		"0671a18e4d": {
+			"feature": "08-io",
+			"reason": "asserts res.headers.etag truthy (etag/conditional-GET is bit 08, A4); the 200 + healthy body + nosniff/SAMEORIGIN/referrer + UUID x-request-id + server-timing total;dur= are asserted untagged on the wire in edge-listen.test (83aaa2098d); the full case ports at bit 08 once etag exists"
 		}
 	},
 	"retired": {
@@ -44673,6 +44677,7 @@
 		"e97bc8a13b": "H23: feature slots are cut; realtime() is a plain function, so there is no entry to name at registration",
 		"ec806ce613": "v1 parses the query from req.url as a string (searchOfUrl); there is no URL object and no urlFn hook",
 		"efbc236424": "H23: trustProxy is cut; ctx.ip is the platform peer and no forwarding header is ever trusted",
-		"f94bb1b63e": "covered-by: every bit-02 suite serves routes on scope-less apps across repeated requests (routing, middleware, context); the empty-scope fast path is the perf gate's concern"
+		"f94bb1b63e": "covered-by: every bit-02 suite serves routes on scope-less apps across repeated requests (routing, middleware, context); the empty-scope fast path is the perf gate's concern",
+		"3bf523e3e8": "v1 defineErrors has no translations generic (errorI18n holds translations, I7); ExtractICUVars is type-tested directly in icu.test.ts (ExtractICUVars describe)"
 	}
 }
