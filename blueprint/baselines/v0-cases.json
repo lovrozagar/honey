@@ -44758,8 +44758,8 @@
 			"reason": "context + input + middleware: .input() is bit 08"
 		},
 		"71240de8ff": {
-			"feature": "08-io",
-			"reason": "middleware meta on a route with input/output schemas: bit 08"
+			"feature": "10-openapi-emit",
+			"reason": "asserts generateOpenApi emits x-tenant on a route with input/output; it is an OpenAPI-emit case (bit 10), classified 08 on the input/output keywords"
 		},
 		"9b8b8cb2ae": {
 			"feature": "08-io",
