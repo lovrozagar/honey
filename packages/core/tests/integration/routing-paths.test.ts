@@ -151,6 +151,8 @@ describe("request path normalization: ctx.path and patterns", () => {
 	// v0: b7dd87de75
 	// v0: 6c8ea866ea
 	// v0: 83662f41a0
+	// v0: d85a20b37d
+	// v0: b3d35c3ea8
 	it("ctx.path is the request path and ctx.routePattern the full pattern, basePath included", async () => {
 		const app = honey<{}>()
 		app.get("/a/b/c/d/e/f/g/h/i/j").handler((ctx) => ctx.res.json("ok", { path: ctx.path, pattern: ctx.routePattern }))

@@ -82,6 +82,17 @@ describe("method resolution", () => {
 	})
 })
 
+describe("method resolution: the method's spelling", () => {
+	// v0: 6f4b652983
+	it("a method a runtime reports in lowercase reaches the route of its uppercase name", async () => {
+		const app = echoApp([["GET", "/test"]])
+		const req = new Request("http://localhost/test")
+		Object.defineProperty(req, "method", { value: "get" })
+		const res = await app.fetch(req, {})
+		expect([res.status, ((await res.json()) as Echo).pattern]).toEqual([200, "/test"])
+	})
+})
+
 describe("method resolution: on() with several methods", () => {
 	// v0: 903360137b
 	// v0: f57a7960d4
@@ -112,6 +123,117 @@ describe("method resolution: on() with several methods", () => {
 		})
 		const wrong = await send(app, "/items/42")
 		expect([wrong.status, sortedAllow(wrong.allow)]).toEqual([405, ["DELETE", "PATCH", "PUT"]])
+	})
+})
+
+type Hit = readonly [method: string, target: string, pattern: string, params: Record<string, string>]
+
+/** Each case: the routes in the order registered, and the route every request reaches. */
+const PRECEDENCE: [string, ReadonlyArray<readonly [HttpMethod, string]>, readonly Hit[]][] = [
+	[
+		// v0: 1f86dd298e
+		"a wildcard registered before a literal beside it",
+		[
+			["GET", "/files/*path"],
+			["GET", "/files/readme"],
+		],
+		[
+			["GET", "/files/readme", "/files/readme", {}],
+			["GET", "/files/other.txt", "/files/*path", { path: "other.txt" }],
+		],
+	],
+	[
+		// v0: eb345244e4
+		// v0: 631c6736df
+		// v0: 0ebb71fe26
+		// v0: a089599a6e
+		"a literal beside a param at the same depth, the param registered first",
+		[
+			["GET", "/users/:id"],
+			["GET", "/users/me"],
+		],
+		[
+			["GET", "/users/me", "/users/me", {}],
+			["GET", "/users/42", "/users/:id", { id: "42" }],
+		],
+	],
+	[
+		// v0: 6a43387f4e
+		// v0: 5da3c4dd3c
+		"a literal under a deeper branch, beside a param with different children",
+		[
+			["GET", "/users/:id/posts"],
+			["GET", "/users/me/posts"],
+			["GET", "/users/me/settings"],
+		],
+		[
+			["GET", "/users/me/posts", "/users/me/posts", {}],
+			["GET", "/users/me/settings", "/users/me/settings", {}],
+			["GET", "/users/42/posts", "/users/:id/posts", { id: "42" }],
+		],
+	],
+	[
+		// v0: 2dd58c60af
+		"a param takes one segment, a wildcard beside it the rest",
+		[
+			["GET", "/files/*path"],
+			["GET", "/files/:name"],
+		],
+		[
+			["GET", "/files/doc.txt", "/files/:name", { name: "doc.txt" }],
+			["GET", "/files/a/b", "/files/*path", { path: "a/b" }],
+		],
+	],
+	[
+		// v0: 0c5ecbdcb4
+		// v0: 67c721f4ac
+		"a wildcard beside a literal takes every deeper path, whole",
+		[
+			["GET", "/static/*path"],
+			["GET", "/static/readme"],
+		],
+		[
+			["GET", "/static/readme", "/static/readme", {}],
+			["GET", "/static/a/b/c", "/static/*path", { path: "a/b/c" }],
+		],
+	],
+	[
+		// v0: 1b31c6263d
+		"a literal branch that dead-ends, or lacks the method, falls back to the param or wildcard beside it",
+		[
+			["GET", "/users/me/settings"],
+			["GET", "/users/:id/profile"],
+			["GET", "/files/static"],
+			["GET", "/files/*path"],
+			["GET", "/a/:id"],
+			["GET", "/a/*rest"],
+			["GET", "/u/me"],
+			["DELETE", "/u/:id"],
+		],
+		[
+			["GET", "/users/me/profile", "/users/:id/profile", { id: "me" }],
+			["GET", "/files/static/x", "/files/*path", { path: "static/x" }],
+			["GET", "/a/1/2", "/a/*rest", { rest: "1/2" }],
+			["DELETE", "/u/me", "/u/:id", { id: "me" }],
+		],
+	],
+	[
+		// v0: 6e5aec2b2c
+		"a request spelling the pattern itself is a param value, not a literal hit",
+		[["GET", "/users/:id"]],
+		[["GET", "/users/:id", "/users/:id", { id: ":id" }]],
+	],
+]
+
+describe("which route a path reaches: literal, then param, then wildcard, in any registration order", () => {
+	it.each(PRECEDENCE)("%s", async (_name, routes, hits) => {
+		const app = echoApp(routes)
+		const reached = []
+		for (const [method, target] of hits) {
+			const { params, pattern } = await echo(app, target, { method })
+			reached.push([method, target, pattern, params])
+		}
+		expect(reached).toEqual(hits)
 	})
 })
 
@@ -203,6 +325,7 @@ describe("registration", () => {
 	// v0: ce5693f6cb
 	// v0: 40cd065c97
 	// v0: c41bbf815d
+	// v0: d582698c3f
 	it("handler() returns the app, so a long chain or hundreds of routes all register", async () => {
 		let chained = honey<{}>() as App
 		for (let i = 0; i < 50; i++) chained = chained.get(`/c${i}`).handler((ctx) => ctx.res.text("ok", `c${i}`)) as App

@@ -39,11 +39,13 @@ describe("path params: capture and names", () => {
 	// v0: ddd8a7fc9a
 	// v0: af851d64d4
 	// v0: 31703df14c
+	// v0: d43611fa39
 	it.each([
 		["/a", "/a", {}],
 		["/:x", "/q", { x: "q" }],
 		["/orgs/:orgId/members/:memberId", "/orgs/o1/members/m2", { memberId: "m2", orgId: "o1" }],
 		["/a/:b/c/:d/e/:f/g/:h", "/a/1/c/2/e/3/g/4", { b: "1", d: "2", f: "3", h: "4" }],
+		["/a/:b/c/:d/e/:f/g/:h/i/:j", "/a/1/c/2/e/3/g/4/i/5", { b: "1", d: "2", f: "3", h: "4", j: "5" }],
 	])("%s captures every param it names from %s", async (pattern, target, params) => {
 		const app = echoApp([["GET", pattern]])
 		expect(await echo(app, target)).toEqual({ method: "GET", params, path: target, pattern })
@@ -75,16 +77,19 @@ describe("path params: decoding", () => {
 
 	// v0: aa339b4531
 	// v0: 8ac0edfc93
+	// v0: 9686f4c0b4
 	it("a param named like a prototype key is an own value and touches no prototype", async () => {
 		const before = Object.getOwnPropertyNames(Object.prototype)
 		const app = echoApp([
 			["GET", "/items/:__proto__"],
 			["GET", "/things/:prototype"],
+			["GET", "/kinds/:constructor"],
 		])
 		const proto = (await echo(app, "/items/safe")).params
 		expect(Object.hasOwn(proto, "__proto__")).toBe(true)
 		expect(proto["__proto__"]).toBe("safe")
 		expect((await echo(app, "/things/evil")).params).toEqual({ prototype: "evil" })
+		expect((await echo(app, "/kinds/test-val")).params).toEqual({ constructor: "test-val" })
 		expect(Object.getOwnPropertyNames(Object.prototype)).toEqual(before)
 	})
 
@@ -107,6 +112,7 @@ describe("literal segments", () => {
 	})
 
 	// v0: 17759e784b
+	// v0: 1ed6d7d820
 	it("a literal is encoded the way the request path is, so either spelling reaches it", async () => {
 		expect(normalizePattern("/é/a b/x^y")).toBe("/%C3%A9/a%20b/x%5Ey")
 		expect(normalizePattern("/%C3%A9")).toBe("/%C3%A9")
