@@ -1,9 +1,11 @@
 /**
  * Range requests (A3, RFC 9110 §14): `rangeResponse` answers one satisfiable byte range with 206,
  * a range past the end with 416, and everything else with the whole body. A plain helper:
- * `staticFiles` and routes call it with the request.
+ * `staticFiles` and routes call it with the request. On the Node bridge each answer is a
+ * HoneyResponse, so the header middleware in front of it stay on the plain map.
  */
-import { withRawBody } from "./builder.ts"
+import { dict } from "../routing/tree.ts"
+import { createHoneyResponse, isNodeOutbound, withRawBody } from "./builder.ts"
 
 /** A body that can hand out any byte span without reading the rest. */
 export type RangeSource = {
@@ -21,6 +23,9 @@ export type RangeInit = {
 }
 
 type Span = { readonly end: number; readonly start: number }
+
+/** What a span of a body is: the bytes, a Blob slice, or a source's stream. */
+type Part = Blob | ReadableStream<Uint8Array> | Uint8Array<ArrayBuffer>
 
 /** One range spec: two digit runs around a dash, each at most 15 digits (beyond that it names no real offset). */
 const SPEC = /^(\d{0,15})-(\d{0,15})$/
@@ -51,27 +56,38 @@ function spanOf(header: string, size: number): Span | "unsatisfiable" | null {
 	return { end: last === "" ? size - 1 : Math.min(Number(last), size - 1), start }
 }
 
-function slice(body: RangeBody, span: Span): BodyInit {
+function slice(body: RangeBody, span: Span): Part {
 	if (body instanceof Uint8Array) return body.subarray(span.start, span.end + 1)
 	if (body instanceof Blob) return body.slice(span.start, span.end + 1)
 	return body.slice(span.start, span.end)
 }
 
-function headersFor(body: RangeBody, init: RangeInit | undefined): Headers {
-	const headers = new Headers(init?.headers)
+/** The answer's headers as a plain map, names lower-cased; no key can reach a prototype. */
+function headersFor(body: RangeBody, init: RangeInit | undefined): Record<string, string> {
+	const headers = dict<string>()
+	for (const [name, value] of Object.entries(init?.headers ?? {})) headers[name.toLowerCase()] = value
 	const own = body instanceof Blob && body.type !== "" ? body.type : "application/octet-stream"
-	headers.set("content-type", init?.contentType ?? own)
-	headers.set("accept-ranges", "bytes")
+	headers["content-type"] = init?.contentType ?? own
+	headers["accept-ranges"] = "bytes"
 	return headers
 }
 
+/** One answer, built the way the bridge it goes out over writes it fastest; bytes are kept as its raw body. */
+function answer(request: Request, part: Part | null, headers: Record<string, string>, status: number): Response {
+	if (isNodeOutbound(request)) {
+		if (part === null || part instanceof Uint8Array) return createHoneyResponse({ headers, raw: part, status })
+		return createHoneyResponse({ headers, status, stream: part instanceof Blob ? part.stream() : part })
+	}
+	const response = new Response(part, { headers, status })
+	return part instanceof Uint8Array ? withRawBody(response, part) : response
+}
+
 /** The whole body, 200; a HEAD gets the head alone, with the length GET would send. */
-function whole(request: Request, body: RangeBody, headers: Headers): Response {
+function whole(request: Request, body: RangeBody, headers: Record<string, string>): Response {
 	const size = sizeOf(body)
-	headers.set("content-length", String(size))
-	if (request.method === "HEAD" || size === 0) return new Response(null, { headers, status: 200 })
-	if (body instanceof Uint8Array) return withRawBody(new Response(body, { headers, status: 200 }), body)
-	return new Response(slice(body, { end: size - 1, start: 0 }), { headers, status: 200 })
+	headers["content-length"] = String(size)
+	if (request.method === "HEAD" || size === 0) return answer(request, null, headers, 200)
+	return answer(request, body instanceof Uint8Array ? body : slice(body, { end: size - 1, start: 0 }), headers, 200)
 }
 
 /**
@@ -89,10 +105,10 @@ export function rangeResponse(request: Request, body: RangeBody, init?: RangeIni
 	const span = spanOf(header, size)
 	if (span === null) return whole(request, body, headers)
 	if (span === "unsatisfiable") {
-		headers.set("content-range", `bytes */${size}`)
-		return new Response(null, { headers, status: 416 })
+		headers["content-range"] = `bytes */${size}`
+		return answer(request, null, headers, 416)
 	}
-	headers.set("content-range", `bytes ${span.start}-${span.end}/${size}`)
-	headers.set("content-length", String(span.end - span.start + 1))
-	return new Response(slice(body, span), { headers, status: 206 })
+	headers["content-range"] = `bytes ${span.start}-${span.end}/${size}`
+	headers["content-length"] = String(span.end - span.start + 1)
+	return answer(request, slice(body, span), headers, 206)
 }

@@ -19,6 +19,7 @@ import { secureHeaders } from "../../src/middleware/secure-headers.ts"
 import { serverTiming } from "../../src/middleware/server-timing.ts"
 import { timeout } from "../../src/middleware/timeout.ts"
 import { isHoneyResponse, NODE_OUTBOUND } from "../../src/response/builder.ts"
+import { staticFiles } from "../../src/response/static.ts"
 import { honey } from "../../src/routing/app.ts"
 
 const BIG = { items: Array.from({ length: 200 }, (_, i) => ({ id: i, name: `item ${i}` })) }
@@ -120,6 +121,32 @@ describe("plain path: every answer on the Node bridge is a HoneyResponse", () =>
 	it("the fixed 404 of an app with no middleware (the miss fast path)", async () => {
 		expect(await both(bare, [{ path: "/nowhere", peer: "203.0.113.5" }])).toEqual([
 			{ honey: true, same: true, status: 404 },
+		])
+	})
+})
+
+/** secureHeaders and cors in front of staticFiles: the common stack for assets. */
+function assets() {
+	const app = honey<{}>()
+	app
+		.use(secureHeaders())
+		.use(cors())
+		.use(staticFiles({ resolve: (_ctx, filePath) => (filePath === "/app.js" ? new Blob(["let x = 1"]) : null) }))
+		.get("/health")
+		.handler((ctx) => ctx.res.text("ok", "up"))
+	return app
+}
+
+describe("plain path: a static file behind the header middlewares", () => {
+	it("a whole file and a 206 range of it are HoneyResponses at the bridge, as in process", async () => {
+		const rows = [{ path: "/app.js", peer: "203.0.113.6" }]
+		const ranged = request(rows[0] as Row, true)
+		const partial = new Request(ranged.url, { headers: { range: "bytes=4-4" } })
+		Object.defineProperty(partial, NODE_OUTBOUND, { value: true })
+		const res = await assets().fetch(partial, {})
+		expect([await both(assets, rows), [isHoneyResponse(res), res.status, await res.text()]]).toEqual([
+			[{ honey: true, same: true, status: 200 }],
+			[true, 206, "x"],
 		])
 	})
 })

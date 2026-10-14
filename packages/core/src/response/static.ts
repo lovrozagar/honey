@@ -11,6 +11,9 @@
  * onto a root directory it cannot leave that root, on POSIX or Windows. A `rewritePath` result is
  * checked again. With `precompressed`, a client that accepts br or gzip gets the `.br` or `.gz`
  * sibling when one exists (Vary: Accept-Encoding either way); a range then covers the encoded bytes.
+ *
+ * It is miss-chain middleware: a files-only app must register at least one route on the handle
+ * (typically its SPA or catch-all fallback) for the chain to run at all.
  */
 import { acceptsCoding } from "../middleware/compress.ts"
 import { type MiddlewareFn, namedMiddleware } from "../middleware/middleware.ts"

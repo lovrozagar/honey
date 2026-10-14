@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { isHoneyResponse, NODE_OUTBOUND, rawBodyOf } from "./builder.ts"
 import { rangeResponse, type RangeBody, type RangeSource } from "./range.ts"
 
 const TEN = new TextEncoder().encode("0123456789")
@@ -135,5 +136,50 @@ describe("rangeResponse: headers", () => {
 			'"v1"',
 			206,
 		])
+	})
+})
+
+describe("rangeResponse: on the Node bridge every answer is a HoneyResponse (the plain-path pin)", () => {
+	function nodeGet(range?: string, method = "GET"): Request {
+		const request = get(range, { method })
+		Object.defineProperty(request, NODE_OUTBOUND, { value: true })
+		return request
+	}
+
+	it.each([
+		{ body: "234", kind: "bytes", name: "a 206 of bytes", range: "bytes=2-4", status: 206 },
+		{ body: "789", kind: "blob", name: "a 206 of a Blob", range: "bytes=7-", status: 206 },
+		{ body: "", kind: "bytes", name: "a 416", range: "bytes=50-", status: 416 },
+		{ body: "0123456789", kind: "bytes", name: "a whole 200 of bytes", range: undefined, status: 200 },
+		{ body: "0123456789", kind: "blob", name: "a whole 200 of a Blob", range: undefined, status: 200 },
+	])("$name", async ({ body, kind, range, status }) => {
+		const res = rangeResponse(nodeGet(range), kind === "blob" ? new Blob([TEN]) : TEN, {
+			headers: { "Cache-Control": "max-age=60" },
+		})
+		expect([
+			isHoneyResponse(res),
+			res.status,
+			await res.text(),
+			res.headers.get("cache-control"),
+			res.headers.get("accept-ranges"),
+		]).toEqual([true, status, body, "max-age=60", "bytes"])
+	})
+
+	it("a range source that hands out a stream streams it", async () => {
+		const streaming: RangeSource = {
+			size: 10,
+			slice: (start, end) => new Blob([TEN.subarray(start, end + 1)]).stream(),
+		}
+		const res = rangeResponse(nodeGet("bytes=1-2"), streaming)
+		expect([isHoneyResponse(res), res.status, await res.text()]).toEqual([true, 206, "12"])
+	})
+
+	it("a HEAD is a bodiless HoneyResponse with the length a GET would send", () => {
+		const res = rangeResponse(nodeGet(undefined, "HEAD"), TEN)
+		expect([isHoneyResponse(res), res.body, res.headers.get("content-length")]).toEqual([true, null, "10"])
+	})
+
+	it("a whole body of bytes keeps them as its raw body, there as off the bridge", () => {
+		expect([rawBodyOf(rangeResponse(nodeGet(), TEN)), rawBodyOf(rangeResponse(get(), TEN))]).toEqual([TEN, TEN])
 	})
 })
