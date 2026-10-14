@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, openAsBlob, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import { honey } from "../routing/app.ts"
 import { type StaticConfig, staticFiles } from "./static.ts"
@@ -398,5 +401,33 @@ describe("staticFiles(): a precompressed sibling found or not", () => {
 			{},
 		)
 		expect([res.status, await res.text(), res.headers.get("content-encoding")]).toEqual([206, "gzip", "gzip"])
+	})
+})
+
+describe("staticFiles(): from a real directory", () => {
+	// v0: 24c0b79358
+	it("node's fs.openAsBlob as the resolver: a real file is served, and traversal never reaches a file outside the root", async () => {
+		const outside = mkdtempSync(join(tmpdir(), "honey-static-"))
+		const root = join(outside, "public")
+		writeFileSync(join(outside, "secret.txt"), "secret")
+		mkdirSync(root)
+		writeFileSync(join(root, "hello.txt"), "hello from disk")
+		const a = app({
+			resolve: async (_ctx, filePath) => {
+				try {
+					return await openAsBlob(join(root, filePath))
+				} catch {
+					/* no such file: fall through */
+					return null
+				}
+			},
+		})
+		const served = await a.fetch(req("/hello.txt"), {})
+		const escaped = await a.fetch(rawRequest("/../secret.txt"), {})
+		expect([await served.text(), served.headers.get("content-type"), escaped.status]).toEqual([
+			"hello from disk",
+			"text/plain; charset=utf-8",
+			404,
+		])
 	})
 })
