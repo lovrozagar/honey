@@ -6,6 +6,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import { describe, expect, it } from "vitest"
+import { curlLogger } from "../../src/observability/curl-logger.ts"
 import { honey } from "../../src/routing/app.ts"
 import { createLogger } from "../../src/telemetry/logger.ts"
 
@@ -42,6 +43,20 @@ export function privateFields(path: string, text: string): string[] {
 	}
 	return out
 }
+
+/**
+ * Every log call that spreads a record (`{ ...x }`) hides what it carries from the field scan, so
+ * each is named here with what it spreads. One is request detail: curlLogger, H17's sanctioned opt-in
+ * exception, whose masking is asserted below rather than assumed.
+ */
+const SPREADS: Readonly<Record<string, string>> = {
+	"errors/on-error.ts": "the request bindings (method, path, routeId, requestId; fields.ts)",
+	"observability/curl-logger.ts": "the request as a masked command: the sanctioned request-detail logger",
+	"realtime/invoke-user.ts": "a socket's own fields (connId, namespace, route)",
+}
+
+/** A logger call that hands over a spread record: what it carries is invisible to the field scan. */
+const SPREAD = /^\s*\{\s*\.\.\./
 
 describe("no private field at any log call site", () => {
 	it("core's logger calls name no cookie, credential, query, body, input, raw URL or headers", () => {
@@ -88,5 +103,53 @@ describe("a request full of secrets leaves none in the log", () => {
 		await res.text()
 		const log = written.join("\n")
 		expect([written.length, /SECRET/.test(log), log.includes("/orders/7")]).toEqual([3, false, true])
+	})
+})
+
+/** A request carrying every kind of secret. */
+const secrets = () =>
+	new Request("https://app.example.com/login?access_token=QUERY-SECRET&next=home", {
+		body: '{"password":"BODY-SECRET"}',
+		headers: {
+			authorization: "Bearer AUTH-SECRET",
+			"content-type": "application/json",
+			cookie: "sid=COOKIE-SECRET",
+			"x-csrf-token": "CSRF-SECRET",
+			"x-session-id": "SESSION-SECRET",
+		},
+		method: "POST",
+	})
+
+describe("the sanctioned request-detail logger masks what it carries", () => {
+	it("every call site handing a logger a spread record is named, curlLogger the only request-detail one", () => {
+		const spreading = sources(SRC)
+			.filter((path) =>
+				[...readFileSync(path, "utf8").matchAll(CALL)].some((match) => {
+					const text = readFileSync(path, "utf8")
+					return SPREAD.test(argsAt(text, match.index + match[0].length - 1))
+				}),
+			)
+			.map((path) => relative(SRC, path))
+		expect(spreading).toEqual(Object.keys(SPREADS))
+	})
+
+	it("by default no credential, cookie, session, token query or body reaches its line; with body on, only a bounded text body", async () => {
+		const written: string[] = []
+		const app = honey<{}>().logger(
+			createLogger({ format: "json", level: "info", write: (line) => void written.push(line) }),
+		)
+		const routes = app.use(curlLogger())
+		routes.post("/login").handler((ctx) => ctx.res.text("ok", "in"))
+		const withBody = honey<{}>().logger(
+			createLogger({ format: "json", level: "info", write: (line) => void written.push(line) }),
+		)
+		withBody
+			.use(curlLogger({ body: { maxBytes: 8 } }))
+			.post("/login")
+			.handler((ctx) => ctx.res.text("ok", "in"))
+		await app.fetch(secrets(), {})
+		await withBody.fetch(secrets(), {})
+		const log = written.join("\n")
+		expect([written.length, log.match(/[A-Z]+-SECRET/g), log.includes("next=home")]).toEqual([2, null, true])
 	})
 })
