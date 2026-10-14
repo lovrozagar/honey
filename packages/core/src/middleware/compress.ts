@@ -34,8 +34,11 @@ function essenceOf(contentType: string | null): string {
 	return (semi === -1 ? text : text.slice(0, semi)).trim().toLowerCase()
 }
 
-/** Whether `accept` takes gzip: by name, else through `*`, at a q-value above 0 (a malformed one is 0). */
-function takesGzip(accept: string | null): boolean {
+/**
+ * Whether an `Accept-Encoding` value takes `coding`: by name, else through `*`, at a q-value above 0
+ * (a malformed one is 0). Shared with staticFiles' precompressed siblings.
+ */
+export function acceptsCoding(accept: string | null, coding: string): boolean {
 	if (accept === null) return false
 	let any = 0
 	for (const item of accept.split(",")) {
@@ -43,9 +46,9 @@ function takesGzip(accept: string | null): boolean {
 		const weight = params.map((param) => param.trim()).find((param) => param.startsWith("q="))
 		const value = weight === undefined ? 1 : Number(weight.slice(2))
 		const q = Number.isFinite(value) ? value : 0
-		const coding = name.trim().toLowerCase()
-		if (coding === "gzip") return q > 0
-		if (coding === "*") any = q
+		const listed = name.trim().toLowerCase()
+		if (listed === coding) return q > 0
+		if (listed === "*") any = q
 	}
 	return any > 0
 }
@@ -80,7 +83,7 @@ export function compress(options: CompressOptions = {}): MiddlewareFn<{ readonly
 		const secret =
 			!credentialed &&
 			(req.headers.has("cookie") || req.headers.has("authorization") || response.headers.has("set-cookie"))
-		if (secret || !takesGzip(req.headers.get("accept-encoding"))) {
+		if (secret || !acceptsCoding(req.headers.get("accept-encoding"), "gzip")) {
 			return withHeaders(response, (headers) => addVary(headers, "accept-encoding"))
 		}
 		const bytes = await gzip(raw)

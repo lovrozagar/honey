@@ -4,6 +4,7 @@
  */
 import type { ServerResponse } from "node:http"
 import type { CompressOptions } from "../../src/middleware/compress.ts"
+import type { StaticConfig } from "../../src/response/static.ts"
 import type { IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
@@ -249,4 +250,12 @@ export function unvalidatedSse(
 			}),
 		producer,
 	)
+}
+
+/** staticFiles that decodes ctx.path and hands it to resolve unchecked: `..`, NUL, `:` and all. */
+export function uncheckedStatic(config: StaticConfig<unknown>): Mw {
+	return async (ctx, next) => {
+		const file = await config.resolve(ctx, decodeURIComponent((ctx as { path?: string }).path ?? "/"))
+		return file instanceof Response ? file : next()
+	}
 }

@@ -32,6 +32,7 @@ import {
 	type RateLimit,
 	uncapped,
 	uncappedStore,
+	uncheckedStatic,
 	unvalidatedSse,
 	withoutBackpressure,
 } from "./mutants.ts"
@@ -222,6 +223,12 @@ export const GUARDS: readonly Guard[] = [
 		disable: () => ({ upstreamHeaders: (request: Request) => new Headers(request.headers) }),
 		id: "v1-proxy-header-smuggling",
 		module: "packages/core/src/proxy/headers.ts",
+	},
+	{
+		catches: "v1: staticFiles handing resolve a path that leaves the root (`..`, NUL, a drive, an encoded separator)",
+		disable: () => ({ staticFiles: uncheckedStatic }),
+		id: "v1-static-traversal",
+		module: "packages/core/src/response/static.ts",
 	},
 	{
 		catches: "v1: a header value carrying CR/LF written through the plain header path",

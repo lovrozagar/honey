@@ -53,6 +53,9 @@ const { compress } = (await import(
 const { proxy } = (await import(
 	resolvePath(REPO, "packages/core/src/proxy/proxy.ts")
 )) as typeof import("../../../src/proxy/proxy.ts")
+const { staticFiles } = (await import(
+	resolvePath(REPO, "packages/core/src/response/static.ts")
+)) as typeof import("../../../src/response/static.ts")
 const { secureHeaders } = (await import(
 	resolvePath(REPO, "packages/core/src/middleware/secure-headers.ts")
 )) as typeof import("../../../src/middleware/secure-headers.ts")
@@ -318,5 +321,40 @@ describe("v1 adversarial: nothing the client says about itself or the hop reache
 			{},
 		)
 		expect(sent).toEqual({ "x-forwarded-host": "app.test", "x-forwarded-proto": "http" })
+	})
+})
+
+describe("v1 adversarial: staticFiles never hands resolve a path that leaves the root", () => {
+	it("dot segments, encoded separators, NUL, drives and streams, double encoding: every path resolve gets stays inside", async () => {
+		const seen: string[] = []
+		const app = honey<{}>()
+		/* the router lets encoded separators through to the handler: staticFiles must hold the line itself */
+		app.encodedSlashes("allow")
+		app
+			.use(
+				staticFiles({
+					resolve: (_ctx, filePath) => {
+						seen.push(filePath)
+						return null
+					},
+				}),
+			)
+			.get("/health")
+			.handler((ctx) => ctx.res.text("ok", "up"))
+		const corpus = [
+			"/a%2F..%2F..%2Fetc%2Fpasswd",
+			"/%2e%2e%5C%2e%2e%5Cwin.ini",
+			"/..%2fsecret",
+			"/a%00.txt",
+			"/C:%5Cboot.ini",
+			"/a.txt::$DATA",
+			"/%252e%252e%252fsecret",
+			"/../../etc/passwd",
+			"/ok/file.css",
+		]
+		for (const path of corpus) await app.fetch(rawTarget(path), {})
+		const unsafe = /[\\\0:]/
+		const escapes = seen.filter((path) => path.split("/").some((part) => part === ".." || unsafe.test(part)))
+		expect([escapes, seen.includes("/ok/file.css")]).toEqual([[], true])
 	})
 })
