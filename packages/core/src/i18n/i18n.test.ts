@@ -5,6 +5,7 @@ describe("TranslationRegistry: a locale's map, loaded once", () => {
 	// v0: 4b10b8434b
 	// v0: 93b342e29e
 	// v0: ef26ca0250
+	// v0: cd5daa46bf
 	it("a static map is there at once; an empty one is valid; an unknown locale is undefined", async () => {
 		const registry = new TranslationRegistry({ empty: {}, en: { greeting: "Hello {name}" } })
 		expect([await registry.get("en"), await registry.get("empty"), await registry.get("fr")]).toEqual([
@@ -18,6 +19,8 @@ describe("TranslationRegistry: a locale's map, loaded once", () => {
 describe("TranslationRegistry: a loader, its failure, and a large map", () => {
 	// v0: 1e31438934
 	// v0: ef13670efc
+	// v0: 9aee3784f8
+	// v0: 8f5226a76e
 	it.each([
 		["a sync loader", () => ({ greeting: "Hello" })],
 		["an async loader", async () => ({ greeting: "Hello" })],

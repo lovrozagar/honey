@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest"
 import type { HoneyContext } from "../../src/context/context.ts"
 import { HoneyError } from "../../src/errors/error.ts"
+import { errorI18n } from "../../src/i18n/error-i18n.ts"
 import { cors } from "../../src/middleware/cors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { type Honey, honey } from "../../src/routing/app.ts"
@@ -158,6 +159,26 @@ describe("handles share one app", () => {
 		const wrong = await authed.fetch(new Request("http://localhost/api/fail", { method: "POST" }), {})
 		expect([wrong.status, await wrong.text()]).toEqual([405, "custom 405"])
 		expect(await send(authed, "/api/fail")).toEqual({ body: '{"formatted":"test"}', location: null, status: 400 })
+	})
+})
+
+describe("handles share one app: its error settings", () => {
+	// v0: 74ce58529c
+	// v0: 7f7e45f108
+	it("errorI18n and onError set on the app answer for routes registered through a use() handle", async () => {
+		const app = honey<{}>()
+			.errorI18n(errorI18n({ errors: { en: { test: "Translated" } }, resolveLocale: () => "en" }))
+			.onError((error) => (error instanceof HoneyError ? undefined : new Response("custom", { status: 503 })))
+		const authed = app.use(createMiddleware((_ctx, next) => next()))
+		authed.get("/known").handler(() => {
+			throw new HoneyError({ errorKey: "test", status: "bad_request" })
+		})
+		authed.get("/unknown").handler(() => {
+			throw new Error("boom")
+		})
+		const known = await authed.fetch(new Request("http://localhost/known"), {})
+		expect([known.status, ((await known.json()) as { message: string }).message]).toEqual([400, "Translated"])
+		expect(await send(authed, "/unknown")).toMatchObject({ body: "custom", status: 503 })
 	})
 
 	// v0: 2c2daa6f20

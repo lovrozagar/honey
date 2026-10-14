@@ -227,12 +227,15 @@ const NUMBER: readonly Row[] = [
 
 const BASICS: readonly Row[] = [
 	// v0: 6903ccce32
+	// v0: b3aad7f675
 	["{field} is required", { field: "Email" }, undefined, "Email is required"],
 	// v0: fae748139c
 	["{field} must be at least {min} chars", { field: "Name", min: 3 }, undefined, "Name must be at least 3 chars"],
 	// v0: 458cdff331
+	// v0: 8885841770
 	["{field} is required", {}, undefined, "{field} is required"],
 	// v0: 7bc72b5800
+	// v0: b79ac6f32a
 	["Something went wrong", {}, undefined, "Something went wrong"],
 	// v0: 05d421daea
 	["{x}", { x: "<script>alert(1)</script>" }, undefined, "<script>alert(1)</script>"],
@@ -243,9 +246,12 @@ const BASICS: readonly Row[] = [
 	// v0: a4b41019a7
 	["{{x}}", { x: "val" }, undefined, "{{x}}"],
 	// v0: 162a1ea923
+	// v0: d019100ed7
 	["{count} items", { count: 0 }, undefined, "0 items"],
 	// v0: 9afb1d8a5f
 	["offset: {n}", { n: -5 }, undefined, "offset: -5"],
+	// v0: 44a2d5f489
+	["{x} and {x}", { x: "val" }, undefined, "val and val"],
 	// v0: 7986a8032f
 	["{a}{b}{c}", { a: "X", b: "Y", c: "Z" }, undefined, "XYZ"],
 	// v0: 3752c99b87

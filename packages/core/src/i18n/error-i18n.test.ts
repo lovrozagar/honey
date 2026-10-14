@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 import { HoneyError } from "../errors/error.ts"
+import { defineErrors } from "../errors/errors.ts"
 import { DIGEST } from "../errors/projector.ts"
+import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { createLogger } from "../telemetry/logger.ts"
 import { errorI18n, type ErrorTranslations, translateError } from "./error-i18n.ts"
@@ -52,6 +54,7 @@ describe("translateError(): a translated copy", () => {
 		expect(translateError(error, translations, "en").message).toBe("1 slot left")
 	})
 
+	// v0: 5c9b1a6ef6
 	it("field paths take their display names: exact first, then without leading segments", () => {
 		const error = invalidInput({ json: ["json.email", "json.name", "json.age"] })
 		const paths = translateError(error, translations, "en").fields.json?.map((field) => field.path)
@@ -60,13 +63,18 @@ describe("translateError(): a translated copy", () => {
 })
 
 describe("translateError(): what stays as it was", () => {
+	// v0: c1df89a435
+	// v0: c1ccd88d25
+	// v0: b43be7072d
 	it("nothing to translate (an unknown locale, an unknown key, no fields): the same error, untouched", () => {
 		const error = new HoneyError({ errorKey: "item_gone", status: "gone", vars: { name: "x" } })
 		const other = new HoneyError({ errorKey: "unlisted", status: "gone" })
+		const fielded = invalidInput({ json: ["json.email"] })
 		expect([
 			translateError(error, translations, "fr") === error,
 			translateError(other, translations, "en") === other,
-		]).toEqual([true, true])
+			translateError(fielded, translations, "de").fields.json?.[0]?.path,
+		]).toEqual([true, true, "json.email"])
 	})
 
 	it("the thrown error is never changed: one instance, translated per locale", () => {
@@ -180,6 +188,10 @@ describe("app.errorI18n: the answer to a thrown error is translated", () => {
 	// v0: 49a823e88a
 	// v0: 37a053d1c2
 	// v0: 4710aa35ae
+	// v0: 146bd68487
+	// v0: cacf9aa112
+	// v0: c99a5d87b5
+	// v0: eecb9677e0
 	it("each request in its own locale; one shared error instance, never changed", async () => {
 		const shared = gone()
 		const a = app(
@@ -193,8 +205,12 @@ describe("app.errorI18n: the answer to a thrown error is translated", () => {
 			await body(await a.fetch(new Request("http://app.test/x"), { TENANT: "t" })),
 		]
 		expect([de.message, en.message, shared.message]).toEqual(["Order 7 ist weg", "Order 7 is gone", "item_gone"])
+		/* the vars filled the message; the answer carries neither them nor fields it never had */
+		expect([de.fields, "vars" in de]).toEqual([{}, false])
 	})
 
+	// v0: 737977869f
+	// v0: cca4792b8e
 	it("field paths and the message together, error_key kept per field", async () => {
 		const a = app(
 			() => invalidInput({ json: ["json.email"] }),
@@ -206,7 +222,9 @@ describe("app.errorI18n: the answer to a thrown error is translated", () => {
 			[{ error_key: "invalid", message: "invalid", path: "E-Mail" }],
 		])
 	})
+})
 
+describe("app.errorI18n: what resolveLocale sees", () => {
 	// v0: d0104b5a96
 	// v0: 2fa26d92e9
 	// v0: bdff50f741
@@ -239,6 +257,7 @@ describe("app.errorI18n: the answer to a thrown error is translated", () => {
 
 describe("app.errorI18n: resolveLocale and the operator's line", () => {
 	// v0: e3afc9e519
+	// v0: 495900234d
 	it("resolveLocale may answer later", async () => {
 		const answer = await body(
 			await app(gone, async () => "de").fetch(new Request("http://app.test/x"), { TENANT: "t" }),
@@ -262,6 +281,9 @@ describe("app.errorI18n: resolveLocale and the operator's line", () => {
 
 describe("app.errorI18n: when it cannot translate", () => {
 	// v0: 226ffacef3
+	// v0: 136d35b9e5
+	// v0: 3441188c3e
+	// v0: 2b6385adab
 	it.each([
 		[
 			"throws",
@@ -343,5 +365,85 @@ describe("app.errorI18n with onError", () => {
 			await withOnError(() => undefined).fetch(new Request("http://app.test/x"), { TENANT: "t" }),
 		)
 		expect(answer.message).toBe("Order 7 ist weg")
+	})
+})
+
+/** Templates for a factory's keys, in English and German. */
+const businessErrors = defineErrors({
+	forbidden: "forbidden",
+	org_slug_taken: "conflict",
+	profile_error: "bad_gateway",
+})
+const businessI18n = () =>
+	errorI18n({
+		errors: {
+			de: { org_slug_taken: "Organisationsname {slug} ist bereits vergeben" },
+			en: {
+				forbidden: "Access denied for {resource}",
+				org_slug_taken: "Organization slug {slug} is already taken",
+				profile_error: "Failed to process profile request",
+			},
+		},
+		resolveLocale: ({ headers }) => (headers["accept-language"]?.startsWith("de") ? "de" : "en"),
+	})
+
+describe("app.errorI18n through middleware and boundaries", () => {
+	// v0: c45ddceeeb
+	// v0: c30ac830d2
+	// v0: a65f592ae3
+	// v0: 0a90ba67f9
+	it("a factory error from the handler or a middleware is translated per request, the middleware's headers kept", async () => {
+		const a = honey<{}>().errorFactory(businessErrors).errorI18n(businessI18n())
+		const stamped = a.use(
+			createMiddleware(async (_ctx, next) => {
+				const res = await next()
+				res.headers.set("x-test", "1")
+				return res
+			}),
+		)
+		stamped
+			.post("/orgs")
+			.errors("org_slug_taken")
+			.handler(() => {
+				throw businessErrors.org_slug_taken({ vars: { slug: "taken" } })
+			})
+		stamped
+			.use(
+				createMiddleware(() => {
+					throw businessErrors.forbidden({ vars: { resource: "admin panel" } })
+				}),
+			)
+			.get("/admin")
+			.errors("forbidden")
+			.handler((ctx) => ctx.res.text("ok", "admin"))
+		const answers = []
+		for (const [path, method, lang] of [
+			["/orgs", "POST", "en"],
+			["/orgs", "POST", "de-DE"],
+			["/admin", "GET", "en"],
+		] as const) {
+			const res = await a.fetch(
+				new Request(`http://app.test${path}`, { headers: { "accept-language": lang }, method }),
+				{},
+			)
+			answers.push([res.status, res.headers.get("x-test"), (await body(res)).message])
+		}
+		expect(answers).toEqual([
+			[409, "1", "Organization slug taken is already taken"],
+			[409, "1", "Organisationsname taken ist bereits vergeben"],
+			[403, "1", "Access denied for admin panel"],
+		])
+	})
+
+	// v0: 21da2ee5a6
+	it("a route's boundary key answers an unknown throw, translated like any error", async () => {
+		const a = honey<{}>().errorFactory(businessErrors).errorI18n(businessI18n()).logger(false)
+		a.get("/me")
+			.boundary("profile_error")
+			.handler(() => {
+				throw new Error("db timeout")
+			})
+		const answer = await body(await a.fetch(new Request("http://app.test/me"), {}))
+		expect([answer.error_key, answer.message]).toEqual(["profile_error", "Failed to process profile request"])
 	})
 })
