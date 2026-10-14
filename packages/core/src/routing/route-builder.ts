@@ -14,6 +14,7 @@ import type {
 	HandlerCtx,
 	InitAccMeta,
 	MergeRoute,
+	RouteMeta,
 	ScopedMwEntry,
 	SkipRouteRecord,
 } from "./app-types.ts"
@@ -78,7 +79,7 @@ export type HandlerReturn<B extends BuilderTypes> = Honey<
 				{},
 				{},
 				RouteHandlerCtx<B>,
-				B["accMeta"],
+				RouteMeta<B["accMeta"]>,
 				B["errorKeys"] | B["defaultErrors"],
 				ComputeErrorsByStatus<B["errorFactory"], B["errorKeys"] | B["defaultErrors"], typeof ERROR_META>
 			>,

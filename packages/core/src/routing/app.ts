@@ -5,7 +5,7 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { DefaultMeta, ScopedMwEntry } from "./app-types.ts"
+import type { DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -116,14 +116,31 @@ export class Honey<
 		TTaps,
 		TScopedMw
 	>
-	/** Typed chain meta: constrain route meta and set defaults in one call. */
-	meta<TNewMeta extends Record<string, unknown>, TValues extends Partial<DefaultMeta> & Partial<TNewMeta>>(
+	/**
+	 * Typed chain meta, the meta type given explicitly (`meta<AppMeta>({ … })`): constrain route meta
+	 * and set defaults in one call. `TNewMeta` defaults to `never`, so a call that leaves it out
+	 * resolves to the next overload instead of binding it to a wide record.
+	 */
+	meta<
+		TNewMeta extends Record<string, unknown> = never,
+		TValues extends Partial<DefaultMeta> & Partial<TNewMeta> = Partial<DefaultMeta> & Partial<TNewMeta>,
+	>(values: TValues): Honey<TEnv, TCtx, TRoutes, TNewMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
+	/** Chain meta, merged into every route registered through the new handle; its values reach the routes' types (`internal: true`). */
+	meta<
+		const TValues extends Partial<DefaultMeta> & ([TMeta] extends [never] ? Record<string, unknown> : Partial<TMeta>),
+	>(
 		values: TValues,
-	): Honey<TEnv, TCtx, TRoutes, TNewMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
-	/** Chain meta, merged into every route registered through the new handle. */
-	meta<TValues extends Partial<DefaultMeta> & ([TMeta] extends [never] ? {} : Partial<TMeta>)>(
-		values: TValues,
-	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
+	): Honey<
+		TEnv,
+		TCtx,
+		TRoutes,
+		WithChainMeta<TMeta, TValues>,
+		TErrorFactory,
+		TDefaultErrors,
+		TBasePath,
+		TTaps,
+		TScopedMw
+	>
 	meta(values?: Record<string, unknown>): unknown {
 		if (values === undefined) return this
 		return this.#derive({ chainMeta: { ...this.#view.chainMeta, ...values } })

@@ -41,11 +41,13 @@ export type ApplyScoped<
 > = TScopedMw extends readonly [infer Head extends ScopedMwEntry, ...infer Rest extends readonly ScopedMwEntry[]]
 	? (string extends Head["path"]
 			? {}
-			: TFullPath extends Head["path"]
+			: Head["path"] extends "/"
 				? Head["adds"]
-				: TFullPath extends `${Head["path"] & string}/${string}`
+				: TFullPath extends Head["path"]
 					? Head["adds"]
-					: {}) &
+					: TFullPath extends `${Head["path"] & string}/${string}`
+						? Head["adds"]
+						: {}) &
 			ApplyScoped<Rest, TFullPath>
 	: {}
 
@@ -69,7 +71,7 @@ export type HandlerCtx<
 	TErrorKeys extends string = never,
 	TPath extends string = string,
 > = ApplyParams<[TErrorFactory] extends [never] ? TCtx : Omit<TCtx, "errors">, TParams> & {
-	readonly meta: Readonly<Omit<TAccMeta, "openApi">>
+	readonly meta: Readonly<Omit<TAccMeta, "openApi" | typeof CHAIN_META>>
 	readonly routePattern: TPath
 } & ([TErrorFactory] extends [never]
 		? {}
@@ -125,12 +127,28 @@ export type MergeRoute<
 /** `TMeta` defaults to `never`, and `never & X` is `never`: accumulated meta starts at `{}`. */
 export type InitAccMeta<TMeta> = [TMeta] extends [never] ? {} : TMeta
 
-/** A route with `{ internal: true }` meta is left out of `$routes`; `never` meta is not internal. */
+/** Chain `.meta(values)` at the type level: a phantom optional key, so routes see the values without having to repeat them. */
+declare const CHAIN_META: unique symbol
+
+/** The handle's meta after a chain `.meta(values)`. */
+export type WithChainMeta<TMeta, TValues> = InitAccMeta<TMeta> & { readonly [CHAIN_META]?: TValues }
+
+/** Route meta as it is recorded: without the chain-meta key. */
+export type RouteMeta<TAccMeta> = Omit<TAccMeta, typeof CHAIN_META>
+
+type IsInternal<T> = [T] extends [{ internal: true }] ? true : false
+
+/**
+ * A route whose meta is `{ internal: true }`, on the route or on the chain it was registered on, is
+ * left out of `$routes` (and so of generated clients); `never` meta is not internal.
+ */
 export type SkipRouteRecord<TAccMeta> = [TAccMeta] extends [never]
 	? false
-	: [TAccMeta] extends [{ internal: true }]
+	: IsInternal<TAccMeta> extends true
 		? true
-		: false
+		: TAccMeta extends { readonly [CHAIN_META]?: infer C }
+			? IsInternal<NonNullable<C>>
+			: false
 
 /** The status codes `errorsByStatus` is keyed by; another status key falls back to `number`. */
 type CodeOf = {
