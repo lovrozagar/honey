@@ -349,6 +349,7 @@ packages/gen/src/_tokenizer/	gen	corpus	00	vendored o200k_base tokenizer (pinned
 bench/src/significance.ts	core	src	00	the perf significance decision (median + sample CI → fail only beyond +10% AND outside the band); used by hotpath.ts	—
 bench/src/significance.test.ts	core	test	00	unit-tests the significance decision (R6)	—
 bench/src/finalize.ts	core	test	00	finalize-cost bench — _resolve O(routes×scopes), separate from the warm per-request loop (G-perf)	—
+bench/src/adapter.ts	core	test	04	node/serve per-request overhead vs a bare node:http handler, significance-gated vs raw (machine-independent, like finalize.ts); the adapter budget gate	—
 scripts/capture-token-budget.ts	gen	script	00	run the tokenizer over v0 output → write blueprint/baselines/tokens.json ceilings	—
 scripts/capture-token-budget.test.ts	gen	test	00	the pure token-count + ceiling-math over fixtures (00-rules requires a sibling test for a script row)	—
 blueprint/baselines/oracle-baseline.txt	core	corpus	00	committed oracle count (stepped 6767−N) the oracle-count test asserts	—

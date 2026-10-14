@@ -92,7 +92,9 @@ export function serve<TEnv>(app: FetchApp<TEnv>, options: NodeServeOptions<TEnv>
 			if (!res.writableFinished) abort(request)
 		})
 		try {
-			const response = await app.fetch(request, options.env)
+			/* a synchronous answer skips the extra microtask an await would cost */
+			const answer = app.fetch(request, options.env)
+			const response = answer instanceof Promise ? await answer : answer
 			/* a body over the cap was left on the socket; while draining, the connection ends here */
 			if (drain.draining || (request as unknown as Record<symbol, boolean>)[BODY_OVERFLOW]) res.shouldKeepAlive = false
 			await writeResponse(response, res)

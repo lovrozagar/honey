@@ -56,7 +56,8 @@
 				"packages/gen/tests/**",
 				"bench/src/significance.ts",
 				"bench/src/significance.test.ts",
-				"bench/src/finalize.ts"
+				"bench/src/finalize.ts",
+				"bench/src/adapter.ts"
 			],
 			"plugins": ["typescript", "unicorn", "oxc", "vitest"],
 			"rules": {

@@ -24,23 +24,38 @@ function connectionNamed(value: string | string[] | null | undefined): string[] 
 		.map((token) => token.trim())
 }
 
+function hasHopByHop(headers: HeaderMap): boolean {
+	for (const name in headers) if (HOP_BY_HOP.test(name)) return true
+	return false
+}
+
 /** A Honey header map, without the hop-by-hop ones a handler set; the same object when it has none. */
 function honeyHeaders(headers: HeaderMap): HeaderMap {
-	if (!Object.keys(headers).some((name) => HOP_BY_HOP.test(name))) return headers
+	if (!hasHopByHop(headers)) return headers
 	const named = connectionNamed(headers.connection)
 	return Object.fromEntries(Object.entries(headers).filter(([name]) => !HOP_BY_HOP.test(name) && !named.includes(name)))
 }
 
-/** A native response's headers as Node takes them: every Set-Cookie kept, hop-by-hop and Connection-named dropped. */
+/**
+ * A native response's headers as a fresh map Node takes: every Set-Cookie kept, hop-by-hop and
+ * Connection-named dropped. The Connection list and the cookie list are read only when present.
+ */
 function nativeHeaders(response: Response): HeaderMap {
-	const named = connectionNamed(response.headers.get("connection"))
+	const connection = response.headers.get("connection")
+	const named = connection === null ? null : connectionNamed(connection)
 	const headers: HeaderMap = {}
+	let cookies = false
 	response.headers.forEach((value, name) => {
-		if (!HOP_BY_HOP.test(name) && !named.includes(name)) headers[name] = value
+		if (name === "set-cookie") cookies = true
+		else if (!HOP_BY_HOP.test(name) && (named === null || !named.includes(name))) headers[name] = value
 	})
-	const cookies = response.headers.getSetCookie()
-	if (cookies.length > 0) headers["set-cookie"] = cookies
+	if (cookies) headers["set-cookie"] = response.headers.getSetCookie()
 	return headers
+}
+
+/** A header map this write may change: a native one is fresh, a Honey one is copied. */
+function ownHeaders(response: Response): HeaderMap {
+	return isHoneyResponse(response) ? { ...honeyHeaders(response.plainHeaders) } : nativeHeaders(response)
 }
 
 function headersOf(response: Response): HeaderMap {
@@ -53,7 +68,9 @@ function writeHead(res: ServerResponse, response: Response, headers: HeaderMap):
 
 function writeBuffered(res: ServerResponse, response: Response, body: RawBody): void {
 	const length = typeof body === "string" ? Buffer.byteLength(body) : body.byteLength
-	writeHead(res, response, { ...headersOf(response), "content-length": String(length) })
+	const headers = ownHeaders(response)
+	headers["content-length"] = String(length)
+	writeHead(res, response, headers)
 	res.end(body)
 }
 
@@ -93,7 +110,8 @@ export async function writeResponse(response: Response, res: ServerResponse): Pr
 	if (isSmallDeclared(response)) return writeBuffered(res, response, new Uint8Array(await response.arrayBuffer()))
 	/* a stream's declared length is never trusted (`fetch()` keeps the encoded length of a body it
 	 * decoded): Node chunks it, so a wrong length cannot truncate it or desynchronize keep-alive */
-	const { "content-length": _declared, ...headers } = nativeHeaders(response)
+	const headers = nativeHeaders(response)
+	delete headers["content-length"]
 	writeHead(res, response, headers)
 	return pipeBody(body, res)
 }
