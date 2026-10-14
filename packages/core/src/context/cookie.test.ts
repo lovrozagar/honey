@@ -434,10 +434,17 @@ describe("parseCookieHeader", () => {
 	})
 
 	// v0: 587b90b244
-	it("skips prototype keys", () => {
-		const parsed = parseCookieHeader("__proto__=x; constructor=y; ok=1")
-		expect(Object.keys(parsed)).toEqual(["ok"])
-		expect(Object.getPrototypeOf(parsed)).toBe(Object.prototype)
+	it("keeps prototype names as plain keys on a record with no prototype", () => {
+		const parsed = parseCookieHeader("__proto__=x; constructor=y; prototype=z; ok=1")
+		expect(Object.getPrototypeOf(parsed)).toBeNull()
+		expect(Object.entries(parsed)).toEqual([
+			["__proto__", "x"],
+			["constructor", "y"],
+			["prototype", "z"],
+			["ok", "1"],
+		])
+		expect(parsed.toString).toBeUndefined()
+		expect(({} as Record<string, unknown>).x).toBeUndefined()
 	})
 
 	it("strips one pair of surrounding quotes before decoding", () => {

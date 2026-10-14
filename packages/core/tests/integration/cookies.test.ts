@@ -45,6 +45,24 @@ describe("ctx.cookies", () => {
 	})
 })
 
+describe("ctx.cookies: names that shadow Object.prototype", () => {
+	it("are read as plain cookies, and nothing else answers to them", async () => {
+		const names = ["__proto__", "constructor", "toString", "hasOwnProperty"]
+		const app = honey<{}>()
+		app
+			.get("/t")
+			.handler((ctx) =>
+				ctx.res.json("ok", { missing: ctx.cookies.valueOf ?? null, values: names.map((n) => ctx.cookies[n] ?? null) }),
+			)
+		const cookie = names.map((n) => `${n}=v-${n}`).join("; ")
+		expect(await send(app, "/t", cookie)).toEqual({
+			body: { missing: null, values: names.map((n) => `v-${n}`) },
+			setCookie: [],
+			status: 200,
+		})
+	})
+})
+
 describe("cookies on the answer", () => {
 	// v0: 3a72e25a94
 	// v0: 0a2e6e8df9

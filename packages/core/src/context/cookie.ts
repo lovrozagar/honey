@@ -21,10 +21,6 @@ const validDomainRe = /^\.?(?:[A-Za-z0-9-]+\.)*[A-Za-z0-9-]+$|^\[[0-9A-Fa-f:.]+\
 /* av-value: any CHAR except CTLs or ";" (RFC 6265 §4.1.1) */
 const invalidPathRe = /[^\x20-\x3a\x3c-\x7e]/
 
-function isUnsafeKey(name: string): boolean {
-	return name === "__proto__" || name === "constructor" || name === "prototype"
-}
-
 /** Cookie-octets: 0x21, 0x23-0x2B, 0x2D-0x3A, 0x3C-0x5B, 0x5D-0x7E; `%` is encoded so it round-trips. */
 function isCookieOctet(c: number): boolean {
 	if (c === 0x25) return false
@@ -74,17 +70,18 @@ export function decodeCookieValue(value: string): string {
 
 /**
  * Parse a `Cookie` request header. When a name repeats, the first value wins: browsers send the
- * cookie with the most specific path first (RFC 6265 §5.4). Names are trimmed; empty names and
- * prototype keys are skipped.
+ * cookie with the most specific path first (RFC 6265 §5.4). Names are trimmed and empty names
+ * skipped. The record has no prototype, so a cookie named like an Object.prototype member is a
+ * plain key and nothing else answers to such a name.
  */
 export function parseCookieHeader(header: string): Record<string, string> {
-	const result: Record<string, string> = {}
+	const result: Record<string, string> = Object.create(null)
 	if (header.length === 0) return result
 	for (const pair of header.split(";")) {
 		const eqIdx = pair.indexOf("=")
 		if (eqIdx === -1) continue
 		const name = pair.slice(0, eqIdx).trim()
-		if (name.length === 0 || isUnsafeKey(name) || Object.hasOwn(result, name)) continue
+		if (name.length === 0 || Object.hasOwn(result, name)) continue
 		let value = pair.slice(eqIdx + 1).trim()
 		/* RFC 6265: strip surrounding double quotes before decoding, so an encoded quote survives */
 		if (value.length >= 2 && value.charCodeAt(0) === 34 && value.charCodeAt(value.length - 1) === 34)
