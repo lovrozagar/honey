@@ -2,7 +2,8 @@
  * The WebSocket route builder: what `app.ws(path)` returns. A ws route is an ordinary route record
  * with method `WS`, so the chain, the scopes, meta and error declarations work as on any route; its
  * handler is the upgrade itself. The origin check and the chain run first, so a refused upgrade is
- * answered before any 101 (H18.12). `.input()` arrives with the input layer at bit 08.
+ * answered before any 101 (H18.12). `.input()` takes the non-body sources (an upgrade is a bodyless
+ * GET) and validates them after the chain, so a refused request answers 400 before any 101.
  */
 import { type HoneyContext, REQUEST } from "../context/context.ts"
 import { HoneyError } from "../errors/error.ts"
@@ -10,6 +11,7 @@ import type { MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.t
 import type { WSAdapter, WSHandler } from "../ws/contract.ts"
 import { originAllowed, validateOriginPolicy, type WSOriginPolicy } from "../ws/origin.ts"
 import { createWsSession } from "../ws/session.ts"
+import { compileInput, type InferInputMap, type NonBodyInput, type InputStep } from "../input/input.ts"
 import { joinPatterns, parsePattern } from "./pattern.ts"
 import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, settle } from "./register.ts"
 import type { ErrorFactories } from "./settings.ts"
@@ -22,6 +24,8 @@ type WSBuilderState = {
 	readonly errorKeys: ReadonlySet<string>
 	readonly errorSource: ErrorFactories | null
 	readonly graph: HoneyGraph
+	/** the compiled `.input()` step */
+	readonly input: InputStep | null
 	readonly meta: Readonly<Record<string, unknown>> | null
 	readonly middlewares: readonly RuntimeMiddleware[]
 	readonly origins: WSOriginPolicy | null
@@ -77,6 +81,15 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 		return this.#next({ errorKeys: new Set([...this.#s.errorKeys, ...keys]), errorSource: named })
 	}
 
+	/** Validate the upgrade request's params, search, headers and cookies onto ctx.input. */
+	input<const TSchemas extends NonBodyInput>(
+		schemas: TSchemas,
+	): WSRouteBuilder<TCtx & { readonly input: InferInputMap<TSchemas> }, TPath, TParent> {
+		return this.#next<TCtx & { readonly input: InferInputMap<TSchemas> }>({
+			input: compileInput(schemas, ["GET"], this.#s.path),
+		})
+	}
+
 	meta(meta: Record<string, unknown>): WSRouteBuilder<TCtx, TPath, TParent> {
 		return this.#next({ meta: { ...this.#s.meta, ...meta } })
 	}
@@ -105,6 +118,7 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 			dk: s.errorKeys,
 			ef: s.errorSource,
 			fn: upgrader(callbacks as WSHandler<unknown>, s.origins, s.path),
+			in: s.input,
 			own: s.graph.settings,
 			rb: null,
 			rm: s.middlewares,
@@ -128,6 +142,7 @@ export function startWsRoute<TCtx, TPath extends string, TParent>(
 		errorKeys: new Set(),
 		errorSource: null,
 		graph,
+		input: null,
 		meta: view.chainMeta,
 		middlewares: [],
 		origins: null,

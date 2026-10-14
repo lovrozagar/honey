@@ -68,7 +68,6 @@ describe("assertRequestContentType: the request's media type against the declare
 
 describe("assertBodySchemaAllowed: a body schema the route can never receive", () => {
 	// v0: 5c9fc8be95
-	// v0: 2595655908
 	it("refuses a json or form schema on a route only GET or HEAD reach, naming the route", () => {
 		expect([
 			thrown(() => assertBodySchemaAllowed({ json: schema }, ["GET"], "/x")).message,
@@ -81,7 +80,6 @@ describe("assertBodySchemaAllowed: a body schema the route can never receive", (
 		])
 	})
 
-	// v0: 08e479d91a
 	it("allows a body schema on every other method, on a route that also takes GET, and any non-body schema on GET", () => {
 		expect(() => {
 			assertBodySchemaAllowed({ json: schema }, ["DELETE"], "/x")

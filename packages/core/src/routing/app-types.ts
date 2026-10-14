@@ -61,9 +61,8 @@ export type ApplyParams<TCtx, TParams> = [keyof TParams] extends [string]
 	: TCtx
 
 /**
- * The full handler ctx: the chain's ctx, typed params, route meta and pattern, and the declared
- * errors. With a factory, `errors` holds only the declared keys (as at runtime), not the context's
- * wide record, so an undeclared key is a type error rather than a call to `undefined`.
+ * The full handler ctx: chain ctx, typed params, meta, pattern, declared errors and, after
+ * `.input()`, ctx.input. With a factory, `errors` holds only the declared keys (as at runtime).
  */
 export type HandlerCtx<
 	TCtx,
@@ -73,6 +72,7 @@ export type HandlerCtx<
 	TErrorKeys extends string = never,
 	TPath extends string = string,
 	TTaps = {},
+	TInput = never,
 > = ApplyParams<
 	[TErrorFactory] extends [never]
 		? [keyof TTaps] extends [never]
@@ -89,7 +89,8 @@ export type HandlerCtx<
 		? {}
 		: [TErrorKeys] extends [never]
 			? { readonly errors: TErrorFactory }
-			: { readonly errors: Pick<TErrorFactory, TErrorKeys & keyof TErrorFactory> })
+			: { readonly errors: Pick<TErrorFactory, TErrorKeys & keyof TErrorFactory> }) &
+	([TInput] extends [never] ? {} : { readonly input: TInput })
 
 /** One route at the type level, for the RPC client and codegen. */
 export type RouteRecord<

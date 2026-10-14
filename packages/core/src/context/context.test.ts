@@ -344,7 +344,7 @@ describe("isReservedCtxKey", () => {
 		]) {
 			expect(isReservedCtxKey(key), key).toBe(true)
 		}
-		for (const key of ["ip", "log", "req", "res", "routePattern", "search", "searchAll", "signal"])
+		for (const key of ["input", "ip", "log", "req", "res", "routePattern", "search", "searchAll", "signal"])
 			expect(isReservedCtxKey(key), key).toBe(true)
 		expect(isReservedCtxKey("user")).toBe(false)
 		expect(isReservedCtxKey("toString")).toBe(false)

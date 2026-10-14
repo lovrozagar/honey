@@ -3,6 +3,7 @@
  * registered into it, and mounting a sub-app. Records are per graph, keyed by `RouteId`; the
  * tree holds ids only, so a sub-app mounted into two parents never shares a record.
  */
+import type { InputStep } from "../input/input.ts"
 import type { MaybePromise, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { FinalizeHooks, FinalTable } from "./finalize.ts"
 import { describeMw, errorsOf, scopeGuard } from "./middleware-chain.ts"
@@ -32,6 +33,8 @@ export type RouteHandler = RouteRecord & {
 	/** the factory `.errors(factory, ...keys)` named; its keys come from it, not the app's */
 	readonly ef: ErrorFactories | null
 	readonly fn: (ctx: object) => MaybePromise<Response>
+	/** the compiled `.input()` step, run after the middleware and before `fn`; `null` without `.input()` */
+	readonly in: InputStep | null
 	/** the settings of the app the route was registered on */
 	readonly own: AppSettings<unknown>
 	/** route-level boundary key (`.boundary()`) */

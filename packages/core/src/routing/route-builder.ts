@@ -4,6 +4,7 @@
  * the new route. A one-shot method disappears from the chain once called.
  */
 import type { ERROR_META } from "../errors/errors.ts"
+import { compileInput, type InferInputMap, type InputSchemas, type InputStep } from "../input/input.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { TypedResponse } from "../response/response.ts"
@@ -33,6 +34,8 @@ export type BuilderTypes = {
 	env: unknown
 	errorFactory: unknown
 	errorKeys: string
+	/** ctx.input once `.input()` ran; `never` before */
+	input: unknown
 	meta: unknown
 	method: string
 	path: string
@@ -75,7 +78,8 @@ export type RouteHandlerCtx<B extends BuilderTypes> = HandlerCtx<
 	B["errorFactory"],
 	B["errorKeys"] | B["defaultErrors"],
 	B["path"],
-	B["taps"]
+	B["taps"],
+	B["input"]
 >
 
 /** The app `.handler()` returns: the same handle, typed with the new route. */
@@ -88,7 +92,7 @@ export type HandlerReturn<B extends BuilderTypes> = Honey<
 				B["routes"],
 				B["path"],
 				B["method"],
-				{},
+				[B["input"]] extends [never] ? {} : B["input"],
 				{},
 				RouteHandlerCtx<B>,
 				RouteMeta<B["accMeta"]>,
@@ -125,6 +129,7 @@ export type StartOf<H, TPath extends string, TMethod extends string> =
 				env: TEnv
 				errorFactory: TFactory
 				errorKeys: never
+				input: never
 				meta: TMeta
 				method: TMethod
 				path: MergePath<TBase, TPath>
@@ -144,6 +149,8 @@ export type BuilderState = {
 	readonly errorSource: ErrorFactories | null
 	readonly extraMethods: readonly string[]
 	readonly graph: HoneyGraph
+	/** the compiled `.input()` step */
+	readonly input: InputStep | null
 	/** explicit meta: chain `.meta()` overlaid by route `.meta()` */
 	readonly meta: Readonly<Record<string, unknown>> | null
 	readonly method: string
@@ -214,6 +221,19 @@ export class RouteBuilder<B extends BuilderTypes> {
 		return this.#next({ meta: merged })
 	}
 
+	/**
+	 * Validate what the request carries: params, search, headers, cookies, and one body (json or
+	 * form). Each source lands on ctx.input as its schema produced it; the first that fails answers
+	 * 400 (415 for a body of another media type). A body schema on a route only GET or HEAD reach
+	 * throws here.
+	 */
+	input<const TSchemas extends InputSchemas>(
+		schemas: TSchemas,
+	): BuilderChain<Next<B, { input: InferInputMap<TSchemas>; used: B["used"] | "input" }>> {
+		const s = this.#s
+		return this.#next({ input: compileInput(schemas, [s.method, ...s.extraMethods], s.path) })
+	}
+
 	/** Route-level middleware, after the chain and the scopes. */
 	use<TAdds>(mw: MiddlewareFn<B["ctx"], TAdds>): BuilderChain<Next<B, { ctx: B["ctx"] & TAdds }>> {
 		return this.#next({ middlewares: [...this.#s.middlewares, mw as unknown as RuntimeMiddleware] })
@@ -229,6 +249,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 			dk: s.errorKeys,
 			ef: s.errorSource,
 			fn: fn as unknown as RouteSource["fn"],
+			in: s.input,
 			own: s.graph.settings,
 			rb: s.boundaryKey,
 			rm: s.middlewares,
@@ -257,6 +278,7 @@ export function startRoute(
 		...undeclared(),
 		extraMethods: route.extraMethods,
 		graph,
+		input: null,
 		meta: view.chainMeta,
 		method: route.method,
 		middlewares: [],

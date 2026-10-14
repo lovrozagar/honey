@@ -74,6 +74,7 @@ const RESERVED: Readonly<Record<string, true>> = /* @__PURE__ */ Object.freeze({
 	errors: true,
 	executionCtx: true,
 	headers: true,
+	input: true,
 	ip: true,
 	log: true,
 	meta: true,

@@ -5,6 +5,7 @@
  * registration moved the graph's epoch.
  */
 import { type HoneyContext, REQUEST, type RouteInfo } from "../context/context.ts"
+import { withInput } from "../input/input.ts"
 import type { ErrorPolicy } from "../errors/projector.ts"
 import {
 	type ChainErrorConverter,
@@ -167,11 +168,9 @@ function planRoute(
 	const taps = tapsFor(g.settings, r.own)
 	const traced = g.settings.telemetry !== null
 	const run = traced ? chain.map(tracedMiddleware) : chain
-	const handler = traced
-		? tracedHandler(taps === null ? r.fn : answering(r.fn))
-		: taps === null
-			? r.fn
-			: answering(r.fn)
+	/* only a route with .input() pays for it: the step runs between the middleware and the handler */
+	const fn = r.in === null ? r.fn : withInput(r.in, r.fn)
+	const handler = traced ? tracedHandler(taps === null ? fn : answering(fn)) : taps === null ? fn : answering(fn)
 	const compiled = compileChain(run, handler, hooks.convert)
 	return {
 		cv: r.cv,
