@@ -37,6 +37,7 @@ src/input/input.ts	core	src	08	.input() assembly	input.ts
 src/input/params.ts	core	src	08	typed path params	input.ts,validation.ts
 src/input/query.ts	core	src	08	typed query	input.ts,validation.ts
 src/input/headers.ts	core	src	08	typed request headers	input.ts,validation.ts
+src/input/cookies.ts	core	src	08	typed cookies: Cookie header first-wins (RFC 6265), over the null-prototype ctx.cookies record	input.ts,validation.ts
 src/input/json.ts	core	src	08	JSON body + content-type assert	validation.ts
 src/input/form.ts	core	src	08	multipart/urlencoded body	validation.ts
 src/input/binary.ts	core	src	08	.input({ binary }) raw-body slot (A1)	—
