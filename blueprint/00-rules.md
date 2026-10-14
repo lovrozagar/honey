@@ -104,7 +104,7 @@ Runtime detection (`detect-runtime`) returns a pure value; adapters branch on it
 | `ws` | optional peer | **core** | the exact tested version | `>=` that version | the Node WebSocket adapter only |
 | `ts-morph` | optional peer | **gen** (not core) | the exact tested version | `>=` that version | `honey-codegen` type-extraction entry only — `honey/boundaries` keeps it out of core |
 
-(Exact dev versions are filled from the repo's lockfile at bit 00; the shape — exact dev + `>=` peer — is the pin.) `@lovrozagar/honey` declares `"sideEffects": false` for tree-shakeability (H19.3).
+(Exact dev versions are filled from the repo's lockfile at bit 00; the shape — exact dev + `>=` peer — is the pin.) `@lovrozagar/honey` declares `"sideEffects"` as the exact list of optional-entry files (the `// feature-entry:` modules — `["./src/trust/trust.ts"]` from bit 03, growing per feature), **not** `false`, so bundlers drop unused core but keep a registering `import "@lovrozagar/honey/<feature>"`; everything else is side-effect-free (H19.3).
 
 **Runtime floor (H19.2):** Node ≥ the first LTS with stable `fetch`/WebStreams/`crypto.subtle` (Node 20), Bun ≥ the tested version, Cloudflare Workers = current. Deno is not a target (H15).
 
@@ -121,7 +121,9 @@ The SDK/CLI/MCP conformance + compile tests run real language toolchains (go, ca
 
 ## Module state (H19.3)
 
-A module-scope `let`, mutable map, or cache is forbidden unless the line carries `// per-process-constant: <reason>` and the reason is on the allowlist: the RAW_BODY `WeakMap` (`response`), the `TextEncoder`/`TextDecoder` singletons, the rate-limit default store, the i18n `dict` cache, the build id. The `honey/no-module-state` lint rule rejects anything else; `honey/no-module-side-effects` keeps the runtime tree-shakeable. Request state lives on the request context, never module scope.
+A module-scope `let`, mutable map, or cache is forbidden unless the line carries `// per-process-constant: <reason>` and the reason is on the allowlist: the RAW_BODY `WeakMap` (`response`), the `TextEncoder`/`TextDecoder` singletons, the rate-limit default store, the i18n `dict` cache, the build id, and the **`feature-slot` registry** (the optional-entry slot map — a per-process registry, same category as the rate-limit store / i18n dict; added bit 03 for `trust`, the first optional entry). The `honey/no-module-state` lint rule rejects anything else; `honey/no-module-side-effects` keeps the runtime tree-shakeable. Request state lives on the request context, never module scope.
+
+**Optional self-registering entries (`@lovrozagar/honey/<feature>`, from bit 03's `trust`).** A feature that must stay out of the core bundle unless imported ships as a subpath entry whose module registers its slot on import. That one registering call is a deliberate module side effect: it is exempt from `no-module-side-effects` only on a line marked `// feature-entry: <name>`, and only in a file the package's `sideEffects` array names. `@lovrozagar/honey`'s `sideEffects` is therefore **not** `false` — it is the exact list of feature-entry files (e.g. `["./src/trust/trust.ts"]`, growing as proxy/realtime/ws add entries), so a bundler keeps the registering import instead of dropping it. `tests/structure/side-effects.test.ts` gates that the `sideEffects` list equals exactly the set of files carrying a `// feature-entry:` marker (no drift either way).
 
 ## The formatter post-pass
 

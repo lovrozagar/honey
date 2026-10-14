@@ -344,6 +344,7 @@ tests/structure/v0-inventory.test.ts	core	test	00	the classifier over fixtures (
 tests/structure/reorg-coverage-diff.test.ts	core	test	00	the lose-nothing gate: each completed feature's v0 cases are ported (v1 test tagged // v0: <id>) or retired (reason in inventory); unaccounted for a completed feature fails; global unaccounted = 0 before bit-20 _v0 delete (H13)	—
 tests/structure/oracle-count.ts	core	src	00	a vitest reporter + pure checkOracle(totals, baseline); enforces only when HONEY_ORACLE=1; counts only _v0/tests (R2)	—
 tests/structure/oracle-count.test.ts	core	test	00	unit-tests the pure checkOracle: drift, silent-skip, flaky-tolerant (G-oracle)	—
+tests/structure/side-effects.test.ts	core	test	03	package.json sideEffects equals exactly the set of files carrying a `// feature-entry:` marker (optional entries, H19.3) — no drift either way	—
 tests/structure/mutation-harness.ts	core	src	00	run the adversarial/security suite with each guard disabled → must go red (failing-input-first enforced)	—
 tests/structure/mutation-harness.test.ts	core	test	00	proves the harness mechanism against a fixture guard (no v1 guard exists yet at bit 00) (R4)	—
 tests/integration/security/adversarial.test.ts	core	test	00	the in-process app.fetch adversarial scaffold (scope-bypass/proto-pollution/CORS/header-injection/SSE-WS-memory) + a mechanism smoke; middleware bits (07, …) add cases (R3)	hostile-client
