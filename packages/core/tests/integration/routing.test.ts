@@ -71,14 +71,20 @@ describe("method resolution", () => {
 	// v0: 93535ff147
 	// v0: 53061962a5
 	// v0: 191f79b6a7
+	// v0: 4420fbc747
+	// v0: a8d57951ba
+	// v0: ba3f8329bb
 	it("ALL answers any method, and an exact method on the same path wins over it", async () => {
 		const app = echoApp([
 			["ALL", "/resource"],
 			["GET", "/resource"],
+			["ALL", "/catch"],
 		])
 		expect(await echo(app, "/resource")).toEqual({ method: "GET", params: {}, path: "/resource", pattern: "/resource" })
 		for (const method of ["PUT", "DELETE", "PATCH"])
 			expect((await echo(app, "/resource", { method })).method).toBe(method)
+		for (const method of ["GET", "POST", "DELETE"])
+			expect(await echo(app, "/catch", { method })).toMatchObject({ method, pattern: "/catch" })
 	})
 })
 
@@ -244,6 +250,7 @@ describe("404 and 405", () => {
 	// v0: e96839041f
 	// v0: ac10ff582e
 	// v0: 6abfdc07c5
+	// v0: 731db302e5
 	it("an unknown path is 404; a known path with another method is 405 naming every method it has", async () => {
 		const app = echoApp([
 			["GET", "/items"],
@@ -374,5 +381,52 @@ describe("answers stay the same", () => {
 				wrong.push(`${i}`)
 		}
 		expect(wrong).toEqual([])
+	})
+})
+
+describe("a resource behind an auth chain, beside a public route", () => {
+	// v0: 18167919d0
+	// v0: 1b2318a124
+	// v0: e17e9607a9
+	// v0: aa12d63617
+	// v0: 754ffde8ad
+	// v0: ea1334b3f4
+	// v0: cdef041f42
+	it("each method reaches its route with its status; without a token the chain answers 401 first", async () => {
+		const app = honey<{}>()
+		const api = app.basePath("/api")
+		api.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
+		const authed = api.use(
+			createMiddleware((ctx: { req: Request }, next) =>
+				ctx.req.headers.get("authorization")?.startsWith("Bearer ")
+					? next({ user: "u1" })
+					: new Response(JSON.stringify({ error_key: "unauthorized" }), { status: 401 }),
+			),
+		)
+		authed.get("/orgs").handler((ctx) => ctx.res.json("ok", { items: [{ id: "org1" }], total: 1 }))
+		authed.get("/orgs/:orgId").handler((ctx) => ctx.res.json("ok", { id: ctx.params.orgId }))
+		authed.post("/orgs").handler(async (ctx) => ctx.res.json("created", (await ctx.req.json()) as object))
+		authed.delete("/orgs/:orgId").handler((ctx) => ctx.res.noContent())
+		const auth = { authorization: "Bearer tok" }
+		const answers = []
+		for (const [method, path, headers, body] of [
+			["GET", "/api/health", {}, undefined],
+			["GET", "/api/orgs", {}, undefined],
+			["GET", "/api/orgs", auth, undefined],
+			["GET", "/api/orgs/org42", auth, undefined],
+			["POST", "/api/orgs", auth, JSON.stringify({ slug: "new-org" })],
+			["DELETE", "/api/orgs/org42", auth, undefined],
+		] as const) {
+			const res = await send(app, path, { body, headers, method })
+			answers.push([method, path, res.status, res.body])
+		}
+		expect(answers).toEqual([
+			["GET", "/api/health", 200, "ok"],
+			["GET", "/api/orgs", 401, '{"error_key":"unauthorized"}'],
+			["GET", "/api/orgs", 200, '{"items":[{"id":"org1"}],"total":1}'],
+			["GET", "/api/orgs/org42", 200, '{"id":"org42"}'],
+			["POST", "/api/orgs", 201, '{"slug":"new-org"}'],
+			["DELETE", "/api/orgs/org42", 204, ""],
+		])
 	})
 })

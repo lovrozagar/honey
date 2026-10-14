@@ -13,6 +13,7 @@ import { poweredBy } from "../../src/middleware/powered-by.ts"
 import { requestId } from "../../src/middleware/request-id.ts"
 import { secureHeaders } from "../../src/middleware/secure-headers.ts"
 import { serverTiming } from "../../src/middleware/server-timing.ts"
+import { HoneyError } from "../../src/errors/error.ts"
 import { honey } from "../../src/routing/app.ts"
 
 type App = { fetch(request: Request, env: {}): Response | Promise<Response> }
@@ -86,6 +87,77 @@ describe("the edge stack on the wire", () => {
 			res.headers.get("access-control-allow-origin"),
 			res.headers.get("vary")?.includes("Origin"),
 		]).toEqual([204, "http://allowed.com", true])
+	})
+})
+
+const missing = () => new HoneyError({ errorKey: "not_found", status: "not_found" })
+
+/** A list of items with create, read and delete, behind CORS, security headers and request ids. */
+function itemsApp() {
+	const items: { id: number; name: string }[] = []
+	const find = (id: string) => items.findIndex((item) => item.id === Number(id))
+	const app = honey<{}>()
+	const edged = app
+		.use(cors({ origin: "*" }))
+		.use(secureHeaders())
+		.use(requestId())
+	edged.get("/items").handler((ctx) => ctx.res.json("ok", items))
+	edged.post("/items").handler(async (ctx) => {
+		const item = { id: items.length + 1, name: ((await ctx.req.json()) as { name: string }).name }
+		items.push(item)
+		return ctx.res.json("created", item)
+	})
+	edged.get("/items/:id").handler((ctx) => {
+		const at = find(ctx.params.id)
+		if (at === -1) throw missing()
+		return ctx.res.json("ok", items[at])
+	})
+	edged.delete("/items/:id").handler((ctx) => {
+		const at = find(ctx.params.id)
+		if (at === -1) throw missing()
+		items.splice(at, 1)
+		return ctx.res.noContent()
+	})
+	return app
+}
+
+describe("a resource's whole life behind the edge stack", () => {
+	// v0: f69441538b
+	it("list, create, read, miss, wrong method, delete and list again, each answer carrying the edge headers", async () => {
+		const base = await listen(itemsApp())
+		const steps: [string, string, string | undefined][] = [
+			["GET", "/items", undefined],
+			["POST", "/items", JSON.stringify({ name: "Widget" })],
+			["GET", "/items/1", undefined],
+			["GET", "/items/999", undefined],
+			["PATCH", "/items", undefined],
+			["DELETE", "/items/1", undefined],
+			["GET", "/items", undefined],
+		]
+		const answers = []
+		for (const [method, path, body] of steps) {
+			const headers = { origin: "http://app.example", ...(body && { "content-type": "application/json" }) }
+			const res = await fetch(`${base}${path}`, { body, headers, method })
+			answers.push([
+				method,
+				path,
+				res.status,
+				res.status === 200 || res.status === 201 ? await res.json() : null,
+				res.headers.get("access-control-allow-origin"),
+				res.headers.get("x-content-type-options"),
+				UUID.test(res.headers.get("x-request-id") ?? ""),
+			])
+		}
+		const edge = ["*", "nosniff", true]
+		expect(answers).toEqual([
+			["GET", "/items", 200, [], ...edge],
+			["POST", "/items", 201, { id: 1, name: "Widget" }, ...edge],
+			["GET", "/items/1", 200, { id: 1, name: "Widget" }, ...edge],
+			["GET", "/items/999", 404, null, ...edge],
+			["PATCH", "/items", 405, null, ...edge],
+			["DELETE", "/items/1", 204, null, ...edge],
+			["GET", "/items", 200, [], ...edge],
+		])
 	})
 })
 

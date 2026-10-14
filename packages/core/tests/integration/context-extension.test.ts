@@ -85,6 +85,7 @@ describe("ctx.background and ctx.executionCtx", () => {
 	// v0: f5a5019dfa
 	// v0: 85830ec8d5
 	// v0: c6954e7a8d
+	// v0: def1f2bf1b
 	it.each([
 		["a handler that answers", "/ok", 200],
 		["a handler that throws", "/boom", 500],
