@@ -104,12 +104,16 @@ export class Honey<
 		return this as never
 	}
 
-	/** Type only: constrain what route `.meta()` accepts. */
+	protected override invalidate(): void {
+		this.#graph.epoch++
+	}
+
+	/** Type only: constrain what route `.meta()` accepts; declared tap keys stay allowed. */
 	meta<TNewMeta extends Record<string, unknown>>(): Honey<
 		TEnv,
 		TCtx,
 		TRoutes,
-		TNewMeta,
+		[keyof TTaps] extends [never] ? TNewMeta : TNewMeta & Partial<TTaps>,
 		TErrorFactory,
 		TDefaultErrors,
 		TBasePath,

@@ -25,6 +25,8 @@ export type RequestState<TEnv> = {
 	readonly req: Request
 	/** `ctx.ip` once something asked: the canonical peer, or `null` when no runtime reports one */
 	ip?: string | null
+	/** set when the route's handler answered, on a route with taps only: they fire on nothing else */
+	answered?: true
 }
 
 /** What a context reads from its route, computed once at finalize. */
@@ -46,6 +48,12 @@ export const REQUEST: unique symbol = /* @__PURE__ */ Symbol("honey.request")
 
 /** Abort `ctx.signal` from inside honey (a timeout): not exported from the package. */
 export const ABORT_CONTEXT: unique symbol = /* @__PURE__ */ Symbol("honey.abortContext")
+
+/** The taps `ctx.tap()` queued, and whether the route's handler answered: read by routing/tap.ts only. */
+export const TAPS: unique symbol = /* @__PURE__ */ Symbol("honey.taps")
+
+/** One `ctx.tap(key, payload)` call, waiting for the handler's answer. */
+export type TapCall = { readonly key: string; readonly payload: unknown }
 
 /**
  * Every name the framework owns on a context. `next({ ... })` additions and `.context()` values may
@@ -71,6 +79,7 @@ const RESERVED: Readonly<Record<string, true>> = /* @__PURE__ */ Object.freeze({
 	search: true,
 	searchAll: true,
 	signal: true,
+	tap: true,
 })
 
 export function isReservedCtxKey(key: string): boolean {
@@ -111,6 +120,7 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	readonly #routeId: string
 	#search: Record<string, string> | null = null
 	#searchAll: Record<string, string[]> | null = null
+	#taps: TapCall[] | null = null
 
 	constructor(state: RequestState<TEnv>, route: RouteInfo, params: Record<string, string>) {
 		this.env = state.env
@@ -183,6 +193,19 @@ export class HoneyContext<TEnv = Record<string, unknown>> {
 	get signal(): AbortSignal {
 		this.#ac ??= this.#linkSignal()
 		return this.#ac.signal
+	}
+
+	/**
+	 * Fire the app's tap for `key` with `payload` once this request's handler answered: after the
+	 * response, never on an error answer, never delaying it. A key no tap is registered for is ignored.
+	 */
+	tap(key: string, payload: unknown): void {
+		;(this.#taps ??= []).push({ key, payload })
+	}
+
+	/** What `tap()` queued, or null when nothing was. */
+	get [TAPS](): readonly TapCall[] | null {
+		return this.#taps
 	}
 
 	/** Abort `signal` with `reason`, so work that takes it stops (a timeout answered for it). */

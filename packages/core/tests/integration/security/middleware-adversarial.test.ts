@@ -1,7 +1,7 @@
 /**
  * The adversarial suite's edge-middleware cases (F1): security headers on every exit, CORS
  * credential reflection, csrf bypasses, rate-limit key spray and spoofing, the BREACH oracle, proxy
- * SSRF and Host spoofing, curlLogger leaks. Each is a failing input first and the guard that answers
+ * SSRF and Host spoofing, curlLogger leaks, taps that fail or hang. Each is a failing input first and the guard that answers
  * it second; the mutation harness reruns this directory with each guard disabled.
  */
 import { resolve as resolvePath } from "node:path"
@@ -429,5 +429,43 @@ describe("v1 adversarial: one request's locale never leaks into another's answer
 			"item_gone",
 			false,
 		])
+	})
+})
+
+/** Settles to "late" after 200ms: what an answer a tap held back loses its race to. */
+const late = () => new Promise<string>((resolve) => setTimeout(() => resolve("late"), 200))
+
+describe("v1 adversarial: a tap never delays, changes or fails the answer", () => {
+	it("a throwing tap and a never-settling one answer 200 at once, past onError; a failed handler fires none", async () => {
+		const onError = vi.fn()
+		const fired: string[] = []
+		const app = honey<{}>()
+		app.onError(onError)
+		app.tap("throws", () => {
+			fired.push("throws")
+			throw new Error("tap broke")
+		})
+		app.tap("hangs", () => {
+			fired.push("hangs")
+			return new Promise(() => {})
+		})
+		for (const key of ["throws", "hangs"]) {
+			app.get(`/${key}`).handler((ctx) => {
+				ctx.tap(key, {})
+				return ctx.res.text("ok", "ok")
+			})
+		}
+		app.get("/fails").handler((ctx) => {
+			ctx.tap("throws", {})
+			throw new Error("handler broke")
+		})
+		const answers = []
+		for (const path of ["/throws", "/hangs", "/fails"]) {
+			const pending = Promise.resolve(app.fetch(new Request(`http://app.test${path}`), {})).then((res) => res.status)
+			answers.push(await Promise.race([pending, late()]))
+		}
+		await new Promise((resolve) => setTimeout(resolve, 10))
+		/* onError sees the failed handler alone, never a tap */
+		expect([answers, fired, onError.mock.calls.length]).toEqual([[200, 200, 500], ["throws", "hangs"], 1])
 	})
 })

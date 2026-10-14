@@ -26,6 +26,7 @@ import {
 } from "./pattern.ts"
 import { assertNothingDiscarded, chainErrorKeys, type HoneyGraph, type RouteHandler } from "./register.ts"
 import { type AppSettings, assertSettingsAgree, type ErrorFactories } from "./settings.ts"
+import { answering, firing, tapsFor } from "./tap.ts"
 import { dict } from "./tree.ts"
 
 /** Everything a matched route runs, compiled once. */
@@ -142,13 +143,18 @@ function planRoute(
 	const { errors, policy } = resolveErrors(src, chain, r)
 	const meta = routeMeta(chain, r.xm)
 	r.mt = meta
+	/* only a route with taps pays for them: the handler marks its answer, the chain fires after */
+	const taps = tapsFor(g.settings, r.own)
 	return {
 		cv: r.cv,
 		pf: null,
 		pfChain: chain,
 		policy,
 		route: { errors, id: r.id, meta: meta ?? EMPTY_META, pattern: r.rp },
-		run: compileChain(chain, r.fn, hooks.convert),
+		run:
+			taps === null
+				? compileChain(chain, r.fn, hooks.convert)
+				: firing(compileChain(chain, answering(r.fn), hooks.convert), taps),
 	}
 }
 

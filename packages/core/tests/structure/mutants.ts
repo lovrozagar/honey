@@ -3,7 +3,9 @@
  * it exists for taken out. Split from mutation-harness.ts, which keeps the guard list and the runner.
  */
 import type { ServerResponse } from "node:http"
+import type { TapCall } from "../../src/context/context.ts"
 import type { CompressOptions } from "../../src/middleware/compress.ts"
+import type { CompiledChain } from "../../src/middleware/middleware.ts"
 import type { StaticConfig } from "../../src/response/static.ts"
 import type { IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
@@ -296,4 +298,22 @@ export function translatingInPlace(real: ErrorI18nFactory): ErrorI18nFactory {
 			},
 		}
 	}
+}
+
+export type Firing = (
+	run: CompiledChain,
+	taps: ReadonlyMap<string, (ctx: object, payload: unknown) => unknown>,
+) => CompiledChain
+
+/**
+ * `firing` that runs each `ctx.tap()` call's handler inline, awaited before the answer goes out.
+ * context.ts loads lazily: a top-level import would load it before the suite's mock is in place.
+ */
+export const inlineFiring: Firing = (run, taps) => async (ctx) => {
+	const { TAPS } = await import("../../src/context/context.ts")
+	const response = await run(ctx)
+	for (const call of (ctx as { [TAPS]: readonly TapCall[] | null })[TAPS] ?? []) {
+		await taps.get(call.key)?.(ctx, call.payload)
+	}
+	return response
 }

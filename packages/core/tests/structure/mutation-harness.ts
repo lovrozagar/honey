@@ -17,6 +17,7 @@ import {
 	credentialedCompress,
 	forwardedIp,
 	forwardedKey,
+	inlineFiring,
 	naiveWriter,
 	passThrough,
 	rawServerTiming,
@@ -246,6 +247,12 @@ export const GUARDS: readonly Guard[] = [
 		disable: (original) => ({ errorI18n: translatingInPlace(original.errorI18n as ErrorI18nFactory) }),
 		id: "v1-error-i18n-copy",
 		module: "packages/core/src/i18n/error-i18n.ts",
+	},
+	{
+		catches: "v1: taps run inline before the answer, so a failing tap fails the request and a slow one holds it",
+		disable: () => ({ firing: inlineFiring }),
+		id: "v1-tap-background",
+		module: "packages/core/src/routing/tap.ts",
 	},
 	{
 		catches: "v1: a request log line carrying the credentials, cookies and CSRF tokens the request sent",

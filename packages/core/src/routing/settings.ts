@@ -11,6 +11,8 @@ import type { RequestLogEntry } from "../telemetry/fields.ts"
 import { createLogger, type Logger, SILENT } from "../telemetry/logger.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import type { WSAdapter } from "../ws/contract.ts"
+import type { WithTaps } from "./app-types.ts"
+import type { TapFn, TapHandler } from "./tap.ts"
 
 /** An app's error factory (`defineErrors`), as its settings hold it. */
 export type ErrorFactories = Readonly<Record<string, (...args: never[]) => unknown>>
@@ -71,6 +73,8 @@ export type AppSettings<TEnv = unknown> = {
 	/** one info line per request after its body ends; `null`: off */
 	requestLog: RequestLogOptions | null
 	stripPrefix: string | null
+	/** `app.tap()` handlers by key; `null` until one is registered */
+	taps: Map<string, TapFn<TEnv>> | null
 	trailingSlash: "enforce" | "ignore" | "strip"
 	wsAdapter: WSAdapter | null
 }
@@ -100,6 +104,7 @@ export function createSettings<TEnv>(): AppSettings<TEnv> {
 		onNotFound: null,
 		requestLog: null,
 		stripPrefix: null,
+		taps: null,
 		trailingSlash: "ignore",
 		wsAdapter: null,
 	}
@@ -118,6 +123,24 @@ export abstract class SettingsChain<TEnv> {
 
 	constructor(settings: AppSettings<TEnv>) {
 		this.settings = settings
+	}
+
+	/** Recompile what the app serves on its next request: a setting finalize reads changed. */
+	protected abstract invalidate(): void
+
+	/** A tap fired after a route's handler answered, in the background (see routing/tap.ts). */
+	tap<const TKey extends string>(
+		key: TKey,
+		handler: TapHandler<TEnv, this extends { readonly $taps: infer T } ? T : {}, TKey>,
+	): this {
+		;(this.settings.taps ??= new Map()).set(key, handler as TapFn<TEnv>)
+		this.invalidate()
+		return this
+	}
+
+	/** Type only: each tap key's payload, for `ctx.tap()`, tap handlers and route meta. */
+	taps<TNewTaps extends Record<string, unknown>>(): WithTaps<this, TNewTaps> {
+		return this as never
 	}
 
 	/** `"strip"` redirects `/a/` to `/a`, `"enforce"` redirects `/a` to `/a/` (308); `"ignore"` serves both. */

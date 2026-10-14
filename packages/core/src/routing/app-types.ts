@@ -4,6 +4,8 @@
  * `$routes`/`$ctx`/`$env`/`$meta` types. Type-only.
  */
 import type { HoneyContext, REQUEST } from "../context/context.ts"
+import type { Honey } from "./app.ts"
+import type { TapMethod } from "./tap.ts"
 import type { StatusKey } from "../response/status.ts"
 import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 
@@ -70,10 +72,20 @@ export type HandlerCtx<
 	TErrorFactory = never,
 	TErrorKeys extends string = never,
 	TPath extends string = string,
-> = ApplyParams<[TErrorFactory] extends [never] ? TCtx : Omit<TCtx, "errors">, TParams> & {
-	readonly meta: Readonly<Omit<TAccMeta, "openApi" | typeof CHAIN_META>>
-	readonly routePattern: TPath
-} & ([TErrorFactory] extends [never]
+	TTaps = {},
+> = ApplyParams<
+	[TErrorFactory] extends [never]
+		? [keyof TTaps] extends [never]
+			? TCtx
+			: Omit<TCtx, "tap">
+		: Omit<TCtx, [keyof TTaps] extends [never] ? "errors" : "errors" | "tap">,
+	TParams
+> &
+	/* declared taps replace the context's any-key tap; without them the context stays as it is */
+	([keyof TTaps] extends [never] ? {} : TapMethod<TTaps>) & {
+		readonly meta: Readonly<Omit<TAccMeta, "openApi" | typeof CHAIN_META>>
+		readonly routePattern: TPath
+	} & ([TErrorFactory] extends [never]
 		? {}
 		: [TErrorKeys] extends [never]
 			? { readonly errors: TErrorFactory }
@@ -259,3 +271,29 @@ export type InferRouteErrors<T, TPath extends InferRoutePaths<T>, TMethod extend
 export type InferErrorFactory<T> = T extends { readonly $errorFactory: infer F } ? F : never
 
 export type InferBasePath<T> = T extends { readonly $basePath: infer P } ? P : never
+
+/** `H` with tap payloads `TNewTaps` declared: they join its taps, and route meta may carry any of them. */
+export type WithTaps<H, TNewTaps extends Record<string, unknown>> =
+	H extends Honey<
+		infer TEnv,
+		infer TCtx,
+		infer TRoutes,
+		infer TMeta,
+		infer TFactory,
+		infer TDefaults extends string,
+		infer TBase extends string,
+		infer TTaps extends Record<string, unknown>,
+		infer TScoped extends readonly ScopedMwEntry[]
+	>
+		? Honey<
+				TEnv,
+				TCtx,
+				TRoutes,
+				[TMeta] extends [never] ? Partial<TNewTaps> : TMeta & Partial<TNewTaps>,
+				TFactory,
+				TDefaults,
+				TBase,
+				TTaps & TNewTaps,
+				TScoped
+			>
+		: never

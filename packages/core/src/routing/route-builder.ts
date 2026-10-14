@@ -74,7 +74,8 @@ export type RouteHandlerCtx<B extends BuilderTypes> = HandlerCtx<
 	B["accMeta"],
 	B["errorFactory"],
 	B["errorKeys"] | B["defaultErrors"],
-	B["path"]
+	B["path"],
+	B["taps"]
 >
 
 /** The app `.handler()` returns: the same handle, typed with the new route. */
