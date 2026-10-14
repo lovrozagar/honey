@@ -1,13 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { isHoneyResponse, NODE_OUTBOUND, rawBodyOf, withRawBody } from "../response/builder.ts"
 import { honey } from "../routing/app.ts"
 import { compress, type CompressOptions } from "./compress.ts"
 
 const TEXT = "honey ".repeat(400)
-
-afterEach(() => {
-	vi.unstubAllGlobals()
-})
 
 type Route = (ctx: { res: { text: Function; json: Function; stream: Function } }) => unknown
 
@@ -31,8 +27,7 @@ async function decoded(res: Response): Promise<string> {
 	const encoding = res.headers.get("content-encoding")
 	if (res.body === null) return ""
 	if (encoding === null) return res.text()
-	const format = (encoding === "br" ? "brotli" : encoding) as CompressionFormat
-	return new Response(res.body.pipeThrough(new DecompressionStream(format))).text()
+	return new Response(res.body.pipeThrough(new DecompressionStream(encoding as CompressionFormat))).text()
 }
 
 async function send(a: ReturnType<typeof app>, headers?: Record<string, string>) {
@@ -42,46 +37,30 @@ async function send(a: ReturnType<typeof app>, headers?: Record<string, string>)
 
 describe("compress(): negotiation", () => {
 	it.each([
-		["br, gzip", "br"],
-		["gzip, deflate", "gzip"],
+		["gzip", "gzip"],
+		["br, gzip, deflate, zstd", "gzip"],
 		["GZIP", "gzip"],
-		["gzip;q=1, br;q=0.5", "gzip"],
-		["br;q=0, gzip", "gzip"],
-		["*", "br"],
-		["*;q=0.1, br;q=0", "gzip"],
+		["gzip;q=0.5, br;q=1", "gzip"],
+		["*", "gzip"],
+		["*;q=0.1, br", "gzip"],
+		["*, gzip;q=0", null],
+		["br", null],
 		["identity", null],
 		["deflate", null],
 		["gzip;q=0", null],
 		["gzip;q=abc", null],
+		["*;q=0", null],
 	])("Accept-Encoding %j: %s", async (accept, expected) => {
 		expect((await send(app(), { "accept-encoding": accept })).encoding).toBe(expected)
 	})
 
 	it("the body decodes to what the handler answered", async () => {
-		const [br, gzip] = await Promise.all([
-			send(app(), { "accept-encoding": "br" }),
-			send(app(), { "accept-encoding": "gzip" }),
-		])
-		expect([await decoded(br.res), await decoded(gzip.res)]).toEqual([TEXT, TEXT])
+		expect(await decoded((await send(app(), { "accept-encoding": "gzip" })).res)).toBe(TEXT)
 	})
 
 	it("Vary: Accept-Encoding on every answer it could have encoded, encoded or not", async () => {
 		const [encoded, plain] = [await send(app(), { "accept-encoding": "gzip" }), await send(app(), {})]
 		expect([encoded.vary, plain.vary, plain.encoding]).toEqual(["accept-encoding", "accept-encoding", null])
-	})
-
-	it("a runtime without brotli: gzip", async () => {
-		const Native = globalThis.CompressionStream
-		vi.stubGlobal(
-			"CompressionStream",
-			class extends Native {
-				constructor(format: CompressionFormat) {
-					if ((format as string) === "brotli") throw new TypeError("unsupported")
-					super(format)
-				}
-			},
-		)
-		expect((await send(app(), { "accept-encoding": "br, gzip" })).encoding).toBe("gzip")
 	})
 })
 
@@ -113,7 +92,7 @@ describe("compress(): what it leaves alone", () => {
 	])("%s", async (_name, handler) => {
 		/* the answer to a client that accepts br and gzip is the one a client accepting nothing gets */
 		const a = app(handler as Route)
-		const [negotiated, identity] = [await send(a, { "accept-encoding": "br, gzip" }), await send(a)]
+		const [negotiated, identity] = [await send(a, { "accept-encoding": "gzip, br" }), await send(a)]
 		expect([negotiated.encoding, await negotiated.res.text()]).toEqual([identity.encoding, await identity.res.text()])
 	})
 
