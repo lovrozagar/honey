@@ -56,7 +56,7 @@ src/response/sse.ts	core	src	05	text/event-stream emitter + typed events	respons
 src/response/range.ts	core	src	05	Range / 206 / Accept-Ranges (A3)	—
 src/response/etag.ts	core	src	08	ETag + If-None-Match	etag.ts
 src/response/cache-control.ts	core	src	08	cacheControl + Last-Modified/If-Modified-Since (A4)	—
-src/response/with-headers.ts	core	src	08	apply declared headers	with-headers.ts
+src/response/with-headers.ts	core	src	07	withHeaders(response, edit) + addVary: a 101 is returned untouched, a HoneyResponse edits through HoneyOutHeaders' plain-record path, a mutable native response in place, an immutable one (fetch()/Response.redirect) copied first (same body stream/status/statusText). Born at 07 (every phase-(b) header middleware needs it); bit 08 extends it for declared response headers	with-headers.ts
 src/response/pretty-json.ts	core	src	08	pretty JSON option	pretty-json.ts
 src/response/static.ts	core	src	07	static files + range	static.ts
 src/validation/standard-schema.ts	core	types	02	Standard Schema V1 interface (type-only): StandardSchemaLike, StandardSchemaIssue, InferInput/InferOutput — vendor-neutral contract zod/valibot/arktype/effect implement; defineErrors (bit 02) types `data` as InferOutput<schema>, bit 08 input/output validation import the same types. kind=types, no sibling test (v0 types.ts)	types.ts
