@@ -40,7 +40,6 @@ src/input/form.ts	core	src	08	multipart/urlencoded body	validation.ts
 src/input/binary.ts	core	src	08	.input({ binary }) raw-body slot (A1)	—
 src/input/body-limit.ts	core	src	08	request body size cap	body-limit.ts
 src/input/body-kind.ts	core	src	08	body-kind detection	body-kind.ts
-src/input/request-limits.ts	core	src	08	request limit constants	request-limits.ts
 src/input/accepts.ts	core	src	08	Accept negotiation	accepts.ts
 src/validation/validate-input.ts	core	src	08	run input standard-schema	validation.ts
 src/validation/validate-output.ts	core	src	08	run output standard-schema	validation.ts
@@ -78,11 +77,10 @@ src/middleware/powered-by.ts	core	src	07	X-Powered-By	powered-by.ts
 src/middleware/ip-restrict.ts	core	src	07	IP allow/deny	ip-restrict.ts
 src/context/peer.ts	core	src	03	ctx.ip = the canonical platform peer (H23): CF-Connecting-IP on Workers, PEER_ADDRESS symbol on node (adapter sets it, bit 04), server.requestIP on Bun; unwrap ::ffff:, lowercase IPv6; lazy + cached per request; `ip` reserved. No trustProxy/XFF/CIDR (cut)	peer.ts,client-ip.ts
 src/runtime/detect-runtime.ts	core	src	04	node|bun|cf detection (no Deno)	detect-runtime.ts
-src/runtime/optional-peer.ts	core	src	04	optional-peer-dependency guard: a friendly error when an optional npm peer (e.g. ws) is missing — a dynamic import of a real dependency, NOT a registry (H23). Renamed from runtime/peer.ts to avoid colliding with context/peer.ts (ctx.ip)	peer.ts
+src/runtime/optional-peer.ts	core	src	06	optional-peer-dependency guard: a friendly error when an optional npm peer (e.g. ws) is missing — a dynamic import of a real dependency, NOT a registry (H23). Renamed from runtime/peer.ts to avoid colliding with context/peer.ts (ctx.ip)	peer.ts
 src/adapters/node/serve.ts	core	src	04	Node http serve (node:* here only)	node.ts
 src/adapters/node/request.ts	core	src	04	node:http ↔ Fetch Request bridge	node-request.ts
 src/adapters/bun/serve.ts	core	src	04	Bun.serve	node.ts,serve.ts
-src/adapters/workers/serve.ts	core	src	04	Workers fetch(request,env,ctx)	serve.ts
 src/adapters/serve.ts	core	src	04	plain serve(app, options): detect runtime → call node/bun adapter → return a handle (port, shutdown). The `./serve` export. No slot, no self-registration, no side effect (H23)	serve.ts
 src/adapters/fetch-request.ts	core	src	04	toFetchRequest	fetch-request.ts
 src/streaming/producer-stream.ts	core	src	05	Web-Streams body drive + abort	producer-stream.ts
