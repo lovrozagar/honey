@@ -1,452 +1,409 @@
+/**
+ * Errors through the app: a throw anywhere in the chain becomes one answer that the middleware
+ * around it still shapes, which thrown errors reach the client under an errorFactory (declared,
+ * default and boundary keys), ctx.errors, and the app's onError, onNotFound and onMethodNotAllowed.
+ */
 import { describe, expect, it } from "vitest"
 import { HoneyError } from "../../src/errors/error.ts"
-import { honey } from "../../src/routing/app.ts"
-import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
+import { createMiddleware, defineMiddleware } from "../../src/middleware/middleware.ts"
+import { honey } from "../../src/routing/app.ts"
 
-/**
- * Middleware that sets a custom header on every response (simulates secureHeaders/poweredBy).
- * Exercises the post-next() path that was previously skipped for error responses.
- */
-const headerMw = (name: string, value: string) =>
+type Fetchable = { fetch: (r: Request, env: never) => Response | Promise<Response> }
+
+async function send(app: Fetchable, target: string, init: RequestInit = {}) {
+	const res = await app.fetch(new Request(`http://localhost${target}`, init), {} as never)
+	const text = await res.text()
+	const body: unknown = res.headers.get("content-type") === "application/json" ? JSON.parse(text) : text
+	return { body, headers: Object.fromEntries(res.headers), status: res.status }
+}
+
+const JSON_TYPE = { "content-type": "application/json" }
+const envelope = (key: string, status: number, statusKey = key) => ({
+	error_key: key,
+	fields: {},
+	message: key,
+	status,
+	status_key: statusKey,
+	success: false,
+})
+/** The answer an error gets, with any headers beyond the content type. */
+const failure = (key: string, status: number, statusKey = key, extra: Record<string, string> = {}) => ({
+	body: envelope(key, status, statusKey),
+	headers: { ...JSON_TYPE, ...extra },
+	status,
+})
+const INTERNAL = failure("internal_server_error", 500)
+
+/** A middleware that sets a header on whatever answer comes back from next(). */
+const stamp = (name: string, value: string) =>
 	createMiddleware(async (_ctx, next) => {
 		const res = await next()
 		res.headers.set(name, value)
 		return res
 	})
 
-describe("handler returning nothing", () => {
-	// v0: 35d8feadcd
-	it("handler returning null → 500", async () => {
-		const app = honey<{}>()
-		app.get("/oops").handler((() => null) as never)
+const STAMPS = { "x-one": "1", "x-two": "2" }
 
-		const res = await app.fetch(new Request("http://localhost/oops"), {})
-		expect(res.status).toBe(500)
+/** An app whose outermost middleware records ctx.error's cause once the rest has answered. */
+function observedApp() {
+	const causes: unknown[] = []
+	const observer = createMiddleware(async (ctx: { error?: HoneyError }, next) => {
+		const res = await next()
+		causes.push(ctx.error?.cause)
+		return res
 	})
-})
+	return { app: honey<{}>().use(observer), causes }
+}
 
-describe("middleware returning nothing", () => {
-	// v0: 7512c45a97
-	it("middleware that calls next() but doesn't return it → 500", async () => {
-		const badMw = createMiddleware((async (_ctx: Record<string, unknown>, next: (a?: {}) => Promise<Response>) => {
-			await next()
-			/* forgot to return */
-		}) as never)
+type App = ReturnType<typeof honey<{}>>
 
-		const app = honey<{}>().use(badMw)
-		app.get("/test").handler((ctx) => ctx.res.json("ok", {}))
+/** Where a throw happens, and the answer it becomes. */
+const THROWS: Array<{ answer: ReturnType<typeof failure> | object; label: string; route: (app: App) => void }> = [
+	{
+		answer: failure("bad_request", 400, "bad_request", STAMPS),
+		label: "a handler throws a HoneyError",
+		route: (app) =>
+			app.get("/t").handler(() => {
+				throw new HoneyError({ errorKey: "bad_request", status: "bad_request" })
+			}),
+	},
+	{
+		answer: failure("not_found", 404, "not_found", STAMPS),
+		label: "an async handler throws after an await",
+		route: (app) =>
+			app.get("/t").handler(async () => {
+				await Promise.resolve()
+				throw new HoneyError({ errorKey: "not_found", status: "not_found" })
+			}),
+	},
+	{
+		answer: failure("bad_request", 400, "bad_request", STAMPS),
+		label: "a handler returns a rejected promise",
+		route: (app) =>
+			app.get("/t").handler(() => Promise.reject(new HoneyError({ errorKey: "bad_request", status: "bad_request" }))),
+	},
+	{
+		answer: failure("internal_server_error", 500, "internal_server_error", STAMPS),
+		label: "a handler throws a plain Error",
+		route: (app) =>
+			app.get("/t").handler(() => {
+				throw new Error("kaboom")
+			}),
+	},
+	{
+		answer: failure("internal_server_error", 500, "internal_server_error", STAMPS),
+		label: "a middleware throws before next()",
+		route: (app) =>
+			app
+				.use(
+					createMiddleware(() => {
+						throw new RangeError("out of range")
+					}),
+				)
+				.get("/t")
+				.handler((ctx) => ctx.res.json("ok", {})),
+	},
+	{
+		answer: failure("internal_server_error", 500, "internal_server_error", STAMPS),
+		label: "a middleware throws after next() answered",
+		route: (app) =>
+			app
+				.use(
+					createMiddleware(async (_ctx, next) => {
+						await next()
+						throw new Error("post-processing crashed")
+					}),
+				)
+				.get("/t")
+				.handler((ctx) => ctx.res.json("ok", {})),
+	},
+	{
+		answer: failure("conflict", 409, "conflict", { ...STAMPS, "x-route": "yes" }),
+		label: "a handler behind route middleware throws",
+		route: (app) =>
+			app
+				.get("/t")
+				.use(stamp("x-route", "yes"))
+				.handler(() => {
+					throw new HoneyError({ errorKey: "conflict", status: "conflict" })
+				}),
+	},
+	{
+		answer: { body: { data: 1 }, headers: { ...JSON_TYPE, ...STAMPS }, status: 200 },
+		label: "nothing throws",
+		route: (app) => app.get("/t").handler((ctx) => ctx.res.json("ok", { data: 1 })),
+	},
+]
 
-		const res = await app.fetch(new Request("http://localhost/test"), {})
-		expect(res.status).toBe(500)
-	})
-})
-
-describe("sync errors in handlers", () => {
+describe("a throw anywhere in the chain becomes one error answer", () => {
+	// v0: 2856f1a087
+	// v0: 61507ec17c
+	// v0: 57cad9f54e
+	// v0: 1596ac0783
+	// v0: 9dd1cacac5
+	// v0: 02c8c70858
 	// v0: a361ade160
-	it("sync throw in middleware before next() → 500", async () => {
-		const mw = createMiddleware(async () => {
-			throw new RangeError("out of range")
-		})
-
-		const app = honey<{}>().use(mw)
-		app.get("/test").handler((ctx) => ctx.res.json("ok", {}))
-
-		const res = await app.fetch(new Request("http://localhost/test"), {})
-		expect(res.status).toBe(500)
+	// v0: 3bffd4af3d
+	// v0: 048cb7f945
+	// v0: 17bec54ba7
+	// v0: a226a39432
+	it.each(THROWS)("when $label, every middleware around it still stamps the answer", async ({ answer, route }) => {
+		const app = honey<{}>()
+		route(app.use(stamp("x-one", "1")).use(stamp("x-two", "2")))
+		expect(await send(app, "/t")).toEqual(answer)
 	})
 })
 
-describe("defaultErrors expands enforcement", () => {
-	// v0: 57575ddf02
-	it("defaultErrors key allowed even when route only declares other keys", async () => {
-		const errors = defineErrors({
-			auth_failed: "unauthorized",
-			not_found: "not_found",
-			rate_limited: "too_many_requests",
+/** A layer that answers nothing, and the hint its 500 carries. */
+const EMPTY_ANSWERS: Array<[string, (app: App) => void, string]> = [
+	["a handler returns null", (app) => app.get("/t").handler((() => null) as never), "handler must return"],
+	["a handler returns nothing", (app) => app.get("/t").handler((() => undefined) as never), "handler must return"],
+	[
+		"a middleware awaits next() and returns nothing",
+		(app) =>
+			app
+				.use(
+					createMiddleware((async (_ctx: object, next: () => Promise<Response>) => {
+						await next()
+					}) as never),
+				)
+				.get("/t")
+				.handler((ctx) => ctx.res.json("ok", {})),
+		"middleware must return",
+	],
+]
+
+describe("a layer that answers nothing, or throws mid-chain", () => {
+	// v0: 35d8feadcd
+	// v0: 866c9b8ca8
+	// v0: 7512c45a97
+	it.each(EMPTY_ANSWERS)(
+		"when %s, the answer is a 500 whose cause says what to return",
+		async (_label, route, hint) => {
+			const { app, causes } = observedApp()
+			route(app)
+			expect(await send(app, "/t")).toEqual(INTERNAL)
+			expect(causes).toEqual([expect.objectContaining({ message: expect.stringContaining(hint) })])
+		},
+	)
+
+	// v0: e96926060d
+	it("a throw stops the chain: later middleware and the handler never run", async () => {
+		const trace: string[] = []
+		const app = honey<{}>()
+		const fail = createMiddleware(() => {
+			trace.push("mw1")
+			throw new Error("early fail")
 		})
-
-		const app = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
-
+		const later = createMiddleware((_ctx, next) => {
+			trace.push("mw2")
+			return next()
+		})
 		app
-			.get("/item")
-			.errors("not_found")
-			.handler(() => {
-				/* auth_failed is a defaultError, not declared on this route */
-				throw errors.auth_failed()
-			})
-
-		const res = await app.fetch(new Request("http://localhost/item"), {})
-		/* auth_failed should be allowed (it's in defaultErrors) → 401 */
-		expect(res.status).toBe(401)
-		const data = (await res.json()) as Record<string, string>
-		expect(data.error_key).toBe("auth_failed")
-	})
-})
-
-describe("HoneyError construction", () => {
-	// v0: 1d261c36cc
-	it("error with cause preserves chain", () => {
-		const cause = new Error("original")
-		const err = new HoneyError({
-			cause,
-			errorKey: "internal_server_error",
-			status: "internal_server_error",
-		})
-		expect(err.cause).toBe(cause)
-		expect(err.status).toBe(500)
-	})
-})
-
-describe("defaultErrors propagation", () => {
-	// v0: ce007f0a3e
-	it("defaultErrors keys available on all routes", async () => {
-		const errors = defineErrors({
-			auth_failed: "unauthorized",
-			not_found: "not_found",
-		})
-
-		const app = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
-
-		/* route only declares not_found, but auth_failed is a default */
-		app
-			.get("/item")
-			.errors("not_found")
-			.handler(() => {
-				/* throw auth_failed — should be allowed because it's a default */
-				throw errors.auth_failed()
-			})
-
-		const res = await app.fetch(new Request("http://localhost/item"), {})
-		/* auth_failed is in defaultErrors, so should be allowed (not wrapped) */
-		expect(res.status).toBe(401)
-		const data = (await res.json()) as Record<string, unknown>
-		expect(data.error_key).toBe("auth_failed")
-	})
-})
-
-describe("ctx.errors factory subsetting", () => {
-	// v0: 7241a672c9
-	it("route with specific error keys → ctx.errors only has those keys", async () => {
-		const errors = defineErrors({
-			auth_failed: "unauthorized",
-			not_found: "not_found",
-			rate_limited: "too_many_requests",
-		})
-
-		const app = honey<{}>().errorFactory(errors)
-		app
-			.get("/item")
-			.errors("not_found")
+			.get("/t")
+			.use(fail)
+			.use(later)
 			.handler((ctx) => {
-				const keys = Object.keys(ctx.errors as Record<string, unknown>)
-				return ctx.res.json("ok", { errorKeys: keys })
+				trace.push("handler")
+				return ctx.res.json("ok", {})
 			})
-
-		const res = await app.fetch(new Request("http://localhost/item"), {})
-		expect(res.status).toBe(200)
-		const data = (await res.json()) as Record<string, string[]>
-		/* only not_found should be in the subset (plus any defaultErrors) */
-		expect(data.errorKeys).toContain("not_found")
-		expect(data.errorKeys).not.toContain("rate_limited")
-	})
-
-	// v0: a88f6dff48
-	it("route with no error keys → full factory available", async () => {
-		const errors = defineErrors({
-			auth_failed: "unauthorized",
-			not_found: "not_found",
-		})
-
-		const app = honey<{}>().errorFactory(errors)
-		app.get("/item").handler((ctx) => {
-			const keys = Object.keys(ctx.errors as Record<string, unknown>)
-			return ctx.res.json("ok", { errorKeys: keys })
-		})
-
-		const res = await app.fetch(new Request("http://localhost/item"), {})
-		expect(res.status).toBe(200)
-		const data = (await res.json()) as Record<string, string[]>
-		expect(data.errorKeys).toContain("not_found")
-		expect(data.errorKeys).toContain("auth_failed")
+		expect(await send(app, "/t")).toEqual(INTERNAL)
+		expect(trace).toEqual(["mw1"])
 	})
 })
 
-describe("middleware error wrapping", () => {
+describe("a middleware rewriting the error answer", () => {
 	// v0: fb311f828e
-	it("middleware detects error response and rewrites it", async () => {
-		const mw = createMiddleware(async (_ctx, next) => {
-			const res = await next()
-			if (res.status >= 500) {
-				return new Response(JSON.stringify({ error_key: "wrapped_error", status: 502 }), {
-					headers: { "content-type": "application/json" },
-					status: 502,
-				})
-			}
-			return res
-		})
-
-		const app = honey<{}>().use(mw)
-		app.get("/fail").handler(() => {
-			throw new Error("original")
-		})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {})
-		expect(res.status).toBe(502)
-		const data = (await res.json()) as Record<string, unknown>
-		expect(data.error_key).toBe("wrapped_error")
+	// v0: 481a492388
+	it.each<[string, (res: Response) => Promise<Response>, object]>([
+		[
+			"replaces it",
+			async () => Response.json({ error_key: "wrapped_error", status: 502 }, { status: 502 }),
+			{ body: { error_key: "wrapped_error", status: 502 }, headers: JSON_TYPE, status: 502 },
+		],
+		[
+			"reads and extends it",
+			async (res) => Response.json({ ...((await res.json()) as object), extra: true }, { status: res.status }),
+			{ body: { ...envelope("internal_server_error", 500), extra: true }, headers: JSON_TYPE, status: 500 },
+		],
+	])("a middleware that %s changes the error answer the client gets", async (_label, rewrite, answer) => {
+		const app = honey<{}>()
+		app
+			.use(createMiddleware(async (_ctx, next) => rewrite(await next())))
+			.get("/t")
+			.handler(() => {
+				throw new Error("original")
+			})
+		expect(await send(app, "/t")).toEqual(answer)
 	})
 })
 
-describe("defineMiddleware with error keys", () => {
-	// v0: b2dda0df3a
-	it("middleware error keys auto-accumulated by .use()", async () => {
-		const { defineMiddleware } = await import("../../src/middleware/middleware.ts")
-		const errors = defineErrors({
-			auth_required: "unauthorized",
-			rate_limited: "too_many_requests",
-		})
+const errors = defineErrors({
+	auth_failed: "unauthorized",
+	not_found: "not_found",
+	rate_limited: "too_many_requests",
+	wrapped: "bad_gateway",
+})
 
-		const authMw = defineMiddleware({
-			errors: [errors, "auth_required"],
-			fn: async (ctx, next) => {
-				const req = (ctx as { req: Request }).req
-				if (!req.headers.get("authorization")) {
-					throw errors.auth_required()
-				}
+/** A /t route on `errors`, with auth_failed a default error, that declares not_found and throws `thrown`. */
+function factoryApp(thrown: () => unknown, boundary: "app" | "none" | "route" = "none") {
+	const app = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
+	if (boundary === "app") app.defaultBoundary("wrapped")
+	const route = app.get("/t").errors("not_found")
+	const handler = () => {
+		throw thrown()
+	}
+	if (boundary === "route") route.boundary("wrapped").handler(handler)
+	else route.handler(handler)
+	return app
+}
+
+/** A thrown error, and the answer it becomes under the factory. */
+const REACHES: Array<[string, () => unknown, object]> = [
+	["a declared key", () => errors.not_found(), failure("not_found", 404)],
+	["a default key the route did not declare", () => errors.auth_failed(), failure("auth_failed", 401, "unauthorized")],
+	["an undeclared key", () => errors.rate_limited(), INTERNAL],
+	[
+		"a HoneyError from outside the factory",
+		() => new HoneyError({ errorKey: "teapot", status: "bad_request" }),
+		INTERNAL,
+	],
+	["a plain Error", () => new Error("raw"), INTERNAL],
+]
+
+describe("which errors reach the client under an errorFactory", () => {
+	// v0: 57575ddf02
+	// v0: ce007f0a3e
+	it.each(REACHES)("%s gives %o", async (_label, thrown, answer) => {
+		expect(await send(factoryApp(thrown), "/t")).toEqual(answer)
+	})
+
+	// v0: 8a8c5fae41
+	it.each([
+		["the app's defaultBoundary", "app"],
+		["the route's .boundary()", "route"],
+	] as const)("%s turns plain and undeclared throws into its key, and lets declared ones through", async (_l, at) => {
+		const wrapped = failure("wrapped", 502, "bad_gateway")
+		expect(
+			await send(
+				factoryApp(() => new Error("raw"), at),
+				"/t",
+			),
+		).toEqual(wrapped)
+		expect(
+			await send(
+				factoryApp(() => errors.rate_limited(), at),
+				"/t",
+			),
+		).toEqual(wrapped)
+		expect(
+			await send(
+				factoryApp(() => errors.not_found(), at),
+				"/t",
+			),
+		).toEqual(failure("not_found", 404))
+	})
+
+	// v0: b2dda0df3a
+	it("a middleware's declared errors reach the client on the routes that use it", async () => {
+		const own = defineErrors({ auth_required: "unauthorized", rate_limited: "too_many_requests" })
+		const auth = defineMiddleware({
+			errors: [own, "auth_required"],
+			fn: (ctx: { req: Request }, next) => {
+				if (!ctx.req.headers.get("authorization")) throw own.auth_required()
 				return next()
 			},
 		})
-
-		const app = honey<{}>().errorFactory(errors)
+		const app = honey<{}>().errorFactory(own)
 		app
-			.get("/protected")
-			.use(authMw)
-			.handler((ctx) => ctx.res.json("ok", {}))
-
-		/* without auth → 401 */
-		const res1 = await app.fetch(new Request("http://localhost/protected"), {})
-		expect(res1.status).toBe(401)
-		const data1 = (await res1.json()) as Record<string, unknown>
-		expect(data1.error_key).toBe("auth_required")
-
-		/* with auth → 200 */
-		const res2 = await app.fetch(
-			new Request("http://localhost/protected", {
-				headers: { authorization: "Bearer tok" },
-			}),
-			{},
-		)
-		expect(res2.status).toBe(200)
+			.get("/p")
+			.use(auth)
+			.handler((ctx) => ctx.res.json("ok", { in: true }))
+		expect(await send(app, "/p")).toEqual(failure("auth_required", 401, "unauthorized"))
+		const authed = await send(app, "/p", { headers: { authorization: "Bearer tok" } })
+		expect(authed).toEqual({ body: { in: true }, headers: JSON_TYPE, status: 200 })
 	})
 })
 
-describe("middleware: error skips subsequent middleware", () => {
-	// v0: e96926060d
-	it("first middleware throws → second middleware never runs", async () => {
-		const order: string[] = []
-
-		const mw1 = createMiddleware(async () => {
-			order.push("mw1")
-			throw new Error("early fail")
-		})
-		const mw2 = createMiddleware(async (_ctx, next) => {
-			order.push("mw2")
-			return next()
-		})
-
-		const app = honey<{}>()
+describe("ctx.errors", () => {
+	// v0: 7241a672c9
+	// v0: a88f6dff48
+	it("holds the route's declared keys and the app's default keys, and nothing else", async () => {
+		const app = honey<{}>().errorFactory(errors).defaultErrors("auth_failed")
 		app
-			.get("/test")
-			.use(mw1)
-			.use(mw2)
+			.get("/declared")
+			.errors("not_found")
+			.handler((ctx) => ctx.res.json("ok", { keys: Object.keys(ctx.errors) }))
+		app.get("/none").handler((ctx) => ctx.res.json("ok", { keys: Object.keys(ctx.errors) }))
+		app
+			.get("/throw")
+			.errors("not_found")
 			.handler((ctx) => {
-				order.push("handler")
-				return ctx.res.json("ok", {})
+				throw ctx.errors.not_found()
 			})
-
-		const res = await app.fetch(new Request("http://localhost/test"), {})
-		expect(res.status).toBe(500)
-		expect(order).toEqual(["mw1"])
-		expect(order).not.toContain("mw2")
-		expect(order).not.toContain("handler")
+		const keys = (list: string[]) => ({ body: { keys: list }, headers: JSON_TYPE, status: 200 })
+		expect(await send(app, "/declared")).toEqual(keys(["auth_failed", "not_found"]))
+		expect(await send(app, "/none")).toEqual(keys(["auth_failed"]))
+		expect(await send(app, "/throw")).toEqual(failure("not_found", 404))
 	})
 })
 
-describe("error responses flow through middleware chain", () => {
-	// v0: 2856f1a087
-	it("middleware headers survive sync handler throw", async () => {
-		const app = honey<Record<string, never>>().use(headerMw("x-powered-by", "honey"))
-		app.get("/fail").handler(() => {
-			throw new HoneyError({ errorKey: "bad_request", status: "bad_request" })
+describe("the app's error handlers", () => {
+	it.each<[string, () => unknown, object]>([
+		[
+			"returns a Response",
+			() => new Response("handled", { status: 418 }),
+			{
+				body: "handled",
+				headers: { "content-type": "text/plain;charset=UTF-8" },
+				status: 418,
+			},
+		],
+		[
+			"returns a HoneyError",
+			() => new HoneyError({ errorKey: "typed", status: "conflict" }),
+			failure("typed", 409, "conflict"),
+		],
+		[
+			"resolves to a HoneyError",
+			async () => new HoneyError({ errorKey: "typed", status: "conflict" }),
+			failure("typed", 409, "conflict"),
+		],
+		["returns nothing", () => undefined, INTERNAL],
+		[
+			"throws",
+			() => {
+				throw new Error("onError broke")
+			},
+			INTERNAL,
+		],
+		["rejects", () => Promise.reject(new Error("onError broke")), INTERNAL],
+	])("an onError that %s, given what was thrown, gives %o", async (_label, onError, answer) => {
+		const seen: unknown[] = []
+		const boom = new Error("boom")
+		const app = honey<{}>().onError((thrown) => {
+			seen.push(thrown)
+			return onError() as never
 		})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(400)
-		expect(res.headers.get("x-powered-by")).toBe("honey")
-		const body = (await res.json()) as Record<string, unknown>
-		expect(body.error_key).toBe("bad_request")
+		app.get("/t").handler(() => {
+			throw boom
+		})
+		expect(await send(app, "/t")).toEqual(answer)
+		expect(seen).toEqual([boom])
 	})
 
-	// v0: 57cad9f54e
-	it("middleware headers survive async handler throw", async () => {
-		const app = honey<Record<string, never>>().use(headerMw("x-custom", "test"))
-		app.get("/fail").handler(async () => {
-			await Promise.resolve()
-			throw new HoneyError({ errorKey: "not_found", status: "not_found" })
+	it("onNotFound answers unknown paths; onMethodNotAllowed answers wrong methods, keeping Allow", async () => {
+		const app = honey<{}>()
+			.onNotFound((ctx) => Response.json({ missing: new URL(ctx.req.url).pathname }, { status: 404 }))
+			.onMethodNotAllowed((ctx) => Response.json({ allowed: ctx.allowed }, { status: 405 }))
+		app.get("/t").handler((ctx) => ctx.res.json("ok", {}))
+		app.post("/t").handler((ctx) => ctx.res.json("ok", {}))
+		expect(await send(app, "/nope")).toEqual({ body: { missing: "/nope" }, headers: JSON_TYPE, status: 404 })
+		expect(await send(app, "/t", { method: "DELETE" })).toEqual({
+			body: { allowed: ["GET", "POST"] },
+			headers: { ...JSON_TYPE, allow: "GET, POST" },
+			status: 405,
 		})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(404)
-		expect(res.headers.get("x-custom")).toBe("test")
-	})
-
-	// v0: 9dd1cacac5
-	it("multiple middleware stacked — all post-next() headers present on error", async () => {
-		const app = honey<Record<string, never>>().use(headerMw("x-one", "1")).use(headerMw("x-two", "2"))
-
-		app.get("/fail").handler(() => {
-			throw new Error("kaboom")
-		})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(500)
-		expect(res.headers.get("x-one")).toBe("1")
-		expect(res.headers.get("x-two")).toBe("2")
-	})
-})
-
-describe("error responses flow through middleware chain (2)", () => {
-	// v0: 17bec54ba7
-	it("route-level middleware also gets post-next() on error", async () => {
-		const app = honey<Record<string, never>>()
-		app
-			.get("/fail")
-			.use(headerMw("x-route", "yes"))
-			.handler(() => {
-				throw new HoneyError({ errorKey: "conflict", status: "conflict" })
-			})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(409)
-		expect(res.headers.get("x-route")).toBe("yes")
-	})
-})
-
-describe("error response format unchanged", () => {
-	// v0: 8a8c5fae41
-	it("boundary error wrapping still works through middleware", async () => {
-		const errors = defineErrors({
-			auth_error: "internal_server_error",
-			wrapped: "internal_server_error",
-		})
-		const app = honey<Record<string, never>>().errorFactory(errors).use(headerMw("x-test", "1"))
-
-		app
-			.get("/fail")
-			.boundary("wrapped")
-			.handler(() => {
-				throw new Error("raw crash")
-			})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(500)
-		expect(res.headers.get("x-test")).toBe("1")
-		const body = (await res.json()) as Record<string, unknown>
-		expect(body.error_key).toBe("wrapped")
-	})
-})
-
-describe("throws anywhere in the chain become one error response", () => {
-	// v0: 481a492388
-	it("middleware that reads error response body can rewrite it", async () => {
-		const rewriteMw = createMiddleware(async (_ctx, next) => {
-			const res = await next()
-			if (res.status >= 400) {
-				const body = (await res.json()) as Record<string, unknown>
-				return new Response(JSON.stringify({ ...body, extra: true }), {
-					headers: { "content-type": "application/json" },
-					status: res.status,
-				})
-			}
-			return res
-		})
-
-		const app = honey<Record<string, never>>().use(rewriteMw)
-		app.get("/fail").handler(() => {
-			throw new HoneyError({ errorKey: "not_found", status: "not_found" })
-		})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(404)
-		const body = (await res.json()) as Record<string, unknown>
-		expect(body.error_key).toBe("not_found")
-		expect(body.extra).toBe(true)
-	})
-
-	// v0: 61507ec17c
-	it("no middleware → error response works as before (regression)", async () => {
-		const app = honey<Record<string, never>>()
-		app.get("/fail").handler(() => {
-			throw new HoneyError({ errorKey: "conflict", status: "conflict" })
-		})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(409)
-		const body = (await res.json()) as Record<string, unknown>
-		expect(body.error_key).toBe("conflict")
-	})
-
-	// v0: 048cb7f945
-	it("middleware itself throws after next() → still produces error response (safety net)", async () => {
-		const brokenMw = createMiddleware(async (_ctx, next) => {
-			await next()
-			throw new Error("middleware post-processing crashed")
-		})
-
-		const app = honey<Record<string, never>>().use(brokenMw)
-		app.get("/ok").handler((ctx) => ctx.res.json("ok", { success: true }))
-
-		const res = await app.fetch(new Request("http://localhost/ok"), {} as Record<string, never>)
-		expect(res.status).toBe(500)
-	})
-})
-
-describe("throws anywhere in the chain become one error response (2)", () => {
-	// v0: 02c8c70858
-	it("middleware throws before next() → still produces error response", async () => {
-		const brokenMw = createMiddleware(async () => {
-			throw new Error("middleware crashed before next")
-		})
-
-		const app = honey<Record<string, never>>().use(brokenMw)
-		app.get("/ok").handler((ctx) => ctx.res.json("ok", { success: true }))
-
-		const res = await app.fetch(new Request("http://localhost/ok"), {} as Record<string, never>)
-		expect(res.status).toBe(500)
-	})
-
-	// v0: 1596ac0783
-	it("async handler rejection flows through middleware", async () => {
-		const app = honey<Record<string, never>>().use(headerMw("x-async", "yes"))
-		app.get("/fail").handler(async () => {
-			return Promise.reject(new HoneyError({ errorKey: "bad_request", status: "bad_request" }))
-		})
-
-		const res = await app.fetch(new Request("http://localhost/fail"), {} as Record<string, never>)
-		expect(res.status).toBe(400)
-		expect(res.headers.get("x-async")).toBe("yes")
-	})
-
-	// v0: a226a39432
-	it("successful responses still work with middleware", async () => {
-		const app = honey<Record<string, never>>().use(headerMw("x-test", "works"))
-		app.get("/ok").handler((ctx) => ctx.res.json("ok", { data: 1 }))
-
-		const res = await app.fetch(new Request("http://localhost/ok"), {} as Record<string, never>)
-		expect(res.status).toBe(200)
-		expect(res.headers.get("x-test")).toBe("works")
-		const body = (await res.json()) as Record<string, unknown>
-		expect(body.data).toBe(1)
 	})
 })

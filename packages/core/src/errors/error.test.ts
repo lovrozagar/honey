@@ -23,6 +23,7 @@ describe("HoneyError", () => {
 	})
 
 	// v0: 85eaf4b513
+	// v0: 1d261c36cc
 	it("cause on native Error.cause", () => {
 		const cause = new Error("db failed")
 		expect(new HoneyError({ cause, errorKey: "test", status: "bad_request" }).cause).toBe(cause)
