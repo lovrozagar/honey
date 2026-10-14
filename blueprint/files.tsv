@@ -45,7 +45,8 @@ src/validation/validate-input.ts	core	src	08	run input standard-schema	validatio
 src/validation/validate-output.ts	core	src	08	run output standard-schema	validation.ts
 src/validation/content-type.ts	core	src	08	assert request/response content types	validation.ts
 src/response/response.ts	core	src	02	HoneyRes core + helper dispatch	response.ts
-src/response/builder.ts	core	src	02	response construction + finalize	honey-response.ts
+src/response/builder.ts	core	src	02	HoneyResponse, createHoneyResponse, replaceResponse, NODE_OUTBOUND/isNodeOutbound/isHoneyResponse (~230 lines after the HoneyOutHeaders split)	honey-response.ts
+src/response/out-headers.ts	core	src	02	HoneyOutHeaders — a lazy Headers view over a plain map (own-key get, getSetCookie, lazy upgrade to native on mutate/iterate); split from builder.ts to hold the 300-line limit	honey-response.ts
 src/response/status.ts	core	src	02	status vocabulary: StatusKey (snake_case 2xx–5xx names), statusKeyToCode, codeToStatusKey — read by errors/error.ts, response.ts, later OpenAPI/SDK; standalone so the response core needn't depend on the error class (v0 types.ts:8-133)	types.ts
 src/response/media-type.ts	core	src	08	media-type parse + Accept negotiation	media-type.ts
 src/response/binary.ts	core	src	08	ctx.res.binary typed bytes (A1)	response.ts
