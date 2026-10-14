@@ -39,8 +39,6 @@ const TARGET = process.env.HOTPATH_TARGET === "v0" ? "v0" : "v1"
 
 /** Scenarios v1 does not run, and why: the bit whose feature they need, or the cut that removed it. */
 const PENDING_V1: Readonly<Record<string, string>> = {
-	body: "pending bit 08",
-	"large-response": "pending bit 08",
 	/* trustProxy is cut (H23): v1 has no forwarded-client resolution to measure */
 	trust: "cut (H23)",
 }
@@ -132,6 +130,17 @@ function buildV1App() {
 		.handler((ctx) => ctx.res.json("ok", { ok: true }))
 	for (let i = 0; i < 300; i++) app.get(`/r${i}/:a/:b`).handler((ctx) => ctx.res.json("ok", { a: ctx.params.a }))
 	app.get("/deep/:a/:b/:c/:d/:e").handler((ctx) => ctx.res.json("ok", { e: ctx.params.e }))
+	/* body and large-response as v0 builds them; output validation at its default, off, on both sides */
+	app
+		.post("/echo")
+		.input({ json: passSchema })
+		.output({ "application/json": { ok: passSchema } })
+		.handler((ctx) => ctx.res.json("ok", ctx.input.json))
+	const big = { items: Array.from({ length: 500 }, (_, i) => ({ id: i, name: `n${i}`, ok: true })) }
+	app
+		.get("/large")
+		.output({ "application/json": { ok: passSchema } })
+		.handler((ctx) => ctx.res.json("ok", big))
 	return app
 }
 
