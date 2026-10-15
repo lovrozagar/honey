@@ -29,6 +29,10 @@ export default defineConfig({
 		exclude: ["**/node_modules/**", "**/dist/**", ...harness, ...harnessRust, ...stale],
 		include: ["tests/**/*.test.ts"],
 		passWithNoTests: true,
+		/* a runner knob, no assertion: the default run executes gen's Go compiles beside this suite, and
+		 * the process-spawning cases (a gateway generation takes ~2.5 s alone) exceed the 5 s default
+		 * under that load */
+		testTimeout: 30_000,
 		/* the oracle count (00-rules): the v0 suite keeps the committed passed/skipped totals */
 		reporters: ["default", "../packages/core/tests/structure/oracle-count.ts"],
 	},
