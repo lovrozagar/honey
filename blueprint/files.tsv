@@ -280,7 +280,7 @@ src/emit/ts/redirect-policy.ts	gen	src	11	redirect policy	client/redirect-policy
 src/emit/ts/sse.ts	gen	src	11	TS SSE client	client/sse.ts
 src/emit/ts/ws.ts	gen	src	11	TS WebSocket client	client/ws.ts
 src/emit/ts/realtime.ts	gen	src	11	resume client: createResumableConnection, keepalive, fallback chain, RealtimeError types (H8)	codegen.ts
-src/emit/ts/type-gen.ts	gen	src	11	generateTypes/jsonSchemaToTS: JSON Schema → TS declarations	codegen.ts
+src/emit/ts/type-gen.ts	gen	src	11	generateTypes(options): the app's types.gen.d.ts — Routes/RouteCtx/RouteInput/RouteOutput/RouteErrors/RouteErrorShapes/RouteErrorsByStatus/RouteMeta over the IR (irToTs) joined on x-honey-route, meta from the route tree (O1), ctx.input from extracted types with IR wire fallback (O3); builds the IR itself from the document with deriveOperationIds (O5)	codegen.ts
 src/emit/ts/route-tree.ts	gen	src	11	generateRouteTree(tree) over a gen-local v2-wire type (asserts v===2, writes RouteEntry.es per F17); FromApp/FromRouteTree leave gen — the caller composes generateRouteTree(app.toRouteTree()) (F2)	plugin.ts,codegen.ts
 src/emit/ts/app-client.ts	gen	src	11	the F1 app-typed front: emits createClient<typeof app> into the app's _gen/client.gen.ts, a Proxy over HTTP methods with a typed path arg (v0 shape, H4); InferRoutes = T extends {$routes: infer R} ? R : never declared structurally in the template so the emitted client imports nothing from core (stronger than H2 — no emitted import type)	client/index.ts
 src/emit/ts/overrides.test.ts	gen	test	11	C2 per-call base/timeout/headers overrides + the raw-response accessor, asserted over the executed client	client/http.ts

@@ -46001,14 +46001,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/core/context.test.ts"
 		},
-		"a1c8f914c0": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/core/x-internal.test.ts"
-		},
-		"72f35f74da": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/core/x-internal.test.ts"
-		},
 		"c3c69b195f": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
@@ -46829,6 +46821,8 @@
 		"ff639f1ab7": "bit-11 triage: DUP: Despite its title it does no scoping; SDK calls returning live-app data is the same assertion as 609a6a675a",
 		"ff656f9322": "bit-11 triage: TEXT: #parseBody name + mime strings; json/text parsing ported via 86c23526d8/e498ad6139, binary via A1 binary.test",
 		"ffc4c70a5d": "bit-11 triage: TEXT: \"emitted startsWith(\"\"text/\"\") source text; behavior ported as 358ff0ebb5\"",
-		"fffd7ccee4": "bit-11 triage: DUP: same standard-envelope error as bbe9086162"
+		"fffd7ccee4": "bit-11 triage: DUP: same standard-envelope error as bbe9086162",
+		"a1c8f914c0": "O4: generateTypes types the documented routes only; internal routes are excluded (H18.15/F3). v0 included them — superseded by v1 security posture; core document carries no internal routes.",
+		"72f35f74da": "O4: generateTypes types the documented routes only; internal routes are excluded (H18.15/F3). v0 included them — superseded by v1 security posture; core document carries no internal routes."
 	}
 }
