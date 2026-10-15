@@ -102,6 +102,8 @@ src/realtime/server.ts	core	src	06	RealtimePublisher + connection/session wiring
 tests/integration/conformance/reference-server.ts	core	app	06	the live resumable reference server (H8 conformance target): an in-memory event log replaying after Last-Event-ID or after the WS token via onReconnect, built on the public hooks alone — NOT shipped core, no resume protocol. Driven by the bit-06 resume integration now and the SDK conformance harness (bits 11-16); the conformance app/matrix join this dir at bit 11	—
 tests/integration/conformance/openapi-document.test.ts	core	test	10	OpenAPI 3.1 conformance: the emitted document validates against the 3.1 meta-schema (ajv + ajv-formats, dev-only), committed + generated docs round-trip through a real YAML reader (js-yaml, dev-only), no dangling $ref, every emitted path routes. The yaml.ts emitter stays vendor-free (hand-rolled); these deps are test-only (test:packaging confirms no leak)	conformance/openapi-document*
 tests/integration/conformance/oas31/	core	corpus	10	the OAS 3.1 meta-schema, base dialect and vocabulary (schema.json, dialect-base.json, meta-base.json) vendored verbatim from spec.openapis.org; openapi-document.test validates every committed and generated document against it. Frozen spec artifacts — vendored over a devDependency	fixtures/oas31/*
+tests/integration/conformance/app.ts	core	app	11	the conformance reference app (a honey app exposing every feature) spawned as a subprocess by gen's matrix/runner/harness — lives in core so gen never imports core (F6 process boundary); bits 12-18 drive the same app	sdk-harness/*
+tests/integration/route-tree-emit.test.ts	core	test	11	the live-app route-tree round trip (F2): app → generateRouteTree(app.toRouteTree()) via honey-codegen → import the module → routeTree() → serve identically, es carried; imports honey-codegen (allowed core importer)	codegen.ts
 src/realtime/realtime.ts	core	src	06	realtime(app, path, opts) → RealtimePublisher; the ./realtime export — a plain function wiring app.ws(path) + bus/session/publisher, NOT a self-registering slot (H23 — feature-slots.ts is cut, never recreated). Core never imports it; an app without realtime bundles none of it	realtime/register.ts
 src/ws/contract.ts	core	src	06	the shared ws contract (WSContext/WSHandler/WSAdapter/RawSocket types + WSContextImpl send-buffer/backpressure socket + fireHandler); a plain module every adapter imports — v0 wrongly housed these in cloudflare.ts behind an `import "./session.ts"` side-effect feeding the slot. No registerFeature, no side-effect import, no preUpgrade (cut — an upgrade-before-authorize window no adapter implemented)	ws/cloudflare.ts
 src/ws/node.ts	core	src	06	Node ws adapter (ws optional peer, lazy, not cached on failure); reads the upgrade off the NODE_UPGRADE symbol on the request view (like PEER_ADDRESS), not env.__nodeUpgrade — ctx.env stays the user's; keepalive ping/pong, idle, handshake-fail reject	ws/node.ts
@@ -275,7 +277,10 @@ src/emit/ts/sse.ts	gen	src	11	TS SSE client	client/sse.ts
 src/emit/ts/ws.ts	gen	src	11	TS WebSocket client	client/ws.ts
 src/emit/ts/realtime.ts	gen	src	11	resume client: createResumableConnection, keepalive, fallback chain, RealtimeError types (H8)	codegen.ts
 src/emit/ts/type-gen.ts	gen	src	11	generateTypes/jsonSchemaToTS: JSON Schema → TS declarations	codegen.ts
-src/emit/ts/route-tree.ts	gen	src	11	generateRouteTree/FromApp/FromRouteTree: the typed route tree for honey/plugin	plugin.ts,codegen.ts
+src/emit/ts/route-tree.ts	gen	src	11	generateRouteTree(tree) over a gen-local v2-wire type (asserts v===2, writes RouteEntry.es per F17); FromApp/FromRouteTree leave gen — the caller composes generateRouteTree(app.toRouteTree()) (F2)	plugin.ts,codegen.ts
+src/emit/ts/app-client.ts	gen	src	11	the F1 app-typed front: emits createClient<typeof app> into the app's _gen/client.gen.ts (emitted `import type { InferRoutes }` resolves in the consumer, H2), Proxy over path segments	client/index.ts
+src/emit/ts/overrides.test.ts	gen	test	11	C2 per-call base/timeout/headers overrides + the raw-response accessor, asserted over the executed client	client/http.ts
+src/emit/ts/binary.test.ts	gen	test	11	A1 binary response → Uint8Array/stream with Accept set; A2 typed response headers, over the executed client	client/http.ts
 src/emit/ts/index.ts	gen	index	11	TS SDK entry/exports	client/index.ts
 src/emit/go/sdk.ts	gen	src	12	Go SDK	codegen-go.ts
 src/emit/go/types.ts	gen	src	12	Go types	go-type-emitter.ts
@@ -346,6 +351,9 @@ tests/structure/mutation-harness.ts	gen	src	09	gen-local GUARDS registry + runne
 tests/structure/mutation-harness.test.ts	gen	test	09	proves the gen harness mechanism against a fixture guard	—
 tests/security/mutants.ts	gen	test	09	the gen guard mutants: escape-bypass (policy off → JSON.stringify), nondeterministic-naming (compareCodeUnits → localeCompare), spec-text-to-source (quoteKey returns the key raw)	—
 tests/security/emit-adversarial.test.ts	gen	test	09	gen emit adversarial + the F2 fuzz oracle (imported from escape.fuzz's helper, not duplicated), reran by the harness per guard	—
+tests/integration/conformance/matrix.ts	gen	src	11	the conformance feature×target grid (dx/conformance.md): the shared scenarios each target runner drives; complete-or-red per target. Bits 12-18 add their runner against this same grid unchanged	sdk-harness/*
+tests/integration/conformance/ts.test.ts	gen	test	11	the TS conformance runner: drives the shared matrix scenarios against the core reference app spawned as a subprocess (F6 process boundary, gen never imports core)	sdk-harness/ts-harness*
+tests/integration/ts-harness.test.ts	gen	test	11	opt-in gen test:harness entry (00-rules:119): spawns the core reference app and runs the emitted TS SDK against it; added to root test:harness + the CI harness job	sdk-harness/ts-harness*
 # vendored runtime templates (H9) — one subtree per language, each with its own sibling golden-output test (bits 11–18):
 src/runtime/ts/*	gen	runtime	11	vendored TS fetch runtime template	client/*
 src/runtime/go/*	gen	runtime	12	vendored Go net/http runtime template	client-go/*
