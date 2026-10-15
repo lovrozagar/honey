@@ -25,6 +25,7 @@ src/routing/match.ts	core	src	01	matchRoute over the tree; method/path resolutio
 src/routing/record.ts	core	src	01	RouteRecord + leaf types; per-graph record copy	index.ts
 src/routing/tree.ts	core	src	01	the route tree structure	tree.ts
 src/routing/tree-merge.ts	core	src	01	mergeTree (sub-app mount)	tree.ts
+src/routing/route-tree.ts	core	src	09	app.routeTree(tree) load + app.toRouteTree() export: the IR seam's runtime half — hydrate/export the finalized route tree, tested via the core toRouteTree→routeTree round-trip (no generator needed); delegation to the catch-all, frozen/stale-tree guards, handler patch mode, copy semantics, two-apps-from-one-tree; the bit-11 generator serializes toRouteTree's format	index.ts
 src/routing/pattern.ts	core	src	01	path pattern compile + match	pattern.ts
 src/routing/request-path.ts	core	src	01	canonicalization, strip-prefix, trailing slash	request-path.ts
 src/realtime/invoke-user.ts	core	src	06	callback containment for ws/realtime: invokeUser (fire callback, catch, report), reportUserError, createEventQueue; console fallback uses the bit-07 logger. NOT the request-handler path (that is runHandler inside compileChain, middleware.ts, bit 02)	invoke-user.ts
