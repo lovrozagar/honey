@@ -276,16 +276,15 @@ src/emit/ts/sdk.ts	gen	src	11	TS SDK	client/sdk.ts
 src/emit/ts/service-map.ts	gen	src	11	serviceMapOf: the IR → SDK service map (method/path/stream/body kind, per-op error statuses) the SDK Proxy dispatches over; keys are the renamed members (state_), entry flags (sse/ws/realtime/invalidate/params) present only when set (contract j)	client/sdk.ts
 src/emit/ts/sdk-types.ts	gen	types	11	the SDK class type surface split from sdk.ts (300-line limit): typed per-operation method signatures + config/result types over the IR	client/sdk.ts,client/types.ts
 src/emit/ts/http.ts	gen	src	11	TS fetch client core	client/http.ts
-src/emit/ts/request.ts	gen	src	11	request build + retry	client/http.ts
-src/emit/ts/response.ts	gen	src	11	response parse + raw accessor	client/http.ts
-src/emit/ts/path.ts	gen	src	11	path/url helpers	client/path.ts
-src/emit/ts/types.ts	gen	types	11	emitted TS types	client/types.ts,ts-type-emitter.ts
-src/emit/ts/error.ts	gen	src	11	typed errors	client/error.ts
-src/emit/ts/defaults.ts	gen	src	11	client defaults	client/defaults.ts
-src/emit/ts/redirect-policy.ts	gen	src	11	redirect policy	client/redirect-policy.ts
-src/emit/ts/sse.ts	gen	src	11	TS SSE client	client/sse.ts
-src/emit/ts/ws.ts	gen	src	11	TS WebSocket client	client/ws.ts
-src/emit/ts/realtime.ts	gen	src	11	resume client: createResumableConnection, keepalive, fallback chain, RealtimeError types (H8)	codegen.ts
+src/emit/ts/request.test.ts	gen	test	11	phase-b request behavior over the executed client (build + retry); the runtime is runtime/ts/request.ts (F1 vendored, glob-covered), not an emit-ts emitter	client/http.ts
+src/emit/ts/response.test.ts	gen	test	11	phase-b response behavior over the executed client (parse + raw accessor C2); runtime runtime/ts/response.ts	client/http.ts
+src/emit/ts/path.test.ts	gen	test	11	phase-b path behavior over the executed client (interpolation + ""/./.. refusals); runtime runtime/ts/path.ts	client/path.ts
+src/emit/ts/error.test.ts	gen	test	11	phase-b error behavior over the executed client (typed ClientError, maxErrorMessageChars); runtime runtime/ts/error.ts	client/error.ts
+src/emit/ts/defaults.test.ts	gen	test	11	phase-b client defaults over the executed client; runtime runtime/ts/defaults.ts	client/defaults.ts
+src/emit/ts/redirect-policy.test.ts	gen	test	11	phase-b redirect policy over the executed client (cross-origin auth drop, H18.10); runtime runtime/ts/redirect-policy.ts	client/redirect-policy.ts
+src/emit/ts/sse.test.ts	gen	test	11	phase-c SSE client behavior over the executed client; runtime runtime/ts/sse.ts	client/sse.ts
+src/emit/ts/ws.test.ts	gen	test	11	phase-c WebSocket client behavior over the executed client; runtime runtime/ts/ws.ts	client/ws.ts
+src/emit/ts/realtime.test.ts	gen	test	11	phase-c resume client behavior over the executed client (createResumableConnection, keepalive, fallback chain, RealtimeError, H8); runtime runtime/ts/realtime.ts + realtime-connection.ts	codegen.ts
 src/emit/ts/type-gen.ts	gen	src	11	generateTypes(options): the app's types.gen.d.ts — Routes/RouteCtx/RouteInput/RouteOutput/RouteErrors/RouteErrorShapes/RouteErrorsByStatus/RouteMeta over the IR (irToTs) joined on x-honey-route, meta from the route tree (O1), ctx.input from extracted types with IR wire fallback (O3); builds the IR itself from the document with deriveOperationIds (O5)	codegen.ts
 src/emit/ts/type-gen.ctx.test.ts	gen	test	11	phase-d type-gen ctx cases: RouteCtx mirrors v1 HandlerCtx (readonly meta/routePattern/input, errors factory), WithOutput over the route's output (never when none, O9), per-route extracted additions + MwCtx/_MW aliasing, BaseCtx/env/middleware/taps	codegen.ts
 src/emit/ts/type-gen.errors.test.ts	gen	test	11	phase-d type-gen error cases (O2): RouteErrors/RouteErrorShapes/RouteErrorsByStatus from x-honey-errors — keys code-unit sorted, shapes (null = schema-less), statuses numeric ascending; never when no errors	codegen.ts
@@ -315,7 +314,6 @@ src/emit/ts/__fixtures__/emitted.ts	gen	test	11	the executed-client fixture (D4,
 src/emit/ts/__fixtures__/honey-doc.ts	gen	test	11	phase-d fixture (D4 precedent): a honeyDoc builder for type-gen tests — ops carrying x-honey-route, params, responses, the O2 error extension — so documents are written by hand and fed through toIR	codegen.ts
 src/emit/ts/__fixtures__/tree-data.ts	gen	test	11	phase-d fixture: treeOf([[method, pattern, entry?]]) building RouteTreeV2 literals (v0 helper shape, v:2) for the route-tree emitter tests	codegen.ts
 src/emit/ts/__fixtures__/typecheck.ts	gen	test	11	phase-d fixture: the in-process ts-morph typecheck harness for emitted .d.ts, resolving @lovrozagar/honey to a barrel over core source (project.ts precedent) so a missing core name is a real red (O6)	codegen.ts
-src/emit/ts/index.ts	gen	index	11	TS SDK entry/exports	client/index.ts
 src/emit/go/sdk.ts	gen	src	12	Go SDK	codegen-go.ts
 src/emit/go/types.ts	gen	src	12	Go types	go-type-emitter.ts
 src/emit/go/http.ts	gen	src	12	Go net/http client	codegen-go.ts
