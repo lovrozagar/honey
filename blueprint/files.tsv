@@ -161,6 +161,7 @@ src/openapi/register.ts	core	index	10	./openapi export	openapi/register.ts
 src/meta/meta-spec.ts	core	src	09	meta-spec core	meta-spec.ts
 src/meta/meta-spec-merge.ts	core	src	09	meta merge + conflict	meta-spec-merge.ts
 src/meta/meta-spec-validate.ts	core	src	09	meta validation + x- extension gate	meta-spec.ts
+src/meta/meta-spec-apply.ts	core	src	09	apply a compiled metaSpec to one route: entry values (meta or schema descriptor) to operation fields, meta.extensions, totality	meta-spec.ts
 src/build/index.ts	core	index	19	./build export	build/index.ts
 src/build/plugin.ts	core	src	19	the build plugin	plugin.ts
 src/build/loaders.ts	core	src	19	config/codegen loaders (jiti)	plugin.ts,codegen-load.ts,codegen-loaders.ts
