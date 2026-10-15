@@ -2,7 +2,7 @@
  * Where each operation sits on a generated TS client, and the service map the runtime dispatches
  * by: the resource tree with every member name a client can expose, and one entry per operation.
  */
-import type { IR, IRNamespace, IROperation, IRTreeEntry } from "../../ir/model.ts"
+import type { IR, IRNamespace, IROperation, IRSchema, IRTreeEntry } from "../../ir/model.ts"
 import { isJsonMedia, mediaEssence, type SdkSuccess, sdkModel } from "../../ir/sdk-model.ts"
 import { openApiPathParams } from "../../ir/slots.ts"
 import { tsString } from "../shared/escape.ts"
@@ -19,7 +19,8 @@ export type ServiceEntry = {
 	params?: string[]
 	path: string
 	realtime?: true
-	sse?: true
+	/** an event stream; `"json"` when its declared event schema is not a string */
+	sse?: "json" | true
 	wildcard?: string
 	ws?: true
 }
@@ -93,14 +94,32 @@ function headersOf(op: IROperation, status: string): string[] {
 	return [...new Set(declared.map(({ name }) => name.toLowerCase()))].sort(compareCodeUnits)
 }
 
+/* a string-typed schema: a scalar string, or a string const or enum */
+const isStringSchema = (schema: IRSchema) =>
+	(schema.kind === "scalar" && schema.type === "string") ||
+	(schema.kind === "const" && typeof schema.value === "string")
+
+/**
+ * The schema an SSE op declares for its events' `data`, when it is not a string: such events are
+ * JSON (core JSON-encodes an object `data`) and the client parses them.
+ */
+export function sseEventSchema(op: IROperation, resolve: (schema: IRSchema) => IRSchema): IRSchema | undefined {
+	const response = Object.values(op.responses).find(
+		({ contentType }) => contentType !== undefined && mediaEssence(contentType) === "text/event-stream",
+	)
+	if (response?.schema === undefined) return undefined
+	const resolved = resolve(response.schema)
+	return resolved.kind === "unknown" || isStringSchema(resolved) ? undefined : response.schema
+}
+
 /** The service entry of `op`; `success` is its success answer as the SDK model reads it. */
-function entryOf(op: IROperation, success: { contentType?: string; status: string }): ServiceEntry {
+function entryOf(op: IROperation, success: SdkSuccess, resolve: (schema: IRSchema) => IRSchema): ServiceEntry {
 	const entry: ServiceEntry = { method: op.method, path: op.path }
 	const params = openApiPathParams(op.path)
 	if (params.length > 0) entry.params = params
 	const wildcard = op.params.path.find((p) => p.wildcard === true)
 	if (wildcard) entry.wildcard = wildcard.name
-	if (op.extensions.sse) entry.sse = true
+	if (op.extensions.sse) entry.sse = sseEventSchema(op, resolve) === undefined ? true : "json"
 	if (op.extensions.websocket) entry.ws = true
 	if (op.extensions.realtime) entry.realtime = true
 	if (op.extensions.idempotencyKey) entry.idempotent = true
@@ -118,12 +137,15 @@ function entryOf(op: IROperation, success: { contentType?: string; status: strin
  * Null-prototype nodes: an id of `__proto__.x` must never reach `Object.prototype`.
  */
 export function serviceMapOf(ir: IR): Record<string, ServiceMapNode> {
-	const success = new Map(sdkModel(ir).ops.map((op) => [op.id, op.success]))
+	const model = sdkModel(ir)
+	const success = new Map(model.ops.map((op) => [op.id, op.success]))
 	const walk = (ns: IRNamespace): Record<string, ServiceMapNode> => {
 		const node: Record<string, ServiceMapNode> = Object.create(null)
 		for (const [key, entry] of ns.entries) {
 			node[key] =
-				entry.kind === "namespace" ? walk(entry.ns) : entryOf(entry.op, success.get(entry.op.id) as SdkSuccess)
+				entry.kind === "namespace"
+					? walk(entry.ns)
+					: entryOf(entry.op, success.get(entry.op.id) as SdkSuccess, model.resolve)
 		}
 		return node
 	}

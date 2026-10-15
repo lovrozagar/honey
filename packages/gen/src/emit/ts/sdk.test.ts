@@ -211,3 +211,31 @@ describe("generateSdk: names it refuses, and renames that collide", () => {
 		})
 	})
 })
+
+describe("serviceMapOf: JSON events (C1)", () => {
+	it("flags an event stream json only when its declared event schema is not a string", () => {
+		const stream = (schema?: Json) => ({
+			200: { content: { "text/event-stream": schema === undefined ? {} : { schema } }, description: "" },
+		})
+		const tree = toIR({
+			components: { schemas: { Tick: { properties: { n: { type: "number" } }, type: "object" } } },
+			info: { title: "T", version: "1" },
+			openapi: "3.1.0",
+			paths: {
+				"/const": { get: op("s.const", { responses: stream({ const: "x" }) }) },
+				"/none": { get: op("s.none", { responses: stream() }) },
+				"/object": { get: op("s.object", { responses: stream({ type: "object" }) }) },
+				"/ref": { get: op("s.ref", { responses: stream({ $ref: "#/components/schemas/Tick" }) }) },
+				"/unknown": { get: op("s.unknown", { responses: stream({}) }) },
+			},
+		} as OpenApiDocument)
+		const s = (plain(serviceMapOf(tree)) as Record<string, Record<string, Json>>).s ?? {}
+		expect(Object.fromEntries(Object.entries(s).map(([name, entry]) => [name, entry.sse]))).toEqual({
+			const: true,
+			none: true,
+			object: "json",
+			ref: "json",
+			unknown: true,
+		})
+	})
+})

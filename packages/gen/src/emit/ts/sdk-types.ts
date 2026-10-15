@@ -10,7 +10,7 @@ import { tsString } from "../shared/escape.ts"
 import { compareCodeUnits, NameTable, pascalWords } from "../shared/lang.ts"
 import { quoteKey } from "../shared/literals.ts"
 import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
-import { memberTree } from "./service-map.ts"
+import { memberTree, sseEventSchema } from "./service-map.ts"
 
 /* globals the emitted types read, and the names they declare: a component schema never takes one */
 const RESERVED = [
@@ -171,8 +171,14 @@ function signatures(name: string, op: SdkOp, ctx: Context): string[] {
 		return `${input.required ? "input" : "input?"}: ${type}`
 	}
 	const key = quoteKey(name)
-	if (op.stream === "ws" || op.stream === "realtime") return [`${key}(${arg("WsOptions")}): TypedWebSocket`]
-	if (op.stream === "sse") return [`${key}(${arg("SseOptions")}): AsyncIterable<SSEEvent>`]
+	/* a realtime op is typed by its transport, as the runtime dispatches it */
+	const { sse, websocket } = op.ir.extensions
+	if (websocket) return [`${key}(${arg("WsOptions")}): TypedWebSocket`]
+	if (sse) {
+		const events = sseEventSchema(op.ir, ctx.resolve)
+		const event = events === undefined ? "SSEEvent" : `SSEEvent<${irToTs(events, ctx.types)}>`
+		return [`${key}(${arg("SseOptions")}): AsyncIterable<${event}>`]
+	}
 	const data = dataOf(op, ctx.types)
 	const errors = errorsOf(op, ctx.types, ctx.resolve)
 	const headers = headersOf(op)

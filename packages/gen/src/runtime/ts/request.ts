@@ -149,28 +149,40 @@ function timeoutError(ms: number): Error {
 		: Object.assign(new Error(`Request timed out after ${ms} ms`), { name: "TimeoutError" })
 }
 
-/** A request's signal: the caller's abort and its timeout as one, alive until `done()`. */
+/** A request's signal: the caller's abort, the client's and the timeout as one, alive until `done()`. */
 export type RequestSignal = {
-	/** release the timer and the listener; call once the body has been read or abandoned */
+	/** release the timer and the listeners; call once the body has been read or abandoned */
 	done: () => void
-	/** stop the timeout but keep the caller's cancellation (the answer turned out to be a stream) */
+	/** stop the timeout but keep the cancellations (the answer turned out to be a stream) */
 	exemptFromTimeout: () => void
 	signal: AbortSignal | undefined
 }
 
-/** The signal for one request: a stream has no timeout; `timeout` 0 or less disables it. */
-export function requestSignal(userSignal: AbortSignal | undefined, timeout: number | undefined): RequestSignal {
-	if (!timeout || timeout <= 0) return { done: () => {}, exemptFromTimeout: () => {}, signal: userSignal }
+/**
+ * The signal for one request, aborting with the first of `sources` (the caller's, the client's
+ * dispose) or the timeout: a stream has no timeout; `timeout` 0 or less disables it. Listeners,
+ * not `AbortSignal.any`: a combined signal only weakly held can be collected before it fires.
+ */
+export function requestSignal(
+	sources: readonly (AbortSignal | undefined)[],
+	timeout: number | undefined,
+): RequestSignal {
+	const signals = sources.filter((signal): signal is AbortSignal => signal !== undefined)
+	const timed = timeout !== undefined && timeout > 0
+	if (!timed && signals.length <= 1) return { done: () => {}, exemptFromTimeout: () => {}, signal: signals[0] }
 	const ctrl = new AbortController()
-	const timer = setTimeout(() => ctrl.abort(timeoutError(timeout)), timeout)
-	;(timer as unknown as { unref?: () => void }).unref?.()
-	const onUserAbort = () => ctrl.abort(userSignal?.reason)
-	if (userSignal?.aborted) ctrl.abort(userSignal.reason)
-	else userSignal?.addEventListener("abort", onUserAbort, { once: true })
+	const timer = timed ? setTimeout(() => ctrl.abort(timeoutError(timeout)), timeout) : undefined
+	;(timer as unknown as { unref?: () => void } | undefined)?.unref?.()
+	const listeners = signals.map((signal) => {
+		const onAbort = () => ctrl.abort(signal.reason)
+		if (signal.aborted) ctrl.abort(signal.reason)
+		else signal.addEventListener("abort", onAbort, { once: true })
+		return () => signal.removeEventListener("abort", onAbort)
+	})
 	return {
 		done: () => {
 			clearTimeout(timer)
-			userSignal?.removeEventListener("abort", onUserAbort)
+			for (const remove of listeners) remove()
 		},
 		exemptFromTimeout: () => clearTimeout(timer),
 		signal: ctrl.signal,

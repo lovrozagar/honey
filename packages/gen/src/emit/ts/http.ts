@@ -19,6 +19,8 @@ const RUNTIME_MODULES: readonly string[] = [
 	"hooks",
 	"sse",
 	"ws",
+	"realtime",
+	"realtime-connection",
 	"http",
 	"stale",
 	"app-types",

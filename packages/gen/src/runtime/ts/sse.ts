@@ -1,5 +1,6 @@
-export type SSEEvent = {
-	data: string
+/** One server-sent event; `data` is the raw text, or the parsed value when the operation declares JSON events. */
+export type SSEEvent<T = string> = {
+	data: T
 	event?: string
 	/** The last event ID (sticky across events, as `EventSource.lastEventId`). Absent while empty. */
 	id?: string
@@ -57,12 +58,17 @@ class EventFields {
 	}
 }
 
-/** The complete lines at the head of `pending` (CRLF, LF or CR), and what is left after them. */
-function completeLines(pending: string): { lines: string[]; rest: string } {
+/**
+ * The complete lines at the head of `pending` (CRLF, LF or CR), what is left after them, and how
+ * much of that rest is already known to hold no line end. `from` is that count from the last call:
+ * the scan resumes there, so a long line arriving in many chunks is read once, not once per chunk.
+ */
+function completeLines(pending: string, from: number): { lines: string[]; rest: string; scanned: number } {
 	const lines: string[] = []
 	let start = 0
+	let end = from
 	while (start < pending.length) {
-		let end = start
+		end = Math.max(end, start)
 		while (end < pending.length && pending.charCodeAt(end) !== 10 && pending.charCodeAt(end) !== 13) end++
 		if (end === pending.length) break
 		/* a CR as the last character may be the first half of CRLF */
@@ -70,7 +76,7 @@ function completeLines(pending: string): { lines: string[]; rest: string } {
 		lines.push(pending.slice(start, end))
 		start = end + (pending.charCodeAt(end) === 13 && pending.charCodeAt(end + 1) === 10 ? 2 : 1)
 	}
-	return { lines, rest: pending.slice(start) }
+	return { lines, rest: pending.slice(start), scanned: Math.max(end - start, 0) }
 }
 
 /**
@@ -88,6 +94,7 @@ export async function* parseSSEStream(
 	const maxBuffer = opts?.maxBufferSize ?? DEFAULT_MAX_BUFFER
 	const fields = new EventFields(maxBuffer)
 	let pending = ""
+	let scanned = 0
 	let first = true
 	try {
 		for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
@@ -96,8 +103,10 @@ export async function* parseSSEStream(
 				if (pending.charCodeAt(0) === 0xfeff) pending = pending.slice(1)
 				first = false
 			}
-			const { lines, rest } = completeLines(pending)
-			pending = rest
+			const complete = completeLines(pending, scanned)
+			pending = complete.rest
+			scanned = complete.scanned
+			const { lines } = complete
 			for (const line of lines) {
 				const out = line === "" ? fields.dispatch() : fields.read(line)
 				if (out) yield out

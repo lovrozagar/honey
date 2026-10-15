@@ -1,0 +1,211 @@
+/**
+ * The realtime resume protocol's client side (H8): the frames a server sends, the errors a
+ * connection ends with, the transport adapters a consumer plugs in, the keepalive loop and the
+ * fallback chain that picks the first transport to answer `ready`.
+ */
+
+export type ServerFrame =
+	| { data: unknown; id: number; t: "msg" }
+	| { t: "pong" }
+	| { reason: string; t: "bye" }
+	| { reconnectToken: string; t: "ready" }
+
+export class RealtimeError extends Error {
+	readonly reason: string
+
+	constructor(message: string, reason: string) {
+		super(message)
+		this.reason = reason
+		this.name = "RealtimeError"
+	}
+}
+
+export class RealtimeConnectError extends RealtimeError {
+	override name = "RealtimeConnectError"
+}
+
+export class RealtimeAuthError extends RealtimeError {
+	override name = "RealtimeAuthError"
+}
+
+export class RealtimeKickedError extends RealtimeError {
+	override name = "RealtimeKickedError"
+}
+
+export class RealtimeAbortError extends RealtimeError {
+	override name = "RealtimeAbortError"
+}
+
+export type Transport = "longpoll" | "sse" | "ws"
+
+export type ConnectionState = "closed" | "connected" | "connecting" | "draining" | "idle" | "reconnecting"
+
+export type TransportOpts = {
+	headers?: Record<string, string>
+	lastId?: number
+	reconnectToken?: string
+	signal?: AbortSignal
+}
+
+/** One live transport: the adapter calls `onFrame`, `onClose` and `onError`; the client replaces them. */
+export type TransportConnection = {
+	close(): void
+	onClose: (reason: string) => void
+	onError: (err: unknown) => void
+	onFrame: (frame: ServerFrame) => void
+	send(data: string): void
+}
+
+export type TransportAdapter = {
+	connect(url: string, opts: TransportOpts): TransportConnection
+}
+
+/** The transport the adapter at `index` of a chain stands for: WebSocket, then SSE, then long polling. */
+export function transportAt(index: number): Transport {
+	if (index === 0) return "ws"
+	return index === 1 ? "sse" : "longpoll"
+}
+
+export type KeepaliveOptions = {
+	interval?: number
+	onDead: () => void
+	sendPing: () => void
+	timeout?: number
+	transport: Transport
+}
+
+export type KeepaliveLoop = { onFrame(): void; onPong(): void; start(): void; stop(): void }
+
+/**
+ * A connection's liveness: over WebSocket a ping every `interval` and dead after `timeout` without
+ * a pong; over SSE dead after `timeout` without a frame; long polling needs none.
+ */
+class Keepalive implements KeepaliveLoop {
+	readonly #opts: KeepaliveOptions
+	#ping: ReturnType<typeof setInterval> | null = null
+	#dead: ReturnType<typeof setTimeout> | null = null
+
+	constructor(opts: KeepaliveOptions) {
+		this.#opts = opts
+	}
+
+	#armDead(): void {
+		if (this.#dead !== null) clearTimeout(this.#dead)
+		this.#dead = setTimeout(() => this.#opts.onDead(), this.#opts.timeout ?? 60_000)
+	}
+
+	start(): void {
+		this.stop()
+		const { transport } = this.#opts
+		if (transport === "longpoll") return
+		if (transport === "ws") this.#ping = setInterval(() => this.#opts.sendPing(), this.#opts.interval ?? 25_000)
+		this.#armDead()
+	}
+
+	stop(): void {
+		if (this.#ping !== null) clearInterval(this.#ping)
+		if (this.#dead !== null) clearTimeout(this.#dead)
+		this.#ping = null
+		this.#dead = null
+	}
+
+	onPong(): void {
+		if (this.#dead !== null) this.#armDead()
+	}
+
+	onFrame(): void {
+		if (this.#opts.transport === "sse" && this.#dead !== null) this.#armDead()
+	}
+}
+
+export function createKeepaliveLoop(opts: KeepaliveOptions): KeepaliveLoop {
+	return new Keepalive(opts)
+}
+
+/** Dial `adapter` and resolve once it sends `ready`; reject on an error, a close or `timeout`. */
+export function dialReady(
+	adapter: TransportAdapter,
+	target: { opts: TransportOpts; url: string },
+	timeout: number,
+): Promise<TransportConnection> {
+	return new Promise((resolve, reject) => {
+		const conn = adapter.connect(target.url, target.opts)
+		const timer = setTimeout(() => {
+			conn.close()
+			reject(new Error("timeout"))
+		}, timeout)
+		const onFrame = conn.onFrame
+		conn.onFrame = (frame) => {
+			if (frame.t !== "ready") return onFrame(frame)
+			clearTimeout(timer)
+			conn.onFrame = onFrame
+			resolve(conn)
+		}
+		conn.onError = (err) => {
+			clearTimeout(timer)
+			conn.close()
+			reject(err)
+		}
+		conn.onClose = (reason) => {
+			clearTimeout(timer)
+			reject(new Error(reason))
+		}
+	})
+}
+
+export type FallbackChain = {
+	connect(url: string, transportOpts: TransportOpts): Promise<{ conn: TransportConnection; transport: Transport }>
+	readonly provenTransport: Transport | null
+}
+
+/** Try each transport in order until one is ready; remember the one that worked and try it first next time. */
+class Chain implements FallbackChain {
+	readonly #transports: TransportAdapter[]
+	readonly #timeout: number
+	#proven: number | null = null
+
+	constructor(opts: { timeout?: number; transports: TransportAdapter[] }) {
+		this.#transports = opts.transports
+		this.#timeout = opts.timeout ?? 3000
+	}
+
+	get provenTransport(): Transport | null {
+		return this.#proven === null ? null : transportAt(this.#proven)
+	}
+
+	async #dial(url: string, opts: TransportOpts) {
+		const proven = this.#proven
+		if (proven !== null && proven < this.#transports.length) {
+			try {
+				const conn = await dialReady(this.#transports[proven] as TransportAdapter, { opts, url }, this.#timeout)
+				return { conn, transport: transportAt(proven) }
+			} catch {
+				/* the proven transport failed: fall through to the whole chain */
+			}
+		}
+		for (let i = 0; i < this.#transports.length; i++) {
+			try {
+				const conn = await dialReady(this.#transports[i] as TransportAdapter, { opts, url }, this.#timeout)
+				this.#proven = i
+				return { conn, transport: transportAt(i) }
+			} catch {
+				/* try the next one */
+			}
+		}
+		throw new RealtimeConnectError("All transports failed", "all_failed")
+	}
+
+	connect(url: string, opts: TransportOpts): Promise<{ conn: TransportConnection; transport: Transport }> {
+		const attempt =
+			this.#transports.length === 0
+				? Promise.reject(new RealtimeConnectError("No transports configured", "no_transports"))
+				: this.#dial(url, opts)
+		/* a caller that never awaits the attempt must not see an unhandled rejection */
+		attempt.catch(() => {})
+		return attempt
+	}
+}
+
+export function createFallbackChain(opts: { timeout?: number; transports: TransportAdapter[] }): FallbackChain {
+	return new Chain(opts)
+}

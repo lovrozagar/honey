@@ -91,6 +91,8 @@ export type ClientConfig = {
 	/** Send an `x-request-id` header on every request. Default `true`; `false` avoids a CORS preflight. */
 	requestId?: boolean
 	sortSearchParams?: boolean
+	/** The most characters one event, or an unterminated line, may hold before the stream errors. Default 1 MiB. */
+	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
 	throwOnError?: boolean
 	/** Milliseconds for a whole request, including reading the body. Streams are exempt. */

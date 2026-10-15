@@ -20,5 +20,8 @@ export default defineConfig({
 		},
 		include: ["src/**/*.test.ts", "tests/**/*.test.ts", "scripts/**/*.test.ts"],
 		passWithNoTests: true,
+		/* many tests typecheck emitted code with an in-process TS compiler; a cold one under a full parallel
+		 * run takes seconds, so the 5 s default would fail them on load, not on behavior */
+		testTimeout: 30_000,
 	},
 })

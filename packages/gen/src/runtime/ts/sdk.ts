@@ -3,6 +3,7 @@ import { ClientError } from "./error.ts"
 import { HTTPClient } from "./http.ts"
 import { interpolatePath, PathParamError } from "./path.ts"
 import { newClientRequestId, type RequestOptions } from "./request.ts"
+import type { SSEEvent } from "./sse.ts"
 import { resolveInvalidationTargets, StaleIndex } from "./stale.ts"
 import { createTypedWebSocket, type TypedWebSocket } from "./ws.ts"
 
@@ -19,7 +20,8 @@ export type ServiceEntry = {
 	/** the OpenAPI path template, `{param}` kept */
 	path: string
 	realtime?: boolean
-	sse?: boolean
+	/** an event stream; `"json"` when its events carry JSON `data` the client parses */
+	sse?: boolean | "json"
 	/** the param that spans segments (`x-honey-wildcard`) */
 	wildcard?: string
 	ws?: boolean
@@ -70,15 +72,33 @@ function pathError(e: PathParamError, entry: ServiceEntry): ClientError {
 	})
 }
 
-/** The per-call options an entry adds: its `Accept`, an `Idempotency-Key`, the client's dispose signal. */
-function optionsFor(entry: ServiceEntry, input: CallInput, disposal: AbortSignal): RequestOptions {
+/** The per-call options an entry adds: its `Accept` and an `Idempotency-Key`. */
+function optionsFor(entry: ServiceEntry, input: CallInput): RequestOptions {
 	const headers: Record<string, string | undefined> = {}
 	if (entry.accept) headers.accept = entry.accept
 	Object.assign(headers, input.headers)
 	if (entry.idempotent && !Object.keys(headers).some((k) => k.toLowerCase() === "idempotency-key"))
 		headers["Idempotency-Key"] = input.idempotencyKey ?? newClientRequestId()
-	const signal = input.signal ? AbortSignal.any([input.signal, disposal]) : disposal
-	return { ...input, headers, signal }
+	return { ...input, headers }
+}
+
+/** Each event with its `data` parsed as JSON; an event that does not parse fails the stream, naming it. */
+function jsonEvents(events: AsyncIterable<SSEEvent>): AsyncIterable<SSEEvent<unknown>> {
+	return {
+		async *[Symbol.asyncIterator]() {
+			for await (const event of events) {
+				let data: unknown
+				try {
+					data = JSON.parse(event.data)
+				} catch (e) {
+					const name = event.id === undefined ? "an event" : `event ${JSON.stringify(event.id)}`
+					const message = `SSE ${name} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`
+					throw new ClientError({ body: event.data, message, response: Response.error(), status: 0 })
+				}
+				yield { ...event, data }
+			}
+		},
+	}
 }
 
 /** The client behind a generated SDK class: operations from the service map, read-after-write tracking, dispose. */
@@ -91,7 +111,7 @@ class SdkCore {
 
 	constructor(config: SDKConfig) {
 		this.#config = config
-		this.http = new HTTPClient(config)
+		this.http = new HTTPClient(config, this.#disposal.signal)
 		this.#stale = this.#newIndex()
 	}
 
@@ -136,7 +156,7 @@ class SdkCore {
 		}
 		const selector = `${entry.method} ${path}`
 		const meta = this.#meta(selector, path, entry.method)
-		const opts = optionsFor(entry, input, this.#disposal.signal)
+		const opts = optionsFor(entry, input)
 		const { accept: declared, headers } = entry
 		const op = { declared, headers, meta, method: entry.method, opts, path: template, shouldThrow }
 		const result = await this.http.requestOperation(op)
@@ -148,9 +168,24 @@ class SdkCore {
 		return result
 	}
 
+	/** An SSE op: its stale view for the hooks, and its `x-invalidate` targets marked once the answer is ok. */
 	stream(entry: ServiceEntry, input: CallInput): AsyncIterable<unknown> {
-		const opts = optionsFor(entry, input, this.#disposal.signal)
-		return this.http.requestStream(entry.method, templateOf(entry), opts)
+		const opts = optionsFor(entry, input)
+		const template = templateOf(entry)
+		let selector: string | undefined
+		let meta: RequestMeta | undefined
+		try {
+			const path = interpolatePath(template, input.params)
+			selector = `${entry.method} ${path}`
+			meta = this.#meta(selector, path, entry.method)
+		} catch {
+			/* a bad param fails the stream when it is sent, as for any call */
+		}
+		const onOpen = () => {
+			if (selector !== undefined) this.#mark(entry, input.params, selector)
+		}
+		const events = this.http.streamOperation({ meta, method: entry.method, onOpen, opts, path: template })
+		return entry.sse === "json" ? jsonEvents(events) : events
 	}
 
 	connect(entry: ServiceEntry, input: CallInput): TypedWebSocket {
@@ -168,7 +203,8 @@ class SdkCore {
 /** The function an entry is called through, named by its dotted member path for stack traces. */
 function callable(core: SdkCore, entry: ServiceEntry, name: string): OperationFn {
 	let fn: OperationFn
-	if (entry.ws || entry.realtime) fn = (input) => core.connect(entry, input ?? {})
+	/* a realtime op dispatches by its transport; `realtime` only says the resume runtime applies */
+	if (entry.ws) fn = (input) => core.connect(entry, input ?? {})
 	else if (entry.sse) fn = (input) => core.stream(entry, input ?? {})
 	else fn = (input) => core.request(entry, input ?? {})
 	Object.defineProperty(fn, "name", { value: name })

@@ -51,9 +51,13 @@ export class HTTPClient {
 	#token: string | null = null
 	#refreshing: Promise<string | null> | null = null
 
-	constructor(config: ClientConfig) {
+	readonly #disposal: AbortSignal | undefined
+
+	/** `disposal` aborts every request in flight and refuses later ones (a generated SDK's `dispose()`). */
+	constructor(config: ClientConfig, disposal?: AbortSignal) {
 		this.#config = config
 		this.#fetch = bindDefaultFetch(config.fetch)
+		this.#disposal = disposal
 	}
 
 	/** The base URL, parsed once; a per-call base (C2) is parsed for that call. */
@@ -168,7 +172,7 @@ export class HTTPClient {
 		const { method, opts, path } = call
 		const { body, headers, url } = await this.#prepare(call, kind, meta)
 		const timeout = kind === "stream" ? undefined : (opts.timeout ?? this.#config.timeout)
-		const { done, exemptFromTimeout, signal } = requestSignal(opts.signal, timeout)
+		const { done, exemptFromTimeout, signal } = requestSignal([opts.signal, this.#disposal], timeout)
 		const cleanups: Array<() => void> = [done]
 		const finish = () => {
 			for (const fn of cleanups.splice(0)) fn()
@@ -199,10 +203,11 @@ export class HTTPClient {
 	}
 
 	#iterate(sent: Sent): AsyncIterable<SSEEvent> {
+		const maxBufferSize = this.#config.sseMaxBufferChars
 		return {
 			async *[Symbol.asyncIterator]() {
 				try {
-					if (sent.response.body) yield* parseSSEStream(sent.response.body)
+					if (sent.response.body) yield* parseSSEStream(sent.response.body, { maxBufferSize })
 				} finally {
 					sent.done()
 				}
@@ -252,7 +257,12 @@ export class HTTPClient {
 	}
 
 	requestStream(method: string, path: string, opts: RequestOptions, meta?: RequestMeta): AsyncIterable<SSEEvent> {
-		const send = () => this.#send({ method, opts, path }, "stream", meta)
+		return this.streamOperation({ meta, method, opts, path })
+	}
+
+	/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
+	streamOperation(op: Call & { meta?: RequestMeta; onOpen?: () => void }): AsyncIterable<SSEEvent> {
+		const send = () => this.#send(op, "stream", op.meta)
 		const maxMessage = this.#config.maxErrorMessageChars
 		const iterate = (sent: Sent) => this.#iterate(sent)
 		return {
@@ -265,6 +275,7 @@ export class HTTPClient {
 						sent.done()
 					}
 				}
+				op.onOpen?.()
 				yield* iterate(sent)
 			},
 		}

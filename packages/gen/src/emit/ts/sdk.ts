@@ -28,6 +28,9 @@ const RUNTIME_EXPORTS = [
 	"BadRequestError",
 	"ClientError",
 	"ConflictError",
+	"createFallbackChain",
+	"createKeepaliveLoop",
+	"createResumableConnection",
 	"ForbiddenError",
 	"GatewayTimeoutError",
 	"HTTPClient",
@@ -38,12 +41,31 @@ const RUNTIME_EXPORTS = [
 	"parseSSEStream",
 	"PathParamError",
 	"RateLimitError",
+	"RealtimeAbortError",
+	"RealtimeAuthError",
+	"RealtimeConnectError",
+	"RealtimeError",
+	"RealtimeKickedError",
 	"ServiceUnavailableError",
 	"UnauthorizedError",
 	"UnprocessableEntityError",
 ]
 
-const RUNTIME_TYPES = ["ClientConfig", "InvalidationConfig", "RequestOptions", "SSEEvent", "TypedWebSocket"]
+const RUNTIME_TYPES = [
+	"ClientConfig",
+	"ConnectionState",
+	"InvalidationConfig",
+	"RequestOptions",
+	"ResumableConnection",
+	"ResumableConnectionOpts",
+	"ServerFrame",
+	"SSEEvent",
+	"Transport",
+	"TransportAdapter",
+	"TransportConnection",
+	"TransportOpts",
+	"TypedWebSocket",
+]
 
 /** `TestSDK` → `test-sdk`: the words of the name, lower case, joined by `-`. */
 const kebab = (name: string) =>
