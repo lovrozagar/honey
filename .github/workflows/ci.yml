@@ -68,9 +68,22 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      # gen compiles and runs the emitted Go SDK at the toolchain .go-version pins (GOTOOLCHAIN through
+      # its go-env fixture), with the module cache and the pinned toolchain under ~/.cache/honey-tmp/go
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .go-version
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/honey-tmp/go/mod
+          key: ${{ runner.os }}-gomod-${{ hashFiles('.go-version') }}
       - run: bun install --frozen-lockfile
       - run: bun run generate
       - run: bun run test
+        env:
+          # a missing Go fails the run instead of skipping the executed Go SDK tests
+          HONEY_REQUIRE_GO: "1"
       - run: bun run test:consumers
       - run: bun run test:e2e
 
@@ -219,10 +232,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      # the pinned Go, the same as the test job and every local run; emitted go.mod files keep the go
+      # 1.24 floor (`omitzero` on tri-state fields), which go vet enforces
       - uses: actions/setup-go@v5
         with:
-          # generated go.mod files say go 1.24 (`omitzero` on tri-state fields)
-          go-version: "1.24"
+          go-version-file: .go-version
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/honey-tmp/go/mod
+          key: ${{ runner.os }}-gomod-${{ hashFiles('.go-version') }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

@@ -9,6 +9,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { goEnv } from "../go/__fixtures__/go-env.ts"
 import { rng, runs } from "./__fixtures__/rng.ts"
 import { goString, lineComment, pyString, rustString, wellFormed } from "./escape.ts"
 
@@ -45,6 +46,8 @@ type Language = {
 	/** the commands that compile and run `path`, printing one hex line per string */
 	readonly run: (path: string, dir: string) => readonly (readonly string[])[]
 	readonly source: (texts: readonly string[]) => string
+	/** the environment its commands run with: Go's is the pinned toolchain's (G10) */
+	readonly env?: () => NodeJS.ProcessEnv
 	readonly tool: string
 	/** the arguments that make the tool print its version: its presence check */
 	readonly version: readonly string[]
@@ -63,6 +66,7 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 				`for _, s := range []string{${texts.map(goString).join(", ")}} { fmt.Println(hex.EncodeToString([]byte(s))) }`,
 				"}",
 			].join("\n"),
+		env: () => goEnv(),
 		tool: "go",
 		version: ["version"],
 	},
@@ -93,7 +97,8 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 	},
 }
 
-const has = ({ tool, version }: Language) => spawnSync(tool, [...version], { stdio: "ignore" }).status === 0
+const has = ({ env, tool, version }: Language) =>
+	spawnSync(tool, [...version], { env: env?.(), stdio: "ignore" }).status === 0
 const required = process.env.HONEY_REQUIRE_TOOLCHAINS === "1"
 
 /** The hex of each string `language`'s compiler made of the literals of `texts`. */
@@ -104,7 +109,7 @@ function compiled(language: Language, texts: readonly string[]): string[] {
 		writeFileSync(path, language.source(texts))
 		let stdout = ""
 		for (const [command, ...args] of language.run(path, dir)) {
-			const result = spawnSync(command as string, args, { encoding: "utf8", maxBuffer: 1 << 26 })
+			const result = spawnSync(command as string, args, { encoding: "utf8", env: language.env?.(), maxBuffer: 1 << 26 })
 			if (result.status !== 0) throw new Error(`${command} failed: ${result.stderr}`)
 			stdout = result.stdout
 		}

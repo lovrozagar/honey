@@ -11,6 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { goEnv } from "../go/__fixtures__/go-env.ts"
 import { verifyHelper } from "./webhooks.ts"
 
 const SECRET = "Jefe"
@@ -39,6 +40,8 @@ const triples = (open: string, close: string) =>
 	).join(", ")
 
 type Language = {
+	/** the environment its commands run with: Go's is the pinned toolchain's (G10) */
+	readonly env?: () => NodeJS.ProcessEnv
 	/** the commands that compile and run the program in `dir`, printing one true or false per case */
 	readonly run: (dir: string) => readonly (readonly string[])[]
 	/** write the program into `dir` */
@@ -50,6 +53,7 @@ type Language = {
 const LANGUAGES: Readonly<Record<string, Language>> = {
 	go: {
 		run: (dir) => [["go", "run", join(dir, "main.go")]],
+		env: () => goEnv(),
 		tool: "go",
 		version: ["version"],
 		write: (dir) =>
@@ -121,7 +125,8 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 	},
 }
 
-const has = ({ tool, version }: Language) => spawnSync(tool, [...version], { stdio: "ignore" }).status === 0
+const has = ({ env, tool, version }: Language) =>
+	spawnSync(tool, [...version], { env: env?.(), stdio: "ignore" }).status === 0
 const required = process.env.HONEY_REQUIRE_TOOLCHAINS === "1"
 
 /** What `language`'s program prints for the cases. */
@@ -131,7 +136,7 @@ function verified(language: Language): string {
 		language.write(dir)
 		let stdout = ""
 		for (const [command, ...args] of language.run(dir)) {
-			const result = spawnSync(command as string, args, { cwd: dir, encoding: "utf8" })
+			const result = spawnSync(command as string, args, { cwd: dir, encoding: "utf8", env: language.env?.() })
 			if (result.status !== 0) throw new Error(`${command} failed: ${result.stderr}`)
 			stdout = result.stdout
 		}
