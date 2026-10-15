@@ -9,7 +9,7 @@ import { parsePattern, UNNAMED_WILDCARD } from "../routing/pattern.ts"
 import { deriveSchemaName } from "../schema/naming.ts"
 import type { JsonSchema } from "../schema/to-json-schema.ts"
 import type { CollectedRoute, CollectedRoutes, CollectedWsRoute } from "./collect.ts"
-import type { Convert, ResponseObject } from "./responses.ts"
+import type { Convert, DeclaredError, ResponseObject } from "./responses.ts"
 
 export type Operation = Record<string, unknown>
 export type PathItem = Record<string, Operation>
@@ -27,12 +27,12 @@ export type PathsContext = {
 	readonly convert: (where: string) => Convert
 	/** the route's policy fields for one method, written first */
 	readonly policy: (route: CollectedRoute | CollectedWsRoute, method: string, kind: "http" | "ws") => Operation
-	/** the route's responses, the errors it declares among them */
+	/** the route's responses, the errors it declares among them, and every declared error key (`x-honey-errors`) */
 	readonly responses: (
 		route: CollectedRoute,
 		convert: Convert,
 		hint: (code: number) => string,
-	) => Record<string, ResponseObject>
+	) => { errors: Record<string, DeclaredError>; responses: Record<string, ResponseObject> }
 	readonly trailingSlash: "enforce" | "ignore" | "strip"
 	readonly warn: (code: "WS_SHADOWED", message: string) => void
 }
@@ -150,12 +150,13 @@ export function buildPaths(
 					: { method: methods[0] as string, path, role, status },
 			)
 		const { body, parameters } = inputsOf(route.input, convert, name("request"), pathParameters(route))
-		const responses = ctx.responses(route, convert, (code) => name("response", code))
+		const { errors, responses } = ctx.responses(route, convert, (code) => name("response", code))
 		for (const method of methods) {
 			const operation: Operation = { ...ctx.policy(route, method.toUpperCase(), "http"), "x-honey-route": route.id }
 			if (body !== null) operation.requestBody = { content: structuredClone(body), required: true }
 			if (parameters.length > 0) operation.parameters = structuredClone(parameters)
 			operation.responses = structuredClone(responses)
+			if (Object.keys(errors).length > 0) operation["x-honey-errors"] = structuredClone(errors)
 			paths[path] ??= {}
 			;(paths[path] as PathItem)[method] = operation
 			operations.push({ method, operation, path, route })

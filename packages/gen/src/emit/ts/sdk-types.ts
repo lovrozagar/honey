@@ -204,9 +204,12 @@ function members(ns: IRNamespace, ctx: Context, indent: string): string[] {
 	})
 }
 
-/** The component schemas' declared names, claimed in code-unit order so the same document names them alike. */
-function componentNames(ir: IR, name: string): (schema: string) => string {
-	const table = new NameTable([...RESERVED, name, `${name}Config`, `${name}Operations`])
+/**
+ * The component schemas' declared names, clear of `reserved` (the names the emitted file declares
+ * and the globals it reads), claimed in code-unit order so the same document names them alike.
+ */
+export function componentNames(ir: IR, reserved: readonly string[]): (schema: string) => string {
+	const table = new NameTable(reserved)
 	for (const schema of Object.keys(ir.schemas).sort(compareCodeUnits)) {
 		const base = pascalWords(schema) || "Schema"
 		table.get(schema, /^[0-9]/.test(base) ? `Schema${base}` : base)
@@ -217,7 +220,7 @@ function componentNames(ir: IR, name: string): (schema: string) => string {
 /** The `${stem}.types.gen.ts` text of `ir` for the SDK `name`, importing the runtime module `runtime`. */
 export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const model = sdkModel(ir)
-	const types: TypeOptions = { refName: componentNames(ir, name) }
+	const types: TypeOptions = { refName: componentNames(ir, [...RESERVED, name, `${name}Config`, `${name}Operations`]) }
 	const ctx: Context = { ops: model.opsById, resolve: model.resolve, types }
 	const schemas = model.schemaNames.map(
 		(schema) => `export type ${types.refName?.(schema)} = ${irToTs(ir.schemas[schema] as IRSchema, types)}`,

@@ -9,7 +9,7 @@ import { dirname, join, relative, sep } from "node:path"
 import type { ts } from "ts-morph"
 import { addedProps, type ExtractedProp, frameworkClass, routeAdditions } from "./chain.ts"
 import { Serializer } from "./serialize.ts"
-import { type EntryOptions, loadEntry, registrations, type TsMorph } from "./walk.ts"
+import { type EntryOptions, loadEntry, type Registration, registrations, type TsMorph } from "./walk.ts"
 
 export type { ExtractedProp } from "./chain.ts"
 
@@ -27,6 +27,8 @@ export type ExtractedTypes = {
 	env: string
 	/** what the app's middleware and context values added */
 	middleware: ExtractedProp[]
+	/** per route id, `ctx.input` as the handler gets it (the parsed type, O3); a route without input has none */
+	inputs: Record<string, string>
 	/** per route id, what the route's middleware added beyond `middleware`; a route that added nothing has none */
 	routes: Record<string, ExtractedProp[]>
 	/** the declared tap payloads, or null when none are */
@@ -129,6 +131,30 @@ function resolvable(text: string, outputDir: string | undefined, cache: Packages
 	)
 }
 
+/** Each route's parsed `ctx.input` text by route id; an id two registrations type differently is left out. */
+function routeInputs(
+	found: readonly Registration[],
+	serialize: (type: ts.Type) => string,
+	routeId: (method: string, path: string) => string,
+): Record<string, string> {
+	const byId = new Map<string, string | null>()
+	for (const { input, methods, path } of found) {
+		if (input === null || path === null) continue
+		const text = serialize(input)
+		for (const method of methods) {
+			let id: string
+			try {
+				id = routeId(method, path)
+			} catch {
+				/* the router refuses the path: routeAdditions said so once */
+				continue
+			}
+			byId.set(id, byId.has(id) && byId.get(id) !== text ? null : text)
+		}
+	}
+	return Object.fromEntries([...byId].filter((entry): entry is [string, string] => entry[1] !== null))
+}
+
 /** The app's extracted types, or null (said once through `report`) without ts-morph. */
 export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	const { exportName, report, routeId, tsMorph } = options
@@ -148,7 +174,8 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	const owner = frameworkClass(ctx as ts.Type, compiler)
 	const middleware = addedProps(ctx as ts.Type, owner, ser)
 	const base = new Set(middleware.map((p) => p.name))
-	const routes = routeAdditions(registrations(entry), ser, { base, owner, report, routeId })
+	const found = registrations(entry)
+	const routes = routeAdditions(found, ser, { base, owner, report, routeId })
 	const taps = ser.serialize(tapsType as ts.Type)
 
 	const cache: Packages = new Map()
@@ -156,6 +183,7 @@ export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	const props = (list: readonly ExtractedProp[]) => list.map((p) => ({ ...p, type: text(p.type) }))
 	return {
 		env: text(ser.serialize(env as ts.Type)),
+		inputs: routeInputs(found, (type) => text(ser.shape(type)), routeId),
 		middleware: props(middleware),
 		routes: Object.fromEntries(Object.entries(routes).map(([id, list]) => [id, props(list)])),
 		taps: taps === "{}" ? null : text(taps),

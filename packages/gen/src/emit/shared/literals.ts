@@ -11,7 +11,7 @@ export function quoteKey(key: string): string {
 	return IDENTIFIER.test(key) ? key : tsString(key)
 }
 
-/** The TypeScript literal type of `value`; one without a literal type widens to its type, or `unknown`. */
+/** The TypeScript literal type of a JSON `value` (an array as a tuple, an object field by field); else its type, or `unknown`. */
 export function literalType(value: unknown): string {
 	if (value === null) return "null"
 	if (value === undefined) return "undefined"
@@ -19,5 +19,8 @@ export function literalType(value: unknown): string {
 	if (typeof value === "boolean") return String(value)
 	if (typeof value === "bigint") return `${value}n`
 	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "number"
-	return "unknown"
+	if (Array.isArray(value)) return `[${value.map(literalType).join(", ")}]`
+	if (typeof value !== "object" || Object.getPrototypeOf(value) !== Object.prototype) return "unknown"
+	const fields = Object.entries(value).map(([key, child]) => `${quoteKey(key)}: ${literalType(child)}`)
+	return fields.length === 0 ? "{}" : `{ ${fields.join("; ")} }`
 }

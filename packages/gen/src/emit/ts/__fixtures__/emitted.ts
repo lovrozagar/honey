@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { generateAppClient } from "../app-client.ts"
+import type { RouteTreeV2 } from "../route-tree.ts"
 import { generateSdk, type SdkOptions } from "../sdk.ts"
 
 /** Where emitted files land: under the toolchain cache, never /tmp. */
@@ -61,4 +62,12 @@ export function recordingFetch(answer: (request: Request) => Response | Promise<
 		return answer(request)
 	}) as typeof globalThis.fetch
 	return { calls, fetch }
+}
+
+/** The `routes.gen.ts` module `generateRouteTree` writes for `tree`, imported, with its text. */
+export async function emittedRouteTree(tree: RouteTreeV2): Promise<Record<string, unknown> & { text: string }> {
+	/* loaded on use, so the suites importing this file for the SDK never load the tree emitter */
+	const { generateRouteTree } = await import("../route-tree.ts")
+	const text = generateRouteTree(tree)
+	return { ...(await load({ "routes.gen.ts": text }, "routes.gen.ts")), text }
 }

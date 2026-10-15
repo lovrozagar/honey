@@ -3,6 +3,7 @@
  * lists) whose JSON is equal is declared once as a `const` and shared by name. Callers refuse
  * values JSON cannot carry first, so equal JSON always means equal values.
  */
+import { tsString } from "../emit/shared/escape.ts"
 
 /** The name prefix a caller forces on a value: `M` for meta, `P` for a route id. */
 export type ForcedPrefix = "M" | "P"
@@ -26,8 +27,11 @@ function worthNaming(value: unknown): boolean {
 
 /** A key in an object literal; a quoted "__proto__" would set the prototype, a computed one defines a property. */
 function keyName(key: string): string {
-	return key === "__proto__" ? '["__proto__"]' : JSON.stringify(key)
+	return key === "__proto__" ? '["__proto__"]' : tsString(key)
 }
+
+/** A primitive as source: strings through the one escape layer (F2), the rest as JSON writes them. */
+const primitive = (value: unknown) => (typeof value === "string" ? tsString(value) : JSON.stringify(value))
 
 /** Collects route data, decides what repeats, then prints each value: by name when shared, else in full. */
 export class InternPool {
@@ -167,7 +171,7 @@ export class InternPool {
 
 	#literal(value: unknown): string {
 		if (value === undefined) return "undefined"
-		if (value === null || typeof value !== "object") return JSON.stringify(value)
+		if (value === null || typeof value !== "object") return primitive(value)
 		if (Array.isArray(value)) return `[${value.map((child) => this.expr(child)).join(",")}]`
 		const entries = Object.entries(value).filter(([, child]) => child !== undefined)
 		return `{${entries.map(([key, child]) => `${keyName(key)}:${this.expr(child)}`).join(",")}}`

@@ -189,7 +189,12 @@ export function responsesOf(op: Json, components: Components): { responses: Reco
 			out.contentType = type
 			const schema = content[type]?.schema as Json | undefined
 			if (schema !== undefined) out.schema = schemaToIR(schema)
+			out.contents = ordered(content).map((contentType) => {
+				const each = content[contentType]?.schema as Json | undefined
+				return each === undefined ? { contentType } : { contentType, schema: schemaToIR(each) }
+			})
 		}
+		if (response?.["x-honey-error"] === true) out.error = true
 		const headers = responseHeaders(response, components)
 		if (headers !== undefined) out.headers = headers
 		responses[status] = out
@@ -209,7 +214,22 @@ export function extensionsOf(op: Json, sse: boolean): IROperationExtensions {
 	if (typeof op["x-honey-route"] === "string") out.route = op["x-honey-route"]
 	const invalidate = op["x-invalidate"]
 	if (Array.isArray(invalidate)) out.invalidates = invalidate.filter((target) => typeof target === "string")
+	const errors = declaredErrors(op["x-honey-errors"])
+	if (errors !== undefined) out.errors = errors
 	return out
+}
+
+/** `x-honey-errors` as the IR reads it: each key with a numeric or null status, its schema when it has one. */
+function declaredErrors(raw: unknown): IROperationExtensions["errors"] {
+	if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined
+	const out: NonNullable<IROperationExtensions["errors"]> = {}
+	for (const [key, entry] of Object.entries(raw as Json)) {
+		const { schema, status } = (entry ?? {}) as Json
+		if (status !== null && typeof status !== "number") continue
+		out[key] =
+			schema !== null && typeof schema === "object" ? { schema: schemaToIR(schema as Json), status } : { status }
+	}
+	return Object.keys(out).length > 0 ? out : undefined
 }
 
 /* a header name: an RFC 9110 token */

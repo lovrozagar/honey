@@ -79,10 +79,16 @@ export type IRResponse = {
 	schema?: IRSchema
 	/** the declared headers (A2), names as written, in code-unit order; none when it declares none */
 	headers?: { name: string; required: boolean; schema: IRSchema }[]
+	/** every media type it declares with its schema; `contentType`/`schema` are the preferred one */
+	contents?: { contentType: string; schema?: IRSchema }[]
+	/** a response a declared error produces (`x-honey-error`), never a declared output */
+	error?: true
 }
 
 export type IROperationExtensions = {
 	deprecated?: true
+	/** every declared error key (`x-honey-errors`): its status, null when it has none, and its own schema */
+	errors?: Record<string, { schema?: IRSchema; status: number | null }>
 	idempotencyKey?: true
 	invalidates?: string[]
 	mcp?: true
@@ -179,11 +185,8 @@ function unionOf(schema: Json): IRSchema {
 	const raw = schema.discriminator as { mapping?: Record<string, string>; propertyName: string } | undefined
 	if (raw === undefined) return { kind: "union", variants }
 	const discriminator: IRDiscriminator = { propertyName: raw.propertyName }
-	if (raw.mapping !== undefined) {
-		discriminator.mapping = Object.fromEntries(
-			Object.entries(raw.mapping).map(([value, ref]) => [value, lastSegment(ref)]),
-		)
-	}
+	const mapping = raw.mapping && Object.entries(raw.mapping).map(([value, ref]) => [value, lastSegment(ref)])
+	if (mapping) discriminator.mapping = Object.fromEntries(mapping)
 	return { discriminator, kind: "union", variants }
 }
 
@@ -208,11 +211,8 @@ function objectOf(schema: Json): IRSchema {
 	})
 	const ap = schema.additionalProperties
 	if (ap === undefined) return { fields, kind: "object" }
-	return {
-		additional: ap === false ? false : ap === true ? { kind: "unknown" } : schemaToIR(ap as Json),
-		fields,
-		kind: "object",
-	}
+	const additional = ap === false ? false : ap === true ? ({ kind: "unknown" } as const) : schemaToIR(ap as Json)
+	return { additional, fields, kind: "object" }
 }
 
 type Reader = (schema: Json) => IRSchema | null

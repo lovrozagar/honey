@@ -2,6 +2,7 @@ import { JSONSchema, Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import * as v from "valibot"
 import * as z from "zod"
+import { defineErrors } from "../errors/errors.ts"
 import { readableStream } from "../input/input.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
@@ -448,5 +449,37 @@ describe("generateOpenApi: schema-derived meta over every shape a route takes", 
 				([path, method]) => op(doc, path as string, method)["x-entity"],
 			),
 		).toEqual(["live", undefined, "stream", undefined, undefined])
+	})
+})
+
+describe("generateOpenApi: the declared errors for codegen (x-honey-errors, x-honey-error)", () => {
+	it("lists every declared key with its status and own schema, and marks only the responses errors produce", () => {
+		const errors = defineErrors({
+			taken: "conflict",
+			too_big: { schema: z.object({ limit: z.number() }), status: "unprocessable_entity" },
+		})
+		const app = honey<{}>().errorFactory(errors)
+		app
+			.post("/items")
+			.errors("taken", "too_big")
+			.output({ "application/json": { conflict: z.object({ existing: z.string() }), created: z.object({}) } })
+			.handler((c) => c.res.json("created", {}))
+		const doc = generateOpenApi(app, { info: INFO })
+		const operation = op(doc, "/items", "post")
+		const declared = operation["x-honey-errors"] as Record<string, { schema?: unknown; status: number | null }>
+		const marked = Object.entries(operation.responses as Record<string, Record<string, unknown>>).map(
+			([code, response]) => [code, response["x-honey-error"] ?? false],
+		)
+		expect([Object.keys(declared), declared.taken, declared.too_big?.status, marked]).toEqual([
+			["taken", "too_big"],
+			{ status: 409 },
+			422,
+			[
+				["201", false],
+				["409", false],
+				["422", true],
+			],
+		])
+		expect(resolved(doc, declared.too_big?.schema)).toMatchObject({ properties: { limit: { type: "number" } } })
 	})
 })

@@ -176,12 +176,13 @@ function policyOf(run: Run): PathsContext["policy"] {
 	}
 }
 
-/** A route's responses: what it declares, its errors, else a bare 200. */
+/** A route's responses (what it declares, its errors, else a bare 200) and its declared errors. */
 function responsesOf(errors: ErrorSettings): PathsContext["responses"] {
 	return (route, convert, hint) => {
 		const out = successResponses(route.output, convert, hint)
-		addErrorResponses(out, route.errorMeta, errors, (schema, h) => convert(schema, "output", h))
-		return Object.keys(out).length === 0 ? { "200": { description: "Success" } } : ordered(out)
+		const declared = addErrorResponses(out, route.errorMeta, errors, (schema, h) => convert(schema, "output", h))
+		const responses = Object.keys(out).length === 0 ? { "200": { description: "Success" } } : ordered(out)
+		return { errors: declared, responses }
 	}
 }
 

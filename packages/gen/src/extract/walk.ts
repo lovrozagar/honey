@@ -31,7 +31,14 @@ export type LoadedEntry = {
 const BUILDER_MEMBERS = ["$ctx", "$method", "$path"]
 
 /** One route a `.handler()` call registers: where, its methods, its full path (null if not a literal) and its ctx. */
-export type Registration = { at: string; ctx: ts.Type; methods: string[]; path: string | null }
+export type Registration = {
+	at: string
+	ctx: ts.Type
+	/** `ctx.input` as the handler receives it (parsed), or null when the route declares no input */
+	input: ts.Type | null
+	methods: string[]
+	path: string | null
+}
 
 /**
  * The tsconfig that governs `fromPath`: the nearest one walking up, but never past the project root
@@ -79,12 +86,17 @@ function registrationOf(entry: LoadedEntry, call: ts.CallExpression): Registrati
 	})
 	if (phantoms.includes(undefined)) return null
 	const [ctx, method, path] = phantoms as ts.Type[]
+	/* the handler callback's ctx parameter carries `input`, which the builder's `$ctx` phantom leaves out */
+	const handler = checker.getResolvedSignature(call)?.parameters[0]
+	const param = handler && checker.getTypeOfSymbol(handler).getCallSignatures()[0]?.parameters[0]
+	const input = param && checker.getTypeOfSymbol(param).getProperty("input")
 	const file = call.getSourceFile()
 	const line = file.getLineAndCharacterOfPosition(call.getStart(file)).line + 1
 	const paths = literals(path as ts.Type)
 	return {
 		at: `${file.fileName}:${line}`,
 		ctx: ctx as ts.Type,
+		input: input ? checker.getTypeOfSymbol(input) : null,
 		/* `.on()`'s methods are literals by its signature; a path is one only as a single literal */
 		methods: literals(method as ts.Type),
 		path: paths.length === 1 && !(path as ts.Type).isUnion() ? (paths[0] as string) : null,

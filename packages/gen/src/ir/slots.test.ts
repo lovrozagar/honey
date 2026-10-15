@@ -243,11 +243,21 @@ describe("responses and extensions", () => {
 		})
 		expect([op.responses, op.extensions]).toEqual([
 			{
-				200: { contentType: "application/json", schema: STRING, status: "200" },
-				201: { contentType: "text/event-stream; charset=utf-8", schema: STRING, status: "201" },
+				200: {
+					contentType: "application/json",
+					contents: [{ contentType: "application/json", schema: STRING }],
+					schema: STRING,
+					status: "200",
+				},
+				201: {
+					contentType: "text/event-stream; charset=utf-8",
+					contents: [{ contentType: "text/event-stream; charset=utf-8", schema: STRING }],
+					schema: STRING,
+					status: "201",
+				},
 				204: { status: "204" },
 				"4XX": { status: "4XX" },
-				default: { contentType: "text/plain", status: "default" },
+				default: { contentType: "text/plain", contents: [{ contentType: "text/plain" }], status: "default" },
 			},
 			{ sse: true },
 		])
@@ -326,6 +336,51 @@ describe("responses: declared headers (A2)", () => {
 				{ name: "X-Total", required: true, schema: { kind: "scalar", type: "integer" } },
 				{ name: "x-cursor", required: false, schema: { kind: "unknown" } },
 			],
+			false,
+		])
+	})
+})
+
+describe("responses and extensions: what codegen reads of declared errors (O2) and media types", () => {
+	it("carries x-honey-errors per key and x-honey-error per response, and every media type with its schema", () => {
+		const op = operation({
+			responses: {
+				201: {
+					content: { "application/json": { schema: { type: "object" } }, "text/plain": { schema: { type: "string" } } },
+					description: "",
+				},
+				409: {
+					content: { "application/json": { schema: { type: "object" } } },
+					description: "",
+					"x-honey-error": true,
+				},
+			},
+			"x-honey-errors": { gone: { status: null }, taken: { schema: { type: "string" }, status: 409 } },
+		})
+		expect([
+			op.extensions.errors,
+			op.responses["201"]?.contents,
+			op.responses["201"]?.error,
+			op.responses["409"]?.error,
+		]).toEqual([
+			{ gone: { status: null }, taken: { schema: STRING, status: 409 } },
+			[
+				{ contentType: "application/json", schema: OBJECT },
+				{ contentType: "text/plain", schema: STRING },
+			],
+			undefined,
+			true,
+		])
+	})
+
+	it("drops a malformed x-honey-errors entry and leaves no field when nothing is declared", () => {
+		const op = operation({
+			responses: { 200: { description: "" } },
+			"x-honey-errors": { bad: { status: "x" }, gone: null, list: [] },
+		})
+		expect([op.extensions.errors, op.responses["200"]?.contents, Object.hasOwn(op.extensions, "errors")]).toEqual([
+			undefined,
+			undefined,
 			false,
 		])
 	})

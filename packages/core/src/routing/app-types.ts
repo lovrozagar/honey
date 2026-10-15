@@ -1,6 +1,7 @@
 /** The app's type machinery: the handler ctx, each route's record, and the `Infer*` ladder. Type-only. */
 import type { HoneyContext, REQUEST } from "../context/context.ts"
 import type { Honey } from "./app.ts"
+import type { RouteSelectorOf } from "./codegen-types.ts"
 import type { ApplyOutput } from "./output-types.ts"
 import type { TapMethod } from "./tap.ts"
 import type { StatusKey } from "../response/status.ts"
@@ -17,7 +18,7 @@ export type OpenApiMeta = {
 	extensions?: Record<`x-${string}`, unknown>
 	/** an internal route never appears in generated artifacts */
 	internal?: boolean
-	invalidate?: readonly string[] | null
+	invalidate?: readonly RouteSelectorOf[] | null
 	mcp?: boolean
 	operationId?: string
 	security?: Array<Record<string, string[]>> | string | string[]
@@ -270,7 +271,6 @@ export type InferRouteErrors<T, TPath extends InferRoutePaths<T>, TMethod extend
 	RouteLookup<T, TPath, TMethod> extends { errors: infer E } ? E : never
 
 export type InferErrorFactory<T> = T extends { readonly $errorFactory: infer F } ? F : never
-
 export type InferBasePath<T> = T extends { readonly $basePath: infer P } ? P : never
 
 /** `H` with tap payloads `TNewTaps` declared: they join its taps, and route meta may carry any of them. */

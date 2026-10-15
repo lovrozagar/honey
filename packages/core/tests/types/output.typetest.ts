@@ -10,8 +10,9 @@ import { createMiddleware } from "../../src/middleware/middleware.ts"
 import type { TypedResponse } from "../../src/response/response.ts"
 import { honey } from "../../src/routing/app.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
-import type { InferRouteInput, InferRouteOutput, InferRoutes } from "../../src/routing/app-types.ts"
-import type { AllowedResMethods, OutputSchemas } from "../../src/routing/output-types.ts"
+import type { InferRouteInput, InferRouteOutput, InferRoutes, OpenApiMeta } from "../../src/routing/app-types.ts"
+import type { RouteSelectorOf, SelectorOf, WithOutput } from "../../src/routing/codegen-types.ts"
+import type { AllowedResMethods, ApplyOutput, OutputSchemas } from "../../src/routing/output-types.ts"
 
 const withDb = createMiddleware((_ctx, next) => next({ db: "test-db" }))
 
@@ -353,5 +354,24 @@ describe(".output() on the builder and in the route map", () => {
 		expectTypeOf<InferRouteInput<typeof app, "/api/users", "post">>().toEqualTypeOf<{
 			readonly json: { name: string }
 		}>()
+	})
+})
+
+describe("the codegen surface (O6): WithOutput, HoneyCodegen and route selectors", () => {
+	it("narrows invalidate to the generated selectors, and keeps any string before codegen ran", () => {
+		expectTypeOf<SelectorOf<{ routeSelector: "GET /a" | "POST /b" }>>().toEqualTypeOf<"GET /a" | "POST /b">()
+		expectTypeOf<SelectorOf<{}>>().toEqualTypeOf<string>()
+		expectTypeOf<RouteSelectorOf>().toEqualTypeOf<string>()
+		expectTypeOf<NonNullable<OpenApiMeta["invalidate"]>>().toEqualTypeOf<readonly string[]>()
+		honey<{}>()
+			.get("/a")
+			.meta({ invalidate: ["GET /a", "GET /anything"] })
+			.handler((c) => c.res.json("ok", {}))
+	})
+
+	it("types WithOutput as the ctx a route with that output declaration gets", () => {
+		const id = z.object({ id: z.string() })
+		type Out = { "application/json": { ok: typeof id } }
+		expectTypeOf<WithOutput<{ a: 1 }, Out>>().toEqualTypeOf<ApplyOutput<{ a: 1 }, Out>>()
 	})
 })

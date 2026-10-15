@@ -217,7 +217,7 @@ describe("routes: keyed by the caller's route id", () => {
 			expect(Object.keys(routes).sort()).toEqual(["GET /admin", "GET /user"])
 			expect(shown(routes["GET /user"])).toEqual(["auth: { sub: string }"])
 			expect(shown(routes["GET /admin"])).toEqual(["auth: { sub: string }", "admin: { level: number }"])
-			expect(extract(bare).types).toEqual({ env: "{ DB: string }", middleware: [], routes: {}, taps: null })
+			expect(extract(bare).types).toEqual({ env: "{ DB: string }", inputs: {}, middleware: [], routes: {}, taps: null })
 		},
 		SLOW,
 	)
@@ -400,6 +400,31 @@ describe("types: a named type by reference, everything else exactly", () => {
 			expect(shown(extract(entryPath, { outputDir: join(project.root, "h72") }).types.middleware)[2]).toBe(
 				'own: import("./own.ts").Own',
 			)
+		},
+		SLOW,
+	)
+})
+
+describe("inputs: each route's ctx.input as the handler gets it (O3)", () => {
+	it(
+		"keeps the parsed type a schema produces, not the type the request sends, and has no entry without .input()",
+		() => {
+			const entryPath = project.write(
+				"routes/inputs.ts",
+				lines(
+					'import { honey } from "@lovrozagar/honey"',
+					"/** a Standard schema reading a string and producing a number */",
+					"const count = { '~standard': { types: undefined as unknown as { input: string; output: number }, validate: (v: unknown) => ({ value: Number(v) }), vendor: 'x', version: 1 as const } }",
+					"export const app = honey<{}>()",
+					'app.post("/count").input({ json: count }).handler((c) => c.res.text("ok", String(c.input.json + 1)))',
+					'app.get("/plain").handler((c) => c.res.text("ok", "ok"))',
+					"/* a path the router refuses, and one route registered twice with different inputs: neither is typed */",
+					'app.post("/bad").input({ json: count }).handler((c) => c.res.text("ok", "ok"))',
+					'app.put("/twice").input({ json: count }).handler((c) => c.res.text("ok", "ok"))',
+					'app.put("/twice").input({ search: count }).handler((c) => c.res.text("ok", "ok"))',
+				),
+			)
+			expect(extract(entryPath, { routeId: refusing }).types.inputs).toEqual({ "POST /count": "{ json: number }" })
 		},
 		SLOW,
 	)

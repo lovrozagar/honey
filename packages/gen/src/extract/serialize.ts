@@ -243,6 +243,11 @@ export class Serializer {
 		return entries.length > 0 ? `{ ${entries.join("; ")} }` : "{}"
 	}
 
+	/** An object type written out member by member, never by its alias name: a core-internal alias stays out of the output. */
+	shape(type: ts.Type): string {
+		return this.#object(type)
+	}
+
 	/** An optional member's type, without the `| undefined` its `?` already says (a `null` stays). */
 	optional(type: ts.Type): string {
 		const kept = type.isUnion() ? type.types.filter((t) => !(t.flags & this.compiler.TypeFlags.Undefined)) : [type]

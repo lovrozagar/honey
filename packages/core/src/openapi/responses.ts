@@ -17,7 +17,12 @@ export type ResponseObject = {
 	content?: Record<string, MediaObject>
 	description: string
 	headers?: Record<string, HeaderObject>
+	/** set on every response the route's declared errors produce, so a reader tells it from a declared output */
+	"x-honey-error"?: true
 }
+
+/** One declared error key as an operation's `x-honey-errors` carries it: its status (null: none) and own schema. */
+export type DeclaredError = { schema?: JsonSchema; status: number | null }
 
 /** A schema converted for this operation: `hint` names a component it lifts. */
 export type Convert = (schema: unknown, io: "input" | "output", hint: string) => JsonSchema
@@ -141,29 +146,42 @@ function problem(keys: readonly string[], code: number): JsonSchema {
 const oneOrOneOf = (schemas: readonly JsonSchema[]): JsonSchema =>
 	schemas.length === 1 ? (schemas[0] as JsonSchema) : { oneOf: [...schemas] }
 
+/** Every declared error key, code-unit ordered: its status (null when it has none) and its own schema, converted once. */
+function declaredErrors(
+	errorMeta: Readonly<Record<string, CollectedError>>,
+	convert: (schema: unknown, hint: string) => JsonSchema,
+): Record<string, DeclaredError> {
+	const declared: Record<string, DeclaredError> = {}
+	for (const key of Object.keys(errorMeta).sort(compareCodeUnits)) {
+		const { schema, status } = errorMeta[key] as CollectedError
+		const entry: DeclaredError = { status: status > 0 ? status : null }
+		if (schema !== null) entry.schema = convert(schema, `Error${status > 0 ? status : ""}`)
+		declared[key] = entry
+	}
+	return declared
+}
+
 /**
  * Add the errors `errorMeta` names to `responses`, one response per status, each status left to an
- * answer the route declares there itself. A key with no status is not documented.
+ * answer the route declares there itself. A key with no status is not documented as a response.
+ * Returns every declared key with its status and own schema: the operation's `x-honey-errors`.
  */
 export function addErrorResponses(
 	responses: Record<string, ResponseObject>,
 	errorMeta: Readonly<Record<string, CollectedError>>,
 	settings: ErrorSettings,
 	convert: (schema: unknown, hint: string) => JsonSchema,
-): void {
+): Record<string, DeclaredError> {
+	const declared = declaredErrors(errorMeta, convert)
 	const byStatus = new Map<number, { custom: JsonSchema[]; keys: string[]; standard: string[] }>()
-	for (const key of Object.keys(errorMeta).sort(compareCodeUnits)) {
-		const { schema, status } = errorMeta[key] as CollectedError
-		if (status <= 0 || Object.hasOwn(responses, String(status))) continue
+	for (const [key, { schema, status }] of Object.entries(declared)) {
+		if (status === null || Object.hasOwn(responses, String(status))) continue
 		const group = byStatus.get(status) ?? { custom: [], keys: [], standard: [] }
 		byStatus.set(status, group)
 		group.keys.push(key)
-		if (schema === null) {
-			group.standard.push(key)
-			continue
-		}
-		const own = convert(schema, `Error${status}`)
-		group.custom.push(settings.customErrorSchema === null ? own : { allOf: [own, settings.customErrorSchema] })
+		if (schema === undefined) group.standard.push(key)
+		else
+			group.custom.push(settings.customErrorSchema === null ? schema : { allOf: [schema, settings.customErrorSchema] })
 	}
 	for (const [code, { custom, keys, standard }] of byStatus) {
 		const content: Record<string, MediaObject> = {}
@@ -174,8 +192,9 @@ export function addErrorResponses(
 			const envelope = standard.length > 0 ? [narrowed(settings.errorSchema ?? defaultEnvelope(), standard, code)] : []
 			content["application/json"] = { schema: oneOrOneOf([...envelope, ...custom]) }
 		}
-		responses[String(code)] = { content, description: keys.join(", ") }
+		responses[String(code)] = { content, description: keys.join(", "), "x-honey-error": true }
 	}
+	return declared
 }
 
 /** `responses` keyed in ascending status order: the same bytes however they were declared. */
