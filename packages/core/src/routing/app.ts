@@ -12,6 +12,7 @@ import {
 	addChain,
 	addScope,
 	createGraph,
+	GRAPH,
 	type HandleView,
 	type HoneyGraph,
 	markUsed,
@@ -20,12 +21,11 @@ import {
 } from "./register.ts"
 import { type StartOf, startRoute } from "./route-builder.ts"
 import type { AppSettings } from "./settings.ts"
-import { SettingsChain } from "./settings-chain.ts"
+import { RouteTreeChain } from "./route-tree.ts"
 import type { HttpMethod, MergePath, PrefixRoutes } from "./types.ts"
 import { startWsRoute, type WSRouteBuilder } from "./ws-builder.ts"
 
-/** An app's graph slot: not exported from the package; finalize readers (tests, codegen) reach the graph through it. */
-export const GRAPH: unique symbol = /* @__PURE__ */ Symbol("honey.graph")
+export { GRAPH } from "./register.ts"
 
 export class Honey<
 	TEnv,
@@ -37,7 +37,7 @@ export class Honey<
 	TBasePath extends string = "/",
 	TTaps extends Record<string, unknown> = {},
 	TScopedMw extends readonly ScopedMwEntry[] = [],
-> extends SettingsChain<TEnv> {
+> extends RouteTreeChain<TEnv> {
 	declare readonly $basePath: TBasePath
 	declare readonly $ctx: TCtx
 	declare readonly $env: TEnv

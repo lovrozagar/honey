@@ -3,6 +3,8 @@
  * the serving app's own route table, so two apps that load one tree never share a record.
  */
 import { canonical, expandOptional, parsePattern, type RouteId, routeId, type Segment } from "./pattern.ts"
+import type { InputSchemas } from "../input/input.ts"
+import type { OutputSchemas } from "./output-types.ts"
 import type { RouteRecord } from "./record.ts"
 import type { HttpMethod } from "./types.ts"
 
@@ -29,8 +31,12 @@ export type RouteEntry = {
 	h?: RouteRecord
 	/** internal route (spec, docs, manifest) */
 	i?: 1 | true
+	/** what `.input()` declares: a delegated leaf's body media type is checked against it */
+	iv?: InputSchemas | null
 	/** route meta */
 	mt?: Readonly<Record<string, unknown>> | null
+	/** what `.output()` declares */
+	out?: OutputSchemas | null
 }
 
 export interface RouteMeta {}

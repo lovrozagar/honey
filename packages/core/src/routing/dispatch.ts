@@ -174,7 +174,7 @@ function preflight(
 	const requested = state.req.headers.get("access-control-request-method")
 	if (requested === null) return null
 	const hit = matchRoute(g.root, requested.trim().toUpperCase(), state.path)
-	if (hit === null || !hit.matched) return null
+	if (hit === null || !hit.matched || !final.plans.has(hit.id)) return null
 	const plan = final.plans.get(hit.id) as Plan
 	const hooks = hooksOf(g)
 	plan.pf ??= compileChain(plan.pfChain, hooks.miss, hooks.convert)
@@ -196,7 +196,8 @@ function upgradeRequired(): Response {
 function upgrade(g: HoneyGraph, final: FinalTable, state: FetchState, method: string): MaybePromise<Response> | null {
 	if (!final.ws || method !== "GET" || !isWebSocketUpgrade(state.req)) return null
 	const ws = matchWsRoute(g.root, state.path)
-	if (ws === null) return null
+	/* a loaded ws leaf no route serves is no upgrade */
+	if (ws === null || !final.plans.has(ws.id)) return null
 	state.ws = g.settings.wsAdapter
 	return run(state, final.plans.get(ws.id) as Plan, ws.params)
 }
@@ -252,7 +253,18 @@ function route(g: HoneyGraph, incoming: Incoming) {
 		const answered = method === "OPTIONS" ? preflight(g, final, state, match.allowed) : null
 		return answered ?? miss(s, final, state, match.allowed)
 	}
-	return run(state, final.plans.get(match.id) as Plan, match.params)
+	return runMatched(s, final, state, match)
+}
+
+/** A matched leaf's plan; a loaded leaf no route serves, and no catch-all takes, answers like a path without one. */
+function runMatched(
+	s: AppSettings<unknown>,
+	final: FinalTable,
+	state: FetchState,
+	match: { readonly id: string; readonly params: Record<string, string> },
+): MaybePromise<Response> {
+	const plan = final.plans.get(match.id)
+	return plan === undefined ? miss(s, final, state, null) : run(state, plan, match.params)
 }
 
 /** The routed answer; a HEAD request's without its body, as GET's answer would be sent. */

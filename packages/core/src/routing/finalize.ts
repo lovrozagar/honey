@@ -18,6 +18,7 @@ import {
 	type MaybePromise,
 	type RuntimeMiddleware,
 } from "../middleware/middleware.ts"
+import { assertTreeCurrent, delegatedRecords } from "./delegate.ts"
 import { commonPrefix } from "./middleware-chain.ts"
 import {
 	canonical,
@@ -127,7 +128,7 @@ function resolveErrors(
 }
 
 /** The scoped middleware a pattern runs: whole where the scope covers it, behind the path check where it covers part. */
-function scopesFor(g: HoneyGraph, variants: readonly (readonly Segment[])[]): RuntimeMiddleware[] {
+export function scopesFor(g: HoneyGraph, variants: readonly (readonly Segment[])[]): RuntimeMiddleware[] {
 	const out: RuntimeMiddleware[] = []
 	for (const entry of g.scoped) {
 		const coverage = variantsCoverage(variants, entry.segs)
@@ -223,10 +224,11 @@ export function finalize(g: HoneyGraph, hooks: FinalizeHooks): FinalTable {
 	if (g.final !== null && g.final.epoch === g.epoch) return g.final
 	assertNothingDiscarded(g)
 	assertSettingsAgree(g.settings)
+	assertTreeCurrent(g)
 	const plans = new Map<RouteId, Plan>()
 	const statics: Record<string, Record<string, Plan>> = dict()
 	let ws = false
-	for (const [id, r] of g.records) {
+	for (const [id, r] of [...g.records, ...delegatedRecords(g)]) {
 		const variants = expandOptional(r.sg)
 		const plan = planRoute(g, r, variants, hooks)
 		plans.set(id, plan)

@@ -10,7 +10,15 @@ import { GRAPH } from "../routing/app.ts"
 import { finalTable } from "../routing/dispatch.ts"
 import type { Plan } from "../routing/finalize.ts"
 import type { OutputSchemas } from "../routing/output-types.ts"
-import { expandOptional, patternParams, splitRouteId, toOpenApiTemplate, UNNAMED_WILDCARD } from "../routing/pattern.ts"
+import {
+	expandOptional,
+	parsePattern,
+	patternParams,
+	splitRouteId,
+	toOpenApiTemplate,
+	UNNAMED_WILDCARD,
+} from "../routing/pattern.ts"
+import type { RouteEntry } from "../routing/tree.ts"
 
 /** One path a WebSocket route serves. */
 export type CollectedWsRoute = {
@@ -42,32 +50,42 @@ export type CollectedRoute = CollectedWsRoute & {
 
 export type CollectedRoutes = { readonly http: CollectedRoute[]; readonly ws: CollectedWsRoute[] }
 
-/** Every route `app` serves, in registration order. */
+/** What a route resolves to: from its plan, or for a loaded leaf nothing serves, from its tree entry. */
+function resolved(plan: Plan | undefined, entry: RouteEntry | undefined) {
+	if (plan !== undefined) {
+		const declared = plan.policy.declared === null ? [] : [...plan.policy.declared]
+		return { errorKeys: declared.sort(compareCodeUnits), errors: plan.route.errors, meta: plan.route.meta }
+	}
+	const meta: Readonly<Record<string, unknown>> = entry?.mt ?? {}
+	return { errorKeys: [...(entry?.ek ?? [])].sort(compareCodeUnits), errors: null, meta }
+}
+
+/** A route's pattern and declarations: its record's, else its loaded tree entry's. */
+function declarations(g: HoneyGraph, id: string) {
+	const record = g.records.get(id)
+	const entry = g.loaded?.[id]
+	return {
+		input: record?.iv ?? entry?.iv ?? null,
+		output: record?.out ?? entry?.out ?? null,
+		segments: record?.sg ?? parsePattern(splitRouteId(id).pattern),
+	}
+}
+
+/** Every route `app` serves: in registration order, or a loaded tree's order. */
 export function collectRoutes(app: { readonly [GRAPH]: HoneyGraph }): CollectedRoutes {
 	const g = app[GRAPH]
 	const { plans } = finalTable(g)
 	const http: CollectedRoute[] = []
 	const ws: CollectedWsRoute[] = []
-	for (const [id, record] of g.records) {
-		/* finalize plans every record */
-		const { policy, route } = plans.get(id) as Plan
-		const { errors, meta } = route
+	for (const id of g.loaded === null ? g.records.keys() : Object.keys(g.loaded)) {
+		const { input, output, segments } = declarations(g, id)
+		const { errorKeys, errors, meta } = resolved(plans.get(id), g.loaded?.[id])
 		const { method, pattern } = splitRouteId(id)
-		for (const segments of expandOptional(record.sg)) {
-			const params = patternParams(segments).map((name) => (name === UNNAMED_WILDCARD ? "wildcard" : name))
-			const base = { id, input: record.iv, meta, params, path: toOpenApiTemplate(segments), pattern }
-			if (method === "WS") {
-				ws.push(base)
-				continue
-			}
-			http.push({
-				...base,
-				errorKeys: policy.declared === null ? [] : [...policy.declared].sort(compareCodeUnits),
-				errors,
-				internal: meta.internal === true,
-				method,
-				output: record.out,
-			})
+		for (const variant of expandOptional(segments)) {
+			const params = patternParams(variant).map((name) => (name === UNNAMED_WILDCARD ? "wildcard" : name))
+			const base = { id, input, meta, params, path: toOpenApiTemplate(variant), pattern }
+			if (method === "WS") ws.push(base)
+			else http.push({ ...base, errorKeys, errors, internal: meta.internal === true, method, output })
 		}
 	}
 	return { http, ws }

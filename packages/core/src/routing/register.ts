@@ -21,10 +21,15 @@ import {
 } from "./pattern.ts"
 import type { RouteRecord } from "./record.ts"
 import { type AppSettings, createSettings, type ErrorFactories } from "./settings.ts"
-import { createNode, insertLeaf, type TreeNode } from "./tree.ts"
+import { createNode, insertLeaf, type RouteEntry, type TreeNode } from "./tree.ts"
+
+/** An app's graph slot: not exported from the package; finalize readers (tests, codegen) reach the graph through it. */
+export const GRAPH: unique symbol = /* @__PURE__ */ Symbol("honey.graph")
 
 /** A registered route: what it was registered with, before finalize resolves it against the graph. */
 export type RouteHandler = RouteRecord & {
+	/** came with the loaded route tree: a registration of the same route replaces it */
+	readonly lt?: true
 	/** the chain middleware captured at registration, plus any mounting chain */
 	readonly cm: readonly RuntimeMiddleware[]
 	/** `.context()` values of the registering handle, merged under the mounting handle's */
@@ -70,6 +75,8 @@ export type ScopedEntry = {
 }
 
 export type HoneyGraph = {
+	/** root wildcards a loaded app registered outside its tree: what its unserved leaves delegate to */
+	readonly catchAll: Map<RouteId, RouteHandler>
 	/** every `use(mw)` handle; one that never registers a route is reported at finalize */
 	readonly chains: ChainNode[]
 	/** bumped by every registration; finalize re-runs when it moves */
@@ -78,13 +85,17 @@ export type HoneyGraph = {
 	/** the error boundary and miss answer dispatch compiles into every chain, created once */
 	hooks: FinalizeHooks | null
 	readonly pending: Set<PendingRoute>
+	/** the route data of the tree `routeTree()` loaded; `null` while the app builds its own tree */
+	loaded: Readonly<Record<RouteId, RouteEntry>> | null
 	readonly records: Map<RouteId, RouteHandler>
-	readonly root: TreeNode
+	root: TreeNode
 	/** path-scoped middleware, in registration order */
 	readonly scoped: ScopedEntry[]
 	/** chains of the handles that served a request: what 404 and 405 run when there are no routes */
 	readonly served: Set<readonly RuntimeMiddleware[]>
 	readonly settings: AppSettings<unknown>
+	/** routes a loaded app registered that its tree lacks: the tree is stale, said at finalize */
+	readonly unexpected: RouteId[]
 }
 
 /** What one handle contributes to the routes registered or mounted through it. */
@@ -107,16 +118,19 @@ export const ROOT_VIEW: HandleView = /* @__PURE__ */ Object.freeze({
 
 export function createGraph(): HoneyGraph {
 	return {
+		catchAll: new Map(),
 		chains: [],
 		epoch: 0,
 		final: null,
 		hooks: null,
+		loaded: null,
 		pending: new Set(),
 		records: new Map(),
 		root: createNode(),
 		scoped: [],
 		served: new Set(),
 		settings: createSettings(),
+		unexpected: [],
 	}
 }
 
@@ -140,10 +154,19 @@ export function addChain(g: HoneyGraph, parent: ChainNode | null, mw: RuntimeMid
 export function addRoute(g: HoneyGraph, method: string, segments: readonly Segment[], source: RouteSource): RouteId {
 	const pattern = canonical(segments)
 	const id = routeId(method, pattern)
-	if (g.records.has(id)) throw new Error(`Duplicate route: ${id}`)
-	for (const variant of expandOptional(segments)) insertLeaf(g.root, variant, method, id)
-	g.records.set(id, { ...source, id, mt: null, rp: pattern, sg: segments })
+	if (g.records.get(id)?.lt === undefined && (g.records.has(id) || g.catchAll.has(id))) {
+		throw new Error(`Duplicate route: ${id}`)
+	}
+	const record = { ...source, id, mt: null, rp: pattern, sg: segments }
 	g.epoch++
+	if (g.loaded === null) for (const variant of expandOptional(segments)) insertLeaf(g.root, variant, method, id)
+	else if (!Object.hasOwn(g.loaded, id)) {
+		/* a loaded app binds the routes its tree holds; a root wildcard it lacks is the catch-all */
+		if (segments.length === 1 && segments[0]?.k === "wildcard") g.catchAll.set(id, record)
+		else g.unexpected.push(id)
+		return id
+	}
+	g.records.set(id, record)
 	return id
 }
 
