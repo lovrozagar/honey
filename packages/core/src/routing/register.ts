@@ -3,7 +3,7 @@
  * registered into it, and mounting a sub-app. Records are per graph, keyed by `RouteId`; the
  * tree holds ids only, so a sub-app mounted into two parents never shares a record.
  */
-import type { InputStep } from "../input/input.ts"
+import type { InputSchemas, InputStep } from "../input/input.ts"
 import type { OutputSchemas } from "./output-types.ts"
 import type { MaybePromise, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { FinalizeHooks, FinalTable } from "./finalize.ts"
@@ -36,6 +36,8 @@ export type RouteHandler = RouteRecord & {
 	readonly fn: (ctx: object) => MaybePromise<Response>
 	/** the compiled `.input()` step, run after the middleware and before `fn`; `null` without `.input()` */
 	readonly in: InputStep | null
+	/** what `.input()` declares, as written: read by documentation, never at dispatch; `null` without it */
+	readonly iv: InputSchemas | null
 	/** what `.output()` declares, checked at finalize when the app's mode is on; `null` without it */
 	readonly out: OutputSchemas | null
 	/** the settings of the app the route was registered on */

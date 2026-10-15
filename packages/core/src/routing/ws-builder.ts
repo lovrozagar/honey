@@ -24,8 +24,8 @@ type WSBuilderState = {
 	readonly errorKeys: ReadonlySet<string>
 	readonly errorSource: ErrorFactories | null
 	readonly graph: HoneyGraph
-	/** the compiled `.input()` step */
-	readonly input: InputStep | null
+	/** `.input()`: the schemas as written (for documentation) and the step they compile to */
+	readonly input: { readonly schemas: NonBodyInput; readonly step: InputStep } | null
 	readonly meta: Readonly<Record<string, unknown>> | null
 	readonly middlewares: readonly RuntimeMiddleware[]
 	readonly origins: WSOriginPolicy | null
@@ -86,7 +86,7 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 		schemas: TSchemas,
 	): WSRouteBuilder<TCtx & { readonly input: InferInputMap<TSchemas> }, TPath, TParent> {
 		return this.#next<TCtx & { readonly input: InferInputMap<TSchemas> }>({
-			input: compileInput(schemas, ["GET"], this.#s.path),
+			input: { schemas, step: compileInput(schemas, ["GET"], this.#s.path) },
 		})
 	}
 
@@ -118,7 +118,8 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 			dk: s.errorKeys,
 			ef: s.errorSource,
 			fn: upgrader(callbacks as WSHandler<unknown>, s.origins, s.path),
-			in: s.input,
+			in: s.input?.step ?? null,
+			iv: s.input?.schemas ?? null,
 			out: null,
 			own: s.graph.settings,
 			rb: null,

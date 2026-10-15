@@ -154,8 +154,8 @@ export type BuilderState = {
 	readonly errorSource: ErrorFactories | null
 	readonly extraMethods: readonly string[]
 	readonly graph: HoneyGraph
-	/** the compiled `.input()` step */
-	readonly input: InputStep | null
+	/** `.input()`: the schemas as written (for documentation) and the step they compile to */
+	readonly input: { readonly schemas: InputSchemas; readonly step: InputStep } | null
 	/** what `.output()` declared */
 	readonly output: OutputSchemas | null
 	/** explicit meta: chain `.meta()` overlaid by route `.meta()` */
@@ -170,9 +170,9 @@ export type BuilderState = {
 	readonly view: HandleView
 }
 
-/** A new route's error declarations: no keys, no boundary, no named factory. */
-export function undeclared(): Pick<BuilderState, "boundaryKey" | "errorKeys" | "errorSource"> {
-	return { boundaryKey: null, errorKeys: new Set(), errorSource: null }
+/** A new route's declarations: no error keys, no boundary, no named factory, no input. */
+export function undeclared(): Pick<BuilderState, "boundaryKey" | "errorKeys" | "errorSource" | "input"> {
+	return { boundaryKey: null, errorKeys: new Set(), errorSource: null, input: null }
 }
 
 export class RouteBuilder<B extends BuilderTypes> {
@@ -232,8 +232,8 @@ export class RouteBuilder<B extends BuilderTypes> {
 	input<const TSchemas extends InputSchemas>(
 		schemas: TSchemas,
 	): BuilderChain<Next<B, { input: InferInputMap<TSchemas>; used: B["used"] | "input" }>> {
-		const s = this.#s
-		return this.#next({ input: compileInput(schemas, [s.method, ...s.extraMethods], s.path) })
+		const step = compileInput(schemas, [this.#s.method, ...this.#s.extraMethods], this.#s.path)
+		return this.#next({ input: { schemas, step } })
 	}
 
 	/** Declare what the route answers: ctx.res narrows to it, and `outputValidation` checks it. */
@@ -258,7 +258,8 @@ export class RouteBuilder<B extends BuilderTypes> {
 			dk: s.errorKeys,
 			ef: s.errorSource,
 			fn: fn as unknown as RouteSource["fn"],
-			in: s.input,
+			in: s.input?.step ?? null,
+			iv: s.input?.schemas ?? null,
 			out: s.output,
 			own: s.graph.settings,
 			rb: s.boundaryKey,
@@ -285,7 +286,6 @@ export function startRoute(
 		...undeclared(),
 		extraMethods: route.extraMethods,
 		graph,
-		input: null,
 		meta: view.chainMeta,
 		method: route.method,
 		output: null,

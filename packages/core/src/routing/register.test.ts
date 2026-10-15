@@ -27,6 +27,7 @@ function source(): RouteSource {
 		ef: null,
 		fn: () => new Response("x"),
 		in: null,
+		iv: null,
 		out: null,
 		own: createGraph().settings,
 		rb: null,
