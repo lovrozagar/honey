@@ -5,7 +5,7 @@
  */
 import type { ERROR_META } from "../errors/errors.ts"
 import { compileInput, type InferInputMap, type InputSchemas, type InputStep } from "../input/input.ts"
-import type { OutputSchemas } from "./output-types.ts"
+import type { KnownStatusKeys, OutputSchemas } from "./output-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { TypedResponse } from "../response/response.ts"
@@ -238,7 +238,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 
 	/** Declare what the route answers: ctx.res narrows to it, and `outputValidation` checks it. */
 	output<const TOutput extends OutputSchemas>(
-		schemas: TOutput,
+		schemas: TOutput & KnownStatusKeys<TOutput>,
 	): BuilderChain<Next<B, { output: TOutput; used: B["used"] | "output" }>> {
 		return this.#next({ output: schemas })
 	}

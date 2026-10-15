@@ -27,6 +27,14 @@ export type OutputSchemas = {
 	readonly [mediaType: `${string}/${string}`]: StatusSchemas
 } & { readonly headers?: HeaderSchemas; readonly redirect?: RedirectStatuses }
 
+/**
+ * `TOutput` with every key under a media type, `headers` or `redirect` that names no status
+ * mapped to `never`: intersected with the declaration, a typo is an error where it is written.
+ */
+export type KnownStatusKeys<TOutput> = {
+	readonly [CT in keyof TOutput]: { readonly [K in keyof TOutput[CT]]: K extends StatusKey ? TOutput[CT][K] : never }
+}
+
 /** The helper each media type is answered with. */
 type HelperOf = {
 	"application/json": "json"

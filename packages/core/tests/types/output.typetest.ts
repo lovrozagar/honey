@@ -249,6 +249,21 @@ describe("OutputSchemas: what .output() takes", () => {
 			"text/plain": { ok: z.string() },
 		}).toExtend<OutputSchemas>()
 	})
+
+	it("refuses a key that names no status, under a media type, headers or redirect", () => {
+		const route = honey<{}>().get("/t")
+		expectTypeOf(route.output).toBeCallableWith({
+			"application/json": { ok: z.string() },
+			headers: { ok: z.object({}) },
+			redirect: { found: true },
+		})
+		// @ts-expect-error a status key that names no status
+		route.output({ "application/json": { okay: z.string() } })
+		// @ts-expect-error a header status that names no status
+		route.output({ "application/json": { ok: z.string() }, headers: { okay: z.object({}) } })
+		// @ts-expect-error a redirect that names no status
+		route.output({ redirect: { foundd: true } })
+	})
 })
 
 describe("errorsByStatus: a route's declared errors by status code", () => {
