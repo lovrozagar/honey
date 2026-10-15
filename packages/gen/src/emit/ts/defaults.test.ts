@@ -1,3 +1,4 @@
+import { Project, ts } from "ts-morph"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { emittedApp, emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
 
@@ -281,4 +282,55 @@ describe("default fetch: path-only base and missing fetch", () => {
 			await expect(sdk.users.list({})).rejects.toThrow(TypeError)
 		}
 	})
+})
+
+/** DOC with servers: the first one's URL templated, its quote kept verbatim in the query. */
+const SERVED = {
+	...DOC,
+	servers: [
+		{ url: "https://{env}.example.test/v2?tag=%22a'b", variables: { env: { default: "api" } } },
+		{ url: "https://second.example.test" },
+	],
+}
+
+/** What a strict consumer reports compiling `new TestSDK({})` beside the SDK emitted for `document`. */
+async function bareConfigErrors(document: Json): Promise<string[]> {
+	const project = new Project({
+		compilerOptions: {
+			allowImportingTsExtensions: true,
+			lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
+			module: ts.ModuleKind.ESNext,
+			moduleResolution: ts.ModuleResolutionKind.Bundler,
+			noEmit: true,
+			strict: true,
+			target: ts.ScriptTarget.ES2022,
+			types: [],
+		},
+		useInMemoryFileSystem: true,
+	})
+	for (const [name, text] of Object.entries((await emittedSdk(document)).files))
+		project.createSourceFile(`/sdk/${name}`, text)
+	const check = project.createSourceFile(
+		"/sdk/check.ts",
+		`import { TestSDK } from "./test-sdk.index.gen.ts"\nexport const sdk = new TestSDK({})\n`,
+	)
+	return check.getPreEmitDiagnostics().map((d) => ts.flattenDiagnosticMessageText(d.compilerObject.messageText, "\n"))
+}
+
+describe("base URL: the document's first server (G1)", () => {
+	it("sends to the first server, its variables filled, when the config names no baseURL; a configured one wins", async () => {
+		const TestSDK = (await emittedSdk(SERVED)).TestSDK as new (config: Json) => Sdk
+		const { calls, fetch } = recordingFetch()
+		await new TestSDK({ fetch }).users.list({})
+		await new TestSDK({ baseURL: "https://other.example.test", fetch }).users.list({})
+		expect(calls.map((call) => call.url)).toEqual([
+			"https://api.example.test/v2/users?tag=%22a%27b",
+			"https://other.example.test/users",
+		])
+	})
+
+	it("types baseURL optional only when the document declares a server", async () => {
+		const [served, bare] = await Promise.all([bareConfigErrors(SERVED), bareConfigErrors(DOC)])
+		expect({ bare: bare.map((message) => message.includes("baseURL")), served }).toEqual({ bare: [true], served: [] })
+	}, 60_000)
 })

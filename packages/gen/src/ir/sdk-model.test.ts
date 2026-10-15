@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { type OpenApiDocument, toIR } from "./build.ts"
-import { type IRSchema, irResolver, schemaToIR } from "./model.ts"
+import { type IRSchema } from "./model.ts"
+import { irResolver, schemaToIR } from "./schema.ts"
 import {
 	irErrorEnvelope,
 	isJsonMedia,

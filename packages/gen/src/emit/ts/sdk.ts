@@ -4,6 +4,7 @@
  * verbatim, and the index a consumer imports. Read from the IR alone (H2).
  */
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
+import { tsString } from "../shared/escape.ts"
 import { words } from "../shared/lang.ts"
 import { runtimeSource } from "./http.ts"
 import { sdkTypesText } from "./sdk-types.ts"
@@ -88,15 +89,19 @@ function validated(options: SdkOptions): { name: string; stem: string } {
 	return { name, stem }
 }
 
-/** The class: the runtime's `SDKClient` over the service map, merged with the operations' interface. */
-function clientText(name: string, stem: string): string {
+/**
+ * The class: the runtime's `SDKClient` over the service map, merged with the operations' interface.
+ * A config without `baseURL` sends to `server`, the document's first one, when it declares any.
+ */
+function clientText(name: string, stem: string, server: string | undefined): string {
+	const config = server === undefined ? "config" : `{ ...config, baseURL: config.baseURL ?? ${tsString(server)} }`
 	return `import { SDKClient } from "./${stem}.runtime.gen"
 import { serviceMap } from "./${stem}.map.gen"
 import type { ${name}Config, ${name}Operations } from "./${stem}.types.gen"
 
 export class ${name}<TThrow extends boolean = false> extends SDKClient {
 	constructor(config: ${name}Config<TThrow>) {
-		super(serviceMap, config)
+		super(serviceMap, ${config})
 	}
 }
 
@@ -121,7 +126,7 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 	const runtime = `${stem}.runtime.gen`
 	return {
 		files: {
-			[`${stem}.client.gen.ts`]: clientText(name, stem),
+			[`${stem}.client.gen.ts`]: clientText(name, stem, ir.servers[0]),
 			[`${stem}.index.gen.ts`]: indexText(name, stem),
 			[`${stem}.map.gen.ts`]: serviceMapText(ir, runtime),
 			[`${stem}.runtime.gen.ts`]: runtimeSource(),

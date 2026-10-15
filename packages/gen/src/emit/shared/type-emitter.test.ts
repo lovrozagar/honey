@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { IRSchema } from "../../ir/model.ts"
-import { schemaToIR } from "../../ir/model.ts"
+import { schemaToIR } from "../../ir/schema.ts"
 import { arrayOf, intersectionOf, irToTs, unionOf } from "./type-emitter.ts"
 
 type Json = Record<string, unknown>

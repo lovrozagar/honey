@@ -6,7 +6,7 @@
 import type { IR, IRBody, IRNamespace, IRParam, IRSchema } from "../../ir/model.ts"
 import { irErrorEnvelope, isJsonMedia, mediaEssence, type SdkOp, sdkModel } from "../../ir/sdk-model.ts"
 import { bodiesOf } from "../../ir/slots.ts"
-import { tsString } from "../shared/escape.ts"
+import { blockCommentText, tsString } from "../shared/escape.ts"
 import { compareCodeUnits, NameTable, pascalWords } from "../shared/lang.ts"
 import { quoteKey } from "../shared/literals.ts"
 import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
@@ -217,6 +217,17 @@ export function componentNames(ir: IR, reserved: readonly string[]): (schema: st
 	return (schema) => table.get(schema, "Schema")
 }
 
+/** The config type: `baseURL` optional when the document declares a server, the first one being its default. */
+function configText(name: string, server: string | undefined): string {
+	const head = `export type ${name}Config<TThrow extends boolean = false> =`
+	if (server === undefined) return `${head} Omit<SDKConfig, "throwOnError"> & { throwOnError?: TThrow }`
+	return `${head} Omit<SDKConfig, "baseURL" | "throwOnError"> & {
+	/** Default: the document's first server, ${blockCommentText(server)} */
+	baseURL?: string
+	throwOnError?: TThrow
+}`
+}
+
 /** The `${stem}.types.gen.ts` text of `ir` for the SDK `name`, importing the runtime module `runtime`. */
 export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const model = sdkModel(ir)
@@ -228,7 +239,7 @@ export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	return `import type { SDKConfig, SSEEvent, TypedWebSocket } from "./${runtime}"
 
 ${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${SHARED}
-export type ${name}Config<TThrow extends boolean = false> = Omit<SDKConfig, "throwOnError"> & { throwOnError?: TThrow }
+${configText(name, ir.servers[0])}
 
 /** Every operation of the SDK, by its member path. */
 export interface ${name}Operations<TThrow extends boolean = false> {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { type IRSchema, irResolver, schemaToIR } from "./model.ts"
+import type { IRSchema } from "./model.ts"
+import { irResolver, schemaToIR } from "./schema.ts"
 
 type Json = Record<string, unknown>
 

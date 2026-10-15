@@ -4,15 +4,8 @@
  * document's info, and the webhooks it sends. Reads the document alone; gen never reaches into core (H2).
  */
 import { compareCodeUnits, pascalWords } from "../emit/shared/lang.ts"
-import {
-	type IR,
-	type IRAuth,
-	type IRInfo,
-	type IROperation,
-	type IRSchema,
-	type IRWebhook,
-	schemaToIR,
-} from "./model.ts"
+import { type IR, type IRAuth, type IRInfo, type IROperation, type IRSchema, type IRWebhook } from "./model.ts"
+import { schemaToIR } from "./schema.ts"
 import { buildResourceTree } from "./resource-tree.ts"
 import {
 	type Components,
@@ -27,6 +20,12 @@ import {
 type Json = Record<string, unknown>
 
 /** An OpenAPI document as gen reads it: plain JSON. */
+/** A server: its URL template and the defaults of its variables. */
+export type OpenApiServer = {
+	readonly url: string
+	readonly variables?: Readonly<Record<string, { readonly default?: string }>>
+}
+
 export type OpenApiDocument = {
 	readonly components?: Readonly<Record<string, Readonly<Record<string, unknown>>>> & {
 		readonly schemas?: Readonly<Record<string, Json>>
@@ -34,6 +33,7 @@ export type OpenApiDocument = {
 	readonly info?: Readonly<Record<string, unknown>>
 	readonly openapi: string
 	readonly paths?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+	readonly servers?: readonly OpenApiServer[]
 	readonly webhooks?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
 }
 
@@ -158,6 +158,11 @@ function explicitOperations(doc: OpenApiDocument, options: ToIROptions, seen: Se
 	return { operations, unnamed }
 }
 
+/** A server URL with each declared `{variable}` replaced by its default; an undeclared one is left as written. */
+function serverUrl({ url, variables = {} }: OpenApiServer): string {
+	return url.replace(/\{([^{}]*)\}/g, (whole, name: string) => variables[name]?.default ?? whole)
+}
+
 /** The IR of `doc`; an explicit id always keeps its name, a derived one takes what is left. */
 export function toIR(doc: OpenApiDocument, options: ToIROptions = {}): IR {
 	const schemas: Record<string, IRSchema> = {}
@@ -181,6 +186,7 @@ export function toIR(doc: OpenApiDocument, options: ToIROptions = {}): IR {
 		operations,
 		schemaDescriptions,
 		schemas,
+		servers: (doc.servers ?? []).map(serverUrl),
 		tree: buildResourceTree(operations),
 		webhooks: webhooksOf(doc),
 	}

@@ -139,6 +139,22 @@ describe("toIR: info and authentication", () => {
 	})
 })
 
+describe("toIR: servers", () => {
+	it("lists each server URL in order, its variables filled with their defaults, and none when the document has none", () => {
+		const servers = [
+			{
+				url: "https://{region}.api.test/{version}/{region}",
+				variables: { region: { default: "eu", enum: ["eu", "us"] }, version: { default: "v1" } },
+			},
+			{ url: "/api/{undeclared}" },
+		]
+		expect([toIR({ ...doc({}), servers } as OpenApiDocument).servers, toIR(doc({})).servers]).toEqual([
+			["https://eu.api.test/v1/eu", "/api/{undeclared}"],
+			[],
+		])
+	})
+})
+
 /** A document of one route and `webhooks`. */
 const withWebhooks = (webhooks: Json) =>
 	({ ...doc({ "/a": { get: { ...ok, operationId: "a" } } }), webhooks }) as OpenApiDocument

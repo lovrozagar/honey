@@ -28,8 +28,8 @@ const { irToTs } = (await import(
 	resolve(REPO, "packages/gen/src/emit/shared/type-emitter.ts")
 )) as typeof import("../../src/emit/shared/type-emitter.ts")
 const { schemaToIR } = (await import(
-	resolve(REPO, "packages/gen/src/ir/model.ts")
-)) as typeof import("../../src/ir/model.ts")
+	resolve(REPO, "packages/gen/src/ir/schema.ts")
+)) as typeof import("../../src/ir/schema.ts")
 const { verifyHelper, WEBHOOK_LANGUAGES } = (await import(
 	resolve(REPO, "packages/gen/src/emit/shared/webhooks.ts")
 )) as typeof import("../../src/emit/shared/webhooks.ts")

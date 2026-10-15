@@ -12,8 +12,8 @@ import {
 	type IRParam,
 	type IRResponse,
 	type IRSignature,
-	schemaToIR,
 } from "./model.ts"
+import { schemaToIR } from "./schema.ts"
 
 import { compareCodeUnits } from "../emit/shared/lang.ts"
 

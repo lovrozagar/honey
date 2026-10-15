@@ -4,7 +4,8 @@
  * realtime calls alike, instead of in each emitter.
  */
 import { compareCodeUnits } from "../emit/shared/lang.ts"
-import { type IR, type IRMultipartPart, type IROperation, type IRParam, type IRSchema, irResolver } from "./model.ts"
+import { type IR, type IRMultipartPart, type IROperation, type IRParam, type IRSchema } from "./model.ts"
+import { irResolver } from "./schema.ts"
 import { type IRPathSegment, parseOpenApiPath } from "./slots.ts"
 
 export type SdkBody =
