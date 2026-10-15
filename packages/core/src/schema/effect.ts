@@ -4,7 +4,7 @@
  */
 import type { EffectConverter, JsonSchema } from "./to-json-schema.ts"
 
-/** The JSON Schema `convert` gives for `schema`, its `$defs` kept for the slots to hoist; null without a converter. */
+/** The JSON Schema `convert` gives for `schema`, its `$defs` kept for the document to lift into components; null without a converter. */
 export function effectJsonSchema(schema: unknown, convert: EffectConverter | undefined): JsonSchema | null {
 	return convert === undefined ? null : (convert(schema as never) as JsonSchema)
 }

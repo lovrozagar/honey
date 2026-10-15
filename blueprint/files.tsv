@@ -255,6 +255,7 @@ src/emit/shared/escape.fuzz.test.ts	gen	test	09	F2 fuzz: per-target spec-derived
 src/emit/shared/escape.toolchains.test.ts	gen	test	09	F2 cross-check against the real go/rustc/python3 toolchains (harness only, HONEY_REQUIRE_TOOLCHAINS); lifts the reference decoders from spec-derived to compiler-verified	—
 src/emit/shared/__fixtures__/rng.ts	gen	corpus	09	seeded mulberry32 for the gen fuzz (HONEY_FUZZ_SEED/RUNS read inside functions); gen copy, H2 forbids importing core/tests	tests/integration/security/rng.ts
 src/emit/shared/type-emitter.ts	gen	src	09	shared type emission	type-emitter.ts
+src/emit/shared/type-emitter.vendors.test.ts	gen	test	09	v0 per-vendor type cases (F7): each vendor's JSON Schema from core jsonSchemaOf → IR → TypeScript, wire truth; the 160-tag it.each table, too large to sit beside type-emitter.test's mechanics	type-emitter.ts,ts-type-emitter.ts
 src/emit/shared/format.ts	gen	src	11	formatter post-pass dispatch (gofmt/rustfmt/ruff/…)	—
 src/emit/shared/webhooks.ts	gen	src	10	webhook generator: typed payload parser + signature-verify emitted per SDK (B3)	—
 src/emit/ts/sdk.ts	gen	src	11	TS SDK	client/sdk.ts
