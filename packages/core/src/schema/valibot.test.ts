@@ -220,10 +220,12 @@ describe("valibotJsonSchema: the rarer actions, tuple rests and defaults", () =>
 		])
 	})
 
-	it("a tuple's rest types what follows, a loose one leaves it open; a value default is kept, a computed one not", () => {
+	it("a tuple's rest types what follows, a loose one leaves it open, an optional tail may be left out; a value default is kept, a computed one not", () => {
 		expect([
 			valibotJsonSchema(v.tupleWithRest([v.string()], v.number())),
 			valibotJsonSchema(v.looseTuple([v.string()])),
+			valibotJsonSchema(v.tuple([v.string(), v.optional(v.number()), v.nullish(v.boolean())])),
+			valibotJsonSchema(v.tuple([v.optional(v.string()), v.number()])),
 			valibotJsonSchema(v.optional(v.number(), 3)),
 			valibotJsonSchema(v.optional(v.number(), () => 3)),
 			valibotJsonSchema(v.any()),
@@ -231,6 +233,14 @@ describe("valibotJsonSchema: the rarer actions, tuple rests and defaults", () =>
 		]).toEqual([
 			{ items: NUMBER, minItems: 1, prefixItems: [STRING], type: "array" },
 			{ minItems: 1, prefixItems: [STRING], type: "array" },
+			{
+				items: false,
+				maxItems: 3,
+				minItems: 1,
+				prefixItems: [STRING, NUMBER, { anyOf: [{ type: "boolean" }, { type: "null" }] }],
+				type: "array",
+			},
+			{ items: false, maxItems: 2, minItems: 2, prefixItems: [STRING, NUMBER], type: "array" },
 			{ default: 3, type: "number" },
 			NUMBER,
 			{},

@@ -75,8 +75,11 @@ function object(node: Node, walk: Walk): JsonSchema {
 }
 
 function tuple(node: Node, walk: Walk): JsonSchema {
-	const items = (node.items as readonly unknown[]).map(walk)
-	const json: JsonSchema = { minItems: items.length, prefixItems: items, type: "array" }
+	const entries = node.items as readonly Node[]
+	const items = entries.map(walk)
+	/* an optional tail may be left out; an optional element before a required one may not */
+	const required = entries.reduce((count, entry, at) => (OPTIONAL.includes(entry.type) ? count : at + 1), 0)
+	const json: JsonSchema = { minItems: required, prefixItems: items, type: "array" }
 	if (node.type === "tuple_with_rest") json.items = walk(node.rest)
 	else if (node.type !== "loose_tuple") {
 		json.items = false
