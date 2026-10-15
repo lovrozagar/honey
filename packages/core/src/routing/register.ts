@@ -21,10 +21,20 @@ import {
 } from "./pattern.ts"
 import type { RouteRecord } from "./record.ts"
 import { type AppSettings, createSettings, type ErrorFactories } from "./settings.ts"
-import { createNode, insertLeaf, type RouteEntry, type TreeNode } from "./tree.ts"
+import { cloneTree, createNode, insertLeaf, type RouteEntry, type TreeNode } from "./tree.ts"
 
 /** An app's graph slot: not exported from the package; finalize readers (tests, codegen) reach the graph through it. */
 export const GRAPH: unique symbol = /* @__PURE__ */ Symbol("honey.graph")
+
+/** A handle's view slot: what a handle-level helper (serving a document) reads its basePath off. */
+export const VIEW: unique symbol = /* @__PURE__ */ Symbol("honey.view")
+
+/**
+ * The meta marker of a route an app serves about itself (its document, docs page or manifest).
+ * Such a route belongs to the app that registered it: mounting another app copies none of its
+ * served routes, a route tree leaves them out, and an app loaded from a tree registers its own.
+ */
+export const SERVED: unique symbol = /* @__PURE__ */ Symbol.for("honey.served")
 
 /** A registered route: what it was registered with, before finalize resolves it against the graph. */
 export type RouteHandler = RouteRecord & {
@@ -151,15 +161,29 @@ export function addChain(g: HoneyGraph, parent: ChainNode | null, mw: RuntimeMid
 }
 
 /** Register one route at every leaf its pattern occupies (an optional last param places two). */
-export function addRoute(g: HoneyGraph, method: string, segments: readonly Segment[], source: RouteSource): RouteId {
-	const pattern = canonical(segments)
-	const id = routeId(method, pattern)
+/** Throw the duplicate-route error when `g` already has a route at `method` and `segments`. */
+export function assertRouteFree(g: HoneyGraph, method: string, segments: readonly Segment[]): RouteId {
+	const id = routeId(method, canonical(segments))
 	if (g.records.get(id)?.lt === undefined && (g.records.has(id) || g.catchAll.has(id))) {
 		throw new Error(`Duplicate route: ${id}`)
 	}
-	const record = { ...source, id, mt: null, rp: pattern, sg: segments }
+	return id
+}
+
+/** Whether a route's own meta marks it served: the app's own, never copied with it. */
+export function isServed(r: { readonly xm: Readonly<Record<string, unknown>> | null }): boolean {
+	return (r.xm as { [SERVED]?: unknown } | null)?.[SERVED] === true
+}
+
+export function addRoute(g: HoneyGraph, method: string, segments: readonly Segment[], source: RouteSource): RouteId {
+	const id = assertRouteFree(g, method, segments)
+	const record = { ...source, id, mt: null, rp: canonical(segments), sg: segments }
 	g.epoch++
-	if (g.loaded === null) for (const variant of expandOptional(segments)) insertLeaf(g.root, variant, method, id)
+	/* a loaded app serves its own document beside its tree: on a copy, the loaded tree untouched */
+	const beside = g.loaded !== null && isServed(source) && !Object.hasOwn(g.loaded, id)
+	if (beside && Object.isFrozen(g.root)) g.root = cloneTree(g.root)
+	if (g.loaded === null || beside)
+		for (const variant of expandOptional(segments)) insertLeaf(g.root, variant, method, id)
 	else if (!Object.hasOwn(g.loaded, id)) {
 		/* a loaded app binds the routes its tree holds; a root wildcard it lacks is the catch-all */
 		if (segments.length === 1 && segments[0]?.k === "wildcard") g.catchAll.set(id, record)
@@ -212,6 +236,7 @@ export function mount(g: HoneyGraph, view: HandleView, sub: HoneyGraph): void {
 	const base = view.basePath
 	const at = (pattern: string): string => (base === "/" ? pattern : joinPatterns(base, pattern))
 	for (const [id, r] of sub.records) {
+		if (isServed(r)) continue
 		const { method, pattern } = splitRouteId(id)
 		addRoute(g, method, parsePattern(at(pattern)), {
 			...r,

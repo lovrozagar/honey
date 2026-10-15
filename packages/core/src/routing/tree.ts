@@ -171,11 +171,24 @@ export function forEachLeaf(
 	for (const method in node.w.m) cb(method, `${prefix}/${wildcard}`, node.w.m[method] as RouteId)
 }
 
-/** Deep copy into fresh null-prototype nodes. */
-export function cloneTree(node: TreeNode): TreeNode {
+/** Whether `node` routes nothing, here or below. */
+function isEmpty(node: TreeNode): boolean {
+	return node.m === null && node.d === null && node.w === null && node.ws === null && Object.keys(node.s).length === 0
+}
+
+/** Deep copy into fresh null-prototype nodes; with `keep`, only the static leaves it keeps. */
+export function cloneTree(node: TreeNode, keep?: (id: RouteId) => boolean): TreeNode {
 	const out = createNode()
-	for (const seg in node.s) out.s[seg] = cloneTree(node.s[seg] as TreeNode)
+	for (const seg in node.s) {
+		const child = cloneTree(node.s[seg] as TreeNode, keep)
+		/* a static subtree `keep` emptied goes with its leaves */
+		if (keep === undefined || !isEmpty(child)) out.s[seg] = child
+	}
 	if (node.m !== null) out.m = Object.assign(dict<RouteId>(), node.m)
+	if (keep !== undefined && out.m !== null) {
+		for (const method in out.m) if (!keep(out.m[method] as RouteId)) delete out.m[method]
+		if (Object.keys(out.m).length === 0) out.m = null
+	}
 	if (node.d !== null) out.d = { c: cloneTree(node.d.c), n: node.d.n }
 	if (node.w !== null) out.w = { m: Object.assign(dict<RouteId>(), node.w.m), n: node.w.n }
 	out.ws = node.ws

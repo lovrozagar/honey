@@ -10,7 +10,7 @@ import { compareCodeUnits } from "../schema/canonicalize.ts"
 import { finalTable } from "./dispatch.ts"
 import { type Plan, scopesFor } from "./finalize.ts"
 import { expandOptional } from "./pattern.ts"
-import { GRAPH, type HoneyGraph, type RouteHandler } from "./register.ts"
+import { chainErrorFactories, GRAPH, type HoneyGraph, isServed, type RouteHandler } from "./register.ts"
 import type { ErrorFactories } from "./settings.ts"
 import { SettingsChain } from "./settings-chain.ts"
 import {
@@ -62,13 +62,19 @@ function statusKeysOf(
 export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 	const { plans } = finalTable(g)
 	const routes = Object.assign(dict<RouteEntry>(), g.loaded)
+	const served = new Set<string>()
 	for (const [id, r] of g.records) {
-		const { mf, policy, route } = plans.get(id) as Plan
+		/* an app's served routes are its own: an app loading the tree registers its own */
+		if (isServed(r)) {
+			served.add(id)
+			continue
+		}
+		const { mw, policy, route } = plans.get(id) as Plan
 		const ek = [...(policy.declared ?? [])].sort(compareCodeUnits)
 		/* the record resolves the same way anywhere: its chain carries the scopes covering it here */
 		const cm = [...r.cm, ...scopesFor(g, expandOptional(r.sg))]
 		const h: RouteHandler = { ...r, cm, dk: new Set(ek), rb: policy.boundaryKey, xm: route.meta }
-		const es = statusKeysOf(ek, [r.ef, ...mf, r.own.errorFactory])
+		const es = statusKeysOf(ek, [r.ef, ...chainErrorFactories(mw), r.own.errorFactory])
 		routes[id] = {
 			bek: policy.boundaryKey,
 			ek,
@@ -79,7 +85,7 @@ export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 			out: r.out,
 		}
 	}
-	return { meta: {}, root: cloneTree(g.root), routes, v: ROUTE_TREE_VERSION }
+	return { meta: {}, root: cloneTree(g.root, (id) => !served.has(id)), routes, v: ROUTE_TREE_VERSION }
 }
 
 /** `app.routeTree()` and `app.toRouteTree()`: every app handle has them. */

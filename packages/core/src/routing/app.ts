@@ -18,6 +18,7 @@ import {
 	markUsed,
 	mount,
 	ROOT_VIEW,
+	VIEW,
 } from "./register.ts"
 import { type StartOf, startRoute } from "./route-builder.ts"
 import type { AppSettings } from "./settings.ts"
@@ -46,12 +47,13 @@ export class Honey<
 	declare readonly $routes: TRoutes
 	declare readonly $taps: TTaps
 	readonly #graph: HoneyGraph
-	readonly #view: HandleView
+	/** this handle's view: read-only, reached through a symbol the package does not export */
+	readonly [VIEW]: HandleView
 
 	constructor(graph: HoneyGraph = createGraph(), view: HandleView = ROOT_VIEW) {
 		super(graph.settings as AppSettings<TEnv>)
 		this.#graph = graph
-		this.#view = view
+		this[VIEW] = view
 	}
 
 	get [GRAPH](): HoneyGraph {
@@ -60,13 +62,13 @@ export class Honey<
 
 	/** A new handle on the same graph with part of this handle's view replaced. */
 	#derive(changes: Partial<HandleView>): never {
-		return new Honey<TEnv>(this.#graph, { ...this.#view, ...changes }) as never
+		return new Honey<TEnv>(this.#graph, { ...this[VIEW], ...changes }) as never
 	}
 
 	basePath<P extends string>(
 		prefix: P,
 	): Honey<TEnv, TCtx, TRoutes, TMeta, TErrorFactory, TDefaultErrors, MergePath<TBasePath, P>, TTaps, TScopedMw> {
-		return this.#derive({ basePath: joinPatterns(this.#view.basePath, prefix) })
+		return this.#derive({ basePath: joinPatterns(this[VIEW].basePath, prefix) })
 	}
 
 	/** Static values every route registered through the new handle finds on `ctx`. */
@@ -74,7 +76,7 @@ export class Honey<
 		values: TAdds,
 	): Honey<TEnv, TCtx & Readonly<TAdds>, TRoutes, TMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw> {
 		for (const key in values) if (isReservedCtxKey(key)) throw new Error(`context() cannot set reserved key "${key}"`)
-		return this.#derive({ contextValues: { ...this.#view.contextValues, ...values } })
+		return this.#derive({ contextValues: { ...this[VIEW].contextValues, ...values } })
 	}
 
 	/** The app's error factory; routes mounted from another app keep that app's. */
@@ -149,7 +151,7 @@ export class Honey<
 	>
 	meta(values?: Record<string, unknown>): unknown {
 		if (values === undefined) return this
-		return this.#derive({ chainMeta: { ...this.#view.chainMeta, ...values } })
+		return this.#derive({ chainMeta: { ...this[VIEW].chainMeta, ...values } })
 	}
 
 	/** Chain middleware: a new handle whose routes run `mw`; this handle is unchanged. */
@@ -173,11 +175,11 @@ export class Honey<
 	>
 	use(pathOrMw: string | MiddlewareFn<never, unknown>, scopedMw?: MiddlewareFn<never, unknown>): unknown {
 		if (typeof pathOrMw === "string") {
-			addScope(this.#graph, this.#view.basePath, pathOrMw, scopedMw as unknown as RuntimeMiddleware)
+			addScope(this.#graph, this[VIEW].basePath, pathOrMw, scopedMw as unknown as RuntimeMiddleware)
 			return this.#derive({})
 		}
 		const mw = pathOrMw as unknown as RuntimeMiddleware
-		return this.#derive({ chain: [...this.#view.chain, mw], node: addChain(this.#graph, this.#view.node, mw) })
+		return this.#derive({ chain: [...this[VIEW].chain, mw], node: addChain(this.#graph, this[VIEW].node, mw) })
 	}
 
 	/**
@@ -221,7 +223,7 @@ export class Honey<
 	route(prefixOrSub: unknown, maybeSub?: unknown): unknown {
 		if (typeof prefixOrSub === "string") {
 			if (!(maybeSub instanceof Honey)) throw new TypeError("honey: route(prefix, sub) needs the sub-app")
-			markUsed(this.#view.node)
+			markUsed(this[VIEW].node)
 			;(this.basePath(prefixOrSub) as unknown as Honey<TEnv>).#mount(maybeSub as Honey<TEnv>)
 			return this
 		}
@@ -229,14 +231,14 @@ export class Honey<
 	}
 
 	#mount(sub: Honey<TEnv>): this {
-		markUsed(this.#view.node)
-		markUsed(sub.#view.node)
-		mount(this.#graph, this.#view, sub.#graph)
+		markUsed(this[VIEW].node)
+		markUsed(sub[VIEW].node)
+		mount(this.#graph, this[VIEW], sub.#graph)
 		return this
 	}
 
 	#builder(method: string, path: string, extraMethods: readonly string[] = []): unknown {
-		return startRoute(this.#graph, this.#view, this, { extraMethods, method, path })
+		return startRoute(this.#graph, this[VIEW], this, { extraMethods, method, path })
 	}
 
 	/** One route for several methods: one record per method. */
@@ -277,15 +279,15 @@ export class Honey<
 	ws<const TPath extends string>(
 		path: TPath,
 	): WSRouteBuilder<TCtx & ApplyScoped<TScopedMw, MergePath<TBasePath, TPath>>, MergePath<TBasePath, TPath>, this> {
-		return startWsRoute(this.#graph, this.#view, this, path)
+		return startWsRoute(this.#graph, this[VIEW], this, path)
 	}
 
 	/** The Fetch handler an adapter calls. Finalizes once; a later registration re-finalizes. */
 	fetch(request: Request, env: TEnv, executionCtx?: ExecutionCtx): MaybePromise<Response> {
 		const g = this.#graph
-		if (!g.served.has(this.#view.chain)) {
-			markUsed(this.#view.node)
-			g.served.add(this.#view.chain)
+		if (!g.served.has(this[VIEW].chain)) {
+			markUsed(this[VIEW].node)
+			g.served.add(this[VIEW].chain)
 			g.epoch++
 		}
 		return dispatch(g, request, env, executionCtx)

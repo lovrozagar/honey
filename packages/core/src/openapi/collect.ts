@@ -7,7 +7,7 @@ import { ERROR_META, type ErrorMetaEntry } from "../errors/errors.ts"
 import type { InputSchemas } from "../input/input.ts"
 import { type StatusKey, statusKeyToCode } from "../response/status.ts"
 import { compareCodeUnits } from "../schema/canonicalize.ts"
-import type { HoneyGraph } from "../routing/register.ts"
+import { chainErrorFactories, type HoneyGraph } from "../routing/register.ts"
 import { GRAPH } from "../routing/app.ts"
 import { finalTable } from "../routing/dispatch.ts"
 import type { Plan } from "../routing/finalize.ts"
@@ -61,6 +61,8 @@ export type CollectedRoute = CollectedWsRoute & {
 	readonly registration: object
 	/** `GET`, `POST`… or `ALL` */
 	readonly method: string
+	/** each middleware the route runs, in order, by name; an unnamed one is `anonymous` (F13) */
+	readonly middleware: readonly string[]
 	readonly output: OutputSchemas | null
 }
 
@@ -135,9 +137,10 @@ export function collectRoutes(app: { readonly [GRAPH]: HoneyGraph }): CollectedR
 		const { input, output, segments } = declarations(g, id)
 		const { errorKeys, errors, meta } = resolved(plans.get(id), g.loaded?.[id])
 		const record = g.records.get(id)
+		const chain = plans.get(id)?.mw ?? []
 		const errorMeta = errorMetaOf(errorKeys, [
 			record?.ef,
-			...(plans.get(id)?.mf ?? []),
+			...chainErrorFactories(chain),
 			record?.own.errorFactory,
 			g.loaded?.[id]?.es,
 			g.settings.errorFactory,
@@ -157,6 +160,7 @@ export function collectRoutes(app: { readonly [GRAPH]: HoneyGraph }): CollectedR
 					errors,
 					internal: meta.internal === true,
 					method,
+					middleware: chain.map((mw) => mw.name || "anonymous"),
 					output,
 					registration,
 				})
