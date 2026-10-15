@@ -240,13 +240,12 @@ src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
 src/ir/resource-tree.ts	gen	src	09	resource tree from dotted operationId	codegen-ir.ts
 src/ir/slots.ts	gen	src	09	request/response slots + realtime/sse/ws markers	codegen-ir.ts
 src/ir/sdk-model.ts	gen	src	09	the SDK model over the IR	codegen-sdk-model.ts
-src/schema/naming.ts	core	src	09	schema name derivation (deriveSchemaName/sanitizeComponentName/isErrorEnvelope/shortHash) for the core dedup/hoist (slots.ts) + openapi document; codegen-ir never imports it	codegen-schema-naming.ts
+src/schema/naming.ts	core	src	09	schema name derivation (deriveSchemaName/sanitizeComponentName/isErrorEnvelope/shortHash + the private djb2 hashString it wraps, F10) for the core dedup/hoist (slots.ts imports shortHash) + openapi document; codegen-ir never imports it	codegen-schema-naming.ts,codegen-hash.ts
 src/ir/route-tree-intern.ts	gen	src	09	route-tree interning	codegen-route-tree-intern.ts
 src/ir/load.ts	gen	src	17	load the consumer app + vite config via jiti to produce the spec (CLI concern, not the IR seam; path re-homed when bit 17 is planned)	codegen-load.ts
 src/emit/shared/lang.ts	gen	src	09	per-language naming (pascal/snake/camel)	codegen-lang.ts
 src/emit/shared/literals.ts	gen	src	09	literal/string writers	codegen-lang.ts
 src/emit/shared/escape.ts	gen	src	09	the one shared fuzzed string-escape layer (F2)	codegen-lang.ts,codegen-sanitize.ts
-src/emit/shared/hash.ts	gen	src	09	content hash	codegen-hash.ts
 src/emit/shared/type-emitter.ts	gen	src	09	shared type emission	type-emitter.ts
 src/emit/shared/format.ts	gen	src	11	formatter post-pass dispatch (gofmt/rustfmt/ruff/…)	—
 src/emit/shared/webhooks.ts	gen	src	10	webhook generator: typed payload parser + signature-verify emitted per SDK (B3)	—
