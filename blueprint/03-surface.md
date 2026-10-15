@@ -59,9 +59,9 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `.` (generate from an `openapi.json` → artifacts) | new entry over moved `codegen*.ts` + IR | runnable against any OpenAPI 3.x, not only honey's |
 | `./cli` | moved from core `./cli` | the `honey-codegen` generate CLI |
 | TS SDK emitter | moved `client/`, `client/sdk`, `ts-type-emitter` | MODIFY [C2] uniform raw-response/overrides |
-| Go SDK emitter | moved `client-go/`, `codegen-go`, `go-type-emitter` | MODIFY [C1,C2] + formatter post-pass (gofmt mandatory) |
-| Rust SDK emitter | moved `client-rust/`, `codegen-rust`, `rust-type-emitter` | MODIFY [C1,C2] + rustfmt |
-| Python SDK emitter | moved `client-python/`, `codegen-python`, `python-type-emitter` | MODIFY [C1,C2] + ruff/black mandatory |
+| Go SDK emitter | moved `client-go/`, `codegen-go`, `go-type-emitter` | MODIFY [C2] + formatter post-pass (gofmt mandatory); C1 auto-pagination CUT (H20) |
+| Rust SDK emitter | moved `client-rust/`, `codegen-rust`, `rust-type-emitter` | MODIFY [C2] + rustfmt; C1 CUT (H20) |
+| Python SDK emitter | moved `client-python/`, `codegen-python`, `python-type-emitter` | MODIFY [C2] + ruff/black mandatory; C1 CUT (H20) |
 | **C#/.NET SDK emitter** | new | ADD [H5,H11] BCL-only, NuGet, net8.0→net10 |
 | **Java SDK emitter** | new | ADD [H5,H11] HttpClient + Jackson, Maven Central, `--release 17` |
 | Go CLI emitter | moved `cli-go/`, `codegen-go-cli` | MODIFY [E1] cf-grade: verb consistency, discovery, compact output, completion, skills bundle |

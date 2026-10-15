@@ -1,8 +1,8 @@
 # Bit 12 — Go SDK
 
-Closes: C2 · A1/A2
+Closes: C2 · A1/A2 · H8 (SSE/WS resume) · H18.10 (cross-origin auth drop). C1 auto-pagination is CUT (H20).
 Oracle kept green: `tests/integration/go-harness`, go-emitter byte-equivalence, go-nested.
-Formatter post-pass: gofmt (mandatory, not opt-in). Runtime: vendored, `net/http` + the WS lib (H9).
+Formatter post-pass: gofmt (mandatory, not opt-in). Runtime: vendored, `net/http` + coder/websocket ≥v1.8.15 (H9); shipped-SDK floor go 1.24, built/tested under the pinned go 1.27.2 (G9/G10).
 
 ## Scope
 The Go SDK emitter + vendored runtime (split v0 `codegen-go.ts` 970, `go-type-emitter.ts` 660 into `gen/emit/go/`). Reads only the IR.
