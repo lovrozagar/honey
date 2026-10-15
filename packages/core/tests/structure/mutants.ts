@@ -363,3 +363,17 @@ export function trustingJsonSchemaOf(original: JsonSchemaOf): JsonSchemaOf {
 		return convert({ target: "draft-2020-12" }) as JsonSchema
 	}
 }
+
+/** YAML that writes every string plain, as it came: a newline, a `: ` or a `#` read as structure. */
+export function plainYaml(value: unknown, indent = ""): string {
+	if (value === null || typeof value !== "object") return `${String(value)}\n`
+	const entries = Array.isArray(value) ? value.map((item) => ["-", item] as const) : Object.entries(value)
+	return entries
+		.map(([key, item]) => {
+			const head = Array.isArray(value) ? `${indent}- ` : `${indent}${key}: `
+			return item !== null && typeof item === "object"
+				? `${head}\n${plainYaml(item, `${indent}  `)}`
+				: `${head}${String(item)}\n`
+		})
+		.join("")
+}

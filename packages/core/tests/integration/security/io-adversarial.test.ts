@@ -3,10 +3,12 @@
  * the declared one, a body larger than its limit with no length declared, a binary body of an
  * undeclared type, dangerous keys in a query or a form, a declared response header that would
  * open a redirect or split a header, an answer that breaks its declared contract, an endless
- * stream under etag, fields named like problem+json members, and a schema converter that
- * answers no schema or throws. Each is a failing input first and the property that answers it
+ * stream under etag, fields named like problem+json members, a schema converter that answers
+ * no schema or throws, and the OpenAPI document's own: text that would restructure its YAML, a
+ * server that would inject into its URL, and a docs page config that would end its script. Each is a failing input first and the property that answers it
  * second; the mutation harness reruns this directory with each guard disabled.
  */
+import { createRequire } from "node:module"
 import { resolve as resolvePath } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import * as z from "zod"
@@ -39,6 +41,21 @@ const { HoneyError } = (await import(
 const { extractSchemas } = (await import(
 	resolvePath(REPO, "packages/core/src/openapi/extract-schemas.ts")
 )) as typeof import("../../../src/openapi/extract-schemas.ts")
+const { generateOpenApi } = (await import(
+	resolvePath(REPO, "packages/core/src/openapi/generate.ts")
+)) as typeof import("../../../src/openapi/generate.ts")
+const { toYaml } = (await import(
+	resolvePath(REPO, "packages/core/src/openapi/yaml.ts")
+)) as typeof import("../../../src/openapi/yaml.ts")
+const { scalar } = (await import(
+	resolvePath(REPO, "packages/core/src/openapi/scalar.ts")
+)) as typeof import("../../../src/openapi/scalar.ts")
+const { swagger } = (await import(
+	resolvePath(REPO, "packages/core/src/openapi/swagger.ts")
+)) as typeof import("../../../src/openapi/swagger.ts")
+
+/* a YAML reader, test-only */
+const jsYaml = createRequire(import.meta.url)("js-yaml") as { load(text: string): unknown }
 
 const send = (target: string, init?: RequestInit) => new Request(`http://app.test${target}`, init)
 
@@ -272,5 +289,40 @@ describe("v1 adversarial: a schema's conversion", () => {
 			{ input: { json: {}, search: {} }, output: { "application/json": { ok: {} } } },
 			["failed", "unsupported", "unsupported"],
 		])
+	})
+})
+
+describe("v1 adversarial: the OpenAPI document and its pages", () => {
+	it("reads back the same through YAML whatever its text holds: a newline, a `: `, a `#`, a dash, a quote", () => {
+		const app = honey<{}>()
+		app
+			.get("/a")
+			.meta({ summary: "- item: injected\n# not a comment", tags: ["a: b", "'quoted'"] })
+			.handler((c) => c.res.text("ok", "a"))
+		const info = { description: "line\nopenapi: 9.9.9\npaths: {}", title: "API: v2 # x", version: "1" }
+		const doc = generateOpenApi(app, { info })
+		expect(jsYaml.load(toYaml(doc))).toEqual(JSON.parse(JSON.stringify(doc)))
+	})
+
+	it("refuses a server whose URL or variable would inject a control character, or a variable it never declared", () => {
+		const app = honey<{}>()
+		app.get("/a").handler((c) => c.res.text("ok", "a"))
+		const generate = (servers: unknown) => () =>
+			generateOpenApi(app, { info: { title: "T", version: "1" }, servers: servers as never })
+		expect(generate([{ url: "https://api.example.com/\r\nX-Injected: 1" }])).toThrow(/INVALID_SERVER/)
+		expect(generate([{ url: "https://{env}.example.com", variables: { env: { default: "a\r\nb" } } }])).toThrow(
+			/INVALID_SERVER/,
+		)
+		expect(generate([{ url: "https://{host}" }])).toThrow(/INVALID_SERVER/)
+	})
+
+	it("keeps a docs page config inside its inline script: a value cannot end it and run its own", async () => {
+		const breakout = "/openapi.json</script><script>alert(1)</script>"
+		for (const page of [scalar, swagger]) {
+			const app = honey<{}>()
+			app.get("/docs").handler(page({ url: breakout }) as never)
+			const html = await (await app.fetch(send("/docs"), {})).text()
+			expect(html.includes("</script><script>alert(1)")).toBe(false)
+		}
 	})
 })

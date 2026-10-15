@@ -9,7 +9,7 @@
 import { spawnSync } from "node:child_process"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
-import { bypassedEscapes, localeOrder, rawKey } from "../security/mutants.ts"
+import { bypassedEscapes, localeOrder, rawKey, variableTimeHelper } from "../security/mutants.ts"
 
 export type Guard = {
 	/** what the suite must catch once this guard is gone */
@@ -39,6 +39,14 @@ export const GUARDS: readonly Guard[] = [
 		disable: () => ({ quoteKey: rawKey }),
 		id: "spec-text-to-source",
 		module: "packages/gen/src/emit/shared/literals.ts",
+	},
+	{
+		catches: "a webhook verify helper comparing the digest by value, a timing oracle on the signature (H18.9)",
+		disable: (original) => ({
+			verifyHelper: variableTimeHelper(original.verifyHelper as (language: string) => string),
+		}),
+		id: "webhook-ct-compare",
+		module: "packages/gen/src/emit/shared/webhooks.ts",
 	},
 ]
 

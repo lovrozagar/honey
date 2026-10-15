@@ -24,6 +24,7 @@ import {
 	inlineFiring,
 	naiveWriter,
 	passThrough,
+	plainYaml,
 	rawServerTiming,
 	rawTargetProxy,
 	reflectingCors,
@@ -363,6 +364,28 @@ export const GUARDS: readonly Guard[] = [
 		}),
 		id: "v1-schema-conversion-leak",
 		module: "packages/core/src/schema/to-json-schema.ts",
+	},
+	{
+		catches: "v1: a document string written into served YAML plain, a newline or `: ` read back as structure",
+		disable: () => ({ toYaml: plainYaml }),
+		id: "v1-yaml-escape",
+		module: "packages/core/src/openapi/yaml.ts",
+	},
+	{
+		catches:
+			"v1: a server URL or variable holding a control character or an undeclared variable written to the document",
+		disable: (original) => {
+			const serversOf = original.serversOf as (servers: unknown, prefix: unknown, error: unknown) => unknown
+			return { serversOf: (servers: unknown, prefix: unknown) => serversOf(servers, prefix, () => {}) }
+		},
+		id: "v1-server-var-validate",
+		module: "packages/core/src/openapi/servers.ts",
+	},
+	{
+		catches: "v1: a docs page config that ends its inline script and runs its own",
+		disable: () => ({ inlineJson: (value: unknown) => JSON.stringify(value) }),
+		id: "v1-docs-inline-escape",
+		module: "packages/core/src/openapi/docs-page.ts",
 	},
 ]
 

@@ -1,7 +1,8 @@
 /**
  * Gen's adversarial suite: spec text an emitter must never let become source. A string literal
  * carrying a line or paragraph separator, a BOM or NUL; property names and enum values that read as
- * code; names whose order depends on the machine. Each is a failing input first and the property
+ * code; names whose order depends on the machine; a webhook verify helper that compares the
+ * signature by value, so its timing leaks how much of a forged one is right. Each is a failing input first and the property
  * that answers it second; the gen mutation harness reruns this directory with each guard disabled.
  */
 import { resolve } from "node:path"
@@ -29,6 +30,9 @@ const { irToTs } = (await import(
 const { schemaToIR } = (await import(
 	resolve(REPO, "packages/gen/src/ir/model.ts")
 )) as typeof import("../../src/ir/model.ts")
+const { verifyHelper, WEBHOOK_LANGUAGES } = (await import(
+	resolve(REPO, "packages/gen/src/emit/shared/webhooks.ts")
+)) as typeof import("../../src/emit/shared/webhooks.ts")
 
 /** The TypeScript of a JSON Schema, as an emitter writes it. */
 const typeOf = (schema: Record<string, unknown>) => irToTs(schemaToIR(schema))
@@ -91,5 +95,15 @@ describe("gen adversarial: spec text never becomes source", () => {
 			[],
 			[...values].sort(),
 		])
+	})
+})
+
+/* a digest compared by value: an operator, an equality method or a byte-wise library compare */
+const VALUE_COMPARE =
+	/\b(?:expected|given)\b\s*(?:===?|!==?|\.equals\(|\.SequenceEqual\()|(?:===?|!==?)\s*\b(?:expected|given)\b|bytes\.Equal|Arrays\.equals|memcmp/
+
+describe("emit adversarial: webhook signatures", () => {
+	it.each(WEBHOOK_LANGUAGES)("%s's verify helper never compares the digest by value", (language) => {
+		expect(VALUE_COMPARE.exec(verifyHelper(language))?.[0] ?? null).toBeNull()
 	})
 })
