@@ -51,8 +51,10 @@ describe("assertRequestContentType: the request's media type against the declare
 	// v0: c677f09f6a
 	// v0: 057408633c
 	// v0: fa158866cc
+	// v0: 45a57a390e
 	it.each<[string | null, Declared]>([
 		["text/plain", { json: schema }],
+		["application/xml", { json: schema }],
 		[null, { json: schema }],
 		["application/jsonx", { json: schema }],
 		["application/json-patch", { json: schema }],

@@ -84,6 +84,7 @@ describe("settings setters: handles and formatters", () => {
 		expect(await get(root, "/api/x")).toEqual([200, "x"])
 	})
 
+	// v0: 97155a1beb
 	it("the error formatters take a function or a schema with a mapper", async () => {
 		const app = honey<{}>()
 			.defaultErrorFormatter((_e, shape) => ({ ...shape, plain: true }))

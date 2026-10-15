@@ -229,6 +229,8 @@ describe("the route builder's one-shots: what stays and what goes", () => {
 	// v0: 2d8fde8b4b
 	// v0: d936b826ba
 	// v0: 18ec8dd64f
+	// v0: 59f27c5468
+	// v0: 9e1cec2375
 	it("each one-shot goes once used, every other one stays", () => {
 		const errs = defineErrors({
 			forbidden: "forbidden",
@@ -239,6 +241,11 @@ describe("the route builder's one-shots: what stays and what goes", () => {
 		const input = route.input({ json: z.object({ name: z.string() }) })
 		const errors = route.errors("not_found", "forbidden")
 		const boundary = route.boundary("internal_server_error")
+		const meta = route.meta({ summary: "x" })
+		expectTypeOf(meta).not.toHaveProperty("meta")
+		for (const method of ["boundary", "errors", "input", "output", "use", "handler"] as const) {
+			expectTypeOf(meta).toHaveProperty(method)
+		}
 		expectTypeOf(input).not.toHaveProperty("input")
 		expectTypeOf(errors).not.toHaveProperty("errors")
 		expectTypeOf(boundary).not.toHaveProperty("boundary")
@@ -259,6 +266,7 @@ describe("the route builder's one-shots through later calls", () => {
 	// v0: 3e32c59f4d
 	// v0: 83c49ae0f2
 	// v0: 8444cc701a
+	// v0: 8b89fae5a3
 	it("a used one-shot stays gone through later calls; use() stays through all of them", () => {
 		const errs = defineErrors({ bad_request: "bad_request" })
 		const pass = createMiddleware((_ctx, next) => next({ x: 1 }))
@@ -271,6 +279,10 @@ describe("the route builder's one-shots through later calls", () => {
 			.get("/t")
 			.input({ json: z.object({ n: z.string() }) })
 			.use(pass)
+		const afterMeta = honey<{}>()
+			.get("/t")
+			.input({ json: z.object({ n: z.string() }) })
+			.meta({ summary: "x" })
 		const afterOutput = honey<{}>()
 			.get("/t")
 			.meta({ summary: "x" })
@@ -279,6 +291,7 @@ describe("the route builder's one-shots through later calls", () => {
 		expectTypeOf(afterErrors).not.toHaveProperty("input")
 		expectTypeOf(afterErrors).not.toHaveProperty("errors")
 		expectTypeOf(afterUse).not.toHaveProperty("input")
+		expectTypeOf(afterMeta).not.toHaveProperty("input")
 		expectTypeOf(afterOutput).not.toHaveProperty("meta")
 		expectTypeOf(afterOutput).not.toHaveProperty("output")
 		expectTypeOf(afterOutput).toHaveProperty("input")

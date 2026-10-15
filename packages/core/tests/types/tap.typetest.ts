@@ -98,7 +98,8 @@ describe("app.tap(): the handler", () => {
 
 describe("route meta: tap keys with their payloads", () => {
 	// v0: fe9637b053
-	it("a tap key in meta must carry its payload's shape", () => {
+	// v0: 0012d0d7c2
+	it("a tap key in meta must carry its payload's shape; every tap key is optional there", () => {
 		const app = honey<{}>().taps<AppTaps>()
 		app
 			.get("/a")
@@ -112,10 +113,19 @@ describe("route meta: tap keys with their payloads", () => {
 			// @ts-expect-error the wrong shape for audit
 			.meta({ audit: { wrong: true } })
 			.handler((c) => c.res.json("ok", {}))
+		app.get("/none").handler((c) => c.res.json("ok", {}))
+		app
+			.get("/webhook")
+			.meta({ webhook: { event: "created" } })
+			.handler((c) => {
+				expectTypeOf(c.meta.webhook).toEqualTypeOf<{ event: string }>()
+				return c.res.json("ok", {})
+			})
 	})
 
 	// v0: c81529e274
 	// v0: 9a356bf11d
+	// v0: d7ec11758e
 	it("beside a .meta<T>() declaration, before or after it: both reach the handler's meta", () => {
 		type RouteMeta = { operationId: string; security: string }
 		honey<{}>()

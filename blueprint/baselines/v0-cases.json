@@ -41638,8 +41638,8 @@
 			"reason": "uses input/output (bit 08)"
 		},
 		"07e1febb41": {
-			"feature": "09-ir-seam",
-			"reason": "uses route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"0864de0f54": {
 			"feature": "04-adapters",
@@ -41686,8 +41686,8 @@
 			"reason": "uses taps (bit 07)"
 		},
 		"0c054d5b1d": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"0c2f68e8cc": {
 			"feature": "11-ts-client",
@@ -41706,8 +41706,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"0da4f01fb4": {
-			"feature": "09-ir-seam",
-			"reason": "uses route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"0da51d81f1": {
 			"feature": "08-io",
@@ -41894,8 +41894,8 @@
 			"reason": "Accept media-range precedence is accepts() behavior (input/accepts.ts, bit 08)"
 		},
 		"1de1e2d100": {
-			"feature": "09-ir-seam",
-			"reason": "uses route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"1e111b2995": {
 			"feature": "07-security-middleware",
@@ -41946,8 +41946,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"21ff53e8fc": {
-			"feature": "09-ir-seam",
-			"reason": "middleware meta on a ws route's operation is metaSpec emission (bit 09, with its siblings)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"22ee825969": {
 			"feature": "02-finalize-middleware",
@@ -42038,8 +42038,8 @@
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
 		},
 		"2b93176f37": {
-			"feature": "09-ir-seam",
-			"reason": "runtime vs snapshot vs generated trees: two of the three are bit 09"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/fuzz/router-encoding.fuzz.test.ts"
 		},
 		"2bd756bd5c": {
 			"feature": "08-io",
@@ -42174,8 +42174,8 @@
 			"reason": "uses taps (bit 07)"
 		},
 		"36f87443a4": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"3733c24ddb": {
 			"feature": "08-io",
@@ -42266,8 +42266,8 @@
 			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
 		"3e07faac56": {
-			"feature": "09-ir-seam",
-			"reason": "imports codegen's generateTypes dynamically (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; integration/server.test.ts"
 		},
 		"3e32c59f4d": {
 			"feature": "08-io",
@@ -42366,8 +42366,8 @@
 			"reason": "uses route tree loading (bit 09)"
 		},
 		"43e433dd73": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"43e64d3be2": {
 			"feature": "08-io",
@@ -42406,8 +42406,8 @@
 			"reason": "uses input/output (bit 08)"
 		},
 		"45360d3a8c": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"45c989439c": {
 			"feature": "09-ir-seam",
@@ -42630,8 +42630,8 @@
 			"reason": "uses route tree loading (bit 09)"
 		},
 		"591e67855c": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"59780c02bb": {
 			"feature": "07-security-middleware",
@@ -42734,8 +42734,8 @@
 			"reason": "uses input/output (bit 08)"
 		},
 		"619448690f": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"6217b769b1": {
 			"feature": "08-io",
@@ -42762,8 +42762,8 @@
 			"reason": "uses taps (bit 07)"
 		},
 		"64792abcb5": {
-			"feature": "09-ir-seam",
-			"reason": "uses route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"64fe70ad2e": {
 			"feature": "02-finalize-middleware",
@@ -42842,8 +42842,8 @@
 			"reason": "forwarding a POST body as a stream is proxy behavior (proxy/, bit 07)"
 		},
 		"6b3f8bc280": {
-			"feature": "09-ir-seam",
-			"reason": "uses route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"6c6c854912": {
 			"feature": "07-security-middleware",
@@ -43058,8 +43058,8 @@
 			"reason": "uses route tree loading (bit 09)"
 		},
 		"7bf16a3c75": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"7c0132f759": {
 			"feature": "02-finalize-middleware",
@@ -43106,8 +43106,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"7ed08f4048": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"7f2b5465a1": {
 			"feature": "07-security-middleware",
@@ -43406,8 +43406,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"97099ec2ee": {
-			"feature": "09-ir-seam",
-			"reason": "uses route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"970f25e183": {
 			"feature": "07-security-middleware",
@@ -43466,8 +43466,8 @@
 			"reason": "uses taps (bit 07)"
 		},
 		"9a8e35727c": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"9a8fa7b812": {
 			"feature": "08-io",
@@ -43734,8 +43734,8 @@
 			"reason": "bodyLimit answering 413 mid-stream is bodyLimit behavior (bit 08)"
 		},
 		"ad44f238f5": {
-			"feature": "09-ir-seam",
-			"reason": "uses route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/integration/integration.test.ts"
 		},
 		"ae1feb3a09": {
 			"feature": "08-io",
@@ -43938,8 +43938,8 @@
 			"reason": "uses serve (node.ts, bit 04), HoneyServer (node.ts, bit 04)"
 		},
 		"c0233a6aa4": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateManifest (codegen.ts, bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-15.test.ts"
 		},
 		"c04a9f5797": {
 			"feature": "08-io",
@@ -44022,8 +44022,8 @@
 			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"c669b3cf9a": {
-			"feature": "09-ir-seam",
-			"reason": "scoped middleware meta back-filling a ws operation is metaSpec emission (bit 09, with its siblings)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"c66efc187c": {
 			"feature": "07-security-middleware",
@@ -44142,8 +44142,8 @@
 			"reason": "uses taps (bit 07)"
 		},
 		"d63fdb6ada": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateRouteTreeFromApp (codegen.ts, bit 09), route tree loading (bit 09)"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; regression/ws1-route-model.regression.test.ts"
 		},
 		"d64bac1e58": {
 			"feature": "08-io",
@@ -44210,8 +44210,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"dcf1d551cf": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"ddd8a7fc9a": {
 			"feature": "02-finalize-middleware",
@@ -44350,8 +44350,8 @@
 			"reason": "uses parseCookies (validation.ts, bit 08)"
 		},
 		"edc731afad": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09), metaSpec (bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
 		},
 		"ee2ab1f762": {
 			"feature": "07-security-middleware",
@@ -44502,8 +44502,8 @@
 			"reason": "input/output schema types: io is bit 08"
 		},
 		"f794ba99e7": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateManifest (codegen.ts, bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-15.test.ts"
 		},
 		"f84705bad9": {
 			"feature": "08-io",
@@ -44574,8 +44574,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"fc6222ab83": {
-			"feature": "09-ir-seam",
-			"reason": "uses generateOpenApi (codegen.ts, bit 09)"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; regression/ws9-12/typescript.regression.test.ts"
 		},
 		"fc68a018ed": {
 			"feature": "07-security-middleware",
@@ -44634,16 +44634,16 @@
 			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
 		},
 		"ccfd3d3c19": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): a gateway whose own routes shadow downstream fails generation (OpenAPI); regression/review.regression.test.ts"
 		},
 		"d3867759a6": {
 			"feature": "09-ir-seam",
 			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
 		},
 		"e5f4964230": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; regression/ws1-route-model.regression.test.ts"
 		},
 		"3b4eaa9ff1": {
 			"feature": "09-ir-seam",
@@ -44658,40 +44658,40 @@
 			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
 		},
 		"7701c5fa63": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"869ac2591d": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"ddc57889a9": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"f499098c4e": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"8196b9bff1": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"931a464cbb": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"a8e03f60b0": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"381e76f483": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"c722aca93d": {
-			"feature": "09-ir-seam",
-			"reason": "app.routeTree() gateway delegation: loads a tree with routeTree() (bit 09, ruling c5/P6); consumer-critical before cutover"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"452e3079a4": {
 			"feature": "09-ir-seam",
@@ -44854,8 +44854,8 @@
 			"reason": "asserts the loaded/generated route tree (routeTree), bit 09"
 		},
 		"943e56dc6a": {
-			"feature": "09-ir-seam",
-			"reason": "middleware meta baked into the generated route tree, bit 09"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/middleware-meta.test.ts"
 		},
 		"0b67c3421d": {
 			"feature": "09-ir-seam",
@@ -44886,8 +44886,8 @@
 			"reason": "a delegated route's content type from its own schemas: routeTree delegation, bit 09"
 		},
 		"b27299f29a": {
-			"feature": "09-ir-seam",
-			"reason": "input schemas through .routeTree() hydration: bit 09"
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		},
 		"c87c554a26": {
 			"feature": "10-openapi-emit",
@@ -44976,6 +44976,1710 @@
 		"371882dde5": {
 			"feature": "08-io",
 			"reason": "duplicate-key shape for a schema without Standard JSON Schema (valibot: one value scalar, repeats array); tagged on shapedRecord. Misclassified to 10 on \"Standard JSON Schema\""
+		},
+		"24f75dc7df": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"068d758463": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"178e8aeccd": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"f82f6740dd": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"6d2bdf1853": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"380b8cbc40": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"a722ec5e10": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"22b777db17": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; integration/bug-hunt-17.test.ts"
+		},
+		"17ac0bc299": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; integration/bug-hunt-17.test.ts"
+		},
+		"3756d467b1": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; integration/sdk-harness/ts-harness.test.ts"
+		},
+		"d379f8f413": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; regression/ws1-route-model.regression.test.ts"
+		},
+		"e105286902": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; regression/ws1-route-model.regression.test.ts"
+		},
+		"937038f7e6": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): calls 12-14; unit/codegen/auth-scheme.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"1c7fd168e2": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): calls 12-14; unit/codegen/auth-scheme.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"e123e01a3e": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"c1eda29526": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"466504544f": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"9167a75680": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"333c08fd8f": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"6c15a64a94": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"2142fb5576": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"7790799c89": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"6fa210cc8c": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"efa7572028": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"ac69585d6e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"1c105cf116": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"9357ffb552": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"99e217739e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"b7221ffab4": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"df7e7129c2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"ed48e36e07": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"67e663d9f3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"8d2119afab": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"2803d8f745": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
+		},
+		"2d6e23d74e": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
+		},
+		"7b85e5f7e5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"0f050e9ee9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"4a3c6a7418": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"1299a7554a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"494723e73f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"bfcffa46d6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"60ee74ece9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"f3000607cc": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"9387483f22": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"7d57e0e7c3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"f10b7d426c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"ee2cd65fa9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"904acfc480": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"d74951f387": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"7ea0a471f0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"d63cb5c950": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"e0aeaa56a2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"bfad53d101": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"1f2723e3f0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"67d8703a11": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"4a3f99f9b3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"4a8c25fde6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"245e7d73be": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"d085912aca": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"4cf86ced8c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"0d8b0fded3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"03a0e807c7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
+		},
+		"f4eeebd344": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/invalidate-meta.test.ts"
+		},
+		"9b9191ae36": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/invalidate-meta.test.ts"
+		},
+		"78e7bb7ebc": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/invalidate-meta.test.ts"
+		},
+		"eecb2cdc81": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"53841828e3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"2a3909d553": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"8ab3dbcaa6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"c143d3a344": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"ab8fc55fcf": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/invalidate-meta.test.ts"
+		},
+		"7894f62ae9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"3634311714": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/invalidate-meta.test.ts"
+		},
+		"2717e15bd2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11,10; unit/codegen/invalidate-meta.test.ts"
+		},
+		"8df5de9200": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"2ab0bbb8f5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"b99f9ef5db": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
+		},
+		"faaa4fc03e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/ir-only-emitters.test.ts"
+		},
+		"4222952886": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/ir-only-emitters.test.ts"
+		},
+		"fcc17af2f3": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/manifest-serve.test.ts"
+		},
+		"3e40c123b7": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/manifest-serve.test.ts"
+		},
+		"6c3fe953a3": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/manifest-serve.test.ts"
+		},
+		"ac1b3f50b9": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/manifest-serve.test.ts"
+		},
+		"efa2491888": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"0ae459e912": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"784a6dbdf7": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"6e428e7a5a": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"f66a31ae3b": {
+			"feature": "17-cli-gold-standard",
+			"reason": "bit-09 triage (17): Go CLI emitter (flags, enum errors); unit/codegen/polyglot-emitters.test.ts"
+		},
+		"165597d9a3": {
+			"feature": "17-cli-gold-standard",
+			"reason": "bit-09 triage (17): Go CLI emitter (flags, enum errors); unit/codegen/polyglot-emitters.test.ts"
+		},
+		"9be781321d": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"a1c45da195": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"5770bf39ca": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"63ad606050": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"1f8936180b": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"ccf0031834": {
+			"feature": "12-go-sdk",
+			"reason": "bit-09 triage (12-14): calls 12-14; unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+		},
+		"1ee83dce78": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/route-tree-schema-preservation.test.ts"
+		},
+		"b7de30d109": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/route-tree-schema-preservation.test.ts"
+		},
+		"7e284ba526": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/route-tree-schema-preservation.test.ts"
+		},
+		"93fc232f69": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/route-tree-schema-preservation.test.ts"
+		},
+		"262ea9454c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/route-tree-schema-preservation.test.ts"
+		},
+		"55cd3dbcf2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/route-tree-schema-preservation.test.ts"
+		},
+		"172119f4b7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-form-binary.test.ts"
+		},
+		"66bd6c533f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-form-binary.test.ts"
+		},
+		"304629f28e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-form-binary.test.ts"
+		},
+		"2b3e2ca251": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11,10; unit/codegen/sdk-invalidation.test.ts"
+		},
+		"9f37daaa06": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11,10; unit/codegen/sdk-invalidation.test.ts"
+		},
+		"23755479e3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
+		},
+		"209037ea81": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
+		},
+		"b99898f519": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
+		},
+		"b2f58ec1b8": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
+		},
+		"2c6a043853": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-nested.test.ts"
+		},
+		"5308f7a935": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
+		},
+		"67dd6b2f4e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
+		},
+		"6d38f79ef0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"6075e129c0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"dfdb631550": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"e12ce313ff": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"31b9ef1230": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"77c3e29e2f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"6a28ff9ecf": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"97daae6222": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"6296b0d960": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"02ba59f548": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"486f74543f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"a9e55620ce": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"c4252688b9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"cae5930955": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"37402502ed": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"e9f13f34d9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"c00913ed57": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"53b55c0c13": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"4ba33cc9c6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"e5e60a4ce8": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"9912193035": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"e8c807c73e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"23773f4839": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"caed65c7bf": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"90b9a40caa": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"5570c4ed47": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"f0e741df66": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"7420feea98": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"8716fd136a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
+		},
+		"f2954af53b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"630c54383f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"e50828f7ad": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"53e990f9e5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"a1d7da5bde": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"59ab0200ed": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"13de0df31d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"e8c7089c4b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"b70b35fbb9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"e6bdee4ee7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"65abbd0e4d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"f6ca098d0d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"a4b1bc5ab6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"05ea6eaba3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"cf6f0cf973": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
+		},
+		"dc6333d4c8": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"f90e376685": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"07bb9ebe04": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"bd3682e9c7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"394728c906": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"1e47c54778": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"48224efb17": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"e4955184ed": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"e0df3a87b2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"2ae9f9442b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"d9dbca9f97": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"fd935e64c9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"e364e050e3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"eb076db8ee": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"977d4ac305": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"e90ea3a857": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"097f6e4b97": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"1c80d2cbc6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"a7c674b3a8": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"42ada55a0a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"ae20342bab": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"9ddf1e3594": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"0ec712062d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"7fbf95b9a2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"94d2099d09": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"898812c83a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"2c1fc6b4f9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"999ac95582": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"a38cd5df9b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"236e3e5769": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"7e10d40f86": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"97dfd96828": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"ab490a218c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"b5b9e2ac0d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"fe8d6bc1a7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"5405775079": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
+		},
+		"ce7863f066": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"bed677911e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"a69054d119": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"8345a732c7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"8d643ee633": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"9034857bfb": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"7440966e69": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"938df592bd": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"fc58c03669": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"586e7c6311": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"4f62eb0c8f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"a30acf4042": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"ac60be02a8": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"02718b19dd": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"8ee5ed9817": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"02b07c37ef": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
+		},
+		"b6f6572d3f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"1c1578c622": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"341a572e8b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"755128cc91": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"b7d7829800": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"9a54e8587e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"4d0e00cc24": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"fcaa32f551": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"ef3b858653": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"15559804d0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"b72ff2324f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"c06785e093": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"0c5061cc19": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"e5659eb56d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"88fe7539b7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"af645b0e07": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"ffc4c70a5d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"fc702f2100": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"d6607d6b54": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"b911d53bf2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"b7cef4920b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"0abc86d02e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"a038c119fe": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"8be8df0993": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"066726536b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"b1bdbc10ed": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"bf92b9e770": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"537a7cdfe9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
+		},
+		"ee7fbfbf7f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"17bd5beace": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"5c504dfad4": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"9e6f63457d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"315ea556a3": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"f0c134e75c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"f000740f60": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"909a33255e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"5cff46b8a2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"b72b4a4db7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"5266ee7580": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"d9a559a2c2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"01435c471b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"16a014ba41": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"a3648850a2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"f369dcabb5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"8ebd298507": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"a41520ae7e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"4dc403f6bb": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"4f7d2e0f61": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"7811071b8a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"6a6e6cc528": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"8c5455f3ac": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"2dd02e57a0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"7731ace5a8": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"b6e6bd3219": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"d2645bb721": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"c06c2bfe35": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"d288f2ec78": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"071bbe7d73": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"16a6e40a1f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
+		},
+		"5c7327630f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"45a5b0b383": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"7c6184e099": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"861578b9d4": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"a1b05d5934": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"c55541b35f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"25bfa2d4b9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"7fb191764d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"f8614f06bd": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"e9b5e8156c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"8d7b6def57": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"c056791e92": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"24a0bdbfce": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"39d5b0bd4e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"79937e4464": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"79d0c3c1f6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"e46e840eb6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"07f14f737b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"b35c9756b1": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"94f274a538": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"1adaed9a78": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"ce63b62f23": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"54bf8bd01c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"489c912320": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"eb62bc6ec5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"b8071e9beb": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"52850362ff": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"17c64fb04a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
+		},
+		"d3e135c042": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"1dcaa3ad12": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"d68153af0b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"a195d72312": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"6dc2907107": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"66fed1a886": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"818a5a53ab": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"36b37807ca": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"04468bd138": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
+		},
+		"79e6db30df": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-request-id-runtimes.test.ts"
+		},
+		"b32bb9e005": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"8649409ebf": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"4b28b5125a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"b28bfb5318": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"14c5c0feef": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"39969ee2ff": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"6739433526": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"557ae99876": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"5f0e11395a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"ea5cc25ad4": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"2610f1105a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"aa60f4c20f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"091340af93": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"c448109549": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"23d624f79e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"7f2e37104b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"b92e3bdd01": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"a2999bdd86": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"4dd46a9825": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"0133924867": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
+		},
+		"88a8924ee0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11,10; unit/codegen/ts-adversarial-compile.test.ts"
+		},
+		"487079ba1b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
+		},
+		"cd282ce42f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
+		},
+		"d49e80d116": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
+		},
+		"bb8e7546d1": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
+		},
+		"7682f55c19": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/ts-sdk.test.ts"
+		},
+		"7ae1354806": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"2f1cf2ae5c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"003e38e63f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"ecf8c096cb": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"c9ebe8cd43": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"52a381a64d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"2db33c851d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"62b23da627": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"a44b90b0b5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"df2d4dfa04": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"e74d4558b2": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"2dcadf4427": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"5f4441e96a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"2adddfc93c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"3062a0190f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"d9e9c58c3c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"8abfd30eee": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"923b50cac1": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"16563e422e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"c6a4392e8b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"00be0eaf70": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"705a0cce7a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"01d3fd8025": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"df84c43bfe": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"1b9cc30394": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"e0ae536e6f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"e307df4b24": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"98c428e092": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"724600a1c8": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"52f3a6b68d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"f7acd0d1cd": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"bf82dacaa4": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"ca049515a6": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"cb5657ad68": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"05979f7b83": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"ca969b19f0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"f52e9b5d04": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"8fb3e02da5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"9f8023694c": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/ts-type-emitter.test.ts"
+		},
+		"81bd6fd06a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"8e405a63a7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"b10d6edfc9": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"2bb2500ef7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"d48578b92d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"3c06c03f2d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"5a5fd49d0e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"95fb65a4b7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"8c8a800da4": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"ce41c39195": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"5b5963dc6a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"b762ffb505": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"1b35afa162": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"555da9d12f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"4e10b6018f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"b5725495ac": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"b3ed47c6ec": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"a31c4df124": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"e7a1f2c66d": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"697b381e1a": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"1a7a0badb1": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"0a41708edf": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"a5b73c73eb": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
+		},
+		"d5f6068fdd": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
+		},
+		"382216f3e0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
+		},
+		"5d9d759f72": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
+		},
+		"cec9d9e7a1": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
+		},
+		"6c61e09376": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
+		},
+		"45e403d70e": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
+		},
+		"47f3dd45a5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
+		},
+		"ae748154a5": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"ad73c602a0": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"b9beb5f0ab": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"7848edcbce": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"df9bb270c3": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"7a95770991": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"0399ce37b6": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"f960cec7a1": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+		},
+		"5c381daca0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/core/context.test.ts"
+		},
+		"a1c8f914c0": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/core/x-internal.test.ts"
+		},
+		"72f35f74da": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/core/x-internal.test.ts"
+		},
+		"c3c69b195f": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
+		},
+		"959d14ae17": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
+		},
+		"fa6a97ea33": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
+		},
+		"89e639eb73": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
+		},
+		"6de7a00415": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
+		},
+		"4b465e0068": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
+		},
+		"1bd65834a7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
+		},
+		"2a82dc943d": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
+		},
+		"03ff4daa83": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/meta/middleware-meta.test.ts"
+		},
+		"bcdf605127": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/middleware/finalized-chain.test.ts"
+		},
+		"a66923fc91": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/route-tree/route-tree.test.ts"
+		},
+		"360ed98742": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/route-tree/route-tree.test.ts"
+		},
+		"4b34d0a127": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-text): calls 11; unit/route-tree/route-tree.test.ts"
+		},
+		"713b41d0f5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
 		}
 	},
 	"retired": {

@@ -231,6 +231,7 @@ describe("output validation through the app: a type other than JSON", () => {
 	// v0: bb78fc44db
 	// v0: 2bf6ce4a01
 	// v0: f86079d3a3
+	// v0: d739acb505
 	it("a non-JSON declared type is a type contract: its schema never runs, its answer passes", async () => {
 		const never = schemaOf([{ message: "must not run" }])
 		const app = validating()

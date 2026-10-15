@@ -232,9 +232,13 @@ describe("route .input(): the declared body against the request", () => {
 		)
 		expect(statuses).toEqual([415, 415, 415, 400, 201, 201, 201, 415])
 	})
+})
 
+describe("route .input(): which methods take a body", () => {
 	// v0: 2595655908
 	// v0: 08e479d91a
+	// v0: 2eecafee9e
+	// v0: 7599defa48
 	it("refuses a body schema on GET when the route registers; DELETE validates its body", async () => {
 		expect(() =>
 			honey<{}>()
