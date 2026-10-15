@@ -4,9 +4,11 @@ import {
 	ceilingOf,
 	cliSurfaces,
 	countTokens,
+	documentOperationText,
 	irOperationText,
 	markAllMcp,
 	mcpSurfaces,
+	oversizedOperations,
 	sdkSurfaces,
 } from "./capture-token-budget.ts"
 
@@ -162,5 +164,62 @@ describe("irOperationText", () => {
 				},
 			},
 		})
+	})
+})
+
+/** A document whose GET /nodes/{id} returns a recursive Node, and whose POST /notes carries `description`. */
+const documented = (description: string) => ({
+	components: {
+		schemas: {
+			Node: {
+				properties: { children: { items: { $ref: "#/components/schemas/Node" }, type: "array" } },
+				type: "object",
+			},
+		},
+	},
+	openapi: "3.1.0",
+	paths: {
+		"/nodes/{id}": {
+			get: {
+				operationId: "getNode",
+				responses: { "200": { content: { "application/json": { schema: { $ref: "#/components/schemas/Node" } } } } },
+			},
+		},
+		"/notes": {
+			post: { description, operationId: "postNote", requestBody: { $ref: "#/components/requestBodies/Missing" } },
+		},
+	},
+})
+
+describe("documentOperationText", () => {
+	it("writes an operation as the document holds it, every component it reaches inlined, a cycle and an unknown name kept as refs", () => {
+		expect(JSON.parse(documentOperationText(documented("d"), "/nodes/{id}", "get"))).toEqual({
+			operationId: "getNode",
+			responses: {
+				"200": {
+					content: {
+						"application/json": {
+							schema: {
+								properties: { children: { items: { $ref: "#/components/schemas/Node" }, type: "array" } },
+								type: "object",
+							},
+						},
+					},
+				},
+			},
+		})
+		expect(
+			(JSON.parse(documentOperationText(documented("d"), "/notes", "post")) as { requestBody: unknown }).requestBody,
+		).toEqual({
+			$ref: "#/components/requestBodies/Missing",
+		})
+	})
+})
+
+describe("oversizedOperations", () => {
+	it("flags each operation whose document text runs over the ceiling, by id", () => {
+		const spec = documented("word ".repeat(400))
+		const small = countTokens(documentOperationText(spec, "/nodes/{id}", "get"))
+		expect([oversizedOperations(spec, small), oversizedOperations(spec, 10_000)]).toEqual([["postNote"], []])
 	})
 })
