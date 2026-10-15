@@ -1,7 +1,8 @@
 /**
  * One operation's slots in the IR: its parameters by where they travel, its request bodies in
  * preference order, its responses by status, and the honey extensions it carries (realtime, SSE,
- * websocket, invalidation…). Component `$ref`s on parameters, bodies and responses are followed.
+ * websocket, invalidation…), and for a webhook, how it is signed. Component `$ref`s on parameters,
+ * bodies and responses are followed.
  */
 import {
 	type IRBody,
@@ -10,6 +11,7 @@ import {
 	type IROperationExtensions,
 	type IRParam,
 	type IRResponse,
+	type IRSignature,
 	schemaToIR,
 } from "./model.ts"
 
@@ -193,4 +195,34 @@ export function extensionsOf(op: Json, sse: boolean): IROperationExtensions {
 	const invalidate = op["x-invalidate"]
 	if (Array.isArray(invalidate)) out.invalidates = invalidate.filter((target) => typeof target === "string")
 	return out
+}
+
+/* a header name: an RFC 9110 token */
+const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+/** Each reason an SDK could not verify a signature written as `raw`. */
+function signatureErrors(raw: Json): string[] {
+	const errors: string[] = []
+	if (raw.algorithm !== "hmac-sha256") errors.push(`algorithm ${JSON.stringify(raw.algorithm)} is not hmac-sha256`)
+	if (raw.encoding !== "hex" && raw.encoding !== "base64")
+		errors.push(`encoding ${JSON.stringify(raw.encoding)} is not hex or base64`)
+	if (typeof raw.header !== "string" || !TOKEN.test(raw.header))
+		errors.push(`header ${JSON.stringify(raw.header)} is not a header name`)
+	if (raw.prefix !== undefined && typeof raw.prefix !== "string") errors.push("the prefix is not a string")
+	else if (/\p{Cc}/u.test(raw.prefix ?? "")) errors.push("the prefix holds a control character")
+	return errors
+}
+
+/**
+ * How the webhook `name` is signed, from its operation's `x-honey-signature`; none when unsigned.
+ * gen reads documents it did not write: a signature an SDK could not verify is refused, never
+ * emitted as a helper that cannot check it.
+ */
+export function signatureOf(name: string, op: Json): IRSignature | undefined {
+	const raw = op["x-honey-signature"]
+	if (raw === undefined) return undefined
+	const errors = signatureErrors(raw !== null && typeof raw === "object" ? (raw as Json) : {})
+	if (errors.length > 0) throw new Error(`x-honey-signature on webhook ${JSON.stringify(name)}: ${errors.join("; ")}`)
+	const { encoding, header, prefix } = raw as { encoding: "base64" | "hex"; header: string; prefix?: string }
+	return { algorithm: "hmac-sha256", encoding, header, prefix: prefix ?? "" }
 }

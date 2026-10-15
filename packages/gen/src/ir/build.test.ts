@@ -134,6 +134,79 @@ describe("toIR: info and authentication", () => {
 	})
 })
 
+/** A document of one route and `webhooks`. */
+const withWebhooks = (webhooks: Json) =>
+	({ ...doc({ "/a": { get: { ...ok, operationId: "a" } } }), webhooks }) as OpenApiDocument
+
+/** A webhook that POSTs `{ id }`, signed as `signature` says. */
+const signed = (signature?: Json) => ({
+	post: {
+		requestBody: {
+			content: { "application/json": { schema: { properties: { id: { type: "string" } }, type: "object" } } },
+		},
+		responses: { "200": { description: "Received" } },
+		summary: "Paid",
+		...(signature === undefined ? {} : { "x-honey-signature": signature }),
+	},
+})
+
+describe("toIR: webhooks", () => {
+	it("reads each webhook by name: its method, body, summary and how it is signed, the prefix empty when unset", () => {
+		const ir = toIR(
+			withWebhooks({
+				"order.shipped": {
+					put: { description: "Sent per parcel.", requestBody: signed().post.requestBody, responses: {} },
+				},
+				"invoice.paid": signed({ algorithm: "hmac-sha256", encoding: "hex", header: "X-Signature" }),
+			}),
+		)
+		expect([ir.webhooks, toIR(doc({})).webhooks]).toEqual([
+			[
+				{
+					body: {
+						fields: [{ name: "id", required: false, schema: { kind: "scalar", type: "string" } }],
+						kind: "object",
+					},
+					method: "POST",
+					name: "invoice.paid",
+					signature: { algorithm: "hmac-sha256", encoding: "hex", header: "X-Signature", prefix: "" },
+					summary: "Paid",
+				},
+				{
+					body: {
+						fields: [{ name: "id", required: false, schema: { kind: "scalar", type: "string" } }],
+						kind: "object",
+					},
+					description: "Sent per parcel.",
+					method: "PUT",
+					name: "order.shipped",
+				},
+			],
+			[],
+		])
+	})
+
+	it("refuses a signature an SDK could not verify: another algorithm or encoding, a header that is no token, a control character", () => {
+		const sig = { algorithm: "hmac-sha256", encoding: "base64", header: "Sig" }
+		const read = (signature: Json) => () => toIR(withWebhooks({ hook: signed(signature) }))
+		expect(read({ ...sig, algorithm: "md5" })).toThrow(
+			'x-honey-signature on webhook "hook": algorithm "md5" is not hmac-sha256',
+		)
+		expect(read({ ...sig, encoding: "utf8" })).toThrow(
+			'x-honey-signature on webhook "hook": encoding "utf8" is not hex or base64',
+		)
+		expect(read({ ...sig, header: "X Sig" })).toThrow(
+			'x-honey-signature on webhook "hook": header "X Sig" is not a header name',
+		)
+		expect(read({ ...sig, prefix: "sha256=" })).not.toThrow()
+		expect(read({ ...sig, prefix: "v1\n" })).toThrow(
+			'x-honey-signature on webhook "hook": the prefix holds a control character',
+		)
+		expect(read("hmac" as never)).toThrow('x-honey-signature on webhook "hook": algorithm undefined is not hmac-sha256')
+		expect(read({ ...sig, prefix: 1 })).toThrow('x-honey-signature on webhook "hook": the prefix is not a string')
+	})
+})
+
 const SPECS = join(import.meta.dirname, "__fixtures__/specs")
 
 describe("toIR: the SDK emitters' fixture documents", () => {

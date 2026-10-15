@@ -245,3 +245,7 @@ jobs:
       - run: cd packages/gen && bunx vitest run src/emit/shared/escape.toolchains.test.ts
         env:
           HONEY_REQUIRE_TOOLCHAINS: "1"
+      # the webhook verify helpers compiled and checked against a known HMAC: node, go, cargo, python3
+      - run: cd packages/gen && bunx vitest run src/emit/shared/webhooks.toolchains.test.ts
+        env:
+          HONEY_REQUIRE_TOOLCHAINS: "1"

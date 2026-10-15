@@ -1,12 +1,28 @@
 /**
  * The IR from an OpenAPI 3.x document: its component schemas, its operations (each with an id,
- * explicit or derived), the resource tree over them, how a client authenticates, and the
- * document's info. Reads the document alone; gen never reaches into core (H2).
+ * explicit or derived), the resource tree over them, how a client authenticates, the
+ * document's info, and the webhooks it sends. Reads the document alone; gen never reaches into core (H2).
  */
 import { compareCodeUnits, pascalWords } from "../emit/shared/lang.ts"
-import { type IR, type IRAuth, type IRInfo, type IROperation, type IRSchema, schemaToIR } from "./model.ts"
+import {
+	type IR,
+	type IRAuth,
+	type IRInfo,
+	type IROperation,
+	type IRSchema,
+	type IRWebhook,
+	schemaToIR,
+} from "./model.ts"
 import { buildResourceTree } from "./resource-tree.ts"
-import { type Components, extensionsOf, paramsOf, parseOpenApiPath, requestBodies, responsesOf } from "./slots.ts"
+import {
+	type Components,
+	extensionsOf,
+	paramsOf,
+	parseOpenApiPath,
+	requestBodies,
+	responsesOf,
+	signatureOf,
+} from "./slots.ts"
 
 type Json = Record<string, unknown>
 
@@ -18,6 +34,7 @@ export type OpenApiDocument = {
 	readonly info?: Readonly<Record<string, unknown>>
 	readonly openapi: string
 	readonly paths?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+	readonly webhooks?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
 }
 
 export type ToIROptions = {
@@ -97,6 +114,27 @@ function infoOf(doc: OpenApiDocument): IRInfo {
 	)
 }
 
+/** Each webhook by name, in code-unit order: its method, JSON payload, text and signature. */
+function webhooksOf(doc: OpenApiDocument): IRWebhook[] {
+	const components = (doc.components ?? {}) as Components
+	return Object.keys(doc.webhooks ?? {})
+		.sort(compareCodeUnits)
+		.flatMap((name) => {
+			const item = doc.webhooks?.[name] as Readonly<Record<string, unknown>>
+			return METHODS.filter((method) => typeof item[method] === "object" && item[method] !== null).map((method) => {
+				const op = item[method] as Json
+				const json = requestBodies(op, components).find((b) => b.kind === "raw" && b.contentType === "application/json")
+				const signature = signatureOf(name, op)
+				const webhook: IRWebhook = { method: method.toUpperCase(), name }
+				if (json?.kind === "raw") webhook.body = json.schema
+				if (typeof op.description === "string") webhook.description = op.description
+				if (signature !== undefined) webhook.signature = signature
+				if (typeof op.summary === "string") webhook.summary = op.summary
+				return webhook
+			})
+		})
+}
+
 /** The operations with an explicit id, a shared one suffixed by method or refused; and those without one. */
 function explicitOperations(doc: OpenApiDocument, options: ToIROptions, seen: Set<string>) {
 	const components = (doc.components ?? {}) as Components
@@ -144,5 +182,6 @@ export function toIR(doc: OpenApiDocument, options: ToIROptions = {}): IR {
 		schemaDescriptions,
 		schemas,
 		tree: buildResourceTree(operations),
+		webhooks: webhooksOf(doc),
 	}
 }

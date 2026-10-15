@@ -118,6 +118,16 @@ export type IRAuth = { headerName: string; prefix: string }
 
 export type IRInfo = { title?: string; description?: string; version?: string }
 
+/** How a webhook is signed (`x-honey-signature`); `prefix` precedes the digest, empty when nothing does. */
+export type IRSignature = { algorithm: "hmac-sha256"; encoding: "base64" | "hex"; header: string; prefix: string }
+
+/** A request the API sends a subscriber, `body` its JSON payload's schema. */
+export type IRWebhook = Pick<IROperation, "description" | "method" | "summary"> & {
+	name: string
+	body?: IRSchema
+	signature?: IRSignature
+}
+
 export type IR = {
 	auth: IRAuth
 	info: IRInfo
@@ -126,6 +136,8 @@ export type IR = {
 	/** the `description` of each component schema that has one */
 	schemaDescriptions: Record<string, string>
 	tree: IRNamespace
+	/** every webhook, by name in code-unit order */
+	webhooks: IRWebhook[]
 }
 
 type Json = Record<string, unknown>
