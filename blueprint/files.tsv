@@ -10,7 +10,7 @@
 # ============================== packages/core  (@lovrozagar/honey) ==============================
 path	pkg	kind	bit	responsibility	origin
 src/routing/app.ts	core	src	02	the Honey app surface + honey() factory; delegates to the modules below. Keeps only the generic-changing surface; the type machinery is app-types.ts	index.ts
-src/routing/app-types.ts	core	types	02	app-level type machinery split from app.ts for the 300-line limit (nine positional generics kept — v0 typetests T16/T28 pin them): HandlerCtx/ApplyParams/ApplyScoped/ScopedMwEntry, RouteEntry/MergeRoute/ComputeErrorsByStatus, the Infer* ladder, HoneyCtx, DefaultMeta. Route entry keeps input/output typed {} at 02 so bit 08 fills them without reshaping	index.ts,types.ts
+src/routing/app-types.ts	core	types	02	app-level type machinery split from app.ts for the 300-line limit (nine positional generics kept — v0 typetests T16/T28 pin them): HandlerCtx/ApplyParams/ApplyScoped/ScopedMwEntry, RouteEntry/MergeRoute/ComputeErrorsByStatus, the Infer* ladder, HoneyCtx, DefaultMeta. Route entry keeps input/output typed {} at 02 so bit 08 fills them without reshaping; bit 11 adds a sibling request member (InferRequestMap: each source's schema INPUT, readableStream unwrapped) so the SDK template can type the client request where input (the server's parsed ctx.input) drops it — additive, type-only, H13 (R1)	index.ts,types.ts
 src/routing/output-types.ts	core	types	08	the .output() type algebra: OutputSchemas (media type → status → schema | true, redirect, headers), AllowedResMethods, and ApplyOutput narrowing ctx.res (declared helpers narrowed by status key and body, undeclared removed, UniversalRes kept, sse only for an event stream); type-only	index.ts
 src/routing/settings.ts	core	src	02	AppSettings, defaults, chain (basePath/context/onError/trustProxy)	index.ts
 src/routing/settings-chain.ts	core	src	02	the settings setters every app handle shares (SettingsChain), split from settings.ts for the 300-line cap	index.ts
@@ -244,10 +244,10 @@ tests/regression/ws4-node-adapter.regression.test.ts	core	test	06	the deferred n
 tests/regression/ws4-in-process.regression.test.ts	core	test	06	in-process ws cases (6): adapter contract exercised without a socket; v1-named port of v0 regression/ws4-8/in-process, each // v0: tagged	regression/ws4-8/in-process.regression.test.ts,regression/ws4-8/harness.ts
 tests/regression/v072.regression.test.ts	core	test	17	no bit-02 case left (V072-2 aeff0f4b4d is CLI, bit 17); born there	regression/v072.regression.test.ts
 # ============================== packages/gen  (@lovrozagar/honey-codegen) ==============================
-src/ir/model.ts	gen	src	09	the IR types	codegen-ir.ts,codegen-sdk-model.ts
+src/ir/model.ts	gen	src	09	the IR types; bit 11 adds IRResponse.headers (declared response headers) additively for A2 (H13, g)	codegen-ir.ts,codegen-sdk-model.ts
 src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
 src/ir/resource-tree.ts	gen	src	09	resource tree from dotted operationId	codegen-ir.ts
-src/ir/slots.ts	gen	src	09	request/response slots + realtime/sse/ws markers	codegen-ir.ts
+src/ir/slots.ts	gen	src	09	request/response slots + realtime/sse/ws markers; bit 11 extends responsesOf to carry declared response headers for A2 (additive, H13, g) — its slots.test gains a header-carried case	codegen-ir.ts
 src/ir/__fixtures__/	gen	corpus	09	v0 SDK spec fixtures (python/go/rust) copied byte-for-byte; the toIR round-trip (build.test) reads them; kept so tests stay valid after _v0 goes at bit 20	tests/unit/codegen/fixtures/*
 src/ir/sdk-model.ts	gen	src	09	the SDK model over the IR	codegen-sdk-model.ts
 src/schema/naming.ts	core	src	09	schema name derivation (deriveSchemaName/sanitizeComponentName/isErrorEnvelope/shortHash + the private djb2 hashString it wraps, F10) for the core dedup/hoist (slots.ts imports shortHash) + openapi document; codegen-ir never imports it	codegen-schema-naming.ts,codegen-hash.ts
@@ -266,6 +266,8 @@ src/emit/shared/format.ts	gen	src	11	formatter post-pass dispatch (gofmt/rustfmt
 src/emit/shared/webhooks.ts	gen	src	10	webhook verify-helper emitter: language-agnostic constant-time HMAC from x-honey-signature via F2 (F11); the typed payload parser is per-SDK (bits 11-16)	—
 src/emit/shared/webhooks.toolchains.test.ts	gen	test	10	cross-check: compile the TS/Go/Rust/Python verify helpers and verify a known HMAC under HONEY_REQUIRE_TOOLCHAINS (harness); C#/Java structural-only until 15/16	—
 src/emit/ts/sdk.ts	gen	src	11	TS SDK	client/sdk.ts
+src/emit/ts/service-map.ts	gen	src	11	serviceMapOf: the IR → SDK service map (method/path/stream/body kind, per-op error statuses) the SDK Proxy dispatches over; keys are the renamed members (state_), entry flags (sse/ws/realtime/invalidate/params) present only when set (contract j)	client/sdk.ts
+src/emit/ts/sdk-types.ts	gen	types	11	the SDK class type surface split from sdk.ts (300-line limit): typed per-operation method signatures + config/result types over the IR	client/sdk.ts,client/types.ts
 src/emit/ts/http.ts	gen	src	11	TS fetch client core	client/http.ts
 src/emit/ts/request.ts	gen	src	11	request build + retry	client/http.ts
 src/emit/ts/response.ts	gen	src	11	response parse + raw accessor	client/http.ts
@@ -282,6 +284,20 @@ src/emit/ts/route-tree.ts	gen	src	11	generateRouteTree(tree) over a gen-local v2
 src/emit/ts/app-client.ts	gen	src	11	the F1 app-typed front: emits createClient<typeof app> into the app's _gen/client.gen.ts, a Proxy over HTTP methods with a typed path arg (v0 shape, H4); InferRoutes = T extends {$routes: infer R} ? R : never declared structurally in the template so the emitted client imports nothing from core (stronger than H2 — no emitted import type)	client/index.ts
 src/emit/ts/overrides.test.ts	gen	test	11	C2 per-call base/timeout/headers overrides + the raw-response accessor, asserted over the executed client	client/http.ts
 src/emit/ts/binary.test.ts	gen	test	11	A1 binary response → Uint8Array/stream with Accept set; A2 typed response headers, over the executed client	client/http.ts
+src/emit/ts/http.behavior.test.ts	gen	test	11	phase-b http port (split of http.ts behavior by concern): verb/path/query/header request wire + typed result decode over the executed client	client/http.ts
+src/emit/ts/http.edges.test.ts	gen	test	11	phase-b http port: edge cases — non-JSON error body keeps its text, empty/invalid 2xx JSON → null or 200 ClientError (two-fronts client wins, contract i), empty void body → null (ee7fbfbf7f/R3)	client/http.ts
+src/emit/ts/http.headers.test.ts	gen	test	11	phase-b http port: request header merge/precedence and A2 declared response headers readable (case-insensitive) on the safe result	client/http.ts
+src/emit/ts/http.hooks.test.ts	gen	test	11	phase-b http port: the hook ctx (isStale/invalidatedBy/selector present only when invalidation is on, contract a); retry-from-retry returns the current response, one retry per call (contract h, v0 client wins)	client/http.ts
+src/emit/ts/http.invalidation.test.ts	gen	test	11	phase-b http port: invalidation config staleTime/staleMaxEntries?/maxSourcesPerTarget? and stale-source eviction (contract a, v0 SDK)	client/http.ts
+src/emit/ts/http.patterns.test.ts	gen	test	11	phase-b http port: path-pattern interpolation and the status-0 ClientError on Response.error() for a path-param failure in safe mode (contract d)	client/http.ts
+src/emit/ts/http.signal.test.ts	gen	test	11	phase-b http port: AbortSignal propagation, dispose() aborting in-flight calls and rejecting later ones (contract b, v0)	client/http.ts
+src/emit/ts/http.stale.test.ts	gen	test	11	phase-b http port: stale-while-revalidate serving + isStale flagging across the invalidation cache	client/http.ts
+src/emit/ts/request.body.test.ts	gen	test	11	phase-b request port: JSON/form/binary request bodies, stream input body, and the status-0 ClientError on a JSON-serialize failure in safe mode (contract d; v0 RangeError crash fixed, V0BUG)	client/http.ts
+src/emit/ts/request.search.test.ts	gen	test	11	phase-b request port: query/search serialization from the typed request input (InferRequestMap, readableStream unwrapped — R1)	client/http.ts
+src/emit/ts/response.parse.test.ts	gen	test	11	phase-b response port: content-type-directed decode — JSON/text/binary by declared result type, empty bodies resolving to the declared type's empty (null for void, "" for text, empty bytes for binary)	client/http.ts
+src/emit/ts/error.data.test.ts	gen	test	11	phase-b error port: typed error narrowing by honey error-key, error data payload, and maxErrorMessageChars truncation (default 512, contract c)	client/error.ts
+src/emit/ts/sdk.class.test.ts	gen	test	11	phase-b SDK port: the generated class — new SdkName({baseURL}), public state, dispose(), printable toStringTag [object SdkName] and NOT thenable (then → undefined on the method Proxy, a42bc08c59/R2 ported), serviceMapOf keyed by renamed members (contract j)	client/sdk.ts
+src/emit/ts/types.test.ts	gen	test	11	phase-b types port: irToTs emitted declarations — operations/inputs/outputs/errors typed; types.ts is kind=types so this test is explicit, not implicit	client/types.ts,ts-type-emitter.ts
 src/emit/ts/__fixtures__/emitted.ts	gen	test	11	the executed-client fixture (D4, F5/F8; kind=test, __fixtures__ helper precedent): emittedSdk(document, opts)/emittedApp() write the emitted files under $HOME/.cache/honey-tmp/gen-ts/<content-hash>/ and dynamic-import them, driven by an injected recording fetch — so every behavior test runs the real emitted module and an F8 mutant of runtimeSource() is reached by all of them	client/http.ts
 src/emit/ts/index.ts	gen	index	11	TS SDK entry/exports	client/index.ts
 src/emit/go/sdk.ts	gen	src	12	Go SDK	codegen-go.ts
