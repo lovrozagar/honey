@@ -40,8 +40,25 @@ describe("the precedence helpers callers share", () => {
 			arrayOf("() => void"),
 			intersectionOf(["() => void", "A"]),
 			arrayOf('"a | b"'),
+			arrayOf('"a\\"|b"'),
 			arrayOf("Array<A | B>"),
-		]).toEqual(["(() => void) | string", "(() => void)[]", "(() => void) & A", '"a | b"[]', "Array<A | B>[]"])
+		]).toEqual([
+			"(() => void) | string",
+			"(() => void)[]",
+			"(() => void) & A",
+			'"a | b"[]',
+			'"a\\"|b"[]',
+			"Array<A | B>[]",
+		])
+	})
+
+	it("bracket a union in an intersection, and any array element looser than []: an intersection or a readonly array", () => {
+		expect([
+			intersectionOf(["A | B", "C"]),
+			unionOf(["A", "A", "B"]),
+			arrayOf("A & B"),
+			arrayOf("readonly string[]"),
+		]).toEqual(["(A | B) & C", "A | B", "(A & B)[]", "(readonly string[])[]"])
 	})
 })
 

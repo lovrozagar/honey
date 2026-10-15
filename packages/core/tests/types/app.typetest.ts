@@ -370,3 +370,18 @@ describe("every Infer* over a get and a post on one path, without .meta()", () =
 		expectTypeOf<InferRouteMeta<typeof app, "/hello", "get">>().toEqualTypeOf<{}>()
 	})
 })
+
+describe("the route builder's phantoms: what codegen's extractor reads", () => {
+	it("a builder carries its middleware ctx (scoped and builder .use() included), its methods and its full path", () => {
+		const scoped = createMiddleware((_ctx, next) => next({ scoped: 1 }))
+		const added = createMiddleware((_ctx, next) => next({ added: "a" }))
+		const app = honey<{ DB: string }>().basePath("/v1").use("/admin", scoped)
+		const builder = app.on(["GET", "PUT"], "/admin/x").use(added)
+		expectTypeOf(builder.$path).toEqualTypeOf<"/v1/admin/x">()
+		expectTypeOf(builder.$method).toEqualTypeOf<"GET" | "PUT">()
+		expectTypeOf(builder.$ctx).toEqualTypeOf<HoneyContext<{ DB: string }> & { scoped: number } & { added: string }>()
+		/* the ctx before the handler re-declares params, meta, errors and input */
+		expectTypeOf(builder.$ctx).not.toHaveProperty("input")
+		expectTypeOf(app.get("/plain").$method).toEqualTypeOf<"GET">()
+	})
+})

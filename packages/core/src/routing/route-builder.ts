@@ -170,12 +170,11 @@ export type BuilderState = {
 	readonly view: HandleView
 }
 
-/** A new route's declarations: no error keys, no boundary, no named factory, no input. */
-export function undeclared(): Pick<BuilderState, "boundaryKey" | "errorKeys" | "errorSource" | "input"> {
-	return { boundaryKey: null, errorKeys: new Set(), errorSource: null, input: null }
-}
-
 export class RouteBuilder<B extends BuilderTypes> {
+	/* type only, read by codegen: the ctx middleware built (before the handler's own declarations), the methods, the full path */
+	declare readonly $ctx: B["ctx"]
+	declare readonly $method: B["method"]
+	declare readonly $path: B["path"]
 	readonly #s: BuilderState
 
 	constructor(state: BuilderState) {
@@ -283,9 +282,12 @@ export function startRoute(
 	const pending: PendingRoute = { id: `${[route.method, ...route.extraMethods].join(",")} ${fullPath}` }
 	graph.pending.add(pending)
 	return new RouteBuilder({
-		...undeclared(),
+		boundaryKey: null,
+		errorKeys: new Set(),
+		errorSource: null,
 		extraMethods: route.extraMethods,
 		graph,
+		input: null,
 		meta: view.chainMeta,
 		method: route.method,
 		output: null,

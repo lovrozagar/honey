@@ -290,4 +290,11 @@ describe("operation extensions", () => {
 			{},
 		])
 	})
+
+	it("reads the route id an operation came from (x-honey-route), the key extracted ctx types join on", () => {
+		expect([
+			operation({ "x-honey-route": "GET /users/:id?" }).extensions,
+			operation({ "x-honey-route": 1 }).extensions,
+		]).toEqual([{ route: "GET /users/:id?" }, {}])
+	})
 })

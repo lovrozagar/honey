@@ -85,6 +85,8 @@ export type IROperationExtensions = {
 	invalidates?: string[]
 	mcp?: true
 	realtime?: true
+	/** the honey route id the operation came from (`x-honey-route`): what extracted ctx types are keyed by */
+	route?: string
 	sse?: true
 	websocket?: true
 }

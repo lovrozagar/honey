@@ -33,9 +33,10 @@ function topLevel(type: string, token: "&" | "=>" | "|"): boolean {
 	return false
 }
 
-/** `el[]`, parenthesised when a union, intersection or function binds looser than `[]`. */
+/** `el[]`, parenthesised when a union, intersection, function or `readonly` array binds looser than `[]`. */
 export function arrayOf(el: string): string {
-	return topLevel(el, "|") || topLevel(el, "&") || topLevel(el, "=>") ? `(${el})[]` : `${el}[]`
+	const looser = topLevel(el, "|") || topLevel(el, "&") || topLevel(el, "=>") || el.startsWith("readonly ")
+	return looser ? `(${el})[]` : `${el}[]`
 }
 
 /** `A | B`, each part once; `never` for none. */
