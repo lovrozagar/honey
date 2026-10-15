@@ -24,6 +24,7 @@ The IR is the only thing `packages/gen` reads from core's output. This bit build
 
 ## Security corpus
 - the shared string-escape layer is fuzzed here (F2): every emitter inherits it.
+- **`meta.tsType` is cut (F2).** v0 let schema metadata inject a raw TypeScript type string that the emitter wrote verbatim — spec text becoming source, which the generator must never do on an arbitrary OpenAPI document. The legitimate case (name a declared component) is served by `irToTs`'s `refName`; there is no path for raw author TS. Do not reintroduce it.
 
 ## Budget
 - token: the IR→surface size per operation is the measured input to the token budget (bit 7.1).
