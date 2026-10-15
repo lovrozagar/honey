@@ -11,6 +11,7 @@ import type { IpRestrictOptions } from "../../src/middleware/ip-restrict.ts"
 import type { MemoryStoreOptions, RateLimitOptions } from "../../src/middleware/rate-limit.ts"
 import type { SSEEvent, SSEOptions, SSEStream } from "../../src/response/sse.ts"
 import { type ProducerOptions, type ProducerSink, producerStream } from "../../src/streaming/producer-stream.ts"
+import type { JsonSchema, jsonSchemaOf } from "../../src/schema/to-json-schema.ts"
 import type { WSContext, WSHandler } from "../../src/ws/contract.ts"
 export type NormalizePath = (raw: string, encodedSlashes?: "allow" | "reject") => string | null
 
@@ -349,4 +350,16 @@ export function plainRecord<T>(entries: Iterable<[string, T]>): Record<string, T
 	const out: Record<string, T> = {}
 	for (const [key, value] of entries) out[key] = value
 	return out
+}
+
+type JsonSchemaOf = typeof jsonSchemaOf
+
+/** jsonSchemaOf that trusts a vendor's converter: whatever it answers, or throws, reaches the document. */
+export function trustingJsonSchemaOf(original: JsonSchemaOf): JsonSchemaOf {
+	return (schema, io, options) => {
+		const standard = (schema as { "~standard"?: { jsonSchema?: Record<string, unknown> } } | null)?.["~standard"]
+		const convert = standard?.jsonSchema?.[io]
+		if (typeof convert !== "function") return original(schema, io, options)
+		return convert({ target: "draft-2020-12" }) as JsonSchema
+	}
 }

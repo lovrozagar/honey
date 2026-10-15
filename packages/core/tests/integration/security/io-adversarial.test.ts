@@ -3,9 +3,9 @@
  * the declared one, a body larger than its limit with no length declared, a binary body of an
  * undeclared type, dangerous keys in a query or a form, a declared response header that would
  * open a redirect or split a header, an answer that breaks its declared contract, an endless
- * stream under etag, and fields named like problem+json members. Each is a failing input first
- * and the property that answers it second; the mutation harness reruns this directory with each
- * guard disabled.
+ * stream under etag, fields named like problem+json members, and a schema converter that
+ * answers no schema or throws. Each is a failing input first and the property that answers it
+ * second; the mutation harness reruns this directory with each guard disabled.
  */
 import { resolve as resolvePath } from "node:path"
 import { describe, expect, it, vi } from "vitest"
@@ -35,6 +35,10 @@ const { etag } = (await import(
 const { HoneyError } = (await import(
 	resolvePath(REPO, "packages/core/src/errors/error.ts")
 )) as typeof import("../../../src/errors/error.ts")
+
+const { extractSchemas } = (await import(
+	resolvePath(REPO, "packages/core/src/openapi/extract-schemas.ts")
+)) as typeof import("../../../src/openapi/extract-schemas.ts")
 
 const send = (target: string, init?: RequestInit) => new Request(`http://app.test${target}`, init)
 
@@ -238,6 +242,35 @@ describe("v1 adversarial: an endless stream and problem+json members", () => {
 			"val_error",
 			false,
 			["detail", "instance", "status", "title", "type"],
+		])
+	})
+})
+
+/** A Standard schema whose JSON Schema converters are `jsonSchema`: a vendor the conversion cannot vouch for. */
+const hostile = (jsonSchema: Record<string, () => unknown>) => ({
+	"~standard": { jsonSchema, validate: (value: unknown) => ({ value }), vendor: "hostile", version: 1 as const },
+})
+
+describe("v1 adversarial: a schema's conversion", () => {
+	it("a converter that answers no schema, or throws, documents {} and is reported, never reaching the document", () => {
+		const app = honey<{}>()
+		app
+			.post("/a")
+			.input({
+				json: hostile({ input: () => "<script>alert(1)</script>" }),
+				search: hostile({
+					input: () => {
+						throw new Error("converter exploded")
+					},
+				}),
+			})
+			.output({ "application/json": { ok: hostile({ output: () => [{ $ref: "file:///etc/passwd" }] }) } } as never)
+			.handler((ctx) => ctx.res.text("ok", "ok"))
+		const issues: string[] = []
+		const schemas = extractSchemas(app, { report: (issue) => issues.push(issue.kind) })["POST /a"]
+		expect([schemas, issues.sort()]).toEqual([
+			{ input: { json: {}, search: {} }, output: { "application/json": { ok: {} } } },
+			["failed", "unsupported", "unsupported"],
 		])
 	})
 })

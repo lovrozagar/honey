@@ -29,6 +29,7 @@ import {
 	reflectingCors,
 	textIpRestrict,
 	translatingInPlace,
+	trustingJsonSchemaOf,
 	trustingEveryHop,
 	type Compress,
 	type CreateWsSession,
@@ -354,6 +355,14 @@ export const GUARDS: readonly Guard[] = [
 		},
 		id: "v1-problem-fields-nested",
 		module: "packages/core/src/errors/problem-json.ts",
+	},
+	{
+		catches: "v1: a vendor converter's non-schema answer or throw reaching the document instead of {} reported",
+		disable: (original) => ({
+			jsonSchemaOf: trustingJsonSchemaOf(original.jsonSchemaOf as Parameters<typeof trustingJsonSchemaOf>[0]),
+		}),
+		id: "v1-schema-conversion-leak",
+		module: "packages/core/src/schema/to-json-schema.ts",
 	},
 ]
 
