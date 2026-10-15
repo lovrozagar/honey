@@ -1,8 +1,4 @@
-/**
- * The app's type machinery: what a handler's ctx is, what each registered route records at the
- * type level (read by the RPC client and codegen), and the `Infer*` ladder over an app's phantom
- * `$routes`/`$ctx`/`$env`/`$meta` types. Type-only.
- */
+/** The app's type machinery: the handler ctx, each route's record, and the `Infer*` ladder. Type-only. */
 import type { HoneyContext, REQUEST } from "../context/context.ts"
 import type { Honey } from "./app.ts"
 import type { ApplyOutput } from "./output-types.ts"
@@ -145,15 +141,19 @@ declare const CHAIN_META: unique symbol
 /** The handle's meta after a chain `.meta(values)`. */
 export type WithChainMeta<TMeta, TValues> = InitAccMeta<TMeta> & { readonly [CHAIN_META]?: TValues }
 
+/** The meta type a handle declares (`meta<T>()`), chain values left out; `never` when none was declared. */
+export type DeclaredMeta<TMeta> = [TMeta] extends [never]
+	? never
+	: [keyof RouteMeta<TMeta>] extends [never]
+		? never
+		: RouteMeta<TMeta>
+
 /** Route meta as it is recorded: without the chain-meta key. */
 export type RouteMeta<TAccMeta> = Omit<TAccMeta, typeof CHAIN_META>
 
 type IsInternal<T> = [T] extends [{ internal: true }] ? true : false
 
-/**
- * A route whose meta is `{ internal: true }`, on the route or on the chain it was registered on, is
- * left out of `$routes` (and so of generated clients); `never` meta is not internal.
- */
+/** A route whose meta, its own or its chain's, is `{ internal: true }` is left out of `$routes`. */
 export type SkipRouteRecord<TAccMeta> = [TAccMeta] extends [never]
 	? false
 	: IsInternal<TAccMeta> extends true
@@ -251,7 +251,7 @@ type RouteLookup<T, TPath extends string, TMethod extends string> =
 			: never
 		: never
 
-export type InferMeta<T> = T extends { readonly $meta: infer M } ? M : never
+export type InferMeta<T> = T extends { readonly $meta: infer M } ? DeclaredMeta<M> : never
 
 export type InferRouteCtx<T, TPath extends InferRoutePaths<T>, TMethod extends InferRouteMethods<T, TPath>> =
 	RouteLookup<T, TPath, TMethod> extends { ctx: infer C } ? C : never

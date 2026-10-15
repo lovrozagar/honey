@@ -5,7 +5,7 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { ApplyScoped, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
+import type { ApplyScoped, DeclaredMeta, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -131,7 +131,8 @@ export class Honey<
 	>(values: TValues): Honey<TEnv, TCtx, TRoutes, TNewMeta, TErrorFactory, TDefaultErrors, TBasePath, TTaps, TScopedMw>
 	/** Chain meta, merged into every route registered through the new handle; its values reach the routes' types (`internal: true`). */
 	meta<
-		const TValues extends Partial<DefaultMeta> & ([TMeta] extends [never] ? Record<string, unknown> : Partial<TMeta>),
+		const TValues extends Partial<DefaultMeta> &
+			([DeclaredMeta<TMeta>] extends [never] ? Record<string, unknown> : Partial<DeclaredMeta<TMeta>>),
 	>(
 		values: TValues,
 	): Honey<

@@ -5,6 +5,7 @@
  * app-routes.typetest.ts. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
+import * as z from "zod"
 import type { HoneyContext } from "../../src/context/context.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, type MiddlewareFn } from "../../src/middleware/middleware.ts"
@@ -18,7 +19,10 @@ import type {
 	InferMethods,
 	InferRouteCtx,
 	InferRouteErrors,
+	InferRouteInput,
+	InferRouteMeta,
 	InferRouteMethods,
+	InferRouteOutput,
 	InferRoutePaths,
 	InferRoutes,
 } from "../../src/routing/app-types.ts"
@@ -237,5 +241,132 @@ describe("services typed from the base app", () => {
 		const orgService = { list: (ctx: InferCtx<typeof base>) => ctx.db.query(`SELECT * FROM orgs WHERE ${ctx.orgId}`) }
 		const app = base.get("/orgs").handler((ctx) => ctx.res.json("ok", orgService.list(ctx)))
 		expectTypeOf<InferRoutes<typeof app>>().toHaveProperty("/orgs")
+	})
+})
+
+describe("chain meta and the types around it", () => {
+	const trace = createMiddleware((_ctx, next) => next({ traceId: "t-1" }))
+
+	// v0: eec7376b03
+	// v0: 742967526a
+	// v0: 4fb96fc3e2
+	// v0: 94c30f996f
+	// v0: 5a9c31f6c4
+	// v0: d40ff68d41
+	// v0: 1179ee7a73
+	// v0: 2220f8b4e7
+	// v0: a783ced1ad
+	it("InferMeta stays the meta<T>() type through chain values, use, basePath and context, per sub-chain; never without it", () => {
+		const phantom = honey<{}>().meta<AppMeta>()
+		const valued = honey<{}>().meta<AppMeta>({ tags: "Auth" })
+		const chained = phantom.meta({ auth: "public" }).meta({ tags: "Auth" })
+		const through = chained.use(trace).basePath("/api").context({ db: "sqlite" })
+		const other = honey<{}>().meta<{ version?: number }>().meta({ version: 1 })
+		const untyped = honey<{}>().meta({ summary: "hello", tags: "test" })
+		expectTypeOf<InferMeta<typeof phantom>>().toEqualTypeOf<AppMeta>()
+		expectTypeOf<InferMeta<typeof valued>>().toEqualTypeOf<AppMeta>()
+		expectTypeOf<InferMeta<typeof chained>>().toEqualTypeOf<AppMeta>()
+		expectTypeOf<InferMeta<typeof through>>().toEqualTypeOf<AppMeta>()
+		expectTypeOf<InferMeta<typeof other>>().toEqualTypeOf<{ version?: number }>()
+		expectTypeOf<InferMeta<typeof untyped>>().toBeNever()
+	})
+
+	// v0: ee72a529a9
+	// v0: 7c891b2fe4
+	// v0: 3f94d8a967
+	// v0: 79c440bd65
+	// v0: 872c60de41
+	it("leaves InferCtx, InferEnv and InferBasePath as they were", () => {
+		const app = honey<TestEnv>().basePath("/api").meta<AppMeta>().meta({ auth: "public" }).use(trace)
+		expectTypeOf<InferCtx<typeof app>>().toMatchTypeOf<{ env: TestEnv; traceId: string }>()
+		expectTypeOf<InferEnv<typeof app>>().toEqualTypeOf<TestEnv>()
+		expectTypeOf<InferBasePath<typeof app>>().toEqualTypeOf<"/api">()
+	})
+})
+
+describe("ctx.meta beside chain meta", () => {
+	const trace = createMiddleware((_ctx, next) => next({ traceId: "t-1" }))
+
+	// v0: c6d39885ab
+	// v0: 487a59c3bf
+	// v0: 17e70b09ae
+	// v0: 1805403000
+	// v0: 8daeffc6c5
+	// v0: 529072faf7
+	// v0: 0181b14817
+	// v0: f2386fc73a
+	// v0: 4c13bd40c8
+	// v0: 1e6272505d
+	it("ctx.meta beside chain meta: a route's values narrow it, DefaultMeta's keys beside TMeta's; a bare route gets the app type", () => {
+		const base = honey<TestEnv>().meta<AppMeta>().meta({ auth: "required" }).context({ region: "eu" }).use(trace)
+		base
+			.post("/orgs/:orgId")
+			.meta({ invalidate: ["GET /orgs"] as const, summary: "Create", tags: "Orgs" })
+			.input({ json: z.object({ name: z.string() }) })
+			.handler((ctx) => {
+				expectTypeOf(ctx.meta.tags).toEqualTypeOf<string>()
+				expectTypeOf(ctx.meta.invalidate).toEqualTypeOf<readonly ["GET /orgs"]>()
+				expectTypeOf(ctx.region).toEqualTypeOf<string>()
+				expectTypeOf(ctx.traceId).toEqualTypeOf<string>()
+				expectTypeOf(ctx.input.json.name).toEqualTypeOf<string>()
+				expectTypeOf(ctx.params.orgId).toEqualTypeOf<string>()
+				expectTypeOf(ctx.env.SECRET).toEqualTypeOf<string>()
+				return ctx.res.text("ok", "ok")
+			})
+		base.get("/bare").handler((ctx) => {
+			expectTypeOf(ctx.meta.tags).toEqualTypeOf<AppMeta["tags"]>()
+			return ctx.res.text("ok", "ok")
+		})
+		// @ts-expect-error a key neither TMeta nor DefaultMeta has
+		base.get("/x").meta({ unknown: true })
+	})
+})
+
+describe("every Infer* over a get and a post on one path, without .meta()", () => {
+	const withQuery = createMiddleware((_ctx, next) => next({ db: { query: (_sql: string): unknown[] => [] } }))
+	const app = honey<TestEnv>()
+		.use(withQuery)
+		.get("/hello")
+		.input({ search: z.object({ q: z.string() }) })
+		.output({ "application/json": { ok: z.object({ q: z.string() }) } })
+		.handler((c) => c.res.json("ok", { q: c.input.search.q }))
+		.post("/hello")
+		.input({ json: z.object({ q: z.string() }) })
+		.output({ "application/json": { ok: z.object({ q: z.string() }) } })
+		.handler((c) => c.res.json("ok", { q: c.input.json.q }))
+
+	// v0: cdcd23a6ed
+	// v0: ca3d66a61e
+	// v0: 67004ab0ca
+	// v0: 51bf890746
+	// v0: 6abd3f6ae2
+	// v0: 5c7ae7ae69
+	it("the app-level Infer* types: routes, ctx, env, methods and paths", () => {
+		expectTypeOf<InferRoutes<typeof app>>().toHaveProperty("/hello")
+		expectTypeOf<InferCtx<typeof app>>().toMatchTypeOf<{ db: { query: (sql: string) => unknown[] } }>()
+		expectTypeOf<InferEnv<typeof app>>().toEqualTypeOf<TestEnv>()
+		expectTypeOf<InferMethods<typeof app>>().toEqualTypeOf<"get" | "post">()
+		expectTypeOf<InferRoutePaths<typeof app>>().toEqualTypeOf<"/hello">()
+		expectTypeOf<InferRouteMethods<typeof app, "/hello">>().toEqualTypeOf<"get" | "post">()
+	})
+
+	// v0: ec1e2f0b16
+	// v0: 26d5e7650d
+	// v0: 85b230d75c
+	// v0: 41047b2bd0
+	// v0: 2ab53d3ca1
+	it("the per-route Infer* types: input, output, ctx, and an empty meta for a route without one", () => {
+		expectTypeOf<InferRouteInput<typeof app, "/hello", "get">>().toEqualTypeOf<{ readonly search: { q: string } }>()
+		expectTypeOf<InferRouteInput<typeof app, "/hello", "post">>().toEqualTypeOf<{ readonly json: { q: string } }>()
+		expectTypeOf<InferRouteOutput<typeof app, "/hello", "get">["application/json"]>().toHaveProperty("ok")
+		expectTypeOf<InferRouteCtx<typeof app, "/hello", "get">>().toMatchTypeOf<{
+			db: { query: (sql: string) => unknown[] }
+			input: { search: { q: string } }
+		}>()
+		expectTypeOf<InferRouteCtx<typeof app, "/hello", "post">>().toMatchTypeOf<{
+			db: { query: (sql: string) => unknown[] }
+			input: { json: { q: string } }
+		}>()
+		expectTypeOf<InferRouteMeta<typeof app, "/hello", "get">>().toEqualTypeOf<{}>()
 	})
 })
