@@ -63,12 +63,12 @@ export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 	const { plans } = finalTable(g)
 	const routes = Object.assign(dict<RouteEntry>(), g.loaded)
 	for (const [id, r] of g.records) {
-		const { policy, route } = plans.get(id) as Plan
+		const { mf, policy, route } = plans.get(id) as Plan
 		const ek = [...(policy.declared ?? [])].sort(compareCodeUnits)
 		/* the record resolves the same way anywhere: its chain carries the scopes covering it here */
 		const cm = [...r.cm, ...scopesFor(g, expandOptional(r.sg))]
 		const h: RouteHandler = { ...r, cm, dk: new Set(ek), rb: policy.boundaryKey, xm: route.meta }
-		const es = statusKeysOf(ek, [r.ef, r.own.errorFactory])
+		const es = statusKeysOf(ek, [r.ef, ...mf, r.own.errorFactory])
 		routes[id] = {
 			bek: policy.boundaryKey,
 			ek,

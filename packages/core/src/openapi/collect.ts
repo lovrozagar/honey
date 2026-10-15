@@ -88,8 +88,9 @@ function lookup(source: ErrorSource, key: string): ErrorMetaEntry | undefined {
 }
 
 /**
- * Each key's status from the first source that knows it (the factory the route named, the app it
- * was registered on, a generated tree's record, the app serving it), else from its name, else unknown.
+ * Each key's status from the first source that knows it (the factory the route named, the ones its
+ * middleware brought, the app it was registered on, a generated tree's record, the app serving it),
+ * else from its name, else unknown.
  */
 function errorMetaOf(keys: readonly string[], sources: readonly ErrorSource[]) {
 	const out: Record<string, CollectedError> = {}
@@ -136,6 +137,7 @@ export function collectRoutes(app: { readonly [GRAPH]: HoneyGraph }): CollectedR
 		const record = g.records.get(id)
 		const errorMeta = errorMetaOf(errorKeys, [
 			record?.ef,
+			...(plans.get(id)?.mf ?? []),
 			record?.own.errorFactory,
 			g.loaded?.[id]?.es,
 			g.settings.errorFactory,

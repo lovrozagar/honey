@@ -11,13 +11,20 @@ export function errorsOf(mw: RuntimeMiddleware): readonly string[] | undefined {
 	return (mw as { errors?: readonly string[] }).errors
 }
 
+/** The factory a middleware's error keys come from (`defineMiddleware`). */
+export function errorFactoryOf(mw: RuntimeMiddleware): Readonly<Record<string, unknown>> | undefined {
+	return (mw as { errorFactory?: Readonly<Record<string, unknown>> }).errorFactory
+}
+
 /** A scoped middleware behind a request-path check: it runs only when the path is inside the scope. */
 export function scopeGuard(segs: readonly Segment[], mw: RuntimeMiddleware): RuntimeMiddleware {
 	const guard: RuntimeMiddleware = (ctx, next) => (pathInScope(ctx.path as string, segs) ? mw(ctx, next) : next())
 	Object.defineProperty(guard, "name", { configurable: true, value: mw.name })
 	const errors = errorsOf(mw)
+	const factory = errorFactoryOf(mw)
 	const meta = (mw as { meta?: Readonly<Record<string, unknown>> }).meta
 	if (errors) Object.defineProperty(guard, "errors", { value: errors })
+	if (factory) Object.defineProperty(guard, "errorFactory", { value: factory })
 	if (meta) Object.defineProperty(guard, "meta", { value: meta })
 	return guard
 }

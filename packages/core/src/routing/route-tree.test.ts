@@ -7,6 +7,7 @@ import { honey } from "./app.ts"
 import { gatewayTree } from "./gateway-tree.ts"
 import { createNode, insertRoute, type RouteEntry, type RouteTree } from "./tree.ts"
 import { mergeTree } from "./tree-merge.ts"
+import { timeout } from "../middleware/timeout.ts"
 
 /** A generated-style tree: topology and route data, no live records. */
 function treeOf(routes: readonly (readonly [string, string, RouteEntry?])[]): RouteTree {
@@ -208,10 +209,9 @@ describe("toRouteTree(): what a snapshot holds", () => {
 })
 
 describe("toRouteTree(): what a snapshot knows of errors", () => {
-	it("records each declared key's status key, from the factory the route named or its app's, and keeps it as data in a gateway's tree", () => {
+	it("records each declared key's status key, from the factory the route named, a middleware's own or its app's, and keeps it as data in a gateway's tree", () => {
 		const named = defineErrors({ teapot: { schema: z.object({ brew: z.string() }), status: "bad_request" } })
 		const app = honey<{}>().errorFactory(defineErrors({ column_name_taken: "conflict" }))
-		/* a middleware's factory stays its own: the key it declares is the route's, its status is not known here */
 		const audited = defineMiddleware({
 			errors: [defineErrors({ audit_failed: "bad_gateway" }), "audit_failed"],
 			fn: async (_c, next) => next(),
@@ -221,8 +221,10 @@ describe("toRouteTree(): what a snapshot knows of errors", () => {
 			.use(audited)
 			.errors("column_name_taken")
 			.handler((c) => c.res.text("ok", "c"))
+		/* timeout() declares its key with no factory: the key is recorded, its status is not */
 		app
 			.get("/tea")
+			.use(timeout({ duration: 1000 }))
 			.errors(named, "teapot")
 			.handler((c) => c.res.text("ok", "t"))
 		app.get("/open").handler((c) => c.res.text("ok", "o"))
@@ -234,14 +236,16 @@ describe("toRouteTree(): what a snapshot knows of errors", () => {
 			snap.routes["POST /columns"]?.es,
 			snap.routes["GET /tea"]?.es,
 			snap.routes["GET /open"]?.es,
+			snap.routes["GET /tea"]?.ek,
 			served.routes["POST /columns"],
 		]).toEqual([
-			{ column_name_taken: "conflict" },
+			{ audit_failed: "bad_gateway", column_name_taken: "conflict" },
 			{ teapot: "bad_request" },
 			undefined,
+			["request_timeout", "teapot"],
 			expect.objectContaining({
 				ek: ["audit_failed", "column_name_taken"],
-				es: { column_name_taken: "conflict" },
+				es: { audit_failed: "bad_gateway", column_name_taken: "conflict" },
 			}),
 		])
 	})

@@ -7,7 +7,7 @@ import type { InputSchemas, InputStep } from "../input/input.ts"
 import type { OutputSchemas } from "./output-types.ts"
 import type { MaybePromise, RuntimeMiddleware } from "../middleware/middleware.ts"
 import type { FinalizeHooks, FinalTable } from "./finalize.ts"
-import { describeMw, errorsOf, scopeGuard } from "./middleware-chain.ts"
+import { describeMw, errorFactoryOf, errorsOf, scopeGuard } from "./middleware-chain.ts"
 import {
 	canonical,
 	expandOptional,
@@ -233,4 +233,9 @@ export function mount(g: HoneyGraph, view: HandleView, sub: HoneyGraph): void {
 /** The error keys a middleware chain declares, in run order. */
 export function chainErrorKeys(chain: readonly RuntimeMiddleware[]): string[] {
 	return chain.flatMap((mw) => errorsOf(mw) ?? [])
+}
+
+/** The factories a middleware chain's keys come from, each once, in run order. */
+export function chainErrorFactories(chain: readonly RuntimeMiddleware[]): ErrorFactories[] {
+	return [...new Set(chain.flatMap((mw) => errorFactoryOf(mw) ?? []))] as ErrorFactories[]
 }

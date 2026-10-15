@@ -14,7 +14,10 @@ export type MetaSpecDiagnosticCode =
 	| "DUPLICATE_OPERATION_ID"
 	| "DUPLICATE_TARGET"
 	| "INVALID_SELECTOR"
+	| "INVALID_SERVER"
+	| "INVALID_TAG"
 	| "INVALID_VALUE"
+	| "INVALID_WEBHOOK"
 	| "MAP_THREW"
 	| "MISSING_ENTRY"
 	| "RESERVED_FIELD"
@@ -25,6 +28,7 @@ export type MetaSpecDiagnosticCode =
 	| "UNKNOWN_PROFILE"
 	| "UNKNOWN_SECURITY_SCHEME"
 	| "UNSUPPORTED_VERSION"
+	| "UNUSED_TAG"
 	| "WS_SHADOWED"
 
 export type MetaSpecDiagnostic = {

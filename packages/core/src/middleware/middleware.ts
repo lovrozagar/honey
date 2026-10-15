@@ -71,7 +71,11 @@ export function defineMiddleware<
 	meta?: Record<string, unknown>
 }): MiddlewareFn<TReqs, TAdds, TKeys> {
 	const fn = opts.fn as MiddlewareFn<TReqs, TAdds, TKeys>
-	if (opts.errors) Object.defineProperty(fn, "errors", { value: opts.errors.slice(1) })
+	if (opts.errors) {
+		Object.defineProperty(fn, "errors", { value: opts.errors.slice(1) })
+		/* the factory the keys come from, off the type: a document reads their statuses off it */
+		Object.defineProperty(fn, "errorFactory", { value: opts.errors[0] })
+	}
 	if (opts.meta) attachMiddlewareMeta(fn, opts.meta)
 	return fn
 }

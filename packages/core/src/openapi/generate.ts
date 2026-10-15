@@ -34,8 +34,14 @@ import { assembleDocument, type OpenApiDocument, type OpenApiInfo } from "./docu
 import { assignOperationIds, buildPaths, type EmittedOperation, type Operation, type PathsContext } from "./paths.ts"
 import { addErrorResponses, type Convert, type ErrorSettings, ordered, successResponses } from "./responses.ts"
 import { checkSecurity } from "./security.ts"
+import { type OpenApiServer, serversOf } from "./servers.ts"
+import { type OpenApiExternalDocs, type OpenApiTag, tagsOf } from "./tags.ts"
+import { type OpenApiWebhook, webhooksOf } from "./webhooks.ts"
 
 export type { OpenApiDocument, OpenApiInfo } from "./document.ts"
+export type { OpenApiServer, OpenApiServerVariable } from "./servers.ts"
+export type { OpenApiExternalDocs, OpenApiTag } from "./tags.ts"
+export type { OpenApiWebhook, WebhookSignature } from "./webhooks.ts"
 
 /** What `filterRoutes` is shown of a route: its resolved meta, its method and its honey pattern. */
 export type OpenApiRouteInfo = {
@@ -46,6 +52,8 @@ export type OpenApiRouteInfo = {
 
 export type GenerateOpenApiOptions = {
 	readonly converters?: JsonSchemaOptions["converters"]
+	/** the document's own external docs */
+	readonly externalDocs?: OpenApiExternalDocs
 	/** leave out every route this answers false for */
 	readonly filterRoutes?: (route: OpenApiRouteInfo) => boolean
 	readonly info: OpenApiInfo
@@ -58,6 +66,12 @@ export type GenerateOpenApiOptions = {
 	/** the metaSpec profile this document carries */
 	readonly profile?: string
 	readonly securitySchemes?: Readonly<Record<string, unknown>>
+	/** the servers it lists, in place of the stripped prefix; that prefix is appended to each */
+	readonly servers?: readonly OpenApiServer[]
+	/** metadata for the tags operations name; tags are never derived */
+	readonly tags?: readonly OpenApiTag[]
+	/** the requests the API sends subscribers, by name */
+	readonly webhooks?: Readonly<Record<string, OpenApiWebhook>>
 }
 
 type App = { readonly [GRAPH]: HoneyGraph }
@@ -228,13 +242,21 @@ export function generateOpenApi(app: App, options: GenerateOpenApiOptions): Open
 		trailingSlash: settings.trailingSlash,
 		warn: (code, message) => diagnostics.add(code, "warn", message),
 	})
+	const report = (code: "INVALID_SERVER" | "INVALID_WEBHOOK") => (message: string) =>
+		diagnostics.add(code, "error", message)
+	const servers = serversOf(options.servers, settings.stripPrefix, report("INVALID_SERVER"))
+	const webhooks = webhooksOf(options.webhooks, convertFor("webhooks"), report("INVALID_WEBHOOK"))
+	const tags = tagsOf(operations, options.tags, (code, level, message) => diagnostics.add(code, level, message))
 	check(run, operations, routes, options.logger ?? settings.logger)
 	const document = assembleDocument({
+		externalDocs: options.externalDocs,
 		info: options.info,
 		paths,
 		schemas: run.components.schemas(),
 		securitySchemes: options.securitySchemes,
-		servers: settings.stripPrefix === null ? [] : [{ url: settings.stripPrefix }],
+		servers,
+		tags,
+		webhooks,
 	})
 	return deduplicateSchemas(document as unknown as SchemaSpec) as unknown as OpenApiDocument
 }

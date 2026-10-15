@@ -29,7 +29,13 @@ import {
 	variantsCoverage,
 	splitRouteId,
 } from "./pattern.ts"
-import { assertNothingDiscarded, chainErrorKeys, type HoneyGraph, type RouteHandler } from "./register.ts"
+import {
+	assertNothingDiscarded,
+	chainErrorFactories,
+	chainErrorKeys,
+	type HoneyGraph,
+	type RouteHandler,
+} from "./register.ts"
 import { type AppSettings, assertSettingsAgree, type ErrorFactories } from "./settings.ts"
 import type { RequestTrace } from "../telemetry/request-trace.ts"
 import { answering, firing, tapsFor } from "./tap.ts"
@@ -39,6 +45,8 @@ import { dict } from "./tree.ts"
 export type Plan = {
 	/** `.context()` values copied onto each request context */
 	readonly cv: Readonly<Record<string, unknown>> | null
+	/** the factories the chain's middleware declare their keys from: where a document reads their statuses */
+	readonly mf: readonly ErrorFactories[]
 	readonly policy: ErrorPolicy
 	/** what a CORS preflight for this route runs: the chain without the handler, compiled on first use */
 	pf: CompiledChain | null
@@ -188,6 +196,7 @@ function planRoute(
 	const compiled = compileChain(run, handler, hooks.convert)
 	return {
 		cv: r.cv,
+		mf: chainErrorFactories(chain),
 		pf: null,
 		pfChain: run,
 		policy,
@@ -211,6 +220,7 @@ function planMiss(g: HoneyGraph, hooks: FinalizeHooks): Plan {
 	const run = g.settings.telemetry === null ? chain : chain.map(tracedMiddleware)
 	return {
 		cv: null,
+		mf: chainErrorFactories(chain),
 		pf: null,
 		pfChain: run,
 		policy,
