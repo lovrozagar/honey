@@ -60,6 +60,9 @@ describe("collectRoutes: one record per path a route serves", () => {
 })
 
 describe("collectRoutes: what each route declares", () => {
+	// v0: 591e67855c
+	// v0: 71240de8ff
+	// v0: b14023381e
 	it("carries the resolved meta: middleware's, the chain's, the route's; x- extensions and internal as given", () => {
 		const tagged = createMiddleware((_ctx, next) => next({}), { meta: { tags: ["auth"] } })
 		const app = honey<{}>()
@@ -70,12 +73,20 @@ describe("collectRoutes: what each route declares", () => {
 			.meta({ extensions: { "x-rate": 5 }, internal: true })
 			.handler((ctx) => ctx.res.text("ok", "ok"))
 		app.get("/b").handler((ctx) => ctx.res.text("ok", "ok"))
-		const [a, b] = collectRoutes(app).http
-		expect([a?.meta, a?.internal, b?.meta, b?.internal]).toEqual([
+		/* a route declaring input and output resolves its meta the same way */
+		app
+			.use(tagged)
+			.get("/c")
+			.input({ search: z.object({ q: z.string().optional() }) })
+			.output({ "application/json": { ok: z.object({ id: z.string() }) } })
+			.handler((ctx) => ctx.res.json("ok", { id: "1" }))
+		const [a, b, c] = collectRoutes(app).http
+		expect([a?.meta, a?.internal, b?.meta, b?.internal, c?.meta]).toEqual([
 			{ extensions: { "x-rate": 5 }, internal: true, summary: "chain", tags: ["auth"] },
 			true,
 			{},
 			false,
+			{ tags: ["auth"] },
 		])
 	})
 

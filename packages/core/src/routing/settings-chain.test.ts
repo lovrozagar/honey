@@ -64,6 +64,8 @@ describe("settings setters: handles and formatters", () => {
 	})
 
 	// v0: 97155a1beb
+	// v0: c0310f239e
+	// v0: fad3d93a79
 	it("the error formatters take a function or a schema with a mapper", async () => {
 		const app = honey<{}>()
 			.defaultErrorFormatter((_e, shape) => ({ ...shape, plain: true }))

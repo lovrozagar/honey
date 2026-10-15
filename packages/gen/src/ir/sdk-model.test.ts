@@ -246,6 +246,8 @@ function withFields(object: IRSchema, properties: Record<string, unknown>): IRSc
 
 describe("irErrorEnvelope: honey's error body, read through refs", () => {
 	// v0: 658fb508a5
+	// v0: 2f4c85dc90
+	// v0: a6591bd427
 	it("reads honey's error envelope through refs, and nothing else as one", () => {
 		const fieldList = schemaToIR({
 			properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
@@ -264,6 +266,8 @@ describe("irErrorEnvelope: honey's error body, read through refs", () => {
 			broken({ fields: { type: "string" } }),
 			broken({ fields: { additionalProperties: { type: "string" }, type: "object" } }),
 			broken({ error_key: { enum: [1], type: "string" } }),
-		]).toEqual([null, null, null, null])
+			/* the default envelope, its status an unconstrained integer */
+			broken({ status: { type: "integer" } }),
+		]).toEqual([null, null, null, null, null])
 	})
 })

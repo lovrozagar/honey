@@ -17,6 +17,7 @@ function fromSchemas(config: MetaSpecConfig, roots: Roots) {
 }
 
 describe("MetaSpecDiagnostics: collected, never printed", () => {
+	// v0: ecc28ae3e7
 	it("keeps one of each code and message, and hands warnings back when nothing failed", () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
 		const diagnostics = new MetaSpecDiagnostics()
@@ -39,6 +40,8 @@ describe("MetaSpecDiagnostics: collected, never printed", () => {
 		)
 	})
 
+	// v0: 7387b8cccb
+	// v0: ab689f33ae
 	it("throws every error at once, the first twenty listed and the rest counted", () => {
 		const diagnostics = new MetaSpecDiagnostics()
 		for (let i = 0; i < 22; i++) diagnostics.add("INVALID_VALUE", "error", `bad ${i}`)
@@ -77,6 +80,8 @@ describe("checkTargetKey: what a policy may write", () => {
 const ARTICLE = { properties: { id: { type: "string" } }, "x-entity": { name: "article" }, type: "object" }
 
 describe("schemaMetaLookup: a metadata key on a route's JSON Schema", () => {
+	// v0: 1129ba4760
+	// v0: c77faa6505
 	it("reads the root, reads through one level of items, and prefers the array's own key", () => {
 		const lookup = schemaMetaLookup({
 			"input.json": { items: ARTICLE, "x-entity": { name: "list" }, type: "array" },
@@ -95,6 +100,11 @@ describe("schemaMetaLookup: a metadata key on a route's JSON Schema", () => {
 		])
 	})
 
+	// v0: 5640229457
+	// v0: 68dc580ef7
+	// v0: 8bc90180d2
+	// v0: 9cf1433f18
+	// v0: d9c8036451
 	it("searches deep only when asked, takes the shallowest hit, and refuses two different ones at one depth", () => {
 		const envelope = {
 			properties: { articles: { items: ARTICLE, type: "array" }, count: { type: "number" } },
@@ -123,7 +133,9 @@ describe("schemaMetaLookup: a metadata key on a route's JSON Schema", () => {
 			{ found: true, value: { name: "article" } },
 		])
 	})
+})
 
+describe("schemaMetaLookup: how deep a search goes", () => {
 	it("stops a deep search six levels down", () => {
 		let schema: JsonSchema = { "x-k": 1 }
 		for (let i = 0; i < 7; i++) schema = { items: schema }
@@ -132,6 +144,9 @@ describe("schemaMetaLookup: a metadata key on a route's JSON Schema", () => {
 })
 
 describe("schema entries: reading a descriptor off the route's schemas", () => {
+	// v0: 1976f15140
+	// v0: 833df127c6
+	// v0: fc5800aa5f
 	it("searches the sources in order, reads another key with read, and leaves a route without the key alone", () => {
 		const config: MetaSpecConfig = {
 			schema: { entity: { key: "x-entity", read: "x-entity" }, query: { from: ["input.search"], key: "x-query" } },
@@ -148,6 +163,9 @@ describe("schema entries: reading a descriptor off the route's schemas", () => {
 		])
 	})
 
+	// v0: 04be870b97
+	// v0: 19c8e5937c
+	// v0: 4e705cf05f
 	it("emits a stamped null, omits what an expand maps to undefined, and refuses an ambiguous deep hit", () => {
 		const config: MetaSpecConfig = {
 			schema: {
@@ -178,6 +196,8 @@ describe("schema entries: one reserved key, several kinds, versioned", () => {
 	const entity = { "x-comb": { kind: "entity", table: "users", v: 1 } }
 	const query = { "x-comb": { kind: "query", sort: ["name"], v: 1 } }
 
+	// v0: 6a5c42389a
+	// v0: f3f993f6b5
 	it("lets each entry claim its own kind from one key on different sources, skipping the other kind", () => {
 		expect(fromSchemas(config, { "input.search": query, output: entity })).toEqual({
 			codes: [],
@@ -185,6 +205,7 @@ describe("schema entries: one reserved key, several kinds, versioned", () => {
 		})
 	})
 
+	// v0: 13b8ce8425
 	it("refuses a descriptor no entry claims", () => {
 		expect(fromSchemas(config, { output: { "x-comb": { kind: "job" } } }).codes).toEqual([
 			"DESCRIPTOR_MISMATCH",
@@ -192,6 +213,9 @@ describe("schema entries: one reserved key, several kinds, versioned", () => {
 		])
 	})
 
+	// v0: 1ba062a79d
+	// v0: 310b7c427c
+	// v0: 84ffa6b4ff
 	it("refuses a descriptor newer than the entry handles, or with no version, under a guard; honors a named field", () => {
 		expect([
 			fromSchemas(guarded(), { output: { "x-comb": { v: 2 } } }).codes,

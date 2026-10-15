@@ -297,6 +297,8 @@ describe("ctx.meta beside chain meta", () => {
 	// v0: f2386fc73a
 	// v0: 4c13bd40c8
 	// v0: 1e6272505d
+	// v0: 28628ff81e
+	// v0: 81869ea9bd
 	it("ctx.meta beside chain meta: a route's values narrow it, DefaultMeta's keys beside TMeta's; a bare route gets the app type", () => {
 		const base = honey<TestEnv>().meta<AppMeta>().meta({ auth: "required" }).context({ region: "eu" }).use(trace)
 		base

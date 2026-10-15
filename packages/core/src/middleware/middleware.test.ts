@@ -271,6 +271,7 @@ describe("middleware factories and meta", () => {
 	})
 
 	// v0: e83975eeb1
+	// v0: dcf1d551cf
 	it("defineMiddleware stores the error keys it names and its meta", () => {
 		const factory = { gone: () => new HoneyError({ errorKey: "gone", status: "gone" }), nope: () => null }
 		const mw = defineMiddleware({ errors: [factory, "gone"], fn: (_ctx, next) => next(), meta: { a: 1 } })
@@ -285,6 +286,8 @@ describe("middleware factories and meta", () => {
 		expect(namedMiddleware("cors", () => undefined).name).toBe("cors")
 	})
 
+	// v0: 36f87443a4
+	// v0: 43e433dd73
 	it("collectMiddlewareMeta merges in run order, later wins, null when none", () => {
 		const a = createMiddleware((_c, next) => next(), { meta: { auth: "a", x: 1 } }) as unknown as RuntimeMiddleware
 		const b = createMiddleware((_c, next) => next(), { meta: { auth: "b" } }) as unknown as RuntimeMiddleware

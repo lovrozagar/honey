@@ -9,6 +9,27 @@ const ref = (name: string): IRSchema => ({ kind: "ref", name })
 const nullable = (inner: IRSchema): IRSchema => ({ inner, kind: "nullable" })
 const field = (name: string, required: boolean, schema: IRSchema = STRING) => ({ name, required, schema })
 
+describe("schemaToIR: the plain scalars", () => {
+	// v0: 404db74b24
+	// v0: 47a34c2e35
+	// v0: a30de0935b
+	// v0: d62a9014f7
+	// v0: ec577ff078
+	it.each<[string, Json, IRSchema]>([
+		["a plain string", { type: "string" }, { kind: "scalar", type: "string" }],
+		["an integer", { type: "integer" }, { kind: "scalar", type: "integer" }],
+		["a number", { type: "number" }, { kind: "scalar", type: "number" }],
+		["a boolean", { type: "boolean" }, { kind: "scalar", type: "boolean" }],
+		[
+			"a date-time string",
+			{ format: "date-time", type: "string" },
+			{ format: "date-time", kind: "scalar", type: "string" },
+		],
+	])("%s", (_name, schema, expected) => {
+		expect(schemaToIR(schema)).toEqual(expected)
+	})
+})
+
 describe("schemaToIR: scalars, enums and consts", () => {
 	// v0: bc49f24dc7
 	// v0: 6ed77decf1
@@ -31,6 +52,7 @@ describe("schemaToIR: scalars, enums and consts", () => {
 	// v0: 5f78355c1a
 	// v0: aa459aee5a
 	// v0: 92693a402e
+	// v0: 5378faff01
 	it.each<[string, Json | undefined, IRSchema]>([
 		["an explicit null", { type: "null" }, { kind: "scalar", type: "null" }],
 		[
@@ -141,6 +163,7 @@ describe("schemaToIR: arrays, tuples and binary", () => {
 	// v0: c10caea95e
 	// v0: 9f36dce437
 	// v0: 164bdc1242
+	// v0: c0211067ce
 	it("reads arrays, nested arrays, tuples and binary strings", () => {
 		expect([
 			schemaToIR({ items: { $ref: "#/components/schemas/User" }, type: "array" }),
@@ -170,6 +193,7 @@ describe("schemaToIR: nullability, unions and references", () => {
 	// v0: 7b1a44c5dc
 	// v0: 0ea5ec85e5
 	// v0: 427954c9e3
+	// v0: 97b332bfdd
 	it("wraps a nullable schema once, its null variant or type stripped", () => {
 		expect([
 			schemaToIR({ nullable: true, type: "string" }),

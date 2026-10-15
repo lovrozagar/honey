@@ -91,6 +91,7 @@ describe("chain meta", () => {
 	// v0: 9920d8c1ac
 	// v0: 17d508f033
 	// v0: 18ceb7b727
+	// v0: ebb807f926
 	it("reaches ctx.meta of every route registered through the handle, under the route's own; none is {}", async () => {
 		const app = honey<{}>()
 		const chain = app.meta({ security: "jwt" })

@@ -215,6 +215,8 @@ describe("deduplicateSchemas: the same answer whatever the input order or pass",
 
 describe("deduplicateSchemas: names never handed out twice", () => {
 	// v0: 185c933e0b
+	// v0: 05c35e92d6
+	// v0: 1af90b899f
 	it("keeps three shapes of one name apart, even when two of their 24-bit hashes collide", () => {
 		/* djb2 of {"enum":["aR"]} and {"enum":["b1"]} agrees in its first 24 bits */
 		expect(shortHash(canonicalizeSchema({ enum: ["aR"] }))).toBe(shortHash(canonicalizeSchema({ enum: ["b1"] })))
@@ -235,6 +237,7 @@ describe("deduplicateSchemas: names never handed out twice", () => {
 	})
 
 	// v0: c1be7510ab
+	// v0: 890654ad0c
 	it("leaves a name an existing component holds to it, and keeps the other components", () => {
 		const taken = { description: "mine", type: "object" }
 		const spec: SchemaSpec = {
@@ -278,6 +281,7 @@ describe("deduplicateSchemas: what stays as it is", () => {
 })
 
 describe("deduplicateSchemas: status keys and nested objects", () => {
+	// v0: add6cd9235
 	it("names a default answer Response0 and a range answer by its hundred", () => {
 		const spec: SchemaSpec = {
 			paths: { "/a": { get: { responses: { "4XX": answer(object(["a"])), default: answer(object(["b"])) } } } },
@@ -288,6 +292,7 @@ describe("deduplicateSchemas: status keys and nested objects", () => {
 		])
 	})
 
+	// v0: 4c790a7ac0
 	it("hoists no object only error envelopes share, and hoists an object inside a hoisted one too", () => {
 		const fields = object(["path"])
 		const color = object(["hex"])

@@ -53,6 +53,9 @@ describe("jsonSchemaOf: Standard JSON Schema first", () => {
 		])
 	})
 
+	// v0: 839d43975f
+	// v0: 92e1a4f8fa
+	// v0: adad9cbadc
 	it("converts arktype and any other vendor that publishes Standard JSON Schema", () => {
 		const own = {
 			"~standard": {

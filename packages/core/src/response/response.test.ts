@@ -175,6 +175,7 @@ describe("noContent and redirect", () => {
 	// v0: d2fb3a1809
 	// v0: 6698aaeaa5
 	// v0: 40feefa5e3
+	// v0: c80f1d7ea9
 	it("redirect answers 302 to the location with no body, or the status the options give", () => {
 		const found = res.redirect("/new")
 		expect([found.status, found.headers.get("location"), found.body]).toEqual([302, "/new", null])

@@ -41,6 +41,8 @@ describe("valibotJsonSchema: objects", () => {
 	// v0: 32654a0f30
 	// v0: fa2225441b
 	// v0: c221b8b152
+	// v0: 7770f21578
+	// v0: a8de027499
 	it("lists every key a value is required for; optional, nullish and exact-optional keys are not", () => {
 		expect([
 			valibotJsonSchema(v.object({ age: v.number(), name: v.string() })),

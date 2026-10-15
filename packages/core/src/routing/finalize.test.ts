@@ -329,6 +329,7 @@ describe("errors and meta come from the chain that runs", () => {
 
 	// v0: 8bd49ebdaa
 	// v0: 1f6f240192
+	// v0: 2a82dc943d
 	it("contributed meta merges in run order and explicit meta wins; mounted routes get it too", async () => {
 		const a = createMiddleware(async (_c, next) => next(), { meta: { owner: "chain", tier: 1 } })
 		const s = createMiddleware(async (_c, next) => next(), { meta: { tier: 2 } })

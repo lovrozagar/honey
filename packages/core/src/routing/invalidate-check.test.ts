@@ -25,20 +25,38 @@ describe("invalidate check", () => {
 	})
 
 	// v0: f8a19b7d07
+	// v0: 2548edacaa
 	it("an entity with no tagged reader falls back to path shape instead of staying silent", () => {
 		const findings = findMissingInvalidate([read, mutation(null, { "x-entity": "user" })], "x-entity")
 		expect(findings).toEqual([{ affects: ["GET /users"], method: "POST", path: "/users" }])
+		/* without an entity key, a reader of the same entity under an unrelated path is judged by path shape: none */
+		const apart = [
+			op("get", "/v2/tables", null, { "x-entity": "table" }),
+			op("post", "/admin/provision", null, { "x-entity": "table" }),
+		]
+		expect([findMissingInvalidate(apart, undefined), findMissingInvalidate(apart, "x-entity")]).toEqual([
+			[],
+			[{ affects: ["GET /v2/tables"], method: "POST", path: "/admin/provision" }],
+		])
 	})
 })
 
 describe("findMissingInvalidate", () => {
+	// v0: 1abaf35bc1
+	// v0: 22c9c382db
+	// v0: 44c49624af
 	it("flags a mutation whose own path or collection is read", () => {
 		const ops = [op("get", "/tables"), op("get", "/tables/{id}"), op("delete", "/tables/{id}")]
 		expect(findMissingInvalidate(ops, undefined)).toEqual([
 			{ affects: ["GET /tables/{id}", "GET /tables"], method: "DELETE", path: "/tables/{id}" },
 		])
+		/* only a GET reads: a POST and a PUT on one path are no read surface for each other */
+		expect(findMissingInvalidate([op("post", "/tables"), op("put", "/tables")], undefined)).toEqual([])
 	})
 
+	// v0: 10bbf07a20
+	// v0: f5ce95c90d
+	// v0: ff592f6e95
 	it("stays quiet for a mutation nothing reads, or one that recorded a decision", () => {
 		expect(findMissingInvalidate([op("post", "/auth/logout"), op("get", "/auth")], undefined)).toEqual([])
 		expect(findMissingInvalidate([read, mutation({ invalidate: null })], undefined)).toEqual([])
@@ -47,6 +65,7 @@ describe("findMissingInvalidate", () => {
 		expect(findMissingInvalidate([read, op("head", "/users")], undefined)).toEqual([])
 	})
 
+	// v0: c741b6ba25
 	it("prefers readers tagged with the same entity over path shape", () => {
 		const ops = [
 			op("get", "/people", null, { "x-entity": "user" }),
@@ -59,12 +78,14 @@ describe("findMissingInvalidate", () => {
 		])
 	})
 
+	// v0: 6f0d8cd267
 	it("reads the collection of an item path only below the root", () => {
 		expect(findMissingInvalidate([op("get", "/"), op("delete", "/{id}")], undefined)).toEqual([])
 	})
 })
 
 describe("missingInvalidateReport", () => {
+	// v0: 4b3e43fabb
 	it("summarizes every finding in one report, capped at 20 lines", () => {
 		const ops = Array.from({ length: 22 }, (_, i) => [op("get", `/t${i}`), op("post", `/t${i}`)]).flat()
 		const report = missingInvalidateReport(ops, undefined) as string
@@ -81,6 +102,7 @@ describe("missingInvalidateReport", () => {
 		expect(report).not.toContain("more")
 	})
 
+	// v0: d5407269d5
 	it("has nothing to say when the check is off or finds nothing", () => {
 		expect(missingInvalidateReport([read, mutation(null)], "off")).toBeNull()
 		expect(missingInvalidateReport([read], { level: "error" })).toBeNull()

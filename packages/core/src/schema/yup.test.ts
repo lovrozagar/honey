@@ -3,6 +3,10 @@ import * as y from "yup"
 import { yupJsonSchema } from "./yup.ts"
 
 describe("yupJsonSchema: from the schema's own description", () => {
+	// v0: 0392f5a4aa
+	// v0: 65315511c8
+	// v0: c78155b803
+	// v0: cad5e47f03
 	it("scalars, a date on the wire, objects with their required keys, arrays, tuples and nullables", () => {
 		expect(
 			yupJsonSchema(

@@ -35,6 +35,9 @@ describe("zodJsonSchema: walking the definition when no converter is published",
 		})
 	})
 
+	// v0: 0f2d892aa2
+	// v0: 74c4784186
+	// v0: a27a5c0b28
 	it("converts zod/mini, which publishes no converter, through its definition", () => {
 		const schema = zm.object({
 			at: zm.date(),
@@ -64,7 +67,9 @@ describe("zodJsonSchema: walking the definition when no converter is published",
 			type: "object",
 		})
 	})
+})
 
+describe("zodJsonSchema: a default across the input and output sides", () => {
 	it("reads a default as optional going in and present coming out, on the walk too", () => {
 		const schema = stripped(z.object({ page: z.number().default(1) }))
 		expect([zodJsonSchema(schema, "input", report).required, zodJsonSchema(schema, "output", report).required]).toEqual(
@@ -123,6 +128,7 @@ describe("zodJsonSchema: scalars on the walk", () => {
 })
 
 describe("zodJsonSchema: wrappers and composites on the walk", () => {
+	// v0: fc9f4d77f1
 	it("wrappers, pipes and composites; an optional under nullable stays optional", () => {
 		const shape = {
 			both: z.intersection(z.object({ a: z.string() }), z.object({ b: z.number() })),

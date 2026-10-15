@@ -50,6 +50,16 @@ describe("built-in policy: what reaches an operation without a metaSpec", () => 
 		tags: "Users",
 	}
 
+	// v0: 001b3f8cab
+	// v0: 1a621f1cc8
+	// v0: 3bdae03f95
+	// v0: 5b6a98538e
+	// v0: 651204e065
+	// v0: 6a9e7db589
+	// v0: 94d4b1a23e
+	// v0: 964ef4435d
+	// v0: d46e65f666
+	// v0: f288b9d733
 	it("maps the eight built-in keys in their order, hides internal, and passes extensions through", () => {
 		const { codes, operation } = apply(null, meta)
 		expect(codes).toEqual([])
@@ -75,17 +85,24 @@ describe("built-in policy: what reaches an operation without a metaSpec", () => 
 			"x-rate": 5,
 		})
 	})
+})
 
+describe("built-in policy: what is left out", () => {
+	// v0: 58272980cd
+	// v0: e4a255626d
+	// v0: f2bfba1b62
 	it("leaves out a falsy value, an empty invalidate and an mcp that is not true, and keeps a tag list as it is", () => {
 		const falsy = { deprecated: false, invalidate: [], mcp: "yes", security: "", summary: "", tags: "" }
-		expect([apply(null, falsy).operation, apply(null, { tags: ["a", "b"] }).operation]).toEqual([
-			{},
-			{ tags: ["a", "b"] },
-		])
+		expect([
+			apply(null, falsy).operation,
+			apply(null, { tags: ["a", "b"] }).operation,
+			apply(null, { invalidate: null, summary: "s" }).operation,
+		]).toEqual([{}, { tags: ["a", "b"] }, { summary: "s" }])
 	})
 })
 
 describe("entry forms: verbatim, mapped, fanned out, per target", () => {
+	// v0: 868952155a
 	it("writes a verbatim key, a mapped value, a standard field, and nothing where a map answers undefined", () => {
 		const config: MetaSpecConfig = {
 			meta: {
@@ -100,6 +117,7 @@ describe("entry forms: verbatim, mapped, fanned out, per target", () => {
 		]).toEqual([{ summary: "owned by me", "x-area": "eu", "x-cost": "3¢" }, {}])
 	})
 
+	// v0: 835fb52200
 	it("limits an entry to HTTP or WebSocket operations with `on`", () => {
 		const config: MetaSpecConfig = { meta: { a: { key: "x-a", on: "http" }, b: { key: "x-b", on: "ws" } } }
 		const meta = { a: 1, b: 2 }
@@ -109,6 +127,7 @@ describe("entry forms: verbatim, mapped, fanned out, per target", () => {
 		])
 	})
 
+	// v0: e20edc0dbe
 	it("fans one value out with expand, dropping an undefined key and an undefined answer", () => {
 		const config: MetaSpecConfig = {
 			meta: {
@@ -121,6 +140,8 @@ describe("entry forms: verbatim, mapped, fanned out, per target", () => {
 		])
 	})
 
+	// v0: 390472e5b2
+	// v0: 49726217ca
 	it("refuses an expand key the route owns, and two expands writing one key", () => {
 		const bad: MetaSpecConfig = { meta: { a: { expand: () => ({ responses: {}, "x-ok": 1 }) } } }
 		const twice: MetaSpecConfig = { meta: { a: { expand: () => ({ "x-k": 1 }) }, b: { expand: () => ({ "x-k": 2 }) } } }
@@ -132,6 +153,10 @@ describe("entry forms: verbatim, mapped, fanned out, per target", () => {
 })
 
 describe("meta.extensions: the escape hatch", () => {
+	// v0: 04dc37f44b
+	// v0: 4d938de6f2
+	// v0: 60542cac6d
+	// v0: 6136968bb5
 	it("passes x- keys through above every entry, skips undefined, refuses another key, and ignores a non-object", () => {
 		const config: MetaSpecConfig = { meta: { a: "x-a" } }
 		expect([
@@ -158,6 +183,12 @@ describe("profiles: one app, several documents", () => {
 	}
 	const meta = { cost: 1, plan: "pro", summary: "s", team: "core" }
 
+	// v0: 0452211373
+	// v0: 7b58ae28bc
+	// v0: 97a18d1f88
+	// v0: b7b9f17474
+	// v0: ccbd175b21
+	// v0: f4b5d9cebc
 	it("filters nothing by default, drops what exclude lists, and allowlists x- keys with include", () => {
 		expect(
 			[undefined, "lean", "public", "both", "internal"].map((profile) => apply(config, meta, { profile }).operation),
@@ -168,8 +199,14 @@ describe("profiles: one app, several documents", () => {
 			{ summary: "s", "x-cost": 1 },
 			{ summary: "s", "x-cost": 1, "x-plan": "pro", "x-team": "core" },
 		])
+		/* include is default-deny: an extension the allowlist does not name stays out too */
+		expect(apply(config, { ...meta, extensions: { "x-raw": 1 } }, { profile: "public" }).operation).toEqual({
+			summary: "s",
+			"x-plan": "pro",
+		})
 	})
 
+	// v0: b9b2b4acdd
 	it("refuses a profile the policy does not declare, and reads an undeclared default as no filter", () => {
 		expect([apply(config, meta, { profile: "nope" }).codes, apply({ meta: {} }, { summary: "s" }).operation]).toEqual([
 			["error UNKNOWN_PROFILE"],
@@ -179,6 +216,11 @@ describe("profiles: one app, several documents", () => {
 })
 
 describe("precedence and emitted-value checks", () => {
+	// v0: 1864cb6729
+	// v0: 7bf16a3c75
+	// v0: 9a51a70c4c
+	// v0: a212bf87b2
+	// v0: c23f37acfc
 	it("lets route meta beat a schema-derived value, keeps first-write key order, and replaces a built-in", () => {
 		const config: MetaSpecConfig = {
 			meta: { region: "x-region", summary: { key: "summary", map: (value) => `S: ${String(value)}` } },
@@ -191,6 +233,10 @@ describe("precedence and emitted-value checks", () => {
 		])
 	})
 
+	// v0: 54f70166cb
+	// v0: 5af6f559bb
+	// v0: 839e66acac
+	// v0: 8d862be62a
 	it("emits a value its schema accepts, and refuses an invalid one, an async schema, and a whole bad expand", () => {
 		const asyncSchema = { "~standard": { validate: async () => ({ value: 1 }), vendor: "t", version: 1 as const } }
 		const config: MetaSpecConfig = {
@@ -213,6 +259,9 @@ describe("precedence and emitted-value checks", () => {
 })
 
 describe("totality: every meta key has an entry once a policy is declared", () => {
+	// v0: 0c054d5b1d
+	// v0: bcc25b6db2
+	// v0: e57d2b35db
 	it("is an error by default, a warning under warn, silent under off, and silent without a policy", () => {
 		const meta = { custom: 1 }
 		expect([
@@ -223,6 +272,8 @@ describe("totality: every meta key has an entry once a policy is declared", () =
 		]).toEqual([["error MISSING_ENTRY"], ["warn MISSING_ENTRY"], [], []])
 	})
 
+	// v0: 53f9bf48b1
+	// v0: ca4c899051
 	it("names the key and the first route, suggests false, and reports a key once across routes", () => {
 		const diagnostics = new MetaSpecDiagnostics()
 		const spec = compileMetaSpec({ meta: {} }, diagnostics)
@@ -251,6 +302,9 @@ describe("totality: every meta key has an entry once a policy is declared", () =
 })
 
 describe("hidden keys", () => {
+	// v0: 45360d3a8c
+	// v0: 5c836f241a
+	// v0: f74e46440c
 	it("keeps a false key out of every document and the published manifest, beside internal and extensions", () => {
 		const config: MetaSpecConfig = { meta: { secret: false, summary: false, team: "x-team" } }
 		const publishable = publishableMetaKeys(config)
@@ -278,6 +332,7 @@ function compiledCodes(meta: MetaSpecConfig["meta"]) {
 }
 
 describe("duplicates only where two entries meet one operation", () => {
+	// v0: 3b3dc3bb38
 	it("lets HTTP-only and WebSocket-only entries, or entries of disjoint profiles, share a key", () => {
 		expect([
 			compiledCodes({ a: { key: "x-k", on: "http" }, b: { key: "x-k", on: "ws" } }),

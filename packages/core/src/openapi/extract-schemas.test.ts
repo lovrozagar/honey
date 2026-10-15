@@ -16,6 +16,7 @@ describe("extractSchemas: each route's schemas as JSON Schema", () => {
 	// v0: 736d6435b2
 	// v0: 0dfec1738a
 	// v0: 9f6ab846cd
+	// v0: c87c554a26
 	it("keys each route by METHOD /pattern, and a route that declares nothing by an empty object", () => {
 		const app = honey<{}>()
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))

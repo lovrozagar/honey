@@ -15,6 +15,8 @@ describe("resolvedStrictness: what a policy runs with", () => {
 })
 
 describe("mergeMetaSpec: a mounted sub-app's policy under its parent's", () => {
+	// v0: 7482301e43
+	// v0: eff8a5bab5
 	it("fills gaps from the sub, lets the parent win a disagreement and records it", () => {
 		const merged = mergeMetaSpec(
 			{ meta: { a: "x-parent" }, profiles: { p: { include: ["x-a"] } }, schema: { s: { key: "x-s" } } },
@@ -33,6 +35,11 @@ describe("mergeMetaSpec: a mounted sub-app's policy under its parent's", () => {
 		})
 	})
 
+	// v0: 174f3e1bbe
+	// v0: 3b118d8a4c
+	// v0: 3bf88269c2
+	// v0: 5ed48f22e0
+	// v0: e586a69bb7
 	it("lets a sub's false win over anything, keeps a parent's false, and sees no conflict in one shared entry", () => {
 		const shared = { key: "x-shared" }
 		const merged = mergeMetaSpec(
@@ -48,8 +55,12 @@ describe("mergeMetaSpec: a mounted sub-app's policy under its parent's", () => {
 			"warn",
 		])
 		expect([mergeMetaSpec(null, { meta: {} }), mergeMetaSpec({ meta: {} }, null)]).toEqual([{ meta: {} }, { meta: {} }])
+		/* a sub's strict: "off" never downgrades a parent that left strict at its default */
+		expect(mergeMetaSpec({ meta: {} }, { meta: {}, strict: "off" })?.strict).toBe("error")
 	})
+})
 
+describe("mergeMetaSpec: conflicts, once compiled", () => {
 	it("reports each conflict once compiled, as a warning that says which side won", () => {
 		const diagnostics = new MetaSpecDiagnostics()
 		compileMetaSpec(
@@ -69,6 +80,8 @@ describe("mergeMetaSpec: a mounted sub-app's policy under its parent's", () => {
 })
 
 describe("app.metaSpec(): the policy an app declares and the ones it mounts", () => {
+	// v0: 6784b8254a
+	// v0: 7781260304
 	it("merges every mounted sub-app's policy, whether declared before or after the mount, and leaves the sub's own alone", () => {
 		const sub = honey<{}>()
 		sub.get("/s").handler((ctx) => ctx.res.text("ok", "ok"))
@@ -83,6 +96,7 @@ describe("app.metaSpec(): the policy an app declares and the ones it mounts", ()
 		])
 	})
 
+	// v0: c796a9bd41
 	it("refuses a second declaration, and types an entry for every key the app's meta adds", () => {
 		const app = honey<{}>().meta<{ team: string }>()
 		app.metaSpec({ meta: { team: "x-team" } })

@@ -46582,16 +46582,16 @@
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
 		},
 		"ae748154a5": {
-			"feature": "10-openapi-emit",
-			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: yamlSiblingPath names the plugin's written YAML sibling: the generated-file writes are bit 19's (gen write.ts, plugin)"
 		},
 		"ad73c602a0": {
-			"feature": "10-openapi-emit",
-			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: plugin's YAML sibling naming: bit 19"
 		},
 		"b9beb5f0ab": {
-			"feature": "10-openapi-emit",
-			"reason": "bit-09 triage (10): suite topic; unit/codegen/yaml.test.ts"
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: plugin's YAML sibling naming: bit 19"
 		},
 		"7848edcbce": {
 			"feature": "10-openapi-emit",
@@ -46832,6 +46832,90 @@
 		"08b186a1a7": {
 			"feature": "09-ir-seam",
 			"reason": "H72 import() specifier resolution (exports/@types, drops lib imports) lives in the type-extractor split that becomes gen/extract (09f); building it there makes extract write resolvable specifiers from birth instead of absolute paths deferred to bit 19"
+		},
+		"f9e2535dd9": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: generateSDK type output over a spec: the TS client's emitter (bit 11)"
+		},
+		"bb594968f7": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: jsonSchemaToTS of the envelope with a snapshot: the TS client's type text (bit 11)"
+		},
+		"1536ed55e9": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: mergeSpecs: the merge-specs suite lives in bit 11"
+		},
+		"6ea1ccc1dc": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: scopeSpec: the scope-spec suite lives in bit 11"
+		},
+		"90df7f58e8": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: generateSDK end to end after dedup: bit 11"
+		},
+		"871000e50f": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: mergeSpecs: bit 11"
+		},
+		"03490551f7": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: mergeSpecs: bit 11"
+		},
+		"21490b85ed": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: generateRouteTree's meta export: the route-tree module generator is bit 11's"
+		},
+		"ebbd215fc2": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: generateTypes' meta emission: bit 11"
+		},
+		"c6a112aebd": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: generateSDK's serviceMap invalidate: the TS client (bit 11)"
+		},
+		"c082370d45": {
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: the plugin's generateAndWrite reporting once across artifacts: bit 19 (plugin)"
+		},
+		"b6b19279e0": {
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: the plugin's .yml output path: bit 19"
+		},
+		"e35fad649c": {
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: the plugin's .yaml output path: bit 19"
+		},
+		"75ddd200b6": {
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: the plugin generating the unfiltered document once: bit 19"
+		},
+		"d30c60f1da": {
+			"feature": "11-ts-client",
+			"reason": "bit-10 triage: generateSDK over the mock server's spec: bit 11"
+		},
+		"0354472c30": {
+			"feature": "12-go-sdk",
+			"reason": "bit-10 triage: generateGoSDK over the mock server's spec: bit 12"
+		},
+		"86b87df2bb": {
+			"feature": "13-rust-sdk",
+			"reason": "bit-10 triage: generateRustSDK over the mock server's spec: bit 13"
+		},
+		"7a09b3c8d1": {
+			"feature": "20-docs",
+			"reason": "bit-10 triage: generateApiRef (per-language markdown API reference) needs every SDK's naming: docs, bit 20 (no files.tsv row yet)"
+		},
+		"4ef2961727": {
+			"feature": "20-docs",
+			"reason": "bit-10 triage: generateApiRef lists every operation: bit 20"
+		},
+		"2e5131dca9": {
+			"feature": "20-docs",
+			"reason": "bit-10 triage: generateApiRef's typed-error section: bit 20"
+		},
+		"13874dcde2": {
+			"feature": "19-release-provenance",
+			"reason": "bit-10 triage: generateAndWrite's openApi config scheme reaching the SDK step: the plugin, bit 19"
 		}
 	},
 	"retired": {
@@ -46916,6 +47000,15 @@
 		"64192fc032": "validator-only type with no JSON wire value. F7 routes schema through jsonSchemaOf then schemaToIR then irToTs, where undefined/void/never degrade to {} then unknown; the generic unknown-vendor case pins that degrade and 09b pins the vendor to JSON Schema halves. An SDK consuming JSON can never receive the value.",
 		"058f01d394": "validator-only type with no JSON wire value. F7 routes schema through jsonSchemaOf then schemaToIR then irToTs, where undefined/void/never degrade to {} then unknown; the generic unknown-vendor case pins that degrade and 09b pins the vendor to JSON Schema halves. An SDK consuming JSON can never receive the value.",
 		"2e5439ab07": "validator-only type with no JSON wire value. F7 routes schema through jsonSchemaOf then schemaToIR then irToTs, where undefined/void/never degrade to {} then unknown; the generic unknown-vendor case pins that degrade and 09b pins the vendor to JSON Schema halves. An SDK consuming JSON can never receive the value.",
-		"3c51d6bb2d": "superseded by F2: meta.tsType emits raw TypeScript from schema metadata, which is spec text becoming source in a generator that runs on arbitrary OpenAPI documents. The safe case, naming a component, is served by irToTs refName."
+		"3c51d6bb2d": "superseded by F2: meta.tsType emits raw TypeScript from schema metadata, which is spec text becoming source in a generator that runs on arbitrary OpenAPI documents. The safe case, naming a component, is served by irToTs refName.",
+		"7379069673": "bit-10 triage (honey-05 ruled): v1's spec(app, options) takes its app explicitly (H23 cut v0's mount binding): one handler serves one app",
+		"289e6dcd97": "bit-10 triage (honey-05 ruled): v1 drops $schema wherever a schema sits (09 to-json-schema.test pins the opposite truth); a document schema never carries it",
+		"3666a4e416": "bit-10 triage (honey-05 ruled): the /docs→/reference fallback is cut (plan 13, F2): v1 has no internal-mount bookkeeping; a taken path is a plain duplicate-route error",
+		"f90fe34b6c": "bit-10 triage (honey-05 ruled): depends on the /docs→/reference fallback, cut in v1 (F2)",
+		"10730135da": "bit-10 triage (honey-05 ruled): v1's spec(app, options) takes its app explicitly (H23): one handler serves one app",
+		"9636fb44f7": "bit-10 triage (honey-05 ruled): spec() is cut (F16): serveOpenApi(handle, options) mounts the document on any handle; there is no handler to return",
+		"280acb443d": "bit-10 triage (honey-05 ruled): v1 has one generator in core (F5): the served document and honey generate share it, so there is no light spec path to isolate from codegen",
+		"071875613f": "bit-10 triage (honey-05 ruled): same: no separate light spec bundle in v1 (one generator, converters are vendor-free walkers in core)",
+		"055f2c56f7": "bit-10 triage (honey-05 ruled): the OpenAPI runtime slot is cut (F1, H23): serveOpenApi imports the generator directly, there is nothing to load"
 	}
 }

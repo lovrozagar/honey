@@ -36,6 +36,8 @@ describe("gatewayTree(): what a gateway serves", () => {
 	// v0: 740a227711
 	// v0: e3e940e1d3
 	// v0: d3867759a6
+	// v0: 9c2d38b4ed
+	// v0: ccfd3d3c19
 	it("adds the gateway's own routes beside the downstream ones, keeps its root wildcard out, and refuses a shadowing route", async () => {
 		const users = honey<{}>()
 		users.get("/users/list").handler((c) => c.res.text("ok", "remote"))

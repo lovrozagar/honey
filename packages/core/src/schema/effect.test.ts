@@ -5,6 +5,8 @@ import { effectJsonSchema } from "./effect.ts"
 describe("effectJsonSchema: through the converter its caller passes", () => {
 	const schema = Schema.standardSchemaV1(Schema.Struct({ at: Schema.Date, name: Schema.String }))
 
+	// v0: 4823869bd1
+	// v0: 6b1cde59d8
 	it("converts with JSONSchema.make, its $defs kept for the slots to hoist", () => {
 		expect(effectJsonSchema(schema, JSONSchema.make)).toEqual({
 			$defs: { Date: { description: "a string to be decoded into a Date", type: "string" } },
