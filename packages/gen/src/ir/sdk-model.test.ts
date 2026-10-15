@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest"
 import { type OpenApiDocument, toIR } from "./build.ts"
-import type { IRSchema } from "./model.ts"
-import { isJsonMedia, isTextMedia, mediaEssence, type SdkOp, sdkModel, valueCycleSchemas } from "./sdk-model.ts"
+import { type IRSchema, irResolver, schemaToIR } from "./model.ts"
+import {
+	irErrorEnvelope,
+	isJsonMedia,
+	isTextMedia,
+	mediaEssence,
+	type SdkOp,
+	sdkModel,
+	valueCycleSchemas,
+} from "./sdk-model.ts"
 
 type Json = Record<string, unknown>
 
@@ -202,5 +210,60 @@ describe("valueCycleSchemas: what needs a pointer", () => {
 				}),
 			].sort(),
 		).toEqual(["A", "B", "Self"])
+	})
+})
+
+type Schema = Record<string, unknown>
+
+/** honey's error envelope for `status` and `keys`, its field list behind a ref. */
+function envelope(status: unknown, keys: unknown[]): IRSchema {
+	return schemaToIR({
+		properties: {
+			error_key: { enum: keys, type: "string" },
+			fields: {
+				additionalProperties: { items: { $ref: "#/components/schemas/Field" }, type: "array" },
+				type: "object",
+			},
+			message: { type: "string" },
+			status: { enum: [status], type: "integer" },
+			status_key: { type: "string" },
+			success: { const: false },
+		},
+		type: "object",
+	})
+}
+
+/** `object` with the fields named in `properties` replaced. */
+function withFields(object: IRSchema, properties: Record<string, unknown>): IRSchema {
+	if (object.kind !== "object") return object
+	const replaced = Object.entries(properties).map(([name, schema]) => ({
+		name,
+		required: false,
+		schema: schemaToIR(schema as Schema),
+	}))
+	return { ...object, fields: [...object.fields.filter((f) => !Object.hasOwn(properties, f.name)), ...replaced] }
+}
+
+describe("irErrorEnvelope: honey's error body, read through refs", () => {
+	// v0: 658fb508a5
+	it("reads honey's error envelope through refs, and nothing else as one", () => {
+		const fieldList = schemaToIR({
+			properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
+		})
+		const resolve = irResolver({ Envelope: envelope(404, ["not_found", "gone"]), Field: fieldList })
+		expect([
+			irErrorEnvelope(ref("Envelope"), resolve),
+			irErrorEnvelope(envelope("404", ["a"]), resolve),
+			irErrorEnvelope(envelope(404, []), resolve),
+			irErrorEnvelope({ kind: "scalar", type: "string" } as IRSchema, resolve),
+		]).toEqual([{ keys: ["not_found", "gone"], status: 404 }, null, null, null])
+		const broken = (properties: Record<string, unknown>) =>
+			irErrorEnvelope(withFields(envelope(404, ["a"]), properties), resolve)
+		expect([
+			broken({ message: { type: "number" } }),
+			broken({ fields: { type: "string" } }),
+			broken({ fields: { additionalProperties: { type: "string" }, type: "object" } }),
+			broken({ error_key: { enum: [1], type: "string" } }),
+		]).toEqual([null, null, null, null])
 	})
 })

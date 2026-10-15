@@ -197,3 +197,36 @@ export function valueCycleSchemas(schemas: Record<string, IRSchema>): Set<string
 	}
 	return cyclic
 }
+
+const isString = (schema: IRSchema | undefined) => schema?.kind === "scalar" && schema.type === "string"
+
+type FieldOf = (object: IRSchema | undefined, name: string) => IRSchema | undefined
+
+/** Whether `envelope` has the envelope's fixed shape: `success: false`, a message, a status key and its field list. */
+function envelopeShape(envelope: IRSchema, field: FieldOf, resolve: (schema: IRSchema) => IRSchema): boolean {
+	const success = field(envelope, "success")
+	if (success?.kind !== "const" || success.value !== false) return false
+	if (!isString(field(envelope, "message")) || !isString(field(envelope, "status_key"))) return false
+	const fields = field(envelope, "fields")
+	const list = fields?.kind === "object" && fields.additional ? resolve(fields.additional) : undefined
+	const item = list?.kind === "array" ? resolve(list.items) : undefined
+	return ["error_key", "message", "path"].every((name) => isString(field(item, name)))
+}
+
+/** honey's error envelope (`success: false`, an `error_key` enum, one `status`): its keys and status, else `null`. */
+export function irErrorEnvelope(
+	schema: IRSchema,
+	resolve: (schema: IRSchema) => IRSchema,
+): { keys: string[]; status: number } | null {
+	const field: FieldOf = (object, name) => {
+		const found = object?.kind === "object" ? object.fields.find((f) => f.name === name) : undefined
+		return found === undefined ? undefined : resolve(found.schema)
+	}
+	const envelope = resolve(schema)
+	if (!envelopeShape(envelope, field, resolve)) return null
+	const status = field(envelope, "status")
+	const key = field(envelope, "error_key")
+	if (status?.kind !== "scalar" || status.enum?.length !== 1 || typeof status.enum[0] !== "number") return null
+	if (key?.kind !== "scalar" || key.enum === undefined || key.enum.length === 0) return null
+	return key.enum.every((k) => typeof k === "string") ? { keys: key.enum as string[], status: status.enum[0] } : null
+}

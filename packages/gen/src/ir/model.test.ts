@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { type IRSchema, irErrorEnvelope, irResolver, schemaToIR } from "./model.ts"
+import { type IRSchema, irResolver, schemaToIR } from "./model.ts"
 
 type Json = Record<string, unknown>
 
@@ -248,35 +248,6 @@ describe("schemaToIR: unions and references", () => {
 	})
 })
 
-/** honey's error envelope for `status` and `keys`, its field list behind a ref. */
-function envelope(status: unknown, keys: unknown[]): IRSchema {
-	return schemaToIR({
-		properties: {
-			error_key: { enum: keys, type: "string" },
-			fields: {
-				additionalProperties: { items: { $ref: "#/components/schemas/Field" }, type: "array" },
-				type: "object",
-			},
-			message: { type: "string" },
-			status: { enum: [status], type: "integer" },
-			status_key: { type: "string" },
-			success: { const: false },
-		},
-		type: "object",
-	})
-}
-
-/** `object` with the fields named in `properties` replaced. */
-function withFields(object: IRSchema, properties: Record<string, unknown>): IRSchema {
-	if (object.kind !== "object") return object
-	const replaced = Object.entries(properties).map(([name, schema]) => ({
-		name,
-		required: false,
-		schema: schemaToIR(schema as Json),
-	}))
-	return { ...object, fields: [...object.fields.filter((f) => !Object.hasOwn(properties, f.name)), ...replaced] }
-}
-
 describe("reading the IR back", () => {
 	it("follows refs to their schema, an unknown or endless one to unknown", () => {
 		const resolve = irResolver({ A: ref("B"), B: STRING, Loop: ref("Loop") })
@@ -287,26 +258,24 @@ describe("reading the IR back", () => {
 			NUMBER,
 		])
 	})
+})
 
-	// v0: 658fb508a5
-	it("reads honey's error envelope through refs, and nothing else as one", () => {
-		const fieldList = schemaToIR({
-			properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
-		})
-		const resolve = irResolver({ Envelope: envelope(404, ["not_found", "gone"]), Field: fieldList })
+describe("schemaToIR: tuples, as 2020-12 and draft-07 write them", () => {
+	it("reads prefixItems closed unless items types a rest, and an optional tail from minItems", () => {
 		expect([
-			irErrorEnvelope(ref("Envelope"), resolve),
-			irErrorEnvelope(envelope("404", ["a"]), resolve),
-			irErrorEnvelope(envelope(404, []), resolve),
-			irErrorEnvelope(STRING, resolve),
-		]).toEqual([{ keys: ["not_found", "gone"], status: 404 }, null, null, null])
-		const broken = (properties: Record<string, unknown>) =>
-			irErrorEnvelope(withFields(envelope(404, ["a"]), properties), resolve)
-		expect([
-			broken({ message: { type: "number" } }),
-			broken({ fields: { type: "string" } }),
-			broken({ fields: { additionalProperties: { type: "string" }, type: "object" } }),
-			broken({ error_key: { enum: [1], type: "string" } }),
-		]).toEqual([null, null, null, null])
+			schemaToIR({ items: false, prefixItems: [{ type: "string" }, { type: "number" }], type: "array" }),
+			schemaToIR({ items: { type: "number" }, prefixItems: [{ type: "string" }] }),
+			schemaToIR({ maxItems: 2, minItems: 1, prefixItems: [{ type: "string" }, { type: "number" }] }),
+			schemaToIR({ additionalItems: { type: "number" }, items: [{ type: "string" }] }),
+			schemaToIR({ items: [{ type: "string" }], minItems: 1 }),
+			schemaToIR({ prefixItems: [{ type: "string" }, { type: "number" }], type: "array" }),
+		]).toEqual([
+			{ items: [STRING, NUMBER], kind: "tuple" },
+			{ items: [STRING], kind: "tuple", rest: NUMBER },
+			{ items: [STRING, NUMBER], kind: "tuple", required: 1 },
+			{ items: [STRING], kind: "tuple", rest: NUMBER },
+			{ items: [STRING], kind: "tuple" },
+			{ items: [STRING, NUMBER], kind: "tuple" },
+		])
 	})
 })

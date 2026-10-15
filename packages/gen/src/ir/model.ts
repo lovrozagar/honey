@@ -1,7 +1,6 @@
 /**
  * The IR: what every emitter reads, built from an OpenAPI document and nothing else (H2). This
- * file holds its types, the reading of a JSON Schema into an IR schema, and two readers emitters
- * share: following refs, and spotting honey's error envelope.
+ * file holds its types, the reading of a JSON Schema into an IR schema, and following refs.
  */
 
 export type IRScalarType = "boolean" | "integer" | "null" | "number" | "string"
@@ -15,7 +14,14 @@ export type IRSchema =
 	  }
 	| { kind: "object"; fields: IRField[]; additional?: IRSchema | false }
 	| { kind: "array"; items: IRSchema }
-	| { kind: "tuple"; items: IRSchema[] }
+	| {
+			kind: "tuple"
+			items: IRSchema[]
+			/** what may follow the fixed items; none: nothing may */
+			rest?: IRSchema
+			/** how many leading items must be there, when fewer than all: the rest is an optional tail */
+			required?: number
+	  }
 	| { kind: "union"; variants: IRSchema[]; discriminator?: IRDiscriminator }
 	| { kind: "allOf"; parts: IRSchema[] }
 	| { kind: "ref"; name: string }
@@ -195,6 +201,24 @@ function objectOf(schema: Json): IRSchema {
 
 type Reader = (schema: Json) => IRSchema | null
 
+const isSchema = (value: unknown): value is Json => value !== null && typeof value === "object" && !Array.isArray(value)
+
+/**
+ * A tuple, as 2020-12 (`prefixItems`, then `items` for the rest) or draft-07 (`items` as a list,
+ * then `additionalItems`) writes it. Without a rest schema it is closed: zod leaves `items: false`
+ * out of a closed tuple. `minItems` below the length makes an optional tail.
+ */
+function tupleOf(schema: Json): IRSchema | null {
+	const modern = Array.isArray(schema.prefixItems)
+	const fixed = (modern ? schema.prefixItems : schema.items) as Json[]
+	if (!Array.isArray(fixed)) return null
+	const tuple: Extract<IRSchema, { kind: "tuple" }> = { items: fixed.map(schemaToIR), kind: "tuple" }
+	const rest = modern ? schema.items : schema.additionalItems
+	if (isSchema(rest)) tuple.rest = schemaToIR(rest)
+	if (typeof schema.minItems === "number" && schema.minItems < fixed.length) tuple.required = schema.minItems
+	return tuple
+}
+
 const literal = (value: unknown): value is boolean | number | string =>
 	typeof value === "string" || typeof value === "number" || typeof value === "boolean"
 
@@ -227,7 +251,7 @@ const READERS: readonly Reader[] = [
 	(schema) => (Array.isArray(schema.enum) ? enumOf(schema) : null),
 	(schema) =>
 		schema.format === "binary" && (schema.type === "string" || schema.type === undefined) ? { kind: "binary" } : null,
-	(schema) => (Array.isArray(schema.items) ? { items: (schema.items as Json[]).map(schemaToIR), kind: "tuple" } : null),
+	tupleOf,
 	(schema) => (schema.type === "array" ? { items: schemaToIR(schema.items as Json | undefined), kind: "array" } : null),
 	(schema) =>
 		schema.type === "object" || schema.properties !== undefined || schema.additionalProperties !== undefined
@@ -257,37 +281,4 @@ export function irResolver(schemas: Record<string, IRSchema>): (schema: IRSchema
 		}
 		return at
 	}
-}
-
-const isString = (schema: IRSchema | undefined) => schema?.kind === "scalar" && schema.type === "string"
-
-type FieldOf = (object: IRSchema | undefined, name: string) => IRSchema | undefined
-
-/** Whether `envelope` has the envelope's fixed shape: `success: false`, a message, a status key and its field list. */
-function envelopeShape(envelope: IRSchema, field: FieldOf, resolve: (schema: IRSchema) => IRSchema): boolean {
-	const success = field(envelope, "success")
-	if (success?.kind !== "const" || success.value !== false) return false
-	if (!isString(field(envelope, "message")) || !isString(field(envelope, "status_key"))) return false
-	const fields = field(envelope, "fields")
-	const list = fields?.kind === "object" && fields.additional ? resolve(fields.additional) : undefined
-	const item = list?.kind === "array" ? resolve(list.items) : undefined
-	return ["error_key", "message", "path"].every((name) => isString(field(item, name)))
-}
-
-/** honey's error envelope (`success: false`, an `error_key` enum, one `status`): its keys and status, else `null`. */
-export function irErrorEnvelope(
-	schema: IRSchema,
-	resolve: (schema: IRSchema) => IRSchema,
-): { keys: string[]; status: number } | null {
-	const field: FieldOf = (object, name) => {
-		const found = object?.kind === "object" ? object.fields.find((f) => f.name === name) : undefined
-		return found === undefined ? undefined : resolve(found.schema)
-	}
-	const envelope = resolve(schema)
-	if (!envelopeShape(envelope, field, resolve)) return null
-	const status = field(envelope, "status")
-	const key = field(envelope, "error_key")
-	if (status?.kind !== "scalar" || status.enum?.length !== 1 || typeof status.enum[0] !== "number") return null
-	if (key?.kind !== "scalar" || key.enum === undefined || key.enum.length === 0) return null
-	return key.enum.every((k) => typeof k === "string") ? { keys: key.enum as string[], status: status.enum[0] } : null
 }
