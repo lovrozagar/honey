@@ -13,6 +13,7 @@ Core emits the OpenAPI 3.1 document from the collected operations. Split v0 `ope
 - `src/openapi/webhooks.ts` (+test) — 3.1 `webhooks` declaration (B3).
 - `src/openapi/{scalar,swagger,docs-page,serve}.ts` (+test each), `src/openapi/register.ts` (index).
 - consumes `routing/invalidate-check.ts` (the pure `missingInvalidate*` analysis, born bit 01): the emitter runs it over the **emitted operations** and logs/throws the report per `InvalidateCheckLevel` through the **bit-07 logger** (not finalize — finalize has no operations). Add a case asserting a mutation with no declared invalidate targets is reported at `warn`/`error` per config.
+- **emits `x-honey-route` on every operation (obligation from bit 09f).** Each operation carries `x-honey-route: "<METHOD> <canonical pattern>"` = its `CollectedRoute.id` (the runtime id, `routeId(method, normalizePattern(path))`). The IR reads it into `extensions.route` (bit 09, `slots.ts`), and bit 11's `generateTypes` joins the ts-morph-extracted route ctx onto operations by that id. Without it the extracted ctx additions silently drop from the SDK. Add a case asserting it is present and canonical on each operation (both expansions of an optional route share the id). Bit 17's CLI passes core's `routeId`/`normalizePattern` as `extractTypes`' `routeId`, so the keys equal the runtime ids by construction.
 
 ## Tests (named, written first)
 - `openapi/servers.test.ts` — multiple environments + variables render; basePath composition correct.

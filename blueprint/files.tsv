@@ -336,8 +336,12 @@ src/extract/serialize.ts	gen	src	09	type serialize	type-extractor.ts
 src/extract/chain.ts	gen	src	09	middleware chain extraction	type-extractor.ts
 src/extract/__fixtures__/	gen	corpus	09	extract test support: the temp-project writer/barrel/tsconfig (project.ts, strings only, no core import) + the ambient-env worker-configuration.d.ts fixture copied from v0 (25080c8dd7)	type-extractor.ts
 src/cli.ts	gen	src	17	the honey-codegen generate CLI	cli.ts
-src/gen/process.ts	gen	src	09	generate orchestration (target selection + write)	gen-process.ts
-src/gen/write.ts	gen	src	09	write artifacts to disk	gen-write.ts
+src/gen/process.ts	gen	src	17	the CLI's child-process generate runner (runCli/cliInvocation, jiti, honey-source condition) — not IR/emit; moved out of 09 (no 09 cases; its cli-generate cases are 19, re-triaged to 17 when bit 17 is planned)	gen-process.ts
+src/gen/write.ts	gen	src	19	write artifacts to disk, checksum header + x-generated marker + manifest (provenance) — moved out of 09 to its cases' bit (gen-write, 19)	gen-write.ts
+tests/structure/mutation-harness.ts	gen	src	09	gen-local GUARDS registry + runner (H2: no core import); runs tests/security with each guard disabled → must go red	—
+tests/structure/mutation-harness.test.ts	gen	test	09	proves the gen harness mechanism against a fixture guard	—
+tests/security/mutants.ts	gen	test	09	the gen guard mutants: escape-bypass (policy off → JSON.stringify), nondeterministic-naming (compareCodeUnits → localeCompare), spec-text-to-source (quoteKey returns the key raw)	—
+tests/security/emit-adversarial.test.ts	gen	test	09	gen emit adversarial + the F2 fuzz oracle (imported from escape.fuzz's helper, not duplicated), reran by the harness per guard	—
 # vendored runtime templates (H9) — one subtree per language, each with its own sibling golden-output test (bits 11–18):
 src/runtime/ts/*	gen	runtime	11	vendored TS fetch runtime template	client/*
 src/runtime/go/*	gen	runtime	12	vendored Go net/http runtime template	client-go/*
