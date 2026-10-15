@@ -46704,6 +46704,82 @@
 		"f58c5a66c8": {
 			"feature": "10-openapi-emit",
 			"reason": "bit-09 triage (10): a search schema decomposed into query parameters is document assembly; unit/codegen/valibot-json-schema.test.ts"
+		},
+		"76a02dff45": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls deduplicateSchemas on a hand-built spec, core src/schema/slots.ts; unit/openapi/dedup-schemas.test.ts"
+		},
+		"a8ab5b551a": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls deduplicateSchemas on a hand-built spec, core src/schema/slots.ts; unit/openapi/dedup-schemas.test.ts"
+		},
+		"20051ea463": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls deduplicateSchemas on a hand-built spec, core src/schema/slots.ts; unit/openapi/dedup-schemas.test.ts"
+		},
+		"76af7d7b0c": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls deduplicateSchemas on a hand-built spec, core src/schema/slots.ts; unit/openapi/dedup-schemas.test.ts"
+		},
+		"c1be7510ab": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls deduplicateSchemas on a hand-built spec, core src/schema/slots.ts; unit/openapi/dedup-schemas.test.ts"
+		},
+		"95a3eb8401": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls deduplicateSchemas on a hand-built spec, core src/schema/slots.ts; unit/openapi/dedup-schemas.test.ts"
+		},
+		"1349f842b1": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls deduplicateSchemas on a hand-built spec, core src/schema/slots.ts; unit/openapi/dedup-schemas.test.ts"
+		},
+		"f1b57279bc": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"b9d9518864": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"39c1c1076b": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"8c9de52e88": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"fe9a9c69f1": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"cd67ad4f4f": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"6ecfb9b07d": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"804b13881b": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"6eff3c761c": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 2.3: calls sanitizeOpenApiSpec on a hand-built spec, core src/schema/sanitize-spec.ts; unit/openapi/sanitize-openapi.test.ts"
+		},
+		"db6f34e7ea": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 phase d: resolveRefs is spec to IR, gen src/ir/resolve-refs.ts (F9); unit/openapi/dedup-schemas.test.ts"
+		},
+		"c5f0f9e9a5": {
+			"feature": "09-ir-seam",
+			"reason": "bit-09 phase d: resolveRefs is spec to IR, gen src/ir/resolve-refs.ts (F9); unit/openapi/dedup-schemas.test.ts"
+		},
+		"15508ec3e4": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): a search schema decomposed into query parameters is document assembly; unit/codegen/schema-to-json-schema-io.test.ts"
 		}
 	},
 	"retired": {
