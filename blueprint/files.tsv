@@ -258,7 +258,8 @@ src/emit/shared/__fixtures__/escape-oracle.ts	gen	corpus	09	the F2 fuzz oracle (
 src/emit/shared/type-emitter.ts	gen	src	09	shared type emission	type-emitter.ts
 src/emit/shared/type-emitter.vendors.test.ts	gen	test	09	v0 per-vendor type cases (F7): each vendor's JSON Schema from core jsonSchemaOf → IR → TypeScript, wire truth; the 160-tag it.each table, too large to sit beside type-emitter.test's mechanics	type-emitter.ts,ts-type-emitter.ts
 src/emit/shared/format.ts	gen	src	11	formatter post-pass dispatch (gofmt/rustfmt/ruff/…)	—
-src/emit/shared/webhooks.ts	gen	src	10	webhook generator: typed payload parser + signature-verify emitted per SDK (B3)	—
+src/emit/shared/webhooks.ts	gen	src	10	webhook verify-helper emitter: language-agnostic constant-time HMAC from x-honey-signature via F2 (F11); the typed payload parser is per-SDK (bits 11-16)	—
+src/emit/shared/webhooks.toolchains.test.ts	gen	test	10	cross-check: compile the TS/Go/Rust/Python verify helpers and verify a known HMAC under HONEY_REQUIRE_TOOLCHAINS (harness); C#/Java structural-only until 15/16	—
 src/emit/ts/sdk.ts	gen	src	11	TS SDK	client/sdk.ts
 src/emit/ts/http.ts	gen	src	11	TS fetch client core	client/http.ts
 src/emit/ts/request.ts	gen	src	11	request build + retry	client/http.ts
