@@ -5,11 +5,13 @@
  * `app.toRouteTree()` is the snapshot: a copy of the topology and, per route, its resolved data
  * and a live record carrying the scopes that cover it here.
  */
+import { ERROR_META, type ErrorMetaEntry } from "../errors/errors.ts"
 import { compareCodeUnits } from "../schema/canonicalize.ts"
 import { finalTable } from "./dispatch.ts"
 import { type Plan, scopesFor } from "./finalize.ts"
 import { expandOptional } from "./pattern.ts"
 import { GRAPH, type HoneyGraph, type RouteHandler } from "./register.ts"
+import type { ErrorFactories } from "./settings.ts"
 import { SettingsChain } from "./settings-chain.ts"
 import {
 	assertTreeFormat,
@@ -41,6 +43,21 @@ export function loadRouteTree(g: HoneyGraph, tree: RouteTree): void {
 	g.epoch++
 }
 
+/** Each key's status key from the first factory whose ERROR_META knows it; `null` when none does. */
+function statusKeysOf(
+	keys: readonly string[],
+	factories: readonly (ErrorFactories | null)[],
+): Record<string, string> | null {
+	const out: Record<string, string> = {}
+	for (const key of keys) {
+		const meta = factories
+			.map((f) => (f as { [ERROR_META]?: Record<string, ErrorMetaEntry> } | null)?.[ERROR_META])
+			.find((m) => m !== undefined && Object.hasOwn(m, key))
+		if (meta !== undefined) out[key] = (meta[key] as ErrorMetaEntry).statusKey
+	}
+	return Object.keys(out).length === 0 ? null : out
+}
+
 /** `g`'s routes as a tree another app serves; nothing in it is shared with `g`. */
 export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 	const { plans } = finalTable(g)
@@ -51,7 +68,16 @@ export function snapshotRouteTree(g: HoneyGraph): RouteTree {
 		/* the record resolves the same way anywhere: its chain carries the scopes covering it here */
 		const cm = [...r.cm, ...scopesFor(g, expandOptional(r.sg))]
 		const h: RouteHandler = { ...r, cm, dk: new Set(ek), rb: policy.boundaryKey, xm: route.meta }
-		routes[id] = { bek: policy.boundaryKey, ek, h, iv: r.iv, mt: route.meta, out: r.out }
+		const es = statusKeysOf(ek, [r.ef, r.own.errorFactory])
+		routes[id] = {
+			bek: policy.boundaryKey,
+			ek,
+			...(es === null ? {} : { es }),
+			h,
+			iv: r.iv,
+			mt: route.meta,
+			out: r.out,
+		}
 	}
 	return { meta: {}, root: cloneTree(g.root), routes, v: ROUTE_TREE_VERSION }
 }

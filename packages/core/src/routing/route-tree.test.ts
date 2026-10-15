@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { defineErrors } from "../errors/errors.ts"
-import { createMiddleware } from "../middleware/middleware.ts"
+import { createMiddleware, defineMiddleware } from "../middleware/middleware.ts"
 import { collectRoutes } from "../openapi/collect.ts"
 import { honey } from "./app.ts"
+import { gatewayTree } from "./gateway-tree.ts"
 import { createNode, insertRoute, type RouteEntry, type RouteTree } from "./tree.ts"
 import { mergeTree } from "./tree-merge.ts"
 
@@ -178,7 +179,7 @@ describe("toRouteTree(): what a snapshot holds", () => {
 		const { h, ...data } = app.toRouteTree().routes["GET /a"] as RouteEntry
 		expect([app.toRouteTree().root.s.a?.m, data, h?.id]).toEqual([
 			{ GET: "GET /a" },
-			{ bek: "gone", ek: ["gone"], iv: null, mt: { summary: "A" }, out: null },
+			{ bek: "gone", ek: ["gone"], es: { gone: "gone" }, iv: null, mt: { summary: "A" }, out: null },
 			"GET /a",
 		])
 	})
@@ -203,6 +204,46 @@ describe("toRouteTree(): what a snapshot holds", () => {
 				await call(app, "/admin/x", { headers: { authorization: "ok" } }),
 			]).toEqual([401, [200, "/admin/x"]])
 		}
+	})
+})
+
+describe("toRouteTree(): what a snapshot knows of errors", () => {
+	it("records each declared key's status key, from the factory the route named or its app's, and keeps it as data in a gateway's tree", () => {
+		const named = defineErrors({ teapot: { schema: z.object({ brew: z.string() }), status: "bad_request" } })
+		const app = honey<{}>().errorFactory(defineErrors({ column_name_taken: "conflict" }))
+		/* a middleware's factory stays its own: the key it declares is the route's, its status is not known here */
+		const audited = defineMiddleware({
+			errors: [defineErrors({ audit_failed: "bad_gateway" }), "audit_failed"],
+			fn: async (_c, next) => next(),
+		})
+		app
+			.post("/columns")
+			.use(audited)
+			.errors("column_name_taken")
+			.handler((c) => c.res.text("ok", "c"))
+		app
+			.get("/tea")
+			.errors(named, "teapot")
+			.handler((c) => c.res.text("ok", "t"))
+		app.get("/open").handler((c) => c.res.text("ok", "o"))
+		const snap = app.toRouteTree()
+		const gateway = honey<{}>()
+		gateway.all("/*").handler((c) => c.res.text("ok", "proxy"))
+		const served = gatewayTree(gateway, snap)
+		expect([
+			snap.routes["POST /columns"]?.es,
+			snap.routes["GET /tea"]?.es,
+			snap.routes["GET /open"]?.es,
+			served.routes["POST /columns"],
+		]).toEqual([
+			{ column_name_taken: "conflict" },
+			{ teapot: "bad_request" },
+			undefined,
+			expect.objectContaining({
+				ek: ["audit_failed", "column_name_taken"],
+				es: { column_name_taken: "conflict" },
+			}),
+		])
 	})
 })
 

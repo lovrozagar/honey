@@ -27,6 +27,8 @@ export type RouteEntry = {
 	bek?: string | null
 	/** declared error keys */
 	ek?: readonly string[]
+	/** each declared key's status key, read off its factory: a generated tree has no factory to ask */
+	es?: Readonly<Record<string, string>>
 	/** live record: only in `app.toRouteTree()` snapshots, never in generated files */
 	h?: RouteRecord
 	/** internal route (spec, docs, manifest) */

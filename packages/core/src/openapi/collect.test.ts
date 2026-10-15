@@ -4,6 +4,7 @@ import { defineErrors } from "../errors/errors.ts"
 import { readableStream } from "../input/input.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
+import { createNode, insertRoute } from "../routing/tree.ts"
 import { collectRoutes } from "./collect.ts"
 
 describe("collectRoutes: one record per path a route serves", () => {
@@ -63,6 +64,7 @@ describe("collectRoutes: what each route declares", () => {
 	// v0: 591e67855c
 	// v0: 71240de8ff
 	// v0: b14023381e
+
 	it("carries the resolved meta: middleware's, the chain's, the route's; x- extensions and internal as given", () => {
 		const tagged = createMiddleware((_ctx, next) => next({}), { meta: { tags: ["auth"] } })
 		const app = honey<{}>()
@@ -131,5 +133,123 @@ describe("collectRoutes: what each route declares for its body", () => {
 		app.get("/c").handler((ctx) => ctx.res.text("ok", "ok"))
 		const [a, b, c] = collectRoutes(app).http
 		expect([a?.input?.json, a?.output, b?.input?.form, c?.input, c?.output]).toEqual([json, answer, body, null, null])
+	})
+})
+
+const shard = createMiddleware(async (_c, next) => next({}), { meta: { tenant: "project_id" } })
+/** The meta collect resolves for the route at `path`, HTTP or WebSocket. */
+const metaOf = (app: ReturnType<typeof honey<{}>>, path: string) =>
+	[...collectRoutes(app).http, ...collectRoutes(app).ws].find((r) => r.pattern === path)?.meta
+
+describe("collectRoutes: middleware meta reaches every route it runs on", () => {
+	// v0: edc731afad
+	// v0: 03ff4daa83
+
+	it("gives a route-level .use() middleware's meta to that route only, and lets chain .meta() outrank it", () => {
+		const app = honey<{}>()
+		app
+			.get("/audited")
+			.use(shard)
+			.handler((c) => c.res.json("ok", {}))
+		app.get("/plain").handler((c) => c.res.json("ok", {}))
+		app
+			.use(shard)
+			.meta({ tenant: "from-chain" })
+			.get("/chain")
+			.handler((c) => c.res.json("ok", {}))
+		expect([metaOf(app, "/audited"), metaOf(app, "/plain"), metaOf(app, "/chain")]).toEqual([
+			{ tenant: "project_id" },
+			{},
+			{ tenant: "from-chain" },
+		])
+	})
+
+	// v0: 619448690f
+	// v0: 9a8e35727c
+	// v0: 21ff53e8fc
+	// v0: c669b3cf9a
+})
+
+describe("collectRoutes: middleware meta reaches every route it runs on", () => {
+	// v0: edc731afad
+	// v0: 03ff4daa83
+
+	it("back-fills a scoped middleware's meta into routes registered before it, WebSocket ones too, never over explicit meta", () => {
+		const app = honey<{}>()
+		app.get("/late/thing").handler((c) => c.res.json("ok", {}))
+		app
+			.get("/late/explicit")
+			.meta({ tenant: "explicit" } as never)
+			.handler((c) => c.res.json("ok", {}))
+		app.get("/other/thing").handler((c) => c.res.json("ok", {}))
+		app.ws("/late/ws").handler({ onMessage() {} })
+		app
+			.use(shard)
+			.ws("/chain-ws")
+			.handler({ onMessage() {} })
+		app
+			.ws("/route-ws")
+			.use(shard as never)
+			.handler({ onMessage() {} })
+		app.use("/late", shard)
+		expect(
+			["/late/thing", "/late/explicit", "/other/thing", "/late/ws", "/chain-ws", "/route-ws"].map((p) =>
+				metaOf(app, p),
+			),
+		).toEqual([
+			{ tenant: "project_id" },
+			{ tenant: "explicit" },
+			{},
+			{ tenant: "project_id" },
+			{ tenant: "project_id" },
+			{ tenant: "project_id" },
+		])
+	})
+})
+
+describe("collectRoutes: each error key's status, for the document", () => {
+	it("reads a key's status from the factory the route named, then a loaded leaf's own app's, then the app's, then the key's suffix", () => {
+		const named = defineErrors({ teapot: { schema: z.object({ brew: z.string() }), status: "bad_request" } })
+		const appErrors = defineErrors({ gone: "gone", locked: "locked" })
+		const worker = honey<{}>().errorFactory(defineErrors({ worker_only: "conflict" }))
+		worker
+			.get("/w")
+			.errors("worker_only")
+			.handler((c) => c.res.json("ok", {}))
+		const app = honey<{}>().errorFactory(appErrors)
+		app
+			.get("/a")
+			.errors(named, "teapot")
+			.handler((c) => c.res.json("ok", {}))
+		app
+			.get("/b")
+			.errors("locked")
+			.handler((c) => c.res.json("ok", {}))
+		const loaded = honey<{}>().errorFactory(appErrors).routeTree(worker.toRouteTree())
+		const byPattern = Object.fromEntries(
+			[...collectRoutes(app).http, ...collectRoutes(loaded).http].map((r) => [r.pattern, r.errorMeta]),
+		)
+		expect(byPattern).toEqual({
+			"/a": { teapot: { schema: expect.any(Object), status: 400, statusKey: "bad_request" } },
+			"/b": { locked: { schema: null, status: 423, statusKey: "locked" } },
+			"/w": { worker_only: { schema: null, status: 409, statusKey: "conflict" } },
+		})
+	})
+
+	it("infers a key's status from its longest status suffix, and names a key nothing resolves unknown at 0", () => {
+		const app = honey<{}>().routeTree({
+			meta: {},
+			root: (() => {
+				const root = createNode()
+				insertRoute(root, "GET", "/events/:id")
+				return root
+			})(),
+			routes: { "GET /events/:id": { ek: ["billing_event_not_found", "mystery"] } },
+			v: 2,
+		})
+		expect(collectRoutes(app).http[0]?.errorMeta).toEqual({
+			billing_event_not_found: { schema: null, status: 404, statusKey: "not_found" },
+			mystery: { schema: null, status: 0, statusKey: "unknown" },
+		})
 	})
 })
