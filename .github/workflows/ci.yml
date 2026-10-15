@@ -224,14 +224,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - uses: actions/cache@v4
+      # The emitted crates resolve crates.io without a lockfile, so their dependencies drift: key the
+      # cache by ISO week, restore the newest, and save it even when the run fails (below), so each
+      # week compiles the drift once and every later run starts warm.
+      - id: cargo-week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - id: cargo-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             .cache/cargo-target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-${{ steps.cargo-week.outputs.week }}
           restore-keys: |
+            ${{ runner.os }}-cargo-${{ hashFiles('_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-
             ${{ runner.os }}-cargo-
       # one pinned list for CI and local runs (locally the harness fills .cache/python-venv from it)
       - run: pip install -r _v0/tests/python-requirements.txt
@@ -249,3 +256,11 @@ jobs:
       - run: cd packages/gen && bunx vitest run src/emit/shared/webhooks.toolchains.test.ts
         env:
           HONEY_REQUIRE_TOOLCHAINS: "1"
+      - if: always() && steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            .cache/cargo-target
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}

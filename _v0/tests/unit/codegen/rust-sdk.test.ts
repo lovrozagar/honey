@@ -1005,7 +1005,7 @@ describe("Tier 11: integration smoke", () => {
 				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
 			})
 		},
-		60000,
+		180_000,
 	)
 
 	it.skipIf(!hasCargo || !hasIntegrationFlag)(
@@ -1020,7 +1020,7 @@ describe("Tier 11: integration smoke", () => {
 				execSync("cargo fmt", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
 			})
 		},
-		60000,
+		180_000,
 	)
 })
 
@@ -1725,7 +1725,7 @@ describe("Tier 20: sync client", () => {
 				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
 			})
 		},
-		60000,
+		180_000,
 	)
 })
 
@@ -1799,7 +1799,7 @@ describe("Tier 21: SdkResult response field", () => {
 				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
 			})
 		},
-		60000,
+		180_000,
 	)
 })
 
@@ -1896,7 +1896,7 @@ describe("Tier 22: realtime SSE transport", () => {
 				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
 			})
 		},
-		60000,
+		180_000,
 	)
 })
 
@@ -1970,7 +1970,7 @@ describe("Tier 23: realtime longpoll transport", () => {
 				execSync("cargo check", { cwd: dir, env: cargoEnv(), stdio: "pipe" })
 			})
 		},
-		60000,
+		180_000,
 	)
 })
 
