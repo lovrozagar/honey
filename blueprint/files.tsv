@@ -138,7 +138,7 @@ src/schema/yup.ts	core	src	09	Yup → JSON Schema	codegen.ts
 src/schema/effect.ts	core	src	09	Effect → JSON Schema	codegen.ts
 src/schema/slots.ts	core	src	09	collect slots, hoist, dedup, ref-rewrite	codegen.ts
 src/schema/canonicalize.ts	core	src	09	canonicalizeSchema + compareCodeUnits	codegen.ts
-src/schema/resolve-refs.ts	core	src	09	resolveRefs/resolveSchemaDeep	codegen.ts
+src/ir/resolve-refs.ts	gen	src	09	resolveRefs/resolveSchemaDeep: spec→IR ref resolution, used only by SDK generation (gen; core uses sanitize-spec). Built with phase (d)	codegen.ts
 src/schema/sanitize-spec.ts	core	src	09	sanitizeOpenApiSpec	codegen.ts
 src/openapi/collect.ts	core	src	09	walk finalized routes → operation records	openapi/collect.ts
 src/openapi/generate.ts	core	src	10	generateOpenApi orchestration (app → 3.1 document)	codegen.ts
@@ -240,7 +240,7 @@ src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
 src/ir/resource-tree.ts	gen	src	09	resource tree from dotted operationId	codegen-ir.ts
 src/ir/slots.ts	gen	src	09	request/response slots + realtime/sse/ws markers	codegen-ir.ts
 src/ir/sdk-model.ts	gen	src	09	the SDK model over the IR	codegen-sdk-model.ts
-src/ir/schema-naming.ts	gen	src	09	schema name derivation	codegen-schema-naming.ts
+src/schema/naming.ts	core	src	09	schema name derivation (deriveSchemaName/sanitizeComponentName/isErrorEnvelope/shortHash) for the core dedup/hoist (slots.ts) + openapi document; codegen-ir never imports it	codegen-schema-naming.ts
 src/ir/route-tree-intern.ts	gen	src	09	route-tree interning	codegen-route-tree-intern.ts
 src/ir/load.ts	gen	src	17	load the consumer app + vite config via jiti to produce the spec (CLI concern, not the IR seam; path re-homed when bit 17 is planned)	codegen-load.ts
 src/emit/shared/lang.ts	gen	src	09	per-language naming (pascal/snake/camel)	codegen-lang.ts
