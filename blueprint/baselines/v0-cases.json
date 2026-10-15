@@ -46680,6 +46680,30 @@
 		"713b41d0f5": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
+		},
+		"9a75eedce5": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): generateTypes emits the TS model; unit/codegen/effect.test.ts"
+		},
+		"ce7d18c577": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): generateTypes emits the TS model; unit/codegen/yup.test.ts"
+		},
+		"79b1e8ad5b": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): generateTypes emits the TS model; unit/codegen/zod-mini.test.ts"
+		},
+		"08970024e7": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): generateTypes emits the TS model; unit/codegen/schema-to-json-schema-io.test.ts"
+		},
+		"984a1cf106": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): a search schema decomposed into query parameters is document assembly; unit/codegen/valibot-json-schema.test.ts"
+		},
+		"f58c5a66c8": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): a search schema decomposed into query parameters is document assembly; unit/codegen/valibot-json-schema.test.ts"
 		}
 	},
 	"retired": {
