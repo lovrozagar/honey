@@ -41621,10 +41621,6 @@
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
 		},
-		"0710389897": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
-		},
 		"0768e86e14": {
 			"feature": "06-realtime",
 			"reason": "uses WSContextImpl (ws/cloudflare.ts, bit 06)"
@@ -42013,10 +42009,6 @@
 			"feature": "07-security-middleware",
 			"reason": "uses imports request-id.ts (bit 07)"
 		},
-		"276f7119ea": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
-		},
 		"27a2cae06c": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -42269,10 +42261,6 @@
 			"feature": "02-finalize-middleware",
 			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
-		"3df075f168": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
-		},
 		"3e07faac56": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; integration/server.test.ts"
@@ -42356,10 +42344,6 @@
 		"420f680ef2": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
-		},
-		"430a60eb5b": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
 		"43479ee78c": {
 			"feature": "02-finalize-middleware",
@@ -42485,10 +42469,6 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
-		"4c238eef1c": {
-			"feature": "11-ts-client",
-			"reason": "the mock server's WS echo is mock-server behavior (bit 11, with its siblings)"
-		},
 		"4c53d6cec5": {
 			"feature": "11-ts-client",
 			"reason": "a generated tree module staying untouched is generated-tree loading (bit 11, with 8217438ad1)"
@@ -42594,8 +42574,8 @@
 			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"56527a95bd": {
-			"feature": "11-ts-client",
-			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: Vite plugin buildStart dedup across environments is plugin wiring (bit 19)"
 		},
 		"5746507eaa": {
 			"feature": "02-finalize-middleware",
@@ -42676,10 +42656,6 @@
 		"5c7ec6062c": {
 			"feature": "07-security-middleware",
 			"reason": "a v0 request-path fuzz case: lives in the bit-07 fuzz corpus (tests/integration/security)"
-		},
-		"5ce9740e32": {
-			"feature": "11-ts-client",
-			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"5d19aab6ff": {
 			"feature": "07-security-middleware",
@@ -42769,17 +42745,9 @@
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
 		},
-		"64792abcb5": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/route-tree/route-tree.test.ts"
-		},
 		"64fe70ad2e": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
-		},
-		"6640339d88": {
-			"feature": "11-ts-client",
-			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"671eb497a3": {
 			"feature": "02-finalize-middleware",
@@ -42802,8 +42770,8 @@
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
 		"68707d2262": {
-			"feature": "11-ts-client",
-			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: generateAndWrite via resolveHoneyConfig overwriting a stale routes.gen.ts is honey generate wiring"
 		},
 		"68ecfacfe9": {
 			"feature": "08-io",
@@ -42872,10 +42840,6 @@
 		"6d4061927d": {
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
-		},
-		"6d7a217670": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
 		"6e390a38f0": {
 			"feature": "08-io",
@@ -43166,8 +43130,8 @@
 			"reason": "a validation / body-parsing helper: input and validation are bit 08"
 		},
 		"82f8d40099": {
-			"feature": "11-ts-client",
-			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: Vite plugin hotUpdate ignoring atomic-write temp files is plugin wiring (bit 19)"
 		},
 		"8345fd903e": {
 			"feature": "07-security-middleware",
@@ -43333,10 +43297,6 @@
 			"feature": "02-finalize-middleware",
 			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
-		"919329d5ad": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
-		},
 		"91b842ec94": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
@@ -43384,10 +43344,6 @@
 		"952178b9f4": {
 			"feature": "07-security-middleware",
 			"reason": "uses taps (bit 07)"
-		},
-		"952afed163": {
-			"feature": "11-ts-client",
-			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"953ed12238": {
 			"feature": "09-ir-seam",
@@ -43453,10 +43409,6 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
-		"992303233d": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
-		},
 		"997ddde7ff": {
 			"feature": "07-security-middleware",
 			"reason": "forwarding a small known-length body as bytes is proxy behavior (proxy/, bit 07)"
@@ -43517,10 +43469,6 @@
 			"feature": "08-io",
 			"reason": "bodyLimit's REPLACE_BODY hook on the Node request lands with bodyLimit (bit 08)"
 		},
-		"9fcfe5e40d": {
-			"feature": "11-ts-client",
-			"reason": "emitSchemaType: the TS type emitter is bit 11"
-		},
 		"9fd398499c": {
 			"feature": "11-ts-client",
 			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
@@ -43572,10 +43520,6 @@
 		"a38209a0e3": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
-		},
-		"a3eb33f2a3": {
-			"feature": "11-ts-client",
-			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"a40d4a499b": {
 			"feature": "07-security-middleware",
@@ -44105,10 +44049,6 @@
 			"feature": "08-io",
 			"reason": "uses etag (etag.ts, bit 08)"
 		},
-		"d20324ce95": {
-			"feature": "11-ts-client",
-			"reason": "the generated mock server's SSE route is codegen output (mock-server, with the TS client at bit 11)"
-		},
 		"d211912876": {
 			"feature": "02-finalize-middleware",
 			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
@@ -44168,10 +44108,6 @@
 		"d6f8f70709": {
 			"feature": "05-streaming-sse-range",
 			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
-		},
-		"d7f2ce4c3a": {
-			"feature": "11-ts-client",
-			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
 		"d950b79ac5": {
 			"feature": "02-finalize-middleware",
@@ -44266,8 +44202,8 @@
 			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 08)"
 		},
 		"e3076a2112": {
-			"feature": "11-ts-client",
-			"reason": "asserts a generated route tree or client types: the TS emitter is bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: generateAndWrite overwriting an out-of-date routes.gen.ts; FromApp only builds the fixture"
 		},
 		"e32ec4b0bb": {
 			"feature": "07-security-middleware",
@@ -44348,10 +44284,6 @@
 		"ebb0d677ab": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
-		},
-		"eca8ef3252": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
 		"edabe155f3": {
 			"feature": "08-io",
@@ -44525,10 +44457,6 @@
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
 		},
-		"f9344b7c53": {
-			"feature": "11-ts-client",
-			"reason": "emitSchemaType: the TS type emitter is bit 11"
-		},
 		"f97c4880f6": {
 			"feature": "05-streaming-sse-range",
 			"reason": "ctx.res.generate() is driven by streaming/producer-stream.ts; it extends response.ts at bit 05"
@@ -44536,10 +44464,6 @@
 		"f9ca57d13f": {
 			"feature": "02-finalize-middleware",
 			"reason": "HoneyResponse.clone is response/builder.ts, born at bit 02 (re-cut)"
-		},
-		"fa0bee710c": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
 		"fa37f1b147": {
 			"feature": "08-io",
@@ -44556,10 +44480,6 @@
 		"faccadd062": {
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
-		},
-		"fb38591fdd": {
-			"feature": "11-ts-client",
-			"reason": "exercises the SDK mock server the generated-client tests run against"
 		},
 		"fb4d1f631e": {
 			"feature": "07-security-middleware",
@@ -44921,42 +44841,6 @@
 			"feature": "11-ts-client",
 			"reason": "emitSchemaType: the TS type emitter is bit 11"
 		},
-		"1536604e85": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"ea350bfcbb": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"40eafd8316": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"02b51894ad": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"7781b94f4e": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"d49771fc13": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"6513cd416b": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"1047fa78b8": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
-		"bbd3ed2282": {
-			"feature": "11-ts-client",
-			"reason": "the SDK mock server: support owned by the client bits (files.tsv: by owner)"
-		},
 		"765a8e1e33": {
 			"feature": "11-ts-client",
 			"reason": "drives createClient: the TS client is bit 11"
@@ -45097,10 +44981,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
 		},
-		"b7221ffab4": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
-		},
 		"df7e7129c2": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/codegen.test.ts"
@@ -45145,10 +45025,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
 		},
-		"bfcffa46d6": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
-		},
 		"60ee74ece9": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
@@ -45174,10 +45050,6 @@
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
 		},
 		"904acfc480": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
-		},
-		"d74951f387": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/generated-types-validity.test.ts"
 		},
@@ -45405,14 +45277,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
 		},
-		"209037ea81": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
-		},
-		"b99898f519": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
-		},
 		"b2f58ec1b8": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
@@ -45420,14 +45284,6 @@
 		"2c6a043853": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-nested.test.ts"
-		},
-		"5308f7a935": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
-		},
-		"67dd6b2f4e": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-nested.test.ts"
 		},
 		"6d38f79ef0": {
 			"feature": "11-ts-client",
@@ -45457,23 +45313,7 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
 		},
-		"97daae6222": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
 		"6296b0d960": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
-		"02ba59f548": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
-		"486f74543f": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
-		"a9e55620ce": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
 		},
@@ -45505,14 +45345,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
 		},
-		"e5e60a4ce8": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
-		"9912193035": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
 		"e8c807c73e": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
@@ -45525,23 +45357,7 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
 		},
-		"90b9a40caa": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
-		"5570c4ed47": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
 		"f0e741df66": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
-		"7420feea98": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r4-phase-a.test.ts"
-		},
-		"8716fd136a": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r4-phase-a.test.ts"
 		},
@@ -45549,51 +45365,11 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
 		},
-		"630c54383f": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"e50828f7ad": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
 		"53e990f9e5": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
 		},
-		"a1d7da5bde": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"59ab0200ed": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"13de0df31d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"e8c7089c4b": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"b70b35fbb9": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"e6bdee4ee7": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
 		"65abbd0e4d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"f6ca098d0d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
-		},
-		"a4b1bc5ab6": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r5-phase-d.test.ts"
 		},
@@ -45677,34 +45453,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
 		},
-		"a7c674b3a8": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"42ada55a0a": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"ae20342bab": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"9ddf1e3594": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"0ec712062d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"7fbf95b9a2": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"94d2099d09": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
 		"898812c83a": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
@@ -45721,18 +45469,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
 		},
-		"236e3e5769": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"7e10d40f86": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"97dfd96828": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
 		"ab490a218c": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
@@ -45740,78 +45476,6 @@
 		"b5b9e2ac0d": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"fe8d6bc1a7": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"5405775079": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/sdk-r6-25-json-schema.test.ts"
-		},
-		"ce7863f066": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"bed677911e": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"a69054d119": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"8345a732c7": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"8d643ee633": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"9034857bfb": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"7440966e69": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"938df592bd": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"fc58c03669": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"586e7c6311": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"4f62eb0c8f": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"a30acf4042": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"ac60be02a8": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"02718b19dd": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"8ee5ed9817": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
-		},
-		"02b07c37ef": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-f.test.ts"
 		},
 		"b6f6572d3f": {
 			"feature": "11-ts-client",
@@ -45857,71 +45521,7 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
 		},
-		"c06785e093": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"0c5061cc19": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"e5659eb56d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"88fe7539b7": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"af645b0e07": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"ffc4c70a5d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"fc702f2100": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"d6607d6b54": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"b911d53bf2": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"b7cef4920b": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"0abc86d02e": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
 		"a038c119fe": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"8be8df0993": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"066726536b": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"b1bdbc10ed": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"bf92b9e770": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
-		},
-		"537a7cdfe9": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-g.test.ts"
 		},
@@ -45933,43 +45533,7 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
 		},
-		"5c504dfad4": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
 		"9e6f63457d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"315ea556a3": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"f0c134e75c": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"f000740f60": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"909a33255e": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"5cff46b8a2": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"b72b4a4db7": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"5266ee7580": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"d9a559a2c2": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
 		},
@@ -45981,35 +45545,11 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
 		},
-		"a3648850a2": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"f369dcabb5": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): TS SDK: client strings, response-type dedupe, jsonSchemaToTS, isStandardErrEnvelope; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
 		"8ebd298507": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
 		},
-		"a41520ae7e": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"4dc403f6bb": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
 		"4f7d2e0f61": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"7811071b8a": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"6a6e6cc528": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
 		},
@@ -46025,27 +45565,7 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
 		},
-		"b6e6bd3219": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"d2645bb721": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
 		"c06c2bfe35": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"d288f2ec78": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"071bbe7d73": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
-		},
-		"16a6e40a1f": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-h.test.ts"
 		},
@@ -46058,14 +45578,6 @@
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
 		},
 		"7c6184e099": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"861578b9d4": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"a1b05d5934": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
 		},
@@ -46101,38 +45613,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
 		},
-		"39d5b0bd4e": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"79937e4464": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"79d0c3c1f6": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"e46e840eb6": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"07f14f737b": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"b35c9756b1": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"94f274a538": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"1adaed9a78": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
 		"ce63b62f23": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
@@ -46141,59 +45621,11 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
 		},
-		"489c912320": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"eb62bc6ec5": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"b8071e9beb": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"52850362ff": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"17c64fb04a": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-i.test.ts"
-		},
-		"d3e135c042": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
-		},
-		"1dcaa3ad12": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
-		},
 		"d68153af0b": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
 		},
-		"a195d72312": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
-		},
-		"6dc2907107": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
-		},
 		"66fed1a886": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
-		},
-		"818a5a53ab": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
-		},
-		"36b37807ca": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
-		},
-		"04468bd138": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/sdk-r6-phase-j.test.ts"
 		},
@@ -46221,23 +45653,11 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
 		},
-		"39969ee2ff": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
-		},
 		"6739433526": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
 		},
 		"557ae99876": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
-		},
-		"5f0e11395a": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
-		},
-		"ea5cc25ad4": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
 		},
@@ -46273,10 +45693,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
 		},
-		"4dd46a9825": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
-		},
 		"0133924867": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): suite topic; unit/codegen/sdk-runtime.test.ts"
@@ -46284,22 +45700,6 @@
 		"88a8924ee0": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11,10; unit/codegen/ts-adversarial-compile.test.ts"
-		},
-		"487079ba1b": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
-		},
-		"cd282ce42f": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
-		},
-		"d49e80d116": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
-		},
-		"bb8e7546d1": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): suite topic; unit/codegen/ts-emitter-byte-equiv.test.ts"
 		},
 		"7682f55c19": {
 			"feature": "11-ts-client",
@@ -46489,15 +45889,7 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
 		},
-		"95fb65a4b7": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
-		},
 		"8c8a800da4": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
-		},
-		"ce41c39195": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
 		},
@@ -46533,10 +45925,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
 		},
-		"e7a1f2c66d": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
-		},
 		"697b381e1a": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
@@ -46552,10 +45940,6 @@
 		"a5b73c73eb": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/type-generator.test.ts"
-		},
-		"d5f6068fdd": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/typed-errors-codegen.test.ts"
 		},
 		"382216f3e0": {
 			"feature": "11-ts-client",
@@ -46629,10 +46013,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
 		},
-		"959d14ae17": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
-		},
 		"fa6a97ea33": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/meta/meta-codegen.test.ts"
@@ -46669,10 +46049,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/route-tree/route-tree.test.ts"
 		},
-		"360ed98742": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-text): calls 11; unit/route-tree/route-tree.test.ts"
-		},
 		"4b34d0a127": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/route-tree/route-tree.test.ts"
@@ -46684,10 +46060,6 @@
 		"9a75eedce5": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): generateTypes emits the TS model; unit/codegen/effect.test.ts"
-		},
-		"ce7d18c577": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): generateTypes emits the TS model; unit/codegen/yup.test.ts"
 		},
 		"79b1e8ad5b": {
 			"feature": "11-ts-client",
@@ -46809,14 +46181,6 @@
 			"feature": "11-ts-client",
 			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
 		},
-		"5947f0a8a7": {
-			"feature": "11-ts-client",
-			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
-		},
-		"a8f13c9b31": {
-			"feature": "11-ts-client",
-			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
-		},
 		"158d1519bb": {
 			"feature": "11-ts-client",
 			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
@@ -46825,49 +46189,37 @@
 			"feature": "11-ts-client",
 			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
 		},
-		"cbaca5a893": {
-			"feature": "11-ts-client",
-			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
-		},
 		"08b186a1a7": {
 			"feature": "09-ir-seam",
 			"reason": "H72 import() specifier resolution (exports/@types, drops lib imports) lives in the type-extractor split that becomes gen/extract (09f); building it there makes extract write resolvable specifiers from birth instead of absolute paths deferred to bit 19"
-		},
-		"f9e2535dd9": {
-			"feature": "11-ts-client",
-			"reason": "bit-10 triage: generateSDK type output over a spec: the TS client's emitter (bit 11)"
 		},
 		"bb594968f7": {
 			"feature": "11-ts-client",
 			"reason": "bit-10 triage: jsonSchemaToTS of the envelope with a snapshot: the TS client's type text (bit 11)"
 		},
 		"1536ed55e9": {
-			"feature": "11-ts-client",
-			"reason": "bit-10 triage: mergeSpecs: the merge-specs suite lives in bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs is the v0 Vite plugin's multi-app spec merge (plugin.ts); plugin wiring is bit 19"
 		},
 		"6ea1ccc1dc": {
-			"feature": "11-ts-client",
-			"reason": "bit-10 triage: scopeSpec: the scope-spec suite lives in bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec is a v0 spec-filter utility for generate wiring with no gen emit home; bit 19 owns the plugin and generate CLI wiring"
 		},
 		"90df7f58e8": {
 			"feature": "11-ts-client",
 			"reason": "bit-10 triage: generateSDK end to end after dedup: bit 11"
 		},
 		"871000e50f": {
-			"feature": "11-ts-client",
-			"reason": "bit-10 triage: mergeSpecs: bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs conflict on differing same-name component schemas; plugin spec-merge is bit 19"
 		},
 		"03490551f7": {
-			"feature": "11-ts-client",
-			"reason": "bit-10 triage: mergeSpecs: bit 11"
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs accepts identical same-name component schemas; plugin spec-merge is bit 19"
 		},
 		"21490b85ed": {
 			"feature": "11-ts-client",
 			"reason": "bit-10 triage: generateRouteTree's meta export: the route-tree module generator is bit 11's"
-		},
-		"ebbd215fc2": {
-			"feature": "11-ts-client",
-			"reason": "bit-10 triage: generateTypes' meta emission: bit 11"
 		},
 		"c6a112aebd": {
 			"feature": "11-ts-client",
@@ -46888,10 +46240,6 @@
 		"75ddd200b6": {
 			"feature": "19-release-provenance",
 			"reason": "bit-10 triage: the plugin generating the unfiltered document once: bit 19"
-		},
-		"d30c60f1da": {
-			"feature": "11-ts-client",
-			"reason": "bit-10 triage: generateSDK over the mock server's spec: bit 11"
 		},
 		"0354472c30": {
 			"feature": "12-go-sdk",
@@ -46916,6 +46264,94 @@
 		"13874dcde2": {
 			"feature": "19-release-provenance",
 			"reason": "bit-10 triage: generateAndWrite's openApi config scheme reaching the SDK step: the plugin, bit 19"
+		},
+		"0d020b5def": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"21030845aa": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: merging specs across apps then scoping by tag is generate-pipeline wiring (v0's plugin calls mergeSpecs); no bit-11 home"
+		},
+		"21af367135": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs then scopeSpec by tags into separate SDKs: plugin/generate spec utilities owned by bit 19"
+		},
+		"23ac6ba9b1": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec by pathPrefix is a spec transform for generate wiring; no bit-11 or files.tsv home"
+		},
+		"3259833d04": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"3ddaf9e27d": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"4976fe5495": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"55963e486d": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"68b09fe15e": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"76de71bf2b": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"795c4bb4ec": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"99ffc7d072": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec excludeTags is a spec transform for generate wiring; no bit-11 or files.tsv home"
+		},
+		"a0fcfb1905": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec by tags is a spec transform for generate wiring; no bit-11 or files.tsv home"
+		},
+		"a265788665": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"aeccb1b016": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"b58ca524e8": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"cabb876f5a": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"cdcd615e05": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"e123451152": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"e7c7e8b03b": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"eb3ae70614": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: mergeSpecs exists only for the v0 Vite plugin's multi-spec SDK input (plugin.ts)"
+		},
+		"f041095901": {
+			"feature": "19-release-provenance",
+			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
 		}
 	},
 	"retired": {
@@ -47010,6 +46446,389 @@
 		"280acb443d": "bit-10 triage (honey-05 ruled): v1 has one generator in core (F5): the served document and honey generate share it, so there is no light spec path to isolate from codegen",
 		"071875613f": "bit-10 triage (honey-05 ruled): same: no separate light spec bundle in v1 (one generator, converters are vendor-free walkers in core)",
 		"055f2c56f7": "bit-10 triage (honey-05 ruled): the OpenAPI runtime slot is cut (F1, H23): serveOpenApi imports the generator directly, there is nothing to load",
-		"9e70789d0e": "bit-10 triage: v1 declares one body per route (bit 08 InputSchemas); json and form on one route cannot be declared, so there are never two bodies to document. The single-body legs port (c091a16d80, 0a2f64ab66)."
+		"9e70789d0e": "bit-10 triage: v1 declares one body per route (bit 08 InputSchemas); json and form on one route cannot be declared, so there are never two bodies to document. The single-body legs port (c091a16d80, 0a2f64ab66).",
+		"00ee8660f1": "bit-11 triage: TEXT: internal #requestSafe name; safe-mode result ported via e45e2d4201/51c69e7164",
+		"0143ac18cf": "bit-11 triage: DUP: json input typing is covered by 4f7846376d",
+		"02718b19dd": "bit-11 triage: TEXT: #clearStale(seqSnapshot) call text; behavior ported via e1786bbb53",
+		"02b07c37ef": "bit-11 triage: TEXT: status-range gate string; behavior ported via 6485294e4d (parse error on 200 still marks stale)",
+		"02b51894ad": "bit-11 triage: MOCK: asserts the v0 mock server's /errors/404 body over raw fetch; no client involved",
+		"02ba59f548": "bit-11 triage: TEXT: Asserts the internal alias name _ErrEnvelope in emitted text; typed error data is ported via error.test.ts cases",
+		"02cc86a130": "bit-11 triage: TEXT: captureStackTrace call in emitted text: stack cosmetics; ClientError behavior ported in error.test",
+		"03245982d5": "bit-11 triage: DUP: composition of bb778cc79c and 2b1b556f1a in one batch",
+		"03547caa7a": "bit-11 triage: DUP: safe-mode error is a plain parsed body (no .stack); kept 6ae275b4c0",
+		"03673d7d8c": "bit-11 triage: DUP: sortSearchParams config option duplicated by runtime case 958ff3260e",
+		"04468bd138": "bit-11 triage: TEXT: guard expression string for empty invalidate; no-target case belongs in d68153af0b port",
+		"04c95d5a8f": "bit-11 triage: DUP: a number search param in the query; kept 64c7a6b83d",
+		"055f2020d8": "bit-11 triage: DUP: parallel calls resolve independently; kept 723ebdf457",
+		"066726536b": "bit-11 triage: TEXT: absence of a source line; never-drop behavior ported as e9ba60ceb5",
+		"06b72f76a8": "bit-11 triage: DUP: static config headers sent duplicated by 3644f5622e",
+		"0710389897": "bit-11 triage: MOCK: asserts the v0 mock server's /auth/refresh refusal over raw fetch; no client involved",
+		"071bbe7d73": "bit-11 triage: DUP: old 1 MiB SSE buffer literal gone; the configurable bound is 2dd02e57a0",
+		"07c2b2930f": "bit-11 triage: DUP: staleMaxEntries threshold duplicated by f6fdef6f18",
+		"07f14f737b": "bit-11 triage: TEXT: return typed vs inline object literal in emitted source; WS surface ported via ws.test.ts cases",
+		"084d7c35f7": "bit-11 triage: TEXT: #searchSerializer field name: per-call allocation detail; serializer behavior ported via 8322d9bd6c",
+		"0a6c8fd597": "bit-11 triage: DUP: Omitted fetch calls the globalThis-bound fetch (no Illegal invocation): same assertion as 589348f934, one shared runtime",
+		"0abc86d02e": "bit-11 triage: TEXT: body-rebind source line; hook body rewrite ported as 35f67e8d93",
+		"0b78a0791e": "bit-11 triage: TEXT: #resourceCache.get(key) text; identity behavior ported via 3180c3051e",
+		"0ba47d6efc": "bit-11 triage: DUP: \"no addEventListener(\"\"abort\"\") in #doSSE duplicated by e0fe80d231\"",
+		"0c5061cc19": "bit-11 triage: TEXT: emitted guard source text; behavior (non-string message -> HTTP status) ported as 262dee1e93",
+		"0c8f44af80": "bit-11 triage: DUP: stub-fetch union of 388d4f9772 (fresh UUID), 073657bca1 (per-call kept) and e35f665414 (hook wins)",
+		"0ec712062d": "bit-11 triage: V0BUG: pins pre-fix: nullable number typed without the null variant",
+		"1047fa78b8": "bit-11 triage: MOCK: asserts the v0 mock server's hand-set x-invalidate header on POST; no client involved",
+		"115d9c2858": "bit-11 triage: DUP: surface app WS action types: covered by 52a5219983 and 97cf971ee1",
+		"118afdcd6a": "bit-11 triage: DUP: sequential reuse of one client is covered by 1146095908 (success, error, success)",
+		"13048dd80b": "bit-11 triage: DUP: client side is GET JSON into data (kept 9c34aa9ebd); serving manifest.json is core's",
+		"13404bc296": "bit-11 triage: DUP: \"asserts the same \"\"get(target, key)\"\"/Reflect.get text as cb5cea8fec\"",
+		"13de0df31d": "bit-11 triage: TEXT: counts a response literal in the emitted interface text; size/dedupe shape, not behavior",
+		"14bc71eb18": "bit-11 triage: DUP: a call finishing under a configured timeout succeeds; kept 336da90474",
+		"1535db594c": "bit-11 triage: CUT: H23: ipRestrict has no getIp option; the address is ctx.ip, the platform peer only",
+		"1536604e85": "bit-11 triage: MOCK: asserts the v0 mock server's no-token 401 over raw fetch; no client involved",
+		"15e0b2ac58": "bit-11 triage: DUP: same empty-json POST and error_key check as 9a6154239c, which asserts the full envelope",
+		"16204a7e99": "bit-11 triage: DUP: internal lookupStale on an empty map; the public result (isStale false, by []) is d7aee41a8e",
+		"16a6e40a1f": "bit-11 triage: DUP: old slice(0, 512) literal gone; the configurable cap is 8c5455f3ac",
+		"17c64fb04a": "bit-11 triage: DUP: dispose(): void on the client type; kept 54bf8bd01c",
+		"199f2cdbd3": "bit-11 triage: TEXT: export type SDKResult< text; result typing ported via c925ade565/f92f0fdca0/0cad6a4d7a",
+		"19fa044370": "bit-11 triage: DUP: 204 gives data and error null; kept 0a9df4cde3",
+		"1a0114c8c1": "bit-11 triage: DUP: concurrent independence is covered by a98111c2ed (mixed concurrent calls)",
+		"1adaed9a78": "bit-11 triage: TEXT: typeof symbol check string; Symbol-omitted behavior is the R6-24 runtime test",
+		"1c9f02644c": "bit-11 triage: TEXT: string checks on v0 file contents (export class SDK, as const); the file set and behavior are asserted by running the v1 SDK",
+		"1dcaa3ad12": "bit-11 triage: TEXT: #doSSE(entry: signature text; internal helper shape",
+		"209037ea81": "bit-11 triage: TEXT: regex on serviceMap text; mixed-depth nesting is pinned by the IR resource-tree test and executed by 23755479e3's port",
+		"20dc827210": "bit-11 triage: V0BUG: pins pre-fix: a fresh action function on every property access",
+		"22c0de0e09": "bit-11 triage: DUP: success data with error null already asserted by 80921780d9",
+		"236e3e5769": "bit-11 triage: DUP: nullable wraps any shape; same rule as 898812c83a (tuple)",
+		"23ad43fb99": "bit-11 triage: DUP: DELETE 204 gives data and error null; kept 0a9df4cde3",
+		"23dcd00b36": "bit-11 triage: DUP: an auto x-request-id when unset is covered by 388d4f9772 (fresh UUID on each request)",
+		"23f1b78af2": "bit-11 triage: DUP: SSE uses the globalThis-bound default fetch: same assertion as 890bba3563",
+		"248ae6cac9": "bit-11 triage: DUP: toBeFunction only; the throw-mode return is asserted by 3fd365de52",
+		"2502254e8a": "bit-11 triage: DUP: another JSON-body POST against the real app; kept 908e699934",
+		"258a3e1f91": "bit-11 triage: DUP: only asserts the resolved target is present (bb778cc79c); its drop intent is superseded by e9ba60ceb5",
+		"25ca9db744": "bit-11 triage: DUP: 5xx gives the error result; kept 906b7a7d38",
+		"2622c8105e": "bit-11 triage: TEXT: config type declaration text; each config option is exercised by executed http/request tests",
+		"276f7119ea": "bit-11 triage: MOCK: asserts the v0 mock server's PUT /users/:id over raw fetch; no client involved",
+		"27ef629b27": "bit-11 triage: TEXT: #patternRegexCache field: perf internal, matching behavior ported via c07376999d",
+		"2873b5c0aa": "bit-11 triage: V0BUG: pre-fix witness asserting a read's clearStale wipes a later mutation's mark (corruption); v1 keeps it, see e1786bbb53",
+		"290b89894a": "bit-11 triage: DUP: toBeFunction only; $path behavior is asserted by b00322dda0",
+		"2cab4bbd2e": "bit-11 triage: DUP: error result with status and response already asserted by 5751e4a67b",
+		"2d0b176e81": "bit-11 triage: V0BUG: pins pre-fix: POST json body not exposed on onRequest ctx",
+		"2de961ae1d": "bit-11 triage: DUP: retry on onResponse ctx type duplicated by 02338dcfd7",
+		"307f567daf": "bit-11 triage: TEXT: internal #resourceCache field name; identity behavior ported via 3180c3051e",
+		"30e445683e": "bit-11 triage: V0BUG: pins v0 not exposing the body to onRequest",
+		"315ea556a3": "bit-11 triage: TEXT: _HttpOpts alias name in emitted types; alias hoisting is text layout",
+		"35149ed69d": "bit-11 triage: TEXT: no require() in emitted text; ESM-ness is proven by importing the emitted SDK in sdk.test/ts-harness",
+		"360ed98742": "bit-11 triage: TEXT: spelling of export const routeTree; importing and serving it is the route-tree-emit port 8217438ad1",
+		"36b37807ca": "bit-11 triage: TEXT: self.#connectWS(entry, call-site text; internal wiring",
+		"39969ee2ff": "bit-11 triage: DUP: Search values in the URL query: same runtime assertion as 18efdee41a, via the SDK front",
+		"39d5b0bd4e": "bit-11 triage: TEXT: \"state member text in the emitted interface; state works per v0 runtime \"\"keeps state, dispose and String(sdk) working\"\"\"",
+		"39db4ec44d": "bit-11 triage: DUP: full substitution already asserted by bb778cc79c; multi-param covered by f38504b4bf",
+		"3b556aba9e": "bit-11 triage: DUP: baseURL path prefix kept by $url is asserted by 7b1ceb7659 (https://api.example.com/v1/users/a%2Fb)",
+		"3b61f15b54": "bit-11 triage: DUP: an undefined search value omitted; kept f4567265b5",
+		"3c8b94f112": "bit-11 triage: V0BUG: pins the same pre-fix base-query drop with a call search present",
+		"3d535c97aa": "bit-11 triage: TEXT: string-contains serviceMap/SDK/users/list in emitted source; dispatch behavior covered by executed sdk.test cases",
+		"3df075f168": "bit-11 triage: MOCK: asserts the v0 mock server's DELETE then 404 over raw fetch; no client involved",
+		"3e1a197522": "bit-11 triage: DUP: reconnectToken option duplicated by 1665940631",
+		"40099cd069": "bit-11 triage: V0BUG: pins pre-fix: ld+json returned as a raw string",
+		"403a6ee57f": "bit-11 triage: V0BUG: pins v0 leaving +json (vnd.api+json) bodies as raw strings",
+		"407703a546": "bit-11 triage: V0BUG: pins v0's substring match JSON-parsing application/jsonp into a SyntaxError",
+		"40eafd8316": "bit-11 triage: MOCK: asserts the v0 mock server's /errors/400 body over raw fetch; no client involved",
+		"41418fd9ee": "bit-11 triage: DUP: the error-branch shape is 900fb63f15 (unknown error) plus 955febe9dc (response and status)",
+		"42ada55a0a": "bit-11 triage: V0BUG: \"pins pre-fix: type array [\"\"string\"\",\"\"null\"\"] typed unknown\"",
+		"430a60eb5b": "bit-11 triage: MOCK: asserts the v0 mock server's POST /users create over raw fetch; no client involved",
+		"430fa809f3": "bit-11 triage: TEXT: internal helper name #buildURL; URL building ported via 96675f036a",
+		"43afb7bf5e": "bit-11 triage: V0BUG: \"pins pre-fix regex injection: \"\".\"\" in a pattern matches any character\"",
+		"4512d19eeb": "bit-11 triage: DUP: HTTP + WS coexisting in the service map: covered by 3a1c5d25a9",
+		"45e9071532": "bit-11 triage: TEXT: internal async #buildHeaders name; header building ported via 3644f5622e/3025883411",
+		"465755700a": "bit-11 triage: TEXT: internal helper name #interpolatePath; interpolation ported via 81e629816e/0cc741d5be",
+		"486f74543f": "bit-11 triage: TEXT: Asserts the internal alias name _ErrField in emitted text; no behavior beyond typed error rows",
+		"487079ba1b": "bit-11 triage: TEXT: Snapshot of v0's emitted types file; v1 emits different files, SDK types are asserted by typecheck/execution",
+		"489c912320": "bit-11 triage: DUP: #disposed field is a leg of dispose behavior 54bf8bd01c; kept 54bf8bd01c",
+		"4c238eef1c": "bit-11 triage: MOCK: asserts the v0 mock server's /ws echo over a raw WebSocket; no client involved",
+		"4dc403f6bb": "bit-11 triage: DUP: status 0 in throw and safe returns is a leg of 8ebd298507; kept 8ebd298507",
+		"4dd46a9825": "bit-11 triage: DUP: Config timeout aborting a never-answering fetch: same assertion as 78ea52cb6f",
+		"4e61b70acd": "bit-11 triage: DUP: toBeFunction only; the POST-path constraint is asserted by 82d4dbe54b",
+		"4e66f4b732": "bit-11 triage: DUP: toBeFunction only; the result-mode return is asserted by b797bb4a20",
+		"4f62eb0c8f": "bit-11 triage: TEXT: seqSnapshot field text; behavior ported via e1786bbb53",
+		"4fa33eb0f0": "bit-11 triage: DUP: surface app WS ops in service map with params: covered by 03c352c0e8 and 3a1c5d25a9",
+		"51931126aa": "bit-11 triage: DUP: search params on query string duplicated by 9e6939e825",
+		"5266ee7580": "bit-11 triage: TEXT: _Expand<_Inp spelling in emitted signatures; text layout",
+		"52850362ff": "bit-11 triage: DUP: request signal composes the dispose signal; kept 54bf8bd01c",
+		"5308f7a935": "bit-11 triage: TEXT: regex on serviceMap text for 2-segment ids; pinned by the resource-tree nesting test (users.list)",
+		"537a7cdfe9": "bit-11 triage: TEXT: regex count over emitted source; behavior ported as 172daa7492",
+		"5405775079": "bit-11 triage: DUP: same nullable rule as 898812c83a (boolean)",
+		"54479b0a16": "bit-11 triage: V0BUG: pins v0 writing Symbol(x) into the query",
+		"54b9b823da": "bit-11 triage: TEXT: internal resCtx annotation (selector?) in #doSSE; covered by c062890fd6/2ddd3d861d ports",
+		"5511ee2089": "bit-11 triage: DUP: same result fields as 924b793b81, read without destructuring",
+		"552a4bee9c": "bit-11 triage: DUP: path param interpolation (/items/42, no :id) subsumed by 75b9a8ea5c exact URL /users/42",
+		"5570c4ed47": "bit-11 triage: TEXT: Counts raw brackets in emitted types; escaping is pinned by type-emitter tests and v1 typechecks the emitted SDK",
+		"570e6a3c74": "bit-11 triage: DUP: expired-swept / fresh-kept split is asserted by ef7a387d44",
+		"58002b96cf": "bit-11 triage: DUP: same callable-action property as fbc48ed932",
+		"586e7c6311": "bit-11 triage: TEXT: #invalidationSeq field text; stale-race behavior ported from sdk-r6-3-stale-race (e1786bbb53, ea9b7c2ff8)",
+		"5947f0a8a7": "bit-11 triage: DUP: same no-input-schema property as 5eb9c55499, via the cut FromApp entry",
+		"5950e31315": "bit-11 triage: TEXT: #toColonParams name + regex literal; {param} path interpolation ported via 81e629816e and 44e305fc5f",
+		"59ab0200ed": "bit-11 triage: TEXT: _Res alias hoist is emitted-text layout; v1 types from IR via irToTs have no such alias scheme",
+		"5c504dfad4": "bit-11 triage: DUP: same determinism as 17bd5beace over another emitted file; kept 17bd5beace (assert every file)",
+		"5ccff541dc": "bit-11 triage: TEXT: config field spellings (baseURL, fetch, invalidation, hooks); each option exercised at runtime in http.test",
+		"5ce9740e32": "bit-11 triage: CUT: F7: types come from the vendor's JSON Schema; z.undefined() has no JSON Schema word, the undefined type was v0's _def walker",
+		"5cff46b8a2": "bit-11 triage: TEXT: & _HttpOpts intersection spelling in emitted types; text layout",
+		"5f0e11395a": "bit-11 triage: DUP: Static config Authorization reaching the request: same assertion as b98c67a478",
+		"5fda2fdb63": "bit-11 triage: TEXT: this.#searchSerializer = constructor text: allocation detail",
+		"601a863f1c": "bit-11 triage: DUP: size-guard sweep of expired entries duplicated by f6fdef6f18",
+		"6039f1fe34": "bit-11 triage: TEXT: \"internal \"\"serviceMap as _ServiceMap\"\" cast text\"",
+		"6306574c67": "bit-11 triage: DUP: Same ReturnFor /output/sse = AsyncIterable<SSEEvent> assertion as 87fc01b238",
+		"630c54383f": "bit-11 triage: DUP: same flat field-error shape as f2954af53b; kept f2954af53b",
+		"64792abcb5": "bit-11 triage: DUP: identical mergeTree two-app serve; kept ad44f238f5",
+		"64934b0660": "bit-11 triage: DUP: same custom-schema error payload as 614de19390",
+		"6513cd416b": "bit-11 triage: MOCK: asserts the v0 mock server's hand-set x-invalidate header on DELETE; no client involved",
+		"652c35a792": "bit-11 triage: DUP: path-param encoding, asserting only that an error came back; kept f8439e0116",
+		"662acddbbe": "bit-11 triage: TEXT: regex over emitted client for x-request-id/randomUUID/headers.has; behavior ported via 48a20ec21b, a70a717fe1, e5f3de3b8d",
+		"6640339d88": "bit-11 triage: V0BUG: v0 typed bigint as bigint though JSON carries a number; v1 types int64 as number (vendors 'a bigint, as the int64 number')",
+		"67dd6b2f4e": "bit-11 triage: DUP: a single-segment op typed as a root callable; kept b2f58ec1b8",
+		"6a024db370": "bit-11 triage: V0BUG: \"pins pre-fix regex injection: \"\"a.c\"\" matches \"\"abc\"\"\"",
+		"6a33205b57": "bit-11 triage: TEXT: substring checks on the emitted map file text; service-map content asserted as data by 7765198c03",
+		"6a6e6cc528": "bit-11 triage: DUP: safe mode returning the client-side ClientError is a leg of 4f7d2e0f61; kept 4f7d2e0f61",
+		"6ade9cc04f": "bit-11 triage: DUP: x-websocket -> ws flag in the service map is asserted by c03f1e4abc",
+		"6b32f76b51": "bit-11 triage: V0BUG: pins v0 leaving problem+json as a raw string",
+		"6be84ab36f": "bit-11 triage: TEXT: exported class name spelling; the named export is exercised by importing and constructing the executed SDK",
+		"6c7fd63ae1": "bit-11 triage: CUT: F1: fixed emitted file set; a WS-only SDK still ships runtime.gen.ts",
+		"6d7a217670": "bit-11 triage: MOCK: asserts the v0 mock server's GET /users/:id over raw fetch; no client involved",
+		"6dc2907107": "bit-11 triage: TEXT: #connectWS(entry: signature text; WS invalidation ported via 66fed1a886",
+		"6e614dce18": "bit-11 triage: DUP: custom-formatter body reaching the client is the same pass-through as cb37af43a2; core pins both formatters",
+		"6ec0a21eb9": "bit-11 triage: DUP: the same never-errors assertion as 681d5c6a54 on another route",
+		"6ffcaa0e07": "bit-11 triage: TEXT: \"absence of \"\"new Set(\"\" in #markStale: allocation detail, no observable behavior\"",
+		"70c2c5c179": "bit-11 triage: DUP: 4xx -> {data:null, error:body, status} duplicated by 51c69e7164",
+		"70e58651de": "bit-11 triage: TEXT: internal #buildSignal name; abort/timeout ported via a1ec69a992/be205e6444",
+		"713c82785a": "bit-11 triage: DUP: enum path param is not plain string duplicated by 1db149e20a",
+		"7420feea98": "bit-11 triage: TEXT: Asserts the regex [\\x00-\\x1f] in emitted source; control-char stripping is ported by executing in b23536e1a6",
+		"7440966e69": "bit-11 triage: TEXT: clearTimeout(timer) string; behavior is the R6-2 runtime test",
+		"74bd6068ac": "bit-11 triage: DUP: Path-only baseURL joined against location.origin: same assertion as 9d438fd1c1",
+		"757b77548e": "bit-11 triage: DUP: same non-text non-JSON -> bytes rule as 8e1ed88266 (pdf)",
+		"75ea0d912d": "bit-11 triage: TEXT: import-statement spelling between v0 client/types/map files; v1 file set differs and is executed",
+		"763477605b": "bit-11 triage: TEXT: new Proxy( in emitted text; Proxy dispatch behavior ported via 33e1e5e77f/910422df4f",
+		"76a783a1ee": "bit-11 triage: DUP: asserts only toMatchTypeOf<{}>; no-output typing is c07ddbf8fe's assertion",
+		"774e218b02": "bit-11 triage: DUP: Titled $path but calls $url with the same input and expectation as 9fcb6ed7ed",
+		"7781b94f4e": "bit-11 triage: MOCK: asserts the v0 mock server's /errors/422 body over raw fetch; no client involved",
+		"77d02ef169": "bit-11 triage: DUP: identical assertion to e9ba60ceb5 (labelled pre-fix but the fix kept this behavior)",
+		"7811071b8a": "bit-11 triage: DUP: try around JSON.stringify is the mechanism of 4f7d2e0f61; kept 4f7d2e0f61",
+		"7838e946f1": "bit-11 triage: TEXT: internal helper name #lookupStale; stale lookup behavior ported via 024ded11f0",
+		"79937e4464": "bit-11 triage: TEXT: \"Reflect.get string in the proxy source; symbol-key behavior is the v0 runtime \"\"not a thenable / String(sdk)\"\" test\"",
+		"79d0c3c1f6": "bit-11 triage: TEXT: \"absence of \"\"resourceName in target\"\" in proxy source; dispatch behavior ported via 591db32764 and 6d397517f4\"",
+		"7ac7d1a065": "bit-11 triage: DUP: pattern-level stale of every instance is asserted by e137c4fbc0 (ids 2 and 3 both stale)",
+		"7ccdbf6dea": "bit-11 triage: DUP: unknown resource is undefined duplicated by 910422df4f",
+		"7e10d40f86": "bit-11 triage: DUP: nullable wraps any shape; same rule as 898812c83a (record)",
+		"7ea39f6c42": "bit-11 triage: DUP: only asserts the request param arrives, as ae685a18ac does",
+		"7fbf95b9a2": "bit-11 triage: V0BUG: pins pre-fix: nullable boolean typed without the null variant",
+		"8077f92abe": "bit-11 triage: DUP: pre-fix witness; its only check (stack header names ClientError) follows from af3171aa45's name",
+		"8107f4a000": "bit-11 triage: DUP: toBeFunction only; $url behavior is asserted by 82b57a83c0",
+		"818a5a53ab": "bit-11 triage: TEXT: self.#requestSSE(entry, call-site text; internal wiring",
+		"8345a732c7": "bit-11 triage: TEXT: baseUrl.searchParams in emitted source; base-URL query merge is v0 runtime sdk-r6-1-baseurl-query",
+		"8433466500": "bit-11 triage: DUP: multiple path params in one path duplicated by 0cc741d5be (exact URL, out-of-order params)",
+		"8464e49947": "bit-11 triage: DUP: Titled $path but calls $url with the same input and expectation as 5f7858305b",
+		"85b4194c02": "bit-11 triage: DUP: another no-input GET against the real app; kept a62b942bd4",
+		"861578b9d4": "bit-11 triage: DUP: determinism of emitted types; kept 17bd5beace",
+		"86db73108d": "bit-11 triage: V0BUG: pins v0 writing a Date query value in locale format",
+		"8716fd136a": "bit-11 triage: TEXT: \"Asserts \"\"body,\"\" near new Cls({ in emitted source; ClientError carrying the body is ported as 741208d659\"",
+		"881374cc5b": "bit-11 triage: DUP: search values reaching the request; kept 64c7a6b83d",
+		"88fe7539b7": "bit-11 triage: TEXT: \"emitted split(\"\";\"\") source text; media-type parsing behavior ported in 317418d74f/fedd2850e1\"",
+		"8a1f373e49": "bit-11 triage: DUP: surface app WS routes carry x-websocket: same property as d537e2ff0d",
+		"8a5e4ad9a0": "bit-11 triage: DUP: internal lookupStale hit; public isStale + invalidatedBy covered by bb125595cf/314714aff6",
+		"8b26bddd47": "bit-11 triage: TEXT: \"Substrings of v0 files (export class SDK, serviceMap as const, \"\"GET\"\"); v1 file set and dispatch are asserted in sdk.test.ts\"",
+		"8b751037e7": "bit-11 triage: DUP: buildSearchParams config option duplicated by runtime case 8322d9bd6c",
+		"8b85201081": "bit-11 triage: DUP: a string search param in the query; kept 64c7a6b83d",
+		"8b90d65886": "bit-11 triage: DUP: ctx.retry() resolves without throwing on a 500 retry; kept 069d6deb4e, which also asserts the result",
+		"8bc6f14906": "bit-11 triage: DUP: non-2xx gives data null and an error; kept d98726b2da",
+		"8be8df0993": "bit-11 triage: TEXT: private method call text; partial resolution behavior ported as f38504b4bf",
+		"8c80566721": "bit-11 triage: TEXT: v0 map file has no import lines: file-layout text, not behavior",
+		"8ce7d13ff2": "bit-11 triage: V0BUG: pins pre-fix: vnd.api+json returned as a raw string",
+		"8d0e936bc5": "bit-11 triage: TEXT: SDK interface declaration text incl. TThrow generic; typing ported via 2bf37c5bd3",
+		"8d643ee633": "bit-11 triage: TEXT: absence of new URL(relative, base) in emitted source; behavior is the R6-1 runtime test",
+		"8d64abb66a": "bit-11 triage: TEXT: spelling of renamed identifiers (state_, then_) in emitted text; runtime access through renames is cd6eaa50f7's port",
+		"8ddfcecb12": "bit-11 triage: TEXT: internal #requestThrow name; throw-mode behavior ported via 3ad57ef8f3",
+		"8ee5ed9817": "bit-11 triage: TEXT: ++this.#invalidationSeq text; monotonic seq behavior ported via 4467ff0b60",
+		"8fee25e08b": "bit-11 triage: DUP: byte-identical body to e52cbce038",
+		"9004638f54": "bit-11 triage: DUP: toBeFunction only; the guard is asserted by f18675c8c3 and 73d50ab411",
+		"9034857bfb": "bit-11 triage: TEXT: cleanup property type in emitted source; timer cleanup behavior is v0 runtime sdk-r6-2-signal-cleanup",
+		"909a33255e": "bit-11 triage: TEXT: counts signal?: occurrences in emitted text; WS option surface ported via 65abbd0e4d",
+		"90b9a40caa": "bit-11 triage: TEXT: \"Asserts path: \"\"/items/{weird-name}\"\" text in map; the hyphenated-template behavior is ported as b44fef713c\"",
+		"910ac62aea": "bit-11 triage: DUP: DELETE-path typing is covered by a0621e13ad (DELETE, PATCH, PUT)",
+		"919329d5ad": "bit-11 triage: MOCK: asserts the v0 mock server's own GET /users list over raw fetch; no client involved",
+		"9198cca407": "bit-11 triage: TEXT: identity of internal compilePattern result (cache shape); matching behavior covered by 94c455dadf",
+		"929ca3cf0c": "bit-11 triage: CUT: v1 refuses an Upgrade request with a body (websockets.test 'one with a body is refused', 400); a bodiless one is served",
+		"92ef8e3170": "bit-11 triage: TEXT: ) as TestSDK cast text; SDK typing asserted via expectTypeOf ports",
+		"92ff01c7c9": "bit-11 triage: DUP: success data with error null already asserted by 80921780d9",
+		"9347711e7b": "bit-11 triage: V0BUG: it.skip asserting reading A clears B's pattern-stale mark; v0 fixed this to per-path refresh (pinned via f3123a5717)",
+		"938df592bd": "bit-11 triage: TEXT: finally/cleanup() strings in #doRequest; behavior is the R6-2 runtime test",
+		"94d2099d09": "bit-11 triage: V0BUG: pins pre-fix: {nullable:true} typed unknown without or null",
+		"94f274a538": "bit-11 triage: TEXT: toISOString() string; behavior is the R6-24 runtime test",
+		"952afed163": "bit-11 triage: CUT: F7: zod readonly becomes {readOnly:true} (zod.test wrappers); a TS Readonly<> wrapper was v0's _def walker, not on the wire",
+		"959d14ae17": "bit-11 triage: DUP: METHOD /path keys are the meta export's keys, asserted with c3c69b195f",
+		"95fb65a4b7": "bit-11 triage: TEXT: Asserts an identifier (UsersUserIdGetCtx) is absent from emitted text; no behavior",
+		"95ff2b6d5c": "bit-11 triage: DUP: parallel calls resolve independently; kept 723ebdf457",
+		"974c0c17a3": "bit-11 triage: DUP: byte-identical body to db1957d863 (tests onRequest despite the onResponse describe)",
+		"97daae6222": "bit-11 triage: TEXT: Counts raw brackets in emitted types text; v1 typechecks the emitted SDK, which subsumes it",
+		"97dfd96828": "bit-11 triage: DUP: identical assertion to 394728c906 ({type:null} -> null)",
+		"9912193035": "bit-11 triage: TEXT: Asserts the spelling const ownState = config.state ?? {}; the no-mutation behavior is ported as 4ba33cc9c6",
+		"992303233d": "bit-11 triage: MOCK: asserts the v0 mock server's /auth/refresh success over raw fetch; no client involved",
+		"993f01481a": "bit-11 triage: DUP: serviceMap entries carry invalidate arrays duplicated by c6a112aebd",
+		"9aa77bb419": "bit-11 triage: DUP: serviceMap method/path from operationId duplicated by 1cf93ccfb0",
+		"9c76203cb5": "bit-11 triage: DUP: WS branch uses the converted path duplicated by 44e305fc5f",
+		"9c9740305d": "bit-11 triage: DUP: compares two local type literals (never touches the SDK); the result branch shape is kept in c925ade565",
+		"9ce1d0502b": "bit-11 triage: DUP: same POST-path typing as 82d4dbe54b",
+		"9d17a3ecd4": "bit-11 triage: V0BUG: pins mounted sub paths without the parent basePath; v1 prefixes them (core app-routes route(sub) typetest)",
+		"9ddeb8446e": "bit-11 triage: DUP: no output typed as null is c07ddbf8fe's assertion",
+		"9ddf1e3594": "bit-11 triage: V0BUG: pins pre-fix: additionalProperties beside properties lost its index signature",
+		"9f474cc814": "bit-11 triage: DUP: 204 -> null data already asserted by 5fbb101f38",
+		"9fcfe5e40d": "bit-11 triage: V0BUG: v0 erased lazy to unknown; v1 resolves it (zod.test wrappers lazy: STRING; a recursive ref aliases in type-emitter.test)",
+		"a152eb1be7": "bit-11 triage: DUP: identical to e838c74666 (json body on POST /users)",
+		"a195d72312": "bit-11 triage: TEXT: entry.method read inside #doSSE; internal helper shape, SSE method behavior covered by d68153af0b",
+		"a1b05d5934": "bit-11 triage: DUP: determinism of emitted client; kept 17bd5beace",
+		"a1d7da5bde": "bit-11 triage: DUP: same no-unknown-fallback narrowing as 53e990f9e5; kept 53e990f9e5",
+		"a22c7bce4f": "bit-11 triage: TEXT: export const serviceMap = {...} as const text; serviceMap data ported via 1cf93ccfb0",
+		"a2a04616fb": "bit-11 triage: DUP: createClient({ baseURL }) GET answers ok; kept d5298d8cd1",
+		"a30acf4042": "bit-11 triage: TEXT: seq: number in a private Map type; behavior ported via e1786bbb53",
+		"a3430896d2": "bit-11 triage: DUP: $isClientError on a parsed safe-mode error is false; kept 79ddd8e169",
+		"a3648850a2": "bit-11 triage: DUP: same nested-namespace property as 16a014ba41; kept 16a014ba41",
+		"a3eb33f2a3": "bit-11 triage: CUT: F7: z.void() has no JSON Schema word; the void type was v0's zod _def walker",
+		"a41520ae7e": "bit-11 triage: DUP: Missing path param message is a leg of 8ebd298507; kept 8ebd298507",
+		"a4b1bc5ab6": "bit-11 triage: TEXT: _SseOpts option text; headers, Last-Event-ID resume and abort are SSE runtime behaviors ported elsewhere",
+		"a4b1f877f1": "bit-11 triage: TEXT: _ClientError as ClientError re-export spelling; the ClientError export is imported and executed in error.test",
+		"a69054d119": "bit-11 triage: TEXT: absence of an old inline-arrow pattern in emitted source; identity behavior ported via b4610e7f97",
+		"a6ebd58088": "bit-11 triage: DUP: prefix base URL with trailing slash is d298fbabe0's exact assertion (same runtime, F1)",
+		"a7c674b3a8": "bit-11 triage: V0BUG: pins pre-fix: nullable string typed without the null variant",
+		"a84f744694": "bit-11 triage: DUP: A user wrapper around createSDK is a usage pattern; its list/get against the live app is the assertion of 609a6a675a",
+		"a8acb26493": "bit-11 triage: DUP: search values reaching the URL query: same assertion as 18efdee41a",
+		"a8f13c9b31": "bit-11 triage: DUP: same greppable error-key property as 8bffd38769, via the cut FromApp entry",
+		"a9673f9d09": "bit-11 triage: TEXT: internal reqCtx annotation in #doSSE; v1 shares one hook ctx type, asserted via 660c7536bd and 662e95ee14",
+		"a9e55620ce": "bit-11 triage: TEXT: Counts a substring in emitted types; error field row shape is asserted by executing typed errors (error.test.ts)",
+		"aa1a4bfcd2": "bit-11 triage: TEXT: #parseSSE signature / no buffer.split text; CRLF/LF/CR parsing ported via 8d6102d160 and 61d8c80345",
+		"ab1b502ae0": "bit-11 triage: DUP: same GET-path typing as 41b1f23fb1",
+		"ab785df761": "bit-11 triage: DUP: status-equals-HTTP-status already asserted by fb6593469a",
+		"ac60be02a8": "bit-11 triage: TEXT: seq guard line in #clearStale; behavior ported via e1786bbb53 and ea9b7c2ff8",
+		"ad0eb85d02": "bit-11 triage: DUP: A provided fetch is used and the global never called: same assertion as e3d5f6f1b9",
+		"ad46ca2476": "bit-11 triage: DUP: POST json body + content-type duplicated by acac67ddaf (exact content-type and body)",
+		"ae20342bab": "bit-11 triage: V0BUG: pins pre-fix: tuple items array typed as an array, not a tuple",
+		"af645b0e07": "bit-11 triage: TEXT: \"emitted endsWith(\"\"+json\"\") source text; behavior ported as 317418d74f\"",
+		"afbe49a0d3": "bit-11 triage: DUP: client side is GET JSON into data (kept 9c34aa9ebd); serving openapi.json is bit 10",
+		"b1bdbc10ed": "bit-11 triage: TEXT: absence of an old source shape; behavior ported as e9ba60ceb5/f38504b4bf",
+		"b1dbbc75e1": "bit-11 triage: DUP: SSE op -> sse flag, not ws: covered by 3a1c5d25a9 (stream kind from text/event-stream)",
+		"b29b4f5d2f": "bit-11 triage: DUP: plain operation has no realtime flag; asserted within c03f1e4abc",
+		"b35c9756b1": "bit-11 triage: TEXT: instanceof Date in #serializeSearch; behavior is v0 runtime R6-24 Date search param ISO test",
+		"b4d5e97807": "bit-11 triage: DUP: duplicate operationId throws duplicated by dde5e96145 (tagged build.test)",
+		"b4eb4057d7": "bit-11 triage: DUP: Same persistent-401 unguarded ctx.retry() assertion as f05df367a8 (2 calls, ends with 401); typed class is in b23536e1a6",
+		"b5e01842e1": "bit-11 triage: DUP: same numeric-status property as fc8e23e301 (201 instead of 200)",
+		"b6bfb85df8": "bit-11 triage: CUT: F1: fixed emitted file set, runtime.gen.ts always vendored; no per-spec conditional runtime file",
+		"b6e6bd3219": "bit-11 triage: DUP: field reference for maxErrorMessageChars; kept 8c5455f3ac",
+		"b70b35fbb9": "bit-11 triage: TEXT: byte size of an external v0 anyrow types file vs a Phase A baseline; v1 emits no per-method code",
+		"b7221ffab4": "bit-11 triage: DUP: v1 extracted.taps is a string or null, so undefined is the null case 99e217739e",
+		"b72b4a4db7": "bit-11 triage: TEXT: _Inp alias presence in emitted types; input dedupe is text layout",
+		"b7bd37f221": "bit-11 triage: V0BUG: pins pre-fix: expired stale entries never swept (unbounded map)",
+		"b7cef4920b": "bit-11 triage: TEXT: reqCtx initializer source text; ctx.body behavior ported as e5430a42ec",
+		"b8071e9beb": "bit-11 triage: DUP: dispose aborts its controller; kept 54bf8bd01c",
+		"b89a8698ff": "bit-11 triage: TEXT: isStale guard count in #request: perf-only text",
+		"b8d0eb3bb1": "bit-11 triage: DUP: toBeFunction only; the GET-path constraint is asserted by 41b1f23fb1",
+		"b911d53bf2": "bit-11 triage: TEXT: inline reqCtx type text in emitted client; ctx.body behavior ported as e5430a42ec",
+		"b928158b97": "bit-11 triage: DUP: JSON output typing is covered by 2b64ade49c",
+		"b99898f519": "bit-11 triage: TEXT: regex on serviceMap text for a root leaf; pinned by resource-tree (health leaf) and executed by 23755479e3's port",
+		"b9ecb641ad": "bit-11 triage: V0BUG: v0 reused any inbound x-request-id; v1 reuses only when trusted (request-id.test 'an inbound id is never reused unless trusted')",
+		"ba3fc69150": "bit-11 triage: DUP: same +json suffix rule as 317418d74f (ld+json)",
+		"ba665ccaad": "bit-11 triage: DUP: \"no removeEventListener(\"\"abort\"\") in #doSSE duplicated by e0fe80d231\"",
+		"bb8e7546d1": "bit-11 triage: TEXT: Snapshot of v0's emitted index file; emitted file set is asserted by sdk.test.ts, not byte snapshots",
+		"bbd3ed2282": "bit-11 triage: MOCK: asserts the v0 mock server's hand-set x-invalidate header on PUT; no client involved",
+		"bcebb21e8e": "bit-11 triage: V0BUG: pins pre-fix substring match: application/jsonp routed to .json() and throws",
+		"bde0ad09e6": "bit-11 triage: V0BUG: pins the pre-fix defect: new URL(rel, base) drops the base URL's ?tenant query",
+		"bed677911e": "bit-11 triage: TEXT: \"Object.defineProperty(fn,\"\"name\"\") debug-name string in emitted client; Layer B' text guard\"",
+		"bf2af40759": "bit-11 triage: DUP: Titled $path but calls $url with the same input and expectation as b1938132a3",
+		"bf92b9e770": "bit-11 triage: TEXT: retry-block source text; a failed retry ending as a typed error is ported as 172daa7492",
+		"bfcffa46d6": "bit-11 triage: DUP: body is identical to 7b85e5f7e5 (uses v.object despite the arktype title); kept 7b85e5f7e5",
+		"c06785e093": "bit-11 triage: TEXT: absence of the _ErrEnvelope helper name; malformed-envelope rejection is pinned in sdk-model (b7d7829800 etc)",
+		"c18fdb9811": "bit-11 triage: DUP: body compares dot access to dot access; same assertion as 2c8db7fc33",
+		"c4411337c8": "bit-11 triage: DUP: distinct ids across calls are covered by 388d4f9772",
+		"c7d6a22696": "bit-11 triage: TEXT: internal reqCtx annotation (isStale?) in #doSSE; covered by 660c7536bd/662e95ee14 ports",
+		"c7f1f3452e": "bit-11 triage: DUP: same File->FormData property as da0703c65c, only in result mode",
+		"c8501bbf4d": "bit-11 triage: TEXT: internal helper name #pathMatchesPattern; matching behavior ported via c07376999d",
+		"c91bb45c5f": "bit-11 triage: CUT: F1: fixed emitted file set; a REST-only SDK still ships runtime.gen.ts",
+		"c9f3515be4": "bit-11 triage: TEXT: \"absence of \"\"as Record\"\" casts in #connectWS: code quality, no behavior\"",
+		"c9fe262b56": "bit-11 triage: DUP: Path-only baseURL with no origin fails with the Invalid baseURL message: same assertion as 2ceadeb32f",
+		"ca7a8a42bc": "bit-11 triage: TEXT: .get(pattern) cache lookup text: perf internal",
+		"ca9a23c14c": "bit-11 triage: DUP: subset of a98111c2ed (a 404 call yields a non-null error)",
+		"cbaca5a893": "bit-11 triage: CUT: F2: generateRouteTreeFromApp gone from gen; uses the v0 global setJsonSchemaConverter slot (H23: no side-effect slots)",
+		"cc43596b1c": "bit-11 triage: DUP: \"asserts the same \"\"get(target, key)\"\"/Reflect.get text as cb5cea8fec\"",
+		"cd282ce42f": "bit-11 triage: TEXT: Snapshot of v0's emitted client file; v1 vendors one runtime, behavior asserted by executing it",
+		"ce3e641286": "bit-11 triage: DUP: Client PathsForMethod at depth: 5b1194dad8 asserts the same over 60+ routes, a superset of 20+",
+		"ce41c39195": "bit-11 triage: CUT: baseCtxName option: v1 generateTypes({ ir, extracted }) takes no naming option",
+		"ce7863f066": "bit-11 triage: TEXT: actionCache identifier in emitted source; stable action identity is the R6-4 runtime test and b4610e7f97",
+		"ce7d18c577": "bit-11 triage: DUP: yup→JSON Schema is pinned in core yup.test.ts; generateTypes placing json input/status output is kept as 9a75eedce5",
+		"cff2049378": "bit-11 triage: TEXT: internal #parseAsClientError name; error parsing ported via cc1f8a93e9/3ad57ef8f3",
+		"d00042efd6": "bit-11 triage: TEXT: .includes(mutationSelector) in #markStale: implementation detail",
+		"d20324ce95": "bit-11 triage: MOCK: asserts the v0 mock server's /stream SSE framing over raw fetch; no client involved",
+		"d25f842621": "bit-11 triage: DUP: field-less SSE line handling (text check) duplicated by runtime case 5dfc2659fb",
+		"d2645bb721": "bit-11 triage: DUP: field reference for sseMaxBufferChars; kept 2dd02e57a0",
+		"d288f2ec78": "bit-11 triage: DUP: field reference for maxSourcesPerTarget; kept 7731ace5a8",
+		"d2b0734bc4": "bit-11 triage: DUP: no timeout means no timers; kept f95827cf3f",
+		"d30c60f1da": "bit-11 triage: DUP: generateSDK consuming the mock spec and returning files is 3756d467b1's assertion",
+		"d36877786e": "bit-11 triage: TEXT: v0 types file has no import lines: file-layout text, not behavior",
+		"d3727bb2b5": "bit-11 triage: DUP: sequential success then error results; each covered by 80921780d9 and 5751e4a67b",
+		"d3e135c042": "bit-11 triage: TEXT: #requestSSE(entry: _ServiceEntry signature text; SSE invalidation ported via d68153af0b",
+		"d49771fc13": "bit-11 triage: MOCK: asserts the v0 mock server's /errors/500 body over raw fetch; no client involved",
+		"d49e80d116": "bit-11 triage: TEXT: Snapshot of v0's emitted map file; service-map dispatch is asserted by executing the SDK (sdk.test.ts)",
+		"d5f6068fdd": "bit-11 triage: DUP: Route errors as the string union of declared keys: same assertion as 4e10b6018f",
+		"d6607d6b54": "bit-11 triage: TEXT: counts arrayBuffer() calls in emitted source; byte fallback ported as 8e1ed88266/fedd2850e1",
+		"d6a0b3723a": "bit-11 triage: V0BUG: \"pins pre-fix coercion of an object message to \"\"[object Object]\"\"\"",
+		"d6ff0429e6": "bit-11 triage: TEXT: .set(pattern, cache write text: perf internal",
+		"d71f6de432": "bit-11 triage: DUP: unknown action is undefined duplicated by df0bf121a6",
+		"d74951f387": "bit-11 triage: DUP: route keys plus per-route field types, same as 494723e73f once vendors erase to JSON Schema; kept 494723e73f",
+		"d752cf5083": "bit-11 triage: TEXT: internal helper name #resolveInvalidationTargets; invalidation behavior ported via f3123a5717/024ded11f0/f6fdef6f18",
+		"d7f2ce4c3a": "bit-11 triage: CUT: F7: z.never() is {not:{}}, which v1 types unknown (probed); the never type was v0's zod _def walker",
+		"d86ac84afc": "bit-11 triage: DUP: identical assertion to 94c455dadf",
+		"d8f83d8347": "bit-11 triage: DUP: credentials config option duplicated by 3a4702b6b6 (applied to fetch init)",
+		"d9a559a2c2": "bit-11 triage: DUP: absence of the nested _call wrapper is the promoted-callable property of 01435c471b; kept 01435c471b",
+		"ddeb1fa414": "bit-11 triage: DUP: PATCH with params plus JSON, same as 659a3bd4c7; kept 659a3bd4c7",
+		"dec2b27f7b": "bit-11 triage: DUP: a slash in a path param encoded as %2F; kept f8439e0116",
+		"e02fdf7624": "bit-11 triage: V0BUG: pins pre-fix absence of a pattern cache by reading function source",
+		"e1fec477b8": "bit-11 triage: V0BUG: pins v0's AbortSignal.timeout leak (clearTimeout never called)",
+		"e20f0321cf": "bit-11 triage: V0BUG: pins pre-fix: problem+json returned as a raw string",
+		"e46e840eb6": "bit-11 triage: TEXT: non-enumerable _ws debug handle via defineProperty string; internal helper name",
+		"e50828f7ad": "bit-11 triage: DUP: same flat field-error key set as f2954af53b; kept f2954af53b",
+		"e5659eb56d": "bit-11 triage: TEXT: absence of a coercion string in emitted source; behavior ported as 262dee1e93",
+		"e5a52abc07": "bit-11 triage: DUP: raw-ws echo of a JSON frame, the same server echo; kept 44a9953b6f",
+		"e5e60a4ce8": "bit-11 triage: TEXT: Asserts the constructor's clone spelling { ...config, state: }; the no-mutation behavior is ported as 4ba33cc9c6",
+		"e6bdee4ee7": "bit-11 triage: TEXT: try/catch around #parseBody in emitted source; behavior is v0 runtime R5-4 safe-mode parse failure test",
+		"e7a1f2c66d": "bit-11 triage: DUP: \"Routes keyed by every path is 6770071363 (plus root \"\"/\"\" via 5a96d675c2 shape); the RootGetCtx absence is TEXT like 95fb65a4b7\"",
+		"e7f8da394b": "bit-11 triage: DUP: Titled $path but calls $url with the same input and expectation as 476d566fc1",
+		"e8b5b341ca": "bit-11 triage: V0BUG: pins the same v0 timer leak",
+		"e8c7089c4b": "bit-11 triage: TEXT: length-threshold hoist of literals to _Res aliases is emitted-text layout",
+		"e97b564a82": "bit-11 triage: DUP: identical to 5ded84967b (params key on /users/:id)",
+		"e98f9bb90e": "bit-11 triage: DUP: same literal-dot rule as ce47584f84 (dot inside a segment)",
+		"ea350bfcbb": "bit-11 triage: MOCK: asserts the v0 mock server's 404 error body over raw fetch; no client involved",
+		"ea5cc25ad4": "bit-11 triage: DUP: Async headers function result reaching the request: same assertion as 138f2c9a6f",
+		"eb62bc6ec5": "bit-11 triage: DUP: dispose() method presence; kept 54bf8bd01c",
+		"ebbd215fc2": "bit-11 triage: DUP: openApi-only meta in generated types is covered by 1bd65834a7",
+		"eca8ef3252": "bit-11 triage: MOCK: asserts the v0 mock server's list after create over raw fetch; no client involved",
+		"ed0fa1093c": "bit-11 triage: TEXT: internal reqCtx annotation (selector?) in #doSSE; covered by 660c7536bd/662e95ee14 ports",
+		"ee825b5d5b": "bit-11 triage: V0BUG: pins v0's [object Object] message from a nested message object",
+		"f000740f60": "bit-11 triage: TEXT: _WsOpts alias name in emitted types; text layout",
+		"f0c134e75c": "bit-11 triage: TEXT: _SseOpts alias name in emitted types; text layout",
+		"f3623ebe1b": "bit-11 triage: DUP: same error-result shape as 5751e4a67b, 5xx instead of 4xx",
+		"f369dcabb5": "bit-11 triage: TEXT: promotion guard expression in emitted client source; behavior tagged via 01435c471b",
+		"f6ca098d0d": "bit-11 triage: TEXT: _SseOpts alias text; the cookies passthrough behavior is v0 runtime R5-5 SSE cookie test",
+		"f76af59828": "bit-11 triage: TEXT: isStale guard around #clearStale in throw branch: perf-only; no observable change when not stale",
+		"f864a9c55c": "bit-11 triage: DUP: subset of 924b793b81 (the data field of the result)",
+		"f9344b7c53": "bit-11 triage: V0BUG: v0 typed Date as Date though JSON carries a string; v1 types date-time as string (vendors 'a Date, as the string')",
+		"f9e2535dd9": "bit-11 triage: TEXT: Snapshot plus resource-name substrings of v0 types text; shared-envelope dedup is pinned in core slots.test.ts",
+		"fa0bee710c": "bit-11 triage: MOCK: asserts the v0 mock server's expired-token 401 over raw fetch; no client involved",
+		"fad147e24c": "bit-11 triage: TEXT: internal resCtx annotation (invalidatedBy?) in #doSSE; covered by c062890fd6/2ddd3d861d ports",
+		"faeb3fda11": "bit-11 triage: DUP: byte-identical body to c11d515486",
+		"faed33e265": "bit-11 triage: V0BUG: pins pre-fix: action function has no debug name",
+		"fb38591fdd": "bit-11 triage: MOCK: asserts the v0 mock server's valid-token 200 over raw fetch; no client involved",
+		"fc06d00d70": "bit-11 triage: DUP: mode config option duplicated by 3a4702b6b6",
+		"fc173bd3ee": "bit-11 triage: DUP: File + string fields in one form is already asserted by da0703c65c (avatar + name)",
+		"fc19d78823": "bit-11 triage: V0BUG: pins pre-fix regex injection: (a-or-b) alternation active in a pattern",
+		"fc58c03669": "bit-11 triage: TEXT: cleanup() string for SSE; behavior is the R6-2 runtime test",
+		"fc702f2100": "bit-11 triage: TEXT: absence of an includes() string in emitted source; behavior ported as fedd2850e1",
+		"fe5f58eb75": "bit-11 triage: TEXT: no unguarded #clearStale line: perf-only text",
+		"fe8d6bc1a7": "bit-11 triage: DUP: same nullable rule as 898812c83a (number)",
+		"ff639f1ab7": "bit-11 triage: DUP: Despite its title it does no scoping; SDK calls returning live-app data is the same assertion as 609a6a675a",
+		"ff656f9322": "bit-11 triage: TEXT: #parseBody name + mime strings; json/text parsing ported via 86c23526d8/e498ad6139, binary via A1 binary.test",
+		"ffc4c70a5d": "bit-11 triage: TEXT: \"emitted startsWith(\"\"text/\"\") source text; behavior ported as 358ff0ebb5\"",
+		"fffd7ccee4": "bit-11 triage: DUP: same standard-envelope error as bbe9086162"
 	}
 }
