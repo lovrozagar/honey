@@ -10,7 +10,8 @@
  * the parent resource and `{ org: "" }` can never turn `/:org/:repo` into `//repo`.
  */
 
-const BRACE_RE = /\{([^{}/]+)\}/g
+/** A fresh `{name}` placeholder matcher: a global regex carries `lastIndex`, so none is shared. */
+const braces = () => /\{([^{}/]+)\}/g
 
 export class PathParamError extends Error {
 	constructor(message: string) {
@@ -73,7 +74,7 @@ export function interpolatePath(path: string, params: Record<string, unknown> = 
 		} else if (seg.charCodeAt(0) === 42 /* * */ && i === segments.length - 1) out.push(wildcardSegment(seg, params))
 		else {
 			out.push(
-				seg.replace(BRACE_RE, (_, name: string) => {
+				seg.replace(braces(), (_, name: string) => {
 					const value = paramValue(params, name)
 					if (value === undefined) throw new PathParamError(`Missing path param: ${name}`)
 					return encodeSegmentValue(name, value)
@@ -89,8 +90,7 @@ export function hasPlaceholder(path: string): boolean {
 	for (const seg of path.split("/")) {
 		if (seg.length > 1 && seg.charCodeAt(0) === 58) return true
 		if (seg.charCodeAt(0) === 42) return true
-		BRACE_RE.lastIndex = 0
-		if (BRACE_RE.test(seg)) return true
+		if (braces().test(seg)) return true
 	}
 	return false
 }
@@ -113,7 +113,7 @@ export function interpolatePartial(path: string, params: Record<string, unknown>
 				const value = paramValue(params, seg.length > 1 ? seg.slice(1) : "*")
 				return value === undefined ? seg : encodeWildcardValue(seg.slice(1), value)
 			}
-			return seg.replace(BRACE_RE, (match, name: string) => {
+			return seg.replace(braces(), (match, name: string) => {
 				const value = paramValue(params, name)
 				return value === undefined ? match : encodeSegmentValue(name, value)
 			})
@@ -129,8 +129,8 @@ function escapeRegExp(text: string): string {
 function literalSource(seg: string): string {
 	let source = ""
 	let last = 0
-	BRACE_RE.lastIndex = 0
-	for (let m = BRACE_RE.exec(seg); m !== null; m = BRACE_RE.exec(seg)) {
+	const brace = braces()
+	for (let m = brace.exec(seg); m !== null; m = brace.exec(seg)) {
 		source += `${escapeRegExp(seg.slice(last, m.index))}[^/]+`
 		last = m.index + m[0].length
 	}
