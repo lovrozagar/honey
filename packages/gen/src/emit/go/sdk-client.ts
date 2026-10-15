@@ -1,9 +1,10 @@
 /**
  * client.go's body (G1): `Client` with one field per top-level namespace of `IR.tree`, a
  * `<Path>Resource` struct per nested namespace, every operation a method on the struct of its
- * namespace, `NewClient` wiring them, and each method's `<Op>Opts` after them in name order.
+ * namespace, `NewClient` wiring them, and each method's `<Op>Opts` and `<Op>Headers` after them in
+ * name order.
  */
-import type { IR, IRNamespace } from "../../ir/model.ts"
+import type { IR, IRAuth, IRNamespace } from "../../ir/model.ts"
 import { methodsOf, namespacesOf } from "../../ir/resource-tree.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { goString, lineComment } from "../shared/escape.ts"
@@ -71,6 +72,18 @@ function wiring(node: Resource, chain: string): string[] {
 	])
 }
 
+/**
+ * The auth header pair (F2): an unset name takes the scheme's, and its prefix too unless the caller
+ * set one; a set name keeps the caller's prefix, empty meaning none.
+ */
+function authDefaults(auth: IRAuth): string[] {
+	const prefix =
+		auth.prefix === ""
+			? []
+			: ['\t\tif cfg.AuthHeaderPrefix == "" {', `\t\t\tcfg.AuthHeaderPrefix = ${goString(auth.prefix)}`, "\t\t}"]
+	return ['\tif cfg.AuthHeaderName == "" {', `\t\tcfg.AuthHeaderName = ${goString(auth.headerName)}`, ...prefix, "\t}"]
+}
+
 /** NewClient: the BaseURL default (the document's first server; without one an empty BaseURL panics), auth, wiring. */
 function newClient(root: Resource, ir: IR): string[] {
 	const server = ir.servers[0]
@@ -87,12 +100,7 @@ function newClient(root: Resource, ir: IR): string[] {
 		'\tif cfg.BaseURL == "" {',
 		`\t\t${fallback}`,
 		"\t}",
-		'\tif cfg.AuthHeaderName == "" {',
-		`\t\tcfg.AuthHeaderName = ${goString(ir.auth.headerName)}`,
-		"\t}",
-		'\tif cfg.AuthHeaderPrefix == "" {',
-		`\t\tcfg.AuthHeaderPrefix = ${goString(ir.auth.prefix)}`,
-		"\t}",
+		...authDefaults(ir.auth),
 		"\tcfg = prepareConfig(cfg)",
 		"\tr := &Client{cfg: cfg, stale: NewStaleTracker(cfg.Invalidation)}",
 		...wiring(root, ""),
@@ -113,12 +121,16 @@ const plansIn = (node: Resource, members: readonly string[]): GoCallPlan[] => [
 	...node.fields.flatMap(({ name, node: child }) => plansIn(child, [...members, name])),
 ]
 
-/** client.go's declarations for `ir` (the client, its resources and methods, then every `<Op>Opts`), and every method's call plan. */
+/**
+ * client.go's declarations for `ir` (the client, its resources and methods, then every `<Op>Opts`
+ * and `<Op>Headers` in name order), and every method's call plan.
+ */
 export function clientDecls(ir: IR, env: ClientEnv): { readonly decls: string; readonly plans: GoCallPlan[] } {
 	const root = resourceOf(ir.tree, [], "Client", env)
 	const opts = methodsIn(root)
-		.sort((a, b) => compareCodeUnits(a.opts, b.opts))
-		.map((method) => method.optsDecl)
+		.flatMap((method) => method.decls)
+		.sort(([a], [b]) => compareCodeUnits(a, b))
+		.map(([, decl]) => decl)
 	const decls = [
 		"// Client is the API's client: a field per resource namespace, a method per operation at the root.",
 		...structDecl(root, ["cfg Config", "stale *StaleTracker"]),

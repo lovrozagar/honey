@@ -13,18 +13,12 @@ type Files = Readonly<Record<string, string>>
  * which notes each request as `METHOD url[ x-trace=…][ body]` (query sorted) and answers it from
  * `replies` (`reply{status, body, headers}`, keyed `METHOD /path`; 200 `{}` by default, JSON unless
  * its headers say otherwise). `input.Base` is the `base` stdin carried, if any. It prints every
- * `section`'s notes as one JSON object.
+ * `section`'s notes as one JSON object. It imports BASE_IMPORTS and a program's own extra imports.
  */
 const PROGRAM = `package main
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
+{{imports}}
 
 	sdk "{{module}}"
 )
@@ -106,9 +100,16 @@ func main() {
 }
 `
 
-/** PROGRAM importing the SDK as `module`, running `body`. */
-export const program = (module: string, body: string) =>
-	PROGRAM.replace("{{module}}", () => module).replace("{{body}}", () => body)
+/* the standard packages PROGRAM itself uses; Go rejects an unused import, so a body's own are opt-in */
+const BASE_IMPORTS = ["context", "encoding/json", "fmt", "io", "net/http", "os", "strings"]
+
+/** PROGRAM importing the SDK as `module` and the standard packages `imports` too, running `body`. */
+export function program(module: string, body: string, imports: readonly string[] = []): string {
+	const all = [...new Set([...BASE_IMPORTS, ...imports])].sort().map((path) => `\t"${path}"`)
+	return PROGRAM.replace("{{imports}}", () => all.join("\n"))
+		.replace("{{module}}", () => module)
+		.replace("{{body}}", () => body)
+}
 
 /** A consumer program's build and run: whether it built, its vet findings, its notes by section. */
 export type Run = { built: boolean; vet: readonly string[]; out: Record<string, string[]> | undefined; stderr: string }
@@ -117,9 +118,9 @@ export type Run = { built: boolean; vet: readonly string[]; out: Record<string, 
 const notesOf = (ran: { status: number; stdout: string }) =>
 	ran.status === 0 ? (JSON.parse(ran.stdout) as Record<string, string[]>) : undefined
 
-/** `files` built and vetted with the consumer `body` beside them, which is run when it builds. */
-export function check(files: Files, module: string, body: string): Run {
-	const sdk = compileGo(files, { main: program(module, body) })
+/** `files` built and vetted with the consumer `body` (importing `imports` too) beside them, which is run when it builds. */
+export function check(files: Files, module: string, body: string, imports: readonly string[] = []): Run {
+	const sdk = compileGo(files, { main: program(module, body, imports) })
 	if (!sdk.built) return { built: false, out: undefined, stderr: sdk.stderr, vet: sdk.vet }
 	const ran = sdk.run()
 	return { built: true, out: notesOf(ran), stderr: ran.stderr, vet: sdk.vet }

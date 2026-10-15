@@ -325,6 +325,9 @@ src/emit/go/types-union.ts	gen	types	12	Go union/oneOf emission; split from type
 src/emit/go/types-codec.ts	gen	types	12	struct MarshalJSON/UnmarshalJSON bodies (untagged + extra keys, allOf part merge keyed by original names via goString, ruling 2); split from types-struct.ts, covered by types.compiled/types.structs.test	go-type-emitter.ts
 src/emit/go/sdk-client.ts	gen	types	12	Go SDK Client + resource structs + NewClient + *Opts (empty BaseURL defaults to servers[0], G1); split from the SDK emitter, covered by sdk.test/sdk.calls.test/sdk.driver.test (ruling 1)	codegen-go.ts
 src/emit/go/sdk-method.ts	gen	types	12	one Go method per operation + its call plan; split from the SDK emitter, covered by the shared sdk.* tests (ruling 1)	codegen-go.ts
+src/emit/go/sdk-answer.ts	gen	types	12	what a method returns: JSON *T, binary []byte, text string, 204 error-only, safe-mode SDKResult (F1/F5); SDK-surface split, covered by http*/binary/sdk suites (ruling 1)	codegen-go.ts
+src/emit/go/sdk-body.ts	gen	types	12	the body parameter per kind: JSON, form url.Values, multipart <Op>Body with FilePart, text string, binary io.Reader; SDK-surface split, covered by the shared suites (ruling 1)	codegen-go.ts
+src/emit/go/sdk-opts.ts	gen	types	12	<Op>Opts (scalars as pointers, slices/maps plain, IdempotencyKey on idempotent ops) + <Op>Headers with setFrom for WithHeadersInto (F3/F6); SDK-surface split (ruling 1)	codegen-go.ts
 src/emit/go/http.ts	gen	src	12	Go net/http client	codegen-go.ts
 src/emit/go/sse.ts	gen	src	12	Go SSE	codegen-go.ts
 src/emit/go/ws.ts	gen	src	12	Go WebSocket	codegen-go.ts
@@ -335,6 +338,12 @@ src/emit/go/sdk.driver.test.ts	gen	test	12	the driver's call plan + executed Go 
 src/emit/go/sdk.driver.script.test.ts	gen	test	12	the driver's script mode (split from sdk.driver.test at the 500 cap): the optional script stdin field (config extras, scripted OnAuthExpired tokens, hook/log recorders, per-call cancel/deadline/sleep) and the {observed, trace} output with Go error types and errors.Is results	codegen-go.ts
 src/emit/go/types.compiled.test.ts	gen	test	12	emitted Go types compiled + round-tripped: special keys, the json:"-" key, allOf merge, the combined case	codegen-go.ts
 src/emit/go/types.structs.test.ts	gen	test	12	the Go struct rows: tags, untagged keys, extra keys, allOf	go-type-emitter.ts
+src/emit/go/http.auth.test.ts	gen	test	12	phase-c auth: the empty-prefix pair rule, the spec name/prefix default, no "Bearer " on apiKey (a682f0d68e V0BUG), auth on-origin and dropped on a cross-origin follow (F2/H18.10)	codegen-go.ts
+src/emit/go/http.response.test.ts	gen	test	12	phase-c responses: ([]byte,error)/(string,error) value returns (F1), status-keyed results, undecodable-2xx as the error return not result.Err (F5)	codegen-go.ts
+src/emit/go/http.stale.test.ts	gen	test	12	phase-c invalidation: StaleIndex over the Go runtime (InvalidationConfig.StaleMaxEntries, not Config; f92c465b60), stale-lapse window	codegen-go.ts
+src/emit/go/http.hooks.test.ts	gen	test	12	phase-c hooks + OnLog (plan 3.1): the log entry carries no path/header/query — operation is METHOD /template, the wrapped *url.Error rewritten to the template (OnLog path-leak V0BUG; the go-auth-redaction defense)	codegen-go.ts
+src/emit/go/overrides.test.ts	gen	test	12	phase-c C2 per-call overrides (WithBaseURL/WithTimeout/WithHeader over a per-call copy) + WithResponseInto raw accessor	codegen-go.ts
+src/emit/go/binary.test.ts	gen	test	12	phase-c A1 binary: []byte response with Accept set, io.Reader request, over the executed Go client	codegen-go.ts
 src/emit/go/__fixtures__/go-env.ts	gen	test	12	toolchain-parity fixture (G10, D4 precedent): goEnv (GOTOOLCHAIN=pinned, caches under the home cache dir, GOFLAGS readonly), runGo, gofmtPath from the pinned GOROOT, goRequired gate (HONEY_REQUIRE_GO)	—
 src/emit/go/__fixtures__/compiled.ts	gen	test	12	the executed-Go fixture (G8/G11, D4 precedent): compiledSdk + runCalls write the emitted SDK under the home cache dir keyed by content hash, compile once per hash via goEnv, and drive it through the reflection driver (main may be several files) so behavior tests run the real emitted client and the F8 mutants of runtimeSource() are reached	codegen-go.ts
 src/emit/go/__fixtures__/recording-server.ts	gen	test	12	a node http server recording WireHop-shaped requests and answering scripted responses, driving the executed-Go calls	—

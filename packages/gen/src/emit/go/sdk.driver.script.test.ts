@@ -341,10 +341,11 @@ describe("the Go test driver's script: a call's Go error", () => {
 })
 
 describe("the Go test driver's script: what it refuses", () => {
-	it("exits 1 naming the reason, nothing sent: an unknown member, a key the method has no field for, a binary answer it cannot read, extra calls", async () => {
+	it("exits 1 naming the reason, nothing sent: an unknown member, a key the method has no field for, a body it takes no parameter for, extra calls", async () => {
 		if (!withGo()) return
 		const sdk = scriptedSdk()
 		const file: Call = {
+			body: { contentType: "application/octet-stream", kind: "binary", size: 1 },
 			operation: "files.get",
 			params: { name: "a" },
 			route: { method: "GET", path: "/files/{name}" },
@@ -366,7 +367,7 @@ describe("the Go test driver's script: what it refuses", () => {
 		expect(runs.map((run) => run.stderr.trim())).toEqual([
 			expect.stringMatching(/script.*unknown field "wait"/),
 			expect.stringMatching(/notes\.create.*IdempotencyKey/),
-			expect.stringMatching(/files\.get.*binary/),
+			expect.stringMatching(/files\.get.*binary body.*no body parameter/),
 			expect.stringMatching(/script.*2 calls.*1/),
 		])
 	}, 600_000)

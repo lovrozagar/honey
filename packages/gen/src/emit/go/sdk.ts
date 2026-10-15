@@ -1,14 +1,16 @@
 /**
  * The Go SDK (bit 12): a module of package `sdk` emitted from the IR alone (H2) — the vendored
- * runtime verbatim, `types.go` (every component, then every hoisted declaration in name order),
- * `client.go` (the client, its resources and methods), `doc.go` and `go.mod`, plus `go.sum` when the
- * API needs the WebSocket library. Every `.go` file carries the generated-code marker.
+ * runtime verbatim, `types.go` (every component, then every hoisted declaration in name order, then
+ * the declared error keys), `client.go` (the client, its resources and methods), `doc.go` and
+ * `go.mod`, plus `go.sum` when the API needs the WebSocket library. Every `.go` file carries the
+ * generated-code marker.
  */
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IR, IRInfo, IRSchema } from "../../ir/model.ts"
 import { sdkModel } from "../../ir/sdk-model.ts"
 import { lineComment } from "../shared/escape.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
+import { goErrorKeys } from "./errors.ts"
 import { needsWebSocket, runtimeFiles } from "./http.ts"
 import { clientDecls, type GoCallPlan } from "./sdk-client.ts"
 import { type GoTypeContext, goTopLevel, goTypeContext } from "./types.ts"
@@ -30,6 +32,14 @@ const WEBSOCKET = "github.com/coder/websocket v1.8.15"
 const WEBSOCKET_SUM = [
 	`${WEBSOCKET} h1:6B2JPeOGlpff2Uz6vOEH1Vzpi0iUz20A+lPVhPHtNUA=`,
 	`${WEBSOCKET}/go.mod h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg=`,
+]
+
+/* what client.go may import, each only when its code uses it */
+const CLIENT_IMPORTS: readonly (readonly [string, string])[] = [
+	["context", "context"],
+	["io", "io"],
+	["http", "net/http"],
+	["url", "net/url"],
 ]
 
 /* string and rune literals and line comments: text an import check must not read as code */
@@ -79,6 +89,7 @@ function emitGo(document: Record<string, unknown>, options: GoSdkOptions): Gener
 	const components = componentDecls(ir, at)
 	const ops = model.opsById
 	const client = clientDecls(ir, { at, ops, throwOnError: options.throwOnError ?? true })
+	const errorKeys = goErrorKeys(model, at)
 	const hoisted = [...at.decls].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, decl]) => decl)
 	const features = {
 		realtime: model.ops.some((op) => op.stream === "realtime"),
@@ -89,9 +100,11 @@ function emitGo(document: Record<string, unknown>, options: GoSdkOptions): Gener
 		files: {
 			...runtimeFiles(features),
 			...moduleFiles(options.modulePath ?? "example.com/sdk", needsWebSocket(features)),
-			"client.go": goFile(client.decls, [["context", "context"]]),
+			"client.go": goFile(client.decls, CLIENT_IMPORTS),
 			"doc.go": docFile(ir.info),
-			"types.go": goFile([...components, ...hoisted].join("\n\n"), [["json", "encoding/json"]]),
+			"types.go": goFile([...components, ...hoisted, errorKeys].filter((decl) => decl !== "").join("\n\n"), [
+				["json", "encoding/json"],
+			]),
 		},
 	}
 }

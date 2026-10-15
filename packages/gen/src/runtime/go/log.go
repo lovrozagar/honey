@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-// LogEntry is what Config.OnLog receives. The SDK never formats, levels or persists it. Operation
-// is `METHOD /path/template`, never the concrete URL, so an entry carries no path value, query or
-// header. Status is nil when no response arrived. Err is the failure on the "error" event.
+// LogEntry is what Config.OnLog receives. The SDK never formats, levels or persists it. No entry's
+// text carries a path value, header value or query: Operation is "METHOD /template", and Err (the
+// "error" event's failure) names it in place of the URL. Status is nil when no response arrived.
 type LogEntry struct {
 	Level      string `json:"level"`
 	Event      string `json:"event"`
@@ -34,7 +34,7 @@ func emitLog(cfg Config, entry LogEntry) {
 }
 
 func errorEntry(operation string, start time.Time, err error) LogEntry {
-	entry := LogEntry{Level: "error", Event: "error", Operation: operation, DurationMs: time.Since(start).Milliseconds(), Err: err}
+	entry := LogEntry{Level: "error", Event: "error", Operation: operation, DurationMs: time.Since(start).Milliseconds(), Err: templated(err, operation)}
 	var apiErr APIError
 	if errors.As(err, &apiErr) {
 		status := apiErr.Status()
@@ -79,4 +79,14 @@ func redactedURL(raw string) string {
 	u.Fragment = ""
 	u.RawFragment = ""
 	return u.String()
+}
+
+// templated names operation in place of the request in the text of an error wrapping a *url.Error
+// (its URL as wrapTransportError left it), so a logged error carries no path value.
+func templated(err error, operation string) error {
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		return err
+	}
+	return &redactedError{msg: strings.ReplaceAll(err.Error(), ue.Op+" "+strconv.Quote(redactedURL(ue.URL)), operation), err: err}
 }

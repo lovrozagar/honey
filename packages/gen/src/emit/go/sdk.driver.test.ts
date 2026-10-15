@@ -227,6 +227,45 @@ describe("the Go test driver: timeouts and the raw response, the grid's outcomes
 	}, 600_000)
 })
 
+/** One GET whose header params take each Opts shape: a required string (no pointer) and an optional integer. */
+const PING: Json = {
+	info: { title: "Ping", version: "1" },
+	openapi: "3.1.0",
+	paths: {
+		"/ping": {
+			get: {
+				operationId: "ping.get",
+				parameters: [
+					{ in: "header", name: "X-Tenant", required: true, schema: STRING },
+					{ in: "header", name: "X-Limit", schema: { type: "integer" } },
+				],
+				responses: { 200: { ...json({ type: "object" }), description: "ok" } },
+			},
+		},
+	},
+}
+
+describe("the Go test driver: header params in every Opts shape", () => {
+	it("sets a required string header and an optional integer header from the call's headers", async () => {
+		if (!withGo()) return
+		const sdk = compiledSdk(PING, { modulePath: "example.com/ping" })
+		const call: Call = {
+			headers: { "x-limit": "5", "x-tenant": "acme" },
+			operation: "ping.get",
+			route: { method: "GET", path: "/ping" },
+		}
+		const [run, hops] = await served([{ json: { ok: true }, status: 200 }], async (server) => {
+			const ran = await sdk.runCalls({ calls: [call] }, server)
+			return [ran, server.hops.map((hop) => [hop.headers["x-tenant"], hop.headers["x-limit"]])] as const
+		})
+		expect(outcome(run), run.stderr).toEqual({
+			observed: [{ data: { ok: true }, kind: "data", status: 200 }],
+			status: 0,
+		})
+		expect(hops).toEqual([["acme", "5"]])
+	}, 600_000)
+})
+
 describe("the Go test driver: what it cannot express yet", () => {
 	it("refuses it loudly: a non-zero exit naming the operation and the reason, nothing sent", async () => {
 		if (!withGo()) return

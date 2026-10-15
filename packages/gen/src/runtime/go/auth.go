@@ -60,15 +60,7 @@ func mergeHeaders(cfg Config, token, contentType string, layers ...map[string]st
 		}
 	}
 	if token != "" {
-		name := cfg.AuthHeaderName
-		if name == "" {
-			name = "Authorization"
-		}
-		prefix := cfg.AuthHeaderPrefix
-		if prefix == "" {
-			prefix = "Bearer "
-		}
-		h.Set(name, prefix+token)
+		h.Set(cfg.AuthHeaderName, cfg.AuthHeaderPrefix+token)
 	}
 	if h.Get("X-Request-Id") == "" {
 		h.Set("X-Request-Id", newUUIDv4())

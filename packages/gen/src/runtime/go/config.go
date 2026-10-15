@@ -20,6 +20,9 @@ import (
 //
 // MaxResponseBytes caps a buffered response body. Zero means 100 MiB; a negative value disables
 // the cap.
+//
+// AuthHeaderName and AuthHeaderPrefix are a pair: leave both empty for the API's scheme; set the
+// name and the prefix is yours (empty means none); set only the prefix to keep the scheme's header.
 type Config struct {
 	BaseURL          string
 	BearerToken      string

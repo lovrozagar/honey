@@ -48,14 +48,12 @@ type job struct {
 	d directives
 }
 
-// refusal names what of j, on a method of type t, the driver cannot express yet; nil when it can.
-func refusal(j job, t reflect.Type) error {
+// refusal names what of j the driver cannot express yet; nil when it can.
+func refusal(j job) error {
 	c, p := j.c, j.p
 	switch {
 	case p.Stream != nil:
 		return fmt.Errorf("the operation streams (%s): events and frames are not driven yet", *p.Stream)
-	case (p.Response == "binary" || p.Response == "text") && t.NumOut() < 2:
-		return fmt.Errorf("the operation answers %s, and the method returns an error alone: no answer to observe", p.Response)
 	case c.LastEventID != "" || c.ReconnectToken != "" || c.Send != nil || c.Take != nil:
 		return errors.New("stream controls (lastEventId, reconnectToken, send, take) are not driven yet")
 	case c.Body != nil && c.Body.Kind != "json" && c.Body.Kind != "binary":
@@ -82,7 +80,7 @@ func (r *runner) perform(i int, c call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := refusal(j, method.Type()); err != nil {
+	if err := refusal(j); err != nil {
 		return nil, err
 	}
 	var resp *http.Response
@@ -245,15 +243,27 @@ func optsOf(t reflect.Type, j job) (reflect.Value, map[string]string, error) {
 			undeclared[name] = value
 			continue
 		}
-		raw := json.RawMessage(value)
-		if opts.Elem().FieldByName(field).Type().Elem().Kind() == reflect.String {
-			raw, _ = json.Marshal(value)
-		}
-		if err := setField(opts.Elem(), field, raw); err != nil {
+		if err := setField(opts.Elem(), field, headerJSON(opts.Elem().FieldByName(field), value)); err != nil {
 			return reflect.Value{}, nil, err
 		}
 	}
 	return opts, undeclared, nil
+}
+
+// headerJSON is a header's text as JSON for field: quoted when the field holds a string, by pointer or
+// not; as is for a number or a bool. A missing field is left to setField to refuse.
+func headerJSON(field reflect.Value, value string) json.RawMessage {
+	if field.IsValid() {
+		t := field.Type()
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		if t.Kind() == reflect.String {
+			quoted, _ := json.Marshal(value)
+			return quoted
+		}
+	}
+	return json.RawMessage(value)
 }
 
 // declaredHeader is the Opts field of the header param named name in any casing, or "".
