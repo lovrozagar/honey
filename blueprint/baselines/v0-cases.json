@@ -46765,6 +46765,7 @@
 		"36a391cbb5": "internal narrowing helper ExtractJsonSchemas (ExtractSchemas shorthand); not on the \".\" KEEP list (DELETE); same ruling as 859dd0e9ef",
 		"d026c096ce": "internal helper InferJsonOutputMap; not on the \".\" KEEP list (DELETE); same ruling as 859dd0e9ef",
 		"6fdb5357d6": "v0 asserts InferRouteMeta returns never for a route without .meta(); v1 answers the app meta with the route values, {} for no-meta (InitAccMeta), the deliberate design pinned by 62fc72d2e4/27a2cae06c; the case whole assertion (never) contradicts it. Same class as 0c96e1482b",
-		"9b2202b08f": "v0 asserts codegen.ts does not export the test-loader reset, a shape assertion about the v0 loader module; v1 has no loaders at all per R4prime, so there is nothing to export. The zod-JSON-Schema-without-vendor-import behavior is covered by the zod converter: standard-first, src vendor-free per F2"
+		"9b2202b08f": "v0 asserts codegen.ts does not export the test-loader reset, a shape assertion about the v0 loader module; v1 has no loaders at all per R4prime, so there is nothing to export. The zod-JSON-Schema-without-vendor-import behavior is covered by the zod converter: standard-first, src vendor-free per F2",
+		"64ba93662b": "v0 throws no status when deriveErrorEnvelopeName has no const/enum/response-status source. v1 does NOT throw: it runs while the served /openapi.json is built (bit 10), so throwing would 500 the whole endpoint over one odd envelope; v1 names it without a status, still unique via uniqueName hashing, with the fallback explicit in the signature status-or-undefined. The robust degrade supersedes the throw"
 	}
 }
