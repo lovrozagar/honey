@@ -2,7 +2,7 @@
 
 Closes: D1 (structured output, annotations, binary)
 Oracle kept green: `tests/integration/mcp-harness`, mcp-meta-serializer, codegen-mcp(-hardening).
-Formatter post-pass: biome (the MCP server is TS). Gating: `.meta({ extensions: { "x-mcp": true } })`.
+Formatter post-pass: oxfmt (the MCP server is TS). Gating: `.meta({ extensions: { "x-mcp": true } })`.
 
 ## Scope
 The MCP **server** emitter (split v0 `codegen-mcp.ts` 445 + `client-mcp/server.ts` 221 into `gen/emit/mcp/`). The biggest lever for the agent-token metric. Reads only the IR.

@@ -127,7 +127,7 @@ A module-scope `let`, mutable map, or cache is forbidden unless the line carries
 
 ## The formatter post-pass
 
-honey-codegen emits target source by structured string assembly guarded by the `codegen-lang` sanitizer (no AST for emission — see `01-decisions.md`). Every emitter runs its language's canonical formatter as a post-pass before the output is considered done: gofmt, rustfmt, ruff (or black), `dotnet format`, google-java-format, biome for TS. The pass is mandatory in publish CI so every shipped SDK is formatter-clean; pure-JS generation (a worker with no toolchain) emits valid-but-unformatted code as a documented fallback. Type **extraction** is the exception that uses a real AST (the TypeScript compiler API via ts-morph) because resolving types needs the checker.
+honey-codegen emits target source by structured string assembly guarded by the `codegen-lang` sanitizer (no AST for emission — see `01-decisions.md`). Every emitter runs its language's canonical formatter as a post-pass before the output is considered done: gofmt, rustfmt, ruff (or black), `dotnet format`, google-java-format, oxfmt for TS. The pass is mandatory in publish CI so every shipped SDK is formatter-clean; pure-JS generation (a worker with no toolchain) emits valid-but-unformatted code as a documented fallback. Type **extraction** is the exception that uses a real AST (the TypeScript compiler API via ts-morph) because resolving types needs the checker.
 
 ## Gates that exist from the first source file
 
