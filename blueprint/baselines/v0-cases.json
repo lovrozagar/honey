@@ -46828,6 +46828,10 @@
 		"cbaca5a893": {
 			"feature": "11-ts-client",
 			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"08b186a1a7": {
+			"feature": "09-ir-seam",
+			"reason": "H72 import() specifier resolution (exports/@types, drops lib imports) lives in the type-extractor split that becomes gen/extract (09f); building it there makes extract write resolvable specifiers from birth instead of absolute paths deferred to bit 19"
 		}
 	},
 	"retired": {

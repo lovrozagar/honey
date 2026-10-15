@@ -334,6 +334,7 @@ src/extract/extract.ts	gen	src	09	extract ctx/chain types (ts-morph)	type-extrac
 src/extract/walk.ts	gen	src	09	type-node walk	type-extractor.ts
 src/extract/serialize.ts	gen	src	09	type serialize	type-extractor.ts
 src/extract/chain.ts	gen	src	09	middleware chain extraction	type-extractor.ts
+src/extract/__fixtures__/	gen	corpus	09	extract test support: the temp-project writer/barrel/tsconfig (project.ts, strings only, no core import) + the ambient-env worker-configuration.d.ts fixture copied from v0 (25080c8dd7)	type-extractor.ts
 src/cli.ts	gen	src	17	the honey-codegen generate CLI	cli.ts
 src/gen/process.ts	gen	src	09	generate orchestration (target selection + write)	gen-process.ts
 src/gen/write.ts	gen	src	09	write artifacts to disk	gen-write.ts
