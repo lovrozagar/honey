@@ -46780,6 +46780,10 @@
 		"15508ec3e4": {
 			"feature": "10-openapi-emit",
 			"reason": "bit-09 triage (10): a search schema decomposed into query parameters is document assembly; unit/codegen/schema-to-json-schema-io.test.ts"
+		},
+		"591db32764": {
+			"feature": "11-ts-client",
+			"reason": "asserts serviceMapOf/sdkMemberPaths [the TS SDK service map and the state->state_ member-path renaming], not the IR builder; bit 09 owns the IR seam, bit 11 the TS client emitter"
 		}
 	},
 	"retired": {
