@@ -41541,6 +41541,14 @@
 			"feature": "02-finalize-middleware",
 			"reason": "asserts through the app (honey(), app.fetch, use()): the request lifecycle is bit 02"
 		},
+		"3634311714": {
+			"feature": "10-openapi-emit",
+			"reason": "bit-09 triage (10): calls 10; unit/codegen/invalidate-meta.test.ts"
+		},
+		"4222952886": {
+			"feature": "11-ts-client",
+			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/ir-only-emitters.test.ts"
+		},
 		"001353fae8": {
 			"feature": "08-io",
 			"reason": "uses input/output (bit 08)"
@@ -45265,10 +45273,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/invalidate-meta.test.ts"
 		},
-		"3634311714": {
-			"feature": "10-openapi-emit",
-			"reason": "bit-09 triage (10): calls 10; unit/codegen/invalidate-meta.test.ts"
-		},
 		"2717e15bd2": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11,10; unit/codegen/invalidate-meta.test.ts"
@@ -45288,10 +45292,6 @@
 		"faaa4fc03e": {
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-text): calls 11; unit/codegen/ir-only-emitters.test.ts"
-		},
-		"4222952886": {
-			"feature": "11-ts-client",
-			"reason": "bit-09 triage (11-model): calls 11; unit/codegen/ir-only-emitters.test.ts"
 		},
 		"fcc17af2f3": {
 			"feature": "10-openapi-emit",
@@ -46734,6 +46734,12 @@
 		"66aa708e60": "v0 asserts the search constructor value is kept ({constructor:\"x\"}); v1 extends the dangerous-key filter to search (H18.13), dropping __proto__/constructor/prototype before the validator. The no-pollution guarantee is covered by 4259eb4c23 (validator never sees them, null-proto result); the literal \"constructor is just a value\" contradicts the deliberate v1 hardening (same precedent as 78c407f3ba/2488556684)",
 		"4a956d3336": "v1 keeps the output narrowing internal (output-types HelperOf/UniversalRes); not in 03-surface the \".\" KEEP list (DELETE); the narrowing behavior is pinned by the ctx.res cases in output.typetest; exporting it would add undocumented public surface the bit-20 dx-coverage gate rejects",
 		"e17355da20": "v1 keeps the output narrowing internal (output-types HelperOf/UniversalRes); not in 03-surface the \".\" KEEP list (DELETE); the narrowing behavior is pinned by the ctx.res cases in output.typetest; exporting it would add undocumented public surface the bit-20 dx-coverage gate rejects",
-		"859dd0e9ef": "v1 keeps the output narrowing internal (output-types HelperOf/UniversalRes); not in 03-surface the \".\" KEEP list (DELETE); the narrowing behavior is pinned by the ctx.res cases in output.typetest; exporting it would add undocumented public surface the bit-20 dx-coverage gate rejects. ExtractSchemas is a ctx.res narrowing helper (v0 index.ts:2972-2995), not OpenAPI"
+		"859dd0e9ef": "v1 keeps the output narrowing internal (output-types HelperOf/UniversalRes); not in 03-surface the \".\" KEEP list (DELETE); the narrowing behavior is pinned by the ctx.res cases in output.typetest; exporting it would add undocumented public surface the bit-20 dx-coverage gate rejects. ExtractSchemas is a ctx.res narrowing helper (v0 index.ts:2972-2995), not OpenAPI",
+		"071bf6e6c7": "v0 allowed a GET route with a json body schema (body not consumed); v1 refuses a body schema on GET/HEAD at registration (assertBodySchemaAllowed, bit-08 fork-9), pinned by input.test 2595655908. The hardening supersedes v0 permissive behavior",
+		"342e7553ae": "v1 route .meta() is one-shot (the builder one-shot pattern, like input/output/errors), pinned by the .meta() one-shot cases in middleware.typetest; incremental meta lives at the CHAIN level (accumulate via DeclaredMeta, finding (i)); v0 route-level accumulate-via-intersection is superseded",
+		"0ac0a3e7a4": "internal narrowing helper ExtractSchemas; not on 03-surface the \".\" KEEP list (DELETE); behavior pinned by the ctx.res/output cases; exporting would add undocumented public surface. Same ruling as 859dd0e9ef",
+		"36a391cbb5": "internal narrowing helper ExtractJsonSchemas (ExtractSchemas shorthand); not on the \".\" KEEP list (DELETE); same ruling as 859dd0e9ef",
+		"d026c096ce": "internal helper InferJsonOutputMap; not on the \".\" KEEP list (DELETE); same ruling as 859dd0e9ef",
+		"6fdb5357d6": "v0 asserts InferRouteMeta returns never for a route without .meta(); v1 answers the app meta with the route values, {} for no-meta (InitAccMeta), the deliberate design pinned by 62fc72d2e4/27a2cae06c; the case whole assertion (never) contradicts it. Same class as 0c96e1482b"
 	}
 }
