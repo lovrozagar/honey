@@ -46784,6 +46784,50 @@
 		"591db32764": {
 			"feature": "11-ts-client",
 			"reason": "asserts serviceMapOf/sdkMemberPaths [the TS SDK service map and the state->state_ member-path renaming], not the IR builder; bit 09 owns the IR seam, bit 11 the TS client emitter"
+		},
+		"eaf65f57f6": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"5eb9c55499": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"8bffd38769": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"aef1c13482": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"1c3f943ad0": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"e0ff761d81": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"5947f0a8a7": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"a8f13c9b31": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"158d1519bb": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"eefb450246": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
+		},
+		"cbaca5a893": {
+			"feature": "11-ts-client",
+			"reason": "asserts the generateRouteTree/generateRouteTreeFromApp emitted module (src/emit/ts/route-tree.ts, bit 11); the InternPool class it consumes stays in bit 09 route-tree-intern"
 		}
 	},
 	"retired": {
