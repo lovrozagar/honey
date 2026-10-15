@@ -252,6 +252,7 @@ for (const name of Object.keys(RUNTIMES)) {
 	})
 
 	describe.skipIf(skip)(`proxy against a real upstream, ${name}: requests`, () => {
+		// v0: 05492fc681
 		it("redirects go back to the client, not followed", async () => {
 			const res = await withConn(name, (conn) => conn.send(get("/up/redirect")))
 			expect([res.status, res.headers.location]).toEqual([302, "/elsewhere"])

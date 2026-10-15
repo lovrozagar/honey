@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest"
+import { compileGo } from "../go/__fixtures__/compiled.ts"
+import { goRequired, hasGo } from "../go/__fixtures__/go-env.ts"
 import {
 	blockCommentText,
 	commentText,
@@ -37,6 +39,7 @@ describe("string literals: one escaper, one policy per target", () => {
 		)
 	})
 
+	// v0: 11147399aa
 	it("Go: named escapes, \\xHH for control bytes, the BOM as \\ufeff", () => {
 		expect(goString(nasty)).toBe(
 			'"q\\"b\\\\n\\nr\\rt\\tz\\x00d\\x7f e\\x01 \uFFFD \u2028\u2029\u0085\\ufeff \u{1F600}"',
@@ -85,4 +88,94 @@ describe("comments: text that can never become code", () => {
 			'next\\"',
 		])
 	})
+})
+
+/* a struct whose JSON keys a Go struct tag cannot hold raw: a backtick, a quote, a backslash */
+const ODD_KEYS = { "a`b": "1", "back\\slash": "2", 'q"k': "3" }
+
+/** Each json tag name of the emitted Odd (sorted), and the JSON of ODD_KEYS decoded into it and encoded again. */
+const TAGS = `package main
+
+import (
+	"encoding/json"
+	"os"
+	"reflect"
+	"slices"
+	"strings"
+
+	sdk "example.com/tags"
+)
+
+func main() {
+	t := reflect.TypeFor[sdk.Odd]()
+	var tags []string
+	for i := range t.NumField() {
+		tags = append(tags, strings.Split(t.Field(i).Tag.Get("json"), ",")[0])
+	}
+	slices.Sort(tags)
+	var odd sdk.Odd
+	if err := json.Unmarshal([]byte(${goString(JSON.stringify(ODD_KEYS))}), &odd); err != nil {
+		panic(err)
+	}
+	wire, err := json.Marshal(odd)
+	if err != nil {
+		panic(err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"tags": tags, "wire": string(wire)}); err != nil {
+		os.Exit(1)
+	}
+}
+`
+
+/** The Odd struct emitted, built with TAGS beside it, and what TAGS saw; undefined where Go may be absent. */
+async function compileOdd() {
+	expect(hasGo() || !goRequired()).toBe(true)
+	if (!hasGo()) return undefined
+	const { generateGoSdk } = await import("../go/sdk.ts")
+	const properties = Object.fromEntries(Object.keys(ODD_KEYS).map((key) => [key, { type: "string" }]))
+	const schema = { properties, required: Object.keys(ODD_KEYS), type: "object" }
+	const document = {
+		components: { schemas: { Odd: schema } },
+		info: { title: "Tags", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/odd": {
+				get: {
+					operationId: "odd.get",
+					responses: {
+						200: {
+							content: { "application/json": { schema: { $ref: "#/components/schemas/Odd" } } },
+							description: "ok",
+						},
+					},
+				},
+			},
+		},
+	}
+	const sdk = compileGo(generateGoSdk(document, { modulePath: "example.com/tags" }).files, { main: TAGS })
+	const ran = sdk.built ? sdk.run() : undefined
+	const seen = ran?.status === 0 ? (JSON.parse(ran.stdout) as { tags: string[]; wire: string }) : undefined
+	return { built: sdk.built, seen, stderr: sdk.stderr + (ran?.stderr ?? ""), vet: sdk.vet }
+}
+
+let odd: ReturnType<typeof compileOdd> | undefined
+/** compileOdd, once. */
+const oddStruct = () => (odd ??= compileOdd())
+
+describe("Go struct tags: any JSON key", () => {
+	it("gives a key holding a backtick, a quote or a backslash one json tag that reads back as the key, vet clean", async () => {
+		const seen = await oddStruct()
+		if (seen === undefined) return
+		expect({ built: seen.built, tags: seen.seen?.tags, vet: seen.vet }, seen.stderr).toEqual({
+			built: true,
+			tags: Object.keys(ODD_KEYS).sort(),
+			vet: [],
+		})
+	}, 600_000)
+
+	it("sends and reads such a key as itself on the wire", async () => {
+		const seen = await oddStruct()
+		if (seen === undefined) return
+		expect(JSON.parse(seen.seen?.wire ?? "null"), seen.stderr).toEqual(ODD_KEYS)
+	}, 600_000)
 })

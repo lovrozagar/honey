@@ -157,6 +157,7 @@ src/openapi/manifest.ts	core	src	10	generateManifest (route manifest)	codegen.ts
 src/openapi/extract-schemas.ts	core	src	09	extractSchemas (per-route schema extraction)	codegen.ts
 src/openapi/document.ts	core	src	10	assemble the 3.1 document	openapi/document.ts
 src/openapi/paths.ts	core	src	10	paths + operations	openapi/document.ts
+src/openapi/paths.ws.test.ts	core	test	12	the WS-route document leg (e61795b84c): an internal WS route and a filtered WS route both absent from doc.paths; split from paths.test.ts at the 500 cap	openapi/document.ts
 src/openapi/components.ts	core	src	10	components/schemas	openapi/document.ts
 src/openapi/security.ts	core	src	10	security schemes + reference check	openapi/document.ts
 src/openapi/responses.ts	core	src	10	success + redirect Location + error responses by errorFormat (honey envelope / problem+json), F4	openapi/document.ts
@@ -249,7 +250,8 @@ tests/regression/ws4-node-adapter.regression.test.ts	core	test	06	the deferred n
 tests/regression/ws4-in-process.regression.test.ts	core	test	06	in-process ws cases (6): adapter contract exercised without a socket; v1-named port of v0 regression/ws4-8/in-process, each // v0: tagged	regression/ws4-8/in-process.regression.test.ts,regression/ws4-8/harness.ts
 tests/regression/v072.regression.test.ts	core	test	17	no bit-02 case left (V072-2 aeff0f4b4d is CLI, bit 17); born there	regression/v072.regression.test.ts
 # ============================== packages/gen  (@lovrozagar/honey-codegen) ==============================
-src/ir/model.ts	gen	src	09	the IR types; bit 11 adds IRResponse.headers (declared response headers) additively for A2 (H13, g)	codegen-ir.ts,codegen-sdk-model.ts
+src/ir/model.ts	gen	types	09	the IR type declarations (type-only after the bit-12 split): IRSchema/IRBody/IRResponse/IROperation/IR, with IRResponse.headers (A2, H13 g) and the additive IR.servers field (each server URL in order, {var} filled from its default, bit 12). The JSON Schema reader moved to schema.ts when servers pushed model.ts past the 300 cap	codegen-ir.ts,codegen-sdk-model.ts
+src/ir/schema.ts	gen	src	09	schemaToIR + irResolver (the JSON Schema to IR reader), split from model.ts at the 300 cap (behavior-preserving); its colocated schema.test.ts is the former model.test.ts (git mv)	codegen-ir.ts
 src/ir/build.ts	gen	src	09	build the IR from the OpenAPI/spec	codegen-ir.ts
 src/ir/resource-tree.ts	gen	src	09	resource tree from dotted operationId	codegen-ir.ts
 src/ir/slots.ts	gen	src	09	request/response slots + realtime/sse/ws markers; bit 11 extends responsesOf to carry declared response headers for A2 (additive, H13, g) — its slots.test gains a header-carried case	codegen-ir.ts
@@ -316,13 +318,26 @@ src/emit/ts/__fixtures__/honey-doc.ts	gen	test	11	phase-d fixture (D4 precedent)
 src/emit/ts/__fixtures__/tree-data.ts	gen	test	11	phase-d fixture: treeOf([[method, pattern, entry?]]) building RouteTreeV2 literals (v0 helper shape, v:2) for the route-tree emitter tests	codegen.ts
 src/emit/ts/__fixtures__/typecheck.ts	gen	test	11	phase-d fixture: the in-process ts-morph typecheck harness for emitted .d.ts, resolving @lovrozagar/honey to a barrel over core source (project.ts precedent) so a missing core name is a real red (O6)	codegen.ts
 src/emit/go/sdk.ts	gen	src	12	Go SDK	codegen-go.ts
-src/emit/go/types.ts	gen	src	12	Go types	go-type-emitter.ts
+src/emit/go/types.ts	gen	src	12	Go type emitter entry (renderTopLevel); splits below (ruling 1)	go-type-emitter.ts
+src/emit/go/types-names.ts	gen	types	12	Go identifier/name emission for the type surface (exported names, keyword/receiver avoidance); split from types.ts, covered by the shared type tests (ruling 1)	go-type-emitter.ts
+src/emit/go/types-struct.ts	gen	types	12	Go struct emission (fields, json tags, json:"-" for a non-tag-safe key); split from types.ts (ruling 1)	go-type-emitter.ts
+src/emit/go/types-union.ts	gen	types	12	Go union/oneOf emission; split from types.ts (ruling 1)	go-type-emitter.ts
+src/emit/go/types-codec.ts	gen	types	12	struct MarshalJSON/UnmarshalJSON bodies (untagged + extra keys, allOf part merge keyed by original names via goString, ruling 2); split from types-struct.ts, covered by types.compiled/types.structs.test	go-type-emitter.ts
+src/emit/go/sdk-client.ts	gen	types	12	Go SDK Client + resource structs + NewClient + *Opts (empty BaseURL defaults to servers[0], G1); split from the SDK emitter, covered by sdk.test/sdk.calls.test/sdk.driver.test (ruling 1)	codegen-go.ts
+src/emit/go/sdk-method.ts	gen	types	12	one Go method per operation + its call plan; split from the SDK emitter, covered by the shared sdk.* tests (ruling 1)	codegen-go.ts
 src/emit/go/http.ts	gen	src	12	Go net/http client	codegen-go.ts
 src/emit/go/sse.ts	gen	src	12	Go SSE	codegen-go.ts
 src/emit/go/ws.ts	gen	src	12	Go WebSocket	codegen-go.ts
 src/emit/go/errors.ts	gen	src	12	Go errors	codegen-go.ts
+src/emit/go/format.test.ts	gen	test	12	every emitted Go file is gofmt- and vet-clean at the pinned toolchain, and valid without Go	codegen-go.ts
+src/emit/go/sdk.calls.test.ts	gen	test	12	the Go method surface: signatures, *Opts, safe mode, keyword/receiver names, the servers[0] default (G1)	codegen-go.ts
+src/emit/go/sdk.driver.test.ts	gen	test	12	the driver's call plan + executed Go calls against the recording server in throw/safe/refusal modes (G8/G11)	codegen-go.ts
+src/emit/go/types.compiled.test.ts	gen	test	12	emitted Go types compiled + round-tripped: special keys, the json:"-" key, allOf merge, the combined case	codegen-go.ts
+src/emit/go/types.structs.test.ts	gen	test	12	the Go struct rows: tags, untagged keys, extra keys, allOf	go-type-emitter.ts
 src/emit/go/__fixtures__/go-env.ts	gen	test	12	toolchain-parity fixture (G10, D4 precedent): goEnv (GOTOOLCHAIN=pinned, caches under the home cache dir, GOFLAGS readonly), runGo, gofmtPath from the pinned GOROOT, goRequired gate (HONEY_REQUIRE_GO)	—
-src/emit/go/__fixtures__/compiled.ts	gen	test	12	the executed-Go fixture (G8/G11, D4 precedent): writes the emitted SDK under the home cache dir keyed by document hash, compiles once per hash via goEnv, and drives it through the reflection driver so behavior tests run the real emitted client and the F8 mutants of runtimeSource() are reached	codegen-go.ts
+src/emit/go/__fixtures__/compiled.ts	gen	test	12	the executed-Go fixture (G8/G11, D4 precedent): compiledSdk + runCalls write the emitted SDK under the home cache dir keyed by content hash, compile once per hash via goEnv, and drive it through the reflection driver (main may be several files) so behavior tests run the real emitted client and the F8 mutants of runtimeSource() are reached	codegen-go.ts
+src/emit/go/__fixtures__/recording-server.ts	gen	test	12	a node http server recording WireHop-shaped requests and answering scripted responses, driving the executed-Go calls	—
+src/emit/go/__fixtures__/driver/	gen	test	12	the G8/G11 Go reflection driver (main.go/invoke.go/observe.go): stdin {cell, plans, base, alt} to stdout Observed[], refusing loudly what phase b cannot express (streams, bytes, raw, timeouts)	—
 src/emit/rust/sdk.ts	gen	src	13	Rust SDK	codegen-rust.ts
 src/emit/rust/types.ts	gen	src	13	Rust types	rust-type-emitter.ts
 src/emit/rust/http.ts	gen	src	13	Rust reqwest client	codegen-rust.ts

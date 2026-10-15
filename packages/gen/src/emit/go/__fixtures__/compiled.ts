@@ -1,0 +1,154 @@
+/**
+ * Emitted Go, compiled: the files an emitter writes land under
+ * `$HOME/.cache/honey-tmp/go/sdk/<content hash>/` and are built and vetted with the pinned toolchain
+ * (go-env), so a test proves the text it asserts is Go the pinned compiler accepts — vet included,
+ * which is what enforces the module's `go` floor. An optional consumer program (`main`, under
+ * `cmd/check`) is built beside the SDK into one binary per content hash, run as is.
+ *
+ * `compiledSdk` is that with the test driver (`driver/*.go`, G8.3-4) as the program: the unit
+ * behavior tests, the conformance runner and the harness run cells through it by the emitter's own
+ * call plans (`goCallPlans`), one process per cell, `Observed[]` back.
+ */
+import { spawn, spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { type GoSdkOptions, generateGoSdk, goCallPlans } from "../sdk.ts"
+import { goCacheDir, goEnv, runGo } from "./go-env.ts"
+
+/** A run of the check program: its exit status and output. */
+export type Ran = { status: number; stderr: string; stdout: string }
+
+export type Compiled = {
+	readonly built: boolean
+	readonly dir: string
+	readonly stderr: string
+	/** `go vet ./...` findings, one per line; empty when clean */
+	readonly vet: readonly string[]
+	/** run the `main` check program; its status and output */
+	run(): Ran
+	/** run the `main` check program with `input` on stdin, without blocking the event loop */
+	exec(input: string): Promise<Ran>
+}
+
+/** What `runCalls` takes: a grid Cell, or just its calls and setup (the grid's types stay in tests/, out of src's reach). */
+export type DriverCell = { readonly calls: readonly { readonly operation: string }[]; readonly setup?: object }
+
+/** One driver run: its exit status, its stderr, and on success the grid's `Observed`, one per call. */
+export type DriverRun = {
+	readonly observed: readonly unknown[] | undefined
+	readonly status: number
+	readonly stderr: string
+}
+
+/** The SDK compiled with the driver beside it. */
+export type DrivenSdk = Compiled & {
+	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin) */
+	runCalls(cell: DriverCell, origins: { readonly alt?: string; readonly url: string }): Promise<DriverRun>
+}
+
+/* the check program's binary, beside the module it is built from */
+const BINARY = "check"
+/* the import path the driver's sources name the SDK by, replaced with the SDK's module path */
+const DRIVER_IMPORT = '"honey.test/driver/sdk"'
+
+/** The files to write: the SDK, and the check program under `cmd/check` when one is given. */
+function withMain(files: Readonly<Record<string, string>>, main: Main | undefined): [string, string][] {
+	const entries = Object.entries(files)
+	const program = typeof main === "string" ? { "main.go": main } : (main ?? {})
+	for (const [name, text] of Object.entries(program)) entries.push([`cmd/check/${name}`, text])
+	return entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+}
+
+/** Write each file beside its final name, then rename: a parallel worker never reads half a file. */
+function writeOnce(dir: string, entries: readonly [string, string][]): void {
+	if (existsSync(join(dir, ".complete"))) return
+	for (const [name, text] of entries) {
+		const path = join(dir, name)
+		mkdirSync(dirname(path), { recursive: true })
+		const partial = `${path}.${process.pid}.partial`
+		writeFileSync(partial, text)
+		renameSync(partial, path)
+	}
+	writeFileSync(join(dir, ".complete"), "")
+}
+
+/** Link the check program once per content hash, beside its final name then renamed; its link errors, if any. */
+function linkOnce(dir: string): string {
+	if (existsSync(join(dir, BINARY))) return ""
+	const partial = `${BINARY}.${process.pid}.partial`
+	const link = runGo(["build", "-o", partial, "./cmd/check"], { cwd: dir })
+	if (link.status !== 0) return link.stderr
+	renameSync(join(dir, partial), join(dir, BINARY))
+	return ""
+}
+
+/** The check program's run with `input` on stdin, as a promise: an in-process server keeps answering meanwhile. */
+function execIn(dir: string, input: string): Promise<Ran> {
+	return new Promise((resolve, reject) => {
+		const child = spawn(join(dir, BINARY), [], { cwd: dir, env: goEnv() })
+		let stdout = ""
+		let stderr = ""
+		child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()))
+		child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()))
+		child.once("error", reject)
+		child.once("close", (status) => resolve({ status: status ?? 1, stderr, stdout }))
+		child.stdin.end(input)
+	})
+}
+
+/** A check program: one `main.go`, or its files by name. */
+type Main = string | Readonly<Record<string, string>>
+
+/** `files` (a module with its `go.mod`) built and vetted at the pinned toolchain, with `main` beside it. */
+export function compileGo(files: Readonly<Record<string, string>>, options: { main?: Main } = {}): Compiled {
+	const entries = withMain(files, options.main)
+	const hash = createHash("sha256").update(JSON.stringify(entries)).digest("hex").slice(0, 20)
+	const dir = goCacheDir("sdk", hash)
+	writeOnce(dir, entries)
+	const build = runGo(["build", "./..."], { cwd: dir })
+	const vet = build.status === 0 ? runGo(["vet", "./..."], { cwd: dir }) : undefined
+	const findings = (vet?.stderr ?? "").split("\n").filter((line) => line !== "" && !line.startsWith("#"))
+	const linked = build.status === 0 && options.main !== undefined ? linkOnce(dir) : ""
+	return {
+		built: build.status === 0 && linked === "",
+		dir,
+		exec: (input) => execIn(dir, input),
+		run: () => {
+			const result = spawnSync(join(dir, BINARY), [], { cwd: dir, encoding: "utf8", env: goEnv() })
+			return { status: result.status ?? 1, stderr: result.stderr, stdout: result.stdout }
+		},
+		stderr: build.stderr + linked,
+		vet: vet?.status === 0 ? [] : findings,
+	}
+}
+
+/** The driver's sources by file name, importing the SDK as `module`. */
+function driverSources(module: string): Record<string, string> {
+	const dir = join(import.meta.dirname, "driver")
+	return Object.fromEntries(
+		readdirSync(dir)
+			.filter((name) => name.endsWith(".go"))
+			.map((name) => [name, readFileSync(join(dir, name), "utf8").replaceAll(DRIVER_IMPORT, JSON.stringify(module))]),
+	)
+}
+
+/**
+ * The Go SDK for `document` compiled with the test driver beside it, once per content hash, and
+ * `runCalls` sending cells through it by the emitter's call plans for the same options.
+ */
+export function compiledSdk(document: Record<string, unknown>, options: GoSdkOptions = {}): DrivenSdk {
+	const { files } = generateGoSdk(document, options)
+	const plans = goCallPlans(document, options)
+	const module = /^module (\S+)$/m.exec(files["go.mod"] as string)?.[1] as string
+	const compiled = compileGo(files, { main: driverSources(module) })
+	return {
+		...compiled,
+		runCalls: async (cell, origins) => {
+			const input = { alt: origins.alt, base: origins.url, cell, plans }
+			const ran = await compiled.exec(JSON.stringify(input))
+			const observed = ran.status === 0 ? (JSON.parse(ran.stdout) as unknown[]) : undefined
+			return { observed, status: ran.status, stderr: ran.stderr }
+		},
+	}
+}
