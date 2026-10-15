@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { compileGo } from "./__fixtures__/compiled.ts"
-import { goRequired, hasGo } from "./__fixtures__/go-env.ts"
+import { check, checkServed, once, seen } from "./__fixtures__/consumer.ts"
+import { withGo } from "./__fixtures__/go-env.ts"
+import { served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
-type Files = Readonly<Record<string, string>>
 
 const STRING = { type: "string" }
 const ref = (name: string): Json => ({ $ref: `#/components/schemas/${name}` })
@@ -94,114 +94,6 @@ const NAMES = document(
 	},
 )
 
-/**
- * A consumer program around `body`: an SDK client over a recording transport. Each request is
- * noted as `METHOD url[ x-trace=…][ body]` (query sorted) and answered from `replies` (200 `{}` by
- * default); it prints every `section`'s notes as one JSON object.
- */
-const PROGRAM = `package main
-
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
-
-	sdk "{{module}}"
-)
-
-type reply struct {
-	status int
-	body   string
-}
-
-var (
-	ctx       = context.Background()
-	replies   = map[string]reply{}
-	out       = map[string][]string{}
-	current   = "main"
-	transport = &http.Client{Transport: recorder{}}
-)
-
-func section(name string) { current = name }
-
-func note(parts ...any) { out[current] = append(out[current], strings.TrimSpace(fmt.Sprintln(parts...))) }
-
-type recorder struct{}
-
-func (recorder) RoundTrip(req *http.Request) (*http.Response, error) {
-	line := req.Method + " " + req.URL.Scheme + "://" + req.URL.Host + req.URL.EscapedPath()
-	if req.URL.RawQuery != "" {
-		line += "?" + req.URL.Query().Encode()
-	}
-	if trace := req.Header.Get("X-Trace"); trace != "" {
-		line += " x-trace=" + trace
-	}
-	if req.Body != nil {
-		sent, _ := io.ReadAll(req.Body)
-		if text := strings.TrimSpace(string(sent)); text != "" {
-			line += " " + text
-		}
-	}
-	note(line)
-	answer, ok := replies[req.Method+" "+req.URL.Path]
-	if !ok {
-		answer = reply{200, "{}"}
-	}
-	return &http.Response{
-		Body:       io.NopCloser(strings.NewReader(answer.body)),
-		Header:     http.Header{"Content-Type": {"application/json"}},
-		Request:    req,
-		StatusCode: answer.status,
-	}, nil
-}
-
-func client(base string) *sdk.Client {
-	return sdk.NewClient(sdk.Config{BaseURL: base, HTTPClient: transport})
-}
-
-func must[T any](v T, err error) T {
-	if err != nil {
-		note("error:", err)
-	}
-	return v
-}
-
-func main() {
-{{body}}
-	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
-		os.Exit(1)
-	}
-}
-`
-
-/** PROGRAM importing the SDK as `module`, running `body`. */
-const program = (module: string, body: string) =>
-	PROGRAM.replace("{{module}}", () => module).replace("{{body}}", () => body)
-
-type Run = { built: boolean; vet: readonly string[]; out: Record<string, string[]> | undefined; stderr: string }
-
-/** `files` built and vetted with the consumer `body` beside them, which is run when it builds. */
-function check(files: Files, module: string, body: string): Run {
-	const sdk = compileGo(files, { main: program(module, body) })
-	if (!sdk.built) return { built: false, out: undefined, stderr: sdk.stderr, vet: sdk.vet }
-	const ran = sdk.run()
-	const out = ran.status === 0 ? (JSON.parse(ran.stdout) as Record<string, string[]>) : undefined
-	return { built: true, out, stderr: ran.stderr, vet: sdk.vet }
-}
-
-/** `check` run once, on first use. */
-function once(run: () => Run): () => Run {
-	let memo: Run | undefined
-	return () => (memo ??= run())
-}
-
-/** What a test asserts of a run: it builds, vets clean, and the notes of `section`. */
-const seen = (run: Run, section = "main") => ({ built: run.built, out: run.out?.[section], vet: run.vet })
-
 const shop = once(() =>
 	check(
 		generateGoSdk(SHOP, { modulePath: "example.com/shop" }).files,
@@ -220,8 +112,8 @@ const shop = once(() =>
 	var _ func(context.Context, *sdk.UsersListOpts, ...sdk.RequestOption) (*sdk.UserPage, error) = api.Users.List
 	var _ func(context.Context, string, *sdk.GetUserOpts, ...sdk.RequestOption) (*sdk.User, error) = api.GetUser
 	var _ func(context.Context, string, *sdk.UsersDeleteOpts, ...sdk.RequestOption) error = api.Users.Delete
-	replies["POST /users"] = reply{200, \`{"id":"u1","name":"Ada"}\`}
-	replies["DELETE /users/u1"] = reply{204, ""}
+	replies["POST /users"] = reply{status: 200, body: \`{"id":"u1","name":"Ada"}\`}
+	replies["DELETE /users/u1"] = reply{status: 204, body: ""}
 	note("created", must(api.Users.Create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil, sdk.WithHeader("X-Trace", "t0"))).Id)
 	note("deleted", api.Users.Delete(ctx, "u1", nil) == nil)
 	section("opts")
@@ -246,7 +138,7 @@ const names = once(() =>
 	must(api.Type.Get(ctx, "t1", nil))
 	must(api.Select.Range(ctx, "u1", "c1", nil))
 	section("models")
-	replies["GET /config"] = reply{200, \`{"region":"eu"}\`}
+	replies["GET /config"] = reply{status: 200, body: \`{"region":"eu"}\`}
 	var model *sdk.ConfigModel = must(api.Config.Get(ctx, nil))
 	note(model.Region)
 	section("enums")
@@ -257,10 +149,10 @@ const names = once(() =>
 /** A consumer of users.create typed as returning `result`, noting `show` after a 404 and a 200. */
 const createUser = (result: string, show: string) => `	api := client("http://api.test")
 	var create func(context.Context, sdk.UserCreateInput, *sdk.UsersCreateOpts, ...sdk.RequestOption) (${result}, error) = api.Users.Create
-	replies["POST /users"] = reply{404, \`{"message":"no"}\`}
+	replies["POST /users"] = reply{status: 404, body: \`{"message":"no"}\`}
 	res, err := create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil)
 	note(${show})
-	replies["POST /users"] = reply{200, \`{"id":"u1","name":"Ada"}\`}
+	replies["POST /users"] = reply{status: 200, body: \`{"id":"u1","name":"Ada"}\`}
 	res, err = create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil)
 	note(${show})`
 
@@ -274,15 +166,6 @@ const SERVED = { ...USERS_DOC, servers: [{ url: "https://api.example.test/v1" }]
 /** `doc`'s SDK as example.com/users, throwing by default. */
 const usersSdk = (doc: Json, throwOnError?: boolean) =>
 	generateGoSdk(doc, { modulePath: "example.com/users", throwOnError }).files
-
-/* Go absent passes locally and fails where it is required (CI, the pre-push battery) */
-const go = hasGo()
-
-/** Whether this test runs its Go half: false only where Go may be absent. */
-function withGo(): boolean {
-	expect(go || !goRequired()).toBe(true)
-	return go
-}
 
 describe("the Go SDK surface, called from a consumer program", () => {
 	// v0: 5333bd1243
@@ -442,5 +325,26 @@ describe("Go names that never collide, called from a consumer program", () => {
 		if (!withGo()) return
 		const run = names()
 		expect(seen(run, "enums"), run.stderr).toEqual({ built: true, out: ["-created_at created_at []"], vet: [] })
+	}, 600_000)
+})
+
+describe("the consumer-program harness", () => {
+	it("answers with a reply's headers in process, and reaches a recording server by the base on stdin", async () => {
+		if (!withGo()) return
+		const body = `	var resp *http.Response
+	replies["POST /users"] = reply{status: 201, body: \`{"id":"u1","name":"Ada"}\`, headers: map[string]string{"X-Version": "7"}}
+	must(client("http://api.test").Users.Create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil, sdk.WithResponseInto(&resp)))
+	note(resp.StatusCode, resp.Header.Get("X-Version"), resp.Header.Get("Content-Type"))
+	section("served")
+	note(must(sdk.NewClient(sdk.Config{BaseURL: input.Base}).Users.Create(ctx, sdk.UserCreateInput{Name: "Bo"}, nil)).Id)`
+		const [run, hops] = await served([{ json: { id: "u2", name: "Bo" }, status: 200 }], async (server) => {
+			const ran = await checkServed(usersSdk(USERS_DOC), "example.com/users", body, server.url)
+			return [ran, server.hops.map((hop) => `${hop.method} ${hop.url} ${JSON.stringify(hop.body.json)}`)] as const
+		})
+		expect({ hops, main: seen(run), served: seen(run, "served") }, run.stderr).toEqual({
+			hops: ['POST /users {"name":"Bo"}'],
+			main: { built: true, out: ['POST http://api.test/users {"name":"Ada"}', "201 7 application/json"], vet: [] },
+			served: { built: true, out: ["u2"], vet: [] },
+		})
 	}, 600_000)
 })

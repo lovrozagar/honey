@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -39,48 +41,74 @@ type body struct {
 	Size        int             `json:"size"`
 }
 
-// refusal names what of c, on the method p plans, the driver cannot express yet; nil when it can.
-func refusal(c call, p plan) error {
+// job is one call of the cell: what the grid asks, the method's plan, and the script's directives.
+type job struct {
+	c call
+	p plan
+	d directives
+}
+
+// refusal names what of j, on a method of type t, the driver cannot express yet; nil when it can.
+func refusal(j job, t reflect.Type) error {
+	c, p := j.c, j.p
 	switch {
 	case p.Stream != nil:
 		return fmt.Errorf("the operation streams (%s): events and frames are not driven yet", *p.Stream)
-	case p.Response != "json" && p.Response != "none":
-		return fmt.Errorf("the operation answers %s: bytes and text are not observed yet", p.Response)
-	case c.Raw:
-		return errors.New("a raw response (raw: true) is not observed yet")
+	case (p.Response == "binary" || p.Response == "text") && t.NumOut() < 2:
+		return fmt.Errorf("the operation answers %s, and the method returns an error alone: no answer to observe", p.Response)
 	case c.LastEventID != "" || c.ReconnectToken != "" || c.Send != nil || c.Take != nil:
 		return errors.New("stream controls (lastEventId, reconnectToken, send, take) are not driven yet")
-	case c.Body != nil && c.Body.Kind != "json":
+	case c.Body != nil && c.Body.Kind != "json" && c.Body.Kind != "binary":
 		return fmt.Errorf("a %s body is not sent yet", c.Body.Kind)
-	case c.Body != nil && !p.Body:
-		return errors.New("the call has a JSON body the method takes no parameter for")
+	case c.Body != nil && p.Body == nil:
+		return fmt.Errorf("the call has a %s body, and the method takes no body parameter", c.Body.Kind)
+	case c.Body != nil && (c.Body.Kind == "binary") != (*p.Body == "binary"):
+		return fmt.Errorf("the call has a %s body, and the method a %s body parameter", c.Body.Kind, *p.Body)
+	case j.d.OneShotBody && (c.Body == nil || c.Body.Kind != "binary"):
+		return errors.New("oneShotBody is scripted for a call without a binary body")
 	}
 	return nil
 }
 
-// perform sends c on client by its plan and returns what it observed.
-func perform(client *sdk.Client, in input, c call) (any, error) {
-	p, ok := in.Plans[c.Operation]
+// perform sends call i, c, by its plan and returns what it observed: null for a Go error the grid
+// has no Observed for when a script is given, a failure of the run without one.
+func (r *runner) perform(i int, c call) (any, error) {
+	p, ok := r.in.Plans[c.Operation]
 	if !ok {
 		return nil, errors.New("no call plan names this operation")
 	}
-	if err := refusal(c, p); err != nil {
+	j := job{c: c, p: p, d: r.script.directivesOf(i)}
+	method, err := methodOf(r.client, p)
+	if err != nil {
 		return nil, err
 	}
-	method, err := methodOf(client, p)
-	if err != nil {
+	if err := refusal(j, method.Type()); err != nil {
 		return nil, err
 	}
 	var resp *http.Response
-	reqOpts, err := requestOptions(in, c, &resp)
+	reqOpts, target, err := requestOptions(r.in, j, &resp)
 	if err != nil {
 		return nil, err
 	}
-	args, err := argsOf(method.Type(), c, p, reqOpts)
+	time.Sleep(time.Duration(j.d.SleepMs) * time.Millisecond)
+	r.rec.begin(i)
+	/* the clock starts before the ctx, so elapsedMs never undercuts a caller deadline */
+	start := time.Now()
+	ctx, release := j.d.ctxOf()
+	defer release()
+	args, err := argsOf(method.Type(), ctx, j, reqOpts)
 	if err != nil {
 		return nil, err
 	}
-	return observe(method.CallSlice(args), resp)
+	o := outcomeOf(method.CallSlice(args))
+	r.rec.called(time.Since(start), o, j.d.IsKeys)
+	if o.err != nil && !gridError(o.err) {
+		if r.script == nil {
+			return nil, o.err
+		}
+		return nil, nil
+	}
+	return observedOf(j, o, resp, target)
 }
 
 // methodOf walks the plan's resource fields from client to the method.
@@ -100,65 +128,107 @@ func methodOf(client *sdk.Client, p plan) (reflect.Value, error) {
 	return method, nil
 }
 
-// requestOptions are the call's per-call overrides, plus the raw response the status is read from.
-func requestOptions(in input, c call, resp **http.Response) ([]sdk.RequestOption, error) {
+// requestOptions are the call's per-call overrides, plus the raw response the status is read
+// from and, for a plan with typed response headers, WithHeadersInto over a new <Op>Headers (the
+// struct is returned beside them).
+func requestOptions(in input, j job, resp **http.Response) ([]sdk.RequestOption, any, error) {
 	opts := []sdk.RequestOption{sdk.WithResponseInto(resp)}
-	switch c.Origin {
+	switch j.c.Origin {
 	case "":
 	case "alt":
 		if in.Alt == "" {
-			return nil, errors.New("the call goes to the alt origin, and the input names none")
+			return nil, nil, errors.New("the call goes to the alt origin, and the input names none")
 		}
 		opts = append(opts, sdk.WithBaseURL(in.Alt))
 	default:
-		return nil, fmt.Errorf("origin %q is not one the driver knows", c.Origin)
+		return nil, nil, fmt.Errorf("origin %q is not one the driver knows", j.c.Origin)
 	}
-	if c.TimeoutMs != nil {
-		opts = append(opts, sdk.WithTimeout(time.Duration(*c.TimeoutMs)*time.Millisecond))
+	if j.c.TimeoutMs != nil {
+		opts = append(opts, sdk.WithTimeout(time.Duration(*j.c.TimeoutMs)*time.Millisecond))
 	}
-	return opts, nil
+	if j.p.ResponseHeaders == nil {
+		return opts, nil, nil
+	}
+	into, target, ok := headerTarget(j.p.Operation)
+	if !ok {
+		return nil, nil, errors.New("the plan declares response headers, and targets.go has no target for them")
+	}
+	return append(opts, into), target, nil
 }
 
 // argsOf builds the method's arguments: ctx, the path params in plan order, the body, the
 // <Op>Opts, then the RequestOptions (a header the method does not declare among them).
-func argsOf(t reflect.Type, c call, p plan, reqOpts []sdk.RequestOption) ([]reflect.Value, error) {
-	args := []reflect.Value{reflect.ValueOf(context.Background())}
-	for _, name := range p.PathParams {
-		value, ok := c.Params[name]
+func argsOf(t reflect.Type, ctx context.Context, j job, reqOpts []sdk.RequestOption) ([]reflect.Value, error) {
+	want := 1 + len(j.p.PathParams) + 2
+	if j.p.Body != nil {
+		want++
+	}
+	if t.NumIn() != want {
+		return nil, fmt.Errorf("the plan gives %d arguments, the method takes %d", want, t.NumIn())
+	}
+	args := []reflect.Value{reflect.ValueOf(ctx)}
+	for _, name := range j.p.PathParams {
+		value, ok := j.c.Params[name]
 		if !ok {
 			return nil, fmt.Errorf("path param %s is missing from the call", name)
 		}
 		args = append(args, reflect.ValueOf(value))
 	}
-	if p.Body {
-		raw := json.RawMessage("null")
-		if c.Body != nil {
-			raw = c.Body.Value
-		}
-		arg, err := decodeAs(t.In(len(args)), raw)
+	if j.p.Body != nil {
+		arg, err := bodyArg(t.In(len(args)), j)
 		if err != nil {
 			return nil, fmt.Errorf("body: %w", err)
 		}
 		args = append(args, arg)
 	}
-	opts, undeclared, err := optsOf(t.In(len(args)), c, p)
+	opts, undeclared, err := optsOf(t.In(len(args)), j)
 	if err != nil {
 		return nil, err
 	}
 	for _, name := range sortedNames(undeclared) {
 		reqOpts = append(reqOpts, sdk.WithHeader(name, undeclared[name]))
 	}
-	args = append(args, opts, reflect.ValueOf(reqOpts))
-	if len(args) != t.NumIn() {
-		return nil, fmt.Errorf("the plan gives %d arguments, the method takes %d", len(args), t.NumIn())
+	return append(args, opts, reflect.ValueOf(reqOpts)), nil
+}
+
+// bodyArg is the body parameter (type t): a binary body as bytes i & 0xff behind an io.Reader (a
+// bare one with oneShotBody), any other decoded from its JSON (a struct, url.Values, a string).
+func bodyArg(t reflect.Type, j job) (reflect.Value, error) {
+	if j.c.Body == nil || j.c.Body.Kind != "binary" {
+		raw := json.RawMessage("null")
+		if j.c.Body != nil {
+			raw = j.c.Body.Value
+		}
+		return decodeAs(t, raw)
 	}
-	return args, nil
+	data := make([]byte, j.c.Body.Size)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	var r io.Reader = bytes.NewReader(data)
+	if j.d.OneShotBody {
+		r = struct{ io.Reader }{r}
+	}
+	if !reflect.TypeOf(r).AssignableTo(t) {
+		return reflect.Value{}, fmt.Errorf("a binary body cannot fill a %s parameter", t)
+	}
+	arg := reflect.New(t).Elem()
+	arg.Set(reflect.ValueOf(r))
+	return arg, nil
 }
 
 // optsOf fills a new <Op>Opts (t is its pointer type) from the call's search and its declared
-// header params, each by the field the plan names; it returns the headers no param declares.
-func optsOf(t reflect.Type, c call, p plan) (reflect.Value, map[string]string, error) {
+// header params, each by the field the plan names, and the scripted IdempotencyKey; it returns the
+// headers no param declares.
+func optsOf(t reflect.Type, j job) (reflect.Value, map[string]string, error) {
+	c, p := j.c, j.p
 	opts := reflect.New(t.Elem())
+	if j.d.IdempotencyKey != nil {
+		key, _ := json.Marshal(*j.d.IdempotencyKey)
+		if err := setField(opts.Elem(), "IdempotencyKey", key); err != nil {
+			return reflect.Value{}, nil, err
+		}
+	}
 	for name, raw := range c.Search {
 		field, ok := p.Query[name]
 		if !ok {

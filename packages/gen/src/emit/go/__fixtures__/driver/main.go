@@ -5,13 +5,18 @@
 //
 // Stdin is one JSON object, G11's envelope:
 //
-//	{ "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url }
+//	{ "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url, "script"?: Script }
 //
 // cell is the grid's Cell as is (its other members are ignored); plans are the emitter's call plans
 // (goCallPlans). Every call of a cell runs in order on one client, so state a call leaves (a
 // refreshed token, a stale mark) reaches the next: a multi-step script is a cell with more calls.
 // Stdout is the grid's Observed[] JSON, one per call. Any failure, and any Call or outcome this
 // driver cannot express yet, exits 1 with the reason on stderr: a red cell, never a silent pass.
+//
+// script (script.go; only unit tests send one, the conformance runner and the harness never do)
+// adds client config, hooks, OnLog, OnAuthExpired and per-call ctx directives, and stdout becomes
+// { "observed": (Observed|null)[], "trace": Trace } (trace.go): a call ending in a Go error the grid
+// has no Observed for observes null, its error traced, instead of failing the run.
 package main
 
 import (
@@ -27,10 +32,11 @@ import (
 
 // input is the envelope on stdin.
 type input struct {
-	Cell  cell            `json:"cell"`
-	Plans map[string]plan `json:"plans"`
-	Base  string          `json:"base"`
-	Alt   string          `json:"alt"`
+	Cell   cell            `json:"cell"`
+	Plans  map[string]plan `json:"plans"`
+	Base   string          `json:"base"`
+	Alt    string          `json:"alt"`
+	Script json.RawMessage `json:"script"`
 }
 
 // cell holds what the driver reads of a grid Cell; the calls are decoded strictly one by one.
@@ -57,15 +63,31 @@ type setup struct {
 
 // plan is one method's call plan, in the emitter's names (emit/go/sdk-method.ts GoMethodCall).
 type plan struct {
-	Operation  string            `json:"operation"`
-	Members    []string          `json:"members"`
-	Method     string            `json:"method"`
-	PathParams []string          `json:"pathParams"`
-	Body       bool              `json:"body"`
-	Query      map[string]string `json:"query"`
-	Headers    map[string]string `json:"headers"`
-	Response   string            `json:"response"`
-	Stream     *string           `json:"stream"`
+	Operation       string            `json:"operation"`
+	Members         []string          `json:"members"`
+	Method          string            `json:"method"`
+	PathParams      []string          `json:"pathParams"`
+	Body            *string           `json:"body"`
+	Query           map[string]string `json:"query"`
+	Headers         map[string]string `json:"headers"`
+	Response        string            `json:"response"`
+	ResponseHeaders *responseHeaders  `json:"responseHeaders"`
+	Stream          *string           `json:"stream"`
+}
+
+// responseHeaders is a method's <Op>Headers struct: its type name, and each declared header (as
+// the spec spells it) to its field.
+type responseHeaders struct {
+	Type   string            `json:"type"`
+	Fields map[string]string `json:"fields"`
+}
+
+// runner runs a cell's calls on one client, recording into its trace when a script is given.
+type runner struct {
+	client *sdk.Client
+	in     input
+	script *script
+	rec    *recorder
 }
 
 func main() {
@@ -85,20 +107,29 @@ func drive(r io.Reader, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	client := sdk.NewClient(cfg)
+	s, err := scriptOf(in.Script, len(in.Cell.Calls))
+	if err != nil {
+		return fmt.Errorf("script: %w", err)
+	}
+	rec := &recorder{}
+	s.apply(&cfg, rec)
+	run := &runner{client: sdk.NewClient(cfg), in: in, script: s, rec: rec}
 	observed := make([]any, 0, len(in.Cell.Calls))
 	for i, raw := range in.Cell.Calls {
 		var c call
 		if err := strict(raw, &c); err != nil {
 			return fmt.Errorf("call %d: %w", i, err)
 		}
-		seen, err := perform(client, in, c)
+		seen, err := run.perform(i, c)
 		if err != nil {
 			return fmt.Errorf("call %d (%s): %w", i, c.Operation, err)
 		}
 		observed = append(observed, seen)
 	}
-	return json.NewEncoder(w).Encode(observed)
+	if s == nil {
+		return json.NewEncoder(w).Encode(observed)
+	}
+	return json.NewEncoder(w).Encode(map[string]any{"observed": observed, "trace": rec.trace()})
 }
 
 // strict decodes raw into v refusing unknown members: a Call or Setup field this driver does not

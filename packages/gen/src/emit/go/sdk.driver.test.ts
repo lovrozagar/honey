@@ -2,8 +2,8 @@ import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import type { Call, Observed, WireHop } from "../../../tests/integration/conformance/matrix.ts"
 import { compiledSdk, type DrivenSdk, type DriverRun } from "./__fixtures__/compiled.ts"
-import { goRequired, hasGo } from "./__fixtures__/go-env.ts"
-import { type RecordingServer, type Reply, recordingServer } from "./__fixtures__/recording-server.ts"
+import { withGo } from "./__fixtures__/go-env.ts"
+import { type RecordingServer, type Reply, served } from "./__fixtures__/recording-server.ts"
 import { goCallPlans } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -59,27 +59,8 @@ const CREATED_BODY = '{"tags":["a"],"text":"hi"}'
 /** The path and query CREATE reaches, escaped as encodeURIComponent and URLSearchParams do. */
 const CREATED_URL = "/orgs/a%2Fb%20c/members/m%3F1/notes?tag=x%26y+z"
 
-/* Go absent passes locally and fails where it is required (CI, the pre-push battery) */
-const go = hasGo()
-
-/** Whether this test runs its Go half: false only where Go may be absent. */
-function withGo(): boolean {
-	expect(go || !goRequired()).toBe(true)
-	return go
-}
-
 /** A run's outcome as a test asserts it: the exit status and what it observed. */
 const outcome = (run: DriverRun) => ({ observed: run.observed, status: run.status })
-
-/** `use` with a recording server answering `replies`, closed after it whatever it does. */
-async function served<T>(replies: readonly Reply[], use: (server: RecordingServer) => Promise<T>): Promise<T> {
-	const server = await recordingServer(replies)
-	try {
-		return await use(server)
-	} finally {
-		await server.close()
-	}
-}
 
 /** The SDK for NOTES compiled with the driver, which must build and vet clean. */
 function notesSdk(throwOnError?: boolean): DrivenSdk {
@@ -112,11 +93,25 @@ const createdHop = (server: RecordingServer): WireHop => ({
 	url: CREATED_URL,
 })
 
+/** A raw Observed: the status, the body as text and every header the Node listener sends. */
+const raw = (status: number, body: string, headers: Record<string, unknown>) => ({
+	body,
+	headers: {
+		connection: "keep-alive",
+		"content-length": String(body.length),
+		date: expect.any(String),
+		"keep-alive": "timeout=5",
+		...headers,
+	},
+	kind: "raw",
+	status,
+})
+
 describe("goCallPlans: each operation's call plan, in the emitter's own names", () => {
 	it("names the resource path, the method, the path params in path order and every Opts field", () => {
 		expect(goCallPlans(NOTES)).toEqual({
 			"orgs.members.notes.create": {
-				body: true,
+				body: "json",
 				headers: { "X-Trace": "XTrace" },
 				members: ["Orgs", "Members", "Notes"],
 				method: "Create",
@@ -124,6 +119,7 @@ describe("goCallPlans: each operation's call plan, in the emitter's own names", 
 				pathParams: ["org", "member"],
 				query: { tag: "Tag" },
 				response: "json",
+				responseHeaders: null,
 				stream: null,
 			},
 		})
@@ -139,10 +135,10 @@ describe("the Go test driver: the compiled SDK called by its call plan, (*T, err
 			{ json: { error_key: "note.invalid", message: "bad text" }, status: 422 },
 		]
 		const setup = { auth: { kind: "bearer", token: "tok" }, headers: { "X-Tenant": "acme" } } as const
-		const [run, hops, expected] = await served(replies, async (server) => {
+		const [run, hops, expected, bodies] = await served(replies, async (server) => {
 			const ran = await sdk.runCalls({ calls: [CREATE, CREATE], setup }, server)
 			const recorded: readonly WireHop[] = server.hops
-			return [ran, recorded, createdHop(server)] as const
+			return [ran, recorded, createdHop(server), server.bodies.map(String)] as const
 		})
 		expect(outcome(run), run.stderr).toEqual({
 			observed: [
@@ -157,6 +153,7 @@ describe("the Go test driver: the compiled SDK called by its call plan, (*T, err
 			status: 0,
 		})
 		expect(hops).toEqual([expected, expected])
+		expect(bodies).toEqual([CREATED_BODY, CREATED_BODY])
 	}, 600_000)
 })
 
@@ -187,12 +184,55 @@ describe("the Go test driver: the compiled SDK called by its call plan, safe mod
 	}, 600_000)
 })
 
+describe("the Go test driver: timeouts and the raw response, the grid's outcomes in either mode", () => {
+	it("observes a lapsed client or call timeout as timeout, a late answer never awaited", async () => {
+		if (!withGo()) return
+		const sdk = notesSdk()
+		const replies: Reply[] = [
+			{ delayMs: 2000, json: {}, status: 200 },
+			{ delayMs: 2000, json: {}, status: 200 },
+		]
+		const calls: Call[] = [CREATE, { ...CREATE, timeoutMs: 50 }]
+		const started = Date.now()
+		const [run, hops] = await served(replies, async (server) => {
+			const ran = await sdk.runCalls({ calls, setup: { timeoutMs: 300 } }, server)
+			return [ran, server.hops.length] as const
+		})
+		expect({ ...outcome(run), hops }, run.stderr).toEqual({
+			hops: 2,
+			observed: [{ kind: "timeout" }, { kind: "timeout" }] satisfies Observed[],
+			status: 0,
+		})
+		expect(Date.now() - started).toBeLessThan(1500)
+	}, 600_000)
+
+	it("observes raw: true as the stored response, on success and on an error status, in both modes", async () => {
+		if (!withGo()) return
+		const replies: Reply[] = [
+			{ headers: { "x-extra": "e" }, json: { id: "n1", text: "hi" }, status: 200 },
+			{ text: "plain failure", status: 404 },
+		]
+		const expected = [
+			raw(200, '{"id":"n1","text":"hi"}', { "content-type": "application/json", "x-extra": "e" }),
+			raw(404, "plain failure", {}),
+		]
+		for (const sdk of [notesSdk(), notesSdk(false)]) {
+			const calls: Call[] = [
+				{ ...CREATE, raw: true },
+				{ ...CREATE, raw: true },
+			]
+			const run = await served(replies, (server) => sdk.runCalls({ calls }, server))
+			expect(outcome(run), run.stderr).toEqual({ observed: expected, status: 0 })
+		}
+	}, 600_000)
+})
+
 describe("the Go test driver: what it cannot express yet", () => {
 	it("refuses it loudly: a non-zero exit naming the operation and the reason, nothing sent", async () => {
 		if (!withGo()) return
 		const sdk = notesSdk()
 		const refused: Call[] = [
-			{ ...CREATE, raw: true },
+			{ ...CREATE, lastEventId: "e1" },
 			{ ...CREATE, body: { contentType: "application/octet-stream", kind: "binary", size: 4 } },
 		]
 		const [runs, hops] = await served([], async (server) => {
@@ -200,9 +240,21 @@ describe("the Go test driver: what it cannot express yet", () => {
 			return [ran, server.hops] as const
 		})
 		expect(runs.map((run) => ({ ...outcome(run), stderr: run.stderr.trim() }))).toEqual([
-			{ observed: undefined, status: 1, stderr: expect.stringMatching(/orgs\.members\.notes\.create.*raw/) },
+			{ observed: undefined, status: 1, stderr: expect.stringMatching(/orgs\.members\.notes\.create.*lastEventId/) },
 			{ observed: undefined, status: 1, stderr: expect.stringMatching(/orgs\.members\.notes\.create.*binary/) },
 		])
 		expect(hops).toEqual([])
+	}, 600_000)
+
+	it("fails a call ending in a Go error the grid has no Observed for: an undecodable success", async () => {
+		if (!withGo()) return
+		const sdk = notesSdk()
+		const replies: Reply[] = [{ headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }]
+		const run = await served(replies, (server) => sdk.runCalls({ calls: [CREATE] }, server))
+		expect({ ...outcome(run), stderr: run.stderr.trim() }).toEqual({
+			observed: undefined,
+			status: 1,
+			stderr: expect.stringMatching(/orgs\.members\.notes\.create.*honey: decode response/),
+		})
 	}, 600_000)
 })

@@ -7,14 +7,19 @@
  *
  * `compiledSdk` is that with the test driver (`driver/*.go`, G8.3-4) as the program: the unit
  * behavior tests, the conformance runner and the harness run cells through it by the emitter's own
- * call plans (`goCallPlans`), one process per cell, `Observed[]` back.
+ * call plans (`goCallPlans`), one process per cell, `Observed[]` back. A unit test may add a
+ * `Script` (client extras, recorders, per-call directives) and gets a `Trace` beside the observed.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
+import type { GoCallPlan } from "../sdk-client.ts"
 import { type GoSdkOptions, generateGoSdk, goCallPlans } from "../sdk.ts"
+import type { Script, Trace } from "./driver/protocol.ts"
 import { goCacheDir, goEnv, runGo } from "./go-env.ts"
+
+export type { CallScript, GoError, HookTrace, Script, Trace } from "./driver/protocol.ts"
 
 /** A run of the check program: its exit status and output. */
 export type Ran = { status: number; stderr: string; stdout: string }
@@ -36,6 +41,7 @@ export type DriverCell = { readonly calls: readonly { readonly operation: string
 
 /** One driver run: its exit status, its stderr, and on success the grid's `Observed`, one per call. */
 export type DriverRun = {
+	/** with a script, a call ending in a Go error the grid has no `Observed` for is null */
 	readonly observed: readonly unknown[] | undefined
 	readonly status: number
 	readonly stderr: string
@@ -43,8 +49,12 @@ export type DriverRun = {
 
 /** The SDK compiled with the driver beside it. */
 export type DrivenSdk = Compiled & {
-	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin) */
-	runCalls(cell: DriverCell, origins: { readonly alt?: string; readonly url: string }): Promise<DriverRun>
+	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
+	runCalls(
+		cell: DriverCell,
+		origins: { readonly alt?: string; readonly url: string },
+		script?: Script,
+	): Promise<DriverRun & { readonly trace?: Trace }>
 }
 
 /* the check program's binary, beside the module it is built from */
@@ -123,14 +133,51 @@ export function compileGo(files: Readonly<Record<string, string>>, options: { ma
 	}
 }
 
-/** The driver's sources by file name, importing the SDK as `module`. */
-function driverSources(module: string): Record<string, string> {
-	const dir = join(import.meta.dirname, "driver")
-	return Object.fromEntries(
-		readdirSync(dir)
-			.filter((name) => name.endsWith(".go"))
-			.map((name) => [name, readFileSync(join(dir, name), "utf8").replaceAll(DRIVER_IMPORT, JSON.stringify(module))]),
+/**
+ * targets.go: `headerTarget`, `WithHeadersInto` over a new `<Op>Headers` for each plan with typed
+ * response headers (F3). Reflection cannot name a Go type by string, so the plans write the code.
+ */
+function headerTargets(plans: Readonly<Record<string, GoCallPlan>>): string {
+	const cases = Object.values(plans).flatMap(({ operation, responseHeaders }) =>
+		responseHeaders === null
+			? []
+			: [
+					`\tcase ${JSON.stringify(operation)}:`,
+					`\t\th := &sdk.${responseHeaders.type}{}`,
+					"\t\treturn sdk.WithHeadersInto(h), h, true",
+				],
 	)
+	return [
+		"package main",
+		"",
+		`import sdk ${DRIVER_IMPORT}`,
+		"",
+		"// headerTarget is WithHeadersInto over a new <Op>Headers for operation, and that struct; false when",
+		"// the operation declares no response headers.",
+		"func headerTarget(operation string) (sdk.RequestOption, any, bool) {",
+		"\tswitch operation {",
+		...cases,
+		"\t}",
+		"\treturn nil, nil, false",
+		"}",
+		"",
+	].join("\n")
+}
+
+/** The driver's sources by file name, with targets.go from `plans`, importing the SDK as `module`. */
+function driverSources(module: string, plans: Readonly<Record<string, GoCallPlan>>): Record<string, string> {
+	const dir = join(import.meta.dirname, "driver")
+	const files = readdirSync(dir)
+		.filter((name) => name.endsWith(".go"))
+		.map((name) => [name, readFileSync(join(dir, name), "utf8")])
+	files.push(["targets.go", headerTargets(plans)])
+	return Object.fromEntries(files.map(([name, text]) => [name, text.replaceAll(DRIVER_IMPORT, JSON.stringify(module))]))
+}
+
+/** A driver run's stdout as the caller reads it: `Observed[]`, or `{observed, trace}` under a script. */
+function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace?: Trace } {
+	if (!scripted) return { observed: JSON.parse(stdout) as unknown[] }
+	return JSON.parse(stdout) as { observed: unknown[]; trace: Trace }
 }
 
 /**
@@ -141,14 +188,14 @@ export function compiledSdk(document: Record<string, unknown>, options: GoSdkOpt
 	const { files } = generateGoSdk(document, options)
 	const plans = goCallPlans(document, options)
 	const module = /^module (\S+)$/m.exec(files["go.mod"] as string)?.[1] as string
-	const compiled = compileGo(files, { main: driverSources(module) })
+	const compiled = compileGo(files, { main: driverSources(module, plans) })
 	return {
 		...compiled,
-		runCalls: async (cell, origins) => {
-			const input = { alt: origins.alt, base: origins.url, cell, plans }
+		runCalls: async (cell, origins, script) => {
+			const input = { alt: origins.alt, base: origins.url, cell, plans, script }
 			const ran = await compiled.exec(JSON.stringify(input))
-			const observed = ran.status === 0 ? (JSON.parse(ran.stdout) as unknown[]) : undefined
-			return { observed, status: ran.status, stderr: ran.stderr }
+			const out = ran.status === 0 ? parsed(ran.stdout, script !== undefined) : { observed: undefined }
+			return { ...out, status: ran.status, stderr: ran.stderr }
 		},
 	}
 }

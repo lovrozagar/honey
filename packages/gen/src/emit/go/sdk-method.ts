@@ -5,7 +5,7 @@
  * Spec text reaches the source only through the shared escape layer.
  */
 import type { IRParam } from "../../ir/model.ts"
-import type { SdkOp, SdkResponseKind, SdkStream } from "../../ir/sdk-model.ts"
+import type { SdkBody, SdkOp, SdkResponseKind, SdkStream } from "../../ir/sdk-model.ts"
 import { goString, lineComment } from "../shared/escape.ts"
 import { goExported, goLocal, NameScope } from "../shared/lang.ts"
 import { type GoTypeContext, goTypeOf } from "./types.ts"
@@ -19,15 +19,23 @@ export type GoMethodCall = {
 	readonly method: string
 	/** the path params by spec name, in signature order */
 	readonly pathParams: readonly string[]
-	/** whether a JSON body follows them */
-	readonly body: boolean
+	/** the kind of the body parameter that follows them (`jsonBodyOf`, which also emits it); null without one */
+	readonly body: SdkBody["kind"] | null
 	/** each query param by spec name, to its `<Op>Opts` field */
 	readonly query: Readonly<Record<string, string>>
 	/** each header param by spec name, to its `<Op>Opts` field */
 	readonly headers: Readonly<Record<string, string>>
 	readonly response: SdkResponseKind
+	/**
+	 * the `<Op>Headers` struct `WithHeadersInto` fills: its type name and each declared response
+	 * header (as the spec spells it) to its field; null for a method that has none
+	 */
+	readonly responseHeaders: GoResponseHeaders | null
 	readonly stream: SdkStream
 }
+
+/** A method's typed response headers, as a caller names them. */
+export type GoResponseHeaders = { readonly type: string; readonly fields: Readonly<Record<string, string>> }
 
 /** One operation's method, the options struct it takes, and how a caller reaches it. */
 export type GoMethod = {
@@ -161,13 +169,15 @@ function callOf(
 	const by = (at: OptsField["in"]) =>
 		Object.fromEntries(fields.filter((field) => field.in === at).map((field) => [field.param, field.name]))
 	return {
-		body: jsonBodyOf(op) !== undefined,
+		body: jsonBodyOf(op)?.kind ?? null,
 		headers: by("header"),
 		method: name,
 		operation: op.id,
 		pathParams: path.map(([param]) => param.name),
 		query: by("query"),
 		response: op.success.kind,
+		/* the emitter declares no <Op>Headers struct yet (G5) */
+		responseHeaders: null,
 		stream: op.stream,
 	}
 }

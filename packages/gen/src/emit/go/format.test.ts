@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { formatFiles } from "../shared/format.ts"
 import { gofmtFormatter } from "../shared/gofmt.ts"
 import { type Compiled, compileGo } from "./__fixtures__/compiled.ts"
-import { goRequired, gofmtPath, hasGo } from "./__fixtures__/go-env.ts"
+import { gofmtPath, withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -58,15 +58,6 @@ const DOCUMENT: Json = {
 			},
 		},
 	},
-}
-
-/* Go absent passes locally and fails where it is required (CI, the pre-push battery) */
-const go = hasGo()
-
-/** Whether this test runs its Go half: false only where Go may be absent. */
-function withGo(): boolean {
-	expect(go || !goRequired()).toBe(true)
-	return go
 }
 
 let formatted: Promise<Compiled> | undefined

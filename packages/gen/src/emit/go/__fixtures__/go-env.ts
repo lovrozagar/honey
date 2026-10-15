@@ -62,3 +62,14 @@ export function hasGo(): boolean {
 export function goRequired(): boolean {
 	return process.env.HONEY_REQUIRE_TOOLCHAINS === "1" || process.env.HONEY_REQUIRE_GO === "1"
 }
+
+/**
+ * Whether a test runs its Go half: false only where Go may be absent. A missing Go fails the test
+ * where it is required (CI, the pre-push battery) and skips the Go half anywhere else.
+ */
+export function withGo(): boolean {
+	const go = hasGo()
+	if (!go && goRequired())
+		throw new Error("Go is required here (HONEY_REQUIRE_GO or HONEY_REQUIRE_TOOLCHAINS), and none is on PATH")
+	return go
+}

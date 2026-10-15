@@ -332,11 +332,13 @@ src/emit/go/errors.ts	gen	src	12	Go errors	codegen-go.ts
 src/emit/go/format.test.ts	gen	test	12	every emitted Go file is gofmt- and vet-clean at the pinned toolchain, and valid without Go	codegen-go.ts
 src/emit/go/sdk.calls.test.ts	gen	test	12	the Go method surface: signatures, *Opts, safe mode, keyword/receiver names, the servers[0] default (G1)	codegen-go.ts
 src/emit/go/sdk.driver.test.ts	gen	test	12	the driver's call plan + executed Go calls against the recording server in throw/safe/refusal modes (G8/G11)	codegen-go.ts
+src/emit/go/sdk.driver.script.test.ts	gen	test	12	the driver's script mode (split from sdk.driver.test at the 500 cap): the optional script stdin field (config extras, scripted OnAuthExpired tokens, hook/log recorders, per-call cancel/deadline/sleep) and the {observed, trace} output with Go error types and errors.Is results	codegen-go.ts
 src/emit/go/types.compiled.test.ts	gen	test	12	emitted Go types compiled + round-tripped: special keys, the json:"-" key, allOf merge, the combined case	codegen-go.ts
 src/emit/go/types.structs.test.ts	gen	test	12	the Go struct rows: tags, untagged keys, extra keys, allOf	go-type-emitter.ts
 src/emit/go/__fixtures__/go-env.ts	gen	test	12	toolchain-parity fixture (G10, D4 precedent): goEnv (GOTOOLCHAIN=pinned, caches under the home cache dir, GOFLAGS readonly), runGo, gofmtPath from the pinned GOROOT, goRequired gate (HONEY_REQUIRE_GO)	—
 src/emit/go/__fixtures__/compiled.ts	gen	test	12	the executed-Go fixture (G8/G11, D4 precedent): compiledSdk + runCalls write the emitted SDK under the home cache dir keyed by content hash, compile once per hash via goEnv, and drive it through the reflection driver (main may be several files) so behavior tests run the real emitted client and the F8 mutants of runtimeSource() are reached	codegen-go.ts
 src/emit/go/__fixtures__/recording-server.ts	gen	test	12	a node http server recording WireHop-shaped requests and answering scripted responses, driving the executed-Go calls	—
+src/emit/go/__fixtures__/consumer.ts	gen	test	12	compiles small Go consumer programs beside an emitted SDK where compiling is the assertion (errors.As, Err<Key>, SDKResult.OK, multipart FilePart), plus checkServed against the recording server	—
 src/emit/go/__fixtures__/driver/	gen	test	12	the G8/G11 Go reflection driver (main.go/invoke.go/observe.go): stdin {cell, plans, base, alt} to stdout Observed[], refusing loudly what phase b cannot express (streams, bytes, raw, timeouts)	—
 src/emit/rust/sdk.ts	gen	src	13	Rust SDK	codegen-rust.ts
 src/emit/rust/types.ts	gen	src	13	Rust types	rust-type-emitter.ts

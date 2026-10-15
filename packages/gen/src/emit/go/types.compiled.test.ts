@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { goString } from "../shared/escape.ts"
 import { compileGo } from "./__fixtures__/compiled.ts"
-import { goRequired, hasGo } from "./__fixtures__/go-env.ts"
+import { withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -124,14 +124,10 @@ func main() {
 }
 `
 
-/* Go absent passes locally and fails where it is required (CI, the pre-push battery) */
-const go = hasGo()
-
 describe("the emitted Go types compile and run", () => {
 	// v0: 63c75b0973
 	it("builds and vets, keeps absent, null and a value apart, and encodes required lists and maps as []/{}", () => {
-		expect(go || !goRequired()).toBe(true)
-		if (!go) return
+		if (!withGo()) return
 		const sdk = compileGo(generateGoSdk(DOCUMENT, { modulePath: "example.com/typecheck" }).files, { main: CHECK })
 		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
 		const ran = sdk.run()
@@ -244,12 +240,6 @@ function keysSdk(): Seen {
 	keys = { built: sdk.built, stderr: sdk.stderr + (ran?.stderr ?? ""), vet: sdk.vet }
 	if (printed) keys.out = Object.fromEntries(Object.entries(printed).map(([name, text]) => [name, JSON.parse(text)]))
 	return keys
-}
-
-/** Whether this test runs its Go half: false only where Go may be absent. */
-function withGo(): boolean {
-	expect(go || !goRequired()).toBe(true)
-	return go
 }
 
 /** The built, vet and printed values `names` of the keys SDK. */
