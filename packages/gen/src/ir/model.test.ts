@@ -181,6 +181,8 @@ describe("schemaToIR: nullability, unions and references", () => {
 			schemaToIR({ nullable: true, oneOf: [{ type: "string" }, { type: "number" }] }),
 			schemaToIR({ type: ["string", "number", "null"] }),
 			schemaToIR({ type: ["string", "number"] }),
+			schemaToIR({ nullable: true, type: ["string", "number"] }),
+			schemaToIR({ nullable: true, type: ["string", "number", "null"] }),
 		]).toEqual([
 			nullable(STRING),
 			nullable(STRING),
@@ -191,6 +193,8 @@ describe("schemaToIR: nullability, unions and references", () => {
 			nullable({ kind: "union", variants: [STRING, NUMBER] }),
 			nullable({ kind: "union", variants: [STRING, NUMBER] }),
 			{ kind: "union", variants: [STRING, NUMBER] },
+			nullable({ kind: "union", variants: [STRING, NUMBER] }),
+			nullable({ kind: "union", variants: [STRING, NUMBER] }),
 		])
 	})
 })

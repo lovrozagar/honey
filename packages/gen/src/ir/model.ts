@@ -137,7 +137,8 @@ function isNullable(schema: Json): boolean {
 /** The schema `schema` makes nullable; never wrapped twice. */
 function nullableOf(schema: Json): IRSchema {
 	let inner: IRSchema
-	if (Array.isArray(schema.type)) {
+	/* only a type list that holds null is stripped; a flag beside any other list drops the flag below */
+	if (Array.isArray(schema.type) && schema.type.includes("null")) {
 		const rest = (schema.type as unknown[]).filter((type) => type !== "null")
 		inner = schemaToIR({ ...schema, type: rest.length === 1 ? rest[0] : rest })
 	} else if (schema.anyOf !== undefined || schema.oneOf !== undefined) {
