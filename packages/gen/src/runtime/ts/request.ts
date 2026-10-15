@@ -1,3 +1,4 @@
+import type { ClientConfig } from "./config.ts"
 import { ClientError } from "./error.ts"
 
 /** What one call sends beyond the path: its parameters, headers, body and timing. */
@@ -187,4 +188,17 @@ export function requestSignal(
 		exemptFromTimeout: () => clearTimeout(timer),
 		signal: ctrl.signal,
 	}
+}
+
+/** The fetch init for one send: credentials and mode from the config, half-duplex for a stream body. */
+export function requestInit(
+	at: { body: BodyInit | undefined; headers: Headers; method: string; signal: AbortSignal | undefined },
+	config: Pick<ClientConfig, "credentials" | "mode">,
+): RequestInit {
+	const init: RequestInit = { ...at }
+	if (config.credentials) init.credentials = config.credentials
+	if (config.mode) init.mode = config.mode
+	/* a stream body needs half-duplex on Node's fetch */
+	if (at.body !== undefined && !isReplayable(at.body)) (init as RequestInit & { duplex?: string }).duplex = "half"
+	return init
 }

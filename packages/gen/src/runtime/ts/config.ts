@@ -56,6 +56,16 @@ export type OnResponseContext = {
  */
 export type RedirectPolicy = "error" | "follow" | "manual" | "same-origin"
 
+/** One `onLog` entry: what happened to which operation (`METHOD /path`), and how long it took. */
+export type LogEntry = {
+	duration_ms: number
+	error?: unknown
+	event: "error" | "hook_executed" | "request_start" | "response_received"
+	level: "debug" | "error" | "info" | "warn"
+	operation: string
+	status?: number
+}
+
 export type AuthExpiredContext = {
 	/** The token the 401 rejected (read from the auth header), so concurrent 401s can share one refresh. */
 	rejectedToken: string | null
@@ -82,6 +92,8 @@ export type ClientConfig = {
 	 * is a stream are not retried.
 	 */
 	onAuthExpired?: (ctx: AuthExpiredContext) => Promise<string | null | undefined> | string | null | undefined
+	/** Called at each exchange's start, its answer and its failure (v0's entry shape). */
+	onLog?: (entry: LogEntry) => void
 	onReconnected?: () => void
 	onReconnecting?: (attempt: number, transport: string) => void
 	onRequest?: Array<(ctx: OnRequestContext) => Promise<void> | void>

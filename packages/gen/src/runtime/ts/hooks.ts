@@ -1,4 +1,4 @@
-import type { ClientConfig, OnRequestContext, OnResponseContext, RequestMeta } from "./config.ts"
+import type { ClientConfig, LogEntry, OnRequestContext, OnResponseContext, RequestMeta } from "./config.ts"
 import { isReplayable } from "./request.ts"
 
 /** Where a response hook runs: the request as sent, its answer, and how to send it again. */
@@ -58,4 +58,25 @@ export async function runResponseHooks(
 		if (result instanceof Response) ctx.response = result
 	}
 	return ctx.response
+}
+
+/** The `onLog` entries of one exchange: its start now, then its answer or its failure, each with its duration. */
+export function exchangeLog(
+	onLog: ((entry: LogEntry) => void) | undefined,
+	operation: string,
+): { answered: (response: Response) => void; failed: (error: unknown) => void } {
+	const start = Date.now()
+	onLog?.({ duration_ms: 0, event: "request_start", level: "debug", operation })
+	const took = () => Date.now() - start
+	return {
+		answered: (response) => {
+			const level = response.status >= 400 ? "warn" : "info"
+			onLog?.({ duration_ms: took(), event: "response_received", level, operation, status: response.status })
+		},
+		failed: (error) => {
+			const status = (error as { status?: unknown } | null)?.status
+			const entry: LogEntry = { duration_ms: took(), error, event: "error", level: "error", operation }
+			onLog?.(typeof status === "number" ? { ...entry, status } : entry)
+		},
+	}
 }

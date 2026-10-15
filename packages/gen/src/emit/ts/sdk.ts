@@ -55,6 +55,7 @@ const RUNTIME_TYPES = [
 	"ClientConfig",
 	"ConnectionState",
 	"InvalidationConfig",
+	"LogEntry",
 	"RequestOptions",
 	"ResumableConnection",
 	"ResumableConnectionOpts",

@@ -44,6 +44,7 @@ const TYPES = [
 	"FieldError",
 	"HoneyClient",
 	"InferRoutes",
+	"LogEntry",
 	"OnRequestContext",
 	"OnResponseContext",
 	"RedirectPolicy",

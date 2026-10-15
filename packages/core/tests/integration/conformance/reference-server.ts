@@ -12,7 +12,9 @@
  * A cursor is client data, never identity: one that is not a log id the server could have issued
  * replays the whole log (not a whole number) or nothing (past the head).
  */
+import * as z from "zod"
 import { honey } from "../../../src/routing/app.ts"
+import type { SSEStream } from "../../../src/response/sse.ts"
 import type { WSContext } from "../../../src/ws/contract.ts"
 
 export type ReferenceEvent = { readonly data: unknown; readonly id: number }
@@ -21,9 +23,29 @@ type Listener = (event: ReferenceEvent) => void
 
 const WHOLE = /^(0|[1-9]\d*)$/
 
+/* the documented shapes (bit 11): a streamed payload is a JSON object; a stored event is its log id beside the payload */
+const Payload = z.looseObject({})
+const Stored = z.object({ data: z.unknown(), id: z.number().int() })
+
 /** The log position a client cursor names: `0` (the whole log) unless it is a whole number. */
 function positionOf(cursor: string | null | undefined): number {
 	return cursor != null && WHOLE.test(cursor) ? Number(cursor) : 0
+}
+
+/** The SSE producer: every event after the client's `Last-Event-ID`, then live ones until it leaves. */
+function relay(follow: (position: number, deliver: Listener) => () => void) {
+	return async (stream: SSEStream): Promise<void> => {
+		const stop = follow(positionOf(stream.lastEventId), (event) => {
+			void stream.send({ data: JSON.stringify(event.data), event: "message", id: String(event.id) })
+		})
+		try {
+			if (!stream.signal.aborted) {
+				await new Promise((resolve) => stream.signal.addEventListener("abort", resolve, { once: true }))
+			}
+		} finally {
+			stop()
+		}
+	}
 }
 
 export function createReferenceServer() {
@@ -52,30 +74,28 @@ export function createReferenceServer() {
 	}
 
 	const app = honey<{}>()
-	app.post("/events").handler(async (ctx) => ctx.res.json("ok", append(await ctx.req.json())))
-	app.get("/events").handler((ctx) =>
-		ctx.res.sse(async (stream) => {
-			const stop = follow(positionOf(stream.lastEventId), (event) => {
-				void stream.send({ data: JSON.stringify(event.data), event: "message", id: String(event.id) })
-			})
-			try {
-				if (!stream.signal.aborted) {
-					await new Promise((resolve) => stream.signal.addEventListener("abort", resolve, { once: true }))
-				}
-			} finally {
-				stop()
-			}
-		}),
-	)
-	app.ws("/events/ws").handler({
-		onClose: (_ctx, ws) => {
-			const deliver = sockets.get(ws)
-			sockets.delete(ws)
-			if (deliver !== undefined) listeners.delete(deliver)
-		},
-		onOpen: (_ctx, ws) => open(ws, null),
-		onReconnect: (_ctx, ws, token) => open(ws, token),
-	})
+	app
+		.post("/events")
+		.meta({ operationId: "events.append" })
+		.output({ "application/json": { ok: Stored } })
+		.handler(async (ctx) => ctx.res.json("ok", append(await ctx.req.json())))
+	app
+		.get("/events")
+		.meta({ operationId: "events.stream" })
+		.output({ "text/event-stream": { ok: Payload } })
+		.handler((ctx) => ctx.res.sse(relay(follow)))
+	app
+		.ws("/events/ws")
+		.meta({ operationId: "events.socket" })
+		.handler({
+			onClose: (_ctx, ws) => {
+				const deliver = sockets.get(ws)
+				sockets.delete(ws)
+				if (deliver !== undefined) listeners.delete(deliver)
+			},
+			onOpen: (_ctx, ws) => open(ws, null),
+			onReconnect: (_ctx, ws, token) => open(ws, token),
+		})
 
 	return {
 		app,

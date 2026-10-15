@@ -1,7 +1,7 @@
 import type { ClientConfig, HeadersContext, RequestMeta } from "./config.ts"
 import { bindDefaultFetch, parseClientBaseURL } from "./defaults.ts"
 import { ClientError } from "./error.ts"
-import { runRequestHooks, runResponseHooks } from "./hooks.ts"
+import { exchangeLog, runRequestHooks, runResponseHooks } from "./hooks.ts"
 import { interpolatePath } from "./path.ts"
 import { fetchFollowing } from "./redirects.ts"
 import {
@@ -11,6 +11,7 @@ import {
 	newClientRequestId,
 	type RequestKind,
 	type RequestOptions,
+	requestInit,
 	requestSignal,
 } from "./request.ts"
 import {
@@ -177,14 +178,12 @@ export class HTTPClient {
 		const finish = () => {
 			for (const fn of cleanups.splice(0)) fn()
 		}
-		const init: RequestInit = { body, headers, method, signal }
-		if (this.#config.credentials) init.credentials = this.#config.credentials
-		if (this.#config.mode) init.mode = this.#config.mode
-		/* a stream body needs half-duplex on Node's fetch */
-		if (body !== undefined && !isReplayable(body)) (init as RequestInit & { duplex?: string }).duplex = "half"
+		const init = requestInit({ body, headers, method, signal }, this.#config)
+		const log = exchangeLog(this.#config.onLog, `${method.toUpperCase()} ${path}`)
 		try {
 			signal?.throwIfAborted()
 			let response = await this.#transmit(url, init, isRetry)
+			log.answered(response)
 			if (this.#config.onResponse) {
 				const retry = async () => {
 					const again = await this.#send(call, kind, meta, true)
@@ -198,6 +197,7 @@ export class HTTPClient {
 			return { done: finish, exemptFromTimeout, response }
 		} catch (e) {
 			finish()
+			log.failed(e)
 			throw e
 		}
 	}

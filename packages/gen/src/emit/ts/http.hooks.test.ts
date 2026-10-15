@@ -363,3 +363,28 @@ describe("onResponse ctx.retry(): the retried response, whatever its status", ()
 		expect([retried, result.status, result.error.message]).toEqual([[500], 500, "upstream failed"])
 	})
 })
+
+/** An onLog entry's fields for `GET path`, its duration read as a type. */
+const op = (path: string) => ({ duration_ms: "number", operation: `GET ${path}` })
+
+describe("onLog (Q1): an entry at each exchange's start, answer and failure", () => {
+	it("logs the start, the answer by level and status, and a failed send with its error", async () => {
+		const entries: Json[] = []
+		const onLog = (entry: Json) => void entries.push({ ...entry, duration_ms: typeof entry.duration_ms })
+		const { api } = await appClient({ onLog }, (request) =>
+			request.url.endsWith("/missing") ? Response.json({}, { status: 404 }) : Response.json({}),
+		)
+		await api.get("/ok")
+		await api.get("/missing")
+		const broken = await appClient({ onLog, throwOnError: true }, () => Promise.reject(new TypeError("offline")))
+		await broken.api.get("/down").catch(() => {})
+		expect(entries).toEqual([
+			{ ...op("/ok"), event: "request_start", level: "debug" },
+			{ ...op("/ok"), event: "response_received", level: "info", status: 200 },
+			{ ...op("/missing"), event: "request_start", level: "debug" },
+			{ ...op("/missing"), event: "response_received", level: "warn", status: 404 },
+			{ ...op("/down"), event: "request_start", level: "debug" },
+			{ ...op("/down"), error: new TypeError("offline"), event: "error", level: "error" },
+		])
+	})
+})

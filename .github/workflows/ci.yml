@@ -211,6 +211,11 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/.cache/cargo-target
     steps:
       - uses: actions/checkout@v4
+      # vitest and the emitted SDK's WebSocket run on node: the global WebSocket needs Node >= 22
+      - uses: actions/setup-node@v4
+        with:
+          node-version: current
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
