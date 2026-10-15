@@ -11,6 +11,8 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { countTokens as o200kCount } from "../src/_tokenizer/encoding/o200k_base.js"
+import { toIR } from "../src/ir/build.ts"
+import type { IROperation, IRSchema } from "../src/ir/model.ts"
 
 const REPO = resolve(import.meta.dirname, "../../..")
 const HEADROOM = 0.2
@@ -97,6 +99,25 @@ export function cliSurfaces(files: Record<string, string>): Map<string, string> 
 	return out
 }
 
+/**
+ * An operation as the IR carries it, every component it reaches written in place: the input an
+ * emitter turns into a surface. A component already being written on its own path stays a ref
+ * (a cycle), as does a name the document never defined.
+ */
+export function irOperationText(op: IROperation, schemas: Readonly<Record<string, IRSchema>>): string {
+	const inline = (value: unknown, open: readonly string[]): unknown => {
+		if (Array.isArray(value)) return value.map((item) => inline(item, open))
+		if (value === null || typeof value !== "object") return value
+		const node = value as { kind?: unknown; name?: unknown }
+		const name = node.kind === "ref" && typeof node.name === "string" ? node.name : null
+		if (name !== null && !open.includes(name) && Object.hasOwn(schemas, name)) {
+			return inline(schemas[name], [...open, name])
+		}
+		return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, inline(child, open)]))
+	}
+	return JSON.stringify(inline(op, []))
+}
+
 export function ceilingOf(counts: readonly number[], headroom: number): number {
 	if (counts.length === 0) throw new Error("no operations to bound")
 	return Math.ceil(Math.max(...counts) * (1 + headroom))
@@ -125,11 +146,14 @@ async function capture(): Promise<void> {
 	]
 	const mcp = new Map<string, string>()
 	const sdkCli = new Map<string, string>()
+	const ir = new Map<string, string>()
 	for (const [name, file] of corpora) {
 		const spec = JSON.parse(readFileSync(join(REPO, file), "utf8")) as Spec & Record<string, unknown>
 		const options = { projectName: name, sdkClassName: "SDK", sdkPackageName: "sdk" }
 		const tools = generateMCPServer(markAllMcp(spec) as never, options).files["src/tools.gen.ts"] ?? ""
 		for (const [tool, text] of mcpSurfaces(tools)) mcp.set(`${name}/${tool}`, text)
+		const model = toIR(spec as never, { deriveOperationIds: true })
+		for (const op of model.operations) ir.set(`${name}/${op.id}`, irOperationText(op, model.schemas))
 		const sdk = sdkSurfaces(generateSDK(spec as never).files.types)
 		const cli = cliSurfaces(generateGoCLI(spec, { binaryName: name, modulePath: `example.com/${name}` }).files)
 		for (const method of new Set([...sdk.keys(), ...cli.keys()])) {
@@ -138,12 +162,15 @@ async function capture(): Promise<void> {
 	}
 	const baseline = {
 		headroom: HEADROOM,
+		/* the input side (bit 09): what an emitter reads to write each operation's surface */
+		ir: surface(ir),
 		mcp: surface(mcp),
-		note: "per-operation token counts of v0's emitted surfaces; a ceiling is the max + headroom. Re-capture with `bun packages/gen/scripts/capture-token-budget.ts`.",
+		note: "per-operation token counts of v0's emitted surfaces, and (ir) of the v1 IR operation each is written from; a ceiling is the max + headroom. Re-capture with `bun packages/gen/scripts/capture-token-budget.ts`.",
 		sdkCli: surface(sdkCli),
 		tokenizer: { encoding: "o200k_base", package: "gpt-tokenizer@4.0.0 (vendored, packages/gen/src/_tokenizer)" },
 	}
 	writeFileSync(join(REPO, "blueprint/baselines/tokens.json"), `${JSON.stringify(baseline, null, "\t")}\n`)
+	process.stdout.write(`ir ceiling ${baseline.ir.ceiling} (max ${baseline.ir.max}, ${ir.size} operations)\n`)
 	process.stdout.write(`mcp ceiling ${baseline.mcp.ceiling} (max ${baseline.mcp.max}, ${mcp.size} tools)\n`)
 	process.stdout.write(
 		`sdk+cli ceiling ${baseline.sdkCli.ceiling} (max ${baseline.sdkCli.max}, ${sdkCli.size} operations)\n`,

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest"
-import { ceilingOf, cliSurfaces, countTokens, markAllMcp, mcpSurfaces, sdkSurfaces } from "./capture-token-budget.ts"
+import type { IROperation } from "../src/ir/model.ts"
+import {
+	ceilingOf,
+	cliSurfaces,
+	countTokens,
+	irOperationText,
+	markAllMcp,
+	mcpSurfaces,
+	sdkSurfaces,
+} from "./capture-token-budget.ts"
 
 describe("the pinned tokenizer", () => {
 	it("counts with o200k_base", () => {
@@ -108,5 +117,50 @@ describe("ceilingOf", () => {
 
 	it("has nothing to bound without a measurement", () => {
 		expect(() => ceilingOf([], 0.2)).toThrow(/no operations/)
+	})
+})
+
+describe("irOperationText", () => {
+	it("writes an operation with every component it reaches inlined, a cycle and an unknown name kept as refs", () => {
+		const op = {
+			extensions: {},
+			id: "users.get",
+			method: "GET",
+			params: { header: [], path: [], query: [] },
+			path: "/users",
+			responses: { "200": { schema: { items: { kind: "ref", name: "User" }, kind: "array" }, status: "200" } },
+		} as unknown as IROperation
+		const schemas = {
+			Team: { fields: [{ name: "lead", required: true, schema: { kind: "ref", name: "User" } }], kind: "object" },
+			User: {
+				fields: [
+					{ name: "team", required: false, schema: { kind: "ref", name: "Team" } },
+					{ name: "x", required: false, schema: { kind: "ref", name: "Missing" } },
+				],
+				kind: "object",
+			},
+		} as never
+		const team = {
+			fields: [{ name: "lead", required: true, schema: { kind: "ref", name: "User" } }],
+			kind: "object",
+		}
+		expect(JSON.parse(irOperationText(op, schemas))).toEqual({
+			...op,
+			responses: {
+				"200": {
+					schema: {
+						items: {
+							fields: [
+								{ name: "team", required: false, schema: team },
+								{ name: "x", required: false, schema: { kind: "ref", name: "Missing" } },
+							],
+							kind: "object",
+						},
+						kind: "array",
+					},
+					status: "200",
+				},
+			},
+		})
 	})
 })
