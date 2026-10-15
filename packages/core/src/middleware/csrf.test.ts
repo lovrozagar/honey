@@ -47,6 +47,7 @@ describe("csrf(): safe methods and same-origin requests pass", () => {
 	// v0: 99f470e4ed
 	// v0: abc2dd2484
 	// v0: 30903e23a5
+	// v0: 4096916f65
 	it.each([
 		[
 			"Sec-Fetch-Site: same-origin, any content type",
@@ -55,6 +56,8 @@ describe("csrf(): safe methods and same-origin requests pass", () => {
 		["Sec-Fetch-Site: none (user-initiated)", { "sec-fetch-site": "none" }],
 		["no Sec-Fetch-Site, an Origin on this host", { origin: SELF }],
 		["no Sec-Fetch-Site, no Origin (curl, a server)", { "content-type": "application/json" }],
+		// v0: ace43c394c
+		["no Content-Type and no browser headers (a webhook)", {}],
 	])("a POST with %s passes", async (_name, headers) => {
 		expect(await status(guarded(), "POST", headers)).toBe(200)
 	})

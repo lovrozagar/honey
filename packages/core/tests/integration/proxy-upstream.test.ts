@@ -296,6 +296,8 @@ for (const name of Object.keys(RUNTIMES)) {
 	})
 
 	describe.skipIf(skip)(`proxy against a real upstream, ${name}: what the upstream is told`, () => {
+		// v0: 18601c550b
+		// v0: d6239a3190
 		it("client forwarding headers are replaced; hop-by-hop request headers are dropped", async () => {
 			const res = await withConn(name, (conn) =>
 				conn.send(
@@ -320,6 +322,7 @@ for (const name of Object.keys(RUNTIMES)) {
 			]).toEqual([200, "127.0.0.1", "http", undefined, undefined, undefined, undefined, undefined])
 		}, 30_000)
 
+		// v0: 28472fecb1
 		it("a client that disconnects mid-body cancels the upstream", async () => {
 			const port = await fixture(name)
 			const before = await json<{ abortedStreams: number }>(port, "/state")

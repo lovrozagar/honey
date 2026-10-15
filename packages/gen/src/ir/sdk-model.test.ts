@@ -123,6 +123,7 @@ describe("sdkModel: what a call sends", () => {
 })
 
 describe("sdkModel: the operation as every emitter reads it", () => {
+	// v0: 0321d131b3
 	it("gathers id segments, path pieces, sorted query, error statuses, stream kind and flags", () => {
 		const op = one({
 			description: "D",
@@ -216,6 +217,19 @@ describe("valueCycleSchemas: what needs a pointer", () => {
 type Schema = Record<string, unknown>
 
 /** honey's error envelope for `status` and `keys`, its field list behind a ref. */
+describe("sdkModel: path parameters", () => {
+	// v0: c80635e96d
+	it("lists a path's parameters in the order the path names them", () => {
+		const doc = {
+			info: { title: "T", version: "1" },
+			openapi: "3.1.0",
+			paths: { "/orgs/{orgId}/projects/{projectId}": { get: { operationId: "projects.get", responses: {} } } },
+		}
+		const [op] = sdkModel(toIR(doc as OpenApiDocument)).ops
+		expect(op?.pathParams.map((p) => p.name)).toEqual(["orgId", "projectId"])
+	})
+})
+
 function envelope(status: unknown, keys: unknown[]): IRSchema {
 	return schemaToIR({
 		properties: {
@@ -248,6 +262,17 @@ describe("irErrorEnvelope: honey's error body, read through refs", () => {
 	// v0: 658fb508a5
 	// v0: 2f4c85dc90
 	// v0: a6591bd427
+	// v0: 1c1578c622
+	// v0: 755128cc91
+	// v0: 90df7f58e8
+	// v0: 9a54e8587e
+	// v0: b6f6572d3f
+	// v0: b7d7829800
+	// v0: ef3b858653
+	// v0: fcaa32f551
+	// v0: 15559804d0
+	// v0: 341a572e8b
+	// v0: 4d0e00cc24
 	it("reads honey's error envelope through refs, and nothing else as one", () => {
 		const fieldList = schemaToIR({
 			properties: { error_key: { type: "string" }, message: { type: "string" }, path: { type: "string" } },
@@ -268,6 +293,18 @@ describe("irErrorEnvelope: honey's error body, read through refs", () => {
 			broken({ error_key: { enum: [1], type: "string" } }),
 			/* the default envelope, its status an unconstrained integer */
 			broken({ status: { type: "integer" } }),
-		]).toEqual([null, null, null, null, null])
+			/* one status per envelope: a response that answers two is no single error */
+			broken({ status: { enum: [400, 422], type: "integer" } }),
+			broken({ success: { const: true } }),
+			broken({
+				fields: {
+					additionalProperties: {
+						items: { properties: { error_key: { type: "string" }, message: { type: "string" } }, type: "object" },
+						type: "array",
+					},
+					type: "object",
+				},
+			}),
+		]).toEqual([null, null, null, null, null, null, null, null])
 	})
 })

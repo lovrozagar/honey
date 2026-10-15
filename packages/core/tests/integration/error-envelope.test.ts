@@ -67,6 +67,16 @@ describe("the default envelope", () => {
 			false,
 		])
 	})
+
+	// v0: 7cea4b7f62
+	it("a not_found, thrown or for an unknown path, carries empty fields", async () => {
+		const thrown = await send(
+			throwing(() => new HoneyError({ errorKey: "not_found", status: "not_found" })),
+			"/t",
+		)
+		const unknown = await send(throwing(rateLimited), "/nowhere")
+		expect([thrown.status, thrown.body.fields, unknown.status, unknown.body.fields]).toEqual([404, {}, 404, {}])
+	})
 })
 
 /** A defaultErrorFormatter adding the key in capitals to the shape it is handed. */

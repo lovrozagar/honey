@@ -4,7 +4,9 @@
  * running); SSE framing and Last-Event-ID resume; rangeResponse from a route; HEAD never starts
  * a producer; streams stay independent of each other and of other requests.
  */
+import { type AddressInfo, connect } from "node:net"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { serve } from "../../src/adapters/node/serve.ts"
 import { rangeResponse } from "../../src/response/range.ts"
 import type { SSEStream } from "../../src/response/sse.ts"
 import { honey } from "../../src/routing/app.ts"
@@ -132,6 +134,73 @@ describe("a stream ends when its client or its request does, and leaves nothing 
 		let done = false
 		while (!done) done = (await reader.read()).done === true
 		expect(ended).toEqual(["aborted"])
+	})
+})
+
+/** One event-loop turn: an endless producer that never yields would starve the client sharing this process. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 1))
+
+/** An app with an endless producer per helper, each recording when its finally runs. */
+function endlessApp() {
+	const finished: string[] = []
+	const app = honey<{}>()
+	app.get("/stream").handler((ctx) =>
+		ctx.res.stream(async (writable) => {
+			const writer = writable.getWriter()
+			try {
+				for (;;) await writer.write("tick\n").then(tick)
+			} finally {
+				finished.push("stream")
+			}
+		}),
+	)
+	app.get("/generate").handler((ctx) =>
+		ctx.res.generate(
+			(async function* () {
+				try {
+					for (;;) {
+						yield "tick\n"
+						await tick()
+					}
+				} finally {
+					finished.push("generate")
+				}
+			})(),
+		),
+	)
+	app.get("/sse").handler((ctx) =>
+		ctx.res.sse(async (stream) => {
+			try {
+				while (!stream.closed) await stream.send({ data: "1", event: "tick" }).then(tick)
+			} finally {
+				finished.push("sse")
+			}
+		}),
+	)
+	return { app, finished }
+}
+
+describe("a stream ends when its client drops the socket", () => {
+	// v0: 6e66defcb5
+	it("stream(), generate() and sse() each run their finally after a real socket drops mid-stream", async () => {
+		const { app, finished } = endlessApp()
+		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		await new Promise((resolve) => server.once("listening", resolve))
+		const { port } = server.address() as AddressInfo
+		try {
+			for (const path of ["/stream", "/generate", "/sse"]) {
+				const socket = connect(port, "127.0.0.1")
+				socket.on("error", () => {})
+				await new Promise((resolve) => {
+					socket.once("data", resolve)
+					socket.write(`GET ${path} HTTP/1.1\r\nHost: h\r\n\r\n`)
+				})
+				socket.destroy()
+			}
+			await expect.poll(() => finished.toSorted()).toEqual(["generate", "sse", "stream"])
+		} finally {
+			await server.shutdown(0)
+		}
 	})
 })
 

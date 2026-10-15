@@ -106,6 +106,25 @@ describe("toYaml: nesting, and JSON's normalization", () => {
 	})
 })
 
+/** A seeded generator in [0, 1): the same sequence on every run. */
+function seeded(seed: number): () => number {
+	let state = seed >>> 0
+	return () => {
+		state = (Math.imul(state ^ (state >>> 15), 0x2c1b3c6d) + 0x9e3779b9) >>> 0
+		return state / 0x100000000
+	}
+}
+
+/** Plain characters beside the ones YAML gives meaning: indicators, quotes, breaks, controls, astral. */
+const ALPHABET = [..."aZ0 :#\n\r\t\"'%\\é-?~{[*&!", "🍯", "\u2028", "\u0085", "\u007f"]
+
+/** A string of up to `max` characters drawn from ALPHABET. */
+function randomString(next: () => number, max: number): string {
+	let out = ""
+	for (let i = Math.floor(next() * max); i > 0; i--) out += ALPHABET[Math.floor(next() * ALPHABET.length)]
+	return out
+}
+
 describe("toYaml: what a YAML reader reads back", () => {
 	// v0: f960cec7a1
 	it("quotes every string a reader could read differently, as a value, a key and a list item", () => {
@@ -154,6 +173,19 @@ describe("toYaml: what a YAML reader reads back", () => {
 		]
 		for (const s of risky)
 			expect(readBack({ k: s, [s]: "v", list: [s] })).toEqual(jsonTwice({ k: s, [s]: "v", list: [s] }))
+	})
+})
+
+describe("toYaml: what a YAML reader reads back, seeded at random", () => {
+	// v0: d1055990ff
+	it("reads back 500 seeded random keys and values, as a value, a key and inside a list", () => {
+		const next = seeded(2)
+		for (let round = 0; round < 500; round++) {
+			const key = randomString(next, 8)
+			const value = randomString(next, 12)
+			const doc = { [key]: value, list: [value, { [value]: key }] }
+			expect(readBack(doc)).toEqual(jsonTwice(doc))
+		}
 	})
 
 	// v0: 406c04dbb2

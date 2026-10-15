@@ -117,12 +117,43 @@ export class InternPool {
 		if (n === 1 && !this.#values.has(key)) this.#remember(key, value)
 	}
 
-	/** Equal JSON, equal key: an object's key names its children by their keys, so it is computed once per object. */
+	/**
+	 * Equal JSON, equal key: an object's key names its children by their keys, so it is computed once
+	 * per object. Children are keyed first without recursion: a value nested 1500 deep keeps the stack.
+	 */
 	#canonical(value: unknown): string {
 		if (value === null || typeof value !== "object") return JSON.stringify(value)
-		const memo = this.#objectKeys.get(value)
-		if (memo !== undefined) return memo
-		const key = (child: unknown) => (child === undefined ? "null" : this.#canonical(child))
+		const stack: object[] = [value]
+		const open = new Set<object>()
+		while (stack.length > 0) {
+			const top = stack.at(-1) as object
+			if (this.#objectKeys.has(top)) {
+				stack.pop()
+				continue
+			}
+			const pending = (Array.isArray(top) ? top : Object.values(top)).filter(
+				(child): child is object => child !== null && typeof child === "object" && !this.#objectKeys.has(child),
+			)
+			if (pending.length > 0 && !open.has(top)) {
+				open.add(top)
+				for (const child of pending) if (open.has(child)) throw new TypeError("route data refers to itself")
+				stack.push(...pending)
+				continue
+			}
+			stack.pop()
+			this.#objectKeys.set(top, this.#structureOf(top))
+		}
+		return this.#objectKeys.get(value) as string
+	}
+
+	/** The short key of `value`'s structure, its children already keyed. */
+	#structureOf(value: object): string {
+		const key = (child: unknown) =>
+			child === undefined
+				? "null"
+				: child === null || typeof child !== "object"
+					? JSON.stringify(child)
+					: this.#objectKeys.get(child)
 		const structure = Array.isArray(value)
 			? `[${value.map(key).join(",")}]`
 			: `{${Object.entries(value)
@@ -131,7 +162,6 @@ export class InternPool {
 					.join(",")}}`
 		const id = this.#structures.get(structure) ?? `#${this.#structures.size}`
 		this.#structures.set(structure, id)
-		this.#objectKeys.set(value, id)
 		return id
 	}
 

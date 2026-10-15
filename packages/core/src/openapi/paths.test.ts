@@ -416,6 +416,10 @@ function recording(): { logger: Logger; warnings: string[] } {
 describe("WebSocket operations", () => {
 	// v0: 4c2b9d2aa5
 	// v0: 74e37ef9b9
+	// v0: 7629efa019
+	// v0: 780b2e4126
+	// v0: d537e2ff0d
+	// v0: 8b32760001
 	it("document a WS route as a GET upgrade: its policy run as ws, its search fields as parameters bar x-internal ones", () => {
 		const app = honey<{}>().meta<{ tenant?: string }>()
 		app.metaSpec({ meta: { tenant: { key: "x-tenant", on: "http" } } })
@@ -428,7 +432,9 @@ describe("WebSocket operations", () => {
 			.meta({ tenant: "orgId" } as never)
 			.input({ search: z.object({ secret: z.string().meta({ "x-internal": true }), token: z.string() }) })
 			.handler({ onMessage() {} })
+		app.ws("/ws/chat/:channelId").handler({ onMessage() {} })
 		const doc = generateOpenApi(app, { info: INFO })
+		expect(params(doc, "/ws/chat/{channelId}").map((p) => [p.name, p.in])).toEqual([["channelId", "path"]])
 		expect([
 			op(doc, "/a")["x-tenant"],
 			op(doc, "/live")["x-tenant"],

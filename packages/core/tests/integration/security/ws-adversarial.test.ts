@@ -65,6 +65,7 @@ const handshake = (path: string, headers: Record<string, string> = {}) =>
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10))
 
 describe("v1 adversarial: cross-site WebSocket hijacking (H18.12)", () => {
+	// v0: 92f5a7c91c
 	it.each([
 		["another site with a cookie", { cookie: "sid=1", origin: "https://evil.example" }, 403],
 		["another site with a bearer token", { authorization: "Bearer t", origin: "https://evil.example" }, 403],

@@ -38,6 +38,7 @@ describe("zodJsonSchema: walking the definition when no converter is published",
 	// v0: 0f2d892aa2
 	// v0: 74c4784186
 	// v0: a27a5c0b28
+	// v0: 79b1e8ad5b
 	it("converts zod/mini, which publishes no converter, through its definition", () => {
 		const schema = zm.object({
 			at: zm.date(),
@@ -129,6 +130,9 @@ describe("zodJsonSchema: scalars on the walk", () => {
 
 describe("zodJsonSchema: wrappers and composites on the walk", () => {
 	// v0: fc9f4d77f1
+	// v0: 79cc6e081b
+	// v0: d24350022c
+	// v0: fdbbe06e29
 	it("wrappers, pipes and composites; an optional under nullable stays optional", () => {
 		const shape = {
 			both: z.intersection(z.object({ a: z.string() }), z.object({ b: z.number() })),

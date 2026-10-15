@@ -60,7 +60,8 @@ function scalarOf(ir: Extract<IRSchema, { kind: "scalar" }>): string {
 
 function objectOf(ir: Extract<IRSchema, { kind: "object" }>, emit: Emit): string {
 	const extra = ir.additional === undefined || ir.additional === false ? null : emit(ir.additional)
-	if (ir.fields.length === 0) return `Record<string, ${extra ?? "unknown"}>`
+	/* closed with nothing in it (z.object({})): the empty object, never an open record */
+	if (ir.fields.length === 0) return ir.additional === false ? "{}" : `Record<string, ${extra ?? "unknown"}>`
 	const fields = [...ir.fields]
 		.sort((a, b) => compareCodeUnits(a.name, b.name))
 		.map((field) => `${quoteKey(field.name)}${field.required ? "" : "?"}: ${emit(field.schema)}`)

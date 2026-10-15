@@ -63,6 +63,7 @@ describe("body helpers", () => {
 	// v0: 8b7e6d5a31
 	// v0: 9f79a93bb7
 	// v0: 0bafb3f051
+	// v0: 1969e321da
 	it.each(HELPERS)(
 		"%s with headers and cookies keeps its content type, adds the headers and each cookie",
 		async (_n, call, type, body) => {
@@ -320,6 +321,7 @@ describe("stream(): a body written through a WritableStream", () => {
 	// v0: 6e218a132d
 	// v0: d3b9d3791a
 	// v0: 3534671b97
+	// v0: 840b8074ed
 	it("takes strings, ArrayBuffers and views, in order, under octet-stream by default", async () => {
 		const response = res.stream(async (writable) => {
 			const writer = writable.getWriter()

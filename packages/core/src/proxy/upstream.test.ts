@@ -318,6 +318,7 @@ describe("proxy: signals", () => {
 		expect([res.status, record.aborted]).toEqual([504, true])
 	})
 
+	// v0: def4c77871
 	it("destination always gets a live signal that follows the request", async () => {
 		const { app, calls } = proxyApp()
 		await app.fetch(req("/api/x"), {})

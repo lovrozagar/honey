@@ -25,6 +25,7 @@ describe("RouteBuilder runtime", () => {
 		expectTypeOf(route).toHaveProperty("use")
 	})
 
+	// v0: 7894f62ae9
 	it("route meta merges over chain meta and dedupes invalidate", async () => {
 		const app = honey<{}>()
 		app

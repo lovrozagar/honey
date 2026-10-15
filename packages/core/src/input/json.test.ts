@@ -60,6 +60,24 @@ describe("jsonInput: the JSON body, read once and validated", () => {
 		])
 		expect(await jsonInput(passing, post('{"ok":true}'))).toEqual({ ok: true })
 	})
+
+	// v0: 3881c674c7
+	it("through app.fetch, onError sees the 400 malformed_body HoneyError, never a SyntaxError 500", async () => {
+		const seen: unknown[] = []
+		const app = honey<{}>().onError((error) => {
+			seen.push([(error as HoneyError).status, (error as HoneyError).errorKey])
+		})
+		app
+			.post("/")
+			.input({ json: passing })
+			.handler((ctx) => ctx.res.json("created", ctx.input))
+		const res = await app.fetch(post("{invalid json!!!"), {})
+		expect([res.status, ((await res.json()) as { error_key: string }).error_key, seen]).toEqual([
+			400,
+			"malformed_body",
+			[[400, "malformed_body"]],
+		])
+	})
 })
 
 describe("jsonInput: what a body may carry, and what reading it may raise", () => {

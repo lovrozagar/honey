@@ -276,6 +276,7 @@ describe("chain meta and the types around it", () => {
 	// v0: 3f94d8a967
 	// v0: 79c440bd65
 	// v0: 872c60de41
+	// v0: c1b08aeb6d
 	it("leaves InferCtx, InferEnv and InferBasePath as they were", () => {
 		const app = honey<TestEnv>().basePath("/api").meta<AppMeta>().meta({ auth: "public" }).use(trace)
 		expectTypeOf<InferCtx<typeof app>>().toMatchTypeOf<{ env: TestEnv; traceId: string }>()

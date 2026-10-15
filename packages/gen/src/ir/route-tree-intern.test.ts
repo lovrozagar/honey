@@ -65,6 +65,7 @@ describe("InternPool: what is never shared", () => {
 	// v0: dd922d3f48
 	// v0: 1e80af980a
 	// v0: 58a178c621
+	// v0: 8bffd38769
 	it("leaves empty arrays, unique arrays, booleans, null, undefined and short strings inline", () => {
 		const skipped = pool(
 			[[], [], ["email_taken"], true, null, undefined, "ab", "ab", 42, 42, Number.NaN],
@@ -103,5 +104,29 @@ describe("InternPool: what is never shared", () => {
 		expect(pool([], [[{ a: 1, b: undefined, c: [undefined] }, "M"]]).emitConstLines()).toEqual([
 			'const M0 = {"a":1,"c":[undefined]}',
 		])
+	})
+	// v0: eefb450246
+	it("takes a value with an undefined key for the same value without it", () => {
+		const shared = pool([{ a: "long enough" }, { a: "long enough", b: undefined }])
+		expect([shared.expr({ a: "long enough" }), shared.expr({ a: "long enough", b: undefined })]).toEqual(["J0", "J0"])
+	})
+})
+
+describe("InternPool: values it is handed", () => {
+	it("refuses route data that refers to itself instead of looping", () => {
+		const cyclic: Record<string, unknown> = { name: "loop" }
+		cyclic.self = { back: cyclic }
+		expect(() => new InternPool().count(cyclic)).toThrow("route data refers to itself")
+	})
+
+	// v0: 158d1519bb
+	it("keys each value once, so counting a value nested 1500 deep stays linear", () => {
+		let deep: Record<string, unknown> = { leaf: "end-of-chain" }
+		for (let i = 0; i < 1500; i++) deep = { [`k${i % 7}`]: deep }
+		const started = performance.now()
+		const deepPool = new InternPool()
+		for (let i = 0; i < 3; i++) deepPool.count(deep)
+		deepPool.seal()
+		expect([deepPool.id(deep) !== undefined, performance.now() - started < 500]).toEqual([true, true])
 	})
 })

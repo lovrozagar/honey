@@ -152,12 +152,7 @@ describe("serializeCookie — __Host- prefix", () => {
 	// v0: 942513e280
 	it("rejects __Host- with domain", () => {
 		expect(() =>
-			serializeCookie("__Host-sid", {
-				domain: "example.com",
-				path: "/",
-				secure: true,
-				value: "tok",
-			}),
+			serializeCookie("__Host-sid", { domain: "example.com", path: "/", secure: true, value: "tok" }),
 		).toThrow("__Host- cookies must not set domain")
 	})
 
@@ -378,6 +373,7 @@ function roundTrip(value: string): string | undefined {
 
 describe("cookie value round-trip", () => {
 	// v0: 3c7a8870e8
+	// v0: 00e99379c6
 	it("every BMP code point round-trips", () => {
 		for (let c = 0; c <= 0xffff; c++) {
 			if (c >= 0xd800 && c <= 0xdfff) continue

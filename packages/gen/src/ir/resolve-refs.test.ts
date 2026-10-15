@@ -86,6 +86,7 @@ describe("resolveRefs: what stays as it is", () => {
 })
 
 describe("resolveRefs: where inlining stops", () => {
+	// v0: 4222952886
 	it("cuts a cycle with an empty schema, refuses a dangling ref, and caps an exponential expansion", () => {
 		const cyclic = resolveRefs(
 			doc(

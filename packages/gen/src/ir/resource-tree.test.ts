@@ -34,6 +34,11 @@ describe("buildResourceTree: a namespace per dotted operationId segment", () => 
 	// v0: 7a491d2d89
 	// v0: 0176a52d2e
 	// v0: 8dc989113b
+	// v0: 01435c471b
+	// v0: 16a014ba41
+	// v0: 6f583f52ca
+	// v0: 7738074321
+	// v0: b335e2e711
 	it("nests each id by its segments at any depth, mixed depths and siblings side by side", () => {
 		const ids = [
 			"health",
@@ -57,6 +62,7 @@ describe("buildResourceTree: a namespace per dotted operationId segment", () => 
 	})
 
 	// v0: 8ef28bd1c7
+	// v0: fefa41c402
 	it("lists methods and namespaces in code-unit order, upper case first", () => {
 		const root = buildResourceTree(["b", "B", "a", "z.x", "Z.x", "_.x"].map(op))
 		expect([methodsOf(root).map(([key]) => key), namespacesOf(root).map(([key]) => key)]).toEqual([
@@ -71,6 +77,7 @@ describe("buildResourceTree: one name, one meaning", () => {
 	// v0: ab08b4ab67
 	// v0: f005ee4de4
 	// v0: 05fc30f534
+	// v0: 2c6a043853
 	it("refuses an id that is also another's namespace, in either order, naming both and a fix", () => {
 		expect(() => buildResourceTree(["users.create", "users.create.draft"].map(op))).toThrow(
 			'operationId conflict: "users.create" is callable but also a namespace prefix of "users.create.draft".\nRename one. Suggested: "users.create" → "users.createOne" or drop "users.create.draft".',

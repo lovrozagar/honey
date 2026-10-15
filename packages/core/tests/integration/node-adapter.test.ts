@@ -397,7 +397,7 @@ describe("many requests at once stay apart", () => {
 	})
 })
 
-/** An app that streams: a large generate(), one that waits after its first chunk, and an endless writer. */
+/** An app that streams: a large generate(), one that waits after its first chunk, an endless writer, and a health check. */
 function streamingNodeApp() {
 	const release = Promise.withResolvers<void>()
 	const seen = { aborted: false, produced: 0 }
@@ -430,6 +430,7 @@ function streamingNodeApp() {
 			}
 		}),
 	)
+	app.get("/health").handler((ctx) => ctx.res.text("ok", "alive"))
 	app.post("/watch").handler(async (ctx) => {
 		await ctx.req.text()
 		return ctx.res.sse(async (stream) => {
@@ -463,9 +464,10 @@ describe("streaming over node:http", () => {
 	})
 
 	// v0: 08f9deb182
+	// v0: 7fc02285c8
 	it("a reader that stops reading holds the producer back: no unbounded buffering", async () => {
 		const { app, seen } = streamingNodeApp()
-		const { port } = await listen(app)
+		const { base, port } = await listen(app)
 		const socket = connect(port, "127.0.0.1")
 		socket.write("GET /flood HTTP/1.1\r\nHost: h\r\n\r\n")
 		socket.pause()
@@ -474,18 +476,21 @@ describe("streaming over node:http", () => {
 		socket.destroy()
 		/* socket buffers hold a few MB at most; 64 KB chunks with no backpressure would be thousands */
 		expect(held * 64 * 1024).toBeLessThan(16 * 1024 * 1024)
+		expect((await fetch(`${base}/health`)).status).toBe(200)
 	})
 
 	// v0: 6536868605
 	// v0: 9de61ca77f
+	// v0: f4ab927eb1
 	it("a client that leaves after its body was read still aborts the stream's signal (POST, then SSE)", async () => {
 		const { app, seen } = streamingNodeApp()
-		const { port } = await listen(app)
+		const { base, port } = await listen(app)
 		const socket = connect(port, "127.0.0.1")
 		const ready = new Promise((resolve) => socket.once("data", resolve))
 		socket.write("POST /watch HTTP/1.1\r\nHost: h\r\nContent-Length: 4\r\n\r\nbody")
 		await ready
 		socket.destroy()
 		await expect.poll(() => seen.aborted).toBe(true)
+		expect((await fetch(`${base}/health`)).status).toBe(200)
 	})
 })

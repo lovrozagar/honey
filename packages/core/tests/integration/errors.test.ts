@@ -172,6 +172,7 @@ describe("a throw anywhere in the chain becomes one error answer", () => {
 	// v0: 048cb7f945
 	// v0: 17bec54ba7
 	// v0: a226a39432
+	// v0: c0fd3fbd05
 	it.each(THROWS)("when $label, every middleware around it still stamps the answer", async ({ answer, route }) => {
 		const app = honey<{}>()
 		route(app.use(stamp("x-one", "1")).use(stamp("x-two", "2")))
@@ -213,6 +214,7 @@ describe("a layer that answers nothing, or throws mid-chain", () => {
 	// v0: 7512c45a97
 	// v0: 4c71266875
 	// v0: 062a5d47b5
+	// v0: af40d2961d
 	it.each(EMPTY_ANSWERS)("when %s, the answer is a 500 whose cause names the mistake", async (_label, route, hint) => {
 		const { app, causes } = observedApp()
 		route(app)

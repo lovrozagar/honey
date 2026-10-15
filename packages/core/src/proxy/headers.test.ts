@@ -58,6 +58,7 @@ describe("proxy: what the upstream is sent", () => {
 		expect(calls[0]?.headers).toEqual({ "x-forwarded-host": "app.test", "x-forwarded-proto": "http", "x-kept": "yes" })
 	})
 
+	// v0: 9df55fa30f
 	it("never the client's Host or Expect", async () => {
 		const { app, calls } = proxyApp()
 		await app.fetch(

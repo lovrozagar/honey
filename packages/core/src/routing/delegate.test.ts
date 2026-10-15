@@ -34,6 +34,10 @@ const TREE = () =>
 	])
 
 describe("delegation: a leaf nothing serves goes to the app's catch-all", () => {
+	// v0: 7701c5fa63
+	// v0: 869ac2591d
+	// v0: c722aca93d
+	// v0: e5f4964230
 	it("runs the catch-all with the leaf's own meta, pattern and params; a leaf without meta has none", async () => {
 		const app = gateway(TREE())
 		expect([await call(app, "/orgs"), await call(app, "/health"), await call(app, "/users/42")]).toEqual([
@@ -43,6 +47,17 @@ describe("delegation: a leaf nothing serves goes to the app's catch-all", () => 
 		])
 	})
 
+	// v0: a8e03f60b0
+	it("a proxy({ destination }) catch-all reads the leaf's meta at runtime", async () => {
+		const app = honey<{}>().routeTree(TREE())
+		app.all("*").handler(proxy({ destination: (c) => new Response(String(c.meta.auth)) }))
+		expect(await call(app, "/orgs")).toEqual([200, "required"])
+	})
+
+	// v0: 8196b9bff1
+	// v0: 931a464cbb
+	// v0: ddc57889a9
+	// v0: f499098c4e
 	it("lets a local route win, answers 404 off the tree for GET and HEAD, and 405 for a method the leaf lacks", async () => {
 		const app = honey<{}>().routeTree(TREE())
 		app.get("/orgs").handler((c) => c.res.text("ok", "local"))
@@ -61,6 +76,7 @@ describe("delegation: a leaf nothing serves goes to the app's catch-all", () => 
 describe("delegation: middleware, scopes, taps and the catch-all itself", () => {
 	// v0: 038723d574
 	// v0: 452e3079a4
+	// v0: 381e76f483
 	it("runs middleware first, guards by the leaf's own pattern, and fires taps on the leaf's meta", async () => {
 		const seen: unknown[] = []
 		const deny = createMiddleware<{ req: Request }>(async (_ctx, next) =>

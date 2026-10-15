@@ -119,6 +119,7 @@ describe("createRealtimeSession: wire format, one JSON text per frame", () => {
 
 	// v0: 8a566b13ec
 	// v0: b6373871b8
+	// v0: 6b5f30fb2e
 	it("an inbound frame is the payload itself; non-JSON and binary frames are dropped", async () => {
 		const got: unknown[] = []
 		const c = connect({ handler: (_ctx, conn) => conn.on("message", (p) => void got.push(p)) })

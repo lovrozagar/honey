@@ -241,6 +241,20 @@ describe("shutdown(): draining", () => {
 		expect(closed).toBe(true)
 	})
 
+	// v0: 8de2d4406e
+	it("an idle keep-alive connection does not hold shutdown open", async () => {
+		const { port, server } = await listen(answering(() => new Response("ok")))
+		const socket = connect(port, "127.0.0.1")
+		socket.on("error", () => {})
+		await new Promise((resolve) => {
+			socket.once("data", resolve)
+			socket.write("GET / HTTP/1.1\r\nHost: h\r\n\r\n")
+		})
+		const started = Date.now()
+		await server.shutdown()
+		expect(Date.now() - started).toBeLessThan(1000)
+	})
+
 	// v0: 21bb753231
 	// v0: 0851a43fb7
 	it("never hands the app a request that arrives on a busy connection while draining", async () => {

@@ -97,6 +97,8 @@ describe("schemaToIR: consts and what has no shape", () => {
 		["an unknown type", { type: "date" }, { kind: "unknown" }],
 		["an enum holding a null, unreadable", { enum: ["a", null] }, { kind: "unknown" }],
 		["an empty schema", {}, { kind: "unknown" }],
+		// v0: 097f6e4b97
+		// v0: 7ae1354806
 		["no schema at all", undefined, { kind: "unknown" }],
 	])("%s", (_name, schema, expected) => {
 		expect(schemaToIR(schema)).toEqual(expected)
@@ -164,6 +166,10 @@ describe("schemaToIR: arrays, tuples and binary", () => {
 	// v0: 9f36dce437
 	// v0: 164bdc1242
 	// v0: c0211067ce
+	// v0: 7c6184e099
+	// v0: 7fb191764d
+	// v0: 999ac95582
+	// v0: ca049515a6
 	it("reads arrays, nested arrays, tuples and binary strings", () => {
 		expect([
 			schemaToIR({ items: { $ref: "#/components/schemas/User" }, type: "array" }),
@@ -194,6 +200,19 @@ describe("schemaToIR: nullability, unions and references", () => {
 	// v0: 0ea5ec85e5
 	// v0: 427954c9e3
 	// v0: 97b332bfdd
+	// v0: 05979f7b83
+	// v0: 24a0bdbfce
+	// v0: 25bfa2d4b9
+	// v0: 2c1fc6b4f9
+	// v0: 898812c83a
+	// v0: 8d7b6def57
+	// v0: b5b9e2ac0d
+	// v0: c056791e92
+	// v0: c55541b35f
+	// v0: cb5657ad68
+	// v0: e9b5e8156c
+	// v0: ab490a218c
+	// v0: bf82dacaa4
 	it("wraps a nullable schema once, its null variant or type stripped", () => {
 		expect([
 			schemaToIR({ nullable: true, type: "string" }),
@@ -207,6 +226,8 @@ describe("schemaToIR: nullability, unions and references", () => {
 			schemaToIR({ type: ["string", "number"] }),
 			schemaToIR({ nullable: true, type: ["string", "number"] }),
 			schemaToIR({ nullable: true, type: ["string", "number", "null"] }),
+			schemaToIR({ nullable: true }),
+			schemaToIR({ oneOf: [{ type: "number" }, { type: "null" }] }),
 		]).toEqual([
 			nullable(STRING),
 			nullable(STRING),
@@ -219,6 +240,8 @@ describe("schemaToIR: nullability, unions and references", () => {
 			{ kind: "union", variants: [STRING, NUMBER] },
 			nullable({ kind: "union", variants: [STRING, NUMBER] }),
 			nullable({ kind: "union", variants: [STRING, NUMBER] }),
+			nullable({ kind: "unknown" }),
+			nullable(NUMBER),
 		])
 	})
 })
@@ -238,6 +261,7 @@ describe("schemaToIR: unions and references", () => {
 	// v0: aaa6fc8799
 	// v0: fa17dfc468
 	// v0: d994c7a586
+	// v0: c6a4392e8b
 	it("keeps unions with their discriminator, allOf parts in order, and a ref by its last segment", () => {
 		const cat = { $ref: "#/components/schemas/Cat" }
 		const dog = { $ref: "#/components/schemas/Dog" }

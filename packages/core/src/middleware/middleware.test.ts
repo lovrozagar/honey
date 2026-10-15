@@ -79,6 +79,19 @@ describe("compileChain > 0 middleware", () => {
 			"handler must return a Response",
 		)
 	})
+})
+
+describe("compileChain > 0 middleware: what reaches the boundary", () => {
+	// v0: 233aac4f72
+	it("a handler answering anything but a Response, sync or async, reaches the boundary named as the mistake", async () => {
+		const sync = await run(compileChain([], () => "text" as unknown as Response, convert))
+		const later = await run(compileChain([], async () => ({ status: 200 }) as unknown as Response, convert))
+		expect([sync.status, await sync.text(), later.status]).toEqual([
+			500,
+			"handler must return a Response — did you forget 'return ctx.res...()'?",
+			500,
+		])
+	})
 
 	it("a sync throw and an async rejection both reach the boundary with the ctx", async () => {
 		const seen: unknown[] = []

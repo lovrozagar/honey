@@ -19,6 +19,11 @@ describe("toIR: operation ids", () => {
 	// v0: 729dd7d3b6
 	// v0: 701ad1506e
 	// v0: b4d6166ec6
+	// v0: 8486a385c0
+	// v0: 9ccdae947a
+	// v0: c332fd86ff
+	// v0: c56800236d
+	// v0: dde5e96145
 	it("skips an operation without an id, refuses a shared one, and derives ids only when asked", () => {
 		const paths = { "/nothing/{id}": { delete: ok, get: { ...ok, operationId: "get" } } }
 		expect([toIR(doc(paths)).operations.map(({ id }) => id), deriveOperationId("delete", "/nothing/{id}")]).toEqual([

@@ -52,6 +52,15 @@ function scenarioApp(make: typeof honey, adapter: WSAdapter) {
 			ws.send(data)
 		},
 	})
+	app.ws("/reject").handler({
+		onMessage: async (_ctx, ws, data) => {
+			if (data === "boom") throw new Error("boom")
+			ws.send(data)
+		},
+		onOpen: () => {
+			throw new Error("open failed")
+		},
+	})
 	app.ws("/stall").handler({ onMessage: () => new Promise(() => {}) })
 	return app
 }
@@ -76,6 +85,7 @@ const SCENARIOS: [string, Scenario, Outcome][] = [
 		{ headers: evil, path: "/echo", sends: [] },
 		{ protocol: "", received: [], status: 403 },
 	],
+	// v0: 6d1310444e
 	[
 		"closes with the code, the reason cut to 123 UTF-8 bytes",
 		{ path: "/close", sends: ["x"] },
@@ -91,6 +101,13 @@ const SCENARIOS: [string, Scenario, Outcome][] = [
 		{ path: "/throw", sends: ["boom", "ok"] },
 		{ protocol: "", received: ["ok"], status: 101 },
 	],
+	// v0: 3f7c9c098f
+	[
+		"stays a WebSocket and keeps serving after onOpen throws and onMessage rejects",
+		{ path: "/reject", sends: ["boom", "still"] },
+		{ protocol: "", received: ["still"], status: 101 },
+	],
+	// v0: 6f634ad036
 	[
 		"closes 1009 on a frame over maxPayload",
 		{ path: "/echo", sends: ["x".repeat(2048)] },

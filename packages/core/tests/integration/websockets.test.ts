@@ -240,6 +240,7 @@ describe("WebSockets on Node: failures around the upgrade", () => {
 })
 
 describe("WebSockets on Node: a client that leaves", () => {
+	// v0: 8ba4057065
 	it("a client that leaves before the app refuses is written nothing; a reset never crashes the server", async () => {
 		const release = gate()
 		const app = honey<{}>()
@@ -286,6 +287,25 @@ describe("WebSockets on Node: a client that leaves", () => {
 	})
 })
 
+describe("WebSockets on Node: a client that leaves after the handshake", () => {
+	// v0: 7bfb4fd091
+	it("a reset right after the 101 never crashes the server: the next request is served", async () => {
+		const { base, port } = await listen(wsApp() as unknown as FetchApp)
+		await new Promise<void>((resolve) => {
+			const socket = connect(port, "127.0.0.1")
+			socket.on("error", () => {})
+			socket.on("data", (chunk) => {
+				if (!chunk.toString("latin1").startsWith("HTTP/1.1 101")) return
+				socket.resetAndDestroy()
+				resolve()
+			})
+			socket.write(HANDSHAKE("/live"))
+		})
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		expect((await fetch(`${base}/page`)).status).toBe(200)
+	})
+})
+
 describe("WebSockets on Node: draining and deadlines", () => {
 	it("an upgrade arriving while the server drains is answered 503 on the socket", async () => {
 		const { server } = await listen(wsApp() as unknown as FetchApp)
@@ -326,6 +346,37 @@ describe("Node without shouldUpgradeCallback: an Upgrade that is not WebSocket",
 	it("a bodiless one is served as the request it is", async () => {
 		const raw = await upgradePath("GET /page HTTP/1.1\r\nHost: h\r\nUpgrade: h2c\r\nConnection: Upgrade\r\n\r\n")
 		expect([raw.split("\r\n")[0], raw.endsWith("page")]).toEqual(["HTTP/1.1 200 OK", true])
+	})
+
+	// v0: 0557d1458c
+	it("an SSE route reached that way streams, and its producer ends when the client leaves", async () => {
+		const ended = gate()
+		const app = honey<{}>()
+		app.get("/events").handler((ctx) =>
+			ctx.res.sse(async (stream) => {
+				try {
+					while (!stream.closed) await stream.send({ data: "1", event: "tick" })
+				} finally {
+					ended.open()
+				}
+			}),
+		)
+		const { server } = await listen(app as unknown as FetchApp)
+		const port = await frontFor(server)
+		const raw = await new Promise<string>((resolve) => {
+			const socket = connect(port, "127.0.0.1")
+			let out = ""
+			socket.on("error", () => {})
+			socket.on("data", (chunk) => {
+				out += chunk.toString("latin1")
+				if (!out.includes("event: tick")) return
+				socket.destroy()
+				resolve(out)
+			})
+			socket.write("GET /events HTTP/1.1\r\nHost: h\r\nConnection: Upgrade\r\nUpgrade: x\r\n\r\n")
+		})
+		await ended.shut
+		expect(raw.split("\r\n")[0]).toBe("HTTP/1.1 200 OK")
 	})
 
 	it("one with a body is refused: its bytes are already on the raw socket", async () => {

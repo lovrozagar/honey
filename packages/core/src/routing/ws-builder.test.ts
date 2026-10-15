@@ -142,6 +142,7 @@ describe("app.ws(path): what runs before the upgrade", () => {
 	// v0: 63ea23180b
 	// v0: 9e222bc620
 	// v0: 9aaca7bc1c
+	// v0: 71037bdd6f
 	it("chain middleware, scoped middleware and route middleware run first, in order, and what they add reaches the callbacks", async () => {
 		const { adapter } = fakeAdapter()
 		const order: string[] = []
