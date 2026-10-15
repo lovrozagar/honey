@@ -110,35 +110,30 @@ type Captured = { readonly meta: Readonly<Record<string, unknown>>; readonly req
 /** The wire log: a capturing middleware, the cursor, and the hops after a cursor in arrival order. */
 function createWire(originOf: (request: Request) => WireHop["origin"]) {
 	const hops: { hop: WireHop; seq: number }[] = []
-	const pending = new Set<Promise<void>>()
 	let seq = 0
-	/* the clone is read beside the handler, so a hop is logged even when the client gave up on it */
-	const capture = (ctx: Captured, next: NextFn) => {
+	/* the copy is read before the handler answers: bun 1.3 never delivers a body still unread when the
+	   response goes out (a 401 before the handler), and the hop is logged even if the client gives up */
+	const capture = async (ctx: Captured, next: NextFn) => {
 		if (ctx.meta.internal === true) return next()
 		const at = ++seq
 		const { headers, method, url } = ctx.req
 		const target = new URL(url)
-		const logged = bodyOf(ctx.req.clone()).then((body) => {
-			const hop = {
-				body,
-				headers: Object.fromEntries(headers),
-				method,
-				origin: originOf(ctx.req),
-				url: target.pathname + target.search,
-			}
-			hops.push({ hop, seq: at })
-		})
-		pending.add(logged)
-		void logged.finally(() => pending.delete(logged))
+		const body = await bodyOf(ctx.req.clone())
+		const hop = {
+			body,
+			headers: Object.fromEntries(headers),
+			method,
+			origin: originOf(ctx.req),
+			url: target.pathname + target.search,
+		}
+		hops.push({ hop, seq: at })
 		return next()
 	}
-	const since = async (cursor: number): Promise<WireHop[]> => {
-		await Promise.all(pending)
-		return hops
+	const since = (cursor: number): WireHop[] =>
+		hops
 			.filter((entry) => entry.seq > cursor)
 			.sort((a, b) => a.seq - b.seq)
 			.map((entry) => entry.hop)
-	}
 	return { capture, mark: () => seq, since }
 }
 
@@ -388,9 +383,7 @@ export function createConformanceApp(origins: () => Origins | null = () => null)
 	app
 		.get("/__conformance/wire")
 		.meta({ internal: true })
-		.handler(async (ctx) =>
-			ctx.res.json("ok", await wire.since(Number(new URL(ctx.req.url).searchParams.get("since") ?? 0))),
-		)
+		.handler(async (ctx) => ctx.res.json("ok", wire.since(Number(new URL(ctx.req.url).searchParams.get("since") ?? 0))))
 	return serveOpenApi(app, { title: "Conformance", version: "1.0.0" })
 }
 
