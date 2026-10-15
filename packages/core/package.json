@@ -27,11 +27,14 @@
 		"@total-typescript/ts-reset": "catalog:",
 		"@types/node": "catalog:",
 		"@vitest/coverage-v8": "4.1.10",
+		"arktype": "catalog:",
+		"effect": "catalog:",
 		"oxc-parser": "0.152.0",
 		"typescript": "catalog:",
 		"valibot": "catalog:",
 		"vitest": "catalog:",
 		"ws": "catalog:",
+		"yup": "catalog:",
 		"zod": "catalog:"
 	},
 	"peerDependencies": {
