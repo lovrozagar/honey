@@ -36,3 +36,37 @@ export function variableTimeHelper(verifyHelper: (language: string) => string): 
 	return (language) =>
 		VALUE_COMPARE.reduce((text, [constantTime, value]) => text.replace(constantTime, value), verifyHelper(language))
 }
+
+/** `runtimeSource` with each `[from, to]` applied to the text; a patch that no longer matches throws (a stale mutant is red). */
+export function patchedRuntime(
+	runtimeSource: () => string,
+	patches: readonly (readonly [string, string])[],
+): () => string {
+	return () =>
+		patches.reduce((text, [from, to]) => {
+			if (!text.includes(from)) throw new Error(`stale runtime mutant: ${JSON.stringify(from)} is not in the runtime`)
+			return text.replace(from, to)
+		}, runtimeSource())
+}
+
+/* a cross-origin hop that keeps every header, credentials and the auth header included */
+export const KEEP_CROSS_ORIGIN_HEADERS = [
+	[
+		"if (crossOrigin) next.headers = crossOriginHeaders(next.headers as Headers)",
+		"if (crossOrigin) next.headers = new Headers(next.headers as Headers)",
+	],
+] as const
+
+/* a path param written as it came: no percent-encoding, no refusal of a dot segment */
+export const RAW_PATH_PARAMS = [
+	['if (value === "" || value === "." || value === "..") {', "if (false) {"],
+	["return encodeURIComponent(value)\n}", "return value\n}"],
+] as const
+
+/* an onLog entry naming the full request URL and the auth header instead of the path template */
+export const LEAKY_LOG = [
+	[
+		"exchangeLog(this.#config.onLog, `${method.toUpperCase()} ${path}`)",
+		'exchangeLog(this.#config.onLog, `${method.toUpperCase()} ${url.toString()} ${headers.get("authorization") ?? ""}`)',
+	],
+] as const

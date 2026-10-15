@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import { generateSdk } from "../src/emit/ts/sdk.ts"
 import type { IROperation } from "../src/ir/model.ts"
 import {
 	ceilingOf,
@@ -10,6 +13,7 @@ import {
 	mcpSurfaces,
 	oversizedOperations,
 	sdkSurfaces,
+	v1SdkSurfaces,
 } from "./capture-token-budget.ts"
 
 describe("the pinned tokenizer", () => {
@@ -221,5 +225,37 @@ describe("oversizedOperations", () => {
 		const spec = documented("word ".repeat(400))
 		const small = countTokens(documentOperationText(spec, "/nodes/{id}", "get"))
 		expect([oversizedOperations(spec, small), oversizedOperations(spec, 10_000)]).toEqual([["postNote"], []])
+	})
+})
+
+const REPO = resolve(import.meta.dirname, "../../..")
+const APPS = ["compose", "defaults", "gateway", "kitchen", "surface"]
+
+describe("the v1 SDK within the budget (bit 11)", () => {
+	it("reads each operation's signature lines, its raw overload with its call, a repeated name numbered", () => {
+		const raw = "get(input: A & { raw: true }): Promise<Response>"
+		const types = `interface Ops {\n\titems: {\n\t\t${raw}\n\t\tget(input?: A): R\n\t}\n\tusers: {\n\t\tget(input?: B): S\n\t}\n\t"x-y"(input?: C): T\n}`
+		expect(Object.fromEntries(v1SdkSurfaces(types))).toEqual({
+			'"x-y"': '"x-y"(input?: C): T',
+			get: `${raw}\nget(input?: A): R`,
+			"get#2": "get(input?: B): S",
+		})
+	})
+
+	it("keeps every e2e app's operations within the sdkCli and document ceilings", () => {
+		const baseline = JSON.parse(readFileSync(join(REPO, "blueprint/baselines/tokens.json"), "utf8")) as {
+			document: { ceiling: number }
+			sdkCli: { ceiling: number }
+		}
+		const over: string[] = []
+		for (const app of APPS) {
+			const file = join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`)
+			const spec = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown> & { paths: Record<string, never> }
+			const { files, stem } = generateSdk(spec, { name: "SDK" })
+			for (const [name, text] of v1SdkSurfaces(files[`${stem}.types.gen.ts`] ?? ""))
+				if (countTokens(text) > baseline.sdkCli.ceiling) over.push(`${app}/${name}`)
+			over.push(...oversizedOperations(spec, baseline.document.ceiling).map((id) => `${app}/${id} (document)`))
+		}
+		expect(over).toEqual([])
 	})
 })

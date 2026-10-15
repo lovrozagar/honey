@@ -9,7 +9,16 @@
 import { spawnSync } from "node:child_process"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
-import { bypassedEscapes, localeOrder, rawKey, variableTimeHelper } from "../security/mutants.ts"
+import {
+	bypassedEscapes,
+	KEEP_CROSS_ORIGIN_HEADERS,
+	LEAKY_LOG,
+	localeOrder,
+	patchedRuntime,
+	RAW_PATH_PARAMS,
+	rawKey,
+	variableTimeHelper,
+} from "../security/mutants.ts"
 
 export type Guard = {
 	/** what the suite must catch once this guard is gone */
@@ -48,7 +57,28 @@ export const GUARDS: readonly Guard[] = [
 		id: "webhook-ct-compare",
 		module: "packages/gen/src/emit/shared/webhooks.ts",
 	},
+	{
+		catches: "a cross-origin redirect hop that keeps the auth header, cookies and configured headers (H18.10)",
+		disable: (original) => ({ runtimeSource: patchedRuntime(runtime(original), KEEP_CROSS_ORIGIN_HEADERS) }),
+		id: "ts-cross-origin-auth",
+		module: "packages/gen/src/emit/ts/http.ts",
+	},
+	{
+		catches: "an onLog entry carrying the request URL's query or the auth header value",
+		disable: (original) => ({ runtimeSource: patchedRuntime(runtime(original), LEAKY_LOG) }),
+		id: "ts-auth-redaction",
+		module: "packages/gen/src/emit/ts/http.ts",
+	},
+	{
+		catches: "a path param written raw: `..` or `/` in a value changing which resource the request addresses",
+		disable: (original) => ({ runtimeSource: patchedRuntime(runtime(original), RAW_PATH_PARAMS) }),
+		id: "ts-path-param-escape",
+		module: "packages/gen/src/emit/ts/http.ts",
+	},
 ]
+
+/** The emitted runtime's reader, as the guarded module exports it. */
+const runtime = (original: Record<string, unknown>) => original.runtimeSource as () => string
 
 const GEN = resolve(import.meta.dirname, "../..")
 const SUITE = "tests/security"

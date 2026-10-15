@@ -73,6 +73,29 @@ export function sdkSurfaces(typesSource: string): Map<string, string> {
 	return out
 }
 
+/**
+ * Each operation's signature lines in a v1 emitted `${stem}.types.gen.ts`: its raw overload and the
+ * call itself, what a reader of the SDK takes in to call it once. Keyed by member name, a repeat
+ * (`items.get`, `users.get`) numbered in order.
+ */
+export function v1SdkSurfaces(typesSource: string): Map<string, string> {
+	const out = new Map<string, string>()
+	let raw: string | null = null
+	for (const match of typesSource.matchAll(/^\t+("[^"]+"|[\w$]+)\(input\??: .*$/gm)) {
+		const line = match[0].trim()
+		/* the raw overload comes first and belongs to the call on the next line */
+		if (line.includes("& { raw: true }): Promise<Response>")) {
+			raw = line
+			continue
+		}
+		let key = match[1] as string
+		for (let n = 2; out.has(key); n++) key = `${match[1]}#${n}`
+		out.set(key, raw === null ? line : `${raw}\n${line}`)
+		raw = null
+	}
+	return out
+}
+
 const HELP_FIELD = /^\s*(?:Use|Short|Long|Example):\s+("(?:[^"\\]|\\.)*")/
 const FLAG = /\.Flags\(\)\.\w+\((?:&\w+,\s*)?"([^"]+)",\s*[^,]*,\s*("(?:[^"\\]|\\.)*")\)/
 const REQUIRED = /\.MarkFlagRequired\("([^"]+)"\)/
