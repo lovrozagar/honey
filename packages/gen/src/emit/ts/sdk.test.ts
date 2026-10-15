@@ -212,11 +212,13 @@ describe("generateSdk: names it refuses, and renames that collide", () => {
 	})
 })
 
+/** An event-stream answer declaring `schema` for its events, or no schema. */
+const stream = (schema?: Json) => ({
+	200: { content: { "text/event-stream": schema === undefined ? {} : { schema } }, description: "" },
+})
+
 describe("serviceMapOf: JSON events (C1)", () => {
 	it("flags an event stream json only when its declared event schema is not a string", () => {
-		const stream = (schema?: Json) => ({
-			200: { content: { "text/event-stream": schema === undefined ? {} : { schema } }, description: "" },
-		})
 		const tree = toIR({
 			components: { schemas: { Tick: { properties: { n: { type: "number" } }, type: "object" } } },
 			info: { title: "T", version: "1" },

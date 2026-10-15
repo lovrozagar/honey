@@ -1,5 +1,7 @@
 import {
 	type ConnectionState,
+	type ResumableConnection,
+	type ResumableConnectionOpts,
 	createKeepaliveLoop,
 	type KeepaliveLoop,
 	RealtimeAbortError,
@@ -10,34 +12,6 @@ import {
 	type TransportConnection,
 	transportAt,
 } from "./realtime.ts"
-
-export type ResumableConnectionOpts = {
-	fallbackTimeout?: number
-	headers?: Record<string, string>
-	/** Ping every this many ms over WebSocket (a frame resets SSE's dead timer); a dead link reconnects. Off when unset. */
-	keepaliveInterval?: number
-	lastId?: number
-	/** Reconnects after a drop before the stream ends; 0 retries forever. Default 5. */
-	maxReconnectAttempts?: number
-	/** 401 on a request: return a fresh token to retry it once (null = give up). */
-	onAuthExpired?: (ctx: { rejectedToken: string | null }) => Promise<string | null>
-	onReconnected?: () => void
-	onReconnecting?: (attempt: number, transport: Transport) => void
-	reconnectDelayMs?: number
-	reconnectToken?: string
-	signal?: AbortSignal
-	token?: () => Promise<string> | string
-	transports: TransportAdapter[]
-	url: string
-}
-
-export type ResumableConnection = {
-	close(reason?: string): void
-	readonly provenTransport: Transport | null
-	send(data: unknown): void
-	readonly state: ConnectionState
-	[Symbol.asyncIterator](): AsyncIterableIterator<unknown>
-}
 
 type QueueEntry = { type: "done" } | { error: unknown; type: "error" } | { type: "value"; value: unknown }
 
@@ -68,6 +42,10 @@ class Resumable implements ResumableConnection {
 	#reconnectToken: string | undefined
 	#started = false
 	#closed = false
+	/** the dial and reconnect timers still pending: `close()` clears them, so nothing outlives the connection */
+	readonly #timers = new Set<ReturnType<typeof setTimeout>>()
+	/** the transport being dialed, closed with the connection */
+	#dialing: TransportConnection | null = null
 
 	constructor(opts: ResumableConnectionOpts) {
 		this.#opts = opts
@@ -88,6 +66,25 @@ class Resumable implements ResumableConnection {
 	#end(): void {
 		this.#state = "closed"
 		this.#closed = true
+		for (const timer of this.#timers) clearTimeout(timer)
+		this.#timers.clear()
+		const dialing = this.#dialing
+		this.#dialing = null
+		dialing?.close()
+	}
+
+	/** Run `fn` after `ms`, unless the connection closes first; the timer never holds the process open. */
+	#later(fn: () => void, ms: number): () => void {
+		const timer = setTimeout(() => {
+			this.#timers.delete(timer)
+			fn()
+		}, ms)
+		;(timer as unknown as { unref?: () => void }).unref?.()
+		this.#timers.add(timer)
+		return () => {
+			clearTimeout(timer)
+			this.#timers.delete(timer)
+		}
 	}
 
 	#enqueue(entry: QueueEntry): void {
@@ -142,27 +139,37 @@ class Resumable implements ResumableConnection {
 	/** Dial the adapter at `index`; resolve once it is ready, its frames wired before the caller resumes. */
 	#dial(index: number): Promise<TransportConnection> {
 		return new Promise((resolve, reject) => {
+			if (this.#closed) return reject(new RealtimeConnectError("the connection is closed", "closed"))
 			const adapter = this.#opts.transports[index] as TransportAdapter
 			const opts = { headers: this.#opts.headers, lastId: this.#lastId, reconnectToken: this.#reconnectToken }
 			const conn = adapter.connect(this.#opts.url, { ...opts, signal: this.#opts.signal })
+			this.#dialing = conn
 			let ready = false
-			const timer = setTimeout(() => {
+			const cancel = this.#later(() => {
+				this.#dialing = null
 				conn.close()
 				reject(new RealtimeConnectError("transport open timeout", "timeout"))
 			}, this.#opts.fallbackTimeout ?? 3000)
 			const fail = (error: unknown) => {
-				clearTimeout(timer)
+				cancel()
+				if (this.#dialing === conn) this.#dialing = null
 				if (ready) {
 					this.#detach()
 					this.#reconnect()
 				} else reject(error)
 			}
 			conn.onFrame = (frame) => {
-				/* a message before ready is kept; a goodbye before ready is the open failing, left to the timer */
+				/* a message before ready is kept; a goodbye before ready is the server refusing the open */
 				if (ready || frame.t === "msg" || frame.t === "pong") return this.#onFrame(frame)
-				if (frame.t === "bye") return
+				if (frame.t === "bye") {
+					conn.close()
+					return fail(new RealtimeConnectError(`transport refused: ${frame.reason}`, "bye"))
+				}
 				ready = true
-				clearTimeout(timer)
+				cancel()
+				this.#dialing = null
+				/* the connection from its ready frame on, so a drop before the caller resumes is seen */
+				this.#conn = conn
 				this.#reconnectToken = frame.reconnectToken
 				resolve(conn)
 			}
@@ -216,11 +223,8 @@ class Resumable implements ResumableConnection {
 		if (this.#state === "idle") this.#state = "connecting"
 		try {
 			const conn = await this.#open()
-			if (this.#closed) {
-				conn.close()
-				return
-			}
-			this.#conn = conn
+			/* closed, or dropped between its ready frame and here (a reconnect is already scheduled) */
+			if (this.#closed || this.#conn !== conn) return
 			this.#state = "connected"
 			this.#attempts = 0
 			this.#watch(conn)
@@ -245,7 +249,7 @@ class Resumable implements ResumableConnection {
 		this.#proven = null
 		const attempt = this.#attempts
 		safely(() => this.#opts.onReconnecting?.(attempt, transportAt(0)))
-		setTimeout(() => void this.#connect(), this.#opts.reconnectDelayMs ?? 1000)
+		this.#later(() => void this.#connect(), this.#opts.reconnectDelayMs ?? 1000)
 	}
 
 	send(data: unknown): void {
