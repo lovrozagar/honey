@@ -268,6 +268,7 @@ src/emit/shared/__fixtures__/escape-oracle.ts	gen	corpus	09	the F2 fuzz oracle (
 src/emit/shared/type-emitter.ts	gen	src	09	shared type emission	type-emitter.ts
 src/emit/shared/type-emitter.vendors.test.ts	gen	test	09	v0 per-vendor type cases (F7): each vendor's JSON Schema from core jsonSchemaOf → IR → TypeScript, wire truth; the 160-tag it.each table, too large to sit beside type-emitter.test's mechanics	type-emitter.ts,ts-type-emitter.ts
 src/emit/shared/format.ts	gen	src	11	formatter post-pass dispatch (gofmt/rustfmt/ruff/…)	—
+src/emit/shared/gofmt.ts	gen	src	12	the gofmt Formatter adapter (G10): resolves gofmt from the pinned GOROOT and runs it through goEnv(); mandatory in publish CI, valid-but-unformatted fallback when the toolchain is absent	codegen-go.ts
 src/emit/shared/status-keys.ts	gen	src	11	the code → status-key table (STATUS_KEYS), the gen-local mirror of core's statusKeyToCode; type-gen's output keys by status key read it. A core drift leg (codegen-tables.test) pins it equal to core	client/types.ts
 src/emit/shared/status-keys.test.ts	gen	test	11	STATUS_KEYS maps each HTTP status code to its status key; unknown codes fall back by class, and the table is complete over the codes core emits	client/types.ts
 src/emit/shared/webhooks.ts	gen	src	10	webhook verify-helper emitter: language-agnostic constant-time HMAC from x-honey-signature via F2 (F11); the typed payload parser is per-SDK (bits 11-16)	—
@@ -320,6 +321,8 @@ src/emit/go/http.ts	gen	src	12	Go net/http client	codegen-go.ts
 src/emit/go/sse.ts	gen	src	12	Go SSE	codegen-go.ts
 src/emit/go/ws.ts	gen	src	12	Go WebSocket	codegen-go.ts
 src/emit/go/errors.ts	gen	src	12	Go errors	codegen-go.ts
+src/emit/go/__fixtures__/go-env.ts	gen	test	12	toolchain-parity fixture (G10, D4 precedent): goEnv (GOTOOLCHAIN=pinned, caches under the home cache dir, GOFLAGS readonly), runGo, gofmtPath from the pinned GOROOT, goRequired gate (HONEY_REQUIRE_GO)	—
+src/emit/go/__fixtures__/compiled.ts	gen	test	12	the executed-Go fixture (G8/G11, D4 precedent): writes the emitted SDK under the home cache dir keyed by document hash, compiles once per hash via goEnv, and drives it through the reflection driver so behavior tests run the real emitted client and the F8 mutants of runtimeSource() are reached	codegen-go.ts
 src/emit/rust/sdk.ts	gen	src	13	Rust SDK	codegen-rust.ts
 src/emit/rust/types.ts	gen	src	13	Rust types	rust-type-emitter.ts
 src/emit/rust/http.ts	gen	src	13	Rust reqwest client	codegen-rust.ts
@@ -381,6 +384,7 @@ src/gen/process.ts	gen	src	17	the CLI's child-process generate runner (runCli/cl
 src/gen/write.ts	gen	src	19	write artifacts to disk, checksum header + x-generated marker + manifest (provenance) — moved out of 09 to its cases' bit (gen-write, 19)	gen-write.ts
 tests/structure/mutation-harness.ts	gen	src	09	gen-local GUARDS registry + runner (H2: no core import); runs tests/security with each guard disabled → must go red	—
 tests/structure/mutation-harness.test.ts	gen	test	09	proves the gen harness mechanism against a fixture guard	—
+tests/structure/go-toolchain.test.ts	gen	test	12	toolchain parity (G10): no go or gofmt is spawned outside goEnv() — a repo scan forbids a raw go/gofmt invocation in gen src/tests	—
 tests/security/mutants.ts	gen	test	09	the gen guard mutants: escape-bypass (policy off → JSON.stringify), nondeterministic-naming (compareCodeUnits → localeCompare), spec-text-to-source (quoteKey returns the key raw)	—
 tests/security/emit-adversarial.test.ts	gen	test	09	gen emit adversarial + the F2 fuzz oracle (imported from escape.fuzz's helper, not duplicated), reran by the harness per guard	—
 tests/integration/conformance/matrix.ts	gen	src	11	the conformance feature×target grid schema + logic (dx/conformance.md): Target/Call/Observed/Hop/Cell types, cellsFor(target) and compareCell; complete-or-red per target. Scenario data lives in features.ts (Q6); TARGETS is defined there and re-exported here. Bits 12-18 add their runner against this grid unchanged	sdk-harness/*

@@ -44917,14 +44917,6 @@
 			"feature": "11-ts-client",
 			"reason": "bit-09 triage (11-model): calls 11; regression/ws1-route-model.regression.test.ts"
 		},
-		"937038f7e6": {
-			"feature": "12-go-sdk",
-			"reason": "bit-09 triage (12-14): calls 12-14; unit/codegen/auth-scheme.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
-		},
-		"1c7fd168e2": {
-			"feature": "12-go-sdk",
-			"reason": "bit-09 triage (12-14): calls 12-14; unit/codegen/auth-scheme.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
-		},
 		"e123e01a3e": {
 			"feature": "10-openapi-emit",
 			"reason": "bit-09 triage (10): calls 10; unit/codegen/codegen.test.ts"
@@ -45182,8 +45174,8 @@
 			"reason": "bit-09 triage (10): suite topic; unit/codegen/manifest-serve.test.ts"
 		},
 		"efa2491888": {
-			"feature": "12-go-sdk",
-			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
+			"feature": "14-python-sdk",
+			"reason": "H44: Python client.py references only the _Sync classes it emits; Python SDK"
 		},
 		"0ae459e912": {
 			"feature": "12-go-sdk",
@@ -45204,10 +45196,6 @@
 		"165597d9a3": {
 			"feature": "17-cli-gold-standard",
 			"reason": "bit-09 triage (17): Go CLI emitter (flags, enum errors); unit/codegen/polyglot-emitters.test.ts"
-		},
-		"9be781321d": {
-			"feature": "12-go-sdk",
-			"reason": "bit-09 triage (12-14): polyglot SDK emitter output (Go/Rust/Python); unit/codegen/polyglot-emitters.test.ts; the case asserts every polyglot SDK, so 13 and 14 cover it beside 12"
 		},
 		"a1c45da195": {
 			"feature": "12-go-sdk",
@@ -46233,10 +46221,6 @@
 			"feature": "19-release-provenance",
 			"reason": "bit-10 triage: the plugin generating the unfiltered document once: bit 19"
 		},
-		"0354472c30": {
-			"feature": "12-go-sdk",
-			"reason": "bit-10 triage: generateGoSDK over the mock server's spec: bit 12"
-		},
 		"86b87df2bb": {
 			"feature": "13-rust-sdk",
 			"reason": "bit-10 triage: generateRustSDK over the mock server's spec: bit 13"
@@ -46344,6 +46328,46 @@
 		"f041095901": {
 			"feature": "19-release-provenance",
 			"reason": "bit-11 triage: scopeSpec/mergeSpecs: v0 plugin-only spec scoping, no gen home; with its siblings in bit 19 (reconciled)"
+		},
+		"11dafff788": {
+			"feature": "17-cli-gold-standard",
+			"reason": "H41/H42 Go CLI cmd/events.go SSE request text; Go CLI emitter"
+		},
+		"170d9f147b": {
+			"feature": "17-cli-gold-standard",
+			"reason": "Go CLI exit codes 1 (4xx) vs 2 (5xx), cli-go/errors.go; misrouted by v0-inventory.ts:46 (go-cli needs a hyphen)"
+		},
+		"2ef25d029e": {
+			"feature": "20-docs",
+			"reason": "examples/go/example.go vetting against the SDK is docs examples compile; bits/20-docs.md:15 owns docs/examples-compile.test.ts (ported from v0 examples-compile); ambiguity flagged (13th move)"
+		},
+		"3bc6e66ddf": {
+			"feature": "17-cli-gold-standard",
+			"reason": "Go CLI usage errors exit 4 and send nothing; misrouted Go CLI case"
+		},
+		"536b66b01d": {
+			"feature": "19-release-provenance",
+			"reason": "generateAndWrite (plugin.ts:544-601) removes a Go CLI command file whose resource is gone; plugin write wiring"
+		},
+		"5a5855b2dc": {
+			"feature": "17-cli-gold-standard",
+			"reason": "a CLI resource named root never overwrites cmd/root.go; Go CLI emitter"
+		},
+		"96c6447b4a": {
+			"feature": "17-cli-gold-standard",
+			"reason": "Go CLI table/error output strips hostile terminal bytes (cli-go/output.go); misrouted Go CLI case"
+		},
+		"cfefebba33": {
+			"feature": "19-release-provenance",
+			"reason": "resolveHoneyConfig + generateAndWrite with codegen.invalidate off across the SDK and Go CLI passes; plugin config wiring"
+		},
+		"dd36c5aed5": {
+			"feature": "17-cli-gold-standard",
+			"reason": "Go CLI prints a large integer id exactly (cli-go/output.go); misrouted Go CLI case"
+		},
+		"f2de36cde7": {
+			"feature": "17-cli-gold-standard",
+			"reason": "generateGoCLI over the adversarial corpus vets, compiles and maps errors to exit codes; Go CLI"
 		}
 	},
 	"retired": {
@@ -46823,6 +46847,52 @@
 		"ffc4c70a5d": "bit-11 triage: TEXT: \"emitted startsWith(\"\"text/\"\") source text; behavior ported as 358ff0ebb5\"",
 		"fffd7ccee4": "bit-11 triage: DUP: same standard-envelope error as bbe9086162",
 		"a1c8f914c0": "O4: generateTypes types the documented routes only; internal routes are excluded (H18.15/F3). v0 included them — superseded by v1 security posture; core document carries no internal routes.",
-		"72f35f74da": "O4: generateTypes types the documented routes only; internal routes are excluded (H18.15/F3). v0 included them — superseded by v1 security posture; core document carries no internal routes."
+		"72f35f74da": "O4: generateTypes types the documented routes only; internal routes are excluded (H18.15/F3). v0 included them — superseded by v1 security posture; core document carries no internal routes.",
+		"0354472c30": "emitting the Go SDK over the full mock/reference document is the round trip 4f86e8c658 (it emits, compiles and calls)",
+		"0a9040dd53": "sync.Mutex spelling in the runtime; staleness behavior is ported via 5cbc1880a7, b1382c5259 and dfabed1f02",
+		"0f75b1c524": "pins NewClient validating a non-empty BaseURL (panic); G1 ruled an empty BaseURL defaults to servers[0], pinned by emit/go/sdk.test.ts NewClient defaults; its HTTPClient and timeout legs are 163a81f09c and d745d904f7",
+		"107d86649e": "bracket balance of emitted declarations is subsumed by compiling the emitted SDK (fa5233feff) and gofmt parsing it (3c1d480aa1)",
+		"15a9dfae66": "sync.Map regex cache is a perf internal (bit-11 precedent d6ff0429e6); templated-pattern matching is ported via dfabed1f02/b1382c5259",
+		"1851db36b8": "import list spelling; an unused or missing import is a Go compile error, pinned by fa5233feff/f0f9e64b26",
+		"1c7fd168e2": "bearer default emitted for http bearer is 39934e2890",
+		"1f81e16f20": "integer enum hoisted with int consts per value is the types row d5a2c82053",
+		"232c6b872a": "types.go import list spelling; compile and vet pin imports (fa5233feff, f0f9e64b26)",
+		"241d10cf4d": "same mapping as the types.test.ts top-level allOf row 5dfd9485b3",
+		"30c83a9b21": "same mapping as the types.test.ts array rows 5cd1983689, 9ced0daa99",
+		"38aabf3bc1": "statusErrorMap spelling; the status-to-type mapping is ported as ee1a2245dc",
+		"3b9e24b18c": "same mapping as the types.test.ts primitive rows b5c25f6295, a53ccae189, 432f5cb27b, da1ac0e666, 7d05131851",
+		"3eaff23b06": "import path of the v0 library; R6 switched to github.com/coder/websocket, the dependency is pinned through go.mod (7708f42d65)",
+		"3f3493fea8": "nested resources initialized by NewClient is exercised by calling client.Checkout.Sessions.Create in 48146cd2d8",
+		"44c154a00d": "empty it.skip body: v0 master spec §11 put ping/pong out of SDK scope and R6 delegates control frames to coder/websocket; ambiguity flagged (CUT under a v0 ruling)",
+		"452de3de84": "vitest snapshot of v0's client.go/types.go; determinism is ported as ccf0031834 (bit-11 precedent cd282ce42f)",
+		"5688d558c4": "mergeHeaders source text (cfg.AuthHeaderPrefix fallback); prefix behavior ported via c433c88611 and 3426388dc9",
+		"5d98da2dfe": "nested string enum field hoisted and referenced is the types row 6b4d6666f3",
+		"67e671e0d0": "regex over Config's field list; each live field is ported by its behavior (BearerToken 39934e2890, Headers d745229932, Timeout d745d904f7, OnAuthExpired e1af4f62b2, HTTPClient 163a81f09c); ThrowOnError is the dead field v1 deletes (G1)",
+		"6a55175900": "same mapping as the types.test.ts required/optional sorted row 56561e5a8b",
+		"6aff96d76b": "same mapping as the types.test.ts $ref row b80fe84ad2 and cycle row d1952e89cc",
+		"7b566f96f5": "nullable primitive -> *string is the types row 2616780db8",
+		"7b873c346d": "BearerToken sent as Authorization: Bearer <token> is 39934e2890",
+		"7bcb009af0": "nested integer enum hoisted as an int type is the types row d5a2c82053",
+		"7be0dc8c10": "same mapping as the types.test.ts non-identifier key row 01fc22f1ba",
+		"7be5ab401a": "same mapping as the types.test.ts tuple row 89ad8352f3",
+		"8401027c67": "prefix + bearerToken concatenation spelling; the wire header is ported via 3426388dc9 and 7cd3daf47b",
+		"8af4ba9fc1": "same mapping as the types.test.ts top-level const row 4cdf01e418",
+		"8f09d5366f": "a single-segment operationId as a method on *Client is 9e012d9092",
+		"937038f7e6": "where NewClient's body sets the auth defaults; the NewClient signature compiles in sdk.test.ts and the defaults are ported via 39934e2890",
+		"9be781321d": "discriminated union keeps its variant payload is c90c86ca85 (executed decode)",
+		"a4380b6652": "same mapping as the types.test.ts oneOf row b2d724f39b and discriminated union row 8989bc6e20",
+		"a6b9babac1": "two-level crud Users.List/Create on a resource struct is 5333bd1243",
+		"ac3923d960": "position of the package clause; a wrong or missing package clause fails to compile, pinned by fa5233feff",
+		"ad53b02393": "mergeHeaders source text (cfg.AuthHeaderName fallback); header name behavior ported via c433c88611 and 235918a22b",
+		"c2756a7fb8": "same mapping as the types.test.ts nullable string row 2616780db8",
+		"ceec8e9bec": "doRequest helper name; request assembly is ported by every http.test.ts case (41d76e99ed, 65900e144b)",
+		"d306bfdd6f": "additionalProperties beside fields round-trip through Extra is 678ce73756 (executed decode)",
+		"d4d648fc5f": "same mapping as the types.test.ts map row 077115dc27 and Extra row 03bd08e141",
+		"d96c22169a": "same mapping as the types.test.ts hoisted string enum + const block row cb473200f4",
+		"df84e050b4": "the Format-hint prefix extraction is 7cd3daf47b (Token instead of ApiKey); the IR row also pins Token (ir/build.test.ts)",
+		"e55516e590": "same mapping as the types.test.ts type [string,null] row c72fd1c908",
+		"f32e264361": "same mapping as the types.test.ts depth row 340a4055fa",
+		"f459f15dbe": "boolean const field -> bool is the types row 132b9c602b",
+		"f9e13e97e1": "same mapping as the types.test.ts multi-type row d525f50e10"
 	}
 }
