@@ -265,7 +265,7 @@ describe("dispatch: what a handler's throw answers", () => {
 	// v0: 52e3df013d
 	// v0: 580b93481c
 	it.each<[string, (ctx: { res: { json(key: "ok", data: unknown): Response } }) => unknown]>([
-		["a TypeError from reading through undefined", () => (({}) as { a: { b: number } }).a.b],
+		["a TypeError from reading through undefined", () => ({} as { a: { b: number } }).a.b],
 		["a string", () => Promise.reject("string error")],
 		["undefined", () => Promise.reject(undefined)],
 		["a rejection after an await", async () => Promise.reject(new Error("async fail"))],
