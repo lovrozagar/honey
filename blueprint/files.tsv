@@ -13,6 +13,7 @@ src/routing/app.ts	core	src	02	the Honey app surface + honey() factory; delegate
 src/routing/app-types.ts	core	types	02	app-level type machinery split from app.ts for the 300-line limit (nine positional generics kept — v0 typetests T16/T28 pin them): HandlerCtx/ApplyParams/ApplyScoped/ScopedMwEntry, RouteEntry/MergeRoute/ComputeErrorsByStatus, the Infer* ladder, HoneyCtx, DefaultMeta. Route entry keeps input/output typed {} at 02 so bit 08 fills them without reshaping	index.ts,types.ts
 src/routing/output-types.ts	core	types	08	the .output() type algebra: OutputSchemas (media type → status → schema | true, redirect, headers), AllowedResMethods, and ApplyOutput narrowing ctx.res (declared helpers narrowed by status key and body, undeclared removed, UniversalRes kept, sse only for an event stream); type-only	index.ts
 src/routing/settings.ts	core	src	02	AppSettings, defaults, chain (basePath/context/onError/trustProxy)	index.ts
+src/routing/settings-chain.ts	core	src	02	the settings setters every app handle shares (SettingsChain), split from settings.ts for the 300-line cap	index.ts
 src/routing/register.ts	core	src	02	route registration per method; builder wiring; mount	index.ts
 src/routing/route-builder.ts	core	src	02	RouteBuilder: input/output/meta/errors/handler	index.ts
 src/routing/ws-builder.ts	core	src	06	WSRouteBuilder: handler/errors/input/meta/origins/use	index.ts
