@@ -152,7 +152,6 @@ src/openapi/tags.ts	core	src	10	tags + externalDocs (B2)	—
 src/openapi/webhooks.ts	core	src	10	webhooks (B3)	—
 src/openapi/spec-factory.ts	core	src	10	spec factory	openapi/spec-factory.ts
 src/openapi/spec.ts	core	src	10	spec entry	openapi/spec.ts
-src/openapi/json-schema-slot.ts	core	src	09	json-schema slot	openapi/json-schema-slot.ts
 src/openapi/scalar.ts	core	src	10	Scalar docs page	openapi/scalar.ts
 src/openapi/swagger.ts	core	src	10	Swagger docs page	openapi/swagger.ts
 src/openapi/docs-page.ts	core	src	10	docs page shell	openapi/docs-page.ts
@@ -242,8 +241,7 @@ src/ir/slots.ts	gen	src	09	request/response slots + realtime/sse/ws markers	code
 src/ir/sdk-model.ts	gen	src	09	the SDK model over the IR	codegen-sdk-model.ts
 src/ir/schema-naming.ts	gen	src	09	schema name derivation	codegen-schema-naming.ts
 src/ir/route-tree-intern.ts	gen	src	09	route-tree interning	codegen-route-tree-intern.ts
-src/ir/load.ts	gen	src	09	load an openapi.json	codegen-load.ts
-src/ir/loaders.ts	gen	src	09	spec loaders	codegen-loaders.ts
+src/ir/load.ts	gen	src	17	load the consumer app + vite config via jiti to produce the spec (CLI concern, not the IR seam; path re-homed when bit 17 is planned)	codegen-load.ts
 src/emit/shared/lang.ts	gen	src	09	per-language naming (pascal/snake/camel)	codegen-lang.ts
 src/emit/shared/literals.ts	gen	src	09	literal/string writers	codegen-lang.ts
 src/emit/shared/escape.ts	gen	src	09	the one shared fuzzed string-escape layer (F2)	codegen-lang.ts,codegen-sanitize.ts
