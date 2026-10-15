@@ -155,7 +155,8 @@ function declaredErrors(
 	for (const key of Object.keys(errorMeta).sort(compareCodeUnits)) {
 		const { schema, status } = errorMeta[key] as CollectedError
 		const entry: DeclaredError = { status: status > 0 ? status : null }
-		if (schema !== null) entry.schema = convert(schema, `Error${status > 0 ? status : ""}`)
+		/* a key with a schema always has a status: only an unknown key (no schema) has none */
+		if (schema !== null) entry.schema = convert(schema, `Error${status}`)
 		declared[key] = entry
 	}
 	return declared
