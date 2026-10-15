@@ -10,6 +10,7 @@ The TS SDK emitter and its vendored runtime (split v0 `client/http.ts` 737, `cli
 ## Files (from files.tsv — `gen/emit/ts`)
 - `gen/emit/ts/{sdk,http,path,types,error,defaults,redirect-policy,sse,ws}.ts` (+test each) + `gen/emit/ts/index.ts`.
 - `gen/runtime/ts/*` — the vendored fetch runtime template.
+- **route-tree serializer obligation (from bit 10 / F17).** `gen/emit/ts/route-tree.ts` (`generateRouteTree*`) must write `RouteEntry.es` (`Record<errorKey, StatusKey>`, additive, ROUTE_TREE_VERSION stays 2) alongside `bek`/`ek`/`iv`/`mt`/`out`. It is written at snapshot time from the resolving error factory via `ERROR_META`, so it carries a delegated leaf's downstream error statuses across the data-only gateway tree; dropping it regresses the gateway document's downstream error responses to suffix-inference-or-unknown.
 
 ## Tests (named, written first)
 - `gen/emit/ts/sdk.test.ts` — operations typed from IR; status-keyed results narrow.
