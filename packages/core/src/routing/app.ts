@@ -19,7 +19,8 @@ import {
 	ROOT_VIEW,
 } from "./register.ts"
 import { type StartOf, startRoute } from "./route-builder.ts"
-import { type AppSettings, SettingsChain } from "./settings.ts"
+import type { AppSettings } from "./settings.ts"
+import { SettingsChain } from "./settings-chain.ts"
 import type { HttpMethod, MergePath, PrefixRoutes } from "./types.ts"
 import { startWsRoute, type WSRouteBuilder } from "./ws-builder.ts"
 

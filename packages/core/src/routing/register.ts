@@ -197,6 +197,7 @@ export function mount(g: HoneyGraph, view: HandleView, sub: HoneyGraph): void {
 			xm: view.chainMeta ? { ...view.chainMeta, ...r.xm } : r.xm,
 		})
 	}
+	g.settings.metaSpec.absorbed.push(sub.settings.metaSpec)
 	for (const entry of sub.scoped) {
 		const prefix = at(entry.prefix)
 		if (g.scoped.some((e) => e.mw === entry.mw && e.prefix === prefix)) continue
