@@ -241,3 +241,7 @@ jobs:
           HONEY_PYTHON: python
           # a Python problem fails the job instead of skipping the Python SDK tests
           HONEY_REQUIRE_PYTHON: "1"
+      # F2: the escape layer's literals and comments through the real go, rustc and python3
+      - run: cd packages/gen && bunx vitest run src/emit/shared/escape.toolchains.test.ts
+        env:
+          HONEY_REQUIRE_TOOLCHAINS: "1"
