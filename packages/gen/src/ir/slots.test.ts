@@ -298,3 +298,35 @@ describe("operation extensions", () => {
 		]).toEqual([{ route: "GET /users/:id?" }, {}])
 	})
 })
+
+describe("responses: declared headers (A2)", () => {
+	it("carries a response's headers in code-unit order, refs followed, required or not, and none when it declares none", () => {
+		const spec = {
+			components: { headers: { Total: { required: true, schema: { type: "integer" } } } },
+			info: { title: "T", version: "1" },
+			openapi: "3.1.0",
+			paths: {
+				"/r": {
+					get: {
+						operationId: "r",
+						responses: {
+							200: {
+								description: "",
+								headers: { "X-Total": { $ref: "#/components/headers/Total" }, "x-cursor": {} },
+							},
+							404: { description: "" },
+						},
+					},
+				},
+			},
+		}
+		const { responses } = toIR(spec).operations[0] as IROperation
+		expect([responses["200"]?.headers, Object.hasOwn(responses["404"] ?? {}, "headers")]).toEqual([
+			[
+				{ name: "X-Total", required: true, schema: { kind: "scalar", type: "integer" } },
+				{ name: "x-cursor", required: false, schema: { kind: "unknown" } },
+			],
+			false,
+		])
+	})
+})

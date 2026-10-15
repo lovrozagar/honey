@@ -153,7 +153,14 @@ describe("MergeRoute and RouteRecord", () => {
 	it("RouteRecord is path → lowercased method → the route's types", () => {
 		expectTypeOf<RouteRecord<"GET", "/users", { json: { name: string } }, {}>>().toEqualTypeOf<{
 			"/users": {
-				get: { ctx: unknown; errors: never; errorsByStatus: never; input: { json: { name: string } }; output: {} }
+				get: {
+					ctx: unknown
+					errors: never
+					errorsByStatus: never
+					input: { json: { name: string } }
+					output: {}
+					request: { json: { name: string } }
+				}
 			}
 		}>()
 		expectTypeOf<keyof RouteRecord<"POST", "/items", {}, {}, unknown, "not_found">["/items"]>().toEqualTypeOf<"post">()

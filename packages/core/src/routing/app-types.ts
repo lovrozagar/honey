@@ -87,7 +87,7 @@ export type HandlerCtx<
 	TOutput
 >
 
-/** One route at the type level, for the RPC client and codegen. */
+/** One route at the type level, for the RPC client and codegen; `request` (what a client sends) is its input. */
 export type RouteRecord<
 	TMethod extends string,
 	TPath extends string,
@@ -104,11 +104,12 @@ export type RouteRecord<
 			errorsByStatus: TErrorsByStatus
 			input: TInput
 			output: TOutput
+			request: TInput
 		}
 	}
 }
 
-/** Add one route to the accumulated routes (a flat intersection). */
+/** Add one route to the accumulated routes (a flat intersection); `request` is what a client sends. */
 export type MergeRoute<
 	TRoutes,
 	TPath extends string,
@@ -119,6 +120,7 @@ export type MergeRoute<
 	TMeta = {},
 	TErrors extends string = never,
 	TErrorsByStatus = never,
+	TRequest = TInput,
 > = TRoutes & {
 	[P in TPath]: {
 		[M in Lowercase<TMethod>]: {
@@ -128,6 +130,7 @@ export type MergeRoute<
 			input: TInput
 			meta: TMeta
 			output: TOutput
+			request: TRequest
 		}
 	}
 }
@@ -243,10 +246,8 @@ export type InferRouteMethods<T, TPath extends InferRoutePaths<T>> = InferRoutes
 type RouteLookup<T, TPath extends string, TMethod extends string> =
 	InferRoutes<T> extends infer R
 		? TPath extends keyof R
-			? R[TPath] extends infer Methods
-				? TMethod extends keyof Methods
-					? Methods[TMethod]
-					: never
+			? TMethod extends keyof R[TPath]
+				? R[TPath][TMethod]
 				: never
 			: never
 		: never

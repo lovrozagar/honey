@@ -9,7 +9,7 @@ import type { MaybePromise } from "../middleware/middleware.ts"
 import type { BodyParser } from "../response/media-type.ts"
 import { assertBodySchemaAllowed, assertRequestContentType } from "../validation/content-type.ts"
 import { type BinaryBody, binaryInput, binaryRanges, type BinaryTypes, binaryType } from "./binary.ts"
-import type { InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
+import type { InferInput, InferOutput, StandardSchemaLike } from "../validation/standard-schema.ts"
 import { type Shape, shapeOf } from "../validation/validate-input.ts"
 import { cookiesInput } from "./cookies.ts"
 import { formInput } from "./form.ts"
@@ -76,6 +76,20 @@ type InputKey<T> = {
 
 /** ctx.input for a declaration: each source as validated, typed by its schema. */
 export type InferInputMap<T> = { readonly [K in InputKey<T>]: SourceValue<K, NonNullable<T[K]>> }
+
+/** One source as a client sends it: the schema's input type, a `readableStream()` entry by the schema it wraps. */
+type RequestValue<K, E> = K extends "binary"
+	? BinaryBody<Extract<BinaryTypeOf<E>, string>>
+	: InferInput<E extends ReadableStreamSchema<infer S> ? S : E>
+
+/** The keys a client sends: every declared source, a body left unread included. */
+type RequestKey<T> = { [K in keyof T]-?: [NonNullable<T[K]>] extends [never] ? never : K }[keyof T]
+
+/** What a client sends for a declaration (the route record's `request`): `readableStream()` entries unwrapped. */
+export type InferRequestMap<T> = { readonly [K in RequestKey<T>]: RequestValue<K, NonNullable<T[K]>> }
+
+/** What `.input()` records at the type level: the handler's ctx.input and the client's request. */
+export type InputTypes<T> = { input: InferInputMap<T>; request: InferRequestMap<T> }
 
 /** What the input step reads off a request context. */
 type InputCtx = {

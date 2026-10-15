@@ -4,7 +4,7 @@
  * returns the app typed with the new route. A one-shot method disappears from the chain once called.
  */
 import type { ERROR_META } from "../errors/errors.ts"
-import { compileInput, type InferInputMap, type InputSchemas, type InputStep } from "../input/input.ts"
+import { compileInput, type InputSchemas, type InputStep, type InputTypes } from "../input/input.ts"
 import type { KnownStatusKeys, OutputSchemas } from "./output-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
@@ -35,8 +35,9 @@ export type BuilderTypes = {
 	env: unknown
 	errorFactory: unknown
 	errorKeys: string
-	/** ctx.input once `.input()` ran; `never` before */
+	/** ctx.input once `.input()` ran, `never` before; `request` what a client sends, `{}` before */
 	input: unknown
+	request: unknown
 	/** what `.output()` declares; `never` before */
 	output: unknown
 	meta: unknown
@@ -73,6 +74,13 @@ type WithNamedFactory<TApp, TNamed> = [TApp] extends [never]
 				readonly [ERROR_META]: Omit<ErrorMetaOf<TApp>, keyof ErrorMetaOf<TNamed>> & ErrorMetaOf<TNamed>
 			}
 
+/** What `.errors(named, ...keys)` changes. */
+type NamedErrors<B extends BuilderTypes, TFactory, TKeys extends string> = {
+	errorFactory: WithNamedFactory<B["errorFactory"], TFactory>
+	errorKeys: B["errorKeys"] | TKeys
+	used: B["used"] | "errors"
+}
+
 /** The handler's ctx for the route `B` describes. */
 export type RouteHandlerCtx<B extends BuilderTypes> = HandlerCtx<
 	B["ctx"],
@@ -101,7 +109,8 @@ export type HandlerReturn<B extends BuilderTypes> = Honey<
 				RouteHandlerCtx<B>,
 				RouteMeta<B["accMeta"]>,
 				B["errorKeys"] | B["defaultErrors"],
-				ComputeErrorsByStatus<B["errorFactory"], B["errorKeys"] | B["defaultErrors"], typeof ERROR_META>
+				ComputeErrorsByStatus<B["errorFactory"], B["errorKeys"] | B["defaultErrors"], typeof ERROR_META>,
+				B["request"]
 			>,
 	B["meta"],
 	B["errorFactory"],
@@ -136,6 +145,7 @@ export type StartOf<H, TPath extends string, TMethod extends string> =
 				input: never
 				meta: TMeta
 				output: never
+				request: {}
 				method: TMethod
 				path: MergePath<TBase, TPath>
 				routes: TRoutes
@@ -189,19 +199,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 	errors<
 		TFactory extends Record<string, (...args: never[]) => unknown>,
 		TKeys extends Exclude<keyof TFactory & string, B["defaultErrors"]>,
-	>(
-		factory: TFactory,
-		...keys: TKeys[]
-	): BuilderChain<
-		Next<
-			B,
-			{
-				errorFactory: WithNamedFactory<B["errorFactory"], TFactory>
-				errorKeys: B["errorKeys"] | TKeys
-				used: B["used"] | "errors"
-			}
-		>
-	>
+	>(factory: TFactory, ...keys: TKeys[]): BuilderChain<Next<B, NamedErrors<B, TFactory, TKeys>>>
 	errors<TKeys extends DeclarableKey<B>>(
 		...keys: TKeys[]
 	): BuilderChain<Next<B, { errorKeys: B["errorKeys"] | TKeys; used: B["used"] | "errors" }>>
@@ -230,7 +228,7 @@ export class RouteBuilder<B extends BuilderTypes> {
 	/** Validate params, query, headers, cookies and one body onto ctx.input: the first failure is a 400 (415). */
 	input<const TSchemas extends InputSchemas>(
 		schemas: TSchemas,
-	): BuilderChain<Next<B, { input: InferInputMap<TSchemas>; used: B["used"] | "input" }>> {
+	): BuilderChain<Next<B, InputTypes<TSchemas> & { used: B["used"] | "input" }>> {
 		const step = compileInput(schemas, [this.#s.method, ...this.#s.extraMethods], this.#s.path)
 		return this.#next({ input: { schemas, step } })
 	}

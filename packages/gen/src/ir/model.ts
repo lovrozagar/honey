@@ -68,7 +68,7 @@ export type IRBody =
 			parts: IRMultipartPart[]
 			required: boolean
 			/** the whole form, for emitters that type it as one value */
-			schema?: IRSchema
+			schema: IRSchema
 	  }
 
 export type IRResponse = {
@@ -77,6 +77,8 @@ export type IRResponse = {
 	/** none for a response without a body */
 	contentType?: string
 	schema?: IRSchema
+	/** the declared headers (A2), names as written, in code-unit order; none when it declares none */
+	headers?: { name: string; required: boolean; schema: IRSchema }[]
 }
 
 export type IROperationExtensions = {

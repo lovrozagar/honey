@@ -15,6 +15,8 @@ import {
 	schemaToIR,
 } from "./model.ts"
 
+import { compareCodeUnits } from "../emit/shared/lang.ts"
+
 type Json = Record<string, unknown>
 
 /** The document's `components`, by section then name. */
@@ -163,21 +165,34 @@ export function requestBodies(op: Json, components: Components): IRBody[] {
 	return ordered(content).map((type) => bodyOf(type, content[type], requestBody?.required === true, components))
 }
 
+/** A response's declared headers (A2), refs followed, in code-unit order; none when it declares none. */
+function responseHeaders(response: Json | undefined, components: Components): IRResponse["headers"] {
+	const declared = Object.entries((response?.headers ?? {}) as Json).sort(([a], [b]) => compareCodeUnits(a, b))
+	if (declared.length === 0) return undefined
+	return declared.map(([name, raw]) => {
+		const header = deref(raw, components)
+		return { name, required: header?.required === true, schema: schemaToIR(header?.schema as Json | undefined) }
+	})
+}
+
 /** The responses by status, each with its preferred media type's schema; and whether any streams events. */
 export function responsesOf(op: Json, components: Components): { responses: Record<string, IRResponse>; sse: boolean } {
 	const responses: Record<string, IRResponse> = {}
 	let sse = false
 	for (const [status, raw] of Object.entries((op.responses ?? {}) as Json)) {
-		const content = (deref(raw, components)?.content ?? {}) as Record<string, Json>
+		const response = deref(raw, components)
+		const content = (response?.content ?? {}) as Record<string, Json>
 		const type = ordered(content)[0]
-		if (type === undefined) {
-			responses[status] = { status }
-			continue
+		const out: IRResponse = { status }
+		if (type !== undefined) {
+			if (Object.keys(content).some((key) => essenceOf(key) === "text/event-stream")) sse = true
+			out.contentType = type
+			const schema = content[type]?.schema as Json | undefined
+			if (schema !== undefined) out.schema = schemaToIR(schema)
 		}
-		if (Object.keys(content).some((key) => essenceOf(key) === "text/event-stream")) sse = true
-		const schema = content[type]?.schema as Json | undefined
-		responses[status] =
-			schema === undefined ? { contentType: type, status } : { contentType: type, schema: schemaToIR(schema), status }
+		const headers = responseHeaders(response, components)
+		if (headers !== undefined) out.headers = headers
+		responses[status] = out
 	}
 	return { responses, sse }
 }
