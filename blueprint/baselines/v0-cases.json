@@ -47009,6 +47009,7 @@
 		"9636fb44f7": "bit-10 triage (honey-05 ruled): spec() is cut (F16): serveOpenApi(handle, options) mounts the document on any handle; there is no handler to return",
 		"280acb443d": "bit-10 triage (honey-05 ruled): v1 has one generator in core (F5): the served document and honey generate share it, so there is no light spec path to isolate from codegen",
 		"071875613f": "bit-10 triage (honey-05 ruled): same: no separate light spec bundle in v1 (one generator, converters are vendor-free walkers in core)",
-		"055f2c56f7": "bit-10 triage (honey-05 ruled): the OpenAPI runtime slot is cut (F1, H23): serveOpenApi imports the generator directly, there is nothing to load"
+		"055f2c56f7": "bit-10 triage (honey-05 ruled): the OpenAPI runtime slot is cut (F1, H23): serveOpenApi imports the generator directly, there is nothing to load",
+		"9e70789d0e": "bit-10 triage: v1 declares one body per route (bit 08 InputSchemas); json and form on one route cannot be declared, so there are never two bodies to document. The single-body legs port (c091a16d80, 0a2f64ab66)."
 	}
 }
