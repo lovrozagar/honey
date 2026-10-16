@@ -167,6 +167,18 @@ const erring = honey<{}>()
 	.errors("item_not_found")
 	.handler((ctx) => ctx.res.json("ok", { name: "test" }))
 
+/** A declared no-content status (no body at 204), alone and beside a JSON body; an open media type. */
+const emptying = honey<{}>()
+	.get("/image")
+	.output({ "image/gif": { ok: true } })
+	.handler((ctx) => ctx.res.binary("ok", new Uint8Array([0]), { contentType: "image/gif" }))
+	.delete("/items/:id")
+	.output({ "application/json": { no_content: true } })
+	.handler((ctx) => ctx.res.noContent())
+	.put("/items/:id")
+	.output({ "application/json": { no_content: true, ok: row } })
+	.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, name: "a" }))
+
 type Verb = "delete" | "get" | "patch" | "post" | "put"
 /** The result-mode (default) client for an app. */
 type Api<T = typeof app> = ReturnType<typeof createClient<T>>
@@ -178,6 +190,7 @@ declare const deep: Api<typeof big>
 declare const thrower: ReturnType<typeof createClient<typeof app, true>>
 declare const prefixedApi: ReturnType<typeof createClient<typeof prefixed, true>>
 declare const erringApi: Api<typeof erring>
+declare const emptyingApi: ReturnType<typeof createClient<typeof emptying, true>>
 
 /** The input `api.get(path, input)` takes for one path. */
 type GetIn<P extends PathsOf<"get">> = NonNullable<Parameters<typeof api.get<P>>[1]>
@@ -398,10 +411,11 @@ describe("what a call resolves", () => {
 	// v0: 7126d71e1f
 	// v0: a9e3560662
 	// v0: d03706997a
-	it("resolves null for a route without output, a noContent DELETE by params included", () => {
-		expectTypeOf(thrower.get("/output/untyped")).toEqualTypeOf<Promise<null>>()
-		expectTypeOf(thrower.get("/health")).toEqualTypeOf<Promise<null>>()
-		expectTypeOf(thrower.delete("/methods/resource/:id", { params: { id: "1" } })).toEqualTypeOf<Promise<null>>()
+	/* V0BUG: v0's app-client typed an undeclared-output route null though the handler's body is returned */
+	it("resolves unknown for a route without output, a noContent DELETE by params included", () => {
+		expectTypeOf(thrower.get("/output/untyped")).toEqualTypeOf<Promise<unknown>>()
+		expectTypeOf(thrower.get("/health")).toEqualTypeOf<Promise<unknown>>()
+		expectTypeOf(thrower.delete("/methods/resource/:id", { params: { id: "1" } })).toEqualTypeOf<Promise<unknown>>()
 		expectTypeOf<NonNullable<Parameters<typeof api.delete<"/methods/resource/:id">>[1]>>().toEqualTypeOf<{
 			params: { id: string }
 		}>()
@@ -438,6 +452,14 @@ describe("what a call resolves by media type", () => {
 		expectTypeOf(api.get("/output/sse")).toEqualTypeOf<AsyncIterable<SSEEvent>>()
 		expectTypeOf(thrower.get("/output/json")).not.toExtend<AsyncIterable<SSEEvent>>()
 		expectTypeOf(thrower.get("/output/untyped")).not.toExtend<AsyncIterable<SSEEvent>>()
+	})
+
+	/* V0BUG: v0 typed an open media type's answer null though its body is returned */
+	it("resolves null for a declared no-content status, alone or beside a body; an open type unknown", () => {
+		const id = { params: { id: "1" } }
+		expectTypeOf(emptyingApi.delete("/items/:id", id)).toEqualTypeOf<Promise<null>>()
+		expectTypeOf(emptyingApi.put("/items/:id", id)).toEqualTypeOf<Promise<{ id: string; name: string } | null>>()
+		expectTypeOf(emptyingApi.get("/image")).toEqualTypeOf<Promise<unknown>>()
 	})
 
 	// v0: 4a3c6fb134

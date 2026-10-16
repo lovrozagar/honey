@@ -52,32 +52,54 @@ export type InputFor<TRoutes, P extends string, M extends string> =
 export type OutputDefFor<TRoutes, P extends string, M extends string> =
 	RouteOf<TRoutes, P, M> extends { output: infer O } ? O : never
 
-/** A non-JSON answer's value: text for text types, bytes (A1) for binary, else nothing. */
-type ContentTypeReturn<O> = O extends { "text/plain": unknown }
-	? string
-	: O extends { "text/html": unknown }
-		? string
-		: O extends { "text/csv": unknown }
-			? string
-			: O extends { "application/xml": unknown }
-				? string
-				: O extends { "application/octet-stream": unknown }
-					? Uint8Array<ArrayBuffer>
-					: null
+/** Statuses whose answer never carries a body (204, 205, 304): the client reads each as null. */
+type NullBodyStatus = "no_content" | "not_modified" | "reset_content"
 
-/** The value a route answers with, from its declared JSON schemas or its content type. */
+/** The statuses a declaration names under each key (a media type, `headers`, `redirect`). */
+type StatusesOf<O> = { [K in keyof O]: keyof NonNullable<O[K]> }[keyof O]
+
+/** Media type `CT`'s statuses that carry a body. */
+type BodyStatuses<O, CT extends string> = CT extends keyof O ? Exclude<keyof O[CT], NullBodyStatus> : never
+
+/** Whether media type `CT` declares a status that carries a body. */
+type Answers<O, CT extends string> = [BodyStatuses<O, CT>] extends [never] ? false : true
+
+/**
+ * A body's value: JSON by its schemas, text types as text, octet-stream as bytes (A1); `unknown`
+ * when a status carries a body no media type here types; `never` when none carries one.
+ */
+type BodyValue<O> =
+	Answers<O, "application/json"> extends true
+		? O extends { "application/json": infer JsonMap }
+			? SchemaOutput<JsonMap[BodyStatuses<O, "application/json"> & keyof JsonMap]>
+			: never
+		: true extends
+					| Answers<O, "text/plain">
+					| Answers<O, "text/html">
+					| Answers<O, "text/csv">
+					| Answers<O, "application/xml">
+			? string
+			: Answers<O, "application/octet-stream"> extends true
+				? Uint8Array<ArrayBuffer>
+				: [Exclude<StatusesOf<O>, NullBodyStatus>] extends [never]
+					? never
+					: unknown
+
+/** What a declaration answers with: its body's value, `null` for each declared no-content status. */
+type DeclaredValue<O> = BodyValue<O> | ([Extract<StatusesOf<O>, NullBodyStatus>] extends [never] ? never : null)
+
+/**
+ * The value a route answers with, `unknown` when it declares no status: undeclared is not empty,
+ * the handler's body comes back.
+ */
 export type OutputFor<TRoutes, P extends string, M extends string> =
 	OutputDefFor<TRoutes, P, M> extends infer O
 		? [O] extends [never]
-			? null
-			: keyof O extends never
-				? null
-				: O extends { "application/json": infer JsonMap }
-					? JsonMap extends Record<string, unknown>
-						? SchemaOutput<JsonMap[keyof JsonMap]>
-						: null
-					: ContentTypeReturn<O>
-		: null
+			? unknown
+			: [DeclaredValue<O>] extends [never]
+				? unknown
+				: DeclaredValue<O>
+		: unknown
 
 /** Whether a route answers an event stream. */
 export type IsSSE<TRoutes, P extends string, M extends string> =
