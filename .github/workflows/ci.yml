@@ -129,7 +129,7 @@ jobs:
       # setup-uv provides a uv at that pin (required-version fails any other), which installs the pinned uv into the
       # cache, which installs the interpreters: the commands a missing one names locally. None is cached: each
       # installs in about a second.
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           version-file: uv.toml
           enable-cache: false
@@ -342,7 +342,7 @@ jobs:
       # setup-uv provides a uv at that pin (required-version fails any other), which installs the pinned uv into the
       # cache, which installs the interpreters: the commands a missing one names locally. None is cached: each
       # installs in about a second.
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           version-file: uv.toml
           enable-cache: false
