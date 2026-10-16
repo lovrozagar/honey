@@ -26,9 +26,10 @@ const excluded = ["**/node_modules/**", "**/dist/**", ...harness, ...harnessRust
 
 /*
  * a runner knob, no assertion: the suites whose real servers race the clock (health waits on fixed
- * ports, an unbound-port check, a drain that must answer 503 before it closes) each run alone, after
- * the rest of the suite, so this suite's own workers never contend with them; each failed only inside
- * the full parallel run on a loaded machine and passes alone
+ * ports, an unbound-port check, a drain that must answer 503 before it closes) each run alone, before
+ * the rest of the suite: alone, so this suite's own workers never contend with them (each failed only
+ * inside the full parallel run on a loaded machine and passes alone); first, because their fixed ports
+ * sit in the ephemeral range, where a server the rest of the suite left listening can hold one
  */
 export const serial = [
 	"tests/unit/build/build-targets.test.ts",
@@ -49,12 +50,12 @@ export default defineConfig({
 					exclude: [...excluded, ...serial],
 					include: ["tests/**/*.test.ts"],
 					name: "v0",
-					sequence: { groupOrder: 0 },
+					sequence: { groupOrder: serial.length },
 				},
 			},
 			...serial.map((file, i) => ({
 				extends: true,
-				test: { exclude: excluded, include: [file], name: `v0-serial-${i + 1}`, sequence: { groupOrder: i + 1 } },
+				test: { exclude: excluded, include: [file], name: `v0-serial-${i + 1}`, sequence: { groupOrder: i } },
 			})),
 		],
 		/* the oracle count (00-rules): the v0 suite keeps the committed passed/skipped totals */

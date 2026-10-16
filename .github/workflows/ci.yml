@@ -100,6 +100,9 @@ jobs:
       - run: touch "$RUNNER_TEMP/go-sdk-start"
       - run: bun install --frozen-lockfile
       - run: bun run generate
+      # frozen v0 tests listen on fixed ports inside the ephemeral range: reserve them so no automatically
+      # assigned port (a client socket, a port-0 server another test left) holds one
+      - run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=45910-45912,45986
       - run: bun run test
         env:
           # a missing Go fails the run instead of skipping the executed Go SDK tests
