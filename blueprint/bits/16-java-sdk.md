@@ -25,3 +25,6 @@ A first-class Java SDK emitter + vendored runtime in `gen/emit/java/`. Java sour
 
 ## Budget
 - token: per-operation size within budget.
+
+## Downstream
+- On ruling, ping the Anyrow docs (session monorepo-92, or its successor) with the final public API. They drafted against the projection `AnyrowClient.builder()...build()`, operationId-named accessor methods (`client.row().list(...)` / `RowListParams.builder()`), exception-based errors, Maven coords `ai.anyrow:anyrow`; send any delta from that so the docs can follow.

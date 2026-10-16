@@ -7,6 +7,14 @@ Formatter post-pass: gofmt. Language: Go (single static binary; end user needs n
 ## Scope
 The Go CLI emitter, raised to the cf bar at the schema level (split v0 `codegen-go-cli.ts` 1,066 into `gen/emit/cli/`). Shares the Go SDK emit layer (bit 12). Keep Go for zero-setup distribution; adopt cf's consistency/discovery/compact output.
 
+## Distribution (ruled — emit the release plumbing, not just source)
+Honey emits Go CLI **source** (a buildable, pure-Go module → one static binary, `CGO_ENABLED=0`, no Go/Node at runtime). The compiled per-platform binaries are built and hosted by the API author's pipeline, not by Honey (consistent with bit 19: "publication is the API author's pipeline, documented") — but "gold-standard zero-setup distribution" means the author must not hand-wire that pipeline. So the CLI scaffold emits the full cross-build + release plumbing:
+- `.goreleaser.yaml` — the build matrix (linux/darwin/windows × amd64/arm64 from one runner, no C cross-toolchain since the code is pure Go), checksums, archives, and optional publishers (GitHub Releases, Homebrew tap, Scoop). The author runs `goreleaser release` on a tag.
+- a release CI workflow (GitHub Actions) that tags → runs goreleaser → uploads the artifacts.
+- `install.sh` + `install.ps1` — detect os/arch and fetch the right binary from wherever the author hosts (GitHub Releases or a CDN, e.g. Cloudflare R2); CDN-hostable, so a `curl … | sh` one-liner works.
+
+Add to the file list when designing: `gen/emit/cli/{release,install}.ts` (+test each) and their fixtures. Hosting target (GitHub Releases vs a CDN) stays the author's choice; Honey generates the plumbing both paths use. Bit 20 documents the release flow (bit 19 scope).
+
 ## Files (from files.tsv — `gen/emit/cli`)
 - `gen/emit/cli/{commands,flags,output,discovery,completion,skills,indicator,binary}.ts` (+test each) + index.
 

@@ -25,3 +25,6 @@ A first-class C# SDK emitter + vendored runtime in `gen/emit/csharp/`. Models as
 
 ## Budget
 - token: per-operation size within budget.
+
+## Downstream
+- On ruling, ping the Anyrow docs (session monorepo-92, or its successor) with the final public API. They drafted against the projection `AnyrowClient` + `ClientConfig`, operationId-named accessors (`client.Row` / `RowListOptions`), the `Async` suffix + `CancellationToken`, exception-based errors, NuGet id `Anyrow`; send any delta from that so the docs can follow.
