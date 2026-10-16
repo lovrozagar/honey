@@ -108,7 +108,7 @@ Runtime detection (`detect-runtime`) returns a pure value; adapters branch on it
 
 **Runtime floor (H19.2):** Node ≥ the first LTS with stable `fetch`/WebStreams/`crypto.subtle` (Node 20), Bun ≥ the tested version, Cloudflare Workers = current. Deno is not a target (H15).
 
-Generated SDKs do **not** add a honey runtime package: the runtime glue is vendored inline into each SDK and depends on that ecosystem's standard transport/JSON lib by version-range floor — TS `fetch` (platform), Python `httpx`, Go `net/http` + a WS lib, Rust `reqwest`+`tokio`+`tokio-tungstenite`, C# BCL only, Java `java.net.http`+Jackson. Each floor is pinned in the emitter's bit. See `01-decisions.md` (H9, H19.1) and `03-surface.md`.
+Generated SDKs do **not** add a honey runtime package: the runtime glue is vendored inline into each SDK and depends on that ecosystem's standard transport/JSON lib by version-range floor — TS `fetch` (platform), Python `httpx2`, Go `net/http` + a WS lib, Rust `reqwest`+`tokio`+`tokio-tungstenite`, C# BCL only, Java `java.net.http`+Jackson. Each floor is pinned in the emitter's bit. See `01-decisions.md` (H9, H19.1) and `03-surface.md`.
 
 ## Toolchain resources (polyglot harness — memory & tmp hygiene)
 
