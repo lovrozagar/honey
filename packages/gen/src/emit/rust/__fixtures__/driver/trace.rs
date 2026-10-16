@@ -1,8 +1,8 @@
 //! What a scripted run prints beside the observed (emit/shared/__fixtures__/protocol.ts
-//! `Trace<RustError>`): each call's time, its error read through the SDK's accessors and a safe-mode
-//! `SdkResult`'s summary; every hook run with what its context held; every `on_log` entry; and the
-//! `on_auth_expired` calls. The SDK may call a hook off the call's task, so the recorder is shared
-//! behind a mutex.
+//! `Trace<RustError>`): each call's time, its error read through the SDK's accessors, a safe-mode
+//! `SdkResult`'s summary and a stream's trace; every hook run with what its context held; every
+//! `on_log` entry; and the `on_auth_expired` calls. The SDK may call a hook off the call's task, so
+//! the recorder is shared behind a mutex.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
@@ -48,6 +48,9 @@ impl Recorder {
         }
         if let Some(r) = &o.result {
             entry.insert("result".into(), r.clone());
+        }
+        if let Some(st) = &o.stream {
+            entry.insert("stream".into(), st.clone());
         }
         self.state().calls.push(Value::Object(entry));
     }

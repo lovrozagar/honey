@@ -85,8 +85,13 @@ export function once<T>(run: () => Promise<T>): () => Promise<T> {
 /** What a test asserts of a run: it builds, and the notes of `section`. */
 export const seen = (run: Run, section = "main") => ({ built: run.built, out: run.out?.[section] })
 
-/** The async fn that runs section `name`. */
-const sectionFn = (name: string) => `${name.replaceAll("-", "_")}_section`
+/** The async fn that runs section `name`, its `-` as `_`; a name that does not then make a Rust identifier is refused. */
+function sectionFn(name: string): string {
+	const ident = name.replaceAll("-", "_")
+	if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(ident))
+		throw new Error(`a section name must be a Rust identifier once its "-" are "_": ${JSON.stringify(name)}`)
+	return `${ident}_section`
+}
 
 /**
  * A program body running each of `fns` (a section's Rust statements) as an async fn of its own, in order, each

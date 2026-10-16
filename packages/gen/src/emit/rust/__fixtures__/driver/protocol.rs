@@ -2,13 +2,16 @@
 //! tests/integration/conformance/matrix.ts): the stdin envelope, the grid's Setup and Call decoded
 //! strictly (a member this driver does not know fails the cell instead of being dropped), and the
 //! grid's Observed. The script a unit test adds is decoded as strictly (`Script`, `Directives`); its
-//! trace is written in trace.rs.
+//! trace is written in trace.rs. `stream_refusal` names the stream controls a call or its script sets
+//! that its operation's kind cannot take.
 
 use std::collections::BTreeMap;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::script::Directives;
 
 /// The envelope on stdin.
 #[derive(Deserialize)]
@@ -29,7 +32,7 @@ pub struct Cell {
 }
 
 /// What the driver reads of a call plan as it runs: the header params the Opts carry, the answer's
-/// kind, and the Opts field of the idempotency key.
+/// kind, the Opts field of the idempotency key, and the stream's kind (`sse`, `ws`, `realtime`).
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Plan {
@@ -37,6 +40,7 @@ pub struct Plan {
     pub headers: BTreeMap<String, String>,
     pub idempotency_key: Option<String>,
     pub response: String,
+    pub stream: Option<String>,
 }
 
 /// The grid's Setup: the client-wide settings of a cell.
@@ -58,8 +62,8 @@ pub enum Auth {
     Header { name: String, value: String },
 }
 
-/// The grid's Call. Every member is listed so strict decoding knows it; `refusal` names the ones the
-/// driver cannot express until phase d.
+/// The grid's Call. Every member is listed so strict decoding knows it; `stream_refusal` names the
+/// stream controls its operation cannot take.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Call {
@@ -97,18 +101,6 @@ pub enum Body {
 }
 
 impl Call {
-    /// What of the call this driver cannot express yet, with the phase that lands it.
-    pub fn refusal(&self) -> Option<String> {
-        let stream = [
-            ("send", self.send.is_some()),
-            ("take", self.take.is_some()),
-            ("lastEventId", self.last_event_id.is_some()),
-            ("reconnectToken", self.reconnect_token.is_some()),
-        ];
-        let (member, _) = stream.iter().find(|(_, set)| *set)?;
-        Some(refused(member, "d"))
-    }
-
     /// The query param `name`, as the grid gives it.
     pub fn search(&self, name: &str) -> Option<Value> {
         self.search.get(name).cloned()
@@ -179,12 +171,58 @@ pub fn from<T: DeserializeOwned>(v: Value) -> Result<T, String> {
     }
 }
 
-/// A refusal's reason: `member` is expressed from phase `phase` on.
-pub fn refused(member: &str, phase: &str) -> String {
-    format!("{member} arrives in phase {phase}")
+/// What of `call` and its directives `d` the operation of `plan` cannot take: a stream control on an
+/// operation that does not stream, or one its stream's kind has no use for; none when it fits.
+pub fn stream_refusal(call: &Call, plan: &Plan, d: &Directives) -> Option<String> {
+    let set: [(&str, bool, &[&str]); 7] = [
+        ("take", call.take.is_some(), &["sse", "ws", "realtime"]),
+        ("send", call.send.is_some(), &["ws", "realtime"]),
+        (
+            "lastEventId",
+            call.last_event_id.is_some(),
+            &["sse", "realtime"],
+        ),
+        (
+            "reconnectToken",
+            call.reconnect_token.is_some(),
+            &["ws", "realtime"],
+        ),
+        ("protocols", d.protocols.is_some(), &["ws", "realtime"]),
+        ("a realtime script", d.realtime.is_some(), &["realtime"]),
+        ("a ws script", d.ws.is_some(), &["ws"]),
+    ];
+    let Some(kind) = plan.stream.as_deref() else {
+        let (member, ..) = set.iter().find(|(_, on, _)| *on)?;
+        return Some(format!("{member} on an operation that does not stream"));
+    };
+    let label = match kind {
+        "sse" => "an SSE",
+        "ws" => "a WebSocket",
+        _ => "a realtime",
+    };
+    if call.raw {
+        return Some(format!(
+            "raw: true on {label} operation, which has no single response to read"
+        ));
+    }
+    if let Some((member, ..)) = set
+        .iter()
+        .find(|(_, on, kinds)| *on && !kinds.contains(&kind))
+    {
+        let why = match *member {
+            "send" => ": only a WebSocket or realtime call sends",
+            "lastEventId" => ": only an SSE or realtime call resumes by event id",
+            "reconnectToken" => ": only a WebSocket or realtime call resumes by token",
+            "protocols" => ": only a WebSocket or realtime dial offers subprotocols",
+            _ => "",
+        };
+        return Some(format!("{member} on {label} operation{why}"));
+    }
+    (kind == "realtime" && call.take.is_none())
+        .then(|| "a realtime call needs take: the connection never ends by itself".into())
 }
 
-/// The grid's Observed, as far as phase c observes (phase d adds events and frames).
+/// The grid's Observed: phase c's answers, a stream's events (SSE) and frames (WebSocket, realtime).
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Observed {
@@ -213,4 +251,10 @@ pub enum Observed {
         status: u16,
     },
     Timeout,
+    Events {
+        events: Vec<Value>,
+    },
+    Frames {
+        frames: Vec<Value>,
+    },
 }

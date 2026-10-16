@@ -10,6 +10,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
+use futures_util::FutureExt;
+use futures_util::future::Shared;
 use reqwest::header::HeaderMap;
 
 use crate::config::{Client, Inner};
@@ -18,6 +20,9 @@ use crate::request::RequestSpec;
 
 /// A boxed future a `Call` resolves through.
 pub(crate) type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+
+/// A call's cancel signal, shared with the stream, socket or connection it opens.
+pub(crate) type Signal = Shared<BoxFuture<()>>;
 
 /// How a call is sent and its answer read: a regular decoder, a stream's open or a socket's dial.
 pub(crate) type Run<T> = Box<
@@ -46,6 +51,7 @@ pub(crate) struct Overrides {
     pub(crate) timeout: Option<Duration>,
     pub(crate) headers: Vec<(String, String)>,
     pub(crate) base_url: Option<String>,
+    pub(crate) cancel: Option<Signal>,
 }
 
 /// One call to the API; `.await` sends it and resolves to `Result<T, Error>`. `H` is the
@@ -95,7 +101,8 @@ impl<T, H> Call<T, H> {
         self
     }
 
-    /// Ends the call with `Error::Canceled` when `signal` completes first.
+    /// Ends the call with `Error::Canceled` when `signal` completes first. A stream, socket or
+    /// realtime connection already open when it completes ends quietly: its reads then end.
     pub fn cancel_on(mut self, signal: impl Future<Output = ()> + Send + 'static) -> Self {
         self.cancel = Some(Box::pin(signal));
         self
@@ -113,13 +120,15 @@ impl<T, H> Call<T, H> {
         let Call {
             inner,
             spec,
-            overrides,
+            mut overrides,
             cancel,
             run,
             ..
         } = self;
+        let signal = cancel.map(FutureExt::shared);
+        overrides.cancel.clone_from(&signal);
         let sent = run(inner, spec, overrides);
-        match cancel {
+        match signal {
             None => sent,
             Some(signal) => Box::pin(async move {
                 /* the signal first: one already complete sends nothing */

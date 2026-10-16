@@ -1,8 +1,8 @@
 //! The envelope's optional script (emit/shared/__fixtures__/protocol.ts `Script`), decoded strictly:
 //! client config a grid Setup has no member for, scripted `on_auth_expired` tokens, recording hooks,
-//! `on_log`, and per-call directives. A unit test or the harness sends one; the conformance runner
-//! never does. What only Go can do (`ctxTimeoutMs`, `isKeys`) is refused for good, and the stream
-//! members until phase d, before any call is sent.
+//! `on_log`, and per-call directives, the stream ones among them (`protocols`, `realtime`, `ws`). A
+//! unit test or the harness sends one; the conformance runner never does. What only Go can do
+//! (`ctxTimeoutMs`, `isKeys`, `isErrors`, `ws.readLimit`) is refused for good, before any call is sent.
 
 use std::time::Duration;
 
@@ -10,7 +10,6 @@ use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::protocol::refused;
 use crate::trace::{self, Recorder};
 
 /// The script.
@@ -104,31 +103,74 @@ pub struct Directives {
     pub is_keys: Option<Value>,
     #[serde(default)]
     pub one_shot_body: bool,
-    pub protocols: Option<Value>,
-    pub realtime: Option<Value>,
+    pub protocols: Option<Vec<String>>,
+    pub realtime: Option<RealtimeScript>,
     pub sleep_ms: Option<u64>,
-    pub ws: Option<Value>,
+    pub ws: Option<WsScript>,
+}
+
+/// The realtime Opts' reconnect fields a grid Call has no member for.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RealtimeScript {
+    pub max_reconnect_attempts: Option<u32>,
+    pub reconnect_delay_ms: Option<u64>,
+}
+
+/// A WebSocket past the grid's send and take: recording `on` handlers, more messages sent, and the
+/// close the call ends with (1000 and no reason by default). `readLimit` is Go's alone.
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct WsScript {
+    #[serde(default)]
+    pub on: bool,
+    #[serde(default)]
+    pub send: Vec<WsMessage>,
+    pub close: Option<Close>,
+    pub read_limit: Option<Value>,
+}
+
+/// One scripted send: a JSON value (`send_json`), text (`send_text`), or that many bytes `i & 0xff`
+/// (`send_binary`); exactly one of them.
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WsMessage {
+    Json(Value),
+    Text(String),
+    Bytes(usize),
+}
+
+/// A close frame's code and reason.
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Close {
+    pub code: u16,
+    pub reason: String,
 }
 
 impl Directives {
-    /// What of the entry this driver refuses: Go's alone for good, the stream members until phase d.
+    /// What of the entry this driver refuses for good: what Go alone can do.
     fn refusal(&self) -> Option<String> {
-        if self.ctx_timeout_ms.is_some() {
-            return Some(
-                "ctxTimeoutMs is Go's ctx deadline; a Rust call is bounded by timeoutMs".into(),
-            );
-        }
-        if self.is_keys.is_some() {
-            return Some("isKeys is Go's errors.Is; the Rust trace records key()".into());
-        }
-        let later = [
-            ("isErrors", self.is_errors.is_some()),
-            ("protocols", self.protocols.is_some()),
-            ("realtime", self.realtime.is_some()),
-            ("ws", self.ws.is_some()),
+        let go = [
+            (
+                self.ctx_timeout_ms.is_some(),
+                "ctxTimeoutMs is Go's ctx deadline; a Rust call is bounded by timeoutMs",
+            ),
+            (
+                self.is_keys.is_some(),
+                "isKeys is Go's errors.Is; the Rust trace records key()",
+            ),
+            (
+                self.is_errors.is_some(),
+                "isErrors is Go's errors.Is; the Rust trace records the variant and text",
+            ),
+            (
+                self.ws.as_ref().is_some_and(|ws| ws.read_limit.is_some()),
+                "ws.readLimit is Go's SetReadLimit; a Rust socket caps a message at 16 MiB",
+            ),
         ];
-        let (member, _) = later.iter().find(|(_, set)| *set)?;
-        Some(refused(member, "d"))
+        let (_, reason) = go.iter().find(|(set, _)| *set)?;
+        Some((*reason).into())
     }
 }
 

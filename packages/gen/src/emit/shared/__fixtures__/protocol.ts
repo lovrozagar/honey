@@ -4,8 +4,10 @@
  * emit/go/__fixtures__/driver/script.go), and the `trace` (Go: trace.go, stream.go there) printed
  * beside the observed when one is given. Unit tests and the harness send one; the conformance runner
  * never does. Members are documented in Go's terms, the first driver's. The Rust driver
- * (emit/rust/__fixtures__/driver/script.rs, trace.rs) reads the same script, refusing what is Go's
- * alone (`ctxTimeoutMs`, `isKeys`), and records its errors as `RustError`: its trace is `Trace<RustError>`.
+ * (emit/rust/__fixtures__/driver/script.rs, trace.rs, stream.rs) reads the same script, refusing for
+ * good what is Go's alone (`ctxTimeoutMs`, `isKeys`, `isErrors`, `ws.readLimit`), and records its
+ * errors as `RustError`: its trace is `Trace<RustError>`. `protocols`, `realtime` and `ws` mean the
+ * same to it, on the Opts fields and `TypedWebSocket` methods of those names.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
@@ -17,7 +19,7 @@ export type CallScript = {
 	readonly cancel?: "before" | { readonly afterMs: number }
 	/** a caller deadline on the call's ctx (context.WithTimeout) */
 	readonly ctxTimeoutMs?: number
-	/** errors.Is(err, sdk.<name>) for each name, into the trace's `sentinels` */
+	/** errors.Is(err, sdk.<name>) for each name, into the trace's `sentinels` (Go only: Rust refuses it) */
 	readonly isErrors?: readonly ("ErrSSEEventTooLarge" | "ErrSSELineTooLong")[]
 	/** errors.Is(err, sdk.ErrorKey(k)) for each k, into the trace's `keys` */
 	readonly isKeys?: readonly string[]
@@ -38,7 +40,7 @@ export type CallScript = {
 		readonly close?: { readonly code: number; readonly reason: string }
 		/** register a recording On handler for message, close and error */
 		readonly on?: true
-		/** SetReadLimit before the reads */
+		/** SetReadLimit before the reads (Go only: a Rust socket caps a message at 16 MiB, and refuses it) */
 		readonly readLimit?: number
 		/** sent after the grid's `send`, in order */
 		readonly send?: readonly WsMessage[]
@@ -120,7 +122,7 @@ export type RustError = {
 	readonly text: string
 	/** `format!("{e:?}")`, for the redaction legs */
 	readonly debug: string
-	/** the method's Err, or a safe-mode `SdkResult.error` */
+	/** the method's Err, a safe-mode `SdkResult.error`, or one a stream yielded (`next()`, `recv()`) or a send returned */
 	readonly via: "result" | "return" | "stream"
 	/** `std::error::Error::source()` is Some */
 	readonly source: boolean
@@ -142,20 +144,23 @@ export type RustError = {
 export type StreamTrace = {
 	/** WebSocket: the close frame a Read ended on (no take, or before take was reached) */
 	readonly closedBy?: { readonly code: number; readonly reason: string }
-	/** WebSocket: Close's error text, when non-nil */
+	/** WebSocket (Rust: and realtime): Close's error text, when non-nil */
 	readonly closeError?: string
 	/** WebSocket with `ws.on`: every handler run in firing order, those the driver's own Close fires included */
 	readonly handlers?: readonly { readonly data: string; readonly event: "close" | "error" | "message" }[]
 	/** SSE with typed response headers: the `<Op>Headers` WithHeadersInto filled (as `headers` of a data Observed) */
 	readonly headers?: Readonly<Record<string, string>>
-	/** realtime, read after Close: the resume cursor, the transport that last opened, every Errors() value */
+	/**
+	 * realtime, read after Close: the resume cursor, the transport that last opened, every Errors() value.
+	 * Rust: the cursor is `last_event_id()`/`reconnect_token()`, `None` as `""`; the errors are what `recv()` yielded
+	 */
 	readonly realtime?: {
 		readonly cursor: { readonly lastEventId: string; readonly reconnectToken: string }
 		readonly errors: readonly string[]
 		readonly proven: "longpoll" | "sse" | "ws" | null
 	}
-	/** SSE: each observed event's Retry */
-	readonly retry?: readonly number[]
+	/** SSE: each observed event's Retry; Rust records null for an event without one, Go never does */
+	readonly retry?: readonly (number | null)[]
 	/** SSE: values the iterator yielded, errors included; WebSocket and realtime: frames read */
 	readonly yields: number
 }

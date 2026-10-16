@@ -17,6 +17,7 @@ import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { 
 import type { RustSdkOptions } from "../sdk.ts"
 import { errors, http } from "./documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
+import * as streams from "./documents-streams.ts"
 
 /**
  * One crate a run compiles: an OpenAPI document the emitter writes a crate for (made on use: a module runs no
@@ -139,11 +140,17 @@ export const FIXTURES = {
 	/** the HTTP runtime's document (contract 19 §4.3): request build, auth, hooks, answers, stale marks, binary */
 	http: { document: http },
 	"http-safe": { document: http, options: { throwOnError: false } },
+	/** the realtime connections (contract 20 §4.3): a typed feed, and one declaring every stream field's name */
+	realtime: { document: streams.realtime },
 	/** a relative first server: an empty `base_url` is `Error::Config` */
 	relative: { document: relative },
+	/** the event streams (contract 20 §4.3): typed with headers, string, a POST body, a path param */
+	sse: { document: streams.sse },
 	/** every compile rewrites the lock's root (`acme-rs`) and runs it under `--locked` */
 	surface: { document: surface, options: { crateName: "acme-rs" } },
 	types: { document: types },
+	/** the WebSockets (contract 20 §4.3): a WebSocket-only crate, no realtime files */
+	ws: { document: streams.ws },
 } as const satisfies Record<string, RustFixture>
 
 export type FixtureKey = keyof typeof FIXTURES

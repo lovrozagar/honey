@@ -3,7 +3,8 @@
 //! answer's size and SHA-256; the raw response for `raw: true`; an error status as `error` with its
 //! body and honey error key (`ApiError::key()`); a lapsed timeout as `timeout`. Every error is also
 //! traced (`trace::rust_error`); one the grid has no outcome for observes nothing, which fails an
-//! unscripted run and is `null` in a scripted one.
+//! unscripted run and is `null` in a scripted one. A stream's events and frames are read in
+//! stream.rs, socket.rs and live.rs.
 
 use std::collections::BTreeMap;
 
@@ -15,12 +16,14 @@ use crate::protocol::Observed;
 use crate::sha256::sha256_hex;
 use crate::trace::{result_trace, rust_error};
 
-/// One call's outcome: what the grid observes of it, its error as traced, a safe-mode result's summary.
+/// One call's outcome: what the grid observes of it, its error as traced, a safe-mode result's
+/// summary, and a stream's trace.
 #[derive(Default)]
 pub struct Outcome {
     pub observed: Option<Value>,
     pub error: Option<Value>,
     pub result: Option<Value>,
+    pub stream: Option<Value>,
 }
 
 /// A throw-mode answer: `T`, or an `Error`.
@@ -57,7 +60,7 @@ where
 }
 
 /// `seen` as an outcome.
-fn observed(seen: Observed) -> Result<Outcome, String> {
+pub fn observed(seen: Observed) -> Result<Outcome, String> {
     let observed = serde_json::to_value(seen).map_err(|e| e.to_string())?;
     Ok(Outcome {
         observed: Some(observed),
@@ -109,7 +112,7 @@ fn answered<T: Serialize>(
 }
 
 /// An error, traced: an error status and a timeout are grid outcomes; any other observes nothing.
-fn failed(e: sdk::Error, how: &How, via: &str) -> Result<Outcome, String> {
+pub fn failed(e: sdk::Error, how: &How, via: &str) -> Result<Outcome, String> {
     let error = Some(rust_error(&e, via, how.envelope));
     let seen = match &e {
         sdk::Error::Api(api) => Some(api_error(api, how.raw)),
@@ -123,7 +126,7 @@ fn failed(e: sdk::Error, how: &How, via: &str) -> Result<Outcome, String> {
     Ok(Outcome {
         observed,
         error,
-        result: None,
+        ..Outcome::default()
     })
 }
 

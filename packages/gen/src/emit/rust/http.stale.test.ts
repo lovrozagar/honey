@@ -3,7 +3,8 @@
  * `x-invalidate` targets for the next read, which a read through them clears; off without invalidation or
  * with a zero stale time; a mark lapsing after the stale window; and bounded by `InvalidationConfig`, never by
  * `ClientConfig`: `stale_max_entries` evicts even when one mutation marks more targets than the cap, and
- * `max_sources_per_target` caps what a selector was invalidated by. Driven against `http` (documents-http.ts),
+ * `max_sources_per_target` caps what a selector was invalidated by; a lookup's cost bounded by the pattern
+ * keys, never a scan of every stale entry (contract 20 §6, edee99d992). Driven against `http` (documents-http.ts),
  * whose `users.create`/`users.delete` stale `GET /users` and `GET /users/{id}`, and `pages.touch` `/a`, `/b`, `/c`.
  */
 import { describe, expect, it } from "vitest"
@@ -11,7 +12,7 @@ import type { Call } from "../../../tests/integration/conformance/matrix.ts"
 import type { HookTrace, Script } from "../shared/__fixtures__/protocol.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/compiled.ts"
-import { consume } from "./__fixtures__/consumer.ts"
+import { consume, sections } from "./__fixtures__/consumer.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
 
 /** Whether Rust is here: a missing toolchain fails where it is required and skips these legs elsewhere (rust-env). */
@@ -75,6 +76,54 @@ const staleness = (hooks: readonly HookTrace[]) => hooks.map((h) => h.isStale)
 const by = (hooks: readonly HookTrace[]) => hooks.slice(2).map((h) => h.invalidatedBy)
 
 const OPEN: Invalidation = { staleTimeMs: 60_000 }
+
+/**
+ * The lookup budget: a client staling `GET /users/{id}` as a pattern (a create) and each deleted user's
+ * concrete `GET /users/<id>`, uncapped; its reads end in their request hook, which reports what the lookup
+ * found, so a read sends nothing. Per size, the best per-lookup time of five rounds of 256 reads.
+ */
+const BUDGET = sections({
+	budget: `    let c = sdk::Client::new(sdk::ClientConfig {
+        base_url: base.into(),
+        invalidation: Some(sdk::InvalidationConfig {
+            stale_time: std::time::Duration::from_secs(600),
+            stale_max_entries: 100_000,
+            ..Default::default()
+        }),
+        on_request: vec![std::sync::Arc::new(read_ends)],
+        ..Default::default()
+    })?;
+    c.users().create(&sdk::UsersCreateBody { name: None }, &sdk::UsersCreateOpts::default()).await?;
+    let (mut marked, mut best) = (0usize, Vec::new());
+    for size in [16usize, 16_384] {
+        while marked < size {
+            c.users().delete(&marked.to_string(), &sdk::UsersDeleteOpts::default()).await?;
+            marked += 1;
+        }
+        let (mut fastest, mut stale) = (f64::MAX, 0);
+        for _ in 0..5 {
+            let started = std::time::Instant::now();
+            stale = 0;
+            for i in 0..256usize {
+                let id = (i * 7919 % size).to_string();
+                let read = c.users().get(&id, &sdk::UsersGetOpts::default()).await;
+                stale += usize::from(read.is_err_and(|e| e.to_string() == "config: stale"));
+            }
+            fastest = fastest.min(started.elapsed().as_secs_f64() / 256.0);
+        }
+        n.note(format!("{size} keys: {stale} of 256 stale"));
+        best.push(fastest);
+        eprintln!("{size} keys: {:.1} us a lookup", fastest * 1e6);
+    }
+    n.note(format!("ratio {:.2}", best[1] / best[0]));`,
+})
+
+/** A read ends in its request hook with what its lookup found; any other request goes out. */
+const READ_ENDS = `fn read_ends(ctx: &mut sdk::RequestContext) -> sdk::HookFuture<'_> {
+    let found = if ctx.is_stale { "stale" } else { "fresh" };
+    let read = ctx.method == reqwest::Method::GET;
+    Box::pin(async move { if read { Err(sdk::Error::Config(found.into())) } else { Ok(()) } })
+}`
 
 describe.skipIf(!RUST)("stale tracking: a 2xx mutation stales its x-invalidate targets for the next read", () => {
 	// v0: 81f27bd592
@@ -174,6 +223,24 @@ describe.skipIf(!RUST)("stale tracking: bounded by InvalidationConfig, never by 
 			built: false,
 			stderr: expect.stringMatching(/error\[E0560\]: struct `ClientConfig` has no field named `stale_max_entries`/),
 		})
+	}, 600_000)
+
+	/* v0 timed 2000 lookups over 20,000 keys against 500 ms; the port compares a lookup's cost over 16 keys
+	 * and over 16,384 (1024× the keys) in one process, the best of five rounds each: a lookup bounded by the
+	 * pattern keys costs the same at both sizes, one that scans every entry grows with the keys, so the guard
+	 * allows 16× growth and needs no machine's absolute speed */
+	// v0: edee99d992
+	it("looks a selector up without scanning every stale entry: 1024× the entries cost a lookup under 16× more", async () => {
+		const run = await served([], (server) =>
+			consume("http", "stale-budget", { ...BUDGET, base: server.url, decls: `${BUDGET.decls}\n\n${READ_ENDS}` }),
+		)
+		const notes = run.out?.budget ?? []
+		const ratio = Number(/^ratio (\S+)$/.exec(notes.at(-1) ?? "")?.[1])
+		expect({ built: run.built, stale: notes.slice(0, -1) }, run.stderr).toEqual({
+			built: true,
+			stale: ["16 keys: 256 of 256 stale", "16384 keys: 256 of 256 stale"],
+		})
+		expect(ratio, notes.join("\n")).toBeLessThan(16)
 	}, 600_000)
 
 	it("keeps at most maxSourcesPerTarget mutations per stale selector; a templated target takes the mutation's params", async () => {

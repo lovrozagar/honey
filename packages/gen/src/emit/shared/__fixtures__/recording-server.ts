@@ -3,21 +3,20 @@
  * wire recorder: two listeners on 127.0.0.1 (`url`, and `alt`, another origin), every request kept
  * as the grid's `WireHop` in arrival order with its raw body beside it, each answered by the next
  * scripted reply (200 `{}` once the script runs out). A compiled SDK runs in a child process, so the
- * server answers while it waits. A reply may stream (stream-server.ts): an event stream, or a
- * WebSocket an upgrade request is accepted into; an upgrade request is a hop like any other, and
- * any reply without `ws` refuses its handshake as plain HTTP.
+ * server answers while it waits. A reply may stream: an event stream (sse-steps.ts), or a WebSocket
+ * an upgrade request is accepted into (stream-server.ts); an upgrade request is a hop like any
+ * other, and any reply without `ws` refuses its handshake as plain HTTP.
  */
 import { createHash } from "node:crypto"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
 import type { Duplex } from "node:stream"
+import { type SseScript, serveSse } from "./sse-steps.ts"
 import {
 	acceptUpgrade,
 	refuseUpgrade,
-	type SseScript,
 	type Stage,
 	type StreamRecord,
-	serveSse,
 	streamStage,
 	type WsScript,
 } from "./stream-server.ts"

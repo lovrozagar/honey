@@ -79,6 +79,22 @@ describe("the stream server: event streams", () => {
 	})
 })
 
+describe("the stream server: a bytes step", () => {
+	it("writes a bytes step's base64 as the bytes it names: a UTF-8 sequence split across two writes", async () => {
+		const [head, tail] = [Buffer.from("data: \xc3", "latin1"), Buffer.from("\xa9\n\n", "latin1")]
+		const steps = [{ bytes: head.toString("base64") }, { waitMs: 50 }, { bytes: tail.toString("base64") }]
+		const { chunks, ended } = await served([{ sse: { end: "close", steps }, status: 200 }], async (server) =>
+			chunksOf(await fetch(server.url), Date.now()),
+		)
+		const body = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk.text, "latin1")))
+		expect({ body: body.toString("utf8"), ended, texts: chunks.map((chunk) => chunk.text) }).toEqual({
+			body: "data: é\n\n",
+			ended: "end",
+			texts: ["data: \xc3", "\xa9\n\n"],
+		})
+	})
+})
+
 describe("the stream server: how an event stream ends", () => {
 	it("drops the connection after the steps reached the client: a body failing with no final chunk, the client not gone", async () => {
 		/* the pause lets fetch read the event: undici discards what it queued once the body errors */

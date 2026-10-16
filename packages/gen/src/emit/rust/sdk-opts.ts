@@ -40,6 +40,14 @@ export type StreamOpts = {
 	readonly sends: readonly string[]
 }
 
+/** How a stream operation's method answers: the `Call`'s answer type, the run it is sent with, its Opts fields and its rustdoc line. */
+export type StreamAnswer = {
+	readonly type: string
+	readonly run: string
+	readonly stream: StreamOpts
+	readonly doc: string
+}
+
 /** A method's typed response headers, as a caller names them. */
 export type RustResponseHeaders = { readonly type: string; readonly fields: Readonly<Record<string, string>> }
 

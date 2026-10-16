@@ -32,8 +32,9 @@ pub(crate) struct SseParser {
 }
 
 impl SseParser {
-    /// Consumes `chunk`, returning every event it completes.
-    pub(crate) fn feed(&mut self, chunk: &[u8]) -> Result<Vec<SseEvent>, Error> {
+    /// Consumes `chunk`: every event it completes, then the cap it crossed, if one (the stream
+    /// ends there, the events before it delivered).
+    pub(crate) fn feed(&mut self, chunk: &[u8]) -> (Vec<SseEvent>, Option<Error>) {
         let mut out = Vec::new();
         for &b in chunk {
             if std::mem::take(&mut self.pending_cr) && b == b'\n' {
@@ -42,14 +43,18 @@ impl SseParser {
             if b == b'\n' || b == b'\r' {
                 self.pending_cr = b == b'\r';
                 let line = std::mem::take(&mut self.line);
-                out.extend(self.line_of(&line)?);
+                match self.line_of(&line) {
+                    Ok(event) => out.extend(event),
+                    Err(e) => return (out, Some(e)),
+                }
             } else if self.line.len() >= MAX_LINE {
-                return Err(Error::Decode("an event-stream line exceeds 1 MiB".into()));
+                let e = Error::Decode("an event-stream line exceeds 1 MiB".into());
+                return (out, Some(e));
             } else {
                 self.line.push(b);
             }
         }
-        Ok(out)
+        (out, None)
     }
 
     fn line_of(&mut self, raw: &[u8]) -> Result<Option<SseEvent>, Error> {

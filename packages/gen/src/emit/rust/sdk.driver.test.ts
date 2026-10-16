@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
 import { compiledRust, drivenRustSdk } from "./__fixtures__/compiled.ts"
-import { consume, seen } from "./__fixtures__/consumer.ts"
+import { consume, sections, seen } from "./__fixtures__/consumer.ts"
 import { dispatchRs } from "./__fixtures__/dispatch.ts"
 import { FIXTURES } from "./__fixtures__/documents.ts"
 import { RUST_FLOOR, withRust } from "./__fixtures__/rust-env.ts"
@@ -80,7 +80,7 @@ describe("dispatchRs: the driver's dispatch.rs, one match arm per call plan", ()
 		expect(dispatchRs({ [OP]: NOTES })).toContain(`${NOTES_ARM}\n`)
 	})
 
-	it("sets a required field bare, observes a safe-mode answer, refuses a stream until phase d and a multipart body for good", () => {
+	it("sets a required field bare, observes a safe-mode answer, a stream as in throw mode, and refuses a multipart body for good", () => {
 		const text = dispatchRs(
 			{
 				a: plan({ operation: "a", query: { format: "format" }, required: ["format"] }),
@@ -92,7 +92,8 @@ describe("dispatchRs: the driver's dispatch.rs, one match arm per call plan", ()
 		expect(text).toContain('if let Some(v) = call.search("format") { o.format = from(v)?; }')
 		expect(text).toContain("observe_safe(apply(c, call, input, d)).await")
 		expect(text).not.toContain(" observe(")
-		expect(text).toContain('"b" => Err(refused("a stream operation", "d")),')
+		expect(text).toContain("crate::stream::observe_events(apply(c, call, input, d), call.take).await")
+		expect(text).not.toContain("refused(")
 		expect(text).toContain('"e" => Err("a multipart body is driven by a consumer program (FilePart)".into()),')
 	})
 
@@ -206,6 +207,18 @@ describe.skipIf(!RUST)("the compile options: clippy, and the floor toolchain", (
 describe("rustCallPlans: each operation's call plan, in the emitter's own names", () => {
 	it("names the accessors, the method, the path params in signature order and every Opts field", () => {
 		expect(rustCallPlans(FIXTURES.surface.document(), FIXTURES.surface.options)[OP]).toEqual(NOTES)
+	})
+})
+
+describe("sections: each section an async fn of its own, named from the section", () => {
+	it("names a section's fn with its `-` as `_`, and refuses a name that is then no Rust identifier", () => {
+		expect(sections({ "cancel-safe": "", main: "" }).decls).toContain(
+			"async fn cancel_safe_section(n: &mut Notes, base: &str)",
+		)
+		for (const name of ["two words", "1st", "", "é"])
+			expect(() => sections({ [name]: "" }), name).toThrow(
+				`a section name must be a Rust identifier once its "-" are "_": ${JSON.stringify(name)}`,
+			)
 	})
 })
 

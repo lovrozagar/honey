@@ -1,12 +1,12 @@
 /**
- * The recording server's streams (recording-server.ts): server-sent events written step by step as
- * a script gives them, and scripted WebSocket endpoints on Node built-ins alone (the wire is
- * ws-frames.ts): the subprotocol, the client's data and close frames recorded, the close handshake
+ * The recording server's streams (recording-server.ts): the stage every stream runs on (server-sent
+ * events are written on it by sse-steps.ts), and scripted WebSocket endpoints on Node built-ins alone
+ * (the wire is ws-frames.ts): the subprotocol, the client's data and close frames recorded, the close handshake
  * both ways, ping answered with pong. No `ws` package: honey/boundaries keeps it out of gen. A
  * client breaking the protocol is a violation the stage collects, and the recording server's
  * `close()` rejects with it, so a fixture or client bug fails the test instead of passing quietly.
  */
-import { type IncomingMessage, STATUS_CODES, type ServerResponse } from "node:http"
+import { type IncomingMessage, STATUS_CODES } from "node:http"
 import type { Duplex } from "node:stream"
 import type { Json } from "./recording-server.ts"
 import {
@@ -27,20 +27,6 @@ import {
 } from "./ws-frames.ts"
 
 export type { Received } from "./ws-frames.ts"
-
-/** Raw text, written and flushed as given (CRLF, CR, a BOM, half an event), or a pause. */
-export type SseStep = string | { readonly waitMs: number }
-
-/**
- * An event stream: chunked, no content-length, `text/event-stream` unless `contentType`. Its end:
- * `close` finishes the body; `drop` ends the connection once the steps reached it, with no final
- * chunk; `hold` keeps it open until the client leaves or the server closes.
- */
-export type SseScript = {
-	readonly contentType?: string
-	readonly end: "close" | "drop" | "hold"
-	readonly steps: readonly SseStep[]
-}
 
 /**
  * One WebSocket step: a server frame (`text` as given, `json` stringified, `binary` that many bytes
@@ -118,36 +104,6 @@ export function streamStage(): Stage {
 				pauses.add(stop)
 			}),
 	}
-}
-
-/** Serve `script` on `res` with `status` and `headers` (over the default content-type); its record. */
-export function serveSse(
-	res: ServerResponse,
-	head: { readonly headers?: Readonly<Record<string, string>>; readonly status: number },
-	script: SseScript,
-	stage: Stage,
-): StreamRecord {
-	const record: StreamRecord = { clientGone: false, received: [] }
-	let ended = false
-	res.once("close", () => {
-		if (!ended && !stage.stopped) record.clientGone = true
-		ended = true
-	})
-	res.writeHead(head.status, { "content-type": script.contentType ?? "text/event-stream", ...head.headers })
-	res.flushHeaders()
-	void (async () => {
-		for (const step of script.steps) {
-			if (ended) return
-			/* a write waits until it left: a `drop` that ends the socket on a write still corked in Node's response loses it */
-			if (typeof step === "string") await new Promise((flushed) => res.write(step, flushed))
-			else await stage.wait(step.waitMs)
-		}
-		if (ended || script.end === "hold") return
-		ended = true
-		if (script.end === "close") res.end()
-		else res.socket?.end()
-	})()
-	return record
 }
 
 /** Answer an upgrade request on `socket` as plain HTTP, the connection closed after it: a refused handshake. */

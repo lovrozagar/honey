@@ -481,7 +481,7 @@ describe.skipIf(!RUST)("the Rust test driver's script: what it refuses", () => {
 			"driver: call 0 (echo.get): the script sets idempotencyKey, and the method has no idempotency key field",
 			"driver: script: 2 calls scripted for a cell of 1",
 			"driver: script: logDurations needs log",
-			"driver: call 0 (echo.get): take arrives in phase d",
+			"driver: call 0 (echo.get): take on an operation that does not stream",
 		])
 	}, 600_000)
 })

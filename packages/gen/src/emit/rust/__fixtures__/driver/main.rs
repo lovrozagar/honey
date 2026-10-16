@@ -18,9 +18,12 @@
 //! error the grid has no Observed for observes null, its error traced. A bad script exits 1 before
 //! any call is sent.
 //!
-//! The driver refuses a stream operation and a call's `send`, `take`, `lastEventId` or
-//! `reconnectToken` until phase d (`driver: <member> arrives in phase d`), and a multipart body for
-//! good: its `FilePart`s have no JSON form, so a consumer program drives it.
+//! A stream operation (stream.rs; socket.rs and live.rs, which dispatch.rs declares only for an SDK
+//! that needs them) observes events (SSE) or frames (WebSocket, realtime), and a stream control its
+//! operation cannot take is refused (`protocol::stream_refusal`). A stream call that has not ended
+//! after 10 s fails the run ("stream stalled"). Unscripted, an error a stream yielded fails the run
+//! like any error the grid has no outcome for. A multipart body is refused for good: its
+//! `FilePart`s have no JSON form, so a consumer program drives it.
 
 /* one driver serves every SDK: a mode, a body kind or a member a given SDK lacks leaves its code unused */
 #![allow(dead_code)]
@@ -31,6 +34,7 @@ mod observe;
 mod protocol;
 mod script;
 mod sha256;
+mod stream;
 mod trace;
 
 use std::time::{Duration, Instant};
@@ -38,7 +42,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use observe::Outcome;
-use protocol::{Auth, Call, Input, Setup};
+use protocol::{Auth, Call, Input, Setup, stream_refusal};
 use script::{Directives, Script};
 use trace::Recorder;
 
@@ -109,7 +113,8 @@ struct Runner<'a> {
 
 impl Runner<'_> {
     /// Call `i` under its directives: a sleep before it, its time measured around the call alone, its
-    /// outcome traced. Unscripted, an error the grid has no outcome for fails the run.
+    /// outcome traced. Unscripted, an error the grid has no outcome for (one a stream yielded among
+    /// them) fails the run.
     async fn run(&self, i: usize, call: &Call, d: &Directives) -> Result<Value, String> {
         if let Some(ms) = d.sleep_ms {
             tokio::time::sleep(Duration::from_millis(ms)).await;
@@ -118,21 +123,26 @@ impl Runner<'_> {
         let start = Instant::now();
         let outcome = perform(&self.client, call, self.input, d).await?;
         self.recorder.called(start.elapsed(), &outcome);
+        let ungraded = match &outcome.error {
+            Some(e) if !self.scripted => outcome.observed.is_none() || e["via"] == "stream",
+            _ => false,
+        };
         match outcome {
+            Outcome { error: Some(e), .. } if ungraded => Err(format!(
+                "the call ended in an error the grid has no outcome for: {}",
+                e["text"].as_str().unwrap_or_default()
+            )),
             Outcome {
                 observed: Some(seen),
                 ..
             } => Ok(seen),
-            Outcome { error: Some(e), .. } if !self.scripted => Err(format!(
-                "the call ended in an error the grid has no outcome for: {}",
-                e["text"].as_str().unwrap_or_default()
-            )),
             _ => Ok(Value::Null),
         }
     }
 }
 
-/// Sends `call` by its plan, once the driver knows it can express it.
+/// Sends `call` by its plan, once the driver knows it can express it; a stream call under
+/// `STALL_AFTER`.
 async fn perform(
     client: &sdk::Client,
     call: &Call,
@@ -142,7 +152,7 @@ async fn perform(
     let Some(plan) = input.plans.get(&call.operation) else {
         return Err("no call plan names this operation".into());
     };
-    if let Some(reason) = call.refusal() {
+    if let Some(reason) = stream_refusal(call, plan, d) {
         return Err(reason);
     }
     if d.idempotency_key.is_some() && plan.idempotency_key.is_none() {
@@ -153,7 +163,14 @@ async fn perform(
     if call.origin.as_deref() == Some("alt") && input.alt.is_none() {
         return Err("the call asks for the alt origin, and the input names none".into());
     }
-    dispatch::dispatch(client, call, input, d).await
+    let sent = dispatch::dispatch(client, call, input, d);
+    if plan.stream.is_none() {
+        return sent.await;
+    }
+    let bound = stream::STALL_AFTER;
+    tokio::time::timeout(bound, sent)
+        .await
+        .map_err(|_| format!("stream stalled: no end within {}s", bound.as_secs()))?
 }
 
 /// The client config a cell's setup asks for, aimed at `base`.

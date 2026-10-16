@@ -26,6 +26,12 @@ pub(crate) struct RequestSpec {
     pub(crate) failed: Option<Error>,
 }
 
+/// A resume cursor as it is sent: an empty one names no position, so it is none (WHATWG).
+#[allow(dead_code)] // a stream operation's resume cursor
+pub(crate) fn cursor(value: &Option<String>) -> Option<&str> {
+    value.as_deref().filter(|v| !v.is_empty())
+}
+
 /* an SDK calls the builders its operations need */
 #[allow(dead_code)]
 impl RequestSpec {
