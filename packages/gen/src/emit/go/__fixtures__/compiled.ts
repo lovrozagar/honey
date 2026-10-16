@@ -8,7 +8,8 @@
  * `compiledSdk` is that with the test driver (`driver/*.go`, G8.3-4) as the program: the unit
  * behavior tests, the conformance runner and the harness run cells through it by the emitter's own
  * call plans (`goCallPlans`), one process per cell, `Observed[]` back. A unit test may add a
- * `Script` (client extras, recorders, per-call directives) and gets a `Trace` beside the observed.
+ * `Script` (client extras, recorders, per-call directives, stream controls) and gets a `Trace`
+ * beside the observed. `drivenSdk` is the same over given files and plans.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
@@ -19,7 +20,7 @@ import { type GoSdkOptions, generateGoSdk, goCallPlans } from "../sdk.ts"
 import type { Script, Trace } from "./driver/protocol.ts"
 import { goCacheDir, goEnv, runGo } from "./go-env.ts"
 
-export type { CallScript, GoError, HookTrace, Script, Trace } from "./driver/protocol.ts"
+export type { CallScript, GoError, HookTrace, Script, StreamTrace, Trace } from "./driver/protocol.ts"
 
 /** A run of the check program: its exit status and output. */
 export type Ran = { status: number; stderr: string; stdout: string }
@@ -83,11 +84,11 @@ function writeOnce(dir: string, entries: readonly [string, string][]): void {
 	writeFileSync(join(dir, ".complete"), "")
 }
 
-/** Link the check program once per content hash, beside its final name then renamed; its link errors, if any. */
-function linkOnce(dir: string): string {
+/** Link the check program once per content hash (with the race detector for `race`), beside its final name then renamed; its link errors, if any. */
+function linkOnce(dir: string, race: boolean): string {
 	if (existsSync(join(dir, BINARY))) return ""
 	const partial = `${BINARY}.${process.pid}.partial`
-	const link = runGo(["build", "-o", partial, "./cmd/check"], { cwd: dir })
+	const link = runGo(["build", ...(race ? ["-race"] : []), "-o", partial, "./cmd/check"], { cwd: dir })
 	if (link.status !== 0) return link.stderr
 	renameSync(join(dir, partial), join(dir, BINARY))
 	return ""
@@ -110,16 +111,25 @@ function execIn(dir: string, input: string): Promise<Ran> {
 /** A check program: one `main.go`, or its files by name. */
 type Main = string | Readonly<Record<string, string>>
 
-/** `files` (a module with its `go.mod`) built and vetted at the pinned toolchain, with `main` beside it. */
-export function compileGo(files: Readonly<Record<string, string>>, options: { main?: Main } = {}): Compiled {
+/**
+ * `files` (a module with its `go.mod`) built and vetted at the pinned toolchain, with `main` beside
+ * it; `race` links `main` with the race detector (the build and vet stay as they are).
+ */
+export function compileGo(
+	files: Readonly<Record<string, string>>,
+	options: { main?: Main; race?: true } = {},
+): Compiled {
 	const entries = withMain(files, options.main)
-	const hash = createHash("sha256").update(JSON.stringify(entries)).digest("hex").slice(0, 20)
+	const hash = createHash("sha256")
+		.update(JSON.stringify(options.race ? { entries, race: true } : entries))
+		.digest("hex")
+		.slice(0, 20)
 	const dir = goCacheDir("sdk", hash)
 	writeOnce(dir, entries)
 	const build = runGo(["build", "./..."], { cwd: dir })
 	const vet = build.status === 0 ? runGo(["vet", "./..."], { cwd: dir }) : undefined
 	const findings = (vet?.stderr ?? "").split("\n").filter((line) => line !== "" && !line.startsWith("#"))
-	const linked = build.status === 0 && options.main !== undefined ? linkOnce(dir) : ""
+	const linked = build.status === 0 && options.main !== undefined ? linkOnce(dir, options.race === true) : ""
 	return {
 		built: build.status === 0 && linked === "",
 		dir,
@@ -185,8 +195,18 @@ function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace
  * `runCalls` sending cells through it by the emitter's call plans for the same options.
  */
 export function compiledSdk(document: Record<string, unknown>, options: GoSdkOptions = {}): DrivenSdk {
-	const { files } = generateGoSdk(document, options)
-	const plans = goCallPlans(document, options)
+	return drivenSdk(generateGoSdk(document, options).files, goCallPlans(document, options))
+}
+
+/**
+ * An SDK module's `files` compiled with the test driver beside it, `runCalls` sending cells by
+ * `plans`: for a test that drives files beside the emitted ones (a method of a shape the emitter
+ * does not write yet) by plans it derives from the emitter's.
+ */
+export function drivenSdk(
+	files: Readonly<Record<string, string>>,
+	plans: Readonly<Record<string, GoCallPlan>>,
+): DrivenSdk {
 	const module = /^module (\S+)$/m.exec(files["go.mod"] as string)?.[1] as string
 	const compiled = compileGo(files, { main: driverSources(module, plans) })
 	return {

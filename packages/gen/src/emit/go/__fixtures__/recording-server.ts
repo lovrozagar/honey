@@ -3,11 +3,24 @@
  * wire recorder: two listeners on 127.0.0.1 (`url`, and `alt`, another origin), every request kept
  * as the grid's `WireHop` in arrival order with its raw body beside it, each answered by the next
  * scripted reply (200 `{}` once the script runs out). A compiled SDK runs in a child process, so the
- * server answers while it waits.
+ * server answers while it waits. A reply may stream (stream-server.ts): an event stream, or a
+ * WebSocket an upgrade request is accepted into; an upgrade request is a hop like any other, and
+ * any reply without `ws` refuses its handshake as plain HTTP.
  */
 import { createHash } from "node:crypto"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
+import type { Duplex } from "node:stream"
+import {
+	acceptUpgrade,
+	refuseUpgrade,
+	type SseScript,
+	type Stage,
+	type StreamRecord,
+	serveSse,
+	streamStage,
+	type WsScript,
+} from "./stream-server.ts"
 
 /** A JSON value, as the grid's `Json` spells it. */
 export type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json }
@@ -29,7 +42,9 @@ export type RecordedHop = {
 /**
  * One scripted answer: its status, at most one body (`json` with its content-type; `text` as given
  * and `bytes`, that many bytes `i & 0xff`, with none added), extra headers, a wait before answering
- * and a redirect target (`location`, on either listener). Every body goes out with its length.
+ * and a redirect target (`location`, on either listener). Every body goes out with its length. In
+ * place of a body: `sse`, an event stream under the status and headers, or `ws` (status 101), the
+ * upgrade accepted and the socket scripted.
  */
 export type Reply = {
 	readonly bytes?: number
@@ -37,17 +52,22 @@ export type Reply = {
 	readonly headers?: Readonly<Record<string, string>>
 	readonly json?: Json
 	readonly redirect?: { readonly origin: RecordedHop["origin"]; readonly path: string }
+	readonly sse?: SseScript
 	readonly status: number
 	readonly text?: string
+	readonly ws?: WsScript
 }
 
 export type RecordingServer = {
 	readonly alt: string
 	/** each request's raw body, parallel to `hops` */
 	readonly bodies: readonly Buffer[]
+	/** stop every stream and close both listeners; rejects with the protocol violations a stream saw */
 	close(): Promise<void>
 	/** every request received so far, in arrival order */
 	readonly hops: readonly RecordedHop[]
+	/** each hop's stream as it runs, parallel to `hops`; undefined for a hop answered without one */
+	readonly streams: readonly (StreamRecord | undefined)[]
 	readonly url: string
 }
 
@@ -89,21 +109,47 @@ function payloadOf(reply: Reply): [Buffer | string, Record<string, string>] {
 	return [reply.text ?? "", {}]
 }
 
-/** Answer `res` with `reply`, unless the client already went away. */
-function answer(res: ServerResponse, reply: Reply, origins: Origins): void {
-	if (res.destroyed) return
+/** The reply's body and every header it goes out with: its length, the implied ones, a redirect's location. */
+function messageOf(reply: Reply, origins: Origins): [Buffer | string, Record<string, string>] {
 	const [body, implied] = payloadOf(reply)
 	const length = { "content-length": String(Buffer.byteLength(body)) }
 	const location = reply.redirect && { location: `${origins[reply.redirect.origin]}${reply.redirect.path}` }
-	res.writeHead(reply.status, { ...length, ...implied, ...location, ...reply.headers })
-	res.end(body)
+	return [body, { ...length, ...implied, ...location, ...reply.headers }]
 }
 
-/** `replies`, refused when one names more than one body: which would win is no test's business. */
+/** Answer `res` with `reply`, unless the client already went away; the stream it opened, if any. */
+function answer(res: ServerResponse, reply: Reply, origins: Origins, stage: Stage): StreamRecord | undefined {
+	if (res.destroyed) return undefined
+	if (reply.sse !== undefined) return serveSse(res, reply, reply.sse, stage)
+	if (reply.ws !== undefined) {
+		stage.violation(`${res.req.method} ${res.req.url}: a ws reply to a request that is no upgrade`)
+		res.writeHead(500).end()
+		return undefined
+	}
+	const [body, headers] = messageOf(reply, origins)
+	res.writeHead(reply.status, headers)
+	res.end(body)
+	return undefined
+}
+
+/** Answer the upgrade request `req` with `reply`: accepted into its `ws` script, or refused as plain HTTP. */
+function upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, at: Answering): StreamRecord | undefined {
+	const { origins, reply, stage } = at
+	if (reply.ws !== undefined) return acceptUpgrade(req, socket, head, { headers: reply.headers, stage, ws: reply.ws })
+	if (reply.sse !== undefined) stage.violation(`${req.method} ${req.url}: an sse reply to an upgrade request`)
+	const [body, headers] = messageOf(reply, origins)
+	refuseUpgrade(socket, reply.status, headers, body)
+	return undefined
+}
+type Answering = { readonly origins: Origins; readonly reply: Reply; readonly stage: Stage }
+
+/** `replies`, refused when one names more than one body (a stream is one), or `ws` without 101: which would win is no test's business. */
 function checked(replies: readonly Reply[]): readonly Reply[] {
 	for (const [i, reply] of replies.entries()) {
-		const bodies = [reply.json, reply.text, reply.bytes].filter((body) => body !== undefined)
+		const bodies = [reply.json, reply.text, reply.bytes, reply.sse, reply.ws].filter((body) => body !== undefined)
 		if (bodies.length > 1) throw new Error(`reply ${i} names ${bodies.length} bodies; give at most one`)
+		if (reply.ws !== undefined && reply.status !== 101)
+			throw new Error(`reply ${i} accepts a WebSocket with status 101`)
 	}
 	return replies
 }
@@ -129,27 +175,35 @@ export async function recordingServer(replies: readonly Reply[]): Promise<Record
 	checked(replies)
 	const hops: RecordedHop[] = []
 	const bodies: Buffer[] = []
-	const timers = new Set<NodeJS.Timeout>()
+	const streams: (StreamRecord | undefined)[] = []
+	const stage = streamStage()
 	const origins: Record<RecordedHop["origin"], string> = { alt: "", primary: "" }
-	const serve = (origin: RecordedHop["origin"]) =>
-		createServer((req, res) => {
+	/* record the hop, then run `respond` with its reply once the reply's delay passed */
+	const record = (hop: RecordedHop, body: Buffer, respond: (reply: Reply) => StreamRecord | undefined) => {
+		const index = hops.push(hop) - 1
+		bodies.push(body)
+		streams.push(undefined)
+		const reply = replies[index] ?? { json: {}, status: 200 }
+		const run = () => void (streams[index] = respond(reply))
+		if (reply.delayMs === undefined) run()
+		else void stage.wait(reply.delayMs).then((passed) => passed && run())
+	}
+	const serve = (origin: RecordedHop["origin"]) => {
+		const server = createServer((req, res) => {
 			const chunks: Buffer[] = []
 			req.on("data", (chunk: Buffer) => chunks.push(chunk))
 			req.on("end", () => {
-				bodies.push(Buffer.concat(chunks))
-				hops.push(hopOf(req, bodies.at(-1) as Buffer, origin))
-				const reply = replies[hops.length - 1] ?? { json: {}, status: 200 }
-				if (reply.delayMs === undefined) {
-					answer(res, reply, origins)
-					return
-				}
-				const timer = setTimeout(() => {
-					timers.delete(timer)
-					answer(res, reply, origins)
-				}, reply.delayMs)
-				timers.add(timer)
+				const body = Buffer.concat(chunks)
+				record(hopOf(req, body, origin), body, (reply) => answer(res, reply, origins, stage))
 			})
 		})
+		server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+			stage.hold(socket)
+			const empty = Buffer.alloc(0)
+			record(hopOf(req, empty, origin), empty, (reply) => upgrade(req, socket, head, { origins, reply, stage }))
+		})
+		return server
+	}
 	const primary = serve("primary")
 	const other = serve("alt")
 	const [url, alt] = await Promise.all([listen(primary), listen(other)])
@@ -159,10 +213,12 @@ export async function recordingServer(replies: readonly Reply[]): Promise<Record
 		alt: origins.alt,
 		bodies,
 		close: async () => {
-			for (const timer of timers) clearTimeout(timer)
+			const violations = stage.stop()
 			await Promise.all([close(primary), close(other)])
+			if (violations.length > 0) throw new Error(`the stream server saw protocol violations:\n${violations.join("\n")}`)
 		},
 		hops,
+		streams,
 		url: origins.primary,
 	}
 }

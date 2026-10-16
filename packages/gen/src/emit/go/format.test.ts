@@ -12,8 +12,9 @@ const STRING = { type: "string" }
 const ref = (name: string): Json => ({ $ref: `#/components/schemas/${name}` })
 const json = (schema: Json) => ({ content: { "application/json": { schema } } })
 const ok = (schema: Json) => ({ 200: { ...json(schema), description: "ok" } })
+const events = (schema: Json) => ({ 200: { content: { "text/event-stream": { schema } }, description: "events" } })
 
-/** An API reaching every emitted file: nested namespaces, options, a body, enums, nullables, a WebSocket. */
+/** An API reaching every emitted file: nested namespaces, options, a body, enums, nullables, a WebSocket, typed and string SSE, realtime. */
 const DOCUMENT: Json = {
 	components: {
 		schemas: {
@@ -34,9 +35,20 @@ const DOCUMENT: Json = {
 	info: { description: "Pets, formatted.", title: "Format", version: "1" },
 	openapi: "3.1.0",
 	paths: {
+		"/feed": {
+			get: {
+				operationId: "feed.live",
+				parameters: [{ in: "query", name: "channel", required: true, schema: STRING }],
+				responses: events(ref("Pet")),
+				"x-realtime": true,
+				"x-websocket": true,
+			},
+		},
 		"/live": {
 			get: { operationId: "live.subscribe", responses: { 101: { description: "upgrade" } }, "x-websocket": true },
 		},
+		"/pets/events": { get: { operationId: "pets.events", responses: events(ref("Pet")) } },
+		"/pets/log": { get: { operationId: "pets.log", responses: events(STRING) } },
 		"/pets": {
 			get: {
 				operationId: "pets.list",

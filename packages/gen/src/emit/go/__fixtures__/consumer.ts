@@ -2,7 +2,9 @@
  * Consumer programs: a `main` around a test's Go body, built and vetted beside the emitted SDK
  * (compileGo) and run, for what only compiling proves (a name, a type, a signature) or what a JSON
  * driver cannot fill. The program's client sends through an in-process recorder by default; with
- * `checkServed` the program reads `{base}` from stdin and may aim a client at a recording server.
+ * `checkServed` or `consume` the program reads `{base}` from stdin and may aim a client at a
+ * recording server. `consume` also takes top-level declarations (a type with methods, such as a
+ * custom Transport) and links with the race detector on request.
  */
 import { compileGo } from "./compiled.ts"
 
@@ -98,17 +100,18 @@ func main() {
 		os.Exit(1)
 	}
 }
-`
+{{decls}}`
 
 /* the standard packages PROGRAM itself uses; Go rejects an unused import, so a body's own are opt-in */
 const BASE_IMPORTS = ["context", "encoding/json", "fmt", "io", "net/http", "os", "strings"]
 
-/** PROGRAM importing the SDK as `module` and the standard packages `imports` too, running `body`. */
-export function program(module: string, body: string, imports: readonly string[] = []): string {
+/** PROGRAM importing the SDK as `module` and the standard packages `imports` too, running `body`, with `decls` after main. */
+export function program(module: string, body: string, imports: readonly string[] = [], decls = ""): string {
 	const all = [...new Set([...BASE_IMPORTS, ...imports])].sort().map((path) => `\t"${path}"`)
 	return PROGRAM.replace("{{imports}}", () => all.join("\n"))
 		.replace("{{module}}", () => module)
 		.replace("{{body}}", () => body)
+		.replace("{{decls}}", () => (decls === "" ? "" : `\n${decls}\n`))
 }
 
 /** A consumer program's build and run: whether it built, its vet findings, its notes by section. */
@@ -131,6 +134,24 @@ export async function checkServed(files: Files, module: string, body: string, ba
 	const sdk = compileGo(files, { main: program(module, body) })
 	if (!sdk.built) return { built: false, out: undefined, stderr: sdk.stderr, vet: sdk.vet }
 	const ran = await sdk.exec(JSON.stringify({ base }))
+	return { built: true, out: notesOf(ran), stderr: ran.stderr, vet: sdk.vet }
+}
+
+/** A consumer program: its body, the standard packages it imports, its top-level declarations, the base on its stdin, `-race`. */
+export type Consumer = {
+	readonly base?: string
+	readonly body: string
+	readonly decls?: string
+	readonly imports?: readonly string[]
+	readonly race?: true
+}
+
+/** `files` built and vetted with the consumer `p` beside them, run with `{base}` on stdin without blocking the event loop. */
+export async function consume(files: Files, module: string, p: Consumer): Promise<Run> {
+	const main = program(module, p.body, p.imports, p.decls)
+	const sdk = compileGo(files, p.race ? { main, race: true } : { main })
+	if (!sdk.built) return { built: false, out: undefined, stderr: sdk.stderr, vet: sdk.vet }
+	const ran = await sdk.exec(JSON.stringify({ base: p.base ?? "" }))
 	return { built: true, out: notesOf(ran), stderr: ran.stderr, vet: sdk.vet }
 }
 

@@ -17,12 +17,14 @@ import (
 )
 
 // outcome is what a method returned: its answer (*T, []byte, string, a safe-mode Data pointer, or
-// none), its error and where that came from, and a safe-mode SDKResult's summary.
+// none), its error and where that came from ("return", "result", or "stream" for one a stream
+// delivered), a safe-mode SDKResult's summary, and a stream call's trace.
 type outcome struct {
 	value  reflect.Value
 	err    error
 	via    string
 	result *resultTrace
+	stream *streamTrace
 }
 
 // outcomeOf splits a method's return values: the last is its error; a safe-mode SDKResult[T] the

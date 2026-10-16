@@ -266,7 +266,67 @@ describe("the Go test driver: header params in every Opts shape", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: what it cannot express yet", () => {
+/** A WebSocket operation (`x-websocket`) under a path param, with a query param: what the phase-c emitter already dials. */
+const ROOMS: Json = {
+	info: { title: "Rooms", version: "1" },
+	openapi: "3.1.0",
+	paths: {
+		"/rooms/{room}": {
+			get: {
+				operationId: "rooms.socket",
+				parameters: [
+					{ in: "path", name: "room", required: true, schema: STRING },
+					{ in: "query", name: "since", schema: { type: "integer" } },
+				],
+				responses: { 101: { description: "upgrade" } },
+				"x-websocket": true,
+			},
+		},
+	},
+}
+
+describe("the Go test driver: a WebSocket, (*TypedWebSocket, error)", () => {
+	it("dials the escaped path with its query, sends the grid's frames, observes take frames, then closes 1000", async () => {
+		if (!withGo()) return
+		const sdk = compiledSdk(ROOMS, { modulePath: "example.com/rooms" })
+		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+		const reply: Reply = { status: 101, ws: { steps: [{ receive: 1 }, { json: { n: 1 } }, { text: "plain" }] } }
+		const call: Call = {
+			operation: "rooms.socket",
+			params: { room: "a b/c" },
+			route: { method: "GET", path: "/rooms/{room}" },
+			search: { since: 3 },
+			send: ['{"x":1}'],
+			take: 2,
+		}
+		const [run, hops, streams] = await served([reply], async (server) => {
+			const ran = await sdk.runCalls({ calls: [call] }, server)
+			return [ran, server.hops, server.streams] as const
+		})
+		expect(outcome(run), run.stderr).toEqual({
+			observed: [{ frames: [{ n: 1 }, "plain"], kind: "frames" }] satisfies Observed[],
+			status: 0,
+		})
+		expect(hops.map(({ headers, method, url }) => ({ headers, method, url }))).toEqual([
+			{
+				headers: expect.objectContaining({ upgrade: "websocket", "sec-websocket-version": "13" }),
+				method: "GET",
+				url: "/rooms/a%20b%2Fc?since=3",
+			},
+		])
+		expect(streams).toEqual([
+			{
+				clientGone: false,
+				received: [
+					{ kind: "text", text: '{"x":1}' },
+					{ code: 1000, kind: "close", reason: "" },
+				],
+			},
+		])
+	}, 600_000)
+})
+
+describe("the Go test driver: what it cannot express", () => {
 	it("refuses it loudly: a non-zero exit naming the operation and the reason, nothing sent", async () => {
 		if (!withGo()) return
 		const sdk = notesSdk()

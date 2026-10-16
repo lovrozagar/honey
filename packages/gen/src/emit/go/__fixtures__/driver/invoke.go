@@ -16,7 +16,7 @@ import (
 )
 
 // call is the grid's Call. Every member is listed so strict decoding knows it; the ones the
-// driver cannot express yet are refused by refusal.
+// driver cannot express are refused by refusal.
 type call struct {
 	Body           *body                      `json:"body"`
 	Headers        map[string]string          `json:"headers"`
@@ -51,11 +51,10 @@ type job struct {
 // refusal names what of j the driver cannot express yet; nil when it can.
 func refusal(j job) error {
 	c, p := j.c, j.p
+	if err := streamRefusal(j); err != nil {
+		return err
+	}
 	switch {
-	case p.Stream != nil:
-		return fmt.Errorf("the operation streams (%s): events and frames are not driven yet", *p.Stream)
-	case c.LastEventID != "" || c.ReconnectToken != "" || c.Send != nil || c.Take != nil:
-		return errors.New("stream controls (lastEventId, reconnectToken, send, take) are not driven yet")
 	case c.Body != nil && c.Body.Kind != "json" && c.Body.Kind != "binary":
 		return fmt.Errorf("a %s body is not sent yet", c.Body.Kind)
 	case c.Body != nil && p.Body == nil:
@@ -69,7 +68,8 @@ func refusal(j job) error {
 }
 
 // perform sends call i, c, by its plan and returns what it observed: null for a Go error the grid
-// has no Observed for when a script is given, a failure of the run without one.
+// has no Observed for when a script is given (a stream: what it delivered), a failure of the run
+// without one.
 func (r *runner) perform(i int, c call) (any, error) {
 	p, ok := r.in.Plans[c.Operation]
 	if !ok {
@@ -98,13 +98,19 @@ func (r *runner) perform(i int, c call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	o := outcomeOf(method.CallSlice(args))
-	r.rec.called(time.Since(start), o, j.d.IsKeys)
-	if o.err != nil && !gridError(o.err) {
-		if r.script == nil {
-			return nil, o.err
-		}
-		return nil, nil
+	var seen any
+	o := outcome{}
+	if p.Stream == nil {
+		o = outcomeOf(method.CallSlice(args))
+	} else if seen, o, err = r.stream(streamCall{j: j, ctx: ctx, method: method, args: args, target: target}); err != nil {
+		return nil, err
+	}
+	r.rec.called(time.Since(start), o, j.d)
+	if o.err != nil && !gridError(o.err) && r.script == nil {
+		return nil, o.err
+	}
+	if p.Stream != nil || (o.err != nil && !gridError(o.err)) {
+		return seen, nil
 	}
 	return observedOf(j, o, resp, target)
 }
@@ -216,11 +222,14 @@ func bodyArg(t reflect.Type, j job) (reflect.Value, error) {
 }
 
 // optsOf fills a new <Op>Opts (t is its pointer type) from the call's search and its declared
-// header params, each by the field the plan names, and the scripted IdempotencyKey; it returns the
-// headers no param declares.
+// header params, each by the field the plan names, the scripted IdempotencyKey and the stream
+// fields (streamOpts); it returns the headers no param declares.
 func optsOf(t reflect.Type, j job) (reflect.Value, map[string]string, error) {
 	c, p := j.c, j.p
 	opts := reflect.New(t.Elem())
+	if err := streamOpts(opts.Elem(), j); err != nil {
+		return reflect.Value{}, nil, err
+	}
 	if j.d.IdempotencyKey != nil {
 		key, _ := json.Marshal(*j.d.IdempotencyKey)
 		if err := setField(opts.Elem(), "IdempotencyKey", key); err != nil {
@@ -274,27 +283,4 @@ func declaredHeader(p plan, name string) string {
 		}
 	}
 	return ""
-}
-
-// setField decodes raw into the named field of opts.
-func setField(opts reflect.Value, name string, raw json.RawMessage) error {
-	field := opts.FieldByName(name)
-	if !field.IsValid() {
-		return fmt.Errorf("%s has no field %s", opts.Type(), name)
-	}
-	value, err := decodeAs(field.Type(), raw)
-	if err != nil {
-		return fmt.Errorf("%s.%s: %w", opts.Type(), name, err)
-	}
-	field.Set(value)
-	return nil
-}
-
-// decodeAs is raw decoded by encoding/json into a new value of type t.
-func decodeAs(t reflect.Type, raw json.RawMessage) (reflect.Value, error) {
-	ptr := reflect.New(t)
-	if err := json.Unmarshal(raw, ptr.Interface()); err != nil {
-		return reflect.Value{}, err
-	}
-	return ptr.Elem(), nil
 }

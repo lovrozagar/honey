@@ -20,11 +20,13 @@ type trace struct {
 	Transport   *transportTrace `json:"transport,omitempty"`
 }
 
-// callTrace is one call: its time, its error when it has one, and a safe-mode SDKResult's summary.
+// callTrace is one call: its time, its error when it has one, a safe-mode SDKResult's summary, and
+// what a stream call recorded.
 type callTrace struct {
 	ElapsedMs int64        `json:"elapsedMs"`
 	Error     *goError     `json:"error,omitempty"`
 	Result    *resultTrace `json:"result,omitempty"`
+	Stream    *streamTrace `json:"stream,omitempty"`
 }
 
 // resultTrace is a safe-mode SDKResult the method returned without an error.
@@ -36,7 +38,8 @@ type resultTrace struct {
 }
 
 // goError is a call's error as Go sees it: its types down the Unwrap chain, its text, where it came
-// from, the sentinels it matches, its status, the error keys asked about and a refused path param.
+// from, the sentinels it matches, its status, the error keys and sentinels asked about and a
+// refused path param.
 type goError struct {
 	Type      string          `json:"type"`
 	Chain     []string        `json:"chain"`
@@ -47,6 +50,7 @@ type goError struct {
 	TooLarge  bool            `json:"tooLarge"`
 	Status    *int            `json:"status,omitempty"`
 	Keys      map[string]bool `json:"keys,omitempty"`
+	Sentinels map[string]bool `json:"sentinels,omitempty"`
 	PathParam *pathParamTrace `json:"pathParam,omitempty"`
 }
 
@@ -112,19 +116,19 @@ func (r *recorder) begin(i int) {
 	r.current = i
 }
 
-// called records the call that just ended after elapsed, asking its error about keys.
-func (r *recorder) called(elapsed time.Duration, o outcome, keys []string) {
-	entry := callTrace{ElapsedMs: elapsed.Milliseconds(), Result: o.result}
+// called records the call that just ended after elapsed, asking its error what d asks about.
+func (r *recorder) called(elapsed time.Duration, o outcome, d directives) {
+	entry := callTrace{ElapsedMs: elapsed.Milliseconds(), Result: o.result, Stream: o.stream}
 	if o.err != nil {
-		entry.Error = goErrorOf(o.err, o.via, keys)
+		entry.Error = goErrorOf(o.err, o.via, d)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.calls = append(r.calls, entry)
 }
 
-// goErrorOf is err as the trace records it.
-func goErrorOf(err error, via string, keys []string) *goError {
+// goErrorOf is err as the trace records it, asked about d's error keys and sentinels.
+func goErrorOf(err error, via string, d directives) *goError {
 	e := &goError{
 		Type:     fmt.Sprintf("%T", err),
 		Text:     err.Error(),
@@ -145,10 +149,17 @@ func goErrorOf(err error, via string, keys []string) *goError {
 	if errors.As(err, &pp) {
 		e.PathParam = &pathParamTrace{Name: pp.Name, Value: pp.Value, Missing: pp.Missing}
 	}
-	if len(keys) > 0 {
+	if len(d.IsKeys) > 0 {
 		e.Keys = map[string]bool{}
-		for _, key := range keys {
+		for _, key := range d.IsKeys {
 			e.Keys[key] = errors.Is(err, sdk.ErrorKey(key))
+		}
+	}
+	if len(d.IsErrors) > 0 {
+		e.Sentinels = map[string]bool{}
+		for _, name := range d.IsErrors {
+			sentinel, _ := sentinelOf(name)
+			e.Sentinels[name] = errors.Is(err, sentinel)
 		}
 	}
 	return e

@@ -59,6 +59,10 @@ type directives struct {
 	OneShotBody    bool            `json:"oneShotBody"`
 	IdempotencyKey *string         `json:"idempotencyKey"`
 	IsKeys         []string        `json:"isKeys"`
+	IsErrors       []string        `json:"isErrors"`
+	Protocols      []string        `json:"protocols"`
+	Realtime       *realtimeScript `json:"realtime"`
+	WS             *wsScript       `json:"ws"`
 
 	cancelBefore bool
 	cancelAfter  *time.Duration
@@ -81,6 +85,9 @@ func scriptOf(raw json.RawMessage, calls int) (*script, error) {
 			continue
 		}
 		if err := d.parseCancel(); err != nil {
+			return nil, fmt.Errorf("call %d: %w", i, err)
+		}
+		if err := d.checkStream(); err != nil {
 			return nil, fmt.Errorf("call %d: %w", i, err)
 		}
 	}

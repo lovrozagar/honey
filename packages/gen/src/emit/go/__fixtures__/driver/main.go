@@ -11,12 +11,18 @@
 // (goCallPlans). Every call of a cell runs in order on one client, so state a call leaves (a
 // refreshed token, a stale mark) reaches the next: a multi-step script is a cell with more calls.
 // Stdout is the grid's Observed[] JSON, one per call. Any failure, and any Call or outcome this
-// driver cannot express yet, exits 1 with the reason on stderr: a red cell, never a silent pass.
+// driver cannot express, exits 1 with the reason on stderr: a red cell, never a silent pass.
+//
+// A streaming operation (stream.go) observes events (SSE) or frames (WebSocket in socket.go,
+// realtime in live.go), driven by reflection alone, so every driver file builds against any SDK
+// and a method of another shape is refused at run time. A stream call that has not ended after
+// 10 s fails the run ("stream stalled").
 //
 // script (script.go; only unit tests send one, the conformance runner and the harness never do)
-// adds client config, hooks, OnLog, OnAuthExpired and per-call ctx directives, and stdout becomes
-// { "observed": (Observed|null)[], "trace": Trace } (trace.go): a call ending in a Go error the grid
-// has no Observed for observes null, its error traced, instead of failing the run.
+// adds client config, hooks, OnLog, OnAuthExpired, per-call ctx directives and stream controls,
+// and stdout becomes { "observed": (Observed|null)[], "trace": Trace } (trace.go): a call ending in
+// a Go error the grid has no Observed for observes null (a stream: what it delivered so far), its
+// error traced, instead of failing the run.
 package main
 
 import (
@@ -25,6 +31,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"time"
 
 	sdk "honey.test/driver/sdk"
@@ -174,4 +181,27 @@ func configOf(in input) (sdk.Config, error) {
 		cfg.Timeout = time.Duration(*s.TimeoutMs) * time.Millisecond
 	}
 	return cfg, nil
+}
+
+// setField decodes raw into the named field of opts.
+func setField(opts reflect.Value, name string, raw json.RawMessage) error {
+	field := opts.FieldByName(name)
+	if !field.IsValid() {
+		return fmt.Errorf("%s has no field %s", opts.Type(), name)
+	}
+	value, err := decodeAs(field.Type(), raw)
+	if err != nil {
+		return fmt.Errorf("%s.%s: %w", opts.Type(), name, err)
+	}
+	field.Set(value)
+	return nil
+}
+
+// decodeAs is raw decoded by encoding/json into a new value of type t.
+func decodeAs(t reflect.Type, raw json.RawMessage) (reflect.Value, error) {
+	ptr := reflect.New(t)
+	if err := json.Unmarshal(raw, ptr.Interface()); err != nil {
+		return reflect.Value{}, err
+	}
+	return ptr.Elem(), nil
 }
