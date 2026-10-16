@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { Call, Observed, WireHop } from "../../../tests/integration/conformance/matrix.ts"
 import { compiledSdk, type DrivenSdk, type DriverRun } from "./__fixtures__/compiled.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
-import { type RecordingServer, type Reply, served } from "./__fixtures__/recording-server.ts"
+import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { goCallPlans } from "./sdk.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */

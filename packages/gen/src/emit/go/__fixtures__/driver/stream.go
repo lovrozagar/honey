@@ -15,7 +15,7 @@ import (
 // regressed parser or a script that never ends fails the test instead of hanging it.
 const stallAfter = 10 * time.Second
 
-// streamTrace is what a stream call recorded beside its observed (protocol.ts StreamTrace).
+// streamTrace is what a stream call recorded beside its observed (emit/shared/__fixtures__/protocol.ts StreamTrace).
 type streamTrace struct {
 	Yields     int               `json:"yields"`
 	Retry      []int             `json:"retry,omitempty"`

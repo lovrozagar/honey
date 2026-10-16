@@ -6,7 +6,8 @@
  */
 import { createHash } from "node:crypto"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { compiledSdk, type DrivenSdk, type Script, type Trace } from "../../src/emit/go/__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk } from "../../src/emit/go/__fixtures__/compiled.ts"
+import type { Script, Trace } from "../../src/emit/shared/__fixtures__/protocol.ts"
 import { withGo } from "../../src/emit/go/__fixtures__/go-env.ts"
 import { type ReferenceApp, startReferenceApp } from "./conformance/harness.ts"
 import type { Call, Json, Observed, Setup, WireHop } from "./conformance/matrix.ts"

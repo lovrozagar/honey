@@ -1,8 +1,9 @@
 /**
- * The test driver's protocol beside its stdin envelope: the optional `script` a unit test adds to a
- * grid cell (decoded strictly by script.go), and the `trace` (trace.go, stream.go) printed beside
- * the observed when one is given. Unit tests and the harness send one; the conformance runner never
- * does.
+ * The executed-SDK test driver's protocol beside its stdin envelope, the JSON contract every target's
+ * driver shares: the optional `script` a unit test adds to a grid cell (decoded strictly; Go:
+ * emit/go/__fixtures__/driver/script.go), and the `trace` (Go: trace.go, stream.go there) printed
+ * beside the observed when one is given. Unit tests and the harness send one; the conformance runner
+ * never does. Members are documented in Go's terms, the first driver's.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */

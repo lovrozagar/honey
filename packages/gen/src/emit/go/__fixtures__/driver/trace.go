@@ -12,7 +12,7 @@ import (
 	sdk "honey.test/driver/sdk"
 )
 
-// trace is what a scripted run prints beside the observed (compiled.ts Trace).
+// trace is what a scripted run prints beside the observed (emit/shared/__fixtures__/protocol.ts Trace).
 type trace struct {
 	Calls       []callTrace     `json:"calls"`
 	Hooks       []hookTrace     `json:"hooks"`

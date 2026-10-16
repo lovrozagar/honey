@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk, type Script } from "./__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
+import type { Script } from "../shared/__fixtures__/protocol.ts"
 import { check, once, seen } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
-import { type RecordedHop, type Reply, served } from "./__fixtures__/recording-server.ts"
+import { type RecordedHop, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */

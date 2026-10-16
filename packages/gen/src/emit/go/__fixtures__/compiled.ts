@@ -10,7 +10,8 @@
  * behavior tests, the conformance runner and the harness run cells through it by the emitter's own
  * call plans (`goCallPlans`), one process per cell, `Observed[]` back. A unit test or the harness
  * may add a `Script` (client extras, recorders, per-call directives, stream controls, opt-in trace
- * members) and gets a `Trace` beside the observed. `drivenSdk` is the same over given files and plans.
+ * members) and gets a `Trace` beside the observed, both the shared driver protocol
+ * (shared/__fixtures__/protocol.ts). `drivenSdk` is the same over given files and plans.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
@@ -18,10 +19,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFile
 import { dirname, join } from "node:path"
 import type { GoCallPlan } from "../sdk-client.ts"
 import { type GoSdkOptions, generateGoSdk, goCallPlans } from "../sdk.ts"
-import type { Script, Trace } from "./driver/protocol.ts"
+import type { Script, Trace } from "../../shared/__fixtures__/protocol.ts"
 import { goCacheDir, goEnv, runGo } from "./go-env.ts"
-
-export type { CallScript, GoError, HookTrace, Script, StreamTrace, Trace } from "./driver/protocol.ts"
 
 /** A run of the check program: its exit status and output. */
 export type Ran = { status: number; stderr: string; stdout: string }

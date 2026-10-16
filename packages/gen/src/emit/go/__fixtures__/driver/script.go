@@ -12,7 +12,8 @@ import (
 	sdk "honey.test/driver/sdk"
 )
 
-// script is the envelope's optional script, decoded strictly (compiled.ts Script names each member).
+// script is the envelope's optional script, decoded strictly
+// (emit/shared/__fixtures__/protocol.ts Script names each member).
 type script struct {
 	Config        *scriptConfig `json:"config"`
 	OnAuthExpired *struct {
