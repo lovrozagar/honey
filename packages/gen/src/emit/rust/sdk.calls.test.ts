@@ -440,7 +440,7 @@ describe.skipIf(!RUST)("throwOnError, chosen at generation", () => {
 					"Result<sdk::ErrorKeysUser, sdk::Error>",
 					`match r {
             Ok(user) => n.note(format!("ok {}", user.id)),
-            Err(sdk::Error::Api(e)) => n.note(format!("api {}", e.status)),
+            Err(sdk::Error::Api(e)) => n.note(format!("api {}", e.status())),
             Err(e) => return Err(e),
         }`,
 				),
@@ -450,7 +450,7 @@ describe.skipIf(!RUST)("throwOnError, chosen at generation", () => {
 					"Result<sdk::SdkResult<sdk::ErrorKeysUser>, sdk::Error>",
 					`let r = r?;
         match &r.error {
-            Some(e) => n.note(format!("error {}", e.status)),
+            Some(e) => n.note(format!("error {}", e.status())),
             None => n.note(format!("data {}", serde_json::to_string(&r.data).expect("data"))),
         }`,
 				),

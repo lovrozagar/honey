@@ -27,7 +27,7 @@ import {
 	writeFileSync,
 } from "node:fs"
 import { dirname, join } from "node:path"
-import type { Script, Trace } from "../../shared/__fixtures__/protocol.ts"
+import type { RustError, Script, Trace } from "../../shared/__fixtures__/protocol.ts"
 import type { RustCallPlan } from "../sdk-plan.ts"
 import { generateRustSdk, rustCallPlans } from "../sdk.ts"
 import { dispatchRs } from "./dispatch.ts"
@@ -77,7 +77,7 @@ export type DrivenRustSdk = RustCrate & {
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly url: string },
 		script?: Script,
-	): Promise<DriverRun & { readonly trace?: Trace }>
+	): Promise<DriverRun & { readonly trace?: Trace<RustError> }>
 }
 
 /** A cargo command's outcome, as a crate dir's marker keeps it. */
@@ -100,13 +100,30 @@ function emitted(fixture: RustFixture): {
 	return { files: generateRustSdk(document, fixture.options).files, plans: rustCallPlans(document, fixture.options) }
 }
 
-/** Write `text` beside `path`, then rename: a parallel worker never reads half a file. */
-function writeAtomic(path: string, text: string | Buffer): void {
+/** Write `text` beside `path` (dated `mtime` when given), then rename: a parallel worker never reads half a file. */
+function writeAtomic(path: string, text: string | Buffer, mtime?: number): void {
 	mkdirSync(dirname(path), { recursive: true })
 	const partial = `${path}.${process.pid}.partial`
 	writeFileSync(partial, text)
+	if (mtime !== undefined) utimesSync(partial, mtime, mtime)
 	renameSync(partial, path)
 }
+
+/*
+ * Every emitted crate is the package `honey-sdk 0.1.0` at its own workspace root, so cargo gives each the same
+ * unit hash, fingerprint and rlib in the shared target dir and judges them fresh by mtime alone: a crate whose
+ * sources were written before another crate's build finished would link that crate's rlib (and replay its
+ * clippy findings). A source dated past every output makes each cargo command compile the crate in front of it;
+ * its dependencies, from the registry, stay cached.
+ */
+/* 2100-01-01T00:00:00Z, in seconds */
+const SOURCE_TIME = 4_102_444_800
+
+/* in each content hash: a marker written before sources were dated past every output is not trusted */
+const LAYOUT = "sources-dated-2100"
+
+/** A crate's or program's source written for cargo: atomically, dated SOURCE_TIME. */
+const writeSource = (path: string, text: string) => writeAtomic(path, text, SOURCE_TIME)
 
 /**
  * `dir`'s outcome: read from its `.complete` marker, touched for CI's prune (ci.yml keeps only the dirs a run
@@ -137,7 +154,7 @@ function fetch(dir: string, lock: string, toolchain: string | undefined): void {
 
 /** `files` written into `dir` (fetched first if the lock is new) and built or checked as a library. */
 function buildCrate(dir: string, files: Readonly<Record<string, string>>, options: CompileOptions): Outcome {
-	for (const [name, text] of Object.entries(files)) writeAtomic(join(dir, name), text)
+	for (const [name, text] of Object.entries(files)) writeSource(join(dir, name), text)
 	fetch(dir, files["Cargo.lock"] ?? "", options.toolchain)
 	const verb = options.check ? "check" : "build"
 	return outcomeOf(runCargo([verb, "--locked", "--offline", "--lib"], { cwd: dir, toolchain: options.toolchain }))
@@ -162,8 +179,8 @@ function buildProgram({ files, hash: crate, toolchain }: Crate, name: string, pr
 			typeof program === "string"
 				? { [`${bin}.rs`]: program }
 				: Object.fromEntries(Object.entries(program).map(([file, text]) => [`${bin}/${file}`, text]))
-		for (const [file, text] of Object.entries(files)) writeAtomic(join(dir, file), text)
-		for (const [file, text] of Object.entries(sources)) writeAtomic(join(dir, "src/bin", file), text)
+		for (const [file, text] of Object.entries(files)) writeSource(join(dir, file), text)
+		for (const [file, text] of Object.entries(sources)) writeSource(join(dir, "src/bin", file), text)
 		const build = outcomeOf(runCargo(["build", "--locked", "--offline", "--bin", bin], { cwd: dir, toolchain }))
 		if (build.status === 0) {
 			const partial = join(dir, "bin", `${name}.${process.pid}.partial`)
@@ -216,7 +233,9 @@ export function compiledRust(key: FixtureKey, options: CompileOptions = {}): Rus
 	if (options.check && options.programs !== undefined) throw new Error("compiledRust: a check builds no programs")
 	const { files } = emitted(FIXTURES[key])
 	const entries = Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-	const hash = sha(JSON.stringify({ check: options.check, files: entries, toolchain: options.toolchain })).slice(0, 20)
+	const hash = sha(
+		JSON.stringify({ check: options.check, files: entries, layout: LAYOUT, toolchain: options.toolchain }),
+	).slice(0, 20)
 	const dir = rustCacheDir("sdk", hash)
 	const crate = once(dir, () => buildCrate(dir, files, options))
 	const programs = new Map<string, Built>()
@@ -248,9 +267,9 @@ function driverSources(plans: Readonly<Record<string, RustCallPlan>>, throwOnErr
 }
 
 /** A driver run's stdout as the caller reads it: `Observed[]`, or `{observed, trace}` under a script. */
-function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace?: Trace } {
+function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace?: Trace<RustError> } {
 	if (!scripted) return { observed: JSON.parse(stdout) as unknown[] }
-	return JSON.parse(stdout) as { observed: unknown[]; trace: Trace }
+	return JSON.parse(stdout) as { observed: unknown[]; trace: Trace<RustError> }
 }
 
 /**

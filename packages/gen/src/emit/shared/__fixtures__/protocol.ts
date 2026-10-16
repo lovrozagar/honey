@@ -3,7 +3,9 @@
  * driver shares: the optional `script` a unit test adds to a grid cell (decoded strictly; Go:
  * emit/go/__fixtures__/driver/script.go), and the `trace` (Go: trace.go, stream.go there) printed
  * beside the observed when one is given. Unit tests and the harness send one; the conformance runner
- * never does. Members are documented in Go's terms, the first driver's.
+ * never does. Members are documented in Go's terms, the first driver's. The Rust driver
+ * (emit/rust/__fixtures__/driver/script.rs, trace.rs) reads the same script, refusing what is Go's
+ * alone (`ctxTimeoutMs`, `isKeys`), and records its errors as `RustError`: its trace is `Trace<RustError>`.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
@@ -50,7 +52,11 @@ export type Script = {
 		/** Config.AuthHeaderName and AuthHeaderPrefix as given */
 		readonly authHeaderName?: string
 		readonly authHeaderPrefix?: string
-		/** Config.HTTPClient: a caller client counting its round trips and CheckRedirect calls */
+		/**
+		 * Go: Config.HTTPClient, a caller client counting its round trips and CheckRedirect calls. Rust:
+		 * `http_builder`, a caller builder with user agent `honey-driver` and `Policy::limited(10)` (reqwest has
+		 * no round-trip hook, so no `transport` count; the user agent is what a hop shows)
+		 */
 		readonly httpClient?: true
 		readonly invalidation?: {
 			readonly maxSourcesPerTarget?: number
@@ -97,6 +103,41 @@ export type GoError = {
 	readonly via: "result" | "return" | "stream"
 }
 
+/** A call's Rust error as the trace records it (`sdk::Error`, read through its accessors). */
+export type RustError = {
+	readonly variant:
+		| "Api"
+		| "AuthExpired"
+		| "Canceled"
+		| "Closed"
+		| "Config"
+		| "Decode"
+		| "Hook"
+		| "PathParam"
+		| "Timeout"
+		| "Transport"
+	/** `to_string()` */
+	readonly text: string
+	/** `format!("{e:?}")`, for the redaction legs */
+	readonly debug: string
+	/** the method's Err, or a safe-mode `SdkResult.error` */
+	readonly via: "result" | "return" | "stream"
+	/** `std::error::Error::source()` is Some */
+	readonly source: boolean
+	/** `Error::status()` */
+	readonly status?: number
+	/** Api only: `ApiError::kind()`, its Debug name */
+	readonly kind?: string
+	/** Api only: `ApiError::key()` as the wire spells it; null without one */
+	readonly key?: string | null
+	/** Api only: `format!("{:?}", key())`: "Some(ItemNotFound)", "None" */
+	readonly keyVariant?: string
+	/** Api only: `ApiError::message()` */
+	readonly message?: string
+	/** Api with `envelope`: the envelope's members that are set (status, error_key, status_key, message, fields), and `extraKeys`, its extra keys sorted */
+	readonly envelope?: Json
+}
+
 /** What a stream call recorded; each optional member is absent when empty. */
 export type StreamTrace = {
 	/** WebSocket: the close frame a Read ended on (no take, or before take was reached) */
@@ -135,10 +176,10 @@ export type HookTrace = {
 }
 
 /** One call: its time, its error when it has one, a safe-mode SDKResult the method returned without one, and a stream's trace. */
-export type CallTrace = {
+export type CallTrace<E = GoError> = {
 	readonly elapsedMs: number
 	/** every non-nil error, ClientErrors included */
-	readonly error?: GoError
+	readonly error?: E
 	readonly result?: {
 		readonly data: boolean
 		readonly ok: boolean
@@ -159,11 +200,11 @@ export type LogTrace = {
 	readonly status?: number
 }
 
-/** What a scripted run recorded beside the observed. */
-export type Trace = {
+/** What a scripted run recorded beside the observed: `E` is the target's error record. */
+export type Trace<E = GoError> = {
 	/** OnAuthExpired calls */
 	readonly authExpired: number
-	readonly calls: readonly CallTrace[]
+	readonly calls: readonly CallTrace<E>[]
 	readonly hooks: readonly HookTrace[]
 	readonly log: readonly LogTrace[]
 	/** the caller HTTPClient's counts, with `config.httpClient` */

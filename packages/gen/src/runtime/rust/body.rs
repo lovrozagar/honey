@@ -57,3 +57,94 @@ impl From<String> for Body {
         Body(Content::Bytes(Bytes::from(s)))
     }
 }
+
+/// A file part of a multipart body: its file name, its media type (`application/octet-stream` when
+/// `None`) and its bytes, held in memory so an auth retry sends the body again.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FilePart {
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub data: Vec<u8>,
+}
+
+/// `s` as a quoted-string's text in a part header: `"`, CR and LF percent-encoded (WHATWG).
+#[allow(dead_code)]
+fn quoted(s: &str) -> String {
+    s.replace('"', "%22")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+}
+
+/// A `multipart/form-data` body, encoded part by part as a method adds them. Only an API with a
+/// multipart operation calls it, hence the `dead_code` allows.
+#[allow(dead_code)]
+pub(crate) struct Multipart {
+    boundary: String,
+    out: Vec<u8>,
+    pub(crate) failed: Option<String>,
+}
+
+#[allow(dead_code)]
+impl Multipart {
+    pub(crate) fn new() -> Self {
+        Multipart {
+            boundary: format!("honey-{}", crate::auth::new_v4()),
+            out: Vec::new(),
+            failed: None,
+        }
+    }
+
+    fn head(&mut self, disposition: &str, content_type: Option<&str>) {
+        let mut head = format!(
+            "--{}\r\nContent-Disposition: form-data; {disposition}\r\n",
+            self.boundary
+        );
+        if let Some(media) = content_type {
+            head.push_str(&format!("Content-Type: {media}\r\n"));
+        }
+        head.push_str("\r\n");
+        self.out.extend_from_slice(head.as_bytes());
+    }
+
+    /// The text parts of `value`: one per list item, none for `None`.
+    pub(crate) fn text<T: serde::Serialize + ?Sized>(&mut self, name: &str, value: &T) {
+        let value = match crate::query::to_value(value) {
+            Ok(v) => v,
+            Err(e) => {
+                self.failed.get_or_insert(format!("part {name:?}: {e}"));
+                return;
+            }
+        };
+        for text in crate::query::texts(&value) {
+            self.head(&format!("name=\"{}\"", quoted(name)), None);
+            self.out.extend_from_slice(text.as_bytes());
+            self.out.extend_from_slice(b"\r\n");
+        }
+    }
+
+    /// A file part for each of `files` (an `Option<FilePart>`, a `Vec<FilePart>`).
+    pub(crate) fn files<'a>(&mut self, name: &str, files: impl IntoIterator<Item = &'a FilePart>) {
+        for file in files {
+            let disposition = format!(
+                "name=\"{}\"; filename=\"{}\"",
+                quoted(name),
+                quoted(&file.filename)
+            );
+            let media = file
+                .content_type
+                .as_deref()
+                .unwrap_or("application/octet-stream");
+            self.head(&disposition, Some(media));
+            self.out.extend_from_slice(&file.data);
+            self.out.extend_from_slice(b"\r\n");
+        }
+    }
+
+    /// The encoded body and its content type.
+    pub(crate) fn finish(mut self) -> (Bytes, String) {
+        self.out
+            .extend_from_slice(format!("--{}--\r\n", self.boundary).as_bytes());
+        let media = format!("multipart/form-data; boundary={}", self.boundary);
+        (Bytes::from(self.out), media)
+    }
+}

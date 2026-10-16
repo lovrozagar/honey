@@ -1,7 +1,8 @@
 //! The driver's side of the shared protocol (emit/shared/__fixtures__/protocol.ts; the grid's types in
 //! tests/integration/conformance/matrix.ts): the stdin envelope, the grid's Setup and Call decoded
 //! strictly (a member this driver does not know fails the cell instead of being dropped), and the
-//! grid's Observed. `Script` and `Trace` join with the script, in phase c.
+//! grid's Observed. The script a unit test adds is decoded as strictly (`Script`, `Directives`); its
+//! trace is written in trace.rs.
 
 use std::collections::BTreeMap;
 
@@ -27,11 +28,14 @@ pub struct Cell {
     pub calls: Vec<Value>,
 }
 
-/// What the driver reads of a call plan as it runs: the header params the Opts carry, and the answer's kind.
+/// What the driver reads of a call plan as it runs: the header params the Opts carry, the answer's
+/// kind, and the Opts field of the idempotency key.
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Plan {
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
+    pub idempotency_key: Option<String>,
     pub response: String,
 }
 
@@ -55,7 +59,7 @@ pub enum Auth {
 }
 
 /// The grid's Call. Every member is listed so strict decoding knows it; `refusal` names the ones the
-/// driver cannot express yet.
+/// driver cannot express until phase d.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Call {
@@ -101,10 +105,8 @@ impl Call {
             ("lastEventId", self.last_event_id.is_some()),
             ("reconnectToken", self.reconnect_token.is_some()),
         ];
-        if let Some((member, _)) = stream.iter().find(|(_, set)| *set) {
-            return Some(refused(member, "d"));
-        }
-        matches!(self.body, Some(Body::Binary { .. })).then(|| refused("a binary body", "c"))
+        let (member, _) = stream.iter().find(|(_, set)| *set)?;
+        Some(refused(member, "d"))
     }
 
     /// The query param `name`, as the grid gives it.
@@ -114,13 +116,19 @@ impl Call {
 
     /// The header `name`, whatever its case, as a JSON string.
     pub fn header_param(&self, name: &str) -> Option<Value> {
-        let (_, value) = self.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name))?;
+        let (_, value) = self
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))?;
         Some(Value::String(value.clone()))
     }
 
     /// The path param `name`.
     pub fn param(&self, name: &str) -> Result<String, String> {
-        self.params.get(name).cloned().ok_or_else(|| format!("the call has no path param {name}"))
+        self.params
+            .get(name)
+            .cloned()
+            .ok_or_else(|| format!("the call has no path param {name}"))
     }
 
     /// The JSON body, decoded as the method's body parameter.
@@ -129,6 +137,20 @@ impl Call {
             Some(Body::Json { value }) => from(value.clone()),
             _ => Err("the method takes a body, and the call has no JSON body".into()),
         }
+    }
+
+    /// The binary body, `size` bytes `i & 0xff`: in memory, or as a stream sent once (no length, no
+    /// resend) when `one_shot`.
+    pub fn binary_body(&self, one_shot: bool) -> Result<sdk::Body, String> {
+        let Some(Body::Binary { size, .. }) = &self.body else {
+            return Err("the method takes a binary body, and the call has no binary body".into());
+        };
+        let bytes: Vec<u8> = (0..*size).map(|i| (i & 0xff) as u8).collect();
+        if !one_shot {
+            return Ok(bytes.into());
+        }
+        let chunk = Ok::<_, std::io::Error>(bytes::Bytes::from(bytes));
+        Ok(sdk::Body::from_stream(futures_util::stream::iter([chunk])))
     }
 
     /// The JSON body, a string, as a text body.
@@ -162,12 +184,20 @@ pub fn refused(member: &str, phase: &str) -> String {
     format!("{member} arrives in phase {phase}")
 }
 
-/// The grid's Observed, as far as phase b observes.
+/// The grid's Observed, as far as phase c observes (phase d adds events and frames).
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Observed {
     Data {
         data: Value,
+        /// the operation's typed response headers, read through its `FromHeaders`
+        #[serde(skip_serializing_if = "Option::is_none")]
+        headers: Option<BTreeMap<String, String>>,
+        status: u16,
+    },
+    Bytes {
+        sha256: String,
+        size: usize,
         status: u16,
     },
     Error {

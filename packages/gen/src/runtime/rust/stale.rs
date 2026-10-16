@@ -11,10 +11,12 @@ use crate::invalidation::{
     InvalidationConfig, RequestMeta, has_placeholders, matches_pattern, resolve_targets,
 };
 
-/// One stale selector: the mutations that staled it, its sequence stamp and its expiry.
+/// One stale selector: the mutations that staled it, the sequence of the mutation that last did (a
+/// read clears what came before it), the order it was last staled in (eviction), and its expiry.
 struct Entry {
     by: Vec<String>,
     seq: u64,
+    stamp: u64,
     until: Instant,
 }
 
@@ -22,6 +24,7 @@ struct Entry {
 struct Entries {
     map: HashMap<String, Entry>,
     seq: u64,
+    stamps: u64,
 }
 
 /// The selectors invalidation staled; a cheap no-op when invalidation is off.
@@ -104,20 +107,24 @@ impl StaleTracker {
     }
 
     fn upsert(&self, entries: &mut Entries, key: String, until: Instant, source: &str) {
-        let seq = entries.seq;
+        entries.stamps += 1;
+        let (seq, stamp) = (entries.seq, entries.stamps);
         let entry = entries.map.entry(key).or_insert_with(|| Entry {
             by: Vec::new(),
             seq,
+            stamp,
             until,
         });
         entry.seq = seq;
+        entry.stamp = stamp;
         entry.until = until;
         if entry.by.len() < self.max_sources && !entry.by.iter().any(|b| b == source) {
             entry.by.push(source.to_owned());
         }
     }
 
-    /// Past the cap: drops the expired, then the least recently staled down to half the cap.
+    /// Past the cap: drops the expired, then the least recently staled down to half the cap (one
+    /// mutation's targets each staled in turn, so its first target goes first).
     fn evict(&self, entries: &mut Entries) {
         if entries.map.len() <= self.max_entries {
             return;
@@ -126,10 +133,10 @@ impl StaleTracker {
         entries.map.retain(|_, e| e.until > now);
         let keep = (self.max_entries / 2).max(1);
         if entries.map.len() > keep {
-            let mut stamps: Vec<u64> = entries.map.values().map(|e| e.seq).collect();
+            let mut stamps: Vec<u64> = entries.map.values().map(|e| e.stamp).collect();
             stamps.sort_unstable();
             let floor = stamps[stamps.len() - keep];
-            entries.map.retain(|_, e| e.seq >= floor);
+            entries.map.retain(|_, e| e.stamp >= floor);
         }
     }
 }

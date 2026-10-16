@@ -66,6 +66,11 @@ export type RecordingServer = {
 	close(): Promise<void>
 	/** every request received so far, in arrival order */
 	readonly hops: readonly RecordedHop[]
+	/**
+	 * each request's header lines as sent, parallel to `hops`: `[name lower case, value]` once per line, so a
+	 * repeated header Node's `req.headers` keeps one of (`authorization`) shows each time it came
+	 */
+	readonly rawHeaders: readonly (readonly (readonly [string, string])[])[]
 	/** each hop's stream as it runs, parallel to `hops`; undefined for a hop answered without one */
 	readonly streams: readonly (StreamRecord | undefined)[]
 	readonly url: string
@@ -86,6 +91,14 @@ function bodyOf(bytes: Buffer, contentType: string | undefined): RecordedHop["bo
 	} catch {
 		return body
 	}
+}
+
+/** The request's header lines as sent (`req.rawHeaders`), names lower case. */
+function linesOf(req: IncomingMessage): [string, string][] {
+	const lines: [string, string][] = []
+	for (let i = 0; i + 1 < req.rawHeaders.length; i += 2)
+		lines.push([(req.rawHeaders[i] as string).toLowerCase(), req.rawHeaders[i + 1] as string])
+	return lines
 }
 
 /** The request as a hop: header names lower case, a repeated header joined with `, `. */
@@ -174,13 +187,20 @@ function close(server: Server): Promise<void> {
 export async function recordingServer(replies: readonly Reply[]): Promise<RecordingServer> {
 	checked(replies)
 	const hops: RecordedHop[] = []
+	const rawHeaders: [string, string][][] = []
 	const bodies: Buffer[] = []
 	const streams: (StreamRecord | undefined)[] = []
 	const stage = streamStage()
 	const origins: Record<RecordedHop["origin"], string> = { alt: "", primary: "" }
 	/* record the hop, then run `respond` with its reply once the reply's delay passed */
-	const record = (hop: RecordedHop, body: Buffer, respond: (reply: Reply) => StreamRecord | undefined) => {
+	const record = (
+		req: IncomingMessage,
+		hop: RecordedHop,
+		body: Buffer,
+		respond: (reply: Reply) => StreamRecord | undefined,
+	) => {
 		const index = hops.push(hop) - 1
+		rawHeaders.push(linesOf(req))
 		bodies.push(body)
 		streams.push(undefined)
 		const reply = replies[index] ?? { json: {}, status: 200 }
@@ -194,13 +214,13 @@ export async function recordingServer(replies: readonly Reply[]): Promise<Record
 			req.on("data", (chunk: Buffer) => chunks.push(chunk))
 			req.on("end", () => {
 				const body = Buffer.concat(chunks)
-				record(hopOf(req, body, origin), body, (reply) => answer(res, reply, origins, stage))
+				record(req, hopOf(req, body, origin), body, (reply) => answer(res, reply, origins, stage))
 			})
 		})
 		server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
 			stage.hold(socket)
 			const empty = Buffer.alloc(0)
-			record(hopOf(req, empty, origin), empty, (reply) => upgrade(req, socket, head, { origins, reply, stage }))
+			record(req, hopOf(req, empty, origin), empty, (reply) => upgrade(req, socket, head, { origins, reply, stage }))
 		})
 		return server
 	}
@@ -218,6 +238,7 @@ export async function recordingServer(replies: readonly Reply[]): Promise<Record
 			if (violations.length > 0) throw new Error(`the stream server saw protocol violations:\n${violations.join("\n")}`)
 		},
 		hops,
+		rawHeaders,
 		streams,
 		url: origins.primary,
 	}

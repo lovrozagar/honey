@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::call::{Overrides, RawResponse};
 use crate::config::Inner;
 use crate::errors::{ApiError, Error};
-use crate::exchange::send;
+use crate::exchange::{send, url_of};
 use crate::request::RequestSpec;
 use crate::transport::{TransportConn, TransportOpts, with_cursor};
 
@@ -35,26 +35,26 @@ impl LongPoll {
     }
 }
 
-/// Opens without a request: the first receive polls.
+/// Opens without a request, its answer naming the URL each receive polls; a base URL that cannot
+/// make one fails here.
 pub(crate) fn connect(
     inner: &Arc<Inner>,
     spec: &RequestSpec,
     ov: &Overrides,
     opts: &TransportOpts,
-) -> (TransportConn, RawResponse) {
+) -> Result<(TransportConn, RawResponse), Error> {
     let mut spec = spec.duplicate();
     with_cursor(&mut spec, opts);
     let raw = RawResponse {
         status: 200,
+        url: url_of(inner, &spec, ov)?,
         headers: Default::default(),
         body: Default::default(),
     };
-    (
-        TransportConn::LongPoll(Box::new(LongPoll {
-            inner: Arc::clone(inner),
-            spec,
-            ov: ov.clone(),
-        })),
-        raw,
-    )
+    let poll = LongPoll {
+        inner: Arc::clone(inner),
+        spec,
+        ov: ov.clone(),
+    };
+    Ok((TransportConn::LongPoll(Box::new(poll)), raw))
 }

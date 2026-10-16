@@ -15,6 +15,7 @@ import realtimeLongpoll from "../../../ir/__fixtures__/specs/rust/realtime-longp
 import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" with { type: "json" }
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
 import type { RustSdkOptions } from "../sdk.ts"
+import { errors, http } from "./documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
 
 /**
@@ -131,8 +132,13 @@ export const FIXTURES = {
 			"src/lib.rs": "pub fn last_even(v: &mut Vec<u32>) -> Option<u32> {\n    v.pop_if(|x| *x % 2 == 0)\n}\n",
 		},
 	},
+	/** the declared error keys (G6/G7): colliding idents, an envelope's enum, `<Key>Data` schemas (contract 19 §4.3) */
+	errors: { document: errors },
 	fixtures: { document: fixtures },
 	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
+	/** the HTTP runtime's document (contract 19 §4.3): request build, auth, hooks, answers, stale marks, binary */
+	http: { document: http },
+	"http-safe": { document: http, options: { throwOnError: false } },
 	/** a relative first server: an empty `base_url` is `Error::Config` */
 	relative: { document: relative },
 	/** every compile rewrites the lock's root (`acme-rs`) and runs it under `--locked` */

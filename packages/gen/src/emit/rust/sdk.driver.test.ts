@@ -50,7 +50,7 @@ const NOTES_ARM = [
 	'            if let Some(v) = call.search("tag") { o.tag = Some(from(v)?); }',
 	'            if let Some(v) = call.header_param("X-Trace") { o.x_trace = Some(from(v)?); }',
 	'            let c = client.orgs().members().notes().create(&call.param("org")?, &call.param("member")?, &call.json_body()?, &o);',
-	"            observe(apply(c, &call, &input)).await",
+	"            observe(apply(c, call, input, d)).await",
 	"        }",
 ].join("\n")
 
@@ -80,22 +80,56 @@ describe("dispatchRs: the driver's dispatch.rs, one match arm per call plan", ()
 		expect(dispatchRs({ [OP]: NOTES })).toContain(`${NOTES_ARM}\n`)
 	})
 
-	it("sets a required field bare, observes a safe-mode answer, and refuses what arrives in a later phase", () => {
+	it("sets a required field bare, observes a safe-mode answer, refuses a stream until phase d and a multipart body for good", () => {
 		const text = dispatchRs(
 			{
 				a: plan({ operation: "a", query: { format: "format" }, required: ["format"] }),
 				b: plan({ operation: "b", stream: "sse" }),
-				c: plan({ body: "binary", operation: "c" }),
-				d: plan({ operation: "d", response: "binary" }),
+				e: plan({ body: "multipart", operation: "e" }),
 			},
 			false,
 		)
 		expect(text).toContain('if let Some(v) = call.search("format") { o.format = from(v)?; }')
-		expect(text).toContain("observe_safe(apply(c, &call, &input)).await")
+		expect(text).toContain("observe_safe(apply(c, call, input, d)).await")
 		expect(text).not.toContain(" observe(")
 		expect(text).toContain('"b" => Err(refused("a stream operation", "d")),')
-		expect(text).toContain('"c" => Err(refused("a binary body", "c")),')
-		expect(text).toContain('"d" => Err(refused("a binary answer", "c")),')
+		expect(text).toContain('"e" => Err("a multipart body is driven by a consumer program (FilePart)".into()),')
+	})
+
+	it("passes a binary body by value, one-shot when the script asks, and calls a binary answer like any other", () => {
+		const text = dispatchRs({
+			c: plan({ body: "binary", operation: "c", pathParams: [] }),
+			d: plan({ body: null, operation: "d", response: "binary" }),
+		})
+		expect(text).toContain("let c = client.orgs().members().notes().create(call.binary_body(d.one_shot_body)?, &o);")
+		expect(text).toContain('        "d" => {')
+		expect(text).not.toContain("refused(")
+	})
+
+	it("sets the idempotency key the script gives, and reads typed response headers through the real FromHeaders", () => {
+		const text = dispatchRs({
+			[OP]: plan({
+				idempotencyKey: "idempotency_key",
+				responseHeaders: {
+					fields: { "X-Etag": "x_etag", "X-Item-Version": "x_item_version" },
+					type: "ItemsGetHeaders",
+				},
+			}),
+		})
+		expect(text).toContain("            if let Some(k) = &d.idempotency_key { o.idempotency_key = Some(k.clone()); }\n")
+		expect(text).toContain(
+			[
+				"            fn read(h: &reqwest::header::HeaderMap) -> Result<BTreeMap<String, String>, sdk::Error> {",
+				"                let v = <sdk::ItemsGetHeaders as sdk::FromHeaders>::from_headers(h)?;",
+				"                let mut m = BTreeMap::new();",
+				'                put(&mut m, "x-etag", &v.x_etag);',
+				'                put(&mut m, "x-item-version", &v.x_item_version);',
+				"                Ok(m)",
+				"            }",
+				"            observe(apply(c, call, input, d).reading(read)).await",
+			].join("\n"),
+		)
+		expect(dispatchRs({ [OP]: NOTES })).not.toContain("idempotency_key")
 	})
 })
 

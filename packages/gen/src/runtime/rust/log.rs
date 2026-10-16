@@ -23,14 +23,25 @@ pub struct LogEntry {
 /// Receives each `LogEntry`; a panic in it is caught, so a faulty logger cannot break a call.
 pub type OnLogHook = Arc<dyn Fn(LogEntry) + Send + Sync>;
 
-/// One call's log: its operation and when it started.
+/// One call's log: its operation, when it started, and whether it is in flight. A call dropped in
+/// flight (`cancel_on`, a caller's own timeout, a dropped future) logs its `error` entry as it goes.
 pub(crate) struct CallLog<'a> {
-    pub(crate) hook: Option<&'a OnLogHook>,
-    pub(crate) operation: String,
-    pub(crate) start: Instant,
+    hook: Option<&'a OnLogHook>,
+    operation: String,
+    start: Instant,
+    in_flight: bool,
 }
 
-impl CallLog<'_> {
+impl<'a> CallLog<'a> {
+    pub(crate) fn new(hook: Option<&'a OnLogHook>, operation: String) -> Self {
+        CallLog {
+            hook,
+            operation,
+            start: Instant::now(),
+            in_flight: false,
+        }
+    }
+
     fn emit(
         &self,
         level: &'static str,
@@ -51,16 +62,27 @@ impl CallLog<'_> {
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || hook(entry)));
     }
 
-    pub(crate) fn started(&self) {
+    pub(crate) fn started(&mut self) {
+        self.in_flight = true;
         self.emit("debug", "request_start", None, None);
     }
 
-    pub(crate) fn answered(&self, status: u16) {
+    pub(crate) fn answered(&mut self, status: u16) {
+        self.in_flight = false;
         let level = if status >= 400 { "warn" } else { "info" };
         self.emit(level, "response_received", Some(status), None);
     }
 
-    pub(crate) fn failed(&self, e: &Error) {
+    pub(crate) fn failed(&mut self, e: &Error) {
+        self.in_flight = false;
         self.emit("error", "error", e.status(), Some(e.to_string()));
+    }
+}
+
+impl Drop for CallLog<'_> {
+    fn drop(&mut self) {
+        if self.in_flight {
+            self.emit("error", "error", None, Some(Error::Canceled.to_string()));
+        }
     }
 }

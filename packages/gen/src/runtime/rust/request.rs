@@ -128,25 +128,13 @@ impl RequestSpec {
         }
     }
 
-    /// A `multipart/form-data` body: each field of the object as a text part, a list repeating it.
-    pub(crate) fn multipart<T: serde::Serialize + ?Sized>(&mut self, body: &T) {
-        let boundary = format!("honey-{}", new_v4());
-        let pairs = match to_value(body) {
-            Ok(v) => object_pairs(&v),
-            Err(e) => return self.fail(Error::Config(format!("body: {e}"))),
-        };
-        let mut out = String::new();
-        for (name, value) in pairs {
-            let name = name
-                .replace('"', "%22")
-                .replace('\r', "%0D")
-                .replace('\n', "%0A");
-            out.push_str(&format!(
-                "--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"
-            ));
+    /// A `multipart/form-data` body, its parts added by the method.
+    pub(crate) fn multipart(&mut self, form: crate::body::Multipart) {
+        if let Some(e) = &form.failed {
+            return self.fail(Error::Config(format!("body: {e}")));
         }
-        out.push_str(&format!("--{boundary}--\r\n"));
-        self.bytes(out, format!("multipart/form-data; boundary={boundary}"));
+        let (bytes, media) = form.finish();
+        self.bytes(bytes, media);
     }
 
     /// A text body.

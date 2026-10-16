@@ -123,6 +123,7 @@ pub(crate) async fn connect(
             .map_err(transport)?;
     let raw = RawResponse {
         status: response.status().as_u16(),
+        url,
         headers: response.headers().clone(),
         body: Bytes::new(),
     };

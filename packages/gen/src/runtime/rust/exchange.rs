@@ -3,8 +3,6 @@
 //! retry with a refreshed token on a 401, the capped body read, the timeout, the log and the stale
 //! tracker.
 
-use std::time::Instant;
-
 use bytes::Bytes;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
@@ -12,10 +10,11 @@ use crate::auth::new_v4;
 use crate::body::Content;
 use crate::call::{Overrides, RawResponse};
 use crate::config::{Inner, parse_base};
-use crate::errors::Error;
+use crate::errors::{ApiError, Error};
 use crate::hooks::{RequestContext, ResponseContext};
 use crate::invalidation::RequestMeta;
 use crate::log::CallLog;
+use crate::redirect::{Hop, send_following};
 use crate::request::RequestSpec;
 
 /// The most of an error body a stream reads.
@@ -115,11 +114,7 @@ async fn run(
     ov: &Overrides,
     stream: bool,
 ) -> Result<Answer, Error> {
-    let log = CallLog {
-        hook: inner.on_log.as_ref(),
-        operation: spec.operation(),
-        start: Instant::now(),
-    };
+    let mut log = CallLog::new(inner.on_log.as_ref(), spec.operation());
     if let Some(e) = spec.failed.take() {
         log.failed(&e);
         return Err(e);
@@ -151,6 +146,13 @@ async fn run(
                 inner
                     .stale
                     .settle(&x.meta, x.spec.invalidates, &x.spec.params);
+            } else if inner.on_log.is_some() {
+                /* an error status logs the error its call ends with, as Go's does */
+                log.failed(&Error::Api(ApiError::new(
+                    raw.status,
+                    raw.headers.clone(),
+                    raw.body.clone(),
+                )));
             }
         }
         Err(e) => log.failed(e),
@@ -200,18 +202,27 @@ impl Exchange<'_> {
         for hook in &inner.on_request {
             hook(&mut ctx).await?;
         }
-        let mut request = inner.http.request(ctx.method, ctx.url).headers(ctx.headers);
-        if let Some(body) = streamed {
-            request = request.body(body);
-        } else if let Some(bytes) = ctx.body {
-            request = request.body(bytes);
-        }
-        let response = request.send().await.map_err(Error::from_reqwest)?;
-        self.answer(response, is_retry).await
+        let body = match streamed {
+            Some(stream) => Some(Content::Stream(stream)),
+            None => ctx.body.map(Content::Bytes),
+        };
+        let hop = Hop {
+            method: ctx.method,
+            url: ctx.url,
+            headers: ctx.headers,
+            body,
+        };
+        let (response, url) = send_following(&inner.http, inner.redirect, hop).await?;
+        self.answer(response, url, is_retry).await
     }
 
     /// The answer after the `on_response` hooks; a stream's 2xx body stays unread.
-    async fn answer(&self, response: reqwest::Response, is_retry: bool) -> Result<Answer, Error> {
+    async fn answer(
+        &self,
+        response: reqwest::Response,
+        url: reqwest::Url,
+        is_retry: bool,
+    ) -> Result<Answer, Error> {
         let status = response.status().as_u16();
         let headers = response.headers().clone();
         let unread = self.stream && (200..300).contains(&status);
@@ -243,6 +254,7 @@ impl Exchange<'_> {
         Ok((
             RawResponse {
                 status,
+                url,
                 headers: ctx.headers,
                 body,
             },

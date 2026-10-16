@@ -5,12 +5,15 @@ use std::fmt;
 
 use bytes::Bytes;
 use reqwest::header::HeaderMap;
+use serde::de::DeserializeOwned;
+
+use crate::envelope::{ErrorEnvelope, sanitized};
 
 /// Why a call failed.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
-    /// The API answered with an error status (anything but 2xx).
+    /// The API answered with an error status (anything but 2xx, a redirect it did not follow included).
     Api(ApiError),
     /// The exchange failed without an answer: a refused connection, DNS, TLS, a broken or too large body.
     Transport(Box<dyn std::error::Error + Send + Sync>),
@@ -26,45 +29,17 @@ pub enum Error {
     PathParam(String),
     /// The configuration cannot make the request: no usable `base_url`, an invalid header.
     Config(String),
+    /// An `on_request` or `on_response` hook ended the call.
+    Hook(Box<dyn std::error::Error + Send + Sync>),
     /// The stream or socket is closed.
     Closed,
 }
 
-/// What kind of `Error` an error is, without its payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum ErrorKind {
-    Api,
-    Transport,
-    Decode,
-    Timeout,
-    Canceled,
-    AuthExpired,
-    PathParam,
-    Config,
-    Closed,
-}
-
 impl Error {
-    /// The error's kind.
-    pub fn kind(&self) -> ErrorKind {
-        match self {
-            Error::Api(_) => ErrorKind::Api,
-            Error::Transport(_) => ErrorKind::Transport,
-            Error::Decode(_) => ErrorKind::Decode,
-            Error::Timeout => ErrorKind::Timeout,
-            Error::Canceled => ErrorKind::Canceled,
-            Error::AuthExpired(_) => ErrorKind::AuthExpired,
-            Error::PathParam(_) => ErrorKind::PathParam,
-            Error::Config(_) => ErrorKind::Config,
-            Error::Closed => ErrorKind::Closed,
-        }
-    }
-
     /// The error status, when the API answered with one.
     pub fn status(&self) -> Option<u16> {
         match self {
-            Error::Api(e) => Some(e.status),
+            Error::Api(e) => Some(e.status()),
             _ => None,
         }
     }
@@ -83,10 +58,7 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Api(e) => match &e.error_key {
-                Some(key) => write!(f, "API error status {} ({key})", e.status),
-                None => write!(f, "API error status {}", e.status),
-            },
+            Error::Api(e) => e.fmt(f),
             Error::Transport(e) => write!(f, "transport: {e}"),
             Error::Decode(m) => write!(f, "decode: {m}"),
             Error::Timeout => f.write_str("the call timed out"),
@@ -94,6 +66,7 @@ impl fmt::Display for Error {
             Error::AuthExpired(m) => write!(f, "on_auth_expired: {m}"),
             Error::PathParam(m) => write!(f, "path param: {m}"),
             Error::Config(m) => write!(f, "config: {m}"),
+            Error::Hook(e) => write!(f, "hook: {e}"),
             Error::Closed => f.write_str("closed"),
         }
     }
@@ -102,32 +75,150 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::Transport(e) => Some(e.as_ref()),
+            Error::Transport(e) | Error::Hook(e) => Some(e.as_ref()),
             _ => None,
         }
     }
 }
 
-/// An error status: the response as it came, and honey's error key when its body carries one.
-#[derive(Debug, Clone)]
-pub struct ApiError {
-    pub status: u16,
-    pub headers: HeaderMap,
-    pub body: Bytes,
-    /// the `error_key` of a JSON object body
-    pub error_key: Option<String>,
+/// An error status by its name: the eleven the TypeScript SDK names, any other `Other`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ErrorKind {
+    BadRequest,
+    Unauthorized,
+    Forbidden,
+    NotFound,
+    Conflict,
+    UnprocessableEntity,
+    RateLimit,
+    InternalServer,
+    BadGateway,
+    ServiceUnavailable,
+    GatewayTimeout,
+    Other,
+}
+
+impl ErrorKind {
+    fn of(status: u16) -> Self {
+        match status {
+            400 => ErrorKind::BadRequest,
+            401 => ErrorKind::Unauthorized,
+            403 => ErrorKind::Forbidden,
+            404 => ErrorKind::NotFound,
+            409 => ErrorKind::Conflict,
+            422 => ErrorKind::UnprocessableEntity,
+            429 => ErrorKind::RateLimit,
+            500 => ErrorKind::InternalServer,
+            502 => ErrorKind::BadGateway,
+            503 => ErrorKind::ServiceUnavailable,
+            504 => ErrorKind::GatewayTimeout,
+            _ => ErrorKind::Other,
+        }
+    }
+}
+
+/// An error status: the response as it came, its parsed envelope, honey's error key, and a message
+/// safe to show. Boxed, so an `Error` stays small.
+#[derive(Clone)]
+pub struct ApiError(Box<Answered>);
+
+#[derive(Clone)]
+struct Answered {
+    status: u16,
+    headers: HeaderMap,
+    body: Bytes,
+    message: String,
+    envelope: ErrorEnvelope,
 }
 
 impl ApiError {
     pub(crate) fn new(status: u16, headers: HeaderMap, body: Bytes) -> Self {
-        let error_key = serde_json::from_slice::<serde_json::Value>(&body)
-            .ok()
-            .and_then(|v| v.get("error_key")?.as_str().map(str::to_owned));
-        ApiError {
+        let envelope = ErrorEnvelope::parse(&body);
+        let text = match envelope.as_ref().and_then(|e| e.message.as_deref()) {
+            Some(message) => message.to_owned(),
+            None => String::from_utf8_lossy(&body).into_owned(),
+        };
+        ApiError(Box::new(Answered {
             status,
             headers,
+            message: sanitized(&text),
+            envelope: envelope.unwrap_or_default(),
             body,
-            error_key,
-        }
+        }))
+    }
+
+    /// The envelope's `error_key`, which `key()` (emitted with the API's keys) reads.
+    pub(crate) fn raw_key(&self) -> Option<&str> {
+        self.0.envelope.error_key.as_deref()
+    }
+
+    /// The HTTP status.
+    pub fn status(&self) -> u16 {
+        self.0.status
+    }
+
+    /// The status by its name.
+    pub fn kind(&self) -> ErrorKind {
+        ErrorKind::of(self.0.status)
+    }
+
+    /// The envelope's message, else the body's text: control characters dropped, at most 512 characters.
+    pub fn message(&self) -> &str {
+        &self.0.message
+    }
+
+    /// honey's error envelope, empty for a body that is not a JSON object.
+    pub fn envelope(&self) -> &ErrorEnvelope {
+        &self.0.envelope
+    }
+
+    /// The body decoded as `T`, a declared key's own schema.
+    pub fn decode_body<T: DeserializeOwned>(&self) -> Result<T, Error> {
+        serde_json::from_slice(&self.0.body).map_err(|e| Error::Decode(e.to_string()))
+    }
+
+    /// The response's headers.
+    pub fn headers(&self) -> &HeaderMap {
+        &self.0.headers
+    }
+
+    /// The response's body as it came.
+    pub fn body(&self) -> &[u8] {
+        &self.0.body
     }
 }
+
+/// `404 Not Found: <message>`, as the Go SDK's error reads; no header or request detail.
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.status)?;
+        let reason = reqwest::StatusCode::from_u16(self.0.status)
+            .ok()
+            .and_then(|s| s.canonical_reason());
+        if let Some(reason) = reason {
+            write!(f, " {reason}")?;
+        }
+        if !self.0.message.is_empty() {
+            write!(f, ": {}", self.0.message)?;
+        }
+        Ok(())
+    }
+}
+
+/// The status, kind, key and message, and the header names only: a response header (`Set-Cookie`)
+/// may hold a credential, and a logger prints errors with `{:?}`.
+impl fmt::Debug for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let names: Vec<&str> = self.0.headers.keys().map(|k| k.as_str()).collect();
+        f.debug_struct("ApiError")
+            .field("status", &self.0.status)
+            .field("error_key", &self.raw_key())
+            .field("message", &self.0.message)
+            .field("header_names", &names)
+            .field("body_len", &self.0.body.len())
+            .finish()
+    }
+}
+
+impl std::error::Error for ApiError {}

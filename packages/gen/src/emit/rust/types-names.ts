@@ -1,8 +1,8 @@
 /**
  * The crate-level names Rust types are declared under: one scope that components, hoisted types and
  * the client's own declarations all claim from, clear of every item the runtime makes public at the
- * crate root (`lib.rs` re-exports each runtime module's public items) and of the prelude and std names
- * generated code relies on (H52).
+ * crate root (`lib.rs` re-exports each runtime module's public items), of the emitter's own `ErrorKey`,
+ * and of the prelude and std names generated code relies on (H52).
  */
 import type { IR } from "../../ir/model.ts"
 import { irResolver } from "../../ir/schema.ts"
@@ -22,6 +22,9 @@ function runtimeIdentifiers(): string[] {
 		.flatMap(([, source]) => publicItems(source))
 }
 
+/* the crate-root types the emitter itself declares beside the runtime's: errors.ts's enum */
+const EMITTED: readonly string[] = ["ErrorKey"]
+
 /** Names for one schema on its own: each as asked for, no cycles, refs left unresolved. */
 export function plainNames(): RustTypeNames {
 	return {
@@ -39,7 +42,7 @@ export function plainNames(): RustTypeNames {
  * them, a hoist key always getting the name it got first; `cyclic` is every component on a by-value cycle.
  */
 export function irNames(ir: IR): RustTypeNames {
-	const scope = new NameScope(runtimeIdentifiers())
+	const scope = new NameScope([...runtimeIdentifiers(), ...EMITTED])
 	const components = new Map<string, string>()
 	for (const name of Object.keys(ir.schemas).sort(compareCodeUnits)) {
 		const base = rustTypeIdent(name)

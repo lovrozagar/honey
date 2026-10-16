@@ -10,13 +10,14 @@ import { compareCodeUnits } from "../shared/lang.ts"
 /** What the API needs from the runtime beyond plain HTTP. */
 export type RustRuntimeFeatures = { readonly realtime: boolean; readonly ws: boolean }
 
-/* every SDK: config, the call, its request and exchange, auth, hooks, log, errors, answers, SSE, invalidation */
+/* every SDK: config, the call, its request and exchange, redirects, auth, hooks, log, errors and their envelope, answers, SSE, invalidation */
 const CORE: readonly string[] = [
 	"answer",
 	"auth",
 	"body",
 	"call",
 	"config",
+	"envelope",
 	"errors",
 	"events",
 	"exchange",

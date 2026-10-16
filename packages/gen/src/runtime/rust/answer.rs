@@ -76,6 +76,7 @@ fn safe<T: Send + 'static>(
                 data: Some(decode(&raw)?),
                 error: None,
                 status,
+                response: raw.clone(),
             }
         } else {
             let error = ApiError::new(status, raw.headers.clone(), raw.body.clone());
@@ -83,6 +84,7 @@ fn safe<T: Send + 'static>(
                 data: None,
                 error: Some(error),
                 status,
+                response: raw.clone(),
             }
         };
         Ok((result, raw))

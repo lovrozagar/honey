@@ -28,6 +28,11 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// auth_header_prefix + token`; leave both `None` for the API's scheme, set the name and the prefix
 /// is yours (`None` meaning none), set only the prefix to keep the scheme's header. `http_builder`
 /// customizes the transport; the SDK always turns its redirects off and applies `redirect` itself.
+///
+/// Credentials belong here, in `bearer_token`, `api_key` and `headers`: a hop to another origin
+/// carries none of them. reqwest adds a header from the builder's `default_headers` to every hop
+/// after the SDK strips, a cross-origin redirect included, so never put `Authorization`, `Cookie`,
+/// `Proxy-Authorization`, `X-Api-Key` or the `auth_header_name` header there.
 pub struct ClientConfig {
     pub base_url: String,
     pub bearer_token: Option<String>,
@@ -38,6 +43,10 @@ pub struct ClientConfig {
     pub timeout: Option<Duration>,
     pub max_response_bytes: usize,
     pub redirect: RedirectPolicy,
+    /// The transport's builder. Its `default_headers` go on every hop, a cross-origin redirect
+    /// included: `Authorization`, `Cookie`, `Proxy-Authorization`, `X-Api-Key` or the
+    /// `auth_header_name` header set there leaks; set credentials in `bearer_token`, `api_key` and
+    /// `headers`, which the SDK strips from a hop to another origin.
     pub http_builder: Option<reqwest::ClientBuilder>,
     pub invalidation: Option<InvalidationConfig>,
     pub on_request: Vec<OnRequestHook>,
@@ -139,6 +148,7 @@ pub(crate) struct Inner {
     pub(crate) auth: AuthState,
     pub(crate) timeout: Option<Duration>,
     pub(crate) max_response_bytes: usize,
+    pub(crate) redirect: RedirectPolicy,
     pub(crate) on_request: Vec<OnRequestHook>,
     pub(crate) on_response: Vec<OnResponseHook>,
     pub(crate) on_auth_expired: Option<OnAuthExpiredHook>,
@@ -209,6 +219,7 @@ impl Client {
             auth: AuthState::new(config.bearer_token.or(config.api_key)),
             timeout: (!timeout.is_zero()).then_some(timeout),
             max_response_bytes: config.max_response_bytes,
+            redirect: config.redirect,
             on_request: config.on_request,
             on_response: config.on_response,
             on_auth_expired: config.on_auth_expired,

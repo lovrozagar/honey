@@ -6,10 +6,11 @@
  * stream as `EventStream<E>`, a WebSocket as `TypedWebSocket`, realtime as `Realtime<E>`. Spec text reaches
  * the source only through the shared escape layer.
  */
-import type { IRBody, IRParam, IRSchema } from "../../ir/model.ts"
-import { mediaEssence, type SdkBody, type SdkOp } from "../../ir/sdk-model.ts"
+import type { IRParam } from "../../ir/model.ts"
+import { mediaEssence, type SdkOp } from "../../ir/sdk-model.ts"
 import { lineComment, rustString } from "../shared/escape.ts"
 import { NameScope, rustTypeIdent, rustValueIdent } from "../shared/lang.ts"
+import { type RustBody, rustBody, typeAt } from "./sdk-body.ts"
 import type { RustCallPlan } from "./sdk-plan.ts"
 import {
 	type OptsField,
@@ -20,8 +21,7 @@ import {
 	type StreamOpts,
 	takesIdempotencyKey,
 } from "./sdk-opts.ts"
-import { unboxed } from "./types-struct.ts"
-import { type RustTypeContext, rustTypeOf } from "./types.ts"
+import type { RustTypeContext } from "./types.ts"
 
 /** One operation's method, its client.rs declarations by name (`<Op>Opts`, `<Op>Headers`), and its call plan less the accessors. */
 export type RustMethod = {
@@ -37,7 +37,7 @@ export type MethodEnv = { readonly at: RustTypeContext; readonly throwOnError: b
 type Answer = { readonly type: string; readonly run: string; readonly stream: StreamOpts | null }
 
 /* the method's own locals: a path param never shadows one (it is claimed as `…2`) */
-const METHOD_LOCALS = ["body", "client", "opts", "spec"]
+const METHOD_LOCALS = ["body", "client", "form", "opts", "spec"]
 
 const isLastEventIdHeader = (param: string, where: OptsField["in"]) =>
 	where === "header" && param.toLowerCase() === "last-event-id"
@@ -84,13 +84,9 @@ const REALTIME: StreamOpts = {
 const TRANSPORT_OPTS =
 	"TransportOpts { last_event_id: opts.last_event_id.clone(), reconnect_token: opts.reconnect_token.clone(), protocols: opts.protocols.clone(), max_reconnect_attempts: opts.max_reconnect_attempts, reconnect_delay_ms: opts.reconnect_delay_ms }"
 
-/** `schema`'s Rust type at `<op><field>`, a component reference unboxed. */
-const typeAt = (schema: IRSchema, op: SdkOp, field: string, at: RustTypeContext) =>
-	unboxed(schema, rustTypeOf(schema, { ...at, fieldName: field, parentName: op.id }))
-
 /** A streamed event's type: the operation's declared event schema, else `fallback`. */
 const eventType = (op: SdkOp, at: RustTypeContext, fallback: string) =>
-	op.events === undefined ? fallback : typeAt(op.events, op, "Event", at)
+	op.events === undefined ? fallback : typeAt(op.events, op.id, "Event", at)
 
 /** How a stream operation answers, in either error mode. */
 function streamAnswer(op: SdkOp, at: RustTypeContext): Answer {
@@ -116,22 +112,10 @@ function answerOf(op: SdkOp, env: MethodEnv): Answer {
 				? ["Vec<u8>", "binary"]
 				: schema === undefined
 					? ["()", "none"]
-					: [typeAt(schema, op, "Response", env.at), "json"]
+					: [typeAt(schema, op.id, "Response", env.at), "json"]
 	const generic = decoder === "json" ? `::<${type}>` : ""
 	if (env.throwOnError) return { run: `crate::answer::${decoder}${generic}`, stream: null, type }
 	return { run: `crate::answer::safe_${decoder}${generic}`, stream: null, type: `SdkResult<${type}>` }
-}
-
-/** The body parameter's type, and the statement encoding it into the spec. */
-function bodyOf(op: SdkOp, body: SdkBody, at: RustTypeContext): { readonly type: string; readonly send: string } {
-	const media = rustString(body.contentType)
-	if (body.kind === "text") return { send: `spec.text(body, ${media});`, type: "&str" }
-	if (body.kind === "binary") return { send: `spec.binary(body, ${media});`, type: "Body" }
-	if (body.kind === "multipart") {
-		const { schema } = op.ir.body as Extract<IRBody, { schema: IRSchema }>
-		return { send: "spec.multipart(body);", type: `&${typeAt(schema, op, "Body", at)}` }
-	}
-	return { send: `spec.${body.kind}(body, ${media});`, type: `&${typeAt(body.schema, op, "Body", at)}` }
 }
 
 /** The operation's path params in the order the path holds them, whatever order they were declared in. */
@@ -147,13 +131,13 @@ function methodDoc(op: SdkOp): string[] {
 }
 
 /** The spec statements after the path: the asked media type, the Opts, the body, the targets a 2xx stales. */
-function specLines(op: SdkOp, fields: readonly OptsField[], answer: Answer, body: string | undefined): string[] {
+function specLines(op: SdkOp, fields: readonly OptsField[], answer: Answer, body: readonly string[]): string[] {
 	const { contentType, kind } = op.success
 	const accept = op.stream === null && (kind === "binary" || kind === "text")
 	return [
 		...(accept ? [`spec.accept(${rustString(mediaEssence(contentType as string))});`] : []),
 		...optsLines(op, fields, answer.stream),
-		...(body === undefined ? [] : [body]),
+		...body,
 		...(op.invalidates.length > 0 ? [`spec.invalidates(&[${op.invalidates.map(rustString).join(", ")}]);`] : []),
 	]
 }
@@ -169,7 +153,7 @@ type Parts = {
 }
 
 /** The method's lines: its signature over `client`, the spec it fills, the `Call` it returns. */
-function methodLines(parts: Parts, client: string, answer: Answer, body: ReturnType<typeof bodyOf> | undefined) {
+function methodLines(parts: Parts, client: string, answer: Answer, body: RustBody | undefined) {
 	const { fields, headers, op, opts, path } = parts
 	const empty = fields.length === 0 && answer.stream === null && !takesIdempotencyKey(op)
 	const params = [
@@ -179,7 +163,7 @@ function methodLines(parts: Parts, client: string, answer: Answer, body: ReturnT
 		`${empty ? "_opts" : "opts"}: &${opts}`,
 	]
 	const bound = path.map(([param, local]) => `(${rustString(param.name)}, ${local})`).join(", ")
-	const statements = specLines(op, fields, answer, body?.send)
+	const statements = specLines(op, fields, answer, body?.lines ?? [])
 	const returns = headers ? `Call<${answer.type}, ${headers.plan.type}>` : `Call<${answer.type}>`
 	return [
 		...(params.length > 7 ? ["    #[allow(clippy::too_many_arguments)]"] : []),
@@ -217,7 +201,7 @@ export function rustMethod(op: SdkOp, name: string, client: string, env: MethodE
 	const opts = env.at.names.claim(`${rustTypeIdent(op.id)}Opts`)
 	const locals = new NameScope(METHOD_LOCALS)
 	const path = pathParamsOf(op).map((param) => [param, locals.claim(rustValueIdent(param.name))] as const)
-	const body = op.body && bodyOf(op, op.body, env.at)
+	const body = op.body && rustBody(op, op.body, env.at)
 	const answer = answerOf(op, env)
 	const fields = optsFields(op, opts, env.at, answer.stream)
 	const parts = { fields, headers: responseHeaders(op, env.at), name, op, opts, path }

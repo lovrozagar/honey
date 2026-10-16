@@ -27,7 +27,7 @@ pub(crate) fn connect<E: DeserializeOwned + Send + 'static>(
                     Ok(conn) => conn,
                     Err(_) => match transport_sse::connect(&inner, &spec, &ov, &opts).await {
                         Ok(conn) => conn,
-                        Err(_) => transport_longpoll::connect(&inner, &spec, &ov, &opts),
+                        Err(_) => transport_longpoll::connect(&inner, &spec, &ov, &opts)?,
                     },
                 };
                 let (conn, raw) = opened;

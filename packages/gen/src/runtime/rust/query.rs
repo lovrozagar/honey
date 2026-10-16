@@ -52,9 +52,10 @@ fn scalar(value: &Value) -> Option<String> {
     }
 }
 
-/// The texts `value` is sent as: one per list item, none for null.
+/// The texts `value` is sent as: one per list item, none for null or an empty object.
 pub(crate) fn texts(value: &Value) -> Vec<String> {
     match value {
+        Value::Object(members) if members.is_empty() => Vec::new(),
         Value::Array(items) => items.iter().filter_map(scalar).collect(),
         other => scalar(other).into_iter().collect(),
     }

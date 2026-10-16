@@ -25,10 +25,12 @@ pub(crate) type Run<T> = Box<
         + Send,
 >;
 
-/// The answer a call was read from: its status and headers, and its body (empty for a stream).
+/// The answer a call was read from: its status, the URL it came from (the last of any redirects),
+/// its headers, and its body (empty for a stream).
 #[derive(Debug, Clone)]
 pub struct RawResponse {
     pub status: u16,
+    pub url: reqwest::Url,
     pub headers: HeaderMap,
     pub body: Bytes,
 }
@@ -120,9 +122,11 @@ impl<T, H> Call<T, H> {
         match cancel {
             None => sent,
             Some(signal) => Box::pin(async move {
+                /* the signal first: one already complete sends nothing */
                 tokio::select! {
-                    answer = sent => answer,
+                    biased;
                     () = signal => Err(Error::Canceled),
+                    answer = sent => answer,
                 }
             }),
         }

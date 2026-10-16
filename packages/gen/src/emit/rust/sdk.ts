@@ -1,14 +1,16 @@
 /**
  * The Rust SDK (bit 13): a crate emitted from the IR alone (H2), its library named `sdk` — the vendored
  * runtime verbatim under `src/`, `src/types.rs` (every component, then every hoisted declaration in name
- * order), `src/client.rs` (the client, its resources and methods), `src/lib.rs` (the modules, and the crate
- * root's exports), `Cargo.toml` and `Cargo.lock`. Every `.rs` file carries the generated-code marker.
+ * order, then the API's `ErrorKey` when it has an operation), `src/client.rs` (the client, its resources
+ * and methods), `src/lib.rs` (the modules, and the crate root's exports), `Cargo.toml` and `Cargo.lock`.
+ * Every `.rs` file carries the generated-code marker.
  */
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IR, IRInfo, IRSchema } from "../../ir/model.ts"
 import { sdkModel } from "../../ir/sdk-model.ts"
 import { lineComment } from "../shared/escape.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
+import { rustErrorKeys } from "./errors.ts"
 import { needsWebSocket, publicItems, runtimeFiles } from "./http.ts"
 import { cargoLock, cargoToml, validateCrateName, validateCrateVersion } from "./sdk-cargo.ts"
 import { clientDecls } from "./sdk-client.ts"
@@ -64,8 +66,6 @@ function libFile(info: IRInfo, runtime: readonly (readonly [module: string, sour
 	return [
 		MARKER,
 		...lineComment(doc.join("\n\n"), "//!"),
-		/* Error::Api holds the error status's response inline (G6): a call it ends was a network round trip */
-		"#![allow(clippy::result_large_err)]",
 		"",
 		...modules.map((module) => `mod ${module};`),
 		"",
@@ -88,6 +88,8 @@ function emitRust(document: Record<string, unknown>, options: RustSdkOptions) {
 	/* components first: the client's hoisted types then land beside them */
 	const components = componentDecls(ir, at)
 	const client = clientDecls(ir, { at, ops: model.opsById, throwOnError: options.throwOnError ?? true })
+	/* before the hoisted are read: each key's <Key>Data lands among them; an API without operations answers no error */
+	const errorKeys = model.ops.length > 0 ? [rustErrorKeys(model, at)] : []
 	const hoisted = [...at.decls].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, decl]) => decl)
 	const features = {
 		realtime: model.ops.some((op) => op.stream === "realtime"),
@@ -96,7 +98,7 @@ function emitRust(document: Record<string, unknown>, options: RustSdkOptions) {
 	const { "Cargo.lock": template, ...sources } = runtimeFiles(features)
 	const runtime = Object.entries(sources).map(([name, source]) => [name.replace(/\.rs$/, ""), source] as const)
 	const ws = needsWebSocket(features)
-	const types = [...components, ...hoisted]
+	const types = [...components, ...hoisted, ...errorKeys]
 	const own = { client: model.ops.length > 0, types: types.length > 0 }
 	const files: Record<string, string> = {
 		"Cargo.lock": cargoLock(template as string, crate, ws),
