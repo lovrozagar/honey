@@ -97,7 +97,35 @@ jobs:
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-gobuild-
+      # gen compiles the emitted Rust at the toolchain rust-toolchain.toml pins (RUSTUP_TOOLCHAIN through its
+      # rust-env fixture) and checks it at the RUST_FLOOR toolchain. A bare install reads the file; the default
+      # follows it, so any other cargo in the job runs the pin too. Toolchains are not cached: a minimal one
+      # installs in seconds.
+      - name: Rust (rust-toolchain.toml, and the RUST_FLOOR toolchain)
+        run: |
+          rustup toolchain install
+          rustup default "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+          rustup toolchain install 1.85.0 --profile minimal --component clippy
+      # the registry, both target dirs and the compiled crates (rust/__fixtures__/compiled.ts), keyed like
+      # gobuild on every input of a Rust compile (toolchain-projects.test.ts holds it to that); the emitted
+      # crates carry their lock, so the registry changes only with what the key already hashes
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/rust/cargo
+            ~/.cache/honey-tmp/rust/target
+            ~/.cache/honey-tmp/rust/target-1.85.0
+            ~/.cache/honey-tmp/rust/sdk
+          key: >-
+            ${{ runner.os }}-rust-${{ hashFiles('rust-toolchain.toml', 'packages/gen/src/emit/rust/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/rust/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/rust-toolchain.test.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-rust-
       - run: touch "$RUNNER_TEMP/go-sdk-start"
+      - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
       - run: bun install --frozen-lockfile
       - run: bun run generate
       # frozen v0 tests listen on fixed ports inside the ephemeral range: reserve them so no automatically
@@ -105,14 +133,18 @@ jobs:
       - run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=45910-45912,45986
       - run: bun run test
         env:
-          # a missing Go fails the run instead of skipping the executed Go SDK tests
-          HONEY_REQUIRE_GO: "1"
+          # a missing toolchain (Go, Rust and its floor, Python) fails the run instead of skipping its tests
+          HONEY_REQUIRE_TOOLCHAINS: "1"
       # every SDK dir this run built or reused has a .complete newer than the start; the rest are stale
       # (their inputs changed), so the saved cache stays one run's SDKs instead of growing with each change
       - name: Prune the Go SDKs this run did not use
         run: >-
           find ~/.cache/honey-tmp/go/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/go-sdk-start" -printf '%h\0' | xargs -0r rm -rf
+      - name: Prune the Rust SDKs this run did not use
+        run: >-
+          find ~/.cache/honey-tmp/rust/sdk -mindepth 2 -maxdepth 2 -name .complete
+          ! -newer "$RUNNER_TEMP/rust-sdk-start" -printf '%h\0' | xargs -0r rm -rf
       - run: bun run test:consumers
       - run: bun run test:e2e
 
@@ -249,8 +281,6 @@ jobs:
     name: harness
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/.cache/cargo-target
     steps:
       - uses: actions/checkout@v4
       # vitest and the emitted SDK's WebSocket run on node: the global WebSocket needs Node >= 22
@@ -276,12 +306,35 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@stable
+      # gen compiles the emitted Rust at the toolchain rust-toolchain.toml pins (RUSTUP_TOOLCHAIN through its
+      # rust-env fixture) and checks it at the RUST_FLOOR toolchain. A bare install reads the file; the default
+      # follows it, so any other cargo in the job runs the pin too. Toolchains are not cached: a minimal one
+      # installs in seconds.
+      - name: Rust (rust-toolchain.toml, and the RUST_FLOOR toolchain)
+        run: |
+          rustup toolchain install
+          rustup default "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+          rustup toolchain install 1.85.0 --profile minimal --component clippy
+      # gen's Rust caches for the toolchain files run below, keyed as in the test job
+      - uses: actions/cache@v4
         with:
-          components: rustfmt
-      # The emitted crates resolve crates.io without a lockfile, so their dependencies drift: key the
+          path: |
+            ~/.cache/honey-tmp/rust/cargo
+            ~/.cache/honey-tmp/rust/target
+            ~/.cache/honey-tmp/rust/target-1.85.0
+            ~/.cache/honey-tmp/rust/sdk
+          key: >-
+            ${{ runner.os }}-rust-harness-${{ hashFiles('rust-toolchain.toml', 'packages/gen/src/emit/rust/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/rust/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/rust-toolchain.test.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-rust-harness-
+      # v0's emitted crates resolve crates.io without a lockfile, so their dependencies drift: key the
       # cache by ISO week, restore the newest, and save it even when the run fails (below), so each
-      # week compiles the drift once and every later run starts warm.
+      # week compiles the drift once and every later run starts warm. v0's tests pin their own target
+      # dir (_v0/tests/cargo-env.ts, byte-frozen until bit 20), so it stays in the checkout.
       - id: cargo-week
         run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
       - id: cargo-cache
@@ -291,9 +344,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             .cache/cargo-target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-${{ steps.cargo-week.outputs.week }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-toolchain.toml', '_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-${{ steps.cargo-week.outputs.week }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ hashFiles('_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-
+            ${{ runner.os }}-cargo-${{ hashFiles('rust-toolchain.toml', '_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-
             ${{ runner.os }}-cargo-
       # one pinned list for CI and local runs (locally the harness fills .cache/python-venv from it)
       - run: pip install -r _v0/tests/python-requirements.txt

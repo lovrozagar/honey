@@ -1,0 +1,170 @@
+/**
+ * Toolchain parity (G10) for Rust: gen runs Rust only through `src/emit/rust/__fixtures__/rust-env.ts`,
+ * under the channel `rust-toolchain.toml` pins, and CI installs that channel from the file, so a local run
+ * and a CI run compile with the same rustc to the patch. Unlike Go's, importing the env file does not
+ * license a raw spawn: every cargo, rustc and rustfmt goes through its runners. Only the mutation harness
+ * compiles a crate outside the fixture registry (G17).
+ */
+import { readdirSync, readFileSync, statSync } from "node:fs"
+import { join, resolve } from "node:path"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import * as env from "../../src/emit/rust/__fixtures__/rust-env.ts"
+
+const { RUST_FLOOR, pinnedRust, runRustc, withRust } = env
+
+const GEN = resolve(import.meta.dirname, "../..")
+const ROOTS = ["src", "tests", "scripts"]
+const SELF = "tests/structure/rust-toolchain.test.ts"
+const ENV = "src/emit/rust/__fixtures__/rust-env.ts"
+const COMPILED = "src/emit/rust/__fixtures__/compiled.ts"
+
+/* a spawn of a Rust tool, or a list of commands whose entry starts with one (a list of language names is not one) */
+const RUST_COMMAND =
+	/\b(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\(\s*"(?:cargo|rustc|rustfmt|rustup|rustdoc|cargo-clippy|clippy-driver)"|\[\[\s*"(?:cargo|rustc|rustfmt|rustup)",/
+
+/** Every TS file under `dir`, recursively, gen-relative. */
+function tsFiles(dir: string): string[] {
+	return readdirSync(join(GEN, dir)).flatMap((name) => {
+		const path = join(dir, name)
+		if (statSync(join(GEN, path)).isDirectory()) return name === "_tokenizer" ? [] : tsFiles(path)
+		return name.endsWith(".ts") ? [path] : []
+	})
+}
+
+/** Every gen TS file but this one and the env file, with its text. */
+const others = () =>
+	ROOTS.flatMap(tsFiles)
+		.filter((path) => path !== SELF && path !== ENV)
+		.map((path) => ({ path, text: readFileSync(join(GEN, path), "utf8") }))
+
+const count = (text: string, needle: string) => text.split(needle).length - 1
+
+describe("Rust runs through rust-env.ts only", () => {
+	it("leaves no gen file spawning cargo, rustc, rustfmt or rustup but rust-env.ts", () => {
+		expect(
+			others()
+				.filter(({ text }) => RUST_COMMAND.test(text))
+				.map(({ path }) => path),
+		).toEqual([])
+	})
+
+	it("recognizes a raw spawn and a command list as running Rust", () => {
+		expect(
+			[
+				'spawnSync("cargo", ["build"])',
+				'run: [["rustc", "-o"]]',
+				'spawn("rustfmt")',
+				'spawnSync("node")',
+				'["go", "rust", "python"]',
+			].map((t) => RUST_COMMAND.test(t)),
+		).toEqual([true, true, true, false, false])
+	})
+
+	it("hands out one binary path, rustfmt's, and only to the formatter adapter", () => {
+		expect(Object.keys(env).filter((name) => /path/i.test(name))).toEqual(["rustfmtPath"])
+		const loose = others().filter(
+			({ text }) => count(text, "rustfmtPath(") !== count(text, "rustfmtFormatter(rustfmtPath("),
+		)
+		expect(loose.map(({ path }) => path)).toEqual([])
+	})
+})
+
+const WORKFLOW = readFileSync(join(GEN, "../../.github/workflows/ci.yml"), "utf8")
+const TOML = readFileSync(join(GEN, "../../rust-toolchain.toml"), "utf8")
+/* the step that installs what the file pins: rustup reads the file for a bare install, and the default follows it */
+const PIN_DEFAULT = `rustup default "$(sed -n 's/^channel = "\\(.*\\)"$/\\1/p' rust-toolchain.toml)"`
+const FLOOR_INSTALL = `rustup toolchain install ${RUST_FLOOR} --profile minimal --component clippy`
+
+/** Each job's body under `jobs:`, by name. */
+function jobs(workflow: string): Record<string, string> {
+	const body = workflow.slice(workflow.indexOf("\njobs:\n"))
+	return Object.fromEntries(
+		[...body.matchAll(/^ {2}([\w-]+):\n((?: {4}.*\n|\n)*)/gm)].map(([, name, text]) => [name, text]),
+	)
+}
+
+/** The trimmed lines of each step's `run` in a job body. */
+const runs = (job: string) =>
+	job.split(/^ {6}- /m).map((step) =>
+		(/\brun: [|>]-?\n((?: {10}.*\n)*)|\brun: (.*)\n/.exec(step) ?? [])
+			.slice(1)
+			.join("")
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean),
+	)
+
+describe("CI installs the channel rust-toolchain.toml pins", () => {
+	it("pins an exact minimal channel with rustfmt and clippy", () => {
+		expect(pinnedRust()).toMatch(/^\d+\.\d+\.\d+$/)
+		expect(TOML).toMatch(/^profile = "minimal"$/m)
+		const components = /^components = \[(.*)\]$/m.exec(TOML)?.[1] ?? ""
+		expect([...components.matchAll(/"([^"]+)"/g)].map(([, name]) => name)).toEqual(
+			expect.arrayContaining(["rustfmt", "clippy"]),
+		)
+	})
+
+	it("installs it from the file, and the floor by name, in every job that runs gen's tests", () => {
+		const testing = Object.entries(jobs(WORKFLOW)).filter(([, job]) =>
+			/^ +- run: bun run test(?::harness)?$/m.test(job),
+		)
+		expect(testing.map(([name]) => name).sort()).toEqual(["harness", "test"])
+		const missing = testing.filter(
+			([, job]) =>
+				!runs(job).some(
+					(lines) =>
+						lines.some((line) => /^rustup toolchain install(?: -\S+)*$/.test(line)) &&
+						lines.includes(PIN_DEFAULT) &&
+						lines.includes(FLOOR_INSTALL),
+				),
+		)
+		expect(missing.map(([name]) => name)).toEqual([])
+	})
+
+	it("names no other Rust anywhere: no setup action, no floating channel, no literal but the floor", () => {
+		const setups = WORKFLOW.match(
+			/dtolnay\/rust-toolchain\S*|actions-rust-lang\/setup-rust-toolchain\S*|\btoolchain:.*|\S*@stable/g,
+		)
+		expect(setups ?? []).toEqual([])
+		const literals = [...WORKFLOW.matchAll(/rustup toolchain install +([^\s-]\S*)/g)].map(([, channel]) => channel)
+		expect(literals.filter((channel) => channel !== RUST_FLOOR)).toEqual([])
+		const defaults = [...WORKFLOW.matchAll(/rustup default .*/g)].map(([line]) => line)
+		expect(defaults.filter((line) => line !== PIN_DEFAULT)).toEqual([])
+	})
+})
+
+describe("the toolchains a run compiles with", () => {
+	const PIN = withRust()
+	const FLOOR = withRust(RUST_FLOOR)
+
+	afterEach(() => {
+		vi.unstubAllEnvs()
+	})
+
+	it.skipIf(!PIN)("runs the pinned channel by name, whatever the cwd", () => {
+		expect(runRustc(["--version"], { cwd: env.rustCacheDir("tmp") }).stdout).toMatch(
+			new RegExp(`^rustc ${pinnedRust()} `),
+		)
+	})
+
+	it.skipIf(!FLOOR)("runs the floor toolchain by name", () => {
+		expect(runRustc(["--version"], { toolchain: RUST_FLOOR }).stdout).toMatch(new RegExp(`^rustc ${RUST_FLOOR} `))
+	})
+
+	it("never installs a missing toolchain: it skips, or fails naming the install where Rust is required", () => {
+		vi.stubEnv("HONEY_REQUIRE_TOOLCHAINS", "")
+		vi.stubEnv("HONEY_REQUIRE_RUST", "")
+		expect(withRust("0.0.0")).toBe(false)
+		vi.stubEnv("HONEY_REQUIRE_RUST", "1")
+		expect(() => withRust("0.0.0")).toThrow("rustup toolchain install 0.0.0 --profile minimal")
+	})
+})
+
+describe("the fixture documents a default run compiles", () => {
+	it("come only from the registry, except the mutation harness's guard mutants", () => {
+		const callers = others().filter(({ path, text }) => path !== COMPILED && /\bmutantRustSdk\b/.test(text))
+		expect(
+			callers.map(({ path }) => path).filter((path) => !/^tests\/structure\/mutation-harness[^/]*\.ts$/.test(path)),
+		).toEqual([])
+	})
+})

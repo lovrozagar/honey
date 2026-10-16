@@ -15,13 +15,20 @@ import type { TestSpecification } from "vitest/node"
 import config, { LongestFirst, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
 
 const GEN = resolve(import.meta.dirname, "../..")
-/* the Go compile every executed Go test goes through: its import closure is the emitter and the driver */
-const COMPILED = "src/emit/go/__fixtures__/compiled.ts"
 
 /** Each toolchain project's env fixture, the one module its files run that toolchain through. */
 const ENV: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, string>> = {
 	go: "src/emit/go/__fixtures__/go-env.ts",
+	rust: "src/emit/rust/__fixtures__/rust-env.ts",
 }
+
+/** Each toolchain's CI compile cache: its key's name, and the pin file every compile depends on. */
+const CACHE: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, readonly [key: string, pin: string]>> = {
+	go: ["gobuild", ".go-version"],
+	rust: ["rust", "rust-toolchain.toml"],
+}
+
+type Toolchain = keyof typeof ENV
 
 type Project = {
 	readonly test: {
@@ -107,19 +114,31 @@ function cacheKeyGlobs(workflow: string, name: string): string[] {
 	return [...(key?.[1] ?? "").matchAll(/'([^']+)'/g)].map(([, glob]) => glob as string)
 }
 
-/** The files directly in gen-relative `dir`. */
-const dirFiles = (dir: string) => readdirSync(join(GEN, dir)).map((name) => join(dir, name))
+/** The files directly in gen-relative `dir`; none where it is not there yet. */
+const dirFiles = (dir: string) =>
+	existsSync(join(GEN, dir)) ? readdirSync(join(GEN, dir)).map((name) => join(dir, name)) : []
 
-/** Every file a Go compile in the default run is built from: the emitter and driver side, the runtime, the documents. */
-function goInputs(runFiles: readonly string[], imports: Imports): string[] {
-	const goTests = runFiles.filter((file) => projectsOf(file).includes("go"))
+/**
+ * Every file a `name` compile in the default run is built from: the compile fixture's import closure (the
+ * emitter and the driver), the tests that reach the toolchain with the test files they import (the
+ * documents and programs), the runtime, the driver sources.
+ */
+function compileInputs(name: Toolchain, runFiles: readonly string[], imports: Imports): string[] {
+	const tests = runFiles.filter((file) => reaches(file, ENV[name], imports))
 	return [
-		...closure([COMPILED], imports),
-		...closure(goTests, imports, (file) => goTests.includes(file) || file.startsWith("tests/")),
-		...dirFiles("src/runtime/go"),
-		...dirFiles("src/emit/go/__fixtures__/driver"),
+		...closure([`src/emit/${name}/__fixtures__/compiled.ts`], imports),
+		...closure(tests, imports, (file) => tests.includes(file) || file.startsWith("tests/")),
+		...dirFiles(`src/runtime/${name}`),
+		...dirFiles(`src/emit/${name}/__fixtures__/driver`),
 	].map((file) => `packages/gen/${file}`)
 }
+
+/**
+ * The toolchain project a file belongs to: of the toolchains its imports reach, the one whose group runs
+ * last, since it runs beside that group with every earlier one done; undefined for a Node-only file.
+ */
+const ownerOf = (file: string, imports: Imports) =>
+	(Object.keys(ENV) as Toolchain[]).findLast((name) => reaches(file, ENV[name], imports))
 
 describe("the default run's projects", () => {
 	const imports = diskImports()
@@ -135,10 +154,10 @@ describe("the default run's projects", () => {
 		expect(orders).toEqual([["unit", 0], ...Object.keys(TOOLCHAIN_PROJECTS).map((name, i) => [name, i])])
 	})
 
-	it.each(Object.entries(ENV))("holds every file that reaches the %s toolchain in its project", (name, env) => {
-		const reaching = runFiles.filter((file) => reaches(file, env, imports))
-		expect(reaching.length).toBeGreaterThan(0)
-		expect(reaching.filter((file) => !projectsOf(file).includes(name))).toEqual([])
+	it.each(Object.keys(ENV))("holds every file whose last toolchain reached is %s in its project", (name) => {
+		const owned = runFiles.filter((file) => ownerOf(file, imports) === name)
+		expect(owned.length).toBeGreaterThan(0)
+		expect(owned.filter((file) => !projectsOf(file).includes(name))).toEqual([])
 	})
 
 	it.each(Object.entries(ENV))(
@@ -149,9 +168,10 @@ describe("the default run's projects", () => {
 		},
 	)
 
-	it("keys CI's Go compile cache on every input of a Go compile", () => {
-		const globs = cacheKeyGlobs(readFileSync(join(GEN, "../../.github/workflows/ci.yml"), "utf8"), "gobuild")
-		const inputs = [".go-version", ...goInputs(runFiles, imports)]
+	it.each(Object.keys(CACHE) as Toolchain[])("keys CI's %s compile cache on every input of its compiles", (name) => {
+		const [key, pin] = CACHE[name]
+		const globs = cacheKeyGlobs(readFileSync(join(GEN, "../../.github/workflows/ci.yml"), "utf8"), key)
+		const inputs = [pin, ...compileInputs(name, runFiles, imports)]
 		expect(globs.length).toBeGreaterThan(0)
 		expect(inputs.filter((file) => !globs.some((glob) => matchesGlob(file, glob)))).toEqual([])
 	})

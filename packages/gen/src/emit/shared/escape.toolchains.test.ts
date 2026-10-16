@@ -2,14 +2,15 @@
  * The F2 cross-check against the real compilers: a seeded batch of literals (and comments) goes
  * into one program per language, which prints each string's UTF-8 bytes; they must equal the bytes
  * of the text as written. This lifts the fuzz's spec-derived readers to compiler-verified. Runs
- * where the toolchains are; `HONEY_REQUIRE_TOOLCHAINS=1` (the CI harness job) makes a missing one fail.
+ * where the toolchains are; `HONEY_REQUIRE_TOOLCHAINS=1` (CI's test and harness jobs) makes a missing one fail.
  */
-import { spawnSync } from "node:child_process"
+import { type SpawnSyncReturns, spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { goEnv, goRequired } from "../go/__fixtures__/go-env.ts"
+import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
+import { hasRust, runRustc, rustCacheDir, rustRequired } from "../rust/__fixtures__/rust-env.ts"
 import { rng, runs } from "./__fixtures__/rng.ts"
 import { goString, lineComment, pyString, rustString, wellFormed } from "./escape.ts"
 
@@ -43,20 +44,29 @@ const TOKENS: readonly string[] = [
 
 type Language = {
 	readonly file: string
-	/** the commands that compile and run `path`, printing one hex line per string */
-	readonly run: (path: string, dir: string) => readonly (readonly string[])[]
+	/** compile and run `path`, a program in `dir`, which prints one hex line per string */
+	readonly exec: (path: string, dir: string) => SpawnSyncReturns<string>
+	/** where its work dirs go: Go's and Rust's toolchain caches, off /tmp (00-rules); Python's one source file stays in the OS temp dir */
+	readonly home: () => string
+	/** whether its toolchain is here: Go's and Rust's are the pinned ones (G10) */
+	readonly present: () => boolean
+	/** whether a missing toolchain fails rather than skips */
+	readonly required: () => boolean
 	readonly source: (texts: readonly string[]) => string
-	/** the environment its commands run with: Go's is the pinned toolchain's (G10) */
-	readonly env?: () => NodeJS.ProcessEnv
 	readonly tool: string
-	/** the arguments that make the tool print its version: its presence check */
-	readonly version: readonly string[]
 }
+
+/** `command args`, its output as text. */
+const spawn = (command: string, args: readonly string[]) =>
+	spawnSync(command, [...args], { encoding: "utf8", maxBuffer: 1 << 26 })
 
 const LANGUAGES: Readonly<Record<string, Language>> = {
 	go: {
+		exec: (path) => runGo(["run", path]),
 		file: "main.go",
-		run: (path) => [["go", "run", path]],
+		home: () => goCacheDir("tmp"),
+		present: hasGo,
+		required: goRequired,
 		source: (texts) =>
 			[
 				"package main",
@@ -66,13 +76,14 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 				`for _, s := range []string{${texts.map(goString).join(", ")}} { fmt.Println(hex.EncodeToString([]byte(s))) }`,
 				"}",
 			].join("\n"),
-		env: () => goEnv(),
 		tool: "go",
-		version: ["version"],
 	},
 	python: {
+		exec: (path) => spawn("python3", [path]),
 		file: "main.py",
-		run: (path) => [["python3", path]],
+		home: tmpdir,
+		present: () => spawn("python3", ["--version"]).status === 0,
+		required: () => process.env.HONEY_REQUIRE_TOOLCHAINS === "1",
 		source: (texts) =>
 			[
 				...texts.flatMap((text) => lineComment(text, "#")),
@@ -80,11 +91,17 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 				'    print(s.encode("utf-8").hex())',
 			].join("\n"),
 		tool: "python3",
-		version: ["--version"],
 	},
 	rust: {
+		/* edition 2024, the emitted SDK's: a literal's escapes read the same in 2021 */
+		exec: (path, dir) => {
+			const built = runRustc(["--edition", "2024", "-o", join(dir, "main"), path])
+			return built.status === 0 ? spawn(join(dir, "main"), []) : built
+		},
 		file: "main.rs",
-		run: (path, dir) => [["rustc", "--edition", "2021", "-o", join(dir, "main"), path], [join(dir, "main")]],
+		home: () => rustCacheDir("tmp"),
+		present: () => hasRust(),
+		required: rustRequired,
 		source: (texts) =>
 			[
 				...texts.flatMap((text) => lineComment(text, "///")),
@@ -93,31 +110,22 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 				"}",
 			].join("\n"),
 		tool: "rustc",
-		version: ["--version"],
 	},
 }
 
-const has = ({ env, tool, version }: Language) =>
-	spawnSync(tool, [...version], { env: env?.(), stdio: "ignore" }).status === 0
-/** Whether a missing `language` fails rather than skips: Go's by go-env's rule, the rest under HONEY_REQUIRE_TOOLCHAINS. */
-const required = ({ tool }: Language) => (tool === "go" ? goRequired() : process.env.HONEY_REQUIRE_TOOLCHAINS === "1")
 /** The languages whose toolchain is here, checked once: a missing one is skipped, or fails where it is required. */
-const PRESENT = new Set(Object.keys(LANGUAGES).filter((name) => has(LANGUAGES[name] as Language)))
-const SKIPPED = (name: string) => !PRESENT.has(name) && !required(LANGUAGES[name] as Language)
+const PRESENT = new Set(Object.keys(LANGUAGES).filter((name) => (LANGUAGES[name] as Language).present()))
+const SKIPPED = (name: string) => !PRESENT.has(name) && !(LANGUAGES[name] as Language).required()
 
 /** The hex of each string `language`'s compiler made of the literals of `texts`. */
 function compiled(language: Language, texts: readonly string[]): string[] {
-	const dir = mkdtempSync(join(tmpdir(), "honey-f2-"))
+	const dir = mkdtempSync(join(language.home(), "honey-f2-"))
 	try {
 		const path = join(dir, language.file)
 		writeFileSync(path, language.source(texts))
-		let stdout = ""
-		for (const [command, ...args] of language.run(path, dir)) {
-			const result = spawnSync(command as string, args, { encoding: "utf8", env: language.env?.(), maxBuffer: 1 << 26 })
-			if (result.status !== 0) throw new Error(`${command} failed: ${result.stderr}`)
-			stdout = result.stdout
-		}
-		return stdout.trim().split("\n")
+		const result = language.exec(path, dir)
+		if (result.status !== 0) throw new Error(`${language.tool} failed: ${result.stderr}`)
+		return result.stdout.trim().split("\n")
 	} finally {
 		rmSync(dir, { force: true, recursive: true })
 	}

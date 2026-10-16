@@ -3,15 +3,17 @@
  * base64 crates, which cargo fetches) and Python each compile their helper and check RFC 4231's
  * HMAC-SHA256 test case 2, hex and base64, behind a prefix, and refuse a tampered, short,
  * unprefixed, oddly encoded or undecodable signature. Runs where the toolchains are;
- * `HONEY_REQUIRE_TOOLCHAINS=1` (the CI harness job) makes a missing one fail. C# and Java are
+ * `HONEY_REQUIRE_TOOLCHAINS=1` (CI's test and harness jobs) makes a missing one fail. C# and Java are
  * checked structurally until their SDKs (bits 15 and 16).
  */
-import { spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { type SpawnSyncReturns, spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { goEnv, goRequired } from "../go/__fixtures__/go-env.ts"
+import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
+import { hasRust, runCargo, rustCacheDir, rustRequired } from "../rust/__fixtures__/rust-env.ts"
 import { verifyHelper } from "./webhooks.ts"
 
 const SECRET = "Jefe"
@@ -40,22 +42,62 @@ const triples = (open: string, close: string) =>
 	).join(", ")
 
 type Language = {
-	/** the environment its commands run with: Go's is the pinned toolchain's (G10) */
-	readonly env?: () => NodeJS.ProcessEnv
-	/** the commands that compile and run the program in `dir`, printing one true or false per case */
-	readonly run: (dir: string) => readonly (readonly string[])[]
+	/** compile and run the program in `dir`, which prints one true or false per case */
+	readonly exec: (dir: string) => SpawnSyncReturns<string>
+	/** where its work dirs go: Go's and Rust's toolchain caches, off /tmp (00-rules); Node's and Python's one source file stays in the OS temp dir */
+	readonly home: () => string
+	/** whether its toolchain is here: Go's and Rust's are the pinned ones (G10) */
+	readonly present: () => boolean
+	/** whether a missing toolchain fails rather than skips */
+	readonly required: () => boolean
+	readonly tool: string
 	/** write the program into `dir` */
 	readonly write: (dir: string) => void
-	readonly tool: string
-	readonly version: readonly string[]
+}
+
+/** `command args` in `dir`, its output as text. */
+const spawn = (command: string, args: readonly string[], dir?: string) =>
+	spawnSync(command, [...args], { cwd: dir, encoding: "utf8" })
+
+/** Whether `command --version` runs. */
+const runs = (command: string) => spawn(command, ["--version"]).status === 0
+
+/** Whether a missing toolchain without a fixture of its own fails rather than skips. */
+const toolchainsRequired = () => process.env.HONEY_REQUIRE_TOOLCHAINS === "1"
+
+/* the crates the Rust helper uses, which cargo resolves and fetches once per manifest (Fb10) */
+const CARGO_TOML =
+	'[package]\nname = "verify"\nversion = "0.0.0"\nedition = "2024"\n\n[dependencies]\nbase64 = "0.22"\nhex = "0.4"\nhmac = "0.12"\nsha2 = "0.10"\nsubtle = "2"\n'
+
+/**
+ * Gives the crate in `dir` its lock: resolved and its crates fetched on the first run for this manifest, kept
+ * beside the registry under a name keyed by the manifest's hash, and copied in on every later run, so the
+ * build runs `--locked --offline`.
+ */
+function lock(dir: string): void {
+	const kept = join(
+		rustCacheDir("cargo", `.webhooks-${createHash("sha256").update(CARGO_TOML).digest("hex").slice(0, 12)}`),
+		"Cargo.lock",
+	)
+	if (!existsSync(kept)) {
+		for (const args of [["generate-lockfile"], ["fetch", "--locked"]]) {
+			const result = runCargo([...args, "--manifest-path", join(dir, "Cargo.toml")], { cwd: dir })
+			if (result.status !== 0) throw new Error(`cargo ${args[0]} failed: ${result.stderr}`)
+		}
+		/* fetched first and renamed into place, so a lock that is there names crates that are there */
+		copyFileSync(join(dir, "Cargo.lock"), `${kept}.${process.pid}`)
+		renameSync(`${kept}.${process.pid}`, kept)
+	}
+	copyFileSync(kept, join(dir, "Cargo.lock"))
 }
 
 const LANGUAGES: Readonly<Record<string, Language>> = {
 	go: {
-		run: (dir) => [["go", "run", join(dir, "main.go")]],
-		env: () => goEnv(),
+		exec: (dir) => runGo(["run", join(dir, "main.go")], { cwd: dir }),
+		home: () => goCacheDir("tmp"),
+		present: hasGo,
+		required: goRequired,
 		tool: "go",
-		version: ["version"],
 		write: (dir) =>
 			writeFileSync(
 				join(dir, "main.go"),
@@ -72,9 +114,11 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 			),
 	},
 	python: {
-		run: (dir) => [["python3", join(dir, "main.py")]],
+		exec: (dir) => spawn("python3", [join(dir, "main.py")], dir),
+		home: tmpdir,
+		present: () => runs("python3"),
+		required: toolchainsRequired,
 		tool: "python3",
-		version: ["--version"],
 		write: (dir) =>
 			writeFileSync(
 				join(dir, "main.py"),
@@ -86,15 +130,19 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 			),
 	},
 	rust: {
-		run: (dir) => [["cargo", "run", "--quiet", "--manifest-path", join(dir, "Cargo.toml")]],
+		exec: (dir) => {
+			lock(dir)
+			return runCargo(["run", "--quiet", "--locked", "--offline", "--manifest-path", join(dir, "Cargo.toml")], {
+				cwd: dir,
+			})
+		},
+		home: () => rustCacheDir("tmp"),
+		present: () => hasRust(),
+		required: rustRequired,
 		tool: "cargo",
-		version: ["--version"],
 		write: (dir) => {
 			mkdirSync(join(dir, "src"))
-			writeFileSync(
-				join(dir, "Cargo.toml"),
-				'[package]\nname = "verify"\nversion = "0.0.0"\nedition = "2021"\n\n[dependencies]\nbase64 = "0.22"\nhex = "0.4"\nhmac = "0.12"\nsha2 = "0.10"\nsubtle = "2"\n',
-			)
+			writeFileSync(join(dir, "Cargo.toml"), CARGO_TOML)
 			writeFileSync(
 				join(dir, "src/main.rs"),
 				[
@@ -109,9 +157,11 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 		},
 	},
 	ts: {
-		run: (dir) => [["node", join(dir, "main.ts")]],
+		exec: (dir) => spawn("node", [join(dir, "main.ts")], dir),
+		home: tmpdir,
+		present: () => runs("node"),
+		required: toolchainsRequired,
 		tool: "node",
-		version: ["--version"],
 		write: (dir) =>
 			writeFileSync(
 				join(dir, "main.ts"),
@@ -125,26 +175,18 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 	},
 }
 
-const has = ({ env, tool, version }: Language) =>
-	spawnSync(tool, [...version], { env: env?.(), stdio: "ignore" }).status === 0
-/** Whether a missing `language` fails rather than skips: Go's by go-env's rule, the rest under HONEY_REQUIRE_TOOLCHAINS. */
-const required = ({ tool }: Language) => (tool === "go" ? goRequired() : process.env.HONEY_REQUIRE_TOOLCHAINS === "1")
 /** The languages whose toolchain is here, checked once: a missing one is skipped, or fails where it is required. */
-const PRESENT = new Set(Object.keys(LANGUAGES).filter((name) => has(LANGUAGES[name] as Language)))
-const SKIPPED = (name: string) => !PRESENT.has(name) && !required(LANGUAGES[name] as Language)
+const PRESENT = new Set(Object.keys(LANGUAGES).filter((name) => (LANGUAGES[name] as Language).present()))
+const SKIPPED = (name: string) => !PRESENT.has(name) && !(LANGUAGES[name] as Language).required()
 
 /** What `language`'s program prints for the cases. */
 function verified(language: Language): string {
-	const dir = mkdtempSync(join(tmpdir(), "honey-webhooks-"))
+	const dir = mkdtempSync(join(language.home(), "honey-webhooks-"))
 	try {
 		language.write(dir)
-		let stdout = ""
-		for (const [command, ...args] of language.run(dir)) {
-			const result = spawnSync(command as string, args, { cwd: dir, encoding: "utf8", env: language.env?.() })
-			if (result.status !== 0) throw new Error(`${command} failed: ${result.stderr}`)
-			stdout = result.stdout
-		}
-		return stdout.trim()
+		const result = language.exec(dir)
+		if (result.status !== 0) throw new Error(`${language.tool} failed: ${result.stderr}`)
+		return result.stdout.trim()
 	} finally {
 		rmSync(dir, { force: true, recursive: true })
 	}

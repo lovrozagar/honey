@@ -16,18 +16,25 @@ export const HARNESS = [
 export const GO = [
 	"src/emit/go/**/*.test.ts",
 	"src/emit/shared/escape.test.ts",
-	"src/emit/shared/*.toolchains.test.ts",
 	"src/emit/shared/gofmt.test.ts",
 	"tests/security/emit-adversarial.test.ts",
 	"tests/structure/mutation-harness.test.ts",
 ]
 
 /**
+ * The default run's test files that run Rust: each reaches `rust-env.ts`, the one way gen runs Rust, through its
+ * imports. They run as the `rust` project, held to that as `GO` is. A file that reaches Go too runs here, in the
+ * later group, where no other language runs beside it.
+ */
+export const RUST = ["src/emit/shared/*.toolchains.test.ts", "tests/structure/rust-toolchain.test.ts"]
+
+/**
  * Each language toolchain's project, in the order their `sequence.groupOrder` groups run, one language group at
  * a time: two toolchains at once at most, Node and one language (00-rules:118, G17). `unit` (Node only) shares
- * the first group, so its files fill the workers beside the first language instead of adding a serial group.
+ * the first group, so its files fill the workers beside the first language instead of adding a serial group. A
+ * file whose imports reach several languages belongs to the last of them.
  */
-export const TOOLCHAIN_PROJECTS = { go: GO } as const
+export const TOOLCHAIN_PROJECTS = { go: GO, rust: RUST } as const
 
 /** The default run's test files: the `unit` project's, less every toolchain project's. */
 export const DEFAULT_RUN = ["src/**/*.test.ts", "tests/**/*.test.ts", "scripts/**/*.test.ts"]
