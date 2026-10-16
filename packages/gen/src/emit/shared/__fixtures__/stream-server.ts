@@ -110,7 +110,11 @@ export function streamStage(): Stage {
 					resolve(passed)
 				}
 				const stop = () => end(false)
-				const timer = setTimeout(() => end(true), ms)
+				/* a timer counts from the loop's cached clock, so it can fire short of `ms` in real time: rearm for the rest */
+				const due = performance.now() + ms
+				const check = () =>
+					performance.now() >= due ? end(true) : (timer = setTimeout(check, due - performance.now()))
+				let timer = setTimeout(check, ms)
 				pauses.add(stop)
 			}),
 	}

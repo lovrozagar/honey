@@ -456,7 +456,11 @@ goDescribe("an SSE open through a plain call's pipeline: the OnResponse hooks", 
 
 goDescribe("an SSE open through a plain call's pipeline: OnLog", () => {
 	it("logs request_start, then response_received, the error entry on an error status or no response, naming only the template", async () => {
-		const calls = [ticks({ headers: { "x-tenant": "t-secret" }, search: { since: 77 } }), ticks(), pending("p-secret")]
+		const calls = [
+			ticks({ headers: { "x-tenant": "t-secret" }, search: { since: 987654321 } }),
+			ticks(),
+			pending("p-secret"),
+		]
 		const replies = [TICK, { json: { message: "nope" }, status: 404 }, sse(["data: x\n\n"])]
 		const { run } = await drive(sseSdk(), replies, calls, { script: { log: true } })
 		const closed = await served([], async (server) => server.url)
@@ -476,7 +480,8 @@ goDescribe("an SSE open through a plain call's pipeline: OnLog", () => {
 				logged(PENDING, "error", "error", { error: expect.stringContaining("connection refused") }),
 			],
 		])
+		/* the query value is longer than any port: the refused entry's error names the closed server's port */
 		const logs = JSON.stringify([run.trace?.log, refused.trace?.log])
-		expect(["t-secret", "since", "77", "p-secret"].filter((value) => logs.includes(value))).toEqual([])
+		expect(["t-secret", "since", "987654321", "p-secret"].filter((value) => logs.includes(value))).toEqual([])
 	}, 600_000)
 })

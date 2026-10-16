@@ -1,5 +1,5 @@
 import { PassThrough } from "node:stream"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { recordingServer, type Reply, served } from "./__fixtures__/recording-server.ts"
 import { streamStage } from "./__fixtures__/stream-server.ts"
 
@@ -219,5 +219,28 @@ describe("the stream stage: what a server's close stops", () => {
 		open.emit("error", new Error("reset"))
 		stage.stop()
 		expect([open.destroyed, closed.destroyed]).toEqual([true, true])
+	})
+})
+
+describe("the stream server: a pause", () => {
+	it("lasts at least its ms in real time when its timer fires early, as Node's do on a stale loop clock", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+		let now = 1000
+		const clock = vi.spyOn(performance, "now").mockImplementation(() => now)
+		try {
+			const ended: boolean[] = []
+			void streamStage()
+				.wait(50)
+				.then((passed) => ended.push(passed))
+			now += 49.4
+			await vi.advanceTimersByTimeAsync(50)
+			const early = [...ended]
+			now += 0.6
+			await vi.advanceTimersByTimeAsync(1)
+			expect([early, ended]).toEqual([[], [true]])
+		} finally {
+			clock.mockRestore()
+			vi.useRealTimers()
+		}
 	})
 })

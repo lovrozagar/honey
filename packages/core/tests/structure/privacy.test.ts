@@ -130,7 +130,8 @@ describe("the sanctioned request-detail logger masks what it carries", () => {
 				}),
 			)
 			.map((path) => relative(SRC, path))
-		expect(spreading).toEqual(Object.keys(SPREADS))
+		/* the walk follows the filesystem's entry order, which varies by tree: compare the sets in one order */
+		expect(spreading.sort()).toEqual(Object.keys(SPREADS).sort())
 	})
 
 	it("by default no credential, cookie, session, token query or body reaches its line; with body on, only a bounded text body", async () => {

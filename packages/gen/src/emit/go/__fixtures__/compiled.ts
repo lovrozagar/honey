@@ -15,7 +15,7 @@
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, utimesSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { GoCallPlan } from "../sdk-client.ts"
 import { type GoSdkOptions, generateGoSdk, goCallPlans } from "../sdk.ts"
@@ -71,9 +71,13 @@ function withMain(files: Readonly<Record<string, string>>, main: Main | undefine
 	return entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 }
 
-/** Write each file beside its final name, then rename: a parallel worker never reads half a file. */
+/**
+ * Write each file beside its final name, then rename: a parallel worker never reads half a file. A dir
+ * already complete has its `.complete` touched instead: CI keeps only the SDK dirs a run used (ci.yml).
+ */
 function writeOnce(dir: string, entries: readonly [string, string][]): void {
-	if (existsSync(join(dir, ".complete"))) return
+	const complete = join(dir, ".complete")
+	if (existsSync(complete)) return utimesSync(complete, new Date(), new Date())
 	for (const [name, text] of entries) {
 		const path = join(dir, name)
 		mkdirSync(dirname(path), { recursive: true })
@@ -81,7 +85,7 @@ function writeOnce(dir: string, entries: readonly [string, string][]): void {
 		writeFileSync(partial, text)
 		renameSync(partial, path)
 	}
-	writeFileSync(join(dir, ".complete"), "")
+	writeFileSync(complete, "")
 }
 
 /** Link the check program once per content hash (with the race detector for `race`), beside its final name then renamed; its link errors, if any. */

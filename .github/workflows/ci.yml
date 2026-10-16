@@ -80,12 +80,36 @@ jobs:
           path: ~/.cache/honey-tmp/go/mod
           key: ${{ runner.os }}-gomod-test-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
           restore-keys: ${{ runner.os }}-gomod-test-
+      # the Go build cache and the compiled SDKs (go/__fixtures__/compiled.ts), each SDK dir named by the hash
+      # of what it holds. The key hashes every input of what gets compiled (toolchain-projects.test.ts holds
+      # it to that), so a commit that changes none restores every SDK and compiles nothing; a changed input
+      # restores the last set and rebuilds only the SDKs whose content changed. It is apart from the module
+      # cache above (no shared path), which changes only with the toolchains and the dependency set.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/go/cache
+            ~/.cache/honey-tmp/go/sdk
+          key: >-
+            ${{ runner.os }}-gobuild-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/go/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-gobuild-
+      - run: touch "$RUNNER_TEMP/go-sdk-start"
       - run: bun install --frozen-lockfile
       - run: bun run generate
       - run: bun run test
         env:
           # a missing Go fails the run instead of skipping the executed Go SDK tests
           HONEY_REQUIRE_GO: "1"
+      # every SDK dir this run built or reused has a .complete newer than the start; the rest are stale
+      # (their inputs changed), so the saved cache stays one run's SDKs instead of growing with each change
+      - name: Prune the Go SDKs this run did not use
+        run: >-
+          find ~/.cache/honey-tmp/go/sdk -mindepth 2 -maxdepth 2 -name .complete
+          ! -newer "$RUNNER_TEMP/go-sdk-start" -printf '%h\0' | xargs -0r rm -rf
       - run: bun run test:consumers
       - run: bun run test:e2e
 
