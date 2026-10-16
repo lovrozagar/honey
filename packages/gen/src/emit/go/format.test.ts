@@ -7,6 +7,9 @@ import { type Compiled, compileGo } from "./__fixtures__/compiled.ts"
 import { GO_FLOOR, gofmtPath, withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -83,63 +86,91 @@ function formattedSdk(): Promise<Compiled> {
 }
 
 describe("the emitted Go SDK through gofmt, build and vet", () => {
-	// v0: 3c1d480aa1
-	it("leaves gofmt -l nothing to list after the gofmt pass, and goes out as emitted, still valid Go, without a gofmt", async () => {
+	it("goes out as emitted without a gofmt", async () => {
 		const files = generateGoSdk(DOCUMENT).files
 		expect(await formatFiles(files, {})).toEqual(files)
-		if (!withGo()) return
-		const raw = compileGo(files)
-		const sdk = await formattedSdk()
-		const listed = spawnSync(gofmtPath(), ["-l", sdk.dir], { encoding: "utf8" })
-		expect({ listed: listed.stdout, rawBuilds: raw.built, status: listed.status }, raw.stderr + listed.stderr).toEqual({
-			listed: "",
-			rawBuilds: true,
-			status: 0,
-		})
-	}, 600_000)
+	})
+
+	// v0: 3c1d480aa1
+	it.skipIf(!GO)(
+		"leaves gofmt -l nothing to list after the gofmt pass, and builds as emitted without one",
+		async () => {
+			const files = generateGoSdk(DOCUMENT).files
+			const raw = compileGo(files)
+			const sdk = await formattedSdk()
+			const listed = spawnSync(gofmtPath(), ["-l", sdk.dir], { encoding: "utf8" })
+			expect(
+				{ listed: listed.stdout, rawBuilds: raw.built, status: listed.status },
+				raw.stderr + listed.stderr,
+			).toEqual({
+				listed: "",
+				rawBuilds: true,
+				status: 0,
+			})
+		},
+		600_000,
+	)
 
 	// v0: fa5233feff
-	it("builds under the pinned toolchain", async () => {
-		if (!withGo()) return
-		const sdk = await formattedSdk()
-		expect(sdk.built, sdk.stderr).toBe(true)
-	}, 600_000)
+	it.skipIf(!GO)(
+		"builds under the pinned toolchain",
+		async () => {
+			const sdk = await formattedSdk()
+			expect(sdk.built, sdk.stderr).toBe(true)
+		},
+		600_000,
+	)
 
 	// v0: f0f9e64b26
-	it("is go vet clean under the pinned toolchain, which holds it to the go 1.24 floor", async () => {
-		if (!withGo()) return
-		const sdk = await formattedSdk()
-		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	}, 600_000)
+	it.skipIf(!GO)(
+		"is go vet clean under the pinned toolchain, which holds it to the go 1.24 floor",
+		async () => {
+			const sdk = await formattedSdk()
+			expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+		},
+		600_000,
+	)
 })
 
 describe("the emitted Go SDK under the go 1.24 floor toolchain", () => {
-	it("declares the floor GO_FLOOR names, ships every runtime file, and builds and vets clean under that toolchain itself", () => {
+	it("declares the floor GO_FLOOR names and ships every runtime file", () => {
 		const files = generateGoSdk(DOCUMENT).files
 		const runtime = readdirSync(new URL("../../runtime/go/", import.meta.url)).filter((name) => name.endsWith(".go"))
 		expect({
 			floor: files["go.mod"]?.includes(`\ngo ${GO_FLOOR.split(".").slice(0, 2).join(".")}\n`),
 			missing: runtime.filter((name) => !(name in files)),
 		}).toEqual({ floor: true, missing: [] })
-		if (!withGo()) return
-		const floor = compileGo(files, { toolchain: GO_FLOOR })
-		expect({ built: floor.built, vet: floor.vet }, floor.stderr).toEqual({ built: true, vet: [] })
-	}, 600_000)
+	})
 
-	it("compiles under the toolchain it is given, in a cache dir of its own: a module past the floor fails there", () => {
-		if (!withGo()) return
-		const [major, minor, patch] = GO_FLOOR.split(".")
-		const past = {
-			"go.mod": `module example.com/past\n\ngo ${major}.${minor}.${Number(patch) + 1}\n`,
-			"past.go": "package past\n",
-		}
-		const pinned = compileGo(past)
-		const floor = compileGo(past, { toolchain: GO_FLOOR })
-		expect({ floor: floor.built, ownDir: floor.dir !== pinned.dir, pinned: pinned.built, why: floor.stderr }).toEqual({
-			floor: false,
-			ownDir: true,
-			pinned: true,
-			why: expect.stringContaining(`requires go >= ${major}.${minor}.${Number(patch) + 1} (running go ${GO_FLOOR}`),
-		})
-	}, 600_000)
+	it.skipIf(!GO)(
+		"builds and vets clean under the GO_FLOOR toolchain itself",
+		() => {
+			const files = generateGoSdk(DOCUMENT).files
+			const floor = compileGo(files, { toolchain: GO_FLOOR })
+			expect({ built: floor.built, vet: floor.vet }, floor.stderr).toEqual({ built: true, vet: [] })
+		},
+		600_000,
+	)
+
+	it.skipIf(!GO)(
+		"compiles under the toolchain it is given, in a cache dir of its own: a module past the floor fails there",
+		() => {
+			const [major, minor, patch] = GO_FLOOR.split(".")
+			const past = {
+				"go.mod": `module example.com/past\n\ngo ${major}.${minor}.${Number(patch) + 1}\n`,
+				"past.go": "package past\n",
+			}
+			const pinned = compileGo(past)
+			const floor = compileGo(past, { toolchain: GO_FLOOR })
+			expect({ floor: floor.built, ownDir: floor.dir !== pinned.dir, pinned: pinned.built, why: floor.stderr }).toEqual(
+				{
+					floor: false,
+					ownDir: true,
+					pinned: true,
+					why: expect.stringContaining(`requires go >= ${major}.${minor}.${Number(patch) + 1} (running go ${GO_FLOOR}`),
+				},
+			)
+		},
+		600_000,
+	)
 })

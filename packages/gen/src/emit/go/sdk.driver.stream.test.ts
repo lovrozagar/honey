@@ -7,6 +7,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -95,9 +99,8 @@ async function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly 
 	})
 }
 
-describe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error]", () => {
+goDescribe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error]", () => {
 	it("observes typed events with event and id, breaks out after take, and traces retry and the typed headers", async () => {
-		if (!withGo()) return
 		const reply: Reply = {
 			headers: { "x-stream-id": "s-1" },
 			...sse(
@@ -132,9 +135,8 @@ describe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error]", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: SSE errors and string data", () => {
+goDescribe("the Go test driver: SSE errors and string data", () => {
 	it("observes the events before an undecodable one, its error traced, and an error status before any event as error", async () => {
-		if (!withGo()) return
 		const sdk = streamsSdk()
 		const replies = [sse(['data: {"n":1}\n\n', "data: nope\n\n"]), { json: { message: "nope" }, status: 404 }]
 		const { run } = await drive(sdk, replies, [ticks(), ticks()], {})
@@ -160,7 +162,6 @@ describe("the Go test driver: SSE errors and string data", () => {
 		})
 	}, 600_000)
 	it("observes a string stream's data as sent, a path failing before the stream as no events, and asks isErrors", async () => {
-		if (!withGo()) return
 		const long = `data: ${"x".repeat(2 ** 20 + 1)}\n\n`
 		const replies = [sse(['data: {"a":1}\n\n']), sse(["data: ok\n\n", long])]
 		const script: Script = { calls: [null, null, { isErrors: ["ErrSSELineTooLong", "ErrSSEEventTooLarge"] }] }
@@ -179,9 +180,8 @@ describe("the Go test driver: SSE errors and string data", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: an SSE call's ctx", () => {
+goDescribe("the Go test driver: an SSE call's ctx", () => {
 	it("ends quietly when the call's ctx ends mid-stream: the events so far, no error", async () => {
-		if (!withGo()) return
 		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
 		const { run } = await drive(streamsSdk(), [sse(['data: {"n":1}\n\n'], "hold")], [ticks()], script)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
@@ -191,9 +191,8 @@ describe("the Go test driver: an SSE call's ctx", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: a WebSocket's script, (*TypedWebSocket, error)", () => {
+goDescribe("the Go test driver: a WebSocket's script, (*TypedWebSocket, error)", () => {
 	it("records handlers, sends scripted JSON, text and bytes after the grid's send, and closes with the scripted code", async () => {
-		if (!withGo()) return
 		const script: Script = {
 			calls: [
 				{
@@ -227,9 +226,8 @@ describe("the Go test driver: a WebSocket's script, (*TypedWebSocket, error)", (
 	}, 600_000)
 })
 
-describe("the Go test driver: how a WebSocket read ends", () => {
+goDescribe("the Go test driver: how a WebSocket read ends", () => {
 	it("ends on the server's close frame as closedBy, and on a drop or an over-limit frame with the error traced", async () => {
-		if (!withGo()) return
 		const replies = [
 			ws([{ close: { code: 1000, reason: "done" } }]),
 			ws([{ text: "one" }, { waitMs: 50 }, { drop: true }]),
@@ -257,7 +255,6 @@ describe("the Go test driver: how a WebSocket read ends", () => {
 	}, 600_000)
 
 	it("fails the run when a stream never ends: stream stalled, after 10 s", async () => {
-		if (!withGo()) return
 		const started = Date.now()
 		const { run } = await drive(streamsSdk(), [ws([])], [socket()])
 		expect({ status: run.status, stderr: run.stderr.trim() }).toEqual({
@@ -268,9 +265,8 @@ describe("the Go test driver: how a WebSocket read ends", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: realtime, (*ResumableConnection, error)", () => {
+goDescribe("the Go test driver: realtime, (*ResumableConnection, error)", () => {
 	it("opens over WebSocket with the resume cursor, sends, reads take frames, and traces the settled cursor", async () => {
-		if (!withGo()) return
 		const reply = ws([
 			{ receive: 1 },
 			{ json: { id: "1", n: 1, reconnect_token: "rt-1" } },
@@ -303,7 +299,6 @@ describe("the Go test driver: realtime, (*ResumableConnection, error)", () => {
 	}, 600_000)
 
 	it("falls back to SSE when the upgrade is refused, and to long-poll when SSE is refused too", async () => {
-		if (!withGo()) return
 		const sdk = streamsSdk()
 		const refused = { json: { message: "no" }, status: 404 }
 		const replies = [refused, sse(['id: 3\ndata: {"n":3,"reconnect_token":"rt-3"}\n\n'], "hold")]
@@ -328,9 +323,8 @@ describe("the Go test driver: realtime, (*ResumableConnection, error)", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: a stream method failing before any stream", () => {
+goDescribe("the Go test driver: a stream method failing before any stream", () => {
 	it("observes a refused WebSocket handshake as error, and one refused with 200 as null with its error traced", async () => {
-		if (!withGo()) return
 		const replies: Reply[] = [
 			{ json: { message: "no" }, status: 403 },
 			{ json: {}, status: 200 },
@@ -349,9 +343,8 @@ describe("the Go test driver: a stream method failing before any stream", () => 
 	}, 600_000)
 })
 
-describe("the Go test driver: what it refuses on a stream, nothing sent", () => {
+goDescribe("the Go test driver: what it refuses on a stream, nothing sent", () => {
 	it("refuses controls that do not fit the stream", async () => {
-		if (!withGo()) return
 		const sdk = streamsSdk()
 		const cases: [Call, Script | undefined, RegExp][] = [
 			[feed({}), undefined, /a realtime call without take/],
@@ -389,9 +382,8 @@ describe("the Go test driver: what it refuses on a stream, nothing sent", () => 
 	}, 600_000)
 })
 
-describe("consumer programs for streams: top-level decls and a -race link", () => {
+goDescribe("consumer programs for streams: top-level decls and a -race link", () => {
 	it("compiles decls beside main, and links -race only when asked: a data race then fails the run", async () => {
-		if (!withGo()) return
 		const { files } = generateGoSdk(STREAMS)
 		const decls = "type counter struct{ n int }\n\nfunc (c *counter) bump() { c.n++ }"
 		const body =
@@ -425,11 +417,10 @@ func (c *closing) Recv(ctx context.Context) (any, error) {
 }
 func (c *closing) Connect(context.Context, string, *sdk.TransportOpts) (sdk.TransportConn, error) { return c, nil }`
 
-describe("ResumableConnection.Close: the transport's close before the read's cancel", () => {
+goDescribe("ResumableConnection.Close: the transport's close before the read's cancel", () => {
 	/* coder/websocket drops the connection when a Read's ctx ends (conn.go setupReadTimeout), so a
 	 * cancel first races the close frame Close sends: the server could see no `1000 client close` */
 	it("closes the transport while its read is still live, then cancels the read", async () => {
-		if (!withGo()) return
 		const body = `	c := &closing{entered: make(chan struct{})}
 	rc := sdk.NewResumableConnection("http://rt.test/feed", []sdk.Transport{c}, nil)
 	note(rc.Connect(ctx))

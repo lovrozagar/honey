@@ -4,6 +4,10 @@ import { compiledSdk, type DrivenSdk, type GoError, type HookTrace, type Script 
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -124,9 +128,8 @@ const outcome = ({ hops, run }: Awaited<ReturnType<typeof drive>>) => ({
 const hookError = (text: string) =>
 	plain({ chain: ["*fmt.wrapError", "*errors.errorString"], text, type: "*fmt.wrapError" })
 
-describe("OnRequest and OnResponse hooks: declaration order", () => {
+goDescribe("OnRequest and OnResponse hooks: declaration order", () => {
 	it("run in declaration order on every call: the last header set is sent, the last body set decodes", async () => {
-		if (!withGo()) return
 		const hooks: Script["hooks"] = {
 			request: [{ setHeader: ["X-Hooked", "first"] }, { setHeader: ["X-Hooked", "second"] }],
 			response: [{ body: '{"id":"r0","name":"first"}' }, { body: '{"id":"r1","name":"second"}' }],
@@ -160,9 +163,8 @@ describe("OnRequest and OnResponse hooks: declaration order", () => {
 	}, 600_000)
 })
 
-describe("OnRequest and OnResponse hooks: a hook's error", () => {
+goDescribe("OnRequest and OnResponse hooks: a hook's error", () => {
 	it("ends the call with it, wrapped, runs no later hook, and reaches OnLog as the error entry", async () => {
-		if (!withGo()) return
 		const [before, after] = await Promise.all([
 			failing([{ fail: "boom" }, {}], [{}]),
 			failing([{}], [{ fail: "bad" }, { body: '{"id":"x","name":"x"}' }]),
@@ -186,9 +188,8 @@ describe("OnRequest and OnResponse hooks: a hook's error", () => {
 	}, 600_000)
 })
 
-describe("OnRequest and OnResponse hooks: an auth retry", () => {
+goDescribe("OnRequest and OnResponse hooks: an auth retry", () => {
 	it("runs every hook again with isRetry, its request carrying what they set; OnLog sees one exchange", async () => {
-		if (!withGo()) return
 		const script: Script = {
 			hooks: { request: [{ setHeader: ["X-Hooked", "1"] }], response: [{}] },
 			log: true,
@@ -214,9 +215,8 @@ describe("OnRequest and OnResponse hooks: an auth retry", () => {
 	}, 600_000)
 })
 
-describe("OnLog: the exchange by its operation template, never a path value, query or token", () => {
+goDescribe("OnLog: the exchange by its operation template, never a path value, query or token", () => {
 	it("logs request_start, then response_received at info for a 2xx, warn plus an error entry for an error status", async () => {
-		if (!withGo()) return
 		const missing: Reply = { json: { message: "no such user" }, status: 404 }
 		const { run } = await drive([FOUND, missing], [GET, GET], { log: true }, BEARER)
 		expect(run.trace?.log).toEqual([
@@ -229,7 +229,6 @@ describe("OnLog: the exchange by its operation template, never a path value, que
 	}, 600_000)
 
 	it("logs request_start then an error entry with no status when no response arrives, its text without query or token", async () => {
-		if (!withGo()) return
 		const log = await refused()
 		expect(log).toEqual([start, failed(expect.stringContaining("connection refused") as unknown as string)])
 		const text = JSON.stringify(log)
@@ -239,7 +238,6 @@ describe("OnLog: the exchange by its operation template, never a path value, que
 	/* V0BUG: v0's LogEntry carried the raw transport error, a *url.Error naming the concrete URL and
 	   so every path value (_v0/src/client-go/runtime.go:157-169); v1's entry names the operation template */
 	it("names no path param value in a transport error's text: the operation template stands for the URL", async () => {
-		if (!withGo()) return
 		const text = JSON.stringify(await refused())
 		expect([ORG, USER_ID].filter((value) => text.includes(value))).toEqual([])
 	}, 600_000)

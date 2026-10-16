@@ -6,6 +6,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type RecordingServer, type Reply, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const MODULE = "example.com/sse"
@@ -139,11 +143,10 @@ const CONSUMER = `	var typed iter.Seq2[sdk.SSEEvent[sdk.Tick], error] = client(i
 	}
 	time.Sleep(1500 * time.Millisecond)`
 
-describe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared event schema", () => {
+goDescribe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared event schema", () => {
 	// v0: b857f94d20
 	// v0: 31d78e3aa4
 	it("compiles as iter.Seq2[SSEEvent[Tick]] and [string] in both modes; an empty LastEventID sends none; a break closes the body", async () => {
-		if (!withGo()) return
 		for (const throwOnError of [true, false]) {
 			const files = generateGoSdk(SSE, { modulePath: MODULE, throwOnError }).files
 			const { goneWhileRunning, hops, ran } = await served([HELD], async (server) => {
@@ -156,18 +159,18 @@ describe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared even
 				out: ["1 7 <nil>"],
 				vet: [],
 			})
-			expect({ goneWhileRunning, hops: hops.map((hop) => [hop.headers.accept, hop.headers["last-event-id"]]) }).toEqual(
-				{
-					goneWhileRunning: true,
-					hops: [["text/event-stream", undefined]],
-				},
-			)
+			expect({
+				goneWhileRunning,
+				hops: hops.map((hop) => [hop.headers.accept, hop.headers["last-event-id"]]),
+			}).toEqual({
+				goneWhileRunning: true,
+				hops: [["text/event-stream", undefined]],
+			})
 		}
 	}, 600_000)
 
 	// v0: b857f94d20
 	it("decodes each event's data into T with its event and id, and keeps a string stream's data as sent", async () => {
-		if (!withGo()) return
 		const replies = [sse([tick(1), tick(2), tick(3)]), sse(['data: {"a":1}\n\n'])]
 		const { run } = await drive(sseSdk(), replies, [ticks({ take: 3 }), text()])
 		expect(run.observed, run.stderr).toEqual([
@@ -178,7 +181,6 @@ describe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared even
 
 	// v0: b857f94d20
 	it("ends a typed stream on data that does not decode: the events before it, then a decode error, never a string", async () => {
-		if (!withGo()) return
 		const reply = sse(['data: {"n":1}\n\n', "data: nope\n\n"])
 		const { run } = await drive(sseSdk(), [reply], [ticks()], { script: {} })
 		const call = run.trace?.calls[0]
@@ -193,10 +195,9 @@ describe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared even
 	}, 600_000)
 })
 
-describe("an SSE request on the wire: accept and Last-Event-ID", () => {
+goDescribe("an SSE request on the wire: accept and Last-Event-ID", () => {
 	// v0: e7c7d4d6d6
 	it("asks for text/event-stream, and a per-call accept header wins", async () => {
-		if (!withGo()) return
 		const calls = [ticks(), ticks({ headers: { accept: "text/plain" } })]
 		const { hops, run } = await drive(sseSdk(), [TICK, TICK], calls)
 		expect({ accept: hops.map((hop) => hop.headers.accept), observed: run.observed }, run.stderr).toEqual({
@@ -207,7 +208,6 @@ describe("an SSE request on the wire: accept and Last-Event-ID", () => {
 
 	// v0: 31d78e3aa4
 	it("sends lastEventId as Last-Event-ID, and no such header without one", async () => {
-		if (!withGo()) return
 		const { hops, run } = await drive(sseSdk(), [TICK, TICK], [ticks({ lastEventId: "evt-5" }), ticks()])
 		expect({ ids: hops.map((hop) => hop.headers["last-event-id"]), observed: run.observed }, run.stderr).toEqual({
 			ids: ["evt-5", undefined],
@@ -216,10 +216,9 @@ describe("an SSE request on the wire: accept and Last-Event-ID", () => {
 	}, 600_000)
 })
 
-describe("an SSE request on the wire: the operation's method, params, body and auth", () => {
+goDescribe("an SSE request on the wire: the operation's method, params, body and auth", () => {
 	// v0: 28da0ea38b
 	it("sends the declared query and header params", async () => {
-		if (!withGo()) return
 		const call = ticks({ headers: { "x-tenant": "acme" }, search: { since: 5 } })
 		const { hops, run } = await drive(sseSdk(), [TICK], [call])
 		expect(run.observed, run.stderr).toEqual([TICKED])
@@ -231,7 +230,6 @@ describe("an SSE request on the wire: the operation's method, params, body and a
 	// v0: 28da0ea38b
 	// v0: 1944c43665
 	it("sends a POST stream's method, query, JSON body and bearer token", async () => {
-		if (!withGo()) return
 		const setup: Setup = { auth: { kind: "bearer", token: "tok" } }
 		const { hops, run } = await drive(sseSdk(), [sse(["data: one\n\n"])], [CHAT], { setup })
 		expect(run.observed, run.stderr).toEqual([{ events: [{ data: "one" }], kind: "events" }])
@@ -255,10 +253,9 @@ describe("an SSE request on the wire: the operation's method, params, body and a
 	}, 600_000)
 })
 
-describe("an SSE open that fails", () => {
+goDescribe("an SSE open that fails", () => {
 	// v0: 0ccba24aa9
 	it("yields one typed error and ends on an error status before any event, in throw and safe mode alike", async () => {
-		if (!withGo()) return
 		const replies = [
 			{ json: { message: "nope" }, status: 404 },
 			{ json: { message: "boom" }, status: 500 },
@@ -281,7 +278,6 @@ describe("an SSE open that fails", () => {
 	}, 600_000)
 
 	it("refreshes the token once on a 401 open and streams on the retry", async () => {
-		if (!withGo()) return
 		const replies = [{ json: { message: "expired" }, status: 401 }, TICK]
 		const { hops, run } = await drive(sseSdk(), replies, [ticks()], {
 			script: { onAuthExpired: { tokens: ["new"] } },
@@ -299,9 +295,8 @@ describe("an SSE open that fails", () => {
 	}, 600_000)
 })
 
-describe("an SSE call that fails before it opens", () => {
+goDescribe("an SSE call that fails before it opens", () => {
 	it("fails a bad path param before any request: no events, a PathParamError, no hop", async () => {
-		if (!withGo()) return
 		const { hops, run } = await drive(sseSdk(), [], [pending("..")], { script: {} })
 		const call = run.trace?.calls[0]
 		expect(
@@ -321,10 +316,9 @@ describe("an SSE call that fails before it opens", () => {
 	}, 600_000)
 })
 
-describe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", () => {
+goDescribe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", () => {
 	// v0: 0c1872f081
 	it("is not cut by Config.Timeout or a per-call timeout: a gap past both still delivers the next event", async () => {
-		if (!withGo()) return
 		const reply = sse(["data: 1\n\n", { waitMs: 500 }, "data: 2\n\n"])
 		const { run } = await drive(sseSdk(), [reply], [text({ timeoutMs: 100 })], {
 			script: {},
@@ -340,7 +334,6 @@ describe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", () 
 	}, 600_000)
 
 	it("ends quietly when the caller's ctx is canceled or its deadline passes mid-stream: the events so far, no error", async () => {
-		if (!withGo()) return
 		const held = sse(["data: 1\n\n"], "hold")
 		const script: Script = { calls: [{ cancel: { afterMs: 150 } }, { ctxTimeoutMs: 150 }] }
 		const { run } = await drive(sseSdk(), [held, held], [text(), text()], { script })
@@ -357,7 +350,6 @@ describe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", () 
 	}, 600_000)
 
 	it("closes the body when the caller breaks out of the loop, before the run goes on", async () => {
-		if (!withGo()) return
 		const spaced = sse(["data: 1\n\n", { waitMs: 50 }, "data: 2\n\n", { waitMs: 50 }, "data: 3\n\n"], "hold")
 		/* a second call after a 2 s pause keeps the driver alive, so its exit cannot be what closed the body */
 		const script: Script = { calls: [null, { sleepMs: 2_000 }] }
@@ -377,9 +369,8 @@ describe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", () 
 	}, 600_000)
 })
 
-describe("an SSE open's typed response headers and request hooks", () => {
+goDescribe("an SSE open's typed response headers and request hooks", () => {
 	it("fills <Op>Headers at open, and runs the request hooks on the open", async () => {
-		if (!withGo()) return
 		const reply: Reply = { ...TICK, headers: { "x-stream-id": "s-1" } }
 		const script: Script = { hooks: { request: [{ setHeader: ["x-hook", "1"] }] } }
 		const { hops, run, url } = await drive(sseSdk(), [reply], [ticks()], { script })
@@ -426,9 +417,8 @@ const logged = (operation: string, event: string, level: string, extra: Json = {
 const TICKS = "GET /ticks"
 const PENDING = "GET /pending/{id}"
 
-describe("an SSE open through a plain call's pipeline: the OnResponse hooks", () => {
+goDescribe("an SSE open through a plain call's pipeline: the OnResponse hooks", () => {
 	it("runs them in order on the open: an error status's last body set decodes, a failing hook ends the stream unread", async () => {
-		if (!withGo()) return
 		/* a 2xx stream's Body is nil: its events come from the stream, whatever a hook set */
 		const hooks: Script["hooks"] = { response: [{}, { body: '{"message":"hooked"}' }] }
 		const replies = [TICK, { json: { message: "nope" }, status: 404 }]
@@ -437,7 +427,9 @@ describe("an SSE open through a plain call's pipeline: the OnResponse hooks", ()
 			observed: [TICKED, { body: { message: "hooked" }, errorKey: null, kind: "error", status: 404 }],
 			order: "0 request 0 | 0 response 0 200 | 0 response 1 200 | 1 request 0 | 1 response 0 404 | 1 response 1 404",
 		})
-		const failing = await drive(sseSdk(), [HELD], [ticks()], { script: { hooks: { response: [{ fail: "bad" }, {}] } } })
+		const failing = await drive(sseSdk(), [HELD], [ticks()], {
+			script: { hooks: { response: [{ fail: "bad" }, {}] } },
+		})
 		const { error } = failing.run.trace?.calls[0] ?? {}
 		const gone = failing.streams[0]?.clientGone
 		expect({ error: [error?.via, error?.text], gone, observed: failing.run.observed }, failing.run.stderr).toEqual({
@@ -449,7 +441,6 @@ describe("an SSE open through a plain call's pipeline: the OnResponse hooks", ()
 	}, 600_000)
 
 	it("runs them again with isRetry on an auth retry, and OnLog sees one exchange", async () => {
-		if (!withGo()) return
 		const script: Script = { hooks: { response: [{}] }, log: true, onAuthExpired: { tokens: ["new"] } }
 		const replies = [{ json: { message: "expired" }, status: 401 }, TICK]
 		const setup: Setup = { auth: { kind: "bearer", token: "old" } }
@@ -462,9 +453,8 @@ describe("an SSE open through a plain call's pipeline: the OnResponse hooks", ()
 	}, 600_000)
 })
 
-describe("an SSE open through a plain call's pipeline: OnLog", () => {
+goDescribe("an SSE open through a plain call's pipeline: OnLog", () => {
 	it("logs request_start, then response_received, the error entry on an error status or no response, naming only the template", async () => {
-		if (!withGo()) return
 		const calls = [ticks({ headers: { "x-tenant": "t-secret" }, search: { since: 77 } }), ticks(), pending("p-secret")]
 		const replies = [TICK, { json: { message: "nope" }, status: 404 }, sse(["data: x\n\n"])]
 		const { run } = await drive(sseSdk(), replies, calls, { script: { log: true } })

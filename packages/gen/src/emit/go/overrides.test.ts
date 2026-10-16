@@ -6,6 +6,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -59,12 +63,11 @@ async function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly 
 	})
 }
 
-describe("per-call headers (WithHeader) over Config.Headers", () => {
+goDescribe("per-call headers (WithHeader) over Config.Headers", () => {
 	// v0: d745229932
 	it.each(MODES)(
 		"a per-call header wins over the config's same name for that call only, the rest inherited (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const setup: Setup = { headers: { "X-Keep": "k", "X-Trace": "d" } }
 			const { hops, run } = await drive(ovrSdk(mode), [], [{ ...ECHO, headers: { "x-trace": "a" } }, ECHO], setup)
 			expect(
@@ -94,7 +97,6 @@ describe("per-call headers (WithHeader) over Config.Headers", () => {
 	)
 
 	it("WithHeader is the one per-call header path: <Op>Opts has no Headers field", () => {
-		if (!withGo()) return
 		const run = consumer()
 		expect(seen(run), run.stderr).toEqual({
 			built: true,
@@ -104,11 +106,10 @@ describe("per-call headers (WithHeader) over Config.Headers", () => {
 	}, 600_000)
 })
 
-describe("per-call base URL and timeout (WithBaseURL, WithTimeout)", () => {
+goDescribe("per-call base URL and timeout (WithBaseURL, WithTimeout)", () => {
 	it.each(MODES)(
 		"a per-call base URL sends that call to the other origin, the next to the config's (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const { hops, run } = await drive(ovrSdk(mode), [], [{ ...ECHO, origin: "alt" }, ECHO])
 			expect({ hops: hops.map((h) => [h.origin, h.url]), observed: run.observed }, run.stderr).toEqual({
 				hops: [
@@ -124,7 +125,6 @@ describe("per-call base URL and timeout (WithBaseURL, WithTimeout)", () => {
 	it.each(MODES)(
 		"a per-call timeout shorter than the config's ends the call as a timeout (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const slow: Reply = { delayMs: 1000, json: {}, status: 200 }
 			const { hops, run } = await drive(ovrSdk(mode), [slow], [{ ...ECHO, timeoutMs: 50 }], { timeoutMs: 10_000 })
 			expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
@@ -138,7 +138,6 @@ describe("per-call base URL and timeout (WithBaseURL, WithTimeout)", () => {
 	it.each(MODES)(
 		"a per-call timeout <= 0 removes the config's bound for that call only (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const slow: Reply = { delayMs: 300, json: {}, status: 200 }
 			const calls = [{ ...ECHO, timeoutMs: -1 }, ECHO]
 			const { hops, run } = await drive(ovrSdk(mode), [slow, slow], calls, { timeoutMs: 100 })
@@ -151,11 +150,10 @@ describe("per-call base URL and timeout (WithBaseURL, WithTimeout)", () => {
 	)
 })
 
-describe("the raw response (WithResponseInto)", () => {
+goDescribe("the raw response (WithResponseInto)", () => {
 	it.each(MODES)(
 		"stores a 200's status, headers and readable body beside the decoded answer (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const reply: Reply = { headers: { "x-total": "3" }, json: { id: "i1" }, status: 200 }
 			const { hops, run } = await drive(ovrSdk(mode), [reply], [{ ...ITEM_GET, raw: true }])
 			expect({ hops: hops.map((h) => h.url), observed: run.observed }, run.stderr).toEqual({
@@ -180,7 +178,6 @@ describe("the raw response (WithResponseInto)", () => {
 	it.each(MODES)(
 		"stores an error status's response and its body too (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const reply: Reply = { headers: { "x-total": "0" }, json: { message: "gone" }, status: 404 }
 			const { run } = await drive(ovrSdk(mode), [reply], [{ ...ITEM_GET, raw: true }])
 			expect(run.observed, run.stderr).toEqual([

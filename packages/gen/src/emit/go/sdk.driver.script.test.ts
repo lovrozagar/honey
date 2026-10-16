@@ -4,6 +4,10 @@ import { compiledSdk, type DrivenSdk, type GoError, type Script } from "./__fixt
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -85,9 +89,8 @@ const plain = (entry: Partial<GoError>) => ({
 /** The `*sdk.` entries of an error's chain: the only ones a test may pin. */
 const sdkTypes = (error: GoError | undefined) => error?.chain.filter((type) => type.startsWith("*sdk."))
 
-describe("the Go test driver's script: {observed, trace} on stdout", () => {
+goDescribe("the Go test driver's script: {observed, trace} on stdout", () => {
 	it("records each call's time, a no-op hook per phase, no log and no refresh for an empty script", async () => {
-		if (!withGo()) return
 		const { run, url } = await drive(scriptedSdk(), [FOUND], [GET], { script: {} })
 		expect({ observed: run.observed, status: run.status, trace: run.trace }, run.stderr).toEqual({
 			observed: [DATA],
@@ -112,7 +115,6 @@ describe("the Go test driver's script: {observed, trace} on stdout", () => {
 	}, 600_000)
 
 	it("sets the auth header name and prefix and records OnLog, the operation never the concrete path", async () => {
-		if (!withGo()) return
 		const script: Script = { config: { authHeaderName: "X-Token", authHeaderPrefix: "Token " }, log: true }
 		const replies: Reply[] = [FOUND, { json: { message: "gone" }, status: 404 }]
 		const setup: Setup = { auth: { kind: "bearer", token: "tok" } }
@@ -134,9 +136,8 @@ describe("the Go test driver's script: {observed, trace} on stdout", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver's script: OnAuthExpired and the hooks", () => {
+goDescribe("the Go test driver's script: OnAuthExpired and the hooks", () => {
 	it("answers OnAuthExpired from its tokens in order, then fails it; a retry's hooks see isRetry", async () => {
-		if (!withGo()) return
 		const script: Script = { onAuthExpired: { tokens: ["new"] } }
 		const replies: Reply[] = [{ status: 401 }, FOUND, { status: 401 }]
 		const setup: Setup = { auth: { kind: "bearer", token: "old" } }
@@ -166,7 +167,6 @@ describe("the Go test driver's script: OnAuthExpired and the hooks", () => {
 	}, 600_000)
 
 	it("runs the scripted hooks in order: a set header is sent, a body replaced, a failure ends the call", async () => {
-		if (!withGo()) return
 		const sdk = scriptedSdk()
 		const hooks: Script["hooks"] = {
 			request: [{ setHeader: ["X-Hooked", "1"] }, {}],
@@ -192,9 +192,8 @@ describe("the Go test driver's script: OnAuthExpired and the hooks", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver's script: client config", () => {
+goDescribe("the Go test driver's script: client config", () => {
 	it("turns on invalidation: every hook sees its call's concrete selector", async () => {
-		if (!withGo()) return
 		const script: Script = { config: { invalidation: { staleTimeMs: 60_000 } } }
 		const { run } = await drive(scriptedSdk(), [FOUND, FOUND], [POST, GET], { script })
 		expect(run.trace?.hooks.map((h) => [h.phase, h.selector, h.isStale, h.invalidatedBy])).toEqual([
@@ -206,7 +205,6 @@ describe("the Go test driver's script: client config", () => {
 	}, 600_000)
 
 	it("caps a buffered body by maxResponseBytes: a non-grid error observed as null, tooLarge in the trace", async () => {
-		if (!withGo()) return
 		const script: Script = { config: { maxResponseBytes: 8 } }
 		const replies: Reply[] = [{ bytes: 64, headers: { "content-type": "application/json" }, status: 200 }]
 		const { run } = await drive(scriptedSdk(), replies, [GET], { script })
@@ -223,7 +221,6 @@ describe("the Go test driver's script: client config", () => {
 	}, 600_000)
 
 	it("sends through a caller HTTPClient whose transport and CheckRedirect count, over both redirect origins", async () => {
-		if (!withGo()) return
 		const sdk = scriptedSdk()
 		const script: Script = { config: { httpClient: true } }
 		const same = await drive(sdk, [hop("primary", "/orgs/o/notes/n2"), FOUND], [GET], { script })
@@ -249,9 +246,8 @@ describe("the Go test driver's script: client config", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver's script: per-call directives", () => {
+goDescribe("the Go test driver's script: per-call directives", () => {
 	it("cancels before or during a call, bounds it by a caller deadline, and sleeps before it", async () => {
-		if (!withGo()) return
 		const script: Script = {
 			calls: [{ cancel: "before" }, { cancel: { afterMs: 100 } }, { ctxTimeoutMs: 100 }, { sleepMs: 300 }],
 		}
@@ -282,9 +278,8 @@ describe("the Go test driver's script: per-call directives", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver's script: a call's Go error", () => {
+goDescribe("the Go test driver's script: a call's Go error", () => {
 	it("traces an error status's Go types, status and keys; safe mode's via result and SDKResult", async () => {
-		if (!withGo()) return
 		const invalid: Reply = { json: { error_key: "note.invalid", message: "bad" }, status: 422 }
 		const script: Script = { calls: [{ isKeys: ["note.invalid", "other"] }] }
 		const thrown = await drive(scriptedSdk(), [invalid], [GET], { script })
@@ -316,7 +311,6 @@ describe("the Go test driver's script: a call's Go error", () => {
 	}, 600_000)
 
 	it("traces a refused path param as *sdk.PathParamError, nothing sent, and an undecodable body as null", async () => {
-		if (!withGo()) return
 		const undecodable: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
 		const calls: Call[] = [{ ...GET, params: { id: "..", org: "o" } }, GET]
 		const { hops, run } = await drive(scriptedSdk(), [undecodable], calls, { script: {} })
@@ -340,9 +334,8 @@ describe("the Go test driver's script: a call's Go error", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver's script: opt-in trace members", () => {
+goDescribe("the Go test driver's script: opt-in trace members", () => {
 	it("adds each OnLog entry's durationMs under logDurations, a ClientError's typed envelope under envelope, neither unasked", async () => {
-		if (!withGo()) return
 		const sdk = scriptedSdk()
 		const fields = { text: [{ error_key: "too_short", message: "short", path: "text" }] }
 		const envelope = {
@@ -396,9 +389,8 @@ describe("the Go test driver's script: opt-in trace members", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver's script: what it refuses", () => {
+goDescribe("the Go test driver's script: what it refuses", () => {
 	it("exits 1 naming the reason, nothing sent: an unknown member, a key the method has no field for, a body it takes no parameter for, extra calls, durations without a log", async () => {
-		if (!withGo()) return
 		const sdk = scriptedSdk()
 		const file: Call = {
 			body: { contentType: "application/octet-stream", kind: "binary", size: 1 },

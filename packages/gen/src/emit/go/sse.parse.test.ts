@@ -4,6 +4,10 @@ import { type CallScript, compiledSdk, type DrivenSdk, type GoError, type Script
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const events = (schema: Json) => ({ 200: { content: { "text/event-stream": { schema } }, description: "ok" } })
@@ -62,10 +66,9 @@ function errorOf(error: GoError | undefined) {
 const CAPS: CallScript = { isErrors: ["ErrSSELineTooLong", "ErrSSEEventTooLarge"] }
 const MiB = 2 ** 20
 
-describe("SSE framing through the emitted SDK: line endings", () => {
+goDescribe("SSE framing through the emitted SDK: line endings", () => {
 	// v0: 20a72dddef
 	it("splits events on CRLF and on LF alike, and discards a final event without its blank line", async () => {
-		if (!withGo()) return
 		const { hops, run } = await drive([sse(["data: a\r\n\r\ndata: b\n\ndata: partial"])], [list()])
 		expect({ observed: run.observed, stream: run.trace?.calls[0]?.stream }, run.stderr).toEqual({
 			observed: [{ events: [{ data: "a" }, { data: "b" }], kind: "events" }] satisfies Observed[],
@@ -75,7 +78,6 @@ describe("SSE framing through the emitted SDK: line endings", () => {
 	}, 600_000)
 
 	it("ends a line on CR alone, and skips the LF of a CRLF split across writes instead of reading a blank line", async () => {
-		if (!withGo()) return
 		const replies = [
 			sse(["data: a\rdata: b\r\rdata: c\r\n\r\n"]),
 			sse(["data: a\r", { waitMs: 100 }, "\ndata: b\r\n", { waitMs: 100 }, "\r", { waitMs: 100 }, "\ndata: c\n\n"]),
@@ -89,9 +91,8 @@ describe("SSE framing through the emitted SDK: line endings", () => {
 	}, 600_000)
 })
 
-describe("SSE framing through the emitted SDK: a CR-terminated event dispatches at once", () => {
+goDescribe("SSE framing through the emitted SDK: a CR-terminated event dispatches at once", () => {
 	it("yields an event ended by CR CR on a held stream without waiting for another byte, string and typed", async () => {
-		if (!withGo()) return
 		const replies = [sse(["data: a\r\r"], "hold"), sse(['data: {"n":1}\r\r'], "hold")]
 		const { run } = await drive(replies, [list({ take: 1 }), ticks({ take: 1 })])
 		expect(run.observed, run.stderr).toEqual([
@@ -106,10 +107,9 @@ describe("SSE framing through the emitted SDK: a CR-terminated event dispatches 
 	}, 600_000)
 })
 
-describe("SSE framing through the emitted SDK: the 1 MiB line cap", () => {
+goDescribe("SSE framing through the emitted SDK: the 1 MiB line cap", () => {
 	// v0: b111408001
 	it("delivers a line of exactly 1 MiB, and ends a longer one with ErrSSELineTooLong after the events before it", async () => {
-		if (!withGo()) return
 		const exact = "x".repeat(MiB - "data: ".length)
 		const replies = [sse(["data: ok\n\n", `data: ${exact}x\n\n`, "data: never\n\n"]), sse([`data: ${exact}\n\n`])]
 		const { run } = await drive(replies, [list(), list()], { calls: [CAPS, CAPS] })
@@ -142,10 +142,9 @@ function eventOf(size: number): { data: string; text: string } {
 	return { data: parts.join("\n"), text: `${parts.map((part) => `data: ${part}\n`).join("")}\n` }
 }
 
-describe("SSE framing through the emitted SDK: the 8 MiB event cap", () => {
+goDescribe("SSE framing through the emitted SDK: the 8 MiB event cap", () => {
 	// v0: b111408001
 	it("delivers an event of exactly 8 MiB, and ends one over it with ErrSSEEventTooLarge and no event", async () => {
-		if (!withGo()) return
 		const limit = eventOf(8 * MiB)
 		const over = eventOf(8 * MiB + 1)
 		const nine = `${Array.from({ length: 9 }, () => `data: ${"x".repeat(1_000_000)}\n`).join("")}\n`
@@ -183,10 +182,9 @@ describe("SSE framing through the emitted SDK: the 8 MiB event cap", () => {
 	}, 600_000)
 })
 
-describe("SSE framing through the emitted SDK: the id and retry fields", () => {
+goDescribe("SSE framing through the emitted SDK: the id and retry fields", () => {
 	// v0: 6b81305c6b
 	it("keeps the id sticky across events, ignores an id holding NUL, and clears it on an empty id", async () => {
-		if (!withGo()) return
 		const steps = ["id: 1\ndata: a\n\nid: x\0y\ndata: b\n\ndata: c\n\nid:\ndata: d\n\n"]
 		const { run } = await drive([sse(steps)], [list()])
 		expect({ observed: run.observed, stream: run.trace?.calls[0]?.stream }, run.stderr).toEqual({
@@ -203,7 +201,6 @@ describe("SSE framing through the emitted SDK: the id and retry fields", () => {
 
 	// v0: 5c9b887b0f
 	it("takes retry from ASCII digits only, per event: a negative, fractional, non-numeric or empty value is 0", async () => {
-		if (!withGo()) return
 		const values = ["3000", "-1", "1.5", "x", "0042", "", " 7"]
 		const steps = values.map((value, i) => `retry: ${value}\ndata: ${i}\n\n`)
 		const { run } = await drive([sse([...steps, "data: none\n\n"])], [list()])
@@ -217,9 +214,8 @@ describe("SSE framing through the emitted SDK: the id and retry fields", () => {
 	}, 600_000)
 })
 
-describe("SSE framing through the emitted SDK: the rest of the WHATWG interpretation", () => {
+goDescribe("SSE framing through the emitted SDK: the rest of the WHATWG interpretation", () => {
 	it("skips a leading BOM and comments, joins data lines, reads a bare field name, and drops a block without data", async () => {
-		if (!withGo()) return
 		const steps = [
 			"﻿data: a\n\n",
 			": ping\n",
@@ -243,7 +239,6 @@ describe("SSE framing through the emitted SDK: the rest of the WHATWG interpreta
 	}, 600_000)
 
 	it("strips a BOM only at the stream's start: one before a later field leaves that line an unknown field", async () => {
-		if (!withGo()) return
 		const { run } = await drive([sse(["data: a\n\n﻿data: b\n\ndata: c\n\n"])], [list()])
 		expect(run.observed, run.stderr).toEqual([
 			{ events: [{ data: "a" }, { data: "c" }], kind: "events" },

@@ -6,6 +6,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type RecordingServer, type Reply, served } from "./__fixtures__/recording-server.ts"
 import { goCallPlans } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -126,9 +130,8 @@ describe("goCallPlans: each operation's call plan, in the emitter's own names", 
 	})
 })
 
-describe("the Go test driver: the compiled SDK called by its call plan, (*T, error)", () => {
+goDescribe("the Go test driver: the compiled SDK called by its call plan, (*T, error)", () => {
 	it("sends a nested POST with escaped path params, query, header param and JSON body, and observes data then an error", async () => {
-		if (!withGo()) return
 		const sdk = notesSdk()
 		const replies: Reply[] = [
 			{ json: { id: "n1", text: "hi" }, status: 200 },
@@ -157,9 +160,8 @@ describe("the Go test driver: the compiled SDK called by its call plan, (*T, err
 	}, 600_000)
 })
 
-describe("the Go test driver: the compiled SDK called by its call plan, safe mode (SDKResult[T])", () => {
+goDescribe("the Go test driver: the compiled SDK called by its call plan, safe mode (SDKResult[T])", () => {
 	it("observes an error status as error with a null key, sent to the alt origin, then data on the client's own", async () => {
-		if (!withGo()) return
 		const sdk = notesSdk(false)
 		const replies: Reply[] = [
 			{ json: { message: "no such member" }, status: 404 },
@@ -184,9 +186,8 @@ describe("the Go test driver: the compiled SDK called by its call plan, safe mod
 	}, 600_000)
 })
 
-describe("the Go test driver: timeouts and the raw response, the grid's outcomes in either mode", () => {
+goDescribe("the Go test driver: timeouts and the raw response, the grid's outcomes in either mode", () => {
 	it("observes a lapsed client or call timeout as timeout, a late answer never awaited", async () => {
-		if (!withGo()) return
 		const sdk = notesSdk()
 		const replies: Reply[] = [
 			{ delayMs: 2000, json: {}, status: 200 },
@@ -207,7 +208,6 @@ describe("the Go test driver: timeouts and the raw response, the grid's outcomes
 	}, 600_000)
 
 	it("observes raw: true as the stored response, on success and on an error status, in both modes", async () => {
-		if (!withGo()) return
 		const replies: Reply[] = [
 			{ headers: { "x-extra": "e" }, json: { id: "n1", text: "hi" }, status: 200 },
 			{ text: "plain failure", status: 404 },
@@ -241,9 +241,8 @@ const MOVED: Json = {
 	},
 }
 
-describe("the Go test driver: a success the document does not type (an error-only op)", () => {
+goDescribe("the Go test driver: a success the document does not type (an error-only op)", () => {
 	it("observes the body WithResponseInto stored: its JSON, its text, null when empty, in both modes", async () => {
-		if (!withGo()) return
 		expect(goCallPlans(MOVED)["moved.get"]?.response).toBe("none")
 		const replies: Reply[] = [{ json: { a: 1 }, status: 200 }, { status: 200 }, { status: 200, text: "t" }]
 		const call: Call = { operation: "moved.get", route: { method: "GET", path: "/moved" } }
@@ -281,9 +280,8 @@ const PING: Json = {
 	},
 }
 
-describe("the Go test driver: header params in every Opts shape", () => {
+goDescribe("the Go test driver: header params in every Opts shape", () => {
 	it("sets a required string header and an optional integer header from the call's headers", async () => {
-		if (!withGo()) return
 		const sdk = compiledSdk(PING, { modulePath: "example.com/ping" })
 		const call: Call = {
 			headers: { "x-limit": "5", "x-tenant": "acme" },
@@ -321,9 +319,8 @@ const ROOMS: Json = {
 	},
 }
 
-describe("the Go test driver: a WebSocket, (*TypedWebSocket, error)", () => {
+goDescribe("the Go test driver: a WebSocket, (*TypedWebSocket, error)", () => {
 	it("dials the escaped path with its query, sends the grid's frames, observes take frames, then closes 1000", async () => {
-		if (!withGo()) return
 		const sdk = compiledSdk(ROOMS, { modulePath: "example.com/rooms" })
 		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
 		const reply: Reply = { status: 101, ws: { steps: [{ receive: 1 }, { json: { n: 1 } }, { text: "plain" }] } }
@@ -362,9 +359,8 @@ describe("the Go test driver: a WebSocket, (*TypedWebSocket, error)", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: what it cannot express", () => {
+goDescribe("the Go test driver: what it cannot express", () => {
 	it("refuses it loudly: a non-zero exit naming the operation and the reason, nothing sent", async () => {
-		if (!withGo()) return
 		const sdk = notesSdk()
 		const refused: Call[] = [
 			{ ...CREATE, lastEventId: "e1" },
@@ -382,7 +378,6 @@ describe("the Go test driver: what it cannot express", () => {
 	}, 600_000)
 
 	it("fails a call ending in a Go error the grid has no Observed for: an undecodable success", async () => {
-		if (!withGo()) return
 		const sdk = notesSdk()
 		const replies: Reply[] = [{ headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }]
 		const run = await served(replies, (server) => sdk.runCalls({ calls: [CREATE] }, server))

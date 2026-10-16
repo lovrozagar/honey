@@ -4,6 +4,10 @@ import { compiledSdk, type DrivenSdk, type GoError, type Script, type Trace } fr
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served, type Json as WireJson } from "./__fixtures__/recording-server.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -122,10 +126,9 @@ const answered = ({ hops, run }: Driven) => ({
 	stderr: run.stderr.trim(),
 })
 
-describe("a JSON answer decodes into the operation's type; an undecodable one is the method's error", () => {
+goDescribe("a JSON answer decodes into the operation's type; an undecodable one is the method's error", () => {
 	// v0: 41d76e99ed
 	it("returns the decoded item, and a truncated JSON body as a decode error in both modes, never as SDKResult.Err", async () => {
-		if (!withGo()) return
 		const truncated: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
 		const replies = [found({ id: "i1", name: "one" }), truncated]
 		const driven = (sdk: DrivenSdk) => drive(sdk, replies, [ITEM, ITEM], { script: {} })
@@ -154,10 +157,9 @@ describe("a JSON answer decodes into the operation's type; an undecodable one is
 	}, 600_000)
 })
 
-describe("a decoded answer keeps every member the wire sent", () => {
+goDescribe("a decoded answer keeps every member the wire sent", () => {
 	// v0: 678ce73756
 	it("keeps the additional properties beside a declared field", async () => {
-		if (!withGo()) return
 		const labels = { color: "red", name: "x" }
 		const { hops, run } = await drive(respSdk(), [found(labels)], [LABELS])
 		expect({ hops: hops.map((h) => h.url), observed: run.observed, status: run.status }, run.stderr).toEqual({
@@ -169,7 +171,6 @@ describe("a decoded answer keeps every member the wire sent", () => {
 
 	// v0: c90c86ca85
 	it("keeps the variant's own fields under the discriminator, for each variant", async () => {
-		if (!withGo()) return
 		const circle = { kind: "circle", radius: 2.5 }
 		const square = { kind: "square", side: 3 }
 		const { hops, run } = await drive(respSdk(), [found(circle), found(square)], [SHAPE, SHAPE])
@@ -181,10 +182,9 @@ describe("a decoded answer keeps every member the wire sent", () => {
 	}, 600_000)
 })
 
-describe("a text answer is the body as a string, asked for by its media type", () => {
+goDescribe("a text answer is the body as a string, asked for by its media type", () => {
 	// v0: 53cfea9cfa
 	it("returns a text/plain body verbatim, never JSON-decoded, and sends accept: text/plain, in both modes", async () => {
-		if (!withGo()) return
 		const reply: Reply = { headers: { "content-type": "text/plain" }, status: 200, text: '{"a":1}' }
 		const driven = (sdk: DrivenSdk) => drive(sdk, [reply], [TEXT])
 		const [thrown, safe] = await Promise.all([driven(respSdk()), driven(respSdk(false))])
@@ -194,10 +194,9 @@ describe("a text answer is the body as a string, asked for by its media type", (
 	}, 600_000)
 })
 
-describe("a call ends when its time is up or its ctx is canceled", () => {
+goDescribe("a call ends when its time is up or its ctx is canceled", () => {
 	// v0: d745d904f7
 	it("bounds a call by the client timeout: a timeout observed, a deadline error well before the reply", async () => {
-		if (!withGo()) return
 		const sdk = respSdk()
 		const late: Reply = { delayMs: 2000, json: { ok: true }, status: 200 }
 		const setup: Setup = { timeoutMs: 300 }
@@ -223,7 +222,6 @@ describe("a call ends when its time is up or its ctx is canceled", () => {
 
 	// v0: 9a8782c1a9
 	it("ends a call whose ctx is canceled in flight with context.Canceled, not a deadline and no honey type", async () => {
-		if (!withGo()) return
 		const late: Reply = { delayMs: 2000, json: { ok: true }, status: 200 }
 		const script: Script = { calls: [{ cancel: { afterMs: 100 } }] }
 		const { hops, run } = await drive(respSdk(), [late], [SLOW], { script })

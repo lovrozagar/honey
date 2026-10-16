@@ -4,6 +4,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -167,13 +171,12 @@ const SERVED = { ...USERS_DOC, servers: [{ url: "https://api.example.test/v1" }]
 const usersSdk = (doc: Json, throwOnError?: boolean) =>
 	generateGoSdk(doc, { modulePath: "example.com/users", throwOnError }).files
 
-describe("the Go SDK surface, called from a consumer program", () => {
+goDescribe("the Go SDK surface, called from a consumer program", () => {
 	// v0: 5333bd1243
 	// v0: 48146cd2d8
 	// v0: 5e3a5b2c03
 	// v0: 9e012d9092
 	it("reaches each operation by its dotted id on NewClient's client, a bare id on the client itself", () => {
-		if (!withGo()) return
 		const run = shop()
 		expect(seen(run, "tree"), run.stderr).toEqual({
 			built: true,
@@ -190,7 +193,6 @@ describe("the Go SDK surface, called from a consumer program", () => {
 
 	// v0: 031c04034a
 	it("takes ctx, the path params in path order, the typed body, *Opts and RequestOptions; no response body is error alone", () => {
-		if (!withGo()) return
 		const run = shop()
 		expect(seen(run, "signature"), run.stderr).toEqual({
 			built: true,
@@ -206,7 +208,6 @@ describe("the Go SDK surface, called from a consumer program", () => {
 
 	// v0: 162e732651
 	it("carries query and header params on <Op>Opts as pointers, sending only the ones set", () => {
-		if (!withGo()) return
 		const run = shop()
 		expect(seen(run, "opts"), run.stderr).toEqual({
 			built: true,
@@ -220,10 +221,9 @@ describe("the Go SDK surface, called from a consumer program", () => {
 	}, 600_000)
 })
 
-describe("throwOnError, chosen at generation", () => {
+goDescribe("throwOnError, chosen at generation", () => {
 	// v0: 4fd09131bd
 	it("returns (*T, error) by default and (SDKResult[T], error) with throwOnError false", () => {
-		if (!withGo()) return
 		const thrown = check(
 			usersSdk(USERS_DOC),
 			"example.com/users",
@@ -259,9 +259,8 @@ describe("throwOnError, chosen at generation", () => {
 	}, 600_000)
 })
 
-describe("NewClient's BaseURL", () => {
+goDescribe("NewClient's BaseURL", () => {
 	it("defaults an empty BaseURL to the document's first server, and without either fails at NewClient", () => {
-		if (!withGo()) return
 		const defaulted = check(
 			usersSdk(SERVED),
 			"example.com/users",
@@ -290,10 +289,9 @@ describe("NewClient's BaseURL", () => {
 	}, 600_000)
 })
 
-describe("Go names that never collide, called from a consumer program", () => {
+goDescribe("Go names that never collide, called from a consumer program", () => {
 	// v0: d38a66c936
 	it("keeps a receiver apart from a param named like it: queue with a q query and a q path param", () => {
-		if (!withGo()) return
 		const run = names()
 		expect(seen(run, "receivers"), run.stderr).toEqual({
 			built: true,
@@ -304,7 +302,6 @@ describe("Go names that never collide, called from a consumer program", () => {
 
 	// v0: 6c7134e410
 	it("exports resources and actions named like Go keywords, with keyword and package-named path params", () => {
-		if (!withGo()) return
 		const run = names()
 		expect(seen(run, "keywords"), run.stderr).toEqual({
 			built: true,
@@ -315,22 +312,23 @@ describe("Go names that never collide, called from a consumer program", () => {
 
 	// v0: 6e428e7a5a
 	it("emits a schema named like a runtime type as <Name>Model, returned by its operation", () => {
-		if (!withGo()) return
 		const run = names()
-		expect(seen(run, "models"), run.stderr).toEqual({ built: true, out: ["GET http://api.test/config", "eu"], vet: [] })
+		expect(seen(run, "models"), run.stderr).toEqual({
+			built: true,
+			out: ["GET http://api.test/config", "eu"],
+			vet: [],
+		})
 	}, 600_000)
 
 	// v0: 784a6dbdf7
 	it("labels enum values with unique exported consts: -created_at, created_at and the empty string", () => {
-		if (!withGo()) return
 		const run = names()
 		expect(seen(run, "enums"), run.stderr).toEqual({ built: true, out: ["-created_at created_at []"], vet: [] })
 	}, 600_000)
 })
 
-describe("the consumer-program harness", () => {
+goDescribe("the consumer-program harness", () => {
 	it("answers with a reply's headers in process, and reaches a recording server by the base on stdin", async () => {
-		if (!withGo()) return
 		const body = `	var resp *http.Response
 	replies["POST /users"] = reply{status: 201, body: \`{"id":"u1","name":"Ada"}\`, headers: map[string]string{"X-Version": "7"}}
 	must(client("http://api.test").Users.Create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil, sdk.WithResponseInto(&resp)))

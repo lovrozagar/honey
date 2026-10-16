@@ -1,18 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { goRequired, gofmtPath, hasGo } from "../go/__fixtures__/go-env.ts"
+import { gofmtPath, withGo } from "../go/__fixtures__/go-env.ts"
 import { formatFiles } from "./format.ts"
 import { gofmtFormatter } from "./gofmt.ts"
 
 const UNFORMATTED = "package sdk\nfunc  Add(a int,b int) int{ return a+b }\n"
 const FORMATTED = "package sdk\n\nfunc Add(a int, b int) int { return a + b }\n"
 
-/* Go absent passes locally and fails where it is required (CI, the pre-push battery) */
-const go = hasGo()
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
 
 describe("gofmtFormatter: the Go post-pass (R2)", () => {
-	it("formats a Go file with the pinned gofmt and leaves any other file as it is", async () => {
-		expect(go || !goRequired()).toBe(true)
-		if (!go) return
+	it.skipIf(!GO)("formats a Go file with the pinned gofmt and leaves any other file as it is", async () => {
 		const files = await formatFiles(
 			{ "a.go": UNFORMATTED, "go.mod": "module x\n" },
 			{ go: gofmtFormatter(gofmtPath()) },
@@ -20,9 +18,7 @@ describe("gofmtFormatter: the Go post-pass (R2)", () => {
 		expect(files).toEqual({ "a.go": FORMATTED, "go.mod": "module x\n" })
 	})
 
-	it("reports a file gofmt cannot parse as an error, naming it", async () => {
-		expect(go || !goRequired()).toBe(true)
-		if (!go) return
+	it.skipIf(!GO)("reports a file gofmt cannot parse as an error, naming it", async () => {
 		await expect(
 			formatFiles({ "bad.go": "package sdk\nfunc (\n" }, { go: gofmtFormatter(gofmtPath()) }),
 		).rejects.toThrow(/could not format bad\.go/)

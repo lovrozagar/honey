@@ -7,6 +7,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -134,11 +138,10 @@ const refused = (value: string) =>
 /** REQ's SDK files, for a consumer program beside them. */
 const reqFiles = () => generateGoSdk(REQ, { modulePath: MODULE }).files
 
-describe("path params: each value escaped as one segment, in path order", () => {
+goDescribe("path params: each value escaped as one segment, in path order", () => {
 	// v0: 5770bf39ca
 	// v0: 65900e144b
 	it("sends a slash, a space, a non-ASCII rune and a question mark escaped, the path filled in path order", async () => {
-		if (!withGo()) return
 		const { hops, run } = await drive([FOUND], [user({ org: "a/b c", "user-id": "ü?1" })])
 		expect({ observed: run.observed, status: run.status }, run.stderr).toEqual({ observed: [DATA], status: 0 })
 		expect(hops.map((h) => `${h.method} ${h.url}`)).toEqual(["GET /orgs/a%2Fb%20c/users/%C3%BC%3F1"])
@@ -146,7 +149,6 @@ describe("path params: each value escaped as one segment, in path order", () => 
 
 	// v0: f5710a9129
 	it("refuses an empty, a dot and a dot-dot value as *sdk.PathParamError, nothing sent; a value holding them is escaped", async () => {
-		if (!withGo()) return
 		const values = ["", ".", "..", "../x"]
 		const calls = values.map((value) => user({ org: "ok", "user-id": value }))
 		const { hops, run } = await drive([FOUND], calls, { script: {} })
@@ -162,10 +164,9 @@ describe("path params: each value escaped as one segment, in path order", () => 
 	}, 600_000)
 })
 
-describe("the base URL: its path is kept, a trailing slash never doubled", () => {
+goDescribe("the base URL: its path is kept, a trailing slash never doubled", () => {
 	// v0: 653b3aaa22
 	it("prefixes every request with the base path, with or without a trailing slash", async () => {
-		if (!withGo()) return
 		const call = user({ org: "o", "user-id": "u" })
 		const runs = await Promise.all(
 			[(url: string) => `${url}/api`, (url: string) => `${url}/api/`].map((base) => drive([FOUND], [call], { base })),
@@ -177,10 +178,9 @@ describe("the base URL: its path is kept, a trailing slash never doubled", () =>
 	}, 600_000)
 })
 
-describe("query params: arrays repeated, nullable and bracketed names sent, nothing set sends no query", () => {
+goDescribe("query params: arrays repeated, nullable and bracketed names sent, nothing set sends no query", () => {
 	// v0: a1c45da195
 	it("sends ids once per item, page[size] escaped, maybe as given, and no '?' without a value", async () => {
-		if (!withGo()) return
 		const at = { org: "o", "user-id": "u" }
 		const calls = [
 			user(at, { search: { ids: ["a", "b"], "page[size]": 5 } }),
@@ -196,7 +196,6 @@ describe("query params: arrays repeated, nullable and bracketed names sent, noth
 
 	// v0: a1c45da195
 	it("types the Opts fields by the nilable rule: Ids []string, Maybe *string, PageSize *int64", () => {
-		if (!withGo()) return
 		const body = `
 	m, n := "m", int64(3)
 	must(client("http://api.test").Users.Get(ctx, "o", "u", &sdk.UsersGetOpts{Ids: []string{"a", "b"}, Maybe: &m, PageSize: &n}))
@@ -214,10 +213,9 @@ describe("query params: arrays repeated, nullable and bracketed names sent, noth
 	}, 600_000)
 })
 
-describe("X-Request-Id: a fresh UUIDv4 per request unless the config or the call sets one", () => {
+goDescribe("X-Request-Id: a fresh UUIDv4 per request unless the config or the call sets one", () => {
 	// v0: 82afb66486
 	it("sends two distinct UUIDv4s then the call's own; a config value, then a call value over it", async () => {
-		if (!withGo()) return
 		const own = (value: string): Call => ({ ...PING, headers: { "x-request-id": value } })
 		const fresh = await drive([FOUND, FOUND, FOUND], [PING, PING, own("call-1")])
 		const configured = await drive([FOUND, FOUND], [PING, own("call-2")], {
@@ -240,10 +238,9 @@ describe("X-Request-Id: a fresh UUIDv4 per request unless the config or the call
 	}, 600_000)
 })
 
-describe("request bodies: each declared media type sent as its encoding", () => {
+goDescribe("request bodies: each declared media type sent as its encoding", () => {
 	// v0: bde752863b
 	it("sends an urlencoded body from url.Values with its content type", async () => {
-		if (!withGo()) return
 		const submit: Call = {
 			body: { kind: "json", value: { name: ["form-value"] } },
 			operation: "forms.submit",
@@ -259,7 +256,6 @@ describe("request bodies: each declared media type sent as its encoding", () => 
 
 	// v0: a3274f7f33
 	it("sends a multipart body: a text part, one part per array item, a file part, and no file part without Data", async () => {
-		if (!withGo()) return
 		const body = `
 	api := sdk.NewClient(sdk.Config{BaseURL: input.Base})
 	n := "multipart-value"
@@ -313,9 +309,8 @@ const MULTI: Json = {
 	},
 }
 
-describe("multipart parts: Go types by schema, a file list sent per item with Data", () => {
+goDescribe("multipart parts: Go types by schema, a file list sent per item with Data", () => {
 	it("types files []FilePart, an integer *int64, a boolean list []bool and an object *string, and sends each set one", async () => {
-		if (!withGo()) return
 		const body = `
 	api := sdk.NewClient(sdk.Config{BaseURL: input.Base})
 	n, m := int64(3), \`{"k":1}\`
@@ -366,9 +361,8 @@ async function parts(body: Buffer, contentType: string) {
 	}
 }
 
-describe("Idempotency-Key: an idempotent operation always sends one, stable across an auth retry", () => {
+goDescribe("Idempotency-Key: an idempotent operation always sends one, stable across an auth retry", () => {
 	it("sends a fresh UUIDv4, then Opts.IdempotencyKey, a per-call header over it, the same key on a retry, none on a plain op", async () => {
-		if (!withGo()) return
 		const script: Script = {
 			calls: [null, { idempotencyKey: "opt-k" }, { idempotencyKey: "opt-k2" }],
 			onAuthExpired: { tokens: ["new"] },

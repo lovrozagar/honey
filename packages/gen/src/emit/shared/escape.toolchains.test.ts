@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { goEnv } from "../go/__fixtures__/go-env.ts"
+import { goEnv, goRequired } from "../go/__fixtures__/go-env.ts"
 import { rng, runs } from "./__fixtures__/rng.ts"
 import { goString, lineComment, pyString, rustString, wellFormed } from "./escape.ts"
 
@@ -99,7 +99,11 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 
 const has = ({ env, tool, version }: Language) =>
 	spawnSync(tool, [...version], { env: env?.(), stdio: "ignore" }).status === 0
-const required = process.env.HONEY_REQUIRE_TOOLCHAINS === "1"
+/** Whether a missing `language` fails rather than skips: Go's by go-env's rule, the rest under HONEY_REQUIRE_TOOLCHAINS. */
+const required = ({ tool }: Language) => (tool === "go" ? goRequired() : process.env.HONEY_REQUIRE_TOOLCHAINS === "1")
+/** The languages whose toolchain is here, checked once: a missing one is skipped, or fails where it is required. */
+const PRESENT = new Set(Object.keys(LANGUAGES).filter((name) => has(LANGUAGES[name] as Language)))
+const SKIPPED = (name: string) => !PRESENT.has(name) && !required(LANGUAGES[name] as Language)
 
 /** The hex of each string `language`'s compiler made of the literals of `texts`. */
 function compiled(language: Language, texts: readonly string[]): string[] {
@@ -120,21 +124,22 @@ function compiled(language: Language, texts: readonly string[]): string[] {
 }
 
 describe("F2 cross-check: what the real compilers make of every literal", () => {
-	it.each(Object.keys(LANGUAGES))(
-		"%s",
-		(name) => {
-			const language = LANGUAGES[name] as Language
-			const r = rng(100)
-			const texts = Array.from({ length: runs(200, 3000) }, () => {
-				let text = ""
-				for (let n = r.int(16); n > 0; n--) text += r.pick(TOKENS)
-				return text
-			})
-			const expected = texts.map((text) => Buffer.from(wellFormed(text), "utf8").toString("hex"))
-			/* a missing toolchain passes locally and fails where it is required */
-			const missing = required ? [`${language.tool} is missing under HONEY_REQUIRE_TOOLCHAINS=1`] : expected
-			expect(has(language) ? compiled(language, texts) : missing).toEqual(expected)
-		},
-		600_000,
-	)
+	for (const name of Object.keys(LANGUAGES))
+		it.skipIf(SKIPPED(name))(
+			name,
+			() => {
+				const language = LANGUAGES[name] as Language
+				const r = rng(100)
+				const texts = Array.from({ length: runs(200, 3000) }, () => {
+					let text = ""
+					for (let n = r.int(16); n > 0; n--) text += r.pick(TOKENS)
+					return text
+				})
+				const expected = texts.map((text) => Buffer.from(wellFormed(text), "utf8").toString("hex"))
+				/* reached without its toolchain only where that toolchain is required, so it fails */
+				const missing = [`${language.tool} is missing where it is required`]
+				expect(PRESENT.has(name) ? compiled(language, texts) : missing).toEqual(expected)
+			},
+			600_000,
+		)
 })

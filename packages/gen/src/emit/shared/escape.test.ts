@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { compileGo } from "../go/__fixtures__/compiled.ts"
-import { goRequired, hasGo } from "../go/__fixtures__/go-env.ts"
+import { withGo } from "../go/__fixtures__/go-env.ts"
 import {
 	blockCommentText,
 	commentText,
@@ -13,6 +13,9 @@ import {
 	tsString,
 	wellFormed,
 } from "./escape.ts"
+
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
 
 const LONE_HIGH = "\uD800"
 const LONE_LOW = "\uDC00"
@@ -127,10 +130,8 @@ func main() {
 }
 `
 
-/** The Odd struct emitted, built with TAGS beside it, and what TAGS saw; undefined where Go may be absent. */
+/** The Odd struct emitted, built with TAGS beside it, and what TAGS saw. */
 async function compileOdd() {
-	expect(hasGo() || !goRequired()).toBe(true)
-	if (!hasGo()) return undefined
 	const { generateGoSdk } = await import("../go/sdk.ts")
 	const properties = Object.fromEntries(Object.keys(ODD_KEYS).map((key) => [key, { type: "string" }]))
 	const schema = { properties, required: Object.keys(ODD_KEYS), type: "object" }
@@ -162,10 +163,9 @@ let odd: ReturnType<typeof compileOdd> | undefined
 /** compileOdd, once. */
 const oddStruct = () => (odd ??= compileOdd())
 
-describe("Go struct tags: any JSON key", () => {
+describe.skipIf(!GO)("Go struct tags: any JSON key", () => {
 	it("gives a key holding a backtick, a quote or a backslash one json tag that reads back as the key, vet clean", async () => {
 		const seen = await oddStruct()
-		if (seen === undefined) return
 		expect({ built: seen.built, tags: seen.seen?.tags, vet: seen.vet }, seen.stderr).toEqual({
 			built: true,
 			tags: Object.keys(ODD_KEYS).sort(),
@@ -175,7 +175,6 @@ describe("Go struct tags: any JSON key", () => {
 
 	it("sends and reads such a key as itself on the wire", async () => {
 		const seen = await oddStruct()
-		if (seen === undefined) return
 		expect(JSON.parse(seen.seen?.wire ?? "null"), seen.stderr).toEqual(ODD_KEYS)
 	}, 600_000)
 })

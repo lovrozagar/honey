@@ -7,6 +7,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const MODULE = "example.com/ws"
@@ -101,10 +105,9 @@ const surface = once(() =>
 `),
 )
 
-describe("a WebSocket operation's method: (*TypedWebSocket, error), dialing the operation's path", () => {
+goDescribe("a WebSocket operation's method: (*TypedWebSocket, error), dialing the operation's path", () => {
 	// v0: 11520ddd49
 	it("compiles with that signature, and dials the escaped path as an upgrade, reading a JSON frame", async () => {
-		if (!withGo()) return
 		expect(seen(surface()), surface().stderr).toEqual({ built: true, out: ["compiled"], vet: [] })
 		const call = rooms({ params: { room: "a b/c" }, take: 1 })
 		const { hops, run, streams } = await drive([ws([{ json: { n: 1 } }])], [call], { script: {} })
@@ -121,10 +124,9 @@ describe("a WebSocket operation's method: (*TypedWebSocket, error), dialing the 
 	}, 600_000)
 })
 
-describe("the WebSocket dial's headers: the auth credential, config and call headers, a request id", () => {
+goDescribe("the WebSocket dial's headers: the auth credential, config and call headers, a request id", () => {
 	// v0: 1f8936180b
 	it("sends the bearer token, Config.Headers, a per-call header and a UUIDv4 X-Request-Id on the upgrade", async () => {
-		if (!withGo()) return
 		const setup: Setup = { auth: { kind: "bearer", token: "t" }, headers: { "X-Tenant": "acme" } }
 		const call = rooms({ headers: { "x-call": "1" }, take: 1 })
 		const { hops, run } = await drive([ws([{ text: "hi" }])], [call], { setup })
@@ -141,10 +143,9 @@ describe("the WebSocket dial's headers: the auth credential, config and call hea
 	}, 600_000)
 })
 
-describe("Opts.ReconnectToken: one reconnect_token pair, after the declared query params", () => {
+goDescribe("Opts.ReconnectToken: one reconnect_token pair, after the declared query params", () => {
 	// v0: c8c670b75f
 	it("sends reconnect_token once, after since, and nothing when the token is empty or unset", async () => {
-		if (!withGo()) return
 		const calls = [
 			rooms({ reconnectToken: "rt-1", take: 0 }),
 			rooms({ reconnectToken: "rt-1", search: { since: 3 }, take: 0 }),
@@ -171,7 +172,6 @@ describe("Opts.ReconnectToken: one reconnect_token pair, after the declared quer
 
 	// v0: c8c670b75f
 	it("has a string ReconnectToken and a Protocols field on every WebSocket Opts, and no ReconnectToken2", () => {
-		if (!withGo()) return
 		const fields = consumer(`	opts := sdk.RoomsSocketOpts{ReconnectToken: "x", Protocols: []string{"v2", "v1"}}
 	var token string = opts.ReconnectToken
 	var protocols []string = opts.Protocols
@@ -187,10 +187,9 @@ describe("Opts.ReconnectToken: one reconnect_token pair, after the declared quer
 	}, 600_000)
 })
 
-describe("Opts.Protocols: the subprotocols offered as Sec-WebSocket-Protocol", () => {
+goDescribe("Opts.Protocols: the subprotocols offered as Sec-WebSocket-Protocol", () => {
 	// v0: bbdff81676
 	it("offers the protocols in order, reads frames once the server picks one, and offers none without them", async () => {
-		if (!withGo()) return
 		const replies = [ws([{ json: { p: 1 } }], "v1"), ws([{ json: { p: 2 } }], "v2"), ws([{ json: { p: 3 } }])]
 		const calls = [plain({ take: 1 }), rooms({ take: 1 }), rooms({ take: 1 })]
 		const script: Script = { calls: [{ protocols: ["v2", "v1"] }, { protocols: ["v2"] }, null] }
@@ -209,10 +208,9 @@ describe("Opts.Protocols: the subprotocols offered as Sec-WebSocket-Protocol", (
 	}, 600_000)
 })
 
-describe("TypedWebSocket: Send, Read, On and Close round-trip", () => {
+goDescribe("TypedWebSocket: Send, Read, On and Close round-trip", () => {
 	// v0: 9b47c082c4
 	it("sends text, JSON and binary frames in order, reads the server's JSON, fires message then close, closes 1000", async () => {
-		if (!withGo()) return
 		const script: Script = {
 			calls: [{ ws: { on: true, send: [{ json: { a: 1 } }, { text: "t" }, { bytes: 3 }] } }],
 		}
@@ -244,16 +242,14 @@ describe("TypedWebSocket: Send, Read, On and Close round-trip", () => {
 	}, 600_000)
 })
 
-describe("close codes and reasons", () => {
+goDescribe("close codes and reasons", () => {
 	// v0: 10518c3bac
 	it("exports WSStatusNormalClosure, WSStatusGoingAway and WSStatusProtocolError as 1000, 1001 and 1002", () => {
-		if (!withGo()) return
 		expect(seen(surface(), "codes"), surface().stderr).toEqual({ built: true, out: ["1000 1001 1002"], vet: [] })
 	}, 600_000)
 
 	// v0: 10518c3bac
 	it("sends Close's code and reason, cutting a reason over 123 bytes at a rune boundary", async () => {
-		if (!withGo()) return
 		const long = `${"a".repeat(122)}é`
 		const script: Script = {
 			calls: [
@@ -295,10 +291,9 @@ const STREAM_BY_SERVER = {
 	handlers: ["close done"],
 }
 
-describe("how a WebSocket read ends: a frame over 32 KiB, a close frame, a drop, the read limit", () => {
+goDescribe("how a WebSocket read ends: a frame over 32 KiB, a close frame, a drop, the read limit", () => {
 	// v0: 53d2bbf44d
 	it("reads a 64 KiB frame, ends on a close frame as closedBy, and fires error on a drop and an over-limit frame", async () => {
-		if (!withGo()) return
 		const big = "x".repeat(65_536)
 		const replies = [
 			ws([{ json: big }]),
@@ -344,9 +339,8 @@ describe("how a WebSocket read ends: a frame over 32 KiB, a close frame, a drop,
 	}, 600_000)
 })
 
-describe("a refused WebSocket handshake", () => {
+goDescribe("a refused WebSocket handshake", () => {
 	it("is a typed error for an error status, and a transport error for a 2xx, both before any stream", async () => {
-		if (!withGo()) return
 		const replies: Reply[] = [
 			{ json: { message: "no" }, status: 403 },
 			{ json: {}, status: 200 },

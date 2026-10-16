@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { compileGo } from "./__fixtures__/compiled.ts"
-import { goRequired, hasGo } from "./__fixtures__/go-env.ts"
+import { withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -119,8 +119,8 @@ const reordered = (document: Json): Json => ({
 	),
 })
 
-/* Go absent passes locally and fails where it is required (CI, the pre-push battery) */
-const go = hasGo()
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
 
 describe("generateGoSdk: the module", () => {
 	// v0: 1c0fd18262
@@ -153,7 +153,7 @@ describe("generateGoSdk: the module", () => {
 	})
 
 	// v0: 7708f42d65
-	it("floors go.mod at go 1.24 and requires coder/websocket, verified by go.sum, only for a WebSocket API", () => {
+	it("floors go.mod at go 1.24 and requires coder/websocket with its go.sum lines, only for a WebSocket API", () => {
 		const ws = generateGoSdk(WS_DOCUMENT).files
 		expect({
 			http: goMod(generateGoSdk(DOCUMENT).files["go.mod"] ?? ""),
@@ -167,12 +167,17 @@ describe("generateGoSdk: the module", () => {
 			],
 			ws: { go: "1.24", module: "example.com/sdk", require: ["github.com/coder/websocket v1.8.15"] },
 		})
-		expect(go || !goRequired()).toBe(true)
-		if (!go) return
-		/* GOFLAGS=-mod=readonly: a missing or wrong go.sum line fails the build */
-		const sdk = compileGo(ws)
-		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	}, 600_000)
+	})
+
+	it.skipIf(!GO)(
+		"builds and vets a WebSocket module under -mod=readonly, its go.sum complete",
+		() => {
+			/* GOFLAGS=-mod=readonly: a missing or wrong go.sum line fails the build */
+			const sdk = compileGo(generateGoSdk(WS_DOCUMENT).files)
+			expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+		},
+		600_000,
+	)
 })
 
 describe("generateGoSdk: generated files", () => {

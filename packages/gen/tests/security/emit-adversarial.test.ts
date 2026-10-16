@@ -17,6 +17,9 @@ import type { Call, Setup } from "../integration/conformance/matrix.ts"
 import { guardNamed } from "../structure/mutation-harness.ts"
 import { CORPUS } from "./adversarial-corpus.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+
 const REPO = resolve(import.meta.dirname, "../../../..")
 
 const mutant = guardNamed(process.env.HONEY_MUTANT)
@@ -366,7 +369,7 @@ async function landing(sdk: DrivenSdk, script?: Script): Promise<{ seen: unknown
 	return { seen: [run.status, `${hop?.origin} ${hop?.url}`, credentials], stderr: run.stderr }
 }
 
-describe.skipIf(!withGo())("gen adversarial: the Go SDK emitter", () => {
+describe.skipIf(!GO)("gen adversarial: the Go SDK emitter", () => {
 	/* v0 tidied the module first and skipped offline; v1 emits go.sum (G9) */
 	// v0: 4eba1d1639
 	it("vets clean in both throwOnError modes, every hostile name a Go identifier and every value a literal", () => {
@@ -392,7 +395,7 @@ describe.skipIf(!withGo())("gen adversarial: the Go SDK emitter", () => {
 	}, 600_000)
 })
 
-describe.skipIf(!withGo())("gen adversarial: the emitted Go runtime", () => {
+describe.skipIf(!GO)("gen adversarial: the emitted Go runtime", () => {
 	it("drops the auth header, cookies and configured headers on a cross-origin redirect hop, a caller's HTTPClient included", async () => {
 		const sdk = guards()
 		const runs = await Promise.all([landing(sdk), landing(sdk, { config: { httpClient: true } })])

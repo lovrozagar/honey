@@ -6,6 +6,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 type Invalidation = NonNullable<NonNullable<Script["config"]>["invalidation"]>
 
@@ -92,10 +96,9 @@ const staleness = (hooks: readonly HookTrace[]) => hooks.map((h) => h.isStale)
 /** What the reads after the first two calls were invalidated by. */
 const by = (hooks: readonly HookTrace[]) => hooks.slice(2).map((h) => h.invalidatedBy)
 
-describe("stale tracking: a successful mutation stales its x-invalidate targets for the next read", () => {
+goDescribe("stale tracking: a successful mutation stales its x-invalidate targets for the next read", () => {
 	// v0: 5cbc1880a7
 	it("shows each target's read as stale, invalidated by the mutation's concrete selector", async () => {
-		if (!withGo()) return
 		const hooks = await requests([CREATE, LIST, GET], { staleTimeMs: 60_000 })
 		expect(hooks.map(seen)).toEqual([
 			["POST /users", false, []],
@@ -106,14 +109,12 @@ describe("stale tracking: a successful mutation stales its x-invalidate targets 
 
 	// v0: b1382c5259
 	it("stales every instance of a target its params cannot fill, and clears one once a read through it succeeds", async () => {
-		if (!withGo()) return
 		const hooks = await requests([CREATE, GET, GET], { staleTimeMs: 60_000 })
 		expect(staleness(hooks)).toEqual([false, true, false])
 	}, 600_000)
 
 	// v0: 48f0de3009
 	it("stops reading stale once staleTimeMs has passed since the last mark", async () => {
-		if (!withGo()) return
 		/* the sleep is a lower bound, so 1100 ms always outlasts the 1000 ms window; the read right
 		 * after the first create has the whole window as its margin */
 		const hooks = await requests([CREATE, GET, CREATE, GET], { staleTimeMs: 1000 }, [
@@ -126,12 +127,11 @@ describe("stale tracking: a successful mutation stales its x-invalidate targets 
 	}, 600_000)
 })
 
-describe("stale tracking: off without invalidation or with staleTimeMs 0", () => {
+goDescribe("stale tracking: off without invalidation or with staleTimeMs 0", () => {
 	/* V0BUG: v0's name says the tracker is nil when StaleTime is 0; it never was (a disabled non-nil
 	 * tracker). The port pins the observable: no selector, nothing stale. */
 	// v0: 7298c85a98
 	it("reports no selector and nothing stale to the hooks after a mutation", async () => {
-		if (!withGo()) return
 		const [none, zero] = await Promise.all([requests([CREATE, LIST]), requests([CREATE, LIST], { staleTimeMs: 0 })])
 		const off = [
 			["", false, []],
@@ -141,12 +141,11 @@ describe("stale tracking: off without invalidation or with staleTimeMs 0", () =>
 	}, 600_000)
 })
 
-describe("stale tracking: bounded by InvalidationConfig, never by Config", () => {
+goDescribe("stale tracking: bounded by InvalidationConfig, never by Config", () => {
 	/* G1: v0's test passed on the dead Config.StaleMaxEntries; the live bound is
 	 * InvalidationConfig.StaleMaxEntries, which the driver sets from `staleMaxEntries` */
 	// v0: f92c465b60
 	it("evicts the least recently staled down to half of staleMaxEntries once a mark passes it", async () => {
-		if (!withGo()) return
 		const reads = [TOUCH, A, B, C]
 		const [capped, open] = await Promise.all([
 			requests(reads, { staleMaxEntries: 2, staleTimeMs: 60_000 }),
@@ -160,7 +159,6 @@ describe("stale tracking: bounded by InvalidationConfig, never by Config", () =>
 
 	// v0: f92c465b60
 	it("has no Config.StaleMaxEntries: a client setting it does not compile", () => {
-		if (!withGo()) return
 		const ran = check(
 			generateGoSdk(STALE, { modulePath: MODULE }).files,
 			MODULE,
@@ -173,7 +171,6 @@ describe("stale tracking: bounded by InvalidationConfig, never by Config", () =>
 	}, 600_000)
 
 	it("keeps at most maxSourcesPerTarget mutations per stale selector; a templated target takes the mutation's params", async () => {
-		if (!withGo()) return
 		const reads = [CREATE, DELETE, LIST, GET]
 		const [capped, open] = await Promise.all([
 			requests(reads, { maxSourcesPerTarget: 1, staleTimeMs: 60_000 }),

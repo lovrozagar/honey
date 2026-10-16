@@ -7,6 +7,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type RecordedHop, type Reply, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -118,12 +122,11 @@ const consumerOf = (body: string) => once(() => check(generateGoSdk(BIN, { modul
 
 const octets = (size: number, type: string): Reply => ({ bytes: size, headers: { "content-type": type }, status: 200 })
 
-describe("binary responses: []byte, never JSON-decoded, Accept the declared media type", () => {
+goDescribe("binary responses: []byte, never JSON-decoded, Accept the declared media type", () => {
 	// v0: 63ad606050
 	it.each(MODES)(
 		"answers an octet-stream or pdf body as its bytes and asks for that media type (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const replies = [octets(256, "application/octet-stream"), octets(4, "application/pdf")]
 			const { hops, run } = await drive(binSdk(mode), replies, [FILES_GET, DOCS_GET])
 			expect({ accept: hops.map((h) => [h.url, h.headers.accept]), observed: run.observed }, run.stderr).toEqual({
@@ -141,7 +144,6 @@ describe("binary responses: []byte, never JSON-decoded, Accept the declared medi
 	)
 
 	it("a per-call Accept header wins over the declared media type", async () => {
-		if (!withGo()) return
 		const call = { ...FILES_GET, headers: { accept: "*/*" } }
 		const { hops, run } = await drive(binSdk(true), [octets(3, "application/octet-stream")], [call])
 		expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
@@ -163,7 +165,6 @@ describe("binary responses: []byte, never JSON-decoded, Accept the declared medi
 	note(fmt.Sprintf("%T %q %v", s, s, err))`)
 
 	it("returns ([]byte, error) for a binary answer and (string, error) for a text one, no pointer (F1)", () => {
-		if (!withGo()) return
 		const run = answers()
 		expect(seen(run), run.stderr).toEqual({
 			built: true,
@@ -190,11 +191,10 @@ const uploadOf = (h: RecordedHop) => ({
 })
 const UPLOADED = { contentType: "application/octet-stream", method: "PUT", url: "/files/x" }
 
-describe("non-JSON request bodies and text answers", () => {
+goDescribe("non-JSON request bodies and text answers", () => {
 	it.each(MODES)(
 		"streams an io.Reader body under its declared media type, sized or one-shot (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const size = 65_536
 			const done: Reply = { json: { size }, status: 200 }
 			const script: Script = { calls: [null, { oneShotBody: true }] }
@@ -219,7 +219,6 @@ describe("non-JSON request bodies and text answers", () => {
 	it.each(MODES)(
 		"sends a string body as text/plain and answers text as the string sent, never JSON-decoded (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const replies: Reply[] = [
 				{ headers: { "content-type": "text/plain" }, status: 200, text: "hello" },
 				{ headers: { "content-type": "text/plain" }, status: 200, text: '"quoted"' },
@@ -245,11 +244,10 @@ describe("non-JSON request bodies and text answers", () => {
 /** An item read's 200 carrying `headers`. */
 const item = (headers: Record<string, string>): Reply => ({ headers, json: { id: "i1" }, status: 200 })
 
-describe("typed response headers (<Op>Headers through WithHeadersInto)", () => {
+goDescribe("typed response headers (<Op>Headers through WithHeadersInto)", () => {
 	it.each(MODES)(
 		"fills the declared headers only, a missing optional one left out (%s)",
 		async (_, mode) => {
-			if (!withGo()) return
 			const replies = [
 				item({ "x-etag": "e1", "x-item-version": "3", "x-undeclared": "u" }),
 				item({ "x-item-version": "3" }),
@@ -279,7 +277,6 @@ describe("typed response headers (<Op>Headers through WithHeadersInto)", () => {
 	note(err != nil, miss.XItemVersion, miss.XEtag == nil)`)
 
 	it("types a required header as its Go type and an optional one as a pointer; an error status fills nothing", () => {
-		if (!withGo()) return
 		const run = typed()
 		expect(seen(run), run.stderr).toEqual({
 			built: true,

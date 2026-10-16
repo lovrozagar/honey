@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { goEnv } from "../go/__fixtures__/go-env.ts"
+import { goEnv, goRequired } from "../go/__fixtures__/go-env.ts"
 import { verifyHelper } from "./webhooks.ts"
 
 const SECRET = "Jefe"
@@ -127,7 +127,11 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 
 const has = ({ env, tool, version }: Language) =>
 	spawnSync(tool, [...version], { env: env?.(), stdio: "ignore" }).status === 0
-const required = process.env.HONEY_REQUIRE_TOOLCHAINS === "1"
+/** Whether a missing `language` fails rather than skips: Go's by go-env's rule, the rest under HONEY_REQUIRE_TOOLCHAINS. */
+const required = ({ tool }: Language) => (tool === "go" ? goRequired() : process.env.HONEY_REQUIRE_TOOLCHAINS === "1")
+/** The languages whose toolchain is here, checked once: a missing one is skipped, or fails where it is required. */
+const PRESENT = new Set(Object.keys(LANGUAGES).filter((name) => has(LANGUAGES[name] as Language)))
+const SKIPPED = (name: string) => !PRESENT.has(name) && !required(LANGUAGES[name] as Language)
 
 /** What `language`'s program prints for the cases. */
 function verified(language: Language): string {
@@ -147,14 +151,15 @@ function verified(language: Language): string {
 }
 
 describe("verify helpers: what the real toolchains make of them", () => {
-	it.each(Object.keys(LANGUAGES))(
-		"%s verifies RFC 4231 case 2 in hex and base64 behind a prefix, and refuses every altered signature",
-		(name) => {
-			const language = LANGUAGES[name] as Language
-			/* a missing toolchain passes locally and fails where it is required */
-			const missing = required ? `${language.tool} is missing under HONEY_REQUIRE_TOOLCHAINS=1` : EXPECTED
-			expect(has(language) ? verified(language) : missing).toBe(EXPECTED)
-		},
-		600_000,
-	)
+	for (const name of Object.keys(LANGUAGES))
+		it.skipIf(SKIPPED(name))(
+			`${name} verifies RFC 4231 case 2 in hex and base64 behind a prefix, and refuses every altered signature`,
+			() => {
+				const language = LANGUAGES[name] as Language
+				/* reached without its toolchain only where that toolchain is required, so it fails */
+				const missing = `${language.tool} is missing where it is required`
+				expect(PRESENT.has(name) ? verified(language) : missing).toBe(EXPECTED)
+			},
+			600_000,
+		)
 })

@@ -4,6 +4,10 @@ import { compileGo } from "./__fixtures__/compiled.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const ref = (name: string): Json => ({ $ref: `#/components/schemas/${name}` })
@@ -124,10 +128,9 @@ func main() {
 }
 `
 
-describe("the emitted Go types compile and run", () => {
+goDescribe("the emitted Go types compile and run", () => {
 	// v0: 63c75b0973
 	it("builds and vets, keeps absent, null and a value apart, and encodes required lists and maps as []/{}", () => {
-		if (!withGo()) return
 		const sdk = compileGo(generateGoSdk(DOCUMENT, { modulePath: "example.com/typecheck" }).files, { main: CHECK })
 		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
 		const ran = sdk.run()
@@ -248,33 +251,32 @@ function seenOf(...names: string[]) {
 	return { built: seen.built, out: names.map((name) => seen.out?.[name]), vet: seen.vet }
 }
 
-describe("emitted Go types on the wire: keys encoding/json cannot tag, and allOf parts that encode themselves", () => {
-	it("compiles two required untagged keys and round-trips them", () => {
-		if (!withGo()) return
-		expect(seenOf("pair", "pairBack"), keysSdk().stderr).toEqual({ built: true, out: [PAIR, PAIR], vet: [] })
-	}, 600_000)
+goDescribe(
+	"emitted Go types on the wire: keys encoding/json cannot tag, and allOf parts that encode themselves",
+	() => {
+		it("compiles two required untagged keys and round-trips them", () => {
+			expect(seenOf("pair", "pairBack"), keysSdk().stderr).toEqual({ built: true, out: [PAIR, PAIR], vet: [] })
+		}, 600_000)
 
-	/* V0BUG: v0 tagged the key "-" as json:"-", which encoding/json skips; the fix is json:"-," */
-	it("sends and reads the key -, required and optional", () => {
-		if (!withGo()) return
-		const out = [DASH, DASH, DASH, DASH]
-		expect(seenOf("dash", "dashBack", "maybeDash", "maybeDashBack"), keysSdk().stderr).toEqual({
-			built: true,
-			out,
-			vet: [],
-		})
-	}, 600_000)
+		/* V0BUG: v0 tagged the key "-" as json:"-", which encoding/json skips; the fix is json:"-," */
+		it("sends and reads the key -, required and optional", () => {
+			const out = [DASH, DASH, DASH, DASH]
+			expect(seenOf("dash", "dashBack", "maybeDash", "maybeDashBack"), keysSdk().stderr).toEqual({
+				built: true,
+				out,
+				vet: [],
+			})
+		}, 600_000)
 
-	/* V0BUG: v0 embedded the part, so its promoted methods dropped the allOf's own fields (ruling 2) */
-	it("keeps an allOf's own fields beside a part with its own (un)marshal methods, encoded and decoded", () => {
-		if (!withGo()) return
-		const out = [WRAPPED, WRAPPED]
-		expect(seenOf("wrapped", "wrappedBack"), keysSdk().stderr).toEqual({ built: true, out, vet: [] })
-	}, 600_000)
+		/* V0BUG: v0 embedded the part, so its promoted methods dropped the allOf's own fields (ruling 2) */
+		it("keeps an allOf's own fields beside a part with its own (un)marshal methods, encoded and decoded", () => {
+			const out = [WRAPPED, WRAPPED]
+			expect(seenOf("wrapped", "wrappedBack"), keysSdk().stderr).toEqual({ built: true, out, vet: [] })
+		}, 600_000)
 
-	it("round-trips an allOf with such a part and a backtick key of its own exactly", () => {
-		if (!withGo()) return
-		const out = [COMBINED, COMBINED]
-		expect(seenOf("combined", "combinedBack"), keysSdk().stderr).toEqual({ built: true, out, vet: [] })
-	}, 600_000)
-})
+		it("round-trips an allOf with such a part and a backtick key of its own exactly", () => {
+			const out = [COMBINED, COMBINED]
+			expect(seenOf("combined", "combinedBack"), keysSdk().stderr).toEqual({ built: true, out, vet: [] })
+		}, 600_000)
+	},
+)

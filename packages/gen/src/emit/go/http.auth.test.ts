@@ -5,6 +5,10 @@ import { compiledSdk, type DrivenSdk, type Script } from "./__fixtures__/compile
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type RecordedHop, type Reply, served } from "./__fixtures__/recording-server.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -107,7 +111,7 @@ const API_KEY = { key: { in: "header", name: "X-API-Key", type: "apiKey" } }
 
 type SchemeRow = { readonly schemes?: Json; readonly sent: Readonly<Record<string, string>>; readonly title: string }
 
-describe("the Go SDK's auth header: the spec's first scheme picks its name and prefix", () => {
+goDescribe("the Go SDK's auth header: the spec's first scheme picks its name and prefix", () => {
 	it.each<SchemeRow>([
 		// v0: 235918a22b
 		{ sent: { authorization: "Bearer t" }, title: "no security scheme sends Authorization: Bearer" },
@@ -151,7 +155,6 @@ describe("the Go SDK's auth header: the spec's first scheme picks its name and p
 	])(
 		"$title",
 		async ({ schemes, sent }) => {
-			if (!withGo()) return
 			const setup: Setup = { auth: { kind: "bearer", token: "t" } }
 			const { hops, run } = await drive(authSdk(schemes), [ECHOED], [ECHO], { setup })
 			expect({ observed: run.observed, sent: credentials(hops[0]), urls: hops.map((h) => h.url) }, run.stderr).toEqual({
@@ -164,10 +167,9 @@ describe("the Go SDK's auth header: the spec's first scheme picks its name and p
 	)
 })
 
-describe("the Go SDK's auth header: Config.AuthHeaderName and AuthHeaderPrefix are a pair", () => {
+goDescribe("the Go SDK's auth header: Config.AuthHeaderName and AuthHeaderPrefix are a pair", () => {
 	// v0: c433c88611
 	it("keeps the spec's header for a prefix alone; a set name takes the caller's prefix, empty meaning none", async () => {
-		if (!withGo()) return
 		const [bearer, apiKey] = [authSdk(BEARER), authSdk(API_KEY)]
 		const setup: Setup = { auth: { kind: "bearer", token: "t" } }
 		const legs: [DrivenSdk, NonNullable<Script["config"]>][] = [
@@ -194,10 +196,9 @@ describe("the Go SDK's auth header: Config.AuthHeaderName and AuthHeaderPrefix a
 /* the token the refresh cases start from */
 const OLD: Setup = { auth: { kind: "bearer", token: "old" } }
 
-describe("the Go SDK's auth refresh: a 401 calls OnAuthExpired once and retries once", () => {
+goDescribe("the Go SDK's auth refresh: a 401 calls OnAuthExpired once and retries once", () => {
 	// v0: e1af4f62b2
 	it("retries with the fresh token, gives up after a second 401, and sends nothing more for an empty token", async () => {
-		if (!withGo()) return
 		const sdk = authSdk(BEARER)
 		const fresh: Script = { onAuthExpired: { tokens: ["new"] } }
 		const legs = await Promise.all([
@@ -221,7 +222,6 @@ describe("the Go SDK's auth refresh: a 401 calls OnAuthExpired once and retries 
 
 	// v0: 582e2f9109
 	it("resends a JSON body intact on the retry and keeps the fresh token for the next call", async () => {
-		if (!withGo()) return
 		const replies: Reply[] = [{ status: 401 }, { json: USER_JSON, status: 201 }, { json: USER_JSON, status: 200 }]
 		const script: Script = { onAuthExpired: { tokens: ["new"] } }
 		const { bodies, hops, run } = await drive(authSdk(BEARER), replies, [CREATE, GET_USER], { script, setup: OLD })
@@ -246,10 +246,9 @@ describe("the Go SDK's auth refresh: a 401 calls OnAuthExpired once and retries 
 	}, 600_000)
 })
 
-describe("the Go SDK's auth refresh: an unreplayable body is never retried", () => {
+goDescribe("the Go SDK's auth refresh: an unreplayable body is never retried", () => {
 	// v0: 1ce9803a2a
 	it("never resends a one-shot upload: one hop with the whole body, the 401 returned, no refresh", async () => {
-		if (!withGo()) return
 		const script: Script = { calls: [{ oneShotBody: true }], onAuthExpired: { tokens: ["new"] } }
 		const { hops, run } = await drive(authSdk(BEARER), [{ status: 401 }], [RAW], { script, setup: OLD })
 		expect(
@@ -292,57 +291,58 @@ const LEAVING = {
 }
 const LANDED = { language: "hr", leaked: [], to: "alt /landing" }
 
-describe("the Go SDK's redirects: a cross-origin hop is followed only on opt-in, stripped to the safe headers", () => {
-	const away: Reply = { redirect: { origin: "alt", path: "/landing" }, status: 307 }
-	const setup: Setup = {
-		auth: { kind: "bearer", token: "tok-r" },
-		headers: { "Accept-Language": "hr", Cookie: "sid=1", "X-Api-Key": "k-1" },
-	}
+goDescribe(
+	"the Go SDK's redirects: a cross-origin hop is followed only on opt-in, stripped to the safe headers",
+	() => {
+		const away: Reply = { redirect: { origin: "alt", path: "/landing" }, status: 307 }
+		const setup: Setup = {
+			auth: { kind: "bearer", token: "tok-r" },
+			headers: { "Accept-Language": "hr", Cookie: "sid=1", "X-Api-Key": "k-1" },
+		}
 
-	// v0: ecaa761ec2
-	it("follows under RedirectFollow without X-Api-Key, Authorization or Cookie; refuses it by default as the 307", async () => {
-		if (!withGo()) return
-		const sdk = authSdk(BEARER)
-		const [follow, refuse] = await Promise.all([
-			drive(sdk, [away, ECHOED], [HOP], { setup: { ...setup, redirect: "follow" } }),
-			drive(sdk, [away, ECHOED], [HOP], { setup }),
-		])
-		expect(
-			{
-				follow: { hops: follow.hops.map(redirected), observed: follow.run.observed },
-				refuse: { hops: refuse.hops.map(redirected), observed: refuse.run.observed },
-			},
-			follow.run.stderr + refuse.run.stderr,
-		).toEqual({
-			follow: { hops: [LEAVING, LANDED], observed: [ECHO_DATA] },
-			refuse: { hops: [LEAVING], observed: [{ errorKey: null, kind: "error", status: 307 }] },
-		})
-	}, 600_000)
-
-	/* V0BUG: v0 skipped its redirect policy for a caller Config.HTTPClient (runtime.go:132-133), so
-	   that client forwarded custom headers cross-origin; v1 wraps the caller's client (R3) */
-	// v0: 163a81f09c
-	it("sends through a caller HTTPClient, its CheckRedirect running after the strip", async () => {
-		if (!withGo()) return
-		const sdk = authSdk(BEARER)
-		const script: Script = { config: { httpClient: true } }
-		const [follow, plain] = await Promise.all([
-			drive(sdk, [away, ECHOED], [HOP], { script, setup: { ...setup, redirect: "follow" } }),
-			drive(sdk, [ECHOED], [ECHO], { script, setup }),
-		])
-		expect(
-			{
-				follow: {
-					hops: follow.hops.map(redirected),
-					observed: follow.run.observed,
-					transport: follow.run.trace?.transport,
+		// v0: ecaa761ec2
+		it("follows under RedirectFollow without X-Api-Key, Authorization or Cookie; refuses it by default as the 307", async () => {
+			const sdk = authSdk(BEARER)
+			const [follow, refuse] = await Promise.all([
+				drive(sdk, [away, ECHOED], [HOP], { setup: { ...setup, redirect: "follow" } }),
+				drive(sdk, [away, ECHOED], [HOP], { setup }),
+			])
+			expect(
+				{
+					follow: { hops: follow.hops.map(redirected), observed: follow.run.observed },
+					refuse: { hops: refuse.hops.map(redirected), observed: refuse.run.observed },
 				},
-				plain: { observed: plain.run.observed, transport: plain.run.trace?.transport },
-			},
-			follow.run.stderr + plain.run.stderr,
-		).toEqual({
-			follow: { hops: [LEAVING, LANDED], observed: [ECHO_DATA], transport: { checkRedirect: 1, roundTrips: 2 } },
-			plain: { observed: [ECHO_DATA], transport: { checkRedirect: 0, roundTrips: 1 } },
-		})
-	}, 600_000)
-})
+				follow.run.stderr + refuse.run.stderr,
+			).toEqual({
+				follow: { hops: [LEAVING, LANDED], observed: [ECHO_DATA] },
+				refuse: { hops: [LEAVING], observed: [{ errorKey: null, kind: "error", status: 307 }] },
+			})
+		}, 600_000)
+
+		/* V0BUG: v0 skipped its redirect policy for a caller Config.HTTPClient (runtime.go:132-133), so
+	   that client forwarded custom headers cross-origin; v1 wraps the caller's client (R3) */
+		// v0: 163a81f09c
+		it("sends through a caller HTTPClient, its CheckRedirect running after the strip", async () => {
+			const sdk = authSdk(BEARER)
+			const script: Script = { config: { httpClient: true } }
+			const [follow, plain] = await Promise.all([
+				drive(sdk, [away, ECHOED], [HOP], { script, setup: { ...setup, redirect: "follow" } }),
+				drive(sdk, [ECHOED], [ECHO], { script, setup }),
+			])
+			expect(
+				{
+					follow: {
+						hops: follow.hops.map(redirected),
+						observed: follow.run.observed,
+						transport: follow.run.trace?.transport,
+					},
+					plain: { observed: plain.run.observed, transport: plain.run.trace?.transport },
+				},
+				follow.run.stderr + plain.run.stderr,
+			).toEqual({
+				follow: { hops: [LEAVING, LANDED], observed: [ECHO_DATA], transport: { checkRedirect: 1, roundTrips: 2 } },
+				plain: { observed: [ECHO_DATA], transport: { checkRedirect: 0, roundTrips: 1 } },
+			})
+		}, 600_000)
+	},
+)

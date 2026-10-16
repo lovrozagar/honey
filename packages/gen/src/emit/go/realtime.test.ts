@@ -6,6 +6,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type RecordedHop, type Reply, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -167,9 +171,8 @@ function program(body: string, p: { base?: string; decls?: string; imports?: str
 /** What a consumer leg asserts: it builds, vets clean, and its notes by section. */
 const ran = (run: Run) => ({ built: run.built, out: run.out, vet: run.vet })
 
-describe("a realtime method returns its connection open, its ctx bounding the open (Fd1)", () => {
+goDescribe("a realtime method returns its connection open, its ctx bounding the open (Fd1)", () => {
 	it("falls back from a refused upgrade and a refused event stream to long-poll, polling with the advanced cursor", async () => {
-		if (!withGo()) return
 		const { hops, run } = await drive(rtSdk(), POLLED, [live({ take: 2 })], QUICK)
 		expect({ observed: run.observed, stream: run.trace?.calls[0]?.stream }, run.stderr).toEqual({
 			observed: [{ frames: [polled(1, "7").json, polled(2, "8").json], kind: "frames" }],
@@ -188,7 +191,6 @@ describe("a realtime method returns its connection open, its ctx bounding the op
 	}, 600_000)
 
 	it("honors its ctx: canceled before the call nothing is dialed, and a deadline during the dial ends the open as a timeout", async () => {
-		if (!withGo()) return
 		/* V0BUG: v0's method was `_ = ctx` and returned an unconnected connection. Long-poll connects
 		 * lazily, so an open that only falls through the chain would return a live long-poll connection
 		 * on a done ctx: the ctx must stop the chain itself. */
@@ -210,10 +212,9 @@ describe("a realtime method returns its connection open, its ctx bounding the op
 	}, 600_000)
 })
 
-describe("the resume cursor advances past each delivered event, and a reconnect resumes from it (G12)", () => {
+goDescribe("the resume cursor advances past each delivered event, and a reconnect resumes from it (G12)", () => {
 	// v0: f7a81e9c5c
 	it("reconnects through the chain after a mid-stream drop, the next transport handed the advanced cursor", async () => {
-		if (!withGo()) return
 		/* V0BUG: v0 froze the cursor at construction (realtime.go:87,93,183) and its stable adapter
 		 * ignored opts, so the reconnect's stale ("0", "rt-0") passed; v1 pins ("2", "rt-2") */
 		const run =
@@ -242,7 +243,6 @@ describe("the resume cursor advances past each delivered event, and a reconnect 
 
 	// v0: f7a81e9c5c
 	it("resumes on the wire: the reconnect's upgrade and event stream carry the last delivered id and token", async () => {
-		if (!withGo()) return
 		const replies = [refused, sse([ev(1), ev(2)], "drop"), refused, sse([ev(3)], "hold")]
 		const { hops, run } = await drive(rtSdk(), replies, [live({ take: 3 })], QUICK)
 		expect({ observed: run.observed, stream: run.trace?.calls[0]?.stream }, run.stderr).toEqual({
@@ -270,10 +270,9 @@ describe("the resume cursor advances past each delivered event, and a reconnect 
 	}, 600_000)
 })
 
-describe("every realtime dial carries the call's declared params and its own request id", () => {
+goDescribe("every realtime dial carries the call's declared params and its own request id", () => {
 	// v0: 924873c344
 	it("sends channel and x-tenant on every dial over WS, SSE and long-poll, each with a fresh UUIDv4 X-Request-Id unless the caller set one", async () => {
-		if (!withGo()) return
 		/* V0BUG: v0's realtime method built its URL with a nil query and dropped the declared params.
 		 * Fd2: an id names one request; a caller's id is kept on every dial. */
 		const reconnecting = [refused, sse([ev(1)], "drop"), refused, sse([ev(2)], "hold")]
@@ -300,9 +299,8 @@ describe("every realtime dial carries the call's declared params and its own req
 	}, 600_000)
 })
 
-describe("one resume pair on the wire: the synthetic Opts fields carry a declared resume param (Fd3)", () => {
+goDescribe("one resume pair on the wire: the synthetic Opts fields carry a declared resume param (Fd3)", () => {
 	it("folds a declared reconnect_token, last_event_id and Last-Event-ID into the stream fields, a colliding protocols becoming Protocols2", async () => {
-		if (!withGo()) return
 		/* V0BUG: v0 emitted ReconnectToken2 beside ReconnectToken and sent both pairs */
 		const run = await program(
 			`	for _, v := range []any{sdk.FeedLiveOpts{}, sdk.FeedResumeOpts{}} {
@@ -338,10 +336,9 @@ describe("one resume pair on the wire: the synthetic Opts fields carry a declare
 	}, 600_000)
 })
 
-describe("ResumableConnection over caller transports", () => {
+goDescribe("ResumableConnection over caller transports", () => {
 	// v0: 708684fb00
 	it("falls through a refusing transport to the next, both handed the caller's cursor, and closes both channels", async () => {
-		if (!withGo()) return
 		/* v0 compared a state list the program printed itself; v1 observes each state */
 		const run = await program(`	failing := &fake{kind: sdk.TransportWs}
 	good := &fake{kind: sdk.TransportSse, conns: []*conn{{kind: sdk.TransportSse, values: []any{
@@ -374,7 +371,6 @@ describe("ResumableConnection over caller transports", () => {
 
 	// v0: 773ef1c1f7
 	it("dials only the caller's transport: the server behind the URL sees no request", async () => {
-		if (!withGo()) return
 		const [run, hops] = await served([], async (server) => {
 			const body = `	custom := &fake{kind: sdk.TransportWs, conns: []*conn{{kind: sdk.TransportWs, values: []any{
 		map[string]any{"kind": "custom", "seq": 1}, map[string]any{"kind": "custom", "seq": 2}}}}}
@@ -399,10 +395,9 @@ describe("ResumableConnection over caller transports", () => {
 	}, 600_000)
 })
 
-describe("the default transport adapters", () => {
+goDescribe("the default transport adapters", () => {
 	// v0: 2e7d01ed2c
 	it("ships the three default adapters as Transports, and with zero TransportOpts they send no cursor", async () => {
-		if (!withGo()) return
 		/* v0 built zero TransportOpts and never connected with them; v1 dials with them */
 		const replies = [sse(['data: {"n":1}\n\n'], "hold"), { json: { n: 2 }, status: 200 }]
 		const [run, hops] = await served(replies, async (server) => {
@@ -435,10 +430,9 @@ describe("the default transport adapters", () => {
 	}, 600_000)
 })
 
-describe("ResumableConnection under the race detector", () => {
+goDescribe("ResumableConnection under the race detector", () => {
 	// v0: 0c1872f081
 	it("gives up after MaxReconnectAttempts, keeps an SSE stream past its Connect ctx, and survives Close racing a busy read loop", async () => {
-		if (!withGo()) return
 		const replies = [sse([{ waitMs: 100 }, 'data: {"n":1}\n\n'], "hold")]
 		const [run, hops] = await served(replies, async (server) => {
 			const body = `	section("gives up")

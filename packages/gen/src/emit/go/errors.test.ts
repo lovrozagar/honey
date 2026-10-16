@@ -6,6 +6,10 @@ import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, recordingServer, served } from "./__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
+/** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
+const GO = withGo()
+const goDescribe = describe.skipIf(!GO)
+
 type Json = Record<string, unknown>
 
 const STRING = { type: "string" }
@@ -113,10 +117,9 @@ const surface = once(() =>
 	),
 )
 
-describe("an error status as a Go error, through the driver", () => {
+goDescribe("an error status as a Go error, through the driver", () => {
 	// v0: ee1a2245dc
 	it("raises the per-status type for each named status, unwrapping to *ClientError, its Status() the code", async () => {
-		if (!withGo()) return
 		/* runtime/ts/error.ts:60-70 names these; 429 is RateLimitError, not a STATUS_KEYS spelling */
 		const named: [number, string][] = [
 			[400, "BadRequest"],
@@ -157,7 +160,6 @@ describe("an error status as a Go error, through the driver", () => {
 
 	// v0: d325c5e9df
 	it("raises *ClientError alone for a status no type names: 418 and 410", async () => {
-		if (!withGo()) return
 		const { run } = await drive(errSdk(), [answer(418), answer(410)], [GET, GET], {})
 		const calls = run.trace?.calls ?? []
 		expect({
@@ -173,10 +175,9 @@ describe("an error status as a Go error, through the driver", () => {
 	}, 600_000)
 })
 
-describe("a hostile error body in the error's message", () => {
+goDescribe("a hostile error body in the error's message", () => {
 	// v0: 0c1872f081
 	it("drops control characters and caps the message at 512 runes, the raw body kept", async () => {
-		if (!withGo()) return
 		const hostile = `\x1b]0;pwned\x07${"x".repeat(2000)}`
 		const { run } = await drive(errSdk(), [{ status: 500, text: hostile }], [GET], {})
 		const error = run.trace?.calls[0]?.error
@@ -190,10 +191,9 @@ describe("a hostile error body in the error's message", () => {
 	}, 600_000)
 })
 
-describe("a context that ends the call: plain context errors, never a ClientError", () => {
+goDescribe("a context that ends the call: plain context errors, never a ClientError", () => {
 	// v0: 793253e0ae
 	it("returns context.Canceled for a ctx canceled before the call, nothing sent", async () => {
-		if (!withGo()) return
 		/* v0's test named a sentinel ErrContextCanceled that v0 never had; v1 adds none */
 		const { hops, run } = await drive(errSdk(), [], [GET], { calls: [{ cancel: "before" }] })
 		const error = run.trace?.calls[0]?.error
@@ -206,7 +206,6 @@ describe("a context that ends the call: plain context errors, never a ClientErro
 
 	// v0: ef9aca90d0
 	it("returns context.DeadlineExceeded past a per-call timeout or a caller deadline, observed as a timeout", async () => {
-		if (!withGo()) return
 		const sdk = errSdk()
 		const late: Reply = { delayMs: 1000, json: { id: "i1", name: "one" }, status: 200 }
 		const bounded: Call = { ...GET, timeoutMs: 50 }
@@ -226,10 +225,9 @@ describe("a context that ends the call: plain context errors, never a ClientErro
 	}, 600_000)
 })
 
-describe("safe mode: an error status in SDKResult.Err, every other failure the error return", () => {
+goDescribe("safe mode: an error status in SDKResult.Err, every other failure the error return", () => {
 	// v0: 390361417e
 	it("puts a 404 in the result beside its status and response, and a refused connection in the error return", async () => {
-		if (!withGo()) return
 		/* v0's name ("never returns non-nil error") was false in v0 too: a failure with no response is the error return */
 		const sdk = errSdk(false)
 		const notFound = await drive(sdk, [answer(404)], [GET], {})
@@ -257,7 +255,6 @@ describe("safe mode: an error status in SDKResult.Err, every other failure the e
 
 	// v0: 8fbcc82ca1
 	it("returns SDKResult[T]: OK, Data, Status, Err and Response for a 200 and a 404", () => {
-		if (!withGo()) return
 		const run = consumer(
 			`	api := client("http://api.test")
 	replies["GET /items/i1"] = reply{status: 200, body: \`{"id":"i1","name":"one"}\`}
@@ -284,10 +281,9 @@ describe("safe mode: an error status in SDKResult.Err, every other failure the e
 	}, 600_000)
 })
 
-describe("the runtime's error types, from a consumer program", () => {
+goDescribe("the runtime's error types, from a consumer program", () => {
 	// v0: 473e487f9f
 	it("reaches a 404 as *NotFoundError, *ClientError and any Status() int, as HoneyRaiseForStatus raises it", () => {
-		if (!withGo()) return
 		const run = surface()
 		expect(seen(run, "status"), run.stderr).toEqual({
 			built: true,
@@ -303,7 +299,6 @@ describe("the runtime's error types, from a consumer program", () => {
 
 	// v0: 6bdeecd5e4
 	it("carries the status, key, message, raw body, re-readable response and parsed envelope; a non-JSON body is the message", () => {
-		if (!withGo()) return
 		/* G6: v0 passed on the dead StatusErrorMeta's `Status int`; v1 pins StatusCode and Status(), and a typed Envelope where v0 had Data any */
 		const run = surface()
 		expect(seen(run, "envelope"), run.stderr).toEqual({
@@ -321,9 +316,8 @@ describe("the runtime's error types, from a consumer program", () => {
 	}, 600_000)
 })
 
-describe("declared error keys: Err<Key> sentinels and <Key>Data bodies", () => {
+goDescribe("declared error keys: Err<Key> sentinels and <Key>Data bodies", () => {
 	it("matches a ClientError by its key with errors.Is, names colliding keys apart, and decodes an inline key schema", () => {
-		if (!withGo()) return
 		const run = consumer(
 			`	api := client("http://api.test")
 	var _ sdk.ErrorKey = sdk.ErrItemNotFound
@@ -419,23 +413,26 @@ const (
 		).toBe(true)
 	})
 
-	it("decodes a key's body into the component its godoc names", () => {
-		if (!withGo()) return
-		const files = generateGoSdk(KEYED, { modulePath: "example.com/keyed" }).files
-		const run = check(
-			files,
-			"example.com/keyed",
-			`	replies["POST /a"] = reply{status: 423, body: \`{"error_key":"order.locked","until":"noon"}\`}
+	it.skipIf(!GO)(
+		"decodes a key's body into the component its godoc names",
+		() => {
+			const files = generateGoSdk(KEYED, { modulePath: "example.com/keyed" }).files
+			const run = check(
+				files,
+				"example.com/keyed",
+				`	replies["POST /a"] = reply{status: 423, body: \`{"error_key":"order.locked","until":"noon"}\`}
 	err := client("http://api.test").Orders.Close(ctx, nil)
 	var ce *sdk.ClientError
 	var lock sdk.Lock
 	note(errors.As(err, &ce), ce.DecodeBody(&lock), lock.Until, errors.Is(err, sdk.ErrOrderLocked))`,
-			["errors"],
-		)
-		expect(seen(run), run.stderr).toEqual({
-			built: true,
-			out: ["POST http://api.test/a", "true <nil> noon true"],
-			vet: [],
-		})
-	}, 600_000)
+				["errors"],
+			)
+			expect(seen(run), run.stderr).toEqual({
+				built: true,
+				out: ["POST http://api.test/a", "true <nil> noon true"],
+				vet: [],
+			})
+		},
+		600_000,
+	)
 })
