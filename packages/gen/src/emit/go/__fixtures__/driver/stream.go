@@ -97,7 +97,7 @@ func streamOpts(opts reflect.Value, j job) error {
 		}
 		raw, _ := json.Marshal(f.value)
 		if err := setField(opts, f.name, raw); err != nil {
-			return fmt.Errorf("%w: Opts without their stream fields predate the phase-d emitter", err)
+			return err
 		}
 	}
 	return nil
@@ -128,9 +128,6 @@ func (r *runner) stream(s streamCall) (any, outcome, error) {
 // breaking after take events (absent: to the end). A yielded error is recorded and the yield
 // carries on, so an iterator that does not end after its error shows in yields.
 func driveSSE(s streamCall) streamed {
-	if t := s.method.Type(); !isSeq2(t) {
-		return streamed{err: fmt.Errorf("the SSE method returns %s, not iter.Seq2[SSEEvent[T], error] (the phase-d emitter's shape)", outTypes(t))}
-	}
 	seq := s.method.CallSlice(s.args)[0]
 	st := &streamTrace{}
 	events := []any{}
@@ -203,40 +200,6 @@ func openFailed(err error) streamed {
 		return streamed{o: o}
 	}
 	return streamed{seen: observedStream("frames", nil, err), o: o}
-}
-
-// isSeq2 reports whether t returns one iter.Seq2[E, error] whose E is an SSEEvent.
-func isSeq2(t reflect.Type) bool {
-	if t.NumOut() != 1 || t.Out(0).Kind() != reflect.Func || t.Out(0).NumIn() != 1 {
-		return false
-	}
-	y := t.Out(0).In(0)
-	if y.Kind() != reflect.Func || y.NumIn() != 2 || y.NumOut() != 1 || y.Out(0).Kind() != reflect.Bool {
-		return false
-	}
-	_, data := y.In(0).FieldByName("Data")
-	return y.In(0).Kind() == reflect.Struct && data && y.In(1) == reflect.TypeFor[error]()
-}
-
-// returnsPointer reports whether t returns (*<name>, error).
-func returnsPointer(t reflect.Type, name string) bool {
-	return t.NumOut() == 2 && t.Out(0).Kind() == reflect.Pointer && t.Out(0).Elem().Name() == name &&
-		t.Out(1) == reflect.TypeFor[error]()
-}
-
-// outTypes names what t returns, for a refusal.
-func outTypes(t reflect.Type) string {
-	names := ""
-	for i := range t.NumOut() {
-		if i > 0 {
-			names += ", "
-		}
-		names += t.Out(i).String()
-	}
-	if t.NumOut() == 1 {
-		return names
-	}
-	return "(" + names + ")"
 }
 
 // invoke calls v's method name with args, each converted to the parameter type it fills.

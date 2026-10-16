@@ -68,9 +68,7 @@ func (c *longpollConn) Recv(ctx context.Context) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	for k, vv := range c.headers {
-		req.Header[k] = append([]string(nil), vv...)
-	}
+	req.Header = withRequestID(c.headers.Clone())
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, wrapTransportError(pollCtx, err)

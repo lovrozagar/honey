@@ -47,7 +47,7 @@ func dialWebSocket(ctx context.Context, cfg Config, c *call, opts []RequestOptio
 	}
 	dialOpts := &websocket.DialOptions{
 		HTTPClient:   streamClient(cfg),
-		HTTPHeader:   mergeHeaders(cfg, cfg.auth.current(cfg), "", c.headers, rc.headers),
+		HTTPHeader:   withRequestID(mergeHeaders(cfg, cfg.auth.current(cfg), "", c.headers, rc.headers)),
 		Subprotocols: c.protocols,
 	}
 	conn, resp, err := websocket.Dial(ctx, toWsURL(u), dialOpts)
@@ -124,7 +124,8 @@ func (w *TypedWebSocket) Read(ctx context.Context) ([]byte, error) {
 }
 
 // On registers a handler for "message", "close" or "error". It receives the raw bytes; prefer a
-// Read loop for typed dispatch.
+// Read loop for typed dispatch. A "close" handler gets the reason; the code is in Read's error:
+// websocket.CloseStatus(err).
 func (w *TypedWebSocket) On(event string, handler func(data []byte)) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

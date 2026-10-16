@@ -34,26 +34,20 @@ type ResponseContext struct {
 	InvalidatedBy []string
 }
 
-func runRequestHooks(cfg Config, rc *RequestContext, meta *RequestMeta) error {
-	if meta != nil {
-		rc.Selector, rc.IsStale, rc.InvalidatedBy = meta.Selector, meta.IsStale, meta.InvalidatedBy
-	}
-	for _, hook := range cfg.OnRequest {
+// runHooks runs hooks on rc in declaration order; the first error ends them, wrapped as phase's.
+func runHooks[C any](phase string, hooks []func(C) error, rc C) error {
+	for _, hook := range hooks {
 		if err := hook(rc); err != nil {
-			return fmt.Errorf("honey: OnRequest hook: %w", err)
+			return fmt.Errorf("honey: %s hook: %w", phase, err)
 		}
 	}
 	return nil
 }
 
-func runResponseHooks(cfg Config, rc *ResponseContext, meta *RequestMeta) error {
-	if meta != nil {
-		rc.Selector, rc.IsStale, rc.InvalidatedBy = meta.Selector, meta.IsStale, meta.InvalidatedBy
+// stale is m's fields as a hook context holds them; zero for a nil m.
+func (m *RequestMeta) stale() (string, bool, []string) {
+	if m == nil {
+		return "", false, nil
 	}
-	for _, hook := range cfg.OnResponse {
-		if err := hook(rc); err != nil {
-			return fmt.Errorf("honey: OnResponse hook: %w", err)
-		}
-	}
-	return nil
+	return m.Selector, m.IsStale, m.InvalidatedBy
 }

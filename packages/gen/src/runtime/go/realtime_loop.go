@@ -10,7 +10,8 @@ import (
 )
 
 // openChain tries the proven transport first, then the rest in order, each with the current
-// resume cursor. The first that opens becomes the connection and the proven transport.
+// resume cursor. The first that opens becomes the connection and the proven transport. Once ctx
+// ends it tries no further transport: one that opens lazily (long-poll) would otherwise succeed.
 func (r *ResumableConnection) openChain(ctx context.Context) error {
 	r.mu.Lock()
 	proven := r.provenIdx
@@ -27,6 +28,9 @@ func (r *ResumableConnection) openChain(ctx context.Context) error {
 	}
 	lastErr := errors.New("honey: no transports configured")
 	for _, i := range order {
+		if err := ctx.Err(); err != nil {
+			return wrapTransportError(ctx, err)
+		}
 		c, err := r.transports[i].Connect(ctx, r.url, &opts)
 		if err != nil {
 			lastErr = err
@@ -131,9 +135,14 @@ func (r *ResumableConnection) readLoop(done chan struct{}) {
 }
 
 // reconnect drops the failed connection and reopens the chain with backoff, counting into
-// attempts; it reports false when attempts ran out or the connection closed.
+// attempts; it reports false when attempts ran out or the connection closed (Close ends the
+// transport before its ctx, so a read can fail first).
 func (r *ResumableConnection) reconnect(failed TransportConn, err error, attempts *int) bool {
 	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return false
+	}
 	r.state, r.conn, r.provenIdx = StateReconnecting, nil, -1
 	r.mu.Unlock()
 	_ = failed.Close()

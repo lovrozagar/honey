@@ -4,13 +4,13 @@
  * in the member tree, so a renamed member (`state` → `state_`) is renamed in both.
  */
 import type { IR, IRBody, IRNamespace, IRParam, IRSchema } from "../../ir/model.ts"
-import { irErrorEnvelope, isJsonMedia, mediaEssence, type SdkOp, sdkModel } from "../../ir/sdk-model.ts"
+import { irErrorEnvelope, isJsonMedia, mediaEssence, type SdkOp, sdkModel, sseEventSchema } from "../../ir/sdk-model.ts"
 import { bodiesOf } from "../../ir/slots.ts"
 import { blockCommentText, tsString } from "../shared/escape.ts"
 import { compareCodeUnits, NameTable, pascalWords } from "../shared/lang.ts"
 import { quoteKey } from "../shared/literals.ts"
 import { irToTs, type TypeOptions } from "../shared/type-emitter.ts"
-import { memberTree, sseEventSchema } from "./service-map.ts"
+import { memberTree } from "./service-map.ts"
 
 /* globals the emitted types read, and the names they declare: a component schema never takes one */
 const RESERVED = [

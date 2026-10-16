@@ -9,6 +9,7 @@ import {
 	mediaEssence,
 	type SdkOp,
 	sdkModel,
+	sseEventSchema,
 	valueCycleSchemas,
 } from "./sdk-model.ts"
 
@@ -177,6 +178,45 @@ describe("sdkModel: the operation as every emitter reads it", () => {
 			one({ operationId: "a", "x-websocket": true }).stream,
 			one({ operationId: "a", responses: { 200: content("text/event-stream") } }).stream,
 		]).toEqual(["ws", "sse"])
+	})
+})
+
+describe("sseEventSchema: the typed data of an event stream", () => {
+	it("is the declared event schema when it is not a string, and nothing for a non-stream operation", () => {
+		const { operations } = toIR(
+			{
+				info: { title: "T", version: "1" },
+				openapi: "3.1.0",
+				paths: {
+					"/n": { get: { operationId: "n", responses: { 200: content("application/json", { type: "object" }) } } },
+					"/t": { get: { operationId: "t", responses: { 200: content("text/event-stream", { type: "object" }) } } },
+				},
+			} as OpenApiDocument,
+			{ deriveOperationIds: true },
+		)
+		const byId = Object.fromEntries(operations.map((op) => [op.id, sseEventSchema(op, (s) => s)]))
+		expect(byId).toEqual({ n: undefined, t: { fields: [], kind: "object" } })
+	})
+
+	it("sets SdkOp.events for a typed stream, through a ref, and leaves a string, string const or unknown one untyped", () => {
+		const stream = (schema: Json) => one({ responses: { 200: content("Text/Event-Stream; charset=utf-8", schema) } })
+		const components = { schemas: { S: { type: "string" }, Tick: { type: "object" } } }
+		const viaRef = one(
+			{ responses: { 200: content("text/event-stream", { $ref: "#/components/schemas/Tick" }) } },
+			components,
+		)
+		const toString = one(
+			{ responses: { 200: content("text/event-stream", { $ref: "#/components/schemas/S" }) } },
+			components,
+		)
+		expect([
+			viaRef.events,
+			toString.events,
+			stream({ type: "integer" }).events,
+			stream({ type: "string" }).events,
+			stream({ const: "x" }).events,
+			stream({}).events,
+		]).toEqual([ref("Tick"), undefined, { kind: "scalar", type: "integer" }, undefined, undefined, undefined])
 	})
 })
 

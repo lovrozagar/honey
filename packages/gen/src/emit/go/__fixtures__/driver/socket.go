@@ -110,9 +110,6 @@ func (h *handlers) on(event string) func([]byte) {
 // then Close. A Read ending on a close frame is the stream's end, recorded as closedBy; any other
 // failure is the call's error. Every handler run is traced, those Close fires included.
 func driveSocket(s streamCall) streamed {
-	if t := s.method.Type(); !returnsPointer(t, "TypedWebSocket") {
-		return streamed{err: fmt.Errorf("the WebSocket method returns %s, not (*TypedWebSocket, error)", outTypes(t))}
-	}
 	out := s.method.CallSlice(s.args)
 	if err := errOf(out[1]); err != nil {
 		return openFailed(err)

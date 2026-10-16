@@ -35,30 +35,26 @@ type requestResult struct {
 	resp   *http.Response
 }
 
-// exchange is one call in flight: the client settings, this call's overrides and the call.
+// exchange is one call in flight: the client settings, this call's overrides and the call; a
+// stream's 2xx body is left unread for the caller.
 type exchange struct {
-	cfg Config
-	rc  requestConfig
-	c   *call
+	cfg    Config
+	rc     requestConfig
+	c      *call
+	stream bool
 }
 
 // ErrResponseTooLarge is returned when a buffered body exceeds Config.MaxResponseBytes.
 var ErrResponseTooLarge = errors.New("honey: response body exceeds MaxResponseBytes")
 
-// doRequest sends c and buffers its answer. It injects auth and merges headers, runs the hooks in
-// declaration order, retries once with OnAuthExpired's token on a 401, honors the call's timeout,
-// and turns a non-2xx status into a typed error. OnLog sees request_start, then response_received
-// for the final response, and error on any failure; an auth retry does not log twice.
-func doRequest(ctx context.Context, cfg Config, c *call, opts []RequestOption) (result *requestResult, err error) {
+// doRequest sends c and buffers its answer (run), honoring the call's timeout and the stale
+// tracker. A ctx already done sends nothing: OnLog sees only its error.
+func doRequest(ctx context.Context, cfg Config, c *call, opts []RequestOption) (*requestResult, error) {
 	x := &exchange{cfg: cfg, rc: newRequestConfig(cfg, opts), c: c}
-	start := time.Now()
-	defer func() {
-		if err != nil {
-			emitLog(cfg, errorEntry(c.operation, start, err))
-		}
-	}()
 	if ctx.Err() != nil {
-		return nil, wrapTransportError(ctx, ctx.Err())
+		err := wrapTransportError(ctx, ctx.Err())
+		emitLog(cfg, errorEntry(c.operation, time.Now(), err))
+		return nil, err
 	}
 	if x.rc.timeout > 0 {
 		var cancel context.CancelFunc
@@ -66,9 +62,27 @@ func doRequest(ctx context.Context, cfg Config, c *call, opts []RequestOption) (
 		defer cancel()
 	}
 	c.meta = c.stale.begin(c)
-	emitLog(cfg, LogEntry{Level: "debug", Event: "request_start", Operation: c.operation})
-	result, err = x.sendWithAuth(ctx)
+	result, err := x.run(ctx)
 	if err != nil {
+		return nil, err
+	}
+	c.stale.settle(c)
+	return result, nil
+}
+
+// run is every call's exchange: it injects auth and merges headers, runs the hooks in declaration
+// order, retries once with OnAuthExpired's token on a 401, and turns a non-2xx status into a typed
+// error. OnLog sees request_start, then response_received for the final response, and error on
+// any failure; an auth retry does not log twice.
+func (x *exchange) run(ctx context.Context) (result *requestResult, err error) {
+	start := time.Now()
+	defer func() {
+		if err != nil {
+			emitLog(x.cfg, errorEntry(x.c.operation, start, err))
+		}
+	}()
+	emitLog(x.cfg, LogEntry{Level: "debug", Event: "request_start", Operation: x.c.operation})
+	if result, err = x.sendWithAuth(ctx); err != nil {
 		return nil, err
 	}
 	status := result.status
@@ -76,12 +90,11 @@ func doRequest(ctx context.Context, cfg Config, c *call, opts []RequestOption) (
 	if status >= 400 {
 		level = "warn"
 	}
-	emitLog(cfg, LogEntry{Level: level, Event: "response_received", Operation: c.operation, DurationMs: time.Since(start).Milliseconds(), Status: &status})
+	emitLog(x.cfg, LogEntry{Level: level, Event: "response_received", Operation: x.c.operation, DurationMs: time.Since(start).Milliseconds(), Status: &status})
 	x.rc.deliver(result.resp, result.body)
 	if err = raiseForStatus(result.resp, result.body); err != nil {
 		return nil, err
 	}
-	c.stale.settle(c)
 	return result, nil
 }
 
@@ -102,23 +115,39 @@ func (x *exchange) sendWithAuth(ctx context.Context) (*requestResult, error) {
 	return x.send(ctx, fresh, true)
 }
 
+// send sends once and runs the OnResponse hooks on the answer, its body read first so they may
+// replace it. A stream's 2xx body stays unread (the hooks see a nil Body, and one they set is
+// ignored); of an error body a stream reads at most 64 KiB, a failed read leaving it nil.
 func (x *exchange) send(ctx context.Context, token string, retry bool) (*requestResult, error) {
 	req, err := x.newRequest(ctx, token, retry)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := x.cfg.HTTPClient.Do(req)
+	client, limit := x.cfg.HTTPClient, x.cfg.MaxResponseBytes
+	if x.stream {
+		client, limit = streamClient(x.cfg), 64<<10
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, wrapTransportError(ctx, err)
 	}
-	defer resp.Body.Close()
-	body, err := readBody(resp.Body, x.cfg.MaxResponseBytes)
-	if err != nil {
-		return nil, wrapTransportError(ctx, err)
+	unread := x.stream && resp.StatusCode >= 200 && resp.StatusCode < 300
+	var body []byte
+	if !unread {
+		body, err = readBody(resp.Body, limit)
+		resp.Body.Close()
+		if err != nil && !x.stream {
+			return nil, wrapTransportError(ctx, err)
+		}
 	}
 	rc := &ResponseContext{Status: resp.StatusCode, Headers: resp.Header, Body: body, IsRetry: retry}
-	if err := runResponseHooks(x.cfg, rc, x.c.meta); err != nil {
+	rc.Selector, rc.IsStale, rc.InvalidatedBy = x.c.meta.stale()
+	if err := runHooks("OnResponse", x.cfg.OnResponse, rc); err != nil {
+		resp.Body.Close()
 		return nil, err
+	}
+	if unread {
+		return &requestResult{status: resp.StatusCode, resp: resp}, nil
 	}
 	return &requestResult{body: rc.Body, status: resp.StatusCode, resp: withBody(resp, rc.Body)}, nil
 }
@@ -135,9 +164,10 @@ func (x *exchange) newRequest(ctx context.Context, token string, retry bool) (*h
 	if err != nil {
 		return nil, err
 	}
-	headers := mergeHeaders(x.cfg, token, c.body.mediaType(), c.headers, x.rc.headers)
+	headers := withRequestID(mergeHeaders(x.cfg, token, c.body.mediaType(), c.headers, x.rc.headers))
 	rc := &RequestContext{Method: c.method, URL: fullURL, Path: c.path, Headers: headers, Body: payload, IsRetry: retry}
-	if err := runRequestHooks(x.cfg, rc, c.meta); err != nil {
+	rc.Selector, rc.IsStale, rc.InvalidatedBy = c.meta.stale()
+	if err := runHooks("OnRequest", x.cfg.OnRequest, rc); err != nil {
 		return nil, err
 	}
 	var reader io.Reader

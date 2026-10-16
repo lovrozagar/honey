@@ -39,19 +39,11 @@ func (t *SseTransport) Connect(ctx context.Context, rawURL string, opts *Transpo
 		cancel()
 		return nil, err
 	}
-	if opts != nil {
-		req.Header = opts.Headers.Clone()
-		if req.Header == nil {
-			req.Header = http.Header{}
-		}
-		if opts.LastEventID != "" {
-			req.Header.Set("Last-Event-ID", opts.LastEventID)
-		}
+	req.Header = opts.dialHeaders()
+	if opts != nil && opts.LastEventID != "" {
+		req.Header.Set("Last-Event-ID", opts.LastEventID)
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	if req.Header.Get("X-Request-Id") == "" {
-		req.Header.Set("X-Request-Id", newUUIDv4())
-	}
 	resp, err := transportClient(client).Do(req)
 	opened := stop()
 	switch {

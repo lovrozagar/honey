@@ -173,6 +173,23 @@ describe("an error status as a Go error, through the driver", () => {
 	}, 600_000)
 })
 
+describe("a hostile error body in the error's message", () => {
+	// v0: 0c1872f081
+	it("drops control characters and caps the message at 512 runes, the raw body kept", async () => {
+		if (!withGo()) return
+		const hostile = `\x1b]0;pwned\x07${"x".repeat(2000)}`
+		const { run } = await drive(errSdk(), [{ status: 500, text: hostile }], [GET], {})
+		const error = run.trace?.calls[0]?.error
+		expect({ observed: run.observed, status: error?.status, types: sdkTypes(error) }, run.stderr).toEqual({
+			observed: [{ body: hostile, errorKey: null, kind: "error", status: 500 }],
+			status: 500,
+			types: ["*sdk.InternalServerError", "*sdk.ClientError"],
+		})
+		/* v0: no ESC and at most 700 bytes; the exact text pins both and the cut */
+		expect(error?.text).toBe(`500 Internal Server Error: ]0;pwned${"x".repeat(504)}…`)
+	}, 600_000)
+})
+
 describe("a context that ends the call: plain context errors, never a ClientError", () => {
 	// v0: 793253e0ae
 	it("returns context.Canceled for a ctx canceled before the call, nothing sent", async () => {

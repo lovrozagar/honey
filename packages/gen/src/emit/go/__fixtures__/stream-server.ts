@@ -134,7 +134,8 @@ export function serveSse(
 	void (async () => {
 		for (const step of script.steps) {
 			if (ended) return
-			if (typeof step === "string") res.write(step)
+			/* a write waits until it left: a `drop` that ends the socket on a write still corked in Node's response loses it */
+			if (typeof step === "string") await new Promise((flushed) => res.write(step, flushed))
 			else await stage.wait(step.waitMs)
 		}
 		if (ended || script.end === "hold") return

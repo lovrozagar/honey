@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 )
 
@@ -22,9 +21,6 @@ type realtimeTrace struct {
 // take values from Events(); a value on Errors() is terminal, traced and ends the reads. Then
 // Close, and the connection's cursor and proven transport.
 func driveRealtime(s streamCall) streamed {
-	if t := s.method.Type(); !returnsPointer(t, "ResumableConnection") {
-		return streamed{err: fmt.Errorf("the realtime method returns %s, not (*ResumableConnection, error) (the phase-d emitter's shape)", outTypes(t))}
-	}
 	out := s.method.CallSlice(s.args)
 	if err := errOf(out[1]); err != nil {
 		return openFailed(err)

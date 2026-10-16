@@ -91,9 +91,10 @@ func NewResumableConnection(baseURL string, transports []Transport, opts *Transp
 	}
 }
 
-// newRealtime builds the call's connection over the default WebSocket, SSE and long-poll chain,
-// with the client's auth, headers and redirect policy.
-func newRealtime(cfg Config, c *call, topts TransportOpts, opts []RequestOption) (*ResumableConnection, error) {
+// newRealtime connects the call's connection over the default WebSocket, SSE and long-poll chain,
+// with the client's auth, headers and redirect policy; ctx bounds the open. The headers hold no
+// X-Request-Id unless the caller set one: each dial then mints its own.
+func newRealtime(ctx context.Context, cfg Config, c *call, topts TransportOpts, opts []RequestOption) (*ResumableConnection, error) {
 	rc := newRequestConfig(cfg, opts)
 	u, err := buildURL(rc.baseURL, c.path, c.query)
 	if err != nil {
@@ -101,7 +102,11 @@ func newRealtime(cfg Config, c *call, topts TransportOpts, opts []RequestOption)
 	}
 	topts.HTTPClient = streamClient(cfg)
 	topts.Headers = mergeHeaders(cfg, cfg.auth.current(cfg), "", c.headers, rc.headers)
-	return NewResumableConnection(u, []Transport{&WsTransport{}, &SseTransport{}, &LongpollTransport{}}, &topts), nil
+	r := NewResumableConnection(u, []Transport{&WsTransport{}, &SseTransport{}, &LongpollTransport{}}, &topts)
+	if err := r.Connect(ctx); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // Events returns the decoded payloads.
@@ -177,15 +182,16 @@ func (r *ResumableConnection) Close() error {
 		return nil
 	}
 	r.closed = true
-	r.cancel()
 	conn := r.conn
 	r.conn = nil
 	r.state = StateDisconnected
 	done := r.loopDone
 	r.mu.Unlock()
+	/* the transport closes first: a WebSocket read whose ctx ends drops the connection without the close frame */
 	if conn != nil {
 		_ = conn.Close()
 	}
+	r.cancel()
 	if done != nil {
 		<-done
 	}

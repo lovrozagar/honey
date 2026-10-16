@@ -38,6 +38,7 @@ const WEBSOCKET_SUM = [
 const CLIENT_IMPORTS: readonly (readonly [string, string])[] = [
 	["context", "context"],
 	["io", "io"],
+	["iter", "iter"],
 	["http", "net/http"],
 	["url", "net/url"],
 ]

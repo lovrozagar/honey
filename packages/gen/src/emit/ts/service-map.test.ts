@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
-import { memberTree, serviceMapOf, serviceMapText, sseEventSchema } from "./service-map.ts"
+import { memberTree, serviceMapOf, serviceMapText } from "./service-map.ts"
 
 type Json = Record<string, unknown>
 
@@ -107,21 +107,5 @@ export const serviceMap: ServiceMap = {
 
 	it("writes an empty map for a document without operations", () => {
 		expect(serviceMapText(ir({}), "r")).toContain("export const serviceMap: ServiceMap = {}")
-	})
-})
-
-describe("sseEventSchema", () => {
-	it("is the declared event schema when it is not a string, and nothing for a non-stream operation", () => {
-		const { operations } = ir({
-			"/n": { get: { operationId: "n", responses: { 200: json() } } },
-			"/t": {
-				get: {
-					operationId: "t",
-					responses: { 200: { content: { "text/event-stream": { schema: { type: "object" } } }, description: "" } },
-				},
-			},
-		})
-		const byId = Object.fromEntries(operations.map((op) => [op.id, sseEventSchema(op, (s) => s)]))
-		expect(byId).toEqual({ n: undefined, t: { fields: [], kind: "object" } })
 	})
 })

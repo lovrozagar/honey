@@ -35,6 +35,8 @@ export type SdkOp = {
 	headers: IRParam[]
 	body?: SdkBody
 	success: SdkSuccess
+	/** the schema of its events' `data`, when its event stream declares one that is not a string (`sseEventSchema`) */
+	events?: IRSchema
 	/** the 4xx and 5xx statuses it declares, ascending */
 	errorStatuses: number[]
 	stream: SdkStream
@@ -127,6 +129,24 @@ function streamOf(op: IROperation): SdkStream {
 	return sse === true ? "sse" : null
 }
 
+/* a string-typed schema: a scalar string, or a string const or enum */
+const isStringSchema = (schema: IRSchema) =>
+	(schema.kind === "scalar" && schema.type === "string") ||
+	(schema.kind === "const" && typeof schema.value === "string")
+
+/**
+ * The schema an SSE op declares for its events' `data`, when it is not a string: such events are
+ * JSON (core JSON-encodes an object `data`) and the client parses them.
+ */
+export function sseEventSchema(op: IROperation, resolve: (schema: IRSchema) => IRSchema): IRSchema | undefined {
+	const response = Object.values(op.responses).find(
+		({ contentType }) => contentType !== undefined && mediaEssence(contentType) === "text/event-stream",
+	)
+	if (response?.schema === undefined) return undefined
+	const resolved = resolve(response.schema)
+	return resolved.kind === "unknown" || isStringSchema(resolved) ? undefined : response.schema
+}
+
 function opOf(op: IROperation, resolve: (schema: IRSchema) => IRSchema): SdkOp {
 	const errorStatuses = Object.keys(op.responses)
 		.filter((status) => /^[0-9]{3}$/.test(status) && Number(status) >= 400)
@@ -153,6 +173,8 @@ function opOf(op: IROperation, resolve: (schema: IRSchema) => IRSchema): SdkOp {
 	}
 	const body = bodyOf(op, resolve)
 	if (body !== undefined) out.body = body
+	const events = sseEventSchema(op, resolve)
+	if (events !== undefined) out.events = events
 	return out
 }
 

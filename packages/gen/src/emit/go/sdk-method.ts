@@ -1,17 +1,19 @@
 /**
  * One operation as a Go method (G1): `(ctx, <path params in path order>, <body>?, opts *<Op>Opts,
- * reqOpts ...RequestOption)`, filling the runtime's `call` and handing it to `doRequest` (or
- * `dialWebSocket`). The query and header params ride on `<Op>Opts`, sent only when set. Spec text
- * reaches the source only through the shared escape layer.
+ * reqOpts ...RequestOption)`, filling the runtime's `call` and handing it to `doRequest`, or to its
+ * stream's runtime call (`sse.ts`, `ws.ts`). The query and header params ride on `<Op>Opts`, sent
+ * only when set. Spec text reaches the source only through the shared escape layer.
  */
 import type { IRParam } from "../../ir/model.ts"
 import { mediaEssence, type SdkBody, type SdkOp, type SdkResponseKind, type SdkStream } from "../../ir/sdk-model.ts"
 import { goString, lineComment } from "../shared/escape.ts"
 import { goExported, goLocal, NameScope } from "../shared/lang.ts"
-import { shapeOf } from "./sdk-answer.ts"
+import { type GoStream, type Shape, shapeOf } from "./sdk-answer.ts"
 import { type GoBody, goBody } from "./sdk-body.ts"
 import { type GoResponseHeaders, type OptsField, optsDecl, optsFields, optsLines, responseHeaders } from "./sdk-opts.ts"
+import { sseStream } from "./sse.ts"
 import { type GoTypeContext, goTypeOf } from "./types.ts"
+import { socketStream } from "./ws.ts"
 
 /**
  * How a caller reaches a method, by the names this emitter gave it: the test driver's call plan
@@ -69,6 +71,7 @@ const METHOD_LOCALS = [
 	"mp",
 	"multipartBody",
 	"multipartField",
+	"newRealtime",
 	"opts",
 	"params",
 	"path",
@@ -80,7 +83,11 @@ const METHOD_LOCALS = [
 	"safeResult",
 	"setHeaderValue",
 	"setIdempotencyKey",
+	"sseFail",
+	"streamJSON",
+	"streamText",
 	"textField",
+	"topts",
 	"v",
 ]
 
@@ -106,10 +113,22 @@ function callOf(op: SdkOp, name: string, path: readonly [IRParam, string][], fie
 	}
 }
 
-/** The method's godoc: its name and route, then the operation's summary and description. */
-function methodDoc(op: SdkOp, name: string): string[] {
-	const text = [`${name} calls ${op.method} ${op.path}.`, op.summary, op.description].filter((part) => part !== "")
+/** The method's godoc: its name and route and its stream's note, then the operation's summary and description. */
+function methodDoc(op: SdkOp, name: string, stream: GoStream | null): string[] {
+	const route = [`${name} calls ${op.method} ${op.path}.`, stream?.doc ?? ""].filter((part) => part !== "").join(" ")
+	const text = [route, op.summary, op.description].filter((part) => part !== "")
 	return lineComment(text.join("\n\n"), "//")
+}
+
+/** How the method of `op` answers, and its stream: null for an operation that answers once. */
+function answering(op: SdkOp, env: MethodEnv): { readonly shape: Shape; readonly stream: GoStream | null } {
+	if (op.stream !== null) {
+		const stream = op.stream === "sse" ? sseStream(op, env.at) : socketStream(op.stream)
+		return { shape: stream.shape, stream }
+	}
+	const schema = op.success.schema
+	const result = schema && goTypeOf(schema, { ...env.at, fieldName: "Response", parentName: op.id }).replace(/^\*/, "")
+	return { shape: shapeOf({ kind: op.success.kind, result, throwOnError: env.throwOnError }), stream: null }
 }
 
 /** The statements expanding the path, and the expression the call sends as its path. */
@@ -159,10 +178,9 @@ export function goMethod(op: SdkOp, name: string, receiver: Receiver, env: Metho
 	const bodyLocal = op.body && locals.claim("body")
 	const body = op.body && goBody(op, op.body, { at: env.at, local: bodyLocal as string })
 	const pathLocals = pathParamsOf(op).map((param): [IRParam, string] => [param, locals.claim(goLocal(param.name))])
-	const schema = op.success.schema
-	const result = schema && goTypeOf(schema, { ...env.at, fieldName: "Response", parentName: op.id }).replace(/^\*/, "")
-	const shape = shapeOf({ kind: op.success.kind, result, throwOnError: env.throwOnError, ws: op.stream === "ws" })
-	const fields = optsFields(op, opts, env.at)
+	const { shape, stream } = answering(op, env)
+	const streamOpts = stream?.opts ?? null
+	const fields = optsFields(op, opts, env.at, streamOpts)
 	const path = pathLines(op, pathLocals, shape.fail)
 	const headers = responseHeaders(op, env.at)
 	const params = [
@@ -173,16 +191,16 @@ export function goMethod(op: SdkOp, name: string, receiver: Receiver, env: Metho
 		"reqOpts ...RequestOption",
 	]
 	const lines = [
-		...methodDoc(op, name),
+		...methodDoc(op, name, stream),
 		`func (r *${receiver.type}) ${name}(${params.join(", ")}) ${shape.returns} {`,
 		...path.lines,
 		...(body ? body.lines(shape.fail) : []),
 		`\tc := &call{${callMembers(op, path, body, receiver.client).join(", ")}}`,
-		...optsLines(op, fields),
-		...shape.tail(`ctx, ${receiver.client}.cfg, c, reqOpts`),
+		...optsLines(op, fields, streamOpts),
+		...shape.tail(receiver.client),
 		"}",
 	]
-	const decls: [string, string][] = [[opts, optsDecl(op, opts, fields)]]
+	const decls: [string, string][] = [[opts, optsDecl(op, opts, fields, streamOpts)]]
 	if (headers) decls.push([headers.plan.type, headers.decl])
 	const call = { ...callOf(op, name, pathLocals, fields), responseHeaders: headers?.plan ?? null }
 	return { call, decls, lines }

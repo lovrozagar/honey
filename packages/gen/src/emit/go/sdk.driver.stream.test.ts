@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk, drivenSdk, type Script } from "./__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk, type Script } from "./__fixtures__/compiled.ts"
 import { consume } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "./__fixtures__/recording-server.ts"
-import { generateGoSdk, goCallPlans } from "./sdk.ts"
+import { generateGoSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
 
@@ -54,90 +54,12 @@ const STREAMS: Json = {
 	},
 }
 
-/**
- * The phase-d method shapes (contract "Emitter API"), hand-written as `Target` methods beside the
- * emitted ones over the phase-c runtime, so the driver's SSE and realtime paths run before the
- * emitter writes them. Delete with the emitter step: sse.test.ts and realtime.test.ts then drive
- * the emitted methods, and Fd1 changes `newRealtime`, which stops this file building.
- */
-const BRIDGE = `package sdk
-
-import (
-	"context"
-	"iter"
-)
-
-type TicksTargetOpts struct {
-	Since       *int64
-	LastEventID string
-}
-
-func (r *TicksResource) Target(ctx context.Context, opts *TicksTargetOpts, reqOpts ...RequestOption) iter.Seq2[SSEEvent[Tick], error] {
-	c := &call{method: "GET", path: "/ticks", operation: "GET /ticks", headers: map[string]string{}, stale: r.client.stale}
-	if opts != nil {
-		c.query.set("since", opts.Since)
-		if opts.LastEventID != "" {
-			c.headers["Last-Event-ID"] = opts.LastEventID
-		}
-	}
-	return streamJSON[Tick](ctx, r.client.cfg, c, reqOpts)
-}
-
-type TextTargetOpts struct{ LastEventID string }
-
-func (r *TextResource) Target(ctx context.Context, id string, opts *TextTargetOpts, reqOpts ...RequestOption) iter.Seq2[SSEEvent[string], error] {
-	params := map[string]string{"id": id}
-	path, err := expandPath("/text/{id}", params)
-	if err != nil {
-		return sseFail[string](err)
-	}
-	c := &call{method: "GET", path: path, operation: "GET /text/{id}", headers: map[string]string{}, stale: r.client.stale, params: params}
-	return streamText(ctx, r.client.cfg, c, reqOpts)
-}
-
-type FeedTargetOpts struct {
-	Channel              string
-	LastEventID          string
-	ReconnectToken       string
-	Protocols            []string
-	MaxReconnectAttempts int
-	ReconnectDelayMs     int
-}
-
-func (r *FeedResource) Target(ctx context.Context, opts *FeedTargetOpts, reqOpts ...RequestOption) (*ResumableConnection, error) {
-	c := &call{method: "GET", path: "/feed", operation: "GET /feed", headers: map[string]string{}, stale: r.client.stale}
-	var topts TransportOpts
-	if opts != nil {
-		c.query.set("channel", opts.Channel)
-		topts = TransportOpts{LastEventID: opts.LastEventID, ReconnectToken: opts.ReconnectToken, Protocols: opts.Protocols,
-			MaxReconnectAttempts: opts.MaxReconnectAttempts, ReconnectDelayMs: opts.ReconnectDelayMs}
-	}
-	conn, err := newRealtime(r.client.cfg, c, topts, reqOpts)
-	if err != nil {
-		return nil, err
-	}
-	if err := conn.Connect(ctx); err != nil {
-		return nil, err
-	}
-	return conn, nil
-}
-`
-
-/** The STREAMS SDK with the driver, plus BRIDGE and a `<op>.target` plan for each Target method. */
+let compiled: DrivenSdk | undefined
+/** The STREAMS SDK with the driver, compiled once; it must build and vet clean. */
 function streamsSdk(): DrivenSdk {
-	const plans = goCallPlans(STREAMS)
-	const targets = Object.fromEntries(
-		["feed.live", "text.stream", "ticks.stream"].map((id) => {
-			const operation = id.replace(/\.\w+$/, ".target")
-			return [operation, { ...plans[id], method: "Target", operation }]
-		}),
-	)
-	const sdk = drivenSdk({ ...generateGoSdk(STREAMS).files, "bridge.go": BRIDGE }, {
-		...plans,
-		...targets,
-	} as typeof plans)
-	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	return sdk
+	compiled ??= compiledSdk(STREAMS, { modulePath: "example.com/streams" })
+	expect({ built: compiled.built, vet: compiled.vet }, compiled.stderr).toEqual({ built: true, vet: [] })
+	return compiled
 }
 
 const route = (path: string) => ({ method: "GET", path })
@@ -147,15 +69,14 @@ const socket = (extra: Partial<Call> = {}): Call => ({
 	route: route("/rooms/{room}"),
 	...extra,
 })
-const ticks = (extra: Partial<Call> = {}): Call => ({ operation: "ticks.target", route: route("/ticks"), ...extra })
+const ticks = (extra: Partial<Call> = {}): Call => ({ operation: "ticks.stream", route: route("/ticks"), ...extra })
 const feed = (extra: Partial<Call> = {}): Call => ({
-	operation: "feed.target",
+	operation: "feed.live",
 	route: route("/feed"),
 	search: { channel: "c" },
 	...extra,
 })
-const text = (id: string): Call => ({ operation: "text.target", params: { id }, route: route("/text/{id}") })
-const live = (extra: Partial<Call>): Call => ({ ...feed(extra), operation: "feed.live" })
+const text = (id: string): Call => ({ operation: "text.stream", params: { id }, route: route("/text/{id}") })
 const sse = (steps: readonly (string | { waitMs: number })[], end: "close" | "drop" | "hold" = "close"): Reply => ({
 	sse: { end, steps },
 	status: 200,
@@ -174,7 +95,7 @@ async function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly 
 	})
 }
 
-describe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error] (the phase-d shape, bridged)", () => {
+describe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error]", () => {
 	it("observes typed events with event and id, breaks out after take, and traces retry and the typed headers", async () => {
 		if (!withGo()) return
 		const reply: Reply = {
@@ -211,7 +132,7 @@ describe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error] (the phase-d sh
 	}, 600_000)
 })
 
-describe("the Go test driver: SSE errors and string data (bridged)", () => {
+describe("the Go test driver: SSE errors and string data", () => {
 	it("observes the events before an undecodable one, its error traced, and an error status before any event as error", async () => {
 		if (!withGo()) return
 		const sdk = streamsSdk()
@@ -258,7 +179,7 @@ describe("the Go test driver: SSE errors and string data (bridged)", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: an SSE call's ctx (bridged)", () => {
+describe("the Go test driver: an SSE call's ctx", () => {
 	it("ends quietly when the call's ctx ends mid-stream: the events so far, no error", async () => {
 		if (!withGo()) return
 		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
@@ -347,7 +268,7 @@ describe("the Go test driver: how a WebSocket read ends", () => {
 	}, 600_000)
 })
 
-describe("the Go test driver: realtime, (*ResumableConnection, error) (the phase-d shape, bridged)", () => {
+describe("the Go test driver: realtime, (*ResumableConnection, error)", () => {
 	it("opens over WebSocket with the resume cursor, sends, reads take frames, and traces the settled cursor", async () => {
 		if (!withGo()) return
 		const reply = ws([
@@ -429,23 +350,11 @@ describe("the Go test driver: a stream method failing before any stream", () => 
 })
 
 describe("the Go test driver: what it refuses on a stream, nothing sent", () => {
-	it("refuses the phase-c methods' shapes, Opts without the stream fields, and controls that do not fit the stream", async () => {
+	it("refuses controls that do not fit the stream", async () => {
 		if (!withGo()) return
-		const sdk = compiledSdk(STREAMS, { modulePath: "example.com/streams" })
+		const sdk = streamsSdk()
 		const cases: [Call, Script | undefined, RegExp][] = [
-			[
-				{ operation: "ticks.stream", route: route("/ticks") },
-				undefined,
-				/the SSE method returns error, not iter\.Seq2/,
-			],
-			[live({ take: 1 }), undefined, /the realtime method returns error, not \(\*ResumableConnection, error\)/],
-			[live({}), undefined, /a realtime call without take/],
-			[
-				socket({ reconnectToken: "rt" }),
-				undefined,
-				/has no field ReconnectToken: Opts without their stream fields predate/,
-			],
-			[socket(), { calls: [{ protocols: ["v1"] }] }, /has no field Protocols/],
+			[feed({}), undefined, /a realtime call without take/],
 			[socket({ lastEventId: "1" }), undefined, /lastEventId on a WebSocket operation/],
 			[socket({ raw: true }), undefined, /raw: true on a ws operation/],
 			[
@@ -494,5 +403,43 @@ describe("consumer programs for streams: top-level decls and a -race link", () =
 			raced: [true, undefined],
 		})
 		expect(raced.stderr).toContain("WARNING: DATA RACE")
+	}, 600_000)
+})
+
+/* a transport whose Close records whether the read it is blocked in still has a live ctx */
+const CLOSING = `type closing struct {
+	entered chan struct{}
+	read    context.Context
+	atClose string
+}
+
+func (c *closing) Name() string                   { return "closing" }
+func (c *closing) Kind() sdk.TransportKind         { return sdk.TransportWs }
+func (c *closing) Send(context.Context, any) error { return nil }
+func (c *closing) Close() error                    { c.atClose = fmt.Sprint(c.read.Err()); return nil }
+func (c *closing) Recv(ctx context.Context) (any, error) {
+	c.read = ctx
+	close(c.entered)
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (c *closing) Connect(context.Context, string, *sdk.TransportOpts) (sdk.TransportConn, error) { return c, nil }`
+
+describe("ResumableConnection.Close: the transport's close before the read's cancel", () => {
+	/* coder/websocket drops the connection when a Read's ctx ends (conn.go setupReadTimeout), so a
+	 * cancel first races the close frame Close sends: the server could see no `1000 client close` */
+	it("closes the transport while its read is still live, then cancels the read", async () => {
+		if (!withGo()) return
+		const body = `	c := &closing{entered: make(chan struct{})}
+	rc := sdk.NewResumableConnection("http://rt.test/feed", []sdk.Transport{c}, nil)
+	note(rc.Connect(ctx))
+	<-c.entered
+	note(rc.Close(), c.atClose, rc.State())`
+		const run = await consume(generateGoSdk(STREAMS).files, "example.com/sdk", { body, decls: CLOSING })
+		expect({ built: run.built, out: run.out, vet: run.vet }, run.stderr).toEqual({
+			built: true,
+			out: { main: ["<nil>", "<nil> <nil> disconnected"] },
+			vet: [],
+		})
 	}, 600_000)
 })

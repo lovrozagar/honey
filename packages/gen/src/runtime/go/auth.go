@@ -47,8 +47,8 @@ func (a *authState) refresh(ctx context.Context, cfg Config, rejected string) (s
 
 // mergeHeaders builds a request's headers, later layers winning per name in any casing:
 // Content-Type when contentType is set, then Config.Headers, then each of layers (the operation's
-// headers, then the per-call ones), then the auth header when token is set, then X-Request-Id when
-// still absent. OnRequest hooks may change the result.
+// headers, then the per-call ones), then the auth header when token is set. OnRequest hooks may
+// change the result.
 func mergeHeaders(cfg Config, token, contentType string, layers ...map[string]string) http.Header {
 	h := http.Header{}
 	if contentType != "" {
@@ -61,6 +61,15 @@ func mergeHeaders(cfg Config, token, contentType string, layers ...map[string]st
 	}
 	if token != "" {
 		h.Set(cfg.AuthHeaderName, cfg.AuthHeaderPrefix+token)
+	}
+	return h
+}
+
+// withRequestID gives h a fresh X-Request-Id unless it has one (a nil h becomes a new header) and
+// returns it: each request names itself, and a caller's id is kept.
+func withRequestID(h http.Header) http.Header {
+	if h == nil {
+		h = http.Header{}
 	}
 	if h.Get("X-Request-Id") == "" {
 		h.Set("X-Request-Id", newUUIDv4())

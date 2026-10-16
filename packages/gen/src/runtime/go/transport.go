@@ -44,6 +44,15 @@ const (
 	defaultPollTimeout     = 60 * time.Second
 )
 
+// dialHeaders is a copy of the headers for one dial, with an X-Request-Id: the caller's, else a
+// fresh one, so every dial of a connection is a request of its own.
+func (o *TransportOpts) dialHeaders() http.Header {
+	if o == nil {
+		return withRequestID(nil)
+	}
+	return withRequestID(o.Headers.Clone())
+}
+
 func (o *TransportOpts) maxMessageBytes() int64 {
 	if o == nil || o.MaxMessageBytes <= 0 {
 		return defaultMaxMessageBytes
@@ -137,12 +146,11 @@ func (t *WsTransport) Kind() TransportKind { return TransportWs }
 // Connect dials the endpoint with the resume cursor as query params, and the protocols, headers
 // and client from opts.
 func (t *WsTransport) Connect(ctx context.Context, rawURL string, opts *TransportOpts) (TransportConn, error) {
-	dialOpts := &websocket.DialOptions{Subprotocols: t.Subprotocols, HTTPClient: transportClient(nil)}
+	dialOpts := &websocket.DialOptions{Subprotocols: t.Subprotocols, HTTPClient: transportClient(nil), HTTPHeader: opts.dialHeaders()}
 	if opts != nil {
 		if len(opts.Protocols) > 0 {
 			dialOpts.Subprotocols = opts.Protocols
 		}
-		dialOpts.HTTPHeader = opts.Headers.Clone()
 		dialOpts.HTTPClient = transportClient(opts.HTTPClient)
 	}
 	conn, _, err := websocket.Dial(ctx, toWsURL(withQuery(rawURL, opts, true)), dialOpts)

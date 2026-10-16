@@ -3,7 +3,7 @@
  * by: the resource tree with every member name a client can expose, and one entry per operation.
  */
 import type { IR, IRNamespace, IROperation, IRSchema, IRTreeEntry } from "../../ir/model.ts"
-import { isJsonMedia, mediaEssence, type SdkSuccess, sdkModel } from "../../ir/sdk-model.ts"
+import { isJsonMedia, mediaEssence, type SdkSuccess, sdkModel, sseEventSchema } from "../../ir/sdk-model.ts"
 import { openApiPathParams } from "../../ir/slots.ts"
 import { tsString } from "../shared/escape.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
@@ -92,24 +92,6 @@ function acceptOf(op: IROperation, contentType: string | undefined): string | un
 function headersOf(op: IROperation, status: string): string[] {
 	const declared = op.responses[status]?.headers ?? []
 	return [...new Set(declared.map(({ name }) => name.toLowerCase()))].sort(compareCodeUnits)
-}
-
-/* a string-typed schema: a scalar string, or a string const or enum */
-const isStringSchema = (schema: IRSchema) =>
-	(schema.kind === "scalar" && schema.type === "string") ||
-	(schema.kind === "const" && typeof schema.value === "string")
-
-/**
- * The schema an SSE op declares for its events' `data`, when it is not a string: such events are
- * JSON (core JSON-encodes an object `data`) and the client parses them.
- */
-export function sseEventSchema(op: IROperation, resolve: (schema: IRSchema) => IRSchema): IRSchema | undefined {
-	const response = Object.values(op.responses).find(
-		({ contentType }) => contentType !== undefined && mediaEssence(contentType) === "text/event-stream",
-	)
-	if (response?.schema === undefined) return undefined
-	const resolved = resolve(response.schema)
-	return resolved.kind === "unknown" || isStringSchema(resolved) ? undefined : response.schema
 }
 
 /** The service entry of `op`; `success` is its success answer as the SDK model reads it. */

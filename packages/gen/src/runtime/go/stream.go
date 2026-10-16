@@ -10,47 +10,21 @@ import (
 	"net/http"
 )
 
-// openStream sends a streaming request through the same URL, header, auth and hook pipeline as a
-// regular one, with no timeout: ctx alone bounds it. It retries once with OnAuthExpired's token on
-// a 401, and turns a non-2xx status into a typed error before any event. The caller owns the body.
+// openStream sends a streaming request through every call's exchange (run), with no timeout: ctx
+// alone bounds it, and a non-2xx status is a typed error before any event. The caller owns the body.
 func openStream(ctx context.Context, cfg Config, c *call, opts []RequestOption) (*http.Response, error) {
-	x := &exchange{cfg: cfg, rc: newRequestConfig(cfg, opts), c: c}
 	if c.headers == nil {
 		c.headers = map[string]string{}
 	}
 	if !hasHeader(c.headers, "Accept") {
 		c.headers["Accept"] = "text/event-stream"
 	}
-	client := streamClient(cfg)
-	token := cfg.auth.current(cfg)
-	for attempt := 0; ; attempt++ {
-		req, err := x.newRequest(ctx, token, attempt > 0)
-		if err != nil {
-			return nil, err
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, wrapTransportError(ctx, err)
-		}
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			x.rc.deliver(resp, nil)
-			return resp, nil
-		}
-		body, _ := readBody(resp.Body, 64<<10)
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusUnauthorized && attempt == 0 && cfg.OnAuthExpired != nil && c.body.replayable() {
-			fresh, authErr := cfg.auth.refresh(ctx, cfg, token)
-			if authErr != nil {
-				return nil, fmt.Errorf("honey: OnAuthExpired failed: %w", authErr)
-			}
-			if fresh != "" {
-				token = fresh
-				continue
-			}
-		}
-		x.rc.deliver(resp, body)
-		return nil, raiseForStatus(resp, body)
+	x := &exchange{cfg: cfg, rc: newRequestConfig(cfg, opts), c: c, stream: true}
+	result, err := x.run(ctx)
+	if err != nil {
+		return nil, err
 	}
+	return result.resp, nil
 }
 
 // streamText yields the call's server-sent events with Data as sent.
