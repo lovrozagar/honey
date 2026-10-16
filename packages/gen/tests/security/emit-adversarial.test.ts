@@ -4,11 +4,18 @@
  * code; names whose order depends on the machine; a webhook verify helper that compares the
  * signature by value, so its timing leaks how much of a forged one is right. Each is a failing input first and the property
  * that answers it second; the gen mutation harness reruns this directory with each guard disabled.
+ * The emitted runtimes answer the same way on the wire: TS (bit 11) in process, Go (bit 12) compiled
+ * from the shared adversarial corpus and driven against a recording server.
  */
 import { resolve } from "node:path"
 import { Project } from "ts-morph"
 import { describe, expect, it, vi } from "vitest"
+import type { DrivenSdk, Script } from "../../src/emit/go/__fixtures__/compiled.ts"
+import { withGo } from "../../src/emit/go/__fixtures__/go-env.ts"
+import { type Reply, served } from "../../src/emit/go/__fixtures__/recording-server.ts"
+import type { Call, Setup } from "../integration/conformance/matrix.ts"
 import { guardNamed } from "../structure/mutation-harness.ts"
+import { CORPUS } from "./adversarial-corpus.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 
@@ -286,4 +293,153 @@ describe("gen adversarial: the emitted TS runtime", () => {
 		const seen = JSON.stringify([entries, denied.error])
 		expect([seen.includes("s3cret"), seen.includes("k3y"), seen.includes("api_key")]).toEqual([false, false, false])
 	})
+})
+
+/* the Go emitter and the compiled SDK, imported after the mock so every guard (the runtime files included) reaches them */
+const { generateGoSdk } = (await import(
+	resolve(REPO, "packages/gen/src/emit/go/sdk.ts")
+)) as typeof import("../../src/emit/go/sdk.ts")
+const { compileGo, compiledSdk } = (await import(
+	resolve(REPO, "packages/gen/src/emit/go/__fixtures__/compiled.ts")
+)) as typeof import("../../src/emit/go/__fixtures__/compiled.ts")
+
+const STR = { type: "string" }
+const ID = [{ in: "path", name: "id", required: true, schema: STR }]
+const KEY = [{ in: "query", name: "api_key", schema: STR }]
+/** One document for the three runtime guards: a redirecting read, a path param, a query-keyed success and 401. */
+const GUARD_DOC = {
+	components: { securitySchemes: { bearer: { scheme: "bearer", type: "http" } } },
+	info: { title: "Guards", version: "1" },
+	openapi: "3.1.0",
+	paths: {
+		"/denied/{id}": {
+			get: { operationId: "denied.get", parameters: [...ID, ...KEY], responses: { ...OK, 401: { description: "no" } } },
+		},
+		"/files/{id}": { get: { operationId: "files.get", parameters: ID, responses: OK } },
+		"/hop": { get: { operationId: "hop.get", responses: OK } },
+		"/ok": { get: { operationId: "ok.get", parameters: KEY, responses: OK } },
+	},
+	security: [{ bearer: [] }],
+}
+
+/** GUARD_DOC's SDK with the driver, compiled once per suite run (the mutant's runtime included), which must compile and vet clean. */
+let guardSdk: DrivenSdk | undefined
+function guards(): DrivenSdk {
+	guardSdk ??= compiledSdk(GUARD_DOC, { modulePath: "example.com/guards" })
+	expect({ built: guardSdk.built, vet: guardSdk.vet }, guardSdk.stderr).toEqual({ built: true, vet: [] })
+	return guardSdk
+}
+
+const BEARER: Setup["auth"] = { kind: "bearer", token: "s3cret" }
+const HOP: Call = { operation: "hop.get", route: { method: "GET", path: "/hop" } }
+/* a 307 to the other origin, then the landing */
+const AWAY: Reply[] = [
+	{ redirect: { origin: "alt", path: "/landing" }, status: 307 },
+	{ json: {}, status: 200 },
+]
+/* the auth header, a cookie and a configured header, a redirect followed */
+const CARRIED: Setup = { auth: BEARER, headers: { Cookie: "sid=1", "X-Api-Key": "k-1" }, redirect: "follow" }
+/* a query-keyed success, then a 401 on a path-param read carrying the same query */
+const LOGGED: Call[] = [
+	{ operation: "ok.get", route: { method: "GET", path: "/ok" }, search: { api_key: "k3y" } },
+	{
+		operation: "denied.get",
+		params: { id: "p4th" },
+		route: { method: "GET", path: "/denied/{id}" },
+		search: { api_key: "k3y" },
+	},
+]
+const filesGet = (id: string): Call => ({
+	operation: "files.get",
+	params: { id },
+	route: { method: "GET", path: "/files/{id}" },
+})
+
+/** HOP sent with CARRIED through AWAY under `script`: the driver's status, where it landed and the credentials it landed with. */
+async function landing(sdk: DrivenSdk, script?: Script): Promise<{ seen: unknown[]; stderr: string }> {
+	const { hops, run } = await served(AWAY, async (server) => ({
+		hops: server.hops,
+		run: await sdk.runCalls({ calls: [HOP], setup: CARRIED }, server, script),
+	}))
+	const hop = hops[1]
+	const credentials = ["authorization", "cookie", "x-api-key"].map((name) => hop?.headers[name] ?? null)
+	return { seen: [run.status, `${hop?.origin} ${hop?.url}`, credentials], stderr: run.stderr }
+}
+
+describe.skipIf(!withGo())("gen adversarial: the Go SDK emitter", () => {
+	/* v0 tidied the module first and skipped offline; v1 emits go.sum (G9) */
+	// v0: 4eba1d1639
+	it("vets clean in both throwOnError modes, every hostile name a Go identifier and every value a literal", () => {
+		const modes = [true, false].map((throwOnError) => ({
+			go: compileGo(generateGoSdk(CORPUS, { modulePath: "example.com/adversarial", throwOnError }).files),
+			throwOnError,
+		}))
+		expect(
+			[
+				modes.map(({ go, throwOnError }) => ({ built: go.built, throwOnError, vet: go.vet })),
+				({} as Record<string, unknown>).polluted,
+				({} as Record<string, unknown>).y,
+			],
+			modes.map(({ go }) => go.stderr).join(""),
+		).toEqual([
+			[
+				{ built: true, throwOnError: true, vet: [] },
+				{ built: true, throwOnError: false, vet: [] },
+			],
+			undefined,
+			undefined,
+		])
+	}, 600_000)
+})
+
+describe.skipIf(!withGo())("gen adversarial: the emitted Go runtime", () => {
+	it("drops the auth header, cookies and configured headers on a cross-origin redirect hop, a caller's HTTPClient included", async () => {
+		const sdk = guards()
+		const runs = await Promise.all([landing(sdk), landing(sdk, { config: { httpClient: true } })])
+		expect(
+			runs.map((r) => r.seen),
+			runs.map((r) => r.stderr).join(""),
+		).toEqual([
+			[0, "alt /landing", [null, null, null]],
+			[0, "alt /landing", [null, null, null]],
+		])
+	}, 600_000)
+
+	it("never lets a path param add, drop or climb a segment", async () => {
+		const sdk = guards()
+		const { hops, run } = await served([], async (server) => {
+			const cell = { calls: [filesGet("../admin"), filesGet("a/b"), filesGet("..")] }
+			return { hops: server.hops, run: await sdk.runCalls(cell, { url: `${server.url}/v1` }, {}) }
+		})
+		expect(
+			{ errors: run.trace?.calls.map((c) => c.error?.type ?? null), urls: hops.map((h) => h.url) },
+			run.stderr,
+		).toEqual({ errors: [null, null, "*sdk.PathParamError"], urls: ["/v1/files/..%2Fadmin", "/v1/files/a%2Fb"] })
+	}, 600_000)
+
+	it("keeps path values, the query and the auth header out of every OnLog entry and error text", async () => {
+		const sdk = guards()
+		const replies: Reply[] = [
+			{ json: {}, status: 200 },
+			{ json: { message: "no access" }, status: 401 },
+		]
+		const run = await served(replies, (server) =>
+			sdk.runCalls({ calls: LOGGED, setup: { auth: BEARER } }, server, { log: true }),
+		)
+		const log = run.trace?.log ?? []
+		const seen = JSON.stringify([log, run.trace?.calls.map((c) => c.error)])
+		/* events and status keep it from passing vacuously: an empty log or a missing 401 fails it clean */
+		expect(
+			{
+				events: log.map((e) => e.event),
+				leaks: ["s3cret", "k3y", "api_key", "p4th"].filter((word) => seen.includes(word)),
+				status: run.trace?.calls[1]?.error?.status,
+			},
+			run.stderr,
+		).toEqual({
+			events: ["request_start", "response_received", "request_start", "response_received", "error"],
+			leaks: [],
+			status: 401,
+		})
+	}, 600_000)
 })

@@ -37,16 +37,31 @@ export function variableTimeHelper(verifyHelper: (language: string) => string): 
 		VALUE_COMPARE.reduce((text, [constantTime, value]) => text.replace(constantTime, value), verifyHelper(language))
 }
 
+/** `text` with `from` replaced by `to`; a patch that no longer matches throws (a stale mutant is red). */
+function patched(text: string, [from, to]: readonly [string, string], where = "the runtime"): string {
+	if (!text.includes(from)) throw new Error(`stale runtime mutant: ${JSON.stringify(from)} is not in ${where}`)
+	return text.replace(from, to)
+}
+
 /** `runtimeSource` with each `[from, to]` applied to the text; a patch that no longer matches throws (a stale mutant is red). */
 export function patchedRuntime(
 	runtimeSource: () => string,
 	patches: readonly (readonly [string, string])[],
 ): () => string {
-	return () =>
-		patches.reduce((text, [from, to]) => {
-			if (!text.includes(from)) throw new Error(`stale runtime mutant: ${JSON.stringify(from)} is not in the runtime`)
-			return text.replace(from, to)
-		}, runtimeSource())
+	return () => patches.reduce((text, patch) => patched(text, patch), runtimeSource())
+}
+
+/** `runtimeFiles` with each `[file, from, to]` applied to that file; a patch whose file is not shipped or whose text is gone throws. */
+export function patchedRuntimeFiles<F>(
+	runtimeFiles: (features: F) => Record<string, string>,
+	patches: readonly (readonly [string, string, string])[],
+): (features: F) => Record<string, string> {
+	return (features) =>
+		patches.reduce((files, [file, from, to]) => {
+			const text = files[file]
+			if (text === undefined) throw new Error(`stale runtime mutant: ${file} is not shipped`)
+			return { ...files, [file]: patched(text, [from, to], file) }
+		}, runtimeFiles(features))
 }
 
 /* a cross-origin hop that keeps every header, credentials and the auth header included */
@@ -68,5 +83,25 @@ export const LEAKY_LOG = [
 	[
 		"exchangeLog(this.#config.onLog, `${method.toUpperCase()} ${path}`)",
 		'exchangeLog(this.#config.onLog, `${method.toUpperCase()} ${url.toString()} ${headers.get("authorization") ?? ""}`)',
+	],
+] as const
+
+/* a Go cross-origin hop that keeps every header: the strip loop deletes nothing (the same-origin refusal stays) */
+export const GO_KEEP_CROSS_ORIGIN_HEADERS = [
+	["redirect.go", "\t\t\tdelete(req.Header, name)\n", "\t\t\tcontinue\n"],
+] as const
+
+/* a Go path param written as it came: no percent-encoding, no refusal of an empty or dot segment */
+export const GO_RAW_PATH_PARAMS = [
+	["path.go", 'if value == "" || value == "." || value == ".." {', "if false {"],
+	["path.go", "return escapePathSegment(value), nil", "return value, nil"],
+] as const
+
+/* a Go OnLog response entry naming the full request URL and the auth header instead of METHOD /template */
+export const GO_LEAKY_LOG = [
+	[
+		"request.go",
+		'Event: "response_received", Operation: x.c.operation,',
+		'Event: "response_received", Operation: x.c.method + " " + result.resp.Request.URL.String() + " " + result.resp.Request.Header.Get("Authorization"),',
 	],
 ] as const

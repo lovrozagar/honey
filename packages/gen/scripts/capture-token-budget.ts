@@ -96,6 +96,28 @@ export function v1SdkSurfaces(typesSource: string): Map<string, string> {
 	return out
 }
 
+/**
+ * Each method of a v1 emitted Go `client.go` (bit 12, G13), as `generateGoSdk` writes it before
+ * gofmt: its signature line without the ` {`, then the `<Op>Opts` struct it takes, what a reader of
+ * the SDK takes in to call it once (godoc excluded, as JSDoc is for TS). Keyed `receiver.method`. A
+ * signature naming an Opts struct the text never declares throws: a missed block never measures short.
+ */
+export function v1GoSdkSurfaces(clientGo: string): Map<string, string> {
+	const blocks = new Map<string, string>()
+	for (const match of clientGo.matchAll(/^type (\w+Opts) struct \{\n(?:\t.*\n)*?\}$/gm))
+		blocks.set(match[1] as string, match[0])
+	const out = new Map<string, string>()
+	for (const match of clientGo.matchAll(/^func \(r \*(\w+)\) (\w+)\(ctx context\.Context.*\{$/gm)) {
+		const key = `${match[1]}.${match[2]}`
+		const signature = match[0].slice(0, -" {".length)
+		const opts = /\bopts \*(\w+Opts)\b/.exec(signature)?.[1]
+		const block = opts === undefined ? undefined : blocks.get(opts)
+		if (opts !== undefined && block === undefined) throw new Error(`${key} takes ${opts}, which is never declared`)
+		out.set(key, block === undefined ? signature : `${signature}\n${block}`)
+	}
+	return out
+}
+
 const HELP_FIELD = /^\s*(?:Use|Short|Long|Example):\s+("(?:[^"\\]|\\.)*")/
 const FLAG = /\.Flags\(\)\.\w+\((?:&\w+,\s*)?"([^"]+)",\s*[^,]*,\s*("(?:[^"\\]|\\.)*")\)/
 const REQUIRED = /\.MarkFlagRequired\("([^"]+)"\)/
