@@ -2,8 +2,8 @@
  * The emitted Rust types, compiled and run (contract 18 §8.3): the `types` registry crate builds as emitted,
  * and one consumer program over it decodes and encodes each mapping category through serde_json, one section
  * per category, so a shape that only text could show (tri-state, a reachable literal, an empty closed object,
- * a boxed cycle, a payload-keeping discriminator, raw identifiers, an integer enum, the extra flatten, unique
- * enum labels) is proven on the wire.
+ * a boxed cycle, a payload-keeping discriminator over named or inline variants, raw identifiers, an integer enum,
+ * the extra flatten, unique enum labels, an inline array answer's item type) is proven on the wire.
  */
 import { describe, expect, it } from "vitest"
 import { compiledRust } from "./__fixtures__/compiled.ts"
@@ -43,6 +43,11 @@ fn shown<T: std::fmt::Debug>(decoded: Result<T, String>) -> String {
 /// A \`Thing\` with only its required fields and the two tri-state ones set.
 fn thing(note: Option<Option<String>>, x_key: Option<Option<i64>>) -> sdk::Thing {
     sdk::Thing { attrs: Default::default(), note, parent: None, plain: None, tags: Vec::new(), x_key }
+}
+
+/// \`list().get\`'s answer bound to its hoisted item type: an untyped answer fails the build.
+async fn listed(c: &sdk::Client) -> Result<Vec<sdk::ListGetResponseItem>, sdk::Error> {
+    c.list().get(&sdk::ListGetOpts::default()).await
 }`
 
 /* one section per §8.3 row; each notes what it decoded or encoded */
@@ -88,6 +93,18 @@ const BODY = `
     n.note(back::<sdk::Animal>(r#"{"kind":"dog","name":"rex"}"#));
     n.note(back::<sdk::Animal>(r#"{"kind":"bird"}"#));
 
+    n.section("shape");
+    for text in [r#"{"kind":"a","x":"s"}"#, r#"{"kind":"b","y":2}"#, r#"{"kind":"c"}"#] {
+        let line = match de::<sdk::Shape>(text) {
+            Ok(sdk::Shape::A(a)) => format!("A x={} kind={}", a.x.as_deref().unwrap_or("-"), a.kind),
+            Ok(sdk::Shape::B(b)) => format!("B y={:?} kind={}", b.y, b.kind),
+            Ok(sdk::Shape::Unknown(v)) => format!("Unknown {v}"),
+            Err(e) => format!("error: {e}"),
+        };
+        n.note(line);
+    }
+    n.note(back::<sdk::Shape>(r#"{"kind":"a","x":"s"}"#));
+
     n.section("keywords");
     n.note(en(&sdk::Reserved { r#fn: "f".into(), r#match: "m".into(), r#type: "t".into() }));
     let line = match de::<sdk::Reserved>(r#"{"fn":"f","match":"m","type":"t"}"#) {
@@ -116,6 +133,14 @@ const BODY = `
     }
     n.note(en(&sdk::QSort::CreatedAt));
     n.note(en(&sdk::QSort::CreatedAt2));
+
+    n.section("listed");
+    let line = match de::<Vec<sdk::ListGetResponseItem>>(r#"[{"a":"x"},{}]"#) {
+        Ok(items) => format!("{:?}", items.iter().map(|i| i.a.as_deref()).collect::<Vec<_>>()),
+        Err(e) => format!("error: {e}"),
+    };
+    n.note(line);
+    n.note(en(&sdk::ListGetResponseItem { a: Some("x".into()) }));
 `.trim()
 
 /** The `types` crate with the program beside it, built and run once for every section. */
@@ -168,6 +193,7 @@ describe.skipIf(!RUST)("emitted Rust structs on the wire: optional, nullable, em
 	)
 
 	// v0: fdac715f3f
+	// v0: 7fc4520774
 	it(
 		"round-trips a mutually recursive pair through its boxed fields",
 		async () => expect(await notes("cycle")).toEqual(noted(['{"b":{"a":{}}}', '{"b":{}}'])),
@@ -185,6 +211,15 @@ describe.skipIf(!RUST)("emitted Rust structs on the wire: optional, nullable, em
 	it(
 		"collects unnamed keys into the extra flatten and writes them back beside the named fields",
 		async () => expect(await notes("extra")).toEqual(noted(['id=1 extra={"k": "v"}', '{"id":"1","k":"v"}'])),
+		CARGO,
+	)
+})
+
+describe.skipIf(!RUST)("an emitted Rust operation's answer on the wire: an inline array keeps its item type", () => {
+	// v0: 0c1cfcbc85
+	it(
+		"answers an inline array of inline objects as a Vec of its hoisted item type, decoded and encoded",
+		async () => expect(await notes("listed")).toEqual(noted(['[Some("x"), None]', '{"a":"x"}'])),
 		CARGO,
 	)
 })
@@ -216,6 +251,16 @@ describe.skipIf(!RUST)(
 			CARGO,
 		)
 
+		// v0: 9db777e640
+		it(
+			"dispatches a discriminated union of inline variants, each named by its kind const, kind kept in the payload",
+			async () =>
+				expect(await notes("shape")).toEqual(
+					noted(["A x=s kind=a", "B y=Some(2.0) kind=b", 'Unknown {"kind":"c"}', '{"kind":"a","x":"s"}']),
+				),
+			CARGO,
+		)
+
 		// v0: 4b2edd336d
 		it(
 			"encodes an integer enum as its number, decodes a known one, rejects an unknown one, defaults to the first",
@@ -225,6 +270,7 @@ describe.skipIf(!RUST)(
 		)
 
 		// v0: 784a6dbdf7
+		// v0: 84b788c011
 		it(
 			"gives enum values that collide or are not identifiers unique variants that keep their wire value",
 			async () =>

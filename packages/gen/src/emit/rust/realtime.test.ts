@@ -387,6 +387,7 @@ rustDescribe("send on a degraded connection POSTs the JSON to the endpoint throu
 })
 
 rustDescribe("the realtime surface: ResumableConnection<E>, three states and the folded Opts (Fd3, Fd9)", () => {
+	// v0: 475b19a883
 	it("types each Call by its event schema and folds a declared resume param into the stream fields", async () => {
 		/* V0BUG: v0 emitted reconnect_token2 beside reconnect_token and sent both pairs. The struct literal
 		 * names every field: one more is E0560, one fewer E0063; the match names every state: one more is E0004 */

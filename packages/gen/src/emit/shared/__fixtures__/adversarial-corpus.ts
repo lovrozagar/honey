@@ -13,8 +13,9 @@
  * Made on use: a module under `src` runs no code as it loads.
  */
 
-/* every code point a literal or comment writer must handle: CRLF, comment terminators, quotes, U+2028/9, BOM */
-const NASTY = 'First line.\r\nSecond with */ and """ and `tick` and C:\\temp and a trailing quote"\u2028\u2029\uFEFF'
+/* every code point a literal or comment writer must handle: CRLF, comment terminators, quotes, U+2028/9, BOM, NUL, BEL */
+const NASTY =
+	'First line.\r\nSecond with */ and """ and `tick` and C:\\temp and a trailing quote"\u2028\u2029\uFEFF\u0000\u0007'
 
 const S = { type: "string" }
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })

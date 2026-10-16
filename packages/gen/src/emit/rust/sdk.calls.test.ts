@@ -191,6 +191,7 @@ describe.skipIf(!RUST)("methods: an accessor per namespace, path params in path 
 	)
 
 	// v0: db955c286c
+	// v0: 81d501f0a5
 	it(
 		"reaches a three-level id through one accessor per namespace",
 		async () => {
@@ -233,6 +234,7 @@ describe.skipIf(!RUST)("names: Client's own operations, keywords, runtime-named 
 	// v0: 2c0cbbc0ad
 	// v0: 2777cd92ec
 	// v0: bf7ce14837
+	// v0: 5f8d161780
 	it(
 		"calls keyword resources and actions as raw identifiers, binding keyword and reserved path params in order",
 		async () => {
@@ -254,6 +256,7 @@ describe.skipIf(!RUST)("names: Client's own operations, keywords, runtime-named 
 	)
 
 	// v0: 6e428e7a5a
+	// v0: bb98564205
 	it(
 		"renames components named like runtime or prelude types to <Name>Model, returned by their operation",
 		async () => {

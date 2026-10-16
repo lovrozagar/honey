@@ -21,6 +21,12 @@
 		{
 			"feature": "11-ts-client",
 			"file": "_v0/tests/conformance/generated-sdk.test.ts",
+			"id": "ee37925472",
+			"name": "conformance: URL building (generated TypeScript SDK) > v.name"
+		},
+		{
+			"feature": "11-ts-client",
+			"file": "_v0/tests/conformance/generated-sdk.test.ts",
 			"id": "33342d4cdc",
 			"name": "conformance: SSE parsing (generated TypeScript SDK) > v.name"
 		},
@@ -7721,6 +7727,258 @@
 			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
 			"id": "7830d9193a",
 			"name": "Go CLI runtime > M (codegen-go-cli.ts:918,948): the CLI sends the spec's apiKey header, not a Bearer token"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "f5764ea3b6",
+			"name": "compile findings > H41 (an integer query param on an SSE operation compiles)"
+		},
+		{
+			"feature": "17-cli-gold-standard",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "6940fde3b8",
+			"name": "compile findings > H42 (the CLI compiles a POST SSE operation with a body)"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "300b713032",
+			"name": "compile findings > H43 (JSON keys that are not identifiers)"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "aa075eab3f",
+			"name": "compile findings > H44 (a root namespace with only streaming operations)"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "188a443648",
+			"name": "compile findings > H45 (query params named like the SDK's arguments)"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "b1ef894920",
+			"name": "compile findings > H46 (a namespace starting with q)"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "9ed0eb5f5e",
+			"name": "compile findings > H47 (path params named like keywords or packages)"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "5f8d161780",
+			"name": "compile findings > H47 (path params named like keywords)"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "ffd0718d44",
+			"name": "compile findings > H48 (multi-line descriptions and quotes stay comments) [go]"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "2678a4695b",
+			"name": "compile findings > H48 (multi-line descriptions and quotes stay comments) [rust]"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "4553f2db3f",
+			"name": "compile findings > H48 (multi-line descriptions and quotes stay comments) [python]"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "aa77b5091f",
+			"name": "compile findings > H49 (enum values become unique identifiers) [go]"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "84b788c011",
+			"name": "compile findings > H49 (enum values become unique identifiers) [rust]"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "07d9867e70",
+			"name": "compile findings > H51 (array, nullable, bracketed and `headers` query params)"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "475b19a883",
+			"name": "compile findings > H51 (`timeout` and `headers` query params)"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "5ade085766",
+			"name": "compile findings > H52 (a schema named Config is the response type, not the SDK's config)"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "bb98564205",
+			"name": "compile findings > H52 (schemas named Error, Option and Result)"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "7a8c9a7740",
+			"name": "compile findings > H52 (a schema named NotFoundError does not shadow the exception)"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "81d501f0a5",
+			"name": "compile findings > H53 (a namespace with only nested methods)"
+		},
+		{
+			"feature": "17-cli-gold-standard",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "54011863df",
+			"name": "compile findings > H54 (CLI flags and variables never collide)"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "e5f3a9565d",
+			"name": "compile findings > M (rust-type-emitter.ts:138-140): hoisted names never merge"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "a7ec0b37c2",
+			"name": "compile findings > M (rust-type-emitter.ts:271,403): mutual recursion compiles [go]"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "7fc4520774",
+			"name": "compile findings > M (rust-type-emitter.ts:271,403): mutual recursion compiles [rust]"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "9db777e640",
+			"name": "compile findings > M (rust-type-emitter.ts:326-368): a tagged union with inline variants compiles"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "f0e4d7f76d",
+			"name": "compile findings > M (codegen-rust.ts:107; codegen-go.ts:161): an inline array response keeps its item type [go]"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "0c1cfcbc85",
+			"name": "compile findings > M (codegen-rust.ts:107; codegen-go.ts:161): an inline array response keeps its item type [rust]"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "58d8c8d5a2",
+			"name": "compile findings > M (go-type-emitter.ts:33-35,50-52,347): field identifiers and tags are sanitized [go]"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "923fa8ab43",
+			"name": "compile findings > M (go-type-emitter.ts:33-35,50-52,347): field identifiers and tags are sanitized [rust]"
+		},
+		{
+			"feature": "17-cli-gold-standard",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "d576203419",
+			"name": "compile findings > M (codegen-go-cli.ts:800,812): enum values with quotes and % stay literal"
+		},
+		{
+			"feature": "17-cli-gold-standard",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "fe1c7a829b",
+			"name": "compile findings > M (codegen-go-cli.ts:395-400): query params named like global flags get their own flags"
+		},
+		{
+			"feature": "17-cli-gold-standard",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "06b9246d0f",
+			"name": "compile findings > H (codegen-go-cli.ts:372,1170-1172): a resource named root keeps the root command"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "9f28089ca4",
+			"name": "compile findings > M (codegen-rust.ts:176-197; runtime.rs:357-370): safe mode returns an API error inside SdkResult"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "2f24d67fc2",
+			"name": "compile findings > M (codegen-python.ts:219-227,740): nested and top-level resources with one name keep their own classes"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "50ae770575",
+			"name": "compile findings > L (rust-type-emitter.ts:105,314): string literals use Rust escapes"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "acbcf0ef46",
+			"name": "compile findings > S3: a Python path param named uuid or str does not shadow what the method body calls"
+		},
+		{
+			"feature": "12-go-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "0143e54c67",
+			"name": "compile findings > S4: NUL, BEL and BOM in spec text keep the generated Go SDK compiling"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "dcdad92ee2",
+			"name": "compile findings > S4: NUL, BEL and BOM in spec text keep the generated Python SDK compiling"
+		},
+		{
+			"feature": "17-cli-gold-standard",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "d1636bf8d0",
+			"name": "compile findings > S4: NUL, BEL and BOM in spec text keep the generated Go CLI compiling"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "0e7f1d78fc",
+			"name": "compile findings > S4: NUL, BEL and BOM in spec text keep the generated Rust SDK compiling"
+		},
+		{
+			"feature": "13-rust-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "d1ab354443",
+			"name": "compile findings > NEW (H): a bare object response compiles (HashMap in a resource file)"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "bd0bef251f",
+			"name": "compile findings > M (codegen-python.ts:622-628): list, enum and union aliases are typed, not Any"
+		},
+		{
+			"feature": "14-python-sdk",
+			"file": "_v0/tests/regression/ws9-12/polyglot.regression.test.ts",
+			"id": "3105a53d79",
+			"name": "compile findings > NEW (L): return annotations are valid for type checkers"
 		},
 		{
 			"feature": "19-release-provenance",
@@ -41526,16 +41784,16 @@
 		"08-io": 794,
 		"09-ir-seam": 995,
 		"10-openapi-emit": 369,
-		"11-ts-client": 945,
-		"12-go-sdk": 217,
-		"13-rust-sdk": 302,
-		"14-python-sdk": 182,
-		"17-cli-gold-standard": 87,
+		"11-ts-client": 946,
+		"12-go-sdk": 227,
+		"13-rust-sdk": 318,
+		"14-python-sdk": 192,
+		"17-cli-gold-standard": 93,
 		"18-mcp": 43,
 		"19-release-provenance": 138,
 		"20-docs": 53
 	},
-	"note": "every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → feature a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept.",
+	"note": "every case in the frozen _v0/tests with its classified feature (the bit that owns it); reassigned = id → { feature, reason } a bit owner corrected; retired = id → reason. Regenerate with `bun packages/core/tests/structure/v0-inventory.ts`; reassigned and retired are kept.",
 	"reassigned": {
 		"3424191595": {
 			"feature": "02-finalize-middleware",

@@ -283,6 +283,7 @@ describe("rustTypeOf: allOf", () => {
 describe("rustTypeOf: maps and additionalProperties", () => {
 	it.each<UseRow>([
 		// v0: 7cd2de3189
+		// v0: d1ab354443
 		{
 			schema: { type: "object" },
 			title: "an open object without properties is a HashMap of serde_json::Value",

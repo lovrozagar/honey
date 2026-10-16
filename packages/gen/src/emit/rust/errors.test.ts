@@ -1,8 +1,8 @@
 /**
  * The Rust SDK's errors (contract 19 §5.6, G6/G7): one `#[non_exhaustive]` `Error`, its boxed `Api(ApiError)` read
  * through accessors; `ErrorKind` by status (429 `RateLimit`); each API's `ErrorKey` (§3.4) and an owned `key()`
- * (Fc4); `SdkResult` with `is_ok()` and `response` (Fc5); `Error::Hook` (Fc2). Driven through the `errors`,
- * `fixtures-safe` and `http-safe` drivers; consumers `errors` and `safe` (Fc8) and one compile-fail program.
+ * (Fc4); `SdkResult` with `is_ok()` and `response` (Fc5); `Error::Hook` (Fc2). Driven through the `errors` driver
+ * (safe mode's driven legs are errors.safe.test.ts); consumers `errors` and `safe` (Fc8) and one compile-fail program.
  */
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
@@ -93,11 +93,6 @@ describe("the ErrorKey enum each API declares (G7, §3.4)", () => {
 const ITEM: Call = { operation: "items.get", params: { id: "i1" }, route: { method: "GET", path: "/items/{id}" } }
 const EMAIL: Call["body"] = { kind: "json", value: { email: "a@x.test" } }
 const CREATE: Call = { body: EMAIL, operation: "users.create", route: { method: "POST", path: "/users" } }
-const MEMBERS: Call = {
-	operation: "members.get",
-	params: { org: "o", "user-id": "u" },
-	route: { method: "GET", path: "/orgs/{org}/users/{user-id}" },
-}
 
 /** error-keys.json's 400 envelope (`fields` set), with `success` the one member ErrorEnvelope keeps in `extra`. */
 const TAKEN = {
@@ -142,8 +137,6 @@ const unkeyed = (status: number, kind: string, text: string, message = "m") =>
 /** An error status as the driver observes it, for a `{"message": "m"}` body. */
 const failed = (status: number) => ({ body: { message: "m" }, errorKey: null, kind: "error", status })
 const answer = (status: number): Reply => ({ json: { message: "m" }, status })
-/** A safe-mode result holding an error status. */
-const missed = (status: number) => ({ data: false, ok: false, response: true, status })
 
 describe.skipIf(!RUST)("an error status as Error::Api, its kind by status", () => {
 	// v0: 0506b8c599
@@ -246,39 +239,6 @@ describe.skipIf(!RUST)("each way a call fails, one Error variant each: never Api
 			],
 			hops: 1,
 			observed: [{ kind: "timeout" }, null],
-		})
-	}, 600_000)
-})
-
-/** Where a safe-mode call's failure landed: its route, variant, kind, status and key, and its result. */
-const landed = (call: Traced | undefined) => {
-	const e = call?.error
-	return [e?.via, e?.variant, e?.kind, e?.status, e?.keyVariant, call?.result]
-}
-
-describe.skipIf(!RUST)("safe mode: an error status in SdkResult.error, every other failure the call's Err", () => {
-	// v0: fd4f5e61be
-	it("puts a 404 in the result beside its status and response, and a refused connection in the Err", async () => {
-		const sdk = driven("http-safe")
-		const { run } = await drive(sdk, [answer(404)], [MEMBERS])
-		const lost = await refused(sdk, [MEMBERS])
-		const [found, gone] = [landed(run.trace?.calls[0]), landed(lost.trace?.calls[0])]
-		expect({ found, gone, observed: [run.observed, lost.observed] }, run.stderr + lost.stderr).toEqual({
-			found: ["result", "Api", "NotFound", 404, "None", missed(404)],
-			gone: ["return", "Transport", undefined, undefined, undefined, undefined],
-			observed: [[failed(404)], [null]],
-		})
-	}, 600_000)
-
-	// v0: 099f5c479f
-	it("reads an envelope-declared key in a safe-mode result: error-keys users.create 400 as EmailTaken", async () => {
-		/* mode: v0 ran safe mode only; the throw-mode leg is the errors consumer's `keys` (ItemMissing from a $ref envelope) */
-		const route = { method: "POST", path: "/error-keys/users" }
-		const create: Call = { ...CREATE, operation: "error-keys.users.create", route }
-		const { run } = await drive(driven("fixtures-safe"), [{ json: TAKEN, status: 400 }], [create])
-		expect({ landed: landed(run.trace?.calls[0]), observed: run.observed }, run.stderr).toEqual({
-			landed: ["result", "Api", "BadRequest", 400, "Some(EmailTaken)", missed(400)],
-			observed: [{ body: TAKEN, errorKey: "email_taken", kind: "error", status: 400 }],
 		})
 	}, 600_000)
 })

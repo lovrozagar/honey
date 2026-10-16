@@ -11,6 +11,7 @@ import { createHash } from "node:crypto"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseSync } from "oxc-parser"
+import { collectBindings, expandForOf, forOfLoop, type Loop } from "./v0-inventory-loops.ts"
 
 export type V0Case = { feature: Feature; file: string; id: string; name: string }
 
@@ -85,19 +86,44 @@ export function classify(file: string, name: string): Feature {
 	return RULES.find(([pattern]) => pattern.test(haystack))?.[1] ?? "01-core-route-model"
 }
 
-type Node = { [key: string]: unknown; end: number; start: number; type: string }
+export type Node = { [key: string]: unknown; end: number; start: number; type: string }
 const SUITES = new Set(["describe", "suite"])
 const CASES = new Set(["it", "test"])
 
-/** `it`, `describe.each(t)`, `it.skipIf(c)` … → the identifier the call chain starts from. */
-function rootName(callee: unknown): string | null {
+/**
+ * `it`, `describe.each(t)`, `it.skipIf(c)` … → the identifier the call chain starts from. Also sees
+ * through a conditional callee (`(skip ? it.skip : it)(…)`) and a `const` alias (`const t = … ? it : it.skip; t(…)`),
+ * the two shapes `_v0` uses to pick an `it` variant at runtime (polyglot compile-findings, generated-sdk).
+ */
+function rootName(callee: unknown, bindings: Map<string, Node>): string | null {
+	const seen = new Set<string>()
 	let node = callee as Node | undefined
-	while (node !== undefined && node.type !== "Identifier") {
+	while (node !== undefined) {
+		if (node.type === "Identifier") {
+			const name = node.name as string
+			if (SUITES.has(name) || CASES.has(name)) return name
+			const bound = bindings.get(name)
+			if (bound === undefined || seen.has(name)) return name
+			seen.add(name)
+			node = bound
+			continue
+		}
 		node = (
-			node.type === "MemberExpression" ? node.object : node.type === "CallExpression" ? node.callee : undefined
+			node.type === "MemberExpression"
+				? node.object
+				: node.type === "CallExpression"
+					? node.callee
+					: node.type === "ConditionalExpression"
+						? node.consequent
+						: node.type === "ParenthesizedExpression" ||
+							  node.type === "TSAsExpression" ||
+							  node.type === "TSSatisfiesExpression" ||
+							  node.type === "TSNonNullExpression"
+							? node.expression
+							: undefined
 		) as Node | undefined
 	}
-	return node === undefined ? null : (node.name as string)
+	return null
 }
 
 function titleOf(source: string, arg: Node | undefined): string {
@@ -115,28 +141,46 @@ function children(node: Node): Node[] {
 	})
 }
 
-/** Every case in one test file, in source order, with its describe path. */
+/**
+ * Every case in one test file, in source order, with its describe path. A loop site (`for (const x of ARR) it(…)`)
+ * is one case titled by its raw source, as every closed bit counts them — except a site whose elements are
+ * owned by different bits, which `expandForOf` splits per element (frozen-corpus handler: only `_v0`'s
+ * compile-findings table does this; the regen's +43 / no-id-change check holds nothing else expands).
+ */
 export function casesOf(file: string, source: string): V0Case[] {
-	const names: string[] = []
-	const visit = (node: Node, path: readonly string[]): void => {
-		const root = node.type === "CallExpression" ? rootName(node.callee) : null
-		if (root !== null && (SUITES.has(root) || CASES.has(root))) {
-			const args = node.arguments as Node[]
-			const here = [...path, titleOf(source, args[0])]
-			if (CASES.has(root)) names.push(here.join(" > "))
-			else for (const arg of args.slice(1)) visit(arg, here)
+	const program = parseSync(file, source).program as unknown as Node
+	const bindings = collectBindings(program, children)
+	const entries: { feature?: Feature; name: string }[] = []
+	const visit = (node: Node, path: readonly string[], loop: Loop | null): void => {
+		if (node.type === "ForOfStatement") {
+			const inner = forOfLoop(node, bindings)
+			visit(node.body as Node, path, inner)
+			visit(node.right as Node, path, loop)
 			return
 		}
-		for (const child of children(node)) visit(child, path)
+		const root = node.type === "CallExpression" ? rootName(node.callee, bindings) : null
+		if (root !== null && (SUITES.has(root) || CASES.has(root))) {
+			const args = node.arguments as Node[]
+			if (CASES.has(root)) {
+				const expanded = loop === null ? null : expandForOf(path, args[0], loop)
+				if (expanded === null) entries.push({ name: [...path, titleOf(source, args[0])].join(" > ") })
+				else entries.push(...expanded)
+			} else {
+				const here = [...path, titleOf(source, args[0])]
+				for (const arg of args.slice(1)) visit(arg, here, loop)
+			}
+			return
+		}
+		for (const child of children(node)) visit(child, path, loop)
 	}
-	visit(parseSync(file, source).program as unknown as Node, [])
+	visit(program, [], null)
 	const seen = new Map<string, number>()
-	return names.map((name) => {
+	return entries.map(({ feature, name }) => {
 		const count = (seen.get(name) ?? 0) + 1
 		seen.set(name, count)
 		const key = count === 1 ? `${file}\n${name}` : `${file}\n${name}\n#${count}`
 		return {
-			feature: classify(file, name),
+			feature: feature ?? classify(file, name),
 			file,
 			id: createHash("sha256").update(key).digest("hex").slice(0, 10),
 			name,

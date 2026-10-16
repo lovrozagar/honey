@@ -196,6 +196,7 @@ goDescribe("query params: arrays repeated, nullable and bracketed names sent, no
 	}, 600_000)
 
 	// v0: a1c45da195
+	// v0: 07d9867e70
 	it("types the Opts fields by the nilable rule: Ids []string, Maybe *string, PageSize *int64", () => {
 		const body = `
 	m, n := "m", int64(3)

@@ -43,6 +43,40 @@ describe("casesOf", () => {
 	})
 })
 
+const LOOP_SOURCE = [
+	'import { describe, it } from "vitest"',
+	"const CASES = [",
+	'\t{ id: "rust: keywords", lang: "rust" },',
+	'\t{ id: "go: namespace", lang: "go" },',
+	'\t...(["go", "rust"] as const).map((lang) => ({ id: `shared [${lang}]`, lang })),',
+	"]",
+	'describe("compile findings", () => {',
+	"\tfor (const c of CASES) (c.skip ? it.skip : c.fail ? it.fails : it)(c.id, async () => {})",
+	"})",
+	"const run = cond ? it.skip : it",
+	"for (const v of [{ n: 1 }, { n: 2 }]) run(`vec ${v.n}`, () => {})",
+	"",
+].join("\n")
+
+describe("casesOf: loop sites", () => {
+	const cases = casesOf("_v0/tests/unit/codegen/x.test.ts", LOOP_SOURCE)
+
+	it("expands a loop whose elements carry a target lang that spans bits, through a conditional callee", () => {
+		const cf = cases.filter((c) => c.name.startsWith("compile findings")).map((c) => [c.name, c.feature])
+		expect(cf).toEqual([
+			["compile findings > rust: keywords", "13-rust-sdk"],
+			["compile findings > go: namespace", "12-go-sdk"],
+			["compile findings > shared [go]", "12-go-sdk"],
+			["compile findings > shared [rust]", "13-rust-sdk"],
+		])
+	})
+
+	it("keeps a loop with no lang discriminator as one raw-text case, resolving an it alias", () => {
+		const vec = cases.filter((c) => c.name.endsWith("vec ${v.n}"))
+		expect(vec.map((c) => c.name)).toEqual(["vec ${v.n}"])
+	})
+})
+
 describe("classify", () => {
 	it("homes a case with the bit that owns its feature", () => {
 		expect(classify("_v0/tests/unit/codegen/codegen-mcp.test.ts", "tools > input schema")).toBe("18-mcp")

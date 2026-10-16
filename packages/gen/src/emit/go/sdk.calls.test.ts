@@ -82,10 +82,11 @@ const SHOP = document(
 	},
 )
 
-/** Names a careless emitter collides: a receiver letter as a param, keywords, a runtime type, enum labels. */
+/** Names a careless emitter collides: a receiver letter as a param, keywords, a runtime type, enum labels, an inline array's item. */
 const NAMES = document(
 	{
 		"/config": { get: op("config.get", { ok: ref("Config") }) },
+		"/list": { get: op("list.get", { ok: { items: object({ a: STRING }), type: "array" } }) },
 		"/queue": { get: op("queue.list", { ok: ref("Ack"), parameters: [query("q"), query("order", ref("Status"))] }) },
 		"/queue/{q}": { get: op("queue.get", { ok: ref("Ack"), parameters: [path("q")] }) },
 		"/select/{url}/{ctx}": { get: op("select.range", { ok: ref("Ack"), parameters: [path("url"), path("ctx")] }) },
@@ -146,7 +147,11 @@ const names = once(() =>
 	var model *sdk.ConfigModel = must(api.Config.Get(ctx, nil))
 	note(model.Region)
 	section("enums")
-	note(sdk.StatusCreatedAt, sdk.StatusCreatedAt2, "["+string(sdk.StatusEmpty)+"]")`,
+	note(sdk.StatusCreatedAt, sdk.StatusCreatedAt2, "["+string(sdk.StatusEmpty)+"]")
+	section("arrays")
+	replies["GET /list"] = reply{status: 200, body: \`[{"a":"x"}]\`}
+	var items *[]sdk.ListGetResponseItem = must(api.List.Get(ctx, nil))
+	note(*(*items)[0].A)`,
 	),
 )
 
@@ -291,6 +296,7 @@ goDescribe("NewClient's BaseURL", () => {
 
 goDescribe("Go names that never collide, called from a consumer program", () => {
 	// v0: d38a66c936
+	// v0: b1ef894920
 	it("keeps a receiver apart from a param named like it: queue with a q query and a q path param", () => {
 		const run = names()
 		expect(seen(run, "receivers"), run.stderr).toEqual({
@@ -302,6 +308,7 @@ goDescribe("Go names that never collide, called from a consumer program", () => 
 
 	// v0: 6c7134e410
 	// v0: 2777cd92ec
+	// v0: 9ed0eb5f5e
 	it("exports resources and actions named like Go keywords, with keyword and package-named path params", () => {
 		const run = names()
 		expect(seen(run, "keywords"), run.stderr).toEqual({
@@ -312,6 +319,7 @@ goDescribe("Go names that never collide, called from a consumer program", () => 
 	}, 600_000)
 
 	// v0: 6e428e7a5a
+	// v0: 5ade085766
 	it("emits a schema named like a runtime type as <Name>Model, returned by its operation", () => {
 		const run = names()
 		expect(seen(run, "models"), run.stderr).toEqual({
@@ -322,9 +330,16 @@ goDescribe("Go names that never collide, called from a consumer program", () => 
 	}, 600_000)
 
 	// v0: 784a6dbdf7
+	// v0: aa77b5091f
 	it("labels enum values with unique exported consts: -created_at, created_at and the empty string", () => {
 		const run = names()
 		expect(seen(run, "enums"), run.stderr).toEqual({ built: true, out: ["-created_at created_at []"], vet: [] })
+	}, 600_000)
+
+	// v0: f0e4d7f76d
+	it("answers an inline array of inline objects as a slice of its hoisted item type", () => {
+		const run = names()
+		expect(seen(run, "arrays"), run.stderr).toEqual({ built: true, out: ["GET http://api.test/list", "x"], vet: [] })
 	}, 600_000)
 })
 

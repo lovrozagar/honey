@@ -50,6 +50,7 @@ describe("string literals: one escaper, one policy per target", () => {
 	})
 
 	// v0: 658babeb20
+	// v0: 50ae770575
 	it("Rust: named escapes and \\0, \\u{H} for other control code points and the BOM", () => {
 		expect(rustString(nasty)).toBe(
 			'"q\\"b\\\\n\\nr\\rt\\tz\\0d\\u{7f} e\\u{01} \uFFFD \u2028\u2029\u0085\\u{feff} \u{1F600}"',

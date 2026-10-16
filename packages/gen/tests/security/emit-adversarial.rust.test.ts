@@ -41,6 +41,9 @@ const { drivenRustSdk } = (await import(
 describe.skipIf(!RUST)("gen adversarial: the Rust SDK emitter", () => {
 	/* v0 ran cargo check and skipped offline; v1 emits the lock and builds --locked --offline (G9/G10), and the corpus is clippy-gated (Ff4) */
 	// v0: 60586125be
+	// v0: 0e7f1d78fc
+	// v0: 2678a4695b
+	// v0: 923fa8ab43
 	it("builds clippy-clean in both throwOnError modes, every hostile name a Rust identifier and every value a literal", () => {
 		const modes = (["adversarial", "adversarial-safe"] as const).map((key) => {
 			const crate = compiledRust(key)

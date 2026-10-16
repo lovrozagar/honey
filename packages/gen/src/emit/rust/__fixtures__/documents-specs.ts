@@ -247,6 +247,14 @@ export function types(): Json {
 				Mixed: { oneOf: [{ const: "a", type: "string" }, { const: "b", type: "string" }, { type: "integer" }] },
 				Q: object({ sort: { enum: ["-created_at", "created_at", "", "self"], type: "string" } }),
 				Reserved: object({ fn: STRING, match: STRING, type: STRING }, ["fn", "match", "type"]),
+				/* v0's compile finding: a discriminator over inline variants, each hoisted and named by its kind const */
+				Shape: {
+					discriminator: { propertyName: "kind" },
+					oneOf: [
+						object({ kind: { const: "a", type: "string" }, x: STRING }, ["kind"]),
+						object({ kind: { const: "b", type: "string" }, y: { type: "number" } }, ["kind"]),
+					],
+				},
 				/* v0 tri-state-spec.ts: absent, null and a value are three different requests */
 				Thing: object(
 					{
@@ -264,7 +272,11 @@ export function types(): Json {
 		},
 		info: { title: "Types", version: "1" },
 		openapi: "3.1.0",
-		paths: { "/ping": { get: op("ping", { answer: STRING }) } },
+		paths: {
+			/* an inline array of inline objects answers with its hoisted item type */
+			"/list": { get: op("list.get", { answer: { items: object({ a: STRING }), type: "array" } }) },
+			"/ping": { get: op("ping", { answer: STRING }) },
+		},
 	}
 }
 

@@ -265,7 +265,7 @@ describe("app front: sending to a path", () => {
 })
 
 describe("SDK front: URL vectors", () => {
-	// v0: 33342d4cdc
+	// v0: ee37925472
 	it.each(VECTORS.filter((v) => !v.path.includes("?")))("sends or refuses as the vector says: $name", async (v) => {
 		const { parameters, template } = openApi(v.path)
 		const { calls, sdk } = await sdkOf<{ op: Op }>(

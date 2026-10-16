@@ -201,6 +201,7 @@ const VECTORS: ReadonlyArray<readonly [name: string, chunks: Chunk[], events: Ev
 
 describe("parseSSEStream: shared vectors", () => {
 	// v0: a2d14412a5
+	// v0: 33342d4cdc
 	it.each(VECTORS)("%s", async (_name, chunks, events) => {
 		expect(await parse(...chunks)).toEqual(events)
 	})

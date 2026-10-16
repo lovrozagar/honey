@@ -395,6 +395,7 @@ describe("rustTopLevel: unions", () => {
 
 describe("rustTopLevel: hoisted names", () => {
 	// v0: 1f7c2435c9
+	// v0: e5f3a9565d
 	it("never merges two inline objects that hoist to one name: the later claim is …2", () => {
 		const components = {
 			User: { properties: { profile_settings: { properties: { theme: STRING }, type: "object" } }, type: "object" },

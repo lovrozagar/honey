@@ -373,6 +373,10 @@ async function landing(sdk: DrivenSdk, script?: Script): Promise<{ seen: unknown
 describe.skipIf(!GO)("gen adversarial: the Go SDK emitter", () => {
 	/* v0 tidied the module first and skipped offline; v1 emits go.sum (G9) */
 	// v0: 4eba1d1639
+	// v0: 0143e54c67
+	// v0: ffd0718d44
+	// v0: a7ec0b37c2
+	// v0: 58d8c8d5a2
 	it("vets clean in both throwOnError modes, every hostile name a Go identifier and every value a literal", () => {
 		const modes = [true, false].map((throwOnError) => ({
 			go: compileGo(generateGoSdk(adversarialCorpus(), { modulePath: "example.com/adversarial", throwOnError }).files),

@@ -266,6 +266,7 @@ describe.skipIf(!RUST)("an SSE request on the wire: headers, params, method, bod
 	}, 600_000)
 
 	// v0: 21cd2e88c0
+	// v0: f5764ea3b6
 	it("sends the declared query and header params", async () => {
 		const call = ticks({ headers: { "x-tenant": "acme" }, search: { since: 5 } })
 		const { hops, run } = await drive([TICK], [call])
