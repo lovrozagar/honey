@@ -1,0 +1,2 @@
+# the uv every honey Python command runs: gen's python-env fixture and CI's setup-uv both read this pin
+required-version = "==0.13.1"

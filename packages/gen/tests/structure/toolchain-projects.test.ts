@@ -20,12 +20,14 @@ const GEN = resolve(import.meta.dirname, "../..")
 const ENV: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, string>> = {
 	go: "src/emit/go/__fixtures__/go-env.ts",
 	rust: "src/emit/rust/__fixtures__/rust-env.ts",
+	python: "src/emit/python/__fixtures__/python-env.ts",
 }
 
-/** Each toolchain's CI compile cache: its key's name, and the pin file every compile depends on. */
-const CACHE: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, readonly [key: string, pin: string]>> = {
+/** Each toolchain's CI compile cache: its key's name, and the pin files every compile depends on. */
+const CACHE: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, readonly [key: string, ...pins: string[]]>> = {
 	go: ["gobuild", ".go-version"],
 	rust: ["rust", "rust-toolchain.toml"],
+	python: ["python", ".python-version", "uv.toml"],
 }
 
 type Toolchain = keyof typeof ENV
@@ -169,9 +171,9 @@ describe("the default run's projects", () => {
 	)
 
 	it.each(Object.keys(CACHE) as Toolchain[])("keys CI's %s compile cache on every input of its compiles", (name) => {
-		const [key, pin] = CACHE[name]
+		const [key, ...pins] = CACHE[name]
 		const globs = cacheKeyGlobs(readFileSync(join(GEN, "../../.github/workflows/ci.yml"), "utf8"), key)
-		const inputs = [pin, ...compileInputs(name, runFiles, imports)]
+		const inputs = [...pins, ...compileInputs(name, runFiles, imports)]
 		expect(globs.length).toBeGreaterThan(0)
 		expect(inputs.filter((file) => !globs.some((glob) => matchesGlob(file, glob)))).toEqual([])
 	})

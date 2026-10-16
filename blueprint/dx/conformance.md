@@ -4,7 +4,7 @@ The proof that **every feature works in every generated target**. Analogous to t
 
 ## The three layers (all required; this file owns layer 3)
 
-1. **Compile** — the generated code builds in its real toolchain (tsc/oxfmt, `go build`, `cargo build`, `python -m py_compile`+mypy, `dotnet build`, `javac`). `polyglot-compile`, `examples-compile`, go-cli `compile`.
+1. **Compile** — the generated code builds in its real toolchain (tsc/oxfmt, `go build`, `cargo build`, ruff + `mypy --strict` (and the 3.11 floor import), `dotnet build`, `javac`). `polyglot-compile`, `examples-compile`, go-cli `compile`.
 2. **Golden / byte-equiv** — emitter output + each `runtime/<lang>/*` template is deterministic (`*-emitter-byte-equiv`, golden siblings).
 3. **Behavioral conformance (this matrix)** — each target drives the shared scenarios against the running reference app and must produce identical observable behavior.
 

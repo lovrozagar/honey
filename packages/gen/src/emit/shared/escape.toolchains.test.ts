@@ -6,10 +6,17 @@
  */
 import { type SpawnSyncReturns, spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
+import {
+	hasPython,
+	pinnedPython,
+	pythonCacheDir,
+	pythonRequired,
+	runPython,
+	venv,
+} from "../python/__fixtures__/python-env.ts"
 import { hasRust, runRustc, rustCacheDir, rustRequired } from "../rust/__fixtures__/rust-env.ts"
 import { rng, runs } from "./__fixtures__/rng.ts"
 import { goString, lineComment, pyString, rustString, wellFormed } from "./escape.ts"
@@ -46,9 +53,9 @@ type Language = {
 	readonly file: string
 	/** compile and run `path`, a program in `dir`, which prints one hex line per string */
 	readonly exec: (path: string, dir: string) => SpawnSyncReturns<string>
-	/** where its work dirs go: Go's and Rust's toolchain caches, off /tmp (00-rules); Python's one source file stays in the OS temp dir */
+	/** where its work dirs go: its toolchain's cache, off /tmp (00-rules) */
 	readonly home: () => string
-	/** whether its toolchain is here: Go's and Rust's are the pinned ones (G10) */
+	/** whether its toolchain is here: the pinned one (G10) */
 	readonly present: () => boolean
 	/** whether a missing toolchain fails rather than skips */
 	readonly required: () => boolean
@@ -79,18 +86,18 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 		tool: "go",
 	},
 	python: {
-		exec: (path) => spawn("python3", [path]),
+		exec: (path) => runPython(venv({ python: pinnedPython(), requirements: [] }), [path]),
 		file: "main.py",
-		home: tmpdir,
-		present: () => spawn("python3", ["--version"]).status === 0,
-		required: () => process.env.HONEY_REQUIRE_TOOLCHAINS === "1",
+		home: () => pythonCacheDir("tmp"),
+		present: () => hasPython(),
+		required: pythonRequired,
 		source: (texts) =>
 			[
 				...texts.flatMap((text) => lineComment(text, "#")),
 				`for s in [${texts.map(pyString).join(", ")}]:`,
 				'    print(s.encode("utf-8").hex())',
 			].join("\n"),
-		tool: "python3",
+		tool: `python ${pinnedPython()}`,
 	},
 	rust: {
 		/* edition 2024, the emitted SDK's: a literal's escapes read the same in 2021 */

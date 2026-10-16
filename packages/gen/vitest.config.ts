@@ -28,11 +28,17 @@ export const GO = [
 export const RUST = [
 	"src/emit/rust/**/*.test.ts",
 	"src/emit/shared/rustfmt.test.ts",
-	"src/emit/shared/*.toolchains.test.ts",
 	"tests/security/emit-adversarial.rust.test.ts",
 	"tests/structure/mutation-harness.test.ts",
 	"tests/structure/rust-toolchain.test.ts",
 ]
+
+/**
+ * The default run's test files that run Python: each reaches `python-env.ts`, the one way gen runs Python, through
+ * its imports. They run as the `python` project, held to that as `GO` is. The toolchain files reach Go and Rust
+ * too, so they run here, in the last group.
+ */
+export const PYTHON = ["src/emit/shared/*.toolchains.test.ts", "tests/structure/python-toolchain.test.ts"]
 
 /**
  * Each language toolchain's project, in the order their `sequence.groupOrder` groups run, one language group at
@@ -40,7 +46,7 @@ export const RUST = [
  * the first group, so its files fill the workers beside the first language instead of adding a serial group. A
  * file whose imports reach several languages belongs to the last of them.
  */
-export const TOOLCHAIN_PROJECTS = { go: GO, rust: RUST } as const
+export const TOOLCHAIN_PROJECTS = { go: GO, rust: RUST, python: PYTHON } as const
 
 /** The default run's test files: the `unit` project's, less every toolchain project's. */
 export const DEFAULT_RUN = ["src/**/*.test.ts", "tests/**/*.test.ts", "scripts/**/*.test.ts"]

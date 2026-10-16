@@ -13,6 +13,14 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
+import {
+	hasPython,
+	pinnedPython,
+	pythonCacheDir,
+	pythonRequired,
+	runPython,
+	venv,
+} from "../python/__fixtures__/python-env.ts"
 import { hasRust, runCargo, rustCacheDir, rustRequired } from "../rust/__fixtures__/rust-env.ts"
 import { verifyHelper } from "./webhooks.ts"
 
@@ -44,9 +52,9 @@ const triples = (open: string, close: string) =>
 type Language = {
 	/** compile and run the program in `dir`, which prints one true or false per case */
 	readonly exec: (dir: string) => SpawnSyncReturns<string>
-	/** where its work dirs go: Go's and Rust's toolchain caches, off /tmp (00-rules); Node's and Python's one source file stays in the OS temp dir */
+	/** where its work dirs go: Go's, Rust's and Python's toolchain caches, off /tmp (00-rules); Node's one source file stays in the OS temp dir */
 	readonly home: () => string
-	/** whether its toolchain is here: Go's and Rust's are the pinned ones (G10) */
+	/** whether its toolchain is here: Go's, Rust's and Python's are the pinned ones (G10) */
 	readonly present: () => boolean
 	/** whether a missing toolchain fails rather than skips */
 	readonly required: () => boolean
@@ -114,11 +122,11 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 			),
 	},
 	python: {
-		exec: (dir) => spawn("python3", [join(dir, "main.py")], dir),
-		home: tmpdir,
-		present: () => runs("python3"),
-		required: toolchainsRequired,
-		tool: "python3",
+		exec: (dir) => runPython(venv({ python: pinnedPython(), requirements: [] }), [join(dir, "main.py")], { cwd: dir }),
+		home: () => pythonCacheDir("tmp"),
+		present: () => hasPython(),
+		required: pythonRequired,
+		tool: `python ${pinnedPython()}`,
 		write: (dir) =>
 			writeFileSync(
 				join(dir, "main.py"),

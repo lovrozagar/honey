@@ -124,8 +124,38 @@ jobs:
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-rust-
+      # gen runs every Python command through its python-env fixture, with the uv uv.toml pins and the interpreters
+      # .python-version and PY_FLOOR name, all under ~/.cache/honey-tmp/python and linked nowhere (--no-bin).
+      # setup-uv provides a uv at that pin (required-version fails any other), which installs the pinned uv into the
+      # cache, which installs the interpreters: the commands a missing one names locally. None is cached: each
+      # installs in about a second.
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version-file: uv.toml
+          enable-cache: false
+      - name: Python (uv.toml's uv, .python-version, and the PY_FLOOR interpreter)
+        run: |
+          UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_TOOL_DIR="$HOME/.cache/honey-tmp/python/uv/tools" UV_TOOL_BIN_DIR="$HOME/.cache/honey-tmp/python/uv/bin" uv tool install --no-config --no-python-downloads uv=="$(sed -n 's/^required-version = "==\(.*\)"$/\1/p' uv.toml)"
+          UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_PYTHON_INSTALL_DIR="$HOME/.cache/honey-tmp/python/pythons" UV_PYTHON_BIN_DIR="$HOME/.cache/honey-tmp/python/pybin" "$HOME/.cache/honey-tmp/python/uv/bin/uv" python install --no-bin "$(cat .python-version)" 3.11.4
+      # the gated SDKs and their mypy caches (python/__fixtures__/compiled.ts), keyed like gobuild and rust on every
+      # input of a Python gate (toolchain-projects.test.ts holds it to that). uv's wheel cache is not saved: a venv
+      # fetches its wheels once per run, then installs offline, and the markers that vouch for them go with it.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/python/mypy
+            ~/.cache/honey-tmp/python/sdk
+          key: >-
+            ${{ runner.os }}-python-${{ hashFiles('.python-version', 'uv.toml', 'packages/gen/src/emit/python/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/python-toolchain.test.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-python-
       - run: touch "$RUNNER_TEMP/go-sdk-start"
       - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
+      - run: mkdir -p ~/.cache/honey-tmp/python/sdk && touch "$RUNNER_TEMP/python-sdk-start"
       - run: bun install --frozen-lockfile
       - run: bun run generate
       # frozen v0 tests listen on fixed ports inside the ephemeral range: reserve them so no automatically
@@ -145,6 +175,10 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/rust/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/rust-sdk-start" -printf '%h\0' | xargs -0r rm -rf
+      - name: Prune the Python SDKs this run did not use
+        run: >-
+          find ~/.cache/honey-tmp/python/sdk -mindepth 2 -maxdepth 2 -name .complete
+          ! -newer "$RUNNER_TEMP/python-sdk-start" -printf '%h\0' | xargs -0r rm -rf
       - run: bun run test:consumers
       - run: bun run test:e2e
 
@@ -303,9 +337,19 @@ jobs:
           path: ~/.cache/honey-tmp/go/mod
           key: ${{ runner.os }}-gomod-harness-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
           restore-keys: ${{ runner.os }}-gomod-harness-
-      - uses: actions/setup-python@v5
+      # gen runs every Python command through its python-env fixture, with the uv uv.toml pins and the interpreters
+      # .python-version and PY_FLOOR name, all under ~/.cache/honey-tmp/python and linked nowhere (--no-bin).
+      # setup-uv provides a uv at that pin (required-version fails any other), which installs the pinned uv into the
+      # cache, which installs the interpreters: the commands a missing one names locally. None is cached: each
+      # installs in about a second.
+      - uses: astral-sh/setup-uv@v10
         with:
-          python-version: "3.12"
+          version-file: uv.toml
+          enable-cache: false
+      - name: Python (uv.toml's uv, .python-version, and the PY_FLOOR interpreter)
+        run: |
+          UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_TOOL_DIR="$HOME/.cache/honey-tmp/python/uv/tools" UV_TOOL_BIN_DIR="$HOME/.cache/honey-tmp/python/uv/bin" uv tool install --no-config --no-python-downloads uv=="$(sed -n 's/^required-version = "==\(.*\)"$/\1/p' uv.toml)"
+          UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_PYTHON_INSTALL_DIR="$HOME/.cache/honey-tmp/python/pythons" UV_PYTHON_BIN_DIR="$HOME/.cache/honey-tmp/python/pybin" "$HOME/.cache/honey-tmp/python/uv/bin/uv" python install --no-bin "$(cat .python-version)" 3.11.4
       # gen compiles the emitted Rust at the toolchain rust-toolchain.toml pins (RUSTUP_TOOLCHAIN through its
       # rust-env fixture) and checks it at the RUST_FLOOR toolchain. A bare install reads the file; the default
       # follows it, so any other cargo in the job runs the pin too. Toolchains are not cached: a minimal one
@@ -332,6 +376,23 @@ jobs:
             'packages/gen/tests/integration/conformance/matrix.ts',
             'packages/core/tests/integration/conformance/**') }}
           restore-keys: ${{ runner.os }}-rust-harness-
+      # the gated SDKs and their mypy caches (python/__fixtures__/compiled.ts), keyed like gobuild and rust on every
+      # input of a Python gate (toolchain-projects.test.ts holds it to that). uv's wheel cache is not saved: a venv
+      # fetches its wheels once per run, then installs offline, and the markers that vouch for them go with it.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/python/mypy
+            ~/.cache/honey-tmp/python/sdk
+          key: >-
+            ${{ runner.os }}-python-harness-${{ hashFiles('.python-version', 'uv.toml', 'packages/gen/src/emit/python/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/python-toolchain.test.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts',
+            'packages/core/tests/integration/conformance/**') }}
+          restore-keys: ${{ runner.os }}-python-harness-
       # v0's emitted crates resolve crates.io without a lockfile, so their dependencies drift: key the
       # cache by ISO week, restore the newest, and save it even when the run fails (below), so each
       # week compiles the drift once and every later run starts warm. v0's tests pin their own target
@@ -349,10 +410,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-${{ hashFiles('rust-toolchain.toml', '_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-
             ${{ runner.os }}-cargo-
-      # one pinned list for CI and local runs (locally the harness fills .cache/python-venv from it)
-      - run: pip install -r _v0/tests/python-requirements.txt
+      # v0's frozen harness on the pinned interpreter, with its one pinned list for CI and local runs (locally
+      # the harness fills .cache/python-venv from it); HONEY_PYTHON's bare python, ruff and mypy resolve here
+      - name: v0's harness Python (the pinned interpreter, _v0's pinned requirements)
+        run: |
+          export UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_PYTHON_INSTALL_DIR="$HOME/.cache/honey-tmp/python/pythons"
+          "$HOME/.cache/honey-tmp/python/uv/bin/uv" venv --python "$(cat .python-version)" "$HOME/.cache/honey-tmp/python/v0-venv"
+          "$HOME/.cache/honey-tmp/python/uv/bin/uv" pip install --python "$HOME/.cache/honey-tmp/python/v0-venv/bin/python" -r _v0/tests/python-requirements.txt
+          echo "$HOME/.cache/honey-tmp/python/v0-venv/bin" >> "$GITHUB_PATH"
       - run: bun install --frozen-lockfile
       - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
+      - run: mkdir -p ~/.cache/honey-tmp/python/sdk && touch "$RUNNER_TEMP/python-sdk-start"
       - run: bun run test:harness
         env:
           HONEY_PYTHON: python
@@ -360,11 +428,11 @@ jobs:
           HONEY_REQUIRE_PYTHON: "1"
           # a missing Go or Rust fails gen's Go and Rust conformance and harness files instead of skipping them
           HONEY_REQUIRE_TOOLCHAINS: "1"
-      # F2: the escape layer's literals and comments through the real go, rustc and python3
+      # F2: the escape layer's literals and comments through the real go, rustc and the pinned python
       - run: cd packages/gen && bunx vitest run src/emit/shared/escape.toolchains.test.ts
         env:
           HONEY_REQUIRE_TOOLCHAINS: "1"
-      # the webhook verify helpers compiled and checked against a known HMAC: node, go, cargo, python3
+      # the webhook verify helpers compiled and checked against a known HMAC: node, go, cargo, the pinned python
       - run: cd packages/gen && bunx vitest run src/emit/shared/webhooks.toolchains.test.ts
         env:
           HONEY_REQUIRE_TOOLCHAINS: "1"
@@ -373,6 +441,10 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/rust/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/rust-sdk-start" -printf '%h\0' | xargs -0r rm -rf
+      - name: Prune the Python SDKs this run did not use
+        run: >-
+          find ~/.cache/honey-tmp/python/sdk -mindepth 2 -maxdepth 2 -name .complete
+          ! -newer "$RUNNER_TEMP/python-sdk-start" -printf '%h\0' | xargs -0r rm -rf
       - if: always() && steps.cargo-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
