@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
-import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/compiled.ts"
+import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { consume, once, sections, seen } from "./__fixtures__/consumer.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
 

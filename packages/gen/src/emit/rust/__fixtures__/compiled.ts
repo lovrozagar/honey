@@ -11,26 +11,14 @@
  * uses only the package's own dependencies. The copy's hash names the bin, which keeps the binaries of
  * every copy apart in the shared target dir.
  *
- * `drivenRustSdk` is that with the test driver (`driver/*.rs` and a `dispatch.rs` written from the entry's
- * call plans) as the program, `runCalls` sending a grid cell through it (the shared driver protocol).
+ * `compiledFixture` compiles any fixture, `compiledRust` a registry entry; driven.ts builds the test driver
+ * as a program, for a registry entry or the harness files' served document.
  */
 import { spawn, type SpawnSyncReturns } from "node:child_process"
 import { createHash } from "node:crypto"
-import {
-	copyFileSync,
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	renameSync,
-	utimesSync,
-	writeFileSync,
-} from "node:fs"
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, utimesSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import type { RustError, Script, Trace } from "../../shared/__fixtures__/protocol.ts"
-import type { RustCallPlan } from "../sdk-plan.ts"
-import { generateRustSdk, rustCallPlans } from "../sdk.ts"
-import { dispatchRs } from "./dispatch.ts"
+import { generateRustSdk } from "../sdk.ts"
 import { FIXTURES, type FixtureKey, type RustFixture } from "./documents.ts"
 import { runCargo, rustCacheDir, rustEnv } from "./rust-env.ts"
 
@@ -60,26 +48,6 @@ export type RustCrate = {
 	exec(name: string, input: string): Promise<Ran>
 }
 
-/** What `runCalls` takes: a grid Cell, or just its calls and setup (the grid's types stay in tests/, out of src's reach). */
-export type DriverCell = { readonly calls: readonly { readonly operation: string }[]; readonly setup?: object }
-
-/** One driver run: its exit status, its stderr, and on success the grid's `Observed`, one per call. */
-export type DriverRun = {
-	readonly observed: readonly unknown[] | undefined
-	readonly status: number
-	readonly stderr: string
-}
-
-/** The SDK compiled with the driver beside it. */
-export type DrivenRustSdk = RustCrate & {
-	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
-	runCalls(
-		cell: DriverCell,
-		origins: { readonly alt?: string; readonly url: string },
-		script?: Script,
-	): Promise<DriverRun & { readonly trace?: Trace<RustError> }>
-}
-
 /** A cargo command's outcome, as a crate dir's marker keeps it. */
 type Outcome = { readonly status: number; readonly stderr: string }
 
@@ -90,15 +58,9 @@ const outcomeOf = (run: SpawnSyncReturns<string>): Outcome => ({
 	stderr: (run.stderr ?? "") + (run.error === undefined ? "" : String(run.error)),
 })
 
-/** A fixture's crate: a dependency-free crate's own files (no call plans), or the emitter's crate and call plans for a document. */
-function emitted(fixture: RustFixture): {
-	readonly files: Readonly<Record<string, string>>
-	readonly plans: Readonly<Record<string, RustCallPlan>>
-} {
-	if ("files" in fixture) return { files: fixture.files, plans: {} }
-	const document = fixture.document()
-	return { files: generateRustSdk(document, fixture.options).files, plans: rustCallPlans(document, fixture.options) }
-}
+/** A fixture's crate files: a dependency-free crate's own, or the emitter's for a document. */
+const crateFiles = (fixture: RustFixture): Readonly<Record<string, string>> =>
+	"files" in fixture ? fixture.files : generateRustSdk(fixture.document(), fixture.options).files
 
 /** Write `text` beside `path` (dated `mtime` when given), then rename: a parallel worker never reads half a file. */
 function writeAtomic(path: string, text: string | Buffer, mtime?: number): void {
@@ -226,12 +188,12 @@ function execIn(binary: string, input: string): Promise<Ran> {
 }
 
 /**
- * The registry crate `key` built (or checked) at the pinned toolchain (or `toolchain`), once per content hash,
- * with each of `programs` built in a copy of it.
+ * `fixture`'s crate built (or checked) at the pinned toolchain (or `toolchain`), once per content hash, with
+ * each of `programs` built in a copy of it.
  */
-export function compiledRust(key: FixtureKey, options: CompileOptions = {}): RustCrate {
-	if (options.check && options.programs !== undefined) throw new Error("compiledRust: a check builds no programs")
-	const { files } = emitted(FIXTURES[key])
+export function compiledFixture(fixture: RustFixture, options: CompileOptions): RustCrate {
+	if (options.check && options.programs !== undefined) throw new Error("compiledFixture: a check builds no programs")
+	const files = crateFiles(fixture)
 	const entries = Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 	const hash = sha(
 		JSON.stringify({ check: options.check, files: entries, layout: LAYOUT, toolchain: options.toolchain }),
@@ -257,37 +219,6 @@ export function compiledRust(key: FixtureKey, options: CompileOptions = {}): Rus
 	}
 }
 
-/** The driver's sources by file name: the fixed ones, and `dispatch.rs` written from `plans`. */
-function driverSources(plans: Readonly<Record<string, RustCallPlan>>, throwOnError: boolean): Record<string, string> {
-	const dir = join(import.meta.dirname, "driver")
-	const files = readdirSync(dir)
-		.filter((name) => name.endsWith(".rs"))
-		.map((name) => [name, readFileSync(join(dir, name), "utf8")] as const)
-	return Object.fromEntries([...files, ["dispatch.rs", dispatchRs(plans, throwOnError)]])
-}
-
-/** A driver run's stdout as the caller reads it: `Observed[]`, or `{observed, trace}` under a script. */
-function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace?: Trace<RustError> } {
-	if (!scripted) return { observed: JSON.parse(stdout) as unknown[] }
-	return JSON.parse(stdout) as { observed: unknown[]; trace: Trace<RustError> }
-}
-
-/**
- * The registry SDK `key` compiled with the test driver beside it, and `runCalls` sending cells through it by
- * the emitter's call plans for the entry's own options.
- */
-export function drivenRustSdk(key: FixtureKey): DrivenRustSdk {
-	const fixture: RustFixture = FIXTURES[key]
-	const { plans } = emitted(fixture)
-	const throwOnError = !("document" in fixture && fixture.options?.throwOnError === false)
-	const crate = compiledRust(key, { programs: { driver: driverSources(plans, throwOnError) } })
-	return {
-		...crate,
-		runCalls: async (cell, origins, script) => {
-			const input = { alt: origins.alt, base: origins.url, cell, plans, script }
-			const ran = await crate.exec("driver", JSON.stringify(input))
-			const out = ran.status === 0 ? parsed(ran.stdout, script !== undefined) : { observed: undefined }
-			return { ...out, status: ran.status, stderr: ran.stderr }
-		},
-	}
-}
+/** The registry crate `key` compiled (`compiledFixture`). */
+export const compiledRust = (key: FixtureKey, options: CompileOptions = {}): RustCrate =>
+	compiledFixture(FIXTURES[key], options)

@@ -31,8 +31,9 @@ export type { Received } from "./ws-frames.ts"
 /**
  * One WebSocket step: a server frame (`text` as given, `json` stringified, `binary` that many bytes
  * `i & 0xff`), a pause, a wait until the client sent `receive` data messages in all, a close frame
- * then the client's echo, or `drop`: the connection ends with no close frame. The script stops at
- * `close` and `drop`.
+ * then the client's echo (with `hangUp`: the connection ended right after it, its reads stopped, so
+ * whatever the client sends next is refused with a reset), or `drop`: the connection ends with no
+ * close frame. The script stops at `close` and `drop`.
  */
 export type WsStep =
 	| { readonly text: string }
@@ -40,7 +41,7 @@ export type WsStep =
 	| { readonly binary: number }
 	| { readonly waitMs: number }
 	| { readonly receive: number }
-	| { readonly close: { readonly code: number; readonly reason: string } }
+	| { readonly close: { readonly code: number; readonly hangUp?: true; readonly reason: string } }
 	| { readonly drop: true }
 
 /** A WebSocket endpoint: the subprotocol it answers with (as given, offered or not), then its steps; it holds after them. */
@@ -157,8 +158,8 @@ export function acceptUpgrade(
 type Session = {
 	readonly done: () => boolean
 	feed(chunk: Buffer): void
-	/** a close frame out; the socket ends on the client's echo */
-	close(code: number, reason: string): void
+	/** a close frame out; the socket ends on the client's echo, or at once on `hangUp` */
+	close(code: number, reason: string, hangUp?: true): void
 	/** the connection ends once what was written reached it, with no close frame */
 	drop(): void
 	/** resolves once the client sent `n` data messages in all, or the socket closed */
@@ -205,9 +206,11 @@ function wsSession(socket: Duplex, record: StreamRecord, stage: Stage, fail: (te
 		for (const check of at.waiters) check()
 	})
 	return {
-		close(code, reason) {
+		close(code, reason, hangUp) {
 			sendOn(socket, CLOSE, closePayload(code, reason))
-			at.state = "closing"
+			at.state = hangUp ? "dropped" : "closing"
+			/* the server is gone once its close frame reached the kernel: unread data, then any more, is refused */
+			if (hangUp) socket.pause().end(() => socket.destroy())
 		},
 		done: () => at.state === "closed" || at.state === "dropped" || socket.destroyed,
 		drop() {
@@ -247,7 +250,7 @@ async function runWs(session: Session, steps: readonly WsStep[], stage: Stage): 
 		if (session.done() || stage.stopped) return
 		if ("waitMs" in step) await stage.wait(step.waitMs)
 		else if ("receive" in step) await session.messages(step.receive)
-		else if ("close" in step) return session.close(step.close.code, step.close.reason)
+		else if ("close" in step) return session.close(step.close.code, step.close.reason, step.close.hangUp)
 		else if ("drop" in step) return session.drop()
 		else if ("text" in step) session.send(TEXT, Buffer.from(step.text))
 		else if ("json" in step) session.send(TEXT, Buffer.from(JSON.stringify(step.json)))

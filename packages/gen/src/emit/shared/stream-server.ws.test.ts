@@ -217,6 +217,23 @@ describe("the stream server: the WebSocket close", () => {
 		})
 	})
 
+	it("hangs up after its close frame without the client's echo, the client not gone: what the client sends next is refused", async () => {
+		const reply: Reply = {
+			status: 101,
+			ws: { steps: [{ close: { code: 4401, hangUp: true, reason: "unauthorized" } }] },
+		}
+		const [ended, rest, streams] = await served([reply], async (server) => {
+			const client = await raw(server.url, "/")
+			const end = await Promise.race([client.closed.then(() => "hung up"), sleep(1000).then(() => "held")])
+			return [end, client.rest(), server.streams] as const
+		})
+		expect({ ended, rest: [...rest], streams }).toEqual({
+			ended: "hung up",
+			rest: [0x88, 14, 0x11, 0x31, ...Buffer.from("unauthorized")],
+			streams: [{ clientGone: false, received: [] }],
+		})
+	})
+
 	it("drops the connection with no close frame after what it wrote arrived, the client not gone", async () => {
 		const reply: Reply = {
 			status: 101,

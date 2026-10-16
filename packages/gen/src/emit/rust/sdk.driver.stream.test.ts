@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
 import type { Script } from "../shared/__fixtures__/protocol.ts"
 import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
-import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/compiled.ts"
+import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { dispatchRs } from "./__fixtures__/dispatch.ts"
 import { FIXTURES } from "./__fixtures__/documents.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
@@ -424,6 +424,23 @@ describe.skipIf(!RUST)("the Rust test driver: how a WebSocket read ends", () => 
 			{ closeError: undefined, closedBy: { code: 1000, reason: "done" }, handlers: ["close done"], via: undefined },
 			{ closeError: undefined, closedBy: undefined, handlers: ["message one", "error …"], via: "stream" },
 		])
+	}, 600_000)
+
+	it("keeps reading after a send fails: the server's close frame still waiting is closedBy, the send's error traced", async () => {
+		/* the server closes and hangs up before the client sends; 12 MiB outgrows the client's send buffer (tcp_wmem caps it at 4 MiB), so the send fails every time */
+		const reply = ws([{ close: { code: 4401, hangUp: true, reason: "unauthorized" } }])
+		const script: Script = { calls: [{ ws: { on: true, send: [{ bytes: 12 << 20 }] } }] }
+		const { run } = await drive(driven("ws"), [reply], [socket()], script)
+		const call = run.trace?.calls[0]
+		expect({ error: call?.error?.via, observed: run.observed, stream: call?.stream }, run.stderr).toEqual({
+			error: "stream",
+			observed: [{ frames: [], kind: "frames" }],
+			stream: {
+				closedBy: { code: 4401, reason: "unauthorized" },
+				handlers: [{ data: "unauthorized", event: "close" }],
+				yields: 0,
+			},
+		})
 	}, 600_000)
 })
 

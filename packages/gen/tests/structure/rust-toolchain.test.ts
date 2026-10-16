@@ -3,7 +3,7 @@
  * under the channel `rust-toolchain.toml` pins, and CI installs that channel from the file, so a local run
  * and a CI run compile with the same rustc to the patch. Unlike Go's, importing the env file does not
  * license a raw spawn: every cargo, rustc and rustfmt goes through its runners. Only the mutation harness
- * compiles a crate outside the fixture registry (G17).
+ * compiles a crate outside the fixture registry (G17), and only the harness files the served document (Fe1).
  */
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
@@ -18,7 +18,8 @@ const GEN = resolve(import.meta.dirname, "../..")
 const ROOTS = ["src", "tests", "scripts"]
 const SELF = "tests/structure/rust-toolchain.test.ts"
 const ENV = "src/emit/rust/__fixtures__/rust-env.ts"
-const COMPILED = "src/emit/rust/__fixtures__/compiled.ts"
+/* the fixture files that define the compiles outside the registry */
+const DEFINING = ["src/emit/rust/__fixtures__/compiled.ts", "src/emit/rust/__fixtures__/driven.ts"]
 /* the fixture documents a default run may compile (G17), each a FIXTURES entry (Fb5) */
 const FIXTURE_BUDGET = 16
 
@@ -168,15 +169,56 @@ describe("the toolchains a run compiles with", () => {
 	})
 })
 
+/* each compile outside the registry, and the files alone that may call it */
+const OUTSIDE_REGISTRY: readonly { readonly callers: RegExp; readonly name: string }[] = [
+	{ callers: /^tests\/structure\/mutation-harness[^/]*\.ts$/, name: "mutantRustSdk" },
+	/* harness mode alone, out of the default run (contract 21 Fe1) */
+	{
+		callers: /^tests\/integration\/(?:[^/]*harness[^/]*|conformance\/rust)\.test\.ts$/,
+		name: "servedRustSdk",
+	},
+]
+
+/** The files in `files` calling a compile outside the registry they may not call. */
+const strayCompiles = (files: readonly { readonly path: string; readonly text: string }[]) =>
+	files
+		.filter(
+			({ path, text }) =>
+				!DEFINING.includes(path) &&
+				OUTSIDE_REGISTRY.some(({ callers, name }) => new RegExp(`\\b${name}\\b`).test(text) && !callers.test(path)),
+		)
+		.map(({ path }) => path)
+
+/** A file at `path` whose text calls `name`. */
+const calling = (path: string, name: string) => ({ path, text: `const sdk = ${name}(document)` })
+
 describe("the fixture documents a default run compiles", () => {
 	it(`number at most ${FIXTURE_BUDGET}`, () => {
 		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
 	})
 
-	it("come only from the registry, except the mutation harness's guard mutants", () => {
-		const callers = others().filter(({ path, text }) => path !== COMPILED && /\bmutantRustSdk\b/.test(text))
+	it("come only from the registry, except the mutation harness's guard mutants and the harness files' served document", () => {
+		expect(strayCompiles(others())).toEqual([])
+	})
+
+	it("flags a served-document or guard-mutant compile from any file but the ones each is for", () => {
 		expect(
-			callers.map(({ path }) => path).filter((path) => !/^tests\/structure\/mutation-harness[^/]*\.ts$/.test(path)),
-		).toEqual([])
+			strayCompiles([
+				calling("src/emit/rust/x.test.ts", "servedRustSdk"),
+				calling("tests/integration/conformance/go.test.ts", "servedRustSdk"),
+				calling("tests/integration/rust-harness.test.ts", "servedRustSdk"),
+				calling("tests/integration/conformance/rust.test.ts", "servedRustSdk"),
+				calling("src/emit/rust/__fixtures__/driven.ts", "servedRustSdk"),
+				calling("tests/structure/mutation-harness.rust.ts", "servedRustSdk"),
+				calling("tests/structure/mutation-harness.rust.ts", "mutantRustSdk"),
+				calling("tests/integration/rust-harness.test.ts", "mutantRustSdk"),
+				calling("src/emit/rust/x.test.ts", "servedRustSdkish"),
+			]),
+		).toEqual([
+			"src/emit/rust/x.test.ts",
+			"tests/integration/conformance/go.test.ts",
+			"tests/structure/mutation-harness.rust.ts",
+			"tests/integration/rust-harness.test.ts",
+		])
 	})
 })

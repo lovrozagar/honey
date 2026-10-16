@@ -26,6 +26,8 @@ export type ReferenceApp = {
 export type TargetRunner = {
 	/** build the target's client from app.document once per file */
 	prepare(app: ReferenceApp): Promise<void>
+	/** the file's setup hook's timeout (the app's start and `prepare`), in ms; absent: the config's hookTimeout. A cold Rust compile runs past it (Fe3) */
+	readonly prepareTimeoutMs?: number
 	/** one Observed per call, in order */
 	run(cell: Cell, app: ReferenceApp): Promise<readonly Observed[]>
 	readonly target: Target
@@ -147,7 +149,7 @@ export function targetSuite(runner: TargetRunner): () => ReferenceApp {
 			app = await startReferenceApp()
 			await runner.prepare(app)
 			expect(unknownOperations(cells, app.document), "operations the grid calls but the document lacks").toEqual([])
-		})
+		}, runner.prepareTimeoutMs)
 		afterAll(() => app?.stop())
 		for (const cell of cells) {
 			const title = runner.titles?.[cell.key]

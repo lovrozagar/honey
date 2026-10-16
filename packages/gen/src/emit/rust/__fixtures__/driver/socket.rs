@@ -31,10 +31,10 @@ fn recording(event: &'static str, runs: &Runs) -> impl FnMut(&[u8]) + Send + 'st
 
 /// The method's open socket: a recording handler per `WsEvent` under `ws.on`; the grid's `send` as
 /// text, then the script's messages; `recv` until `take` frames (absent: until `None`), each its JSON,
-/// else its text; then `close` with the script's code and reason (1000 and none by default). The first
-/// send or read error is traced via "stream" and ends the reads, as Go's driver does. The trace holds
-/// the frames read, every handler run (those `close` fires included), the server's close frame and
-/// `close`'s error.
+/// else its text; then `close` with the script's code and reason (1000 and none by default). A failed
+/// send ends the sends, not the reads: what the server sent first (its close frame, say) still waits
+/// to be read. The first send or read error is traced via "stream". The trace holds the frames read,
+/// every handler run (those `close` fires included), the server's close frame and `close`'s error.
 pub async fn observe_frames(
     p: Prepared<sdk::TypedWebSocket, ()>,
     call: &Call,
@@ -54,10 +54,9 @@ pub async fn observe_frames(
         ws.on(sdk::WsEvent::Error, recording("error", &runs));
     }
     let mut frames = Vec::new();
-    let failure = match sent(&mut ws, call, script).await {
-        Ok(()) => read(&mut ws, call.take, &mut frames).await,
-        Err(e) => Some(e),
-    };
+    let unsent = sent(&mut ws, call, script).await.err();
+    let unread = read(&mut ws, call.take, &mut frames).await;
+    let failure = unsent.or(unread);
     let mut st = Map::new();
     if let Some(by) = ws.closed_by() {
         st.insert(

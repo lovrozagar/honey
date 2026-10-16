@@ -329,7 +329,8 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/rust-toolchain.test.ts',
             'packages/gen/tests/integration/conformance/features.ts',
-            'packages/gen/tests/integration/conformance/matrix.ts') }}
+            'packages/gen/tests/integration/conformance/matrix.ts',
+            'packages/core/tests/integration/conformance/**') }}
           restore-keys: ${{ runner.os }}-rust-harness-
       # v0's emitted crates resolve crates.io without a lockfile, so their dependencies drift: key the
       # cache by ISO week, restore the newest, and save it even when the run fails (below), so each
@@ -351,12 +352,13 @@ jobs:
       # one pinned list for CI and local runs (locally the harness fills .cache/python-venv from it)
       - run: pip install -r _v0/tests/python-requirements.txt
       - run: bun install --frozen-lockfile
+      - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
       - run: bun run test:harness
         env:
           HONEY_PYTHON: python
           # a Python problem fails the job instead of skipping the Python SDK tests
           HONEY_REQUIRE_PYTHON: "1"
-          # a missing Go fails gen's Go conformance and harness files instead of skipping them
+          # a missing Go or Rust fails gen's Go and Rust conformance and harness files instead of skipping them
           HONEY_REQUIRE_TOOLCHAINS: "1"
       # F2: the escape layer's literals and comments through the real go, rustc and python3
       - run: cd packages/gen && bunx vitest run src/emit/shared/escape.toolchains.test.ts
@@ -366,6 +368,11 @@ jobs:
       - run: cd packages/gen && bunx vitest run src/emit/shared/webhooks.toolchains.test.ts
         env:
           HONEY_REQUIRE_TOOLCHAINS: "1"
+      # as in the test job: the saved cache keeps only the Rust SDKs this run built or reused
+      - name: Prune the Rust SDKs this run did not use
+        run: >-
+          find ~/.cache/honey-tmp/rust/sdk -mindepth 2 -maxdepth 2 -name .complete
+          ! -newer "$RUNNER_TEMP/rust-sdk-start" -printf '%h\0' | xargs -0r rm -rf
       - if: always() && steps.cargo-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:

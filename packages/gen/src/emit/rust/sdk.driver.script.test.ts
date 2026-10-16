@@ -12,7 +12,8 @@ import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { RustError, Script } from "../shared/__fixtures__/protocol.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
-import { compiledRust, type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/compiled.ts"
+import { compiledRust } from "./__fixtures__/compiled.ts"
+import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
 
 /** Whether Rust is here: a missing toolchain fails where it is required and skips these legs elsewhere (rust-env). */
