@@ -69,8 +69,9 @@ func gridError(err error) bool {
 
 // observedOf normalizes a call's outcome to the grid's Observed: a timeout, the raw response for
 // raw: true, error for an error status, else bytes for a binary answer and data for any other
-// (the JSON of the answer, a text answer as a string, with the typed response headers when the
-// plan has them). o.err, when set, is a grid error.
+// (the JSON of the answer, a text answer as a string, the stored body for a method with no typed
+// answer, with the typed response headers when the plan has them). o.err, when set, is a grid
+// error.
 func observedOf(j job, o outcome, resp *http.Response, target any) (any, error) {
 	var ce *sdk.ClientError
 	switch {
@@ -88,8 +89,14 @@ func observedOf(j job, o outcome, resp *http.Response, target any) (any, error) 
 		status = o.result.Status
 	}
 	data := payload(o.value)
-	if j.p.Response == "binary" {
+	switch j.p.Response {
+	case "binary":
 		return bytesOf(data, status)
+	case "none":
+		var err error
+		if data, err = untypedOf(resp); err != nil {
+			return nil, err
+		}
 	}
 	seen := map[string]any{"data": data, "kind": "data", "status": status}
 	if target != nil {
@@ -124,6 +131,22 @@ func bytesOf(data any, status int) (any, error) {
 	}
 	sum := sha256.Sum256(b)
 	return map[string]any{"kind": "bytes", "sha256": hex.EncodeToString(sum[:]), "size": len(b), "status": status}, nil
+}
+
+// untypedOf is the answer to a method the document types none for (no 2xx declared): the body
+// WithResponseInto stored, as JSON when it is JSON, as text when it is not, nil when empty. It is
+// the rule errorOf applies to an error body.
+func untypedOf(resp *http.Response) (any, error) {
+	body, err := io.ReadAll(resp.Body)
+	switch {
+	case err != nil:
+		return nil, fmt.Errorf("read the stored body: %w", err)
+	case len(body) == 0:
+		return nil, nil
+	case json.Valid(body):
+		return json.RawMessage(body), nil
+	}
+	return string(body), nil
 }
 
 // rawOf is the response WithResponseInto stored: its status, its headers (names lower case, a

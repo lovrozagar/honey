@@ -74,10 +74,12 @@ jobs:
         with:
           go-version-file: .go-version
           cache: false
+      # the pinned and floor toolchains and the WebSocket module: a change in any saves a new cache
       - uses: actions/cache@v4
         with:
           path: ~/.cache/honey-tmp/go/mod
-          key: ${{ runner.os }}-gomod-${{ hashFiles('.go-version') }}
+          key: ${{ runner.os }}-gomod-test-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
+          restore-keys: ${{ runner.os }}-gomod-test-
       - run: bun install --frozen-lockfile
       - run: bun run generate
       - run: bun run test
@@ -238,10 +240,12 @@ jobs:
         with:
           go-version-file: .go-version
           cache: false
+      # the pinned and floor toolchains and the WebSocket module: a change in any saves a new cache
       - uses: actions/cache@v4
         with:
           path: ~/.cache/honey-tmp/go/mod
-          key: ${{ runner.os }}-gomod-${{ hashFiles('.go-version') }}
+          key: ${{ runner.os }}-gomod-harness-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
+          restore-keys: ${{ runner.os }}-gomod-harness-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -272,6 +276,8 @@ jobs:
           HONEY_PYTHON: python
           # a Python problem fails the job instead of skipping the Python SDK tests
           HONEY_REQUIRE_PYTHON: "1"
+          # a missing Go fails gen's Go conformance and harness files instead of skipping them
+          HONEY_REQUIRE_TOOLCHAINS: "1"
       # F2: the escape layer's literals and comments through the real go, rustc and python3
       - run: cd packages/gen && bunx vitest run src/emit/shared/escape.toolchains.test.ts
         env:

@@ -284,9 +284,13 @@ const endOf = ({ error, stream }: Trace["calls"][number]) => ({
 	handlers: stream?.handlers?.map((h) => `${h.event} ${h.data}`),
 })
 
-/** A read ended by the server's close frame: its close handler once, closedBy, no error; Close then finds it closed. */
+/**
+ * A read ended by the server's close frame: its close handler once, closedBy, no error, and Close
+ * after it benign. coder/websocket returns net.ErrClosed from a Close once the peer's close frame
+ * closed the conn; v0's nhooyr.io/websocket v1.8.17 returned nil there, so Close maps it to nil.
+ */
 const STREAM_BY_SERVER = {
-	closeError: expect.stringMatching(/^failed to close WebSocket: /),
+	closeError: undefined,
 	closedBy: { code: 1000, reason: "done" },
 	handlers: ["close done"],
 }

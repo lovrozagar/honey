@@ -227,6 +227,42 @@ describe("the Go test driver: timeouts and the raw response, the grid's outcomes
 	}, 600_000)
 })
 
+/** An error-only op (a 307 and a 500, no 2xx): the plan's response is "none", the method returns no answer. */
+const MOVED: Json = {
+	info: { title: "Moved", version: "1" },
+	openapi: "3.1.0",
+	paths: {
+		"/moved": {
+			get: {
+				operationId: "moved.get",
+				responses: { 307: { description: "moved" }, 500: { ...json({ type: "object" }), description: "failed" } },
+			},
+		},
+	},
+}
+
+describe("the Go test driver: a success the document does not type (an error-only op)", () => {
+	it("observes the body WithResponseInto stored: its JSON, its text, null when empty, in both modes", async () => {
+		if (!withGo()) return
+		expect(goCallPlans(MOVED)["moved.get"]?.response).toBe("none")
+		const replies: Reply[] = [{ json: { a: 1 }, status: 200 }, { status: 200 }, { status: 200, text: "t" }]
+		const call: Call = { operation: "moved.get", route: { method: "GET", path: "/moved" } }
+		for (const throwOnError of [true, false]) {
+			const sdk = compiledSdk(MOVED, { modulePath: "example.com/moved", throwOnError })
+			expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+			const run = await served(replies, (server) => sdk.runCalls({ calls: [call, call, call] }, server))
+			expect(outcome(run), run.stderr).toEqual({
+				observed: [
+					{ data: { a: 1 }, kind: "data", status: 200 },
+					{ data: null, kind: "data", status: 200 },
+					{ data: "t", kind: "data", status: 200 },
+				] satisfies Observed[],
+				status: 0,
+			})
+		}
+	}, 600_000)
+})
+
 /** One GET whose header params take each Opts shape: a required string (no pointer) and an optional integer. */
 const PING: Json = {
 	info: { title: "Ping", version: "1" },

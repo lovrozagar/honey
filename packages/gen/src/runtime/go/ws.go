@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -95,7 +96,7 @@ func writeFrame(ctx context.Context, conn *websocket.Conn, data any) error {
 }
 
 // Close sends a close frame with code and reason, the reason cut at a rune boundary to fit 123
-// bytes.
+// bytes. On a conn already closed it returns nil.
 func (w *TypedWebSocket) Close(code websocket.StatusCode, reason string) error {
 	for len(reason) > maxCloseReason {
 		_, size := utf8.DecodeLastRuneInString(reason)
@@ -103,6 +104,9 @@ func (w *TypedWebSocket) Close(code websocket.StatusCode, reason string) error {
 	}
 	err := w.conn.Close(code, reason)
 	w.fireClose(reason)
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
 	return err
 }
 

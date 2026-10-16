@@ -37,7 +37,11 @@ function secured(root: ConformanceApp, factory: typeof errors) {
 
 type Secure = ReturnType<typeof secured>
 
-/** `users.*`, the users in this app's closure, `taken@example.com` seeded. */
+/** The reads a users mutation invalidates (`x-invalidate`), which the SDK harnesses' stale tracking resolves. */
+const LIST = "GET /v1/secure/users"
+const ONE = "GET /v1/secure/users/:id"
+
+/** `users.*`, the users in this app's closure, `taken@example.com` seeded; each mutation names what it invalidates. */
 function userRoutes(app: Secure, factory: typeof errors): void {
 	const users = new Map<string, User>([["user-0", { email: "taken@example.com", id: "user-0", name: "Taken" }]])
 	let next = 0
@@ -48,7 +52,7 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 		.handler((ctx) => ctx.res.json("ok", [...users.values()]))
 	app
 		.post("/users")
-		.meta({ operationId: "users.create" })
+		.meta({ invalidate: [LIST], operationId: "users.create" })
 		.errors("invalid_input", "email_taken")
 		.input({ json: Fields })
 		.output({ "application/json": { created: UserSchema } })
@@ -73,7 +77,7 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 		})
 	app
 		.put("/users/:id")
-		.meta({ operationId: "users.update" })
+		.meta({ invalidate: [LIST, ONE], operationId: "users.update" })
 		.input({ json: Fields })
 		.output({ "application/json": { ok: UserSchema } })
 		.handler((ctx) => {
@@ -83,7 +87,7 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 		})
 	app
 		.delete("/users/:id")
-		.meta({ operationId: "users.delete" })
+		.meta({ invalidate: [LIST, ONE], operationId: "users.delete" })
 		.output({ headers: { no_content: z.object({}) } })
 		.handler((ctx) => {
 			users.delete(ctx.params.id)
