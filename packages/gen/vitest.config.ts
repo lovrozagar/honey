@@ -38,7 +38,12 @@ export const RUST = [
  * its imports. They run as the `python` project, held to that as `GO` is. The toolchain files reach Go and Rust
  * too, so they run here, in the last group.
  */
-export const PYTHON = ["src/emit/shared/*.toolchains.test.ts", "tests/structure/python-toolchain.test.ts"]
+export const PYTHON = [
+	"src/emit/python/**/*.test.ts",
+	"src/emit/shared/ruff.test.ts",
+	"src/emit/shared/*.toolchains.test.ts",
+	"tests/structure/python-toolchain.test.ts",
+]
 
 /**
  * Each language toolchain's project, in the order their `sequence.groupOrder` groups run, one language group at

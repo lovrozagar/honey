@@ -4,14 +4,16 @@
  * and a CI run compile with the same rustc to the patch. Unlike Go's, importing the env file does not
  * license a raw spawn: every cargo, rustc and rustfmt goes through its runners. No compile outside the
  * registry (G17) but the harness files' served document (Fe1): a mutant reaches the registry crates through
- * the mock of the runtime reader, so it compiles no document of its own.
+ * the mock of the runtime reader, so it compiles no document of its own. A call counts by the module it
+ * resolves to (compile-calls.ts): Python's own `compiledFixture` is python-toolchain.test.ts's to judge.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { dirname, join, relative, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { FIXTURES } from "../../src/emit/rust/__fixtures__/documents.ts"
 import * as env from "../../src/emit/rust/__fixtures__/rust-env.ts"
 import { RUST_VERSION } from "../../src/emit/rust/sdk-cargo.ts"
+import { callsOf } from "./compile-calls.ts"
 
 const { RUST_FLOOR, pinnedRust, runRustc, withRust } = env
 
@@ -170,13 +172,21 @@ describe("the toolchains a run compiles with", () => {
 	})
 })
 
-/* each compile outside the registry, and the files alone that may call it */
-const OUTSIDE_REGISTRY: readonly { readonly callers: RegExp; readonly name: string }[] = [
+const RUST_COMPILED = "src/emit/rust/__fixtures__/compiled.ts"
+const RUST_DRIVEN = "src/emit/rust/__fixtures__/driven.ts"
+const PY_COMPILED = "src/emit/python/__fixtures__/compiled.ts"
+
+/*
+ * each compile outside the registry, by the module that exports it, and the files alone that may call it: every
+ * language names its any-fixture compile `compiledFixture`, so a call counts by the module its name is bound to
+ */
+const OUTSIDE_REGISTRY: readonly { readonly callers: RegExp; readonly module: string; readonly name: string }[] = [
 	/* any document past the budget: only the files that define the compiles call it */
-	{ callers: /^$/, name: "compiledFixture" },
+	{ callers: /^$/, module: RUST_COMPILED, name: "compiledFixture" },
 	/* harness mode alone, out of the default run (contract 21 Fe1) */
 	{
 		callers: /^tests\/integration\/(?:[^/]*harness[^/]*|conformance\/rust)\.test\.ts$/,
+		module: RUST_DRIVEN,
 		name: "servedRustSdk",
 	},
 ]
@@ -187,12 +197,17 @@ const strayCompiles = (files: readonly { readonly path: string; readonly text: s
 		.filter(
 			({ path, text }) =>
 				!DEFINING.includes(path) &&
-				OUTSIDE_REGISTRY.some(({ callers, name }) => new RegExp(`\\b${name}\\b`).test(text) && !callers.test(path)),
+				OUTSIDE_REGISTRY.some(
+					({ callers, module, name }) => callsOf(path, text, name).includes(module) && !callers.test(path),
+				),
 		)
 		.map(({ path }) => path)
 
-/** A file at `path` whose text calls `name`. */
-const calling = (path: string, name: string) => ({ path, text: `const sdk = ${name}(document)` })
+/** A file at `path` whose text imports `name` from gen-relative `module` and calls it. */
+const calling = (path: string, name: string, module: string) => ({
+	path,
+	text: `import { ${name} } from "./${relative(dirname(path), module)}"\nconst sdk = ${name}(document)`,
+})
 
 describe("the fixture documents a default run compiles", () => {
 	it(`number at most ${FIXTURE_BUDGET}`, () => {
@@ -206,21 +221,39 @@ describe("the fixture documents a default run compiles", () => {
 	it("flags a served-document compile from any file but the harness files, and an any-fixture compile from any file but its own", () => {
 		expect(
 			strayCompiles([
-				calling("src/emit/rust/x.test.ts", "servedRustSdk"),
-				calling("tests/integration/conformance/go.test.ts", "servedRustSdk"),
-				calling("tests/integration/rust-harness.test.ts", "servedRustSdk"),
-				calling("tests/integration/conformance/rust.test.ts", "servedRustSdk"),
-				calling("src/emit/rust/__fixtures__/driven.ts", "servedRustSdk"),
-				calling("tests/structure/mutation-harness.rust.ts", "servedRustSdk"),
-				calling("tests/security/x.test.ts", "compiledFixture"),
-				calling("src/emit/rust/__fixtures__/driven.ts", "compiledFixture"),
-				calling("src/emit/rust/x.test.ts", "servedRustSdkish"),
+				calling("src/emit/rust/x.test.ts", "servedRustSdk", RUST_DRIVEN),
+				calling("tests/integration/conformance/go.test.ts", "servedRustSdk", RUST_DRIVEN),
+				calling("tests/integration/rust-harness.test.ts", "servedRustSdk", RUST_DRIVEN),
+				calling("tests/integration/conformance/rust.test.ts", "servedRustSdk", RUST_DRIVEN),
+				calling("src/emit/rust/__fixtures__/driven.ts", "servedRustSdk", RUST_DRIVEN),
+				calling("tests/structure/mutation-harness.rust.ts", "servedRustSdk", RUST_DRIVEN),
+				calling("tests/security/x.test.ts", "compiledFixture", RUST_COMPILED),
+				calling("src/emit/rust/__fixtures__/driven.ts", "compiledFixture", RUST_COMPILED),
+				calling("src/emit/rust/x.test.ts", "servedRustSdkish", RUST_DRIVEN),
+				/* another language's own compile is its leg's to judge; Rust's from another language's fixture is a stray */
+				calling("src/emit/python/__fixtures__/driven.ts", "compiledFixture", PY_COMPILED),
+				calling("src/emit/python/__fixtures__/compiled.ts", "compiledFixture", RUST_COMPILED),
+				/* an alias, a namespace and a re-export each reach it; a bare mention with no import binds nothing */
+				{
+					path: "tests/security/alias.test.ts",
+					text: `import { compiledFixture as build } from "../../${RUST_COMPILED}"\nbuild(document)`,
+				},
+				{
+					path: "tests/security/space.test.ts",
+					text: `import * as c from "../../${RUST_COMPILED}"\nc.compiledFixture(document)`,
+				},
+				{ path: "tests/security/again.ts", text: `export { compiledFixture } from "../../${RUST_COMPILED}"` },
+				{ path: "tests/security/note.test.ts", text: "/* compiledFixture(document) */ compiledFixture(document)" },
 			]),
 		).toEqual([
 			"src/emit/rust/x.test.ts",
 			"tests/integration/conformance/go.test.ts",
 			"tests/structure/mutation-harness.rust.ts",
 			"tests/security/x.test.ts",
+			"src/emit/python/__fixtures__/compiled.ts",
+			"tests/security/alias.test.ts",
+			"tests/security/space.test.ts",
+			"tests/security/again.ts",
 		])
 	})
 })

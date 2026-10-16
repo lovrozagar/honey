@@ -58,6 +58,7 @@ describe("string literals: one escaper, one policy per target", () => {
 		expect(rustString("\b\f\u0001")).toBe('"\\u{08}\\u{0c}\\u{01}"')
 	})
 
+	// v0: 0fd9637be3
 	it("Python: \\xHH for control bytes, and line separators, NEL and the BOM as \\uHHHH", () => {
 		expect(pyString(nasty)).toBe(
 			'"q\\"b\\\\n\\nr\\rt\\tz\\x00d\\x7f e\\x01 \uFFFD \\u2028\\u2029\\u0085\\ufeff \u{1F600}"',
@@ -87,6 +88,7 @@ describe("comments: text that can never become code", () => {
 		]).toEqual([["// one", "// two", "// three", "//", "// four"], ["\t/// doc"], ["  #"]])
 	})
 
+	// v0: 0fd9637be3
 	it("keeps a block comment closed and a docstring inert", () => {
 		expect(blockCommentText("end */ start /* x")).toBe("end * / start / * x")
 		expect(pyDocLines('say """hi""" at C:\\users\nnext"')).toEqual([

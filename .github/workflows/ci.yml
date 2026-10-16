@@ -120,7 +120,7 @@ jobs:
             ${{ runner.os }}-rust-${{ hashFiles('rust-toolchain.toml', 'packages/gen/src/emit/rust/**',
             'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/rust/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
-            'packages/gen/tests/structure/rust-toolchain.test.ts',
+            'packages/gen/tests/structure/rust-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-rust-
@@ -149,7 +149,7 @@ jobs:
             ${{ runner.os }}-python-${{ hashFiles('.python-version', 'uv.toml', 'packages/gen/src/emit/python/**',
             'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
-            'packages/gen/tests/structure/python-toolchain.test.ts',
+            'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-python-
@@ -371,7 +371,7 @@ jobs:
             ${{ runner.os }}-rust-harness-${{ hashFiles('rust-toolchain.toml', 'packages/gen/src/emit/rust/**',
             'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/rust/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
-            'packages/gen/tests/structure/rust-toolchain.test.ts',
+            'packages/gen/tests/structure/rust-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts',
             'packages/core/tests/integration/conformance/**') }}
@@ -388,7 +388,7 @@ jobs:
             ${{ runner.os }}-python-harness-${{ hashFiles('.python-version', 'uv.toml', 'packages/gen/src/emit/python/**',
             'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
-            'packages/gen/tests/structure/python-toolchain.test.ts',
+            'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts',
             'packages/core/tests/integration/conformance/**') }}

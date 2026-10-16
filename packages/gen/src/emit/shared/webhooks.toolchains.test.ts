@@ -9,7 +9,7 @@
 import { type SpawnSyncReturns, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
@@ -52,7 +52,7 @@ const triples = (open: string, close: string) =>
 type Language = {
 	/** compile and run the program in `dir`, which prints one true or false per case */
 	readonly exec: (dir: string) => SpawnSyncReturns<string>
-	/** where its work dirs go: Go's, Rust's and Python's toolchain caches, off /tmp (00-rules); Node's one source file stays in the OS temp dir */
+	/** where its work dirs go, off /tmp (00-rules): Go's, Rust's and Python's toolchain caches, and Node's own dir beside them */
 	readonly home: () => string
 	/** whether its toolchain is here: Go's, Rust's and Python's are the pinned ones (G10) */
 	readonly present: () => boolean
@@ -69,6 +69,13 @@ const spawn = (command: string, args: readonly string[], dir?: string) =>
 
 /** Whether `command --version` runs. */
 const runs = (command: string) => spawn(command, ["--version"]).status === 0
+
+/** Node's work dir, beside the toolchain caches the env fixtures make (`$HOME/.cache/honey-tmp/<name>`): Node has no env fixture. */
+function nodeHome(): string {
+	const dir = join(process.env.HOME ?? homedir(), ".cache/honey-tmp/node")
+	mkdirSync(dir, { recursive: true })
+	return dir
+}
 
 /** Whether a missing toolchain without a fixture of its own fails rather than skips. */
 const toolchainsRequired = () => process.env.HONEY_REQUIRE_TOOLCHAINS === "1"
@@ -166,7 +173,7 @@ const LANGUAGES: Readonly<Record<string, Language>> = {
 	},
 	ts: {
 		exec: (dir) => spawn("node", [join(dir, "main.ts")], dir),
-		home: tmpdir,
+		home: nodeHome,
 		present: () => runs("node"),
 		required: toolchainsRequired,
 		tool: "node",
@@ -199,6 +206,14 @@ function verified(language: Language): string {
 		rmSync(dir, { force: true, recursive: true })
 	}
 }
+
+describe("verify helpers: where they run", () => {
+	it("keeps every language's work dir off /tmp, under $HOME/.cache/honey-tmp (00-rules)", () => {
+		const cache = `${join(process.env.HOME ?? homedir(), ".cache/honey-tmp")}/`
+		const off = Object.entries(LANGUAGES).filter(([, language]) => !language.home().startsWith(cache))
+		expect(off.map(([name]) => name)).toEqual([])
+	})
+})
 
 describe("verify helpers: what the real toolchains make of them", () => {
 	for (const name of Object.keys(LANGUAGES))

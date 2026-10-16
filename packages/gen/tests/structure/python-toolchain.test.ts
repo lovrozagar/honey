@@ -4,13 +4,19 @@
  * `$HOME/.cache/honey-tmp/python` (the uv a bootstrap installs there, never the user's own), and CI installs
  * exactly those, so a local run and a CI run use the same uv and interpreters to the patch. As with Rust,
  * importing the env file does not license a raw spawn: every uv, python, ruff and mypy goes through its
- * runners. Nothing lands in `~/.local/bin`.
+ * runners. Nothing lands in `~/.local/bin`. No gate outside the registry (G17, at most 16 documents) but the
+ * harness files' served document (phase e); a call counts by the module it resolves to (compile-calls.ts), so
+ * Rust's own `compiledFixture` is rust-toolchain.test.ts's to judge. The floor interpreter and the floor
+ * constraints sit at the floors every emitted package declares.
  */
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, statSync } from "node:fs"
 import { homedir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, relative, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { FIXTURES } from "../../src/emit/python/__fixtures__/documents.ts"
 import * as env from "../../src/emit/python/__fixtures__/python-env.ts"
+import { HTTPX2_FLOOR, PYTHON_REQUIRES } from "../../src/emit/python/sdk-pyproject.ts"
+import { callsOf } from "./compile-calls.ts"
 
 const { PY_FLOOR, pinnedPython, pinnedUv, pythonCacheDir, pythonInstall, runPython, uvInstall, venv, withPython } = env
 
@@ -70,7 +76,23 @@ describe("Python runs through python-env.ts only", () => {
 
 const REPO = join(GEN, "../..")
 const WORKFLOW = readFileSync(join(REPO, ".github/workflows/ci.yml"), "utf8")
-const TOOLS = join(GEN, "src/emit/python/__fixtures__/tools.txt")
+const FIXTURE_DIR = join(GEN, "src/emit/python/__fixtures__")
+const TOOLS = join(FIXTURE_DIR, "tools.txt")
+
+/** A constraints file's pins by package, in file order; throws on a line that is no exact `name==x.y.z`. */
+function constraints(file: string): Record<string, string> {
+	const lines = readFileSync(join(FIXTURE_DIR, file), "utf8").split("\n").filter(Boolean)
+	const loose = lines.filter((line) => !/^[a-z0-9-]+==\d+(?:\.\d+)*$/.test(line))
+	if (loose.length > 0) throw new Error(`${file} pins inexactly: ${loose.join(", ")}`)
+	return Object.fromEntries(lines.map((line) => line.split("==")))
+}
+
+/** Whether dotted version `a` is at least `b`. */
+function atLeast(a: string, b: string): boolean {
+	const [x, y] = [a, b].map((v) => v.split(".").map(Number)) as [number[], number[]]
+	const at = x.findIndex((part, i) => part !== (y[i] ?? 0))
+	return at === -1 ? x.length >= y.length : (x[at] as number) > (y[at] ?? 0)
+}
 /* the steps that install what the files pin, from the files: the same commands a missing toolchain names */
 const UV_PIN = `"$(sed -n 's/^required-version = "==\\(.*\\)"$/\\1/p' uv.toml)"`
 const BOOTSTRAP = uvInstall(UV_PIN)
@@ -112,6 +134,18 @@ describe("the pins", () => {
 		expect(readFileSync(join(REPO, ".python-version"), "utf8")).toMatch(/^\d+\.\d+\.\d+\n?$/)
 		expect(readFileSync(join(REPO, "uv.toml"), "utf8")).toMatch(/^required-version = "==\d+\.\d+\.\d+"$/m)
 		expect([pinnedPython(), pinnedUv(), PY_FLOOR].filter((version) => !/^\d+\.\d+\.\d+$/.test(version))).toEqual([])
+	})
+
+	it("floor the interpreter at the minor every emitted package requires", () => {
+		expect(PY_FLOOR.split(".").slice(0, 2).join(".")).toBe(PYTHON_REQUIRES.replace(/^>=/, ""))
+	})
+
+	it("constrain the pin and the floor installs to one package set, exact, the floor at the declared httpx2 floor", () => {
+		const pin = constraints("constraints.txt")
+		const floor = constraints("constraints-floor.txt")
+		expect(floor.httpx2).toBe(HTTPX2_FLOOR)
+		expect(Object.keys(pin)).toEqual(Object.keys(floor))
+		expect(Object.keys(pin).filter((name) => !atLeast(pin[name] as string, floor[name] as string))).toEqual([])
 	})
 
 	it("pin every Python tool gen runs to an exact version", () => {
@@ -233,5 +267,76 @@ describe("what a run never does", () => {
 		expect(BOOTSTRAP).toContain('UV_TOOL_BIN_DIR="$HOME/.cache/honey-tmp/python/uv/bin" ')
 		expect(readdirSync(pythonCacheDir("pybin"))).toEqual([])
 		expect(linkedIntoCache()).toEqual([])
+	})
+})
+
+const PY_COMPILED = "src/emit/python/__fixtures__/compiled.ts"
+const PY_DRIVEN = "src/emit/python/__fixtures__/driven.ts"
+const RUST_COMPILED = "src/emit/rust/__fixtures__/compiled.ts"
+/* the fixture files that define the gates outside the registry */
+const DEFINING = [PY_COMPILED, PY_DRIVEN]
+/* the fixture documents a default run may gate (G17), each a FIXTURES entry (Fb14) */
+const FIXTURE_BUDGET = 16
+
+/* each gate outside the registry, by the module that exports it, and the files alone that may call it */
+const OUTSIDE_REGISTRY: readonly { readonly callers: RegExp; readonly module: string; readonly name: string }[] = [
+	/* any document past the budget: only the files that define the gates call it */
+	{ callers: /^$/, module: PY_COMPILED, name: "compiledFixture" },
+	/* harness mode alone, out of the default run (phase e) */
+	{
+		callers: /^tests\/integration\/(?:[^/]*harness[^/]*|conformance\/python)\.test\.ts$/,
+		module: PY_DRIVEN,
+		name: "servedPythonSdk",
+	},
+]
+
+/** The files in `files` calling a gate outside the registry they may not call. */
+const strayCompiles = (files: readonly { readonly path: string; readonly text: string }[]) =>
+	files
+		.filter(
+			({ path, text }) =>
+				!DEFINING.includes(path) &&
+				OUTSIDE_REGISTRY.some(
+					({ callers, module, name }) => callsOf(path, text, name).includes(module) && !callers.test(path),
+				),
+		)
+		.map(({ path }) => path)
+
+/** A file at `path` whose text imports `name` from gen-relative `module` and calls it. */
+const calling = (path: string, name: string, module: string) => ({
+	path,
+	text: `import { ${name} } from "./${relative(dirname(path), module)}"\nconst sdk = ${name}(document)`,
+})
+
+describe("the fixture documents a default run gates", () => {
+	it(`number at most ${FIXTURE_BUDGET}`, () => {
+		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
+	})
+
+	it("come only from the registry, except the harness files' served document", () => {
+		expect(strayCompiles(others())).toEqual([])
+	})
+
+	it("flag Python's served document anywhere but the harness files, and Python's any-fixture gate anywhere but its own files", () => {
+		expect(
+			strayCompiles([
+				calling("src/emit/python/x.test.ts", "servedPythonSdk", PY_DRIVEN),
+				calling("tests/integration/conformance/rust.test.ts", "servedPythonSdk", PY_DRIVEN),
+				calling("tests/integration/python-harness.test.ts", "servedPythonSdk", PY_DRIVEN),
+				calling("tests/integration/conformance/python.test.ts", "servedPythonSdk", PY_DRIVEN),
+				calling("tests/security/x.test.ts", "compiledFixture", PY_COMPILED),
+				calling("src/emit/python/__fixtures__/consumer.ts", "compiledFixture", PY_COMPILED),
+				/* Rust's own gate is its leg's to judge; Python's from Rust's fixture is a stray */
+				calling("src/emit/rust/__fixtures__/driven.ts", "compiledFixture", RUST_COMPILED),
+				calling("src/emit/rust/__fixtures__/driven.ts", "compiledFixture", PY_COMPILED),
+				{ path: "tests/security/note.test.ts", text: "/* compiledFixture(document) */ compiledFixture(document)" },
+			]),
+		).toEqual([
+			"src/emit/python/x.test.ts",
+			"tests/integration/conformance/rust.test.ts",
+			"tests/security/x.test.ts",
+			"src/emit/python/__fixtures__/consumer.ts",
+			"src/emit/rust/__fixtures__/driven.ts",
+		])
 	})
 })

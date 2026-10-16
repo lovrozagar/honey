@@ -182,6 +182,17 @@ describe("the default run's projects", () => {
 		const globs = Object.values(TOOLCHAIN_PROJECTS).flat()
 		expect(globs.filter((glob) => !runFiles.some((file) => matchesGlob(file, glob)))).toEqual([])
 	})
+
+	/* a fixture reaching another language's emitter would run it in this one's compiles and miss this one's cache key */
+	it.each(Object.keys(ENV) as Toolchain[])(
+		"keeps %s's compile fixtures off every other language's emit tree",
+		(name) => {
+			const fixtures = dirFiles(`src/emit/${name}/__fixtures__`).filter((file) => file.endsWith(".ts"))
+			const others = (Object.keys(ENV) as Toolchain[]).filter((other) => other !== name)
+			const reached = [...closure(fixtures, imports)]
+			expect(reached.filter((file) => others.some((other) => file.startsWith(`src/emit/${other}/`)))).toEqual([])
+		},
+	)
 })
 
 /** A test file `file` of project `name` in group `groupOrder`, as much of one as the sequencer reads. */
