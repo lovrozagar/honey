@@ -118,6 +118,34 @@ export function v1GoSdkSurfaces(clientGo: string): Map<string, string> {
 	return out
 }
 
+/**
+ * Each operation method of a v1 emitted Rust `src/client.rs` (bit 13, G13), as `generateRustSdk` writes it
+ * before rustfmt: its signature line without the indent and ` {`, then the `<Op>Opts` struct it takes with its
+ * field rustdoc (the method's rustdoc, lint allows and the struct's own doc and derive excluded, as godoc is for
+ * Go). Keyed `Type.method`. A method naming no Opts, or one the text never declares, throws: a missed block
+ * never measures short.
+ */
+export function v1RustSdkSurfaces(clientRs: string): Map<string, string> {
+	const blocks = new Map<string, string>()
+	for (const match of clientRs.matchAll(/^pub struct (\w+Opts) (?:\{\}|\{\n(?: {4}.*\n)*?\})$/gm))
+		blocks.set(match[1] as string, match[0])
+	const out = new Map<string, string>()
+	let type = ""
+	for (const line of clientRs.split("\n")) {
+		type = /^impl(?:<'a>)? (\w+)(?:<'[a_]>)? \{$/.exec(line)?.[1] ?? type
+		const name = /^ {4}pub fn ((?:r#)?\w+)\(&self.*\) -> Call<.*\{$/.exec(line)?.[1]
+		if (name === undefined) continue
+		const key = `${type}.${name}`
+		const signature = line.trim().slice(0, -" {".length)
+		const opts = /\b_?opts: &(\w+Opts)\b/.exec(signature)?.[1]
+		if (opts === undefined) throw new Error(`${key} takes no Opts`)
+		const block = blocks.get(opts)
+		if (block === undefined) throw new Error(`${key} takes ${opts}, which is never declared`)
+		out.set(key, `${signature}\n${block}`)
+	}
+	return out
+}
+
 const HELP_FIELD = /^\s*(?:Use|Short|Long|Example):\s+("(?:[^"\\]|\\.)*")/
 const FLAG = /\.Flags\(\)\.\w+\((?:&\w+,\s*)?"([^"]+)",\s*[^,]*,\s*("(?:[^"\\]|\\.)*")\)/
 const REQUIRED = /\.MarkFlagRequired\("([^"]+)"\)/

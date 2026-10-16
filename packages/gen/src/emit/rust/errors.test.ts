@@ -134,14 +134,11 @@ async function refused(sdk: DrivenRustSdk, calls: readonly Call[]) {
 type Traced = Trace<RustError>["calls"][number]
 const errorsOf = (calls: readonly Traced[] | undefined) => (calls ?? []).map((c) => c.error)
 const shape = (e: RustError | undefined) => [e?.variant, e?.status, e?.source, e?.via]
-
 /** A Rust error as the trace records it: no source and the method's own Err unless given, any Debug text. */
 const plain = (entry: Partial<RustError>) => ({ debug: expect.any(String), source: false, via: "return", ...entry })
-
 /** An error status with no key, its body `{"message": message}`, as the trace records it. */
 const unkeyed = (status: number, kind: string, text: string, message = "m") =>
 	plain({ key: null, keyVariant: "None", kind, message, status, text, variant: "Api" })
-
 /** An error status as the driver observes it, for a `{"message": "m"}` body. */
 const failed = (status: number) => ({ body: { message: "m" }, errorKey: null, kind: "error", status })
 const answer = (status: number): Reply => ({ json: { message: "m" }, status })
@@ -410,7 +407,10 @@ describe.skipIf(!RUST)("ApiError, ErrorKind and ErrorKey from a consumer program
 		})
 	}, 600_000)
 
-	// v0: 0ba8f85a31, 678b56b4d2, 661b2b03d8, 099f5c479f
+	// v0: 0ba8f85a31
+	// v0: 678b56b4d2
+	// v0: 661b2b03d8
+	// v0: 099f5c479f
 	it("spells each key as the wire does, reads key() and the envelope, and decodes a key's body into its type", async () => {
 		/* G6: v0's UsersCreateErr400 struct and per-op error enums are the envelope() and key() of one ApiError */
 		const { run, wire } = await errorsConsumer()
@@ -485,7 +485,8 @@ const SAFE = sections({
 })
 
 describe.skipIf(!RUST)("SdkResult from a consumer program (fixtures-safe)", () => {
-	// v0: d59d370556, 97f98d4e97
+	// v0: d59d370556
+	// v0: 97f98d4e97
 	it("holds a 400 as error with its kind, key and envelope, a 201 as data, is_ok() and the raw response in both", async () => {
 		/* Fc5: v0's ok() is is_ok() (std's ok() is Option<T>), its response restored; G16: no SdkResult<T, E> */
 		const user: Reply = { json: { email: "a@x.test", id: "u1" }, status: 201 }

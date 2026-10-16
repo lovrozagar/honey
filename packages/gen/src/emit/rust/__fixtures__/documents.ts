@@ -14,6 +14,7 @@ import formBody from "../../../ir/__fixtures__/specs/rust/form-body.json" with {
 import realtimeLongpoll from "../../../ir/__fixtures__/specs/rust/realtime-longpoll.json" with { type: "json" }
 import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" with { type: "json" }
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
+import { adversarialCorpus } from "../../shared/__fixtures__/adversarial-corpus.ts"
 import type { RustSdkOptions } from "../sdk.ts"
 import { errors, http } from "./documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
@@ -115,6 +116,9 @@ function fixtures(): Json {
 
 /** Every crate a default run compiles: at most 16 (G17; tests/structure/rust-toolchain.test.ts). */
 export const FIXTURES = {
+	/** 60586125be's (and Go's 4eba1d1639's) adversarial corpus, both modes: every hostile name a Rust identifier (phase f) */
+	adversarial: { document: adversarialCorpus },
+	"adversarial-safe": { document: adversarialCorpus, options: { throwOnError: false } },
 	/** the compile cache's self-test (Fb8): a dependency-free crate at the floor's `rust-version`, its lock as cargo writes it */
 	cache: {
 		files: {

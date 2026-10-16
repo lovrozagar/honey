@@ -19,22 +19,39 @@ const V1_ROOTS = [
 	"packages/gen/tests",
 ]
 const TAG = /\/\/ v0: ([0-9a-f]{10})\b/g
+/** A `// v0:` line carrying a second id: TAG reads only the first, so the rest would silently drop — one id per line. */
+const MULTI_TAG = /\/\/ v0: [0-9a-f]{10}\b[ ,]+[0-9a-f]{10}\b/
 
 type Inventory = { cases: V0Case[]; reassigned: Record<string, Reassignment>; retired: Record<string, string> }
 
 const inventory = JSON.parse(readFileSync(join(REPO, "blueprint/baselines/v0-cases.json"), "utf8")) as Inventory
 const known = new Set(inventory.cases.map((c) => c.id))
 
-function portedIds(): Set<string> {
-	const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", ...V1_ROOTS], {
+function taggableFiles(): string[] {
+	return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", ...V1_ROOTS], {
 		cwd: REPO,
 		encoding: "utf8",
 	})
 		.split("\n")
 		.filter((f) => f.endsWith(".ts"))
+}
+
+function portedIds(): Set<string> {
 	return new Set(
-		files.flatMap((f) => [...readFileSync(join(REPO, f), "utf8").matchAll(TAG)].map((m) => m[1] as string)),
+		taggableFiles().flatMap((f) => [...readFileSync(join(REPO, f), "utf8").matchAll(TAG)].map((m) => m[1] as string)),
 	)
+}
+
+function multiIdTagLines(): string[] {
+	const bad: string[] = []
+	for (const f of taggableFiles()) {
+		readFileSync(join(REPO, f), "utf8")
+			.split("\n")
+			.forEach((line, i) => {
+				if (MULTI_TAG.test(line)) bad.push(`${f}:${i + 1}`)
+			})
+	}
+	return bad
 }
 
 describe(`v0 cases accounted for through bit ${String(COMPLETE).padStart(2, "0")}`, () => {
@@ -45,6 +62,10 @@ describe(`v0 cases accounted for through bit ${String(COMPLETE).padStart(2, "0")
 
 	it("every port tag names a real v0 case", () => {
 		expect([...portedIds()].filter((id) => !known.has(id))).toEqual([])
+	})
+
+	it("tags at most one v0 id per line (the gate reads only the first; a second would silently drop)", () => {
+		expect(multiIdTagLines()).toEqual([])
 	})
 
 	it("every retirement and reassignment names a real v0 case", () => {

@@ -105,3 +105,23 @@ export const GO_LEAKY_LOG = [
 		'Event: "response_received", Operation: x.c.method + " " + result.resp.Request.URL.String() + " " + result.resp.Request.Header.Get("Authorization"),',
 	],
 ] as const
+
+/* a Rust cross-origin hop that keeps every header: the allowlist made, then merged back over what it strips (the same-origin refusal stays) */
+export const RUST_KEEP_CROSS_ORIGIN_HEADERS = [
+	["redirect.rs", "        hop.headers = kept;\n", "        hop.headers.extend(kept);\n"],
+] as const
+
+/* a Rust path param written with `/` and dot segments as they came: no refusal, no encoded slash */
+export const RUST_RAW_PATH_PARAMS = [
+	["path.rs", 'if value.is_empty() || value == "." || value == ".." {', "if false {"],
+	["path.rs", "Ok(escape_segment(value))", 'Ok(escape_segment(value).replace("%2F", "/"))'],
+] as const
+
+/* a Rust log entry naming the filled path, the query and the token instead of METHOD /template */
+export const RUST_LEAKY_LOG = [
+	[
+		"exchange.rs",
+		"CallLog::new(inner.on_log.as_ref(), spec.operation())",
+		'CallLog::new(inner.on_log.as_ref(), format!("{} {}?{:?} {:?}", spec.method, spec.path, spec.query, inner.auth.current().await))',
+	],
+] as const

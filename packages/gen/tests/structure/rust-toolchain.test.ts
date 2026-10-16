@@ -2,8 +2,9 @@
  * Toolchain parity (G10) for Rust: gen runs Rust only through `src/emit/rust/__fixtures__/rust-env.ts`,
  * under the channel `rust-toolchain.toml` pins, and CI installs that channel from the file, so a local run
  * and a CI run compile with the same rustc to the patch. Unlike Go's, importing the env file does not
- * license a raw spawn: every cargo, rustc and rustfmt goes through its runners. Only the mutation harness
- * compiles a crate outside the fixture registry (G17), and only the harness files the served document (Fe1).
+ * license a raw spawn: every cargo, rustc and rustfmt goes through its runners. No compile outside the
+ * registry (G17) but the harness files' served document (Fe1): a mutant reaches the registry crates through
+ * the mock of the runtime reader, so it compiles no document of its own.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
@@ -171,7 +172,8 @@ describe("the toolchains a run compiles with", () => {
 
 /* each compile outside the registry, and the files alone that may call it */
 const OUTSIDE_REGISTRY: readonly { readonly callers: RegExp; readonly name: string }[] = [
-	{ callers: /^tests\/structure\/mutation-harness[^/]*\.ts$/, name: "mutantRustSdk" },
+	/* any document past the budget: only the files that define the compiles call it */
+	{ callers: /^$/, name: "compiledFixture" },
 	/* harness mode alone, out of the default run (contract 21 Fe1) */
 	{
 		callers: /^tests\/integration\/(?:[^/]*harness[^/]*|conformance\/rust)\.test\.ts$/,
@@ -197,11 +199,11 @@ describe("the fixture documents a default run compiles", () => {
 		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
 	})
 
-	it("come only from the registry, except the mutation harness's guard mutants and the harness files' served document", () => {
+	it("come only from the registry, except the harness files' served document", () => {
 		expect(strayCompiles(others())).toEqual([])
 	})
 
-	it("flags a served-document or guard-mutant compile from any file but the ones each is for", () => {
+	it("flags a served-document compile from any file but the harness files, and an any-fixture compile from any file but its own", () => {
 		expect(
 			strayCompiles([
 				calling("src/emit/rust/x.test.ts", "servedRustSdk"),
@@ -210,15 +212,15 @@ describe("the fixture documents a default run compiles", () => {
 				calling("tests/integration/conformance/rust.test.ts", "servedRustSdk"),
 				calling("src/emit/rust/__fixtures__/driven.ts", "servedRustSdk"),
 				calling("tests/structure/mutation-harness.rust.ts", "servedRustSdk"),
-				calling("tests/structure/mutation-harness.rust.ts", "mutantRustSdk"),
-				calling("tests/integration/rust-harness.test.ts", "mutantRustSdk"),
+				calling("tests/security/x.test.ts", "compiledFixture"),
+				calling("src/emit/rust/__fixtures__/driven.ts", "compiledFixture"),
 				calling("src/emit/rust/x.test.ts", "servedRustSdkish"),
 			]),
 		).toEqual([
 			"src/emit/rust/x.test.ts",
 			"tests/integration/conformance/go.test.ts",
 			"tests/structure/mutation-harness.rust.ts",
-			"tests/integration/rust-harness.test.ts",
+			"tests/security/x.test.ts",
 		])
 	})
 })

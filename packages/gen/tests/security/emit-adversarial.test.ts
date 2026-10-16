@@ -15,8 +15,8 @@ import type { Script } from "../../src/emit/shared/__fixtures__/protocol.ts"
 import { withGo } from "../../src/emit/go/__fixtures__/go-env.ts"
 import { type Reply, served } from "../../src/emit/shared/__fixtures__/recording-server.ts"
 import type { Call, Setup } from "../integration/conformance/matrix.ts"
-import { guardNamed } from "../structure/mutation-harness.ts"
-import { CORPUS } from "./adversarial-corpus.ts"
+import { guardNamed } from "../structure/mutation-harness.guards.ts"
+import { adversarialCorpus } from "../../src/emit/shared/__fixtures__/adversarial-corpus.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
 const GO = withGo()
@@ -375,7 +375,7 @@ describe.skipIf(!GO)("gen adversarial: the Go SDK emitter", () => {
 	// v0: 4eba1d1639
 	it("vets clean in both throwOnError modes, every hostile name a Go identifier and every value a literal", () => {
 		const modes = [true, false].map((throwOnError) => ({
-			go: compileGo(generateGoSdk(CORPUS, { modulePath: "example.com/adversarial", throwOnError }).files),
+			go: compileGo(generateGoSdk(adversarialCorpus(), { modulePath: "example.com/adversarial", throwOnError }).files),
 			throwOnError,
 		}))
 		expect(

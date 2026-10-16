@@ -18,7 +18,6 @@ export const GO = [
 	"src/emit/shared/escape.test.ts",
 	"src/emit/shared/gofmt.test.ts",
 	"tests/security/emit-adversarial.test.ts",
-	"tests/structure/mutation-harness.test.ts",
 ]
 
 /**
@@ -30,6 +29,8 @@ export const RUST = [
 	"src/emit/rust/**/*.test.ts",
 	"src/emit/shared/rustfmt.test.ts",
 	"src/emit/shared/*.toolchains.test.ts",
+	"tests/security/emit-adversarial.rust.test.ts",
+	"tests/structure/mutation-harness.test.ts",
 	"tests/structure/rust-toolchain.test.ts",
 ]
 

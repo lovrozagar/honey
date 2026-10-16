@@ -8,7 +8,7 @@ import type { IR, IRNamespace } from "../../ir/model.ts"
 import { methodsOf, namespacesOf } from "../../ir/resource-tree.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { lineComment, rustString } from "../shared/escape.ts"
-import { compareCodeUnits, NameScope, pascalWords, rustValueIdent } from "../shared/lang.ts"
+import { compareCodeUnits, NameScope, rustTypeIdent, rustValueIdent } from "../shared/lang.ts"
 import type { RustCallPlan } from "./sdk-plan.ts"
 import { type MethodEnv, type RustMethod, rustMethod } from "./sdk-method.ts"
 
@@ -33,7 +33,8 @@ function resourceOf(ns: IRNamespace, path: readonly string[], type: string, env:
 	const children = namespacesOf(ns).map(([segment, child]) => {
 		const accessor = scope.claim(rustValueIdent(segment))
 		const childPath = [...path, segment]
-		const childType = env.at.names.claim(`${childPath.map(pascalWords).join("")}Resource`)
+		/* the type rule over the whole name: a leading digit gets its guard, and `self` stays `SelfResource` */
+		const childType = env.at.names.claim(rustTypeIdent([...childPath, "Resource"].join(".")))
 		return { accessor, node: resourceOf(child, childPath, childType, env) }
 	})
 	const methods = methodsOf(ns).map(([segment, op]) =>

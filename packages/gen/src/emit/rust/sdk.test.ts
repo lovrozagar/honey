@@ -194,6 +194,27 @@ const COLLISION: Json = {
 	),
 }
 
+/** A group whose name starts with a digit, beside one whose plain name is the digit guard's spelling. */
+const DIGIT_GROUP: Json = {
+	info: { title: "Digits", version: "1" },
+	openapi: "3.1.0",
+	paths: Object.fromEntries(
+		["2fa", "n2fa"].map((group) => [
+			`/${group}`,
+			{ get: { operationId: `${group}.get`, responses: { 204: { description: "done" } } } },
+		]),
+	),
+}
+
+/** client.rs's accessors as `name -> Type`, and the resource structs it declares. */
+function resources(document: Json) {
+	const client = generateRustSdk(document).files["src/client.rs"] ?? ""
+	return {
+		accessors: [...client.matchAll(/pub fn (\S+)\(&self\) -> (\S+)<'_>/g)].map(([, fn, type]) => `${fn} -> ${type}`),
+		structs: [...client.matchAll(/pub struct (\S+Resource\S*)</g)].map(([, type]) => type),
+	}
+}
+
 /** Every document the crate is emitted for in the determinism check, with its options. */
 const DOCUMENTS: (readonly [name: string, document: Json, options: RustSdkOptions])[] = [
 	...Object.entries({
@@ -324,6 +345,13 @@ describe("generateRustSdk: determinism and conflicts", () => {
 	// v0: 29fdf37e42
 	it("refuses an id that is both callable and a namespace, naming both ids", () => {
 		expect(() => generateRustSdk(COLLISION)).toThrow(/operationId conflict.*users\.create.*users\.create\.draft/)
+	})
+
+	it("guards a group's leading digit in its accessor and its resource type, the type claimed beside the guard's own spelling", () => {
+		expect(resources(DIGIT_GROUP)).toEqual({
+			accessors: ["_2fa -> N2faResource", "n2fa -> N2faResource2"],
+			structs: ["N2faResource", "N2faResource2"],
+		})
 	})
 })
 
