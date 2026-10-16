@@ -271,6 +271,7 @@ src/emit/shared/type-emitter.ts	gen	src	09	shared type emission	type-emitter.ts
 src/emit/shared/type-emitter.vendors.test.ts	gen	test	09	v0 per-vendor type cases (F7): each vendor's JSON Schema from core jsonSchemaOf → IR → TypeScript, wire truth; the 160-tag it.each table, too large to sit beside type-emitter.test's mechanics	type-emitter.ts,ts-type-emitter.ts
 src/emit/shared/format.ts	gen	src	11	formatter post-pass dispatch (gofmt/rustfmt/ruff/…)	—
 src/emit/shared/gofmt.ts	gen	src	12	the gofmt Formatter adapter (G10): resolves gofmt from the pinned GOROOT and runs it through goEnv(); mandatory in publish CI, valid-but-unformatted fallback when the toolchain is absent	codegen-go.ts
+src/emit/shared/rustfmt.ts	gen	src	13	the rustfmt Formatter adapter (R2, key rs): the caller passes the pinned toolchain's rustfmt (rust-env's rustfmtPath in tests), --edition 2024 and --config-path os.devNull so no ancestor or user rustfmt.toml applies; a parse error or a rustfmt that cannot run is an error	codegen-rust.ts
 src/emit/shared/status-keys.ts	gen	src	11	the code → status-key table (STATUS_KEYS), the gen-local mirror of core's statusKeyToCode; type-gen's output keys by status key read it. A core drift leg (codegen-tables.test) pins it equal to core	client/types.ts
 src/emit/shared/status-keys.test.ts	gen	test	11	STATUS_KEYS maps each HTTP status code to its status key; unknown codes fall back by class, and the table is complete over the codes core emits	client/types.ts
 src/emit/shared/webhooks.ts	gen	src	10	webhook verify-helper emitter: language-agnostic constant-time HMAC from x-honey-signature via F2 (F11); the typed payload parser is per-SDK (bits 11-16)	—
@@ -357,10 +358,32 @@ src/emit/shared/__fixtures__/stream-server.ts	gen	test	12	in-process SSE + RFC 6
 src/emit/shared/__fixtures__/ws-frames.ts	gen	test	12	the RFC 6455 Sec-WebSocket-Accept key + frame encode/decode with violation checks, split from stream-server.ts at the 300 cap	—
 src/emit/shared/__fixtures__/protocol.ts	gen	test	12	the language-neutral driver protocol contract (moved from the Go driver, R8): TS/serde mirrors of stdin {cell, plans, base, alt, script?} and stdout Observed[]/trace; each target's driver speaks it — the Go reflection driver, the Rust generated dispatch	—
 src/emit/go/__fixtures__/driver/	gen	test	12	the G8/G11 Go reflection driver (.go files: main/invoke/observe/live/socket/script/stream/trace); drives SSE/WS/realtime streams, opt-in log-duration/envelope trace fields, and Fe1's untypedOf (an error-only op's WithResponseInto body as JSON/text/null); the stdin/stdout contract it speaks lives in the shared protocol.ts; refuses only what the grid can't express	—
+src/emit/rust/sdk.driver.test.ts	gen	test	13	the Rust compile cache (one compile per content hash, no cargo on a hit), programs as bins in a crate copy, clippy and the RUST_FLOOR check, dispatchRs, rustCallPlans names, the driver smoke and a consumer program	—
+src/emit/rust/sdk.calls.test.ts	gen	test	13	the §8.5 call surface through consumer programs (G1 signatures, the Fb1 Call builder: per-call header, base_url, timeout, cancel_on, spawn, with_response, the with_headers E0599 refusal, #[must_use]; Client::new and Error::Config incl. a relative server; throw vs safe)	codegen-rust.ts
+src/emit/rust/sdk.bodies.test.ts	gen	test	13	text, binary and typed-header answers; binary, text, string and list bodies; the 401 retry resending an in-memory body and never re-sending a streamed one (a real bug, red first); the Opts and SSE types	codegen-rust.ts
+src/emit/rust/format.test.ts	gen	test	13	§8.7: every emitted file rustfmt- and clippy-clean on the pin, valid without rustfmt, plus the floor check	codegen-rust.ts
 src/emit/rust/__fixtures__/rust-env.ts	gen	test	13	toolchain-parity fixture (G10): rustEnv (RUSTUP_TOOLCHAIN from rust-toolchain.toml, RUSTUP_AUTO_INSTALL=0, CARGO_HOME/target under the home cache dir), runCargo, runRustc, runRustfmt, rustfmtPath from the sysroot, RUST_FLOOR, withRust/rustRequired gate	—
-src/emit/rust/sdk.ts	gen	src	13	Rust SDK	codegen-rust.ts
+src/emit/rust/__fixtures__/compiled.ts	gen	test	13	compiledRust and drivenRustSdk: one compile per content hash under the home cache, no cargo on a cache hit, --locked --offline after one fetch, floor and clippy options, programs as bins in a crate copy (Fb6)	—
+src/emit/rust/__fixtures__/consumer.ts	gen	test	13	Rust consumer programs with opt-in use imports and sections(), compiled against a copy of the emitted crate	—
+src/emit/rust/__fixtures__/documents.ts	gen	test	13	the typed FIXTURES registry within the ≤16-document budget (Fb5, 7 documents): the v0 Rust fixtures merged, `relative` (servers[0] "/api"), plus the cache and canary crates	—
+src/emit/rust/__fixtures__/documents-specs.ts	gen	test	13	the hand-written surface (with its edge ops) and types fixture documents, plus `relative`; split from documents.ts for the 300 cap	—
+src/emit/rust/__fixtures__/dispatch.ts	gen	test	13	dispatchRs: the generated dispatch.rs, one match arm per call plan, safe mode through observe_safe	—
+src/emit/rust/__fixtures__/driver/	gen	test	13	the Rust driver (main, protocol, apply, observe .rs): speaks the shared protocol and refuses what phases c and d deliver	—
+src/emit/rust/sdk.ts	gen	src	13	Rust SDK emitter entry (the one IR reader; also yields the Cargo.lock template and publicItems); splits below	codegen-rust.ts
 src/emit/rust/types.ts	gen	src	13	Rust types	rust-type-emitter.ts
-src/emit/rust/http.ts	gen	src	13	Rust reqwest client	codegen-rust.ts
+src/emit/rust/types-names.ts	gen	types	13	crate-level names for the type surface: components claimed in code-unit order clear of the runtime's pub items and the prelude (<Name>Model, H52), hoists and client declarations claimed after them, the value-cycle set; split from types.ts, covered by the type tests; runtimeIdentifiers() reads runtimeFiles (A's seam)	rust-type-emitter.ts
+src/emit/rust/types-struct.ts	gen	types	13	struct emission: fields sorted by key, rustValueIdent with a rename only where it differs, Option + skip, the tri-state Option<Option<T>>, the allOf and extra flattens; split from types.ts	rust-type-emitter.ts
+src/emit/rust/types-enum.ts	gen	types	13	string enums (claimed variants, Empty/SelfValue, #[default]) and repr(i64) integer enums with hand-written serde (G9); split from types.ts	rust-type-emitter.ts
+src/emit/rust/types-union.ts	gen	types	13	untagged unions (Variant<i>, Literal over a hoisted string enum) and discriminated unions with payload-keeping hand-written serde and Unknown; split from types.ts	codegen-rust.ts
+src/emit/rust/types.compiled.test.ts	gen	test	13	emitted Rust types compiled + run (contract §8.3): the types registry crate builds as emitted and a consumer decodes/encodes each category through serde_json — tri-state, reachable literal, empty closed object, boxed cycle, payload-keeping discriminator, raw identifiers, integer enum, extra flatten, unique enum labels	codegen-rust.ts
+src/emit/rust/types.structs.test.ts	gen	test	13	the Rust top-level rows: enums, consts, struct fields, flattens, cycles, aliases, unions, claimed and hoisted names	rust-type-emitter.ts
+src/emit/rust/types.decls.test.ts	gen	test	13	the Rust declaration rows past the ported ones: enum spellings, discriminated variant naming and one arm per value, runtime/prelude-claimed names (<Name>Model, …2)	—
+src/emit/rust/sdk-plan.ts	gen	types	13	RustCallPlan, the type-only call plan dispatch.rs is generated from	—
+src/emit/rust/sdk-cargo.ts	gen	types	13	RUST_VERSION and EDITION; crate name and version validation (the version lands in a TOML string, so it is validated against injection); cargoToml (Fb7 caret floors at the locked versions, Fb3 tokio-tungstenite only for ws/realtime); cargoLock (the template root rewrite, the Fb3 prune, collapsing "name version" refs to "name" when one version remains, as cargo does)	codegen-rust.ts
+src/emit/rust/sdk-client.ts	gen	types	13	Client::new → Result with the servers[0] default and Error::Config (a server-less spec or an unparseable or relative base_url); <Path>Resource<'a> structs and accessors from IR.tree; Opts and Headers in name order	codegen-rust.ts
+src/emit/rust/sdk-method.ts	gen	types	13	one method (its owning Call<T, H>, its run and body) and its RustCallPlan	codegen-rust.ts
+src/emit/rust/sdk-opts.ts	gen	types	13	<Op>Opts (the Default rule, the stream fields, idempotency_key) and <Op>Headers with FromHeaders	codegen-rust.ts
+src/emit/rust/http.ts	gen	src	13	Rust reqwest client (the exchange + send pipeline)	codegen-rust.ts
 src/emit/rust/sse.ts	gen	src	13	Rust SSE	codegen-rust.ts
 src/emit/rust/ws.ts	gen	src	13	Rust WebSocket	codegen-rust.ts
 src/emit/rust/errors.ts	gen	src	13	Rust errors	codegen-rust.ts
@@ -436,7 +459,7 @@ tests/integration/ts-harness.pipeline.test.ts	gen	test	11	ts-harness split (Q4, 
 # vendored runtime templates (H9) — one subtree per language, each with its own sibling golden-output test (bits 11–18):
 src/runtime/ts/*	gen	runtime	11	vendored TS fetch runtime template	client/*
 src/runtime/go/*	gen	runtime	12	vendored Go net/http runtime template	client-go/*
-src/runtime/rust/*	gen	runtime	13	vendored Rust reqwest runtime template	client-rust/*
+src/runtime/rust/*	gen	runtime	13	vendored Rust reqwest runtime template (contract §10.1): exchange.rs and the send pipeline split out of request.rs at the 300 cap	client-rust/*
 src/runtime/python/*	gen	runtime	14	vendored Python httpx runtime template	client-python/*
 src/runtime/csharp/*	gen	runtime	15	vendored C# BCL runtime template	—
 src/runtime/java/*	gen	runtime	16	vendored Java HttpClient+Jackson runtime template	—
@@ -501,6 +524,7 @@ bench/src/websockets.ts	core	test	06	ws/realtime gate, v1 vs v0 in-process under
 bench/src/middleware.ts	core	test	07	edge-middleware gate: v1-vs-v0 interleaved in-process (+10%, no baseline, like streaming/websockets) one scenario per v0-counterpart middleware (requestId/secureHeaders/cors/csrf/timeout/serverTiming/poweredBy/ipRestrict) + stack-8; rateLimit + compress (A5/A6, no v0) gated as a ratio over the bare v1 route against per-runtime-minor ceilings in baselines/middleware.json + stack-10	—
 scripts/capture-token-budget.ts	gen	script	00	run the tokenizer over v0 output → write the tokens baseline ceilings; bit 12 adds v1GoSdkSurfaces (per-op signature + XOpts, throws on an undeclared Opts type), the G13 Go ceiling, and the G14 runtime-byte measurement	—
 scripts/capture-token-budget.test.ts	gen	test	00	the pure token-count + ceiling-math over fixtures (00-rules requires a sibling test for a script row); bit-12 Go gates: GO_SDK_CEILING 94 (measured max 78 + 20%, per-language rule in comment) and the G14 byte gate asserting 89,964 under 90,000 with the named-feature rationale; TS gates + sdkCli 234 unchanged	—
+scripts/rust-lock.ts	gen	script	13	writes the Cargo.lock template the emitter rewrites (sdk-cargo's cargoToml resolved by cargo under the pinned toolchain → src/runtime/rust/Cargo.lock); a one-shot generator with no pure logic of its own — cargoToml is covered in sdk-cargo, the lock downstream by cargoLock/format/compiled — run after a dependency change (Fb7)	—
 blueprint/baselines/oracle-baseline.txt	core	corpus	00	committed oracle count (stepped 6767−N) the oracle-count test asserts	—
 blueprint/baselines/perf-baseline.txt	core	corpus	00	committed perf notes (this-machine ratios; CI-runner is the real home)	—
 blueprint/baselines/hotpath.json	core	corpus	00	committed hotpath baseline (11 scenarios, this machine, named as such) — hotpath.ts reads it	bench/hotpath-baseline.json

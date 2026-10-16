@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import type { Call, Observed, WireHop } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk, type DriverRun } from "./__fixtures__/compiled.ts"
+import { compiledSdk, compileGo, type DrivenSdk, type DriverRun } from "./__fixtures__/compiled.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
-import { goCallPlans } from "./sdk.ts"
+import { generateGoSdk, goCallPlans } from "./sdk.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
 const GO = withGo()
@@ -386,5 +386,16 @@ goDescribe("the Go test driver: what it cannot express", () => {
 			status: 1,
 			stderr: expect.stringMatching(/orgs\.members\.notes\.create.*honey: decode response/),
 		})
+	}, 600_000)
+})
+
+goDescribe("the compile fixture: a check program's stdin", () => {
+	it("runs a program that never reads its stdin, however large the input, its exit status the answer", async () => {
+		const sdk = compileGo(generateGoSdk(NOTES, { modulePath: "example.com/notes" }).files, {
+			main: "package main\n\nfunc main() {}\n",
+		})
+		expect(sdk.built, sdk.stderr).toBe(true)
+		/* more than a pipe holds: the program exits before the write ends, which must not surface as EPIPE */
+		expect(await sdk.exec("x".repeat(4 << 20))).toEqual({ status: 0, stderr: "", stdout: "" })
 	}, 600_000)
 })

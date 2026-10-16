@@ -49,10 +49,12 @@ describe("string literals: one escaper, one policy per target", () => {
 		)
 	})
 
+	// v0: 658babeb20
 	it("Rust: named escapes and \\0, \\u{H} for other control code points and the BOM", () => {
 		expect(rustString(nasty)).toBe(
 			'"q\\"b\\\\n\\nr\\rt\\tz\\0d\\u{7f} e\\u{01} \uFFFD \u2028\u2029\u0085\\u{feff} \u{1F600}"',
 		)
+		expect(rustString("\b\f\u0001")).toBe('"\\u{08}\\u{0c}\\u{01}"')
 	})
 
 	it("Python: \\xHH for control bytes, and line separators, NEL and the BOM as \\uHHHH", () => {

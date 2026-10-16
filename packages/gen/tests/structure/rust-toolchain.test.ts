@@ -8,7 +8,9 @@
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { FIXTURES } from "../../src/emit/rust/__fixtures__/documents.ts"
 import * as env from "../../src/emit/rust/__fixtures__/rust-env.ts"
+import { RUST_VERSION } from "../../src/emit/rust/sdk-cargo.ts"
 
 const { RUST_FLOOR, pinnedRust, runRustc, withRust } = env
 
@@ -17,6 +19,8 @@ const ROOTS = ["src", "tests", "scripts"]
 const SELF = "tests/structure/rust-toolchain.test.ts"
 const ENV = "src/emit/rust/__fixtures__/rust-env.ts"
 const COMPILED = "src/emit/rust/__fixtures__/compiled.ts"
+/* the fixture documents a default run may compile (G17), each a FIXTURES entry (Fb5) */
+const FIXTURE_BUDGET = 16
 
 /* a spawn of a Rust tool, or a list of commands whose entry starts with one (a list of language names is not one) */
 const RUST_COMMAND =
@@ -158,9 +162,17 @@ describe("the toolchains a run compiles with", () => {
 		vi.stubEnv("HONEY_REQUIRE_RUST", "1")
 		expect(() => withRust("0.0.0")).toThrow("rustup toolchain install 0.0.0 --profile minimal")
 	})
+
+	it("floors at the x.y.0 of the rust-version every emitted crate declares", () => {
+		expect(RUST_FLOOR).toBe(`${RUST_VERSION}.0`)
+	})
 })
 
 describe("the fixture documents a default run compiles", () => {
+	it(`number at most ${FIXTURE_BUDGET}`, () => {
+		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
+	})
+
 	it("come only from the registry, except the mutation harness's guard mutants", () => {
 		const callers = others().filter(({ path, text }) => path !== COMPILED && /\bmutantRustSdk\b/.test(text))
 		expect(

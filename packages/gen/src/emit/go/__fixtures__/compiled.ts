@@ -109,6 +109,9 @@ function execIn(dir: string, input: string): Promise<Ran> {
 		child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()))
 		child.once("error", reject)
 		child.once("close", (status) => resolve({ status: status ?? 1, stderr, stdout }))
+		child.stdin.on("error", () => {
+			/* a program that exits without reading all its input: its exit status answers */
+		})
 		child.stdin.end(input)
 	})
 }

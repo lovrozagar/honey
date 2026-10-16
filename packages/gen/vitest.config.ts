@@ -26,7 +26,12 @@ export const GO = [
  * imports. They run as the `rust` project, held to that as `GO` is. A file that reaches Go too runs here, in the
  * later group, where no other language runs beside it.
  */
-export const RUST = ["src/emit/shared/*.toolchains.test.ts", "tests/structure/rust-toolchain.test.ts"]
+export const RUST = [
+	"src/emit/rust/**/*.test.ts",
+	"src/emit/shared/rustfmt.test.ts",
+	"src/emit/shared/*.toolchains.test.ts",
+	"tests/structure/rust-toolchain.test.ts",
+]
 
 /**
  * Each language toolchain's project, in the order their `sequence.groupOrder` groups run, one language group at

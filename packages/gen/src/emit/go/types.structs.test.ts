@@ -349,6 +349,13 @@ describe("goTopLevel: refs and cycles", () => {
 			title: "a self-referencing field is a pointer to the component",
 			type: struct("Comment", 'Parent *Comment `json:"parent,omitempty"`'),
 		},
+		// v0: fdac715f3f
+		{
+			components: { A: { properties: { b: ref("B") } }, B: { properties: { a: ref("A") } } },
+			name: "A",
+			title: "a field on a mutual-recursion cycle is a pointer",
+			type: struct("A", 'B *B `json:"b,omitempty"`'),
+		},
 	])("$title", (row) => {
 		expect(top(row)).toEqual(declaredAs(row))
 	})

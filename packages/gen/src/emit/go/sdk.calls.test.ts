@@ -301,6 +301,7 @@ goDescribe("Go names that never collide, called from a consumer program", () => 
 	}, 600_000)
 
 	// v0: 6c7134e410
+	// v0: 2777cd92ec
 	it("exports resources and actions named like Go keywords, with keyword and package-named path params", () => {
 		const run = names()
 		expect(seen(run, "keywords"), run.stderr).toEqual({
