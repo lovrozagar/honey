@@ -2,14 +2,15 @@
  * Emitted Go, compiled: the files an emitter writes land under
  * `$HOME/.cache/honey-tmp/go/sdk/<content hash>/` and are built and vetted with the pinned toolchain
  * (go-env), so a test proves the text it asserts is Go the pinned compiler accepts — vet included,
- * which is what enforces the module's `go` floor. An optional consumer program (`main`, under
+ * which is what enforces the module's `go` floor. A floor leg passes `toolchain: GO_FLOOR` to build
+ * and vet under that oldest admitted Go itself. An optional consumer program (`main`, under
  * `cmd/check`) is built beside the SDK into one binary per content hash, run as is.
  *
  * `compiledSdk` is that with the test driver (`driver/*.go`, G8.3-4) as the program: the unit
  * behavior tests, the conformance runner and the harness run cells through it by the emitter's own
- * call plans (`goCallPlans`), one process per cell, `Observed[]` back. A unit test may add a
- * `Script` (client extras, recorders, per-call directives, stream controls) and gets a `Trace`
- * beside the observed. `drivenSdk` is the same over given files and plans.
+ * call plans (`goCallPlans`), one process per cell, `Observed[]` back. A unit test or the harness
+ * may add a `Script` (client extras, recorders, per-call directives, stream controls, opt-in trace
+ * members) and gets a `Trace` beside the observed. `drivenSdk` is the same over given files and plans.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
@@ -85,10 +86,11 @@ function writeOnce(dir: string, entries: readonly [string, string][]): void {
 }
 
 /** Link the check program once per content hash (with the race detector for `race`), beside its final name then renamed; its link errors, if any. */
-function linkOnce(dir: string, race: boolean): string {
+function linkOnce(dir: string, options: CompileOptions): string {
 	if (existsSync(join(dir, BINARY))) return ""
 	const partial = `${BINARY}.${process.pid}.partial`
-	const link = runGo(["build", ...(race ? ["-race"] : []), "-o", partial, "./cmd/check"], { cwd: dir })
+	const race = options.race ? ["-race"] : []
+	const link = runGo(["build", ...race, "-o", partial, "./cmd/check"], { cwd: dir, toolchain: options.toolchain })
 	if (link.status !== 0) return link.stderr
 	renameSync(join(dir, partial), join(dir, BINARY))
 	return ""
@@ -111,25 +113,33 @@ function execIn(dir: string, input: string): Promise<Ran> {
 /** A check program: one `main.go`, or its files by name. */
 type Main = string | Readonly<Record<string, string>>
 
+/** How `compileGo` builds: the check program, the race detector on its link, a toolchain in place of the pin. */
+export type CompileOptions = {
+	readonly main?: Main
+	readonly race?: true
+	/** the Go version (`1.24.0`) every go command runs under in place of the pin: the floor legs pass GO_FLOOR */
+	readonly toolchain?: string
+}
+
+/** The cache dir name for `entries` under `options`: a race link or another toolchain never shares a dir (its `.complete`, its binary) with the plain build. */
+function contentHash(entries: readonly [string, string][], { race, toolchain }: CompileOptions): string {
+	const keyed = race === undefined && toolchain === undefined ? entries : { entries, race, toolchain }
+	return createHash("sha256").update(JSON.stringify(keyed)).digest("hex").slice(0, 20)
+}
+
 /**
- * `files` (a module with its `go.mod`) built and vetted at the pinned toolchain, with `main` beside
- * it; `race` links `main` with the race detector (the build and vet stay as they are).
+ * `files` (a module with its `go.mod`) built and vetted at the pinned toolchain (or `toolchain`),
+ * with `main` beside it; `race` links `main` with the race detector (the build and vet stay as they are).
  */
-export function compileGo(
-	files: Readonly<Record<string, string>>,
-	options: { main?: Main; race?: true } = {},
-): Compiled {
+export function compileGo(files: Readonly<Record<string, string>>, options: CompileOptions = {}): Compiled {
 	const entries = withMain(files, options.main)
-	const hash = createHash("sha256")
-		.update(JSON.stringify(options.race ? { entries, race: true } : entries))
-		.digest("hex")
-		.slice(0, 20)
-	const dir = goCacheDir("sdk", hash)
+	const dir = goCacheDir("sdk", contentHash(entries, options))
 	writeOnce(dir, entries)
-	const build = runGo(["build", "./..."], { cwd: dir })
-	const vet = build.status === 0 ? runGo(["vet", "./..."], { cwd: dir }) : undefined
+	const { toolchain } = options
+	const build = runGo(["build", "./..."], { cwd: dir, toolchain })
+	const vet = build.status === 0 ? runGo(["vet", "./..."], { cwd: dir, toolchain }) : undefined
 	const findings = (vet?.stderr ?? "").split("\n").filter((line) => line !== "" && !line.startsWith("#"))
-	const linked = build.status === 0 && options.main !== undefined ? linkOnce(dir, options.race === true) : ""
+	const linked = build.status === 0 && options.main !== undefined ? linkOnce(dir, options) : ""
 	return {
 		built: build.status === 0 && linked === "",
 		dir,

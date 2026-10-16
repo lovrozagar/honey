@@ -22,8 +22,9 @@ type script struct {
 		Request  []requestHook  `json:"request"`
 		Response []responseHook `json:"response"`
 	} `json:"hooks"`
-	Log   bool          `json:"log"`
-	Calls []*directives `json:"calls"`
+	Log          bool          `json:"log"`
+	LogDurations bool          `json:"logDurations"`
+	Calls        []*directives `json:"calls"`
 }
 
 // scriptConfig sets Config fields a grid Setup has no member for.
@@ -61,6 +62,7 @@ type directives struct {
 	IsKeys         []string        `json:"isKeys"`
 	IsErrors       []string        `json:"isErrors"`
 	Protocols      []string        `json:"protocols"`
+	Envelope       bool            `json:"envelope"`
 	Realtime       *realtimeScript `json:"realtime"`
 	WS             *wsScript       `json:"ws"`
 
@@ -90,6 +92,9 @@ func scriptOf(raw json.RawMessage, calls int) (*script, error) {
 		if err := d.checkStream(); err != nil {
 			return nil, fmt.Errorf("call %d: %w", i, err)
 		}
+	}
+	if s.LogDurations && !s.Log {
+		return nil, errors.New("logDurations needs log")
 	}
 	if c := s.Config; c != nil && c.Invalidation != nil && c.Invalidation.StaleTimeMs == nil {
 		return nil, errors.New("config.invalidation needs staleTimeMs")
@@ -133,7 +138,8 @@ func (s *script) directivesOf(i int) directives {
 }
 
 // apply sets the script's client config and installs its recorders on cfg: the hooks always (one
-// no-op recording hook per phase whose list is absent), OnAuthExpired and OnLog when asked.
+// no-op recording hook per phase whose list is absent), OnAuthExpired and OnLog (with each entry's
+// duration under logDurations) when asked.
 func (s *script) apply(cfg *sdk.Config, rec *recorder) {
 	if s == nil {
 		return
@@ -154,7 +160,7 @@ func (s *script) apply(cfg *sdk.Config, rec *recorder) {
 	cfg.OnRequest = rec.requestHooks(request)
 	cfg.OnResponse = rec.responseHooks(response)
 	if s.Log {
-		cfg.OnLog = rec.logger()
+		cfg.OnLog = rec.logger(s.LogDurations)
 	}
 }
 

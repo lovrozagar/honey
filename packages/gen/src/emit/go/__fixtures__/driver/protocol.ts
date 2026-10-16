@@ -1,7 +1,8 @@
 /**
  * The test driver's protocol beside its stdin envelope: the optional `script` a unit test adds to a
  * grid cell (decoded strictly by script.go), and the `trace` (trace.go, stream.go) printed beside
- * the observed when one is given. The conformance runner and the harness never send a script.
+ * the observed when one is given. Unit tests and the harness send one; the conformance runner never
+ * does.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
@@ -19,6 +20,8 @@ export type CallScript = {
 	readonly isKeys?: readonly string[]
 	/** sets `<Op>Opts.IdempotencyKey` */
 	readonly idempotencyKey?: string
+	/** with a *sdk.ClientError, its typed Envelope into the trace's `envelope` */
+	readonly envelope?: true
 	/** a binary body as a bare io.Reader: no length, no GetBody */
 	readonly oneShotBody?: true
 	/** sets `<Op>Opts.Protocols` (WebSocket, realtime) */
@@ -62,6 +65,8 @@ export type Script = {
 	}
 	/** install OnLog */
 	readonly log?: true
+	/** each OnLog entry's `durationMs` into the trace (needs `log`) */
+	readonly logDurations?: true
 	/** OnAuthExpired: the i-th refresh returns tokens[i], and fails past the end */
 	readonly onAuthExpired?: { readonly tokens: readonly string[] }
 }
@@ -75,6 +80,8 @@ export type GoError = {
 	/** `%T` of the error, then of each errors.Unwrap step; pin only the `*sdk.` entries */
 	readonly chain: readonly string[]
 	readonly deadline: boolean
+	/** with `envelope`, a *sdk.ClientError's Envelope as JSON: its named members, empty ones omitted, never Extra */
+	readonly envelope?: Json
 	readonly keys?: Readonly<Record<string, boolean>>
 	/** errors.As *sdk.PathParamError */
 	readonly pathParam?: { readonly missing: boolean; readonly name: string; readonly value: string }
@@ -142,6 +149,8 @@ export type CallTrace = {
 
 /** One OnLog entry, its error as text. */
 export type LogTrace = {
+	/** LogEntry.DurationMs, only under `logDurations` */
+	readonly durationMs?: number
 	readonly error?: string
 	readonly event: string
 	readonly level: string

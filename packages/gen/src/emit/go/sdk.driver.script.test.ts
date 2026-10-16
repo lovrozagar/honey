@@ -340,8 +340,64 @@ describe("the Go test driver's script: a call's Go error", () => {
 	}, 600_000)
 })
 
+describe("the Go test driver's script: opt-in trace members", () => {
+	it("adds each OnLog entry's durationMs under logDurations, a ClientError's typed envelope under envelope, neither unasked", async () => {
+		if (!withGo()) return
+		const sdk = scriptedSdk()
+		const fields = { text: [{ error_key: "too_short", message: "short", path: "text" }] }
+		const envelope = {
+			error_key: "bad_request",
+			fields,
+			message: "Bad request",
+			status: 400,
+			status_key: "bad_request",
+		}
+		const replies: Reply[] = [
+			{ ...FOUND, delayMs: 50 },
+			{ json: { ...envelope, trace: "t1" }, status: 400 },
+		]
+		const calls = [GET, GET, { ...GET, params: { id: "..", org: "o" } }]
+		const asked = {
+			calls: [{ envelope: true }, { envelope: true }, { envelope: true }],
+			log: true,
+			logDurations: true,
+		} as const
+		const [on, off] = await Promise.all([
+			drive(sdk, replies, calls, { script: asked }),
+			drive(sdk, replies, calls, { script: { calls: [null, { isKeys: ["bad_request"] }], log: true } }),
+		])
+		const operation = "GET /orgs/{org}/notes/{id}"
+		const log = on.run.trace?.log ?? []
+		const durations = log.map((entry) => entry.durationMs)
+		expect(
+			{
+				durations: durations.map((ms, i) => Number.isInteger(ms) && (ms as number) >= [0, 50, 0, 0, 0][i]!),
+				errors: on.run.trace?.calls.map((c) => c.error?.envelope),
+				log: log.map((entry) => ({ ...entry, durationMs: undefined })),
+				starts: [durations[0], durations[2]],
+			},
+			on.run.stderr,
+		).toEqual({
+			durations: [true, true, true, true, true],
+			errors: [undefined, envelope, undefined],
+			log: [
+				{ event: "request_start", level: "debug", operation },
+				{ event: "response_received", level: "info", operation, status: 200 },
+				{ event: "request_start", level: "debug", operation },
+				{ event: "response_received", level: "warn", operation, status: 400 },
+				{ error: "400 Bad Request: Bad request", event: "error", level: "error", operation, status: 400 },
+			],
+			starts: [0, 0],
+		})
+		expect({
+			envelope: off.run.trace?.calls.map((c) => (c.error === undefined ? null : "envelope" in c.error)),
+			log: off.run.trace?.log.map((entry) => "durationMs" in entry),
+		}).toEqual({ envelope: [null, false, false], log: [false, false, false, false, false] })
+	}, 600_000)
+})
+
 describe("the Go test driver's script: what it refuses", () => {
-	it("exits 1 naming the reason, nothing sent: an unknown member, a key the method has no field for, a body it takes no parameter for, extra calls", async () => {
+	it("exits 1 naming the reason, nothing sent: an unknown member, a key the method has no field for, a body it takes no parameter for, extra calls, durations without a log", async () => {
 		if (!withGo()) return
 		const sdk = scriptedSdk()
 		const file: Call = {
@@ -355,6 +411,7 @@ describe("the Go test driver's script: what it refuses", () => {
 			[POST, { calls: [{ idempotencyKey: "k" }] }],
 			[file, {}],
 			[GET, { calls: [null, null] }],
+			[GET, { logDurations: true }],
 		]
 		const [runs, hops] = await served([], async (server) => {
 			const ran = await Promise.all(refused.map(([call, script]) => sdk.runCalls({ calls: [call] }, server, script)))
@@ -369,6 +426,7 @@ describe("the Go test driver's script: what it refuses", () => {
 			expect.stringMatching(/notes\.create.*IdempotencyKey/),
 			expect.stringMatching(/files\.get.*binary body.*no body parameter/),
 			expect.stringMatching(/script.*2 calls.*1/),
+			expect.stringMatching(/script.*logDurations needs log/),
 		])
 	}, 600_000)
 })

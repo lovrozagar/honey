@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process"
+import { readdirSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { formatFiles } from "../shared/format.ts"
 import { gofmtFormatter } from "../shared/gofmt.ts"
 import { type Compiled, compileGo } from "./__fixtures__/compiled.ts"
-import { gofmtPath, withGo } from "./__fixtures__/go-env.ts"
+import { GO_FLOOR, gofmtPath, withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -109,5 +110,36 @@ describe("the emitted Go SDK through gofmt, build and vet", () => {
 		if (!withGo()) return
 		const sdk = await formattedSdk()
 		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+	}, 600_000)
+})
+
+describe("the emitted Go SDK under the go 1.24 floor toolchain", () => {
+	it("declares the floor GO_FLOOR names, ships every runtime file, and builds and vets clean under that toolchain itself", () => {
+		const files = generateGoSdk(DOCUMENT).files
+		const runtime = readdirSync(new URL("../../runtime/go/", import.meta.url)).filter((name) => name.endsWith(".go"))
+		expect({
+			floor: files["go.mod"]?.includes(`\ngo ${GO_FLOOR.split(".").slice(0, 2).join(".")}\n`),
+			missing: runtime.filter((name) => !(name in files)),
+		}).toEqual({ floor: true, missing: [] })
+		if (!withGo()) return
+		const floor = compileGo(files, { toolchain: GO_FLOOR })
+		expect({ built: floor.built, vet: floor.vet }, floor.stderr).toEqual({ built: true, vet: [] })
+	}, 600_000)
+
+	it("compiles under the toolchain it is given, in a cache dir of its own: a module past the floor fails there", () => {
+		if (!withGo()) return
+		const [major, minor, patch] = GO_FLOOR.split(".")
+		const past = {
+			"go.mod": `module example.com/past\n\ngo ${major}.${minor}.${Number(patch) + 1}\n`,
+			"past.go": "package past\n",
+		}
+		const pinned = compileGo(past)
+		const floor = compileGo(past, { toolchain: GO_FLOOR })
+		expect({ floor: floor.built, ownDir: floor.dir !== pinned.dir, pinned: pinned.built, why: floor.stderr }).toEqual({
+			floor: false,
+			ownDir: true,
+			pinned: true,
+			why: expect.stringContaining(`requires go >= ${major}.${minor}.${Number(patch) + 1} (running go ${GO_FLOOR}`),
+		})
 	}, 600_000)
 })

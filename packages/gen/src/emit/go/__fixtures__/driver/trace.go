@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -38,8 +39,8 @@ type resultTrace struct {
 }
 
 // goError is a call's error as Go sees it: its types down the Unwrap chain, its text, where it came
-// from, the sentinels it matches, its status, the error keys and sentinels asked about and a
-// refused path param.
+// from, the sentinels it matches, its status, the error keys and sentinels asked about, a refused
+// path param and, when asked, a *sdk.ClientError's typed Envelope.
 type goError struct {
 	Type      string          `json:"type"`
 	Chain     []string        `json:"chain"`
@@ -52,6 +53,7 @@ type goError struct {
 	Keys      map[string]bool `json:"keys,omitempty"`
 	Sentinels map[string]bool `json:"sentinels,omitempty"`
 	PathParam *pathParamTrace `json:"pathParam,omitempty"`
+	Envelope  json.RawMessage `json:"envelope,omitempty"`
 }
 
 // pathParamTrace is a refused path param, as *sdk.PathParamError holds it.
@@ -77,13 +79,15 @@ type hookTrace struct {
 	InvalidatedBy []string `json:"invalidatedBy"`
 }
 
-// logTrace is one OnLog entry, its error as text.
+// logTrace is one OnLog entry, its error as text, its duration only under logDurations (a
+// duration is nondeterministic, so a default trace stays exact).
 type logTrace struct {
-	Level     string `json:"level"`
-	Event     string `json:"event"`
-	Operation string `json:"operation"`
-	Status    *int   `json:"status,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Level      string `json:"level"`
+	Event      string `json:"event"`
+	Operation  string `json:"operation"`
+	DurationMs *int64 `json:"durationMs,omitempty"`
+	Status     *int   `json:"status,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 type transportTrace struct {
@@ -127,7 +131,8 @@ func (r *recorder) called(elapsed time.Duration, o outcome, d directives) {
 	r.calls = append(r.calls, entry)
 }
 
-// goErrorOf is err as the trace records it, asked about d's error keys and sentinels.
+// goErrorOf is err as the trace records it, asked about d's error keys and sentinels, and for a
+// *sdk.ClientError's Envelope under d.Envelope (marshaled from its fields: Extra is json:"-").
 func goErrorOf(err error, via string, d directives) *goError {
 	e := &goError{
 		Type:     fmt.Sprintf("%T", err),
@@ -148,6 +153,11 @@ func goErrorOf(err error, via string, d directives) *goError {
 	var pp *sdk.PathParamError
 	if errors.As(err, &pp) {
 		e.PathParam = &pathParamTrace{Name: pp.Name, Value: pp.Value, Missing: pp.Missing}
+	}
+	var ce *sdk.ClientError
+	if d.Envelope && errors.As(err, &ce) {
+		/* an ErrorEnvelope holds strings, ints and FieldError maps: it always marshals */
+		e.Envelope, _ = json.Marshal(ce.Envelope)
 	}
 	if len(d.IsKeys) > 0 {
 		e.Keys = map[string]bool{}
@@ -227,10 +237,13 @@ func (r *recorder) refresher(tokens []string) func(context.Context) (string, err
 	}
 }
 
-// logger is OnLog, recording each entry.
-func (r *recorder) logger() func(sdk.LogEntry) {
+// logger is OnLog, recording each entry, with its duration when durations.
+func (r *recorder) logger(durations bool) func(sdk.LogEntry) {
 	return func(e sdk.LogEntry) {
 		entry := logTrace{Level: e.Level, Event: e.Event, Operation: e.Operation, Status: e.Status}
+		if durations {
+			entry.DurationMs = &e.DurationMs
+		}
 		if e.Err != nil {
 			entry.Error = e.Err.Error()
 		}

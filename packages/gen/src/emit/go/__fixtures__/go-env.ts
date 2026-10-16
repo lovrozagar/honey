@@ -14,6 +14,13 @@ export function pinnedGo(): string {
 	return readFileSync(resolve(import.meta.dirname, "../../../../../../.go-version"), "utf8").trim()
 }
 
+/**
+ * The toolchain the floor legs compile under: the oldest Go the emitted `go 1.24` line admits, so
+ * a build and vet there prove the floor the module declares. `sdk.ts` writes that line; the two
+ * move together.
+ */
+export const GO_FLOOR = "1.24.0"
+
 /** Where gen's Go caches live: one area under the toolchain cache, made on first use. */
 export function goCacheDir(...parts: string[]): string {
 	const dir = join(process.env.HOME ?? homedir(), ".cache/honey-tmp/go", ...parts)

@@ -18,11 +18,12 @@
 // and a method of another shape is refused at run time. A stream call that has not ended after
 // 10 s fails the run ("stream stalled").
 //
-// script (script.go; only unit tests send one, the conformance runner and the harness never do)
-// adds client config, hooks, OnLog, OnAuthExpired, per-call ctx directives and stream controls,
-// and stdout becomes { "observed": (Observed|null)[], "trace": Trace } (trace.go): a call ending in
-// a Go error the grid has no Observed for observes null (a stream: what it delivered so far), its
-// error traced, instead of failing the run.
+// script (script.go; unit tests and the harness send one, the conformance runner never does) adds
+// client config, hooks, OnLog, OnAuthExpired, per-call ctx directives, stream controls and opt-in
+// trace members (log durations, a ClientError's Envelope), and stdout becomes
+// { "observed": (Observed|null)[], "trace": Trace } (trace.go): a call ending in a Go error the
+// grid has no Observed for observes null (a stream: what it delivered so far), its error traced,
+// instead of failing the run.
 package main
 
 import (
