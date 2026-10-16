@@ -224,6 +224,9 @@ const ANSWERS = doc({
 	},
 	"/csv": { get: { operationId: "files.csv", responses: { 200: { content: { "text/csv": {} }, description: "" } } } },
 	"/items/{id}": { delete: { operationId: "items.delete", parameters: [param("id")], responses: { 204: {} } } },
+	"/moved": {
+		get: { operationId: "moved", responses: { 307: { description: "", headers: { location: { schema: STRING } } } } },
+	},
 	"/orgs/{org}/feed": {
 		get: {
 			operationId: "feed.get",
@@ -259,6 +262,16 @@ expectType<Equal<Data<typeof sdk.files.text>, string>>()`
 	it("types a 204, or a 200 without a body, as null, never void", () => {
 		const consumer = `expectType<Equal<Data<typeof sdk.items.delete>, null>>()
 expectType<Equal<Data<typeof sdk.project.export>, null>>()`
+		expect(check(ANSWERS, consumer)).toEqual([])
+	})
+
+	it("types an op declaring no success body (only a 307) as null in safe and throw mode, raw as Response", () => {
+		const consumer = `const thrower = new TestSDK({ baseURL: "https://x", throwOnError: true })
+const thrown = () => thrower.moved()
+const raw = () => sdk.moved({ raw: true })
+expectType<Equal<Data<typeof sdk.moved>, null>>()
+expectType<Equal<Result<typeof thrown>, null>>()
+expectType<Equal<Result<typeof raw>, Response>>()`
 		expect(check(ANSWERS, consumer)).toEqual([])
 	})
 

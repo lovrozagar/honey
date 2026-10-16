@@ -7,15 +7,28 @@ type Result = { data: unknown; error: unknown; response: Response; status: numbe
 
 const FRONTS: readonly Front[] = ["sdk", "app"]
 
-/** `GET`, `POST` and `DELETE /items`, the SDK methods `items.list`, `items.create` and `items.remove`. */
+/** A declared JSON answer. */
+const JSON_BODY = { content: { "application/json": {} } }
+
+/**
+ * `GET`, `POST` and `DELETE /items`, the SDK methods `items.list`, `items.create` and `items.remove`;
+ * `GET /moved`, declaring only a 307, and `PUT /items`, a 200 without content: no success body.
+ */
 const DOC = {
 	info: { title: "Test", version: "1" },
 	openapi: "3.1.0",
 	paths: {
 		"/items": {
 			delete: { operationId: "items.remove", responses: { "204": { description: "gone" } } },
-			get: { operationId: "items.list", responses: { "200": { description: "ok" } } },
-			post: { operationId: "items.create", responses: { "201": { description: "made" } } },
+			get: { operationId: "items.list", responses: { "200": { description: "ok", ...JSON_BODY } } },
+			post: { operationId: "items.create", responses: { "201": { description: "made", ...JSON_BODY } } },
+			put: { operationId: "items.touch", responses: { "200": { description: "touched" } } },
+		},
+		"/moved": {
+			get: {
+				operationId: "moved",
+				responses: { "307": { description: "moved", headers: { location: { schema: { type: "string" } } } } },
+			},
 		},
 	},
 }
@@ -106,6 +119,61 @@ describe("a 204 No Content answer", () => {
 	it.each(FRONTS)("%s in throw mode resolves null", async (front) => {
 		expect(await call(front, noContent, { throwOnError: true }, "delete")).toBeNull()
 	})
+})
+
+/**
+ * `items.touch` and `moved` through the SDK class, each answered by a JSON body the operation does
+ * not declare, as a followed redirect's target answers; `cancelled` counts the bodies discarded.
+ */
+async function bodiless(config: Record<string, unknown> = {}, input: object = {}) {
+	let cancelled = 0
+	const body = () =>
+		new ReadableStream<Uint8Array>(
+			{
+				cancel: () => {
+					cancelled++
+				},
+				pull: (controller) => {
+					controller.enqueue(new TextEncoder().encode('{"echoed":true}'))
+					controller.close()
+				},
+			},
+			{ highWaterMark: 0 },
+		)
+	const echo = () => new Response(body(), { headers: { "content-type": "application/json" } })
+	const { TestSDK } = (await emittedSdk(DOC)) as unknown as {
+		TestSDK: new (config: object) => Record<string, unknown> & { items: { touch: (input: object) => unknown } }
+	}
+	const sdk = new TestSDK({ baseURL: "https://api.test", fetch: recordingFetch(echo).fetch, ...config })
+	const results = await Promise.all([sdk.items.touch(input), (sdk.moved as (input: object) => unknown)(input)])
+	return { cancelled, results }
+}
+
+describe("an operation that declares no success body: its data is null, its body behind raw", () => {
+	it("in safe mode resolves data null, error null, the 2xx status, the body discarded unread", async () => {
+		const { cancelled, results } = await bodiless()
+		const seen = (results as Result[]).map((r) => [r.data, r.error, r.status])
+		expect({ cancelled, seen }).toEqual({
+			cancelled: 2,
+			seen: [
+				[null, null, 200],
+				[null, null, 200],
+			],
+		})
+	})
+
+	it("in throw mode resolves null, the body discarded unread", async () => {
+		expect(await bodiless({ throwOnError: true })).toEqual({ cancelled: 2, results: [null, null] })
+	})
+
+	it.each([false, true])(
+		"with raw: true (throwOnError %s) resolves the Response, its body readable",
+		async (thrown) => {
+			const { cancelled, results } = await bodiless({ throwOnError: thrown }, { raw: true })
+			const bodies = await Promise.all((results as Response[]).map((r) => r.json()))
+			expect({ bodies, cancelled }).toEqual({ bodies: [{ echoed: true }, { echoed: true }], cancelled: 0 })
+		},
+	)
 })
 
 describe("throw mode, a 2xx answer", () => {

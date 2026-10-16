@@ -17,8 +17,11 @@ export function isEventStream(response: Response): boolean {
 
 /** How a REST answer is read: thrown or as a result, parsed or raw, and which response headers to keep (A2). */
 export type Reading = {
-	/** the non-JSON media type the operation declares: its body is read as that type, empty or not */
-	declared?: string
+	/**
+	 * the non-JSON media type the operation declares: its body is read as that type, empty or not.
+	 * `null` when it declares no success body: whatever arrives is discarded and reads as null.
+	 */
+	declared?: string | null
 	headers?: readonly string[]
 	maxMessage?: number
 	method: string
@@ -79,12 +82,13 @@ function hasNoBody(response: Response, method: string): boolean {
 }
 
 /**
- * A 2xx body as a value. A declared text or binary answer reads as that type, so an empty one is
- * `""` or zero bytes; otherwise by its content type: JSON parsed, text as text, anything else as
- * bytes (A1), and null when empty.
+ * A 2xx body as a value. An operation declaring no body (`declared` null) reads as null, as a 204
+ * does. A declared text or binary answer reads as that type, so an empty one is `""` or zero bytes;
+ * otherwise by its content type: JSON parsed, text as text, anything else as bytes (A1), and null
+ * when empty.
  */
-export async function parseBody(response: Response, method: string, declared?: string): Promise<unknown> {
-	if (hasNoBody(response, method.toUpperCase())) {
+export async function parseBody(response: Response, method: string, declared?: string | null): Promise<unknown> {
+	if (declared === null || hasNoBody(response, method.toUpperCase())) {
 		await response.body?.cancel().catch(() => {
 			/* nothing to read: a cancel that fails changes nothing */
 		})

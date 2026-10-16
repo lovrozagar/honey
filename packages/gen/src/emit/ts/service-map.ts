@@ -12,6 +12,8 @@ import { quoteKey } from "../shared/literals.ts"
 /** One operation as the runtime's service map holds it (`runtime/ts/sdk.ts` `ServiceEntry`). */
 export type ServiceEntry = {
 	accept?: string
+	/** the operation declares no success body: a 2xx reads as null, its body only through `raw` */
+	empty?: true
 	headers?: string[]
 	idempotent?: true
 	invalidate?: string[]
@@ -109,6 +111,7 @@ function entryOf(op: IROperation, success: SdkSuccess, resolve: (schema: IRSchem
 	if (invalidate && invalidate.length > 0) entry.invalidate = [...invalidate]
 	const accept = acceptOf(op, success.contentType)
 	if (accept !== undefined) entry.accept = accept
+	if (success.kind === "none" && !entry.sse && !entry.ws) entry.empty = true
 	const headers = headersOf(op, success.status)
 	if (headers.length > 0) entry.headers = headers
 	return entry

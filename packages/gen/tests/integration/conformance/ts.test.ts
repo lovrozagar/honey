@@ -18,6 +18,9 @@ type Socket = {
 	send(data: string): void
 }
 type Sdk = { dispose(): void } & Record<string, unknown>
+type SdkClass = new (config: Input) => Sdk
+/** A service map node, read for one fact: `empty`, an operation declaring no success body. */
+type MapNode = { empty?: boolean } & Record<string, unknown>
 type App = Record<string, (path: string, input: Input) => Promise<unknown>>
 
 /** Each titled cell's v0 port, or the C5 case whose live leg it is: the suite names its `it` `<key> (<title>)`. */
@@ -63,6 +66,28 @@ function operationOf(sdk: Sdk, operation: string): (input: Input) => unknown {
 	for (const segment of operation.split(".")) member = (member as Record<string, unknown> | undefined)?.[segment]
 	if (typeof member !== "function") throw new Error(`ConformanceSDK has no operation ${operation}`)
 	return member as (input: Input) => unknown
+}
+
+/** Whether the operation declares no success body, by the service map the SDK dispatches by. */
+function declaresNoBody(map: MapNode, operation: string): boolean {
+	let node: MapNode | undefined = map
+	for (const segment of operation.split(".")) node = node?.[segment] as MapNode | undefined
+	return node?.empty === true
+}
+
+/**
+ * The answer to an operation declaring no success body, its data null by type, as Go's driver
+ * reads it: the raw response's body, JSON when it parses, else the text, null when empty.
+ */
+async function untypedOf(response: Response): Promise<Observed> {
+	const text = await response.text()
+	let data: Json = text.length === 0 ? null : text
+	try {
+		data = JSON.parse(text) as Json
+	} catch {
+		/* not JSON: the text itself, or null when empty */
+	}
+	return { data, kind: "data", status: response.status }
 }
 
 /** A safe-mode result as the grid observes it: an error by status and key, bytes by digest, else data. */
@@ -137,23 +162,38 @@ async function attempt(fire: () => unknown, call: Call): Promise<Observed> {
 	}
 }
 
-/** The TS runner: the emitted SDK class built once from the served document, one instance per cell. */
+/**
+ * One call through `safe`; an operation declaring no success body goes `raw: true` through
+ * `thrower` instead, so an error status still throws its ClientError and a 2xx is read untyped.
+ */
+async function callOf(clients: { map: MapNode; safe: Sdk; thrower: Sdk }, call: Call, app: ReferenceApp) {
+	const input = inputOf(call, app)
+	if (call.raw || !declaresNoBody(clients.map, call.operation))
+		return attempt(() => operationOf(clients.safe, call.operation)(input), call)
+	const send = async () =>
+		untypedOf((await operationOf(clients.thrower, call.operation)({ ...input, raw: true })) as Response)
+	return attempt(send, call)
+}
+
+/** The TS runner: the emitted SDK class built once from the served document, one instance per mode per cell. */
 function tsRunner() {
-	let ConformanceSDK: (new (config: Input) => Sdk) | undefined
+	let built: { ConformanceSDK: SdkClass; map: MapNode } | undefined
 	return {
 		async prepare(app: ReferenceApp): Promise<void> {
 			const sdk = await emittedSdk(app.document, { name: "ConformanceSDK" })
-			ConformanceSDK = sdk.ConformanceSDK as new (config: Input) => Sdk
+			built = { ConformanceSDK: sdk.ConformanceSDK as SdkClass, map: sdk.serviceMap as MapNode }
 		},
 		async run(cell: Cell, app: ReferenceApp): Promise<readonly Observed[]> {
-			if (!ConformanceSDK) throw new Error("the TS runner ran a cell before prepare")
-			const sdk = new ConformanceSDK(configOf(app, cell.setup))
+			if (!built) throw new Error("the TS runner ran a cell before prepare")
+			const config = configOf(app, cell.setup)
+			const safe = new built.ConformanceSDK(config)
+			const thrower = new built.ConformanceSDK({ ...config, throwOnError: true })
 			const observed: Observed[] = []
 			try {
-				for (const call of cell.calls)
-					observed.push(await attempt(() => operationOf(sdk, call.operation)(inputOf(call, app)), call))
+				for (const call of cell.calls) observed.push(await callOf({ map: built.map, safe, thrower }, call, app))
 			} finally {
-				sdk.dispose()
+				safe.dispose()
+				thrower.dispose()
 			}
 			return observed
 		},

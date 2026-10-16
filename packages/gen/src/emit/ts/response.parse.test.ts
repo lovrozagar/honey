@@ -6,11 +6,18 @@ type Result = { data: unknown; error: unknown; response: Response; status: numbe
 
 const FRONTS: readonly Front[] = ["sdk", "app"]
 
-/** `GET /items`, the SDK method `items.list`. */
+/** `GET /items`, the SDK method `items.list`, declaring a JSON answer without a schema. */
 const DOC = {
 	info: { title: "Test", version: "1" },
 	openapi: "3.1.0",
-	paths: { "/items": { get: { operationId: "items.list", responses: { "200": { description: "ok" } } } } },
+	paths: {
+		"/items": {
+			get: {
+				operationId: "items.list",
+				responses: { "200": { content: { "application/json": {} }, description: "ok" } },
+			},
+		},
+	},
 }
 
 /** One `GET /items` through `front` (the SDK class or the app client), answered by `answer`. */

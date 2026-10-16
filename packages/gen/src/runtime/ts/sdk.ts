@@ -11,6 +11,8 @@ import { createTypedWebSocket, type TypedWebSocket } from "./ws.ts"
 export type ServiceEntry = {
 	/** the declared non-JSON media type, sent as `Accept` */
 	accept?: string
+	/** the operation declares no success body: a 2xx answer is null, its body reached only through `raw` */
+	empty?: boolean
 	/** the declared response headers, lower case (A2) */
 	headers?: readonly string[]
 	idempotent?: boolean
@@ -157,8 +159,8 @@ class SdkCore {
 		const selector = `${entry.method} ${path}`
 		const meta = this.#meta(selector, path, entry.method)
 		const opts = optionsFor(entry, input)
-		const { accept: declared, headers } = entry
-		const op = { declared, headers, meta, method: entry.method, opts, path: template, shouldThrow }
+		const declared = entry.empty ? null : entry.accept
+		const op = { declared, headers: entry.headers, meta, method: entry.method, opts, path: template, shouldThrow }
 		const result = await this.http.requestOperation(op)
 		const status = result instanceof Response ? result.status : (result as { status?: number } | null)?.status
 		if (shouldThrow || (status !== undefined && status >= 200 && status < 300)) {

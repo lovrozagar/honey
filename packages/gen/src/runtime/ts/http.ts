@@ -32,8 +32,8 @@ type Call = { method: string; opts: RequestOptions; path: string }
 
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
-	/** the non-JSON media type the operation declares, read as that type */
-	declared?: string
+	/** the non-JSON media type the operation declares, read as that type; null when it declares no body */
+	declared?: string | null
 	headers?: readonly string[]
 	meta?: RequestMeta
 	shouldThrow: boolean
