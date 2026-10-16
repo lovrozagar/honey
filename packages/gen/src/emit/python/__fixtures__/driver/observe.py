@@ -1,20 +1,52 @@
-"""A call's outcome as the grid observes it.
+"""A call's outcome as the grid observes it, and as a script traces it.
 
 A result is ``data`` with the raw response's status (and the typed response headers when the plan
 declares them), the bytes' size and SHA-256 for a binary answer, or ``raw`` when the call asks for
 it; a safe-mode ``SDKResult`` observes its data or its error. ``APIStatusError`` is ``error`` with
-its status, its raw key and its body (phase b: the body's JSON; phase c: the envelope), and
-``APITimeoutError`` is ``timeout``. Any other error the grid has no outcome for: a DriverError.
+its status, its key (``str(e.key)``) and its body's JSON, and ``APITimeoutError`` is ``timeout``.
+Unscripted, any other error is a DriverError. Under a script, a call's error is traced too
+(``via: "return"``, or ``"result"`` for a safe-mode ``SDKResult.error``, with the result's summary),
+and an error the grid has no outcome for observes null.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from invoke import Prepared
-from protocol import DriverError, ErrorObserved, Observed, Plan
+from protocol import (
+    DriverError,
+    ErrorObserved,
+    Observed,
+    Plan,
+    PythonError,
+    ResultTrace,
+)
+from tracing import python_error, result_trace
+
+
+@dataclass(frozen=True)
+class Lens:
+    """How one call is observed: the SDK's module, whether the call asks for the raw response, and
+    whether a script traces it, asking for an ``APIStatusError``'s envelope."""
+
+    module: Any
+    raw: bool
+    scripted: bool
+    envelope: bool
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """What a call observed (null when the grid has no outcome for it), its traced error, and a
+    safe-mode result's summary."""
+
+    observed: Observed | None
+    error: PythonError | None = None
+    result: ResultTrace | None = None
 
 
 def body_of(body: bytes) -> tuple[bool, Any]:
@@ -79,14 +111,8 @@ def answered(result: Any, prepared: Prepared, plan: Plan, raw: bool) -> Observed
     return {"data": result, "kind": "data", "status": response.status}
 
 
-def failed(error: Exception, module: Any, raw: bool) -> Observed:
-    """An error: an error status and a lapsed timeout are grid outcomes; any other is a DriverError."""
-    if isinstance(error, module.APITimeoutError):
-        return {"kind": "timeout"}
-    if not isinstance(error, module.APIStatusError):
-        raise DriverError(
-            f"the call raised {type(error).__name__}, which the grid has no outcome for: {error}"
-        )
+def status_observed(error: Any, raw: bool) -> Observed:
+    """An ``APIStatusError`` as the grid observes it: its raw response, or its status, key and body."""
     if raw:
         body = bytes(error.body).decode("utf-8", "replace")
         return {
@@ -96,8 +122,9 @@ def failed(error: Exception, module: Any, raw: bool) -> Observed:
             "status": error.status,
         }
     present, body = body_of(bytes(error.body))
+    key = error.key
     seen: ErrorObserved = {
-        "errorKey": error.key,
+        "errorKey": None if key is None else str(key),
         "kind": "error",
         "status": error.status,
     }
@@ -106,13 +133,36 @@ def failed(error: Exception, module: Any, raw: bool) -> Observed:
     return seen
 
 
-def observed(
-    result: Any, prepared: Prepared, plan: Plan, context: tuple[Any, bool]
-) -> Observed:
-    """``result`` as observed: a safe-mode ``SDKResult`` by its error or data, anything else as data."""
-    module, raw = context
-    if isinstance(result, module.SDKResult):
-        if result.error is not None:
-            return failed(result.error, module, raw)
-        return answered(result.data, prepared, plan, raw)
-    return answered(result, prepared, plan, raw)
+def grid_outcome(error: BaseException, lens: Lens) -> Observed | None:
+    """An error status or a lapsed timeout as the grid observes it; None for any other error."""
+    if isinstance(error, lens.module.APITimeoutError):
+        return {"kind": "timeout"}
+    if isinstance(error, lens.module.APIStatusError):
+        return status_observed(error, lens.raw)
+    return None
+
+
+def raised(error: BaseException, lens: Lens) -> Outcome:
+    """A call that raised ``error``: traced under a script; unscripted, a grid outcome or a DriverError."""
+    seen = grid_outcome(error, lens)
+    if lens.scripted:
+        return Outcome(seen, python_error(error, "return", lens.envelope))
+    if seen is None:
+        raise DriverError(
+            f"the call raised {type(error).__name__}, which the grid has no outcome for: {error}"
+        )
+    return Outcome(seen)
+
+
+def returned(result: Any, prepared: Prepared, plan: Plan, lens: Lens) -> Outcome:
+    """``result`` as observed: a safe-mode ``SDKResult`` by its error or data (summarized under a
+    script), anything else as data."""
+    if not isinstance(result, lens.module.SDKResult):
+        return Outcome(answered(result, prepared, plan, lens.raw))
+    summary = result_trace(result) if lens.scripted else None
+    if result.error is None:
+        return Outcome(answered(result.data, prepared, plan, lens.raw), None, summary)
+    error = (
+        python_error(result.error, "result", lens.envelope) if lens.scripted else None
+    )
+    return Outcome(status_observed(result.error, lens.raw), error, summary)

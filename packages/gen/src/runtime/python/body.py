@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from .operation import Operation
 from .query import encode, pairs, text
 
+__all__ = ["FilePart"]
+
 BodyPayload = bytes | Iterable[bytes] | AsyncIterable[bytes]
 
 MEDIA = {
@@ -20,27 +22,33 @@ MEDIA = {
 
 
 @dataclass(frozen=True)
+class FilePart:
+    """One multipart file, in memory, so a retry or a redirect can send it again."""
+
+    filename: str
+    data: bytes
+    content_type: str = "application/octet-stream"
+
+
+@dataclass(frozen=True)
 class BodyContent:
     payload: BodyPayload
     media: str
 
 
 def part(name: str, value: object) -> bytes:
-    """One part: a file (bytes, or ``(filename, bytes[, media type])``) or text."""
+    """One part: a ``FilePart``, or text."""
 
     def quoted(raw: str) -> str:
         return raw.replace("\r", "%0D").replace("\n", "%0A").replace('"', "%22")
 
     head = f'Content-Disposition: form-data; name="{quoted(name)}"'
-    if isinstance(value, bytes):
-        value = ("blob", value)
-    if not isinstance(value, tuple):
+    if not isinstance(value, FilePart):
         return f"{head}\r\n\r\n{text(value)}".encode()
-    media = value[2] if len(value) > 2 else "application/octet-stream"
-    data = value[1] if isinstance(value[1], bytes) else str(value[1]).encode()
+    media = quoted(value.content_type)
     return (
-        f'{head}; filename="{quoted(str(value[0]))}"\r\nContent-Type: {media}\r\n\r\n'.encode()
-        + data
+        f'{head}; filename="{quoted(value.filename)}"\r\nContent-Type: {media}\r\n\r\n'.encode()
+        + value.data
     )
 
 
@@ -55,7 +63,7 @@ def encode_body(op: Operation[object], body: object) -> BodyContent | None:
             b"--%s\r\n%s\r\n" % (mark.encode(), part(name, item))
             for name, value in fields.items()
             for item in (value if isinstance(value, list) else [value])
-            if item is not None
+            if item is not None and item != {}
         ]
         return BodyContent(
             b"".join(parts) + f"--{mark}--\r\n".encode(),

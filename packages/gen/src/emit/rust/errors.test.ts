@@ -10,7 +10,7 @@ import type { RustError, Script, Trace } from "../shared/__fixtures__/protocol.t
 import { type Reply, recordingServer, served } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { type Consumer, consume, type Run, seen, sections } from "./__fixtures__/consumer.ts"
-import { errors } from "./__fixtures__/documents-http.ts"
+import { errors } from "../shared/__fixtures__/documents-http.ts"
 import type { FixtureKey } from "./__fixtures__/documents.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
 import { generateRustSdk } from "./sdk.ts"

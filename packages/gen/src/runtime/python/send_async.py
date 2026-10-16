@@ -2,6 +2,7 @@
 """The async shell: the core's hops sent with ``httpx2.AsyncClient``. An ``asyncio.Event`` ``cancel`` is
 raced against each send; a ``threading.Event`` is checked between steps."""
 
+import asyncio
 from typing import TypeVar, Unpack, cast
 
 import httpx2
@@ -11,9 +12,9 @@ from .config import ClientConfig, Defaults
 from .errors import APIConnectionError, APIStatusError, APITimeoutError, HoneyError
 from .events import EventStream, raced
 from .exchange import CallArgs, ClientCore, Exchange, HttpAnswer, failure
-from .hooks import RequestContext, run_async
+from .hooks import RequestContext, refuse_hooks, run_async
 from .operation import Operation
-from .redirect import Hop
+from .redirect import Hop, cross
 from .result import SDKResult
 
 T = TypeVar("T")
@@ -25,6 +26,7 @@ class AsyncTransport(ClientCore):
     """One ``AsyncSDK``'s connection pool and settings."""
 
     def __init__(self, config: ClientConfig, defaults: Defaults) -> None:
+        refuse_hooks(config, sync=False)
         super().__init__(config, defaults)
         self.http = config.async_http_client or httpx2.AsyncClient()
 
@@ -36,9 +38,9 @@ class AsyncTransport(ClientCore):
         x = Exchange(self, op, args)
         answer, _ = await self.run(x)
         try:
-            return SDKResult(cast("T", x.decoded(answer)), None, x.raw)
+            return SDKResult(cast("T", x.decoded(answer)), None, x.raw.status, x.raw)
         except APIStatusError as error:
-            return SDKResult(None, error, x.raw)
+            return SDKResult(None, error, x.raw.status, x.raw)
 
     async def sse(
         self,
@@ -57,7 +59,7 @@ class AsyncTransport(ClientCore):
         )
         answer, live = await self.run(x)
         if live is None:
-            raise failure(answer)
+            raise failure(answer, self)
         return EventStream(
             live, decode=op.answer == "json", cancel=x.options.get("cancel")
         )
@@ -75,6 +77,9 @@ class AsyncTransport(ClientCore):
                     answer, live = await self.attempt(x, fresh, True)
         except HoneyError as error:
             x.log.failed(error)
+            raise
+        except asyncio.CancelledError:
+            x.log.emit("error", "error", error="the call was canceled")
             raise
         return x.done(answer), live
 
@@ -115,7 +120,7 @@ class AsyncTransport(ClientCore):
         chunks: list[bytes] = []
         try:
             response = await self.http.send(
-                request, stream=True, follow_redirects=False
+                request, stream=True, follow_redirects=False, **cross(request, hop)
             )
             if x.stream and 200 <= response.status_code < 300:
                 return HttpAnswer(

@@ -29,12 +29,16 @@ async def raced(
         return await work
     task = asyncio.ensure_future(work)
     waiter = asyncio.ensure_future(cancel.wait())
-    await asyncio.wait((task, waiter), return_when=asyncio.FIRST_COMPLETED)
-    waiter.cancel()
-    if task.done():
-        return task.result()
-    task.cancel()
-    raise CanceledError("the call was canceled")
+    try:
+        await asyncio.wait((task, waiter), return_when=asyncio.FIRST_COMPLETED)
+        if task.done():
+            return task.result()
+        raise CanceledError("the call was canceled")
+    finally:
+        waiter.cancel()
+        if not task.done():
+            task.cancel()
+            await asyncio.wait((task,))
 
 
 @dataclass(frozen=True)

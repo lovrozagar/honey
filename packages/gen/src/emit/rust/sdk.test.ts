@@ -11,7 +11,7 @@ import pySse from "../../ir/__fixtures__/specs/python/sse.json" with { type: "js
 import pyWs from "../../ir/__fixtures__/specs/python/ws.json" with { type: "json" }
 import errorKeys from "../../ir/__fixtures__/specs/rust/error-keys.json" with { type: "json" }
 import realtimeApi from "../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
-import { envelope } from "./__fixtures__/documents-http.ts"
+import { envelope } from "../shared/__fixtures__/documents-http.ts"
 import { FIXTURES } from "./__fixtures__/documents.ts"
 import { RUST_FLOOR } from "./__fixtures__/rust-env.ts"
 import { generateRustSdk, type RustSdkOptions, rustCallPlans } from "./sdk.ts"

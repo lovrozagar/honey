@@ -19,8 +19,12 @@ type Resource = {
 	readonly methods: readonly PyMethod[]
 }
 
-/** The client env, the operations by id, and the async transport class the API needs. */
-export type ClientEnv = MethodEnv & { readonly ops: ReadonlyMap<string, SdkOp>; readonly transport: string }
+/** The client env, the operations by id, the async transport class the API needs, and whether it declares an `ErrorKey`. */
+export type ClientEnv = MethodEnv & {
+	readonly ops: ReadonlyMap<string, SdkOp>
+	readonly transport: string
+	readonly keyed: boolean
+}
 
 /* the root clients' own methods: no namespace or operation takes their names */
 const ROOT_NAMES = ["close", "aclose", "is_stale"]
@@ -134,8 +138,8 @@ export const clientTitle = (ir: IR) =>
 	)[0] as string
 
 /**
- * client.py's body for `ir`: the defaults, the operations' constants, the resource classes (sync, then async),
- * `SDK` and `AsyncSDK`; and every method's call plan.
+ * client.py's body for `ir`: the defaults (with the `ErrorKey` the runtime reads a key into), the operations'
+ * constants, the resource classes (sync, then async), `SDK` and `AsyncSDK`; and every method's call plan.
  */
 export function clientDecls(ir: IR, env: ClientEnv): { readonly lines: string[]; readonly plans: PythonCallPlan[] } {
 	const root = resourceOf(ir.tree, [], env)
@@ -152,6 +156,7 @@ export function clientDecls(ir: IR, env: ClientEnv): { readonly lines: string[];
 		server === undefined ? "None" : pyString(server),
 		pyString(ir.auth.headerName),
 		pyString(ir.auth.prefix),
+		...(env.keyed ? ["ErrorKey"] : []),
 	]
 	const blocks = [
 		[`_DEFAULTS = Defaults(${defaults.join(", ")})`, ...(constants.length > 0 ? ["", ...constants] : [])],

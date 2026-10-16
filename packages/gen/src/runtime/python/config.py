@@ -38,8 +38,9 @@ class ClientConfig:
     ``auth_header_name: auth_header_prefix + token``; unset, both follow the API's scheme, and a set
     name takes no prefix unless one is given. ``timeout`` (seconds; ``None`` or 0: none) bounds a
     whole call, never a stream. A redirect to another origin is followed only under ``"follow"``, and
-    never carries credentials or a body. ``SDK`` runs the ``*_sync`` hooks and a plain
-    ``on_auth_expired``; ``AsyncSDK`` runs the others, and coroutine functions too.
+    never carries credentials, a body, or what an ``http_client`` adds. ``SDK`` runs the ``*_sync``
+    hooks and a plain ``on_auth_expired``; ``AsyncSDK`` runs the others, and coroutine functions too.
+    Either refuses, at construction, a hook it would not run.
     """
 
     base_url: str = ""
@@ -96,11 +97,12 @@ class RawResponse:
 
 @dataclass(frozen=True)
 class Defaults:
-    """What the emitted client fills in: the API's first server and its auth scheme."""
+    """What the emitted client fills in: the API's first server, its auth scheme, its ``ErrorKey``."""
 
     base_url: str | None
     auth_header: str = "Authorization"
     auth_prefix: str = "Bearer "
+    keys: Callable[[str], str] | None = None
 
 
 def redacted(url: str) -> str:

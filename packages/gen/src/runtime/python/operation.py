@@ -12,7 +12,7 @@ HeaderKind = Literal["boolean", "integer", "number", "string"]
 @dataclass(frozen=True)
 class Operation(Generic[T]):
     """An operation answering ``T``. ``path_params`` follow path order; ``shape`` is the JSON kind its
-    answer must have; ``headers`` are its response headers: name, ``<Op>Headers`` key and kind."""
+    answer must have; ``headers`` are its response headers: name, ``<Op>Headers`` key, kind, required."""
 
     method: str
     path: str
@@ -25,4 +25,4 @@ class Operation(Generic[T]):
     idempotent: bool = False
     invalidates: tuple[str, ...] = ()
     stream: Literal["realtime", "sse", "ws"] | None = None
-    headers: tuple[tuple[str, str, HeaderKind], ...] = ()
+    headers: tuple[tuple[str, str, HeaderKind, bool], ...] = ()

@@ -3,7 +3,6 @@
 credential last), the idempotency key and request id, each redirect, the retry after a 401, and the
 answer's error class and decoding. The shells only move bytes."""
 
-import json
 import time
 import uuid
 from collections.abc import Mapping
@@ -27,6 +26,7 @@ from .errors import (
     CanceledError,
     ConfigError,
     DecodeError,
+    loads,
     status_error,
 )
 from .hooks import RequestContext, ResponseContext
@@ -76,6 +76,7 @@ class ClientCore:
         self.auth = AuthState(config.bearer_token or config.api_key)
         self.stale = StaleTracker(config.invalidation)
         self.state: dict[str, Any] = {} if config.state is None else config.state
+        self.keys = defaults.keys
 
 
 class Exchange:
@@ -107,6 +108,7 @@ class Exchange:
         self.idempotency = key if op.idempotent and not op.stream else None
         self.hops = 0
         self.raw = options.get("raw") or RawResponse()
+        self.failure: APIStatusError | None = None
 
     def check(self) -> float | None:
         """The seconds left; ``CanceledError`` once ``cancel`` fired, ``APITimeoutError`` past the timeout."""
@@ -132,10 +134,10 @@ class Exchange:
         )
         layers: list[Mapping[str, object]] = [
             {"Content-Type": content.media} if content else {},
-            {"Accept": self.op.accept} if self.op.accept else {},
             self.core.config.headers,
-            {k: v for k, v in call.items() if v is not None},
+            {"Accept": self.op.accept} if self.op.accept else {},
             {"Idempotency-Key": idempotency} if idempotency else {},
+            {k: v for k, v in call.items() if v is not None and v != {}},
             self.options.get("headers", {}),
             {self.core.auth_header: self.core.auth_prefix + token} if token else {},
         ]
@@ -223,10 +225,14 @@ class Exchange:
         )
 
     def done(self, answer: HttpAnswer) -> HttpAnswer:
-        """The call's answer: logged, the stale tracker settled on a 2xx, ``raw`` filled."""
+        """The call's answer: logged (an error status as its error too), the stale tracker settled on a
+        2xx, ``raw`` filled."""
         self.log.answered(answer.status)
         if 200 <= answer.status < 300:
             self.core.stale.settle(self.meta, self.op.invalidates, self.params)
+        else:
+            self.failure = failure(answer, self.core)
+            self.log.failed(self.failure)
         raw = self.raw
         raw.status, raw.headers, raw.body, raw.url = (
             answer.status,
@@ -238,19 +244,21 @@ class Exchange:
 
     def decoded(self, answer: HttpAnswer) -> object:
         """The answer's value; an error status raised as its class."""
-        if not 200 <= answer.status < 300:
-            raise status_error(answer.status, answer.headers, answer.body)
+        if self.failure is not None:
+            raise self.failure
         target = self.args.get("headers_into")
         if isinstance(target, dict):
-            for name, key, kind in self.op.headers:
+            for name, key, kind, required in self.op.headers:
                 if name in answer.headers:
                     target[key] = scalar(name, answer.headers[name], kind)
+                elif required:
+                    raise DecodeError(f"the {name} header is missing")
         if self.op.answer in ("none", "binary", "text"):
             return {"none": None, "binary": answer.body}.get(
                 self.op.answer, answer.body.decode("utf-8", "replace")
             )
         try:
-            value: object = json.loads(answer.body)
+            value: object = loads(answer.body)
         except ValueError:
             raise DecodeError(f"HTTP {answer.status}: the body is not JSON") from None
         kinds = SHAPES.get(self.op.shape or "", (object,))
@@ -270,8 +278,8 @@ def scalar(name: str, value: str, kind: str) -> object:
     try:
         return {"integer": int, "number": float, "string": str}[kind](value)
     except (KeyError, ValueError):
-        raise DecodeError(f"the {name} header is not a {kind}") from None
+        raise DecodeError(f"the {name} header is not a valid {kind}") from None
 
 
-def failure(answer: HttpAnswer) -> APIStatusError:
-    return status_error(answer.status, answer.headers, answer.body)
+def failure(answer: HttpAnswer, core: ClientCore) -> APIStatusError:
+    return status_error(answer.status, answer.headers, answer.body, core.keys)

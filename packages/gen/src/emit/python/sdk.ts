@@ -1,6 +1,7 @@
 /**
  * The Python SDK (bit 14): a package emitted from the IR alone (H2), in the src layout: `pyproject.toml`,
- * `src/<pkg>/types.py` (every component, then every hoisted declaration, in name order), `client.py` (the
+ * `src/<pkg>/types.py` (every component, then every hoisted declaration, in name order, then the `ErrorKey`
+ * StrEnum when the API declares error keys), `client.py` (the
  * resource classes and the `SDK` and `AsyncSDK` clients), `__init__.py` (the package root's exports), an empty
  * `py.typed`, and the vendored runtime under `_honey/`. Every `.py` file and the manifest carry the marker.
  */
@@ -9,6 +10,7 @@ import type { IR, IRSchema } from "../../ir/model.ts"
 import { sdkModel } from "../../ir/sdk-model.ts"
 import { pyDocLines } from "../shared/escape.ts"
 import { compareCodeUnits, NameScope } from "../shared/lang.ts"
+import { pythonErrorKeys } from "./errors.ts"
 import { type ClientEnv, clientDecls, clientTitle } from "./sdk-client.ts"
 import { allOrder, importBlock, importLine } from "./sdk-imports.ts"
 import type { PythonCallPlan } from "./sdk-plan.ts"
@@ -140,6 +142,8 @@ function emitPython(document: Record<string, unknown>, options: PythonSdkOptions
 	const at = pyTypeContext(ir)
 	/* components first: the client's hoisted types then land beside them */
 	const components = componentDecls(ir, at)
+	/* before the client: its `_DEFAULTS` names ErrorKey, and each `<Key>Data` lands among the hoisted declarations */
+	const errorKey = pythonErrorKeys(model, at)
 	const features = {
 		realtime: model.ops.some((op) => op.stream === "realtime"),
 		ws: model.ops.some((op) => op.stream === "ws"),
@@ -149,12 +153,15 @@ function emitPython(document: Record<string, unknown>, options: PythonSdkOptions
 		at: { ...at, declTyping: at.typing, typing: new Set() },
 		constants: new NameScope(),
 		imports: new Set(),
+		keyed: errorKey !== null,
 		ops: model.opsById,
 		throwOnError: options.throwOnError ?? true,
 		transport,
+		typesImports: new Set(),
 	}
 	const client = clientDecls(ir, env)
-	const decls = [...components, ...[...at.decls].sort(([a], [b]) => compareCodeUnits(a, b))]
+	const hoisted = [...at.decls].sort(([a], [b]) => compareCodeUnits(a, b))
+	const decls = [...components, ...hoisted, ...(errorKey === null ? [] : [["ErrorKey", errorKey] as [string, string]])]
 	const types = decls.map(([name]) => name)
 	const runtime = runtimeFiles(features)
 	const typesDoc = pyDocLines(ir.info.title === undefined ? "The API's types." : `The ${ir.info.title} API's types.`)
@@ -166,7 +173,11 @@ function emitPython(document: Record<string, unknown>, options: PythonSdkOptions
 		[`${root}/py.typed`]: "",
 		[`${root}/types.py`]: pyFile(
 			[typesDoc[0] as string],
-			[["from __future__ import annotations"], importLine("typing", at.typing)],
+			[
+				["from __future__ import annotations"],
+				[...(errorKey === null ? [] : ["from enum import StrEnum"]), ...importLine("typing", at.typing)],
+				importLine("._honey.body", env.typesImports),
+			],
 			decls.map(([, text]) => text),
 		),
 		...Object.fromEntries(Object.entries(runtime).map(([name, source]) => [`${root}/_honey/${name}`, source])),

@@ -22,6 +22,8 @@ export type MethodEnv = {
 	readonly constants: NameScope
 	/** the `collections.abc` and runtime names client.py imports */
 	readonly imports: Set<string>
+	/** the runtime names types.py imports (a multipart body's `FilePart`) */
+	readonly typesImports: Set<string>
 }
 
 /**

@@ -16,8 +16,10 @@ import ws from "../../../ir/__fixtures__/specs/python/ws.json" with { type: "jso
 import realtimeLongpoll from "../../../ir/__fixtures__/specs/rust/realtime-longpoll.json" with { type: "json" }
 import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" with { type: "json" }
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
+import { errors } from "../../shared/__fixtures__/documents-http.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { PythonSdkOptions } from "../sdk.ts"
+import { pythonHttp } from "./documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
 
 /**
@@ -79,8 +81,13 @@ export const FIXTURES = {
 				"from itertools import batched\n\n\ndef pairs(xs: list[int]) -> list[tuple[int, ...]]:\n    return list(batched(xs, 2))\n",
 		},
 	},
+	/** the declared error keys (G6/G7): bit 13's `errors` document, shared (contract 29 §4.3) */
+	errors: { document: errors },
 	fixtures: { document: fixtures },
 	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
+	/** the HTTP runtime's document (contract 29 §4.3): bit 13's `http` and three Python-only paths, both modes */
+	http: { document: pythonHttp },
+	"http-safe": { document: pythonHttp, options: { throwOnError: false } },
 	/** a relative first server: `SDK()` needs an absolute `base_url` (R7) */
 	relative: { document: relative },
 	/** every gate exercises the package rename */

@@ -1,12 +1,14 @@
 /**
  * What a method takes and answers beyond its params (G3, G4, G5): its body's type by kind, its return type
  * and the transport call it makes in either error mode or as a stream, the JSON kind its answer must have, and
- * its `<Op>Headers` TypedDict, hoisted beside the types, with how the runtime reads each header.
+ * its `<Op>Headers` TypedDict, hoisted beside the types, with how the runtime reads each header and whether it
+ * must arrive (Fc5).
  */
 import type { IRParam, IRResponse } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { pyString } from "../shared/escape.ts"
 import { compareCodeUnits, NameScope, pyClassName, pyIdentifier } from "../shared/lang.ts"
+import { multipartBody } from "./sdk-body.ts"
 import type { MethodEnv } from "./sdk-method.ts"
 import { pyTypeOf } from "./types.ts"
 
@@ -14,7 +16,7 @@ import { pyTypeOf } from "./types.ts"
 export const typeAt = (op: SdkOp, field: string, schema: IRParam["schema"], env: MethodEnv) =>
 	pyTypeOf(schema, { ...env.at, fieldName: field, parentName: op.id })
 
-/** The body parameter's type: its schema's for JSON, a form and multipart, `str` for text, bytes or chunks for binary. */
+/** The body parameter's type: its schema's for JSON and a form, `<Op>Body` for multipart, `str` for text, bytes or chunks for binary. */
 export function bodyType(op: SdkOp, async: boolean, env: MethodEnv): string | null {
 	const body = op.body
 	if (body === undefined) return null
@@ -23,8 +25,7 @@ export function bodyType(op: SdkOp, async: boolean, env: MethodEnv): string | nu
 		env.imports.add(async ? "AsyncIterable" : "Iterable")
 		return async ? "bytes | AsyncIterable[bytes]" : "bytes | Iterable[bytes]"
 	}
-	const schema = body.kind === "multipart" ? (op.ir.body as { schema: IRParam["schema"] }).schema : body.schema
-	return typeAt(op, "Body", schema, env)
+	return body.kind === "multipart" ? multipartBody(op, body.parts, env) : typeAt(op, "Body", body.schema, env)
 }
 
 /** What a method answers (its `Operation`'s type and its return type), and the transport call it makes. */
@@ -89,7 +90,7 @@ export function responseHeaders(op: SdkOp, env: MethodEnv) {
 			resolved.kind === "scalar" && resolved.type !== "null"
 				? { kind: resolved.type, type: pyTypeOf(header.schema, at) }
 				: { kind: "string", type: "str" }
-		return { header: header.name, key: scope.claim(pyIdentifier(header.name)), ...read }
+		return { header: header.name, key: scope.claim(pyIdentifier(header.name)), required: header.required, ...read }
 	})
 	typing.add("TypedDict")
 	/* every key is an identifier (pyIdentifier), so the class form always spells it */
@@ -97,6 +98,9 @@ export function responseHeaders(op: SdkOp, env: MethodEnv) {
 		type,
 		[`class ${type}(TypedDict, total=False):`, ...fields.map((f) => `    ${f.key}: ${f.type}`)].join("\n"),
 	)
-	const read = fields.map(({ header, key, kind }) => `(${pyString(header)}, ${pyString(key)}, ${pyString(kind)})`)
+	const read = fields.map(
+		({ header, key, kind, required }) =>
+			`(${pyString(header)}, ${pyString(key)}, ${pyString(kind)}, ${required ? "True" : "False"})`,
+	)
 	return { plan: { fields: Object.fromEntries(fields.map((f) => [f.header, f.key])), type }, read }
 }

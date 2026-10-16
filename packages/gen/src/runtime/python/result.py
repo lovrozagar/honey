@@ -14,8 +14,9 @@ T = TypeVar("T")
 
 @dataclass(frozen=True)
 class SDKResult(Generic[T]):
-    """``data`` on a 2xx, ``error`` on an error status, and the raw response either way."""
+    """``data`` on a 2xx, ``error`` on an error status; the status and raw response either way."""
 
     data: T | None
     error: APIStatusError | None
+    status: int
     response: RawResponse

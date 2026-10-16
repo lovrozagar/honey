@@ -1,13 +1,15 @@
 """The shared driver protocol's shapes, as TypedDicts.
 
 Mirrors of tests/integration/conformance/matrix.ts (``Setup``, ``Call``, ``Observed``) and of
-emit/shared/__fixtures__/protocol.ts (``Script``, ``Trace``), plus the stdin envelope and the
-emitter's call plan (``PythonCallPlan``, emit/python/sdk-plan.ts). Keys keep the wire's spelling.
+emit/shared/__fixtures__/protocol.ts (``Script``, ``CallScript``, ``PythonError``, ``Trace``), plus
+the stdin envelope and the emitter's call plan (``PythonCallPlan``, emit/python/sdk-plan.ts). Keys
+keep the wire's spelling. Every script shape lists each member the shared protocol names, so
+script.py's strict decoding knows it by these annotations and can name what it refuses.
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, Required, TypedDict
 
 
 class DriverError(Exception):
@@ -125,20 +127,121 @@ class TimeoutObserved(TypedDict):
 Observed = DataObserved | ErrorObserved | BytesObserved | RawObserved | TimeoutObserved
 
 
+class AfterMs(TypedDict):
+    afterMs: int
+
+
+class Invalidation(TypedDict, total=False):
+    maxSourcesPerTarget: int
+    staleMaxEntries: int
+    staleTimeMs: Required[int]
+
+
+class ScriptConfig(TypedDict, total=False):
+    authHeaderName: str
+    authHeaderPrefix: str
+    httpClient: bool
+    invalidation: Invalidation
+    maxResponseBytes: int
+
+
+class RequestHook(TypedDict, total=False):
+    fail: str
+    setHeader: list[str]
+
+
+class ResponseHook(TypedDict, total=False):
+    body: str
+    fail: str
+
+
+class ScriptHooks(TypedDict, total=False):
+    request: list[RequestHook]
+    response: list[ResponseHook]
+
+
+class Tokens(TypedDict):
+    tokens: list[str]
+
+
+class RealtimeScript(TypedDict, total=False):
+    maxReconnectAttempts: int
+    reconnectDelayMs: int
+
+
+class WsClose(TypedDict):
+    code: int
+    reason: str
+
+
+class WsScript(TypedDict, total=False):
+    close: WsClose
+    on: bool
+    readLimit: int
+    send: list[dict[str, Any]]
+
+
+class CallScript(TypedDict, total=False):
+    cancel: Literal["before"] | AfterMs
+    ctxTimeoutMs: int
+    envelope: bool
+    idempotencyKey: str
+    isErrors: list[str]
+    isKeys: list[str]
+    oneShotBody: bool
+    protocols: list[str]
+    realtime: RealtimeScript
+    sleepMs: int
+    taskCancel: AfterMs
+    ws: WsScript
+
+
 class Script(TypedDict, total=False):
-    calls: list[dict[str, Any] | None]
-    config: dict[str, Any]
-    hooks: dict[str, list[dict[str, Any]]]
+    calls: list[CallScript | None]
+    config: ScriptConfig
+    hooks: ScriptHooks
     log: bool
     logDurations: bool
-    onAuthExpired: dict[str, list[str]]
+    onAuthExpired: Tokens
+
+
+class PythonError(TypedDict):
+    type: str
+    chain: list[str]
+    text: str
+    repr: str
+    via: Literal["result", "return", "stream"]
+    cause: str | None
+    status: NotRequired[int]
+    key: NotRequired[str | None]
+    keyMember: NotRequired[str | None]
+    message: NotRequired[str]
+    envelope: NotRequired[dict[str, Any]]
+
+
+class ResultTrace(TypedDict):
+    data: bool
+    ok: bool
+    response: bool
+    status: int
+
+
+class CallTrace(TypedDict):
+    elapsedMs: int
+    error: NotRequired[PythonError]
+    result: NotRequired[ResultTrace]
 
 
 class Trace(TypedDict):
     authExpired: int
-    calls: list[dict[str, Any]]
+    calls: list[CallTrace]
     hooks: list[dict[str, Any]]
     log: list[dict[str, Any]]
+
+
+class Printed(TypedDict):
+    observed: list[Observed | None]
+    trace: Trace
 
 
 class SdkRef(TypedDict):

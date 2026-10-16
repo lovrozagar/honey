@@ -6,7 +6,7 @@
  * document arrives in phase e.
  */
 import { join } from "node:path"
-import type { Script, Trace } from "../../shared/__fixtures__/protocol.ts"
+import type { PythonError, Script, Trace } from "../../shared/__fixtures__/protocol.ts"
 import { pythonCallPlans } from "../sdk.ts"
 import { compiledFixture, type GateOptions, type PythonSdk } from "./compiled.ts"
 import { FIXTURES, type FixtureKey, type PythonFixture } from "./documents.ts"
@@ -22,23 +22,23 @@ export type DriverRun = {
 	readonly stderr: string
 }
 
-/** The SDK with the driver aimed at it. `PythonError`, the trace's error record, joins protocol.ts in phase c. */
+/** The SDK with the driver aimed at it: under a script, the trace records each error as a `PythonError`. */
 export type DrivenPythonSdk = PythonSdk & {
 	/** run `cell` on one client ("async" or "sync") aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
 	runCalls(
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly url: string },
 		run: { readonly client: "async" | "sync"; readonly script?: Script },
-	): Promise<DriverRun & { readonly trace?: Trace<unknown> }>
+	): Promise<DriverRun & { readonly trace?: Trace<PythonError> }>
 }
 
 /** The driver's entry point: it puts its own dir on sys.path, which `-I` leaves off. */
 const driverEntry = () => join(import.meta.dirname, "driver", "driver.py")
 
 /** A driver run's stdout as the caller reads it: `Observed[]`, or `{observed, trace}` under a script. */
-function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace?: Trace<unknown> } {
+function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace?: Trace<PythonError> } {
 	if (!scripted) return { observed: JSON.parse(stdout) as unknown[] }
-	return JSON.parse(stdout) as { observed: unknown[]; trace: Trace<unknown> }
+	return JSON.parse(stdout) as { observed: unknown[]; trace: Trace<PythonError> }
 }
 
 /**

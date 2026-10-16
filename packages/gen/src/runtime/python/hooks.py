@@ -7,9 +7,12 @@ from __future__ import annotations
 import inspect
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from .errors import HoneyError, HookError
+from .errors import ConfigError, HoneyError, HookError
+
+if TYPE_CHECKING:
+    from .config import ClientConfig
 
 __all__ = ["RequestContext", "ResponseContext"]
 
@@ -21,15 +24,15 @@ class RequestContext:
     """A request about to be sent; a hook may change it. ``body`` is ``None`` for an iterable body."""
 
     method: str
-    url: str
-    path: str
-    headers: dict[str, str]
-    body: bytes | None
+    url: str = field(repr=False)
+    path: str = field(repr=False)
+    headers: dict[str, str] = field(repr=False)
+    body: bytes | None = field(repr=False)
     is_retry: bool = False
     selector: str = ""
     is_stale: bool = False
     invalidated_by: list[str] = field(default_factory=list)
-    state: dict[str, Any] = field(default_factory=dict)
+    state: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
 @dataclass
@@ -37,21 +40,31 @@ class ResponseContext:
     """An answer before it is decoded; a hook may replace it. A stream's 2xx body is not read."""
 
     status: int
-    headers: Mapping[str, str]
-    body: bytes
+    headers: Mapping[str, str] = field(repr=False)
+    body: bytes = field(repr=False)
     is_retry: bool = False
     selector: str = ""
     is_stale: bool = False
     invalidated_by: list[str] = field(default_factory=list)
-    state: dict[str, Any] = field(default_factory=dict)
+    state: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
-def wrapped(error: Exception) -> HoneyError:
-    return (
-        error
-        if isinstance(error, HoneyError)
-        else HookError(f"a hook raised {type(error).__name__}")
-    )
+def wrapped(error: Exception, what: str = "hook") -> HoneyError:
+    return error if isinstance(error, HoneyError) else HookError(f"{what}: {error}")
+
+
+def refuse_hooks(config: ClientConfig, sync: bool) -> None:
+    """``ConfigError`` for a hook the client would never run."""
+    if sync and (
+        config.on_request
+        or config.on_response
+        or inspect.iscoroutinefunction(config.on_auth_expired)
+    ):
+        raise ConfigError(
+            "SDK runs on_request_sync, on_response_sync and a plain on_auth_expired"
+        )
+    if not sync and (config.on_request_sync or config.on_response_sync):
+        raise ConfigError("AsyncSDK runs on_request and on_response")
 
 
 def run_sync(hooks: Sequence[Callable[[C], None]], context: C) -> None:

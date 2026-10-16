@@ -15,6 +15,7 @@ const EMITTED: readonly string[] = [
 	"SDK",
 	"AsyncSDK",
 	"ErrorKey",
+	"StrEnum",
 	"Any",
 	"Literal",
 	"NotRequired",

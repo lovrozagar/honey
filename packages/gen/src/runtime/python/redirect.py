@@ -2,14 +2,24 @@
 """Which redirects a call follows (R2): the HTTP client never follows one itself. A hop to another
 origin is followed only under ``"follow"``, stripped to the safe headers, and never carries a body."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urljoin, urlsplit
+
+import httpx2
 
 from .body import BodyPayload
 
 MAX_REDIRECTS = 10
 SAFE = ("accept", "accept-language", "user-agent")
+FRAMING = (
+    "accept-encoding",
+    "connection",
+    "content-length",
+    "host",
+    "transfer-encoding",
+)
 
 
 @dataclass(frozen=True)
@@ -18,6 +28,7 @@ class Hop:
     url: str
     headers: dict[str, str]
     content: BodyPayload | None
+    cross: bool = False
 
 
 def origin(url: str) -> tuple[str, str | None, int | None]:
@@ -34,10 +45,13 @@ def follow(
 ) -> Hop | None:
     """The hop after a ``status`` answer, or ``None`` when that answer is the call's. 303 turns all but
     HEAD into GET, 301 and 302 turn POST into GET, and 307 and 308 resend a body, which only bytes can."""
-    target = urljoin(hop.url, location or "")
     if policy == "manual" or status not in (301, 302, 303, 307, 308) or not location:
         return None
-    cross = origin(target) != origin(start)
+    try:
+        target = urljoin(hop.url, location)
+        cross = origin(target) != origin(start)
+    except ValueError:
+        return None
     if urlsplit(target).scheme not in ("http", "https") or (
         cross and policy != "follow"
     ):
@@ -65,4 +79,19 @@ def follow(
         url=target,
         headers=headers,
         content=None if to_get else hop.content,
+        cross=cross,
     )
+
+
+def cross(request: httpx2.Request, hop: Hop) -> dict[str, Any]:
+    """For a hop to another origin: drops what the caller's client added, and its ``auth``."""
+    if not hop.cross:
+        return {}
+    for name in foreign(request.headers):
+        del request.headers[name]
+    return {"auth": None}
+
+
+def foreign(names: Iterable[str]) -> list[str]:
+    """The headers a hop to another origin drops, those a caller's client adds among them."""
+    return [name for name in names if name.lower() not in SAFE + FRAMING]

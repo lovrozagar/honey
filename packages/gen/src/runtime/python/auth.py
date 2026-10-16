@@ -45,7 +45,7 @@ def refresh_sync(
         try:
             fresh = hook()
         except Exception as error:
-            raise wrapped(error) from error
+            raise wrapped(error, "on_auth_expired") from error
         if inspect.iscoroutine(fresh):
             fresh.close()
             raise ConfigError(
@@ -65,5 +65,5 @@ async def refresh_async(
             if inspect.isawaitable(fresh):
                 fresh = await fresh
         except Exception as error:
-            raise wrapped(error) from error
+            raise wrapped(error, "on_auth_expired") from error
         return state.keep(fresh)

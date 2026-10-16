@@ -7,7 +7,10 @@
  * (emit/rust/__fixtures__/driver/script.rs, trace.rs, stream.rs) reads the same script, refusing for
  * good what is Go's alone (`ctxTimeoutMs`, `isKeys`, `isErrors`, `ws.readLimit`), and records its
  * errors as `RustError`: its trace is `Trace<RustError>`. `protocols`, `realtime` and `ws` mean the
- * same to it, on the Opts fields and `TypedWebSocket` methods of those names.
+ * same to it, on the Opts fields and `TypedWebSocket` methods of those names. The Python driver
+ * (emit/python/__fixtures__/driver/script.py, tracing.py) reads it on `SDK` and `AsyncSDK` alike, refuses
+ * the same Go-only members, adds `taskCancel` (an `AsyncSDK` task's), and records its errors as
+ * `PythonError`: its trace is `Trace<PythonError>`.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
@@ -35,6 +38,8 @@ export type CallScript = {
 	readonly realtime?: { readonly maxReconnectAttempts?: number; readonly reconnectDelayMs?: number }
 	/** sleep before the call, outside its `elapsedMs` */
 	readonly sleepMs?: number
+	/** Python only: the call's `asyncio` task is cancelled that many ms in (`AsyncSDK`); Go and Rust refuse it */
+	readonly taskCancel?: { readonly afterMs: number }
 	readonly ws?: {
 		/** Close's code and reason, in place of 1000 and none */
 		readonly close?: { readonly code: number; readonly reason: string }
@@ -137,6 +142,32 @@ export type RustError = {
 	/** Api only: `ApiError::message()` */
 	readonly message?: string
 	/** Api with `envelope`: the envelope's members that are set (status, error_key, status_key, message, fields), and `extraKeys`, its extra keys sorted */
+	readonly envelope?: Json
+}
+
+/** A call's Python error as the trace records it (the exception, read through its attributes). */
+export type PythonError = {
+	/** `type(e).__name__`: "NotFoundError", "HookError", "CancelledError", … */
+	readonly type: string
+	/** the class names of `type(e).__mro__` up to and including HoneyError; `[type]` for an exception outside the SDK */
+	readonly chain: readonly string[]
+	/** `str(e)` */
+	readonly text: string
+	/** `repr(e)`, for the redaction legs */
+	readonly repr: string
+	/** the method's raise, a safe-mode `SDKResult.error`, or one a stream raised */
+	readonly via: "result" | "return" | "stream"
+	/** `type(e.__cause__).__name__`; null without one */
+	readonly cause: string | null
+	/** `APIStatusError.status` */
+	readonly status?: number
+	/** APIStatusError only: `str(e.key)`; null without one */
+	readonly key?: string | null
+	/** APIStatusError only: `e.key.name` when `e.key` is an `ErrorKey` member; null otherwise */
+	readonly keyMember?: string | null
+	/** APIStatusError only: `e.message` */
+	readonly message?: string
+	/** APIStatusError with `envelope`: the envelope's members that are set (status, error_key, status_key, message, fields), and `extraKeys`, its extra keys sorted */
 	readonly envelope?: Json
 }
 

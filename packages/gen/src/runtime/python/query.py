@@ -35,11 +35,11 @@ def text(value: object) -> str:
 
 
 def pairs(params: Mapping[str, object] | None) -> list[tuple[str, str]]:
-    """``params`` in order, ``None`` left out, a list or tuple repeating its key."""
+    """``params`` in order, ``None`` and ``{}`` left out, a list or tuple repeating its key."""
     out = []
     for key, value in (params or {}).items():
         items = value if isinstance(value, (list, tuple)) else [value]
-        out += [(key, text(item)) for item in items if item is not None]
+        out += [(key, text(item)) for item in items if item is not None and item != {}]
     return out
 
 

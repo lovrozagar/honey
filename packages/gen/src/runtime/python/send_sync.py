@@ -9,9 +9,9 @@ from .auth import refresh_sync
 from .config import ClientConfig, Defaults
 from .errors import APIConnectionError, APIStatusError, APITimeoutError, HoneyError
 from .exchange import CallArgs, ClientCore, Exchange, HttpAnswer
-from .hooks import run_sync
+from .hooks import refuse_hooks, run_sync
 from .operation import Operation
-from .redirect import Hop
+from .redirect import Hop, cross
 from .result import SDKResult
 
 T = TypeVar("T")
@@ -21,6 +21,7 @@ class SyncTransport(ClientCore):
     """One ``SDK``'s connection pool and settings."""
 
     def __init__(self, config: ClientConfig, defaults: Defaults) -> None:
+        refuse_hooks(config, sync=True)
         super().__init__(config, defaults)
         self.http = config.http_client or httpx2.Client()
 
@@ -32,9 +33,9 @@ class SyncTransport(ClientCore):
         x = Exchange(self, op, args)
         answer = self.run(x)
         try:
-            return SDKResult(cast("T", x.decoded(answer)), None, x.raw)
+            return SDKResult(cast("T", x.decoded(answer)), None, x.raw.status, x.raw)
         except APIStatusError as error:
-            return SDKResult(None, error, x.raw)
+            return SDKResult(None, error, x.raw.status, x.raw)
 
     def run(self, x: Exchange) -> HttpAnswer:
         """One attempt, and one more with a refreshed token after a 401."""
@@ -75,7 +76,9 @@ class SyncTransport(ClientCore):
         )
         chunks: list[bytes] = []
         try:
-            response = self.http.send(request, stream=True, follow_redirects=False)
+            response = self.http.send(
+                request, stream=True, follow_redirects=False, **cross(request, hop)
+            )
             try:
                 for chunk in response.iter_bytes():
                     x.read(chunks, chunk)

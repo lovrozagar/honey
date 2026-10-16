@@ -1,4 +1,5 @@
-"""The Python SDK's test driver (bit 14, contract 28 §6.5): one fixed program, no generated code.
+"""The Python SDK's test driver (bit 14, contract 28 §6.5, contract 29 §4.2): one fixed program, no
+generated code.
 
 Stdin is one JSON object, the shared envelope:
 
@@ -10,7 +11,14 @@ Stdin is one JSON object, the shared envelope:
 invoke.py walks with ``getattr``. Every call of a cell runs in order on one client, ``SDK`` or
 ``AsyncSDK`` by ``client``, aimed at ``base``. Stdout is the grid's ``Observed[]`` JSON, one per call.
 Any failure, and any call or outcome this driver cannot express, exits 1 with the reason on stderr:
-a red cell, never a silent pass. A script arrives in phase c (it then prints ``{observed, trace}``).
+a red cell, never a silent pass.
+
+A ``script`` (script.py; unit tests and the harness send one, the conformance runner never does)
+sets what a grid Setup cannot, installs recording hooks and directs each call, and stdout becomes
+``{"observed": (Observed|null)[], "trace": Trace<PythonError>}`` (tracing.py): a call ending in an
+error the grid has no Observed for observes null, its error traced. Before call *i*: its
+``sleepMs``, then the recorder marks it; ``elapsedMs`` covers the call alone. An ``AsyncSDK`` call
+runs as its own task, which ``taskCancel`` cancels. A bad script exits 1 before any call is sent.
 
 The interpreter runs isolated (``-I``), so this file puts its own dir and the package root on
 ``sys.path`` itself.
@@ -22,18 +30,31 @@ import asyncio
 import importlib
 import json
 import sys
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from invoke import prepare
-from observe import failed, observed
-from protocol import Call, DriverError, Envelope, Observed, Setup
+from invoke import Target, prepare
+from observe import Lens, Outcome, raised, returned
+from protocol import (
+    Call,
+    CallScript,
+    DriverError,
+    Envelope,
+    Observed,
+    Printed,
+    Script,
+    Setup,
+)
+from script import apply, parse
+from tracing import Recorder
 
 
-def config_of(module: Any, envelope: Envelope) -> Any:
-    """The ``ClientConfig`` the cell's setup asks for, aimed at ``base``."""
+def config_fields(envelope: Envelope) -> dict[str, Any]:
+    """The ``ClientConfig`` fields the cell's setup asks for, aimed at ``base``."""
     setup: Setup = envelope["cell"].get("setup", {})
     fields: dict[str, Any] = {"base_url": envelope["base"]}
     if "headers" in setup:
@@ -52,58 +73,120 @@ def config_of(module: Any, envelope: Envelope) -> Any:
         fields["redirect"] = redirect
     if "timeoutMs" in setup:
         fields["timeout"] = setup["timeoutMs"] / 1000
-    return module.ClientConfig(**fields)
+    return fields
 
 
-def sync_call(client: Any, module: Any, call: Call, envelope: Envelope) -> Observed:
+@dataclass
+class Runner:
+    """What every call of a run shares: the target, the recorder and the script."""
+
+    target: Target
+    recorder: Recorder
+    script: Script | None
+
+    def directives(self, i: int) -> CallScript:
+        """Call ``i``'s script entry; an empty one without it."""
+        entries = [] if self.script is None else self.script.get("calls", [])
+        entry = entries[i] if i < len(entries) else None
+        return {} if entry is None else entry
+
+    def lens(self, call: Call, directives: CallScript) -> Lens:
+        """How call ``call`` is observed."""
+        scripted = self.script is not None
+        envelope = bool(directives.get("envelope"))
+        return Lens(self.target.module, bool(call.get("raw")), scripted, envelope)
+
+    def plan(self, call: Call) -> Any:
+        return self.target.envelope["plans"][call["operation"]]
+
+
+def sync_call(
+    client: Any, runner: Runner, call: Call, directives: CallScript
+) -> Outcome:
     """``call`` sent on ``SDK`` and observed."""
-    prepared = prepare(client, module, call, envelope)
-    raw = bool(call.get("raw"))
+    prepared = prepare(client, runner.target, call, directives)
+    lens = runner.lens(call, directives)
     try:
         result = prepared.method(*prepared.args, **prepared.kwargs)
-    except module.HoneyError as error:
-        return failed(error, module, raw)
-    return observed(
-        result, prepared, envelope["plans"][call["operation"]], (module, raw)
-    )
+    except Exception as error:
+        if not lens.scripted and not isinstance(error, lens.module.HoneyError):
+            raise
+        return raised(error, lens)
+    return returned(result, prepared, runner.plan(call), lens)
 
 
 async def async_call(
-    client: Any, module: Any, call: Call, envelope: Envelope
-) -> Observed:
-    """``call`` sent on ``AsyncSDK`` and observed."""
-    prepared = prepare(client, module, call, envelope)
-    raw = bool(call.get("raw"))
-    try:
-        result = await prepared.method(*prepared.args, **prepared.kwargs)
-    except module.HoneyError as error:
-        return failed(error, module, raw)
-    return observed(
-        result, prepared, envelope["plans"][call["operation"]], (module, raw)
+    client: Any, runner: Runner, call: Call, directives: CallScript
+) -> Outcome:
+    """``call`` sent on ``AsyncSDK`` as its own task, cancelled under ``taskCancel``, and observed."""
+    prepared = prepare(client, runner.target, call, directives)
+    lens = runner.lens(call, directives)
+    task = asyncio.ensure_future(prepared.method(*prepared.args, **prepared.kwargs))
+    cancel = directives.get("taskCancel")
+    timer = (
+        None
+        if cancel is None
+        else asyncio.get_running_loop().call_later(
+            cancel["afterMs"] / 1000, task.cancel
+        )
     )
+    try:
+        result = await task
+    except asyncio.CancelledError as error:
+        return raised(error, lens)
+    except Exception as error:
+        if not lens.scripted and not isinstance(error, lens.module.HoneyError):
+            raise
+        return raised(error, lens)
+    finally:
+        if timer is not None:
+            timer.cancel()
+    return returned(result, prepared, runner.plan(call), lens)
 
 
-def run_sync(module: Any, config: Any, envelope: Envelope) -> list[Observed]:
+def elapsed_ms(start: float) -> int:
+    return round((time.monotonic() - start) * 1000)
+
+
+def run_sync(runner: Runner, config: Any) -> list[Observed | None]:
     """Every call in order on one ``SDK``."""
-    out: list[Observed] = []
-    with module.SDK(config) as client:
-        for i, call in enumerate(envelope["cell"]["calls"]):
+    out: list[Observed | None] = []
+    with runner.target.module.SDK(config) as client:
+        for i, call in enumerate(runner.target.envelope["cell"]["calls"]):
+            directives = runner.directives(i)
+            if "sleepMs" in directives:
+                time.sleep(directives["sleepMs"] / 1000)
+            runner.recorder.begin(i)
+            start = time.monotonic()
             try:
-                out.append(sync_call(client, module, call, envelope))
+                outcome = sync_call(client, runner, call, directives)
             except Exception as error:
                 raise located(i, call, error) from error
+            runner.recorder.called(elapsed_ms(start), outcome.error, outcome.result)
+            out.append(outcome.observed)
+    if config.http_client is not None:
+        config.http_client.close()
     return out
 
 
-async def run_async(module: Any, config: Any, envelope: Envelope) -> list[Observed]:
+async def run_async(runner: Runner, config: Any) -> list[Observed | None]:
     """Every call in order on one ``AsyncSDK``."""
-    out: list[Observed] = []
-    async with module.AsyncSDK(config) as client:
-        for i, call in enumerate(envelope["cell"]["calls"]):
+    out: list[Observed | None] = []
+    async with runner.target.module.AsyncSDK(config) as client:
+        for i, call in enumerate(runner.target.envelope["cell"]["calls"]):
+            directives = runner.directives(i)
+            if "sleepMs" in directives:
+                await asyncio.sleep(directives["sleepMs"] / 1000)
+            runner.recorder.begin(i)
+            start = time.monotonic()
             try:
-                out.append(await async_call(client, module, call, envelope))
+                outcome = await async_call(client, runner, call, directives)
             except Exception as error:
                 raise located(i, call, error) from error
+            runner.recorder.called(elapsed_ms(start), outcome.error, outcome.result)
+            out.append(outcome.observed)
+    if config.async_http_client is not None:
+        await config.async_http_client.aclose()
     return out
 
 
@@ -117,16 +200,26 @@ def located(i: int, call: Call, error: Exception) -> DriverError:
     return DriverError(f"call {i} ({call['operation']}): {reason}")
 
 
-def drive(envelope: Envelope) -> list[Observed]:
-    """The cell on stdin run on the client it names."""
-    if "script" in envelope:
-        raise DriverError("script arrives in phase c")
+def drive(envelope: Envelope) -> list[Observed | None] | Printed:
+    """The cell on stdin run on the client it names, its script checked before any call."""
+    client = envelope["client"]
+    calls = len(envelope["cell"]["calls"])
+    script = parse(envelope["script"], calls, client) if "script" in envelope else None
     sys.path.insert(0, envelope["sdk"]["root"])
     module = importlib.import_module(envelope["sdk"]["package"])
-    config = config_of(module, envelope)
-    if envelope["client"] == "sync":
-        return run_sync(module, config, envelope)
-    return asyncio.run(run_async(module, config, envelope))
+    recorder = Recorder()
+    fields = config_fields(envelope)
+    if script is not None:
+        apply(script, fields, (module, client), recorder)
+    config = module.ClientConfig(**fields)
+    runner = Runner(Target(module, envelope), recorder, script)
+    if client == "sync":
+        observed = run_sync(runner, config)
+    else:
+        observed = asyncio.run(run_async(runner, config))
+    if script is None:
+        return observed
+    return {"observed": observed, "trace": recorder.trace()}
 
 
 def main() -> None:

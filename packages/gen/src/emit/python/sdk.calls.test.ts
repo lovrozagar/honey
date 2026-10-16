@@ -158,6 +158,9 @@ const ROOT_EXPORTS = [
 	"HookError",
 	"EventStream",
 	"SseEvent",
+	"FilePart",
+	"ErrorEnvelope",
+	"FieldError",
 ]
 const IMPORT = `from acme_sdk import (\n${ROW_EXPORTS.map((name) => `    ${name},\n`).join("")})\n`
 

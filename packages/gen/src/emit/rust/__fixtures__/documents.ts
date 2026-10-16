@@ -17,7 +17,7 @@ import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { 
 import { adversarialCorpus } from "../../shared/__fixtures__/adversarial-corpus.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { RustSdkOptions } from "../sdk.ts"
-import { errors, http } from "./documents-http.ts"
+import { errors, http } from "../../shared/__fixtures__/documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
 import * as streams from "./documents-streams.ts"
 

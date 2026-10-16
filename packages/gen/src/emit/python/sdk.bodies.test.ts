@@ -1,10 +1,10 @@
 /**
  * The method shapes the registry documents do not reach (contract 28 §4.3, §4.5, §4.7): a text, form and
- * multipart body, an optional body, a text, binary and integer answer, `<Op>Headers` and `headers_into`, a
- * nullable optional keyword, a realtime op folding its declared Last-Event-ID, a namespace mixing a stream
- * with a call, a method named like a builtin a later signature spells, an API without a title, and one
- * without operations. Each is the emitted text; the package it belongs to is ruff- and mypy-clean (checked
- * when this file was written; phase c executes these shapes).
+ * multipart body (its `<Op>Body` by part, contract 29 Fc6), an optional body, a text, binary and integer answer,
+ * `<Op>Headers` and `headers_into`, a nullable optional keyword, a realtime op folding its declared Last-Event-ID,
+ * a namespace mixing a stream with a call, a method named like a builtin a later signature spells, an API
+ * without a title, and one without operations. Each is the emitted text; the package it belongs to is ruff- and
+ * mypy-clean (checked when this file was written; phase c executes these shapes).
  */
 import { describe, expect, it } from "vitest"
 import { pythonCallPlans, generatePythonSdk } from "./sdk.ts"
@@ -130,6 +130,56 @@ describe("bodies and answers beside JSON", () => {
 	})
 })
 
+describe("multipart bodies (contract 29 Fc6)", () => {
+	const BINARY = { format: "binary", type: "string" }
+	const post = (operationId: string, schema: Json): Json => ({
+		post: {
+			operationId,
+			requestBody: { ...content("multipart/form-data", schema), required: true },
+			responses: { 204: { description: "done" } },
+		},
+	})
+	const FORMS: Json = {
+		info: { version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/nulls": post("nulls.send", {
+				properties: { file: BINARY, "x-note": STRING },
+				required: ["file"],
+				type: ["object", "null"],
+			}),
+			"/texts": post("texts.send", object({ note: STRING }, ["note"])),
+		},
+	}
+	const decl = (document: Json, name: string) => {
+		const types = files(document)["src/honey_sdk/types.py"] ?? ""
+		const start = types.search(new RegExp(`^(class )?${name}\\b`, "m"))
+		return types.slice(start, types.indexOf("\n\n", start))
+	}
+
+	it("types a file part FilePart, imported from the runtime, bare when the form requires it", () => {
+		expect({
+			decl: decl(BODIES, "UploadsCreateBody"),
+			imports: (files(BODIES)["src/honey_sdk/types.py"] ?? "").includes("\n\nfrom ._honey.body import FilePart\n"),
+		}).toEqual({ decl: "class UploadsCreateBody(TypedDict):\n    file: FilePart", imports: true })
+	})
+
+	it("leaves every part NotRequired under a form that is no object, and imports no FilePart for text parts alone", () => {
+		expect({
+			nulls: decl(FORMS, "NullsSendBody"),
+			texts: decl(FORMS, "TextsSendBody"),
+			textOnly: files({ ...FORMS, paths: { "/texts": (FORMS.paths as Json)["/texts"] } })[
+				"src/honey_sdk/types.py"
+			]?.includes("FilePart"),
+		}).toEqual({
+			nulls:
+				'NullsSendBody = TypedDict(\n    "NullsSendBody",\n    {"file": "NotRequired[FilePart]", "x-note": "NotRequired[str]"},\n)',
+			texts: "class TextsSendBody(TypedDict):\n    note: str",
+			textOnly: false,
+		})
+	})
+})
+
 describe("response headers (G5)", () => {
 	it("declares <Op>Headers beside the types, takes headers_into, and reads each header by its kind", () => {
 		const types = files(BODIES)["src/honey_sdk/types.py"] ?? ""
@@ -140,7 +190,7 @@ describe("response headers (G5)", () => {
 			signature: lines(BODIES, "def get(self, *, since"),
 		}).toEqual({
 			constant: [
-				'_REPORTS_GET: Operation[ReportsGetResponse] = Operation("GET", "/reports", shape="object", headers=(("X-Count", "x_count", "integer"), ("X-Tags", "x_tags", "string"), ("X-Trace-Id", "x_trace_id", "string")))',
+				'_REPORTS_GET: Operation[ReportsGetResponse] = Operation("GET", "/reports", shape="object", headers=(("X-Count", "x_count", "integer", False), ("X-Tags", "x_tags", "string", False), ("X-Trace-Id", "x_trace_id", "string", True)))',
 			],
 			/* a header that is no scalar is the text that arrives */
 			decl: "class ReportsGetHeaders(TypedDict, total=False):\n    x_count: int\n    x_tags: str\n    x_trace_id: str",
