@@ -10,7 +10,8 @@ import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
 import type { Script } from "../shared/__fixtures__/protocol.ts"
-import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { gone } from "../shared/__fixtures__/gone.ts"
+import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { dispatchRs } from "./__fixtures__/dispatch.ts"
 import { FIXTURES } from "./__fixtures__/documents.ts"
@@ -64,20 +65,6 @@ async function drive(sdk: DrivenRustSdk, replies: readonly Reply[], calls: reado
 		const run = await sdk.runCalls({ calls }, server, script)
 		return { hops: [...server.hops], run, streams: [...server.streams] }
 	})
-}
-
-/** Poll `check` every 10 ms until it holds, for at most 5 s. */
-async function until(check: () => boolean): Promise<void> {
-	for (let i = 0; i < 500 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 10))
-}
-
-/** Whether `server`'s first stream saw its client leave while `running` was still going, and what it resolved to. */
-async function leftWhileRunning<T>(server: RecordingServer, running: Promise<T>) {
-	const state = { ended: false }
-	const watched = running.finally(() => (state.ended = true))
-	const gone = () => server.streams[0]?.clientGone === true
-	await until(() => state.ended || gone())
-	return { goneWhileRunning: !state.ended && gone(), result: await watched }
 }
 
 /** Each control an SSE call cannot take, its script when it is one, and the reason the driver exits 1 with. */
@@ -204,7 +191,9 @@ describe.skipIf(!RUST)("the Rust test driver: SSE, EventStream<T>", () => {
 			...sse(['retry: 3000\nid: 1\nevent: tick\ndata: {"n":1}\n\n', tick(2), { waitMs: 50 }, tick(3)], "hold"),
 		}
 		const call = ticks({ headers: { "x-tenant": "acme" }, lastEventId: "evt-5", search: { since: 5 }, take: 2 })
-		const { hops, run, streams } = await drive(driven("sse"), [reply, sse(['data: {"a":1}\n\n'])], [call, text()], {})
+		/* the second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(sse(['data: {"a":1}\n\n']))
+		const { hops, run } = await drive(driven("sse"), [reply, next.reply], [call, text()], {})
 		expect({ observed: run.observed, streams: run.trace?.calls.map((c) => c.stream) }, run.stderr).toEqual({
 			observed: [
 				{
@@ -225,24 +214,20 @@ describe.skipIf(!RUST)("the Rust test driver: SSE, EventStream<T>", () => {
 			headers: { accept: "text/event-stream", "last-event-id": "evt-5", "x-tenant": "acme" },
 			url: "/ticks?since=5",
 		})
-		expect(streams[0]?.clientGone).toBe(true)
+		expect(next.released()).toBe(true)
 	}, 600_000)
 
 	it("ends a held stream's reads at take while the run goes on: the client leaves before the next call", async () => {
 		const held = sse([tick(1), { waitMs: 100 }, tick(2), { waitMs: 100 }, tick(3)], "hold")
-		const sdk = driven("sse")
-		const { goneWhileRunning, result } = await served([held, sse([tick(9)])], (server) =>
-			leftWhileRunning(
-				server,
-				sdk.runCalls({ calls: [ticks({ take: 1 }), ticks()] }, server, { calls: [null, { sleepMs: 1500 }] }),
-			),
-		)
-		expect({ goneWhileRunning, observed: result.observed }, result.stderr).toEqual({
-			goneWhileRunning: true,
+		/* the second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(sse([tick(9)]))
+		const { run } = await drive(driven("sse"), [held, next.reply], [ticks({ take: 1 }), ticks()])
+		expect({ observed: run.observed, released: next.released() }, run.stderr).toEqual({
 			observed: [
 				{ events: [{ data: { n: 1 } }], kind: "events" },
 				{ events: [{ data: { n: 9 } }], kind: "events" },
 			],
+			released: true,
 		})
 	}, 600_000)
 })

@@ -4,7 +4,8 @@ import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
 import type { GoError, HookTrace, Script } from "../shared/__fixtures__/protocol.ts"
 import { consume } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
-import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { gone } from "../shared/__fixtures__/gone.ts"
+import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
@@ -103,20 +104,6 @@ const HELD = sse(['id: 7\ndata: {"n":1}\n\n', { waitMs: 50 }, 'data: {"n":2}\n\n
 const TICKED: Observed = { events: [{ data: { n: 1 } }], kind: "events" }
 const tick = (n: number) => `id: ${n}\nevent: tick\ndata: {"n":${n}}\n\n`
 
-/** Resolve once `done()` holds, polling every 10 ms. */
-async function until(done: () => boolean): Promise<void> {
-	while (!done()) await new Promise((wake) => setTimeout(wake, 10))
-}
-
-/** `running`'s result, and whether `server` saw stream 0's client leave while it still ran (not at its exit). */
-async function leftWhileRunning<T>(server: RecordingServer, running: Promise<T>) {
-	const state = { ended: false }
-	const watched = running.finally(() => (state.ended = true))
-	const gone = () => server.streams[0]?.clientGone === true
-	await until(() => state.ended || gone())
-	return { goneWhileRunning: !state.ended && gone(), result: await watched }
-}
-
 /** `calls` run by `sdk` against a server answering `replies`: the run, hops, streams and the server's origin. */
 async function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly Call[], options: Options = {}) {
 	return served(replies, async (server) => {
@@ -132,7 +119,8 @@ const sdkTypes = (error: GoError | undefined) => error?.chain.filter((type) => t
 /**
  * A consumer that holds both stream methods in their declared types (compiling is the assertion),
  * then ranges a held typed stream with `LastEventID: ""` under a ctx nothing cancels, breaking out
- * after the first event, and stays alive 1.5 s: only the iterator can have closed the body.
+ * after the first event, then opens the text stream: its answer waits until the first stream's client
+ * left (gone.ts), so only the iterator, not the exit, can have closed the body.
  */
 const CONSUMER = `	var typed iter.Seq2[sdk.SSEEvent[sdk.Tick], error] = client(input.Base).Ticks.Stream(ctx, nil)
 	var plain iter.Seq2[sdk.SSEEvent[string], error] = client(input.Base).Text.Stream(ctx, nil)
@@ -142,7 +130,10 @@ const CONSUMER = `	var typed iter.Seq2[sdk.SSEEvent[sdk.Tick], error] = client(i
 		note(ev.Data.N, ev.ID, err)
 		break
 	}
-	time.Sleep(1500 * time.Millisecond)`
+	for ev, err := range live.Text.Stream(ctx, nil) {
+		note(ev.Data, err)
+		break
+	}`
 
 goDescribe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared event schema", () => {
 	// v0: b857f94d20
@@ -150,22 +141,25 @@ goDescribe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared ev
 	it("compiles as iter.Seq2[SSEEvent[Tick]] and [string] in both modes; an empty LastEventID sends none; a break closes the body", async () => {
 		for (const throwOnError of [true, false]) {
 			const files = generateGoSdk(SSE, { modulePath: MODULE, throwOnError }).files
-			const { goneWhileRunning, hops, ran } = await served([HELD], async (server) => {
-				const running = consume(files, MODULE, { base: server.url, body: CONSUMER, imports: ["iter", "time"] })
-				const watched = await leftWhileRunning(server, running)
-				return { goneWhileRunning: watched.goneWhileRunning, hops: [...server.hops], ran: watched.result }
+			const next = gone(sse(["data: z\n\n"]))
+			const { hops, ran } = await served([HELD, next.reply], async (server) => {
+				const running = consume(files, MODULE, { base: server.url, body: CONSUMER, imports: ["iter"] })
+				return { ran: await running, hops: [...server.hops] }
 			})
 			expect({ built: ran.built, out: ran.out?.main, vet: ran.vet }, ran.stderr).toEqual({
 				built: true,
-				out: ["1 7 <nil>"],
+				out: ["1 7 <nil>", "z <nil>"],
 				vet: [],
 			})
 			expect({
-				goneWhileRunning,
 				hops: hops.map((hop) => [hop.headers.accept, hop.headers["last-event-id"]]),
+				released: next.released(),
 			}).toEqual({
-				goneWhileRunning: true,
-				hops: [["text/event-stream", undefined]],
+				hops: [
+					["text/event-stream", undefined],
+					["text/event-stream", undefined],
+				],
+				released: true,
 			})
 		}
 	}, 600_000)
@@ -352,19 +346,15 @@ goDescribe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", (
 
 	it("closes the body when the caller breaks out of the loop, before the run goes on", async () => {
 		const spaced = sse(["data: 1\n\n", { waitMs: 50 }, "data: 2\n\n", { waitMs: 50 }, "data: 3\n\n"], "hold")
-		/* a second call after a 2 s pause keeps the driver alive, so its exit cannot be what closed the body */
-		const script: Script = { calls: [null, { sleepMs: 2_000 }] }
-		const calls = [text({ take: 1 }), text()]
-		const { goneWhileRunning, run } = await served([spaced, sse(["data: z\n\n"])], async (server) => {
-			const watched = await leftWhileRunning(server, sseSdk().runCalls({ calls }, server, script))
-			return { goneWhileRunning: watched.goneWhileRunning, run: watched.result }
-		})
-		expect({ goneWhileRunning, observed: run.observed }, run.stderr).toEqual({
-			goneWhileRunning: true,
+		/* the second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(sse(["data: z\n\n"]))
+		const { run } = await drive(sseSdk(), [spaced, next.reply], [text({ take: 1 }), text()], { script: {} })
+		expect({ observed: run.observed, released: next.released() }, run.stderr).toEqual({
 			observed: [
 				{ events: [{ data: "1" }], kind: "events" },
 				{ events: [{ data: "z" }], kind: "events" },
 			],
+			released: true,
 		})
 		expect(run.trace?.calls[0]?.elapsedMs).toBeLessThan(1_000)
 	}, 600_000)
@@ -428,17 +418,22 @@ goDescribe("an SSE open through a plain call's pipeline: the OnResponse hooks", 
 			observed: [TICKED, { body: { message: "hooked" }, errorKey: null, kind: "error", status: 404 }],
 			order: "0 request 0 | 0 response 0 200 | 0 response 1 200 | 1 request 0 | 1 response 0 404 | 1 response 1 404",
 		})
-		const failing = await drive(sseSdk(), [HELD], [ticks()], {
+		/* a second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(TICK)
+		const failing = await drive(sseSdk(), [HELD, next.reply], [ticks(), ticks()], {
 			script: { hooks: { response: [{ fail: "bad" }, {}] } },
 		})
-		const { error } = failing.run.trace?.calls[0] ?? {}
-		const gone = failing.streams[0]?.clientGone
-		expect({ error: [error?.via, error?.text], gone, observed: failing.run.observed }, failing.run.stderr).toEqual({
-			error: ["stream", "honey: OnResponse hook: bad"],
-			gone: true,
-			observed: [{ events: [], kind: "events" }],
+		const errors = failing.run.trace?.calls.map(({ error }) => [error?.via, error?.text])
+		const unread = { events: [], kind: "events" }
+		expect({ errors, observed: failing.run.observed, released: next.released() }, failing.run.stderr).toEqual({
+			errors: [
+				["stream", "honey: OnResponse hook: bad"],
+				["stream", "honey: OnResponse hook: bad"],
+			],
+			observed: [unread, unread],
+			released: true,
 		})
-		expect(steps(failing.run.trace?.hooks)).toBe("0 request 0 | 0 response 0 200")
+		expect(steps(failing.run.trace?.hooks)).toBe("0 request 0 | 0 response 0 200 | 1 request 0 | 1 response 0 200")
 	}, 600_000)
 
 	it("runs them again with isRetry on an auth retry, and OnLog sees one exchange", async () => {

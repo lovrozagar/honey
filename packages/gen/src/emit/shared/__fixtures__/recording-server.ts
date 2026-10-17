@@ -43,9 +43,11 @@ export type RecordedHop = {
  * and `bytes`, that many bytes `i & 0xff`, with none added), extra headers, a wait before answering
  * and a redirect target (`location`, on either listener). Every body goes out with its length. In
  * place of a body: `sse`, an event stream under the status and headers, or `ws` (status 101), the
- * upgrade accepted and the socket scripted.
+ * upgrade accepted and the socket scripted. In place of the wait: `afterLeft`, held until hop `stream`'s
+ * client left it or `withinMs` passed, `seen` told which came first (gone.ts).
  */
 export type Reply = {
+	readonly afterLeft?: AfterLeft
 	readonly bytes?: number
 	readonly delayMs?: number
 	readonly headers?: Readonly<Record<string, string>>
@@ -55,6 +57,13 @@ export type Reply = {
 	readonly status: number
 	readonly text?: string
 	readonly ws?: WsScript
+}
+
+/** A reply's hold on another hop's stream: answered once its client left, or after `withinMs`; `seen(left)` first. */
+export type AfterLeft = {
+	seen(left: boolean): void
+	readonly stream: number
+	readonly withinMs: number
 }
 
 export type RecordingServer = {
@@ -155,15 +164,39 @@ function upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, at: Answeri
 }
 type Answering = { readonly origins: Origins; readonly reply: Reply; readonly stage: Stage }
 
-/** `replies`, refused when one names more than one body (a stream is one), or `ws` without 101: which would win is no test's business. */
+/**
+ * `replies`, refused when one names more than one body (a stream is one), `ws` without 101, or both waits: which
+ * would win is no test's business.
+ */
 function checked(replies: readonly Reply[]): readonly Reply[] {
 	for (const [i, reply] of replies.entries()) {
 		const bodies = [reply.json, reply.text, reply.bytes, reply.sse, reply.ws].filter((body) => body !== undefined)
 		if (bodies.length > 1) throw new Error(`reply ${i} names ${bodies.length} bodies; give at most one`)
 		if (reply.ws !== undefined && reply.status !== 101)
 			throw new Error(`reply ${i} accepts a WebSocket with status 101`)
+		if (reply.afterLeft !== undefined && reply.delayMs !== undefined)
+			throw new Error(`reply ${i} names delayMs and afterLeft; give one wait`)
 	}
 	return replies
+}
+
+/**
+ * The wait before `reply` goes out, true when it still may: its delay, or its `afterLeft` hold (hop `stream`'s
+ * client leaving it, or `withinMs` passing first, `seen` told which); none for neither.
+ */
+function waitOf(
+	reply: Reply,
+	streams: readonly (StreamRecord | undefined)[],
+	stage: Stage,
+): Promise<boolean> | undefined {
+	if (reply.afterLeft === undefined) return reply.delayMs === undefined ? undefined : stage.wait(reply.delayMs)
+	const { seen, stream, withinMs } = reply.afterLeft
+	const watched = streams[stream]
+	const left = watched === undefined ? Promise.resolve(false) : stage.left(watched, withinMs)
+	return left.then((gone) => {
+		seen(gone)
+		return !stage.stopped
+	})
 }
 
 /** A listener on 127.0.0.1 at a free port; resolves with its origin. */
@@ -191,7 +224,7 @@ export async function recordingServer(replies: readonly Reply[]): Promise<Record
 	const streams: (StreamRecord | undefined)[] = []
 	const stage = streamStage()
 	const origins: Record<RecordedHop["origin"], string> = { alt: "", primary: "" }
-	/* record the hop, then run `respond` with its reply once the reply's delay passed */
+	/* record the hop, then run `respond` with its reply once the reply's delay (or afterLeft) passed */
 	const record = (
 		req: IncomingMessage,
 		hop: RecordedHop,
@@ -204,8 +237,9 @@ export async function recordingServer(replies: readonly Reply[]): Promise<Record
 		streams.push(undefined)
 		const reply = replies[index] ?? { json: {}, status: 200 }
 		const run = () => void (streams[index] = respond(reply))
-		if (reply.delayMs === undefined) run()
-		else void stage.wait(reply.delayMs).then((passed) => passed && run())
+		const wait = waitOf(reply, streams, stage)
+		if (wait === undefined) run()
+		else void wait.then((passed) => passed && run())
 	}
 	const serve = (origin: RecordedHop["origin"]) => {
 		const server = createServer((req, res) => {

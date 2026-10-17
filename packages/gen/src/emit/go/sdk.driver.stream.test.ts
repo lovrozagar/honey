@@ -5,6 +5,7 @@ import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
 import type { Script } from "../shared/__fixtures__/protocol.ts"
 import { consume } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
+import { gone } from "../shared/__fixtures__/gone.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
@@ -115,7 +116,9 @@ goDescribe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error]", () => {
 			),
 		}
 		const call = ticks({ lastEventId: "evt-5", search: { since: 5 }, take: 2 })
-		const { hops, run, streams } = await drive(streamsSdk(), [reply], [call], {})
+		/* a second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(sse(['data: {"n":9}\n\n']))
+		const { hops, run } = await drive(streamsSdk(), [reply, next.reply], [call, ticks()], {})
 		expect({ observed: run.observed, stream: run.trace?.calls[0]?.stream }, run.stderr).toEqual({
 			observed: [
 				{
@@ -125,6 +128,7 @@ goDescribe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error]", () => {
 					],
 					kind: "events",
 				},
+				{ events: [{ data: { n: 9 } }], kind: "events" },
 			],
 			stream: { headers: { "x-stream-id": "s-1" }, retry: [3000, 0], yields: 2 },
 		})
@@ -132,7 +136,7 @@ goDescribe("the Go test driver: SSE, iter.Seq2[SSEEvent[T], error]", () => {
 			headers: { accept: "text/event-stream", "last-event-id": "evt-5" },
 			url: "/ticks?since=5",
 		})
-		expect(streams[0]?.clientGone).toBe(true)
+		expect(next.released()).toBe(true)
 	}, 600_000)
 })
 

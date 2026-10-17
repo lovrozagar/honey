@@ -11,7 +11,8 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Observed, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { RustError, Script } from "../shared/__fixtures__/protocol.ts"
-import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { gone } from "../shared/__fixtures__/gone.ts"
+import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { consume, sections, seen } from "./__fixtures__/consumer.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
@@ -70,19 +71,23 @@ async function drive(replies: readonly Reply[], calls: readonly Call[], options:
 	})
 }
 
-/** Poll `check` every 10 ms until it holds, for at most 12 s (past the driver's 10 s watchdog). */
-async function until(check: () => boolean): Promise<void> {
-	for (let i = 0; i < 1200 && !check(); i++) await new Promise((wake) => setTimeout(wake, 10))
-}
-
-/** `running`'s result, and whether `server` saw stream 0's client leave while it still ran (not at its exit). */
-async function leftWhileRunning<T>(server: RecordingServer, running: Promise<T>) {
-	const state = { ended: false }
-	const watched = running.finally(() => (state.ended = true))
-	const gone = () => server.streams[0]?.clientGone === true
-	await until(() => state.ended || gone())
-	return { goneWhileRunning: !state.ended && gone(), result: await watched }
-}
+/**
+ * A text stream opened under `cancel_on` and read until the cancel ends it, then held, not dropped, while the next
+ * stream opens and is read: only the runtime's end, not a drop, can have let the first connection go.
+ */
+const ENDED = sections({
+	ended: `    let c = client(base)?;
+    let signal = tokio::time::sleep(std::time::Duration::from_millis(150));
+    let mut s = c.text().stream(&sdk::TextStreamOpts::default()).cancel_on(signal).await?;
+    while let Some(ev) = s.next().await {
+        n.note(ev?.data);
+    }
+    let mut t = c.text().stream(&sdk::TextStreamOpts::default()).await?;
+    if let Some(ev) = t.next().await {
+        n.note(ev?.data);
+    }
+    drop(s);`,
+})
 
 /** A traced error as a leg pins it: its variant, kind and status when it has them, and where it came from. */
 const errorOf = (e: RustError | undefined) =>
@@ -337,17 +342,18 @@ describe.skipIf(!RUST)("how an open SSE stream ends: the call's cancel, dropping
 	 */
 	it("ends an open stream when the call's cancel fires: the events so far, no error, the connection let go", async () => {
 		const held = sse(["data: 1\n\n"], "hold")
-		/* a second call after a 2 s pause keeps the driver alive, so its exit cannot be what closed the body */
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }, { sleepMs: 2_000 }] }
-		const { goneWhileRunning, run } = await served([held, sse(["data: z\n\n"])], async (server) => {
-			const watched = await leftWhileRunning(server, driven().runCalls({ calls: [text(), text()] }, server, script))
-			return { goneWhileRunning: watched.goneWhileRunning, run: watched.result }
-		})
+		/* the second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(sse(["data: z\n\n"]))
+		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
+		const { run } = await drive([held, next.reply], [text(), text()], { script })
 		const calls = run.trace?.calls ?? []
-		expect({ errors: calls.map((call) => call.error), goneWhileRunning, observed: run.observed }, run.stderr).toEqual({
+		expect(
+			{ errors: calls.map((call) => call.error), observed: run.observed, released: next.released() },
+			run.stderr,
+		).toEqual({
 			errors: [undefined, undefined],
-			goneWhileRunning: true,
 			observed: [strings("1"), strings("z")],
+			released: true,
 		})
 		expect(calls[0]?.elapsedMs).toBeGreaterThanOrEqual(140)
 		expect(calls[0]?.elapsedMs).toBeLessThan(5_000)
@@ -355,17 +361,30 @@ describe.skipIf(!RUST)("how an open SSE stream ends: the call's cancel, dropping
 
 	it("closes the connection when the stream is dropped, before the run goes on", async () => {
 		const spaced = sse(["data: 1\n\n", { waitMs: 50 }, "data: 2\n\n", { waitMs: 50 }, "data: 3\n\n"], "hold")
-		/* a second call after a 2 s pause keeps the driver alive, so its exit cannot be what closed the body */
-		const script: Script = { calls: [null, { sleepMs: 2_000 }] }
-		const { goneWhileRunning, run } = await served([spaced, sse(["data: z\n\n"])], async (server) => {
-			const running = driven().runCalls({ calls: [text({ take: 1 }), text()] }, server, script)
-			const watched = await leftWhileRunning(server, running)
-			return { goneWhileRunning: watched.goneWhileRunning, run: watched.result }
-		})
-		expect({ goneWhileRunning, observed: run.observed }, run.stderr).toEqual({
-			goneWhileRunning: true,
+		/* the second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(sse(["data: z\n\n"]))
+		const { run } = await drive([spaced, next.reply], [text({ take: 1 }), text()], { script: {} })
+		expect({ observed: run.observed, released: next.released() }, run.stderr).toEqual({
 			observed: [strings("1"), strings("z")],
+			released: true,
 		})
 		expect(run.trace?.calls[0]?.elapsedMs).toBeLessThan(1_000)
 	}, 600_000)
+
+	it(
+		"lets the connection go when the cancel ends the stream, while the consumer still holds it",
+		async () => {
+			/* the driver drops a stream once it ended, which would close it whatever the end did: a consumer holds it */
+			const next = gone(sse(["data: z\n\n"]))
+			const run = await served([sse(["data: 1\n\n"], "hold"), next.reply], (server) =>
+				consume("sse", "ended_stream", { base: server.url, body: ENDED.body, decls: ENDED.decls }),
+			)
+			expect({ ...seen(run, "ended"), released: next.released() }, run.stderr).toEqual({
+				built: true,
+				out: ["1", "z"],
+				released: true,
+			})
+		},
+		CARGO,
+	)
 })

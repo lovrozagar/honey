@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Observed, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { HookTrace, LogTrace, Script } from "../shared/__fixtures__/protocol.ts"
+import { gone } from "../shared/__fixtures__/gone.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { consume, seen, sections } from "./__fixtures__/consumer.ts"
@@ -120,21 +121,21 @@ describe.skipIf(!RUST)("an SSE open through a plain call's pipeline: the on_resp
 	}, 600_000)
 
 	it("ends the open as Error::Hook when one fails: no stream, no later hook, the connection let go unread", async () => {
-		const { run, streams } = await drive([HELD], [ticks()], { hooks: { response: [{ fail: "bad" }, {}] } })
-		const error = run.trace?.calls[0]?.error
+		/* a second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
+		const next = gone(TICK)
+		const { run } = await drive([HELD, next.reply], [ticks(), ticks()], { hooks: { response: [{ fail: "bad" }, {}] } })
+		const errors = run.trace?.calls.map(({ error }) => [error?.variant, error?.text, error?.via])
 		expect(
-			{
-				error: [error?.variant, error?.text, error?.via],
-				gone: streams[0]?.clientGone,
-				observed: run.observed,
-				order: steps(run.trace?.hooks),
-			},
+			{ errors, observed: run.observed, order: steps(run.trace?.hooks), released: next.released() },
 			run.stderr,
 		).toEqual({
-			error: ["Hook", "hook: bad", "return"],
-			gone: true,
-			observed: [null],
-			order: "0 request 0 | 0 response 0 200",
+			errors: [
+				["Hook", "hook: bad", "return"],
+				["Hook", "hook: bad", "return"],
+			],
+			observed: [null, null],
+			order: "0 request 0 | 0 response 0 200 | 1 request 0 | 1 response 0 200",
+			released: true,
 		})
 	}, 600_000)
 })

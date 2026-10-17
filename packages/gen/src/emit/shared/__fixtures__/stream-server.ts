@@ -58,6 +58,10 @@ export type StreamRecord = { clientGone: boolean; readonly received: Received[] 
 export type Stage = {
 	/** keep `socket` until it closes, its errors swallowed (a client may reset it) */
 	hold(socket: Duplex): void
+	/** note that `record`'s client left first (its `clientGone` set), waking whoever waits on it in `left` */
+	leave(record: StreamRecord): void
+	/** true once `record`'s client left, or false when `ms` passed or the stage stopped first */
+	left(record: StreamRecord, ms: number): Promise<boolean>
 	/** end every pause and destroy every held socket; the violations seen */
 	stop(): readonly string[]
 	readonly stopped: boolean
@@ -70,6 +74,7 @@ export type Stage = {
 export function streamStage(): Stage {
 	const sockets = new Set<Duplex>()
 	const pauses = new Set<() => void>()
+	const leavers = new Set<() => void>()
 	const violations: string[] = []
 	let stopped = false
 	return {
@@ -78,6 +83,25 @@ export function streamStage(): Stage {
 			socket.on("error", () => undefined)
 			socket.once("close", () => sockets.delete(socket))
 		},
+		leave(record) {
+			record.clientGone = true
+			for (const wake of leavers) wake()
+		},
+		left: (record, ms) =>
+			new Promise((resolve) => {
+				const end = () => {
+					clearTimeout(timer)
+					leavers.delete(wake)
+					pauses.delete(end)
+					resolve(record.clientGone)
+				}
+				const wake = () => void (record.clientGone && end())
+				const timer = setTimeout(end, ms)
+				leavers.add(wake)
+				pauses.add(end)
+				if (stopped) end()
+				else wake()
+			}),
 		stop() {
 			stopped = true
 			for (const end of pauses) end()
@@ -201,7 +225,7 @@ function wsSession(socket: Duplex, record: StreamRecord, stage: Stage, fail: (te
 	socket.once("end", () => socket.end())
 	socket.once("close", () => {
 		/* open, or a server close frame the client never echoed: it left without one */
-		if (!stage.stopped && (at.state === "open" || at.state === "closing")) record.clientGone = true
+		if (!stage.stopped && (at.state === "open" || at.state === "closing")) stage.leave(record)
 		if (at.state !== "dropped") at.state = "closed"
 		for (const check of at.waiters) check()
 	})

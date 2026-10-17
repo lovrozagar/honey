@@ -40,7 +40,7 @@ export function serveSse(
 	const record: StreamRecord = { clientGone: false, received: [] }
 	let ended = false
 	res.once("close", () => {
-		if (!ended && !stage.stopped) record.clientGone = true
+		if (!ended && !stage.stopped) stage.leave(record)
 		ended = true
 	})
 	res.writeHead(head.status, { "content-type": script.contentType ?? "text/event-stream", ...head.headers })
