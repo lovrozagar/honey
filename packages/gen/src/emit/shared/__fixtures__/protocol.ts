@@ -13,6 +13,10 @@
  * `PythonError`: its trace is `Trace<PythonError>`. It drives streams on `AsyncSDK` alone, refusing a stream call
  * on `SDK` (which has none), `raw: true` on a stream, and the stream members Rust refuses, in the same words;
  * `protocols` and `realtime` are the method's `protocols`, `max_reconnect_attempts` and `reconnect_delay_ms`.
+ * The C# driver (emit/csharp/__fixtures__/driver/) takes the same envelope on its one async client and records
+ * its errors as `CsError`: its trace is `Trace<CsError>`. In phase b it refuses a script, `setup.redirect` and a
+ * binary body (phase c), and a stream call, `send`, `take`, `lastEventId` and `reconnectToken` (phase d), each
+ * as `driver: <member> arrives in phase <x>`, before the SDK loads.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
@@ -170,6 +174,34 @@ export type PythonError = {
 	/** APIStatusError only: `e.message` */
 	readonly message?: string
 	/** APIStatusError with `envelope`: the envelope's members that are set (status, error_key, status_key, message, fields), and `extraKeys`, its extra keys sorted */
+	readonly envelope?: Json
+}
+
+/** A call's C# error as the trace records it (the exception, read through its members). */
+export type CsError = {
+	/** `e.GetType().Name`: "NotFoundException", "ApiTimeoutException", "TaskCanceledException", … */
+	readonly type: string
+	/** the type names from `e.GetType()` through its base types up to and including HoneyException; `[type]` outside the SDK */
+	readonly chain: readonly string[]
+	/** `e.Message` */
+	readonly text: string
+	/** `e.ToString()`'s lines before the first stack frame (`   at `), for the redaction legs */
+	readonly display: string
+	/** the method's throw, a safe-mode `SdkResult.Error`, or one a stream threw */
+	readonly via: "result" | "return" | "stream"
+	/** `e.InnerException?.GetType().Name`; null without one */
+	readonly inner: string | null
+	/** `e is OperationCanceledException` (R4: the caller's token) */
+	readonly canceled: boolean
+	/** ApiStatusException only: `Status` */
+	readonly status?: number
+	/** ApiStatusException only (phase c): `Key`'s wire value; null without one */
+	readonly key?: string | null
+	/** ApiStatusException only (phase c): the `ErrorKey` member's name; null for `Other` */
+	readonly keyMember?: string | null
+	/** ApiStatusException only (phase c): the envelope's message */
+	readonly message?: string
+	/** ApiStatusException with `envelope` (phase c): its set members and `extraKeys`, sorted */
 	readonly envelope?: Json
 }
 

@@ -5,8 +5,10 @@
  * `/usr/bin/dotnet`, `~/.dotnet` or a `dotnet` on PATH), and CI installs exactly that, by the command a missing SDK
  * names. As with Python, importing the env file does not license a raw spawn. It hands out two paths, the SDK root
  * and the reference pack, and only to the compile fixture and the toolchain legs. Every build runs lean (no MSBuild
- * node reuse, no MSBuild server, no compiler server), so a build leaves no process behind. A run never installs,
- * and every dir it sets lies under the cache; HOME stays the caller's.
+ * node reuse, no MSBuild server, no compiler server), so a build leaves no process behind, the gates' own builds
+ * included. A run never installs, and every dir it sets lies under the cache; HOME stays the caller's. No gate
+ * outside the registry (G17, at most 16 documents) but the harness files' served document; a call counts by the
+ * module it resolves to (compile-calls.ts), so another language's `compiledFixture` is its own leg's to judge.
  */
 import {
 	existsSync,
@@ -20,9 +22,12 @@ import {
 	writeFileSync,
 } from "node:fs"
 import { homedir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, relative, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { compiledCSharp } from "../../src/emit/csharp/__fixtures__/compiled.ts"
 import * as env from "../../src/emit/csharp/__fixtures__/csharp-env.ts"
+import { FIXTURES } from "../../src/emit/csharp/__fixtures__/documents.ts"
+import { callsOf } from "./compile-calls.ts"
 
 const { LEAN_BUILD, csharpCacheDir, dotnetEnv, dotnetInstall, dotnetRoot, pinnedDotnet, runDotnet, withDotnet } = env
 
@@ -333,5 +338,88 @@ describe("lean builds", () => {
 		} finally {
 			rmSync(dir, { force: true, recursive: true })
 		}
+	})
+
+	/* the gates' own build step (compiled.ts) passes LEAN_BUILD under dotnetEnv: a cold gate builds here, a warm
+	 * one spawns nothing, and neither leaves a server; the fresh project above is the leg a warm cache cannot skip */
+	it.skipIf(!DOTNET)("leave no compiler server or MSBuild node behind a gate's build", async () => {
+		const before = new Set(buildServers())
+		const sdk = compiledCSharp("cache")
+		expect({ built: sdk.built, diagnostics: sdk.diagnostics }).toEqual({ built: true, diagnostics: [] })
+		await vi.waitFor(() => expect(buildServers().filter((line) => !before.has(line))).toEqual([]), {
+			interval: 100,
+			timeout: 3_000,
+		})
+	})
+})
+
+const CS_COMPILED = "src/emit/csharp/__fixtures__/compiled.ts"
+const CS_DRIVEN = "src/emit/csharp/__fixtures__/driven.ts"
+const PY_COMPILED = "src/emit/python/__fixtures__/compiled.ts"
+/* the fixture files that define the gates outside the registry */
+const DEFINING = [CS_COMPILED, CS_DRIVEN]
+/* the fixture documents a default run may gate (G17), each a FIXTURES entry */
+const FIXTURE_BUDGET = 16
+
+/* each gate outside the registry, by the module that exports it, and the files alone that may call it */
+const OUTSIDE_REGISTRY: readonly { readonly callers: RegExp; readonly module: string; readonly name: string }[] = [
+	/* any document past the budget: only the files that define the gates call it */
+	{ callers: /^$/, module: CS_COMPILED, name: "compiledFixture" },
+	/* harness mode alone, out of the default run (phase e) */
+	{
+		callers: /^tests\/integration\/(?:[^/]*harness[^/]*|conformance\/csharp)\.test\.ts$/,
+		module: CS_DRIVEN,
+		name: "servedCSharpSdk",
+	},
+]
+
+/** The files in `files` calling a gate outside the registry where they may not. */
+const strayCompiles = (files: readonly { readonly path: string; readonly text: string }[]) =>
+	files
+		.filter(
+			({ path, text }) =>
+				!DEFINING.includes(path) &&
+				OUTSIDE_REGISTRY.some(
+					({ callers, module, name }) => callsOf(path, text, name).includes(module) && !callers.test(path),
+				),
+		)
+		.map(({ path }) => path)
+
+/** A file at `path` whose text imports `name` from gen-relative `module` and calls it. */
+const calling = (path: string, name: string, module: string) => ({
+	path,
+	text: `import { ${name} } from "./${relative(dirname(path), module)}"\nconst sdk = ${name}(document)`,
+})
+
+describe("the fixture documents a default run gates", () => {
+	it(`number at most ${FIXTURE_BUDGET}`, () => {
+		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
+	})
+
+	it("come only from the registry, except the harness files' served document", () => {
+		expect(strayCompiles(others())).toEqual([])
+	})
+
+	it("flag C#'s served document anywhere but the harness files, and C#'s any-fixture gate anywhere but its own files", () => {
+		expect(
+			strayCompiles([
+				calling("src/emit/csharp/x.test.ts", "servedCSharpSdk", CS_DRIVEN),
+				calling("tests/integration/conformance/python.test.ts", "servedCSharpSdk", CS_DRIVEN),
+				calling("tests/integration/csharp-harness.test.ts", "servedCSharpSdk", CS_DRIVEN),
+				calling("tests/integration/conformance/csharp.test.ts", "servedCSharpSdk", CS_DRIVEN),
+				calling("tests/security/x.test.ts", "compiledFixture", CS_COMPILED),
+				calling("src/emit/csharp/__fixtures__/consumer.ts", "compiledFixture", CS_COMPILED),
+				/* Python's own gate is its leg's to judge; C#'s from Python's fixture is a stray */
+				calling("src/emit/python/__fixtures__/driven.ts", "compiledFixture", PY_COMPILED),
+				calling("src/emit/python/__fixtures__/driven.ts", "compiledFixture", CS_COMPILED),
+				{ path: "tests/security/note.test.ts", text: "/* compiledFixture(document) */ compiledFixture(document)" },
+			]),
+		).toEqual([
+			"src/emit/csharp/x.test.ts",
+			"tests/integration/conformance/python.test.ts",
+			"tests/security/x.test.ts",
+			"src/emit/csharp/__fixtures__/consumer.ts",
+			"src/emit/python/__fixtures__/driven.ts",
+		])
 	})
 })

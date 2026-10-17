@@ -262,7 +262,7 @@ jobs:
             ~/.cache/honey-tmp/dotnet/driver
           key: >-
             ${{ runner.os }}-dotnet-${{ hashFiles('global.json', 'packages/gen/src/emit/csharp/**',
-            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/csharp/**',
+            'packages/gen/src/emit/csharp/**/.editorconfig', 'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/csharp/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
@@ -384,7 +384,7 @@ jobs:
             ~/.cache/honey-tmp/dotnet/driver
           key: >-
             ${{ runner.os }}-dotnet-${{ hashFiles('global.json', 'packages/gen/src/emit/csharp/**',
-            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/csharp/**',
+            'packages/gen/src/emit/csharp/**/.editorconfig', 'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/csharp/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',

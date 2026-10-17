@@ -47,6 +47,20 @@ describe("rustfmtFormatter: a rustfmt that stops reading", () => {
 		const { code, errors } = await rustfmtFormatter("false")("big.rs", source, EMIT_STYLE)
 		expect([code === source, errors.length]).toEqual([true, 1])
 	})
+
+	it("answers with its exit status when the binary closes its input and exits later", async () => {
+		/* the write fails while the binary still runs: the pipe error is ignored, the exit status answers */
+		const dir = mkdtempSync(join(rustCacheDir("tmp"), "rustfmt-closes-"))
+		const bin = join(dir, "rustfmt")
+		writeFileSync(bin, "#!/bin/sh\nexec 0<&-\nsleep 1\nexit 3\n", { mode: 0o755 })
+		try {
+			const source = `fn main() {}\n// ${"x".repeat(1 << 22)}\n`
+			const { code, errors } = await rustfmtFormatter(bin)("big.rs", source, EMIT_STYLE)
+			expect([code === source, errors]).toEqual([true, [`${bin} exited with status 3`]])
+		} finally {
+			rmSync(dir, { force: true, recursive: true })
+		}
+	})
 })
 
 describe("rustfmtFormatter: no configuration but its own", () => {

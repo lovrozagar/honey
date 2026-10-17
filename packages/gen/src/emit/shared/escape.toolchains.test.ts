@@ -5,9 +5,19 @@
  * where the toolchains are; `HONEY_REQUIRE_TOOLCHAINS=1` (CI's test and harness jobs) makes a missing one fail.
  */
 import { type SpawnSyncReturns, spawnSync } from "node:child_process"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import {
+	csharpCacheDir,
+	dotnetRequired,
+	hasDotnet,
+	pinnedDotnet,
+	refPack,
+	runCsc,
+	runDotnet,
+	runtimeConfig,
+} from "../csharp/__fixtures__/csharp-env.ts"
 import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
 import {
 	hasPython,
@@ -19,7 +29,7 @@ import {
 } from "../python/__fixtures__/python-env.ts"
 import { hasRust, runRustc, rustCacheDir, rustRequired } from "../rust/__fixtures__/rust-env.ts"
 import { rng, runs } from "./__fixtures__/rng.ts"
-import { goString, lineComment, pyString, rustString, wellFormed } from "./escape.ts"
+import { csDocLines, csString, goString, lineComment, pyString, rustString, wellFormed } from "./escape.ts"
 
 const TOKENS: readonly string[] = [
 	"a",
@@ -67,7 +77,50 @@ type Language = {
 const spawn = (command: string, args: readonly string[]) =>
 	spawnSync(command, [...args], { encoding: "utf8", maxBuffer: 1 << 26 })
 
+/** csc's flags for a program: no response file, nullable on, every warning an error, the pinned SDK's references. */
+const cscProgram = () => [
+	"-nologo",
+	"-noconfig",
+	"-nullable:enable",
+	"-warnaserror",
+	"-langversion:latest",
+	"-target:exe",
+	...readdirSync(refPack())
+		.filter((name) => name.endsWith(".dll"))
+		.map((name) => `-r:${join(refPack(), name)}`),
+]
+
 const LANGUAGES: Readonly<Record<string, Language>> = {
+	csharp: {
+		/* -doc reads every /// line as XML, badly formed text an error (CS1570); csc reports to stdout */
+		exec: (_, dir) => {
+			const built = runCsc([...cscProgram(), "-doc:p.xml", "-out:p.dll", "Program.cs"], { cwd: dir })
+			if (built.status !== 0) return { ...built, stderr: built.stdout }
+			writeFileSync(join(dir, "p.runtimeconfig.json"), runtimeConfig())
+			return runDotnet(["p.dll"], { cwd: dir })
+		},
+		file: "Program.cs",
+		home: () => csharpCacheDir("tmp"),
+		present: hasDotnet,
+		required: dotnetRequired,
+		source: (texts) =>
+			[
+				"using System;",
+				"using System.Text;",
+				"/// <summary>",
+				...texts.flatMap((text) => csDocLines(text).map((line: string) => `/// ${line}`)),
+				"/// </summary>",
+				"internal static class Program",
+				"{",
+				"    private static void Main()",
+				"    {",
+				`        foreach (var s in new string[] { ${texts.map(csString).join(", ")} })`,
+				"            Console.WriteLine(Convert.ToHexString(Encoding.UTF8.GetBytes(s)).ToLowerInvariant());",
+				"    }",
+				"}",
+			].join("\n"),
+		tool: `dotnet ${pinnedDotnet()}`,
+	},
 	go: {
 		exec: (path) => runGo(["run", path]),
 		file: "main.go",

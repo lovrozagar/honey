@@ -112,6 +112,14 @@ const PY_RESERVED =
 	/* soft keywords and names generated code relies on */
 	"match case type _ self cls"
 
+/* C#'s 77 reserved keywords (contract 45 §4.1): no identifier may be one unless `@`-escaped */
+const CS_RESERVED =
+	"abstract as base bool break byte case catch char checked class const continue decimal default delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using virtual void volatile while"
+
+/* C#'s contextual keywords: legal identifiers, `@`-escaped all the same so none reads as a keyword where it is one */
+const CS_CONTEXTUAL =
+	"add allows and args async await by descending dynamic equals extension field file from get global group init into join let managed nameof nint not notnull nuint on or orderby partial record remove required scoped select set unmanaged value var when where with yield"
+
 /** `name` unless empty (then `empty`), prefixed by `digitPrefix` when it starts with a digit. */
 function guarded(name: string, empty: string, digitPrefix: string): string {
 	if (name === "") return empty
@@ -163,4 +171,21 @@ export function pyIdentifier(raw: string): string {
 export function pyClassName(raw: string): string {
 	const name = guarded(pascalWords(raw), "Model", "N")
 	return listed(PY_RESERVED, name) ? `${name}_` : name
+}
+
+/** A camelCase C# identifier (a parameter, a local): a keyword `@`-escaped, a digit first `_`, nothing `value`. */
+export function csIdentifier(raw: string): string {
+	const name = camelWords(raw)
+	if (name === "") return "value"
+	return /^[0-9]/.test(name) ? `_${name}` : isCsReserved(name) || listed(CS_CONTEXTUAL, name) ? `@${name}` : name
+}
+
+/** Whether `name` is one of C#'s reserved keywords: no namespace segment or bare identifier may be one. */
+export function isCsReserved(name: string): boolean {
+	return listed(CS_RESERVED, name)
+}
+
+/** A PascalCase C# type or member name: a digit first `N`, nothing `Value`; no keyword is PascalCase. */
+export function csTypeName(raw: string): string {
+	return guarded(pascalWords(raw), "Value", "N")
 }

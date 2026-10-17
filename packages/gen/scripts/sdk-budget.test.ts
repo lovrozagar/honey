@@ -375,3 +375,25 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 		})
 	})
 })
+
+/*
+ * G14 (bit 15): the vendored C# runtime's bloat guard, in bytes on disk as shipped (00-rules:160), never string
+ * length. Provisional (R8): 110,000 B, ruled before C# had a runtime, against the probe's 12,843 B skeleton; phase b
+ * lands about 30 KB (config, errors, result, JSON, operation, path, query, transport). Phase d replaces the figure
+ * with the measured, named breakdown. Counted: every runtime .cs file; the directory holds nothing else. No runtime
+ * file goes unshipped (dead code). A raise names its feature bytes and cuts dead and duplicate code first; it is
+ * never silent.
+ */
+const CSHARP_RUNTIME_BYTES = 110_000
+
+describe("the C# runtime within its byte budget (bit 15, G14)", () => {
+	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {
+		const { runtimeFileNames: csharpRuntimeFileNames } = await import("../src/emit/csharp/transport.ts")
+		const { bytes, names, others } = runtimeBytes(runtimeDir("csharp"), ".cs")
+		expect({ names, others, over: Math.max(0, bytes - CSHARP_RUNTIME_BYTES) }).toEqual({
+			names: csharpRuntimeFileNames({ realtime: true, ws: true }),
+			others: [],
+			over: 0,
+		})
+	})
+})

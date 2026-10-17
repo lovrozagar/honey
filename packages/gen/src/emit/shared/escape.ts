@@ -5,7 +5,7 @@
  * language's grammar and cross-checked with the real compilers.
  */
 
-export type Target = "go" | "python" | "rust" | "ts"
+export type Target = "csharp" | "go" | "python" | "rust" | "ts"
 
 /** `text` with each unpaired UTF-16 surrogate as U+FFFD: no target can carry a lone surrogate to the wire. */
 export function wellFormed(text: string): string {
@@ -21,6 +21,11 @@ type Policy = (cp: number) => string | null
 const NAMED: Readonly<Record<number, string>> = { 0x09: "\\t", 0x0a: "\\n", 0x0d: "\\r", 0x22: '\\"', 0x5c: "\\\\" }
 
 const POLICIES: Readonly<Record<Target, Policy>> = {
+	/* C#'s \x takes one to four hex digits, so it is never written: \uHHHH, fixed width, for every escape */
+	csharp: (cp) =>
+		cp < 0x20 || cp === 0x7f || cp === 0x85 || cp === 0x2028 || cp === 0x2029 || cp === 0xfeff
+			? `\\u${hex(cp, 4)}`
+			: null,
 	go: (cp) => {
 		if (cp < 0x20 || cp === 0x7f) return `\\x${hex(cp, 2)}`
 		return cp === 0xfeff ? "\\ufeff" : null
@@ -61,6 +66,7 @@ export const tsString = (text: string) => stringLiteral(text, "ts")
 export const goString = (text: string) => stringLiteral(text, "go")
 export const rustString = (text: string) => stringLiteral(text, "rust")
 export const pyString = (text: string) => stringLiteral(text, "python")
+export const csString = (text: string) => stringLiteral(text, "csharp")
 
 /**
  * Text for a comment or docstring: well-formed, with each character a compiler refuses even in a
@@ -77,10 +83,13 @@ export function commentText(text: string): string {
 	return out
 }
 
+/* every line break a comment writer splits at: a C# or JS lexer ends a line at U+0085, U+2028 and U+2029 too */
+const LINE_BREAKS = /\r\n|\r|\n|\u2028|\u2029|\u0085/
+
 /** Comment lines of `text` behind `marker` (`//`, `///`, `#`): each line break in it starts a new comment line. */
 export function lineComment(text: string, marker: string, indent = ""): string[] {
 	return commentText(text)
-		.split(/\r\n|\r|\n|\u2028|\u2029|\u0085/)
+		.split(LINE_BREAKS)
 		.map((line) => (line.trim() === "" ? `${indent}${marker}` : `${indent}${marker} ${line}`))
 }
 
@@ -92,6 +101,13 @@ export function blockCommentText(text: string): string {
 /** Docstring body lines: backslashes and quotes escaped, so `"""`, a trailing `"` and `C:\users` are inert. */
 export function pyDocLines(text: string): string[] {
 	return commentText(text)
-		.split(/\r\n|\r|\n|\u2028|\u2029|\u0085/)
+		.split(LINE_BREAKS)
 		.map((line) => line.replace(/\\/g, "\\\\").replace(/"/g, '\\"'))
+}
+
+/** XML doc text lines (C#'s `///`): split at every line break, `&`, `<` and `>` as entities (CS1570 otherwise). */
+export function csDocLines(text: string): string[] {
+	return commentText(text)
+		.split(LINE_BREAKS)
+		.map((line) => line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"))
 }

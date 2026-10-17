@@ -4,6 +4,8 @@ import { withGo } from "../go/__fixtures__/go-env.ts"
 import {
 	blockCommentText,
 	commentText,
+	csDocLines,
+	csString,
 	goString,
 	lineComment,
 	pyDocLines,
@@ -65,6 +67,16 @@ describe("string literals: one escaper, one policy per target", () => {
 		)
 	})
 
+	it("C#: named escapes, \\uHHHH for other control code points, DEL, NEL, the line separators and the BOM, never \\x", () => {
+		expect(csString(nasty)).toBe(
+			'"q\\"b\\\\n\\nr\\rt\\tz\\u0000d\\u007f e\\u0001 \uFFFD \\u2028\\u2029\\u0085\\ufeff \u{1F600}"',
+		)
+		expect(csString("\b\f\u000b\u001f")).toBe('"\\u0008\\u000c\\u000b\\u001f"')
+		/* \x takes one to four hex digits in C#, so \x1 before "2" would read as U+0012 */
+		const ascii = Array.from({ length: 0x80 }, (_, cp) => csString(`${String.fromCharCode(cp)}2`))
+		expect(ascii.filter((literal) => literal.includes("\\x"))).toEqual([])
+	})
+
 	it("routes every target through the one writer", () => {
 		expect((["go", "python", "rust", "ts"] as const).map((target) => stringLiteral("a\nb", target))).toEqual([
 			'"a\\nb"',
@@ -86,6 +98,15 @@ describe("comments: text that can never become code", () => {
 			lineComment("doc", "///", "\t"),
 			lineComment("  ", "#", "  "),
 		]).toEqual([["// one", "// two", "// three", "//", "// four"], ["\t/// doc"], ["  #"]])
+	})
+
+	it("C# doc lines: split at every line break a C# lexer ends a line at, XML-escaped, control characters shown", () => {
+		expect([
+			csDocLines("a<b&c\u2028d"),
+			csDocLines("x > y\r\nz\u0085w\u2029v"),
+			csDocLines("&lt; stays text"),
+			csDocLines(`a\u0000b${LONE_LOW}`),
+		]).toEqual([["a&lt;b&amp;c", "d"], ["x &gt; y", "z", "w", "v"], ["&amp;lt; stays text"], ["a\\u0000b\uFFFD"]])
 	})
 
 	// v0: 0fd9637be3

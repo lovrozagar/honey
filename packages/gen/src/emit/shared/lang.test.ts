@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
 	camelWords,
 	compareCodeUnits,
+	csIdentifier,
+	csTypeName,
 	goExported,
 	goLocal,
 	isRustPreludeType,
@@ -114,5 +116,32 @@ describe("lang: identifiers per language", () => {
 			"ok",
 		])
 		expect(["user", "", "2fa", "none"].map(pyClassName)).toEqual(["User", "Model", "N2fa", "None_"])
+	})
+})
+
+/* C#'s 77 reserved keywords and its contextual ones (contract 45 §4.1): each is `@`-escaped as an identifier */
+const CS_RESERVED =
+	"abstract as base bool break byte case catch char checked class const continue decimal default delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using virtual void volatile while"
+const CS_CONTEXTUAL =
+	"add allows and args async await by descending dynamic equals extension field file from get global group init into join let managed nameof nint not notnull nuint on or orderby partial record remove required scoped select set unmanaged value var when where with yield"
+
+describe("lang: C# identifiers", () => {
+	it("C#: camelCase identifiers, a number first guarded, empty as value, every keyword @-escaped", () => {
+		expect(["user-id", "class", "await", "value", "2fa", "", "event", "ok"].map(csIdentifier)).toEqual([
+			"userId",
+			"@class",
+			"@await",
+			"@value",
+			"_2fa",
+			"value",
+			"@event",
+			"ok",
+		])
+		const keywords = [...CS_RESERVED.split(" "), ...CS_CONTEXTUAL.split(" ")]
+		expect(keywords.map(csIdentifier)).toEqual(keywords.map((keyword) => `@${keyword}`))
+	})
+
+	it("C#: PascalCase type names, a number first as N, empty as Value, never a keyword", () => {
+		expect(["user-id", "2fa", "", "class"].map(csTypeName)).toEqual(["UserId", "N2fa", "Value", "Class"])
 	})
 })

@@ -1,5 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { gofmtPath, withGo } from "../go/__fixtures__/go-env.ts"
+import { goCacheDir, gofmtPath, withGo } from "../go/__fixtures__/go-env.ts"
 import { formatFiles } from "./format.ts"
 import { gofmtFormatter } from "./gofmt.ts"
 
@@ -43,5 +45,23 @@ describe("gofmtFormatter: a gofmt that stops reading", () => {
 			useTabs: true,
 		})
 		expect([code === source, errors.length]).toEqual([true, 1])
+	})
+
+	it("answers with its stderr when the binary closes its input and exits later", async () => {
+		/* the write fails while the binary still runs: the pipe error is ignored, the exit status answers */
+		const dir = mkdtempSync(join(goCacheDir("tmp"), "gofmt-closes-"))
+		const bin = join(dir, "gofmt")
+		writeFileSync(bin, "#!/bin/sh\nexec 0<&-\necho closed >&2\nsleep 1\nexit 3\n", { mode: 0o755 })
+		try {
+			const source = `package sdk\n// ${"x".repeat(1 << 22)}\n`
+			const { code, errors } = await gofmtFormatter(bin)("big.go", source, {
+				printWidth: 120,
+				semi: false,
+				useTabs: true,
+			})
+			expect([code === source, errors]).toEqual([true, ["closed"]])
+		} finally {
+			rmSync(dir, { force: true, recursive: true })
+		}
 	})
 })

@@ -36,7 +36,7 @@ export const PYTHON = [
  * The default run's test files that run .NET: each reaches `csharp-env.ts`, the one way gen runs .NET, through its
  * imports. They run as the `csharp` project, held to that as `GO` is.
  */
-export const CSHARP = ["tests/structure/csharp-toolchain.test.ts"]
+export const CSHARP = ["src/emit/csharp/**/*.test.ts", "tests/structure/csharp-toolchain.test.ts"]
 
 /**
  * The default run's test files that run Rust: each reaches `rust-env.ts`, the one way gen runs Rust, through its

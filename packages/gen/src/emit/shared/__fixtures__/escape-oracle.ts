@@ -6,7 +6,7 @@
 import { caseLabel, type Rng, rng, runs } from "./rng.ts"
 import { blockCommentText, commentText, lineComment, pyDocLines, stringLiteral, wellFormed } from "../escape.ts"
 
-export type Target = "go" | "python" | "rust" | "ts"
+export type Target = "csharp" | "go" | "python" | "rust" | "ts"
 type Decoded = { value: string; end: number; escaped: number[] }
 
 const TOKENS: readonly string[] = [
@@ -57,6 +57,7 @@ const TOKENS: readonly string[] = [
 
 /** What each target forbids raw inside `"…"`, or this layer escapes there by policy: the only escapes allowed. */
 const REQUIRED: Readonly<Record<Target, (cp: number) => boolean>> = {
+	csharp: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x85, 0x2028, 0x2029, 0xfeff].includes(cp),
 	go: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
 	python: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x85, 0x2028, 0x2029, 0xfeff].includes(cp),
 	rust: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
@@ -64,6 +65,21 @@ const REQUIRED: Readonly<Record<Target, (cp: number) => boolean>> = {
 }
 
 const SIMPLE: Readonly<Record<Target, Readonly<Record<string, string>>>> = {
+	/* C# 13's simple escapes (§6.4.5.5), `\e` among them */
+	csharp: {
+		'"': '"',
+		"'": "'",
+		"\\": "\\",
+		"0": "\0",
+		a: "\x07",
+		b: "\b",
+		e: "\x1b",
+		f: "\f",
+		n: "\n",
+		r: "\r",
+		t: "\t",
+		v: "\v",
+	},
 	go: { '"': '"', "'": "'", "\\": "\\", a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" },
 	python: { '"': '"', "'": "'", "\\": "\\", a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" },
 	rust: { '"': '"', "'": "'", "\\": "\\", "0": "\0", n: "\n", r: "\r", t: "\t" },
@@ -94,8 +110,22 @@ function byteEscape(text: string, at: number, ascii: boolean): Escape {
 	return { cp, next: at + 4 }
 }
 
+/** C#'s `\x`: one to four hex digits, as many as follow. */
+function variableHex(text: string, at: number): Escape {
+	const run = /^[0-9a-fA-F]{1,4}/.exec(text.slice(at + 2))?.[0]
+	if (run === undefined) throw new Error("bad \\x")
+	return { cp: Number.parseInt(run, 16), next: at + 2 + run.length }
+}
+
 /** The numeric escapes each target's grammar allows, past its simple ones. */
 const NUMERIC: Readonly<Record<Target, (text: string, at: number) => Escape>> = {
+	csharp: (text, at) => {
+		const c = text[at + 1]
+		if (c === "x") return variableHex(text, at)
+		if (c === "u") return { cp: hexAt(text, at + 2, 4), next: at + 6 }
+		if (c === "U") return { cp: hexAt(text, at + 2, 8), next: at + 10 }
+		throw new Error(`escape \\${c} is not C#`)
+	},
 	go: (text, at) => {
 		const c = text[at + 1]
 		if (c === "x") return byteEscape(text, at, true)
@@ -131,6 +161,15 @@ function escapeAt(target: Target, text: string, at: number): Escape {
 	return simple === undefined ? NUMERIC[target](text, at) : { cp: simple.codePointAt(0) as number, next: at + 2 }
 }
 
+/* the raw characters that end a line, so a literal holding one is unterminated: C#'s new-line characters */
+const ENDS_LINE: Readonly<Record<Target, RegExp>> = {
+	csharp: /^[\n\r\u0085\u2028\u2029]$/,
+	go: /^\n$/,
+	python: /^\n$/,
+	rust: /^$/,
+	ts: /^\n$/,
+}
+
 /** Read a `"…"` literal of `target` from the start of `text`, as that language's lexer does. */
 function decode(target: Target, text: string): Decoded {
 	if (text[0] !== '"') throw new Error("no opening quote")
@@ -139,7 +178,7 @@ function decode(target: Target, text: string): Decoded {
 	for (let at = 1; at < text.length;) {
 		const ch = String.fromCodePoint(text.codePointAt(at) as number)
 		if (ch === '"') return { end: at + 1, escaped, value }
-		if (ch === "\n" && target !== "rust") throw new Error("raw newline in a string")
+		if (ENDS_LINE[target].test(ch)) throw new Error("raw newline in a string")
 		if (ch !== "\\") {
 			value += ch
 			at += ch.length
@@ -153,7 +192,8 @@ function decode(target: Target, text: string): Decoded {
 	throw new Error("unterminated literal")
 }
 
-export const TARGETS: readonly Target[] = ["go", "python", "rust", "ts"]
+/* appended, not sorted in: each target's fuzz salt is its index, so the others' inputs stay put */
+export const TARGETS: readonly Target[] = ["go", "python", "rust", "ts", "csharp"]
 
 function input(r: Rng): string {
 	let out = ""
