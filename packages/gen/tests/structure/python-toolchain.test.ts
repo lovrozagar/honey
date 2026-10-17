@@ -5,9 +5,10 @@
  * exactly those, so a local run and a CI run use the same uv and interpreters to the patch. As with Rust,
  * importing the env file does not license a raw spawn: every uv, python, ruff and mypy goes through its
  * runners. Nothing lands in `~/.local/bin`. No gate outside the registry (G17, at most 16 documents) but the
- * harness files' served document (phase e); a call counts by the module it resolves to (compile-calls.ts), so
- * Rust's own `compiledFixture` is rust-toolchain.test.ts's to judge. The floor interpreter and the floor
- * constraints sit at the floors every emitted package declares.
+ * harness files' served document; a call counts by the module it resolves to (compile-calls.ts), so Rust's own
+ * `compiledFixture` is rust-toolchain.test.ts's to judge. Only the Python conformance runner names the gate
+ * option that resolves the constraints online (`"newest"`, Fe4), so the default run never does. The floor
+ * interpreter and the floor constraints sit at the floors every emitted package declares.
  */
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, statSync } from "node:fs"
 import { homedir } from "node:os"
@@ -290,16 +291,20 @@ const OUTSIDE_REGISTRY: readonly { readonly callers: RegExp; readonly module: st
 	},
 ]
 
-/** The files in `files` calling a gate outside the registry they may not call. */
+/* the gate option that resolves the constraints online (Fe4), by its text, and the one file that may name it */
+const ONLINE = { callers: /^tests\/integration\/conformance\/python\.test\.ts$/, text: 'python: "newest"' }
+
+/** Whether the file at `path` calls a gate outside the registry it may not call. */
+const strayGate = (path: string, text: string) =>
+	!DEFINING.includes(path) &&
+	OUTSIDE_REGISTRY.some(
+		({ callers, module, name }) => callsOf(path, text, name).includes(module) && !callers.test(path),
+	)
+
+/** The files in `files` calling a gate outside the registry, or naming the online resolve, where they may not. */
 const strayCompiles = (files: readonly { readonly path: string; readonly text: string }[]) =>
 	files
-		.filter(
-			({ path, text }) =>
-				!DEFINING.includes(path) &&
-				OUTSIDE_REGISTRY.some(
-					({ callers, module, name }) => callsOf(path, text, name).includes(module) && !callers.test(path),
-				),
-		)
+		.filter(({ path, text }) => strayGate(path, text) || (text.includes(ONLINE.text) && !ONLINE.callers.test(path)))
 		.map(({ path }) => path)
 
 /** A file at `path` whose text imports `name` from gen-relative `module` and calls it. */
@@ -308,12 +313,15 @@ const calling = (path: string, name: string, module: string) => ({
 	text: `import { ${name} } from "./${relative(dirname(path), module)}"\nconst sdk = ${name}(document)`,
 })
 
+/** A file at `path` that names the online resolve. */
+const newest = (path: string) => ({ path, text: 'const sdk = servedPythonSdk(document, { python: "newest" })' })
+
 describe("the fixture documents a default run gates", () => {
 	it(`number at most ${FIXTURE_BUDGET}`, () => {
 		expect(Object.keys(FIXTURES).length).toBeLessThanOrEqual(FIXTURE_BUDGET)
 	})
 
-	it("come only from the registry, except the harness files' served document", () => {
+	it("come only from the registry, except the harness files' served document, and never resolve online", () => {
 		expect(strayCompiles(others())).toEqual([])
 	})
 
@@ -338,5 +346,15 @@ describe("the fixture documents a default run gates", () => {
 			"src/emit/python/__fixtures__/consumer.ts",
 			"src/emit/rust/__fixtures__/driven.ts",
 		])
+	})
+
+	it('flag the online "newest" resolve anywhere but the Python conformance runner', () => {
+		expect(
+			strayCompiles([
+				newest("tests/integration/conformance/python.test.ts"),
+				newest("tests/integration/python-harness.test.ts"),
+				newest("src/emit/python/x.test.ts"),
+			]),
+		).toEqual(["tests/integration/python-harness.test.ts", "src/emit/python/x.test.ts"])
 	})
 })

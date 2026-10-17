@@ -2,7 +2,8 @@
  * The conformance grid itself, in the default run (it spawns nothing): its shape, what each target
  * runs, `compareCell`'s rules in both directions, and that the opt-in harness stays opt-in.
  */
-import { matchesGlob } from "node:path"
+import { existsSync } from "node:fs"
+import { join, matchesGlob } from "node:path"
 import { describe, expect, it } from "vitest"
 import config, { HARNESS } from "../../../vitest.config.ts"
 import { FEATURES } from "./features.ts"
@@ -119,7 +120,13 @@ const raw = (headers: Record<string, string>, body = "x", status = 200): Observe
 const tick = (n: number, id = "1"): Observed[] => [{ events: [{ data: { n }, event: "tick", id }], kind: "events" }]
 
 /** Whether a file is in the opt-in harness run. */
+/** gen's root, where the harness globs are relative to */
+const GEN = join(import.meta.dirname, "../../..")
+
 const inHarness = (file: string) => HARNESS.some((glob) => matchesGlob(file, glob))
+
+/** A target's conformance runner, gen-relative. */
+const runner = (target: string) => `tests/integration/conformance/${target}.test.ts`
 
 const OK: Observed[] = [{ data: null, kind: "data", status: 200 }]
 const EXPECT_OK: Expected[] = [{ data: null, kind: "data", status: 200 }]
@@ -361,14 +368,19 @@ describe("compareCell on the wire", () => {
 describe("the opt-in harness", () => {
 	it("keeps every runner and harness file out of the default run, and the grid's own test in it", () => {
 		expect(typeof config).toBe("function")
-		type Resolved = { test: { exclude?: string[]; include?: string[] } }
+		type Resolved = { test: { exclude?: string[]; include?: string[]; projects?: { test: { include: string[] } }[] } }
 		const resolve = config as unknown as (env: { command: "serve"; mode: string }) => Resolved
+		const harness = resolve({ command: "serve", mode: "harness" }).test
+		/* harness mode runs through its toolchain projects (00-rules:118): the union of their includes */
+		const union = (harness.projects ?? []).flatMap(({ test }) => test.include)
+		const runs = (file: string) => union.some((glob) => matchesGlob(file, glob))
 		expect([
 			HARNESS.filter((glob) => !resolve({ command: "serve", mode: "test" }).test.exclude?.includes(glob)),
-			resolve({ command: "serve", mode: "harness" }).test.include,
-			TARGETS.filter((t) => !inHarness(`tests/integration/conformance/${t}.test.ts`)),
-			["tests/integration/ts-harness.test.ts", "tests/integration/ts-harness.pipeline.test.ts"].map(inHarness),
+			[harness.include, union.filter((glob) => !inHarness(glob))],
+			TARGETS.filter((t) => !inHarness(runner(t))),
+			TARGETS.filter((t) => existsSync(join(GEN, runner(t))) !== runs(runner(t))),
+			["tests/integration/ts-harness.test.ts", "tests/integration/ts-harness.pipeline.test.ts"].map(runs),
 			inHarness("tests/integration/conformance/matrix.test.ts"),
-		]).toEqual([[], HARNESS, [], [true, true], false])
+		]).toEqual([[], [undefined, []], [], [], [true, true], false])
 	})
 })

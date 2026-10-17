@@ -24,6 +24,8 @@ export type ReferenceApp = {
 }
 
 export type TargetRunner = {
+	/** the cells this client has no method for by design (Python's SDK: the streams, G2); the target's file pins which */
+	readonly lacks?: (cell: Cell) => boolean
 	/** build the target's client from app.document once per file */
 	prepare(app: ReferenceApp): Promise<void>
 	/** the file's setup hook's timeout (the app's start and `prepare`), in ms; absent: the config's hookTimeout. A cold Rust compile runs past it (Fe3) */
@@ -33,6 +35,8 @@ export type TargetRunner = {
 	readonly target: Target
 	/** a cell's `it` is titled `<key> (<title>)` when it has one: a v0 port, a case's live leg */
 	readonly titles?: Readonly<Record<string, string>>
+	/** a second runner of one target, titled `conformance × <target> (<variant>)` */
+	readonly variant?: string
 }
 
 const APP = fileURLToPath(new URL("../../../../core/tests/integration/conformance/app.ts", import.meta.url))
@@ -134,17 +138,18 @@ function unknownOperations(cells: readonly Cell[], document: Record<string, unkn
 
 /**
  * One `it` per cell of `runner.target` against one app for the file: mark the wire, run the cell,
- * read the wire, compare. Nothing is skippable: a runner that cannot express a cell throws. Returns
- * the file's app, for a target's extra cases.
+ * read the wire, compare. Nothing is skippable: a runner that cannot express a cell throws, and only
+ * the cells it `lacks` by design are left out. Returns the file's app, for a target's extra cases.
  */
 export function targetSuite(runner: TargetRunner): () => ReferenceApp {
-	const cells = cellsFor(runner.target)
+	const cells = cellsFor(runner.target).filter((cell) => !runner.lacks?.(cell))
+	const variant = runner.variant === undefined ? "" : ` (${runner.variant})`
 	let app: ReferenceApp | undefined
 	const current = (): ReferenceApp => {
 		if (app === undefined) throw new Error("the reference app is not started: read it inside a test")
 		return app
 	}
-	describe(`conformance × ${runner.target}`, () => {
+	describe(`conformance × ${runner.target}${variant}`, () => {
 		beforeAll(async () => {
 			app = await startReferenceApp()
 			await runner.prepare(app)

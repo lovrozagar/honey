@@ -56,6 +56,27 @@ export const TOOLCHAIN_PROJECTS = { go: GO, rust: RUST, python: PYTHON } as cons
 /** The default run's test files: the `unit` project's, less every toolchain project's. */
 export const DEFAULT_RUN = ["src/**/*.test.ts", "tests/**/*.test.ts", "scripts/**/*.test.ts"]
 
+/** A target's harness files: its conformance runner and its harness legs. */
+const harnessOf = (target: string) => [
+	`tests/integration/conformance/${target}.test.ts`,
+	`tests/integration/${target}-harness*.test.ts`,
+]
+
+type Group = { exclude?: string[]; include: string[]; name: string }
+
+/**
+ * Each project's `test` options: `first` (Node only) sharing the first toolchain's group, then one project per
+ * toolchain in a group of its own (00-rules:118).
+ */
+const groups = (first: Group, toolchains: Readonly<Record<string, readonly string[]>>) => [
+	{ ...first, sequence: { groupOrder: 0 } },
+	...Object.entries(toolchains).map(([name, include], i) => ({
+		include: [...include],
+		name,
+		sequence: { groupOrder: i },
+	})),
+]
+
 const group = (spec: TestSpecification) => spec.project.config.sequence.groupOrder
 
 /**
@@ -74,8 +95,18 @@ export class LongestFirst extends BaseSequencer {
 
 export default defineConfig(({ mode }) =>
 	mode === "harness"
-		? /* no coverage: it executes the coverage-excluded runtime */
-			{ test: { hookTimeout: 60_000, include: HARNESS, testTimeout: 60_000 } }
+		? /* no coverage: it executes the coverage-excluded runtime. The default run's groups, a target's harness
+			 * files in its language's project, `ts` (Node) beside the first. No project extends this file: vitest
+			 * loads it again in mode `test` for one that does, and the default run's exclude drops every harness file */
+			{
+				test: {
+					projects: groups(
+						{ include: harnessOf("ts"), name: "ts" },
+						Object.fromEntries(Object.keys(TOOLCHAIN_PROJECTS).map((name) => [name, harnessOf(name)])),
+					).map((test) => ({ test: { ...test, hookTimeout: 60_000, testTimeout: 60_000 } })),
+					sequence: { sequencer: LongestFirst },
+				},
+			}
 		: {
 				test: {
 					coverage: {
@@ -99,21 +130,10 @@ export default defineConfig(({ mode }) =>
 					/* one run, one merged coverage report; `sequence.groupOrder` runs the groups one after another. A
 					 * project that `extends` adds its include and exclude to the root's (the arrays merge), so the
 					 * root names no include and every project keeps the HARNESS exclude */
-					projects: [
-						{
-							extends: true,
-							test: {
-								exclude: Object.values(TOOLCHAIN_PROJECTS).flat(),
-								include: DEFAULT_RUN,
-								name: "unit",
-								sequence: { groupOrder: 0 },
-							},
-						},
-						...Object.entries(TOOLCHAIN_PROJECTS).map(([name, include], i) => ({
-							extends: true as const,
-							test: { include: [...include], name, sequence: { groupOrder: i } },
-						})),
-					],
+					projects: groups(
+						{ exclude: Object.values(TOOLCHAIN_PROJECTS).flat(), include: DEFAULT_RUN, name: "unit" },
+						TOOLCHAIN_PROJECTS,
+					).map((test) => ({ extends: true as const, test })),
 					/* many tests typecheck emitted code with an in-process TS compiler; a cold one under a full parallel
 					 * run takes seconds, so the 5 s default would fail them on load, not on behavior */
 					testTimeout: 30_000,

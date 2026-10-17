@@ -3,14 +3,15 @@
  * content hash and a second gate spawns nothing; programs run against the package as written; mypy runs once per
  * package dir and a consumer check once per program, each on a private copy of a base cache; the floor gates
  * under PY_FLOOR in a dir of its own; the emitter's call plans name what the fixed reflection driver walks; and
- * the driver sends one cell on both clients against the recording server.
+ * the driver sends one cell on both clients against the recording server, observing an operation with no typed
+ * answer by its raw body.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
-import { served } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { compiledPython } from "./__fixtures__/compiled.ts"
 import { program } from "./__fixtures__/consumer.ts"
 import { FIXTURES } from "./__fixtures__/documents.ts"
@@ -32,6 +33,8 @@ const FLOOR = withPython(PY_FLOOR)
 const spawns = () => vi.mocked(spawn).mock.calls.length + vi.mocked(spawnSync).mock.calls.length
 
 const OP = "orgs.members.notes.create"
+
+const CLIENTS = ["async", "sync"] as const
 
 /** The NOTES op's plan, in the emitter's names: two path params in path order, a query and a header param, a JSON body. */
 const NOTES: PythonCallPlan = {
@@ -181,4 +184,39 @@ describe.skipIf(!PY)("the Python test driver, against the recording server", () 
 		}
 		expect(hops).toMatchObject([hop, hop])
 	}, 120_000)
+})
+
+/** `orders.close`: a 204 with no typed answer (its plan's `response: "none"`), the SDK's return `None`. */
+const CLOSE: Call = { operation: "orders.close", route: { method: "POST", path: "/a" } }
+
+/** What a 2xx answer to an untyped operation carries: JSON, nothing, then text. */
+const UNTYPED: readonly Reply[] = [
+	{ json: { a: 1 }, status: 200 },
+	{ status: 204 },
+	{ headers: { "content-type": "text/plain" }, status: 200, text: "t" },
+]
+
+describe.skipIf(!PY)("the Python test driver: an answer the SDK does not type", () => {
+	/* the grid's raw box (TS, Go and Rust read it so): JSON, else text, else null, whatever the SDK returns */
+	it.each(CLIENTS)(
+		"%s: observes the raw body as JSON, as null when empty, else as text",
+		async (client) => {
+			const sdk = drivenPythonSdk("errors")
+			expect(sdk.imported, sdk.stderr).toBe(true)
+			const [run, hops] = await served(UNTYPED, async (server) => {
+				const cell = { calls: [CLOSE, CLOSE, CLOSE], setup: {} }
+				return [await sdk.runCalls(cell, { url: server.url }, { client }), server.hops] as const
+			})
+			expect({ observed: run.observed, status: run.status }, run.stderr).toEqual({
+				observed: [
+					{ data: { a: 1 }, kind: "data", status: 200 },
+					{ data: null, kind: "data", status: 204 },
+					{ data: "t", kind: "data", status: 200 },
+				] satisfies Observed[],
+				status: 0,
+			})
+			expect(hops.map((hop) => `${hop.method} ${hop.url}`)).toEqual(["POST /a", "POST /a", "POST /a"])
+		},
+		120_000,
+	)
 })

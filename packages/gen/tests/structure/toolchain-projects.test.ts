@@ -5,14 +5,15 @@
  * exactly when its imports reach that language's env fixture, the one way gen runs it (go-toolchain.test.ts
  * holds Go to that), so the split is checked from the import graph, never kept by hand: a file that reaches a
  * language outside its project would run that toolchain beside another language's group, and a file in a
- * language's project that reaches no toolchain would only stretch that group.
+ * language's project that reaches no toolchain would only stretch that group. Harness mode runs in the same
+ * groups, `ts` (Node) in place of `unit`.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join, matchesGlob, relative, resolve } from "node:path"
 import { ts } from "ts-morph"
 import { describe, expect, it } from "vitest"
 import type { TestSpecification } from "vitest/node"
-import config, { LongestFirst, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
+import config, { HARNESS, LongestFirst, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
 
 const GEN = resolve(import.meta.dirname, "../..")
 
@@ -33,19 +34,23 @@ const CACHE: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, readonly [key: str
 type Toolchain = keyof typeof ENV
 
 type Project = {
+	readonly extends?: boolean
 	readonly test: {
 		readonly exclude?: readonly string[]
+		readonly hookTimeout?: number
 		readonly include?: readonly string[]
 		readonly name: string
 		readonly sequence: { readonly groupOrder: number }
+		readonly testTimeout?: number
 	}
 }
-type Resolved = { test: { exclude: string[]; projects: Project[]; sequence: { sequencer: unknown } } }
+type Resolved = { test: { exclude?: string[]; projects?: Project[]; sequence?: { sequencer: unknown } } }
 
-const resolved = (config as unknown as (env: { command: "serve"; mode: string }) => Resolved)({
-	command: "serve",
-	mode: "test",
-}).test
+/** The config's `test` in a vitest mode: the default run's (`test`) or the opt-in harness's (`harness`). */
+const configIn = (mode: string) =>
+	(config as unknown as (env: { command: "serve"; mode: string }) => Resolved)({ command: "serve", mode }).test
+const resolved = configIn("test")
+const harness = configIn("harness")
 
 /** A file's gen imports, gen-relative; undefined for a module that is not there. */
 type Imports = (file: string) => readonly string[] | undefined
@@ -61,12 +66,18 @@ function testFiles(dir: string): string[] {
 
 const matches = (file: string, globs: readonly string[] = []) => globs.some((glob) => matchesGlob(file, glob))
 
-/** The projects whose include (and not the root's or its own exclude) takes `file`. */
-function projectsOf(file: string): string[] {
-	return resolved.projects
-		.filter(({ test }) => matches(file, test.include) && !matches(file, [...resolved.exclude, ...(test.exclude ?? [])]))
+/** The projects of `run` (the default run's unless named) whose include, and no root or own exclude, takes `file`. */
+function projectsOf(file: string, run: Resolved["test"] = resolved): string[] {
+	return (run.projects ?? [])
+		.filter(
+			({ test }) => matches(file, test.include) && !matches(file, [...(run.exclude ?? []), ...(test.exclude ?? [])]),
+		)
 		.map(({ test }) => test.name)
 }
+
+/** A run's projects as `[name, groupOrder]`, in the order the config lists them. */
+const groupsOf = (run: Resolved["test"]) =>
+	(run.projects ?? []).map(({ test }) => [test.name, test.sequence.groupOrder])
 
 /** The relative modules `text`, the source of gen-relative `file`, imports (static, re-export or dynamic). */
 function importsIn(file: string, text: string): string[] {
@@ -152,8 +163,7 @@ describe("the default run's projects", () => {
 	})
 
 	it("runs each toolchain project in a group of its own, unit beside the first", () => {
-		const orders = resolved.projects.map(({ test }) => [test.name, test.sequence.groupOrder])
-		expect(orders).toEqual([["unit", 0], ...Object.keys(TOOLCHAIN_PROJECTS).map((name, i) => [name, i])])
+		expect(groupsOf(resolved)).toEqual([["unit", 0], ...Object.keys(TOOLCHAIN_PROJECTS).map((name, i) => [name, i])])
 	})
 
 	it.each(Object.keys(ENV))("holds every file whose last toolchain reached is %s in its project", (name) => {
@@ -202,9 +212,42 @@ const spec = (name: string, groupOrder: number, file: string) =>
 		project: { config: { sequence: { groupOrder } }, name },
 	}) as unknown as TestSpecification
 
+/*
+ * The harness runs the same toolchains (00-rules:118): each target's conformance runner and harness files are a
+ * project of their own, in the default run's groups, so Python's runner never runs beside Go's or Rust's.
+ */
+describe("harness mode's projects", () => {
+	const imports = diskImports()
+	const harnessFiles = testFiles("tests").filter((file) => matches(file, HARNESS))
+
+	it("puts every harness file in exactly one harness project", () => {
+		expect(harnessFiles.length).toBeGreaterThan(0)
+		expect(harnessFiles.filter((file) => projectsOf(file, harness).length !== 1)).toEqual([])
+	})
+
+	it("holds each harness file in the project of the last toolchain it reaches, ts (Node) when it reaches none", () => {
+		const misplaced = harnessFiles.filter((file) => projectsOf(file, harness)[0] !== (ownerOf(file, imports) ?? "ts"))
+		expect(misplaced).toEqual([])
+	})
+
+	it("runs the projects in the default run's groups, ts beside go", () => {
+		expect(groupsOf(harness)).toEqual([["ts", 0], ...Object.keys(TOOLCHAIN_PROJECTS).map((name, i) => [name, i])])
+	})
+
+	/* vitest loads an `extends: true` project's root config again in mode `test`, the default run's, whose
+	 * exclude drops every harness file: such a project would run nothing */
+	it("extends no root config, each project holding the 60 s test and hook timeouts", () => {
+		const projects = harness.projects ?? []
+		expect(projects.length).toBeGreaterThan(0)
+		expect(projects.map(({ extends: base, test }) => [base, test.testTimeout, test.hookTimeout])).toEqual(
+			projects.map(() => [undefined, 60_000, 60_000]),
+		)
+	})
+})
+
 describe("the sequencer", () => {
-	it("is the default run's", () => {
-		expect(resolved.sequence.sequencer).toBe(LongestFirst)
+	it("is the default run's and the harness's", () => {
+		expect([resolved.sequence?.sequencer, harness.sequence?.sequencer]).toEqual([LongestFirst, LongestFirst])
 	})
 
 	it("orders by group, then the longest last run first whichever project holds it, an unknown file before those", async () => {

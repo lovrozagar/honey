@@ -2,8 +2,9 @@
  * Emitted Python, driven (contract 28 §6.3, Fb8/G17): a package gated by `compiledFixture`, with `runCalls`
  * sending a grid cell through the fixed reflection driver (`driver/driver.py`, the shared driver protocol), one
  * process per cell. Nothing is generated for the driver: it walks the emitter's call plans (`pythonCallPlans`)
- * with `getattr`. `drivenPythonSdk` drives a registry entry (`FIXTURES`, Fb14); the harness files' served
- * document arrives in phase e.
+ * with `getattr`. `drivenPythonSdk` drives a registry entry (`FIXTURES`, Fb14); `servedPythonSdk` drives the
+ * harness files' served document (the reference app's), outside the registry, which a structure test keeps to
+ * those files (G17).
  */
 import { join } from "node:path"
 import type { PythonError, Script, Trace } from "../../shared/__fixtures__/protocol.ts"
@@ -42,11 +43,10 @@ function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace
 }
 
 /**
- * The registry SDK `key` gated under the pins (or the floors), and `runCalls` sending cells through the driver
- * by the emitter's call plans for the entry's own options.
+ * `fixture`'s SDK gated under the pins, the floors or the newest set, and `runCalls` sending cells through the
+ * driver by the emitter's call plans for the fixture's own options.
  */
-export function drivenPythonSdk(key: FixtureKey, options: GateOptions = {}): DrivenPythonSdk {
-	const fixture: PythonFixture = FIXTURES[key]
+function drivenFixture(fixture: PythonFixture, options: GateOptions): DrivenPythonSdk {
 	const plans = "document" in fixture ? pythonCallPlans(fixture.document(), fixture.options) : {}
 	const sdk = compiledFixture(fixture, options)
 	/* the spread resolves the venv: every driver run needs it */
@@ -61,3 +61,13 @@ export function drivenPythonSdk(key: FixtureKey, options: GateOptions = {}): Dri
 		},
 	}
 }
+
+/** The registry SDK `key`, driven (`drivenFixture`). */
+export const drivenPythonSdk = (key: FixtureKey, options: GateOptions = {}): DrivenPythonSdk =>
+	drivenFixture(FIXTURES[key], options)
+
+/** The SDK of `document` (the reference app's, served), driven with the emitter's default options: the harness files alone. */
+export const servedPythonSdk = (
+	document: Readonly<Record<string, unknown>>,
+	options: GateOptions = {},
+): DrivenPythonSdk => drivenFixture({ document: () => document }, options)

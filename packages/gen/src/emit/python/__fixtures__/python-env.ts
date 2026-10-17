@@ -11,10 +11,10 @@ import { type SpawnSyncReturns, spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { join, resolve } from "node:path"
+import { join, resolve as resolvePath } from "node:path"
 
 /** `file` at the repo root. */
-const atRoot = (file: string) => resolve(import.meta.dirname, "../../../../../..", file)
+const atRoot = (file: string) => resolvePath(import.meta.dirname, "../../../../../..", file)
 
 /* the cache root as the install commands spell it, for a shell to expand */
 const SHELL_ROOT = "$HOME/.cache/honey-tmp/python"
@@ -143,10 +143,25 @@ export type VenvSpec = {
 	readonly requirements: readonly string[]
 }
 
-/** `uv args`, throwing with its stderr when it fails. */
-function uvOrThrow(args: readonly string[]): void {
-	const result = runUv(args, { cwd: pythonCacheDir("tmp") })
+/** `uv args` with `input` on stdin: its stdout, or a throw with its stderr when it fails. */
+function uvOrThrow(args: readonly string[], input?: string): string {
+	const result = runUv(args, { cwd: pythonCacheDir("tmp"), input })
 	if (result.status !== 0) throw new Error(`uv ${args.join(" ")} failed: ${result.error?.message ?? result.stderr}`)
+	return result.stdout
+}
+
+/**
+ * The set `requirements` resolve to today under interpreter `python` (Fe4): `uv pip compile`, online, at the
+ * newest versions they allow (`highest`) or at their declared floors (`lowest-direct`), one exact
+ * `name==version` per line as the constraints files hold them. Throws with uv's stderr.
+ */
+export function resolve(
+	requirements: readonly string[],
+	options: { readonly python: string; readonly resolution: "highest" | "lowest-direct" },
+): string {
+	const { python, resolution } = options
+	const flags = ["--no-header", "--no-annotate", "--quiet", "--python", python, "--resolution", resolution]
+	return uvOrThrow(["pip", "compile", "-", ...flags], `${requirements.join("\n")}\n`)
 }
 
 /**

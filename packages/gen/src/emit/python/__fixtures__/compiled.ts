@@ -2,25 +2,41 @@
  * Emitted Python, gated (contract 28 §6.2, Fb8): a registry package (`FIXTURES`, Fb14) lands under
  * `$HOME/.cache/honey-tmp/python/sdk/<content hash>/` and is byte-compiled and imported under the pinned
  * interpreter (or PY_FLOOR), in a venv holding its manifest's dependencies at the pinned (or floor) constraints,
- * once per content hash. Its `.complete` marker holds the gate's outcome, and a gate that finds it reads it,
- * touches it for CI's prune and spawns nothing. `mypy()` runs once per package dir and `check(program)` once
- * per program text, each on a private copy of a per-venv base cache, so no two mypy processes write one cache
- * (mypy has no cache locking). `exec(program)` runs a program against the package, never cached.
+ * or at the newest set they resolve to online (the harness alone, Fe4), once per content hash. Its `.complete`
+ * marker holds the gate's outcome, and a gate that finds it reads it, touches it for CI's prune and spawns
+ * nothing. `mypy()` runs once per package dir and `check(program)` once per program text, each on a private
+ * copy of a per-venv base cache, so no two mypy processes write one cache (mypy has no cache locking).
+ * `exec(program)` runs a program against the package, never cached.
  *
  * `compiledFixture` gates any fixture, `compiledPython` a registry entry; driven.ts runs the test driver
- * against a registry entry.
+ * against a registry entry or the harness files' served document.
  */
 import { createHash } from "node:crypto"
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { generatePythonSdk } from "../sdk.ts"
 import { FIXTURES, type FixtureKey, type PythonFixture } from "./documents.ts"
-import { execPython, PY_FLOOR, pinnedPython, pythonCacheDir, type Ran, runMypy, runPython, venv } from "./python-env.ts"
+import {
+	execPython,
+	PY_FLOOR,
+	pinnedPython,
+	pythonCacheDir,
+	type Ran,
+	resolve,
+	runMypy,
+	runPython,
+	venv,
+	type VenvSpec,
+} from "./python-env.ts"
 
 export type { Ran } from "./python-env.ts"
 
-/** Which interpreter and dependency set a gate runs under: the pins (the default), or the floors (G10.2, Fb11). */
-export type GateOptions = { readonly python?: "pin" | "floor" }
+/**
+ * Which interpreter and dependency set a gate runs under: the pins (the default), the floors (G10.2, Fb11), or
+ * the pinned interpreter with the newest set the manifest's dependencies resolve to online at gate time (Fe4,
+ * the Python conformance runner alone: a structure test keeps the default run offline).
+ */
+export type GateOptions = { readonly python?: "pin" | "floor" | "newest" }
 
 /** The ruff rules every emitted file and the committed runtime pass (Fb9), with E501 off: the formatter cannot wrap spec text. */
 export const RUFF_SELECT = "E,F,W,I,UP,B,SIM,RUF,FA,PYI,BLE,S"
@@ -93,15 +109,24 @@ function manifest(files: Readonly<Record<string, string>>, pattern: RegExp, what
 	return found
 }
 
+/**
+ * The newest set `requirements` resolve to under the pinned interpreter, online, written by its content: a gate's
+ * hash covers the text as it covers a committed file's, so a set equal to the pins' is the pins' cache hit.
+ */
+function resolved(requirements: readonly string[]): string {
+	const text = resolve(requirements, { python: pinnedPython(), resolution: "highest" })
+	const path = join(pythonCacheDir("resolved"), `${sha(text).slice(0, 20)}.txt`)
+	if (!existsSync(path)) writeAtomic(path, text)
+	return path
+}
+
 /** What a gate runs in: the interpreter, the dependency strings the manifest declares, and their constraints file. */
-function venvSpec(files: Readonly<Record<string, string>>, python: "floor" | "pin") {
+function venvSpec(files: Readonly<Record<string, string>>, python: NonNullable<GateOptions["python"]>): VenvSpec {
 	const requirements = JSON.parse(manifest(files, /^dependencies = (\[.*\])$/m, "dependencies line")) as string[]
-	const constraints = join(import.meta.dirname, CONSTRAINTS[python])
-	return {
-		python: python === "pin" ? pinnedPython() : PY_FLOOR,
-		requirements,
-		...(requirements.length === 0 ? {} : { constraints }),
-	}
+	const interpreter = python === "floor" ? PY_FLOOR : pinnedPython()
+	if (requirements.length === 0) return { python: interpreter, requirements }
+	const constraints = python === "newest" ? resolved(requirements) : join(import.meta.dirname, CONSTRAINTS[python])
+	return { constraints, python: interpreter, requirements }
 }
 
 /** `run`'s exit status and stderr, its spawn error included. */

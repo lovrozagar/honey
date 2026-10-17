@@ -447,15 +447,7 @@ jobs:
           HONEY_PYTHON: python
           # a Python problem fails the job instead of skipping the Python SDK tests
           HONEY_REQUIRE_PYTHON: "1"
-          # a missing Go or Rust fails gen's Go and Rust conformance and harness files instead of skipping them
-          HONEY_REQUIRE_TOOLCHAINS: "1"
-      # F2: the escape layer's literals and comments through the real go, rustc and the pinned python
-      - run: cd packages/gen && bunx vitest run src/emit/shared/escape.toolchains.test.ts
-        env:
-          HONEY_REQUIRE_TOOLCHAINS: "1"
-      # the webhook verify helpers compiled and checked against a known HMAC: node, go, cargo, the pinned python
-      - run: cd packages/gen && bunx vitest run src/emit/shared/webhooks.toolchains.test.ts
-        env:
+          # a missing Go, Rust or Python fails gen's conformance and harness files for it instead of skipping them
           HONEY_REQUIRE_TOOLCHAINS: "1"
       # as in the test job: the saved cache keeps only the Rust SDKs this run built or reused
       - name: Prune the Rust SDKs this run did not use

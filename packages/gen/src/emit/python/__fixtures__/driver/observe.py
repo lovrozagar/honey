@@ -2,7 +2,8 @@
 
 A result is ``data`` with the raw response's status (and the typed response headers when the plan
 declares them), the bytes' size and SHA-256 for a binary answer, or ``raw`` when the call asks for
-it; a safe-mode ``SDKResult`` observes its data or its error. ``APIStatusError`` is ``error`` with
+it; a safe-mode ``SDKResult`` observes its data or its error. An operation with no typed answer
+observes its raw body as data: JSON, else text, else null. ``APIStatusError`` is ``error`` with
 its status, its key (``str(e.key)``) and its body's JSON, and ``APITimeoutError`` is ``timeout``.
 Unscripted, any other error is a DriverError. Under a script, a call's error is traced too
 (``via: "return"``, or ``"result"`` for a safe-mode ``SDKResult.error``, with the result's summary),
@@ -83,7 +84,8 @@ def typed_headers(plan: Plan, filled: dict[str, Any]) -> dict[str, str]:
 
 
 def answered(result: Any, prepared: Prepared, plan: Plan, raw: bool) -> Observed:
-    """A 2xx answer: the raw response, a binary answer's bytes, or the data."""
+    """A 2xx answer: the raw response, a binary answer's bytes, or the data (the raw body's when
+    the operation has no typed answer)."""
     response = prepared.raw
     if raw:
         body = bytes(response.body).decode("utf-8", "replace")
@@ -102,6 +104,8 @@ def answered(result: Any, prepared: Prepared, plan: Plan, raw: bool) -> Observed
             "size": len(data),
             "status": response.status,
         }
+    if plan["response"] == "none":
+        _, result = body_of(bytes(response.body))
     if prepared.headers_into is not None:
         headers = typed_headers(plan, prepared.headers_into)
         return {
