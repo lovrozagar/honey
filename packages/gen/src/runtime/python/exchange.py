@@ -47,8 +47,6 @@ SHAPES: Mapping[str, tuple[type, ...]] = {
 
 
 class CallArgs(TypedDict, total=False):
-    """What a method passes: its path values, query and header params, body, and options."""
-
     path: tuple[str, ...]
     query: Mapping[str, object] | None
     headers: Mapping[str, object] | None
@@ -67,8 +65,6 @@ class HttpAnswer:
 
 
 class ClientCore:
-    """What every call of one client reads."""
-
     def __init__(self, config: ClientConfig, defaults: Defaults) -> None:
         self.config = config
         self.base = base_of(config, defaults)
@@ -80,8 +76,6 @@ class ClientCore:
 
 
 class Exchange:
-    """One call in flight: its request built once, each hop and its answer decided here."""
-
     def __init__(
         self,
         core: ClientCore,
@@ -102,8 +96,10 @@ class Exchange:
         )
         self.log = CallLog(core.config.on_log, f"{op.method} {op.path}")
         self.meta = core.stale.begin(op.method, self.path)
-        timeout = options.get("timeout", core.config.timeout)
-        self.deadline = time.monotonic() + timeout if timeout and not stream else None
+        self.timeout = options.get("timeout", core.config.timeout) or None
+        self.deadline = (
+            None if stream or not self.timeout else time.monotonic() + self.timeout
+        )
         key = args.get("idempotency_key") or str(uuid.uuid4())
         self.idempotency = key if op.idempotent and not op.stream else None
         self.hops = 0
@@ -111,7 +107,6 @@ class Exchange:
         self.failure: APIStatusError | None = None
 
     def check(self) -> float | None:
-        """The seconds left; ``CanceledError`` once ``cancel`` fired, ``APITimeoutError`` past the timeout."""
         cancel = self.options.get("cancel")
         if cancel is not None and cancel.is_set():
             raise CanceledError("the call was canceled")
@@ -126,7 +121,6 @@ class Exchange:
         return base.rstrip("/") + self.path + (f"?{own}" if own else "")
 
     def request(self, token: str | None, is_retry: bool) -> RequestContext:
-        """The request hooks see: each header layer over the last, the credential last."""
         content, idempotency, call = (
             self.content,
             self.idempotency,
@@ -169,7 +163,6 @@ class Exchange:
         )
 
     def hop(self, ctx: RequestContext) -> Hop:
-        """The first hop as the hooks left it; an iterable body goes as it was given."""
         streamed = (
             None
             if self.content is None or ctx.body is not None
@@ -196,7 +189,6 @@ class Exchange:
         return nxt
 
     def read(self, chunks: list[bytes], chunk: bytes) -> None:
-        """Adds ``chunk``; past the cap (a stream's error body is capped at 64 KiB) the call fails."""
         chunks.append(chunk)
         limit = 64 << 10 if self.stream else self.core.config.max_response_bytes
         if limit and sum(map(len, chunks)) > limit:
@@ -216,7 +208,6 @@ class Exchange:
         )
 
     def retries(self, answer: HttpAnswer) -> bool:
-        """A 401 to a request that can be sent again: no body, or bytes."""
         replayable = self.content is None or isinstance(self.content.payload, bytes)
         return (
             answer.status == 401
@@ -225,8 +216,6 @@ class Exchange:
         )
 
     def done(self, answer: HttpAnswer) -> HttpAnswer:
-        """The call's answer: logged (an error status as its error too), the stale tracker settled on a
-        2xx, ``raw`` filled."""
         self.log.answered(answer.status)
         if 200 <= answer.status < 300:
             self.core.stale.settle(self.meta, self.op.invalidates, self.params)
@@ -243,16 +232,9 @@ class Exchange:
         return answer
 
     def decoded(self, answer: HttpAnswer) -> object:
-        """The answer's value; an error status raised as its class."""
         if self.failure is not None:
             raise self.failure
-        target = self.args.get("headers_into")
-        if isinstance(target, dict):
-            for name, key, kind, required in self.op.headers:
-                if name in answer.headers:
-                    target[key] = scalar(name, answer.headers[name], kind)
-                elif required:
-                    raise DecodeError(f"the {name} header is missing")
+        self.fill(answer)
         if self.op.answer in ("none", "binary", "text"):
             return {"none": None, "binary": answer.body}.get(
                 self.op.answer, answer.body.decode("utf-8", "replace")
@@ -261,18 +243,30 @@ class Exchange:
             value: object = loads(answer.body)
         except ValueError:
             raise DecodeError(f"HTTP {answer.status}: the body is not JSON") from None
-        kinds = SHAPES.get(self.op.shape or "", (object,))
-        if not isinstance(value, kinds) or (
-            self.op.shape == "number" and isinstance(value, bool)
-        ):
+        if not shaped(value, self.op.shape):
             raise DecodeError(
                 f"HTTP {answer.status}: the body is not a JSON {self.op.shape}"
             )
         return value
 
+    def fill(self, answer: HttpAnswer) -> None:
+        target = self.args.get("headers_into")
+        if isinstance(target, dict):
+            for name, key, kind, required in self.op.headers:
+                if name in answer.headers:
+                    target[key] = scalar(name, answer.headers[name], kind)
+                elif required:
+                    raise DecodeError(f"the {name} header is missing")
+
+
+def shaped(value: object, shape: str | None) -> bool:
+    kinds = SHAPES.get(shape or "", (object,))
+    return isinstance(value, kinds) and not (
+        shape == "number" and isinstance(value, bool)
+    )
+
 
 def scalar(name: str, value: str, kind: str) -> object:
-    """A header's value as its declared kind."""
     if kind == "boolean" and value in ("true", "false"):
         return value == "true"
     try:

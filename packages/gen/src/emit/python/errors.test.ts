@@ -2,8 +2,9 @@
  * The Python SDK's errors (contract 29 §5.7, G6/G7, Fc2–Fc4): an error status raises its `APIStatusError` subclass
  * (`HTTP <status>: <message>`, the message sanitized and cut at 512 characters), every other failure its own
  * `HoneyError`; each API's functional `ErrorKey` StrEnum (§3.4) and `<Key>Data`, read through `e.key` and
- * `e.decode_body`; the frozen `ErrorEnvelope`. Driven through the `errors` driver on `AsyncSDK` and `SDK` with one
- * expectation (G17); consumers `caught` and `errors` and one mypy program. Safe mode is errors.safe.test.ts.
+ * `e.decode_body`; `ErrorEnvelope`, a TypedDict view of the body (contract 34 Fd8 step 2). Driven through the
+ * `errors` driver on `AsyncSDK` and `SDK` with one expectation (G17); consumers `caught` and `errors` and one mypy
+ * program. Safe mode is errors.safe.test.ts.
  */
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
@@ -213,7 +214,7 @@ describe.skipIf(!PY)("a hostile error body in the error's message and text", SLO
 	it.each(CLIENTS)(
 		"%s: reads a problem+json 422 into the envelope, its message and text free of ESC",
 		async (client) => {
-			/* v0's e.data is the envelope (plan 15:76): an unknown member lands in its extra */
+			/* v0's e.data is the envelope (plan 15:76): an unknown member is one of the trace's extraKeys */
 			const problem: Reply = {
 				headers: { "content-type": "application/problem+json" },
 				json: { message: "bad\x1b[31m", type: "about:blank" },
@@ -221,7 +222,7 @@ describe.skipIf(!PY)("a hostile error body in the error's message and text", SLO
 			}
 			const { run } = await drive(on(client), [problem], [ITEM], { calls: [{ envelope: true }] })
 			const error = run.trace?.calls[0]?.error
-			/* the trace's envelope is Json: an object here, its extraKeys the sorted extra */
+			/* the trace's envelope is Json: an object here, its extraKeys the members ErrorEnvelope does not name, sorted */
 			const envelope = error?.envelope as Readonly<Record<string, unknown>> | undefined
 			const read = { extraKeys: envelope?.extraKeys, message: error?.message, text: error?.text }
 			expect({ chain: error?.chain, read, status: error?.status }, run.stderr).toEqual({
@@ -323,7 +324,8 @@ e = caught(lambda: c.orders.close())
 note(f"{e.key is sdk.ErrorKey.ORDER_LOCKED} {e.decode_body(sdk.Lock)['until']}")
 e = caught(lambda: c.users.create({"email": "a@x.test"}))
 env = e.envelope
-note(f"{type(e).__name__} {e.key is sdk.ErrorKey.EMAIL_TAKEN} {env.status} {env.status_key} {env.message} {env.fields['email'][0].path} {sorted(env.extra)}")
+named = sdk.ErrorEnvelope.__annotations__
+note(f"{type(e).__name__} {e.key is sdk.ErrorKey.EMAIL_TAKEN} {env['status']} {env['status_key']} {env['message']} {env['fields']['email'][0]['path']} {sorted(k for k in env if k not in named)}")
 e = caught(lambda: c.users.create({"email": "a@x.test"}))
 note(f"{type(e).__name__} {e.key is sdk.ErrorKey.USER_NOT_FOUND}")
 e = caught(lambda: c.items.get("i4"))
@@ -334,7 +336,7 @@ e = caught(lambda: c.items.get("i6"))
 note(f"{e.message} {e.envelope == sdk.ErrorEnvelope()} {e.key}")
 c.close()`
 
-/** error-keys.json's 400 envelope (`fields` set), with `success` the one member ErrorEnvelope keeps in `extra`. */
+/** error-keys.json's 400 envelope (`fields` set), with `success` the one member ErrorEnvelope does not name. */
 const TAKEN = {
 	error_key: "email_taken",
 	fields: { email: [{ error_key: "taken", message: "is taken", path: "email" }] },
@@ -415,7 +417,7 @@ const TYPES = [
 	"    wrong: int = e.decode_body(sdk.ItemLockedData)",
 	"    key: sdk.ErrorKey | str | None = e.key",
 	"    envelope: sdk.ErrorEnvelope = e.envelope",
-	"    fields: list[sdk.FieldError] = list(envelope.fields.get('email', []))",
+	"    fields: list[sdk.FieldError] = envelope.get('fields', {}).get('email', [])",
 	"    message: str = e.message",
 	"    print(lock, wrong, key, fields, message)",
 	"",

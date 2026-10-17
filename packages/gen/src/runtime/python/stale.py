@@ -40,13 +40,11 @@ class StaleTracker:
         self.patterns.discard(key)
 
     def expire(self) -> None:
-        """Drops the expired, oldest first: every window is as long, so staling order is expiry order."""
         now = time.monotonic()
         while self.entries and next(iter(self.entries.values())).until <= now:
             self.drop(next(iter(self.entries)))
 
     def read_by(self, selector: str) -> list[str]:
-        """The keys a read of ``selector`` reads: its own, and the pattern keys of its method it matches."""
         method, _, path = selector.partition(" ")
         keys = {
             k
@@ -70,7 +68,6 @@ class StaleTracker:
     def settle(
         self, meta: RequestMeta, targets: tuple[str, ...], params: Mapping[str, str]
     ) -> None:
-        """After a 2xx: stales ``targets``, then clears what the call read through a stale window."""
         if self.window <= 0:
             return
         with self.lock:

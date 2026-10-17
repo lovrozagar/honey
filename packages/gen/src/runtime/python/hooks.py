@@ -54,7 +54,6 @@ def wrapped(error: Exception, what: str = "hook") -> HoneyError:
 
 
 def refuse_hooks(config: ClientConfig, sync: bool) -> None:
-    """``ConfigError`` for a hook the client would never run."""
     if sync and (
         config.on_request
         or config.on_response

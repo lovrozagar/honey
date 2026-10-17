@@ -61,6 +61,19 @@ describe("ruffFormatter: a ruff that stops reading", () => {
 		const { code, errors } = await ruffFormatter("false")("big.py", source, EMIT_STYLE)
 		expect([code === source, errors.length]).toEqual([true, 1])
 	})
+
+	it("answers with its exit status when the binary closes its input and exits later", async () => {
+		/* the write fails while the binary still runs: the pipe error is ignored, the exit status answers */
+		const bin = join(mkdtempSync(join(pythonCacheDir("tmp"), "ruff-closes-")), "ruff")
+		writeFileSync(bin, "#!/bin/sh\nexec 0<&-\nsleep 1\nexit 3\n", { mode: 0o755 })
+		try {
+			const source = `# ${"x".repeat(1 << 22)}\n`
+			const { code, errors } = await ruffFormatter(bin)("big.py", source, EMIT_STYLE)
+			expect([code === source, errors]).toEqual([true, [`${bin} exited with status 3`]])
+		} finally {
+			rmSync(join(bin, ".."), { force: true, recursive: true })
+		}
+	})
 })
 
 describe("ruffFormatter: no configuration but its own", () => {

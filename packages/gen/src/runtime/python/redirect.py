@@ -43,8 +43,6 @@ def follow(
     policy: Literal["same-origin", "follow", "manual"],
     start: str,
 ) -> Hop | None:
-    """The hop after a ``status`` answer, or ``None`` when that answer is the call's. 303 turns all but
-    HEAD into GET, 301 and 302 turn POST into GET, and 307 and 308 resend a body, which only bytes can."""
     if policy == "manual" or status not in (301, 302, 303, 307, 308) or not location:
         return None
     try:
@@ -84,7 +82,6 @@ def follow(
 
 
 def cross(request: httpx2.Request, hop: Hop) -> dict[str, Any]:
-    """For a hop to another origin: drops what the caller's client added, and its ``auth``."""
     if not hop.cross:
         return {}
     for name in foreign(request.headers):
@@ -93,5 +90,4 @@ def cross(request: httpx2.Request, hop: Hop) -> dict[str, Any]:
 
 
 def foreign(names: Iterable[str]) -> list[str]:
-    """The headers a hop to another origin drops, those a caller's client adds among them."""
     return [name for name in names if name.lower() not in SAFE + FRAMING]

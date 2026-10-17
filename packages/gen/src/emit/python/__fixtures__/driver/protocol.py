@@ -1,9 +1,9 @@
 """The shared driver protocol's shapes, as TypedDicts.
 
 Mirrors of tests/integration/conformance/matrix.ts (``Setup``, ``Call``, ``Observed``) and of
-emit/shared/__fixtures__/protocol.ts (``Script``, ``CallScript``, ``PythonError``, ``Trace``), plus
-the stdin envelope and the emitter's call plan (``PythonCallPlan``, emit/python/sdk-plan.ts). Keys
-keep the wire's spelling. Every script shape lists each member the shared protocol names, so
+emit/shared/__fixtures__/protocol.ts (``Script``, ``CallScript``, ``PythonError``, ``StreamTrace``,
+``Trace``), plus the stdin envelope and the emitter's call plan (``PythonCallPlan``,
+emit/python/sdk-plan.ts). Keys keep the wire's spelling. Every script shape lists each member the shared protocol names, so
 script.py's strict decoding knows it by these annotations and can name what it refuses.
 """
 
@@ -124,7 +124,18 @@ class TimeoutObserved(TypedDict):
     kind: Literal["timeout"]
 
 
-Observed = DataObserved | ErrorObserved | BytesObserved | RawObserved | TimeoutObserved
+class EventsObserved(TypedDict):
+    events: list[dict[str, Any]]
+    kind: Literal["events"]
+
+
+class FramesObserved(TypedDict):
+    frames: list[Any]
+    kind: Literal["frames"]
+
+
+Answered = DataObserved | ErrorObserved | BytesObserved | RawObserved
+Observed = Answered | TimeoutObserved | EventsObserved | FramesObserved
 
 
 class AfterMs(TypedDict):
@@ -174,11 +185,17 @@ class WsClose(TypedDict):
     reason: str
 
 
+class WsMessage(TypedDict, total=False):
+    bytes: int
+    json: Any
+    text: str
+
+
 class WsScript(TypedDict, total=False):
     close: WsClose
     on: bool
     readLimit: int
-    send: list[dict[str, Any]]
+    send: list[WsMessage]
 
 
 class CallScript(TypedDict, total=False):
@@ -226,10 +243,31 @@ class ResultTrace(TypedDict):
     status: int
 
 
+class HandlerRun(TypedDict):
+    data: str
+    event: Literal["close", "error", "message"]
+
+
+class RealtimeTrace(TypedDict):
+    cursor: dict[str, str]
+    errors: list[str]
+    proven: str | None
+
+
+class StreamTrace(TypedDict):
+    closedBy: NotRequired[WsClose]
+    handlers: NotRequired[list[HandlerRun]]
+    headers: NotRequired[dict[str, str]]
+    realtime: NotRequired[RealtimeTrace]
+    retry: NotRequired[list[int | None]]
+    yields: int
+
+
 class CallTrace(TypedDict):
     elapsedMs: int
     error: NotRequired[PythonError]
     result: NotRequired[ResultTrace]
+    stream: NotRequired[StreamTrace]
 
 
 class Trace(TypedDict):

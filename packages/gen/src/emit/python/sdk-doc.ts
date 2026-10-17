@@ -1,7 +1,8 @@
 /**
- * A method's docstring: the operation's summary, a blank line, its description, then in throw mode a
- * `Raises:` line per declared error status, ascending, naming the class the runtime raises for it. Spec text
- * goes through `pyDocLines`, so a quote or backslash in it stays inert. No docstring without any of the three.
+ * A method's docstring: the operation's summary, a blank line, its description, a stream's own lines (how it
+ * opens and ends), then in throw mode a `Raises:` line per declared error status, ascending, naming the class the
+ * runtime raises for it. Spec text goes through `pyDocLines`, so a quote or backslash in it stays inert; a
+ * stream's lines are the emitter's own, as they are. No docstring without any of the four.
  */
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { pyDocLines } from "../shared/escape.ts"
@@ -21,18 +22,19 @@ const STATUS_ERRORS: Readonly<Record<number, string>> = {
 	504: "GatewayTimeoutError",
 }
 
-/** The docstring of `op`'s method at 8 spaces, or none. */
-export function methodDoc(op: SdkOp, throwOnError: boolean): string[] {
+/** The docstring of `op`'s method at 8 spaces, `stream` its stream's own lines, or none. */
+export function methodDoc(op: SdkOp, throwOnError: boolean, stream: readonly string[]): string[] {
 	const raises = throwOnError
 		? op.errorStatuses.map((s) => `    ${STATUS_ERRORS[s] ?? "APIStatusError"}: HTTP ${s}`)
 		: []
+	const spec = [op.summary.trim(), op.description.trim()].filter((part) => part !== "")
 	const parts = [
-		op.summary.trim(),
-		op.description.trim(),
-		...(raises.length > 0 ? [["Raises:", ...raises].join("\n")] : []),
+		...spec.map(pyDocLines),
+		...(stream.length > 0 ? [[...stream]] : []),
+		...(raises.length > 0 ? [["Raises:", ...raises]] : []),
 	]
-	const lines = pyDocLines(parts.filter((part) => part !== "").join("\n\n"))
-	if (lines.length === 1 && lines[0] === "") return []
+	const lines = parts.flatMap((part, i) => (i === 0 ? part : ["", ...part]))
+	if (lines.length === 0) return []
 	/* a docstring that opens on its Raises: block opens on a line of its own, so the block keeps its shape */
 	const open = lines[0] === "Raises:" ? ['"""', ...lines] : [`"""${lines[0]}`, ...lines.slice(1)]
 	const body = lines.length === 1 ? [`"""${lines[0]}"""`] : [...open, '"""']

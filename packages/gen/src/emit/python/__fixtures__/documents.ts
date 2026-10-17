@@ -17,6 +17,7 @@ import realtimeLongpoll from "../../../ir/__fixtures__/specs/rust/realtime-longp
 import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" with { type: "json" }
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
 import { errors } from "../../shared/__fixtures__/documents-http.ts"
+import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { PythonSdkOptions } from "../sdk.ts"
 import { pythonHttp } from "./documents-http.ts"
@@ -47,7 +48,20 @@ dependencies = []
 packages = ["src/${pkg}"]
 `
 
-/** The v0 Python fixtures and the realtime ones as one document (§6.1). */
+/** Bit 13's `realtime` `feed.live` alone, also declaring a query named like each realtime-only stream field. */
+function realtimeClash(): Readonly<Record<string, unknown>> {
+	type Live = { get: { parameters: unknown[] } }
+	const doc = structuredClone(streams.realtime()) as { paths: Record<string, Live> }
+	const live = doc.paths["/feed"] as Live
+	for (const name of ["max_reconnect_attempts", "reconnect_delay_ms"])
+		live.get.parameters.push({ in: "query", name, schema: { type: "integer" } })
+	return { ...doc, paths: { "/feed": live } }
+}
+
+/**
+ * The v0 Python fixtures and the realtime ones as one document (§6.1), and a Python-only realtime path whose
+ * declared params the stream fields claim `…2` (contract 34 §2.0, ruling (a): executed in the registry, G17).
+ */
 function fixtures(): Readonly<Record<string, unknown>> {
 	return merged({
 		crud,
@@ -61,6 +75,7 @@ function fixtures(): Readonly<Record<string, unknown>> {
 		realtime,
 		"realtime-sse": realtimeSse,
 		"realtime-longpoll": realtimeLongpoll,
+		"realtime-clash": realtimeClash(),
 	})
 }
 
@@ -88,12 +103,18 @@ export const FIXTURES = {
 	/** the HTTP runtime's document (contract 29 §4.3): bit 13's `http` and three Python-only paths, both modes */
 	http: { document: pythonHttp },
 	"http-safe": { document: pythonHttp, options: { throwOnError: false } },
+	/** the resumable connections (contract 34 Fd6): bit 13's `realtime` document, shared */
+	realtime: { document: streams.realtime },
 	/** a relative first server: `SDK()` needs an absolute `base_url` (R7) */
 	relative: { document: relative },
+	/** the event streams (contract 34 Fd6): bit 13's `sse` document, shared */
+	sse: { document: streams.sse },
 	/** every gate exercises the package rename */
 	surface: { document: surface, options: { packageName: "acme_sdk" } },
 	/** no `servers` (R7) */
 	types: { document: types },
+	/** the WebSockets (contract 34 Fd6): bit 13's `ws` document, shared; a WebSocket-only package ships no realtime files */
+	ws: { document: streams.ws },
 } as const satisfies Record<string, PythonFixture>
 
 export type FixtureKey = keyof typeof FIXTURES

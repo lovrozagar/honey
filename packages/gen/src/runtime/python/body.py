@@ -37,7 +37,6 @@ class BodyContent:
 
 
 def part(name: str, value: object) -> bytes:
-    """One part: a ``FilePart``, or text."""
 
     def quoted(raw: str) -> str:
         return raw.replace("\r", "%0D").replace("\n", "%0A").replace('"', "%22")
@@ -52,8 +51,11 @@ def part(name: str, value: object) -> bytes:
     )
 
 
+def dumps(value: object) -> str:
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+
 def encode_body(op: Operation[object], body: object) -> BodyContent | None:
-    """``body`` as ``op`` declares it; multipart parts are built in memory."""
     if body is None or op.body is None:
         return None
     fields = body if isinstance(body, Mapping) else {}
@@ -71,9 +73,7 @@ def encode_body(op: Operation[object], body: object) -> BodyContent | None:
         )
     media = op.content_type or MEDIA[op.body]
     if op.body == "json":
-        return BodyContent(
-            json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode(), media
-        )
+        return BodyContent(dumps(body).encode(), media)
     if op.body == "form":
         return BodyContent(encode(pairs(fields)).encode(), media)
     if op.body == "text":

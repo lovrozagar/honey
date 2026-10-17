@@ -1,7 +1,8 @@
 /**
  * The vendored Python runtime's reader (contract 29 §5.11): the file set each feature mix ships, in code-unit order;
  * the files returned byte for byte from `runtime/python/`, each marked on line 1; determinism; and the root exports the
- * package's `__init__` star-lists, phase c's `FilePart`, `ErrorEnvelope` and `FieldError` among them.
+ * package's `__init__` star-lists, phase c's `FilePart`, `ErrorEnvelope` and `FieldError` and phase d's stream
+ * surface (contract 34 §2.0) among them.
  */
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
@@ -106,6 +107,23 @@ describe("runtimeExports: what each runtime module adds to the package root", ()
 			envelope: ["ErrorEnvelope", "FieldError"].filter((name) => !names.has(name)),
 			kept: ["APIStatusError", "HoneyError"].filter((name) => !names.has(name)),
 		}).toEqual({ envelope: [], kept: [] })
+	})
+
+	it("exports the stream surface: ws.py's close codes and WsClose beside TypedWebSocket, transport.py's adapter protocol and types, and each transport module's adapter (contract 34 §2.0)", () => {
+		const surface = {
+			"transport.py": ["TransportAdapter", "TransportConn", "TransportKind", "TransportMessage", "TransportOpts"],
+			"transport_longpoll.py": ["LongpollAdapter"],
+			"transport_sse.py": ["SseAdapter"],
+			"transport_ws.py": ["WsAdapter"],
+			"ws.py": [
+				"TypedWebSocket",
+				"WS_STATUS_GOING_AWAY",
+				"WS_STATUS_NORMAL_CLOSURE",
+				"WS_STATUS_PROTOCOL_ERROR",
+				"WsClose",
+			],
+		}
+		expect(Object.fromEntries(Object.keys(surface).map((name) => [name, [...exports(name)].sort()]))).toEqual(surface)
 	})
 
 	it("exports only names its module defines at the top level", () => {

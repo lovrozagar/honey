@@ -19,7 +19,7 @@ import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { RustSdkOptions } from "../sdk.ts"
 import { errors, http } from "../../shared/__fixtures__/documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
-import * as streams from "./documents-streams.ts"
+import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 
 /**
  * One crate a run compiles: an OpenAPI document the emitter writes a crate for (made on use: a module runs no

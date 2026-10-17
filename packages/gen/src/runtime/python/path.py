@@ -14,7 +14,6 @@ def colon_name(part: str) -> str | None:
 
 
 def expand(template: str, params: Mapping[str, str]) -> str:
-    """``template`` filled from ``params``; a missing value, or ``""``, ``.`` or ``..``, is refused."""
 
     def value(name: str) -> str:
         found = params.get(name)

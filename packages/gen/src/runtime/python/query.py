@@ -22,7 +22,6 @@ def number(value: float) -> str:
 
 
 def text(value: object) -> str:
-    """One value as text: booleans lower case, numbers as JavaScript prints them, the rest JSON."""
     if isinstance(value, Enum):
         value = value.value
     if isinstance(value, bool):
@@ -35,7 +34,6 @@ def text(value: object) -> str:
 
 
 def pairs(params: Mapping[str, object] | None) -> list[tuple[str, str]]:
-    """``params`` in order, ``None`` and ``{}`` left out, a list or tuple repeating its key."""
     out = []
     for key, value in (params or {}).items():
         items = value if isinstance(value, (list, tuple)) else [value]

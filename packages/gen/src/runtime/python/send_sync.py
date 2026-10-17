@@ -18,8 +18,6 @@ T = TypeVar("T")
 
 
 class SyncTransport(ClientCore):
-    """One ``SDK``'s connection pool and settings."""
-
     def __init__(self, config: ClientConfig, defaults: Defaults) -> None:
         refuse_hooks(config, sync=True)
         super().__init__(config, defaults)
@@ -38,7 +36,6 @@ class SyncTransport(ClientCore):
             return SDKResult(None, error, x.raw.status, x.raw)
 
     def run(self, x: Exchange) -> HttpAnswer:
-        """One attempt, and one more with a refreshed token after a 401."""
         x.log.emit("debug", "request_start")
         try:
             token = self.auth.token

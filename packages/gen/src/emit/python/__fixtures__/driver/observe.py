@@ -24,6 +24,7 @@ from protocol import (
     Plan,
     PythonError,
     ResultTrace,
+    StreamTrace,
 )
 from tracing import python_error, result_trace
 
@@ -41,12 +42,13 @@ class Lens:
 
 @dataclass(frozen=True)
 class Outcome:
-    """What a call observed (null when the grid has no outcome for it), its traced error, and a
-    safe-mode result's summary."""
+    """What a call observed (null when the grid has no outcome for it), its traced error, a
+    safe-mode result's summary, and what a stream call recorded (stream.py)."""
 
     observed: Observed | None
     error: PythonError | None = None
     result: ResultTrace | None = None
+    stream: StreamTrace | None = None
 
 
 def body_of(body: bytes) -> tuple[bool, Any]:

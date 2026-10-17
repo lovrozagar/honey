@@ -4,19 +4,35 @@ long-poll) that reconnects after a drop and resumes past the last message it del
 
 import asyncio
 import contextlib
-import json
 import random
 from collections.abc import Sequence
 from enum import StrEnum
 from typing import Generic, Self, TypeVar, Unpack, cast
 
-from .errors import APIConnectionError, HoneyError
-from .exchange import CallArgs, Exchange
+from .body import dumps
+from .errors import (
+    APIConnectionError,
+    APITimeoutError,
+    CanceledError,
+    DecodeError,
+    HoneyError,
+    loads,
+)
+from .events import Cancel, raced
+from .exchange import CallArgs, Exchange, shaped
 from .operation import Operation
-from .transport import Dial, Transport, TransportConn, TransportOpts, advance
-from .transport_longpoll import LongpollTransport
-from .transport_sse import SseTransport
-from .transport_ws import WsTransport
+from .transport import (
+    Dial,
+    TransportAdapter,
+    TransportConn,
+    TransportKind,
+    TransportMessage,
+    TransportOpts,
+    advance,
+)
+from .transport_longpoll import LongpollAdapter
+from .transport_sse import SseAdapter
+from .transport_ws import WsAdapter
 from .ws import AsyncWsTransport
 
 __all__ = ["ConnectionState", "ResumableConnection"]
@@ -34,92 +50,128 @@ class ConnectionState(StrEnum):
 
 class ResumableConnection(Generic[T]):
     """``recv`` (or ``async for``) reads the next message, JSON decoded when it is JSON. After a drop it
-    reconnects through the chain, the transport that last opened first, backing off from the delay (an
-    SSE ``retry``, else ``reconnect_delay_ms``; at most 30 s, with jitter) for up to
-    ``max_reconnect_attempts`` in a row, then raises the last failure."""
+    reopens the chain in order, backing off from the delay (an SSE ``retry``, else ``reconnect_delay_ms``;
+    doubling to at most 30 s, with jitter) for up to ``max_reconnect_attempts`` in a row; giving up raises
+    the last failure once, and ``recv`` then answers ``None``, as it does once closed or after the call's
+    ``cancel``. A ``recv`` the caller's task cancels raises ``CancelledError`` and leaves it reconnecting:
+    the next ``recv`` resumes from the cursor."""
 
     def __init__(
-        self, dial: Dial, opts: TransportOpts, transports: Sequence[Transport]
+        self,
+        url: str,
+        adapters: Sequence[TransportAdapter],
+        opts: TransportOpts | None = None,
     ) -> None:
-        self.dial = dial
-        self.opts = opts
-        self.transports = list(transports)
+        self.url = url
+        self.adapters = tuple(adapters)
+        self.opts = opts or TransportOpts()
         self.conn: TransportConn | None = None
-        self.proven = 0
+        self.proven: TransportAdapter | None = None
         self.state = ConnectionState.DISCONNECTED
         self.attempts = 0
         self.retry: int | None = None
-        self.closed = False
+        self.failure: Exception = APIConnectionError("the connection ended")
+        self.cancel: Cancel = None
+        self.shape: str | None = None
+        self.closing = asyncio.Event()
+
+    @property
+    def proven_transport(self) -> TransportKind | None:
+        """The transport that last opened; ``None`` after a drop."""
+        return None if self.proven is None else self.proven.kind()
 
     async def connect(self) -> None:
-        failure: Exception = APIConnectionError("no transport opened")
-        for i in sorted(range(len(self.transports)), key=lambda i: i != self.proven):
+        """Opens the chain in order with the current cursor; the last failure when none opens."""
+        for adapter in self.adapters:
             try:
-                self.conn = await self.transports[i].connect(self.dial, self.opts)
+                self.conn = await adapter.connect(self.url, self.opts)
             except (HoneyError, OSError) as error:
-                failure = error
+                self.failure = error
                 continue
-            self.proven, self.state = i, ConnectionState.CONNECTED
+            self.proven, self.state = adapter, ConnectionState.CONNECTED
             return
-        self.state = ConnectionState.DISCONNECTED
-        raise failure
+        raise self.failure
 
-    async def reconnect(self, failure: Exception) -> None:
-        self.state = ConnectionState.RECONNECTING
-        while not self.closed:
-            self.attempts += 1
-            if self.attempts > self.opts.max_reconnect_attempts:
-                self.state = ConnectionState.DISCONNECTED
-                raise failure
-            base = (self.retry or self.opts.reconnect_delay_ms) / 1000
-            full = min(base * 2 ** (self.attempts - 1), 30.0)
+    async def reconnect(self) -> None:
+        while self.attempts < self.opts.max_reconnect_attempts:
+            base = self.opts.reconnect_delay_ms if self.retry is None else self.retry
+            full = min(base / 1000 * 2**self.attempts, 30.0)
             await asyncio.sleep(full / 2 + JITTER.uniform(0, full / 2))
-            try:
-                return await self.connect()
-            except (HoneyError, OSError) as error:
-                failure = error
+            self.attempts += 1
+            with contextlib.suppress(HoneyError, OSError):
+                return await asyncio.wait_for(self.connect(), 30)
+        self.state = ConnectionState.DISCONNECTED
+        raise self.failure
 
     async def recv(self) -> T | None:
-        """The next message; ``None`` once closed."""
-        while not self.closed:
+        """The next message; ``None`` once closed, given up or cancelled."""
+        try:
+            return await raced(raced(self.read(), self.closing), self.cancel)
+        except CanceledError:
+            await self.close()
+            return None
+        except asyncio.CancelledError:
+            if self.conn is not None:
+                await self.drop(self.conn, self.failure)
+            raise
+
+    async def read(self) -> T | None:
+        while self.state is not ConnectionState.DISCONNECTED:
             conn = self.conn
-            failure: Exception = APIConnectionError("the connection ended")
-            try:
-                message = await conn.recv() if conn is not None else None
-            except HoneyError as error:
-                message, failure = None, error
-            if message is None:
-                self.conn = None
-                if conn is not None:
-                    with contextlib.suppress(Exception):
-                        await conn.close()
-                await self.reconnect(failure)
+            if conn is None:
+                await self.reconnect()
                 continue
-            self.attempts, self.retry = 0, message.retry or self.retry
-            advance(self.opts, message)
             try:
-                return cast("T", json.loads(message.text))
-            except ValueError:
-                return cast("T", message.text)
+                message = await conn.recv()
+                failure: Exception = APIConnectionError("the connection ended")
+            except (HoneyError, OSError) as error:
+                message, failure = None, error
+            if message is not None:
+                return self.deliver(message)
+            await self.drop(conn, failure)
         return None
+
+    async def drop(self, conn: TransportConn, failure: Exception) -> None:
+        if self.closing.is_set():
+            return
+        self.conn, self.proven, self.failure = None, None, failure
+        self.state = ConnectionState.RECONNECTING
+        with contextlib.suppress(Exception):
+            await conn.close()
+
+    def deliver(self, message: TransportMessage) -> T:
+        """``message`` as ``T``, the cursor advanced past it and an SSE ``retry`` kept."""
+        self.attempts = 0
+        if message.retry is not None:
+            self.retry = message.retry
+        try:
+            value = loads(message.text.encode())
+        except ValueError:
+            value = message.text
+        advance(self.opts, message.id, value)
+        if not shaped(value, self.shape):
+            raise DecodeError(f"a message is not a JSON {self.shape}")
+        return cast("T", value)
 
     def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> T:
         message = await self.recv()
-        if self.closed:
+        if message is None and self.state is ConnectionState.DISCONNECTED:
             raise StopAsyncIteration
         return cast("T", message)
 
     async def send(self, data: object) -> None:
-        """Sends text as it is, anything else as JSON."""
+        """Sends text as it is, anything else as JSON (an SSE or long-poll connection POSTs it)."""
         if self.conn is None:
             raise APIConnectionError("the connection is not open")
-        await self.conn.send(data if isinstance(data, str) else json.dumps(data))
+        await self.conn.send(data if isinstance(data, str) else dumps(data))
 
     async def close(self) -> None:
-        self.closed, self.state = True, ConnectionState.DISCONNECTED
+        """Closes the open transport and ends a ``recv`` waiting in any task with ``None``."""
+        self.closing.set()
+        self.state = ConnectionState.DISCONNECTED
         conn, self.conn = self.conn, None
         if conn is not None:
             with contextlib.suppress(Exception):
@@ -133,8 +185,6 @@ class ResumableConnection(Generic[T]):
 
 
 class AsyncRealtimeTransport(AsyncWsTransport):
-    """``AsyncTransport`` for an API with realtime operations."""
-
     async def realtime(
         self,
         op: Operation[T],
@@ -146,20 +196,25 @@ class AsyncRealtimeTransport(AsyncWsTransport):
         reconnect_delay_ms: int | None = None,
         **args: Unpack[CallArgs],
     ) -> ResumableConnection[T]:
-        """The connection, open over WebSocket, else SSE, else long-poll."""
         x = Exchange(self, op, args, stream=True)
-
-        async def headers() -> dict[str, str]:
-            return (await self.prepared(x, self.auth.token)).headers
-
-        opts = TransportOpts(last_event_id, reconnect_token, list(protocols or []))
-        opts.max_reconnect_attempts = (
-            5 if max_reconnect_attempts is None else max_reconnect_attempts
+        x.check()
+        opts = TransportOpts(
+            last_event_id,
+            reconnect_token,
+            list(protocols or []),
+            5 if max_reconnect_attempts is None else max_reconnect_attempts,
+            1000 if reconnect_delay_ms is None else reconnect_delay_ms,
         )
-        opts.reconnect_delay_ms = reconnect_delay_ms or 1000
-        chain: list[Transport] = [WsTransport(), SseTransport(), LongpollTransport()]
-        connection = ResumableConnection[T](
-            Dial(self.http, x.url(), headers), opts, chain
-        )
-        await connection.connect()
+        dial = Dial(self, op, args, x.options.get("raw"))
+        chain: list[TransportAdapter] = [
+            WsAdapter(dial),
+            SseAdapter(dial),
+            LongpollAdapter(dial),
+        ]
+        connection = ResumableConnection[T](x.url(), chain, opts)
+        connection.shape, connection.cancel = op.shape, x.options.get("cancel")
+        try:
+            await raced(asyncio.wait_for(connection.connect(), 30), connection.cancel)
+        except TimeoutError:
+            raise APITimeoutError("no transport opened within 30 s") from None
         return connection

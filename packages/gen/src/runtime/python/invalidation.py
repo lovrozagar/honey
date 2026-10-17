@@ -11,8 +11,6 @@ from .path import colon_name, expand
 
 @dataclass(frozen=True)
 class RequestMeta:
-    """A request's staleness when it starts, as its hooks see it."""
-
     selector: str = ""
     is_stale: bool = False
     invalidated_by: list[str] = field(default_factory=list)
@@ -26,7 +24,6 @@ def has_placeholders(path: str) -> bool:
 
 
 def segment_matches(text: str, pattern: str) -> bool:
-    """Whether a segment matches ``pattern``, each ``{name}`` standing for one or more characters."""
     at = pattern.find("{")
     close = pattern.find("}", at)
     if at < 0 or close < 0:
@@ -50,7 +47,6 @@ def matches_pattern(path: str, pattern: str) -> bool:
 
 
 def resolve_targets(targets: tuple[str, ...], params: Mapping[str, str]) -> list[str]:
-    """Each target filled; one that cannot be stays a pattern, staling every instance."""
     out = []
     for target in targets:
         method, _, path = target.partition(" ")

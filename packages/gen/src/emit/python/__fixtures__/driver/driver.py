@@ -20,6 +20,10 @@ error the grid has no Observed for observes null, its error traced. Before call 
 ``sleepMs``, then the recorder marks it; ``elapsedMs`` covers the call alone. An ``AsyncSDK`` call
 runs as its own task, which ``taskCancel`` cancels. A bad script exits 1 before any call is sent.
 
+A stream operation (stream.py; ``AsyncSDK`` only, G2) observes events (SSE) or frames (WebSocket,
+realtime) and traces its ``stream``; its open and its reads run in the call's task, and one that has
+not ended after 10 s exits 1 ("stream stalled").
+
 The interpreter runs isolated (``-I``), so this file puts its own dir and the package root on
 ``sys.path`` itself.
 """
@@ -31,15 +35,17 @@ import importlib
 import json
 import sys
 import time
+from collections.abc import Coroutine
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from invoke import Target, prepare
 from observe import Lens, Outcome, raised, returned
 from protocol import (
+    AfterMs,
     Call,
     CallScript,
     DriverError,
@@ -50,7 +56,10 @@ from protocol import (
     Setup,
 )
 from script import apply, parse
+from stream import bounded, observe
 from tracing import Recorder
+
+R = TypeVar("R")
 
 
 def config_fields(envelope: Envelope) -> dict[str, Any]:
@@ -115,14 +124,9 @@ def sync_call(
     return returned(result, prepared, runner.plan(call), lens)
 
 
-async def async_call(
-    client: Any, runner: Runner, call: Call, directives: CallScript
-) -> Outcome:
-    """``call`` sent on ``AsyncSDK`` as its own task, cancelled under ``taskCancel``, and observed."""
-    prepared = prepare(client, runner.target, call, directives)
-    lens = runner.lens(call, directives)
-    task = asyncio.ensure_future(prepared.method(*prepared.args, **prepared.kwargs))
-    cancel = directives.get("taskCancel")
+async def tasked(work: Coroutine[Any, Any, R], cancel: AfterMs | None) -> R:
+    """``work`` run as its own task, cancelled ``cancel["afterMs"]`` in when given."""
+    task = asyncio.ensure_future(work)
     timer = (
         None
         if cancel is None
@@ -131,16 +135,36 @@ async def async_call(
         )
     )
     try:
-        result = await task
+        return await task
+    finally:
+        if timer is not None:
+            timer.cancel()
+
+
+async def async_call(
+    client: Any, runner: Runner, call: Call, directives: CallScript
+) -> Outcome:
+    """``call`` sent on ``AsyncSDK`` as its own task, cancelled under ``taskCancel``, and observed;
+    a stream call's open and reads in that task, under ``bounded``."""
+    prepared = prepare(client, runner.target, call, directives)
+    lens = runner.lens(call, directives)
+    cancel = directives.get("taskCancel")
+    if prepared.plan["stream"] is not None:
+        try:
+            streaming = observe(prepared, call, directives, lens)
+            return await tasked(bounded(streaming), cancel)
+        except asyncio.CancelledError as error:
+            return raised(error, lens)
+    try:
+        result = await tasked(
+            prepared.method(*prepared.args, **prepared.kwargs), cancel
+        )
     except asyncio.CancelledError as error:
         return raised(error, lens)
     except Exception as error:
         if not lens.scripted and not isinstance(error, lens.module.HoneyError):
             raise
         return raised(error, lens)
-    finally:
-        if timer is not None:
-            timer.cancel()
     return returned(result, prepared, runner.plan(call), lens)
 
 
@@ -162,7 +186,8 @@ def run_sync(runner: Runner, config: Any) -> list[Observed | None]:
                 outcome = sync_call(client, runner, call, directives)
             except Exception as error:
                 raise located(i, call, error) from error
-            runner.recorder.called(elapsed_ms(start), outcome.error, outcome.result)
+            recorded = (outcome.error, outcome.result, outcome.stream)
+            runner.recorder.called(elapsed_ms(start), *recorded)
             out.append(outcome.observed)
     if config.http_client is not None:
         config.http_client.close()
@@ -183,7 +208,8 @@ async def run_async(runner: Runner, config: Any) -> list[Observed | None]:
                 outcome = await async_call(client, runner, call, directives)
             except Exception as error:
                 raise located(i, call, error) from error
-            runner.recorder.called(elapsed_ms(start), outcome.error, outcome.result)
+            recorded = (outcome.error, outcome.result, outcome.stream)
+            runner.recorder.called(elapsed_ms(start), *recorded)
             out.append(outcome.observed)
     if config.async_http_client is not None:
         await config.async_http_client.aclose()

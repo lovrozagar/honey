@@ -23,8 +23,6 @@ LiveResponse = httpx2.Response | None
 
 
 class AsyncTransport(ClientCore):
-    """One ``AsyncSDK``'s connection pool and settings."""
-
     def __init__(self, config: ClientConfig, defaults: Defaults) -> None:
         refuse_hooks(config, sync=False)
         super().__init__(config, defaults)
@@ -49,23 +47,32 @@ class AsyncTransport(ClientCore):
         last_event_id: str | None = None,
         **args: Unpack[CallArgs],
     ) -> EventStream[T]:
-        """The open stream: an error status raises; no timeout bounds it after that."""
-        resume = {"Last-Event-ID": last_event_id} if last_event_id else {}
+        resume = {"Last-Event-ID": last_event_id or None}
         x = Exchange(
             self,
             op,
             {**args, "headers": {**(args.get("headers") or {}), **resume}},
             stream=True,
         )
-        answer, live = await self.run(x)
-        if live is None:
-            raise failure(answer, self)
         return EventStream(
-            live, decode=op.answer == "json", cancel=x.options.get("cancel")
+            await self.opened(x),
+            decode=op.answer == "json",
+            shape=op.shape,
+            cancel=x.options.get("cancel"),
         )
 
+    async def opened(self, x: Exchange) -> httpx2.Response:
+        answer, live = await self.run(x)
+        if live is None:
+            raise x.failure or failure(answer, self)
+        try:
+            x.fill(answer)
+        except HoneyError:
+            await live.aclose()
+            raise
+        return live
+
     async def run(self, x: Exchange) -> tuple[HttpAnswer, LiveResponse]:
-        """One attempt, and one more with a refreshed token after a 401."""
         x.log.emit("debug", "request_start")
         try:
             token = self.auth.token
@@ -101,15 +108,19 @@ class AsyncTransport(ClientCore):
                 break
             hop = nxt
         response = x.response(answer, is_retry)
-        await run_async(self.config.on_response, response)
+        try:
+            await run_async(self.config.on_response, response)
+        except BaseException:
+            if live is not None:
+                await live.aclose()
+            raise
         return HttpAnswer(
             response.status, response.headers, response.body, answer.url
         ), live
 
     async def send(self, x: Exchange, hop: Hop) -> tuple[HttpAnswer, LiveResponse]:
-        """One hop: its answer read whole, or a stream's 2xx left open and unread."""
         left = x.check()
-        timeout = httpx2.Timeout(left, read=None) if x.stream else left
+        timeout = httpx2.Timeout(x.timeout, read=None) if x.stream else left
         request = self.http.build_request(
             hop.method,
             hop.url,

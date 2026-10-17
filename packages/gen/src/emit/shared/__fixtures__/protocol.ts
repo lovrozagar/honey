@@ -8,9 +8,11 @@
  * good what is Go's alone (`ctxTimeoutMs`, `isKeys`, `isErrors`, `ws.readLimit`), and records its
  * errors as `RustError`: its trace is `Trace<RustError>`. `protocols`, `realtime` and `ws` mean the
  * same to it, on the Opts fields and `TypedWebSocket` methods of those names. The Python driver
- * (emit/python/__fixtures__/driver/script.py, tracing.py) reads it on `SDK` and `AsyncSDK` alike, refuses
- * the same Go-only members, adds `taskCancel` (an `AsyncSDK` task's), and records its errors as
- * `PythonError`: its trace is `Trace<PythonError>`.
+ * (emit/python/__fixtures__/driver/script.py, tracing.py, stream.py) reads it on `SDK` and `AsyncSDK` alike,
+ * refuses the same Go-only members, adds `taskCancel` (an `AsyncSDK` task's), and records its errors as
+ * `PythonError`: its trace is `Trace<PythonError>`. It drives streams on `AsyncSDK` alone, refusing a stream call
+ * on `SDK` (which has none), `raw: true` on a stream, and the stream members Rust refuses, in the same words;
+ * `protocols` and `realtime` are the method's `protocols`, `max_reconnect_attempts` and `reconnect_delay_ms`.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
@@ -45,7 +47,7 @@ export type CallScript = {
 		readonly close?: { readonly code: number; readonly reason: string }
 		/** register a recording On handler for message, close and error */
 		readonly on?: true
-		/** SetReadLimit before the reads (Go only: a Rust socket caps a message at 16 MiB, and refuses it) */
+		/** SetReadLimit before the reads (Go only: a Rust or Python socket caps a message at 16 MiB, and refuses it) */
 		readonly readLimit?: number
 		/** sent after the grid's `send`, in order */
 		readonly send?: readonly WsMessage[]
@@ -175,7 +177,7 @@ export type PythonError = {
 export type StreamTrace = {
 	/** WebSocket: the close frame a Read ended on (no take, or before take was reached) */
 	readonly closedBy?: { readonly code: number; readonly reason: string }
-	/** WebSocket (Rust: and realtime): Close's error text, when non-nil */
+	/** WebSocket (Rust: and realtime): Close's error text, when non-nil; never set by Python, whose `close()` does not raise */
 	readonly closeError?: string
 	/** WebSocket with `ws.on`: every handler run in firing order, those the driver's own Close fires included */
 	readonly handlers?: readonly { readonly data: string; readonly event: "close" | "error" | "message" }[]
@@ -183,14 +185,16 @@ export type StreamTrace = {
 	readonly headers?: Readonly<Record<string, string>>
 	/**
 	 * realtime, read after Close: the resume cursor, the transport that last opened, every Errors() value.
-	 * Rust: the cursor is `last_event_id()`/`reconnect_token()`, `None` as `""`; the errors are what `recv()` yielded
+	 * Rust: the cursor is `last_event_id()`/`reconnect_token()`, `None` as `""`; the errors are what `recv()` yielded.
+	 * Python: the cursor is `conn.opts`, `None` as `""`, and `proven` is `proven_transport`'s value; the errors are
+	 * what `recv()` raised
 	 */
 	readonly realtime?: {
 		readonly cursor: { readonly lastEventId: string; readonly reconnectToken: string }
 		readonly errors: readonly string[]
 		readonly proven: "longpoll" | "sse" | "ws" | null
 	}
-	/** SSE: each observed event's Retry; Rust records null for an event without one, Go never does */
+	/** SSE: each observed event's Retry; Rust and Python record null for an event without one, Go never does */
 	readonly retry?: readonly (number | null)[]
 	/** SSE: values the iterator yielded, errors included; WebSocket and realtime: frames read */
 	readonly yields: number

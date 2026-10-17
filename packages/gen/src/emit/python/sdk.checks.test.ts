@@ -129,6 +129,7 @@ const STREAMS = [
 	"realtime.realtime.connect",
 	"realtime_sse.events.subscribe",
 	"realtime_longpoll.events.poll",
+	"realtime_clash.feed.live",
 ]
 
 describe.skipIf(!PY)("streams: AsyncSDK only", () => {
@@ -150,6 +151,7 @@ describe.skipIf(!PY)("streams: AsyncSDK only", () => {
 				at(lines, "s.realtime.realtime.connect", '"RealtimeResource" has no attribute "realtime"  [attr-defined]'),
 				at(lines, "s.realtime_sse.events.subscribe", NO_REALTIME_SSE),
 				at(lines, "s.realtime_longpoll.events.poll", '"SDK" has no attribute "realtime_longpoll"  [attr-defined]'),
+				at(lines, "s.realtime_clash.feed.live", '"SDK" has no attribute "realtime_clash"  [attr-defined]'),
 			])
 		},
 		GATE,

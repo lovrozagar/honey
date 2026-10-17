@@ -7,8 +7,7 @@ import contextlib
 import json
 import unicodedata
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
-from typing import Any, TypeVar, cast
+from typing import TypedDict, TypeVar, cast
 
 __all__ = [
     "APIConnectionError",
@@ -71,72 +70,33 @@ class HookError(HoneyError):
 T = TypeVar("T")
 
 
-@dataclass(frozen=True)
-class FieldError:
+class FieldError(TypedDict, total=False):
     """One field's error in an envelope's ``fields``."""
 
-    error_key: str = ""
-    message: str = ""
-    path: str = ""
+    error_key: str
+    message: str
+    path: str
 
 
-@dataclass(frozen=True)
-class ErrorEnvelope:
-    """honey's error envelope as the body sent it; a member of another type is kept in ``extra``."""
+class ErrorEnvelope(TypedDict, total=False):
+    """honey's error envelope: a view of the body's JSON object (empty for any other body), each member
+    as the server sent it; ``json.loads(e.body)`` holds the members it does not name."""
 
-    status: int | None = None
-    error_key: str | None = None
-    status_key: str | None = None
-    message: str | None = None
-    fields: Mapping[str, list[FieldError]] = field(default_factory=dict)
-    extra: Mapping[str, Any] = field(default_factory=dict)
-
-
-NAMED = {"status": int, "error_key": str, "status_key": str, "message": str}
+    status: int
+    error_key: str
+    status_key: str
+    message: str
+    fields: dict[str, list[FieldError]]
 
 
 def loads(body: bytes) -> object:
-    """``body``'s JSON; ``ValueError`` when it is none, nested too deep included."""
     try:
         return json.loads(body)
     except RecursionError:
         raise ValueError("the JSON is nested too deep") from None
 
 
-def field_errors(value: object) -> dict[str, list[FieldError]] | None:
-    if not isinstance(value, dict):
-        return None
-    out = {}
-    for name, items in value.items():
-        if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
-            return None
-        out[name] = [
-            FieldError(*(str(i.get(k, "")) for k in ("error_key", "message", "path")))
-            for i in items
-        ]
-    return out
-
-
-def envelope_of(parsed: object) -> ErrorEnvelope:
-    """The envelope a JSON object holds; empty for any other body."""
-    if not isinstance(parsed, dict):
-        return ErrorEnvelope()
-    named: dict[str, Any] = {}
-    extra: dict[str, Any] = {}
-    for name, value in parsed.items():
-        kind = NAMED.get(name)
-        fields = field_errors(value) if name == "fields" else None
-        if fields is not None:
-            named[name] = fields
-        elif kind is not None and type(value) is kind:
-            named[name] = value
-        else:
-            extra[name] = value
-    return ErrorEnvelope(**named, extra=extra)
-
-
 def sanitized(text: str) -> str:
-    """``text`` without control or format characters or U+FFFD, cut at 512 characters."""
     kept = "".join(
         ch for ch in text if ch != "\ufffd" and unicodedata.category(ch)[0] != "C"
     )
@@ -234,16 +194,19 @@ def status_error(
     body: bytes,
     keys: Callable[[str], str] | None = None,
 ) -> APIStatusError:
-    """The error a status raises: its envelope, its message (the envelope's, else the body as text),
-    and its key, the declared ``ErrorKey`` member when ``keys`` names it."""
     try:
-        envelope = envelope_of(loads(body))
+        parsed = loads(body)
     except ValueError:
-        envelope = ErrorEnvelope()
-    text = envelope.message
-    message = sanitized(body.decode("utf-8", "replace") if text is None else text)
-    key = envelope.error_key
-    if key is not None and keys is not None:
+        parsed = None
+    envelope = cast("ErrorEnvelope", parsed if isinstance(parsed, dict) else {})
+    text = envelope.get("message")
+    message = sanitized(
+        text if isinstance(text, str) else body.decode("utf-8", "replace")
+    )
+    key = envelope.get("error_key")
+    if not isinstance(key, str):
+        key = None
+    elif keys is not None:
         with contextlib.suppress(ValueError):
             key = keys(key)
     error = STATUS_ERRORS.get(status, APIStatusError)

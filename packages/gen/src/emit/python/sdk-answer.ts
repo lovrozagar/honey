@@ -1,10 +1,11 @@
 /**
  * What a method takes and answers beyond its params (G3, G4, G5): its body's type by kind, its return type
- * and the transport call it makes in either error mode or as a stream, the JSON kind its answer must have, and
- * its `<Op>Headers` TypedDict, hoisted beside the types, with how the runtime reads each header and whether it
- * must arrive (Fc5).
+ * and the transport call it makes in either error mode, the JSON kind its answer (or a typed stream's event) must
+ * have, and its `<Op>Headers` TypedDict, hoisted beside the types, with how the runtime reads each header and
+ * whether it must arrive (Fc5). A streaming operation answers as its `PyStream` says (`sse.ts`, `ws.ts`,
+ * `realtime.ts`), in either error mode.
  */
-import type { IRParam, IRResponse } from "../../ir/model.ts"
+import type { IRParam, IRResponse, IRSchema } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { pyString } from "../shared/escape.ts"
 import { compareCodeUnits, NameScope, pyClassName, pyIdentifier } from "../shared/lang.ts"
@@ -31,15 +32,23 @@ export function bodyType(op: SdkOp, async: boolean, env: MethodEnv): string | nu
 /** What a method answers (its `Operation`'s type and its return type), and the transport call it makes. */
 export type Answer = { readonly type: string; readonly returns: string; readonly run: string }
 
-/** The answer of `op`: a stream's own, else its decoded success, inside `SDKResult` in safe mode. */
+/**
+ * What a streaming operation's method is: whether a declared param is one its own fields carry (Fd3), those
+ * fields (`name: type = None`, after the declared params), its answer, and the lines its docstring adds.
+ */
+export type PyStream = {
+	readonly carries: (name: string, where: string) => boolean
+	readonly fields: readonly string[]
+	answer(op: SdkOp, env: MethodEnv): Answer
+	readonly doc: readonly string[]
+}
+
+/** A streamed event's type: the operation's declared event schema, else `fallback`. */
+export const eventType = (op: SdkOp, env: MethodEnv, fallback: string) =>
+	op.events === undefined ? fallback : typeAt(op, "Event", op.events, env)
+
+/** The answer of a plain operation `op`: its decoded success, inside `SDKResult` in safe mode. */
 export function answerOf(op: SdkOp, env: MethodEnv): Answer {
-	const events = (fallback: string) => (op.events === undefined ? fallback : typeAt(op, "Event", op.events, env))
-	if (op.stream === "sse") return { returns: `EventStream[${events("str")}]`, run: "sse", type: events("str") }
-	if (op.stream === "ws") return { returns: "TypedWebSocket", run: "websocket", type: "None" }
-	if (op.stream === "realtime") {
-		const type = events(pyTypeOf({ kind: "unknown" }, env.at))
-		return { returns: `ResumableConnection[${type}]`, run: "realtime", type }
-	}
 	const { kind, schema } = op.success
 	const type =
 		kind === "text"
@@ -54,10 +63,16 @@ export function answerOf(op: SdkOp, env: MethodEnv): Answer {
 		: { returns: `SDKResult[${type}]`, run: "result", type }
 }
 
-/** The JSON kind a success body must have, when its schema pins one. */
+/** The JSON kind a success body, or a typed SSE or realtime event (Fd5), must have, when its schema pins one. */
 export function shapeOf(op: SdkOp, env: MethodEnv): string | null {
+	if (op.stream === "sse" || op.stream === "realtime") return op.events === undefined ? null : kindOf(op.events, env)
 	if (op.stream !== null || op.success.kind !== "json" || op.success.schema === undefined) return null
-	const schema = env.at.names.resolve(op.success.schema)
+	return kindOf(op.success.schema, env)
+}
+
+/** The JSON kind `declared` pins: an object, array or scalar type; none for any other schema. */
+function kindOf(declared: IRSchema, env: MethodEnv): string | null {
+	const schema = env.at.names.resolve(declared)
 	if (schema.kind === "object" || schema.kind === "allOf") return "object"
 	if (schema.kind === "array" || schema.kind === "tuple") return "array"
 	if (schema.kind !== "scalar" || schema.type === "null") return null

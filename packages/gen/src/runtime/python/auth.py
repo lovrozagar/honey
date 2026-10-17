@@ -15,7 +15,6 @@ RefreshHook = Callable[[], Awaitable[str | None] | str | None]
 
 
 def scheme(config: ClientConfig, defaults: Defaults) -> tuple[str, str]:
-    """The API's header and prefix; a header the config names takes the config's prefix, or none."""
     if config.auth_header_name is not None:
         return config.auth_header_name, config.auth_header_prefix or ""
     prefix = config.auth_header_prefix
@@ -38,7 +37,6 @@ class AuthState:
 def refresh_sync(
     state: AuthState, hook: RefreshHook, rejected: str | None
 ) -> str | None:
-    """The token to retry a 401 with: one another call refreshed meanwhile, else the hook's."""
     with state.lock:
         if state.token != rejected:
             return state.token

@@ -2,8 +2,9 @@
 client config a grid Setup has no member for, scripted ``on_auth_expired`` tokens, recording hooks,
 ``on_log``, and per-call directives. A unit test or the harness sends one; the conformance runner
 never does. What only Go can do (``ctxTimeoutMs``, ``isKeys``, ``isErrors``, ``ws.readLimit``) is
-refused for good, and ``taskCancel`` on ``SDK``, before any call is sent; the stream directives
-(``protocols``, ``realtime``, ``ws``) arrive in phase d.
+refused for good, and ``taskCancel`` on ``SDK``, before any call is sent. The stream directives
+(``protocols``, ``realtime``, ``ws``) are taken; invoke.py refuses one its operation cannot take, and
+a ``ws.send`` message holds exactly one of ``json``, ``text`` and ``bytes``.
 
 ``SDK`` runs plain hooks (``on_request_sync``, ``on_response_sync``, a plain ``on_auth_expired``);
 ``AsyncSDK`` runs coroutine functions (``on_request``, ``on_response``, ``on_auth_expired``).
@@ -51,7 +52,7 @@ GO_ONLY = (
         "isErrors is Go's errors.Is; the Python trace records the type and text",
     ),
 )
-STREAM_DIRECTIVES = ("protocols", "realtime", "ws")
+WS_MESSAGE = ("bytes", "json", "text")
 
 
 def strict(value: object, hint: Any) -> None:
@@ -78,9 +79,9 @@ def refusal(entry: CallScript, client: str) -> str | None:
         return reason
     if "readLimit" in entry.get("ws", {}):
         return "ws.readLimit is Go's SetReadLimit; a Python socket caps a message at 16 MiB"
-    stream = next((name for name in STREAM_DIRECTIVES if name in entry), None)
-    if stream is not None:
-        return f"{stream} arrives in phase d"
+    sent = entry.get("ws", {}).get("send", [])
+    if any(sum(kind in message for kind in WS_MESSAGE) != 1 for message in sent):
+        return "ws.send: a message holds exactly one of json, text and bytes"
     if "taskCancel" in entry and client == "sync":
         return "taskCancel is an AsyncSDK task's; SDK has none"
     return None

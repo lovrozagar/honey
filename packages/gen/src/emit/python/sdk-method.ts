@@ -7,13 +7,16 @@
  * shadow one (S3). Spec text reaches the source only through the shared escape layer.
  */
 import type { IRParam } from "../../ir/model.ts"
-import { mediaEssence, type SdkOp } from "../../ir/sdk-model.ts"
+import { mediaEssence, type SdkOp, type SdkStream } from "../../ir/sdk-model.ts"
 import { pyString } from "../shared/escape.ts"
 import { compareCodeUnits, NameScope, pyIdentifier } from "../shared/lang.ts"
-import { type Answer, answerOf, bodyType, responseHeaders, shapeOf, typeAt } from "./sdk-answer.ts"
+import { realtimeStream } from "./realtime.ts"
+import { type Answer, answerOf, bodyType, type PyStream, responseHeaders, shapeOf, typeAt } from "./sdk-answer.ts"
 import { methodDoc } from "./sdk-doc.ts"
 import type { PythonCallPlan } from "./sdk-plan.ts"
+import { sseStream } from "./sse.ts"
 import type { PyTypeContext } from "./types.ts"
+import { wsStream } from "./ws.ts"
 
 /** What every method of one SDK shares: the client module's type context, the error mode, what it imports. */
 export type MethodEnv = {
@@ -50,33 +53,18 @@ function qualified(type: string, shadowed: ReadonlySet<string>, env: MethodEnv):
 	})
 }
 
-/* the method's own names: a parameter that takes one is claimed as `…2` */
+/* the method's own names, a stream's fields among them: a parameter that takes one is claimed as `…2` */
 const METHOD_LOCALS = ["self", "body", "options", "idempotency_key", "headers_into"]
-const STREAM_LOCALS = ["last_event_id", "protocols", "reconnect_token"]
 
-/* each stream's own fields, and the declared params its resume channels carry (Fd3) */
-const STREAMS = {
-	realtime: {
-		carries: (name: string, where: string) =>
-			(where === "query" && (name === "reconnect_token" || name === "last_event_id")) ||
-			(where === "header" && name.toLowerCase() === "last-event-id"),
-		fields: [
-			"last_event_id: str | None = None",
-			"reconnect_token: str | None = None",
-			"protocols: Sequence[str] | None = None",
-			"max_reconnect_attempts: int | None = None",
-			"reconnect_delay_ms: int | None = None",
-		],
-	},
-	sse: {
-		carries: (name: string, where: string) => where === "header" && name.toLowerCase() === "last-event-id",
-		fields: ["last_event_id: str | None = None"],
-	},
-	ws: {
-		carries: (name: string, where: string) => where === "query" && name === "reconnect_token",
-		fields: ["protocols: Sequence[str] | None = None", "reconnect_token: str | None = None"],
-	},
-} as const
+/* each stream's answer, its own fields, and the declared params its resume channels carry (Fd3) */
+const STREAMS: Readonly<Record<NonNullable<SdkStream>, PyStream>> = {
+	realtime: realtimeStream,
+	sse: sseStream,
+	ws: wsStream,
+}
+
+/** A field's name: `name` of `name: type = default`. */
+const nameOf = (field: string) => field.slice(0, field.indexOf(":"))
 
 /** A declared query or header param as a keyword. */
 type Keyword = {
@@ -212,12 +200,12 @@ function methodLines(parts: Parts, async: boolean, env: MethodEnv, shadowed: Rea
 		...(body === null ? [] : ["body=body"]),
 		...(keyed ? ["idempotency_key=idempotency_key"] : []),
 		...(headers === null ? [] : ["headers_into=headers_into"]),
-		...own.map((field) => field.slice(0, field.indexOf(":"))).map((field) => `${field}=${field}`),
+		...own.map(nameOf).map((field) => `${field}=${field}`),
 		"options=options",
 	]
 	return [
 		`    ${async ? "async " : ""}def ${parts.name}(${params.join(", ")}) -> ${qualified(answer.returns, shadowed, env)}:`,
-		...methodDoc(op, env.throwOnError),
+		...methodDoc(op, env.throwOnError, op.stream === null ? [] : STREAMS[op.stream].doc),
 		`        return ${async ? "await " : ""}self._t.${answer.run}(${args.join(", ")})`,
 	]
 }
@@ -232,10 +220,10 @@ function noteImports(op: SdkOp, answer: Answer, env: MethodEnv): void {
 
 /** The method of `op` named `name`: its constant, its sync method (none for a stream), its async one, its plan. */
 export function pyMethod(op: SdkOp, name: string, env: MethodEnv): PyMethod {
-	const scope = new NameScope([...METHOD_LOCALS, ...(op.stream === null ? [] : STREAM_LOCALS)])
+	const scope = new NameScope([...METHOD_LOCALS, ...(op.stream === null ? [] : STREAMS[op.stream].fields.map(nameOf))])
 	const path = pathParamsOf(op).map((param) => ({ ident: scope.claim(pyIdentifier(param.name)), param }))
 	const keywords = keywordsOf(op, scope, env)
-	const answer = answerOf(op, env)
+	const answer = op.stream === null ? answerOf(op, env) : STREAMS[op.stream].answer(op, env)
 	const constant = env.constants.claim(`_${pyIdentifier(op.id).toUpperCase()}`)
 	const parts: Parts = { answer, constant, headers: responseHeaders(op, env), keywords, name, op, path }
 	noteImports(op, answer, env)

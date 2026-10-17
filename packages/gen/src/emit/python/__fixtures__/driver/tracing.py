@@ -1,14 +1,14 @@
 """What a scripted run prints beside the observed (emit/shared/__fixtures__/protocol.ts
-``Trace<PythonError>``): each call's time, its error read through the exception's attributes and a
-safe-mode ``SDKResult``'s summary; every hook run with what its context held; every ``on_log``
-entry; and the ``on_auth_expired`` calls. Every hook, the refresher and the logger here are plain
-functions; script.py makes them coroutine functions for ``AsyncSDK``.
+``Trace<PythonError>``): each call's time, its error read through the exception's attributes, a
+safe-mode ``SDKResult``'s summary and a stream call's ``StreamTrace``; every hook run with what its
+context held; every ``on_log`` entry; and the ``on_auth_expired`` calls. Every hook, the refresher
+and the logger here are plain functions; script.py makes them coroutine functions for ``AsyncSDK``.
 """
 
 from __future__ import annotations
 
 import enum
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
 from protocol import (
@@ -17,6 +17,7 @@ from protocol import (
     RequestHook,
     ResponseHook,
     ResultTrace,
+    StreamTrace,
     Trace,
 )
 
@@ -36,7 +37,11 @@ class Recorder:
         self.current = i
 
     def called(
-        self, elapsed_ms: int, error: PythonError | None, result: ResultTrace | None
+        self,
+        elapsed_ms: int,
+        error: PythonError | None,
+        result: ResultTrace | None,
+        stream: StreamTrace | None,
     ) -> None:
         """Records the call that just ended after ``elapsed_ms``."""
         entry: CallTrace = {"elapsedMs": elapsed_ms}
@@ -44,6 +49,8 @@ class Recorder:
             entry["error"] = error
         if result is not None:
             entry["result"] = result
+        if stream is not None:
+            entry["stream"] = stream
         self.calls.append(entry)
 
     def hook(self, entry: dict[str, Any]) -> None:
@@ -95,20 +102,15 @@ def status_of(out: PythonError, error: Any, envelope: bool) -> None:
         out["envelope"] = envelope_of(error.envelope)
 
 
-def envelope_of(envelope: Any) -> dict[str, Any]:
-    """An ``ErrorEnvelope``'s members that are set, and its extra keys sorted."""
-    named = ("status", "error_key", "status_key", "message")
-    out = {name: getattr(envelope, name) for name in named}
-    out = {name: value for name, value in out.items() if value is not None}
-    if envelope.fields:
-        out["fields"] = {
-            name: [
-                {"error_key": f.error_key, "message": f.message, "path": f.path}
-                for f in errors
-            ]
-            for name, errors in envelope.fields.items()
-        }
-    out["extraKeys"] = sorted(envelope.extra)
+ENVELOPE = ("status", "error_key", "status_key", "message", "fields")
+
+
+def envelope_of(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    """An ``ErrorEnvelope`` view's members that are set (``fields`` when not empty), and the keys of the
+    body's other members sorted."""
+    out = {name: envelope.get(name) for name in ENVELOPE}
+    out = {name: value for name, value in out.items() if value not in (None, {})}
+    out["extraKeys"] = sorted(name for name in envelope if name not in ENVELOPE)
     return out
 
 

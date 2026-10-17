@@ -97,8 +97,6 @@ class RawResponse:
 
 @dataclass(frozen=True)
 class Defaults:
-    """What the emitted client fills in: the API's first server, its auth scheme, its ``ErrorKey``."""
-
     base_url: str | None
     auth_header: str = "Authorization"
     auth_prefix: str = "Bearer "
@@ -106,7 +104,6 @@ class Defaults:
 
 
 def redacted(url: str) -> str:
-    """``url`` without the user info, query and fragment a credential may sit in."""
     try:
         parts = urlsplit(url)
         port = f":{parts.port}" if parts.port else ""
@@ -116,7 +113,6 @@ def redacted(url: str) -> str:
 
 
 def parse_base(url: str, what: str) -> str:
-    """``url`` when it is absolute http(s); the error names ``what``, never the value."""
     try:
         parts = urlsplit(url)
         absolute = parts.scheme in ("http", "https") and bool(parts.hostname)

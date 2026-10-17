@@ -287,6 +287,7 @@ describe("pythonCallPlans: which client carries each method", () => {
 	it("marks exactly the stream ops as absent from SDK (sync)", () => {
 		expect({ fixtures: asyncOnly("fixtures"), surface: asyncOnly("surface") }).toEqual({
 			fixtures: [
+				"realtime-clash.feed.live",
 				"realtime-longpoll.events.poll",
 				"realtime-sse.events.subscribe",
 				"realtime.realtime.connect",
