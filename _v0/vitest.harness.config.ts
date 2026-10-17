@@ -13,5 +13,9 @@ export default defineConfig({
 		globalSetup: ["./tests/python-setup.ts"],
 		include: harness,
 		passWithNoTests: true,
+		/* a runner knob, no assertion: a harness case spawns an install or a toolchain under its own bound
+		 * (T4.1's bun install has 60 s against the npm registry), which the 5 s default cut short on CI;
+		 * the runner's bound sits past every case's own */
+		testTimeout: 90_000,
 	},
 })
