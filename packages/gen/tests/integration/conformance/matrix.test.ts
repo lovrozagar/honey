@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs"
 import { join, matchesGlob } from "node:path"
 import { describe, expect, it } from "vitest"
-import config, { HARNESS } from "../../../vitest.config.ts"
+import config, { HARNESS, TOOLCHAIN_PROJECTS } from "../../../vitest.config.ts"
 import { FEATURES } from "./features.ts"
 import {
 	type Cell,
@@ -374,11 +374,14 @@ describe("the opt-in harness", () => {
 		/* harness mode runs through its toolchain projects (00-rules:118): the union of their includes */
 		const union = (harness.projects ?? []).flatMap(({ test }) => test.include)
 		const runs = (file: string) => union.some((glob) => matchesGlob(file, glob))
+		/* a target's runner is wired when it exists, or when its language has a toolchain project, whose harness
+		 * project waits for the runner that language's later phase writes; never otherwise */
+		const wired = (t: string) => existsSync(join(GEN, runner(t))) || Object.hasOwn(TOOLCHAIN_PROJECTS, t)
 		expect([
 			HARNESS.filter((glob) => !resolve({ command: "serve", mode: "test" }).test.exclude?.includes(glob)),
 			[harness.include, union.filter((glob) => !inHarness(glob))],
 			TARGETS.filter((t) => !inHarness(runner(t))),
-			TARGETS.filter((t) => existsSync(join(GEN, runner(t))) !== runs(runner(t))),
+			TARGETS.filter((t) => wired(t) !== runs(runner(t))),
 			["tests/integration/ts-harness.test.ts", "tests/integration/ts-harness.pipeline.test.ts"].map(runs),
 			inHarness("tests/integration/conformance/matrix.test.ts"),
 		]).toEqual([[], [undefined, []], [], [], [true, true], false])

@@ -1,17 +1,36 @@
 /**
  * The verify helpers against the real toolchains: TS, Go, Rust (the hmac, sha2, subtle, hex and
- * base64 crates, which cargo fetches) and Python each compile their helper and check RFC 4231's
- * HMAC-SHA256 test case 2, hex and base64, behind a prefix, and refuse a tampered, short,
- * unprefixed, oddly encoded or undecodable signature. Runs where the toolchains are;
- * `HONEY_REQUIRE_TOOLCHAINS=1` (CI's test and harness jobs) makes a missing one fail. C# and Java are
- * checked structurally until their SDKs (bits 15 and 16).
+ * base64 crates, which cargo fetches), Python and C# (csc against the pinned SDK's reference pack,
+ * BCL only) each compile their helper and check RFC 4231's HMAC-SHA256 test case 2, hex and base64,
+ * behind a prefix, and refuse a tampered, short, unprefixed, oddly encoded or undecodable
+ * signature. Runs where the toolchains are; `HONEY_REQUIRE_TOOLCHAINS=1` (CI's gen shards) makes a
+ * missing one fail. Java is checked structurally until its SDK (bit 16).
  */
 import { type SpawnSyncReturns, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import {
+	csharpCacheDir,
+	dotnetRequired,
+	hasDotnet,
+	pinnedDotnet,
+	refPack,
+	runCsc,
+	runDotnet,
+	runtimeConfig,
+} from "../csharp/__fixtures__/csharp-env.ts"
 import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
 import {
 	hasPython,
@@ -52,9 +71,9 @@ const triples = (open: string, close: string) =>
 type Language = {
 	/** compile and run the program in `dir`, which prints one true or false per case */
 	readonly exec: (dir: string) => SpawnSyncReturns<string>
-	/** where its work dirs go, off /tmp (00-rules): Go's, Rust's and Python's toolchain caches, and Node's own dir beside them */
+	/** where its work dirs go, off /tmp (00-rules): Go's, Rust's, Python's and .NET's toolchain caches, and Node's own dir beside them */
 	readonly home: () => string
-	/** whether its toolchain is here: Go's, Rust's and Python's are the pinned ones (G10) */
+	/** whether its toolchain is here: Go's, Rust's, Python's and .NET's are the pinned ones (G10) */
 	readonly present: () => boolean
 	/** whether a missing toolchain fails rather than skips */
 	readonly required: () => boolean
@@ -106,7 +125,48 @@ function lock(dir: string): void {
 	copyFileSync(kept, join(dir, "Cargo.lock"))
 }
 
+/** csc's flags for a program: no response file, nullable on, every warning an error, the pinned SDK's references. */
+const cscProgram = () => [
+	"-nologo",
+	"-noconfig",
+	"-nullable:enable",
+	"-warnaserror",
+	"-langversion:latest",
+	"-target:exe",
+	...readdirSync(refPack())
+		.filter((name) => name.endsWith(".dll"))
+		.map((name) => `-r:${join(refPack(), name)}`),
+]
+
 const LANGUAGES: Readonly<Record<string, Language>> = {
+	csharp: {
+		/* csc reports to stdout; a failed compile hands it on as the error text */
+		exec: (dir) => {
+			const built = runCsc([...cscProgram(), "-out:p.dll", "Program.cs"], { cwd: dir })
+			if (built.status !== 0) return { ...built, stderr: built.stdout }
+			writeFileSync(join(dir, "p.runtimeconfig.json"), runtimeConfig())
+			return runDotnet(["p.dll"], { cwd: dir })
+		},
+		home: () => csharpCacheDir("tmp"),
+		present: hasDotnet,
+		required: dotnetRequired,
+		tool: `dotnet ${pinnedDotnet()}`,
+		write: (dir) =>
+			writeFileSync(
+				join(dir, "Program.cs"),
+				[
+					verifyHelper("csharp"),
+					"public static class Program",
+					"{",
+					"    public static void Main()",
+					"    {",
+					`        foreach (var c in new[] { ${triples("new[] { ", " }")} })`,
+					`            Console.WriteLine(WebhookSignature.VerifyWebhookSignature(Encoding.UTF8.GetBytes(${JSON.stringify(SECRET)}), Encoding.UTF8.GetBytes(${JSON.stringify(PAYLOAD)}), c[0], c[1], c[2]).ToString().ToLowerInvariant());`,
+					"    }",
+					"}",
+				].join("\n"),
+			),
+	},
 	go: {
 		exec: (dir) => runGo(["run", join(dir, "main.go")], { cwd: dir }),
 		home: () => goCacheDir("tmp"),

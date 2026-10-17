@@ -163,9 +163,9 @@ jobs:
       - run: bun run test:e2e
 
   # gen's rust project, the last group (Ff11): its toolchain files (shared/*.toolchains.test.ts) and
-  # mutation-harness.test.ts run Go and Python too, so both are installed and their caches restored, never saved:
-  # the test job and gen-python own them. This job owns the Rust cache, the heaviest, so the Rust mutants the
-  # harness builds stay in it.
+  # mutation-harness.test.ts run Go, Python and .NET too, so all three are installed and their caches restored,
+  # never saved: the test job, gen-python and gen-csharp own them. This job owns the Rust cache, the heaviest, so
+  # the Rust mutants the harness builds stay in it.
   gen-rust:
     name: gen (rust)
     runs-on: ubuntu-latest
@@ -250,6 +250,24 @@ jobs:
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-python-
+      # gen runs every dotnet through its csharp-env fixture, installed as in gen-csharp (which says why)
+      - name: .NET (global.json's SDK, and the seed restore)
+        run: |
+          V="$(sed -n 's/.*"version": "\(.*\)",/\1/p' global.json)" && D="$HOME/.cache/honey-tmp/dotnet" && F="$(git rev-parse --show-toplevel)/packages/gen/src/emit/csharp/__fixtures__" && T="$D/toolchain/$V" && mkdir -p "$D/dl" "$D/home" "$D/tmp" && curl -fsSL -o "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" "https://builds.dotnet.microsoft.com/dotnet/Sdk/$V/dotnet-sdk-$V-linux-x64.tar.gz" && (cd "$D/dl" && sha512sum -c "$F/dotnet-sdk.sha512") && rm -rf "$T" "$T.partial" && mkdir -p "$T.partial" && tar -xzf "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" -C "$T.partial" && mv "$T.partial" "$T" && rm "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" && DOTNET_CLI_HOME="$D/home" DOTNET_ROOT="$D/toolchain/$V" NUGET_HTTP_CACHE_PATH="$D/nuget-http" NUGET_PACKAGES="$D/nuget" NUGET_PLUGINS_CACHE_PATH="$D/nuget-plugins" TMPDIR="$D/tmp" HOME="$D/home" DOTNET_ADD_GLOBAL_TOOLS_TO_PATH="false" DOTNET_CLI_TELEMETRY_OPTOUT="1" DOTNET_CLI_UI_LANGUAGE="en" DOTNET_CLI_USE_MSBUILD_SERVER="0" DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE="1" DOTNET_GENERATE_ASPNET_CERTIFICATE="false" DOTNET_NOLOGO="1" DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1" MSBUILDDISABLENODEREUSE="1" NUGET_XMLDOC_MODE="skip" UseSharedCompilation="false" "$T/dotnet" restore "$F/seed/Seed.csproj" --source https://api.nuget.org/v3/index.json --artifacts-path "$D/tmp/seed"
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/dotnet/nuget
+            ~/.cache/honey-tmp/dotnet/sdk
+            ~/.cache/honey-tmp/dotnet/driver
+          key: >-
+            ${{ runner.os }}-dotnet-${{ hashFiles('global.json', 'packages/gen/src/emit/csharp/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/csharp/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-dotnet-
       - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
       - run: bun install --frozen-lockfile
       - name: gen (rust)
@@ -339,10 +357,70 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # gen's coverage: the three shards' blobs merged, held to the per-file 100% thresholds in vitest.config.ts
+  # gen's csharp project: its files reach .NET alone (vitest.config.ts). This job owns the dotnet cache.
+  gen-csharp:
+    name: gen (csharp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # vitest runs on node
+      - uses: actions/setup-node@v4
+        with:
+          node-version: current
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      # the gated SDKs, the driver and the one build-time package (Microsoft.NET.ILLink.Tasks), keyed like the
+      # python and rust caches on every input of a .NET gate (toolchain-projects.test.ts holds it to that); the
+      # SDK itself is not cached: the install below fetches the pinned tarball and checks its sha512. This job
+      # saves it; gen-rust only restores it.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/dotnet/nuget
+            ~/.cache/honey-tmp/dotnet/sdk
+            ~/.cache/honey-tmp/dotnet/driver
+          key: >-
+            ${{ runner.os }}-dotnet-${{ hashFiles('global.json', 'packages/gen/src/emit/csharp/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/csharp/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-dotnet-
+      # gen runs every dotnet through its csharp-env fixture: the global.json SDK from its tarball, checked
+      # against dotnet-sdk.sha512 before extraction, under ~/.cache/honey-tmp/dotnet, then the seed restore, the
+      # one NuGet fetch (none when the cache above holds its package): the command a missing SDK names locally
+      - name: .NET (global.json's SDK, and the seed restore)
+        run: |
+          V="$(sed -n 's/.*"version": "\(.*\)",/\1/p' global.json)" && D="$HOME/.cache/honey-tmp/dotnet" && F="$(git rev-parse --show-toplevel)/packages/gen/src/emit/csharp/__fixtures__" && T="$D/toolchain/$V" && mkdir -p "$D/dl" "$D/home" "$D/tmp" && curl -fsSL -o "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" "https://builds.dotnet.microsoft.com/dotnet/Sdk/$V/dotnet-sdk-$V-linux-x64.tar.gz" && (cd "$D/dl" && sha512sum -c "$F/dotnet-sdk.sha512") && rm -rf "$T" "$T.partial" && mkdir -p "$T.partial" && tar -xzf "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" -C "$T.partial" && mv "$T.partial" "$T" && rm "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" && DOTNET_CLI_HOME="$D/home" DOTNET_ROOT="$D/toolchain/$V" NUGET_HTTP_CACHE_PATH="$D/nuget-http" NUGET_PACKAGES="$D/nuget" NUGET_PLUGINS_CACHE_PATH="$D/nuget-plugins" TMPDIR="$D/tmp" HOME="$D/home" DOTNET_ADD_GLOBAL_TOOLS_TO_PATH="false" DOTNET_CLI_TELEMETRY_OPTOUT="1" DOTNET_CLI_UI_LANGUAGE="en" DOTNET_CLI_USE_MSBUILD_SERVER="0" DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE="1" DOTNET_GENERATE_ASPNET_CERTIFICATE="false" DOTNET_NOLOGO="1" DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1" MSBUILDDISABLENODEREUSE="1" NUGET_XMLDOC_MODE="skip" UseSharedCompilation="false" "$T/dotnet" restore "$F/seed/Seed.csproj" --source https://api.nuget.org/v3/index.json --artifacts-path "$D/tmp/seed"
+      - run: mkdir -p ~/.cache/honey-tmp/dotnet/sdk && touch "$RUNNER_TEMP/csharp-sdk-start"
+      - run: bun install --frozen-lockfile
+      - name: gen (csharp)
+        working-directory: packages/gen
+        run: >-
+          bunx vitest run --project csharp --coverage --coverage.thresholds.lines=0
+          --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0
+          --reporter=default --reporter=blob --outputFile.blob="$RUNNER_TEMP/gen-blob/csharp.json"
+        env:
+          HONEY_REQUIRE_TOOLCHAINS: "1"
+      - name: Prune the C# SDKs this run did not use
+        run: >-
+          find ~/.cache/honey-tmp/dotnet/sdk -mindepth 2 -maxdepth 2 -name .complete
+          ! -newer "$RUNNER_TEMP/csharp-sdk-start" -printf '%h\0' | xargs -0r rm -rf
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: gen-blob-csharp
+          path: ${{ runner.temp }}/gen-blob/csharp.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # gen's coverage: the four shards' blobs merged, held to the per-file 100% thresholds in vitest.config.ts
   gen-coverage:
     name: gen coverage
-    needs: [test, gen-rust, gen-python]
+    needs: [test, gen-rust, gen-python, gen-csharp]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- restored by dotnetInstall(): the build-time package IsAotCompatible pulls (Microsoft.NET.ILLink.Tasks), so every test restores offline -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+</Project>
