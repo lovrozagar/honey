@@ -14,6 +14,7 @@
  *   bun run packages/core/tests/e2e/run-strict-consumer.ts --keep     # leave the sandbox for inspection
  */
 import { mkdirSync, readdirSync, rmSync } from "node:fs"
+import { type AddressInfo, createServer } from "node:net"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -26,6 +27,18 @@ const sandbox = join(repoRoot, ".cache", "strict-consumer")
 const keep = process.argv.includes("--keep")
 
 const PKG = "@lovrozagar/honey"
+
+/**
+ * `count` distinct ports the OS holds free now, all bound at once so none repeats: a fixed port in the
+ * ephemeral range is any outbound socket's on a shared machine.
+ */
+async function freePorts(count: number): Promise<number[]> {
+	const servers = Array.from({ length: count }, () => createServer())
+	await Promise.all(servers.map((server) => new Promise<void>((done) => server.listen(0, "0.0.0.0", done))))
+	const ports = servers.map((server) => (server.address() as AddressInfo).port)
+	await Promise.all(servers.map((server) => new Promise((done) => server.close(done))))
+	return ports
+}
 
 async function run(cmd: string[], cwd: string): Promise<{ code: number; out: string }> {
 	const proc = Bun.spawn(cmd, { cwd, stderr: "pipe", stdin: "ignore", stdout: "pipe" })
@@ -181,7 +194,7 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 	console.log("runtime smoke ok (node)")
 
 	/* an app in the README "Start" shape: it serves at top level, which generation must survive */
-	const port = 46_123
+	const [port, served] = await freePorts(2)
 	await Bun.write(
 		join(dir, "src", "server-app.ts"),
 		[
@@ -225,14 +238,17 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 
 	const server = Bun.spawn(["node", "--unhandled-rejections=strict", join("out", "index.js")], {
 		cwd: dir,
-		env: { ...process.env, PORT: String(port + 1) },
+		env: { ...process.env, PORT: String(served) },
 		stderr: "pipe",
 		stdout: "pipe",
 	})
 	try {
 		const deadline = Date.now() + 10_000
 		while (Date.now() < deadline) {
-			const res = await fetch(`http://127.0.0.1:${port + 1}/health`).catch(() => undefined)
+			/* bounded: a listener that takes the connection and never answers must not hang the tier */
+			const res = await fetch(`http://127.0.0.1:${served}/health`, { signal: AbortSignal.timeout(1000) }).catch(
+				() => undefined,
+			)
 			if (res?.status === 200) {
 				console.log("vite build ok (node)")
 				return true
