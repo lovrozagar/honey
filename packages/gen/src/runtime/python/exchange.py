@@ -5,7 +5,7 @@ answer's error class and decoding. The shells only move bytes."""
 
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
@@ -127,6 +127,7 @@ class Exchange:
             self.args.get("headers") or {},
         )
         layers: list[Mapping[str, object]] = [
+            {"X-Request-Id": str(uuid.uuid4())},
             {"Content-Type": content.media} if content else {},
             self.core.config.headers,
             {"Accept": self.op.accept} if self.op.accept else {},
@@ -135,16 +136,11 @@ class Exchange:
             self.options.get("headers", {}),
             {self.core.auth_header: self.core.auth_prefix + token} if token else {},
         ]
-        headers: dict[str, str] = {}
-        for name, value in (item for layer in layers for item in layer.items()):
-            shown = text(value)
-            if any(ch in shown for ch in "\r\n\0"):
+        shown = [(k, text(v)) for layer in layers for k, v in layer.items()]
+        for name, value in shown:
+            if any(ch in value for ch in "\r\n\0"):
                 raise ConfigError(f"the {name} header's value cannot be sent")
-            headers = {
-                k: v for k, v in headers.items() if k.lower() != name.lower()
-            } | {name: shown}
-        if not any(k.lower() == "x-request-id" for k in headers):
-            headers["X-Request-Id"] = str(uuid.uuid4())
+        headers = folded(shown)
         body = (
             content.payload if content and isinstance(content.payload, bytes) else None
         )
@@ -171,7 +167,7 @@ class Exchange:
         return Hop(
             ctx.method,
             ctx.url,
-            dict(ctx.headers),
+            folded(ctx.headers.items()),
             ctx.body if streamed is None or isinstance(streamed, bytes) else streamed,
         )
 
@@ -257,6 +253,14 @@ class Exchange:
                     target[key] = scalar(name, answer.headers[name], kind)
                 elif required:
                     raise DecodeError(f"the {name} header is missing")
+
+
+def folded(items: Iterable[tuple[str, str]]) -> dict[str, str]:
+    out: dict[str, tuple[str, str]] = {}
+    for name, value in items:
+        out.pop(name.lower(), None)
+        out[name.lower()] = (name, value)
+    return dict(out.values())
 
 
 def shaped(value: object, shape: str | None) -> bool:
