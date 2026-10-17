@@ -121,11 +121,31 @@ function diskImports(): Imports {
 	}
 }
 
-/** The `hashFiles` globs of the CI cache whose key starts `<os>-<name>-`, repo-relative. */
-function cacheKeyGlobs(workflow: string, name: string): string[] {
-	const key = new RegExp(`-${name}-\\$\\{\\{ hashFiles\\(([^)]*)\\) \\}\\}`).exec(workflow.replace(/\s+/g, " "))
-	return [...(key?.[1] ?? "").matchAll(/'([^']+)'/g)].map(([, glob]) => glob as string)
+const WORKFLOW = readFileSync(join(GEN, "../../.github/workflows/ci.yml"), "utf8")
+
+/** The `hashFiles` globs of each CI cache step whose key starts `<os>-<name>-`, repo-relative, in workflow order. */
+function cacheKeyGlobs(workflow: string, name: string): string[][] {
+	const keys = workflow
+		.replace(/\s+/g, " ")
+		.matchAll(new RegExp(`-${name}-\\$\\{\\{ hashFiles\\(([^)]*)\\) \\}\\}`, "g"))
+	return [...keys].map(([, globs]) => [...(globs ?? "").matchAll(/'([^']+)'/g)].map(([, glob]) => glob as string))
 }
+
+/** Each job's body under `jobs:`, by name, its comment lines left out. */
+function jobs(workflow: string): Record<string, string> {
+	const body = workflow.slice(workflow.indexOf("\njobs:\n")).replace(/^ *#.*\n/gm, "")
+	return Object.fromEntries(
+		[...body.matchAll(/^ {2}([\w-]+):\n((?: {4}.*\n|\n)*)/gm)].map(([, name, text]) => [name, text]),
+	)
+}
+
+/** Each job's `--project` names, by job, the jobs that name none left out. */
+const shardsOf = (workflow: string) =>
+	Object.fromEntries(
+		Object.entries(jobs(workflow))
+			.map(([name, job]) => [name, [...job.matchAll(/--project (\S+)/g)].map(([, project]) => project as string)])
+			.filter(([, projects]) => projects.length > 0),
+	) as Record<string, string[]>
 
 /** The files directly in gen-relative `dir`; none where it is not there yet. */
 const dirFiles = (dir: string) =>
@@ -180,12 +200,14 @@ describe("the default run's projects", () => {
 		},
 	)
 
+	/* every job that saves or restores the cache names one key, so the shards share what the job owning it saves */
 	it.each(Object.keys(CACHE) as Toolchain[])("keys CI's %s compile cache on every input of its compiles", (name) => {
 		const [key, ...pins] = CACHE[name]
-		const globs = cacheKeyGlobs(readFileSync(join(GEN, "../../.github/workflows/ci.yml"), "utf8"), key)
+		const [globs = [], ...others] = cacheKeyGlobs(WORKFLOW, key)
 		const inputs = [...pins, ...compileInputs(name, runFiles, imports)]
 		expect(globs.length).toBeGreaterThan(0)
 		expect(inputs.filter((file) => !globs.some((glob) => matchesGlob(file, glob)))).toEqual([])
+		expect(others).toEqual(others.map(() => globs))
 	})
 
 	it("names no toolchain glob that matches no file", () => {
@@ -203,6 +225,20 @@ describe("the default run's projects", () => {
 			expect(reached.filter((file) => others.some((other) => file.startsWith(`src/emit/${other}/`)))).toEqual([])
 		},
 	)
+})
+
+describe("CI's gen shards", () => {
+	/* CI runs the default run as shards, a job's `--project` set each, and merges their coverage in gen-coverage
+	 * (contract 28 §8.3): a project in two shards runs twice, one in none never runs, a shard gen-coverage does not
+	 * wait for drops its coverage, and a whole gen run (the root `test` script, `test:gen`) runs every project again */
+	it("splits the projects across CI's shards, each in exactly one, every shard merged in gen-coverage", () => {
+		const shards = shardsOf(WORKFLOW)
+		const needs = /^ {4}needs: \[(.*)\]$/m.exec(jobs(WORKFLOW)["gen-coverage"] ?? "")?.[1]?.split(", ") ?? []
+		const whole = Object.entries(jobs(WORKFLOW)).filter(([, job]) => /^ +- run: bun run test(?::gen)?$/m.test(job))
+		expect(Object.values(shards).flat().sort()).toEqual((resolved.projects ?? []).map(({ test }) => test.name).sort())
+		expect(needs.sort()).toEqual(Object.keys(shards).sort())
+		expect(whole.map(([name]) => name)).toEqual([])
+	})
 })
 
 /** A test file `file` of project `name` in group `groupOrder`, as much of one as the sequencer reads. */

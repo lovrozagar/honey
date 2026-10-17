@@ -157,11 +157,11 @@ describe("the pins", () => {
 })
 
 describe("CI installs the uv uv.toml pins and the interpreters .python-version and PY_FLOOR name", () => {
-	it("in every job that runs gen's tests, from the files, the same commands a missing one names", () => {
+	it("in every job that runs gen's Python, from the files, the same commands a missing one names", () => {
 		const testing = Object.entries(jobs(WORKFLOW)).filter(([, job]) =>
-			/^ +- run: bun run test(?::harness)?$/m.test(job),
+			/^ +- run: bun run test:harness$|--project python\b/m.test(job),
 		)
-		expect(testing.map(([name]) => name).sort()).toEqual(["harness", "test"])
+		expect(testing.map(([name]) => name).sort()).toEqual(["gen-python", "harness"])
 		const missing = testing.filter(
 			([, job]) =>
 				!steps(job).some(setsUpUv) ||
