@@ -230,15 +230,15 @@ describe("streams beside calls", () => {
 })
 
 describe("a method named like a builtin", () => {
-	it("spells the builtin as builtins.<name> in the class's later signatures, and only there", () => {
+	it("spells the builtin as _builtins.<name> in the class's later signatures, and only there", () => {
 		expect({
-			imported: client(BODIES).includes("import builtins"),
+			imported: client(BODIES).includes("import builtins as _builtins"),
 			list: lines(BODIES, "def list("),
 			search: lines(BODIES, "def search("),
 		}).toEqual({
 			imported: true,
 			list: both("    def list(self, *, options: RequestOptions | None = None) -> list[str]:"),
-			search: both("    def search(self, *, options: RequestOptions | None = None) -> builtins.list[str]:"),
+			search: both("    def search(self, *, options: RequestOptions | None = None) -> _builtins.list[str]:"),
 		})
 	})
 })

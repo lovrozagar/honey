@@ -1,8 +1,8 @@
 /**
  * The orders ruff checks (contract 28 §2.3), so the post-pass never has to reorder: `from x import (…)`
- * members as I001 sorts them and `__all__` as RUF022 does. Both group constants (every cased character upper),
- * then classes (a leading capital), then the rest, each group in natural order (a digit run by its number):
- * case-insensitive for imports, case-sensitive for `__all__`.
+ * members as I001 sorts them and `__all__` as RUF022 does. Both group constants (two or more characters, every
+ * cased one upper), then classes (a leading capital, a lone one too), then the rest, each group in natural order
+ * (a digit run by its number): case-insensitive for imports, case-sensitive for `__all__`.
  */
 
 /** `text` as natural order compares it: each digit run whole, every other character alone. */
@@ -20,9 +20,9 @@ function natural(a: string, b: string): number {
 	return left.length - right.length
 }
 
-/** A member's group: 0 a constant, 1 a class, 2 anything else. */
+/** A member's group: 0 a constant, 1 a class (a lone capital too, as ruff sorts it), 2 anything else. */
 function group(name: string): number {
-	if (name.toUpperCase() === name && name.toLowerCase() !== name) return 0
+	if (name.length > 1 && name.toUpperCase() === name && name.toLowerCase() !== name) return 0
 	return /^[A-Z]/.test(name) ? 1 : 2
 }
 

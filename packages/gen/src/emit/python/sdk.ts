@@ -97,7 +97,7 @@ function clientFile(
 	const sections = [
 		["from __future__ import annotations"],
 		[
-			...(env.imports.has("builtins") ? ["import builtins"] : []),
+			...(env.imports.has("builtins") ? ["import builtins as _builtins"] : []),
 			...importLine(
 				"collections.abc",
 				[...env.imports].filter((name) => !(name in RUNTIME) && name !== "builtins"),

@@ -44,12 +44,15 @@ export type PyMethod = {
 /* the builtins an annotation may spell that a method may be named: a method so named shadows it below */
 export const BUILTINS: readonly string[] = ["bool", "bytes", "dict", "float", "int", "list", "str", "tuple"]
 
-/** `type` with each builtin `shadowed` names spelled `builtins.<name>`; strings inside it kept. */
+/**
+ * `type` with each builtin `shadowed` names spelled `_builtins.<name>`; strings inside it kept. The module is
+ * aliased because a method may be named `builtins`, and `pyIdentifier` never yields a leading `_`.
+ */
 function qualified(type: string, shadowed: ReadonlySet<string>, env: MethodEnv): string {
 	return type.replace(/("(?:[^"\\]|\\.)*")|\b([a-z]+)\b/g, (whole, text: string | undefined, name: string) => {
 		if (text !== undefined || !shadowed.has(name)) return whole
 		env.imports.add("builtins")
-		return `builtins.${name}`
+		return `_builtins.${name}`
 	})
 }
 

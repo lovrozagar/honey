@@ -1,6 +1,6 @@
 /**
- * The adversarial OpenAPI corpus every polyglot emitter compiles (Go and Rust now; Python and the Go CLI
- * reuse it): a document whose every name, description and enum value is chosen to break naive
+ * The adversarial OpenAPI corpus every polyglot emitter compiles (Go, Rust and Python now; the Go CLI
+ * reuses it): a document whose every name, description and enum value is chosen to break naive
  * interpolation in an emitter. v0's hostile classes (keywords, leading-digit, hyphenated and
  * colliding snake/camel keys, quotes, backslashes, comment terminators, multi-line text, recursive
  * and union schemas, a streaming POST, multipart, urlencoded, text and binary bodies, realtime,
@@ -9,9 +9,12 @@
  * each target's escape policy exists for (U+FEFF, U+2028/9, NUL, DEL). The raw BOM is what makes a
  * Go build fail when the escape policy is bypassed. Rust's (bit 13): keywords no raw identifier can spell
  * (`self`, `Self`, `crate`, `super`), 2024's reserved `gen`, the method's locals, the prelude, runtime and
- * emitter type names a component would shadow, and format and escape spellings (`{x}`, `\u{41}`).
+ * emitter type names a component would shadow, and format and escape spellings (`{x}`, `\u{41}`). Python's
+ * (bit 14) live in adversarial-python.ts and merge here: keywords, builtins and dunders as params, keys and
+ * method names, ruff's ambiguous names, colliding error keys, and Python's escape spellings.
  * Made on use: a module under `src` runs no code as it loads.
  */
+import { PY_KEYS, PY_LOCALS, PY_STATUS, pythonPaths, pythonSchemas } from "./adversarial-python.ts"
 
 /* every code point a literal or comment writer must handle: CRLF, comment terminators, quotes, U+2028/9, BOM, NUL, BEL */
 const NASTY =
@@ -29,7 +32,7 @@ const GO_LOCALS = "ctx opts reqOpts r c params path err result body context http
 /* Rust's: the method's locals, the keywords no raw identifier can spell, 2024's `gen`, and raw ones */
 const RUST_LOCALS =
 	"client form spec self Self crate super gen async await dyn fn impl match mod move ref use where try unsafe"
-const LOCALS = `${GO_LOCALS} ${RUST_LOCALS}`
+const LOCALS = `${GO_LOCALS} ${RUST_LOCALS} ${PY_LOCALS}`
 
 /* Rust's prelude and std names, the runtime's and the emitter's own (`ErrorKey`, an `<Op>Body`, an `<Op>Opts`) */
 const RUST_NAMES =
@@ -53,6 +56,7 @@ const STATUS = [
 	"del\u007Fx",
 	"{x}",
 	"\\u{41}",
+	...PY_STATUS,
 ]
 
 /** The hostile-keyed user: digit, symbol, quote, prototype, header-like, colliding and keyword keys. */
@@ -81,6 +85,7 @@ function user() {
 			user_id: S,
 			userId: S,
 			weird: { description: NASTY, enum: ["x", "y"], type: "string" },
+			...Object.fromEntries(PY_KEYS.map((key) => [key, S])),
 		},
 		required: ["user_id"],
 		type: "object",
@@ -127,6 +132,7 @@ function schemas() {
 		RequestOption: { properties: { o: S }, type: "object" },
 		SDKResult: { properties: { ok: { type: "boolean" } }, type: "object" },
 		...Object.fromEntries(words(RUST_NAMES).map((name) => [name, { properties: { v: S }, type: "object" }])),
+		...pythonSchemas(),
 	}
 }
 
@@ -266,6 +272,6 @@ export function adversarialCorpus(): Readonly<Record<string, unknown>> {
 		components: { schemas: schemas() },
 		info: { description: NASTY, title: 'Adversarial "API" */', version: "1.0.0" },
 		openapi: "3.1.0",
-		paths: { ...bodyPaths(), ...readPaths() },
+		paths: { ...bodyPaths(), ...readPaths(), ...pythonPaths() },
 	}
 }

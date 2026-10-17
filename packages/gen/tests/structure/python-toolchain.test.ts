@@ -157,11 +157,13 @@ describe("the pins", () => {
 })
 
 describe("CI installs the uv uv.toml pins and the interpreters .python-version and PY_FLOOR name", () => {
+	/* the jobs that run gen's Python: the harness, the python project's shard, and the rust project's, whose
+	 * toolchain files and mutation harness run Python too (vitest.config.ts) */
 	it("in every job that runs gen's Python, from the files, the same commands a missing one names", () => {
 		const testing = Object.entries(jobs(WORKFLOW)).filter(([, job]) =>
-			/^ +- run: bun run test:harness$|--project python\b/m.test(job),
+			/^ +- run: bun run test:harness$|--project (?:python|rust)\b/m.test(job),
 		)
-		expect(testing.map(([name]) => name).sort()).toEqual(["gen-python", "harness"])
+		expect(testing.map(([name]) => name).sort()).toEqual(["gen-python", "gen-rust", "harness"])
 		const missing = testing.filter(
 			([, job]) =>
 				!steps(job).some(setsUpUv) ||

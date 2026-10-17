@@ -16,6 +16,7 @@ import ws from "../../../ir/__fixtures__/specs/python/ws.json" with { type: "jso
 import realtimeLongpoll from "../../../ir/__fixtures__/specs/rust/realtime-longpoll.json" with { type: "json" }
 import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" with { type: "json" }
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
+import { adversarialCorpus } from "../../shared/__fixtures__/adversarial-corpus.ts"
 import { errors } from "../../shared/__fixtures__/documents-http.ts"
 import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
@@ -81,6 +82,9 @@ function fixtures(): Readonly<Record<string, unknown>> {
 
 /** Every package a default run gates: at most 16 (G17; tests/structure/python-toolchain.test.ts). */
 export const FIXTURES = {
+	/** e8f9ebeb5f's (and Go's 4eba1d1639's, Rust's 60586125be's) adversarial corpus, both modes (phase f) */
+	adversarial: { document: adversarialCorpus },
+	"adversarial-safe": { document: adversarialCorpus, options: { throwOnError: false } },
 	/** the gate cache's self-test (Fb8): a dependency-free package */
 	cache: {
 		files: {

@@ -1,25 +1,56 @@
 import { spawnSync } from "node:child_process"
-import { join } from "node:path"
+import { readdirSync, readFileSync } from "node:fs"
+import { dirname, join, relative, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { goCacheDir, withGo } from "../../src/emit/go/__fixtures__/go-env.ts"
+import { pythonCacheDir, withPython } from "../../src/emit/python/__fixtures__/python-env.ts"
+import { runtimeFiles as pythonRuntimeFiles } from "../../src/emit/python/transport.ts"
 import { rustCacheDir, withRust } from "../../src/emit/rust/__fixtures__/rust-env.ts"
-import { runtimeFiles } from "../../src/emit/rust/http.ts"
+import { runtimeFiles as rustRuntimeFiles } from "../../src/emit/rust/http.ts"
 import { runSuite } from "./mutation-harness.ts"
-import { GUARDS, guardNamed, skippedFor, verdicts } from "./mutation-harness.guards.ts"
+import { GUARDS, guardNamed, SUITES, skippedFor, type Toolchain, verdicts } from "./mutation-harness.guards.ts"
 
-/* the suite reruns whole, its fuzz included, once per guard; a cold Rust cache pays the dependency build (Ff10) */
+/* a guard's suite reruns, its fuzz included, once per guard; a cold Rust cache pays the dependency build (Ff10) */
 const RUN = 600_000
 
 const GO_GUARDS = ["go-cross-origin-auth", "go-auth-redaction", "go-path-param-escape"]
 const RUST_GUARDS = ["rust-cross-origin-auth", "rust-auth-redaction", "rust-path-param-escape"]
+const PYTHON_GUARDS = ["python-cross-origin-auth", "python-auth-redaction", "python-path-param-escape"]
 
-/* the plain HTTP runtime, which every Rust SDK ships and the guards patch */
+const GEN = resolve(import.meta.dirname, "../..")
+
+/* the plain HTTP runtime, which every Rust and Python SDK ships and the guards patch */
 const PLAIN = { realtime: false, ws: false }
 
-/** The runtime files `id`'s disabled reader writes, by name, for a plain HTTP SDK. */
-function disabledRuntime(id: string): Record<string, string> {
+/** A language's runtime reader, as its guarded module exports it. */
+type Reader = (features: typeof PLAIN) => Record<string, string>
+
+/** The runtime files `id`'s disabled `reader` writes, by name, for a plain HTTP SDK. */
+function disabledRuntime(id: string, reader: Reader): Record<string, string> {
 	const disable = guardNamed(id)?.disable ?? ((): Record<string, unknown> => ({}))
-	return (disable({ runtimeFiles }).runtimeFiles as typeof runtimeFiles)(PLAIN)
+	return (disable({ runtimeFiles: reader }).runtimeFiles as Reader)(PLAIN)
+}
+
+/** For each of `ids`, the names of the plain runtime files its disabled `reader` changes. */
+function changedFiles(ids: readonly string[], reader: Reader): string[][] {
+	const plain = reader(PLAIN)
+	return ids.map((id) => {
+		const files = disabledRuntime(id, reader)
+		return Object.keys(plain).filter((name) => files[name] !== plain[name])
+	})
+}
+
+/** The `.ts` files under gen's `dir`, repo-relative to gen, `.test.ts` ones only or none of them. */
+function sources(dir: string, tests: boolean): string[] {
+	return readdirSync(join(GEN, dir), { recursive: true, encoding: "utf8" })
+		.filter((name) => name.endsWith(".ts") && name.endsWith(".test.ts") === tests)
+		.map((name) => join(dir, name))
+}
+
+/** The gen-relative paths `file` imports, statically or dynamically. */
+function imports(file: string): string[] {
+	const specifiers = readFileSync(join(GEN, file), "utf8").matchAll(/(?:from|import\()\s*"(\.{1,2}\/[^"]+)"/g)
+	return [...specifiers].map(([, specifier]) => relative(GEN, resolve(GEN, dirname(file), specifier ?? "")))
 }
 
 describe("the gen guard registry", () => {
@@ -51,30 +82,42 @@ describe("each guard's toolchain", () => {
 				expect.objectContaining({ id, module: "packages/gen/src/emit/rust/http.ts", toolchain: "rust" }),
 			),
 		)
-		const plain = runtimeFiles(PLAIN)
-		const changed = RUST_GUARDS.map((id) => {
-			const files = disabledRuntime(id)
-			return Object.keys(plain).filter((name) => files[name] !== plain[name])
-		})
-		expect(changed).toEqual([["redirect.rs"], ["exchange.rs"], ["path.rs"]])
+		expect(changedFiles(RUST_GUARDS, rustRuntimeFiles)).toEqual([["redirect.rs"], ["exchange.rs"], ["path.rs"]])
+	})
+
+	it("holds the three Python runtime guards, each needing Python and patching the Python runtime reader", () => {
+		expect(PYTHON_GUARDS.map((id) => guardNamed(id))).toEqual(
+			PYTHON_GUARDS.map((id) =>
+				expect.objectContaining({ id, module: "packages/gen/src/emit/python/transport.ts", toolchain: "python" }),
+			),
+		)
+		expect(changedFiles(PYTHON_GUARDS, pythonRuntimeFiles)).toEqual([["redirect.py"], ["exchange.py"], ["path.py"]])
 	})
 
 	it("skips each toolchain's guards only where that toolchain is absent", () => {
 		expect([
-			skippedFor(GUARDS, { go: false, rust: false }),
-			skippedFor(GUARDS, { go: true, rust: false }),
-			skippedFor(GUARDS, { go: true, rust: true }),
-		]).toEqual([[...GO_GUARDS, ...RUST_GUARDS], RUST_GUARDS, []])
+			skippedFor(GUARDS, { go: false, python: false, rust: false }),
+			skippedFor(GUARDS, { go: true, python: false, rust: false }),
+			skippedFor(GUARDS, { go: true, python: false, rust: true }),
+			skippedFor(GUARDS, { go: true, python: true, rust: true }),
+		]).toEqual([
+			[...GO_GUARDS, ...RUST_GUARDS, ...PYTHON_GUARDS],
+			[...RUST_GUARDS, ...PYTHON_GUARDS],
+			PYTHON_GUARDS,
+			[],
+		])
 	})
+})
 
-	it("runs every guard, all 13, where Go and Rust are both present", () => {
+describe("each guard's verdict", () => {
+	it("runs every guard, all 16, where Go, Rust and Python are present", () => {
 		const ids = GUARDS.map((g) => g.id)
-		expect(verdicts(GUARDS, skippedFor(GUARDS, { go: true, rust: true }), () => 1)).toEqual({
+		expect(verdicts(GUARDS, skippedFor(GUARDS, { go: true, python: true, rust: true }), () => 1)).toEqual({
 			killed: ids,
 			skipped: [],
 			survived: [],
 		})
-		expect(ids).toHaveLength(13)
+		expect(ids).toHaveLength(16)
 	})
 
 	it("counts a skipped guard as neither killed nor survived, and never runs it", () => {
@@ -84,12 +127,28 @@ describe("each guard's toolchain", () => {
 			return id === "escape-bypass" ? 0 : 1
 		}
 		const tsIds = GUARDS.filter((g) => g.toolchain === undefined).map((g) => g.id)
-		expect(verdicts(GUARDS, skippedFor(GUARDS, { go: false, rust: false }), run)).toEqual({
+		expect(verdicts(GUARDS, skippedFor(GUARDS, { go: false, python: false, rust: false }), run)).toEqual({
 			killed: tsIds.filter((id) => id !== "escape-bypass"),
-			skipped: [...GO_GUARDS, ...RUST_GUARDS],
+			skipped: [...GO_GUARDS, ...RUST_GUARDS, ...PYTHON_GUARDS],
 			survived: ["escape-bypass"],
 		})
 		expect(ran).toEqual(tsIds)
+	})
+})
+
+describe("each toolchain guard's suite", () => {
+	it("reruns a toolchain guard's own security file alone, the one that imports its language's emitter", () => {
+		/* sound only while no shared module imports a language emitter: a guard's mock reaches only the files that
+		 * import its module, so no other security file can see it (Ff12) */
+		const security = sources("tests/security", true)
+		const toolchains = Object.keys(SUITES) as Toolchain[]
+		const naming = toolchains.map((toolchain) =>
+			security.filter((file) => readFileSync(join(GEN, file), "utf8").includes(`src/emit/${toolchain}/`)),
+		)
+		expect(naming).toEqual(toolchains.map((toolchain) => [SUITES[toolchain]]))
+		const language = /^src\/emit\/(?!shared\/)[^/]+\//
+		const crossing = sources("src/emit/shared", false).filter((file) => imports(file).some((to) => language.test(to)))
+		expect(crossing).toEqual([])
 	})
 })
 
@@ -116,6 +175,22 @@ describe("the harness where a toolchain is required", () => {
 		const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
 		expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
 		expect(run.stderr).toMatch(/Rust .* is required here/)
+	})
+
+	it("fails before any suite run instead of skipping when Python is required and absent", () => {
+		/* Python is found through the pinned uv under HOME, never on PATH, so an empty HOME hides it (python-env) */
+		const harness = join(import.meta.dirname, "mutation-harness.ts")
+		const env = {
+			...process.env,
+			HOME: pythonCacheDir("tmp", "no-uv"),
+			HONEY_REQUIRE_GO: "",
+			HONEY_REQUIRE_PYTHON: "1",
+			HONEY_REQUIRE_RUST: "",
+			HONEY_REQUIRE_TOOLCHAINS: "",
+		}
+		const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
+		expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
+		expect(run.stderr).toMatch(/Python .* is required here/)
 	})
 })
 
@@ -148,6 +223,16 @@ describe("the emit adversarial suite against each guard", () => {
 
 	describe.skipIf(!withRust())("the Rust runtime guards", () => {
 		it.each(GUARDS.filter((g) => g.toolchain === "rust").map((g) => g.id))(
+			"goes red with the %s guard disabled",
+			(id) => {
+				expect(runSuite(id)).not.toBe(0)
+			},
+			RUN,
+		)
+	})
+
+	describe.skipIf(!withPython())("the Python runtime guards", () => {
+		it.each(GUARDS.filter((g) => g.toolchain === "python").map((g) => g.id))(
 			"goes red with the %s guard disabled",
 			(id) => {
 				expect(runSuite(id)).not.toBe(0)

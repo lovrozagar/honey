@@ -5,6 +5,7 @@
  * runs the suites.
  */
 import type { GoRuntimeFeatures } from "../../src/emit/go/http.ts"
+import type { PythonRuntimeFeatures } from "../../src/emit/python/transport.ts"
 import type { RustRuntimeFeatures } from "../../src/emit/rust/http.ts"
 import {
 	bypassedEscapes,
@@ -16,6 +17,9 @@ import {
 	localeOrder,
 	patchedRuntime,
 	patchedRuntimeFiles,
+	PYTHON_KEEP_CROSS_ORIGIN_HEADERS,
+	PYTHON_LEAKY_LOG,
+	PYTHON_RAW_PATH_PARAMS,
 	RAW_PATH_PARAMS,
 	rawKey,
 	RUST_KEEP_CROSS_ORIGIN_HEADERS,
@@ -25,10 +29,20 @@ import {
 } from "../security/mutants.ts"
 
 /** A language toolchain a guard's cases compile with. */
-export type Toolchain = "go" | "rust"
+export type Toolchain = "go" | "rust" | "python"
 
 /** Which toolchains this machine runs. */
 export type Present = { readonly [T in Toolchain]: boolean }
+
+/**
+ * The security file a toolchain guard's mutant reruns alone (Ff12): the one that imports that language's emitter,
+ * so the only file the mock reaches. A guard without a toolchain reruns the whole directory.
+ */
+export const SUITES: Readonly<Record<Toolchain, string>> = {
+	go: "tests/security/emit-adversarial.test.ts",
+	python: "tests/security/emit-adversarial.python.test.ts",
+	rust: "tests/security/emit-adversarial.rust.test.ts",
+}
 
 export type Guard = {
 	/** what the suite must catch once this guard is gone */
@@ -133,6 +147,30 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/gen/src/emit/rust/http.ts",
 		toolchain: "rust",
 	},
+	{
+		catches:
+			"a cross-origin redirect hop, through the SDK's client or a caller's httpx2 client, on a call or a realtime event-stream dial, that keeps the auth header, cookies and configured headers (H18.10, R2)",
+		disable: (original) => ({
+			runtimeFiles: patchedRuntimeFiles(pythonRuntime(original), PYTHON_KEEP_CROSS_ORIGIN_HEADERS),
+		}),
+		id: "python-cross-origin-auth",
+		module: "packages/gen/src/emit/python/transport.ts",
+		toolchain: "python",
+	},
+	{
+		catches: "an on_log entry or error text carrying a path value, the query or the token",
+		disable: (original) => ({ runtimeFiles: patchedRuntimeFiles(pythonRuntime(original), PYTHON_LEAKY_LOG) }),
+		id: "python-auth-redaction",
+		module: "packages/gen/src/emit/python/transport.ts",
+		toolchain: "python",
+	},
+	{
+		catches: "a path param written raw: `..` or `/` in a value changing which resource the request addresses",
+		disable: (original) => ({ runtimeFiles: patchedRuntimeFiles(pythonRuntime(original), PYTHON_RAW_PATH_PARAMS) }),
+		id: "python-path-param-escape",
+		module: "packages/gen/src/emit/python/transport.ts",
+		toolchain: "python",
+	},
 ]
 
 /** The emitted runtime's reader, as the guarded module exports it. */
@@ -141,6 +179,10 @@ const runtime = (original: Record<string, unknown>) => original.runtimeSource as
 /** The emitted Go runtime's reader, as the guarded module exports it. */
 const goRuntime = (original: Record<string, unknown>) =>
 	original.runtimeFiles as (features: GoRuntimeFeatures) => Record<string, string>
+
+/** The emitted Python runtime's reader, as the guarded module exports it. */
+const pythonRuntime = (original: Record<string, unknown>) =>
+	original.runtimeFiles as (features: PythonRuntimeFeatures) => Record<string, string>
 
 /** The emitted Rust runtime's reader, as the guarded module exports it. */
 const rustRuntime = (original: Record<string, unknown>) =>

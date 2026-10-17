@@ -125,3 +125,28 @@ export const RUST_LEAKY_LOG = [
 		'CallLog::new(inner.on_log.as_ref(), format!("{} {}?{:?} {:?}", spec.method, spec.path, spec.query, inner.auth.current().await))',
 	],
 ] as const
+
+/* a Python cross-origin hop that keeps every header: the follow keeps them, and the send strips nothing (the same-origin refusal and the auth reset stay) */
+export const PYTHON_KEEP_CROSS_ORIGIN_HEADERS = [
+	[
+		"redirect.py",
+		"        headers = {k: v for k, v in headers.items() if k.lower() in SAFE}\n",
+		"        headers = dict(headers)\n",
+	],
+	["redirect.py", "    for name in foreign(request.headers):\n", "    for name in foreign([]):\n"],
+] as const
+
+/* a Python path param written with `/` and dot segments as they came: no refusal, no encoded slash */
+export const PYTHON_RAW_PATH_PARAMS = [
+	["path.py", 'if found is None or found in ("", ".", ".."):', "if found is None:"],
+	["path.py", 'return quote(found, safe="!~*\'()")', 'return quote(found, safe="/!~*\'()")'],
+] as const
+
+/* a Python log entry naming the filled URL with its query and the token instead of METHOD /template */
+export const PYTHON_LEAKY_LOG = [
+	[
+		"exchange.py",
+		'self.log = CallLog(core.config.on_log, f"{op.method} {op.path}")',
+		'self.log = CallLog(core.config.on_log, f"{op.method} {self.url()} {core.auth.token}")',
+	],
+] as const

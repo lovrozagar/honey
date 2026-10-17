@@ -5,19 +5,18 @@
  * and the realtime ones merged into one document, `fixtures-safe` the same in safe mode. That the floor and mypy
  * legs can fail at all is the canary's to prove: 3.11 has no `itertools.batched`.
  */
-import { createHash } from "node:crypto"
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
 import { served } from "../shared/__fixtures__/recording-server.ts"
-import { type Formatter, formatFiles } from "../shared/format.ts"
-import { ruffFormatter } from "../shared/ruff.ts"
-import { compiledPython, RUFF_IGNORE, RUFF_SELECT } from "./__fixtures__/compiled.ts"
+import { formatFiles } from "../shared/format.ts"
+import { compiledPython } from "./__fixtures__/compiled.ts"
 import { checked } from "./__fixtures__/consumer.ts"
 import { FIXTURES, type PythonFixture } from "./__fixtures__/documents.ts"
 import { drivenPythonSdk } from "./__fixtures__/driven.ts"
-import { PY_FLOOR, pythonCacheDir, ruffPath, runRuff, withPython } from "./__fixtures__/python-env.ts"
+import { PY_FLOOR, runRuff, withPython } from "./__fixtures__/python-env.ts"
+import { CLEAN, formatted, pythonNames, ruffGate, ruffGates, written } from "./__fixtures__/ruff-gate.ts"
 import { allOrder, isortMembers } from "./sdk-imports.ts"
 import { generatePythonSdk } from "./sdk.ts"
 import { runtimeFiles } from "./transport.ts"
@@ -37,53 +36,6 @@ function emitted(key: Mode): Readonly<Record<string, string>> {
 	return generatePythonSdk(fixture.document(), fixture.options).files
 }
 
-/** `files`' `.py` names, sorted. */
-const pythonNames = (files: Readonly<Record<string, string>>) =>
-	Object.keys(files)
-		.filter((name) => name.endsWith(".py"))
-		.sort()
-
-/** `files` through the ruff pass, and every name the pass handed ruff, sorted. */
-async function formatted(files: Readonly<Record<string, string>>) {
-	const ruff = ruffFormatter(ruffPath())
-	const seen: string[] = []
-	const counting: Formatter = (name, source, options) => {
-		seen.push(name)
-		return ruff(name, source, options)
-	}
-	return { files: await formatFiles(files, { py: counting }), seen: seen.sort() }
-}
-
-/** `files` written into a dir of their own under the Python cache, named by their content. */
-function written(prefix: string, files: Readonly<Record<string, string>>): string {
-	const entries = Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-	const hash = createHash("sha256").update(JSON.stringify(entries)).digest("hex").slice(0, 20)
-	const dir = pythonCacheDir("tmp", `${prefix}-${hash}`)
-	for (const [name, text] of entries) {
-		mkdirSync(dirname(join(dir, name)), { recursive: true })
-		writeFileSync(join(dir, name), text)
-	}
-	return dir
-}
-
-/** `ruff format --check` and `ruff check` under Fb9's list over `dir`, run there as its project root. */
-function ruffGates(dir: string) {
-	const format = runRuff(["format", "--isolated", "--target-version", "py311", "--check", "."], { cwd: dir })
-	const check = runRuff(
-		["check", "--isolated", "--target-version", "py311", "--select", RUFF_SELECT, "--ignore", RUFF_IGNORE, "."],
-		{ cwd: dir },
-	)
-	return {
-		check: { status: check.status, out: check.status === 0 ? "" : check.stdout + check.stderr },
-		format: { status: format.status, out: format.status === 0 ? "" : format.stdout + format.stderr },
-	}
-}
-
-const CLEAN = { check: { out: "", status: 0 }, format: { out: "", status: 0 } }
-
-/* a suppression in emitted text: ruff's (`noqa`, file-level too), mypy's and pyright's */
-const SUPPRESSION = /noqa|type:\s*ignore|pyright:\s*ignore/i
-
 describe("the emitted Python package through the ruff pass", () => {
 	it("goes out as emitted without a ruff", async () => {
 		const files = emitted("fixtures")
@@ -98,14 +50,8 @@ describe("the emitted Python package through the ruff pass", () => {
 			const results = await Promise.all(
 				MODES.map(async (key) => {
 					const files = emitted(key)
-					const pass = await formatted(files)
-					const actual = {
-						gates: ruffGates(written("fmt", pass.files)),
-						/* the key `py` reaches every Python file: a mismatched key would skip them all silently */
-						reached: pass.seen,
-						suppressed: Object.keys(files).filter((name) => SUPPRESSION.test(files[name] ?? "")),
-					}
-					return { actual, expected: { gates: CLEAN, reached: pythonNames(files), suppressed: [] }, key }
+					const expected = { ...CLEAN, reached: pythonNames(files), suppressed: [] }
+					return { actual: await ruffGate(files), expected, key }
 				}),
 			)
 			expect(results.every(({ expected }) => expected.reached.length > 0)).toBe(true)
@@ -140,7 +86,8 @@ describe("the emitted Python package through the ruff pass", () => {
 	})
 })
 
-/* every member name class ruff orders differently: constants, classes, the rest; `_` against a letter; digits */
+/* every member name class ruff orders differently: constants, classes, the rest; `_` against a letter; digits;
+ * a one-letter capital, which ruff counts a class (a constant has two or more characters) */
 const NAMES = [
 	"Zebra",
 	"SDK",
@@ -160,6 +107,8 @@ const NAMES = [
 	"A_B",
 	"ZZ",
 	"Z9",
+	"A",
+	"I",
 ]
 
 describe("the import and __all__ orders, against the pinned ruff", () => {
@@ -193,6 +142,8 @@ describe("the import and __all__ orders, against the pinned ruff", () => {
 		/* the fixture bites: the two orders differ, and only on `_` against a letter */
 		expect(ruff.imports.slice(0, 2)).toEqual(["A_B", "AB"])
 		expect(ruff.all.slice(0, 2)).toEqual(["AB", "A_B"])
+		/* and a one-letter capital opens the classes, right after the last constant */
+		for (const order of [ruff.imports, ruff.all]) expect(order.indexOf("A")).toBe(order.indexOf("ZZ") + 1)
 		expect({ all: allOrder(NAMES), imports: isortMembers(NAMES) }).toEqual(ruff)
 	})
 })

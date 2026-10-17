@@ -38,10 +38,6 @@ export type { Ran } from "./python-env.ts"
  */
 export type GateOptions = { readonly python?: "pin" | "floor" | "newest" }
 
-/** The ruff rules every emitted file and the committed runtime pass (Fb9), with E501 off: the formatter cannot wrap spec text. */
-export const RUFF_SELECT = "E,F,W,I,UP,B,SIM,RUF,FA,PYI,BLE,S"
-export const RUFF_IGNORE = "E501"
-
 /** mypy's flags (Fb10): each extra error code its own `--enable-error-code` pair, since the comma form is rejected. */
 export const MYPY_FLAGS: readonly string[] = [
 	"--strict",

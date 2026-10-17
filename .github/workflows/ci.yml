@@ -89,7 +89,7 @@ jobs:
       # it to that), so a commit that changes none restores every SDK and compiles nothing; a changed input
       # restores the last set and rebuilds only the SDKs whose content changed. It is apart from the module
       # cache above (no shared path), which changes only with the toolchains and the dependency set. This job
-      # saves both; gen-rust and gen-python only restore them.
+      # saves both; gen-rust only restores them.
       - uses: actions/cache@v4
         with:
           path: |
@@ -162,8 +162,10 @@ jobs:
       - run: bun run test:consumers
       - run: bun run test:e2e
 
-  # gen's rust project. mutation-harness.test.ts runs Go guards too, so Go is installed and the test job's Go
-  # caches restored, never saved: that job owns them. This job owns the Rust cache.
+  # gen's rust project, the last group (Ff11): its toolchain files (shared/*.toolchains.test.ts) and
+  # mutation-harness.test.ts run Go and Python too, so both are installed and their caches restored, never saved:
+  # the test job and gen-python own them. This job owns the Rust cache, the heaviest, so the Rust mutants the
+  # harness builds stay in it.
   gen-rust:
     name: gen (rust)
     runs-on: ubuntu-latest
@@ -226,6 +228,28 @@ jobs:
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-rust-
+      # gen runs every Python command through its python-env fixture, installed as in gen-python (which says why)
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version-file: uv.toml
+          enable-cache: false
+      - name: Python (uv.toml's uv, .python-version, and the PY_FLOOR interpreter)
+        run: |
+          UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_TOOL_DIR="$HOME/.cache/honey-tmp/python/uv/tools" UV_TOOL_BIN_DIR="$HOME/.cache/honey-tmp/python/uv/bin" uv tool install --no-config --no-python-downloads uv=="$(sed -n 's/^required-version = "==\(.*\)"$/\1/p' uv.toml)"
+          UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_PYTHON_INSTALL_DIR="$HOME/.cache/honey-tmp/python/pythons" UV_PYTHON_BIN_DIR="$HOME/.cache/honey-tmp/python/pybin" "$HOME/.cache/honey-tmp/python/uv/bin/uv" python install --no-bin "$(cat .python-version)" 3.11.4
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/python/mypy
+            ~/.cache/honey-tmp/python/sdk
+          key: >-
+            ${{ runner.os }}-python-${{ hashFiles('.python-version', 'uv.toml', 'packages/gen/src/emit/python/**',
+            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-python-
       - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
       - run: bun install --frozen-lockfile
       - name: gen (rust)
@@ -237,7 +261,7 @@ jobs:
         env:
           HONEY_REQUIRE_TOOLCHAINS: "1"
       # as in the test job: the saved cache keeps only the Rust SDKs this run built or reused. Only the rust
-      # project compiles SDKs; gen-python's Rust is plain rustc and cargo, outside the SDK dirs
+      # project compiles Rust SDKs
       - name: Prune the Rust SDKs this run did not use
         run: >-
           find ~/.cache/honey-tmp/rust/sdk -mindepth 2 -maxdepth 2 -name .complete
@@ -249,16 +273,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # gen's python project. Its toolchain files (shared/*.toolchains.test.ts) run Go and Rust too, so both are
-  # installed and their caches restored, never saved: the test job and gen-rust own them. This job owns the
-  # Python cache.
+  # gen's python project: its files reach Python alone (vitest.config.ts). This job owns the Python cache.
   gen-python:
     name: gen (python)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      # vitest runs on node, and the toolchain files run the TypeScript webhook verifier as `node x.ts`
+      # vitest runs on node
       - uses: actions/setup-node@v4
         with:
           node-version: current
@@ -266,47 +288,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: .go-version
-          cache: false
-      - uses: actions/cache/restore@v4
-        with:
-          path: ~/.cache/honey-tmp/go/mod
-          key: ${{ runner.os }}-gomod-test-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
-          restore-keys: ${{ runner.os }}-gomod-test-
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cache/honey-tmp/go/cache
-            ~/.cache/honey-tmp/go/sdk
-          key: >-
-            ${{ runner.os }}-gobuild-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/**',
-            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/go/**',
-            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
-            'packages/gen/tests/integration/conformance/features.ts',
-            'packages/gen/tests/integration/conformance/matrix.ts') }}
-          restore-keys: ${{ runner.os }}-gobuild-
-      - name: Rust (rust-toolchain.toml, and the RUST_FLOOR toolchain)
-        run: |
-          rustup toolchain install
-          rustup default "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
-          rustup toolchain install 1.85.0 --profile minimal --component clippy
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cache/honey-tmp/rust/cargo
-            ~/.cache/honey-tmp/rust/target
-            ~/.cache/honey-tmp/rust/target-1.85.0
-            ~/.cache/honey-tmp/rust/sdk
-          key: >-
-            ${{ runner.os }}-rust-${{ hashFiles('rust-toolchain.toml', 'packages/gen/src/emit/rust/**',
-            'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/rust/**',
-            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
-            'packages/gen/tests/structure/rust-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
-            'packages/gen/tests/integration/conformance/features.ts',
-            'packages/gen/tests/integration/conformance/matrix.ts') }}
-          restore-keys: ${{ runner.os }}-rust-
       # gen runs every Python command through its python-env fixture, with the uv uv.toml pins and the interpreters
       # .python-version and PY_FLOOR name, all under ~/.cache/honey-tmp/python and linked nowhere (--no-bin).
       # setup-uv provides a uv at that pin (required-version fails any other), which installs the pinned uv into the
@@ -323,6 +304,7 @@ jobs:
       # the gated SDKs and their mypy caches (python/__fixtures__/compiled.ts), keyed like gobuild and rust on every
       # input of a Python gate (toolchain-projects.test.ts holds it to that). uv's wheel cache is not saved: a venv
       # fetches its wheels once per run, then installs offline, and the markers that vouch for them go with it.
+      # This job saves it; gen-rust only restores it.
       - uses: actions/cache@v4
         with:
           path: |

@@ -1,0 +1,377 @@
+import { readFileSync } from "node:fs"
+import { join, resolve } from "node:path"
+import { describe, expect, it } from "vitest"
+import { runtimeFileNames } from "../src/emit/go/http.ts"
+import { generateGoSdk, goCallPlans } from "../src/emit/go/sdk.ts"
+import { generatePythonSdk, pythonCallPlans } from "../src/emit/python/sdk.ts"
+import { runtimeFileNames as pythonRuntimeFileNames } from "../src/emit/python/transport.ts"
+import { runtimeFileNames as rustRuntimeFileNames } from "../src/emit/rust/http.ts"
+import { generateRustSdk, rustCallPlans } from "../src/emit/rust/sdk.ts"
+import { generateSdk } from "../src/emit/ts/sdk.ts"
+import { ceilingOf, countTokens, oversizedOperations } from "./capture-token-budget.ts"
+import { runtimeBytes, v1GoSdkSurfaces, v1PythonSdkSurfaces, v1RustSdkSurfaces, v1SdkSurfaces } from "./sdk-budget.ts"
+
+const REPO = resolve(import.meta.dirname, "../../..")
+const APPS = ["compose", "defaults", "gateway", "kitchen", "surface"]
+/** An e2e app's emitted OpenAPI document. */
+const appSpec = (app: string) =>
+	JSON.parse(
+		readFileSync(join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`), "utf8"),
+	) as Record<string, unknown>
+/** A vendored runtime's directory. */
+const runtimeDir = (language: string) => join(REPO, `packages/gen/src/runtime/${language}`)
+
+describe("the v1 SDK within the budget (bit 11)", () => {
+	it("reads each operation's signature lines, its raw overload with its call, a repeated name numbered", () => {
+		const raw = "get(input: A & { raw: true }): Promise<Response>"
+		const types = `interface Ops {\n\titems: {\n\t\t${raw}\n\t\tget(input?: A): R\n\t}\n\tusers: {\n\t\tget(input?: B): S\n\t}\n\t"x-y"(input?: C): T\n}`
+		expect(Object.fromEntries(v1SdkSurfaces(types))).toEqual({
+			'"x-y"': '"x-y"(input?: C): T',
+			get: `${raw}\nget(input?: A): R`,
+			"get#2": "get(input?: B): S",
+		})
+	})
+
+	it("keeps every e2e app's operations within the sdkCli and document ceilings", () => {
+		const baseline = JSON.parse(readFileSync(join(REPO, "blueprint/baselines/tokens.json"), "utf8")) as {
+			document: { ceiling: number }
+			sdkCli: { ceiling: number }
+		}
+		const over: string[] = []
+		for (const app of APPS) {
+			const file = join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`)
+			const spec = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown> & { paths: Record<string, never> }
+			const { files, stem } = generateSdk(spec, { name: "SDK" })
+			for (const [name, text] of v1SdkSurfaces(files[`${stem}.types.gen.ts`] ?? ""))
+				if (countTokens(text) > baseline.sdkCli.ceiling) over.push(`${app}/${name}`)
+			over.push(...oversizedOperations(spec, baseline.document.ceiling).map((id) => `${app}/${id} (document)`))
+		}
+		expect(over).toEqual([])
+	})
+})
+
+/*
+ * G13 (bit 12): Go's own per-operation ceiling, not sdkCli's 234. Measured over the five e2e apps'
+ * 72 operations in both throwOnError modes (144 surfaces, `v1GoSdkSurfaces` over the pre-gofmt
+ * client.go): max 78 (surface, PutInAllByResourceId, safe mode), median 43; gofmt's field alignment
+ * moves the max to 79. 78 + 20% headroom = 94. Each language holds its own ceiling, set from its
+ * own measurement: Go's surface is a third of TS's, so the shared one would let it triple unseen.
+ * An operation over it is fixed in the schema, never by raising the ceiling; revisit only for a
+ * genuinely large, legitimate operation.
+ */
+const GO_SDK_CEILING = 94
+
+const GO_CLIENT = `package sdk
+
+// Get calls GET /a.
+func (r *Client) Get(ctx context.Context, opts *GetOpts, reqOpts ...RequestOption) (SDKResult[A], error) {
+\treturn get(ctx)
+}
+
+func (r *ItemsResource) Get(ctx context.Context, id string, reqOpts ...RequestOption) error {
+\treturn nil
+}
+
+func (r *Client) helper(x int) {
+}
+
+// GetOpts holds the optional parameters of get.
+type GetOpts struct {
+\t// Limit caps the page.
+\tLimit *int
+}
+
+type EmptyOpts struct {
+}
+`
+
+describe("the v1 Go SDK within the budget (bit 12, G13)", () => {
+	it("reads each method's signature with its Opts block, keyed receiver.method", () => {
+		expect(Object.fromEntries(v1GoSdkSurfaces(GO_CLIENT))).toEqual({
+			"Client.Get": [
+				"func (r *Client) Get(ctx context.Context, opts *GetOpts, reqOpts ...RequestOption) (SDKResult[A], error)",
+				"type GetOpts struct {",
+				"\t// Limit caps the page.",
+				"\tLimit *int",
+				"}",
+			].join("\n"),
+			"ItemsResource.Get":
+				"func (r *ItemsResource) Get(ctx context.Context, id string, reqOpts ...RequestOption) error",
+		})
+	})
+
+	it("refuses a method whose Opts struct is never declared, so a missed block never measures short", () => {
+		const text = GO_CLIENT.replace("type GetOpts struct", "type OtherOpts struct")
+		expect(() => v1GoSdkSurfaces(text)).toThrow("Client.Get takes GetOpts, which is never declared")
+	})
+
+	it(`keeps every e2e app's Go operations within ${GO_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+		const over: string[] = []
+		for (const app of APPS) {
+			const spec = appSpec(app)
+			for (const throwOnError of [true, false]) {
+				const options = { modulePath: "example.com/budget", throwOnError }
+				const surfaces = v1GoSdkSurfaces(generateGoSdk(spec, options).files["client.go"] ?? "")
+				/* completeness: a surface the regex misses can never pass by going unmeasured */
+				const plans = Object.keys(goCallPlans(spec, options)).length
+				if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
+				for (const [key, text] of surfaces) {
+					const tokens = countTokens(text)
+					if (tokens > GO_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
+				}
+			}
+		}
+		expect(over).toEqual([])
+	})
+})
+
+/*
+ * G13 (bit 13): Rust's own per-operation ceiling, not sdkCli's 234 nor Go's 94. Measured over the five e2e
+ * apps' 72 operations in both throwOnError modes (144 surfaces, `v1RustSdkSurfaces` over the pre-rustfmt
+ * src/client.rs): max 80 (surface, put_in_all_by_resource_id, safe mode), median 37, min 26; rustfmt wraps
+ * a long signature one parameter per line, which moves the max to 86 and the median to 39. 80 + 20% headroom
+ * = 96. Each language holds its own ceiling, set from its own measurement. An operation over it is fixed in
+ * the schema, never by raising the ceiling; revisit only for a genuinely large, legitimate operation.
+ */
+const RUST_SDK_CEILING = ceilingOf([80], 0.2)
+
+const RUST_CLIENT = `// @generated by honey. DO NOT EDIT.
+//! The client, its resources and their operations.
+
+use crate::*;
+
+impl Client {
+    /// The client for \`config\`.
+    pub fn new(config: ClientConfig) -> Result<Client, Error> {
+        Client::build(config, crate::config::Defaults { base_url: None })
+    }
+
+    pub fn items(&self) -> ItemsResource<'_> {
+        ItemsResource { client: self }
+    }
+
+    /// Sends \`GET /a\`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn get(&self, id: &str, opts: &GetOpts) -> Call<SdkResult<A>> {
+        Call::new(self, spec, crate::answer::safe_json::<A>)
+    }
+}
+
+impl ItemsResource<'_> {
+    pub fn get(&self, _opts: &ItemsGetOpts) -> Call<()> {
+        Call::new(self.client, spec, crate::answer::none)
+    }
+
+    pub fn r#type(&self, body: Item, _opts: &ItemsGetOpts) -> Call<Item, ItemsTypeHeaders> {
+        Call::new(self.client, spec, crate::answer::json::<Item>)
+    }
+}
+
+/// The parameters of getA beyond its path and body.
+#[derive(Debug, Clone, Default)]
+pub struct GetOpts {
+    /// Required by the API.
+    pub limit: i64,
+    pub cursor: Option<String>,
+}
+
+/// The parameters of items.get beyond its path and body.
+#[derive(Debug, Clone, Default)]
+pub struct ItemsGetOpts {}
+`
+
+describe("the v1 Rust SDK within the budget (bit 13, G13)", () => {
+	it("reads each operation's signature with its Opts block, keyed type.method, never new or an accessor", () => {
+		expect(Object.fromEntries(v1RustSdkSurfaces(RUST_CLIENT))).toEqual({
+			"Client.get": [
+				"pub fn get(&self, id: &str, opts: &GetOpts) -> Call<SdkResult<A>>",
+				"pub struct GetOpts {",
+				"    /// Required by the API.",
+				"    pub limit: i64,",
+				"    pub cursor: Option<String>,",
+				"}",
+			].join("\n"),
+			"ItemsResource.get": "pub fn get(&self, _opts: &ItemsGetOpts) -> Call<()>\npub struct ItemsGetOpts {}",
+			"ItemsResource.r#type":
+				"pub fn r#type(&self, body: Item, _opts: &ItemsGetOpts) -> Call<Item, ItemsTypeHeaders>\npub struct ItemsGetOpts {}",
+		})
+	})
+
+	it("refuses a method whose Opts is never declared, or that names none, so a missed block never measures short", () => {
+		const renamed = RUST_CLIENT.replace("pub struct GetOpts {", "pub struct OtherOpts {")
+		expect(() => v1RustSdkSurfaces(renamed)).toThrow("Client.get takes GetOpts, which is never declared")
+		const unnamed = RUST_CLIENT.replace("_opts: &ItemsGetOpts) -> Call<()>", "_opts: &()) -> Call<()>")
+		expect(() => v1RustSdkSurfaces(unnamed)).toThrow("ItemsResource.get takes no Opts")
+	})
+
+	it(`keeps every e2e app's Rust operations within ${RUST_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+		const over: string[] = []
+		for (const app of APPS) {
+			const spec = appSpec(app)
+			for (const throwOnError of [true, false]) {
+				const surfaces = v1RustSdkSurfaces(generateRustSdk(spec, { throwOnError }).files["src/client.rs"] ?? "")
+				/* completeness: a surface the regex misses can never pass by going unmeasured */
+				const plans = Object.keys(rustCallPlans(spec, { throwOnError })).length
+				if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
+				for (const [key, text] of surfaces) {
+					const tokens = countTokens(text)
+					if (tokens > RUST_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
+				}
+			}
+		}
+		expect(over).toEqual([])
+	})
+})
+
+/*
+ * G13 (bit 14): Python's own per-operation ceiling, not sdkCli's 234 nor Go's 94 or Rust's 96. Measured over the
+ * five e2e apps' 72 operations in both throwOnError modes (144 surfaces, `v1PythonSdkSurfaces` over the pre-format
+ * client.py): max 59 (surface, AsyncSDK.put_in_all_by_resource_id, safe mode), median 26, min 18
+ * (compose, AsyncSDK.get_account); ruff's format pass wraps a long signature one parameter per line, which moves
+ * the max to 70 and the median to 30. 59 + 20% headroom = 71. Each language holds its own ceiling, set from its
+ * own measurement. An operation over it is fixed in the schema, never by raising the ceiling; revisit only for a
+ * genuinely large, legitimate operation.
+ */
+const PYTHON_SDK_CEILING = ceilingOf([59], 0.2)
+
+const PY_CLIENT = `class UsersResource:
+    def get(self, id: str, *, options: RequestOptions | None = None) -> User:
+        return self._core.call(spec)
+
+
+class AsyncUsersResource:
+    def __init__(self, core: AsyncCore) -> None:
+        self._core = core
+
+    async def get(self, id: str, *, options: RequestOptions | None = None) -> User:
+        """Sends \`GET /users/{id}\`."""
+        return await self._core.call(spec)
+
+
+class AsyncSDK:
+    async def aclose(self) -> None:
+        await self._core.aclose()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def list(self, *, limit: int | None = None, options: RequestOptions | None = None) -> _builtins.list[User]:
+        return await self._core.call(spec)
+`
+
+describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
+	it("reads each async operation's signature line, keyed class.method, never the sync twin or a lifecycle method", () => {
+		expect(Object.fromEntries(v1PythonSdkSurfaces(PY_CLIENT))).toEqual({
+			"AsyncSDK.list":
+				"async def list(self, *, limit: int | None = None, options: RequestOptions | None = None) -> _builtins.list[User]",
+			"AsyncUsersResource.get": "async def get(self, id: str, *, options: RequestOptions | None = None) -> User",
+		})
+	})
+
+	it("refuses a signature that spans lines, so a formatted client never measures short", () => {
+		const wrapped = PY_CLIENT.replace(
+			"    async def get(self, id: str, *, options",
+			"    async def get(\n        self, id: str, *, options",
+		)
+		expect(() => v1PythonSdkSurfaces(wrapped)).toThrow("AsyncUsersResource.get spans lines")
+	})
+
+	it(`keeps every e2e app's Python operations within ${PYTHON_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+		const over: string[] = []
+		for (const app of APPS) {
+			const spec = appSpec(app)
+			for (const throwOnError of [true, false]) {
+				const files = generatePythonSdk(spec, { throwOnError }).files
+				const surfaces = v1PythonSdkSurfaces(files["src/honey_sdk/client.py"] ?? "")
+				/* completeness: a surface the regex misses can never pass by going unmeasured */
+				const plans = Object.keys(pythonCallPlans(spec, { throwOnError })).length
+				if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
+				for (const [key, text] of surfaces) {
+					const tokens = countTokens(text)
+					if (tokens > PYTHON_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
+				}
+			}
+		}
+		expect(over).toEqual([])
+	})
+})
+
+describe("runtimeBytes", () => {
+	it("counts bytes on disk, never string length, of the files with its extension, holding every other file apart", () => {
+		const dir = runtimeDir("rust")
+		const { bytes, names, others } = runtimeBytes(dir, ".rs")
+		const length = names.reduce((sum, name) => sum + readFileSync(join(dir, name), "utf8").length, 0)
+		const onDisk = names.reduce((sum, name) => sum + readFileSync(join(dir, name)).byteLength, 0)
+		expect({ bytes, multiByte: bytes > length, others }).toEqual({
+			bytes: onDisk,
+			multiByte: true,
+			others: ["Cargo.lock"],
+		})
+	})
+})
+
+/*
+ * G14 (bit 12): the vendored Go runtime's bloat guard, in bytes on disk as shipped (00-rules:160),
+ * never string length (errors.go and stale.go hold multi-byte characters). v0's client-go/* was
+ * 77,086 B; +15% gave the original 88,649 gate. Bit 12 phases d and e re-baselined it to 90,000 for
+ * named feature bytes: the realtime dial honoring ctx (+113), openChain's ctx check (+186), a fresh
+ * X-Request-Id per dial (+450), SSE-open OnResponse/OnLog parity (+851; net +193 after the shared
+ * exchange -658 and the shared hook loop -25), the ResumableConnection.Close race fix (+232), the
+ * close-code godoc pointer (+95), and a benign WebSocket Close after a server close (+100). No
+ * runtime file goes unshipped (dead code). A future raise names its feature bytes and cuts dead and
+ * duplicate code first; it is never silent.
+ */
+const GO_RUNTIME_BYTES = 90_000
+
+describe("the Go runtime within its byte budget (bit 12, G14)", () => {
+	it(`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`, () => {
+		const { bytes, names } = runtimeBytes(runtimeDir("go"), ".go")
+		expect({ names, over: Math.max(0, bytes - GO_RUNTIME_BYTES) }).toEqual({
+			names: runtimeFileNames({ realtime: true, ws: true }),
+			over: 0,
+		})
+	})
+})
+
+/*
+ * G14 (bit 13): the vendored Rust runtime's bloat guard, in bytes on disk as shipped (00-rules:160), never
+ * string length. v0's client-rust/* was 118,498 B (10 files, its sync pair since cut); +15% = 136,273. Counted:
+ * the 27 runtime .rs files (129,030 B at bit 13's close). Not counted: the Cargo.lock template (43,185 B),
+ * which runtimeFiles() hands sdk.ts to cut each crate's lock from: cargo's dependency manifest, not runtime
+ * code, and absent from v0's baseline (honey-a8's ruling). It is the one other file the directory holds. No
+ * runtime file goes unshipped (dead code). A raise names its feature bytes and cuts dead and duplicate code
+ * first; it is never silent.
+ */
+const RUST_RUNTIME_BYTES = 136_273
+
+describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
+	it(`ships every runtime file it holds, all of them within ${RUST_RUNTIME_BYTES} bytes, the lock template aside`, () => {
+		const { bytes, names, others } = runtimeBytes(runtimeDir("rust"), ".rs")
+		expect({ names, others, over: Math.max(0, bytes - RUST_RUNTIME_BYTES) }).toEqual({
+			names: rustRuntimeFileNames({ realtime: true, ws: true }),
+			others: ["Cargo.lock"],
+			over: 0,
+		})
+	})
+})
+
+/*
+ * G14 (bit 14): the vendored Python runtime's bloat guard, in bytes on disk as shipped (00-rules:160), never
+ * string length. v0's client-python/*.py was 74,271 B (7 files; its sync-only 8,352 B included); +15% = 85,412.
+ * Counted: the 25 runtime .py files (85,372 B at bit 14's phase e: phase d cut every private-helper docstring,
+ * 5,839 B, to fit; phase e's case-insensitive header fold added 178 B). The directory holds nothing else. No
+ * runtime file goes unshipped (dead code). A raise names its feature bytes and cuts dead and duplicate code
+ * first; it is never silent.
+ */
+const PYTHON_RUNTIME_BYTES = 85_412
+
+describe("the Python runtime within its byte budget (bit 14, G14)", () => {
+	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
+		const { bytes, names, others } = runtimeBytes(runtimeDir("python"), ".py")
+		expect({ names, others, over: Math.max(0, bytes - PYTHON_RUNTIME_BYTES) }).toEqual({
+			names: pythonRuntimeFileNames({ realtime: true, ws: true }),
+			others: [],
+			over: 0,
+		})
+	})
+})

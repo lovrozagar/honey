@@ -112,13 +112,13 @@ describe("CI installs the channel rust-toolchain.toml pins", () => {
 		)
 	})
 
-	/* the jobs that run gen's Rust: the harness, the rust project's shard, and the python project's, whose
-	 * toolchain files compile Rust too (vitest.config.ts) */
+	/* the jobs that run gen's Rust: the harness and the rust project's shard, the last group, which every file
+	 * reaching Rust belongs to (vitest.config.ts) */
 	it("installs it from the file, and the floor by name, in every job that runs gen's Rust", () => {
 		const testing = Object.entries(jobs(WORKFLOW)).filter(([, job]) =>
-			/^ +- run: bun run test:harness$|--project (?:rust|python)\b/m.test(job),
+			/^ +- run: bun run test:harness$|--project rust\b/m.test(job),
 		)
-		expect(testing.map(([name]) => name).sort()).toEqual(["gen-python", "gen-rust", "harness"])
+		expect(testing.map(([name]) => name).sort()).toEqual(["gen-rust", "harness"])
 		const missing = testing.filter(
 			([, job]) =>
 				!runs(job).some(
