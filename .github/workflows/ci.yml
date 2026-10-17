@@ -161,10 +161,31 @@ jobs:
       # frozen v0 tests listen on fixed ports inside the ephemeral range: reserve them so no automatically
       # assigned port (a client socket, a port-0 server another test left) holds one
       - run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=45910-45912,45986
+      # diagnostic, an open issue: v0's target-artifacts suite failed with EADDRINUSE on its reserved 45912 at
+      # ee8c46e and a386de5, so a process binds it explicitly; record every socket on 45910-45912 with its
+      # process until the job ends, and print them if the job fails
+      - name: Watch the v0 fixed ports
+        run: |
+          sudo nohup bash -c 'while :; do
+            ss -tanpH "( sport >= :45910 and sport <= :45912 )" | while read -r line; do
+              echo "$(date +%T.%N | cut -c1-12) $line"
+              for pid in $(grep -o "pid=[0-9]*" <<< "$line" | cut -d= -f2 | sort -u); do
+                echo "  $(ps -o pid=,ppid=,args= -p "$pid" | cut -c1-300)"
+              done
+            done
+            sleep 0.05
+          done' > "$RUNNER_TEMP/v0-ports.txt" 2>&1 &
       - run: bun run test
         env:
           # a missing toolchain (Go, Rust and its floor, Python) fails the run instead of skipping its tests
           HONEY_REQUIRE_TOOLCHAINS: "1"
+      - name: The sockets on the v0 fixed ports
+        if: failure()
+        run: |
+          grep -v -e "^  " -e TIME-WAIT "$RUNNER_TEMP/v0-ports.txt" | sort -u -k2 | head -300
+          grep "^  " "$RUNNER_TEMP/v0-ports.txt" | sort -u | head -100
+          echo "--- the timeline, TIME-WAIT left out"
+          grep -v TIME-WAIT "$RUNNER_TEMP/v0-ports.txt" | head -1500
       # every SDK dir this run built or reused has a .complete newer than the start; the rest are stale
       # (their inputs changed), so the saved cache stays one run's SDKs instead of growing with each change
       - name: Prune the Go SDKs this run did not use
