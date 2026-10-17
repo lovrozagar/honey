@@ -1,30 +1,48 @@
 # Bit 15 — C#/.NET SDK (new)
 
 Closes: H5 · H11 · C1 · C2 · A1/A2
-Oracle kept green: a new `tests/integration/csharp-harness` (compile + runtime), added to the polyglot matrix.
-Formatter post-pass: `dotnet format`. Runtime: vendored, BCL-only — `HttpClient` + source-generated `System.Text.Json`, zero external deps (H11).
+Oracle kept green: `tests/integration/conformance/csharp.test.ts` (the 28 cells on the reference app) + `tests/integration/csharp-harness.test.ts` (+`.ws`), the mutation guards, and the adversarial corpus — all run in the `gen-csharp` CI shard (`9e1f727`).
+Formatter post-pass: `dotnet format` (no csharpier). Runtime: vendored, BCL-only — `HttpClient` + source-generated `System.Text.Json`, zero external runtime deps (H11).
+
+All phase-f-lesson claims were probe-verified on the pinned SDKs (research packet `44-…`, evidence under `~/.cache/honey-tmp/b15-probe/`), both the floor and CI SDK, identical results.
+
+## Framework target (ruled, honey-a8 2026-10-17)
+**`net10.0`, a single target — not a `net8.0` floor.** .NET 8 reaches end of support on 2026-11-10 (confirmed in the probe's release metadata), before this bit ships; a floor on an unsupported runtime means no consumer security patches and a build-failing `NETSDK1138` under warnings-as-errors, which only a `<CheckEolTargetFramework>false</CheckEolTargetFramework>` suppression — shipped in generated code into every consumer build — silences, against honey's zero-suppression rule. net10.0 is the current LTS (EOL 2028-11-14) and its native `RespectNullableAnnotations` / `RespectRequiredConstructorParameters` / `JsonStringEnumMemberName` (net9+) erase the net8 JSON-strictness gaps P4 found. One SDK pin (`global.json` 10.0.402, `rollForward: disable`), one build+run leg; no dual-SDK floor leg. H11 (`01-decisions:67`) updates from "floor net8.0, CI net10.0" to this.
 
 ## Scope
-A first-class C# SDK emitter + vendored runtime in `gen/emit/csharp/`. Models as `record`; ships a NuGet package with a generated `.csproj`; target-framework floor `net8.0`, CI tests on `net10.0`. Reads only the IR. No server framework.
+A first-class C# SDK emitter + vendored runtime in `gen/emit/csharp/`. Models as `record` with properties (accessors, not fields). Ships a NuGet package with a generated `.csproj`. Reads only the IR. No server framework. BCL-only (H11): no `PackageReference` at runtime; `IsAotCompatible` pulls `Microsoft.NET.ILLink.Tasks` build-time only (one cached NuGet fetch, keyed on `global.json`).
 
-## Files (from files.tsv — `gen/emit/csharp`, new)
-- `gen/emit/csharp/{sdk,models,http,json,sse,ws,errors,csproj}.ts` (+test each) + index.
-- `gen/runtime/csharp/*` — vendored BCL runtime template + source-gen JSON contexts.
+## Ruled runtime shape
+- **HTTP client config takes `HttpMessageHandler? Handler`, never an `HttpClient`** (P10): a caller `HttpClient` leaks `X-Api-Key`/`Cookie`/custom headers cross-origin (its `DefaultRequestHeaders` re-added each send; a following caller client bypasses the SDK's redirect loop). The SDK builds its own `HttpClient(handler)` with infinite `Timeout` and no default headers, walks the `DelegatingHandler` chain, sets `AllowAutoRedirect = false` on the primary (`ConfigException` if already in use), and inserts an innermost strip handler. Enforces H18.10/Fc7 whatever the caller passes.
+- **Cross-origin strip is an allowlist, not a denylist** (Rust/Python parity): only `accept`, `accept-language`, `user-agent` (+ framing) survive a cross-origin hop; `http→https` counts as cross-origin (scheme/host/port).
+- **WebSocket dial is a self-made HTTP/1.1 upgrade** over the SDK's `HttpClient` + `WebSocket.CreateFromStream` (P11, Python Fd2 parity), never `ClientWebSocket` (which follows a cross-origin 307, hides a refused handshake's body, and aborts 1006 on a cancelled receive). Gives 101 / 403-with-body / 307-unfollowed and the Fd5 dial path through the exchange's handler/headers/request-id. Cancel closes via `CloseOutputAsync(1000)`; the token is never passed to `ReceiveAsync`. `RequestVersionExact` 1.1.
+- **Cancellation throws `OperationCanceledException`** on the caller's token (C# idiom); a per-call timeout / `ClientConfig.Timeout` is a distinct SDK timeout error (caller-token-not-cancelled), never an `ApiConnectionException`; `HttpClient.Timeout` stays infinite (the SDK owns timeouts). The conformance driver maps OCE-on-a-cancel-leg to the protocol's quiet-end so the grid stays one oracle.
+- **Multipart is hand-encoded** (P6): the BCL `MultipartFormDataContent` throws on a `"` in a part name, and cross-SDK wire parity needs the exact part headers (no `Content-Type` on text parts, `filename="…"` UTF-8). The boundary is **random per body** (`honey-<guid>`, Rust/Python collision-safety parity), not fixed.
+- **JSON (source-gen STJ, tri-state round-trips, P4):** an emitted converter per enum (exact, case-sensitive wire names, integers rejected — the stock `JsonStringEnumConverter` is lenient even on net10); no property initializers on records; and **required-non-null enforced** — a `null` into a non-nullable field is rejected (Rust/serde + Go parity), via net10's native `RespectNullableAnnotations`/`RespectRequiredConstructorParameters` where they cover it, else an emitted post-decode check.
+- **Decompression: deferred to a phase-c fork** (not an OFF default — corrected). Python/Go/TS decompress (Accept-Encoding on, caps count decoded bytes); only Rust is off. Phase c rules (a) ON for the SDK's own default handler with the cap on decoded bytes (majority parity) or (b) OFF (Rust parity); either way a caller-supplied handler governs its own `AutomaticDecompression`. Tracked as a bits/19 sweep divergence.
+- **HTTP/1.1** (`SocketsHttpHandler` default; `bits/19:29` conformance-wire parity); the own WS upgrade needs it anyway.
 
-## Tests (named, written first)
-- `gen/emit/csharp/sdk.test.ts` — operations + `record` models from IR.
-- `gen/emit/csharp/overrides.test.ts` — per-call overrides + raw response (C2).
-- `gen/emit/csharp/sse.test.ts` + `gen/emit/csharp/ws.test.ts` — typed events; `Last-Event-ID` reconnect against the reference server (H8 parity).
-- `gen/emit/csharp/binary.test.ts` — `byte[]`/`Stream`; typed headers (A1/A2).
-- `gen/emit/csharp/format.test.ts` — output is `dotnet format`-clean; compiles on net8.0 and net10.0.
-- `conformance/csharp.test.ts` — the C# client runs the shared conformance matrix against the live reference server.
+## Formatter (ruled, C#-fmt)
+`dotnet format --verify-no-changes` is the gate (byte-identical across SDKs, idempotent — P3), with three emitter rules: no `<auto-generated` marker and no `.g.cs`/`.generated.cs` names (either makes `dotnet format` silently skip the file, so the gate would be vacuous — use a safe generated-marker wording, Rust's `// @generated` style); an emitted `root = true` `.editorconfig` in the SDK (else a parent `.editorconfig` leaks); the emitter owns line layout (the formatter wraps nothing).
+
+## Files (from files.tsv — `gen/emit/csharp`, names aligned to the shipped Rust/Python pattern at phase a)
+- `gen/emit/csharp/{index,sdk,sdk-client,sdk-method,sdk-plan,sdk-doc,sdk-csproj,sdk-body,sdk-answer,types,types-record,types-enum,types-union,types-names,json,errors,transport}.ts`, plus `{sse,ws,realtime}.ts` (phase d); `runtimeFiles()` in `transport.ts`.
+- `gen/runtime/csharp/*.cs` — vendored BCL runtime template (≤300 lines/file), source-gen JSON contexts.
+- `global.json` (repo-root pin file), `gen/emit/csharp/__fixtures__/csharp-env.ts` (toolchain parity, lean build switches mandatory — defaults leave `VBCSCompiler` alive), `tests/structure/csharp-toolchain.test.ts`.
+
+## Tests (named, written first — bit-14 phase shape)
+- phase b: `types.test.ts` (+`.records`/`.compiled`/`.decls`), `sdk.test.ts`, `format.test.ts` (dotnet-format-clean, warnings-as-errors, nullable, AOT analyzers), the toolchain + driver fixtures.
+- phase c: `http.test.ts`, `http.{auth,hooks,redirect,response,stale,headers}.test.ts`, `errors.test.ts`, `errors.safe.test.ts`, `overrides.test.ts`, `binary.test.ts`, `sdk.{calls,bodies}.test.ts`, `sdk.driver{,.script}.test.ts`.
+- phase d: `sse.test.ts`, `sse.{parse,hooks}.test.ts`, `ws.test.ts`, `ws.raw.test.ts`, `realtime.test.ts`, `realtime.transports.test.ts`, `streams.close.test.ts`, `sdk.driver.stream.test.ts`.
+- phase e: `conformance/csharp.test.ts` (28 cells, one client, no `variant`/`lacks`), `csharp-harness.test.ts` (+`.ws`).
 
 ## Security corpus
-- shared string-escape (F2); System.Text.Json source-gen is AOT-safe.
-- `gen/emit/csharp/redirect.test.ts` — **`Authorization` (and configured/`onRequest` headers) are dropped on a cross-origin redirect** (H18.10): `HttpClient` resends them by default, so the emitter must set a redirect policy that strips them cross-host. Part of the cross-SDK auth-on-redirect conformance case in the harness.
+- shared string-escape (F2); the cross-origin credential-strip guard (through `ClientConfig.Handler`, both the SDK's own client and a caller handler; the WS upgrade follows no redirect; the event-stream dial is stripped; http→https in process). 3 mutation guards (`csharp-cross-origin-auth`, `csharp-path-param-escape`, `csharp-auth-redaction`; 16→19 killed).
+- phase f: `shared/__fixtures__/adversarial-csharp.ts` + `tests/security/emit-adversarial.csharp.test.ts` — C#'s hostile names (keywords needing `@`; contextual keywords incl. `field`'s net10 meaning; member-equals-type CS0542; synthesized/inherited names `Equals`/`GetHashCode`/`ToString`/record members; `System`/`Task`/`CancellationToken` shadowing → `global::`; lower-case type CS8981; `\u` escapes; U+0085/2028/2029 as C# line terminators in `///` docs; PascalCase error-key collisions). System.Text.Json source-gen is AOT-safe (0 trim/AOT warnings, probed).
 
 ## Budget
-- token: per-operation size within budget.
+- token (G13): `CSHARP_SDK_CEILING = ceilingOf([measured max], 0.2)` at phase f on the emitter's real surfaces (P8 projects max ~56 safe-mode over the e2e ops).
+- byte (G14): no v0 C# runtime exists, so a **provisional 110,000 B** binds at phase b from P8's projection (so the gate bites from the first runtime file), **replaced by the phase-d measured, named per-file breakdown** (the Fd8 pattern — never a +margin estimate), locked measured+named at phase f. Only `.cs` counts; the emitted `.csproj`/`.editorconfig`/`Directory.Build.props` templates are excluded (as Rust excludes `Cargo.lock`).
 
 ## Downstream
-- On ruling, ping the Anyrow docs (session monorepo-92, or its successor) with the final public API. They drafted against the projection `AnyrowClient` + `ClientConfig`, operationId-named accessors (`client.Row` / `RowListOptions`), the `Async` suffix + `CancellationToken`, exception-based errors, NuGet id `Anyrow`; send any delta from that so the docs can follow.
+- At phase a, ping the Anyrow docs (session monorepo-92, or its successor) with the deltas from their projection: **`ClientConfig.Handler` takes an `HttpMessageHandler`, not an `HttpClient`**; **the framework target is `net10.0`** (not net8.0); the `Async` suffix + `CancellationToken` with `OperationCanceledException` on cancel; **uniform named params** (C#4 — 449 real ops, no `<Op>Options` record, no threshold); properties as accessors; NuGet id `Anyrow`. They drafted `AnyrowClient` + `ClientConfig`, operationId-named accessors (`client.Row` / `RowListOptions`), exception-based errors — send the deltas so the docs follow.
