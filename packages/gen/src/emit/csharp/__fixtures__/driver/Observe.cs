@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -8,83 +10,139 @@ namespace Honey.Driver;
 internal sealed record Answer(Type Declared, object? Result, object Raw);
 
 /// <summary>
-/// A call's outcome as the grid observes it. A result is <c>data</c>, written back through the SDK's context, with
-/// the raw response's status, or <c>raw</c> when the call asks for it; an operation with no typed answer observes
-/// its raw body (JSON, else text, else null). A safe-mode <c>SdkResult</c> observes its data or its error. An
-/// <c>ApiStatusException</c> is <c>error</c> with its status, no key until phase c, and its body (JSON, else its
-/// text); an <c>ApiTimeoutException</c> is <c>timeout</c>. A cancel ends the run in phase b (R4: phases c and d
-/// observe it), and so does any other exception, named by its type.
+/// How one call is observed: whether it asks for the raw response, whether a script traces it, whether the trace
+/// takes an <c>ApiStatusException</c>'s envelope, and the <c>&lt;Op&gt;Headers</c> holder the call passed (null for none).
+/// </summary>
+internal sealed record Lens(bool Raw, bool Scripted, bool Envelope, object? Holder = null);
+
+/// <summary>What a call observed (null when the grid has no outcome for it), its traced error, and a safe-mode result's summary.</summary>
+internal sealed record Outcome(JsonNode? Observed, JsonObject? Error = null, JsonObject? Result = null);
+
+/// <summary>
+/// A call's outcome as the grid observes it, and as a script traces it. A result is <c>data</c>, written back
+/// through the SDK's context, with the raw response's status and the typed response headers the holder got; a
+/// binary answer is <c>bytes</c>, its size and SHA-256; <c>raw</c> when the call asks for it. An operation with no
+/// typed answer observes its raw body (JSON, else text, else null). A safe-mode <c>SdkResult</c> observes its data
+/// or its error. An <c>ApiStatusException</c> is <c>error</c> with its status, its <c>Key</c> and its body (JSON,
+/// else its text); an <c>ApiTimeoutException</c> is <c>timeout</c>. Unscripted, any other exception ends the run,
+/// named by its type. Under a script, a call's error is traced too (<c>via: "return"</c>, or <c>"result"</c> for a
+/// safe-mode <c>SdkResult.Error</c>, with the result's summary), and one the grid has no outcome for (a cancel, a
+/// hook's, a decode, a connection or a config error) observes null.
 /// </summary>
 internal static class Observe
 {
     /// <summary>A method's answer as observed: a safe-mode result by its error or data, anything else as data.</summary>
-    public static JsonNode Returned(Sdk sdk, Answer answer, Plan plan, bool raw)
+    public static Outcome Returned(Sdk sdk, Answer answer, Plan plan, Lens lens)
     {
         if (plan.Throws)
         {
             var type = answer.Declared.IsGenericType ? answer.Declared.GetGenericArguments()[0] : null;
-            return Answered(sdk, answer with { Declared = type ?? typeof(void) }, plan, raw);
+            return new Outcome(Answered(sdk, answer with { Declared = type ?? typeof(void) }, plan, lens));
         }
         var result = answer.Result ?? throw new DriverException("the safe-mode method returned no SdkResult");
+        var summary = lens.Scripted ? Traces.ResultOf(result) : null;
         if (Sdk.Get(result, "Error") is Exception error)
         {
-            return Thrown(sdk, error, raw);
+            var traced = lens.Scripted ? Traces.ErrorOf(sdk, error, "result", lens.Envelope) : null;
+            return new Outcome(StatusOf(sdk, error, lens.Raw), traced, summary);
         }
         var generic = result.GetType().IsGenericType;
         var data = generic ? Sdk.Get(result, "Data") : null;
         var declared = generic ? result.GetType().GetGenericArguments()[0] : typeof(void);
-        return Answered(sdk, answer with { Declared = declared, Result = data }, plan, raw);
+        return new Outcome(Answered(sdk, answer with { Declared = declared, Result = data }, plan, lens), null, summary);
     }
 
     /// <summary>
-    /// A call that threw <paramref name="error"/>: a status error or a timeout as the grid observes it, else a
-    /// DriverException naming what the grid has no outcome for.
+    /// A call that threw <paramref name="error"/>: traced under a script; unscripted, a status error or a timeout as
+    /// the grid observes it, else a DriverException naming what the grid has no outcome for.
     /// </summary>
-    public static JsonNode Thrown(Sdk sdk, Exception error, bool raw)
+    public static Outcome Thrown(Sdk sdk, Exception error, Lens lens)
     {
-        if (sdk.Is(error, "ApiStatusException"))
+        var seen = sdk.Is(error, "ApiStatusException") ? StatusOf(sdk, error, lens.Raw)
+            : sdk.Is(error, "ApiTimeoutException") ? new JsonObject { ["kind"] = "timeout" }
+            : null;
+        if (lens.Scripted)
         {
-            var status = Convert.ToInt32(Sdk.Get(error, "Status"));
-            var body = (byte[])Sdk.Get(error, "Body")!;
-            if (raw)
-            {
-                return RawOf(status, Sdk.Get(error, "Headers"), body);
-            }
-            var seen = new JsonObject { ["errorKey"] = null, ["kind"] = "error", ["status"] = status };
-            if (body.Length > 0)
-            {
-                seen["body"] = BodyOf(body);
-            }
-            return seen;
+            return new Outcome(seen, Traces.ErrorOf(sdk, error, "return", lens.Envelope));
         }
-        if (sdk.Is(error, "ApiTimeoutException"))
-        {
-            return new JsonObject { ["kind"] = "timeout" };
-        }
-        if (error is OperationCanceledException)
-        {
-            throw new DriverException($"the call was canceled ({error.GetType().Name}), which phase b does not observe");
-        }
-        throw new DriverException($"the call threw {error.GetType().Name}, which the grid has no outcome for: {error.Message}");
+        return seen is null
+            ? throw new DriverException($"the call threw {error.GetType().Name}, which the grid has no outcome for: {error.Message}")
+            : new Outcome(seen);
     }
 
-    /// <summary>A 2xx answer: the raw response, or the data (the raw body's when the operation has no typed answer).</summary>
-    private static JsonNode Answered(Sdk sdk, Answer answer, Plan plan, bool raw)
+    /// <summary>
+    /// An <c>ApiStatusException</c> as the grid observes it: its raw response, or its status, its <c>Key</c> and its
+    /// body.
+    /// </summary>
+    private static JsonNode StatusOf(Sdk sdk, Exception error, bool raw)
+    {
+        var status = Convert.ToInt32(Sdk.Get(error, "Status"));
+        var body = (byte[])Sdk.Get(error, "Body")!;
+        if (raw)
+        {
+            return RawOf(status, Sdk.Get(error, "Headers"), body);
+        }
+        var key = (string?)Sdk.Get(error, "Key");
+        var seen = new JsonObject { ["errorKey"] = key, ["kind"] = "error", ["status"] = status };
+        if (body.Length > 0)
+        {
+            seen["body"] = BodyOf(body);
+        }
+        return seen;
+    }
+
+    /// <summary>A 2xx answer: the raw response, a binary answer's bytes, or the data (the raw body's when the operation has no typed answer).</summary>
+    private static JsonNode Answered(Sdk sdk, Answer answer, Plan plan, Lens lens)
     {
         var status = Convert.ToInt32(Sdk.Get(answer.Raw, "Status"));
         var body = (byte[])Sdk.Get(answer.Raw, "Body")!;
-        if (raw)
+        if (lens.Raw)
         {
             return RawOf(status, Sdk.Get(answer.Raw, "Headers"), body);
+        }
+        if (plan.Response == "binary")
+        {
+            var bytes = (byte[])answer.Result!;
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            return new JsonObject { ["kind"] = "bytes", ["sha256"] = sha, ["size"] = bytes.Length, ["status"] = status };
         }
         var data = plan.Response switch
         {
             "none" => body.Length == 0 ? null : BodyOf(body),
             "text" => JsonValue.Create((string?)answer.Result),
             "json" => answer.Result is null ? null : JsonSerializer.SerializeToNode(answer.Result, sdk.Info(answer.Declared)),
-            _ => throw new DriverException($"a {plan.Response} answer is not one phase b observes"),
+            _ => throw new DriverException($"a {plan.Response} answer is not one the driver observes"),
         };
-        return new JsonObject { ["data"] = data, ["kind"] = "data", ["status"] = status };
+        var seen = new JsonObject { ["data"] = data, ["kind"] = "data", ["status"] = status };
+        if (lens.Holder is { } holder && plan.ResponseHeaders is { } declared)
+        {
+            seen["headers"] = HeadersOf(holder, declared);
+        }
+        return seen;
+    }
+
+    /// <summary>
+    /// The typed response headers the holder got, by each header's declared name, each value as its text (a number
+    /// invariant, a bool <c>true</c>/<c>false</c>); an unset one is left out.
+    /// </summary>
+    private static JsonObject HeadersOf(object holder, PlanHeaders declared)
+    {
+        var seen = new JsonObject();
+        foreach (var (name, property) in declared.Fields)
+        {
+            var text = Sdk.Get(holder, property) switch
+            {
+                null => null,
+                bool flag => flag ? "true" : "false",
+                IFormattable value => value.ToString(null, CultureInfo.InvariantCulture),
+                var value => value.ToString(),
+            };
+            if (text is not null)
+            {
+                seen[name] = text;
+            }
+        }
+        return seen;
     }
 
     /// <summary>The <c>raw</c> observed: the body as text, every header by its lower-case name.</summary>

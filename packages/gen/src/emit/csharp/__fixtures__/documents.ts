@@ -12,8 +12,10 @@ import refs from "../../../ir/__fixtures__/specs/python/refs.json" with { type: 
 import reservedWords from "../../../ir/__fixtures__/specs/python/reserved-words.json" with { type: "json" }
 import integerEnumStatus from "../../../ir/__fixtures__/specs/go/integer-enum-status.json" with { type: "json" }
 import nullablePrimitive from "../../../ir/__fixtures__/specs/go/nullable-primitive.json" with { type: "json" }
+import { errors } from "../../shared/__fixtures__/documents-http.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { CSharpSdkOptions } from "../sdk.ts"
+import { csharpHttp } from "./documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
 
 /**
@@ -87,8 +89,13 @@ export const FIXTURES = {
 				"namespace Canary.Probe;\n\npublic static class Canary\n{\n    public static int Sum()\n    {\n        int unused;\n          return 1;\n    }\n}\n",
 		},
 	},
+	/** the declared error keys (Fc3): bit 13's `errors` document, shared (contract 47 §4.1) */
+	errors: { document: errors },
 	fixtures: { document: fixtures },
 	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
+	/** the HTTP runtime's document (contract 47 §4.1): bit 13's `http`, the extra paths and `merge.patch`, both modes */
+	http: { document: csharpHttp },
+	"http-safe": { document: csharpHttp, options: { throwOnError: false } },
 	/** a relative first server: a client needs an absolute `BaseUrl` (R7) */
 	relative: { document: relative },
 	/** the call surface; every gate exercises the package and namespace rename (→ `AcmeClient`, `AcmeJsonContext`) */

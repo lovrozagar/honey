@@ -46,6 +46,14 @@ internal static class UrlPath
             : value;
     }
 
+    /// <summary><paramref name="value"/> as a path segment: encoded as <c>encodeURIComponent</c> encodes it.</summary>
+    public static string Encoded(string value)
+    {
+        var path = new StringBuilder();
+        Encode(path, value);
+        return path.ToString();
+    }
+
     /// <summary><paramref name="value"/>'s UTF-8 bytes, all but <c>A-Z a-z 0-9 - _ . ! ~ * ' ( )</c> as <c>%XX</c>.</summary>
     private static void Encode(StringBuilder path, string value)
     {

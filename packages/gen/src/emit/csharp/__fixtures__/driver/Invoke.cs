@@ -7,18 +7,21 @@ namespace Honey.Driver;
 /// <summary>
 /// The binding core (Fb10): one call sent by its plan, nothing generated. The method is found from the client
 /// through each of the plan's <c>accessors</c> by <c>GetProperty</c>, then by <c>GetMethod(plan.method)</c>. Each
-/// parameter binds by its name: a path param from the call's <c>params</c>, the body from its JSON value, a query
-/// param from <c>search</c> and a header param from the call's headers, each value deserialized through the SDK
-/// context's metadata for the parameter's declared type (a string into a string parameter as it is). A call
-/// header no param declares goes in <c>RequestOptions.Headers</c> (F6); the options also carry the call's
-/// timeout, the alt origin's base URL, and always a <c>RawResponse</c> to read. The cancellation token is
-/// <c>default</c> in phase b. The method runs with <c>DoNotWrapExceptions</c>, so the SDK's own exception
-/// arrives, and a result is read only when the declared return type is generic (P5).
+/// parameter binds by its name: a path param from the call's <c>params</c>, a JSON, form or text body from its JSON
+/// value, a query param from <c>search</c> and a header param from the call's headers, each value deserialized
+/// through the SDK context's metadata for the parameter's declared type (a string into a string parameter as it
+/// is). A binary body is <c>size</c> bytes <c>i &amp; 0xff</c> through <c>BinaryBody</c>'s implicit conversion from
+/// <c>byte[]</c>, or under <c>oneShotBody</c> from a non-seekable <c>Stream</c> (Fc6). The script's
+/// <c>idempotencyKey</c> is the plan's parameter, a plan with typed response headers gets a new holder as
+/// <c>headersInto</c> (Fc7), and <c>cancel</c> is the method's <c>CancellationToken</c>. A call header no param
+/// declares goes in <c>RequestOptions.Headers</c> (F6); the options also carry the call's timeout, the alt origin's
+/// base URL, and always a <c>RawResponse</c> to read. The method runs with <c>DoNotWrapExceptions</c>, so the SDK's
+/// own exception arrives, and a result is read only when the declared return type is generic (P5).
 /// </summary>
 internal static class Invoke
 {
-    /// <summary><paramref name="call"/> sent on <paramref name="client"/> and observed (Observe.cs).</summary>
-    public static async Task<JsonNode?> CallAsync(Sdk sdk, object client, Envelope envelope, Call call)
+    /// <summary><paramref name="call"/> sent on <paramref name="client"/> as <paramref name="entry"/> directs, and observed (Observe.cs).</summary>
+    public static async Task<Outcome> CallAsync(Sdk sdk, object client, Envelope envelope, Call call, CallScript? entry, bool scripted)
     {
         var plan = envelope.Plans[call.Operation];
         var target = plan.Accessors.Aggregate(client, (at, name) => Sdk.Get(at, name)
@@ -27,10 +30,15 @@ internal static class Invoke
             ?? throw new DriverException($"{target.GetType().Name} has no method {plan.Method}");
         var raw = sdk.Create("RawResponse");
         var options = Options(sdk, envelope, call, raw, out var given);
-        var args = method.GetParameters().Select(p => Argument(sdk, p, given, options)).ToArray();
+        var bound = Bound(sdk, method, call, plan, entry);
+        var lens = new Lens(call.Raw == true, scripted, entry?.Envelope == true, bound.GetValueOrDefault(Holder));
+        using var cancel = new CancellationTokenSource();
+        bound[Token] = cancel.Token;
+        var args = method.GetParameters().Select(p => Argument(sdk, p, given, bound, options)).ToArray();
         object? result;
         try
         {
+            Cancel(cancel, entry?.Cancel is { } wait ? Scripts.CancelOf(wait) : null);
             var task = method.Invoke(target, BindingFlags.DoNotWrapExceptions, null, args, null) as Task
                 ?? throw new DriverException($"{plan.Method} returned no Task");
             await task;
@@ -38,14 +46,70 @@ internal static class Invoke
         }
         catch (Exception e) when (e is not DriverException)
         {
-            return Observe.Thrown(sdk, e, call.Raw == true);
+            return Observe.Thrown(sdk, e, lens);
         }
-        return Observe.Returned(sdk, new Answer(method.ReturnType, result, raw), plan, call.Raw == true);
+        return Observe.Returned(sdk, new Answer(method.ReturnType, result, raw), plan, lens);
+    }
+
+    /* the keys of the values bound by what they are rather than by a parameter's name */
+    private const string Holder = "<headersInto>";
+    private const string Token = "<token>";
+
+    /// <summary>Cancels <paramref name="source"/> now for a zero <paramref name="wait"/>, or after it; nothing for none.</summary>
+    private static void Cancel(CancellationTokenSource source, TimeSpan? wait)
+    {
+        if (wait == TimeSpan.Zero)
+        {
+            source.Cancel();
+        }
+        else if (wait is { } after)
+        {
+            source.CancelAfter(after);
+        }
     }
 
     /// <summary>
-    /// The call's <c>RequestOptions</c>, and every value it gives a parameter, by parameter name: path params,
-    /// the body, query params, and the call headers a param declares.
+    /// The values the call binds by what they are: a binary body by its parameter name, the script's idempotency key
+    /// by the plan's parameter, and the typed headers' holder.
+    /// </summary>
+    private static Dictionary<string, object?> Bound(Sdk sdk, MethodInfo method, Call call, Plan plan, CallScript? entry)
+    {
+        var bound = new Dictionary<string, object?>();
+        var oneShot = entry?.OneShotBody == true;
+        if (call.Body is { Kind: "binary" } body)
+        {
+            var param = plan.Body?.Param ?? throw new DriverException("the call sends a body, and the method takes none");
+            var type = method.GetParameters().Single(p => p.Name == param).ParameterType;
+            bound[param] = Binary(type, body.Size ?? throw new DriverException("a binary body has no size"), oneShot);
+        }
+        else if (oneShot)
+        {
+            throw new DriverException("the script sets oneShotBody, and the call sends no binary body");
+        }
+        if (entry?.IdempotencyKey is { } key)
+        {
+            bound[plan.IdempotencyKey!] = key;
+        }
+        if (plan.ResponseHeaders is { } headers)
+        {
+            bound[Holder] = sdk.Create(headers.Type);
+        }
+        return bound;
+    }
+
+    /// <summary><paramref name="size"/> bytes <c>i &amp; 0xff</c> as a <paramref name="type"/> (<c>BinaryBody</c>): in memory, or one-shot.</summary>
+    private static object? Binary(Type type, int size, bool oneShot)
+    {
+        var bytes = Enumerable.Range(0, size).Select(i => (byte)(i & 0xff)).ToArray();
+        var from = oneShot ? typeof(Stream) : typeof(byte[]);
+        var convert = type.GetMethod("op_Implicit", BindingFlags.Public | BindingFlags.Static, [from])
+            ?? throw new DriverException($"{type.Name} has no implicit conversion from {from.Name}");
+        return convert.Invoke(null, [oneShot ? new OneShotStream(bytes) : bytes]);
+    }
+
+    /// <summary>
+    /// The call's <c>RequestOptions</c>, and every value it gives a parameter, by parameter name: path params, a
+    /// JSON, form or text body, query params, and the call headers a param declares.
     /// </summary>
     private static object Options(Sdk sdk, Envelope envelope, Call call, object raw, out Dictionary<string, JsonNode?> given)
     {
@@ -57,7 +121,7 @@ internal static class Invoke
                 ?? throw new DriverException($"the call has no path param {path.Name}");
             given[path.Param] = JsonValue.Create(value);
         }
-        if (call.Body is { } body)
+        if (call.Body is { Kind: not "binary" } body)
         {
             var param = plan.Body?.Param ?? throw new DriverException("the call sends a body, and the method takes none");
             given[param] = body.Value;
@@ -109,25 +173,33 @@ internal static class Invoke
     }
 
     /// <summary>
-    /// Parameter <paramref name="p"/>'s argument: the options, the token, a given value through the SDK's context,
-    /// or the parameter's default; a required one with no value is a DriverException.
+    /// Parameter <paramref name="p"/>'s argument: the token, the options, the holder, a bound value, a given value
+    /// through the SDK's context, or the parameter's default; a required one with no value is a DriverException.
     /// </summary>
-    private static object? Argument(Sdk sdk, ParameterInfo p, Dictionary<string, JsonNode?> given, object options)
+    private static object? Argument(Sdk sdk, ParameterInfo p, Dictionary<string, JsonNode?> given, Dictionary<string, object?> bound, object options)
     {
         if (p.ParameterType == typeof(CancellationToken))
         {
-            return CancellationToken.None;
+            return bound[Token];
         }
         if (p.ParameterType == options.GetType())
         {
             return options;
         }
+        if (bound.GetValueOrDefault(Holder) is { } holder && p.ParameterType == holder.GetType())
+        {
+            return holder;
+        }
+        if (bound.TryGetValue(p.Name!, out var value))
+        {
+            return value;
+        }
         if (given.TryGetValue(p.Name!, out var node))
         {
             /* a string is a string: a path param binds without a context entry the API may not need */
-            if (p.ParameterType == typeof(string) && node is JsonValue value && value.TryGetValue<string>(out var text))
+            if (p.ParameterType == typeof(string) && node is JsonValue text && text.TryGetValue<string>(out var s))
             {
-                return text;
+                return s;
             }
             try
             {
@@ -140,4 +212,36 @@ internal static class Invoke
         }
         return p.HasDefaultValue ? p.DefaultValue : throw new DriverException($"the call gives no value for {p.Name}");
     }
+}
+
+/// <summary>A body read once: no length, no seek, so the SDK can neither size nor resend it (<c>oneShotBody</c>).</summary>
+internal sealed class OneShotStream(byte[] data) : Stream
+{
+    private readonly MemoryStream inner = new(data, writable: false);
+
+    public override bool CanRead => true;
+
+    public override bool CanSeek => false;
+
+    public override bool CanWrite => false;
+
+    public override long Length => throw new NotSupportedException();
+
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+
+    public override void Flush()
+    {
+    }
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

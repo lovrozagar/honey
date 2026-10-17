@@ -286,6 +286,31 @@ describe("csTopLevel: refs, hoists and the empty record", () => {
 			text: ["public sealed record Empty", "{", "}"].join("\n"),
 			title: "a closed empty object is a record without members: {} on the wire",
 		},
+		/* honey-a8's ruling (contract 47, after 2a): additionalProperties beside fields is kept as extension data */
+		{
+			name: "Labels",
+			schema: { additionalProperties: STRING, properties: { name: STRING }, type: "object" },
+			text: record("Labels", property("name", "string? Name"), [
+				"[JsonExtensionData]",
+				"public IDictionary<string, JsonElement>? Extra { get; set; }",
+			]),
+			title: "additionalProperties beside fields keeps every other member as Extra, JsonElement-valued",
+		},
+		{
+			name: "Open",
+			schema: { additionalProperties: true, properties: { extra: STRING }, type: "object" },
+			text: record("Open", property("extra", "string? Extra"), [
+				"[JsonExtensionData]",
+				"public IDictionary<string, JsonElement>? Extra2 { get; set; }",
+			]),
+			title: "the extension data claims its name after the fields: Extra2 beside a field extra",
+		},
+		{
+			name: "Shut",
+			schema: { additionalProperties: false, properties: { name: STRING }, type: "object" },
+			text: record("Shut", property("name", "string? Name")),
+			title: "a closed object with fields keeps no extension data",
+		},
 		{
 			components: { Tags: { items: STRING, type: "array" } },
 			name: "X",

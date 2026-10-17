@@ -11,6 +11,7 @@ import { createHash } from "node:crypto"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
 import type { Duplex } from "node:stream"
+import { gzipSync } from "node:zlib"
 import { type SseScript, serveSse } from "./sse-steps.ts"
 import {
 	acceptUpgrade,
@@ -41,15 +42,17 @@ export type RecordedHop = {
 /**
  * One scripted answer: its status, at most one body (`json` with its content-type; `text` as given
  * and `bytes`, that many bytes `i & 0xff`, with none added), extra headers, a wait before answering
- * and a redirect target (`location`, on either listener). Every body goes out with its length. In
- * place of a body: `sse`, an event stream under the status and headers, or `ws` (status 101), the
- * upgrade accepted and the socket scripted. In place of the wait: `afterLeft`, held until hop `stream`'s
- * client left it or `withinMs` passed, `seen` told which came first (gone.ts).
+ * and a redirect target (`location`, on either listener). Every body goes out with its length; under
+ * `gzip`, gzipped, with `content-encoding: gzip` and the encoded length. In place of a body: `sse`, an
+ * event stream under the status and headers, or `ws` (status 101), the upgrade accepted and the socket
+ * scripted. In place of the wait: `afterLeft`, held until hop `stream`'s client left it or `withinMs`
+ * passed, `seen` told which came first (gone.ts).
  */
 export type Reply = {
 	readonly afterLeft?: AfterLeft
 	readonly bytes?: number
 	readonly delayMs?: number
+	readonly gzip?: true
 	readonly headers?: Readonly<Record<string, string>>
 	readonly json?: Json
 	readonly redirect?: { readonly origin: RecordedHop["origin"]; readonly path: string }
@@ -130,12 +133,14 @@ function payloadOf(reply: Reply): [Buffer | string, Record<string, string>] {
 	return [reply.text ?? "", {}]
 }
 
-/** The reply's body and every header it goes out with: its length, the implied ones, a redirect's location. */
+/** The reply's body and every header it goes out with: its length, the implied ones, its encoding, a redirect's. */
 function messageOf(reply: Reply, origins: Origins): [Buffer | string, Record<string, string>] {
-	const [body, implied] = payloadOf(reply)
+	const [payload, implied] = payloadOf(reply)
+	const body = reply.gzip ? gzipSync(payload) : payload
 	const length = { "content-length": String(Buffer.byteLength(body)) }
+	const encoding = reply.gzip && { "content-encoding": "gzip" }
 	const location = reply.redirect && { location: `${origins[reply.redirect.origin]}${reply.redirect.path}` }
-	return [body, { ...length, ...implied, ...location, ...reply.headers }]
+	return [body, { ...length, ...implied, ...encoding, ...location, ...reply.headers }]
 }
 
 /** Answer `res` with `reply`, unless the client already went away; the stream it opened, if any. */

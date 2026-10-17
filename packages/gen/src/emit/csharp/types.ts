@@ -9,7 +9,7 @@ import type { IR, IRSchema } from "../../ir/model.ts"
 import { csTypeName, pascalWords } from "../shared/lang.ts"
 import { enumDecl, enumValues } from "./types-enum.ts"
 import { type CsTypeNames, irNames } from "./types-names.ts"
-import { fieldsOf, recordDecl } from "./types-record.ts"
+import { fieldsOf, isOpen, recordDecl } from "./types-record.ts"
 import { isLiteral, unionDecl } from "./types-union.ts"
 
 export type { CsTypeNames } from "./types-names.ts"
@@ -26,6 +26,8 @@ export type CsTypeContext = {
 	collections: Set<string>
 	/** the types a converter reads by `GetTypeInfo` alone: union variants and `Opt<T>`'s `T` (Fb7) */
 	serialized: Set<string>
+	/** the declarations the JSON context never lists: a multipart `<Op>Body`, an `<Op>Headers` holder */
+	unlisted: Set<string>
 }
 
 /** The C# type of `schema` at the member `fieldName` of the declaration being written. */
@@ -58,6 +60,7 @@ export function csTypeContext(ir?: IR, taken: readonly string[] = []): CsTypeCon
 		names: irNames(ir?.schemas ?? {}, taken, declares),
 		parentName: "",
 		serialized: new Set(),
+		unlisted: new Set(),
 	}
 }
 
@@ -163,8 +166,9 @@ const memberOf =
 export function csTopLevel(name: string, ir: IRSchema, at: CsTypeContext): string {
 	const member = memberOf(name, at)
 	if (ir.kind === "scalar") return enumDecl(name, ir, at)
-	if (ir.kind === "object") return recordDecl(name, ir.fields, member, at)
-	if (ir.kind === "allOf") return recordDecl(name, fieldsOf(ir, at.names.resolve), member, at)
+	const open = isOpen(ir, at.names.resolve)
+	if (ir.kind === "object") return recordDecl(name, { fields: ir.fields, open }, member, at)
+	if (ir.kind === "allOf") return recordDecl(name, { fields: fieldsOf(ir, at.names.resolve), open }, member, at)
 	const variant = (schema: IRSchema, key: string, base: string) => declare(schema, at, key, base)
 	return unionDecl(name, ir as Of<"union">, { at, declare: variant, member })
 }

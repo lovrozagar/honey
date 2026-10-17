@@ -4,7 +4,10 @@
  * even when null; an optional one is `T?`, skipped when null; an optional nullable one is `Opt<T?>`, so absent, null
  * and a value stay three states; an open value is a bare `JsonElement`, already tri-state. A property spelling a
  * member every record has, or the record's own name (CS0542), moves on to `…2`. An allOf is one record of its
- * parts' fields, a key once, its first part's (Python's merge).
+ * parts' fields, a key once, its first part's (Python's merge). An object that declares `additionalProperties`
+ * beside its fields keeps every other member in `[JsonExtensionData] Extra`, JsonElement-valued (honey-a8's ruling,
+ * Rust's flattened map), claimed after the fields: `{ get; set; }`, since an init-only one goes through the
+ * deserialization constructor, which extension data cannot bind to.
  */
 import type { IRField, IRSchema } from "../../ir/model.ts"
 import { csString } from "../shared/escape.ts"
@@ -42,18 +45,33 @@ function propertyLines(field: IRField, name: string, member: Member, at: CsTypeC
 	return [key, `[JsonConverter(typeof(OptConverter<${type}>))]`, UNSET, `public Opt<${type}> ${name} { get; init; }`]
 }
 
-/** `public sealed record <name>` of `fields` in key order, a blank line between properties. */
-export function recordDecl(name: string, fields: readonly IRField[], member: Member, at: CsTypeContext): string {
+/** A record's members: its fields, and whether it keeps every other member (it declares `additionalProperties`). */
+export type RecordShape = { readonly fields: readonly IRField[]; readonly open: boolean }
+
+/** `public sealed record <name>` of its fields in key order, a blank line between properties, then any extension data. */
+export function recordDecl(name: string, { fields, open }: RecordShape, member: Member, at: CsTypeContext): string {
 	const scope = new NameScope([...RECORD_MEMBERS, name])
 	const properties = [...fields]
 		.sort((a, b) => compareCodeUnits(a.name, b.name))
 		.map((field) => propertyLines(field, scope.claim(csTypeName(field.name)), member, at))
+	if (open) {
+		properties.push([
+			"[JsonExtensionData]",
+			`public IDictionary<string, JsonElement>? ${scope.claim("Extra")} { get; set; }`,
+		])
+	}
 	return [
 		`public sealed record ${name}`,
 		"{",
 		...properties.flatMap((lines, i) => [...(i > 0 ? [""] : []), ...lines.map((line) => `    ${line}`)]),
 		"}",
 	].join("\n")
+}
+
+/** Whether an object, or any object part of an allOf (refs followed), declares `additionalProperties`. */
+export function isOpen(schema: IRSchema, resolve: (schema: IRSchema) => IRSchema): boolean {
+	if (schema.kind === "object") return schema.additional !== undefined && schema.additional !== false
+	return schema.kind === "allOf" && schema.parts.some((part) => isOpen(resolve(part), resolve))
 }
 
 /** A schema's fields: an object's own, an allOf's merged (each ref followed, a key once, its first part's), else none. */

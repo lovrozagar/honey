@@ -26,7 +26,7 @@ export type CsTypeNames = {
 /* the BCL names emitted text spells unqualified, by the namespace a `using` brings them from (§4.7) */
 export const BCL: Readonly<Record<string, readonly string[]>> = {
 	System: ["Exception", "Func", "IDisposable", "Object", "String", "Type"],
-	"System.Collections.Generic": ["IReadOnlyDictionary", "IReadOnlyList"],
+	"System.Collections.Generic": ["IDictionary", "IReadOnlyDictionary", "IReadOnlyList"],
 	"System.Text.Json": [
 		"JsonElement",
 		"JsonException",
@@ -39,6 +39,7 @@ export const BCL: Readonly<Record<string, readonly string[]>> = {
 	],
 	"System.Text.Json.Serialization": [
 		"JsonConverter",
+		"JsonExtensionData",
 		"JsonIgnore",
 		"JsonIgnoreCondition",
 		"JsonPropertyName",
@@ -55,6 +56,7 @@ export const BCL: Readonly<Record<string, readonly string[]>> = {
 /* the attributes emitted text spells without their `Attribute` suffix: the suffixed name is taken too */
 const ATTRIBUTES = [
 	"JsonConverter",
+	"JsonExtensionData",
 	"JsonIgnore",
 	"JsonPropertyName",
 	"JsonSerializable",
@@ -68,6 +70,8 @@ const reserved = (taken: readonly string[]) => [
 	...Object.values(runtimeFiles({ realtime: true, ws: true }, "X")).flatMap(runtimeTypeNames),
 	...Object.values(BCL).flat(),
 	...ATTRIBUTES.map((name) => `${name}Attribute`),
+	/* the static class of the API's error keys (errors.ts), declared beside the types when any key is */
+	"ErrorKey",
 	"System",
 	...taken,
 ]

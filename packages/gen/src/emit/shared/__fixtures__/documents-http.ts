@@ -3,7 +3,7 @@
  * answers, stale marks, overrides and binary bodies (throw mode as `http`, safe mode as `http-safe`); and
  * `errors`, the declared error keys `ErrorKey` is emitted from (G6/G7): keys that collide once spelled as
  * Rust idents, one an envelope schema declares, schemas that give `<Key>Data`, and error-keys.json's
- * `users.create` verbatim.
+ * `users.create` verbatim. `httpExtraPaths()` holds the paths Python and C# add to `http`.
  */
 import errorKeys from "../../../ir/__fixtures__/specs/rust/error-keys.json" with { type: "json" }
 
@@ -187,6 +187,32 @@ function answerPaths(): Json {
 		},
 		"/shape": { get: { operationId: "shapes.get", responses: ok(ref("Shape")) } },
 		"/text": { get: { operationId: "text.get", responses: answer("text/plain", STRING) } },
+	}
+}
+
+/**
+ * The paths Python and C# add to `http` (contract 29 §4.3, contract 47 §4.1): `uuid` and `str` path params beside an
+ * idempotency key (acbcf0ef46, S3), a `{id}:cancel` template (3caa440441), a query map and a map header sent as
+ * nothing when empty, and a declared `Idempotency-Key` header (the declared value over the generated key).
+ */
+export function httpExtraPaths(): Json {
+	const done = ok({ properties: { ok: { type: "boolean" } }, type: "object" })
+	const map = { additionalProperties: STRING, type: "object" }
+	const header = (name: string, schema: Json): Json => ({ in: "header", name, schema })
+	/* an op with an idempotency key */
+	const keyed = (operationId: string, parameters: readonly Json[]): Json => ({
+		operationId,
+		parameters,
+		responses: done,
+		"x-idempotency-key": true,
+	})
+	return {
+		"/keyed": { post: keyed("keyed.send", [header("Idempotency-Key", STRING), header("X-Meta", map)]) },
+		"/items/{uuid}/{str}": { put: keyed("items.put", [path("uuid"), path("str")]) },
+		"/ops/{id}:cancel": { post: { operationId: "ops.cancel", parameters: [path("id")], responses: done } },
+		"/search": {
+			get: { operationId: "search.run", parameters: [query("q", STRING), query("tags", map)], responses: done },
+		},
 	}
 }
 

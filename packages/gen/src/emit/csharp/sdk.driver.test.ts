@@ -3,8 +3,8 @@
  * content hash and a second gate spawns nothing, a failed build stays failed, the format gate runs once per dir,
  * a consumer check once per program, and a program runs beside the SDK's dll; the driver is built once per source
  * hash with no reference to any SDK; the emitter's call plans name what it walks; it sends one cell against the
- * recording server, observing data, the raw response, a status error and a timeout; and it refuses what a later
- * phase drives before the SDK loads.
+ * recording server, observing data, the raw response, a status error and a timeout; and it refuses what it cannot
+ * drive (a multipart body, phase d's streams, a bad script) before the SDK loads.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
@@ -47,6 +47,7 @@ const NOTES: CSharpCallPlan = {
 	query: { tag: "tag" },
 	required: ["org", "member", "body"],
 	response: "json",
+	responseHeaders: null,
 	stream: null,
 	throws: true,
 }
@@ -190,7 +191,7 @@ describe.skipIf(!DOTNET)("the C# test driver: its build and what it refuses", ()
 		const cell = (call: Call) => envelopeOf({ calls: [call] }, { [call.operation]: TICKS })
 		expect(await driverOn(cell(TICK))).toEqual({
 			status: 1,
-			stderr: "driver: stream sse arrives in phase d (call 0, ticks.stream)",
+			stderr: "driver: call 0 (ticks.stream): stream sse arrives in phase d",
 			stdout: "",
 		})
 		const create = { operation: OP, route: { method: "POST", path: "/" } }
@@ -200,21 +201,28 @@ describe.skipIf(!DOTNET)("the C# test driver: its build and what it refuses", ()
 		)
 		expect(refused.map((run) => run.stderr)).toEqual(
 			["send", "take", "lastEventId", "reconnectToken"].map(
-				(name) => `driver: ${name} arrives in phase d (call 0, ${OP})`,
+				(name) => `driver: call 0 (${OP}): ${name} arrives in phase d`,
 			),
-		)
-		const binary = { body: { contentType: "application/octet-stream", kind: "binary", size: 3 }, ...create }
-		expect((await driverOn(envelopeOf({ calls: [binary] }, { [OP]: NOTES }))).stderr).toBe(
-			`driver: a binary body arrives in phase c (call 0, ${OP})`,
 		)
 	})
 
-	it("refuses a script and a redirect setup, and an SDK exporting no JsonSerializerContext", async () => {
+	it("refuses a multipart body before the SDK loads: a consumer program sends FileParts", async () => {
+		const upload = { body: { kind: "json", value: {} }, operation: OP, route: { method: "POST", path: "/" } }
+		const multipart: CSharpCallPlan = { ...NOTES, body: { kind: "multipart", param: "body" } }
+		expect(await driverOn(envelopeOf({ calls: [upload] }, { [OP]: multipart }))).toEqual({
+			status: 1,
+			stderr: `driver: call 0 (${OP}): a multipart body is driven by a consumer program (FilePart)`,
+			stdout: "",
+		})
+	})
+
+	it("decodes a script strictly before the SDK loads; refuses an unknown call member and an SDK exporting no JsonSerializerContext", async () => {
 		const create = { operation: OP, route: { method: "POST", path: "/" } }
-		const scripted = { ...envelopeOf({ calls: [create] }, { [OP]: NOTES }), script: {} }
-		expect((await driverOn(scripted)).stderr).toBe("driver: script arrives in phase c")
-		const redirect = envelopeOf({ calls: [create], setup: { redirect: "follow" } }, { [OP]: NOTES })
-		expect((await driverOn(redirect)).stderr).toBe("driver: setup.redirect arrives in phase c")
+		const scripted = (script: object) => ({ ...envelopeOf({ calls: [create] }, { [OP]: NOTES }), script })
+		expect((await driverOn(scripted({ calls: [{ wait: 1 }] }))).stderr).toBe("driver: script: unknown member wait")
+		expect((await driverOn(scripted({ hooks: { request: [{ setHeader: ["X"] }] } }))).stderr).toBe(
+			"driver: script: a request hook's setHeader is [name, value]",
+		)
 		const unknown = envelopeOf({ calls: [{ ...create, cancel: true }] }, { [OP]: NOTES })
 		expect((await driverOn(unknown)).stderr).toMatch(/^driver: the envelope does not decode: .*'cancel'/)
 		expect((await driverOn(envelopeOf({ calls: [create] }, { [OP]: NOTES }))).stderr).toBe(
@@ -280,17 +288,17 @@ describe.skipIf(!DOTNET)("the C# test driver, against the recording server", () 
 		})
 	}, 120_000)
 
-	it("refuses a script on a registry SDK before any call is sent", async () => {
+	it("refuses a bad script on a registry SDK before any call is sent", async () => {
 		const sdk = drivenCSharpSdk("surface")
 		const [run, hops] = await served([], async (server) => {
-			const ran = await sdk.runCalls({ calls: [CREATE] }, { url: server.url }, { script: {} })
+			const ran = await sdk.runCalls({ calls: [CREATE] }, { url: server.url }, { script: { calls: [null, null] } })
 			return [ran, server.hops] as const
 		})
 		expect({ hops: hops.length, observed: run.observed, status: run.status, stderr: run.stderr.trim() }).toEqual({
 			hops: 0,
 			observed: undefined,
 			status: 1,
-			stderr: "driver: script arrives in phase c",
+			stderr: "driver: script: 2 calls scripted for a cell of 1",
 		})
 	}, 120_000)
 })

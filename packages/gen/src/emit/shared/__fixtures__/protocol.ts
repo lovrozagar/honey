@@ -14,9 +14,10 @@
  * on `SDK` (which has none), `raw: true` on a stream, and the stream members Rust refuses, in the same words;
  * `protocols` and `realtime` are the method's `protocols`, `max_reconnect_attempts` and `reconnect_delay_ms`.
  * The C# driver (emit/csharp/__fixtures__/driver/) takes the same envelope on its one async client and records
- * its errors as `CsError`: its trace is `Trace<CsError>`. In phase b it refuses a script, `setup.redirect` and a
- * binary body (phase c), and a stream call, `send`, `take`, `lastEventId` and `reconnectToken` (phase d), each
- * as `driver: <member> arrives in phase <x>`, before the SDK loads.
+ * its errors as `CsError`: its trace is `Trace<CsError>`. In phase c it reads the script (refusing `ctxTimeoutMs`,
+ * `isKeys`, `isErrors` and `taskCancel` for good, and a multipart call), maps `cancel` to the method's
+ * `CancellationToken`, and `httpClient` to `ClientConfig.Handler` (a caller chain); a stream call and its members
+ * wait for phase d.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
@@ -68,7 +69,9 @@ export type Script = {
 		/**
 		 * Go: Config.HTTPClient, a caller client counting its round trips and CheckRedirect calls. Rust:
 		 * `http_builder`, a caller builder with user agent `honey-driver` and `Policy::limited(10)` (reqwest has
-		 * no round-trip hook, so no `transport` count; the user agent is what a hop shows)
+		 * no round-trip hook, so no `transport` count; the user agent is what a hop shows). C#: `ClientConfig.Handler`,
+		 * a caller link adding `User-Agent: honey-driver`, `X-Builder: b` and basic auth where the request has none,
+		 * over a `SocketsHttpHandler` with redirects on (no `transport` count either)
 		 */
 		readonly httpClient?: true
 		readonly invalidation?: {
@@ -195,13 +198,13 @@ export type CsError = {
 	readonly canceled: boolean
 	/** ApiStatusException only: `Status` */
 	readonly status?: number
-	/** ApiStatusException only (phase c): `Key`'s wire value; null without one */
+	/** ApiStatusException only: `Key`'s wire value; null without one */
 	readonly key?: string | null
-	/** ApiStatusException only (phase c): the `ErrorKey` member's name; null for `Other` */
+	/** ApiStatusException only: the name of the `ErrorKey` constant whose value equals `Key`; null when none does */
 	readonly keyMember?: string | null
-	/** ApiStatusException only (phase c): the envelope's message */
+	/** ApiStatusException only: `Detail`, the envelope's message or the sanitized body */
 	readonly message?: string
-	/** ApiStatusException with `envelope` (phase c): its set members and `extraKeys`, sorted */
+	/** ApiStatusException with `envelope`: its set members (status, error_key, status_key, message, fields), and `extraKeys`, its extra keys sorted */
 	readonly envelope?: Json
 }
 

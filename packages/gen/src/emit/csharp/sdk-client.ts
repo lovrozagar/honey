@@ -39,6 +39,7 @@ const CLASS_MEMBERS = [
 	"GetHashCode",
 	"GetType",
 	"MemberwiseClone",
+	"Part",
 	"ToString",
 	"Transport",
 ]
@@ -110,6 +111,7 @@ function clientClass(ir: IR, root: Resource, env: ClientEnv, render: Render) {
 		server === undefined ? "null" : csString(server),
 		csString(ir.auth.headerName),
 		csString(ir.auth.prefix),
+		`${env.context}.Default.Options`,
 	]
 	const title = ir.info.title === undefined ? "The API's client" : `The ${ir.info.title} client`
 	const fields = [

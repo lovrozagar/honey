@@ -2,7 +2,7 @@
  * The vendored C# runtime, as the files a C# SDK ships under `Runtime/` (H9/F5): `runtime/csharp/*.cs`, read here
  * and nowhere else (the F8 mutation target), each emitted as committed but for its one `namespace Honey.Runtime;`
  * line, which becomes the SDK's own namespace (Fb2), so `using <RootNamespace>;` reaches the client, the config,
- * the exceptions and the models alike. Phase b ships the same core for every API: WebSocket and realtime add their
+ * the exceptions and the models alike. Phase c ships the same core for every API: WebSocket and realtime add their
  * files in phase d.
  */
 import { readFileSync } from "node:fs"
@@ -11,8 +11,28 @@ import { compareCodeUnits } from "../shared/lang.ts"
 /** What the API needs from the runtime beyond plain HTTP. */
 export type CSharpRuntimeFeatures = { readonly realtime: boolean; readonly ws: boolean }
 
-/* every SDK: config, errors, the safe result, the strict JSON converters, the operation, the encoders, the transport */
-const CORE: readonly string[] = ["Config", "Errors", "Json", "Operation", "Path", "Query", "Result", "Transport"]
+/* every SDK: the HTTP runtime (config, errors and envelopes, bodies, auth, hooks, log, redirects and the strip
+ * handler, stale tracking, the exchange and the transport), the safe result, the strict JSON converters, the encoders */
+const CORE: readonly string[] = [
+	"Auth",
+	"Body",
+	"Config",
+	"Envelope",
+	"Errors",
+	"Exchange",
+	"Handler",
+	"Hooks",
+	"Invalidation",
+	"Json",
+	"Log",
+	"Operation",
+	"Path",
+	"Query",
+	"Redirect",
+	"Result",
+	"Stale",
+	"Transport",
+]
 
 /* the one line each committed file holds, swapped for the SDK's namespace */
 const NAMESPACE = /^namespace Honey\.Runtime;$/m

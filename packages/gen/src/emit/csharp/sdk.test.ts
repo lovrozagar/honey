@@ -117,30 +117,14 @@ const single = (operationId: string, operation: Json, method = "post"): Json => 
 })
 
 const STRING = { type: "string" }
-const BINARY = { format: "binary", type: "string" }
 const content = (type: string, schema: Json = STRING) => ({ content: { [type]: { schema } } })
-const DONE = { responses: { 204: { description: "done" } } }
-const body = (type: string, schema?: Json) => ({ ...DONE, requestBody: { ...content(type, schema), required: true } })
 const answer = (type: string, schema?: Json) => ({
 	responses: { 200: { description: "ok", ...content(type, schema) } },
 })
 const SOCKET = { responses: { 101: { description: "Switching Protocols" } }, "x-websocket": true }
 
-/** What the phase-b emitter refuses (Fb1), each as its own one-op document: the label and the op id. */
+/** What the emitter still refuses (Fb1; phase c lifts the bodies and bytes, sdk.bodies.test.ts), each as its own one-op document: the label and the op id. */
 const REFUSED: (readonly [label: string, id: string, document: Json])[] = [
-	[
-		"a form body",
-		"forms.send",
-		single("forms.send", body("application/x-www-form-urlencoded", { properties: { a: STRING }, type: "object" })),
-	],
-	[
-		"a multipart body",
-		"uploads.send",
-		single("uploads.send", body("multipart/form-data", { properties: { file: BINARY }, type: "object" })),
-	],
-	["an octet-stream body", "blobs.put", single("blobs.put", body("application/octet-stream", BINARY))],
-	["a text/plain body", "texts.send", single("texts.send", body("text/plain"))],
-	["an octet-stream answer", "blobs.get", single("blobs.get", answer("application/octet-stream", BINARY), "get")],
 	["an SSE answer", "events.stream", single("events.stream", answer("text/event-stream"), "get")],
 	["a WebSocket", "ws.subscribe", single("ws.subscribe", SOCKET, "get")],
 	["a realtime channel", "realtime.connect", single("realtime.connect", { ...SOCKET, "x-realtime": true }, "get")],

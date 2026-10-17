@@ -1,15 +1,19 @@
 /**
- * One operation (§4.4, §4.8): its private `Operation` field, its method, the types the JSON context must list for
- * it, and its call plan. A method takes its path params as `string` in path order, then a required body, the
- * required query and header params, an optional body, the optional ones, `idempotencyKey` on an idempotent op,
- * `options` and `cancellationToken` (C#4). It answers `Task<T>`, `Task` or `Task<string>`, or `SdkResult` in safe
- * mode (C#2); its body is one call into the transport, the signature on one line and the call on the next (Fb8).
- * A param named like one of the method's own locals is `…2`, a keyword `@`-escaped (H52).
+ * One operation (§4.4, §4.8; contract 47 §2): its private `Operation` field (`Accept` for a text or binary answer,
+ * `Invalidates` for its `x-invalidate` targets), its method, the types the JSON context must list for it, and its
+ * call plan. A method takes its path params as `string` in path order, then a required body, the required query
+ * and header params, an optional body, the optional ones, `idempotencyKey` on an idempotent op, `headersInto` where
+ * the op declares response headers (Fc7), `options` and `cancellationToken` (C#4). Its body by kind is
+ * sdk-body.ts's, its answer sdk-answer.ts's, `SdkResult` in safe mode (C#2); its body is one call into the
+ * transport, the signature on one line and the call on the next (Fb8). A param named like one of the method's own
+ * locals is `…2`, a keyword `@`-escaped (H52).
  */
-import type { IRParam, IRSchema } from "../../ir/model.ts"
-import type { SdkBody, SdkOp } from "../../ir/sdk-model.ts"
+import type { IRParam } from "../../ir/model.ts"
+import type { SdkOp } from "../../ir/sdk-model.ts"
 import { csString } from "../shared/escape.ts"
 import { compareCodeUnits, csIdentifier, NameScope } from "../shared/lang.ts"
+import { type CsAnswer, type CsHeadersPlan, csAnswer, csResponseHeaders, signatureType } from "./sdk-answer.ts"
+import { type CsBody, csBody } from "./sdk-body.ts"
 import { methodDoc } from "./sdk-doc.ts"
 import type { CSharpCallPlan } from "./sdk-plan.ts"
 import { type CsTypeContext, csTypeOf } from "./types.ts"
@@ -29,7 +33,7 @@ export type CsMethod = {
 }
 
 /* the method's own parameters: a spec param that takes one of these names is claimed as `…2` */
-export const METHOD_LOCALS = ["body", "cancellationToken", "idempotencyKey", "options"]
+export const METHOD_LOCALS = ["body", "cancellationToken", "headersInto", "idempotencyKey", "options"]
 
 /** A declared query or header param: its identifier and its C# type (nullable when optional). */
 type Param = {
@@ -46,14 +50,12 @@ type Parts = {
 	readonly field: string
 	readonly path: readonly { readonly param: IRParam; readonly ident: string }[]
 	readonly params: readonly Param[]
-	/** the body's C# type; null without a body */
-	readonly body: string | null
-	/** the JSON answer's C# type; null for any other answer */
-	readonly answer: string | null
+	readonly body: CsBody
+	readonly answer: CsAnswer
+	/** the `<Op>Headers` holder; null when the op declares no response header */
+	readonly headers: CsHeadersPlan | null
 	readonly throwOnError: boolean
 }
-
-const UNKNOWN: IRSchema = { kind: "unknown" }
 
 /** An identifier's metadata name: what reflection and named arguments see, `@` dropped. */
 const bare = (ident: string) => ident.replace(/^@/, "")
@@ -80,46 +82,28 @@ function paramsOf(op: SdkOp, scope: NameScope, at: CsTypeContext): Param[] {
 	})
 }
 
-/** How an answer is typed and which transport method reads it, by its kind (`json?` a nullable one) and mode. */
-const ANSWERS: Readonly<Record<string, Readonly<Record<"safe" | "thrown", (type: string) => [string, string]>>>> = {
-	json: { safe: (t) => [`Task<SdkResult<${t}>>`, "ResultAsync"], thrown: (t) => [`Task<${t}>`, "CallAsync"] },
-	"json?": {
-		safe: (t) => [`Task<SdkResult<${t}>>`, "NullableResultAsync"],
-		thrown: (t) => [`Task<${t}>`, "NullableAsync"],
-	},
-	none: { safe: () => ["Task<SdkResult>", "ResultAsync"], thrown: () => ["Task", "CallAsync"] },
-	text: { safe: () => ["Task<SdkResult<string>>", "TextResultAsync"], thrown: () => ["Task<string>", "TextAsync"] },
-}
-
-/** A signature's spelling of `type`: its runtime type, keeping a nullable reference's `?` at the top. */
-const signatureType = (type: string, spell: Spelling) =>
-	`${spell.runtime(type).replace(/\?$/, "")}${type.endsWith("?") ? "?" : ""}`
-
-/** The return type and the transport method: `T` typed as the signature spells it when thrown, as its runtime type in an SdkResult. */
-function answered({ answer, op, throwOnError }: Parts, spell: Spelling): [string, string] {
-	const kind = answer === null ? op.success.kind : `json${answer.endsWith("?") ? "?" : ""}`
-	const mode = throwOnError ? "thrown" : "safe"
-	const type = answer === null ? "" : throwOnError ? signatureType(answer, spell) : spell.runtime(answer)
-	return (ANSWERS[kind] as (typeof ANSWERS)[string])[mode](type)
-}
-
-/** The parameter list, in C#4's order. */
-function signature({ body, op, params, path }: Parts, spell: Spelling): string[] {
+/** The parameter list, in C#4's order, the response-header holder after the idempotency key. */
+function signature({ body, headers, op, params, path }: Parts, spell: Spelling): string[] {
 	const required = op.body?.required === true
+	const type = body.type
 	return [
 		...path.map(({ ident }) => `string ${ident}`),
-		...(body !== null && required ? [`${signatureType(body, spell)} body`] : []),
+		...(type !== null && required ? [`${signatureType(type, spell)} body`] : []),
 		...params.filter((p) => p.param.required === true).map((p) => `${signatureType(p.type, spell)} ${p.ident}`),
-		...(body !== null && !required ? [`${unset(signatureType(body, spell))} body = null`] : []),
+		...(type !== null && !required ? [`${unset(signatureType(type, spell))} body = null`] : []),
 		...params.filter((p) => p.param.required !== true).map((p) => `${signatureType(p.type, spell)} ${p.ident} = null`),
 		...(op.idempotent ? ["string? idempotencyKey = null"] : []),
+		...(headers === null ? [] : [`${headers.type}? headersInto = null`]),
 		"RequestOptions? options = null",
 		"CancellationToken cancellationToken = default",
 	]
 }
 
-/** The `Call` the method builds: path values, query and header args, the body, the idempotency key, the options. */
-function call({ body, op, params, path }: Parts, spell: Spelling): string {
+/**
+ * The `Call` the method builds: path values, query and header args, the body, the idempotency key, the options,
+ * and the holder's `Read` where the op declares response headers.
+ */
+function call({ body, headers, op, params, path }: Parts, spell: Spelling): string {
 	const args = (where: Param["where"]) =>
 		`[${params
 			.filter((p) => p.where === where)
@@ -129,16 +113,17 @@ function call({ body, op, params, path }: Parts, spell: Spelling): string {
 		`[${path.map(({ ident }) => ident).join(", ")}]`,
 		args("query"),
 		args("header"),
-		body === null ? "null" : `Body.Json(body, ${spell.info(body)})`,
+		body.expr(spell),
 		op.idempotent ? "idempotencyKey" : "null",
 		"options",
+		...(headers === null ? [] : ["headersInto is null ? null : headersInto.Read"]),
 	].join(", ")
 }
 
 /** The method's lines: its docs, its signature, the one call into the transport. */
 function methodLines(parts: Parts, spell: Spelling): string[] {
-	const [returns, run] = answered(parts, spell)
-	const read = parts.answer === null ? [] : [spell.info(parts.answer)]
+	const [returns, run] = parts.answer.render(spell)
+	const read = parts.answer.type === null ? [] : [spell.info(parts.answer.type)]
 	return [
 		...methodDoc(parts.op, parts.throwOnError),
 		`    public ${returns} ${parts.name}(${signature(parts, spell).join(", ")}) =>`,
@@ -147,12 +132,12 @@ function methodLines(parts: Parts, spell: Spelling): string[] {
 }
 
 /** The plan the reflection driver walks: every name as reflection sees it (Fb10). */
-function planOf({ body, name, op, params, path, throwOnError }: Parts): Omit<CSharpCallPlan, "accessors"> {
+function planOf({ body, headers, name, op, params, path, throwOnError }: Parts): Omit<CSharpCallPlan, "accessors"> {
 	const by = (where: Param["where"]) =>
 		Object.fromEntries(params.filter((p) => p.where === where).map(({ ident, param }) => [param.name, bare(ident)]))
 	const required = [
 		...path.map(({ ident }) => ident),
-		...(body !== null && op.body?.required === true ? ["body"] : []),
+		...(body.type !== null && op.body?.required === true ? ["body"] : []),
 		...params.filter((p) => p.param.required === true).map(({ ident }) => ident),
 	]
 	return {
@@ -165,26 +150,37 @@ function planOf({ body, name, op, params, path, throwOnError }: Parts): Omit<CSh
 		query: by("query"),
 		required: required.map(bare),
 		response: op.success.kind,
+		responseHeaders: headers,
 		stream: op.stream,
 		throws: throwOnError,
 	}
 }
 
-/** The method of the JSON-bodied, non-stream `op` named `name`, its `Operation` in the private field `field`. */
+/** The `Operation` field: method, path, path params, `Idempotent`, then `Accept` and `Invalidates` when they apply. */
+function operationField(op: SdkOp, field: string, path: Parts["path"]): string {
+	const accept = op.success.kind === "binary" || op.success.kind === "text" ? op.success.contentType : undefined
+	const named = [
+		`Idempotent: ${op.idempotent}`,
+		...(accept === undefined ? [] : [`Accept: ${csString(accept)}`]),
+		...(op.invalidates.length === 0 ? [] : [`Invalidates: [${op.invalidates.map(csString).join(", ")}]`]),
+	]
+	const params = path.map(({ param }) => csString(param.name)).join(", ")
+	return `    private static readonly Operation ${field} = new(${csString(op.method)}, ${csString(op.path)}, [${params}], ${named.join(", ")});`
+}
+
+/** The method of the non-stream `op` named `name`, its `Operation` in the private field `field`. */
 export function csMethod(op: SdkOp, name: string, field: string, env: MethodEnv): CsMethod {
-	const typeAt = (schema: IRSchema, fieldName: string) => csTypeOf(schema, { ...env.at, fieldName, parentName: op.id })
 	const scope = new NameScope(METHOD_LOCALS, bare)
 	const path = pathParamsOf(op).map((param) => ({ ident: scope.claim(csIdentifier(param.name)), param }))
 	const params = paramsOf(op, scope, env.at)
-	const json = op.body as Extract<SdkBody, { kind: "json" }> | undefined
-	const body = json === undefined ? null : typeAt(json.schema, "Body")
-	const answer = op.success.kind === "json" ? typeAt(op.success.schema ?? UNKNOWN, "Response") : null
-	const parts: Parts = { answer, body, field, name, op, params, path, throwOnError: env.throwOnError }
-	const operation = `    private static readonly Operation ${field} = new(${csString(op.method)}, ${csString(op.path)}, [${path.map(({ param }) => csString(param.name)).join(", ")}], Idempotent: ${op.idempotent});`
+	const body = csBody(op, env)
+	const answer = csAnswer(op, env)
+	const headers = csResponseHeaders(op, env)?.plan ?? null
+	const parts: Parts = { answer, body, field, headers, name, op, params, path, throwOnError: env.throwOnError }
 	return {
-		field: operation,
+		field: operationField(op, field, path),
 		lines: (spell) => methodLines(parts, spell),
 		plan: planOf(parts),
-		types: [...params.map(({ type }) => type), ...(body === null ? [] : [body]), ...(answer === null ? [] : [answer])],
+		types: [...params.map(({ type }) => type), ...body.types, ...(answer.type === null ? [] : [answer.type])],
 	}
 }
