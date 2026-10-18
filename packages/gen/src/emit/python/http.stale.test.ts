@@ -251,9 +251,9 @@ describe.skipIf(!PY)("stale tracking: the tracker both clients share", SLOW, () 
 	/* runtime_check.py timed 2,000 lookups over 20,000 keys against 0.5 s; the port compares a lookup's cost over
 	 * 16 keys and over 16,384 (1024× the keys) in one process, the best of five rounds each: a lookup bounded by
 	 * the pattern keys costs about the same at both sizes, one that scans every entry grows with them, so the guard
-	 * allows 16× growth and needs no machine's absolute speed */
+	 * allows 4× growth (an exact-key scan measured about 60×) and needs no machine's absolute speed */
 	// v0: 31aba57f46
-	it("looks a selector up without scanning every stale entry: 1024× the entries cost a lookup under 16× more", async () => {
+	it("looks a selector up without scanning every stale entry: 1024× the entries cost a lookup under 4× more", async () => {
 		const run = await tracker()
 		const notes = run.out?.budget ?? []
 		const ratio = Number(/^ratio (\S+)$/.exec(notes.at(-1) ?? "")?.[1])
@@ -261,6 +261,6 @@ describe.skipIf(!PY)("stale tracking: the tracker both clients share", SLOW, () 
 			ran: true,
 			stale: ["16 keys: 2000 of 2000 stale, 17 entries", "16384 keys: 2000 of 2000 stale, 16385 entries"],
 		})
-		expect(ratio, notes.join("\n")).toBeLessThan(16)
+		expect(ratio, notes.join("\n")).toBeLessThan(4)
 	})
 })

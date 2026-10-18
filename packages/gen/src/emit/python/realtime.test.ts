@@ -134,12 +134,12 @@ note(str(rc.state))`
 
 	it("dials before it returns: a cancel before the call dials nothing, one during the dial ends it", async () => {
 		const canceled = await drive([], [live({ take: 1 })], { script: { calls: [{ cancel: "before" }] } })
-		const late = await drive([{ ...refused, delayMs: 2000 }], [live({ take: 1 })], {
-			script: { calls: [{ cancel: { afterMs: 150 } }] },
+		const late = await drive([{ ...refused, delayMs: 3000 }], [live({ take: 1 })], {
+			script: { calls: [{ cancel: { afterMs: 1000 } }] },
 		})
 		const seen = [canceled, late].map((drove) => {
 			const c = call0(drove)
-			return [drove.run.observed, failure(drove), c?.stream, drove.hops.length, (c?.elapsedMs ?? 1e9) < 1000]
+			return [drove.run.observed, failure(drove), c?.stream, drove.hops.length, (c?.elapsedMs ?? 1e9) < 2500]
 		})
 		expect(seen, canceled.run.stderr + late.run.stderr).toEqual([
 			[[null], ["CanceledError", undefined, "return"], undefined, 0, true],
@@ -150,13 +150,13 @@ note(str(rc.state))`
 
 	it("ends an open connection quietly on a later cancel: the frames so far, no error, no reconnect", async () => {
 		/* Fd4: the connection holds the call's cancel and races every read, a reconnect's included */
-		const held = sse([ev(1), { waitMs: 2000 }, ev(2)], "hold")
+		const held = sse([ev(1), { waitMs: 4000 }, ev(2)], "hold")
 		const drove = await drive([refused, held], [live({ take: 2 })], {
-			script: { calls: [{ cancel: { afterMs: 300 }, realtime: { reconnectDelayMs: 10 } }] },
+			script: { calls: [{ cancel: { afterMs: 1000 }, realtime: { reconnectDelayMs: 10 } }] },
 		})
 		const seen = [failure(drove), drove.hops.length, drove.run.observed, call0(drove)?.stream]
 		expect(seen, drove.run.stderr).toEqual([undefined, 2, frames(frame(1)), settled(1, "1 rt-1", "sse")])
-		expect(call0(drove)?.elapsedMs).toBeLessThan(1500)
+		expect(call0(drove)?.elapsedMs).toBeLessThan(3000)
 	})
 })
 

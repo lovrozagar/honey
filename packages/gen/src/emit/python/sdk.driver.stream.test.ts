@@ -231,14 +231,14 @@ describe.skipIf(!PY)("the Python test driver: how an SSE call fails", SLOW, () =
 
 describe.skipIf(!PY)("the Python test driver: what ends an SSE call", SLOW, () => {
 	it("ends an open stream quietly when the call's cancel fires after it opened: the events so far, no error", async () => {
-		const held = sse([tick(1), { waitMs: 300 }, tick(2)], "hold")
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
+		const held = sse([tick(1), { waitMs: 3000 }, tick(2)], "hold")
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
 		const { run } = await drive(driven("sse"), [held], [ticks({ take: 2 })], script)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: undefined,
 			observed: [{ events: [{ data: { n: 1 } }], kind: "events" }],
 		})
-		expect(run.trace?.calls[0]?.elapsedMs).toBeLessThan(1000)
+		expect(run.trace?.calls[0]?.elapsedMs).toBeLessThan(2500)
 	})
 
 	it("runs the open and the reads in the call's task: a task cancelled mid-read observes null, CancelledError via return", async () => {

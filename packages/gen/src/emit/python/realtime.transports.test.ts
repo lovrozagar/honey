@@ -277,7 +277,7 @@ note(hooked)`,
 		replies: [refused, refused, held(['data: {"n":1}\n\n']), posted, unposted],
 	},
 	longpoll: {
-		body: `c = aclient(bearer_token="tok", timeout=0.2, on_request=[hook])
+		body: `c = aclient(bearer_token="tok", timeout=0.3, on_request=[hook])
 ${SETUP}
 async with sdk.ResumableConnection(setup.url, [adapters[2]], sdk.TransportOpts(max_reconnect_attempts=0)) as rc:
     await rc.connect()

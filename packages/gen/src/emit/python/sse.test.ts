@@ -413,8 +413,8 @@ describe.skipIf(!PY)(
 		})
 
 		it("bounds the open with options['cancel']: a slow answer is CanceledError via return, one hop, well before it comes", async () => {
-			const slow: Reply = { ...TICK, delayMs: 2_000 }
-			const { hops, run } = await drive([slow], [ticks()], { script: { calls: [{ cancel: { afterMs: 100 } }] } })
+			const slow: Reply = { ...TICK, delayMs: 3_000 }
+			const { hops, run } = await drive([slow], [ticks()], { script: { calls: [{ cancel: { afterMs: 1000 } }] } })
 			const call = run.trace?.calls[0]
 			expect({ error: errorOf(call?.error), hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				error: {
@@ -427,7 +427,7 @@ describe.skipIf(!PY)(
 				hops: 1,
 				observed: [null],
 			})
-			expect(call?.elapsedMs).toBeLessThan(1_500)
+			expect(call?.elapsedMs).toBeLessThan(2_500)
 		})
 	},
 )
@@ -452,7 +452,7 @@ describe.skipIf(!PY)("how an open SSE stream ends: the call's cancel, dropping i
 		const held = sse(["data: 1\n\n"], "hold")
 		/* the second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
 		const next = gone(sse(["data: z\n\n"]))
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
 		const { run } = await drive([held, next.reply], [text(), text()], { script })
 		const calls = run.trace?.calls ?? []
 		expect(
@@ -463,7 +463,7 @@ describe.skipIf(!PY)("how an open SSE stream ends: the call's cancel, dropping i
 			observed: [strings("1"), strings("z")],
 			released: true,
 		})
-		expect(calls[0]?.elapsedMs).toBeGreaterThanOrEqual(140)
+		expect(calls[0]?.elapsedMs).toBeGreaterThanOrEqual(950)
 		expect(calls[0]?.elapsedMs).toBeLessThan(5_000)
 	})
 

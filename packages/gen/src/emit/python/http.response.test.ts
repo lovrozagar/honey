@@ -39,8 +39,8 @@ const data = (json: unknown) => ({ data: json, kind: "data", status: 200 })
 /** A 200 whose body claims JSON and is `text`. */
 const claimed = (text: string): Reply => ({ headers: { "content-type": "application/json" }, status: 200, text })
 
-/** An answer that arrives a second late: every bound below ends the call well before it. */
-const LATE: Reply = { delayMs: 1000, json: { ok: true }, status: 200 }
+/** An answer that arrives two seconds late: every bound below ends the call well before it. */
+const LATE: Reply = { delayMs: 2000, json: { ok: true }, status: 200 }
 
 /** A Python error as the trace records it: no cause and the method's own raise unless given, any repr. */
 const plain = (entry: Partial<PythonError>) => ({ cause: null, repr: expect.any(String), via: "return", ...entry })
@@ -182,7 +182,7 @@ describe.skipIf(!PY)("a call ends when its time is up or it is canceled, never a
 			const elapsed = call?.elapsedMs ?? -1
 			expect(
 				{
-					bounded: elapsed >= 250 && elapsed < 900,
+					bounded: elapsed >= 250 && elapsed < 1500,
 					error: call?.error,
 					hops: [bare.hops.length, scripted.hops.length],
 					observed: [bare.run.observed, scripted.run.observed],
@@ -206,8 +206,9 @@ describe.skipIf(!PY)("a call ends when its time is up or it is canceled, never a
 	)
 
 	it.each(CLIENTS)("%s: a call canceled in flight is CanceledError, its one request sent", async (client) => {
-		const script: Script = { calls: [{ cancel: { afterMs: 100 } }] }
-		const { hops, run } = await drive(client, [LATE], [SLOW_GET], { script })
+		/* the cancel lands after the send: an AsyncSDK's first connect is in its window */
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
+		const { hops, run } = await drive(client, [{ ...LATE, delayMs: 3000 }], [SLOW_GET], { script })
 		const elapsed = run.trace?.calls[0]?.elapsedMs ?? -1
 		expect(
 			{
@@ -216,7 +217,7 @@ describe.skipIf(!PY)("a call ends when its time is up or it is canceled, never a
 				observed: run.observed,
 				status: run.status,
 				/* client-specific by design (G22): AsyncSDK races the cancel, a blocking read is not interrupted */
-				timed: client === "async" ? elapsed < 600 : elapsed >= 900,
+				timed: client === "async" ? elapsed < 2500 : elapsed >= 2900,
 			},
 			`${run.stderr} elapsed ${elapsed}`,
 		).toEqual({

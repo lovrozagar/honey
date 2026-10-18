@@ -75,9 +75,9 @@ describe.skipIf(!PY)("safe mode: an error status in SDKResult.error, every other
 		async (client) => {
 			/* G3/G21: v0's response: httpx.Response is RawResponse; its status is kept (H4) */
 			const torn: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
-			const late: Reply = { delayMs: 1000, json: { id: "u", name: "n" }, status: 200 }
+			const late: Reply = { delayMs: 2000, json: { id: "u", name: "n" }, status: 200 }
 			const replies: Reply[] = [{ json: { message: "m" }, status: 404 }, torn, late]
-			const calls = [MEMBERS, USER, { ...MEMBERS, timeoutMs: 50 }, MEMBERS]
+			const calls = [MEMBERS, USER, { ...MEMBERS, timeoutMs: 300 }, MEMBERS]
 			const script: Script = { calls: [null, null, null, { cancel: "before" }] }
 			const { hops, run } = await drive(client, replies, calls, script)
 			const lost = await refused(client, [MEMBERS])

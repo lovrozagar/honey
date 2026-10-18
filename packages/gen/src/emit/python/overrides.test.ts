@@ -79,8 +79,8 @@ describe.skipIf(!PY)("a per-call timeout (options['timeout']) in place of the cl
 	/* G3 as ruled: v0's timeout= keyword becomes options["timeout"] */
 	// v0: 585607242b
 	it.each(GRID)("ends the call as a timeout when it is shorter than the config's (%s, %s)", async (_, client, key) => {
-		const slow: Reply = { ...OK, delayMs: 1000 }
-		const { hops, run } = await drive({ client, key }, [slow], [{ ...ECHO, timeoutMs: 50 }], { timeoutMs: 10_000 })
+		const slow: Reply = { ...OK, delayMs: 2000 }
+		const { hops, run } = await drive({ client, key }, [slow], [{ ...ECHO, timeoutMs: 300 }], { timeoutMs: 10_000 })
 		expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 			hops: 1,
 			observed: [{ kind: "timeout" }],
@@ -91,9 +91,9 @@ describe.skipIf(!PY)("a per-call timeout (options['timeout']) in place of the cl
 	it.each(GRID)(
 		"removes the config's bound for that call only when zero, the client untouched (%s, %s)",
 		async (_, client, key) => {
-			const slow: Reply = { ...OK, delayMs: 300 }
+			const slow: Reply = { ...OK, delayMs: 1000 }
 			const calls = [{ ...ECHO, timeoutMs: 0 }, ECHO]
-			const { hops, run } = await drive({ client, key }, [slow, slow], calls, { timeoutMs: 100 })
+			const { hops, run } = await drive({ client, key }, [slow, slow], calls, { timeoutMs: 300 })
 			expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				hops: 2,
 				observed: [OK_DATA, { kind: "timeout" }],

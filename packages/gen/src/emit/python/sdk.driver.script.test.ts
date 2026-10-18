@@ -272,9 +272,9 @@ describe.skipIf(!PY)("the Python test driver's script: a caller's httpx2 client"
 
 describe.skipIf(!PY)("the Python test driver's script: cancel, a task's cancellation and sleep", SLOW, () => {
 	it.each(CLIENTS)("%s: cancels before a call or during it; sleeps outside elapsedMs", async (client) => {
-		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 100 } }, { sleepMs: 300 }] }
+		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 1000 } }, { sleepMs: 1000 }] }
 		const started = Date.now()
-		const { hops, run } = await drive(on(client), [{ ...OK, delayMs: 1000 }, OK], [ECHO, ECHO, ECHO], { script })
+		const { hops, run } = await drive(on(client), [{ ...OK, delayMs: 3000 }, OK], [ECHO, ECHO, ECHO], { script })
 		const calls = run.trace?.calls ?? []
 		const during = calls[1]?.elapsedMs ?? -1
 		expect(
@@ -282,9 +282,9 @@ describe.skipIf(!PY)("the Python test driver's script: cancel, a task's cancella
 				errors: calls.map((c) => c.error),
 				hops: hops.length,
 				observed: run.observed,
-				slept: Date.now() - started >= 300 && (calls[2]?.elapsedMs ?? 300) < 300,
+				slept: Date.now() - started >= 1000 && (calls[2]?.elapsedMs ?? 1000) < 1000,
 				/* client-specific by design (G22): AsyncSDK races the cancel, a blocking read is not interrupted */
-				timed: client === "async" ? during < 600 : during >= 900,
+				timed: client === "async" ? during < 2500 : during >= 2900,
 			},
 			run.stderr,
 		).toEqual({
@@ -297,8 +297,8 @@ describe.skipIf(!PY)("the Python test driver's script: cancel, a task's cancella
 	})
 
 	it("async: cancelling a call's task is CancelledError, outside the SDK's errors, observed null", async () => {
-		const script: Script = { calls: [{ taskCancel: { afterMs: 100 } }] }
-		const { hops, run } = await drive(on("async"), [{ ...OK, delayMs: 1000 }], [ECHO], { script })
+		const script: Script = { calls: [{ taskCancel: { afterMs: 1000 } }] }
+		const { hops, run } = await drive(on("async"), [{ ...OK, delayMs: 3000 }], [ECHO], { script })
 		expect({ error: run.trace?.calls[0]?.error, hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 			error: plain({ chain: ["CancelledError"], text: "", type: "CancelledError" }),
 			hops: 1,

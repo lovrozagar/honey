@@ -429,13 +429,13 @@ describe.skipIf(!PY)("what fails before or at the handshake, nothing read", SLOW
 })
 
 describe.skipIf(!PY)("options['cancel']: it bounds the handshake and ends an open socket (Fd4)", SLOW, () => {
-	/* the waits are 5 s against bounds of 4 s: an interpreter's start never closes that gap, an ignored cancel always does */
+	/* the waits are 5 s against bounds of 2.5 s on the call's own time, which no interpreter start counts in: an
+	 * ignored cancel always outlasts them; the cancels land a second in, after an AsyncSDK's first connect */
 	it("cancels before dialing and a slow handshake while it waits: CanceledError via return, one upgrade sent", async () => {
 		const slow: Reply = { ...ws([]), delayMs: 5000 }
-		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 100 } }] }
-		const started = Date.now()
+		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 1000 } }] }
 		const { hops, run } = await drive([slow], [rooms(), rooms()], { script })
-		expect(Date.now() - started).toBeLessThan(4000)
+		expect(run.trace?.calls[1]?.elapsedMs).toBeLessThan(2500)
 		expect(run.observed, run.stderr).toEqual([null, null])
 		const errors = run.trace?.calls.map((call) => `${call.error?.via} ${call.error?.type}`)
 		expect({ errors, upgrades: hops.map((hop) => hop.headers.upgrade) }).toEqual({
@@ -446,14 +446,12 @@ describe.skipIf(!PY)("options['cancel']: it bounds the handshake and ends an ope
 
 	it("ends an open socket quietly when the cancel fires after it opened: the frames so far, no error, a 1000 close", async () => {
 		const held = ws([{ json: { n: 1 } }, { waitMs: 5000 }, { json: { n: 2 } }])
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
-		const started = Date.now()
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
 		const { run, streams } = await drive([held], [rooms({ take: 2 })], { script })
-		expect(Date.now() - started).toBeLessThan(4000)
 		const call = run.trace?.calls[0]
 		const quiet = { closedBy: undefined, error: undefined, handlers: undefined }
 		expect([run.observed, call && endOf(call)], run.stderr).toEqual([framed([{ n: 1 }]), quiet])
-		expect([(call?.elapsedMs ?? Infinity) < 1000, streams[0]?.received]).toEqual([true, [closed(1000)]])
+		expect([(call?.elapsedMs ?? Infinity) < 2500, streams[0]?.received]).toEqual([true, [closed(1000)]])
 	})
 })
 

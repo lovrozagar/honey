@@ -266,9 +266,9 @@ describe.skipIf(!PY)("each way a call fails, one HoneyError class each: a status
 	it.each(CLIENTS)(
 		"%s: ends a lapsed per-call timeout as APITimeoutError and a cancel before the call as CanceledError, neither with a status",
 		async (client) => {
-			const late: Reply = { delayMs: 1000, json: { id: "i1", name: "n" }, status: 200 }
+			const late: Reply = { delayMs: 2000, json: { id: "i1", name: "n" }, status: 200 }
 			const script: Script = { calls: [null, { cancel: "before" }] }
-			const { hops, run } = await drive(on(client), [late], [{ ...ITEM, timeoutMs: 50 }, ITEM], script)
+			const { hops, run } = await drive(on(client), [late], [{ ...ITEM, timeoutMs: 300 }, ITEM], script)
 			expect({ errors: errorsOf(run), hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				errors: [
 					plain({

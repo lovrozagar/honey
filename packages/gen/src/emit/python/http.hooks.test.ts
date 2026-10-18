@@ -41,8 +41,8 @@ const GET: Call = {
 }
 const FOUND: Reply = { json: { id: "u", name: "found" }, status: 200 }
 const OK: Reply = { json: { ok: true }, status: 200 }
-/** An answer that arrives a second late: every cancel below lands well before it. */
-const LATE: Reply = { ...FOUND, delayMs: 1000 }
+/** An answer that arrives three seconds late: every cancel below lands well before it. */
+const LATE: Reply = { ...FOUND, delayMs: 3000 }
 const BEARER: Setup = { auth: { kind: "bearer", token: TOKEN }, headers: { "X-Trace": HEADER } }
 const data = (value: Record<string, unknown>) => ({ data: value, kind: "data", status: 200 })
 
@@ -277,9 +277,9 @@ describe.skipIf(!PY)("on_log: a canceled call and a cancelled task, by the opera
 	/* AsyncSDK only (G22): a cancel event interrupts an AsyncSDK call in flight, and only AsyncSDK has a task */
 	it("async: a call canceled in flight logs the CanceledError; a cancelled task logs the cancel and re-raises", async () => {
 		const [canceled, task] = await Promise.all([
-			drive({ client: "async", setup: BEARER }, [LATE], [GET], { calls: [{ cancel: { afterMs: 100 } }], log: true }),
+			drive({ client: "async", setup: BEARER }, [LATE], [GET], { calls: [{ cancel: { afterMs: 1000 } }], log: true }),
 			drive({ client: "async", setup: BEARER }, [LATE], [GET], {
-				calls: [{ taskCancel: { afterMs: 100 } }],
+				calls: [{ taskCancel: { afterMs: 1000 } }],
 				log: true,
 			}),
 		])
@@ -449,16 +449,16 @@ describe.skipIf(!PY)("redaction and isolation: what a consumer can print or brea
 })
 
 /**
- * An `AsyncSDK` call's task cancelled 100 ms in, its `asyncio.Event` cancel unset, against a reply a second late:
- * the cancellation reaches the caller, no task outlives it, and nothing the SDK started later reports an exception
- * no one retrieved or a pending task destroyed (the wait outlasts the reply by 350 ms; the collection finalizes any
- * orphan).
+ * An `AsyncSDK` call's task cancelled a second in, its `asyncio.Event` cancel unset, against a reply three seconds
+ * late: the cancellation reaches the caller, no task outlives it, and nothing the SDK started later reports an
+ * exception no one retrieved or a pending task destroyed (the wait outlasts the reply by 550 ms; the collection
+ * finalizes any orphan).
  */
 const ORPHAN = `import gc
 
 c = aclient()
 task = asyncio.ensure_future(c.slow.get(options={"cancel": asyncio.Event()}))
-await asyncio.sleep(0.1)
+await asyncio.sleep(1)
 task.cancel()
 try:
     await task
@@ -467,14 +467,14 @@ except asyncio.CancelledError:
     note("cancelled")
 await asyncio.sleep(0.05)
 note(f"tasks {len(asyncio.all_tasks())}")
-await asyncio.sleep(1.2)
+await asyncio.sleep(2.5)
 gc.collect()
 await asyncio.sleep(0)`
 
 describe.skipIf(!PY)("a cancelled AsyncSDK task", SLOW, () => {
 	/* AsyncSDK only: SDK has no task */
 	it("async: re-raises CancelledError, leaves no task behind and orphans no send", async () => {
-		const { hops, run } = await served([{ ...OK, delayMs: 1000 }], async (server) => ({
+		const { hops, run } = await served([{ ...OK, delayMs: 3000 }], async (server) => ({
 			run: await consume("http", "hooks-orphan-async", { base: server.url, body: ORPHAN }),
 			hops: server.hops.length,
 		}))
