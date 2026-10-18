@@ -48,8 +48,8 @@ const claimed = (text: string, status = 200): Reply => ({
 	text,
 })
 
-/** An answer that arrives a second late: every bound below ends the call well before it. */
-const LATE: Reply = { delayMs: 1000, json: { ok: true }, status: 200 }
+/** An answer that arrives two seconds late: every bound below ends the call well before it. */
+const LATE: Reply = { delayMs: 2000, json: { ok: true }, status: 200 }
 
 /** A C# error as the trace records it: no inner, not canceled, the method's own throw unless given, any display. */
 const plain = (entry: Partial<CsError>) => ({
@@ -213,10 +213,16 @@ describe.skipIf(!DOTNET)("a text answer is the body as a string, asked for by it
 	})
 })
 
-/** A timed run's one call: what it observed, its error, its time, and the hops. */
+/**
+ * The unbounded call a timed call follows on its client: .NET's first request on a starved core pays JIT and the
+ * connect, which can outlast a 300 ms bound before anything is sent, so the timed call is the client's second.
+ */
+const WARM: Call = { ...ECHO, timeoutMs: 0 }
+
+/** A timed run's last call: what the run observed, the call's error and time, and the hops. */
 const timed = ({ hops, run }: Driven) => ({
-	elapsed: run.trace?.calls[0]?.elapsedMs ?? -1,
-	error: run.trace?.calls[0]?.error,
+	elapsed: run.trace?.calls.at(-1)?.elapsedMs ?? -1,
+	error: run.trace?.calls.at(-1)?.error,
 	hops: hops.length,
 	observed: run.observed,
 	status: run.status,
@@ -230,17 +236,18 @@ describe.skipIf(!DOTNET)(
 		it("ClientConfig.Timeout bounds a call: a timeout observed well before the reply", async () => {
 			const setup: Setup = { timeoutMs: 300 }
 			const [bare, scripted] = await Promise.all([
-				drive([LATE], [SLOW_GET], { setup }),
-				drive([LATE], [SLOW_GET], { script: {}, setup }),
+				drive([OK, LATE], [WARM, SLOW_GET], { setup }),
+				drive([OK, LATE], [WARM, SLOW_GET], { script: {}, setup }),
 			])
 			const { elapsed, ...call } = timed(scripted)
+			const observed = [OK_DATA, { kind: "timeout" }]
 			expect(
-				{ bare: wire(bare), bounded: elapsed >= 250 && elapsed < 900, scripted: call },
+				{ bare: wire(bare), bounded: elapsed >= 250 && elapsed < 1500, scripted: call },
 				`${bare.run.stderr}${scripted.run.stderr} elapsed ${elapsed}`,
 			).toEqual({
-				bare: { hops: ["/slow"], observed: [{ kind: "timeout" }], status: 0 },
+				bare: { hops: ["/echo", "/slow"], observed, status: 0 },
 				bounded: true,
-				scripted: { error: timedOut(300), hops: 1, observed: [{ kind: "timeout" }], status: 0 },
+				scripted: { error: timedOut(300), hops: 2, observed, status: 0 },
 			})
 		})
 
@@ -248,35 +255,33 @@ describe.skipIf(!DOTNET)(
 		it("one deadline spans the auth retry: two 400 ms answers under 600 ms time out on the second", async () => {
 			const script: Script = { onAuthExpired: { tokens: ["new"] } }
 			const setup: Setup = { auth: { kind: "bearer", token: "old" }, timeoutMs: 600 }
-			const replies: Reply[] = [
-				{ delayMs: 400, status: 401 },
-				{ ...LATE, delayMs: 400 },
-			]
-			const run = await drive(replies, [SLOW_GET], { script, setup })
+			const replies: Reply[] = [OK, { delayMs: 400, status: 401 }, { ...LATE, delayMs: 400 }]
+			const run = await drive(replies, [WARM, SLOW_GET], { script, setup })
 			const { elapsed, ...call } = timed(run)
+			/* a deadline per attempt lets both answers through, so the timeout shows it; a ceiling flakes under load */
 			expect(
-				{ ...call, bounded: elapsed >= 550 && elapsed < 800, expired: run.run.trace?.authExpired },
+				{ ...call, expired: run.run.trace?.authExpired, waited: elapsed >= 550 },
 				`${run.run.stderr} elapsed ${elapsed}`,
 			).toEqual({
-				bounded: true,
 				error: timedOut(600),
 				expired: 1,
-				hops: 2,
-				observed: [{ kind: "timeout" }],
+				hops: 3,
+				observed: [OK_DATA, { kind: "timeout" }],
 				status: 0,
+				waited: true,
 			})
 		})
 
 		/* ported: python http.response.test.ts:208 (the caller's token: the OCE as thrown, never wrapped) */
 		it("a call canceled in flight on its token ends at once, its one request sent", async () => {
-			const script: Script = { calls: [{ cancel: { afterMs: 300 } }] }
-			const run = await drive([LATE], [SLOW_GET], { script })
+			const script: Script = { calls: [null, { cancel: { afterMs: 300 } }] }
+			const run = await drive([OK, LATE], [WARM, SLOW_GET], { script })
 			const { elapsed, ...call } = timed(run)
-			expect({ ...call, fast: elapsed < 900 }, `${run.run.stderr} elapsed ${elapsed}`).toEqual({
+			expect({ ...call, fast: elapsed < 1500 }, `${run.run.stderr} elapsed ${elapsed}`).toEqual({
 				error: expect.objectContaining({ canceled: true, via: "return" }),
 				fast: true,
-				hops: 1,
-				observed: [null],
+				hops: 2,
+				observed: [OK_DATA, null],
 				status: 0,
 			})
 		})

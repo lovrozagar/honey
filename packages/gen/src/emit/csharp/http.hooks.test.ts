@@ -40,8 +40,8 @@ const GET: Call = {
 }
 const FOUND: Reply = { json: { id: "u", name: "found" }, status: 200 }
 const OK: Reply = { json: { ok: true }, status: 200 }
-/** An answer that arrives a second late: every cancel below lands well before it. */
-const LATE: Reply = { ...FOUND, delayMs: 1000 }
+/** An answer that arrives two seconds late: every cancel below lands well before it. */
+const LATE: Reply = { ...FOUND, delayMs: 2000 }
 const BEARER: Setup = { auth: { kind: "bearer", token: TOKEN }, headers: { "X-Trace": HEADER } }
 const data = (value: Record<string, unknown>) => ({ data: value, kind: "data", status: 200 })
 
@@ -223,12 +223,15 @@ describe.skipIf(!DOTNET)("OnRequest and OnResponse hooks: an auth retry", SLOW, 
 	})
 })
 
-/** One late `members.get` canceled on its token as `cancel` says, logged. */
+/**
+ * One late `members.get` canceled on its token as `cancel` says, logged, after one unbounded call on its client:
+ * .NET's first request on a starved core pays JIT and the connect, which can outlast the 300 ms cancel.
+ */
 const canceled = (cancel: "before" | { afterMs: number }) =>
-	drive([LATE], [GET], { calls: [{ cancel }], log: true }, BEARER)
+	drive([FOUND, LATE], [{ ...GET, timeoutMs: 0 }, GET], { calls: [null, { cancel }], log: true }, BEARER)
 /** A canceled call as the log leg reads it, and as it expects it after `hops` hops. */
 const cancelRead = ({ hops, run }: Awaited<ReturnType<typeof drive>>) => ({
-	canceled: run.trace?.calls[0]?.error?.canceled,
+	canceled: run.trace?.calls[1]?.error?.canceled,
 	hops: hops.length,
 	log: run.trace?.log,
 	observed: run.observed,
@@ -236,8 +239,8 @@ const cancelRead = ({ hops, run }: Awaited<ReturnType<typeof drive>>) => ({
 const ended = (hops: number) => ({
 	canceled: true,
 	hops,
-	log: [start, failed("the call was canceled")],
-	observed: [null],
+	log: [start, received("info", 200), start, failed("the call was canceled")],
+	observed: [data({ id: "u", name: "found" }), null],
 })
 
 describe.skipIf(!DOTNET)(
@@ -278,7 +281,7 @@ describe.skipIf(!DOTNET)(
 		/* ported: python http.hooks.test.ts:265, :278 (a C# call ends by its token: no task cancel) */
 		it("a call canceled on its token, before it is sent or in flight, logs its start and the cancel", async () => {
 			const [before, during] = await Promise.all([canceled("before"), canceled({ afterMs: 300 })])
-			expect({ before: cancelRead(before), during: cancelRead(during) }).toEqual({ before: ended(0), during: ended(1) })
+			expect({ before: cancelRead(before), during: cancelRead(during) }).toEqual({ before: ended(1), during: ended(2) })
 		})
 	},
 )

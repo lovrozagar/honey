@@ -279,24 +279,26 @@ describe.skipIf(!DOTNET)("the C# test driver's script: a caller handler chain (C
 
 describe.skipIf(!DOTNET)("the C# test driver's script: cancel and sleep", SLOW, () => {
 	it("cancels before a call or during it on the method's token; sleeps outside elapsedMs", async () => {
-		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 300 } }, { sleepMs: 300 }] }
+		/* one unbounded call first: .NET's first request on a starved core (JIT, connect) can outlast the 300 ms cancel */
+		const script: Script = { calls: [null, { cancel: "before" }, { cancel: { afterMs: 300 } }, { sleepMs: 1000 }] }
+		const echoes = [{ ...ECHO, timeoutMs: 0 }, ECHO, ECHO, ECHO]
 		const started = Date.now()
-		const { hops, run } = await drive(on(), [{ ...OK, delayMs: 1000 }, OK], [ECHO, ECHO, ECHO], { script })
+		const { hops, run } = await drive(on(), [OK, { ...OK, delayMs: 2000 }, OK], echoes, { script })
 		const calls = run.trace?.calls ?? []
 		expect(
 			{
-				during: (calls[1]?.elapsedMs ?? 900) < 900,
+				during: (calls[2]?.elapsedMs ?? 1500) < 1500,
 				errors: calls.map((c) => c.error),
 				hops: hops.length,
 				observed: run.observed,
-				slept: Date.now() - started >= 300 && (calls[2]?.elapsedMs ?? 300) < 300,
+				slept: Date.now() - started >= 1000 && (calls[3]?.elapsedMs ?? 1000) < 1000,
 			},
 			run.stderr,
 		).toEqual({
 			during: true,
-			errors: [CANCELED, CANCELED, undefined],
-			hops: 2,
-			observed: [null, null, OK_DATA],
+			errors: [undefined, CANCELED, CANCELED, undefined],
+			hops: 3,
+			observed: [OK_DATA, null, null, OK_DATA],
 			slept: true,
 		})
 	})

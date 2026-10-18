@@ -70,17 +70,20 @@ describe.skipIf(!DOTNET)("a per-call header (RequestOptions.Headers) over the cl
 })
 
 describe.skipIf(!DOTNET)("a per-call timeout (RequestOptions.Timeout) in place of the client's", SLOW, () => {
-	/* ported from python/overrides.test.ts:81 */
+	/* ported from python/overrides.test.ts:81; an unbounded call first, as .NET's cold first request can outlast 300 ms */
 	it.each(MODES)("ends the call as a timeout when it is shorter than the config's (%s, %s)", async (_, key) => {
-		const slow: Reply = { ...OK, delayMs: 2000 }
-		const { hops, run } = await drive(key, [slow], [{ ...ECHO, timeoutMs: 300 }], { timeoutMs: 10_000 })
+		const calls = [
+			{ ...ECHO, timeoutMs: 0 },
+			{ ...ECHO, timeoutMs: 300 },
+		]
+		const { hops, run } = await drive(key, [OK, { ...OK, delayMs: 2000 }], calls, { timeoutMs: 10_000 })
 		expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
-			hops: 1,
-			observed: [{ kind: "timeout" }],
+			hops: 2,
+			observed: [OK_DATA, { kind: "timeout" }],
 		})
 	})
 
-	/* ported from python/overrides.test.ts:91 */
+	/* ported from python/overrides.test.ts:91; its unbounded first call warms the client for the bounded second */
 	it.each(MODES)(
 		"removes the config's bound for that call only when zero, the client untouched (%s, %s)",
 		async (_, key) => {

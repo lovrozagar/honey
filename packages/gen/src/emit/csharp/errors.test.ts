@@ -272,8 +272,7 @@ describe.skipIf(!DOTNET)(
 			const { hops, run } = await drive([gone, torn], [ITEM, ITEM, dots])
 			const lost = await refused([ITEM])
 			const [api, decode, path] = errorsOf(run)
-			const transport = lost.trace?.calls[0]?.error
-			const shapes = [api, decode, path, transport].map((e) => [e?.chain, e?.status, e?.inner])
+			const shapes = [api, decode, path, lost.trace?.calls[0]?.error].map((e) => [e?.chain, e?.status, e?.inner])
 			const observed = [run.observed, lost.observed]
 			expect({ hops, observed, path: path?.text, shapes }, run.stderr + lost.stderr).toEqual({
 				hops: 2,
@@ -288,19 +287,20 @@ describe.skipIf(!DOTNET)(
 			})
 		})
 
-		// ported: python errors.test.ts:266
+		// ported: python errors.test.ts:266; an unbounded call first, as .NET's cold first request can outlast 300 ms
 		it("ends a lapsed per-call timeout as ApiTimeoutException and a cancel before the call as the caller's OCE, neither with a status", async () => {
-			const late: Reply = { delayMs: 2000, json: { id: "i1", name: "n" }, status: 200 }
-			const script: Script = { calls: [null, { cancel: "before" }] }
-			const { hops, run } = await drive([late], [{ ...ITEM, timeoutMs: 300 }, ITEM], script)
-			const [timeout, canceled] = errorsOf(run)
+			const found: Reply = { json: { id: "i1", name: "n" }, status: 200 }
+			const calls = [{ ...ITEM, timeoutMs: 0 }, { ...ITEM, timeoutMs: 300 }, ITEM]
+			const script: Script = { calls: [null, null, { cancel: "before" }] }
+			const { hops, run } = await drive([found, { ...found, delayMs: 2000 }], calls, script)
+			const [, timeout, canceled] = errorsOf(run)
 			expect(
 				{ canceled, hops, observed: run.observed, statuses: [timeout?.status, canceled?.status], timeout },
 				run.stderr,
 			).toEqual({
 				canceled: expect.objectContaining({ canceled: true, via: "return" }),
-				hops: 1,
-				observed: [{ kind: "timeout" }, null],
+				hops: 2,
+				observed: [{ data: { id: "i1", name: "n" }, kind: "data", status: 200 }, { kind: "timeout" }, null],
 				statuses: [undefined, undefined],
 				timeout: plain({
 					chain: ["ApiTimeoutException", "HoneyException"],
