@@ -228,9 +228,9 @@ describe.skipIf(!RUST)("stale tracking: bounded by InvalidationConfig, never by 
 	/* v0 timed 2000 lookups over 20,000 keys against 500 ms; the port compares a lookup's cost over 16 keys
 	 * and over 16,384 (1024× the keys) in one process, the best of five rounds each: a lookup bounded by the
 	 * pattern keys costs the same at both sizes, one that scans every entry grows with the keys, so the guard
-	 * allows 16× growth and needs no machine's absolute speed */
+	 * allows 4× growth (an exact-key scan measured over 30×) and needs no machine's absolute speed */
 	// v0: edee99d992
-	it("looks a selector up without scanning every stale entry: 1024× the entries cost a lookup under 16× more", async () => {
+	it("looks a selector up without scanning every stale entry: 1024× the entries cost a lookup under 4× more", async () => {
 		const run = await served([], (server) =>
 			consume("http", "stale-budget", { ...BUDGET, base: server.url, decls: `${BUDGET.decls}\n\n${READ_ENDS}` }),
 		)
@@ -240,7 +240,7 @@ describe.skipIf(!RUST)("stale tracking: bounded by InvalidationConfig, never by 
 			built: true,
 			stale: ["16 keys: 256 of 256 stale", "16384 keys: 256 of 256 stale"],
 		})
-		expect(ratio, notes.join("\n")).toBeLessThan(16)
+		expect(ratio, notes.join("\n")).toBeLessThan(4)
 	}, 600_000)
 
 	it("keeps at most maxSourcesPerTarget mutations per stale selector; a templated target takes the mutation's params", async () => {

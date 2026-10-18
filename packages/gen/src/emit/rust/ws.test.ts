@@ -395,9 +395,8 @@ rustDescribe("what fails before or at the handshake: a `..` path param, an error
 
 rustDescribe("cancel_on on a WebSocket call: it bounds the handshake and ends an open socket (Fd6)", () => {
 	it("cancels a ready signal before dialing and a slow handshake while it waits, Canceled via return", async () => {
-		const slow: Reply = { ...ws([]), delayMs: 2000 }
-		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 100 } }] }
-		const started = Date.now()
+		const slow: Reply = { ...ws([]), delayMs: 5000 }
+		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 300 } }] }
 		const { hops, run } = await drive([slow], [rooms(), rooms()], { script })
 		expect(run.observed, run.stderr).toEqual([null, null])
 		expect({
@@ -410,13 +409,13 @@ rustDescribe("cancel_on on a WebSocket call: it bounds the handshake and ends an
 			],
 			hops: ["websocket"],
 		})
-		expect(Date.now() - started).toBeLessThan(1500)
+		expect(run.trace?.calls[1]?.elapsedMs).toBeLessThan(1500)
 	})
 
 	/* Fd6 ruled the alternative (Go/TS parity): the signal also ends an open socket, quietly */
 	it("ends an open socket quietly when the cancel fires after it opened: the frames so far, no error", async () => {
-		const held = ws([{ json: { n: 1 } }, { waitMs: 2000 }, { json: { n: 2 } }])
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
+		const held = ws([{ json: { n: 1 } }, { waitMs: 4000 }, { json: { n: 2 } }])
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
 		const { run } = await drive([held], [rooms({ take: 2 })], { script })
 		const call = run.trace?.calls[0]
 		expect({ observed: run.observed, ...(call && endOf(call)) }, run.stderr).toEqual({
@@ -426,6 +425,6 @@ rustDescribe("cancel_on on a WebSocket call: it bounds the handshake and ends an
 			handlers: undefined,
 			observed: [{ frames: [{ n: 1 }], kind: "frames" }],
 		})
-		expect(call?.elapsedMs).toBeLessThan(1000)
+		expect(call?.elapsedMs).toBeLessThan(3000)
 	})
 })

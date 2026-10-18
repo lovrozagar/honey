@@ -229,9 +229,9 @@ describe.skipIf(!RUST)("each way a call fails, one Error variant each: never Api
 
 	// v0: 2e44f6198e
 	it("ends a lapsed per-call timeout as Timeout and a cancel before the call as Canceled, neither with a status", async () => {
-		const late: Reply = { delayMs: 1000, json: { id: "i1", name: "n" }, status: 200 }
+		const late: Reply = { delayMs: 2000, json: { id: "i1", name: "n" }, status: 200 }
 		const script: Script = { calls: [null, { cancel: "before" }] }
-		const { hops, run } = await drive(driven("errors"), [late], [{ ...ITEM, timeoutMs: 50 }, ITEM], script)
+		const { hops, run } = await drive(driven("errors"), [late], [{ ...ITEM, timeoutMs: 300 }, ITEM], script)
 		expect({ errors: errorsOf(run.trace?.calls), hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 			errors: [
 				plain({ text: "the call timed out", variant: "Timeout" }),

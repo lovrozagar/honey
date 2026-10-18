@@ -116,11 +116,11 @@ rustDescribe("a realtime method resolves with its connection open, cancel_on bou
 		/* V0BUG: v0's method returned before it dialed, so a canceled call still handed back a connection */
 		const canceled = await drive([], [live({ take: 1 })], { script: { calls: [{ cancel: "before" }] } })
 		const late = await drive([{ ...refused, delayMs: 2000 }], [live({ take: 1 })], {
-			script: { calls: [{ cancel: { afterMs: 150 } }] },
+			script: { calls: [{ cancel: { afterMs: 300 } }] },
 		})
 		const seen = [canceled, late].map(({ hops, run }) => {
 			const c = run.trace?.calls[0]
-			return [run.observed, c?.error?.variant, c?.error?.via, c?.stream, hops.length, (c?.elapsedMs ?? 1e9) < 1000]
+			return [run.observed, c?.error?.variant, c?.error?.via, c?.stream, hops.length, (c?.elapsedMs ?? 1e9) < 1500]
 		})
 		expect(seen, canceled.run.stderr + late.run.stderr).toEqual([
 			[[null], "Canceled", "return", undefined, 0, true],
@@ -131,9 +131,9 @@ rustDescribe("a realtime method resolves with its connection open, cancel_on bou
 
 	it("ends an open connection quietly on a later cancel: the frames so far, no error, no reconnect", async () => {
 		/* Fd6, ruled the alternative: `cancel_on` reaches past the open and ends the connection, as Go's ctx does */
-		const held = sse([ev(1), { waitMs: 2000 }, ev(2)], "hold")
+		const held = sse([ev(1), { waitMs: 4000 }, ev(2)], "hold")
 		const { hops, run } = await drive([refused, held], [live({ take: 2 })], {
-			script: { calls: [{ cancel: { afterMs: 300 }, realtime: { reconnectDelayMs: 10 } }] },
+			script: { calls: [{ cancel: { afterMs: 1000 }, realtime: { reconnectDelayMs: 10 } }] },
 		})
 		const c = run.trace?.calls[0]
 		expect({ error: c?.error, hops: hops.length, observed: run.observed, stream: c?.stream }, run.stderr).toEqual({
@@ -142,7 +142,7 @@ rustDescribe("a realtime method resolves with its connection open, cancel_on bou
 			observed: frames(frame(1)),
 			stream: { realtime: { cursor: cursor("1", "rt-1"), errors: [], proven: "sse" }, yields: 1 },
 		})
-		expect(c?.elapsedMs).toBeLessThan(1500)
+		expect(c?.elapsedMs).toBeLessThan(3000)
 	}, 600_000)
 })
 

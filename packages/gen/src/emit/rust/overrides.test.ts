@@ -73,8 +73,8 @@ describe.skipIf(!RUST)("a per-call timeout (.timeout) in place of the client's",
 	it.each(MODES)(
 		"ends the call as a timeout when it is shorter than the config's (%s)",
 		async (_, key) => {
-			const slow: Reply = { ...OK, delayMs: 1000 }
-			const { hops, run } = await drive(key, [slow], [{ ...ECHO, timeoutMs: 50 }], { timeoutMs: 10_000 })
+			const slow: Reply = { ...OK, delayMs: 2000 }
+			const { hops, run } = await drive(key, [slow], [{ ...ECHO, timeoutMs: 300 }], { timeoutMs: 10_000 })
 			expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				hops: 1,
 				observed: [{ kind: "timeout" }],
@@ -87,9 +87,9 @@ describe.skipIf(!RUST)("a per-call timeout (.timeout) in place of the client's",
 	it.each(MODES)(
 		"removes the config's bound for that call only when zero (Duration::ZERO), the client untouched (%s)",
 		async (_, key) => {
-			const slow: Reply = { ...OK, delayMs: 300 }
+			const slow: Reply = { ...OK, delayMs: 1000 }
 			const calls = [{ ...ECHO, timeoutMs: 0 }, ECHO]
-			const { hops, run } = await drive(key, [slow, slow], calls, { timeoutMs: 100 })
+			const { hops, run } = await drive(key, [slow, slow], calls, { timeoutMs: 300 })
 			expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				hops: 2,
 				observed: [OK_DATA, { kind: "timeout" }],

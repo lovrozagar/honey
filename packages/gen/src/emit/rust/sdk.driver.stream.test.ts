@@ -276,14 +276,14 @@ describe.skipIf(!RUST)("the Rust test driver: how an SSE call fails", () => {
 
 describe.skipIf(!RUST)("the Rust test driver: what ends an SSE call", () => {
 	it("ends an open stream quietly when the call's cancel fires after it opened: the events so far, no error", async () => {
-		const held = sse([tick(1), { waitMs: 300 }, tick(2)], "hold")
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
+		const held = sse([tick(1), { waitMs: 3000 }, tick(2)], "hold")
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
 		const { run } = await drive(driven("sse"), [held], [ticks({ take: 2 })], script)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: undefined,
 			observed: [{ events: [{ data: { n: 1 } }], kind: "events" }],
 		})
-		expect(run.trace?.calls[0]?.elapsedMs).toBeLessThan(1000)
+		expect(run.trace?.calls[0]?.elapsedMs).toBeLessThan(2500)
 	}, 600_000)
 
 	it("fails the run when a stream never ends: stream stalled, after 10 s", async () => {

@@ -294,7 +294,7 @@ describe.skipIf(!RUST)("the Rust test driver's script: a caller's http_builder",
 
 describe.skipIf(!RUST)("the Rust test driver's script: cancel and sleep", () => {
 	it("cancels before a call (nothing sent) or during it, and sleeps before a call outside its elapsedMs", async () => {
-		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 100 } }, { sleepMs: 300 }] }
+		const script: Script = { calls: [{ cancel: "before" }, { cancel: { afterMs: 300 } }, { sleepMs: 1000 }] }
 		const late: Reply = { ...OK, delayMs: 2000 }
 		const started = Date.now()
 		const { hops, run } = await drive(driven("http"), [late, OK], [ECHO, ECHO, ECHO], { script })
@@ -305,7 +305,7 @@ describe.skipIf(!RUST)("the Rust test driver's script: cancel and sleep", () => 
 				hops: hops.length,
 				observed: run.observed,
 				quick: calls.map((c) => c.elapsedMs < 1500),
-				slept: Date.now() - started >= 300 && (calls[2]?.elapsedMs ?? 300) < 300,
+				slept: Date.now() - started >= 1000 && (calls[2]?.elapsedMs ?? 1000) < 1000,
 			},
 			run.stderr,
 		).toEqual({

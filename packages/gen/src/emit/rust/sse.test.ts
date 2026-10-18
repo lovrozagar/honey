@@ -77,7 +77,7 @@ async function drive(replies: readonly Reply[], calls: readonly Call[], options:
  */
 const ENDED = sections({
 	ended: `    let c = client(base)?;
-    let signal = tokio::time::sleep(std::time::Duration::from_millis(150));
+    let signal = tokio::time::sleep(std::time::Duration::from_millis(1000));
     let mut s = c.text().stream(&sdk::TextStreamOpts::default()).cancel_on(signal).await?;
     while let Some(ev) = s.next().await {
         n.note(ev?.data);
@@ -322,7 +322,7 @@ describe.skipIf(!RUST)("what bounds an SSE call: cancel_on bounds the open, no t
 
 	it("bounds the open with cancel_on: a slow answer is Canceled via return, one hop, well before it comes", async () => {
 		const slow: Reply = { ...TICK, delayMs: 2_000 }
-		const { hops, run } = await drive([slow], [ticks()], { script: { calls: [{ cancel: { afterMs: 100 } }] } })
+		const { hops, run } = await drive([slow], [ticks()], { script: { calls: [{ cancel: { afterMs: 300 } }] } })
 		const call = run.trace?.calls[0]
 		expect({ error: errorOf(call?.error), hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 			error: { kind: undefined, status: undefined, text: "the call was canceled", variant: "Canceled", via: "return" },
@@ -344,7 +344,7 @@ describe.skipIf(!RUST)("how an open SSE stream ends: the call's cancel, dropping
 		const held = sse(["data: 1\n\n"], "hold")
 		/* the second call's answer waits until the first stream's client left (gone.ts): the driver still runs */
 		const next = gone(sse(["data: z\n\n"]))
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
 		const { run } = await drive([held, next.reply], [text(), text()], { script })
 		const calls = run.trace?.calls ?? []
 		expect(
@@ -355,7 +355,7 @@ describe.skipIf(!RUST)("how an open SSE stream ends: the call's cancel, dropping
 			observed: [strings("1"), strings("z")],
 			released: true,
 		})
-		expect(calls[0]?.elapsedMs).toBeGreaterThanOrEqual(140)
+		expect(calls[0]?.elapsedMs).toBeGreaterThanOrEqual(950)
 		expect(calls[0]?.elapsedMs).toBeLessThan(5_000)
 	}, 600_000)
 

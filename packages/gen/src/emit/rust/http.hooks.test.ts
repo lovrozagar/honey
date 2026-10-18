@@ -249,7 +249,7 @@ describe.skipIf(!RUST)(
 		it("logs a call dropped in flight as an error entry with no status; a call canceled before it starts logs nothing", async () => {
 			const late: Reply = { ...FOUND, delayMs: 2000 }
 			const [inflight, before] = await Promise.all([
-				drive([late], [GET], { calls: [{ cancel: { afterMs: 100 } }], log: true }, BEARER),
+				drive([late], [GET], { calls: [{ cancel: { afterMs: 300 } }], log: true }, BEARER),
 				drive([FOUND], [GET], { calls: [{ cancel: "before" }], log: true }, BEARER),
 			])
 			const read = ({ hops, run }: typeof before) => ({

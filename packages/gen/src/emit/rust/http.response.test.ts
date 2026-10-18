@@ -162,7 +162,7 @@ describe.skipIf(!RUST)("a call ends when its time is up or it is canceled, never
 	}, 600_000)
 
 	it("ends a call canceled in flight as Error::Canceled, well before the reply, its one request sent", async () => {
-		const script: Script = { calls: [{ cancel: { afterMs: 100 } }] }
+		const script: Script = { calls: [{ cancel: { afterMs: 300 } }] }
 		const { hops, run } = await drive(driven("http"), [LATE], [SLOW], { script })
 		const call = run.trace?.calls[0]
 		expect(

@@ -128,9 +128,9 @@ const CALLS = sections({
     c.users().list(&o).header("x-trace", "a").await?;
     c.users().list(&o).await?;
     c.users().list(&o).base_url(base.replace("/v1", "/v2")).await?;
-    let timed = c.users().list(&o).timeout(std::time::Duration::from_millis(100)).await;
+    let timed = c.users().list(&o).timeout(std::time::Duration::from_millis(300)).await;
     n.note(format!("timeout {}", matches!(timed, Err(sdk::Error::Timeout))));
-    let signal = tokio::time::sleep(std::time::Duration::from_millis(100));
+    let signal = tokio::time::sleep(std::time::Duration::from_millis(300));
     let canceled = c.users().list(&o).cancel_on(signal).await;
     n.note(format!("canceled {}", matches!(canceled, Err(sdk::Error::Canceled))));
     let spawned = tokio::spawn(c.users().list(&o).header("x-trace", "s").into_future()).await;
