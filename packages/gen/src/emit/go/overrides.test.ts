@@ -125,8 +125,8 @@ goDescribe("per-call base URL and timeout (WithBaseURL, WithTimeout)", () => {
 	it.each(MODES)(
 		"a per-call timeout shorter than the config's ends the call as a timeout (%s)",
 		async (_, mode) => {
-			const slow: Reply = { delayMs: 1000, json: {}, status: 200 }
-			const { hops, run } = await drive(ovrSdk(mode), [slow], [{ ...ECHO, timeoutMs: 50 }], { timeoutMs: 10_000 })
+			const slow: Reply = { delayMs: 2000, json: {}, status: 200 }
+			const { hops, run } = await drive(ovrSdk(mode), [slow], [{ ...ECHO, timeoutMs: 300 }], { timeoutMs: 10_000 })
 			expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				hops: 1,
 				observed: [{ kind: "timeout" }],
@@ -138,9 +138,9 @@ goDescribe("per-call base URL and timeout (WithBaseURL, WithTimeout)", () => {
 	it.each(MODES)(
 		"a per-call timeout <= 0 removes the config's bound for that call only (%s)",
 		async (_, mode) => {
-			const slow: Reply = { delayMs: 300, json: {}, status: 200 }
+			const slow: Reply = { delayMs: 1000, json: {}, status: 200 }
 			const calls = [{ ...ECHO, timeoutMs: -1 }, ECHO]
-			const { hops, run } = await drive(ovrSdk(mode), [slow, slow], calls, { timeoutMs: 100 })
+			const { hops, run } = await drive(ovrSdk(mode), [slow, slow], calls, { timeoutMs: 300 })
 			expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				hops: 2,
 				observed: [ECHOED, { kind: "timeout" }],

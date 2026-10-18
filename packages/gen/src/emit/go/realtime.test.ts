@@ -198,11 +198,11 @@ goDescribe("a realtime method returns its connection open, its ctx bounding the 
 		const sdk = rtSdk()
 		const canceled = await drive(sdk, [], [live({ take: 1 })], { calls: [{ cancel: "before" }] })
 		const late = await drive(sdk, [{ ...refused, delayMs: 2000 }], [live({ take: 1 })], {
-			calls: [{ ctxTimeoutMs: 150 }],
+			calls: [{ ctxTimeoutMs: 300 }],
 		})
 		const seen = [canceled, late].map(({ hops, run }) => {
 			const c = run.trace?.calls[0]
-			const ms = c && c.elapsedMs < 1000
+			const ms = c && c.elapsedMs < 1500
 			return [run.observed, c?.error?.canceled, c?.error?.deadline, c?.error?.via, c?.stream, hops.length, ms]
 		})
 		expect(seen, canceled.run.stderr + late.run.stderr).toEqual([

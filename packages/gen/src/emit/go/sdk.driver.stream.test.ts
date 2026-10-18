@@ -187,7 +187,7 @@ goDescribe("the Go test driver: SSE errors and string data", () => {
 
 goDescribe("the Go test driver: an SSE call's ctx", () => {
 	it("ends quietly when the call's ctx ends mid-stream: the events so far, no error", async () => {
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }] }
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }] }
 		const { run } = await drive(streamsSdk(), [sse(['data: {"n":1}\n\n'], "hold")], [ticks()], script)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: undefined,

@@ -250,7 +250,7 @@ goDescribe("the Go test driver's script: client config", () => {
 goDescribe("the Go test driver's script: per-call directives", () => {
 	it("cancels before or during a call, bounds it by a caller deadline, and sleeps before it", async () => {
 		const script: Script = {
-			calls: [{ cancel: "before" }, { cancel: { afterMs: 100 } }, { ctxTimeoutMs: 100 }, { sleepMs: 300 }],
+			calls: [{ cancel: "before" }, { cancel: { afterMs: 300 } }, { ctxTimeoutMs: 300 }, { sleepMs: 1000 }],
 		}
 		const late: Reply = { ...FOUND, delayMs: 2000 }
 		const started = Date.now()
@@ -261,8 +261,8 @@ goDescribe("the Go test driver's script: per-call directives", () => {
 			hops: hops.length,
 			observed: run.observed,
 			quick: calls.map((c) => c.elapsedMs < 1500),
-			slept: Date.now() - started >= 300 && (calls[3]?.elapsedMs ?? 300) < 300,
-			waited: (calls[2]?.elapsedMs ?? 0) >= 100,
+			slept: Date.now() - started >= 1000 && (calls[3]?.elapsedMs ?? 1000) < 1000,
+			waited: (calls[2]?.elapsedMs ?? 0) >= 300,
 		}).toEqual({
 			flags: [
 				[true, false, []],

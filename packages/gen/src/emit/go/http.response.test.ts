@@ -224,7 +224,7 @@ goDescribe("a call ends when its time is up or its ctx is canceled", () => {
 	// v0: 9a8782c1a9
 	it("ends a call whose ctx is canceled in flight with context.Canceled, not a deadline and no honey type", async () => {
 		const late: Reply = { delayMs: 2000, json: { ok: true }, status: 200 }
-		const script: Script = { calls: [{ cancel: { afterMs: 100 } }] }
+		const script: Script = { calls: [{ cancel: { afterMs: 300 } }] }
 		const { hops, run } = await drive(respSdk(), [late], [SLOW], { script })
 		const call = run.trace?.calls[0]
 		expect({

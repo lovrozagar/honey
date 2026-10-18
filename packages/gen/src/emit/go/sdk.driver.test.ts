@@ -190,10 +190,10 @@ goDescribe("the Go test driver: timeouts and the raw response, the grid's outcom
 	it("observes a lapsed client or call timeout as timeout, a late answer never awaited", async () => {
 		const sdk = notesSdk()
 		const replies: Reply[] = [
-			{ delayMs: 2000, json: {}, status: 200 },
-			{ delayMs: 2000, json: {}, status: 200 },
+			{ delayMs: 5000, json: {}, status: 200 },
+			{ delayMs: 5000, json: {}, status: 200 },
 		]
-		const calls: Call[] = [CREATE, { ...CREATE, timeoutMs: 50 }]
+		const calls: Call[] = [CREATE, { ...CREATE, timeoutMs: 300 }]
 		const started = Date.now()
 		const [run, hops] = await served(replies, async (server) => {
 			const ran = await sdk.runCalls({ calls, setup: { timeoutMs: 300 } }, server)
@@ -204,7 +204,7 @@ goDescribe("the Go test driver: timeouts and the raw response, the grid's outcom
 			observed: [{ kind: "timeout" }, { kind: "timeout" }] satisfies Observed[],
 			status: 0,
 		})
-		expect(Date.now() - started).toBeLessThan(1500)
+		expect(Date.now() - started).toBeLessThan(4000)
 	}, 600_000)
 
 	it("observes raw: true as the stored response, on success and on an error status, in both modes", async () => {

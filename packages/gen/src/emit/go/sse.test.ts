@@ -330,7 +330,7 @@ goDescribe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", (
 
 	it("ends quietly when the caller's ctx is canceled or its deadline passes mid-stream: the events so far, no error", async () => {
 		const held = sse(["data: 1\n\n"], "hold")
-		const script: Script = { calls: [{ cancel: { afterMs: 150 } }, { ctxTimeoutMs: 150 }] }
+		const script: Script = { calls: [{ cancel: { afterMs: 1000 } }, { ctxTimeoutMs: 1000 }] }
 		const { run } = await drive(sseSdk(), [held, held], [text(), text()], { script })
 		const calls = run.trace?.calls ?? []
 		expect({ errors: calls.map((call) => call.error), observed: run.observed }, run.stderr).toEqual({
@@ -340,7 +340,7 @@ goDescribe("how an SSE stream ends: timeouts, the caller's ctx, breaking out", (
 				{ events: [{ data: "1" }], kind: "events" },
 			],
 		})
-		for (const { elapsedMs } of calls) expect(elapsedMs).toBeGreaterThanOrEqual(140)
+		for (const { elapsedMs } of calls) expect(elapsedMs).toBeGreaterThanOrEqual(950)
 		for (const { elapsedMs } of calls) expect(elapsedMs).toBeLessThan(5_000)
 	}, 600_000)
 
