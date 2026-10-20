@@ -38,8 +38,14 @@ export function validateRootNamespace(value: string): string {
 export const validateClientName = (value: string): string =>
 	CLIENT_NAME.test(value) ? value : refuse("clientName", value)
 
-/** A SemVer 2 version. */
-export const validateVersion = (value: string): string => (SEMVER.test(value) ? value : refuse("version", value))
+/* MSBuild derives the assembly version from major.minor.patch, each part at most 65534 (CS7034 past it) */
+const ASSEMBLY_PART_MAX = 65534
+
+/** A SemVer 2 version whose major, minor and patch each fit an assembly version part. */
+export function validateVersion(value: string): string {
+	const parts = SEMVER.exec(value)?.slice(1, 4)
+	return parts?.every((part) => Number(part) <= ASSEMBLY_PART_MAX) === true ? value : refuse("version", value)
+}
 
 /** The `.csproj`: the package id as the assembly name, no package reference (H11). */
 export const csproj = ({

@@ -157,11 +157,14 @@ const cachesDotnet = (step: string) =>
 	/\}\}-dotnet-\$\{\{ hashFiles\(/.test(step.replace(/\s+/g, " "))
 
 describe("CI installs the SDK global.json pins", () => {
-	/* the jobs that run gen's .NET: the csharp project's shard, and the rust project's, whose toolchain files reach
-	 * every language (vitest.config.ts, Fb13); the harness (`bun run test:harness`) joins them in phase e */
+	/* the jobs that run gen's .NET: the harness (`bun run test:harness`, the C# runner and harness files), the
+	 * csharp project's shard, and the rust project's, whose toolchain files reach every language (vitest.config.ts,
+	 * Fb13) */
 	it("in every job that runs gen's .NET, by the command a missing SDK names, beside the dotnet cache", () => {
-		const testing = Object.entries(jobs(WORKFLOW)).filter(([, job]) => /--project (?:csharp|rust)\b/.test(job))
-		expect(testing.map(([name]) => name).sort()).toEqual(["gen-csharp", "gen-rust"])
+		const testing = Object.entries(jobs(WORKFLOW)).filter(([, job]) =>
+			/^ +- run: bun run test:harness$|--project (?:csharp|rust)\b/m.test(job),
+		)
+		expect(testing.map(([name]) => name).sort()).toEqual(["gen-csharp", "gen-rust", "harness"])
 		const missing = testing.filter(
 			([, job]) => !runs(job).some((lines) => lines.includes(INSTALL)) || !steps(job).some(cachesDotnet),
 		)

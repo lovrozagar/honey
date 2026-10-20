@@ -283,6 +283,12 @@ describe("generateCSharpSdk: the options (Fb3)", () => {
 		})
 	})
 
+	it("takes a version whose every part is 65534, the most an assembly version part may hold", () => {
+		expect(filesOf(minimal, { version: "65534.65534.65534" })["HoneySdk.csproj"]).toContain(
+			"<Version>65534.65534.65534</Version>",
+		)
+	})
+
 	it("takes a package id of 100 characters, NuGet's limit", () => {
 		expect(Object.keys(filesOf(minimal, { packageId: "X".repeat(100) }))).toContain(`${"X".repeat(100)}.csproj`)
 	})
@@ -296,6 +302,9 @@ describe("generateCSharpSdk: the options (Fb3)", () => {
 		["rootNamespace", "A.2b"],
 		["clientName", "lower"],
 		["version", "1.0"],
+		["version", "65535.0.0"],
+		["version", "0.65535.0"],
+		["version", "0.0.65535-rc.1"],
 	] as const)("refuses the %s %j, naming it", (option, value) => {
 		expect(() => generateCSharpSdk(minimal, { [option]: value })).toThrow(`Invalid ${option}: "${value}"`)
 	})

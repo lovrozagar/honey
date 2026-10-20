@@ -618,6 +618,25 @@ jobs:
           rustup toolchain install
           rustup default "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
           rustup toolchain install 1.85.0 --profile minimal --component clippy
+      # gen runs every dotnet through its csharp-env fixture, installed as in gen-csharp (which says why)
+      - name: .NET (global.json's SDK, and the seed restore)
+        run: |
+          V="$(sed -n 's/.*"version": "\(.*\)",/\1/p' global.json)" && D="$HOME/.cache/honey-tmp/dotnet" && F="$(git rev-parse --show-toplevel)/packages/gen/src/emit/csharp/__fixtures__" && T="$D/toolchain/$V" && mkdir -p "$D/dl" "$D/home" "$D/tmp" && curl -fsSL -o "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" "https://builds.dotnet.microsoft.com/dotnet/Sdk/$V/dotnet-sdk-$V-linux-x64.tar.gz" && (cd "$D/dl" && sha512sum -c "$F/dotnet-sdk.sha512") && rm -rf "$T" "$T.partial" && mkdir -p "$T.partial" && tar -xzf "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" -C "$T.partial" && mv "$T.partial" "$T" && rm "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" && DOTNET_CLI_HOME="$D/home" DOTNET_ROOT="$D/toolchain/$V" NUGET_HTTP_CACHE_PATH="$D/nuget-http" NUGET_PACKAGES="$D/nuget" NUGET_PLUGINS_CACHE_PATH="$D/nuget-plugins" TMPDIR="$D/tmp" HOME="$D/home" DOTNET_ADD_GLOBAL_TOOLS_TO_PATH="false" DOTNET_CLI_TELEMETRY_OPTOUT="1" DOTNET_CLI_UI_LANGUAGE="en" DOTNET_CLI_USE_MSBUILD_SERVER="0" DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE="1" DOTNET_GENERATE_ASPNET_CERTIFICATE="false" DOTNET_NOLOGO="1" DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1" MSBUILDDISABLENODEREUSE="1" NUGET_XMLDOC_MODE="skip" UseSharedCompilation="false" "$T/dotnet" restore "$F/seed/Seed.csproj" --source https://api.nuget.org/v3/index.json --artifacts-path "$D/tmp/seed"
+      # restored, never saved: gen-csharp owns it; the served SDK builds here each run
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/dotnet/nuget
+            ~/.cache/honey-tmp/dotnet/sdk
+            ~/.cache/honey-tmp/dotnet/driver
+          key: >-
+            ${{ runner.os }}-dotnet-${{ hashFiles('global.json', 'packages/gen/src/emit/csharp/**',
+            'packages/gen/src/emit/csharp/**/.editorconfig', 'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/csharp/**',
+            'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
+            'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
+            'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-dotnet-
       # gen's Rust caches for the toolchain files run below, keyed as in the test job
       - uses: actions/cache@v4
         with:
@@ -685,7 +704,7 @@ jobs:
           HONEY_PYTHON: python
           # a Python problem fails the job instead of skipping the Python SDK tests
           HONEY_REQUIRE_PYTHON: "1"
-          # a missing Go, Rust or Python fails gen's conformance and harness files for it instead of skipping them
+          # a missing Go, Rust, Python or .NET fails gen's conformance and harness files for it instead of skipping them
           HONEY_REQUIRE_TOOLCHAINS: "1"
       # as in the test job: the saved cache keeps only the Rust SDKs this run built or reused
       - name: Prune the Rust SDKs this run did not use

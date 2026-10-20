@@ -7,24 +7,30 @@ namespace Honey.Runtime;
 /// <summary>
 /// One event of a call for <c>ClientConfig.OnLog</c>: <c>request_start</c> (debug), <c>response_received</c> (info
 /// below 400, warn from 400) or <c>error</c> (error), the operation as <c>METHOD /template</c>, the milliseconds since
-/// the call began, the status and the error. No entry holds a URL, a header value or a query.
+/// <c>request_start</c> (0 for it), the status and the error. No entry holds a URL, a header value or a query.
 /// </summary>
 public sealed record LogEntry(string Level, string Event, string Operation, long DurationMs, int? Status, string? Error);
 
 internal sealed class CallLog(Action<LogEntry>? hook, string operation)
 {
-    private readonly long _start = Stopwatch.GetTimestamp();
+    private long _start;
 
-    public void Start() => Emit("debug", "request_start", null, null);
+    public void Start()
+    {
+        _start = Stopwatch.GetTimestamp();
+        Emit("debug", "request_start", 0, null, null);
+    }
 
-    public void Received(int status) => Emit(status >= 400 ? "warn" : "info", "response_received", status, null);
+    public void Received(int status) => Emit(status >= 400 ? "warn" : "info", "response_received", Elapsed, status, null);
 
     public void Failed(Exception error) =>
-        Emit("error", "error", (error as ApiStatusException)?.Status, $"{error.GetType().Name}: {error.Message}");
+        Emit("error", "error", Elapsed, (error as ApiStatusException)?.Status, $"{error.GetType().Name}: {error.Message}");
 
-    public void Canceled() => Emit("error", "error", null, "the call was canceled");
+    public void Canceled() => Emit("error", "error", Elapsed, null, "the call was canceled");
 
-    private void Emit(string level, string name, int? status, string? error)
+    private long Elapsed => (long)Stopwatch.GetElapsedTime(_start).TotalMilliseconds;
+
+    private void Emit(string level, string name, long durationMs, int? status, string? error)
     {
         if (hook is null)
         {
@@ -32,7 +38,7 @@ internal sealed class CallLog(Action<LogEntry>? hook, string operation)
         }
         try
         {
-            hook(new LogEntry(level, name, operation, (long)Stopwatch.GetElapsedTime(_start).TotalMilliseconds, status, error));
+            hook(new LogEntry(level, name, operation, durationMs, status, error));
         }
         catch (Exception)
         {

@@ -383,7 +383,7 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * ToString calls, and every internal member has a use); every /// block on a non-public member, 14,523 B (13,100 B in
  * phase c's 18 files, 1,423 B in Sse, Wire and WsDial); the loop's header comment, 483 B. By file: Adapters 7,436,
  * Auth 1,655, Body 4,702, Config 7,966, Envelope 5,389, Errors 7,083, Events 6,197, Exchange 9,257, Handler 3,469,
- * Hooks 4,855, Invalidation 3,628, Json 5,638, Log 1,574, Operation 1,482, Path 2,003, Query 1,986, Realtime 5,127,
+ * Hooks 4,855, Invalidation 3,628, Json 5,638, Log 1,703, Operation 1,482, Path 2,003, Query 1,986, Realtime 5,127,
  * RealtimeLoop 6,436, Redirect 2,165, Result 1,273, Sse 3,789, Stale 4,527, Transport 6,319, TransportLongPoll 2,226,
  * TransportSse 2,137, TransportWs 1,550, Wire 3,289, Ws 10,774, WsDial 5,790. Phase d's delta on phase c's 88,583 B,
  * +41,139 B: SSE core (Events, Sse, Wire) 13,275 B, WebSocket (Ws, WsDial) 16,564 B, realtime (Adapters, Realtime,
@@ -392,9 +392,12 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * end's lock and once-only cancel, WsDial the dial's own deadline and status mapping (no exchange, ruled) and the
  * Upgrade check Q-d1's probe found the BCL never makes, Adapters 1,520 B of public docs on the interfaces, options
  * and kinds. Counted: every runtime .cs file; the directory holds nothing else. No runtime file goes unshipped (dead
- * code). A raise names its feature bytes and cuts dead and duplicate code first; it is never silent.
+ * code). A raise names its feature bytes and cuts dead and duplicate code first; it is never silent. Phase e, +129 B
+ * to 129,851 B (Fe7): Log's clock starts at request_start, which logs 0, and every later entry passes its elapsed
+ * time (Q-e4: the clock read from construction logged request_start at up to 54 ms on a cold first call under load);
+ * Log has no dead member to cut.
  */
-const CSHARP_RUNTIME_BYTES = 129_722
+const CSHARP_RUNTIME_BYTES = 129_851
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {

@@ -263,6 +263,19 @@ describe.skipIf(!DOTNET)(
 			})
 		})
 
+		/* ported: rust-harness.test.ts:265-279 (Fe7: the call begins at request_start, so it logs 0 by definition) */
+		it("logs a client's first call's request_start at durationMs 0, then a whole-ms response_received", async () => {
+			const { run } = await drive([FOUND], [GET], { log: true, logDurations: true }, BEARER)
+			const log = run.trace?.log ?? []
+			const first = log[0]?.durationMs
+			expect(first, `request_start durationMs expected 0, got ${first}`).toBe(0)
+			expect(log, run.stderr).toEqual([
+				{ ...start, durationMs: 0 },
+				{ ...received("info", 200), durationMs: expect.any(Number) },
+			])
+			expect(Number.isInteger(log[1]?.durationMs) && (log[1]?.durationMs ?? -1) >= 0).toBe(true)
+		})
+
 		/* ported: python http.hooks.test.ts:244 */
 		it("request_start then an error entry with no status when no answer arrives", async () => {
 			const closed = await served([], async (server) => server.url)

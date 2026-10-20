@@ -148,12 +148,17 @@ const reconnect: Scenario[] = [
 ]
 
 const overrides: Scenario[] = [
+	/*
+	 * Warmed (bit 15 e, Fe2): the timed call is not the client's first, and its deadline is 300 ms. A cold first
+	 * request under a 50 ms deadline lost its hop under load (red in 20 runs: C# 20, Python floor 11, Rust 6,
+	 * Python async 5, Python sync 1). TS and Go never lost it (0 of 20) and run this shape because the cell is shared.
+	 */
 	{
-		calls: [call("timing.slow", "GET", "/v1/slow", { search: { ms: 2000 }, timeoutMs: 50 })],
-		expect: [{ kind: "timeout" }],
+		calls: [echo(), call("timing.slow", "GET", "/v1/slow", { search: { ms: 2000 }, timeoutMs: 300 })],
+		expect: [echoed, { kind: "timeout" }],
 		id: "timeout",
 		setup: { timeoutMs: 10_000 },
-		wire: [hop("GET", "/v1/slow?ms=2000")],
+		wire: [hop("GET", "/v1/echo"), hop("GET", "/v1/slow?ms=2000")],
 	},
 	{
 		calls: [echo({ headers: { "x-trace": "a" } }), echo()],
