@@ -1,7 +1,7 @@
 # Bit 15 — C#/.NET SDK (new)
 
 Closes: H5 · H11 · C1 · C2 · A1/A2
-Oracle kept green: `tests/integration/conformance/csharp.test.ts` (the 28 cells on the reference app) + `tests/integration/csharp-harness.test.ts` (+`.ws`), the mutation guards, and the adversarial corpus — all run in the `gen-csharp` CI shard (`9e1f727`).
+Oracle kept green: `tests/integration/conformance/csharp.test.ts` (the 28 cells on the reference app) + `tests/integration/csharp-harness.test.ts` (+`.ws`), the mutation guards, and the adversarial corpus. These do **not** share one CI home (Fe3): the two harness-mode runners run in the **harness job**, beside every other target; the mutation guards (`mutation-harness.test.ts`) run in **gen (rust)** (`vitest.config.ts`, the shard owning the heaviest cache); the shared string-escape adversarial corpus runs in the default/unit run; and the `gen (csharp)` shard (`9e1f727`) runs the C# emit suite (`src/emit/csharp/**` + `csharp-toolchain.test.ts`).
 Formatter post-pass: `dotnet format` (no csharpier). Runtime: vendored, BCL-only — `HttpClient` + source-generated `System.Text.Json`, zero external runtime deps (H11).
 
 All phase-f-lesson claims were probe-verified on the pinned SDKs (research packet `44-…`, evidence under `~/.cache/honey-tmp/b15-probe/`), both the floor and CI SDK, identical results.
