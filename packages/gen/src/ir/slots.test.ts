@@ -225,6 +225,34 @@ describe("request bodies: order and refs", () => {
 	})
 })
 
+const URLENCODED = "application/x-www-form-urlencoded"
+
+/** A form of `properties` offered urlencoded and multipart, and as JSON too when `withJson`. */
+function offered(properties: Json, withJson = false): Json {
+	const schema = { properties, type: "object" }
+	const content = { [URLENCODED]: { schema }, "multipart/form-data": { schema } }
+	return { requestBody: { content: withJson ? { ...content, "application/json": { schema } } : content } }
+}
+
+const order = (op: IROperation) => bodiesOf(op).map(({ contentType, kind }) => `${contentType} ${kind}`)
+
+describe("request bodies: a form offered both ways", () => {
+	it("prefers multipart when the form has a file part, since urlencoded cannot carry one", () => {
+		const file = { file: { format: "binary", type: "string" } }
+		expect([order(operation(offered(file))), order(operation(offered(file, true)))]).toEqual([
+			["multipart/form-data multipart", `${URLENCODED} raw`],
+			["application/json raw", "multipart/form-data multipart", `${URLENCODED} raw`],
+		])
+	})
+
+	it("keeps urlencoded first when the form has no file part", () => {
+		expect(order(operation(offered({ note: { type: "string" } })))).toEqual([
+			`${URLENCODED} raw`,
+			"multipart/form-data raw",
+		])
+	})
+})
+
 describe("responses and extensions", () => {
 	// v0: bd7dffc2cb
 	// v0: 87881dbcd5

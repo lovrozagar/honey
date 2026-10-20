@@ -158,11 +158,17 @@ function bodyOf(type: string, media: Json | undefined, required: boolean, compon
 	return { contentType: type, kind: "raw", required, schema: schemaToIR(schema) }
 }
 
+/* a urlencoded form cannot carry a file, so a multipart one with a file part ranks just above it */
+const weight = (body: IRBody) =>
+	body.kind === "multipart" ? rank("application/x-www-form-urlencoded") - 0.5 : rank(body.contentType)
+
 /** Every request body the operation declares, preferred first. */
 export function requestBodies(op: Json, components: Components): IRBody[] {
 	const requestBody = deref(op.requestBody, components)
 	const content = (requestBody?.content ?? {}) as Record<string, Json>
-	return ordered(content).map((type) => bodyOf(type, content[type], requestBody?.required === true, components))
+	return ordered(content)
+		.map((type) => bodyOf(type, content[type], requestBody?.required === true, components))
+		.sort((a, b) => weight(a) - weight(b))
 }
 
 /** A response's declared headers (A2), refs followed, in code-unit order; none when it declares none. */
