@@ -36,6 +36,10 @@ internal sealed class Recorder
         {
             entry["result"] = result;
         }
+        if (outcome.Stream is { } stream)
+        {
+            entry["stream"] = stream;
+        }
         calls.Add(entry);
     }
 
@@ -133,7 +137,10 @@ internal sealed class LogRecorder(bool durations, Recorder recorder)
     }
 }
 
-/// <summary>A call's error and a safe-mode result as the trace records them (protocol.ts <c>CsError</c>).</summary>
+/// <summary>
+/// A call's error and a safe-mode result as the trace records them (protocol.ts <c>CsError</c>): <c>via</c> is
+/// <c>"return"</c> for the method's throw, <c>"result"</c> for a safe-mode error, <c>"stream"</c> for one a stream threw.
+/// </summary>
 internal static class Traces
 {
     /* the envelope's text members, in protocol.ts order after `status` */

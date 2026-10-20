@@ -1,9 +1,10 @@
 /**
- * The C# method shapes past JSON (contract 47 §5.12, §2.1, §2.2): what phase c lifts from phase b's refusals (Fb1)
- * and what still waits for phase d; each body and answer kind's method on `http`, and the bytes and text twins on
- * `http-safe`; the multipart `<Op>Body` records with `FilePart` parts; Fc7's `<Op>Headers` holder and its `Read`,
- * typed by each header's scalar, none for a WebSocket or realtime op; what the JSON context lists and never lists;
- * and the names `headersInto` and `Part` push to `…2`. Each is the emitted text.
+ * The C# method shapes past JSON (contract 47 §5.12, §2.1, §2.2): every kind phase b refused (Fb1) emits, the
+ * bodies and bytes since phase c and the streams since phase d (contract 50 §2); each body and answer kind's method
+ * on `http`, and the bytes and text twins on `http-safe`; the multipart `<Op>Body` records with `FilePart` parts;
+ * Fc7's `<Op>Headers` holder and its `Read`, typed by each header's scalar, none for a WebSocket or realtime op; what
+ * the JSON context lists and never lists; and the names `headersInto` and `Part` push to `…2`. Each is the emitted
+ * text.
  */
 import { describe, expect, it } from "vitest"
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
@@ -37,7 +38,7 @@ const answer = (type: string, schema?: Json) => ({
 })
 const SOCKET = { responses: { 101: { description: "Switching Protocols" } }, "x-websocket": true }
 
-/** Phase b's refused kinds (`sdk.test.ts`'s REFUSED), each its own one-op document. */
+/** Phase b's refused kinds (Fb1), each its own one-op document. */
 const KINDS: readonly (readonly [label: string, document: Json])[] = [
 	[
 		"a form body",
@@ -54,10 +55,6 @@ const KINDS: readonly (readonly [label: string, document: Json])[] = [
 	["a WebSocket", single("ws.subscribe", SOCKET, "get")],
 	["a realtime channel", single("realtime.connect", { ...SOCKET, "x-realtime": true }, "get")],
 ]
-
-/** Phase b's refusal of `id`, which phase d lifts. */
-const later = (id: string, what: string) =>
-	`C# SDK: operation "${id}" ${what}, which this emitter does not generate yet`
 
 /** A multipart body whose schema requires its file part. */
 const UPLOADS = single(
@@ -228,18 +225,18 @@ const METHODS: readonly (readonly [op: string, owner: string, signature: string,
 	],
 ]
 
-describe("generateCSharpSdk: the kinds phase c emits", () => {
-	/* phase b's sdk.test.ts:311 refusals, narrowed to the streams (phase d) */
-	it("emits form, multipart, octet-stream and text/plain bodies and an octet-stream answer, and still refuses each stream, naming it", () => {
+describe("generateCSharpSdk: the kinds phase b refused", () => {
+	/* phase b's sdk.test.ts:311 refusals: phase c lifts the bodies and bytes, phase d the streams (contract 50 §2) */
+	it("emits form, multipart, octet-stream and text/plain bodies, an octet-stream answer, an SSE answer, a WebSocket and a realtime channel", () => {
 		expect(Object.fromEntries(KINDS.map(([label, document]) => [label, refusal(document)]))).toEqual({
 			"a form body": null,
 			"a multipart body": null,
 			"an octet-stream body": null,
 			"a text/plain body": null,
 			"an octet-stream answer": null,
-			"an SSE answer": later("events.stream", "streams server-sent events"),
-			"a WebSocket": later("ws.subscribe", "is a WebSocket"),
-			"a realtime channel": later("realtime.connect", "is a realtime channel"),
+			"an SSE answer": null,
+			"a WebSocket": null,
+			"a realtime channel": null,
 		})
 	})
 })

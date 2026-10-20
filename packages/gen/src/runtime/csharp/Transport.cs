@@ -9,13 +9,7 @@ using System.Threading.Tasks;
 
 namespace Honey.Runtime;
 
-/// <summary>
-/// One client's sending side: an HttpClient of its own over the handler <see cref="Handler.Install"/> gives (its own,
-/// disposed with it, or the caller's, never disposed), the credential, the stale tracker, and every typed call: a
-/// JSON, text, byte or empty answer, thrown or in safe mode. A 2xx fills the call's declared response headers
-/// before its body decodes.
-/// </summary>
-internal sealed class Transport : IDisposable
+internal sealed partial class Transport : IDisposable
 {
     public Transport(ClientConfig config, Defaults defaults)
     {
@@ -42,55 +36,45 @@ internal sealed class Transport : IDisposable
 
     public void Dispose() => Http.Dispose();
 
-    /// <summary>A JSON answer; a null one is a DecodeException.</summary>
     public async Task<T> CallAsync<T>(Operation op, Call call, JsonTypeInfo<T> answer, CancellationToken cancellationToken) =>
         Decode(op, await ThrowingAsync(op, call, cancellationToken).ConfigureAwait(false), answer) ?? throw Null(op);
 
-    /// <summary>A JSON answer the API declares nullable.</summary>
     public async Task<T?> NullableAsync<T>(Operation op, Call call, JsonTypeInfo<T> answer, CancellationToken cancellationToken) =>
         Decode(op, await ThrowingAsync(op, call, cancellationToken).ConfigureAwait(false), answer);
 
-    /// <summary>No answer: the body, if any, is not read as anything.</summary>
     public async Task CallAsync(Operation op, Call call, CancellationToken cancellationToken) =>
         await ThrowingAsync(op, call, cancellationToken).ConfigureAwait(false);
 
-    /// <summary>A text answer, as UTF-8 whatever its charset.</summary>
     public async Task<string> TextAsync(Operation op, Call call, CancellationToken cancellationToken) =>
         Encoding.UTF8.GetString((await ThrowingAsync(op, call, cancellationToken).ConfigureAwait(false)).Body);
 
-    /// <summary>A binary answer, as received.</summary>
     public async Task<byte[]> BytesAsync(Operation op, Call call, CancellationToken cancellationToken) =>
         (await ThrowingAsync(op, call, cancellationToken).ConfigureAwait(false)).Body;
 
-    /// <summary>A JSON answer in safe mode; a null one is a DecodeException.</summary>
     public async Task<SdkResult<T>> ResultAsync<T>(Operation op, Call call, JsonTypeInfo<T> answer, CancellationToken cancellationToken)
     {
         var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
         return error is null ? new(Decode(op, raw, answer) ?? throw Null(op), null, raw) : new(default, error, raw);
     }
 
-    /// <summary>A JSON answer the API declares nullable, in safe mode.</summary>
     public async Task<SdkResult<T>> NullableResultAsync<T>(Operation op, Call call, JsonTypeInfo<T> answer, CancellationToken cancellationToken)
     {
         var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
         return error is null ? new(Decode(op, raw, answer), null, raw) : new(default, error, raw);
     }
 
-    /// <summary>No answer, in safe mode.</summary>
     public async Task<SdkResult> ResultAsync(Operation op, Call call, CancellationToken cancellationToken)
     {
         var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
         return new(error, raw);
     }
 
-    /// <summary>A text answer, in safe mode.</summary>
     public async Task<SdkResult<string>> TextResultAsync(Operation op, Call call, CancellationToken cancellationToken)
     {
         var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
         return new(error is null ? Encoding.UTF8.GetString(raw.Body) : null, error, raw);
     }
 
-    /// <summary>A binary answer, in safe mode.</summary>
     public async Task<SdkResult<byte[]>> BytesResultAsync(Operation op, Call call, CancellationToken cancellationToken)
     {
         var (raw, error) = await ExchangeAsync(op, call, cancellationToken).ConfigureAwait(false);
@@ -117,7 +101,6 @@ internal sealed class Transport : IDisposable
         return error is null ? raw : throw error;
     }
 
-    /// <summary>One exchange; on a 2xx, the declared response headers read into the call's holder.</summary>
     private async Task<(RawResponse Raw, ApiStatusException? Error)> ExchangeAsync(Operation op, Call call, CancellationToken cancellationToken)
     {
         var (raw, error) = await new Exchange(this, op, call).RunAsync(cancellationToken).ConfigureAwait(false);
@@ -128,7 +111,6 @@ internal sealed class Transport : IDisposable
         return (raw, error);
     }
 
-    /// <summary>The origin's path, the call's path, and the origin's query with the call's after it; no fragment.</summary>
     public static string Url(string origin, string path, string query)
     {
         var hash = origin.IndexOf('#');

@@ -4,13 +4,8 @@ using System.Text;
 
 namespace Honey.Runtime;
 
-/// <summary>
-/// Path templates: each <c>{name}</c> is its param's value encoded as <c>encodeURIComponent</c> encodes it, so every
-/// SDK language sends the same bytes; an empty value, <c>.</c> or <c>..</c> is refused before anything is sent.
-/// </summary>
 internal static class UrlPath
 {
-    /// <summary>The path of <paramref name="op"/> with <paramref name="values"/> in place of its path params.</summary>
     public static string Expand(Operation op, string[] values)
     {
         var template = op.Path;
@@ -46,7 +41,6 @@ internal static class UrlPath
             : value;
     }
 
-    /// <summary><paramref name="value"/> as a path segment: encoded as <c>encodeURIComponent</c> encodes it.</summary>
     public static string Encoded(string value)
     {
         var path = new StringBuilder();
@@ -54,7 +48,6 @@ internal static class UrlPath
         return path.ToString();
     }
 
-    /// <summary><paramref name="value"/>'s UTF-8 bytes, all but <c>A-Z a-z 0-9 - _ . ! ~ * ' ( )</c> as <c>%XX</c>.</summary>
     private static void Encode(StringBuilder path, string value)
     {
         foreach (var b in Encoding.UTF8.GetBytes(value))

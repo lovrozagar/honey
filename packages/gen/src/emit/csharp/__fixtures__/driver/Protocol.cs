@@ -113,7 +113,8 @@ internal sealed record ScriptRefresh(IReadOnlyList<string> Tokens);
 
 /// <summary>
 /// One call's script entry. <c>cancel</c> is <c>"before"</c> or <c>{afterMs}</c>; the members only Go or Python
-/// can use, and the stream ones, are kept as given so the refusal can name them.
+/// can use are kept as given so the refusal can name them. <c>protocols</c> and <c>realtime</c> are the stream
+/// method's fields, <c>ws</c> the WebSocket's script.
 /// </summary>
 internal sealed record CallScript(
     JsonNode? Cancel = null,
@@ -123,11 +124,26 @@ internal sealed record CallScript(
     JsonNode? IsErrors = null,
     JsonNode? IsKeys = null,
     bool? OneShotBody = null,
-    JsonNode? Protocols = null,
-    JsonNode? Realtime = null,
+    IReadOnlyList<string>? Protocols = null,
+    RealtimeScript? Realtime = null,
     int? SleepMs = null,
     JsonNode? TaskCancel = null,
-    JsonNode? Ws = null);
+    WsScript? Ws = null);
+
+/// <summary>The realtime method's <c>maxReconnectAttempts</c> and <c>reconnectDelay</c> (in ms here).</summary>
+internal sealed record RealtimeScript(int? MaxReconnectAttempts = null, int? ReconnectDelayMs = null);
+
+/// <summary>
+/// A WebSocket's script: the close the driver sends in place of 1000 and none, whether a recording handler runs
+/// for each event, Go's read limit (refused), and the messages sent after the grid's <c>send</c>.
+/// </summary>
+internal sealed record WsScript(WsCode? Close = null, bool? On = null, int? ReadLimit = null, IReadOnlyList<WsSend>? Send = null);
+
+/// <summary>A close's code and reason.</summary>
+internal sealed record WsCode(int Code, string Reason);
+
+/// <summary>One scripted send: exactly one of a JSON value, text, or that many bytes <c>i &amp; 0xff</c> (Script.cs counts them).</summary>
+internal sealed record WsSend(JsonNode? Json = null, string? Text = null, int? Bytes = null);
 
 /// <summary>A run the driver cannot express: exit 1 with its reason, before or instead of a call.</summary>
 internal sealed class DriverException(string message) : Exception(message);
@@ -202,8 +218,8 @@ internal static class Protocol
 
     /// <summary>
     /// What the driver cannot drive, refused before the SDK loads as <c>call &lt;i&gt; (&lt;op&gt;): &lt;reason&gt;</c>:
-    /// a stream call and its members (phase d), a multipart body (a consumer program sends <c>FilePart</c>s), and an
-    /// idempotency key on a method without one.
+    /// a stream member the operation cannot take (<see cref="StreamRefusal"/>), a multipart body (a consumer
+    /// program sends <c>FilePart</c>s), and an idempotency key on a method without one.
     /// </summary>
     public static void Refuse(Envelope envelope, Script? script)
     {
@@ -213,7 +229,7 @@ internal static class Protocol
             var plan = envelope.Plans.GetValueOrDefault(call.Operation)
                 ?? throw new DriverException($"no call plan names {call.Operation} (call {i})");
             var entry = script?.Calls is { } entries && i < entries.Count ? entries[i] : null;
-            var reason = Later(call, plan) ?? Refused(plan, entry);
+            var reason = StreamRefusal(call, plan, entry) ?? Refused(plan, entry);
             if (reason is not null)
             {
                 throw new DriverException($"call {i} ({call.Operation}): {reason}");
@@ -221,14 +237,48 @@ internal static class Protocol
         }
     }
 
-    /// <summary>The first member of <paramref name="call"/> phase d drives, with that phase; null for none.</summary>
-    private static string? Later(Call call, Plan plan) =>
-        plan.Stream is { } stream ? $"stream {stream} arrives in phase d"
-        : call.Send is not null ? "send arrives in phase d"
-        : call.Take is not null ? "take arrives in phase d"
-        : call.LastEventId is not null ? "lastEventId arrives in phase d"
-        : call.ReconnectToken is not null ? "reconnectToken arrives in phase d"
-        : null;
+    /* each stream member: its name in a refusal, whether the call or its script entry gives it, the stream kinds
+     * that take it, and why the others do not (Rust's and Python's texts) */
+    private static readonly (string Name, Func<Call, CallScript?, bool> Given, string[] Kinds, string Why)[] Members =
+    [
+        ("take", (call, _) => call.Take is not null, ["sse", "ws", "realtime"], ""),
+        ("send", (call, _) => call.Send is not null, ["ws", "realtime"], ": only a WebSocket or realtime call sends"),
+        ("lastEventId", (call, _) => call.LastEventId is not null, ["sse", "realtime"], ": only an SSE or realtime call resumes by event id"),
+        ("reconnectToken", (call, _) => call.ReconnectToken is not null, ["ws", "realtime"], ": only a WebSocket or realtime call resumes by token"),
+        ("protocols", (_, entry) => entry?.Protocols is not null, ["ws", "realtime"], ": only a WebSocket or realtime dial offers subprotocols"),
+        ("a realtime script", (_, entry) => entry?.Realtime is not null, ["realtime"], ""),
+        ("a ws script", (_, entry) => entry?.Ws is not null, ["ws"], ""),
+    ];
+
+    /// <summary>
+    /// Why <paramref name="call"/> cannot be sent as its operation streams, or does not; null when it can: a stream
+    /// member on an operation that does not stream, <c>raw: true</c> on a stream (it has no single response to
+    /// read), a member the stream kind does not take, and a realtime call without <c>take</c>.
+    /// </summary>
+    private static string? StreamRefusal(Call call, Plan plan, CallScript? entry)
+    {
+        var given = Members.Where(member => member.Given(call, entry)).ToList();
+        if (plan.Stream is not { } kind)
+        {
+            return given is [var first, ..] ? $"{first.Name} on an operation that does not stream" : null;
+        }
+        var label = kind switch
+        {
+            "sse" => "an SSE",
+            "ws" => "a WebSocket",
+            "realtime" => "a realtime",
+            _ => throw new DriverException($"stream {kind} is not one the driver knows"),
+        };
+        if (call.Raw == true)
+        {
+            return $"raw: true on {label} operation, which has no single response to read";
+        }
+        if (given.FirstOrDefault(member => !member.Kinds.Contains(kind)) is { Name: not null } misfit)
+        {
+            return $"{misfit.Name} on {label} operation{misfit.Why}";
+        }
+        return kind == "realtime" && call.Take is null ? "a realtime call needs take: the connection never ends by itself" : null;
+    }
 
     /// <summary>Why the driver never sends <paramref name="plan"/>'s call as scripted; null when it does.</summary>
     private static string? Refused(Plan plan, CallScript? entry) =>

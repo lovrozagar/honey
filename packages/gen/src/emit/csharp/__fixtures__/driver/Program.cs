@@ -15,7 +15,8 @@ namespace Honey.Driver;
 /// every argument and writes every answer through the SDK's own exported <c>JsonSerializerContext</c>, so its wire
 /// is the SDK's wire. A script (Script.cs; unit tests and the harness send one, the conformance runner never does)
 /// sets what a grid setup cannot, installs recording hooks and directs each call, and stdout becomes
-/// <c>{"observed": (Observed|null)[], "trace": Trace&lt;CsError&gt;}</c> (Trace.cs). Before call <c>i</c>: its
+/// <c>{"observed": (Observed|null)[], "trace": Trace&lt;CsError&gt;}</c> (Trace.cs). A stream call (SSE, WebSocket,
+/// realtime) observes what its stream delivered under a 10 s watchdog (Stream.cs). Before call <c>i</c>: its
 /// <c>sleepMs</c>, then the recorder marks it; <c>elapsedMs</c> covers the call alone. Any failure, and any call or
 /// outcome it cannot express, exits 1 with <c>driver: reason</c> on stderr: a red cell, never a silent pass. A bad
 /// script and what the driver cannot drive are refused before the SDK loads.

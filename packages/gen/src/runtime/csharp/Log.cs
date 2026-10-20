@@ -11,7 +11,6 @@ namespace Honey.Runtime;
 /// </summary>
 public sealed record LogEntry(string Level, string Event, string Operation, long DurationMs, int? Status, string? Error);
 
-/// <summary>One call's log; a logger that throws is ignored.</summary>
 internal sealed class CallLog(Action<LogEntry>? hook, string operation)
 {
     private readonly long _start = Stopwatch.GetTimestamp();

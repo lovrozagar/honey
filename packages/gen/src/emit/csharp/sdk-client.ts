@@ -42,6 +42,7 @@ const CLASS_MEMBERS = [
 	"Part",
 	"ToString",
 	"Transport",
+	"TransportOptions",
 ]
 
 /** A namespace's class name before it is claimed: its path PascalCase, then `Resource`. */

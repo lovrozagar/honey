@@ -25,7 +25,7 @@ export type CsTypeNames = {
 
 /* the BCL names emitted text spells unqualified, by the namespace a `using` brings them from (§4.7) */
 export const BCL: Readonly<Record<string, readonly string[]>> = {
-	System: ["Exception", "Func", "IDisposable", "Object", "String", "Type"],
+	System: ["Exception", "Func", "IDisposable", "Object", "String", "TimeSpan", "Type"],
 	"System.Collections.Generic": ["IDictionary", "IReadOnlyDictionary", "IReadOnlyList"],
 	"System.Text.Json": [
 		"JsonElement",

@@ -8,13 +8,8 @@ using System.Threading.Tasks;
 
 namespace Honey.Runtime;
 
-/// <summary>
-/// The SDK's innermost link: on a hop the exchange marks cross-origin it removes every request header but Accept,
-/// Accept-Language and User-Agent, whichever link above it set them; the primary below it adds only framing.
-/// </summary>
 internal sealed class StripHandler : DelegatingHandler
 {
-    /// <summary>The mark of a cross-origin hop.</summary>
     public static readonly HttpRequestOptionsKey<bool> Cross = new("honey.cross");
 
     private static readonly string[] Safe = ["Accept", "Accept-Language", "User-Agent"];
@@ -35,10 +30,8 @@ internal sealed class StripHandler : DelegatingHandler
     }
 }
 
-/// <summary>The handler a client sends through: its own, or the caller's with the strip installed above its primary.</summary>
 internal static class Handler
 {
-    /// <summary>The root to send through, and whether the client owns (and so disposes) it.</summary>
     public static (HttpMessageHandler Root, bool Owned) Install(ClientConfig config)
     {
         if (config.Handler is not { } root)
@@ -47,6 +40,8 @@ internal static class Handler
             {
                 AllowAutoRedirect = false,
                 UseCookies = false,
+                /* a stream let go early closes its connection at once instead of draining it first (up to 2 s) */
+                MaxResponseDrainSize = 0,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
             };
             return (new StripHandler { InnerHandler = primary }, true);
@@ -61,10 +56,6 @@ internal static class Handler
         }
     }
 
-    /// <summary>
-    /// <paramref name="root"/> with a strip between its last link and its primary (above a bare primary); a chain
-    /// another client already installed one in is used as it is.
-    /// </summary>
     private static HttpMessageHandler Insert(HttpMessageHandler root)
     {
         DelegatingHandler? last = null;
@@ -88,7 +79,6 @@ internal static class Handler
         return root;
     }
 
-    /// <summary>Refuses a primary whose credentials answer every origin; turns its own redirects off (only when on: the setter throws once it has sent).</summary>
     private static void Prepare(HttpMessageHandler primary)
     {
         var credentials = primary switch

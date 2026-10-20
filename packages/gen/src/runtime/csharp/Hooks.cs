@@ -104,15 +104,10 @@ public sealed class ResponseContext
         $"ResponseContext {{ Status = {Status}, IsRetry = {IsRetry}, Selector = {Selector}, IsStale = {IsStale}, InvalidatedBy = [{string.Join(", ", InvalidatedBy)}] }}";
 }
 
-/// <summary>What every context of one attempt shares: the retry, the stale fields and the call's state.</summary>
 internal sealed record CallState(bool IsRetry, string Selector, bool IsStale, IReadOnlyList<string> InvalidatedBy, IDictionary<string, object?> State);
 
 internal static class Hooks
 {
-    /// <summary>
-    /// Each hook in order on <paramref name="context"/>; what one throws ends the call as a HookException, but for a
-    /// HoneyException and a cancel of <paramref name="token"/>, which pass as they are.
-    /// </summary>
     public static async Task RunAsync<T>(IReadOnlyList<Func<T, CancellationToken, Task>>? hooks, T context, CancellationToken token)
     {
         foreach (var hook in hooks ?? [])
@@ -128,7 +123,6 @@ internal static class Hooks
         }
     }
 
-    /// <summary>Whether a hook's <paramref name="error"/> becomes a HookException: anything but the SDK's own and a cancel of the call.</summary>
     public static bool Wraps(Exception error, CancellationToken token) =>
         error is not HoneyException && !(error is OperationCanceledException && token.IsCancellationRequested);
 }

@@ -4,7 +4,8 @@
  * a consumer check once per program, and a program runs beside the SDK's dll; the driver is built once per source
  * hash with no reference to any SDK; the emitter's call plans name what it walks; it sends one cell against the
  * recording server, observing data, the raw response, a status error and a timeout; and it refuses what it cannot
- * drive (a multipart body, phase d's streams, a bad script) before the SDK loads.
+ * drive (a multipart body, a bad script) before the SDK loads. Its streams and their refusals are
+ * sdk.driver.stream.test.ts's.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
@@ -166,44 +167,12 @@ const envelopeOf = (cell: object, plans: Readonly<Record<string, CSharpCallPlan>
 	sdk: { client: "AcmeClient", dll: compiledCSharp("cache").dll, namespace: "Acme" },
 })
 
-/** A stream op's hand-written plan: no phase-b SDK has one (Fb1). */
-const TICKS: CSharpCallPlan = {
-	...NOTES,
-	accessors: ["Ticks"],
-	body: null,
-	method: "StreamAsync",
-	operation: "ticks.stream",
-	path: [],
-	stream: "sse",
-}
-
-const TICK: Call = { operation: "ticks.stream", route: { method: "GET", path: "/ticks" }, take: 2 }
-
 describe.skipIf(!DOTNET)("the C# test driver: its build and what it refuses", () => {
 	it("builds once per source hash, with no SDK: the same dll, the second time with no spawn", () => {
 		const dll = driverDll()
 		expect(existsSync(dll)).toBe(true)
 		const before = spawns()
 		expect({ dll: driverDll(), spawned: spawns() - before }).toEqual({ dll, spawned: 0 })
-	})
-
-	it("refuses a stream op and every stream member before the SDK loads, naming the phase each arrives in", async () => {
-		const cell = (call: Call) => envelopeOf({ calls: [call] }, { [call.operation]: TICKS })
-		expect(await driverOn(cell(TICK))).toEqual({
-			status: 1,
-			stderr: "driver: call 0 (ticks.stream): stream sse arrives in phase d",
-			stdout: "",
-		})
-		const create = { operation: OP, route: { method: "POST", path: "/" } }
-		const members = [{ send: ["x"] }, { take: 1 }, { lastEventId: "1" }, { reconnectToken: "t" }]
-		const refused = await Promise.all(
-			members.map((member) => driverOn(envelopeOf({ calls: [{ ...create, ...member }] }, { [OP]: NOTES }))),
-		)
-		expect(refused.map((run) => run.stderr)).toEqual(
-			["send", "take", "lastEventId", "reconnectToken"].map(
-				(name) => `driver: call 0 (${OP}): ${name} arrives in phase d`,
-			),
-		)
 	})
 
 	it("refuses a multipart body before the SDK loads: a consumer program sends FileParts", async () => {

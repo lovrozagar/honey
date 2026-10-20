@@ -5,13 +5,8 @@ using System.Text.Json;
 
 namespace Honey.Runtime;
 
-/// <summary>
-/// Query strings as URLSearchParams writes them (WHATWG <c>application/x-www-form-urlencoded</c>): a string is its
-/// text, any other JSON value its JSON text, a list one pair per item; null, nothing and an empty object send nothing.
-/// </summary>
 internal static class UrlQuery
 {
-    /// <summary>The query string of <paramref name="args"/>, without the <c>?</c>.</summary>
     public static string Encode(Arg[] args)
     {
         var query = new StringBuilder();
@@ -26,7 +21,6 @@ internal static class UrlQuery
         return query.ToString();
     }
 
-    /// <summary>The text a value sends as one query item or one header: null for none.</summary>
     public static string? Text(JsonElement value) =>
         value.ValueKind switch
         {
@@ -56,7 +50,6 @@ internal static class UrlQuery
         return texts;
     }
 
-    /// <summary><paramref name="text"/>'s UTF-8 bytes: <c>A-Z a-z 0-9 * - . _</c> as they are, a space as <c>+</c>, the rest <c>%XX</c>.</summary>
     private static StringBuilder Form(StringBuilder query, string text)
     {
         foreach (var b in Encoding.UTF8.GetBytes(text))

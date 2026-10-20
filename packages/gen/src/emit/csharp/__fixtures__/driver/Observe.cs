@@ -15,8 +15,11 @@ internal sealed record Answer(Type Declared, object? Result, object Raw);
 /// </summary>
 internal sealed record Lens(bool Raw, bool Scripted, bool Envelope, object? Holder = null);
 
-/// <summary>What a call observed (null when the grid has no outcome for it), its traced error, and a safe-mode result's summary.</summary>
-internal sealed record Outcome(JsonNode? Observed, JsonObject? Error = null, JsonObject? Result = null);
+/// <summary>
+/// What a call observed (null when the grid has no outcome for it), its traced error, a safe-mode result's summary,
+/// and a stream call's trace (protocol.ts <c>StreamTrace</c>).
+/// </summary>
+internal sealed record Outcome(JsonNode? Observed, JsonObject? Error = null, JsonObject? Result = null, JsonObject? Stream = null);
 
 /// <summary>
 /// A call's outcome as the grid observes it, and as a script traces it. A result is <c>data</c>, written back
@@ -27,7 +30,7 @@ internal sealed record Outcome(JsonNode? Observed, JsonObject? Error = null, Jso
 /// else its text); an <c>ApiTimeoutException</c> is <c>timeout</c>. Unscripted, any other exception ends the run,
 /// named by its type. Under a script, a call's error is traced too (<c>via: "return"</c>, or <c>"result"</c> for a
 /// safe-mode <c>SdkResult.Error</c>, with the result's summary), and one the grid has no outcome for (a cancel, a
-/// hook's, a decode, a connection or a config error) observes null.
+/// hook's, a decode, a connection or a config error) observes null. A stream call's reads are Stream.cs's.
 /// </summary>
 internal static class Observe
 {
@@ -125,7 +128,7 @@ internal static class Observe
     /// The typed response headers the holder got, by each header's declared name, each value as its text (a number
     /// invariant, a bool <c>true</c>/<c>false</c>); an unset one is left out.
     /// </summary>
-    private static JsonObject HeadersOf(object holder, PlanHeaders declared)
+    public static JsonObject HeadersOf(object holder, PlanHeaders declared)
     {
         var seen = new JsonObject();
         foreach (var (name, property) in declared.Fields)
@@ -158,7 +161,7 @@ internal static class Observe
     }
 
     /// <summary>A non-empty body's JSON, or its text when it is no JSON.</summary>
-    private static JsonNode? BodyOf(byte[] body)
+    public static JsonNode? BodyOf(byte[] body)
     {
         var text = Encoding.UTF8.GetString(body);
         try

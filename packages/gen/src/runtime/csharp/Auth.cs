@@ -5,10 +5,6 @@ using System.Threading.Tasks;
 
 namespace Honey.Runtime;
 
-/// <summary>
-/// The credential: the header that carries it (the API's own unless set; a set name takes no prefix unless one is
-/// set too), and one current token, the bearer token before the API key, refreshed once for concurrent 401s.
-/// </summary>
 internal sealed class Credential
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -21,20 +17,12 @@ internal sealed class Credential
         _token = string.IsNullOrEmpty(config.BearerToken) ? (string.IsNullOrEmpty(config.ApiKey) ? null : config.ApiKey) : config.BearerToken;
     }
 
-    /// <summary>The header the token goes in.</summary>
     public string Header { get; }
 
-    /// <summary>The text before the token.</summary>
     public string Prefix { get; }
 
-    /// <summary>The current token; null for none.</summary>
     public string? Token => _token;
 
-    /// <summary>
-    /// After a 401 to <paramref name="rejected"/>: a token another call already got in its place, else the hook's,
-    /// which becomes current; null when the hook gives none (the 401 stands). One refresh runs at a time; what the
-    /// hook throws is a HookException, but for a HoneyException and a cancel of <paramref name="cancellationToken"/>.
-    /// </summary>
     public async Task<string?> RefreshAsync(string? rejected, Func<CancellationToken, Task<string?>> hook, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);

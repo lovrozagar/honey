@@ -5,14 +5,8 @@ using System.Text;
 
 namespace Honey.Runtime;
 
-/// <summary>
-/// Invalidation targets (<c>METHOD /path</c>): filled from a call's path params, a <c>{name}</c> or whole
-/// <c>:name</c> segment encoded as a path param is; a target a param is missing for stays a pattern, matched against
-/// a concrete path segment by segment, with no regular expression.
-/// </summary>
 internal static class Invalidation
 {
-    /// <summary>Each of <paramref name="targets"/> with <paramref name="values"/> in place of its params, or as written when one is missing.</summary>
     public static List<string> Resolve(IEnumerable<string> targets, IReadOnlyDictionary<string, string> values) =>
         [.. targets.Select(target =>
         {
@@ -21,11 +15,9 @@ internal static class Invalidation
             return path is null ? target : $"{target[..space]} {path}";
         })];
 
-    /// <summary>Whether a target's path holds a param: a pattern.</summary>
     public static bool HasPlaceholders(string path) =>
         path.Split('/').Any(part => ColonName(part) is not null || (part.Contains('{') && part.Contains('}')));
 
-    /// <summary>Whether <paramref name="path"/> is <paramref name="pattern"/> or one of its instances.</summary>
     public static bool Matches(string path, string pattern)
     {
         if (path == pattern)
@@ -63,12 +55,10 @@ internal static class Invalidation
         return false;
     }
 
-    /// <summary>A whole <c>:name</c> segment's name (an ASCII identifier); null for any other segment.</summary>
     private static string? ColonName(string part) =>
         part.Length > 1 && part[0] == ':' && (char.IsAsciiLetter(part[1]) || part[1] == '_')
             && part.Skip(1).All(c => char.IsAsciiLetterOrDigit(c) || c == '_') ? part[1..] : null;
 
-    /// <summary><paramref name="template"/> with each param's value encoded; null when one is missing or not a path segment.</summary>
     private static string? Expand(string template, IReadOnlyDictionary<string, string> values)
     {
         var segments = new List<string>();

@@ -6,26 +6,23 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace Honey.Runtime;
 
-/// <summary>
-/// An operation as the transport sends it: its method, its path template, its path params in path order, whether
-/// it takes an idempotency key, the media type a text or binary answer asks for, and its <c>x-invalidate</c> targets.
-/// </summary>
 internal sealed record Operation(string Method, string Path, string[] PathParams, bool Idempotent, string? Accept = null, string[]? Invalidates = null);
 
-/// <summary>What the API declares for every client: its first server (null without one), its auth header and prefix, and its JSON options.</summary>
 internal sealed record Defaults(string? BaseUrl, string AuthHeader, string AuthPrefix, JsonSerializerOptions Json);
 
-/// <summary>A query or header value, held as its JSON so every declared type renders one way; null is no value.</summary>
 internal readonly record struct Arg(string Name, JsonElement Value)
 {
+    /* a string's metadata with no SDK context: plain options throw without a resolver, an empty combined one does not */
+    public static readonly JsonTypeInfo<string> StringInfo = JsonMetadataServices.CreateValueInfo<string>(
+        new JsonSerializerOptions { TypeInfoResolver = JsonTypeInfoResolver.Combine() }, JsonMetadataServices.StringConverter);
+
     public static Arg Of<T>(string name, T? value, JsonTypeInfo<T> info) =>
         value is null ? new(name, default) : new(name, JsonSerializer.SerializeToElement(value, info));
+
+    /* a stream's cursor value: null or empty sends nothing */
+    public static Arg Text(string name, string? value) => Of(name, string.IsNullOrEmpty(value) ? null : value, StringInfo);
 }
 
-/// <summary>
-/// One call's values: its path params in path order, its query and header params, its body, its idempotency key, its
-/// options, and the reader of the response headers it declares.
-/// </summary>
 internal readonly record struct Call(
     string[] Path,
     Arg[] Query,

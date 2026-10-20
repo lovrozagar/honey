@@ -7,24 +7,14 @@ using System.Net.Http;
 
 namespace Honey.Runtime;
 
-/// <summary>One hop of a call: its method, URL, headers, body (bytes, or a stream sent once), and whether it left the first hop's origin.</summary>
 internal sealed record Hop(string Method, Uri Url, IReadOnlyDictionary<string, string> Headers, byte[]? Content, Stream? Stream, bool Cross);
 
-/// <summary>
-/// Which redirects a call follows (the handler never follows one itself): 301, 302, 303, 307 and 308, at most 10 a
-/// call. 303 turns any method but HEAD into a GET, 301 and 302 a POST; 307 and 308 keep the method and the body,
-/// unless the body is a stream or the hop leaves the origin (the 3xx is the answer then). A hop to another origin is
-/// followed only under <see cref="RedirectPolicy.Follow"/>, stripped to Accept, Accept-Language and User-Agent, and
-/// every later hop stays stripped. A missing or unparsable <c>Location</c>, or one that is not http(s), is the answer.
-/// </summary>
 internal static class Redirects
 {
-    /// <summary>The most redirects one call follows, its retry included.</summary>
     public const int Max = 10;
 
     private static readonly string[] Safe = ["Accept", "Accept-Language", "User-Agent"];
 
-    /// <summary>The hop after <paramref name="hop"/> got <paramref name="answer"/>; null when the answer stands.</summary>
     public static Hop? Next(Hop hop, HttpResponseMessage answer, Uri start, RedirectPolicy policy)
     {
         var status = (int)answer.StatusCode;
@@ -58,7 +48,6 @@ internal static class Redirects
         return new Hop(toGet ? "GET" : hop.Method, target, headers, toGet ? null : hop.Content, null, cross);
     }
 
-    /// <summary>Whether two URLs share scheme, host and port (a default port written or not is the same).</summary>
     public static bool SameOrigin(Uri a, Uri b) =>
         a.Scheme == b.Scheme && string.Equals(a.Host, b.Host, StringComparison.OrdinalIgnoreCase) && a.Port == b.Port;
 }

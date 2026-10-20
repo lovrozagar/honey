@@ -88,7 +88,6 @@ public sealed record ClientConfig
         return true;
     }
 
-    /// <summary>A URL's scheme, host, port and path: never its user, password, query or fragment.</summary>
     private static string? Redacted(string? url) =>
         url is null ? null
         : Uri.TryCreate(url, UriKind.Absolute, out var uri) ? $"{uri.Scheme}://{uri.Host}:{uri.Port}{uri.AbsolutePath}"

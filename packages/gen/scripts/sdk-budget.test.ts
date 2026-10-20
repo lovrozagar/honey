@@ -378,13 +378,23 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 
 /*
  * G14 (bit 15): the vendored C# runtime's bloat guard, in bytes on disk as shipped (00-rules:160), never string
- * length. Provisional (R8): 110,000 B, ruled before C# had a runtime, against the probe's 12,843 B skeleton; phase b
- * lands about 30 KB (config, errors, result, JSON, operation, path, query, transport). Phase d replaces the figure
- * with the measured, named breakdown. Counted: every runtime .cs file; the directory holds nothing else. No runtime
- * file goes unshipped (dead code). A raise names its feature bytes and cuts dead and duplicate code first; it is
- * never silent.
+ * length. Measured at phase d (contract 50 Fd10), replacing the provisional 110,000 B: 129,722 B in 29 files. Fd10's
+ * cuts came first: no dead member (the unused-member analyzers flag only ClientConfig.PrintMembers, which the record's
+ * ToString calls, and every internal member has a use); every /// block on a non-public member, 14,523 B (13,100 B in
+ * phase c's 18 files, 1,423 B in Sse, Wire and WsDial); the loop's header comment, 483 B. By file: Adapters 7,436,
+ * Auth 1,655, Body 4,702, Config 7,966, Envelope 5,389, Errors 7,083, Events 6,197, Exchange 9,257, Handler 3,469,
+ * Hooks 4,855, Invalidation 3,628, Json 5,638, Log 1,574, Operation 1,482, Path 2,003, Query 1,986, Realtime 5,127,
+ * RealtimeLoop 6,436, Redirect 2,165, Result 1,273, Sse 3,789, Stale 4,527, Transport 6,319, TransportLongPoll 2,226,
+ * TransportSse 2,137, TransportWs 1,550, Wire 3,289, Ws 10,774, WsDial 5,790. Phase d's delta on phase c's 88,583 B,
+ * +41,139 B: SSE core (Events, Sse, Wire) 13,275 B, WebSocket (Ws, WsDial) 16,564 B, realtime (Adapters, Realtime,
+ * RealtimeLoop and the three transports) 24,912 B, phase c's 18 files -13,612 B (the cut, Wire's move out of
+ * Exchange, the stream path's growth). It is 692 B over Rust's 129,030 B: Ws holds 1,936 B of public docs and the
+ * end's lock and once-only cancel, WsDial the dial's own deadline and status mapping (no exchange, ruled) and the
+ * Upgrade check Q-d1's probe found the BCL never makes, Adapters 1,520 B of public docs on the interfaces, options
+ * and kinds. Counted: every runtime .cs file; the directory holds nothing else. No runtime file goes unshipped (dead
+ * code). A raise names its feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const CSHARP_RUNTIME_BYTES = 110_000
+const CSHARP_RUNTIME_BYTES = 129_722
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {

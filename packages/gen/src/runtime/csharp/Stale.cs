@@ -6,20 +6,11 @@ using System.Linq;
 
 namespace Honey.Runtime;
 
-/// <summary>What the stale tracker told one call when it began: its selector, whether it is stale, by what, and the mark it saw last.</summary>
 internal sealed record StaleMeta(string Selector, bool IsStale, IReadOnlyList<string> InvalidatedBy, long Seq)
 {
-    /// <summary>Tracking off: no selector, nothing stale.</summary>
     public static readonly StaleMeta None = new("", false, [], 0);
 }
 
-/// <summary>
-/// Staleness per <c>METHOD /path</c> selector, TypeScript parity: a 2xx mutation marks its <c>x-invalidate</c>
-/// targets stale for the window, exact keys and pattern keys; a lookup reads the one exact key and the pattern keys
-/// only, never every entry. Past the cap the least recently staled go until half remain, each target keeps a
-/// bounded list of the mutations that marked it, and a 2xx read clears only what was staled before it began. The
-/// clock is monotonic; one lock, never held across an await.
-/// </summary>
 internal sealed class StaleTracker
 {
     private readonly long _window;
@@ -38,7 +29,6 @@ internal sealed class StaleTracker
         _maxSources = Math.Max(config?.MaxSourcesPerTarget ?? 1, 1);
     }
 
-    /// <summary>What a call to <paramref name="method"/> <paramref name="path"/> reads as it begins.</summary>
     public StaleMeta Begin(string method, string path)
     {
         if (_window <= 0)
@@ -58,7 +48,6 @@ internal sealed class StaleTracker
         }
     }
 
-    /// <summary>After a 2xx: marks <paramref name="targets"/> (filled from <paramref name="values"/>) stale by the call, then clears what the call read stale.</summary>
     public void Settle(StaleMeta meta, string[] targets, IReadOnlyDictionary<string, string> values)
     {
         if (_window <= 0)
@@ -115,7 +104,6 @@ internal sealed class StaleTracker
         }
     }
 
-    /// <summary>The keys a read of <paramref name="selector"/> is stale by: its exact key and each pattern it matches, sorted.</summary>
     private List<string> ReadBy(string selector)
     {
         var space = selector.IndexOf(' ');

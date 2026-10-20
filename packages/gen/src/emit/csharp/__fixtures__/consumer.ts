@@ -42,16 +42,19 @@ internal static class Program
         return 0;
     }
 }
-`
+{decls}`
 
-/** A consumer program: its body (statements of `Main`, unindented), and the base URL it is given. */
-export type Consumer = { readonly base?: string; readonly body: string }
+/**
+ * A consumer program: its body (statements of `Main`, unindented), the base URL it is given, and `decls`, top-level
+ * types after `Program` (a fake `ITransportAdapter`, say), written as they appear.
+ */
+export type Consumer = { readonly base?: string; readonly body: string; readonly decls?: string }
 
 /** A consumer program's run: whether it ran to the end, its notes by section, its stderr. */
 export type Run = { ran: boolean; stderr: string; out: Record<string, string[]> | undefined }
 
-/** PROGRAM around `body`, each line indented into `Main`, using `namespace` and constructing `client`. */
-export function program(namespace: string, client: string, body: string): string {
+/** PROGRAM around `body`, each line indented into `Main`, using `namespace`, constructing `client`, `decls` after it. */
+export function program(namespace: string, client: string, body: string, decls = ""): string {
 	const indented = body
 		.split("\n")
 		.map((line) => (line === "" ? "" : `        ${line}`))
@@ -59,6 +62,7 @@ export function program(namespace: string, client: string, body: string): string
 	return PROGRAM.replace("{ns}", () => namespace)
 		.replace("{client}", () => client)
 		.replace("{body}", () => indented)
+		.replace("{decls}", () => (decls === "" ? "" : `\n${decls}\n`))
 }
 
 /** The emitted client's namespace and class, as the SDK's `Client.cs` declares them. */
@@ -75,7 +79,7 @@ export async function consume(key: FixtureKey, name: string, p: Consumer): Promi
 	const sdk = compiledCSharp(key)
 	if (!sdk.built) return { out: undefined, ran: false, stderr: sdk.diagnostics.join("\n") }
 	const { client, namespace } = clientOf(sdk)
-	const source = `// consumer ${name}: a test program, never shipped\n${program(namespace, client, p.body)}`
+	const source = `// consumer ${name}: a test program, never shipped\n${program(namespace, client, p.body, p.decls)}`
 	const ran = await sdk.exec(source, "", p.base === undefined ? [] : [p.base])
 	const out = ran.status === 0 ? (JSON.parse(ran.stdout) as Record<string, string[]>) : undefined
 	return { out, ran: ran.status === 0, stderr: ran.stderr }

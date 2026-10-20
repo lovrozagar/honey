@@ -34,7 +34,6 @@ public sealed class BinaryBody
 /// <summary>One multipart file, in memory, so a retry or a redirect can send it again.</summary>
 public sealed record FilePart(string FileName, byte[] Data, string ContentType = "application/octet-stream");
 
-/// <summary>One multipart field: its name and each of its parts (a list sends one per item).</summary>
 internal sealed class Part
 {
     private Part(string name, List<(FilePart? File, string? Text)> items)
@@ -47,7 +46,6 @@ internal sealed class Part
 
     public List<(FilePart? File, string? Text)> Items { get; }
 
-    /// <summary>A text field: a string as it is, any other JSON value its JSON text, a list one part per item; null and <c>{}</c> none.</summary>
     public static Part Text<T>(string name, T? value, JsonTypeInfo<T> info)
     {
         var items = new List<(FilePart?, string?)>();
@@ -66,10 +64,8 @@ internal sealed class Part
         return new(name, items);
     }
 
-    /// <summary>A file field; none for null.</summary>
     public static Part File(string name, FilePart? file) => new(name, file is null ? [] : [(file, null)]);
 
-    /// <summary>A file field per file; none for null.</summary>
     public static Part Files(string name, IReadOnlyList<FilePart>? files)
     {
         var items = new List<(FilePart?, string?)>();
@@ -81,19 +77,13 @@ internal sealed class Part
     }
 }
 
-/// <summary>
-/// A request body: its bytes (sent again after a 401 or a 307/308) or a stream (sent once, chunked), and its media
-/// type, by its declared kind.
-/// </summary>
 internal sealed record Body(byte[]? Content, Stream? Stream, string MediaType)
 {
-    /// <summary>Whether the body can be sent again.</summary>
     public bool Replayable => Stream is null;
 
     public static Body? Json<T>(T? value, JsonTypeInfo<T> info, string mediaType = "application/json") =>
         value is null ? null : new(JsonSerializer.SerializeToUtf8Bytes(value, info), null, mediaType);
 
-    /// <summary>A form: each top-level member a field, encoded as a query string is.</summary>
     public static Body? Form<T>(T? value, JsonTypeInfo<T> info)
     {
         if (value is null)
@@ -118,10 +108,6 @@ internal sealed record Body(byte[]? Content, Stream? Stream, string MediaType)
     public static Body? Binary(BinaryBody? value, string mediaType) =>
         value is null ? null : new(value.Bytes, value.Stream, mediaType);
 
-    /// <summary>
-    /// <c>multipart/form-data</c> under a <c>honey-&lt;uuid&gt;</c> boundary: a text part has no Content-Type, a file
-    /// part its file name and Content-Type; a quote, CR and LF in a name are percent-encoded.
-    /// </summary>
     public static Body? Multipart(Part[]? parts)
     {
         if (parts is null)

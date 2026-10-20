@@ -14,10 +14,13 @@
  * on `SDK` (which has none), `raw: true` on a stream, and the stream members Rust refuses, in the same words;
  * `protocols` and `realtime` are the method's `protocols`, `max_reconnect_attempts` and `reconnect_delay_ms`.
  * The C# driver (emit/csharp/__fixtures__/driver/) takes the same envelope on its one async client and records
- * its errors as `CsError`: its trace is `Trace<CsError>`. In phase c it reads the script (refusing `ctxTimeoutMs`,
- * `isKeys`, `isErrors` and `taskCancel` for good, and a multipart call), maps `cancel` to the method's
- * `CancellationToken`, and `httpClient` to `ClientConfig.Handler` (a caller chain); a stream call and its members
- * wait for phase d.
+ * its errors as `CsError`: its trace is `Trace<CsError>`. It reads the script (refusing `ctxTimeoutMs`, `isKeys`,
+ * `isErrors` and `taskCancel` for good, and a multipart call), maps `cancel` to the method's `CancellationToken`,
+ * and `httpClient` to `ClientConfig.Handler` (a caller chain). In phase d it drives SSE, WebSocket and realtime
+ * calls (`events`, `frames`, `live`), refusing `raw: true` on a stream and `ws.readLimit` for good; `protocols` and
+ * `realtime` are the method's `protocols`, `maxReconnectAttempts` and `reconnectDelay`; a cancel observes the
+ * stream's quiet end and traces its OCE (`canceled: true`, `via: "stream"`); it never disposes a stream it
+ * observed, and records `closeError` when `CloseAsync` throws.
  */
 
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */

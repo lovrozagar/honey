@@ -7,8 +7,9 @@ namespace Honey.Driver;
 /// The envelope's optional script (protocol.ts <c>Script</c>, decoded strictly by Protocol.cs): client config a
 /// grid setup has no member for, recording hooks, a scripted <c>OnAuthExpired</c>, <c>OnLog</c>, and per-call
 /// directives. A unit test or the harness sends one; the conformance runner never does. What only Go
-/// (<c>ctxTimeoutMs</c>, <c>isKeys</c>, <c>isErrors</c>) or Python (<c>taskCancel</c>) can do is refused for good,
-/// and the stream directives until phase d, all before the SDK loads. Every hook is async with the call's token
+/// (<c>ctxTimeoutMs</c>, <c>isKeys</c>, <c>isErrors</c>, <c>ws.readLimit</c>) or Python (<c>taskCancel</c>) can do is
+/// refused for good, before the SDK loads; the stream directives (<c>protocols</c>, <c>realtime</c>, <c>ws</c>) are
+/// the stream method's fields and the WebSocket's script (Stream.cs). Every hook is async with the call's token
 /// (Fc8), bound to the SDK's own delegate type by reflection: the driver holds no reference to any SDK.
 /// </summary>
 internal static class Scripts
@@ -24,7 +25,12 @@ internal static class Scripts
         }
         for (var i = 0; i < entries.Count; i++)
         {
-            var reason = entries[i] is { } entry ? Refusal(entry) : null;
+            /* a WsSend cannot tell an absent member from a JSON null, so a message's members are counted in the script */
+            var sends = node["calls"]?[i]?["ws"]?["send"] as JsonArray;
+            var reason = entries[i] is not { } entry ? null
+                : sends?.Any(message => message is not JsonObject { Count: 1 }) == true
+                    ? "ws.send: a message holds exactly one of json, text and bytes"
+                : Refusal(entry);
             if (reason is not null)
             {
                 throw new DriverException($"script: call {i}: {reason}");
@@ -47,9 +53,7 @@ internal static class Scripts
         : entry.IsKeys is not null ? "isKeys is Go's errors.Is; the C# trace records key"
         : entry.IsErrors is not null ? "isErrors is Go's errors.Is; the C# trace records the type and text"
         : entry.TaskCancel is not null ? "taskCancel is a Python AsyncSDK task's; a C# call ends by its token (cancel)"
-        : entry.Protocols is not null ? "protocols arrives in phase d"
-        : entry.Realtime is not null ? "realtime arrives in phase d"
-        : entry.Ws is not null ? "ws arrives in phase d"
+        : entry.Ws?.ReadLimit is not null ? "ws.readLimit is Go's SetReadLimit; a C# socket caps a message at 16 MiB"
         : entry.Cancel is { } cancel && CancelOf(cancel) is null ? "cancel is \"before\" or {\"afterMs\": n}, n > 0"
         : null;
 

@@ -13,9 +13,11 @@ import reservedWords from "../../../ir/__fixtures__/specs/python/reserved-words.
 import integerEnumStatus from "../../../ir/__fixtures__/specs/go/integer-enum-status.json" with { type: "json" }
 import nullablePrimitive from "../../../ir/__fixtures__/specs/go/nullable-primitive.json" with { type: "json" }
 import { errors } from "../../shared/__fixtures__/documents-http.ts"
+import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { CSharpSdkOptions } from "../sdk.ts"
 import { csharpHttp } from "./documents-http.ts"
+import { csharpRealtime } from "./documents-streams.ts"
 import { relative, surface, types } from "./documents-specs.ts"
 
 /**
@@ -96,12 +98,18 @@ export const FIXTURES = {
 	/** the HTTP runtime's document (contract 47 §4.1): bit 13's `http`, the extra paths and `merge.patch`, both modes */
 	http: { document: csharpHttp },
 	"http-safe": { document: csharpHttp, options: { throwOnError: false } },
+	/** the resumable connections (contract 50 §4.1): bit 13's `realtime` document, shared, and the C#-only `clash.feed` */
+	realtime: { document: csharpRealtime },
 	/** a relative first server: a client needs an absolute `BaseUrl` (R7) */
 	relative: { document: relative },
+	/** the event streams (contract 50 §4.1): bit 13's `sse` document, shared */
+	sse: { document: streams.sse },
 	/** the call surface; every gate exercises the package and namespace rename (→ `AcmeClient`, `AcmeJsonContext`) */
 	surface: { document: surface, options: { packageId: "Acme.Sdk", rootNamespace: "Acme" } },
 	/** no `servers` (R7), and every option at its default (`HoneySdk`, `HoneySdkClient`) */
 	types: { document: types },
+	/** the WebSockets (contract 50 §4.1): bit 13's `ws` document, shared; a WebSocket-only SDK ships no realtime files */
+	ws: { document: streams.ws },
 } as const satisfies Record<string, CSharpFixture>
 
 export type FixtureKey = keyof typeof FIXTURES

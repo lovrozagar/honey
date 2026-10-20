@@ -5,7 +5,8 @@
  * operation whose 2xx responses declare headers gets `<Op>Headers`, a class hoisted beside the types (never listed
  * in the JSON context) with one nullable `{ get; private set; }` property per header in code-unit order of its
  * name, typed by the header's scalar (`long?`, `double?`, `bool?`, else `string?`), and an `internal` `Read` the
- * transport calls on a 2xx; a WebSocket or realtime operation, whose 2xx no caller receives, gets none.
+ * transport calls on a 2xx; a WebSocket or realtime operation, whose 2xx no caller receives, gets none. A
+ * stream operation answers as its `CsStream` says (`sse.ts`, `ws.ts`, `realtime.ts`), in either mode.
  */
 import type { IRResponse, IRSchema } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
@@ -15,18 +16,35 @@ import { docLines } from "./sdk-doc.ts"
 import type { MethodEnv, Spelling } from "./sdk-method.ts"
 import { csTypeOf } from "./types.ts"
 
+const UNKNOWN: IRSchema = { kind: "unknown" }
+
 /** A method's answer: its JSON type (null for any other kind), and its return type and transport method. */
 export type CsAnswer = {
 	readonly type: string | null
 	readonly render: (spell: Spelling) => readonly [returns: string, run: string]
 }
 
+/**
+ * What a stream operation's method is (contract 50 §2): whether a declared param is one its own fields carry (the
+ * fold), those fields (each `<type> <ident> = null`, after `headersInto`), the arguments its call passes after the
+ * `Call`, its answer, and its `<returns>` text.
+ */
+export type CsStream = {
+	readonly carries: (name: string, where: string) => boolean
+	readonly fields: readonly { readonly ident: string; readonly type: string }[]
+	readonly args: readonly string[]
+	answer(op: SdkOp, env: MethodEnv): CsAnswer
+	readonly returns: string
+}
+
+/** The C# type of `op`'s declared event schema `events`. */
+export const eventType = (events: IRSchema, op: SdkOp, env: MethodEnv) =>
+	csTypeOf(events, { ...env.at, fieldName: "Event", parentName: op.id })
+
 /** The `<Op>Headers` holder's type and each declared header (as written) to its property. */
 export type CsHeadersPlan = { readonly type: string; readonly fields: Readonly<Record<string, string>> }
 
 type Mode = "safe" | "thrown"
-
-const UNKNOWN: IRSchema = { kind: "unknown" }
 
 /** How an answer is typed and which transport method reads it, by its kind (`json?` a nullable one) and mode. */
 const ANSWERS: Readonly<Record<string, Readonly<Record<Mode, (type: string) => [string, string]>>>> = {

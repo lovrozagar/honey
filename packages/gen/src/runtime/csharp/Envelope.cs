@@ -22,7 +22,6 @@ public sealed record ErrorEnvelope(
 /// <summary>One field's error in an envelope's <c>fields</c>.</summary>
 public sealed record FieldError(string ErrorKey, string Message, string Path);
 
-/// <summary>An error status as its exception is built from it.</summary>
 internal sealed record Failure(
     int Status,
     IReadOnlyDictionary<string, string> Headers,
@@ -32,7 +31,6 @@ internal sealed record Failure(
     string Detail,
     JsonSerializerOptions Json);
 
-/// <summary>Reading an error body: its envelope, and its detail with control characters dropped and cut.</summary>
 internal static class Envelopes
 {
     private const int MaxDetail = 512;
@@ -40,7 +38,6 @@ internal static class Envelopes
     private static readonly ErrorEnvelope Empty = new(null, null, null, null,
         new Dictionary<string, IReadOnlyList<FieldError>>(), new Dictionary<string, JsonElement>());
 
-    /// <summary>The failure an error answer is: its key, envelope and detail beside what arrived.</summary>
     public static Failure Of(int status, IReadOnlyDictionary<string, string> headers, byte[] body, JsonSerializerOptions json)
     {
         var (envelope, _) = Parse(body);
@@ -48,7 +45,6 @@ internal static class Envelopes
         return new Failure(status, headers, body, envelope.ErrorKey, envelope, Sanitized(text), json);
     }
 
-    /// <summary>The body's envelope, and whether the body is JSON at all (nested past 64 levels it is not).</summary>
     public static (ErrorEnvelope Envelope, bool Json) Parse(byte[] body)
     {
         try
@@ -97,7 +93,6 @@ internal static class Envelopes
         return new ErrorEnvelope(status, errorKey, statusKey, message, fields, extra);
     }
 
-    /// <summary>A <c>fields</c> member: an object of lists of field errors, each with string members; null when it is not.</summary>
     private static Dictionary<string, IReadOnlyList<FieldError>>? FieldsOf(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object)
@@ -129,10 +124,6 @@ internal static class Envelopes
     private static string? TextOf(JsonElement item, string name) =>
         item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
-    /// <summary>
-    /// <paramref name="text"/> without its control, format, surrogate, private-use and unassigned characters or
-    /// U+FFFD, cut at 512 characters (runes) and marked with <c>…</c> when cut.
-    /// </summary>
     public static string Sanitized(string text)
     {
         var kept = new StringBuilder();

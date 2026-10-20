@@ -13,10 +13,14 @@ namespace Honey.Driver;
 /// is). A binary body is <c>size</c> bytes <c>i &amp; 0xff</c> through <c>BinaryBody</c>'s implicit conversion from
 /// <c>byte[]</c>, or under <c>oneShotBody</c> from a non-seekable <c>Stream</c> (Fc6). The script's
 /// <c>idempotencyKey</c> is the plan's parameter, a plan with typed response headers gets a new holder as
-/// <c>headersInto</c> (Fc7), and <c>cancel</c> is the method's <c>CancellationToken</c>. A call header no param
-/// declares goes in <c>RequestOptions.Headers</c> (F6); the options also carry the call's timeout, the alt origin's
-/// base URL, and always a <c>RawResponse</c> to read. The method runs with <c>DoNotWrapExceptions</c>, so the SDK's
-/// own exception arrives, and a result is read only when the declared return type is generic (P5).
+/// <c>headersInto</c> (Fc7), and <c>cancel</c> is the method's <c>CancellationToken</c> alone. A stream method's own
+/// fields bind by their fixed names (contract 50 §2, claimed before any declared param): <c>lastEventId</c> and
+/// <c>reconnectToken</c> from the call, <c>protocols</c>, <c>maxReconnectAttempts</c> and <c>reconnectDelay</c> from
+/// the script; a bound value no parameter takes fails the run. A call header no param declares goes in
+/// <c>RequestOptions.Headers</c> (F6); the options also carry the call's timeout, the alt origin's base URL, and
+/// always a <c>RawResponse</c> to read. The method runs with <c>DoNotWrapExceptions</c>, so the SDK's own exception
+/// arrives, and a result is read only when the declared return type is generic (P5). A stream plan's open and reads
+/// are Stream.cs's.
 /// </summary>
 internal static class Invoke
 {
@@ -34,21 +38,41 @@ internal static class Invoke
         var lens = new Lens(call.Raw == true, scripted, entry?.Envelope == true, bound.GetValueOrDefault(Holder));
         using var cancel = new CancellationTokenSource();
         bound[Token] = cancel.Token;
-        var args = method.GetParameters().Select(p => Argument(sdk, p, given, bound, options)).ToArray();
+        var parameters = method.GetParameters();
+        if (bound.Keys.FirstOrDefault(name => name is not (Holder or Token) && parameters.All(p => p.Name != name)) is { } unbound)
+        {
+            throw new DriverException($"{plan.Method} has no parameter {unbound}");
+        }
+        var args = parameters.Select(p => Argument(sdk, p, given, bound, options)).ToArray();
+        Cancel(cancel, entry?.Cancel is { } wait ? Scripts.CancelOf(wait) : null);
+        if (plan.Stream is not null)
+        {
+            var streamCall = new StreamCall(sdk, plan, call, entry, lens);
+            return await Streams.ObserveAsync(streamCall, async () => await ResultAsync(target, method, args)
+                ?? throw new DriverException($"{plan.Method} opened nothing"));
+        }
         object? result;
         try
         {
-            Cancel(cancel, entry?.Cancel is { } wait ? Scripts.CancelOf(wait) : null);
-            var task = method.Invoke(target, BindingFlags.DoNotWrapExceptions, null, args, null) as Task
-                ?? throw new DriverException($"{plan.Method} returned no Task");
-            await task;
-            result = method.ReturnType.IsGenericType ? method.ReturnType.GetProperty("Result")!.GetValue(task) : null;
+            result = await ResultAsync(target, method, args);
         }
         catch (Exception e) when (e is not DriverException)
         {
             return Observe.Thrown(sdk, e, lens);
         }
         return Observe.Returned(sdk, new Answer(method.ReturnType, result, raw), plan, lens);
+    }
+
+    /// <summary>
+    /// <paramref name="method"/> run on <paramref name="target"/> and awaited, the SDK's own exception unwrapped: its
+    /// task's result, or null when the declared return type is not generic (P5).
+    /// </summary>
+    public static async Task<object?> ResultAsync(object target, MethodInfo method, object?[] args)
+    {
+        var task = method.Invoke(target, BindingFlags.DoNotWrapExceptions, null, args, null) as Task
+            ?? throw new DriverException($"{method.Name} returned no Task");
+        await task;
+        return method.ReturnType.IsGenericType ? method.ReturnType.GetProperty("Result")!.GetValue(task) : null;
     }
 
     /* the keys of the values bound by what they are rather than by a parameter's name */
@@ -94,7 +118,28 @@ internal static class Invoke
         {
             bound[Holder] = sdk.Create(headers.Type);
         }
+        if (plan.Stream is not null)
+        {
+            Fields(bound, call, entry);
+        }
         return bound;
+    }
+
+    /// <summary>A stream method's own fields, each given one bound by its fixed name; Protocol.cs refused a misfit.</summary>
+    private static void Fields(Dictionary<string, object?> bound, Call call, CallScript? entry)
+    {
+        var fields = new (string Name, object? Value)[]
+        {
+            ("lastEventId", call.LastEventId),
+            ("reconnectToken", call.ReconnectToken),
+            ("protocols", entry?.Protocols),
+            ("maxReconnectAttempts", entry?.Realtime?.MaxReconnectAttempts),
+            ("reconnectDelay", entry?.Realtime?.ReconnectDelayMs is { } ms ? (TimeSpan?)TimeSpan.FromMilliseconds(ms) : null),
+        };
+        foreach (var (name, value) in fields.Where(field => field.Value is not null))
+        {
+            bound[name] = value;
+        }
     }
 
     /// <summary><paramref name="size"/> bytes <c>i &amp; 0xff</c> as a <paramref name="type"/> (<c>BinaryBody</c>): in memory, or one-shot.</summary>
