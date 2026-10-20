@@ -363,21 +363,24 @@ const CONCURRENT_REPLIES: readonly Reply[] = [
 ]
 
 /**
- * A refresher waiting on the call's token, the call's token canceled at 100 ms: the caller's cancel as thrown, well
- * before the refresher's own 5 s (a refresher handed no token would answer after it, and the retry with it).
+ * A refresher waiting on the call's token, the call's token canceled 300 ms after the refresh starts (so the 401's hop
+ * has always landed, however slow the first request): the caller's cancel as thrown, within 2 s of the refresh's
+ * start, well before the refresher's own 5 s (a refresher handed no token would answer after it, and the retry with it).
  */
-const HONORED = `var config = new ClientConfig
+const HONORED = `using var cts = new System.Threading.CancellationTokenSource();
+var clock = new System.Diagnostics.Stopwatch();
+var config = new ClientConfig
 {
     BearerToken = "old",
     OnAuthExpired = async ct =>
     {
+        clock.Start();
+        cts.CancelAfter(300);
         await Task.Delay(5000, ct);
         return "late";
     },
 };
 using var c = Client(config);
-using var cts = new System.Threading.CancellationTokenSource(100);
-var clock = System.Diagnostics.Stopwatch.StartNew();
 try
 {
     await c.Users.GetAsync("1", cancellationToken: cts.Token);
