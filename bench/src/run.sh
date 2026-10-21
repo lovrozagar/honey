@@ -42,7 +42,8 @@ FRAMEWORKS=("honey" "hono" "elysia" "express" "nest")
 BUN_PORTS=("3100" "3101" "3102" "3103" "3104")
 NODE_PORTS=("3300" "3301" "3302" "3303" "3304")
 FW_PORTS=("${BUN_PORTS[@]}")
-APP_PIDS=()
+# shellcheck source=procs.sh
+source "$DIR/procs.sh"
 
 ports_for() {
 	if [ "$1" = "node" ]; then
@@ -56,26 +57,14 @@ port_busy() {
 	ss -ltnH "sport = :$1" 2>/dev/null | grep -q .
 }
 
-kill_port() {
-	fuser -k "$1/tcp" >/dev/null 2>&1 || true
-	lsof -tiTCP:"$1" -sTCP:LISTEN 2>/dev/null | xargs -r kill -9 2>/dev/null || true
-}
-
+# Stop this run's apps, then wait for their ports to close; a port another process holds is only reported.
 cleanup() {
-	for pid in "${APP_PIDS[@]}"; do
-		kill -9 "$pid" >/dev/null 2>&1 || true
-		pkill -9 -P "$pid" >/dev/null 2>&1 || true
-	done
-	APP_PIDS=()
-	for port in "${FW_PORTS[@]}"; do
-		kill_port "$port"
-	done
+	stop_owned
 	for port in "${FW_PORTS[@]}"; do
 		for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 			if ! port_busy "$port"; then
 				break
 			fi
-			kill_port "$port"
 			sleep 0.2
 		done
 		if port_busy "$port"; then
@@ -96,32 +85,29 @@ start_app() {
 	if [ "$fw" = "nest" ]; then
 		echo "  Starting $fw ($env / $matrix, TS) on :$port..."
 		if [ "$env" = "node" ]; then
-			PORT="$port" bunx tsx "$src" &
+			start_owned env PORT="$port" bunx tsx "$src"
 		else
-			PORT="$port" bun run "$src" &
+			start_owned env PORT="$port" bun run "$src"
 		fi
-		APP_PIDS+=($!)
 		return
 	fi
 
 	if [ "$MODE" = "prod" ]; then
 		echo "  Starting $fw ($env / $matrix, built) on :$port..."
 		if [ "$env" = "node" ]; then
-			PORT="$port" node "$dist/$fw/index.js" &
+			start_owned env PORT="$port" node "$dist/$fw/index.js"
 		else
-			PORT="$port" bun "$dist/$fw/index.js" &
+			start_owned env PORT="$port" bun "$dist/$fw/index.js"
 		fi
-		APP_PIDS+=($!)
 		return
 	fi
 
 	echo "  Starting $fw ($env / $matrix, dev) on :$port..."
 	if [ "$env" = "node" ]; then
-		PORT="$port" bunx tsx "$src" &
+		start_owned env PORT="$port" bunx tsx "$src"
 	else
-		PORT="$port" bun run "$src" &
+		start_owned env PORT="$port" bun run "$src"
 	fi
-	APP_PIDS+=($!)
 }
 
 run_matrix() {
