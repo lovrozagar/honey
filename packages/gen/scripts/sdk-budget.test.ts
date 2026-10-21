@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { runtimeFileNames } from "../src/emit/go/http.ts"
+import { csharpCallPlans, generateCSharpSdk } from "../src/emit/csharp/sdk.ts"
 import { generateGoSdk, goCallPlans } from "../src/emit/go/sdk.ts"
 import { generatePythonSdk, pythonCallPlans } from "../src/emit/python/sdk.ts"
 import { runtimeFileNames as pythonRuntimeFileNames } from "../src/emit/python/transport.ts"
@@ -9,7 +10,14 @@ import { runtimeFileNames as rustRuntimeFileNames } from "../src/emit/rust/http.
 import { generateRustSdk, rustCallPlans } from "../src/emit/rust/sdk.ts"
 import { generateSdk } from "../src/emit/ts/sdk.ts"
 import { ceilingOf, countTokens, oversizedOperations } from "./capture-token-budget.ts"
-import { runtimeBytes, v1GoSdkSurfaces, v1PythonSdkSurfaces, v1RustSdkSurfaces, v1SdkSurfaces } from "./sdk-budget.ts"
+import {
+	runtimeBytes,
+	v1CSharpSdkSurfaces,
+	v1GoSdkSurfaces,
+	v1PythonSdkSurfaces,
+	v1RustSdkSurfaces,
+	v1SdkSurfaces,
+} from "./sdk-budget.ts"
 
 const REPO = resolve(import.meta.dirname, "../../..")
 const APPS = ["compose", "defaults", "gateway", "kitchen", "surface"]
@@ -289,6 +297,72 @@ describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
 				for (const [key, text] of surfaces) {
 					const tokens = countTokens(text)
 					if (tokens > PYTHON_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
+				}
+			}
+		}
+		expect(over).toEqual([])
+	})
+})
+
+/*
+ * G13 (bit 15): C#'s own per-operation ceiling, not sdkCli's 234 nor Go's 94, Rust's 96 or Python's 71. Measured over
+ * the five e2e apps' 72 operations in both throwOnError modes (144 surfaces, `v1CSharpSdkSurfaces` over the emitted
+ * Client.cs): max 56 (surface, PutInAllByResourceId, safe mode), median 27, min 19. The emitter writes no formatter
+ * pass, so the measured text is the shipped text. 56 + 20% headroom = 68. Each language holds its own ceiling, set
+ * from its own measurement. An operation over it is fixed in the schema, never by raising the ceiling; revisit only
+ * for a genuinely large, legitimate operation.
+ */
+const CSHARP_SDK_CEILING = ceilingOf([56], 0.2)
+
+const CS_CLIENT = `namespace Acme;
+
+public sealed class HoneySdkClient
+{
+    public Task<SdkResult<A>> GetAAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default) => Call(id, options);
+    public Task<B> ListAsync(RequestOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        return Call(options);
+    }
+}
+
+public sealed partial class InputResource
+{
+    public Task<C> SearchAsync(double limit, RequestOptions? options = null, CancellationToken cancellationToken = default) => Call(limit, options);
+}
+`
+
+describe("the v1 C# SDK within the budget (bit 15, G13)", () => {
+	it("reads each class's operation signature with its body stripped, keyed Class.method, the resource classes too", () => {
+		expect(Object.fromEntries(v1CSharpSdkSurfaces(CS_CLIENT))).toEqual({
+			"HoneySdkClient.GetAAsync":
+				"public Task<SdkResult<A>> GetAAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default)",
+			"HoneySdkClient.ListAsync":
+				"public Task<B> ListAsync(RequestOptions? options = null, CancellationToken cancellationToken = default)",
+			"InputResource.SearchAsync":
+				"public Task<C> SearchAsync(double limit, RequestOptions? options = null, CancellationToken cancellationToken = default)",
+		})
+	})
+
+	it("refuses a signature that spans lines, so a formatted client never measures short", () => {
+		const wrapped = CS_CLIENT.replace(
+			"ListAsync(RequestOptions? options = null, CancellationToken",
+			"ListAsync(RequestOptions? options = null,\n        CancellationToken",
+		)
+		expect(() => v1CSharpSdkSurfaces(wrapped)).toThrow("HoneySdkClient.ListAsync spans lines")
+	})
+
+	it(`keeps every e2e app's C# operations within ${CSHARP_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+		const over: string[] = []
+		for (const app of APPS) {
+			const spec = appSpec(app)
+			for (const throwOnError of [true, false]) {
+				const surfaces = v1CSharpSdkSurfaces(generateCSharpSdk(spec, { throwOnError }).files["Client.cs"] ?? "")
+				/* completeness: a surface the reader misses can never pass by going unmeasured */
+				const plans = Object.keys(csharpCallPlans(spec, { throwOnError })).length
+				if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
+				for (const [key, text] of surfaces) {
+					const tokens = countTokens(text)
+					if (tokens > CSHARP_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
 				}
 			}
 		}

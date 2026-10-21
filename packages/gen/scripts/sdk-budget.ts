@@ -104,6 +104,27 @@ export function v1PythonSdkSurfaces(clientPy: string): Map<string, string> {
 }
 
 /**
+ * Each operation method of a v1 emitted C# `Client.cs` (bit 15, G13), as `generateCSharpSdk` writes it: the
+ * `public … <Op>Async(…)` signature line of the client class or a `<X>Resource` class, without its indent and its
+ * ` => …` body, what a reader of the SDK takes in to call it once. Keyed `Class.method`. A signature that does not
+ * close on its own line throws: a wrapped signature never measures short.
+ */
+export function v1CSharpSdkSurfaces(clientCs: string): Map<string, string> {
+	const out = new Map<string, string>()
+	let type = ""
+	for (const line of clientCs.split("\n")) {
+		type = /^public (?:sealed )?(?:partial )?class (\w+)/.exec(line)?.[1] ?? type
+		const name = /^ {4}public \S.* (\w+Async)\(/.exec(line)?.[1]
+		if (name === undefined) continue
+		const key = `${type}.${name}`
+		const signature = line.trim().replace(/ =>.*$/, "")
+		if (!signature.endsWith(")")) throw new Error(`${key} spans lines`)
+		out.set(key, signature)
+	}
+	return out
+}
+
+/**
  * A vendored runtime directory's bloat measure (G14): its `ext` files in code-unit order and their bytes on disk
  * as shipped (00-rules:160), never string length, and every other file it holds, in code-unit order.
  */

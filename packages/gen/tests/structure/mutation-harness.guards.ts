@@ -4,11 +4,15 @@
  * looks a guard up reaches no language it does not run (toolchain-projects.test.ts); mutation-harness.ts
  * runs the suites.
  */
+import type { CSharpRuntimeFeatures } from "../../src/emit/csharp/transport.ts"
 import type { GoRuntimeFeatures } from "../../src/emit/go/http.ts"
 import type { PythonRuntimeFeatures } from "../../src/emit/python/transport.ts"
 import type { RustRuntimeFeatures } from "../../src/emit/rust/http.ts"
 import {
 	bypassedEscapes,
+	CSHARP_KEEP_CROSS_ORIGIN_HEADERS,
+	CSHARP_LEAKY_LOG,
+	CSHARP_RAW_PATH_PARAMS,
 	GO_KEEP_CROSS_ORIGIN_HEADERS,
 	GO_LEAKY_LOG,
 	GO_RAW_PATH_PARAMS,
@@ -29,7 +33,7 @@ import {
 } from "../security/mutants.ts"
 
 /** A language toolchain a guard's cases compile with. */
-export type Toolchain = "go" | "rust" | "python"
+export type Toolchain = "csharp" | "go" | "rust" | "python"
 
 /** Which toolchains this machine runs. */
 export type Present = { readonly [T in Toolchain]: boolean }
@@ -39,6 +43,7 @@ export type Present = { readonly [T in Toolchain]: boolean }
  * so the only file the mock reaches. A guard without a toolchain reruns the whole directory.
  */
 export const SUITES: Readonly<Record<Toolchain, string>> = {
+	csharp: "tests/security/emit-adversarial.csharp.test.ts",
 	go: "tests/security/emit-adversarial.test.ts",
 	python: "tests/security/emit-adversarial.python.test.ts",
 	rust: "tests/security/emit-adversarial.rust.test.ts",
@@ -171,10 +176,38 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/gen/src/emit/python/transport.ts",
 		toolchain: "python",
 	},
+	{
+		catches:
+			"a cross-origin redirect hop, through the SDK's client or a caller's HttpMessageHandler chain, that keeps the auth header, cookies and configured headers (H18.10, R3)",
+		disable: (original) => ({
+			runtimeFiles: patchedRuntimeFiles(csharpRuntime(original), CSHARP_KEEP_CROSS_ORIGIN_HEADERS),
+		}),
+		id: "csharp-cross-origin-auth",
+		module: "packages/gen/src/emit/csharp/transport.ts",
+		toolchain: "csharp",
+	},
+	{
+		catches: "a path param written raw: `..` or `/` in a value changing which resource the request addresses",
+		disable: (original) => ({ runtimeFiles: patchedRuntimeFiles(csharpRuntime(original), CSHARP_RAW_PATH_PARAMS) }),
+		id: "csharp-path-param-escape",
+		module: "packages/gen/src/emit/csharp/transport.ts",
+		toolchain: "csharp",
+	},
+	{
+		catches: "an operation log entry carrying the filled path's query or the auth token value",
+		disable: (original) => ({ runtimeFiles: patchedRuntimeFiles(csharpRuntime(original), CSHARP_LEAKY_LOG) }),
+		id: "csharp-auth-redaction",
+		module: "packages/gen/src/emit/csharp/transport.ts",
+		toolchain: "csharp",
+	},
 ]
 
 /** The emitted runtime's reader, as the guarded module exports it. */
 const runtime = (original: Record<string, unknown>) => original.runtimeSource as () => string
+
+/** The emitted C# runtime's reader, as the guarded module exports it: its features and root namespace. */
+const csharpRuntime = (original: Record<string, unknown>) =>
+	original.runtimeFiles as (features: CSharpRuntimeFeatures, rootNamespace: string) => Record<string, string>
 
 /** The emitted Go runtime's reader, as the guarded module exports it. */
 const goRuntime = (original: Record<string, unknown>) =>

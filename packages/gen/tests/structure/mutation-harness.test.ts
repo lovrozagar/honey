@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import { withDotnet } from "../../src/emit/csharp/__fixtures__/csharp-env.ts"
+import { runtimeFiles as csharpRuntimeFiles } from "../../src/emit/csharp/transport.ts"
 import { goCacheDir, withGo } from "../../src/emit/go/__fixtures__/go-env.ts"
 import { pythonCacheDir, withPython } from "../../src/emit/python/__fixtures__/python-env.ts"
 import { runtimeFiles as pythonRuntimeFiles } from "../../src/emit/python/transport.ts"
@@ -13,6 +15,7 @@ import { GUARDS, guardNamed, SUITES, skippedFor, type Toolchain, verdicts } from
 /* a guard's suite reruns, its fuzz included, once per guard; a cold Rust cache pays the dependency build (Ff10) */
 const RUN = 600_000
 
+const CSHARP_GUARDS = ["csharp-cross-origin-auth", "csharp-path-param-escape", "csharp-auth-redaction"]
 const GO_GUARDS = ["go-cross-origin-auth", "go-auth-redaction", "go-path-param-escape"]
 const RUST_GUARDS = ["rust-cross-origin-auth", "rust-auth-redaction", "rust-path-param-escape"]
 const PYTHON_GUARDS = ["python-cross-origin-auth", "python-auth-redaction", "python-path-param-escape"]
@@ -22,20 +25,23 @@ const GEN = resolve(import.meta.dirname, "../..")
 /* the plain HTTP runtime, which every Rust and Python SDK ships and the guards patch */
 const PLAIN = { realtime: false, ws: false }
 
-/** A language's runtime reader, as its guarded module exports it. */
-type Reader = (features: typeof PLAIN) => Record<string, string>
+/** The root namespace the C# reader is given: any one, since the guards only name the files they change. */
+const CSHARP_ROOT = "Acme.Sdk"
 
-/** The runtime files `id`'s disabled `reader` writes, by name, for a plain HTTP SDK. */
-function disabledRuntime(id: string, reader: Reader): Record<string, string> {
+/** A language's runtime reader, as its guarded module exports it: its features, then any further arguments. */
+type Reader<A extends unknown[]> = (...args: A) => Record<string, string>
+
+/** The runtime files `id`'s disabled `reader` writes, by name, given `args`. */
+function disabledRuntime<A extends unknown[]>(id: string, reader: Reader<A>, ...args: A): Record<string, string> {
 	const disable = guardNamed(id)?.disable ?? ((): Record<string, unknown> => ({}))
-	return (disable({ runtimeFiles: reader }).runtimeFiles as Reader)(PLAIN)
+	return (disable({ runtimeFiles: reader }).runtimeFiles as Reader<A>)(...args)
 }
 
-/** For each of `ids`, the names of the plain runtime files its disabled `reader` changes. */
-function changedFiles(ids: readonly string[], reader: Reader): string[][] {
-	const plain = reader(PLAIN)
+/** For each of `ids`, the names of the runtime files its disabled `reader` changes, given `args`. */
+function changedFiles<A extends unknown[]>(ids: readonly string[], reader: Reader<A>, ...args: A): string[][] {
+	const plain = reader(...args)
 	return ids.map((id) => {
-		const files = disabledRuntime(id, reader)
+		const files = disabledRuntime(id, reader, ...args)
 		return Object.keys(plain).filter((name) => files[name] !== plain[name])
 	})
 }
@@ -82,7 +88,7 @@ describe("each guard's toolchain", () => {
 				expect.objectContaining({ id, module: "packages/gen/src/emit/rust/http.ts", toolchain: "rust" }),
 			),
 		)
-		expect(changedFiles(RUST_GUARDS, rustRuntimeFiles)).toEqual([["redirect.rs"], ["exchange.rs"], ["path.rs"]])
+		expect(changedFiles(RUST_GUARDS, rustRuntimeFiles, PLAIN)).toEqual([["redirect.rs"], ["exchange.rs"], ["path.rs"]])
 	})
 
 	it("holds the three Python runtime guards, each needing Python and patching the Python runtime reader", () => {
@@ -91,33 +97,54 @@ describe("each guard's toolchain", () => {
 				expect.objectContaining({ id, module: "packages/gen/src/emit/python/transport.ts", toolchain: "python" }),
 			),
 		)
-		expect(changedFiles(PYTHON_GUARDS, pythonRuntimeFiles)).toEqual([["redirect.py"], ["exchange.py"], ["path.py"]])
+		expect(changedFiles(PYTHON_GUARDS, pythonRuntimeFiles, PLAIN)).toEqual([
+			["redirect.py"],
+			["exchange.py"],
+			["path.py"],
+		])
+	})
+
+	it("holds the three C# runtime guards, each needing .NET and patching the C# runtime reader", () => {
+		expect(CSHARP_GUARDS.map((id) => guardNamed(id))).toEqual(
+			CSHARP_GUARDS.map((id) =>
+				expect.objectContaining({ id, module: "packages/gen/src/emit/csharp/transport.ts", toolchain: "csharp" }),
+			),
+		)
+		expect(changedFiles(CSHARP_GUARDS, csharpRuntimeFiles, PLAIN, CSHARP_ROOT)).toEqual([
+			["Handler.cs", "Redirect.cs"],
+			["Path.cs"],
+			["Exchange.cs"],
+		])
 	})
 
 	it("skips each toolchain's guards only where that toolchain is absent", () => {
 		expect([
-			skippedFor(GUARDS, { go: false, python: false, rust: false }),
-			skippedFor(GUARDS, { go: true, python: false, rust: false }),
-			skippedFor(GUARDS, { go: true, python: false, rust: true }),
-			skippedFor(GUARDS, { go: true, python: true, rust: true }),
+			skippedFor(GUARDS, { csharp: false, go: false, python: false, rust: false }),
+			skippedFor(GUARDS, { csharp: false, go: true, python: false, rust: false }),
+			skippedFor(GUARDS, { csharp: false, go: true, python: false, rust: true }),
+			skippedFor(GUARDS, { csharp: false, go: true, python: true, rust: true }),
+			skippedFor(GUARDS, { csharp: true, go: true, python: true, rust: true }),
 		]).toEqual([
-			[...GO_GUARDS, ...RUST_GUARDS, ...PYTHON_GUARDS],
-			[...RUST_GUARDS, ...PYTHON_GUARDS],
-			PYTHON_GUARDS,
+			[...GO_GUARDS, ...RUST_GUARDS, ...PYTHON_GUARDS, ...CSHARP_GUARDS],
+			[...RUST_GUARDS, ...PYTHON_GUARDS, ...CSHARP_GUARDS],
+			[...PYTHON_GUARDS, ...CSHARP_GUARDS],
+			CSHARP_GUARDS,
 			[],
 		])
 	})
 })
 
 describe("each guard's verdict", () => {
-	it("runs every guard, all 16, where Go, Rust and Python are present", () => {
+	it("runs every guard, all 19, where .NET, Go, Rust and Python are present", () => {
 		const ids = GUARDS.map((g) => g.id)
-		expect(verdicts(GUARDS, skippedFor(GUARDS, { go: true, python: true, rust: true }), () => 1)).toEqual({
-			killed: ids,
-			skipped: [],
-			survived: [],
-		})
-		expect(ids).toHaveLength(16)
+		expect(verdicts(GUARDS, skippedFor(GUARDS, { csharp: true, go: true, python: true, rust: true }), () => 1)).toEqual(
+			{
+				killed: ids,
+				skipped: [],
+				survived: [],
+			},
+		)
+		expect(ids).toHaveLength(19)
 	})
 
 	it("counts a skipped guard as neither killed nor survived, and never runs it", () => {
@@ -127,11 +154,13 @@ describe("each guard's verdict", () => {
 			return id === "escape-bypass" ? 0 : 1
 		}
 		const tsIds = GUARDS.filter((g) => g.toolchain === undefined).map((g) => g.id)
-		expect(verdicts(GUARDS, skippedFor(GUARDS, { go: false, python: false, rust: false }), run)).toEqual({
-			killed: tsIds.filter((id) => id !== "escape-bypass"),
-			skipped: [...GO_GUARDS, ...RUST_GUARDS, ...PYTHON_GUARDS],
-			survived: ["escape-bypass"],
-		})
+		expect(verdicts(GUARDS, skippedFor(GUARDS, { csharp: false, go: false, python: false, rust: false }), run)).toEqual(
+			{
+				killed: tsIds.filter((id) => id !== "escape-bypass"),
+				skipped: [...GO_GUARDS, ...RUST_GUARDS, ...PYTHON_GUARDS, ...CSHARP_GUARDS],
+				survived: ["escape-bypass"],
+			},
+		)
 		expect(ran).toEqual(tsIds)
 	})
 })
@@ -210,6 +239,16 @@ describe("the emit adversarial suite against each guard", () => {
 		},
 		RUN,
 	)
+
+	describe.skipIf(!withDotnet())("the C# runtime guards", () => {
+		it.each(GUARDS.filter((g) => g.toolchain === "csharp").map((g) => g.id))(
+			"goes red with the %s guard disabled",
+			(id) => {
+				expect(runSuite(id)).not.toBe(0)
+			},
+			RUN,
+		)
+	})
 
 	describe.skipIf(!withGo())("the Go runtime guards", () => {
 		it.each(GUARDS.filter((g) => g.toolchain === "go").map((g) => g.id))(

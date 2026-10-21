@@ -213,12 +213,12 @@ describe("csTopLevel: property order and names", () => {
 			schema: { properties: { clone: STRING, equals: STRING, getHashCode: STRING, toString: STRING } },
 			text: record(
 				"X",
-				property("clone", "string? Clone"),
+				property("clone", "string? Clone2"),
 				property("equals", "string? Equals2"),
 				property("getHashCode", "string? GetHashCode2"),
 				property("toString", "string? ToString2"),
 			),
-			title: "a property spelling a member every record has is …2; Clone is free",
+			title: "a property spelling a member every record has is …2, Clone too (CS8859)",
 		},
 	])("$title", (row) => {
 		expect(top(row)).toEqual(declaredAs(row))
@@ -239,14 +239,15 @@ describe("csTopLevel: reserved member names", () => {
 			},
 			text: record(
 				"X",
-				property("deconstruct", "string? Deconstruct2"),
+				property("deconstruct", "string? Deconstruct"),
 				property("equalityContract", "string? EqualityContract2"),
-				property("finalize", "string? Finalize2"),
+				property("finalize", "string? Finalize"),
 				property("getType", "string? GetType2"),
 				property("memberwiseClone", "string? MemberwiseClone2"),
 				property("printMembers", "string? PrintMembers2"),
 			),
-			title: "every synthesized or inherited record member is reserved",
+			title:
+				"every record member a property collides with is reserved; Deconstruct and Finalize, which collide with none, are free",
 		},
 		{
 			name: "X",

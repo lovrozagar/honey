@@ -52,16 +52,19 @@ export function patchedRuntime(
 }
 
 /** `runtimeFiles` with each `[file, from, to]` applied to that file; a patch whose file is not shipped or whose text is gone throws. */
-export function patchedRuntimeFiles<F>(
-	runtimeFiles: (features: F) => Record<string, string>,
+export function patchedRuntimeFiles<A extends readonly unknown[]>(
+	runtimeFiles: (...args: A) => Record<string, string>,
 	patches: readonly (readonly [string, string, string])[],
-): (features: F) => Record<string, string> {
-	return (features) =>
-		patches.reduce((files, [file, from, to]) => {
-			const text = files[file]
-			if (text === undefined) throw new Error(`stale runtime mutant: ${file} is not shipped`)
-			return { ...files, [file]: patched(text, [from, to], file) }
-		}, runtimeFiles(features))
+): (...args: A) => Record<string, string> {
+	return (...args) =>
+		patches.reduce(
+			(files, [file, from, to]) => {
+				const text = files[file]
+				if (text === undefined) throw new Error(`stale runtime mutant: ${file} is not shipped`)
+				return { ...files, [file]: patched(text, [from, to], file) }
+			},
+			runtimeFiles(...args),
+		)
 }
 
 /* a cross-origin hop that keeps every header, credentials and the auth header included */
@@ -148,5 +151,30 @@ export const PYTHON_LEAKY_LOG = [
 		"exchange.py",
 		'self.log = CallLog(core.config.on_log, f"{op.method} {op.path}")',
 		'self.log = CallLog(core.config.on_log, f"{op.method} {self.url()} {core.auth.token}")',
+	],
+] as const
+
+/*
+ * A C# cross-origin hop that keeps every header. Two sites, each proven alone by Q-f3: StripHandler (Handler.cs), the
+ * innermost strip that runs after any caller HttpMessageHandler chain, is what caller-chain legs kill; the follow's
+ * header set (Redirect.cs) is defense-in-depth, equivalent under StripHandler and not counted as its own kill.
+ */
+export const CSHARP_KEEP_CROSS_ORIGIN_HEADERS = [
+	["Redirect.cs", " && (!cross || Safe.Contains(name, StringComparer.OrdinalIgnoreCase))", ""],
+	["Handler.cs", "out var cross) && cross)", "out var cross) && cross && false)"],
+] as const
+
+/* a C# path param written as it came: no refusal of an empty, a dot or a dot-dot value, and a `/` left unencoded */
+export const CSHARP_RAW_PATH_PARAMS = [
+	["Path.cs", 'return value is null or "" or "." or ".."', "return value is null"],
+	["Path.cs", `"-_.!~*'()".Contains((char)b)`, `"-_.!~*'()/".Contains((char)b)`],
+] as const
+
+/* a C# operation log entry naming the filled URL with its query and the token instead of METHOD /template */
+export const CSHARP_LEAKY_LOG = [
+	[
+		"Exchange.cs",
+		'$"{op.Method} {op.Path}")',
+		'$"{op.Method} {client.Base}{UrlPath.Expand(op, call.Path)}?{UrlQuery.Encode(call.Query)} {client.Auth.Token}")',
 	],
 ] as const

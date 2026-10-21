@@ -13,6 +13,7 @@
 import { spawnSync } from "node:child_process"
 import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
+import { withDotnet } from "../../src/emit/csharp/__fixtures__/csharp-env.ts"
 import { withGo } from "../../src/emit/go/__fixtures__/go-env.ts"
 import { withPython } from "../../src/emit/python/__fixtures__/python-env.ts"
 import { withRust } from "../../src/emit/rust/__fixtures__/rust-env.ts"
@@ -23,7 +24,7 @@ const SUITE = "tests/security"
 const VITEST = join(dirname(createRequire(import.meta.url).resolve("vitest/package.json")), "vitest.mjs")
 
 /** Each toolchain's name in a skip line. */
-const NAMES: Readonly<Record<Toolchain, string>> = { go: "Go", python: "Python", rust: "Rust" }
+const NAMES: Readonly<Record<Toolchain, string>> = { csharp: ".NET", go: "Go", python: "Python", rust: "Rust" }
 
 /** The emit adversarial suite's exit status, with `mutant` disabled when given: its toolchain's file alone, or all of it. */
 export function runSuite(mutant: string | undefined): number {
@@ -36,7 +37,7 @@ export function runSuite(mutant: string | undefined): number {
 
 function main(): number {
 	/* throws where a toolchain is required and absent, before any suite run: a required toolchain never skips */
-	const present = { go: withGo(), python: withPython(), rust: withRust() }
+	const present = { go: withGo(), python: withPython(), rust: withRust(), csharp: withDotnet() }
 	if (runSuite(undefined) !== 0) {
 		process.stderr.write("mutation: the emit adversarial suite fails with every guard in place\n")
 		return 1

@@ -53,6 +53,85 @@ export const BCL: Readonly<Record<string, readonly string[]>> = {
 	"System.Threading.Tasks": ["Task"],
 }
 
+/*
+ * the BCL names the vendored runtime spells unqualified (as a type or by static access) and emitted text never does:
+ * the emitted types share the runtime's namespace (Fb2), so each is reserved, never a `using`
+ */
+export const RUNTIME_BCL: readonly string[] = [
+	"Action",
+	"Array",
+	"ByteArrayContent",
+	"CancellationTokenRegistration",
+	"CancellationTokenSource",
+	"Convert",
+	"CultureInfo",
+	"DecompressionMethods",
+	"DelegatingHandler",
+	"Dictionary",
+	"Encoding",
+	"Enum",
+	"EqualityComparer",
+	"Guid",
+	"HashCode",
+	"HashSet",
+	"HttpClient",
+	"HttpClientHandler",
+	"HttpCompletionOption",
+	"HttpHeaders",
+	"HttpMessageHandler",
+	"HttpMethod",
+	"HttpRequestException",
+	"HttpRequestMessage",
+	"HttpRequestOptionsKey",
+	"HttpResponseMessage",
+	"HttpStatusCode",
+	"HttpVersion",
+	"HttpVersionPolicy",
+	"IAsyncEnumerable",
+	"IAsyncEnumerator",
+	"IEnumerable",
+	"IEquatable",
+	"Interlocked",
+	"InvalidOperationException",
+	"JsonDocument",
+	"JsonMetadataServices",
+	"JsonTypeInfoResolver",
+	"LinkedList",
+	"LinkedListNode",
+	"List",
+	"Math",
+	"MemoryStream",
+	"NotSupportedException",
+	"NumberStyles",
+	"OperationCanceledException",
+	"Random",
+	"RandomNumberGenerator",
+	"ReadOnlySpan",
+	"Rune",
+	"SHA1",
+	"SemaphoreSlim",
+	"SocketsHttpHandler",
+	"Stopwatch",
+	"Stream",
+	"StreamContent",
+	"StringBuilder",
+	"StringComparer",
+	"StringComparison",
+	/* System.Threading's, also a runtime property: the scan cannot tell `Timeout.InfiniteTimeSpan` (CS0117) from it */
+	"Timeout",
+	"UnicodeCategory",
+	"Uri",
+	"UriBuilder",
+	"UriKind",
+	"ValueTask",
+	"ValueWebSocketReceiveResult",
+	"WebSocket",
+	"WebSocketCloseStatus",
+	"WebSocketCreationOptions",
+	"WebSocketMessageType",
+	"WebSocketState",
+]
+
 /* the attributes emitted text spells without their `Attribute` suffix: the suffixed name is taken too */
 const ATTRIBUTES = [
 	"JsonConverter",
@@ -65,10 +144,11 @@ const ATTRIBUTES = [
 
 const UNKNOWN: IRSchema = { kind: "unknown" }
 
-/** Every name a declared type may not take: the runtime's types, the BCL's, `System` itself, and `taken`. */
+/** Every name a declared type may not take: the runtime's types, the BCL's (emitted and runtime-spelled), `System` itself, and `taken`. */
 const reserved = (taken: readonly string[]) => [
 	...Object.values(runtimeFiles({ realtime: true, ws: true }, "X")).flatMap(runtimeTypeNames),
 	...Object.values(BCL).flat(),
+	...RUNTIME_BCL,
 	...ATTRIBUTES.map((name) => `${name}Attribute`),
 	/* the static class of the API's error keys (errors.ts), declared beside the types when any key is */
 	"ErrorKey",

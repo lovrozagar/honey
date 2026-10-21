@@ -14,12 +14,11 @@ import { csString } from "../shared/escape.ts"
 import { compareCodeUnits, csTypeName, NameScope } from "../shared/lang.ts"
 import type { CsTypeContext, Member } from "./types.ts"
 
-/* every member a record has, synthesized or inherited, and the name its attributes spell in an expression */
+/* every member name a record property collides with (CS0102, CS0108, CS8859, CS8874), and the name its attributes spell in an expression */
 export const RECORD_MEMBERS: readonly string[] = [
-	"Deconstruct",
+	"Clone",
 	"EqualityContract",
 	"Equals",
-	"Finalize",
 	"GetHashCode",
 	"GetType",
 	"JsonIgnoreCondition",

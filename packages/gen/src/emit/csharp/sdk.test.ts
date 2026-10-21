@@ -310,6 +310,21 @@ describe("generateCSharpSdk: the options (Fb3)", () => {
 	})
 })
 
+describe("generateCSharpSdk: the root namespace and the BCL (§4.7)", () => {
+	it.each([["Acme.Task"], ["Acme.HttpClient"], ["Contoso.Acme.Uri"]])(
+		"refuses the rootNamespace %j, a segment naming a BCL type the runtime spells, naming it",
+		(value) => {
+			expect(() => generateCSharpSdk(minimal, { rootNamespace: value })).toThrow(`Invalid rootNamespace: "${value}"`)
+		},
+	)
+
+	it("takes a namespace whose segments name no BCL type, though a segment is a word like one", () => {
+		expect(filesOf(minimal, { rootNamespace: "Acme.Tasks.Streamers" })["HoneySdk.csproj"]).toContain(
+			"<RootNamespace>Acme.Tasks.Streamers</RootNamespace>",
+		)
+	})
+})
+
 describe("generateCSharpSdk: determinism and conflicts", () => {
 	it.each(DOCUMENTS)("emits identical files for %s twice and for its paths reordered", (_name, document, options) => {
 		const { files } = generateCSharpSdk(document(), options)

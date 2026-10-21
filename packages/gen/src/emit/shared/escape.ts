@@ -105,9 +105,13 @@ export function pyDocLines(text: string): string[] {
 		.map((line) => line.replace(/\\/g, "\\\\").replace(/"/g, '\\"'))
 }
 
-/** XML doc text lines (C#'s `///`): split at every line break, `&`, `<` and `>` as entities (CS1570 otherwise). */
+/**
+ * XML doc text lines (C#'s `///`): split at every line break, `&`, `<` and `>` as entities, and U+FFFE and U+FFFF,
+ * which XML forbids, shown as `\uXXXX` (CS1570 otherwise).
+ */
 export function csDocLines(text: string): string[] {
 	return commentText(text)
+		.replace(/[\uFFFE\uFFFF]/g, (ch) => `\\u${hex(ch.codePointAt(0) as number, 4)}`)
 		.split(LINE_BREAKS)
 		.map((line) => line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"))
 }

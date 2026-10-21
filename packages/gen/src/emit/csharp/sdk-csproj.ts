@@ -5,6 +5,7 @@
  * validated option, never from spec text (Fb3).
  */
 import { isCsReserved } from "../shared/lang.ts"
+import { BCL, RUNTIME_BCL } from "./types-names.ts"
 
 /** The one target framework: the pinned SDK's major (R1). */
 export const TARGET_FRAMEWORK = "net10.0"
@@ -27,10 +28,12 @@ const refuse = (option: string, value: string): never => {
 export const validatePackageId = (value: string): string =>
 	PACKAGE_ID.test(value) && value.length <= 100 ? value : refuse("packageId", value)
 
-/** A namespace: dot-separated identifiers, none a keyword, not under `System`. */
+/** A namespace: dot-separated identifiers, none a keyword or a BCL type the sources spell, not under `System`. */
 export function validateRootNamespace(value: string): string {
 	const segments = value.split(".")
-	const valid = segments.every((segment) => SEGMENT.test(segment) && !isCsReserved(segment))
+	/* a segment naming a BCL type the sources spell unqualified turns that spelling into the namespace (CS0118) */
+	const bcl = new Set([...Object.values(BCL).flat(), ...RUNTIME_BCL])
+	const valid = segments.every((s) => SEGMENT.test(s) && !isCsReserved(s) && !bcl.has(s))
 	return valid && segments[0] !== "System" ? value : refuse("rootNamespace", value)
 }
 
