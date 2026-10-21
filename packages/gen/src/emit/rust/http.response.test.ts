@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { RustError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, served, type Json as WireJson } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, type Json as WireJson, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
 
@@ -187,7 +187,7 @@ describe.skipIf(!RUST)("a call ends when its time is up or it is canceled, never
 describe.skipIf(!RUST)("a refused connection is a transport error, never Canceled", () => {
 	// v0: 91cbb6da4b
 	it("fails a refused connection as Error::Transport with its source, no status and no Canceled in its Debug", async () => {
-		const closed = await served([], async (server) => server.url)
+		const closed = REFUSED_URL
 		const run = await driven("http").runCalls({ calls: [USER], setup: {} }, { url: closed }, {})
 		const error = run.trace?.calls[0]?.error
 		expect(

@@ -3,7 +3,7 @@ import type { Call, Setup } from "../../../tests/integration/conformance/matrix.
 import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
 import type { GoError, HookTrace, Script } from "../shared/__fixtures__/protocol.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
-import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
 const GO = withGo()
@@ -246,7 +246,7 @@ goDescribe("OnLog: the exchange by its operation template, never a path value, q
 
 /** OnLog's entries for GET against a closed origin, the call observed as null. */
 async function refused() {
-	const closed = await served([], async (server) => server.url)
+	const closed = REFUSED_URL
 	const run = await hooksSdk().runCalls({ calls: [GET], setup: BEARER }, { url: closed }, { log: true })
 	expect({ observed: run.observed, status: run.status }, run.stderr).toEqual({ observed: [null], status: 0 })
 	return run.trace?.log ?? []

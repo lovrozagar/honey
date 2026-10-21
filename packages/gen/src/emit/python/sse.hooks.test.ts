@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest"
 import type { Call, Observed, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { HookTrace, LogTrace, PythonError, Script } from "../shared/__fixtures__/protocol.ts"
 import { gone } from "../shared/__fixtures__/gone.ts"
-import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { consume, seen } from "./__fixtures__/consumer.ts"
 import { type DrivenPythonSdk, drivenPythonSdk } from "./__fixtures__/driven.ts"
 import { withPython } from "./__fixtures__/python-env.ts"
@@ -263,7 +263,7 @@ describe.skipIf(!PY)(
 		})
 
 		it("logs request_start then an error entry with no status when no answer arrives, naming no secret", async () => {
-			const closed = await served([], async (server) => server.url)
+			const closed = REFUSED_URL
 			const setup: Setup = { auth: { kind: "bearer", token: "tok-secret" } }
 			const run = await sseSdk().runCalls(
 				{ calls: [pending("p-secret")], setup },

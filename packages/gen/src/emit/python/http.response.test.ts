@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { PythonError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, served, type Json as WireJson } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, type Json as WireJson, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenPythonSdk, drivenPythonSdk } from "./__fixtures__/driven.ts"
 import { withPython } from "./__fixtures__/python-env.ts"
 
@@ -232,7 +232,7 @@ describe.skipIf(!PY)("a call ends when its time is up or it is canceled, never a
 
 describe.skipIf(!PY)("a refused connection is a transport error, never CanceledError", SLOW, () => {
 	it.each(CLIENTS)("%s: APIConnectionError caused by httpx2's ConnectError, with no status", async (client) => {
-		const closed = await served([], async (server) => server.url)
+		const closed = REFUSED_URL
 		const run = await driven("http").runCalls({ calls: [USER], setup: {} }, { url: closed }, { client, script: {} })
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			error: plain({

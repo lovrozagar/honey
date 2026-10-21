@@ -283,6 +283,13 @@ export async function recordingServer(replies: readonly Reply[]): Promise<Record
 }
 
 /** `use` with a recording server answering `replies`, closed after it whatever it does. */
+/**
+ * A URL no connection to which ever succeeds: port 1 on the loopback is privileged, so no unprivileged process can
+ * listen on it, and nothing serves it. A refused-connection leg aims here, never at a server it closed, whose freed
+ * ephemeral port a concurrent test's server may take first.
+ */
+export const REFUSED_URL = "http://127.0.0.1:1"
+
 export async function served<T>(replies: readonly Reply[], use: (server: RecordingServer) => Promise<T>): Promise<T> {
 	const server = await recordingServer(replies)
 	try {

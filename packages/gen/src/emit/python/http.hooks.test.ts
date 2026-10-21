@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { HookTrace, LogTrace, PythonError, Script } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { consume } from "./__fixtures__/consumer.ts"
 import { type DrivenPythonSdk, drivenPythonSdk } from "./__fixtures__/driven.ts"
 import { withPython } from "./__fixtures__/python-env.ts"
@@ -242,7 +242,7 @@ describe.skipIf(!PY)(
 		)
 
 		it.each(CLIENTS)("%s: request_start then an error entry with no status when no answer arrives", async (client) => {
-			const closed = await served([], async (server) => server.url)
+			const closed = REFUSED_URL
 			const run = await hooksSdk().runCalls(
 				{ calls: [GET], setup: BEARER },
 				{ url: closed },

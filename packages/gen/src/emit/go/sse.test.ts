@@ -5,7 +5,7 @@ import type { GoError, HookTrace, Script } from "../shared/__fixtures__/protocol
 import { consume } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { gone } from "../shared/__fixtures__/gone.ts"
-import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
@@ -458,7 +458,7 @@ goDescribe("an SSE open through a plain call's pipeline: OnLog", () => {
 		]
 		const replies = [TICK, { json: { message: "nope" }, status: 404 }, sse(["data: x\n\n"])]
 		const { run } = await drive(sseSdk(), replies, calls, { script: { log: true } })
-		const closed = await served([], async (server) => server.url)
+		const closed = REFUSED_URL
 		const refused = await sseSdk().runCalls({ calls: [pending("p-secret")] }, { url: closed }, { log: true })
 		expect([run.trace?.log, refused.trace?.log], run.stderr + refused.stderr).toEqual([
 			[

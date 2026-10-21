@@ -12,7 +12,7 @@ import { gzipSync } from "node:zlib"
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { CsError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, served, type Json as WireJson } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, type Json as WireJson, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { consume } from "./__fixtures__/consumer.ts"
 import { withDotnet } from "./__fixtures__/csharp-env.ts"
 import { type DrivenCSharpSdk, drivenCSharpSdk } from "./__fixtures__/driven.ts"
@@ -291,7 +291,7 @@ describe.skipIf(!DOTNET)(
 /* ported: python http.response.test.ts:233 */
 describe.skipIf(!DOTNET)("a refused connection is a transport error, never a cancel", SLOW, () => {
 	it("ApiConnectionException with HttpRequestException inner, and no status", async () => {
-		const closed = await served([], async (server) => server.url)
+		const closed = REFUSED_URL
 		const run = await driven("http").runCalls({ calls: [USER], setup: {} }, { url: closed }, { script: {} })
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			error: plain({

@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { CsError, HookTrace, LogTrace, Script } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { checked, consume, program } from "./__fixtures__/consumer.ts"
 import { withDotnet } from "./__fixtures__/csharp-env.ts"
 import { type DrivenCSharpSdk, drivenCSharpSdk } from "./__fixtures__/driven.ts"
@@ -278,7 +278,7 @@ describe.skipIf(!DOTNET)(
 
 		/* ported: python http.hooks.test.ts:244 */
 		it("request_start then an error entry with no status when no answer arrives", async () => {
-			const closed = await served([], async (server) => server.url)
+			const closed = REFUSED_URL
 			const run = await hooksSdk().runCalls({ calls: [GET], setup: BEARER }, { url: closed }, { script: { log: true } })
 			expect(
 				{ log: run.trace?.log, observed: run.observed, secrets: secrets(run.trace?.log), status: run.status },

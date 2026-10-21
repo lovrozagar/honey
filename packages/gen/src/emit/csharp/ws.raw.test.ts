@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
 import type { Script } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { type Reply, served, REFUSED_URL } from "../shared/__fixtures__/recording-server.ts"
 import { consume, seen } from "./__fixtures__/consumer.ts"
 import { withDotnet } from "./__fixtures__/csharp-env.ts"
 import { type DrivenCSharpSdk, drivenCSharpSdk } from "./__fixtures__/driven.ts"
@@ -130,7 +130,7 @@ describe.skipIf(!DOTNET)("what fails at the handshake: the method throws, nothin
 
 	/* ported: python ws.test.ts:393 (phase c's closed origin: a server that closed, never a fixed port) */
 	it("is ApiConnectionException for a closed origin, its text the call's route, never a raw HttpRequestException", async () => {
-		const closed = await served([], async (server) => server.url)
+		const closed = REFUSED_URL
 		const run = await driven().runCalls({ calls: [rooms()], setup: {} }, { url: closed }, { script: {} })
 		expect({ error: failed(run.trace?.calls[0]?.error), observed: run.observed }, run.stderr).toEqual({
 			error: { text: expect.stringMatching(/^GET \/rooms\/\{room\}: /), type: "ApiConnectionException", via: "return" },
