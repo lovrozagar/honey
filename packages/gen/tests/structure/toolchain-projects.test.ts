@@ -22,6 +22,7 @@ const ENV: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, string>> = {
 	go: "src/emit/go/__fixtures__/go-env.ts",
 	python: "src/emit/python/__fixtures__/python-env.ts",
 	csharp: "src/emit/csharp/__fixtures__/csharp-env.ts",
+	java: "src/emit/java/__fixtures__/java-env.ts",
 	rust: "src/emit/rust/__fixtures__/rust-env.ts",
 }
 
@@ -30,6 +31,7 @@ const CACHE: Readonly<Record<keyof typeof TOOLCHAIN_PROJECTS, readonly [key: str
 	go: ["gobuild", ".go-version"],
 	python: ["python", ".python-version", "uv.toml"],
 	csharp: ["dotnet", "global.json", "packages/gen/src/emit/csharp/__fixtures__/dotnet-sdk.sha512"],
+	java: ["java", "packages/gen/src/emit/java/__fixtures__/java-pins.json"],
 	rust: ["rust", "rust-toolchain.toml"],
 }
 

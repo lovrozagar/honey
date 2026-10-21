@@ -43,6 +43,12 @@ export const CSHARP = [
 ]
 
 /**
+ * The default run's test files that run Java: each reaches `java-env.ts`, the one way gen runs Java, through its
+ * imports. They run as the `java` project, held to that as `GO` is.
+ */
+export const JAVA = ["src/emit/java/**/*.test.ts", "tests/structure/java-toolchain.test.ts"]
+
+/**
  * The default run's test files that run Rust: each reaches `rust-env.ts`, the one way gen runs Rust, through its
  * imports. They run as the `rust` project, held to that as `GO` is. The toolchain files and the mutation harness
  * reach Go, Python and .NET too, so they run here, in the last group, the one whose cache is the heaviest to rebuild.
@@ -64,7 +70,7 @@ export const RUST = [
  * cache is the heaviest, so the files that reach every language run in the CI shard that owns it. A new language
  * joins just before Rust, so no earlier group renumbers and no file already owned by one moves.
  */
-export const TOOLCHAIN_PROJECTS = { go: GO, python: PYTHON, csharp: CSHARP, rust: RUST } as const
+export const TOOLCHAIN_PROJECTS = { go: GO, python: PYTHON, csharp: CSHARP, java: JAVA, rust: RUST } as const
 
 /** The default run's test files: the `unit` project's, less every toolchain project's. */
 export const DEFAULT_RUN = ["src/**/*.test.ts", "tests/**/*.test.ts", "scripts/**/*.test.ts"]

@@ -268,6 +268,25 @@ jobs:
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-dotnet-
+      # gen runs every java, javac, google-java-format and Gradle through its java-env fixture: each pin in
+      # java-pins.json (three JDKs, the formatter, Gradle, the Jackson set) fetched and checked against its sha256,
+      # under ~/.cache/honey-tmp/java: the command a missing JDK names locally
+      - name: Java (java-pins.json's JDKs, google-java-format, Gradle and the Jackson set)
+        run: |
+          P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/java/__fixtures__/java-pins.json" && D="$HOME/.cache/honey-tmp/java" && G="$(jq -r .googleJavaFormat.version "$P")" && W="$(jq -r .gradle.version "$P")" && mkdir -p "$D/dl" "$D/toolchain" "$D/repo" "$D/tmp" && for k in $(jq -r '.jdk | keys[]' "$P"); do R="$(jq -r --arg k "$k" '.jdk[$k].release' "$P")" && curl -fsSL -o "$D/dl/$R.tar.gz" "$(jq -r --arg k "$k" '.jdk[$k].url' "$P")" && echo "$(jq -r --arg k "$k" '.jdk[$k].sha256' "$P")  "$D/dl/$R.tar.gz"" | sha256sum -c - && rm -rf "$D/toolchain/$R" "$D/toolchain/$R.partial" && mkdir -p "$D/toolchain/$R.partial" && tar -xzf "$D/dl/$R.tar.gz" -C "$D/toolchain/$R.partial" --strip-components=1 && mv "$D/toolchain/$R.partial" "$D/toolchain/$R" && rm "$D/dl/$R.tar.gz" || exit 1; done && curl -fsSL -o "$D/toolchain/google-java-format-$G.jar" "$(jq -r --arg k "$k" '.googleJavaFormat.url' "$P")" && echo "$(jq -r --arg k "$k" '.googleJavaFormat.sha256' "$P")  "$D/toolchain/google-java-format-$G.jar"" | sha256sum -c - && curl -fsSL -o "$D/dl/gradle.zip" "$(jq -r --arg k "$k" '.gradle.url' "$P")" && echo "$(jq -r --arg k "$k" '.gradle.sha256' "$P")  "$D/dl/gradle.zip"" | sha256sum -c - && rm -rf "$D/toolchain/gradle-$W" && unzip -q "$D/dl/gradle.zip" -d "$D/toolchain" && rm "$D/dl/gradle.zip" && for a in $(jq -r '.jackson.artifacts[].path' "$P"); do mkdir -p "$D/repo/$(dirname "$a")" && curl -fsSL -o "$D/repo/$a" "$(jq -r .jackson.repository "$P")/$a" && echo "$(jq -r --arg a "$a" '.jackson.artifacts[] | select(.path == $a) | .sha256' "$P")  $D/repo/$a" | sha256sum -c - || exit 1; done
+      # restored, never saved: gen-java owns it
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/java/sdk
+            ~/.cache/honey-tmp/java/gradle-home
+          key: >-
+            ${{ runner.os }}-java-${{ hashFiles('packages/gen/src/emit/java/**', 'packages/gen/src/emit/shared/**',
+            'packages/gen/src/ir/**', 'packages/gen/src/runtime/java/**', 'packages/gen/tests/security/**',
+            'packages/gen/tests/structure/mutation-harness*.ts', 'packages/gen/tests/structure/java-toolchain.test.ts',
+            'packages/gen/tests/structure/compile-calls.ts', 'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-java-
       - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
       - run: bun install --frozen-lockfile
       - name: gen (rust)
@@ -417,10 +436,66 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # gen's coverage: the four shards' blobs merged, held to the per-file 100% thresholds in vitest.config.ts
+  gen-java:
+    name: gen (java)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # vitest runs on node
+      - uses: actions/setup-node@v4
+        with:
+          node-version: current
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      # the compiled SDKs and Gradle's home, keyed like the other compile caches on every input of a Java gate
+      # (toolchain-projects.test.ts holds it to that); the toolchain itself is not cached: the install below fetches
+      # each pin and checks its sha256. This job saves it; gen-rust and the harness only restore it.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/java/sdk
+            ~/.cache/honey-tmp/java/gradle-home
+          key: >-
+            ${{ runner.os }}-java-${{ hashFiles('packages/gen/src/emit/java/**', 'packages/gen/src/emit/shared/**',
+            'packages/gen/src/ir/**', 'packages/gen/src/runtime/java/**', 'packages/gen/tests/security/**',
+            'packages/gen/tests/structure/mutation-harness*.ts', 'packages/gen/tests/structure/java-toolchain.test.ts',
+            'packages/gen/tests/structure/compile-calls.ts', 'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-java-
+      # gen runs every java, javac, google-java-format and Gradle through its java-env fixture: each pin in
+      # java-pins.json (three JDKs, the formatter, Gradle, the Jackson set) fetched and checked against its sha256,
+      # under ~/.cache/honey-tmp/java: the command a missing JDK names locally
+      - name: Java (java-pins.json's JDKs, google-java-format, Gradle and the Jackson set)
+        run: |
+          P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/java/__fixtures__/java-pins.json" && D="$HOME/.cache/honey-tmp/java" && G="$(jq -r .googleJavaFormat.version "$P")" && W="$(jq -r .gradle.version "$P")" && mkdir -p "$D/dl" "$D/toolchain" "$D/repo" "$D/tmp" && for k in $(jq -r '.jdk | keys[]' "$P"); do R="$(jq -r --arg k "$k" '.jdk[$k].release' "$P")" && curl -fsSL -o "$D/dl/$R.tar.gz" "$(jq -r --arg k "$k" '.jdk[$k].url' "$P")" && echo "$(jq -r --arg k "$k" '.jdk[$k].sha256' "$P")  "$D/dl/$R.tar.gz"" | sha256sum -c - && rm -rf "$D/toolchain/$R" "$D/toolchain/$R.partial" && mkdir -p "$D/toolchain/$R.partial" && tar -xzf "$D/dl/$R.tar.gz" -C "$D/toolchain/$R.partial" --strip-components=1 && mv "$D/toolchain/$R.partial" "$D/toolchain/$R" && rm "$D/dl/$R.tar.gz" || exit 1; done && curl -fsSL -o "$D/toolchain/google-java-format-$G.jar" "$(jq -r --arg k "$k" '.googleJavaFormat.url' "$P")" && echo "$(jq -r --arg k "$k" '.googleJavaFormat.sha256' "$P")  "$D/toolchain/google-java-format-$G.jar"" | sha256sum -c - && curl -fsSL -o "$D/dl/gradle.zip" "$(jq -r --arg k "$k" '.gradle.url' "$P")" && echo "$(jq -r --arg k "$k" '.gradle.sha256' "$P")  "$D/dl/gradle.zip"" | sha256sum -c - && rm -rf "$D/toolchain/gradle-$W" && unzip -q "$D/dl/gradle.zip" -d "$D/toolchain" && rm "$D/dl/gradle.zip" && for a in $(jq -r '.jackson.artifacts[].path' "$P"); do mkdir -p "$D/repo/$(dirname "$a")" && curl -fsSL -o "$D/repo/$a" "$(jq -r .jackson.repository "$P")/$a" && echo "$(jq -r --arg a "$a" '.jackson.artifacts[] | select(.path == $a) | .sha256' "$P")  $D/repo/$a" | sha256sum -c - || exit 1; done
+      - run: mkdir -p ~/.cache/honey-tmp/java/sdk && touch "$RUNNER_TEMP/java-sdk-start"
+      - run: bun install --frozen-lockfile
+      - name: gen (java)
+        working-directory: packages/gen
+        run: >-
+          bunx vitest run --project java --coverage --coverage.thresholds.lines=0
+          --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0
+          --reporter=default --reporter=blob --outputFile.blob="$RUNNER_TEMP/gen-blob/java.json"
+        env:
+          HONEY_REQUIRE_TOOLCHAINS: "1"
+      - name: Prune the Java SDKs this run did not use
+        run: >-
+          find ~/.cache/honey-tmp/java/sdk -mindepth 1 -maxdepth 1 -type d
+          ! -newer "$RUNNER_TEMP/java-sdk-start" -print0 | xargs -0r rm -rf
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: gen-blob-java
+          path: ${{ runner.temp }}/gen-blob/java.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # gen's coverage: the five shards' blobs merged, held to the per-file 100% thresholds in vitest.config.ts
   gen-coverage:
     name: gen coverage
-    needs: [test, gen-rust, gen-python, gen-csharp]
+    needs: [test, gen-rust, gen-python, gen-csharp, gen-java]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -637,6 +712,25 @@ jobs:
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-dotnet-
+      # gen runs every java, javac, google-java-format and Gradle through its java-env fixture: each pin in
+      # java-pins.json (three JDKs, the formatter, Gradle, the Jackson set) fetched and checked against its sha256,
+      # under ~/.cache/honey-tmp/java: the command a missing JDK names locally
+      - name: Java (java-pins.json's JDKs, google-java-format, Gradle and the Jackson set)
+        run: |
+          P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/java/__fixtures__/java-pins.json" && D="$HOME/.cache/honey-tmp/java" && G="$(jq -r .googleJavaFormat.version "$P")" && W="$(jq -r .gradle.version "$P")" && mkdir -p "$D/dl" "$D/toolchain" "$D/repo" "$D/tmp" && for k in $(jq -r '.jdk | keys[]' "$P"); do R="$(jq -r --arg k "$k" '.jdk[$k].release' "$P")" && curl -fsSL -o "$D/dl/$R.tar.gz" "$(jq -r --arg k "$k" '.jdk[$k].url' "$P")" && echo "$(jq -r --arg k "$k" '.jdk[$k].sha256' "$P")  "$D/dl/$R.tar.gz"" | sha256sum -c - && rm -rf "$D/toolchain/$R" "$D/toolchain/$R.partial" && mkdir -p "$D/toolchain/$R.partial" && tar -xzf "$D/dl/$R.tar.gz" -C "$D/toolchain/$R.partial" --strip-components=1 && mv "$D/toolchain/$R.partial" "$D/toolchain/$R" && rm "$D/dl/$R.tar.gz" || exit 1; done && curl -fsSL -o "$D/toolchain/google-java-format-$G.jar" "$(jq -r --arg k "$k" '.googleJavaFormat.url' "$P")" && echo "$(jq -r --arg k "$k" '.googleJavaFormat.sha256' "$P")  "$D/toolchain/google-java-format-$G.jar"" | sha256sum -c - && curl -fsSL -o "$D/dl/gradle.zip" "$(jq -r --arg k "$k" '.gradle.url' "$P")" && echo "$(jq -r --arg k "$k" '.gradle.sha256' "$P")  "$D/dl/gradle.zip"" | sha256sum -c - && rm -rf "$D/toolchain/gradle-$W" && unzip -q "$D/dl/gradle.zip" -d "$D/toolchain" && rm "$D/dl/gradle.zip" && for a in $(jq -r '.jackson.artifacts[].path' "$P"); do mkdir -p "$D/repo/$(dirname "$a")" && curl -fsSL -o "$D/repo/$a" "$(jq -r .jackson.repository "$P")/$a" && echo "$(jq -r --arg a "$a" '.jackson.artifacts[] | select(.path == $a) | .sha256' "$P")  $D/repo/$a" | sha256sum -c - || exit 1; done
+      # restored, never saved: gen-java owns it
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/honey-tmp/java/sdk
+            ~/.cache/honey-tmp/java/gradle-home
+          key: >-
+            ${{ runner.os }}-java-${{ hashFiles('packages/gen/src/emit/java/**', 'packages/gen/src/emit/shared/**',
+            'packages/gen/src/ir/**', 'packages/gen/src/runtime/java/**', 'packages/gen/tests/security/**',
+            'packages/gen/tests/structure/mutation-harness*.ts', 'packages/gen/tests/structure/java-toolchain.test.ts',
+            'packages/gen/tests/structure/compile-calls.ts', 'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/matrix.ts') }}
+          restore-keys: ${{ runner.os }}-java-
       # gen's Rust caches for the toolchain files run below, keyed as in the test job
       - uses: actions/cache@v4
         with:

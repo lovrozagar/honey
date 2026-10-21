@@ -1,0 +1,124 @@
+/**
+ * An emitted Java SDK held to the pinned toolchain (java-env.ts), once per content hash: written under
+ * `$HOME/.cache/honey-tmp/java/sdk/<hash>`, compiled by the 21 JDK's javac `--release 17 -Xlint:all -Werror` against
+ * exactly the three pinned jars, and checked on demand by google-java-format `--dry-run` and one offline Gradle build.
+ */
+import { createHash } from "node:crypto"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { dirname, join, relative } from "node:path"
+import { javaCacheDir, runGjf, runGradle, runJavac } from "./java-env.ts"
+
+type Files = Readonly<Record<string, string>>
+
+/** What javac made of the sources: its diagnostic lines and the class files it wrote, out-relative. */
+type Javac = { readonly classes: readonly string[]; readonly diagnostics: readonly string[] }
+
+export type CompiledJavaSdk = {
+	/** `<cache>/sdk/<hash>`, the files as given */
+	readonly dir: string
+	/** the jars javac compiled against: the pinned Jackson set */
+	readonly classpath: readonly string[]
+	readonly javac: Javac
+	/** the source paths GJF `--dry-run` would change, `src/main/java/`-relative; [] when canonical */
+	format(): readonly string[]
+	/** one offline Gradle build: its exit status and the Gradle daemons it left alive */
+	gradle(): { readonly daemons: readonly string[]; readonly status: number }
+}
+
+/* the three jars the emitted build declares, Maven-relative in the cache's repo */
+const JARS = [
+	"com/fasterxml/jackson/core/jackson-annotations/2.22/jackson-annotations-2.22.jar",
+	"tools/jackson/core/jackson-core/3.2.4/jackson-core-3.2.4.jar",
+	"tools/jackson/core/jackson-databind/3.2.4/jackson-databind-3.2.4.jar",
+]
+
+/** Every file under `dir`, recursively, `dir`-relative. */
+function walk(dir: string): string[] {
+	if (!existsSync(dir)) return []
+	return readdirSync(dir).flatMap((name) => {
+		const path = join(dir, name)
+		return statSync(path).isDirectory() ? walk(path).map((inner) => join(name, inner)) : [name]
+	})
+}
+
+/** The Gradle daemons alive now, as `pid cmdline`. */
+function gradleDaemons(): string[] {
+	return readdirSync("/proc")
+		.filter((name) => /^\d+$/.test(name))
+		.flatMap((pid) => {
+			const path = join("/proc", pid, "cmdline")
+			/* a process that ended since the listing has no cmdline left to read */
+			const line = existsSync(path) ? readFileSync(path, "utf8").replaceAll("\0", " ") : ""
+			return /GradleDaemon|GradleWrapperMain|gradle-launcher/.test(line) ? [`${pid} ${line.trim()}`] : []
+		})
+}
+
+/**
+ * The Gradle daemons alive that `before` did not hold, once the build's own single-use daemon has had 5 s to exit:
+ * `--no-daemon` still forks one when the build's JVM arguments differ from the launcher's, and it outlives the build
+ * by a moment.
+ */
+function leftAfter(before: ReadonlySet<string>): string[] {
+	const pause = new Int32Array(new SharedArrayBuffer(4))
+	for (let waited = 0; ; waited += 100) {
+		const left = gradleDaemons().filter((line) => !before.has(line))
+		if (left.length === 0 || waited >= 5_000) return left
+		Atomics.wait(pause, 0, 0, 100)
+	}
+}
+
+/** `files` written under `dir`, once: a dir that holds its `.complete` marker is already written. */
+function written(dir: string, files: Files): void {
+	if (existsSync(join(dir, ".complete"))) return
+	rmSync(dir, { force: true, recursive: true })
+	for (const [name, text] of Object.entries(files)) {
+		mkdirSync(dirname(join(dir, name)), { recursive: true })
+		writeFileSync(join(dir, name), text)
+	}
+	writeFileSync(join(dir, ".complete"), "")
+}
+
+/** javac on the sources under `dir`, into `dir/out`, once per dir: kept in `dir/javac.json`. */
+function compiled(dir: string, classpath: readonly string[]): Javac {
+	const kept = join(dir, "javac.json")
+	if (existsSync(kept)) return JSON.parse(readFileSync(kept, "utf8")) as Javac
+	const out = join(dir, "out")
+	rmSync(out, { force: true, recursive: true })
+	mkdirSync(out, { recursive: true })
+	const sources = walk(join(dir, "src")).map((name) => join(dir, "src", name))
+	const args = ["--release", "17", "-Xlint:all", "-Werror", "-cp", classpath.join(":"), "-d", out, ...sources]
+	const ran = runJavac(21, args, { cwd: dir })
+	const diagnostics = `${ran.stdout}${ran.stderr}`.split("\n").filter((line) => line.trim() !== "")
+	const result = { classes: walk(out).filter((name) => name.endsWith(".class")), diagnostics }
+	writeFileSync(kept, JSON.stringify(result))
+	return result
+}
+
+/** The emitted SDK `files`, compiled and ready to check. */
+export function compiledJavaSdk(files: Files): CompiledJavaSdk {
+	const hash = createHash("sha256")
+		.update(JSON.stringify(Object.entries(files)))
+		.digest("hex")
+		.slice(0, 16)
+	const dir = join(javaCacheDir("sdk"), hash)
+	written(dir, files)
+	const classpath = JARS.map((path) => join(javaCacheDir("repo"), path))
+	const sourceRoot = join(dir, "src/main/java")
+	return {
+		classpath,
+		dir,
+		format: () => {
+			const sources = walk(sourceRoot).map((name) => join(sourceRoot, name))
+			const listed = runGjf(["--dry-run", ...sources])
+				.stdout.split("\n")
+				.filter((line) => line !== "")
+			return listed.map((path) => relative(sourceRoot, path))
+		},
+		gradle: () => {
+			const before = new Set(gradleDaemons())
+			const status = runGradle(["-q", "build"], { cwd: dir }).status ?? 1
+			return { daemons: leftAfter(before), status }
+		},
+		javac: compiled(dir, classpath),
+	}
+}

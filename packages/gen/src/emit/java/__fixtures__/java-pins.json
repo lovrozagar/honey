@@ -1,0 +1,92 @@
+{
+	"gradle": {
+		"sha256": "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607",
+		"url": "https://services.gradle.org/distributions/gradle-9.8.2-bin.zip",
+		"version": "9.8.2"
+	},
+	"googleJavaFormat": {
+		"sha256": "834b2a0c38cb774953322a84b5ca3f2f40dd3156650b3cd44d3b744345962f7a",
+		"url": "https://github.com/google/google-java-format/releases/download/v1.37.0/google-java-format-1.37.0-all-deps.jar",
+		"version": "1.37.0"
+	},
+	"jdk": {
+		"17": {
+			"release": "jdk-17.0.20.1+1",
+			"sha256": "3808d1d15e3ec6bd5b84057fb5d84c33d8a1536a258146bcea2e603fc726e08e",
+			"url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20.1_1.tar.gz",
+			"version": "17.0.20.1"
+		},
+		"21": {
+			"release": "jdk-21.0.12.1+1",
+			"sha256": "ce79869e1307ed8ee1e2baa86a412b1eb5b75d10a01006d788a6f968bcfaee94",
+			"url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_linux_hotspot_21.0.12.1_1.tar.gz",
+			"version": "21.0.12.1"
+		},
+		"25": {
+			"release": "jdk-25.0.4.1+1",
+			"sha256": "dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e",
+			"url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz",
+			"version": "25.0.4.1"
+		}
+	},
+	"jackson": {
+		"artifacts": [
+			{
+				"path": "com/fasterxml/jackson/core/jackson-annotations/2.22/jackson-annotations-2.22.jar",
+				"sha1": "15c67f9498d6934cff9510fc70c5a12e52290457",
+				"sha256": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+			},
+			{
+				"path": "com/fasterxml/jackson/core/jackson-annotations/2.22/jackson-annotations-2.22.pom",
+				"sha1": "e9aaa4f2c23cb6c4b983a0dfec3e406ec2b9f09b",
+				"sha256": "38c3ba52a0eade3e3eacc5b13499d56e1038ccbad8ec4bb79426dc21432b46d0"
+			},
+			{
+				"path": "com/fasterxml/jackson/jackson-parent/2.22/jackson-parent-2.22.pom",
+				"sha1": "32456e752caa8cffc0e6f72a3471ea184e0318eb",
+				"sha256": "7d45a7efb69df207bed7cc54b87a0bb012f10952c095570a273b49485da0d129"
+			},
+			{
+				"path": "com/fasterxml/oss-parent/79/oss-parent-79.pom",
+				"sha1": "20a6340c8b8635db53252cb435825b73cf12bb1d",
+				"sha256": "9206b7dd67fb138036576c3dfca947a2a8f3e2c4d2d9c1f2d1dea519b3a4dae1"
+			},
+			{
+				"path": "org/junit/junit-bom/6.0.3/junit-bom-6.0.3.pom",
+				"sha1": "d43a7b02d9b9f4eb8e5b36ba46d68975ad106791",
+				"sha256": "a655b6a5dc00d1bebc91fb2b15c0c7e8aeac9d6bdcf879595505370e27530287"
+			},
+			{
+				"path": "tools/jackson/core/jackson-core/3.2.4/jackson-core-3.2.4.jar",
+				"sha1": "025beaee139ae32025c5f189e4fb39c5b1f78653",
+				"sha256": "494b9f5fccf008042d5a72c5bf00629b144c0ba7362a9864cbb02234c9772651"
+			},
+			{
+				"path": "tools/jackson/core/jackson-core/3.2.4/jackson-core-3.2.4.pom",
+				"sha1": "22ea3da234b8a964cb2d4a7bd836c7cee0352415",
+				"sha256": "728897bac06417793b6b0d957ab7e4899fc880594df422296b17d196a8bdd170"
+			},
+			{
+				"path": "tools/jackson/core/jackson-databind/3.2.4/jackson-databind-3.2.4.jar",
+				"sha1": "73cd5c393378036c5b556355e5257128796b9a9a",
+				"sha256": "c4af37223d5024f1294a5450598b01b65f30c53d9e906f02c3955ba1fb14a67d"
+			},
+			{
+				"path": "tools/jackson/core/jackson-databind/3.2.4/jackson-databind-3.2.4.pom",
+				"sha1": "719b1302f8787befbf137b4cc43c9aa9e1039611",
+				"sha256": "ce888a26268256c5425d56f959a10fc9234a458bcd8b7299c07ea573a405d380"
+			},
+			{
+				"path": "tools/jackson/jackson-base/3.2.4/jackson-base-3.2.4.pom",
+				"sha1": "993234749727d6b7f884ba71b6ff8a6dce91d470",
+				"sha256": "6c89b94983cbd8c13a63527249b9fbf9027a2bf340d8fbe517c42c5c6bece821"
+			},
+			{
+				"path": "tools/jackson/jackson-bom/3.2.4/jackson-bom-3.2.4.pom",
+				"sha1": "40ca98cb99e9719611b9642bd2ab4e03d7081f3c",
+				"sha256": "264046f38cab063138669a3b4c6ea1841600250494c33cf5880e2e39225ba313"
+			}
+		],
+		"repository": "https://repo.maven.apache.org/maven2"
+	}
+}
