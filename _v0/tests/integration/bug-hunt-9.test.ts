@@ -109,7 +109,12 @@ describe("bug-hunt-9: handler map patch mode", () => {
 describe("bug-hunt-9: Node adapter draining rejects new requests", () => {
 	it("request during shutdown → 503", async () => {
 		const app = honey<{}>()
+		let entered!: () => void
+		const inFlight = new Promise<void>((r) => {
+			entered = r
+		})
 		app.get("/slow").handler(async (ctx) => {
+			entered()
 			await new Promise((r) => setTimeout(r, 100))
 			return ctx.res.json("ok", {})
 		})
@@ -120,8 +125,8 @@ describe("bug-hunt-9: Node adapter draining rejects new requests", () => {
 		/* start a slow request to keep inflight > 0 */
 		const slowReq = request(addr.port, "/slow")
 
-		/* wait for it to start, then shutdown */
-		await new Promise((r) => setTimeout(r, 10))
+		/* wait until its handler runs (an unparsed request is idle, and shutdown closes it), then shutdown */
+		await inFlight
 		const shutdownPromise = server.shutdown(5000)
 
 		/* new request after shutdown started → 503 */
