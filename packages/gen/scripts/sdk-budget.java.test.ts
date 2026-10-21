@@ -8,11 +8,14 @@ import { runtimeFiles } from "../src/emit/java/sdk.ts"
 import { runtimeBytes } from "./sdk-budget.ts"
 
 /*
- * G14 analog, phase a (bit 16): the measured 450 B, provisional until phase f locks it, of Transport.java 450 — the
- * one HttpClient, built once on followRedirects(NEVER), and its base URL. Each later phase raises it only by the
- * bytes of a named feature, dead code cut first.
+ * G14 analog (bit 16), provisional until phase f locks it, measured over every runtime file:
+ * - phase a, 450 B: Transport.java 450, the one HttpClient, built once on followRedirects(NEVER), and its base URL;
+ * - phase b, +3,816 B to 4,266 B: Opt.java 3,106, the three-state optional (absent, null, value) with its reader and
+ *   writer, equals/hashCode/toString for the records that hold one; Json.java 710, the one mapper, unknown properties
+ *   ignored and the Opt module registered. Nothing dead to cut: each member is reached by a model or a record.
+ * Each later phase raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 450
+const JAVA_RUNTIME_BYTES = 4266
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

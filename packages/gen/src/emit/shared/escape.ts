@@ -5,7 +5,7 @@
  * language's grammar and cross-checked with the real compilers.
  */
 
-export type Target = "csharp" | "go" | "python" | "rust" | "ts"
+export type Target = "csharp" | "go" | "java" | "python" | "rust" | "ts"
 
 /** `text` with each unpaired UTF-16 surrogate as U+FFFD: no target can carry a lone surrogate to the wire. */
 export function wellFormed(text: string): string {
@@ -30,6 +30,9 @@ const POLICIES: Readonly<Record<Target, Policy>> = {
 		if (cp < 0x20 || cp === 0x7f) return `\\x${hex(cp, 2)}`
 		return cp === 0xfeff ? "\\ufeff" : null
 	},
+	/* Java has no \x: \uHHHH for every other control, DEL and the BOM. The apostrophe stays raw: javac takes it in
+	 * "…", and the backslash's own escape keeps every \u in the text from becoming one (JLS 3.3) */
+	java: (cp) => (cp < 0x20 || cp === 0x7f || cp === 0xfeff ? `\\u${hex(cp, 4)}` : null),
 	python: (cp) => {
 		if (cp < 0x20 || cp === 0x7f) return `\\x${hex(cp, 2)}`
 		/* line separators, NEL and the BOM read as line ends or vanish in some tools: never raw */
@@ -67,6 +70,7 @@ export const goString = (text: string) => stringLiteral(text, "go")
 export const rustString = (text: string) => stringLiteral(text, "rust")
 export const pyString = (text: string) => stringLiteral(text, "python")
 export const csString = (text: string) => stringLiteral(text, "csharp")
+export const javaString = (text: string) => stringLiteral(text, "java")
 
 /**
  * Text for a comment or docstring: well-formed, with each character a compiler refuses even in a
@@ -114,4 +118,32 @@ export function csDocLines(text: string): string[] {
 		.replace(/[\uFFFE\uFFFF]/g, (ch) => `\\u${hex(ch.codePointAt(0) as number, 4)}`)
 		.split(LINE_BREAKS)
 		.map((line) => line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"))
+}
+
+/**
+ * Comment text for Java: javac turns an eligible `\uXXXX` into its character in ANY source text before it lexes
+ * (JLS 3.3), comments included, so `\u000a` in a comment would end it and a bare `\u` would not compile. Each run of
+ * backslashes before a `u` is doubled, which leaves none of them eligible; `commentText` then shows the hidden
+ * characters as escapes it means javac to read.
+ */
+export const javaCommentText = (text: string): string =>
+	commentText(wellFormed(text).replace(/\\+(?=u)/g, (run) => run + run))
+
+/** Java `//` lines of `text`: each line break starts a new line, the `\u` rule kept. */
+export function javaLineComment(text: string, indent = ""): string[] {
+	return javaCommentText(text)
+		.split(LINE_BREAKS)
+		.map((line) => (line.trim() === "" ? `${indent}//` : `${indent}// ${line}`))
+}
+
+/**
+ * Javadoc body lines, unprefixed: split at every line break, `*\/` and `/*` broken so the comment never closes or
+ * nests, and an `@` that would open a tag (at a line's start, or as `{@`) written `&#64;`, the `\u` rule kept.
+ */
+export function javaDocLines(text: string): string[] {
+	return javaCommentText(text)
+		.replace(/\*\//g, "* /")
+		.replace(/\/\*/g, "/ *")
+		.split(LINE_BREAKS)
+		.map((line) => line.replace(/^(\s*)@/, "$1&#64;").replace(/\{@/g, "{&#64;"))
 }

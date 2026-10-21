@@ -188,3 +188,19 @@ describe("generateJavaSdk: determinism", () => {
 		])
 	})
 })
+
+describe("generateJavaSdk: a model file each (phase b)", () => {
+	const withSchemas = (schemas: Json): Json => ({ ...ZERO, components: { schemas } })
+
+	it("writes a model that spells no imported type with no import block: the marker, the package, the declaration", () => {
+		const files = generateJavaSdk(withSchemas({ Empty: { additionalProperties: false, type: "object" } })).files
+		expect(files["src/main/java/ai/anyrow/Empty.java"]).toBe(
+			`${MARKER}\npackage ai.anyrow;\n\npublic record Empty() {}\n`,
+		)
+	})
+
+	it("writes no file for a component that declares no type, an alias of its use type", () => {
+		const files = generateJavaSdk(withSchemas({ Tags: { items: { type: "string" }, type: "array" } })).files
+		expect(Object.keys(files)).toEqual(FILE_NAMES)
+	})
+})

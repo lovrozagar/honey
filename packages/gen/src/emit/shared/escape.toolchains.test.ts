@@ -19,6 +19,7 @@ import {
 	runtimeConfig,
 } from "../csharp/__fixtures__/csharp-env.ts"
 import { goCacheDir, goRequired, hasGo, runGo } from "../go/__fixtures__/go-env.ts"
+import { javaCacheDir, runJava, runJavac, withJava } from "../java/__fixtures__/java-env.ts"
 import {
 	hasPython,
 	pinnedPython,
@@ -29,7 +30,18 @@ import {
 } from "../python/__fixtures__/python-env.ts"
 import { hasRust, runRustc, rustCacheDir, rustRequired } from "../rust/__fixtures__/rust-env.ts"
 import { rng, runs } from "./__fixtures__/rng.ts"
-import { csDocLines, csString, goString, lineComment, pyString, rustString, wellFormed } from "./escape.ts"
+import {
+	csDocLines,
+	csString,
+	goString,
+	javaDocLines,
+	javaLineComment,
+	javaString,
+	lineComment,
+	pyString,
+	rustString,
+	wellFormed,
+} from "./escape.ts"
 
 const TOKENS: readonly string[] = [
 	"a",
@@ -210,4 +222,59 @@ describe("F2 cross-check: what the real compilers make of every literal", () => 
 			},
 			600_000,
 		)
+})
+
+/** Whether the pinned Java is here: a missing one fails where it is required and skips the Java leg elsewhere (java-env). */
+const JAVA = withJava()
+
+/* the Java leg's hostile texts: the escapes javac translates before lexing, a bare `\u`, and the comment closers and tags */
+const HOSTILE: readonly string[] = ["\\u000a", "\\u", "\\uZZZZ", "\\\\u", "*/", "{@", "\n@", '"', "\\", "@"]
+
+/** Program.java: each text as a line comment, a Javadoc and a string literal, the literals printed as UTF-8 hex. */
+function javaSource(texts: readonly string[]): string {
+	return [
+		"import java.nio.charset.StandardCharsets;",
+		"import java.util.HexFormat;",
+		"class Program {",
+		...texts.flatMap((text) => javaLineComment(text, "  ")),
+		...texts.flatMap((text, i) => [
+			"  /**",
+			...javaDocLines(text).map((line) => `   * ${line}`),
+			"   */",
+			`  static final int F${i} = ${i};`,
+		]),
+		"  public static void main(String[] args) {",
+		`    String[] values = { ${texts.map(javaString).join(", ")} };`,
+		"    for (String s : values) System.out.println(HexFormat.of().formatHex(s.getBytes(StandardCharsets.UTF_8)));",
+		"  }",
+		"}",
+	].join("\n")
+}
+
+/** The hex of each string the pinned javac and java made of the literals of `texts`, one per line of output. */
+function compiledJava(texts: readonly string[]): string[] {
+	const dir = mkdtempSync(join(javaCacheDir("tmp"), "honey-f2-"))
+	try {
+		writeFileSync(join(dir, "Program.java"), javaSource(texts))
+		const built = runJavac(21, ["-encoding", "UTF-8", "-Xlint:all", "-Werror", "-d", dir, "Program.java"], { cwd: dir })
+		if (built.status !== 0) throw new Error(`javac failed: ${built.stdout}${built.stderr}`)
+		const ran = runJava(21, ["-cp", dir, "Program"], { cwd: dir })
+		if (ran.status !== 0) throw new Error(`java failed: ${ran.stderr}`)
+		return ran.stdout.split("\n").slice(0, -1)
+	} finally {
+		rmSync(dir, { force: true, recursive: true })
+	}
+}
+
+describe.skipIf(!JAVA)("F2 cross-check: what the pinned javac and java make of every Java literal and comment", () => {
+	it("java (JDK 21): each literal, comment and Javadoc of the batch is inert and reads back as its bytes", () => {
+		const r = rng(101)
+		const texts = Array.from({ length: runs(200, 3000) }, () => {
+			let text = ""
+			for (let n = r.int(16); n > 0; n--) text += r.pick([...TOKENS, ...HOSTILE])
+			return text
+		})
+		const expected = texts.map((text) => Buffer.from(wellFormed(text), "utf8").toString("hex"))
+		expect(compiledJava(texts)).toEqual(expected)
+	}, 600_000)
 })

@@ -16,6 +16,7 @@ import {
 	validatePackageName,
 	validateVersion,
 } from "./gradle.ts"
+import { modelDecls, modelFiles } from "./sdk-models.ts"
 
 /** The package's options, each defaulted and validated. */
 export type JavaSdkOptions = {
@@ -95,10 +96,17 @@ public final class ${pkg.clientName} {
 }
 `
 
-/** The vendored runtime's files by class name, read from disk on every call, in `packageName`. */
-export function runtimeFiles(packageName: string): Record<string, string> {
+/** What an SDK's runtime holds besides its transport: the mapper for any model, `Opt` for a three-state field. */
+export type JavaRuntimeFeatures = { readonly json: boolean; readonly opt: boolean }
+
+/** The vendored runtime's files by class name, read from disk on every call, in `packageName`; every file by default. */
+export function runtimeFiles(
+	packageName: string,
+	features: JavaRuntimeFeatures = { json: true, opt: true },
+): Record<string, string> {
+	const names = [...(features.json ? ["Json"] : []), ...(features.opt ? ["Opt"] : []), "Transport"]
 	return Object.fromEntries(
-		["Transport"].map((name) => [
+		names.map((name) => [
 			name,
 			readFileSync(new URL(`../../runtime/java/${name}.java`, import.meta.url), "utf8").replace(
 				RUNTIME_PACKAGE,
@@ -109,15 +117,21 @@ export function runtimeFiles(packageName: string): Record<string, string> {
 }
 
 /** The package's files for `document`, by path, in code-unit order. */
-export function generateJavaSdk(_document: Record<string, unknown>, options: JavaSdkOptions = {}): GeneratedJavaSdk {
+export function generateJavaSdk(document: Record<string, unknown>, options: JavaSdkOptions = {}): GeneratedJavaSdk {
 	const pkg = packageOf(options)
 	const dir = `src/main/java/${pkg.packageName.replaceAll(".", "/")}`
-	const runtime = Object.entries(runtimeFiles(pkg.packageName)).map(([name, text]) => [`${dir}/${name}.java`, text])
+	const decls = modelDecls(document, [pkg.clientName])
+	const features = { json: decls.size > 0, opt: [...decls.values()].some((decl) => /\bOpt</.test(decl)) }
+	const runtime = Object.entries(runtimeFiles(pkg.packageName, features)).map(([name, text]) => [
+		`${dir}/${name}.java`,
+		text,
+	])
 	const files: Record<string, string> = {
 		"build.gradle": `${MARKER}\n${buildGradle(pkg)}`,
 		"settings.gradle": `${MARKER}\n${settingsGradle(pkg)}`,
 		[`${dir}/${pkg.clientName}.java`]: `${MARKER}\n${clientJava(pkg)}`,
 		...Object.fromEntries(runtime),
+		...modelFiles(decls, { dir, marker: MARKER, packageName: pkg.packageName }),
 	}
 	return { files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => compareCodeUnits(a, b))) }
 }

@@ -7,6 +7,10 @@ import {
 	csDocLines,
 	csString,
 	goString,
+	javaCommentText,
+	javaDocLines,
+	javaLineComment,
+	javaString,
 	lineComment,
 	pyDocLines,
 	pyString,
@@ -83,6 +87,28 @@ describe("string literals: one escaper, one policy per target", () => {
 			'"a\\nb"',
 			'"a\\nb"',
 			'"a\\nb"',
+		])
+	})
+})
+
+describe("Java string literals: one escaper, the \\u hazard kept", () => {
+	const nasty = `q"b\\n\nr\rt\tz\0d\u007f e\u0001 ${LONE_HIGH} \u2028\u2029\u0085\uFEFF ${PAIR}`
+
+	it("Java: named escapes, \\uHHHH for other control code points, DEL and the BOM, never \\x, the apostrophe raw", () => {
+		expect(javaString(nasty)).toBe(
+			'"q\\"b\\\\n\\nr\\rt\\tz\\u0000d\\u007f e\\u0001 \uFFFD \u2028\u2029\u0085\\ufeff \u{1F600}"',
+		)
+		expect(javaString("\b\f\u000b\u001f")).toBe('"\\u0008\\u000c\\u000b\\u001f"')
+		expect(javaString("it's")).toBe('"it\'s"')
+		const ascii = Array.from({ length: 0x80 }, (_, cp) => javaString(String.fromCharCode(cp)))
+		expect(ascii.filter((literal) => literal.includes("\\x"))).toEqual([])
+	})
+
+	it("Java: a backslash is written \\\\, so no \\u reaches javac as a unicode escape", () => {
+		expect([javaString("\\u0041"), javaString("\\u000a"), javaString("\\")]).toEqual([
+			'"\\\\u0041"',
+			'"\\\\u000a"',
+			'"\\\\"',
 		])
 	})
 })
@@ -203,4 +229,37 @@ describe.skipIf(!GO)("Go struct tags: any JSON key", () => {
 		const seen = await oddStruct()
 		expect(JSON.parse(seen.seen?.wire ?? "null"), seen.stderr).toEqual(ODD_KEYS)
 	}, 600_000)
+})
+
+describe("Java comments: a backslash before u never reaches javac as an escape", () => {
+	it("Java comments: a backslash before u is written \\\\u, so javac never reads a unicode escape; hidden controls shown", () => {
+		expect([
+			javaCommentText("\\u0041"),
+			javaCommentText("\\\\u"),
+			javaCommentText("\\"),
+			javaCommentText("a\u0000b"),
+		]).toEqual(["\\\\u0041", "\\\\\\\\u", "\\", "a\\u0000b"])
+	})
+
+	it("Java line comments: split at every line break, blank lines bare, the \\u rule kept", () => {
+		expect([
+			javaLineComment("one\r\ntwo\u2028three\n\nfour"),
+			javaLineComment("doc", "  "),
+			javaLineComment("a\\u0041"),
+		]).toEqual([["// one", "// two", "// three", "//", "// four"], ["  // doc"], ["// a\\\\u0041"]])
+	})
+
+	it("Java Javadoc lines: `*/` hidden, a line-start or inline `@` never a tag, the \\u rule kept", () => {
+		expect([
+			javaDocLines("end */ start /* x"),
+			javaDocLines("@param x\n  @see y"),
+			javaDocLines("mail@host {@code x}"),
+			javaDocLines("a\\u0041 */"),
+		]).toEqual([
+			["end * / start / * x"],
+			["&#64;param x", "  &#64;see y"],
+			["mail@host {&#64;code x}"],
+			["a\\\\u0041 * /"],
+		])
+	})
 })

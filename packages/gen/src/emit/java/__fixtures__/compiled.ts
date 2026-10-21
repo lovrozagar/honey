@@ -6,9 +6,17 @@
 import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
-import { javaCacheDir, runGjf, runGradle, runJavac } from "./java-env.ts"
+import { javaCacheDir, runGjf, runGradle, runJava, runJavac } from "./java-env.ts"
 
 type Files = Readonly<Record<string, string>>
+
+/** A driver run: javac's diagnostics on it, then the program's exit status and output (none when it did not compile). */
+export type JavaRun = {
+	readonly diagnostics: readonly string[]
+	readonly status: number
+	readonly stderr: string
+	readonly stdout: string
+}
 
 /** What javac made of the sources: its diagnostic lines and the class files it wrote, out-relative. */
 type Javac = { readonly classes: readonly string[]; readonly diagnostics: readonly string[] }
@@ -23,6 +31,8 @@ export type CompiledJavaSdk = {
 	format(): readonly string[]
 	/** one offline Gradle build: its exit status and the Gradle daemons it left alive */
 	gradle(): { readonly daemons: readonly string[]; readonly status: number }
+	/** the driver `source`, class `main` (dotted), compiled against the SDK and run on the 21 JDK */
+	run(main: string, source: string): JavaRun
 }
 
 /* the three jars the emitted build declares, Maven-relative in the cache's repo */
@@ -94,6 +104,23 @@ function compiled(dir: string, classpath: readonly string[]): Javac {
 	return result
 }
 
+/** The driver `source` as class `main`, compiled under `dir/driver` against `out` and `classpath`, then run. */
+function driven(dir: string, classpath: readonly string[], main: string, source: string): JavaRun {
+	const root = join(dir, "driver")
+	const path = join(root, "src", `${main.replaceAll(".", "/")}.java`)
+	const out = join(root, "out")
+	rmSync(root, { force: true, recursive: true })
+	mkdirSync(dirname(path), { recursive: true })
+	mkdirSync(out, { recursive: true })
+	writeFileSync(path, source)
+	const cp = [join(dir, "out"), ...classpath].join(":")
+	const javac = runJavac(21, ["--release", "17", "-Xlint:all", "-Werror", "-cp", cp, "-d", out, path], { cwd: dir })
+	const diagnostics = `${javac.stdout}${javac.stderr}`.split("\n").filter((line) => line.trim() !== "")
+	if (javac.status !== 0) return { diagnostics, status: javac.status ?? 1, stderr: "", stdout: "" }
+	const ran = runJava(21, ["-cp", `${out}:${cp}`, main], { cwd: dir })
+	return { diagnostics, status: ran.status ?? 1, stderr: ran.stderr, stdout: ran.stdout }
+}
+
 /** The emitted SDK `files`, compiled and ready to check. */
 export function compiledJavaSdk(files: Files): CompiledJavaSdk {
 	const hash = createHash("sha256")
@@ -120,5 +147,6 @@ export function compiledJavaSdk(files: Files): CompiledJavaSdk {
 			return { daemons: leftAfter(before), status }
 		},
 		javac: compiled(dir, classpath),
+		run: (main, source) => driven(dir, classpath, main, source),
 	}
 }

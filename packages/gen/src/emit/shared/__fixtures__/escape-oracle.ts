@@ -6,7 +6,7 @@
 import { caseLabel, type Rng, rng, runs } from "./rng.ts"
 import { blockCommentText, commentText, lineComment, pyDocLines, stringLiteral, wellFormed } from "../escape.ts"
 
-export type Target = "csharp" | "go" | "python" | "rust" | "ts"
+export type Target = "csharp" | "go" | "java" | "python" | "rust" | "ts"
 type Decoded = { value: string; end: number; escaped: number[] }
 
 const TOKENS: readonly string[] = [
@@ -59,6 +59,7 @@ const TOKENS: readonly string[] = [
 const REQUIRED: Readonly<Record<Target, (cp: number) => boolean>> = {
 	csharp: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x85, 0x2028, 0x2029, 0xfeff].includes(cp),
 	go: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
+	java: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
 	python: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x85, 0x2028, 0x2029, 0xfeff].includes(cp),
 	rust: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
 	ts: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || [0x2028, 0x2029, 0xfeff].includes(cp),
@@ -81,6 +82,8 @@ const SIMPLE: Readonly<Record<Target, Readonly<Record<string, string>>>> = {
 		v: "\v",
 	},
 	go: { '"': '"', "'": "'", "\\": "\\", a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" },
+	/* Java's escape sequences (JLS 3.10.7), `\s` among them; its octal escapes are numeric, below */
+	java: { '"': '"', "'": "'", "\\": "\\", b: "\b", f: "\f", n: "\n", r: "\r", s: " ", t: "\t" },
 	python: { '"': '"', "'": "'", "\\": "\\", a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" },
 	rust: { '"': '"', "'": "'", "\\": "\\", "0": "\0", n: "\n", r: "\r", t: "\t" },
 	ts: { '"': '"', "'": "'", "\\": "\\", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" },
@@ -133,6 +136,12 @@ const NUMERIC: Readonly<Record<Target, (text: string, at: number) => Escape>> = 
 		if (c === "U") return { cp: hexAt(text, at + 2, 8), next: at + 10 }
 		throw new Error(`escape \\${c} is not Go`)
 	},
+	/* the unicode escapes are gone by then (`preLexed`): what remains is octal, one to three digits, `\377` at most */
+	java: (text, at) => {
+		const run = /^[0-3][0-7]{0,2}|^[4-7][0-7]?/.exec(text.slice(at + 1))?.[0]
+		if (run === undefined) throw new Error(`escape \\${text[at + 1]} is not Java`)
+		return { cp: Number.parseInt(run, 8), next: at + 1 + run.length }
+	},
 	python: (text, at) => {
 		const c = text[at + 1]
 		if (c === "x") return byteEscape(text, at, false)
@@ -165,16 +174,33 @@ function escapeAt(target: Target, text: string, at: number): Escape {
 const ENDS_LINE: Readonly<Record<Target, RegExp>> = {
 	csharp: /^[\n\r\u0085\u2028\u2029]$/,
 	go: /^\n$/,
+	java: /^[\n\r]$/,
 	python: /^\n$/,
 	rust: /^$/,
 	ts: /^\n$/,
 }
 
+/**
+ * Java's first step (JLS 3.3): each eligible `\\u…XXXX` (a backslash after an even run of them, one or more `u`s,
+ * four hex digits) becomes its character before the lexer runs, and one that makes a quote, a backslash or a line
+ * end would change the literal's own syntax: that is a failure here. The characters it made count as escapes.
+ */
+function preLexed(text: string, escaped: number[]): string {
+	return text.replace(/(\\*)\\(u+)([0-9a-fA-F]{4})/g, (whole, before: string, _us: string, digits: string) => {
+		if (before.length % 2 === 1) return whole
+		const cp = Number.parseInt(digits, 16)
+		if ([0x0a, 0x0d, 0x22, 0x5c].includes(cp)) throw new Error("a unicode escape changes the literal's syntax")
+		escaped.push(cp)
+		return before + String.fromCodePoint(cp)
+	})
+}
+
 /** Read a `"…"` literal of `target` from the start of `text`, as that language's lexer does. */
-function decode(target: Target, text: string): Decoded {
+function decode(target: Target, source: string): Decoded {
+	const escaped: number[] = []
+	const text = target === "java" ? preLexed(source, escaped) : source
 	if (text[0] !== '"') throw new Error("no opening quote")
 	let value = ""
-	const escaped: number[] = []
 	for (let at = 1; at < text.length;) {
 		const ch = String.fromCodePoint(text.codePointAt(at) as number)
 		if (ch === '"') return { end: at + 1, escaped, value }
@@ -193,7 +219,7 @@ function decode(target: Target, text: string): Decoded {
 }
 
 /* appended, not sorted in: each target's fuzz salt is its index, so the others' inputs stay put */
-export const TARGETS: readonly Target[] = ["go", "python", "rust", "ts", "csharp"]
+export const TARGETS: readonly Target[] = ["go", "python", "rust", "ts", "csharp", "java"]
 
 function input(r: Rng): string {
 	let out = ""
@@ -211,7 +237,9 @@ export function literalProblem(target: Target, text: string): string | null {
 		return `unreadable: ${(error as Error).message}`
 	}
 	if (decoded.value !== wellFormed(text)) return "does not round-trip"
-	if (decoded.end !== literal.length) return "not closed where it ends"
+	/* Java's offsets are in the pre-lexed text, where each unicode escape is one character */
+	const length = target === "java" ? preLexed(literal, []).length : literal.length
+	if (decoded.end !== length) return "not closed where it ends"
 	if (decoded.escaped.some((cp) => !REQUIRED[target](cp))) return "escapes what it need not"
 	const raw = Array.from(literal.slice(1, -1)).find(
 		(ch) => ch !== "\\" && ch !== '"' && REQUIRED[target](ch.codePointAt(0) as number),

@@ -173,6 +173,84 @@ export function pyClassName(raw: string): string {
 	return listed(PY_RESERVED, name) ? `${name}_` : name
 }
 
+/* Java's keywords (JLS 3.9), its literals, `_`, and the restricted identifiers that cannot name a type */
+const JAVA_RESERVED = [
+	"abstract",
+	"assert",
+	"boolean",
+	"break",
+	"byte",
+	"case",
+	"catch",
+	"char",
+	"class",
+	"const",
+	"continue",
+	"default",
+	"do",
+	"double",
+	"else",
+	"enum",
+	"extends",
+	"final",
+	"finally",
+	"float",
+	"for",
+	"goto",
+	"if",
+	"implements",
+	"import",
+	"instanceof",
+	"int",
+	"interface",
+	"long",
+	"native",
+	"new",
+	"package",
+	"private",
+	"protected",
+	"public",
+	"return",
+	"short",
+	"static",
+	"strictfp",
+	"super",
+	"switch",
+	"synchronized",
+	"this",
+	"throw",
+	"throws",
+	"transient",
+	"try",
+	"void",
+	"volatile",
+	"while",
+	"true",
+	"false",
+	"null",
+	"_",
+	"var",
+	"yield",
+	"record",
+	"sealed",
+	"permits",
+]
+
+/** Whether `name` is one of Java's keywords, literals or restricted type identifiers: no bare identifier may be one. */
+export const isJavaReserved = (name: string): boolean => JAVA_RESERVED.includes(name)
+
+/** A camelCase Java identifier (a parameter, a local): a keyword suffixed `_`, a digit first `_`, nothing `value`. */
+export function javaIdentifier(raw: string): string {
+	const name = camelWords(raw)
+	if (name === "" || name === "_") return "value"
+	return /^[0-9]/.test(name) ? `_${name}` : isJavaReserved(name) ? `${name}_` : name
+}
+
+/** A PascalCase Java type name: a digit first `N`, nothing `Value`; no keyword is PascalCase. */
+export function javaTypeName(raw: string): string {
+	return guarded(pascalWords(raw), "Value", "N")
+}
+
 /** A camelCase C# identifier (a parameter, a local): a keyword `@`-escaped, a digit first `_`, nothing `value`. */
 export function csIdentifier(raw: string): string {
 	const name = camelWords(raw)

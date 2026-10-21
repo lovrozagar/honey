@@ -6,7 +6,10 @@ import {
 	csTypeName,
 	goExported,
 	goLocal,
+	isJavaReserved,
 	isRustPreludeType,
+	javaIdentifier,
+	javaTypeName,
 	NameScope,
 	NameTable,
 	pascalWords,
@@ -143,5 +146,46 @@ describe("lang: C# identifiers", () => {
 
 	it("C#: PascalCase type names, a number first as N, empty as Value, never a keyword", () => {
 		expect(["user-id", "2fa", "", "class"].map(csTypeName)).toEqual(["UserId", "N2fa", "Value", "Class"])
+	})
+})
+
+/* Java's 50 keywords (JLS 3.9), its literals, `_`, and the restricted identifiers that cannot name a type (JLS 3.9) */
+const JAVA_KEYWORDS =
+	"abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while"
+const JAVA_LITERALS = "true false null"
+const JAVA_RESTRICTED = "var yield record sealed permits"
+
+describe("lang: Java identifiers", () => {
+	it("Java: camelCase identifiers, a number first guarded, empty or underscore as value, every keyword and literal suffixed", () => {
+		expect(["user-id", "class", "var", "_2fa", "", "_", "ok", "true"].map(javaIdentifier)).toEqual([
+			"userId",
+			"class_",
+			"var_",
+			"_2fa",
+			"value",
+			"value",
+			"ok",
+			"true_",
+		])
+		const reserved = [...JAVA_KEYWORDS.split(" "), ...JAVA_LITERALS.split(" "), ...JAVA_RESTRICTED.split(" ")]
+		expect(reserved.map(javaIdentifier)).toEqual(reserved.map((word) => `${word}_`))
+	})
+
+	it("Java: PascalCase type names, a number first as N, empty as Value; isJavaReserved names the reserved words only", () => {
+		expect(["user-id", "2fa", "", "class", "String"].map(javaTypeName)).toEqual([
+			"UserId",
+			"N2fa",
+			"Value",
+			"Class",
+			"String",
+		])
+		expect(["int", "Int", "true", "yield", "_", "String"].map(isJavaReserved)).toEqual([
+			true,
+			false,
+			true,
+			true,
+			true,
+			false,
+		])
 	})
 })
