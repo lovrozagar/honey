@@ -1,23 +1,36 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync, writeFileSync } from "node:fs"
+import { type AddressInfo, createServer } from "node:net"
 import { resolve } from "node:path"
-import { afterAll, describe, expect, it } from "vitest"
+import { afterEach, beforeAll, describe, expect, it } from "vitest"
 import { createBuildPlugin } from "../../../src/build/index.ts"
 
 const CORE_ROOT = resolve(import.meta.dirname, "../../..")
 const FIXTURE_ENTRY = "tests/unit/build/fixture/src/app.ts"
 const OUT_ROOT = resolve(CORE_ROOT, ".tmp-build-targets")
 
-const PORTS = {
-	bun: 45911,
-	cloudflare: 45910,
-	node: 45912,
-} as const
+type Target = "bun" | "cloudflare" | "node"
+
+/*
+ * Each leg serves on a port the OS holds free when the suite starts, all three bound at once so none repeats. A
+ * fixed port sits in Linux's ephemeral range, where any process on a shared machine may already listen on it, and
+ * wrangler/workerd binds sockets beside its own --port.
+ */
+const PORTS: Record<Target, number> = { bun: 0, cloudflare: 0, node: 0 }
+
+beforeAll(async () => {
+	const servers = Object.keys(PORTS).map(() => createServer())
+	await Promise.all(servers.map((server) => new Promise<void>((done) => server.listen(0, "0.0.0.0", done))))
+	const ports = servers.map((server) => (server.address() as AddressInfo).port)
+	await Promise.all(servers.map((server) => new Promise((done) => server.close(done))))
+	for (const [i, target] of (Object.keys(PORTS) as Target[]).entries()) PORTS[target] = ports[i] as number
+})
 
 const children: ChildProcess[] = []
 
-afterAll(() => {
-	for (const child of children) {
+/* each leg's server stops with its leg, so none outlives it into the next */
+afterEach(() => {
+	for (const child of children.splice(0)) {
 		child.kill("SIGTERM")
 	}
 })
@@ -30,7 +43,7 @@ async function which(bin: string): Promise<boolean> {
 	})
 }
 
-async function viteBuild(target: "bun" | "cloudflare" | "node", outDir: string): Promise<void> {
+async function viteBuild(target: Target, outDir: string): Promise<void> {
 	const { build, defaultServerConditions } = await import("vite")
 	await build({
 		configFile: false,
@@ -52,7 +65,8 @@ async function waitHealthy(url: string, timeoutMs = 12_000): Promise<void> {
 	let last = ""
 	while (Date.now() < deadline) {
 		try {
-			const res = await fetch(url)
+			/* a listener that takes the connection and never answers fails the probe, not the leg's timeout */
+			const res = await fetch(url, { signal: AbortSignal.timeout(1_000) })
 			if (res.status === 200) return
 			last = `status ${res.status}`
 		} catch (err) {
