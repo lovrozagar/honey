@@ -5,6 +5,7 @@
  * no `HttpClient.close`), the `@generated` marker on line 1 of every file, and determinism.
  */
 import { describe, expect, it } from "vitest"
+import { sse } from "../shared/__fixtures__/documents-streams.ts"
 import { generateJavaSdk, type JavaSdkOptions } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -202,5 +203,14 @@ describe("generateJavaSdk: a model file each (phase b)", () => {
 	it("writes no file for a component that declares no type, an alias of its use type", () => {
 		const files = generateJavaSdk(withSchemas({ Tags: { items: { type: "string" }, type: "array" } })).files
 		expect(Object.keys(files)).toEqual(FILE_NAMES)
+	})
+})
+
+describe("generateJavaSdk: a streaming operation (refused until phase d)", () => {
+	/* phase d flips this: the operation refused here becomes supported, the leg inverted */
+	it("refuses a streaming operation by name, saying streaming lands in phase d", () => {
+		expect(() => generateJavaSdk(sse())).toThrow(
+			/^[a-z.]+: the Java SDK emits no sse operation until phase d, where streaming lands$/,
+		)
 	})
 })

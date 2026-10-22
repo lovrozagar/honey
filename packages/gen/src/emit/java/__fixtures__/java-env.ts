@@ -7,7 +7,7 @@
  * (google-java-format needs it); 17 and 25 are CI's matrix. Downloads are manual: a missing pin fails where Java is
  * required, naming its install, and is never fetched by a run. A structure test forbids a Java spawn elsewhere.
  */
-import { type SpawnSyncReturns, spawnSync } from "node:child_process"
+import { type SpawnSyncReturns, spawn, spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
@@ -96,6 +96,30 @@ export const runJava = (major: number, args: readonly string[], options: RunOpti
 /** The pinned JDK `major`'s `javac` on `args`. */
 export const runJavac = (major: number, args: readonly string[], options: RunOptions = {}) =>
 	run(join(javaHome(major), "bin/javac"), args, options)
+
+/** What an async Java run returns: its exit status (null when killed by a signal) and both streams. */
+export type AsyncRun = { readonly status: number | null; readonly stderr: string; readonly stdout: string }
+
+/**
+ * The pinned JDK `major`'s `java` on `args`, asynchronously: `input` on stdin, both streams collected. Async so the
+ * in-process recording server (shared/__fixtures__/recording-server.ts) answers the JVM while it runs.
+ */
+export function execJava(major: number, args: readonly string[], options: RunOptions = {}): Promise<AsyncRun> {
+	return new Promise((done, reject) => {
+		const child = spawn(join(javaHome(major), "bin/java"), [...args], { cwd: options.cwd, env: javaEnv() })
+		let stdout = ""
+		let stderr = ""
+		child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+			stdout += chunk
+		})
+		child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+			stderr += chunk
+		})
+		child.on("error", reject)
+		child.on("close", (status) => done({ status, stderr, stdout }))
+		child.stdin.end(options.input ?? "")
+	})
+}
 
 /** google-java-format on `args`, on the 21 JDK. */
 export const runGjf = (args: readonly string[], options: RunOptions = {}) =>

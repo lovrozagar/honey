@@ -3,10 +3,10 @@
  * `$HOME/.cache/honey-tmp/java/sdk/<hash>`, compiled by the 21 JDK's javac `--release 17 -Xlint:all -Werror` against
  * exactly the three pinned jars, and checked on demand by google-java-format `--dry-run` and one offline Gradle build.
  */
-import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { createHash, randomUUID } from "node:crypto"
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
-import { javaCacheDir, runGjf, runGradle, runJava, runJavac } from "./java-env.ts"
+import { type AsyncRun, execJava, javaCacheDir, runGjf, runGradle, runJava, runJavac } from "./java-env.ts"
 
 type Files = Readonly<Record<string, string>>
 
@@ -31,8 +31,12 @@ export type CompiledJavaSdk = {
 	format(): readonly string[]
 	/** one offline Gradle build: its exit status and the Gradle daemons it left alive */
 	gradle(): { readonly daemons: readonly string[]; readonly status: number }
-	/** the driver `source`, class `main` (dotted), compiled against the SDK and run on the 21 JDK */
+	/** the SDK's compiled classes, `dir/out`: the driver's classpath beside the jars */
+	readonly out: string
+	/** the driver `source`, class `main` (dotted), compiled against the SDK and run on the 21 JDK, synchronously */
 	run(main: string, source: string): JavaRun
+	/** `run`, asynchronously: the recording server answers while the program runs (a leg that needs it) */
+	exec(main: string, source: string): Promise<JavaRun>
 }
 
 /* the three jars the emitted build declares, Maven-relative in the cache's repo */
@@ -88,6 +92,24 @@ function written(dir: string, files: Files): void {
 	writeFileSync(join(dir, ".complete"), "")
 }
 
+/**
+ * The SDK written and compiled under `dir`, once: built in a private sibling directory and renamed into place, so a
+ * concurrent test (vitest runs files in parallel) never reads a half-built `out`. A lost rename keeps the winner's.
+ */
+function materialized(dir: string, files: Files, classpath: readonly string[]): Javac {
+	if (!existsSync(join(dir, ".complete"))) {
+		const tmp = `${dir}.${randomUUID()}`
+		written(tmp, files)
+		compiled(tmp, classpath)
+		try {
+			renameSync(tmp, dir)
+		} catch {
+			rmSync(tmp, { force: true, recursive: true })
+		}
+	}
+	return JSON.parse(readFileSync(join(dir, "javac.json"), "utf8")) as Javac
+}
+
 /** javac on the sources under `dir`, into `dir/out`, once per dir: kept in `dir/javac.json`. */
 function compiled(dir: string, classpath: readonly string[]): Javac {
 	const kept = join(dir, "javac.json")
@@ -104,8 +126,8 @@ function compiled(dir: string, classpath: readonly string[]): Javac {
 	return result
 }
 
-/** The driver `source` as class `main`, compiled under `dir/driver` against `out` and `classpath`, then run. */
-function driven(dir: string, classpath: readonly string[], main: string, source: string): JavaRun {
+/** The driver `source` as class `main`, compiled under `dir/driver` against `out` and `classpath`; null when it does not compile. */
+function prepared(dir: string, classpath: readonly string[], main: string, source: string): JavaRun | Compiled {
 	const root = join(dir, "driver")
 	const path = join(root, "src", `${main.replaceAll(".", "/")}.java`)
 	const out = join(root, "out")
@@ -117,8 +139,41 @@ function driven(dir: string, classpath: readonly string[], main: string, source:
 	const javac = runJavac(21, ["--release", "17", "-Xlint:all", "-Werror", "-cp", cp, "-d", out, path], { cwd: dir })
 	const diagnostics = `${javac.stdout}${javac.stderr}`.split("\n").filter((line) => line.trim() !== "")
 	if (javac.status !== 0) return { diagnostics, status: javac.status ?? 1, stderr: "", stdout: "" }
-	const ran = runJava(21, ["-cp", `${out}:${cp}`, main], { cwd: dir })
-	return { diagnostics, status: ran.status ?? 1, stderr: ran.stderr, stdout: ran.stdout }
+	return { cp: `${out}:${cp}`, dir, diagnostics, main }
+}
+
+/** A prepared driver: what javac made of it, and the classpath and directory a run takes. */
+type Compiled = {
+	readonly cp: string
+	readonly dir: string
+	readonly diagnostics: readonly string[]
+	readonly main: string
+}
+
+const finished = (
+	ran: { status: number | null; stderr: string; stdout: string },
+	diagnostics: readonly string[],
+): JavaRun => ({
+	diagnostics,
+	status: ran.status ?? 1,
+	stderr: ran.stderr,
+	stdout: ran.stdout,
+})
+
+/** The driver `source` run synchronously. */
+function driven(dir: string, classpath: readonly string[], main: string, source: string): JavaRun {
+	const ready = prepared(dir, classpath, main, source)
+	if ("status" in ready) return ready
+	const ran = runJava(21, ["-cp", ready.cp, ready.main], { cwd: ready.dir })
+	return finished({ status: ran.status, stderr: ran.stderr, stdout: ran.stdout }, ready.diagnostics)
+}
+
+/** The driver `source` run asynchronously. */
+async function drivenAsync(dir: string, classpath: readonly string[], main: string, source: string): Promise<JavaRun> {
+	const ready = prepared(dir, classpath, main, source)
+	if ("status" in ready) return ready
+	const ran: AsyncRun = await execJava(21, ["-cp", ready.cp, ready.main], { cwd: ready.dir })
+	return finished(ran, ready.diagnostics)
 }
 
 /** The emitted SDK `files`, compiled and ready to check. */
@@ -128,8 +183,8 @@ export function compiledJavaSdk(files: Files): CompiledJavaSdk {
 		.digest("hex")
 		.slice(0, 16)
 	const dir = join(javaCacheDir("sdk"), hash)
-	written(dir, files)
 	const classpath = JARS.map((path) => join(javaCacheDir("repo"), path))
+	const javac = materialized(dir, files, classpath)
 	const sourceRoot = join(dir, "src/main/java")
 	return {
 		classpath,
@@ -146,7 +201,9 @@ export function compiledJavaSdk(files: Files): CompiledJavaSdk {
 			const status = runGradle(["-q", "build"], { cwd: dir }).status ?? 1
 			return { daemons: leftAfter(before), status }
 		},
-		javac: compiled(dir, classpath),
+		javac,
+		out: join(dir, "out"),
 		run: (main, source) => driven(dir, classpath, main, source),
+		exec: (main, source) => drivenAsync(dir, classpath, main, source),
 	}
 }

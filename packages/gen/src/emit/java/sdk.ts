@@ -16,7 +16,13 @@ import {
 	validatePackageName,
 	validateVersion,
 } from "./gradle.ts"
-import { modelDecls, modelFiles } from "./sdk-models.ts"
+import { componentDecls, modelFiles } from "./sdk-models.ts"
+import { errorClassFiles, errorKeyFiles } from "./sdk-errors.ts"
+import { type JavaCallPlan } from "./sdk-plan.ts"
+import { surfaceOf, type SurfaceEnv } from "./sdk-client.ts"
+import { javaTypeContext } from "./models.ts"
+import { sdkModel } from "../../ir/sdk-model.ts"
+import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 
 /** The package's options, each defaulted and validated. */
 export type JavaSdkOptions = {
@@ -30,6 +36,8 @@ export type JavaSdkOptions = {
 	readonly clientName?: string
 	/** the package version; `0.1.0` by default */
 	readonly version?: string
+	/** false: every method answers `Result<T>` and an error status lands in it; `true` (the default) throws */
+	readonly throwOnError?: boolean
 }
 
 /** The SDK's files by path. */
@@ -96,15 +104,57 @@ public final class ${pkg.clientName} {
 }
 `
 
-/** What an SDK's runtime holds besides its transport: the mapper for any model, `Opt` for a three-state field. */
-export type JavaRuntimeFeatures = { readonly json: boolean; readonly opt: boolean }
+/** What the runtime holds besides the call surface: the mapper, `Opt` for a three-state field, the transport holder. */
+export type JavaRuntimeFeatures = {
+	readonly json: boolean
+	readonly opt: boolean
+	/** the exchange machinery: the call runtime, its errors, its results */
+	readonly operations: boolean
+	/** the phase-a transport holder, which a document with no operation ships alone */
+	readonly transport: boolean
+}
+
+/** The vendored runtime's operation files, the exchange machinery a call needs. */
+const OPERATION_FILES = [
+	"ApiException",
+	"Answer",
+	"BinaryBody",
+	"Body",
+	"Call",
+	"CallLog",
+	"ClientConfig",
+	"Credential",
+	"ErrorEnvelope",
+	"Envelope",
+	"Exchange",
+	"Flight",
+	"FilePart",
+	"HoneyException",
+	"Hooks",
+	"LogEntry",
+	"Operation",
+	"RawResponse",
+	"RequestContext",
+	"RequestHook",
+	"RequestOptions",
+	"Result",
+	"ResponseContext",
+	"ResponseHook",
+	"UrlPath",
+	"UrlQuery",
+]
 
 /** The vendored runtime's files by class name, read from disk on every call, in `packageName`; every file by default. */
 export function runtimeFiles(
 	packageName: string,
-	features: JavaRuntimeFeatures = { json: true, opt: true },
+	features: JavaRuntimeFeatures = { json: true, opt: true, operations: true, transport: true },
 ): Record<string, string> {
-	const names = [...(features.json ? ["Json"] : []), ...(features.opt ? ["Opt"] : []), "Transport"]
+	const names = [
+		...(features.json ? ["Json"] : []),
+		...(features.opt ? ["Opt"] : []),
+		...(features.transport ? ["Transport"] : []),
+		...(features.operations ? OPERATION_FILES : []),
+	]
 	return Object.fromEntries(
 		names.map((name) => [
 			name,
@@ -118,20 +168,72 @@ export function runtimeFiles(
 
 /** The package's files for `document`, by path, in code-unit order. */
 export function generateJavaSdk(document: Record<string, unknown>, options: JavaSdkOptions = {}): GeneratedJavaSdk {
+	return { files: emitJava(document, options).files }
+}
+
+/**
+ * Each operation's call plan by id, from the very emit `generateJavaSdk` runs with these options: the names the fixed
+ * reflection driver walks, never re-derived outside the emitter.
+ */
+export function javaCallPlans(
+	document: Record<string, unknown>,
+	options: JavaSdkOptions = {},
+): Readonly<Record<string, JavaCallPlan>> {
+	return Object.fromEntries(emitJava(document, options).plans.map((plan) => [plan.operation, plan]))
+}
+
+/** The package's files and the call plans, from one emit. */
+function emitJava(document: Record<string, unknown>, options: JavaSdkOptions) {
 	const pkg = packageOf(options)
 	const dir = `src/main/java/${pkg.packageName.replaceAll(".", "/")}`
-	const decls = modelDecls(document, [pkg.clientName])
-	const features = { json: decls.size > 0, opt: [...decls.values()].some((decl) => /\bOpt</.test(decl)) }
+	const ir = toIR(document as OpenApiDocument)
+	const model = sdkModel(ir)
+	const ctx = javaTypeContext(ir, [pkg.clientName])
+	const isArray = (schema: Parameters<typeof model.resolve>[0]) => model.resolve(schema).kind === "array"
+	const operations = model.ops.length > 0
+	const env: SurfaceEnv = {
+		client: pkg.clientName,
+		ctx,
+		isArray,
+		marker: MARKER,
+		ops: model.opsById,
+		packageName: pkg.packageName,
+		throwOnError: options.throwOnError ?? true,
+	}
+	const surface = operations ? surfaceOf(ir, env) : { files: {}, plans: [] as JavaCallPlan[] }
+	const errors = operations
+		? {
+				...errorClassFiles(dir, pkg.packageName, MARKER),
+				...errorKeyFiles(model, ctx, { dir, marker: MARKER, packageName: pkg.packageName }),
+			}
+		: {}
+	const decls = componentDecls(ir, ctx)
+	const features = {
+		json: decls.size > 0 || operations,
+		operations,
+		opt: [...decls.values()].some((decl) => /\bOpt</.test(decl)) || operations,
+		transport: !operations,
+	}
 	const runtime = Object.entries(runtimeFiles(pkg.packageName, features)).map(([name, text]) => [
 		`${dir}/${name}.java`,
 		text,
 	])
+	const client = operations ? surface.files[`${pkg.clientName}.java`] : `${MARKER}\n${clientJava(pkg)}`
 	const files: Record<string, string> = {
 		"build.gradle": `${MARKER}\n${buildGradle(pkg)}`,
 		"settings.gradle": `${MARKER}\n${settingsGradle(pkg)}`,
-		[`${dir}/${pkg.clientName}.java`]: `${MARKER}\n${clientJava(pkg)}`,
+		[`${dir}/${pkg.clientName}.java`]: client as string,
 		...Object.fromEntries(runtime),
 		...modelFiles(decls, { dir, marker: MARKER, packageName: pkg.packageName }),
+		...errors,
+		...Object.fromEntries(
+			Object.entries(surface.files)
+				.map(([name, text]) => [`${dir}/${name}`, text])
+				.filter(([name]) => !name.endsWith(`/${pkg.clientName}.java`)),
+		),
 	}
-	return { files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => compareCodeUnits(a, b))) }
+	return {
+		files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => compareCodeUnits(a, b))),
+		plans: surface.plans,
+	}
 }

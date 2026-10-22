@@ -1,0 +1,138 @@
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import tools.jackson.databind.JsonNode;
+
+/** The client a cell's setup and script make: the builder's setters by name, then its build. */
+final class Config {
+  private Config() {}
+
+  /**
+   * The client for the envelope's cell, configured by its setup and by the script when one is
+   * given.
+   */
+  static Object client(Sdk sdk, JsonNode envelope, JsonNode script, Recorder recorder) {
+    JsonNode target = Wire.member(envelope, "sdk");
+    Class<?> client = sdk.type(Wire.text(target, "client"));
+    Object builder = Reflect.invokeStatic(client, "builder");
+    Reflect.call(builder, "baseUrl", Wire.text(envelope, "base"));
+    setup(builder, Wire.member(Wire.member(envelope, "cell"), "setup"));
+    if (script != null) {
+      scripted(sdk, builder, script, recorder);
+    }
+    return Reflect.call(builder, "build");
+  }
+
+  private static void setup(Object builder, JsonNode setup) {
+    if (setup == null) {
+      return;
+    }
+    JsonNode auth = Wire.member(setup, "auth");
+    if (auth != null && "bearer".equals(Wire.text(auth, "kind"))) {
+      Reflect.call(builder, "bearerToken", Wire.text(auth, "token"));
+    } else if (auth != null) {
+      Reflect.call(builder, "apiKey", Wire.text(auth, "value"));
+      Reflect.call(builder, "authHeaderName", Wire.text(auth, "name"));
+      Reflect.call(builder, "authHeaderPrefix", "");
+    }
+    JsonNode headers = Wire.member(setup, "headers");
+    if (headers != null) {
+      Reflect.call(builder, "headers", stringMap(headers));
+    }
+    JsonNode timeout = Wire.member(setup, "timeoutMs");
+    if (timeout != null) {
+      Reflect.call(builder, "timeout", Duration.ofMillis(timeout.asLong()));
+    }
+  }
+
+  /** The script's config, hooks, log and refresh, each installed only when the script names it. */
+  private static void scripted(Sdk sdk, Object builder, JsonNode script, Recorder recorder) {
+    JsonNode config = Wire.member(script, "config");
+    if (config != null) {
+      optional(builder, "authHeaderName", Wire.text(config, "authHeaderName"));
+      optional(builder, "authHeaderPrefix", Wire.text(config, "authHeaderPrefix"));
+    }
+    JsonNode hooks = Wire.member(script, "hooks");
+    if (hooks != null) {
+      Reflect.call(builder, "onRequest", requestHook(sdk, hooks, recorder));
+      Reflect.call(builder, "onResponse", responseHook(sdk, hooks, recorder));
+    }
+    if (Wire.member(script, "onAuthExpired") != null) {
+      Supplier<String> refresh = recorder::refresh;
+      Reflect.call(builder, "onAuthExpired", refresh);
+    }
+    if (Wire.flag(script, "log")) {
+      Consumer<Object> logger = recorder::log;
+      Reflect.call(builder, "onLog", logger);
+    }
+  }
+
+  private static void optional(Object builder, String name, String value) {
+    if (value != null) {
+      Reflect.call(builder, name, value);
+    }
+  }
+
+  /**
+   * One request hook that runs the script's request entries in order; an absent list is one no-op
+   * entry.
+   */
+  private static Object requestHook(Sdk sdk, JsonNode hooks, Recorder recorder) {
+    java.util.List<JsonNode> entries = entriesOf(hooks, "request");
+    return proxy(
+        sdk,
+        "RequestHook",
+        (proxy, method, args) -> {
+          for (int i = 0; i < entries.size(); i++) {
+            recorder.request(i, entries.get(i), args[0]);
+          }
+          return null;
+        });
+  }
+
+  private static Object responseHook(Sdk sdk, JsonNode hooks, Recorder recorder) {
+    java.util.List<JsonNode> entries = entriesOf(hooks, "response");
+    return proxy(
+        sdk,
+        "ResponseHook",
+        (proxy, method, args) -> {
+          for (int i = 0; i < entries.size(); i++) {
+            recorder.response(i, entries.get(i), args[0]);
+          }
+          return null;
+        });
+  }
+
+  private static java.util.List<JsonNode> entriesOf(JsonNode hooks, String name) {
+    JsonNode list = Wire.member(hooks, name);
+    java.util.List<JsonNode> entries = new java.util.ArrayList<>();
+    for (int i = 0; list != null && i < list.size(); i++) {
+      entries.add(list.get(i));
+    }
+    if (entries.isEmpty()) {
+      entries.add(Wire.object());
+    }
+    return entries;
+  }
+
+  /**
+   * A proxy of the SDK's functional interface {@code iface}, answering its one method by {@code
+   * handler}.
+   */
+  private static Object proxy(Sdk sdk, String iface, InvocationHandler handler) {
+    return Proxy.newProxyInstance(
+        Config.class.getClassLoader(), new Class<?>[] {sdk.type(iface)}, handler);
+  }
+
+  private static Map<String, String> stringMap(JsonNode node) {
+    Map<String, String> map = new LinkedHashMap<>();
+    for (var member : node.properties()) {
+      map.put(member.getKey(), member.getValue().asString());
+    }
+    return map;
+  }
+}

@@ -3,9 +3,9 @@
  * hoists (an inline object, an enum, a union's wrappers), as one source file each, since a public top-level type
  * needs its own. A file imports exactly the types its text spells, in google-java-format's order: one block, sorted.
  */
-import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import { compareCodeUnits } from "../shared/lang.ts"
-import { declares, javaTopLevel, javaTypeContext } from "./models.ts"
+import { declares, type JavaTypeContext, javaTopLevel } from "./models.ts"
+import type { IR } from "../../ir/model.ts"
 
 /* every type a model declaration may spell that java.lang does not hold, by its simple name */
 const IMPORTS: Readonly<Record<string, string>> = {
@@ -20,9 +20,14 @@ const IMPORTS: Readonly<Record<string, string>> = {
 	JsonProperty: "com.fasterxml.jackson.annotation.JsonProperty",
 	JsonValue: "com.fasterxml.jackson.annotation.JsonValue",
 	LinkedHashMap: "java.util.LinkedHashMap",
-	List: "java.util.List",
 	Map: "java.util.Map",
 	StdDeserializer: "tools.jackson.databind.deser.std.StdDeserializer",
+	Consumer: "java.util.function.Consumer",
+	Duration: "java.time.Duration",
+	InputStream: "java.io.InputStream",
+	List: "java.util.List",
+	Supplier: "java.util.function.Supplier",
+	TypeReference: "tools.jackson.core.type.TypeReference",
 }
 
 /** `text` without its string literals and comments: what its code spells. */
@@ -33,7 +38,7 @@ const codeOf = (text: string): string =>
 		.replace(/\/\/.*$/gm, "")
 
 /** The import lines `decl` needs, sorted as google-java-format sorts them. */
-function importsOf(decl: string): string[] {
+export function importsOf(decl: string): string[] {
 	const code = codeOf(decl)
 	return Object.entries(IMPORTS)
 		.filter(([name]) => new RegExp(`(?<![\\w.])${name}\\b`).test(code))
@@ -42,16 +47,14 @@ function importsOf(decl: string): string[] {
 }
 
 /** One model file's text: the marker, the package, its imports, its declaration. */
-function sourceOf(marker: string, packageName: string, decl: string): string {
+export function sourceOf(marker: string, packageName: string, decl: string): string {
 	const imports = importsOf(decl)
 	const head = imports.length > 0 ? `\n${imports.join("\n")}\n` : ""
 	return `${marker}\npackage ${packageName};\n${head}\n${decl}\n`
 }
 
-/** The model declarations of `document`, by type name: every component that declares, then what each hoists. */
-export function modelDecls(document: Record<string, unknown>, taken: readonly string[]): Map<string, string> {
-	const ir = toIR(document as OpenApiDocument)
-	const ctx = javaTypeContext(ir, taken)
+/** The model declarations of `ir` in `ctx`: every component that declares, then what each hoists, the ops' included. */
+export function componentDecls(ir: IR, ctx: JavaTypeContext): Map<string, string> {
 	const decls = new Map<string, string>()
 	for (const [key, schema] of Object.entries(ir.schemas).sort(([a], [b]) => compareCodeUnits(a, b))) {
 		if (!declares(schema)) continue

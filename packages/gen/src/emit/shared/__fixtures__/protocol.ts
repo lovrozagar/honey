@@ -23,6 +23,9 @@
  * observed, and records `closeError` when `CloseAsync` throws.
  */
 
+/** The Java driver's error record (java-error.ts), beside the others. */
+export type { JavaError } from "./java-error.ts"
+
 /** A scripted WebSocket Send: a JSON value (decoded, so Send marshals it), text, or that many bytes `i & 0xff`. */
 export type WsMessage = { readonly json: Json } | { readonly text: string } | { readonly bytes: number }
 
