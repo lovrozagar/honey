@@ -42,12 +42,15 @@ export function goEnv(toolchain = pinnedGo()): NodeJS.ProcessEnv {
 	}
 }
 
-/** `go args` in `cwd` under the pinned toolchain (or `toolchain`). */
-export function runGo(args: readonly string[], options: { cwd?: string; input?: string; toolchain?: string } = {}) {
+/** `go args` in `cwd` under the pinned toolchain (or `toolchain`), with `env` over the toolchain's environment. */
+export function runGo(
+	args: readonly string[],
+	options: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string; toolchain?: string } = {},
+) {
 	return spawnSync("go", [...args], {
 		cwd: options.cwd,
 		encoding: "utf8",
-		env: goEnv(options.toolchain),
+		env: { ...goEnv(options.toolchain), ...options.env },
 		input: options.input,
 		maxBuffer: 1 << 26,
 	}) as SpawnSyncReturns<string>

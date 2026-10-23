@@ -10,11 +10,13 @@ export const HARNESS = [
 
 /**
  * The default run's test files that run Go: each reaches `go-env.ts`, the one way gen runs Go, through its
- * imports. They run as the `go` project. `tests/structure/toolchain-projects.test.ts` holds a file that reaches
- * Go to this list, and a file listed here outside `src/emit/go/` to reaching Go.
+ * imports. They run as the `go` project, the generated CLI's (bit 17, a Go module) with the SDK's.
+ * `tests/structure/toolchain-projects.test.ts` holds a file that reaches Go to this list, and a file listed here
+ * outside `src/emit/go/` to reaching Go.
  */
 export const GO = [
 	"src/emit/go/**/*.test.ts",
+	"src/emit/cli/**/*.test.ts",
 	"src/emit/shared/escape.test.ts",
 	"src/emit/shared/gofmt.test.ts",
 	"tests/security/emit-adversarial.test.ts",
