@@ -164,20 +164,26 @@ describe.skipIf(!GO)("the zero-op module, built (phase a)", SLOW, () => {
 		const fmt = spawnSync(gofmtPath(toolchain), ["-l", "."], { cwd: built.dir, encoding: "utf8" })
 		const unformatted = fmt.stdout.split("\n").filter((name) => name !== "" && !name.startsWith("internal/sdk/"))
 		const settings = runGo(["version", "-m", built.binary], { toolchain }).stdout
-		expect({
-			errors: built.stderr + built.linkErrors,
-			gofmt: unformatted,
-			static: /^\tbuild\tCGO_ENABLED=0$/m.test(settings),
-			tidy: [tidy.status, tidy.stdout],
-			vet: built.vet,
-		}).toEqual({ errors: "", gofmt: [], static: true, tidy: [0, ""], vet: [] })
+		/* a cold module cache's `go: downloading` lines are build output, not errors: the build's status answers */
+		expect(
+			{
+				built: built.built,
+				gofmt: unformatted,
+				link: built.linkErrors,
+				static: /^\tbuild\tCGO_ENABLED=0$/m.test(settings),
+				tidy: [tidy.status, tidy.stdout],
+				vet: built.vet,
+			},
+			built.stderr,
+		).toEqual({ built: true, gofmt: [], link: "", static: true, tidy: [0, ""], vet: [] })
 	})
 
 	it("is tidy as written with the WebSocket library required", () => {
 		const built = builtCli(generateGoCli(ws()).files)
 		const tidy = runGo(["mod", "tidy", "-diff"], { cwd: built.dir, env: { GOFLAGS: "-modcacherw" } })
-		expect({ errors: built.stderr + built.linkErrors, tidy: [tidy.status, tidy.stdout] }).toEqual({
-			errors: "",
+		expect({ built: built.built, link: built.linkErrors, tidy: [tidy.status, tidy.stdout] }, built.stderr).toEqual({
+			built: true,
+			link: "",
 			tidy: [0, ""],
 		})
 	})
