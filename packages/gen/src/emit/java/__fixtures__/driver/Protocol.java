@@ -9,8 +9,9 @@ final class Protocol {
   private static final Set<String> SCRIPT =
       Set.of("calls", "config", "hooks", "log", "logDurations", "onAuthExpired");
   private static final Set<String> CALL_SCRIPT =
-      Set.of("cancel", "envelope", "idempotencyKey", "sleepMs");
-  private static final Set<String> CONFIG = Set.of("authHeaderName", "authHeaderPrefix");
+      Set.of("cancel", "envelope", "idempotencyKey", "oneShotBody", "sleepMs");
+  private static final Set<String> CONFIG =
+      Set.of("authHeaderName", "authHeaderPrefix", "invalidation", "maxResponseBytes");
   private static final Set<String> REQUEST_HOOK = Set.of("fail", "setHeader");
   private static final Set<String> RESPONSE_HOOK = Set.of("body", "fail");
   private static final Set<String> PHASE_D =
@@ -45,8 +46,9 @@ final class Protocol {
   }
 
   private static void setupRefusal(JsonNode setup) {
-    if (Wire.member(setup, "redirect") != null) {
-      throw new DriverException("setup: redirect is not driven by the Java driver until phase c2");
+    String redirect = Wire.text(setup, "redirect");
+    if (redirect != null && !Set.of("follow", "same-origin", "none").contains(redirect)) {
+      throw new DriverException("setup: redirect " + redirect + " is not one the driver knows");
     }
     JsonNode auth = Wire.member(setup, "auth");
     if (auth != null) {
@@ -77,10 +79,6 @@ final class Protocol {
       if (Wire.member(call, member) != null) {
         return member + " is not driven by the Java driver until phase d";
       }
-    }
-    JsonNode body = Wire.member(call, "body");
-    if (body != null && "binary".equals(Wire.text(body, "kind"))) {
-      return "binary bodies are driven from phase c2";
     }
     return null;
   }

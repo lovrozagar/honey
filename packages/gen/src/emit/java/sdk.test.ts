@@ -190,9 +190,10 @@ describe("generateJavaSdk: determinism", () => {
 	})
 })
 
-describe("generateJavaSdk: a model file each (phase b)", () => {
-	const withSchemas = (schemas: Json): Json => ({ ...ZERO, components: { schemas } })
+/** The zero-op document with `schemas` as its components. */
+const withSchemas = (schemas: Json): Json => ({ ...ZERO, components: { schemas } })
 
+describe("generateJavaSdk: a model file each (phase b)", () => {
 	it("writes a model that spells no imported type with no import block: the marker, the package, the declaration", () => {
 		const files = generateJavaSdk(withSchemas({ Empty: { additionalProperties: false, type: "object" } })).files
 		expect(files["src/main/java/ai/anyrow/Empty.java"]).toBe(

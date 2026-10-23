@@ -29,11 +29,14 @@ final class Invoke {
     for (JsonNode accessor : Wire.items(Wire.member(plan, "accessors"))) {
       target = Reflect.call(target, accessor.asString());
     }
-    Object raw = newRaw(run.sdk());
+    Object raw = newInstance(run.sdk(), "RawResponse");
     Map<String, JsonNode> fields = Bind.fields(plan, call, entry);
     Object params = Bind.params(run.sdk(), plan, fields);
     Object options = options(run, call, raw, Bind.extraHeaders(plan, call));
-    Method method = Reflect.method(target.getClass(), Wire.text(plan, "method"), 2);
+    JsonNode headers = Wire.member(plan, "responseHeaders");
+    Object holder = headers == null ? null : newInstance(run.sdk(), Wire.text(headers, "type"));
+    Method method = method(run, target, plan, holder);
+    Object[] args = holder == null ? new Object[] {params, options} : new Object[] {params, holder, options};
     JsonNode cancel = Wire.member(entry, "cancel");
     Thread thread = Thread.currentThread();
     if (cancel != null && "before".equals(cancel.asString(""))) {
@@ -43,7 +46,7 @@ final class Invoke {
     Object answer = null;
     Throwable thrown = null;
     try {
-      answer = method.invoke(target, params, options);
+      answer = method.invoke(target, args);
     } catch (InvocationTargetException e) {
       thrown = e.getCause();
     } catch (IllegalAccessException e) {
@@ -55,7 +58,7 @@ final class Invoke {
       Thread.interrupted();
     }
     Observe.Ask ask =
-        new Observe.Ask(Wire.flag(call, "raw"), run.scripted(), Wire.flag(entry, "envelope"));
+        new Observe.Ask(Wire.flag(call, "raw"), run.scripted(), Wire.flag(entry, "envelope"), holder);
     return thrown != null
         ? Observe.thrown(run.sdk(), thrown, raw, ask)
         : Observe.returned(run.sdk(), plan, answer, raw, ask);
@@ -82,11 +85,25 @@ final class Invoke {
     return timer;
   }
 
-  private static Object newRaw(Sdk sdk) {
+  /**
+   * The operation's method: by its name and parameter types, the {@code <Op>Params}, the {@code <Op>Headers} when the
+   * call holds one, and RequestOptions.
+   */
+  private static Method method(Run run, Object target, JsonNode plan, Object holder) {
+    String name = Wire.text(plan, "method");
+    Class<?> params = run.sdk().type(Wire.text(plan, "params"));
+    Class<?> options = run.sdk().type("RequestOptions");
+    if (holder == null) {
+      return Reflect.method(target.getClass(), name, params, options);
+    }
+    return Reflect.method(target.getClass(), name, params, holder.getClass(), options);
+  }
+
+  private static Object newInstance(Sdk sdk, String type) {
     try {
-      return sdk.type("RawResponse").getConstructor().newInstance();
+      return sdk.type(type).getConstructor().newInstance();
     } catch (ReflectiveOperationException e) {
-      throw new DriverException("RawResponse did not construct: " + e.getMessage());
+      throw new DriverException(type + " did not construct: " + e.getMessage());
     }
   }
 

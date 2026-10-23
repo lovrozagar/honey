@@ -23,10 +23,32 @@ final class Observe {
    * What the script and the call ask for: the raw response, a traced run, and the envelope in each
    * trace.
    */
-  record Ask(boolean raw, boolean scripted, boolean envelope) {}
+  record Ask(boolean raw, boolean scripted, boolean envelope, Object holder) {}
 
   /** A call that returned: a typed answer, or a safe-mode Result holding data or an error. */
   static Outcome returned(Sdk sdk, JsonNode plan, Object answer, Object raw, Ask ask) {
+    Outcome out = answeredOutcome(sdk, plan, answer, raw, ask);
+    if (ask.holder() == null || out.observed() == null || !"data".equals(out.observed().path("kind").asString())) {
+      return out;
+    }
+    ObjectNode seen = (ObjectNode) out.observed();
+    seen.set("headers", headersOf(plan, ask.holder()));
+    return new Outcome(seen, out.error(), out.result());
+  }
+
+  /** The `<Op>Headers` holder's fields, each declared header (as written) to its value; an absent optional one is absent. */
+  private static ObjectNode headersOf(JsonNode plan, Object holder) {
+    ObjectNode headers = Wire.object();
+    for (var field : Wire.member(Wire.member(plan, "responseHeaders"), "fields").properties()) {
+      Object value = Reflect.call(holder, field.getValue().asString());
+      if (value != null) {
+        headers.put(field.getKey(), value.toString());
+      }
+    }
+    return headers;
+  }
+
+  private static Outcome answeredOutcome(Sdk sdk, JsonNode plan, Object answer, Object raw, Ask ask) {
     if (Wire.flag(plan, "throws")) {
       return new Outcome(answered(sdk, plan, answer, raw, ask), null, null);
     }

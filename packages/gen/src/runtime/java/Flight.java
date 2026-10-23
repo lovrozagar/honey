@@ -3,34 +3,26 @@ package honey.runtime;
 
 import java.io.InputStream;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * One call's exchange: its hops, its auth retry, and its one deadline over all of them, which
- * cancels the hop in flight when it lapses. Hooks run before each hop and on each answer.
+ * cancels the hop in flight when it lapses. Hooks run once per attempt, before its first hop; the
+ * SDK's own redirect loop then sends each hop from the hook's headers.
  */
 final class Flight {
-  private static final Set<String> RESTRICTED =
-      Set.of("connection", "content-length", "expect", "host", "upgrade");
-
-  /** One hop's answer: its status, its headers, its body, and the URL that answered. */
+  /** One hop's answer: its status, its headers, its decoded body, and the URL that answered. */
   private record Hop(int status, Map<String, String> headers, byte[] body, URI url) {}
+
+  /** One hop's response, and the URL it came from. */
+  private record Sent(HttpResponse<byte[]> response, URI url) {}
 
   private final Exchange exchange;
   private final ClientConfig config;
@@ -39,8 +31,14 @@ final class Flight {
   private final RequestOptions options;
   private final String route;
   private final CallLog log;
-  private final Duration limit;
-  private final Instant end;
+  private final Deadline deadline;
+  private final Hops hops;
+
+  /** The redirects this call has followed, across its attempts (C#'s _redirects). */
+  private int redirects;
+
+  /** This call's stale view, taken before its first hop (C#'s _meta). */
+  private StaleMeta meta = StaleMeta.NONE;
 
   Flight(Exchange exchange, Operation op, Call call, RequestOptions options) {
     this.exchange = exchange;
@@ -51,8 +49,8 @@ final class Flight {
     this.route = op.route();
     this.log = new CallLog(config.onLog(), route);
     Duration bound = this.options.timeout() != null ? this.options.timeout() : config.timeout();
-    this.limit = bound == null || bound.isZero() ? null : bound;
-    this.end = limit == null ? null : Instant.now().plus(limit);
+    this.deadline = bound == null || bound.isZero() ? null : new Deadline(bound, route);
+    this.hops = new Hops(exchange.http(), deadline, route);
   }
 
   Answer run() {
@@ -73,6 +71,8 @@ final class Flight {
 
   private Answer answer() {
     URI url = url();
+    meta =
+        exchange.stale().begin(op.method(), UrlPath.expand(op.template(), op.names(), call.path()));
     Credential credential = exchange.credential();
     String token = credential.token();
     Hop hop = attempt(url, token, false);
@@ -100,13 +100,46 @@ final class Flight {
   private Hop attempt(URI url, String token, boolean retry) {
     byte[] bytes = call.body() == null ? null : call.body().bytes();
     RequestContext context = new RequestContext(op.method(), url, bytes, retry);
+    context.staleness(meta);
     layer(context.headers(), token);
     Hooks.onRequest(config.onRequest(), context);
-    HttpResponse<byte[]> sent = send(request(context));
+    Sent sent = follow(leg(context), url);
+    byte[] body = Decode.body(sent.response(), config.maxResponseBytes(), deadline);
     ResponseContext answer =
-        new ResponseContext(sent.statusCode(), joined(sent.headers().map()), sent.body(), retry);
+        new ResponseContext(
+            sent.response().statusCode(), joined(sent.response().headers().map()), body, retry);
+    answer.staleness(meta);
     Hooks.onResponse(config.onResponse(), answer);
-    return new Hop(answer.status(), answer.headers(), answer.body(), url);
+    return new Hop(answer.status(), answer.headers(), answer.body(), sent.url());
+  }
+
+  /** The first hop of an attempt, from the hook's headers and body. */
+  private Redirects.Leg leg(RequestContext context) {
+    byte[] body = context.body();
+    InputStream stream = body == null && call.body() != null ? call.body().stream() : null;
+    return new Redirects.Leg(
+        context.method(), context.url(), context.headers(), body, stream, false);
+  }
+
+  /**
+   * Sends {@code first}, then each hop the redirect rules allow, until an answer stands. The
+   * deadline is checked before each hop: a hop never leaves once it has lapsed.
+   */
+  private Sent follow(Redirects.Leg first, URI start) {
+    Redirects rules = new Redirects(start, config.redirect());
+    Redirects.Leg leg = first;
+    while (true) {
+      HttpResponse<byte[]> response = hops.send(leg);
+      Redirects.Leg next =
+          redirects < Redirects.MAX
+              ? rules.next(leg, response.statusCode(), joined(response.headers().map()))
+              : null;
+      if (next == null) {
+        return new Sent(response, leg.url());
+      }
+      redirects++;
+      leg = next;
+    }
   }
 
   /**
@@ -115,6 +148,7 @@ final class Flight {
    */
   private void layer(Map<String, String> layers, String token) {
     layers.put("X-Request-Id", UUID.randomUUID().toString());
+    layers.put("Accept-Encoding", "gzip, deflate");
     if (call.body() != null) {
       layers.put("Content-Type", call.body().mediaType());
     }
@@ -144,76 +178,6 @@ final class Flight {
     return headers;
   }
 
-  private HttpRequest request(RequestContext context) {
-    validate(context.headers());
-    HttpRequest.Builder builder =
-        HttpRequest.newBuilder(context.url()).version(HttpClient.Version.HTTP_1_1);
-    for (Map.Entry<String, String> header : context.headers().entrySet()) {
-      builder.header(header.getKey(), header.getValue());
-    }
-    return builder.method(context.method(), publisher(context)).build();
-  }
-
-  private HttpRequest.BodyPublisher publisher(RequestContext context) {
-    if (context.body() != null) {
-      return HttpRequest.BodyPublishers.ofByteArray(context.body());
-    }
-    InputStream stream = call.body() == null ? null : call.body().stream();
-    return stream == null
-        ? HttpRequest.BodyPublishers.noBody()
-        : HttpRequest.BodyPublishers.ofInputStream(() -> stream);
-  }
-
-  /**
-   * The final map, checked after the hooks: a restricted name and a control character are the
-   * caller's to fix.
-   */
-  private static void validate(Map<String, String> headers) {
-    for (Map.Entry<String, String> header : headers.entrySet()) {
-      String name = header.getKey();
-      if (RESTRICTED.contains(name.toLowerCase(Locale.ROOT))) {
-        throw new ConfigException("the " + name + " header is restricted and cannot be sent");
-      }
-      if (header.getValue().chars().anyMatch(c -> c == '\r' || c == '\n' || c == 0)) {
-        throw new ConfigException("the " + name + " header's value cannot be sent");
-      }
-    }
-  }
-
-  private HttpResponse<byte[]> send(HttpRequest request) {
-    CompletableFuture<HttpResponse<byte[]>> sent =
-        exchange.http().sendAsync(request, BodyHandlers.ofByteArray());
-    CompletableFuture<HttpResponse<byte[]>> bounded = sent.thenApply(response -> response);
-    if (end != null) {
-      bounded.orTimeout(
-          Math.max(0, Duration.between(Instant.now(), end).toMillis()), TimeUnit.MILLISECONDS);
-    }
-    try {
-      return bounded.get();
-    } catch (ExecutionException e) {
-      throw failure(sent, e.getCause());
-    } catch (InterruptedException e) {
-      java.lang.Thread.currentThread().interrupt();
-      sent.cancel(true);
-      throw new CancellationException("the call was canceled");
-    }
-  }
-
-  private RuntimeException failure(CompletableFuture<?> sent, Throwable cause) {
-    if (cause instanceof TimeoutException) {
-      sent.cancel(true);
-      return new ApiTimeoutException(route + " timed out after " + limit.toMillis() + " ms", cause);
-    }
-    if (cause instanceof RuntimeException runtime) {
-      return runtime;
-    }
-    String detail = cause.getMessage();
-    if (detail == null) {
-      detail = cause.getClass().getSimpleName();
-    }
-    return new ApiConnectionException(route + ": " + detail, cause);
-  }
-
   private Answer finish(Hop hop) {
     log.received(hop.status());
     RawResponse raw = options.raw() != null ? options.raw() : new RawResponse();
@@ -223,6 +187,20 @@ final class Flight {
       error = ApiException.of(new ApiException.Failure(hop.status(), hop.headers(), hop.body()));
       log.failed(error, error.status());
     }
+    if (hop.status() >= 200 && hop.status() < 300) {
+      exchange.stale().settle(meta, op.invalidates(), pathValues());
+    }
     return new Answer(route, raw, error, hop.body());
+  }
+
+  /**
+   * The call's path values by their template names: what a stale target's placeholders fill from.
+   */
+  private Map<String, String> pathValues() {
+    Map<String, String> values = new TreeMap<>();
+    for (int i = 0; i < op.names().length; i++) {
+      values.put(op.names()[i], call.path()[i]);
+    }
+    return values;
   }
 }

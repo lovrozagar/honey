@@ -16,7 +16,7 @@ import {
 	validatePackageName,
 	validateVersion,
 } from "./gradle.ts"
-import { componentDecls, modelFiles } from "./sdk-models.ts"
+import { componentDecls, modelFiles, putFile } from "./sdk-models.ts"
 import { errorClassFiles, errorKeyFiles } from "./sdk-errors.ts"
 import { type JavaCallPlan } from "./sdk-plan.ts"
 import { surfaceOf, type SurfaceEnv } from "./sdk-client.ts"
@@ -124,16 +124,21 @@ const OPERATION_FILES = [
 	"CallLog",
 	"ClientConfig",
 	"Credential",
+	"Decode",
+	"Deadline",
 	"ErrorEnvelope",
 	"Envelope",
 	"Exchange",
 	"Flight",
 	"FilePart",
 	"HoneyException",
+	"Hops",
 	"Hooks",
 	"LogEntry",
 	"Operation",
 	"RawResponse",
+	"RedirectPolicy",
+	"Redirects",
 	"RequestContext",
 	"RequestHook",
 	"RequestOptions",
@@ -153,7 +158,7 @@ export function runtimeFiles(
 		...(features.json ? ["Json"] : []),
 		...(features.opt ? ["Opt"] : []),
 		...(features.transport ? ["Transport"] : []),
-		...(features.operations ? OPERATION_FILES : []),
+		...(features.operations ? [...OPERATION_FILES, ...STALE_FILES] : []),
 	]
 	return Object.fromEntries(
 		names.map((name) => [
@@ -165,6 +170,9 @@ export function runtimeFiles(
 		]),
 	)
 }
+
+/** The exchange's stale tracking, shipped with every exchange: the tracker, its config and the read's view. */
+const STALE_FILES = ["InvalidationConfig", "StaleMeta", "StaleTracker"]
 
 /** The package's files for `document`, by path, in code-unit order. */
 export function generateJavaSdk(document: Record<string, unknown>, options: JavaSdkOptions = {}): GeneratedJavaSdk {
@@ -214,24 +222,25 @@ function emitJava(document: Record<string, unknown>, options: JavaSdkOptions) {
 		opt: [...decls.values()].some((decl) => /\bOpt</.test(decl)) || operations,
 		transport: !operations,
 	}
-	const runtime = Object.entries(runtimeFiles(pkg.packageName, features)).map(([name, text]) => [
+	const runtime = Object.entries(runtimeFiles(pkg.packageName, features)).map(([name, text]): [string, string] => [
 		`${dir}/${name}.java`,
 		text,
 	])
 	const client = operations ? surface.files[`${pkg.clientName}.java`] : `${MARKER}\n${clientJava(pkg)}`
-	const files: Record<string, string> = {
-		"build.gradle": `${MARKER}\n${buildGradle(pkg)}`,
-		"settings.gradle": `${MARKER}\n${settingsGradle(pkg)}`,
-		[`${dir}/${pkg.clientName}.java`]: client as string,
-		...Object.fromEntries(runtime),
-		...modelFiles(decls, { dir, marker: MARKER, packageName: pkg.packageName }),
-		...errors,
-		...Object.fromEntries(
-			Object.entries(surface.files)
-				.map(([name, text]) => [`${dir}/${name}`, text])
-				.filter(([name]) => !name.endsWith(`/${pkg.clientName}.java`)),
-		),
-	}
+	const entries: [string, string][] = [
+		["build.gradle", `${MARKER}\n${buildGradle(pkg)}`],
+		["settings.gradle", `${MARKER}\n${settingsGradle(pkg)}`],
+		[`${dir}/${pkg.clientName}.java`, client as string],
+		...runtime,
+		...Object.entries(modelFiles(decls, { dir, marker: MARKER, packageName: pkg.packageName })),
+		...Object.entries(errors),
+		...Object.entries(surface.files)
+			.filter(([name]) => name !== `${pkg.clientName}.java`)
+			.map(([name, text]): [string, string] => [`${dir}/${name}`, text]),
+	]
+	/* one declaration per file: a second claim of a path throws, never overwrites */
+	const files: Record<string, string> = {}
+	for (const [path, text] of entries) putFile(files, path, text)
 	return {
 		files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => compareCodeUnits(a, b))),
 		plans: surface.plans,

@@ -26,7 +26,7 @@ The proof that **every feature works in every generated target**. Analogous to t
 | SSE/WS **reconnect** (`Last-Event-ID`) | resumes from the last id against the bit-06 reference server — parity across all targets |
 | per-call overrides (base/timeout/headers) (C2) | override applied, client default untouched |
 | raw-response accessor (C2) | status + headers + body reachable |
-| auth (api key / bearer / custom) | sent on-origin; **dropped on a cross-origin redirect** (H18.10) — all targets, incl. C#/Java whose HttpClient resends by default |
+| auth (api key / bearer / custom) | sent on-origin; **dropped on a cross-origin redirect** (H18.10) — all targets, incl. C#, whose HttpClient resends by default, and Java, whose `Redirect.NORMAL` drops `Authorization` but resends configured headers |
 | request id propagation | `x-request-id` round-trips |
 
 CLI-only rows: `--json` uniform output, exit codes, `--output <file>` binary, discovery index, shell completion. MCP-only rows: `x-mcp` gating, `outputSchema`+`structuredContent`, tool annotations (readOnly/idempotent/destructive), binary/image result, token-budget ceiling.

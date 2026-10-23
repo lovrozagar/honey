@@ -11,11 +11,13 @@ final class Exchange {
   private final ClientConfig config;
   private final HttpClient http;
   private final Credential credential;
+  private final StaleTracker stale;
 
   Exchange(ClientConfig config) {
     this.config = config;
     this.http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
     this.credential = new Credential(config);
+    this.stale = new StaleTracker(config.invalidation());
   }
 
   /** Runs one call: its answer, its error status included; every other failure throws. */
@@ -33,5 +35,9 @@ final class Exchange {
 
   Credential credential() {
     return credential;
+  }
+
+  StaleTracker stale() {
+    return stale;
   }
 }

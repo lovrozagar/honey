@@ -6,12 +6,15 @@
  * when it collides with a keyword, a literal, a runtime or client type, or a type the emitted and runtime text
  * spells; a collision is `<Name>Model`, and an unspelled `java.lang` name is kept.
  */
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import { schemaToIR } from "../../ir/schema.ts"
 import { declares, javaTypeContext, javaTypeOf } from "./models.ts"
+import { spelledIn } from "./models-names.ts"
 import { generateJavaSdk } from "./sdk.ts"
+import { FIXTURES } from "./__fixtures__/documents.ts"
+import { importsOf } from "./sdk-models.ts"
 
 type Json = Record<string, unknown>
 
@@ -232,6 +235,20 @@ describe("names: a type name is reserved only where it collides (B3, refined)", 
 			expect(nameOf(name)).toBe(name)
 		},
 	)
+
+	it("reads the code after a string holding //, which opens no comment", () => {
+		expect(spelledIn('URI u = URI.create("http://x"); Thread t = null;')).toEqual(["URI", "URI", "Thread"])
+	})
+
+	it("reads no type name out of a char or string literal, nor out of a comment", () => {
+		expect(
+			spelledIn("boolean f(char c) { return c >= 'A' && c <= 'Z' || c == '\\'' || s == \"Pet\"; } // Integer"),
+		).toEqual([])
+	})
+
+	it("imports a type spelled between two comments that each hold a quote: neither quote opens a string", () => {
+		expect(importsOf('/** a "b */ Map<String, String> m; /** c" */')).toEqual(["import java.util.Map;"])
+	})
 })
 
 describe("names: claims and hoists never merge", () => {
@@ -257,38 +274,46 @@ describe("names: claims and hoists never merge", () => {
 	})
 })
 
-/* the code text a scan reads: no comments, no string contents */
-const codeOf = (code: string) =>
-	code
-		.replace(/\/\*[\s\S]*?\*\//g, "")
-		.replace(/\/\/.*$/gm, "")
-		.replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+/* the runtime's own sources, read on every run: every .java file of src/runtime/java, the set javaNames scans */
+const RUNTIME = new URL("../../runtime/java/", import.meta.url)
+const runtimeFiles = (): string[] => readdirSync(RUNTIME).filter((file) => file.endsWith(".java"))
 
-/* the types a text spells: each imported type by its simple name, and each capitalized identifier that is not a member access */
-const spelled = (code: string): string[] => {
-	const text = codeOf(code)
-	const imported = [...text.matchAll(/^import [\w.]*\.(\w+);/gm)].map((match) => match[1] as string)
-	const bare = [...text.matchAll(/(?<![.\w])[A-Z][A-Za-z0-9]*\b/g)].map((match) => match[0])
-	return [...new Set([...imported, ...bare])]
-}
-
-/* the runtime's own sources, read on every run: the same set step 2 scans */
-const runtimeText = (): string[] =>
-	["Transport.java"].map((file) => readFileSync(new URL(`../../runtime/java/${file}`, import.meta.url), "utf8"))
+/* the types each SDK declares itself, by file: its models and its op types claim their names in the scope */
+const declaredBy = (files: Record<string, string>): string[] =>
+	Object.keys(files)
+		.filter((path) => path.endsWith(".java"))
+		.map((path) => path.slice(path.lastIndexOf("/") + 1, -".java".length))
 
 describe("names: SPELLED is derived by a scan of the emitted client and the runtime", () => {
-	it("reserves every type name the emitted client and the runtime spell, by scan", () => {
-		const client = Object.entries(generateJavaSdk(ZERO).files)
-			.filter(([path]) => path.endsWith(".java"))
-			.map(([, text]) => text)
-		const names = [...new Set([...client, ...runtimeText()].flatMap(spelled))].sort()
+	it("reserves every type name the emitted clients and every runtime file spell, by scan, ops and response headers included", () => {
+		const sdks = [generateJavaSdk(ZERO).files, generateJavaSdk(FIXTURES.http.document()).files]
+		const runtime = runtimeFiles()
+		const own = new Set(sdks.flatMap(declaredBy).filter((name) => !runtime.includes(`${name}.java`) && name !== CLIENT))
+		const texts = [
+			...sdks
+				.flatMap((files) => Object.entries(files).filter(([path]) => path.endsWith(".java")))
+				.map(([, text]) => text),
+			...runtime.map((file) => readFileSync(new URL(file, RUNTIME), "utf8")),
+		]
+		const names = [...new Set(texts.flatMap(spelledIn))].filter((name) => !own.has(name)).sort()
 		const ir = toIR(doc(Object.fromEntries(names.map((name) => [name, OBJECT]))))
 		const scope = javaTypeContext(ir, [CLIENT]).names
 		const renamed = Object.fromEntries(names.map((name) => [name, scope.ref(name)]))
 		expect(renamed).toEqual(Object.fromEntries(names.map((name) => [name, `${name}Model`])))
 		expect(names).toEqual(
-			expect.arrayContaining(["AnyrowClient", "Builder", "IllegalStateException", "String", "Transport", "URI"]),
+			expect.arrayContaining([
+				"AnyrowClient",
+				"Builder",
+				"Deadline",
+				"Hops",
+				"IllegalStateException",
+				"StaleTracker",
+				"String",
+				"Transport",
+				"URI",
+			]),
 		)
+		expect([...own]).toEqual(expect.arrayContaining(["ItemsGetHeaders", "ItemsGetParams", "ItemsResource"]))
 	})
 })
 

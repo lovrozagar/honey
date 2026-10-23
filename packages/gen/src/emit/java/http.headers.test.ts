@@ -101,6 +101,41 @@ describe.skipIf(!JAVA)("a request hook's header: one value per name, whatever it
 			observed: [null],
 		})
 	})
+
+	/* new: the JDK's builder refuses every other control character with a raw IllegalArgumentException that quotes the
+	 * value; the SDK's ConfigException names the header and carries neither the value nor that refusal */
+	it.each(["a\u0001b", "a\u007fb"])(
+		"refuses a hook's value %j as ConfigException, the value nowhere in it, nothing sent",
+		async (value) => {
+			const { hops, run } = await drive([], [ECHO], {}, setHeader("X-Bad", value))
+			expect(JSON.stringify(run.trace?.calls[0]?.error)).not.toContain(JSON.stringify(value).slice(1, -1))
+			expect({ error: run.trace?.calls[0]?.error, hops: hops.length, observed: run.observed }, run.stderr).toEqual({
+				error: plain({
+					chain: ["ConfigException", "HoneyException"],
+					text: "the X-Bad header cannot be sent",
+					type: "ConfigException",
+				}),
+				hops: 0,
+				observed: [null],
+			})
+		},
+	)
+})
+
+describe.skipIf(!JAVA)("a header name the JDK refuses: the SDK's ConfigException, never the JDK's", SLOW, () => {
+	/* new: a per-call header named outside the token grammar is refused by name before anything is sent */
+	it("refuses a per-call header named 'bad name' as ConfigException, nothing sent", async () => {
+		const { hops, run } = await drive([], [{ ...ECHO, headers: { "bad name": "x" } }], {}, {})
+		expect({ error: run.trace?.calls[0]?.error, hops: hops.length, observed: run.observed }, run.stderr).toEqual({
+			error: plain({
+				chain: ["ConfigException", "HoneyException"],
+				text: "the bad name header cannot be sent",
+				type: "ConfigException",
+			}),
+			hops: 0,
+			observed: [null],
+		})
+	})
 })
 
 describe.skipIf(!JAVA)("a per-call header: it replaces the config's of any case, one line", SLOW, () => {

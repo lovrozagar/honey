@@ -56,9 +56,16 @@ function selectedBy(union: Discriminated, at: JavaTypeContext): Selected[] {
 		.sort((a, b) => compareCodeUnits(firstValue(a), firstValue(b)))
 }
 
+/* google-java-format's line width */
+const WIDTH = 100
+
 /** A wrapper record holding its payload as `@JsonValue`, implementing its union. */
-const wrapperText = (wrapper: string, union: string, payload: string) =>
-	`@JsonDeserialize\npublic record ${wrapper}(@JsonValue ${payload} value) implements ${union} {}`
+function wrapperText(wrapper: string, union: string, payload: string): string {
+	const header = `public record ${wrapper}(@JsonValue ${payload} value)`
+	const one = `${header} implements ${union} {}`
+	/* past 100 columns google-java-format breaks before `implements`, indented four */
+	return `@JsonDeserialize\n${one.length <= WIDTH ? one : `${header}\n    implements ${union} {}`}`
+}
 
 /** Each selectable variant's payload, wrapper and selecting values; the wrappers are declared here. */
 function dispatchOf(name: string, union: Discriminated, scope: UnionScope): Dispatch[] {
@@ -73,9 +80,6 @@ function dispatchOf(name: string, union: Discriminated, scope: UnionScope): Disp
 		return { payload, values, wrapper }
 	})
 }
-
-/* google-java-format's line width */
-const WIDTH = 100
 
 /**
  * The sealed interface's header lines as google-java-format writes them: one line when it fits; else `permits`

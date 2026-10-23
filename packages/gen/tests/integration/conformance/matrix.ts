@@ -23,7 +23,7 @@ export type Auth =
 export type Setup = {
 	readonly auth?: Auth
 	readonly headers?: Readonly<Record<string, string>>
-	readonly redirect?: "follow" | "same-origin"
+	readonly redirect?: "follow" | "none" | "same-origin"
 	readonly timeoutMs?: number
 }
 export type Body =

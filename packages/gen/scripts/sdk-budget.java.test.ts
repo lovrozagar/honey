@@ -29,9 +29,25 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *   - auth, 1,442 B: Credential, the token and its single-flight refresh;
  *   - hooks and the log, 6,434 B: Hooks 1,338, RequestContext 1,506, ResponseContext 1,191, RequestHook 314 and
  *     ResponseHook 338, the hooks and what they may change; CallLog 1,382 and LogEntry 365, the log lines.
+ * - phase c2, +28,805 B to 80,766 B measured, the ceiling 80,800 B; nothing dead to cut (every member is reached by
+ *   the exchange or an emitted call, the five-argument Operation constructor keeps every c1 operation's bytes):
+ *   - stale tracking, 13,365 B, a baseline exchange feature at sibling parity (shipped with every operation SDK):
+ *     StaleTracker 8,782, the bounded, lapsing marks and their O(1) lookup; InvalidationConfig 2,175, its config;
+ *     StaleMeta 505; the selector, isStale and invalidatedBy on RequestContext 562 and ResponseContext 562; the
+ *     invalidates targets on Operation 266; the tracker on Exchange 142 and its config on ClientConfig 371;
+ *   - redirects, 4,918 B: Redirects 4,237, the follow policy, the 303 rewrite, the body resend and the cross-origin
+ *     strip; RedirectPolicy 402; its config on ClientConfig 279;
+ *   - the bounded decode, 4,850 B: Decode 4,358, gzip and deflate counted against maxResponseBytes in 64 KiB reads
+ *     before the one exact array, under the deadline; its config and 100 MiB default on ClientConfig 492;
+ *   - the hops, +3,448 B net: Hops 4,325, the request built and checked per hop (a JDK header refusal is the SDK's
+ *     ConfigException) and sent under the one deadline, split from Flight (-877 B) so Flight runs the follow loop;
+ *   - the deadline, 1,052 B: Deadline, the call's one bound, checked before each hop and in the decode, expiring as
+ *     ApiTimeoutException;
+ *   - typed response headers, 1,164 B: Answer's header reader and its strict boolean parse;
+ *   - UrlQuery +8 B: google-java-format's re-wrap of one doc comment.
  * Each later phase raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 51961
+const JAVA_RUNTIME_BYTES = 80800
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

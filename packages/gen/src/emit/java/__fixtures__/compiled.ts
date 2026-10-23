@@ -126,20 +126,36 @@ function compiled(dir: string, classpath: readonly string[]): Javac {
 	return result
 }
 
-/** The driver `source` as class `main`, compiled under `dir/driver` against `out` and `classpath`; null when it does not compile. */
+/**
+ * The driver `source` as class `main`, compiled once under `dir/programs/<hash of main and source>` against `out` and
+ * `classpath`; its diagnostics and status when it does not compile. Each program has its own directory, built in a
+ * private sibling and renamed into place, so concurrent tests running programs against one SDK never clobber one
+ * another's sources or classes. A lost rename keeps the winner's.
+ */
 function prepared(dir: string, classpath: readonly string[], main: string, source: string): JavaRun | Compiled {
-	const root = join(dir, "driver")
-	const path = join(root, "src", `${main.replaceAll(".", "/")}.java`)
-	const out = join(root, "out")
-	rmSync(root, { force: true, recursive: true })
-	mkdirSync(dirname(path), { recursive: true })
-	mkdirSync(out, { recursive: true })
-	writeFileSync(path, source)
+	const hash = createHash("sha256").update(`${main}\0${source}`).digest("hex").slice(0, 16)
+	const root = join(dir, "programs", hash)
 	const cp = [join(dir, "out"), ...classpath].join(":")
-	const javac = runJavac(21, ["--release", "17", "-Xlint:all", "-Werror", "-cp", cp, "-d", out, path], { cwd: dir })
-	const diagnostics = `${javac.stdout}${javac.stderr}`.split("\n").filter((line) => line.trim() !== "")
-	if (javac.status !== 0) return { diagnostics, status: javac.status ?? 1, stderr: "", stdout: "" }
-	return { cp: `${out}:${cp}`, dir, diagnostics, main }
+	if (!existsSync(join(root, "javac.json"))) {
+		const tmp = `${root}.${randomUUID()}`
+		const path = join(tmp, "src", `${main.replaceAll(".", "/")}.java`)
+		mkdirSync(dirname(path), { recursive: true })
+		mkdirSync(join(tmp, "out"), { recursive: true })
+		writeFileSync(path, source)
+		const javac = runJavac(21, ["--release", "17", "-Xlint:all", "-Werror", "-cp", cp, "-d", join(tmp, "out"), path], {
+			cwd: dir,
+		})
+		const diagnostics = `${javac.stdout}${javac.stderr}`.split("\n").filter((line) => line.trim() !== "")
+		writeFileSync(join(tmp, "javac.json"), JSON.stringify({ diagnostics, status: javac.status ?? 1 }))
+		try {
+			renameSync(tmp, root)
+		} catch {
+			rmSync(tmp, { force: true, recursive: true })
+		}
+	}
+	const javac = JSON.parse(readFileSync(join(root, "javac.json"), "utf8")) as { diagnostics: string[]; status: number }
+	if (javac.status !== 0) return { diagnostics: javac.diagnostics, status: javac.status, stderr: "", stdout: "" }
+	return { cp: `${join(root, "out")}:${cp}`, dir, diagnostics: javac.diagnostics, main }
 }
 
 /** A prepared driver: what javac made of it, and the classpath and directory a run takes. */

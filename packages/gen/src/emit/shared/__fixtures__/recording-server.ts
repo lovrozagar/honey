@@ -11,7 +11,8 @@ import { createHash } from "node:crypto"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
 import type { Duplex } from "node:stream"
-import { gzipSync } from "node:zlib"
+import { Readable } from "node:stream"
+import { messageOf, type Origins } from "./reply-body.ts"
 import { type SseScript, serveSse } from "./sse-steps.ts"
 import {
 	acceptUpgrade,
@@ -41,9 +42,10 @@ export type RecordedHop = {
 
 /**
  * One scripted answer: its status, at most one body (`json` with its content-type; `text` as given
- * and `bytes`, that many bytes `i & 0xff`, with none added), extra headers, a wait before answering
- * and a redirect target (`location`, on either listener). Every body goes out with its length; under
- * `gzip`, gzipped, with `content-encoding: gzip` and the encoded length. In place of a body: `sse`, an
+ * and `bytes`, that many bytes `i & 0xff`, streamed in chunks so the size is no heap's concern), extra headers, a
+ * wait before answering and a redirect target (`location`, on either listener). A body goes out with its length; under
+ * `gzip` or `deflate`, encoded, with `content-encoding` and the encoded length (a streamed body is chunked, unlengthed).
+ * In place of a body: `sse`, an
  * event stream under the status and headers, or `ws` (status 101), the upgrade accepted and the socket
  * scripted. In place of the wait: `afterLeft`, held until hop `stream`'s client left it or `withinMs`
  * passed, `seen` told which came first (gone.ts).
@@ -51,8 +53,11 @@ export type RecordedHop = {
 export type Reply = {
 	readonly afterLeft?: AfterLeft
 	readonly bytes?: number
+	readonly deflate?: true
 	readonly delayMs?: number
 	readonly gzip?: true
+	/** bytes already gzip-coded by the caller, sent as they are: a large answer encoded outside any timed window */
+	readonly gzipped?: Buffer
 	readonly headers?: Readonly<Record<string, string>>
 	readonly json?: Json
 	readonly redirect?: { readonly origin: RecordedHop["origin"]; readonly path: string }
@@ -86,9 +91,6 @@ export type RecordingServer = {
 	readonly streams: readonly (StreamRecord | undefined)[]
 	readonly url: string
 }
-
-/** Both listeners' origins, by the name a hop and a redirect give them. */
-type Origins = Readonly<Record<RecordedHop["origin"], string>>
 
 /** A request's body as a hop records it: its media type, size, digest, and its JSON when it parses. */
 function bodyOf(bytes: Buffer, contentType: string | undefined): RecordedHop["body"] {
@@ -126,23 +128,6 @@ function hopOf(req: IncomingMessage, bytes: Buffer, origin: RecordedHop["origin"
 	}
 }
 
-/** The reply's body and the headers it implies: JSON with its content-type, text or bytes as they are. */
-function payloadOf(reply: Reply): [Buffer | string, Record<string, string>] {
-	if (reply.json !== undefined) return [JSON.stringify(reply.json), { "content-type": "application/json" }]
-	if (reply.bytes !== undefined) return [Buffer.from(Array.from({ length: reply.bytes }, (_, i) => i & 0xff)), {}]
-	return [reply.text ?? "", {}]
-}
-
-/** The reply's body and every header it goes out with: its length, the implied ones, its encoding, a redirect's. */
-function messageOf(reply: Reply, origins: Origins): [Buffer | string, Record<string, string>] {
-	const [payload, implied] = payloadOf(reply)
-	const body = reply.gzip ? gzipSync(payload) : payload
-	const length = { "content-length": String(Buffer.byteLength(body)) }
-	const encoding = reply.gzip && { "content-encoding": "gzip" }
-	const location = reply.redirect && { location: `${origins[reply.redirect.origin]}${reply.redirect.path}` }
-	return [body, { ...length, ...implied, ...encoding, ...location, ...reply.headers }]
-}
-
 /** Answer `res` with `reply`, unless the client already went away; the stream it opened, if any. */
 function answer(res: ServerResponse, reply: Reply, origins: Origins, stage: Stage): StreamRecord | undefined {
 	if (res.destroyed) return undefined
@@ -154,7 +139,8 @@ function answer(res: ServerResponse, reply: Reply, origins: Origins, stage: Stag
 	}
 	const [body, headers] = messageOf(reply, origins)
 	res.writeHead(reply.status, headers)
-	res.end(body)
+	if (body instanceof Readable) body.pipe(res)
+	else res.end(body)
 	return undefined
 }
 
@@ -164,7 +150,8 @@ function upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, at: Answeri
 	if (reply.ws !== undefined) return acceptUpgrade(req, socket, head, { headers: reply.headers, stage, ws: reply.ws })
 	if (reply.sse !== undefined) stage.violation(`${req.method} ${req.url}: an sse reply to an upgrade request`)
 	const [body, headers] = messageOf(reply, origins)
-	refuseUpgrade(socket, reply.status, headers, body)
+	if (body instanceof Readable) stage.violation(`${req.method} ${req.url}: a streamed body to an upgrade request`)
+	refuseUpgrade(socket, reply.status, headers, body instanceof Readable ? "" : body)
 	return undefined
 }
 type Answering = { readonly origins: Origins; readonly reply: Reply; readonly stage: Stage }
@@ -175,8 +162,12 @@ type Answering = { readonly origins: Origins; readonly reply: Reply; readonly st
  */
 function checked(replies: readonly Reply[]): readonly Reply[] {
 	for (const [i, reply] of replies.entries()) {
-		const bodies = [reply.json, reply.text, reply.bytes, reply.sse, reply.ws].filter((body) => body !== undefined)
+		const bodies = [reply.json, reply.text, reply.bytes, reply.gzipped, reply.sse, reply.ws].filter(
+			(body) => body !== undefined,
+		)
 		if (bodies.length > 1) throw new Error(`reply ${i} names ${bodies.length} bodies; give at most one`)
+		if (reply.gzip !== undefined && reply.deflate !== undefined)
+			throw new Error(`reply ${i} names gzip and deflate; give one encoding`)
 		if (reply.ws !== undefined && reply.status !== 101)
 			throw new Error(`reply ${i} accepts a WebSocket with status 101`)
 		if (reply.afterLeft !== undefined && reply.delayMs !== undefined)

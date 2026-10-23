@@ -87,11 +87,18 @@ function bodyType(body: NonNullable<SdkOp["body"]>, op: SdkOp, ctx: JavaTypeCont
 	if (body.kind === "json" || body.kind === "form") return typeAt(body.schema, op, "Body", ctx)
 	if (body.kind === "text") return "String"
 	if (body.kind === "binary") return "BinaryBody"
-	return `${javaTypeName(op.id)}Body`
+	return opTypeName(op, "Body", ctx)
 }
 
+/**
+ * The operation's own `<Op><Kind>` type, claimed from the model scope after the components (C#'s order), so a component
+ * spelled the same keeps its name and this one is `…2`; one operation and kind, one name.
+ */
+export const opTypeName = (op: SdkOp, kind: "Body" | "Headers" | "Params", ctx: JavaTypeContext) =>
+	ctx.names.hoist(`op:${op.id}:${kind}`, `${javaTypeName(op.id)}${kind}`)
+
 /** The record's name: `<Op>Params`. */
-export const paramsName = (op: SdkOp) => `${javaTypeName(op.id)}Params`
+export const paramsName = (op: SdkOp, ctx: JavaTypeContext) => opTypeName(op, "Params", ctx)
 
 /** Each multipart part as a record component: a file's `FilePart` or a list of them, a text part's type. */
 export function multipartRecord(
@@ -108,5 +115,5 @@ export function multipartRecord(
 			part.type === "file" ? (isArray(schema) ? "List<FilePart>" : "FilePart") : typeAt(schema, op, part.name, ctx)
 		return { field: scope.claim(javaIdentifier(part.name)), name: part.name, type }
 	})
-	return { components, name: `${javaTypeName(op.id)}Body` }
+	return { components, name: opTypeName(op, "Body", ctx) }
 }

@@ -9,8 +9,9 @@ import { methodsOf, namespacesOf } from "../../ir/resource-tree.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { javaString } from "../shared/escape.ts"
 import { javaIdentifier, javaTypeName, NameScope } from "../shared/lang.ts"
+import type { JavaTypeContext } from "./models.ts"
 import { docOf } from "./sdk-decl.ts"
-import { sourceOf } from "./sdk-models.ts"
+import { putFile, sourceOf } from "./sdk-models.ts"
 import { type JavaOp, javaOp, type OpEnv } from "./sdk-op.ts"
 import type { JavaCallPlan } from "./sdk-plan.ts"
 
@@ -43,8 +44,12 @@ const RESERVED = [
 	"wait",
 ]
 
-/** The resource class of `path`: its words in PascalCase, then `Resource`. */
-export const resourceName = (path: readonly string[]) => `${javaTypeName(path.join("."))}Resource`
+/**
+ * The resource class of `path`: its words in PascalCase, then `Resource`, claimed from the model scope after the
+ * components (C#'s order), so a component spelled the same keeps its name and this one is `…2`; one path, one name.
+ */
+export const resourceName = (path: readonly string[], ctx: JavaTypeContext) =>
+	ctx.names.hoist(`resource:${JSON.stringify(path)}`, `${javaTypeName(path.join("."))}Resource`)
 
 function nodeOf(ns: IRNamespace, path: readonly string[]): Node {
 	return {
@@ -85,28 +90,30 @@ function trimmed(lines: readonly string[]): string[] {
 const opBlocks = (ops: readonly { readonly op: JavaOp }[]): string[][] =>
 	ops.map(({ op }) => [...op.lines, ...op.helper])
 
+/** A child node's resource class name, by its path: the name its own file declares. */
+const own = (child: Node, env: SurfaceEnv) => resourceName(child.path, env.ctx)
+
 /** A resource class's text: its constants, its exchange and child fields, its constructor, accessors and methods. */
 function resourceLines(node: Node, env: SurfaceEnv): string[] {
 	const { children, ops } = membersOf(node, env)
-	const own = (child: string) => resourceName([...node.path, child])
 	const constants = ops.map(({ op }) => op.constantLines)
 	return blocks([
-		[docOf(`The ${node.path.join(".")} operations.`, ""), `public final class ${resourceName(node.path)} {`],
+		[docOf(`The ${node.path.join(".")} operations.`, ""), `public final class ${resourceName(node.path, env.ctx)} {`],
 		constants.flat(),
-		["  private final Exchange exchange;", ...children.map(({ name }) => `  private final ${own(name)} ${name};`)],
 		[
-			`  ${resourceName(node.path)}(Exchange exchange) {`,
+			"  private final Exchange exchange;",
+			...children.map(({ child, name }) => `  private final ${own(child, env)} ${name};`),
+		],
+		[
+			`  ${resourceName(node.path, env.ctx)}(Exchange exchange) {`,
 			"    this.exchange = exchange;",
-			...children.map(({ name }) => `    this.${name} = new ${own(name)}(exchange);`),
+			...children.map(({ child, name }) => `    this.${name} = new ${own(child, env)}(exchange);`),
 			"  }",
 		],
-		...children.map(({ name }) => [`  public ${own(name)} ${name}() {`, `    return ${name};`, "  }"]),
+		...children.map(({ child, name }) => [`  public ${own(child, env)} ${name}() {`, `    return ${name};`, "  }"]),
 		...opBlocks(ops),
 	]).concat("}")
 }
-
-/** A resource class's type name for the accessor `child`. */
-const own = (child: string) => resourceName([child])
 
 /** One builder setter: its doc, its signature, and the config call it makes. */
 const setter = (name: string, type: string, call: string) => [
@@ -130,6 +137,9 @@ const SETTERS: readonly (readonly [string, string])[] = [
 	["onResponse", "ResponseHook"],
 	["onAuthExpired", "Supplier<String>"],
 	["onLog", "Consumer<LogEntry>"],
+	["redirect", "RedirectPolicy"],
+	["maxResponseBytes", "long"],
+	["invalidation", "InvalidationConfig"],
 ]
 
 /** The client: its constructor, its root resources, its ungrouped operations, and its builder. */
@@ -143,12 +153,15 @@ function clientLines(ir: IR, root: Node, env: SurfaceEnv): string[] {
 	]
 	return blocks([
 		[docOf("The client for the API. Build one with {@link #builder()}.", ""), `public final class ${env.client} {`],
-		["  private final Exchange exchange;", ...children.map(({ name }) => `  private final ${own(name)} ${name};`)],
+		[
+			"  private final Exchange exchange;",
+			...children.map(({ child, name }) => `  private final ${own(child, env)} ${name};`),
+		],
 		ops.flatMap(({ op }) => op.constantLines),
 		[
 			`  private ${env.client}(ClientConfig config) {`,
 			"    this.exchange = new Exchange(config);",
-			...children.map(({ name }) => `    this.${name} = new ${own(name)}(exchange);`),
+			...children.map(({ child, name }) => `    this.${name} = new ${own(child, env)}(exchange);`),
 			"  }",
 		],
 		[
@@ -157,7 +170,7 @@ function clientLines(ir: IR, root: Node, env: SurfaceEnv): string[] {
 			"    return new Builder();",
 			"  }",
 		],
-		...children.map(({ name }) => [`  public ${own(name)} ${name}() {`, `    return ${name};`, "  }"]),
+		...children.map(({ child, name }) => [`  public ${own(child, env)} ${name}() {`, `    return ${name};`, "  }"]),
 		...opBlocks(ops),
 		[
 			`  /** Builds an {@link ${env.client}}. */`,
@@ -188,8 +201,9 @@ function visit(
 	const { children, ops } = membersOf(node, env)
 	for (const { name, op } of ops) {
 		out.plans.push({ ...op.plan, accessors, method: name })
-		out.files[`${op.plan.params}.java`] = recordSource(op.params, env)
-		if (op.body !== null) out.files[`${op.plan.params.replace(/Params$/, "Body")}.java`] = recordSource(op.body, env)
+		putFile(out.files, `${op.plan.params}.java`, recordSource(op.params, env))
+		if (op.headers !== null) putFile(out.files, `${op.headers.type}.java`, recordSource(op.headers.lines, env))
+		if (op.body !== null) putFile(out.files, `${op.body.name}.java`, recordSource(op.body.lines, env))
 	}
 	for (const { child, name } of children) visit(child, [...accessors, name], env, out)
 }
@@ -205,10 +219,11 @@ export function surfaceOf(ir: IR, env: SurfaceEnv): { files: Record<string, stri
 	const out: { files: Record<string, string>; plans: JavaCallPlan[] } = { files: {}, plans: [] }
 	visit(root, [], env, out)
 	const walk = (node: Node) => {
-		if (node.path.length > 0) out.files[`${resourceName(node.path)}.java`] = recordSource(resourceLines(node, env), env)
+		if (node.path.length > 0)
+			putFile(out.files, `${resourceName(node.path, env.ctx)}.java`, recordSource(resourceLines(node, env), env))
 		for (const child of node.children) walk(child.node)
 	}
 	walk(root)
-	out.files[`${env.client}.java`] = recordSource(clientLines(ir, root, env), env)
+	putFile(out.files, `${env.client}.java`, recordSource(clientLines(ir, root, env), env))
 	return out
 }

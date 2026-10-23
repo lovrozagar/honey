@@ -21,7 +21,8 @@ A first-class Java SDK emitter + vendored runtime in `gen/emit/java/`. Java sour
 
 ## Security corpus
 - shared string-escape (F2); Jackson configured without polymorphic-deserialization gadgets.
-- `gen/emit/java/redirect.test.ts` — **`Authorization` (and configured headers) are dropped on a cross-origin redirect** (H18.10): `java.net.http.HttpClient` resends them by default, so the emitter must not follow cross-host redirects with auth attached. Part of the cross-SDK auth-on-redirect conformance case.
+- `gen/emit/java/redirect.test.ts` — **`Authorization` (and configured headers) are dropped on a cross-origin redirect** (H18.10): `java.net.http.HttpClient`'s `Redirect.NORMAL` drops `Authorization` but resends every configured header (`X-Api-Key`, `Cookie`), so the SDK owns the follow loop (`Redirect.NEVER`) and keeps only the safe set (Accept, Accept-Language, User-Agent) once a hop crosses origins; the kill leg asserts the configured header, not `Authorization` alone.
+- `gen/emit/java/http.stale.test.ts` — stale tracking (contract 47 §5.7: `x-invalidate`, the stale window, `staleMaxEntries`, `maxSourcesPerTarget`) at sibling parity, always shipped with the exchange; the O(1) selector lookup is proven against the O(n) exact-key-scan mutant by in-process CPU time (added at c2: the four siblings ship it and the grid is complete-or-red). Part of the cross-SDK auth-on-redirect conformance case.
 
 ## Budget
 - token: per-operation size within budget.

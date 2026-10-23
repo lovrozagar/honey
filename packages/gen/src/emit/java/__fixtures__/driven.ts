@@ -10,6 +10,8 @@ import { type CompiledJavaSdk, compiledJavaSdk } from "./compiled.ts"
 import { driverClasses } from "./driver-build.ts"
 import { FIXTURES, type FixtureKey, type JavaFixture } from "./documents.ts"
 import { execJava } from "./java-env.ts"
+import { writeFileSync } from "node:fs"
+import { join } from "node:path"
 
 /** What `runCalls` takes: a grid Cell, or just its calls and setup (the grid's types stay in tests/, out of src's reach). */
 export type DriverCell = { readonly calls: readonly { readonly operation: string }[]; readonly setup?: object }
@@ -26,13 +28,27 @@ export type DrivenJavaSdk = CompiledJavaSdk & {
 	/** the SDK's javac diagnostics, empty when it builds */
 	readonly built: boolean
 	readonly diagnostics: readonly string[]
-	/** run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given */
+	/**
+	 * run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given, with
+	 * `jvmArgs` on the JVM's command line. `probe` runs the probe class instead of the driver: the driver's run, then the
+	 * process-global `jdk.httpclient.allowRestrictedHeaders` reported on stderr after it (`honey-probe …=`).
+	 */
 	runCalls(
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly url: string },
-		run?: { readonly script?: Script },
+		run?: { readonly script?: Script; readonly jvmArgs?: readonly string[]; readonly probe?: true },
 	): Promise<DriverRun & { readonly trace?: Trace<JavaError> }>
 }
+
+/** The probe: the Driver under a shutdown hook that reports the process-global restricted-header property (Qc6). */
+const PROBE = `public final class Probe {
+  public static void main(String[] args) throws Exception {
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> System.err.println(
+        "honey-probe allowRestrictedHeaders=" + System.getProperty("jdk.httpclient.allowRestrictedHeaders"))));
+    Driver.main(args);
+  }
+}
+`
 
 /** The client class's simple name and its package, read from the emitted sources (the one holding `builder()`). */
 function clientOf(files: Readonly<Record<string, string>>): { client: string; pkg: string } {
@@ -72,7 +88,10 @@ function drivenFixture(fixture: JavaFixture): DrivenJavaSdk {
 				sdk: { client, package: pkg },
 			}
 			const classes = driverClasses(sdk.classpath)
-			const ran = await execJava(21, ["-cp", [classes, sdk.out, ...sdk.classpath].join(":"), "Driver"], {
+			const main = opts.probe === true ? join(sdk.dir, "Probe.java") : "Driver"
+			if (opts.probe === true) writeFileSync(main, PROBE)
+			const cp = [classes, sdk.out, ...sdk.classpath].join(":")
+			const ran = await execJava(21, [...(opts.jvmArgs ?? []), "-cp", cp, main], {
 				cwd: sdk.dir,
 				input: JSON.stringify(envelope),
 			})

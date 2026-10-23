@@ -3,7 +3,17 @@ package honey.runtime;
 
 /** One operation's fixed description: its path params by spec name in path order. */
 record Operation(
-    String method, String template, String[] names, String accept, boolean idempotent) {
+    String method,
+    String template,
+    String[] names,
+    String accept,
+    boolean idempotent,
+    String[] invalidates) {
+  /** An operation with no x-invalidate targets. */
+  Operation(String method, String template, String[] names, String accept, boolean idempotent) {
+    this(method, template, names, accept, idempotent, new String[0]);
+  }
+
   /** The route as the log and the errors name it: {@code METHOD /template}. */
   String route() {
     return method + " " + template;

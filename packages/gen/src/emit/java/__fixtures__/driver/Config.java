@@ -20,14 +20,14 @@ final class Config {
     Class<?> client = sdk.type(Wire.text(target, "client"));
     Object builder = Reflect.invokeStatic(client, "builder");
     Reflect.call(builder, "baseUrl", Wire.text(envelope, "base"));
-    setup(builder, Wire.member(Wire.member(envelope, "cell"), "setup"));
+    setup(sdk, builder, Wire.member(Wire.member(envelope, "cell"), "setup"));
     if (script != null) {
       scripted(sdk, builder, script, recorder);
     }
     return Reflect.call(builder, "build");
   }
 
-  private static void setup(Object builder, JsonNode setup) {
+  private static void setup(Sdk sdk, Object builder, JsonNode setup) {
     if (setup == null) {
       return;
     }
@@ -47,6 +47,29 @@ final class Config {
     if (timeout != null) {
       Reflect.call(builder, "timeout", Duration.ofMillis(timeout.asLong()));
     }
+    JsonNode redirect = Wire.member(setup, "redirect");
+    if (redirect != null) {
+      Reflect.call(builder, "redirect", redirectPolicy(sdk, Wire.text(setup, "redirect")));
+    }
+  }
+
+  /**
+   * The SDK's RedirectPolicy constant for a setup's redirect name, which Protocol has already
+   * named.
+   */
+  private static Object redirectPolicy(Sdk sdk, String name) {
+    String constant =
+        switch (name) {
+          case "follow" -> "ALL";
+          case "same-origin" -> "SAME_ORIGIN";
+          default -> "NONE";
+        };
+    for (Object value : sdk.type("RedirectPolicy").getEnumConstants()) {
+      if (((Enum<?>) value).name().equals(constant)) {
+        return value;
+      }
+    }
+    throw new DriverException("the SDK has no RedirectPolicy." + constant);
   }
 
   /** The script's config, hooks, log and refresh, each installed only when the script names it. */
@@ -55,6 +78,14 @@ final class Config {
     if (config != null) {
       optional(builder, "authHeaderName", Wire.text(config, "authHeaderName"));
       optional(builder, "authHeaderPrefix", Wire.text(config, "authHeaderPrefix"));
+      JsonNode cap = Wire.member(config, "maxResponseBytes");
+      if (cap != null) {
+        Reflect.call(builder, "maxResponseBytes", cap.asLong());
+      }
+      JsonNode invalidation = Wire.member(config, "invalidation");
+      if (invalidation != null) {
+        Reflect.call(builder, "invalidation", invalidation(sdk, invalidation));
+      }
     }
     JsonNode hooks = Wire.member(script, "hooks");
     if (hooks != null) {
@@ -69,6 +100,21 @@ final class Config {
       Consumer<Object> logger = recorder::log;
       Reflect.call(builder, "onLog", logger);
     }
+  }
+
+  /** The script's invalidation config: its stale time, and each cap the script names. */
+  private static Object invalidation(Sdk sdk, JsonNode spec) {
+    Object config = Reflect.invokeStatic(sdk.type("InvalidationConfig"), "builder");
+    Reflect.call(config, "staleTime", Duration.ofMillis(spec.get("staleTimeMs").asLong()));
+    JsonNode entries = Wire.member(spec, "staleMaxEntries");
+    if (entries != null) {
+      Reflect.call(config, "staleMaxEntries", entries.asInt());
+    }
+    JsonNode sources = Wire.member(spec, "maxSourcesPerTarget");
+    if (sources != null) {
+      Reflect.call(config, "maxSourcesPerTarget", sources.asInt());
+    }
+    return Reflect.call(config, "build");
   }
 
   private static void optional(Object builder, String name, String value) {

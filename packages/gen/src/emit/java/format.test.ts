@@ -9,7 +9,9 @@
 import { basename } from "node:path"
 import { describe, expect, it } from "vitest"
 import { compiledJavaSdk } from "./__fixtures__/compiled.ts"
+import { FIXTURES, type FixtureKey, type JavaFixture } from "./__fixtures__/documents.ts"
 import { withJava } from "./__fixtures__/java-env.ts"
+import { errors } from "../shared/__fixtures__/documents-http.ts"
 import { generateJavaSdk } from "./sdk.ts"
 
 type Json = Record<string, unknown>
@@ -68,6 +70,23 @@ describe.skipIf(!JAVA)("google-java-format --dry-run on the 21 pin: the emitted 
 		expect(compiledJavaSdk(withFile(TRANSPORT, indented)).format()).toEqual([FORMAT_PATH])
 	})
 })
+
+describe.skipIf(!JAVA)(
+	"google-java-format --dry-run on the error keys and the HTTP surface: the emitted SDK",
+	SLOW,
+	() => {
+		/* new: a 404 envelope's record component and the ErrorKey doc overflowed 100 columns, and GJF re-wrapped both */
+		it("lists nothing for the errors document, which declares the envelope and the ErrorKey file", () => {
+			expect(compiledJavaSdk(generateJavaSdk(errors()).files).format()).toEqual([])
+		})
+
+		/* new: a signature, a record header's implements and a switch arm past 100 columns each stayed on one line */
+		it.each(Object.keys(FIXTURES) as FixtureKey[])("lists nothing for the %s fixture SDK", (key) => {
+			const fixture: JavaFixture = FIXTURES[key]
+			expect(compiledJavaSdk(generateJavaSdk(fixture.document(), fixture.options).files).format()).toEqual([])
+		})
+	},
+)
 
 describe.skipIf(!JAVA)("one offline Gradle build of the emitted SDK", SLOW, () => {
 	it("succeeds, and leaves no Gradle daemon alive, checked by command line", () => {

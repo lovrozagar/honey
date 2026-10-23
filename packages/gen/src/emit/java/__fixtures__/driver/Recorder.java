@@ -62,7 +62,7 @@ final class Recorder {
    */
   void request(int index, JsonNode entry, Object context) {
     String url = Reflect.call(context, "url").toString();
-    ObjectNode seen = hookOf("request", index, Reflect.call(context, "isRetry"));
+    ObjectNode seen = hookOf("request", index, context);
     seen.put("method", (String) Reflect.call(context, "method"));
     seen.put("path", URI.create(url).getRawPath());
     seen.put("url", url);
@@ -83,7 +83,7 @@ final class Recorder {
    * failure.
    */
   void response(int index, JsonNode entry, Object context) {
-    ObjectNode seen = hookOf("response", index, Reflect.call(context, "isRetry"));
+    ObjectNode seen = hookOf("response", index, context);
     seen.put("status", (Integer) Reflect.call(context, "status"));
     hooks.add(seen);
     String body = Wire.text(entry, "body");
@@ -125,15 +125,27 @@ final class Recorder {
     log.add(seen);
   }
 
-  private ObjectNode hookOf(String phase, int index, Object retry) {
+  /** A hook's trace; the stale view and the selector are the SDK's only when it ships stale tracking. */
+  private ObjectNode hookOf(String phase, int index, Object context) {
     ObjectNode seen = Wire.object();
     seen.put("call", current);
     seen.put("index", index);
-    seen.set("invalidatedBy", Wire.array());
-    seen.put("isRetry", (Boolean) retry);
-    seen.put("isStale", false);
+    seen.set("invalidatedBy", invalidatedBy(context));
+    seen.put("isRetry", (Boolean) Reflect.call(context, "isRetry"));
+    seen.put("isStale", Reflect.has(context, "isStale") && (Boolean) Reflect.call(context, "isStale"));
     seen.put("phase", phase);
-    seen.put("selector", operation);
+    seen.put("selector", Reflect.has(context, "selector") ? (String) Reflect.call(context, "selector") : operation);
     return seen;
+  }
+
+  /** The mutations that stale a hook's call, none when the SDK ships no stale tracking. */
+  private static ArrayNode invalidatedBy(Object context) {
+    ArrayNode by = Wire.array();
+    if (Reflect.has(context, "invalidatedBy")) {
+      for (Object source : (List<?>) Reflect.call(context, "invalidatedBy")) {
+        by.add((String) source);
+      }
+    }
+    return by;
   }
 }

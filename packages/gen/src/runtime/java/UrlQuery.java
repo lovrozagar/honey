@@ -83,7 +83,9 @@ final class UrlQuery {
     }
   }
 
-  /** Appends {@code value} with each byte but the letters, digits and {@code safe} percent-encoded. */
+  /**
+   * Appends {@code value} with each byte but the letters, digits and {@code safe} percent-encoded.
+   */
   static void escape(StringBuilder out, String value, String safe) {
     for (byte b : value.getBytes(StandardCharsets.UTF_8)) {
       char c = (char) (b & 0xFF);

@@ -21,7 +21,10 @@ final class Bind {
     JsonNode body = Wire.member(call, "body");
     JsonNode planBody = Wire.member(plan, "body");
     if (body != null && planBody != null) {
-      fields.put(Wire.text(planBody, "param"), body.get("value"));
+      boolean binary = "binary".equals(Wire.text(body, "kind"));
+      fields.put(
+          Wire.text(planBody, "param"),
+          binary ? Binary.marker(body, Wire.flag(entry, "oneShotBody")) : body.get("value"));
     }
     queryFields(plan, call, fields);
     for (var header : members(call, "headers")) {
@@ -62,7 +65,10 @@ final class Bind {
     Object builder = Reflect.invokeStatic(type, "builder");
     for (Map.Entry<String, JsonNode> field : fields.entrySet()) {
       Method setter = Reflect.method(builder.getClass(), field.getKey(), 1);
-      Object value = sdk.read(field.getValue(), setter.getGenericParameterTypes()[0]);
+      Object value =
+          field.getValue().has("binary")
+              ? Binary.body(sdk, field.getValue())
+              : sdk.read(field.getValue(), setter.getGenericParameterTypes()[0]);
       Reflect.call(builder, field.getKey(), value);
     }
     return Reflect.call(builder, "build");

@@ -2,6 +2,7 @@
 package honey.runtime;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -17,6 +18,7 @@ public final class RequestContext {
   private byte[] body;
 
   private final boolean retry;
+  private StaleMeta meta = StaleMeta.NONE;
 
   RequestContext(String method, URI url, byte[] body, boolean retry) {
     this.method = method;
@@ -28,6 +30,25 @@ public final class RequestContext {
   /** Whether this attempt replays the call after OnAuthExpired refreshed its token. */
   public boolean isRetry() {
     return retry;
+  }
+
+  /** The stale tracker's key, {@code METHOD /path}; empty when stale tracking is off. */
+  public String selector() {
+    return meta.selector();
+  }
+
+  /** Whether a mutation marked this call's selector stale. */
+  public boolean isStale() {
+    return meta.isStale();
+  }
+
+  /** The selectors of the mutations that marked this call's selector stale. */
+  public List<String> invalidatedBy() {
+    return meta.invalidatedBy();
+  }
+
+  void staleness(StaleMeta meta) {
+    this.meta = meta;
   }
 
   /** The HTTP method. */

@@ -50,12 +50,14 @@ const SPELLED: readonly string[] = [
 	"URI",
 ]
 
-/* the code text a scan reads: no comments, no string contents */
-const codeOf = (code: string) =>
-	code
-		.replace(/\/\*[\s\S]*?\*\//g, "")
-		.replace(/\/\/.*$/gm, "")
-		.replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+/**
+ * The code text a scan reads: comments dropped and string and char literals emptied, in one left-to-right pass, so a
+ * `//` inside a string opens no comment and a quote inside a comment opens no string.
+ */
+export const codeOf = (code: string) =>
+	code.replace(/\/\*[\s\S]*?\*\/|\/\/.*$|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)'/gm, (token) =>
+		token.startsWith("/") ? "" : token[0] === '"' ? '""' : "''",
+	)
 
 /** The type names `code` spells: each imported type by its simple name, and each capitalized identifier that is not a member access. */
 export function spelledIn(code: string): string[] {

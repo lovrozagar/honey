@@ -29,5 +29,24 @@ export function assigned(indent: string, lhs: string, { items, prefix, suffix }:
 	return [`${indent}${lhs} =`, ...layout(prefix, items, suffix, `${indent}    `)]
 }
 
-/** A `/** … *\/` doc comment of one line at `indent`. */
-export const docOf = (text: string, indent = "  "): string => `${indent}/** ${text} */`
+/**
+ * A `/** … *\/` doc comment at `indent`: one line when it fits in 100 columns, else google-java-format's filled lines, each
+ * word on the first line it fits, after ` * `.
+ */
+export function docOf(text: string, indent = "  "): string {
+	const one = `${indent}/** ${text} */`
+	if (one.length <= WIDTH) return one
+	const available = WIDTH - indent.length - " * ".length
+	const lines: string[] = []
+	let line = ""
+	for (const word of text.split(/\s+/).filter((w) => w !== "")) {
+		if (line !== "" && line.length + 1 + word.length > available) {
+			lines.push(line)
+			line = word
+		} else {
+			line = line === "" ? word : `${line} ${word}`
+		}
+	}
+	lines.push(line)
+	return [`${indent}/**`, ...lines.map((l) => `${indent} * ${l}`), `${indent} */`].join("\n")
+}

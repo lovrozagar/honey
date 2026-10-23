@@ -25,6 +25,9 @@ final class ClientConfig {
   private final List<ResponseHook> onResponse;
   private final Supplier<String> onAuthExpired;
   private final Consumer<LogEntry> onLog;
+  private final RedirectPolicy redirect;
+  private final long maxResponseBytes;
+  private final InvalidationConfig invalidation;
 
   private ClientConfig(Builder builder) {
     this.baseUrl = builder.baseUrl;
@@ -37,6 +40,9 @@ final class ClientConfig {
     this.onResponse = List.copyOf(builder.onResponse);
     this.onAuthExpired = builder.onAuthExpired;
     this.onLog = builder.onLog;
+    this.redirect = builder.redirect;
+    this.maxResponseBytes = builder.maxResponseBytes;
+    this.invalidation = builder.invalidation;
   }
 
   /** Whether {@code url} is an absolute http(s) URL with a host. */
@@ -98,8 +104,24 @@ final class ClientConfig {
     return onLog;
   }
 
+  RedirectPolicy redirect() {
+    return redirect;
+  }
+
+  long maxResponseBytes() {
+    return maxResponseBytes;
+  }
+
+  /** The stale window of the x-invalidate targets, or null when off. */
+  InvalidationConfig invalidation() {
+    return invalidation;
+  }
+
   /** The config's builder: each setter replaces the one before it, hooks append. */
   static final class Builder {
+    /** The default cap on a decoded answer: 100 MiB. */
+    private static final long DEFAULT_MAX_RESPONSE_BYTES = 100L << 20;
+
     private final String server;
     private final String defaultHeader;
     private final String defaultPrefix;
@@ -117,6 +139,9 @@ final class ClientConfig {
     private String token;
     private String authHeader;
     private String authPrefix;
+    private RedirectPolicy redirect = RedirectPolicy.SAME_ORIGIN;
+    private long maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES;
+    private InvalidationConfig invalidation;
 
     private Builder(String server, String header, String prefix) {
       this.server = server;
@@ -166,6 +191,19 @@ final class ClientConfig {
 
     void onLog(Consumer<LogEntry> log) {
       this.onLog = log;
+    }
+
+    void redirect(RedirectPolicy value) {
+      this.redirect = value;
+    }
+
+    /** The cap on a decoded answer in bytes; 0 is none. */
+    void maxResponseBytes(long value) {
+      this.maxResponseBytes = value;
+    }
+
+    void invalidation(InvalidationConfig value) {
+      this.invalidation = value;
     }
 
     /** Builds the config: the base URL is required and must be absolute http(s). */

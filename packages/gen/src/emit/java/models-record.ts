@@ -66,24 +66,47 @@ function claimField(scope: NameScope, key: string): string {
 }
 
 /** One component: its annotations, then its type and name. */
-function component(field: IRField, name: string, member: Member, at: JavaTypeContext): string {
+type Component = { readonly annotations: string; readonly declaration: string }
+
+/** One component's text on a single line: its annotations, then its type and name. */
+const inline = ({ annotations, declaration }: Component): string => `${annotations} ${declaration}`
+
+/** One component: `@JsonProperty` with its inclusion rule, then its type as the field's shape decides. */
+function component(field: IRField, name: string, member: Member, at: JavaTypeContext): Component {
 	const type = member(field.schema, field.name)
 	const key = `@JsonProperty(${javaString(field.name)})`
 	const nullable = at.names.resolve(field.schema).kind === "nullable"
-	if (field.required) return `${key} ${PRIMITIVE[type] !== undefined && !nullable ? PRIMITIVE[type] : type} ${name}`
-	if (type === JSON_NODE) return `${key} ${NON_NULL} ${type} ${name}`
-	if (nullable) return `${key} ${NON_EMPTY} Opt<${type}> ${name}`
-	return `${key} ${NON_NULL} ${type} ${name}`
+	if (field.required) {
+		return {
+			annotations: key,
+			declaration: `${PRIMITIVE[type] !== undefined && !nullable ? PRIMITIVE[type] : type} ${name}`,
+		}
+	}
+	if (type === JSON_NODE) return { annotations: `${key} ${NON_NULL}`, declaration: `${type} ${name}` }
+	if (nullable) return { annotations: `${key} ${NON_EMPTY}`, declaration: `Opt<${type}> ${name}` }
+	return { annotations: `${key} ${NON_NULL}`, declaration: `${type} ${name}` }
+}
+
+/**
+ * One component on its own line, its last line closing the header. A line over 100 columns breaks after its annotations,
+ * the type and name at +8, as google-java-format does.
+ */
+function perLine(part: Component, last: boolean): string[] {
+	const tail = last ? ") {}" : ","
+	const line = `    ${inline(part)}${tail}`
+	if (line.length <= WIDTH) return [line]
+	return [`    ${part.annotations}`, `        ${part.declaration}${tail}`]
 }
 
 /** `public record <name>` of its components: one line when it fits, else broken after `(` as google-java-format does. */
-function recordText(name: string, components: readonly string[]): string {
+function recordText(name: string, components: readonly Component[]): string {
 	const head = `public record ${name}(`
-	const one = `${head}${components.join(", ")}) {}`
+	const joined = components.map(inline).join(", ")
+	const one = `${head}${joined}) {}`
 	if (components.length === 0 || one.length <= WIDTH) return one
-	const block = `    ${components.join(", ")}) {}`
+	const block = `    ${joined}) {}`
 	if (block.length <= WIDTH) return `${head}\n${block}`
-	return [head, ...components.map((c, i) => `    ${c}${i < components.length - 1 ? "," : ") {}"}`)].join("\n")
+	return [head, ...components.flatMap((c, i) => perLine(c, i === components.length - 1))].join("\n")
 }
 
 /** `public record <name>` of its fields in key order, then any map of the other members. */
@@ -92,6 +115,11 @@ export function recordDecl(name: string, { fields, open }: RecordShape, member: 
 	const components = [...fields]
 		.sort((a, b) => compareCodeUnits(a.name, b.name))
 		.map((field) => component(field, claimField(scope, field.name), member, at))
-	if (open) components.push(`@JsonAnySetter @JsonAnyGetter Map<String, ${JSON_NODE}> ${scope.claim("extra")}`)
+	if (open) {
+		components.push({
+			annotations: "@JsonAnySetter @JsonAnyGetter",
+			declaration: `Map<String, ${JSON_NODE}> ${scope.claim("extra")}`,
+		})
+	}
 	return recordText(name, components)
 }

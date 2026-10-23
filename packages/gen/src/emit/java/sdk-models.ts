@@ -5,6 +5,7 @@
  */
 import { compareCodeUnits } from "../shared/lang.ts"
 import { declares, type JavaTypeContext, javaTopLevel } from "./models.ts"
+import { codeOf } from "./models-names.ts"
 import type { IR } from "../../ir/model.ts"
 
 /* every type a model declaration may spell that java.lang does not hold, by its simple name */
@@ -29,13 +30,6 @@ const IMPORTS: Readonly<Record<string, string>> = {
 	Supplier: "java.util.function.Supplier",
 	TypeReference: "tools.jackson.core.type.TypeReference",
 }
-
-/** `text` without its string literals and comments: what its code spells. */
-const codeOf = (text: string): string =>
-	text
-		.replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
-		.replace(/\/\*[\s\S]*?\*\//g, "")
-		.replace(/\/\/.*$/gm, "")
 
 /** The import lines `decl` needs, sorted as google-java-format sorts them. */
 export function importsOf(decl: string): string[] {
@@ -64,6 +58,12 @@ export function componentDecls(ir: IR, ctx: JavaTypeContext): Map<string, string
 	/* a hoist claims its name from the same scope as the components, so it never repeats one */
 	for (const [name, decl] of ctx.decls) decls.set(name, decl)
 	return decls
+}
+
+/** `files` with `path` set to `text`; a second declaration of one path is a generator bug, never an overwrite. */
+export function putFile(files: Record<string, string>, path: string, text: string): void {
+	if (Object.hasOwn(files, path)) throw new Error(`two declarations claim ${path}`)
+	files[path] = text
 }
 
 /** The model files of `decls` under `dir`, in `packageName`, each behind `marker`. */

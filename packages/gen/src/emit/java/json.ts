@@ -11,12 +11,17 @@ export type Dispatch = { readonly values: readonly string[]; readonly wrapper: s
 /* a payload's erasure: `Class` takes no type arguments */
 const erased = (type: string) => type.replace(/<.*$/, "")
 
+/** One switch arm, `label -> value;`: one line when it fits 100 columns, else broken after `->` as google-java-format breaks it. */
+function arm(label: string, value: string): string[] {
+	const one = `        ${label} -> ${value};`
+	return one.length <= 100 ? [one] : [`        ${label} ->`, `            ${value};`]
+}
+
 /** One `case` arm per selecting value, in dispatch order. */
 const cases = (dispatch: readonly Dispatch[]): string[] =>
 	dispatch.flatMap(({ values, wrapper, payload }) =>
-		values.map(
-			(value) =>
-				`        case ${javaString(value)} -> new ${wrapper}(ctxt.readTreeAsValue(node, ${erased(payload)}.class));`,
+		values.flatMap((value) =>
+			arm(`case ${javaString(value)}`, `new ${wrapper}(ctxt.readTreeAsValue(node, ${erased(payload)}.class))`),
 		),
 	)
 
@@ -43,7 +48,7 @@ export function deserializerLines(
 		"      }",
 		"      return switch (value) {",
 		...cases(dispatch),
-		`        default -> new ${unknown}(node);`,
+		...arm("default", `new ${unknown}(node)`),
 		"      };",
 		"    }",
 		"  }",

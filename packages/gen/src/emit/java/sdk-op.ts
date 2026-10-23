@@ -10,7 +10,8 @@ import type { SdkOp } from "../../ir/sdk-model.ts"
 import { javaString } from "../shared/escape.ts"
 import { snakeWords } from "../shared/lang.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
-import { assigned, docOf } from "./sdk-decl.ts"
+import { assigned, docOf, layout } from "./sdk-decl.ts"
+import { type JavaHeaders, javaResponseHeaders } from "./sdk-headers.ts"
 import { multipartRecordLines, paramsRecord } from "./sdk-record.ts"
 import type { JavaCallPlan } from "./sdk-plan.ts"
 import { type Field, fieldsOf, multipartRecord, paramsName } from "./sdk-params.ts"
@@ -32,10 +33,12 @@ export type JavaOp = {
 	readonly lines: string[]
 	/** the `<Op>Params` record's lines */
 	readonly params: string[]
-	/** the `<Op>Body` record's lines, for a multipart body; null otherwise */
-	readonly body: string[] | null
+	/** the `<Op>Body` record's name and lines, for a multipart body; null otherwise */
+	readonly body: { readonly name: string; readonly lines: string[] } | null
 	/** the multipart helper's lines, for a multipart body; empty otherwise */
 	readonly helper: string[]
+	/** the `<Op>Headers` holder, for an operation whose 2xx responses declare headers; null otherwise */
+	readonly headers: JavaHeaders | null
 }
 
 const UNKNOWN: IRSchema = { kind: "unknown" }
@@ -125,31 +128,62 @@ function callLines(fields: readonly Field[], op: SdkOp): string[] {
 	]
 }
 
-/** The method's lines, both overloads, for the answer's reader. */
-function methodLines(op: SdkOp, name: string, fields: readonly Field[], env: OpEnv): string[] {
+/** One method's name, its fields, and the holder of its response headers when it declares any. */
+type MethodSite = { readonly name: string; readonly fields: readonly Field[]; readonly headers: JavaHeaders | null }
+
+/**
+ * The method's lines: `op(params)` and `op(params, options)` for every operation. An operation with response headers
+ * adds `op(params, headersInto, options)`, which fills `headersInto` from a 2xx before it reads the answer (null: none);
+ * its two shorter overloads delegate to it.
+ */
+function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
+	const { fields, headers, name } = site
 	const constant = constantOf(name)
 	const answer = answerOf(op, env)
 	const safe = !env.throwOnError
 	const isVoid = answer.type === "void" && !safe
 	const returns = safe ? `Result<${answer.type === "void" ? "Void" : answer.type}>` : answer.type
-	const params = paramsName(op)
+	const params = paramsName(op, env.ctx)
 	const reader = safe ? answer.safe : answer.reader
-	const delegate = isVoid ? `    ${name}(params, null);` : `    return ${name}(params, null);`
-	const run = `    Answer answer = exchange.run(${constant}, call, options);`
-	const finish = `    ${isVoid ? "" : "return "}answer.${reader};`
+	const ret = isVoid ? "" : "return "
+	const via = headers === null ? "" : ", null"
+	const fill =
+		headers === null
+			? []
+			: [
+					"    if (headersInto != null && answer.error() == null) {",
+					"      headersInto.read(answer.raw().headers());",
+					"    }",
+				]
+	const body = [
+		...callLines(fields, op),
+		`    Answer answer = exchange.run(${constant}, call, options);`,
+		...fill,
+		`    ${ret}answer.${reader};`,
+	]
+	const shorter = headers === null ? body : [`    ${ret}${name}(params, null, options);`]
+	/* an overload's signature, broken as google-java-format breaks one past 100 columns */
+	const signature = (args: readonly string[]) => layout(`public ${returns} ${name}(`, args, ") {", "  ")
 	return [
 		docOf(op.id),
-		`  public ${returns} ${name}(${params} params) {`,
-		delegate,
+		...signature([`${params} params`]),
+		`    ${ret}${name}(params, null${via});`,
 		"  }",
 		"",
 		docOf(op.id),
-		`  public ${returns} ${name}(${params} params, RequestOptions options) {`,
-		...callLines(fields, op),
-		run,
-		finish,
+		...signature([`${params} params`, "RequestOptions options"]),
+		...shorter,
 		"  }",
 		"",
+		...(headers === null
+			? []
+			: [
+					docOf(op.id),
+					...signature([`${params} params`, `${headers.type} headersInto`, "RequestOptions options"]),
+					...body,
+					"  }",
+					"",
+				]),
 	]
 }
 
@@ -163,6 +197,9 @@ function constantLines(op: SdkOp, constant: string): string[] {
 		`new String[] {${names.map((n) => javaString(n)).join(", ")}}`,
 		accept === undefined ? "null" : javaString(accept),
 		op.idempotent ? "true" : "false",
+		...(op.invalidates.length === 0
+			? []
+			: [`new String[] {${op.invalidates.map((target) => javaString(target)).join(", ")}}`]),
 	]
 	return assigned("  ", `private static final Operation ${constant}`, { items, prefix: "new Operation(", suffix: ");" })
 }
@@ -172,6 +209,7 @@ export function javaOp(op: SdkOp, name: string, env: OpEnv): JavaOp {
 	if (op.stream)
 		throw new Error(`${op.id}: the Java SDK emits no ${op.stream} operation until phase d, where streaming lands`)
 	const fields = fieldsOf(op, env.ctx)
+	const headers = javaResponseHeaders(op, env)
 	const constant = constantOf(name)
 	const multipart = op.body?.kind === "multipart" ? multipartRecord(op, op.body.parts, env.ctx, env.isArray) : null
 	const plan: Omit<JavaCallPlan, "accessors"> = {
@@ -183,21 +221,26 @@ export function javaOp(op: SdkOp, name: string, env: OpEnv): JavaOp {
 		method: name,
 		operation: op.id,
 		options: true,
-		params: paramsName(op),
+		params: paramsName(op, env.ctx),
 		path: fields.filter((f) => f.where === "path").map((f) => ({ name: f.name, param: f.field })),
 		query: Object.fromEntries(fields.filter((f) => f.where === "query").map((f) => [f.name, f.field])),
 		required: fields.filter((f) => f.required).map((f) => f.field),
 		response: op.success.kind,
+		responseHeaders: headers === null ? null : { fields: headers.fields, type: headers.type },
 		stream: op.stream ?? null,
 		throws: env.throwOnError,
 	}
 	return {
-		body: multipart === null ? null : multipartRecordLines(multipart.name, op.id, multipart.components),
+		body:
+			multipart === null
+				? null
+				: { lines: multipartRecordLines(multipart.name, op.id, multipart.components), name: multipart.name },
+		headers,
 		helper: multipartHelper(op, env),
 		constant,
 		constantLines: constantLines(op, constant),
-		lines: methodLines(op, name, fields, env),
-		params: paramsRecord(paramsName(op), op.id, fields),
+		lines: methodLines(op, { fields, headers, name }, env),
+		params: paramsRecord(paramsName(op, env.ctx), op.id, fields),
 		plan,
 	}
 }
