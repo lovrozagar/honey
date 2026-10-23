@@ -80,6 +80,28 @@ describe("the stream server: event streams", () => {
 })
 
 describe("the stream server: a bytes step", () => {
+	it.each(["gzip", "deflate"] as const)(
+		"sends a %s-encoded stream, each step sync-flushed: the event before a pause arrives decoded before it ends",
+		async (encoding) => {
+			const reply: Reply = {
+				sse: { encoding, end: "close", steps: ["data: a\n\n", { waitMs: 400 }, "data: b\n\n"] },
+				status: 200,
+			}
+			const [res, read] = await served([reply], async (server) => {
+				const start = Date.now()
+				const answered = await fetch(server.url)
+				return [answered, await chunksOf(answered, start)] as const
+			})
+			const early = read.chunks.filter((chunk) => chunk.at < 300).map((chunk) => chunk.text)
+			expect({
+				body: read.chunks.map((chunk) => chunk.text).join(""),
+				early: early.join(""),
+				encoding: res.headers.get("content-encoding"),
+				ended: read.ended,
+			}).toEqual({ body: "data: a\n\ndata: b\n\n", early: "data: a\n\n", encoding, ended: "end" })
+		},
+	)
+
 	it("writes a bytes step's base64 as the bytes it names: a UTF-8 sequence split across two writes", async () => {
 		const [head, tail] = [Buffer.from("data: \xc3", "latin1"), Buffer.from("\xa9\n\n", "latin1")]
 		const steps = [{ bytes: head.toString("base64") }, { waitMs: 50 }, { bytes: tail.toString("base64") }]

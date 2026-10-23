@@ -62,8 +62,7 @@ public final class Driver {
     } catch (DriverException e) {
       throw new DriverException("call " + index + " (" + op + "): " + e.getMessage());
     }
-    run.recorder()
-        .called((System.nanoTime() - started) / 1_000_000, outcome.error(), outcome.result());
+    run.recorder().called((System.nanoTime() - started) / 1_000_000, outcome);
     return outcome.observed() == null ? Wire.JSON.getNodeFactory().nullNode() : outcome.observed();
   }
 

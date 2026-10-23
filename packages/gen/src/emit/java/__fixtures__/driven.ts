@@ -30,13 +30,21 @@ export type DrivenJavaSdk = CompiledJavaSdk & {
 	readonly diagnostics: readonly string[]
 	/**
 	 * run `cell` on one client aimed at `origins.url` (`alt`: a call's other origin), under `script` when given, with
-	 * `jvmArgs` on the JVM's command line. `probe` runs the probe class instead of the driver: the driver's run, then the
+	 * `jvmArgs` on the JVM's command line, on the `jdk` release's java (21 by default; the SDK and the driver are
+	 * `--release 17`, so 17 and 25 run the same classes). `probe` runs the probe class instead of the driver: the driver's run, then the
 	 * process-global `jdk.httpclient.allowRestrictedHeaders` reported on stderr after it (`honey-probe …=`).
 	 */
 	runCalls(
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly url: string },
-		run?: { readonly script?: Script; readonly jvmArgs?: readonly string[]; readonly probe?: true },
+		run?: {
+			readonly script?: Script
+			readonly jvmArgs?: readonly string[]
+			readonly jdk?: 17 | 21 | 25
+			/** call plans laid over the emitter's: a refusal leg's hand-written ones, refused before the SDK loads */
+			readonly plans?: Readonly<Record<string, unknown>>
+			readonly probe?: true
+		},
 	): Promise<DriverRun & { readonly trace?: Trace<JavaError> }>
 }
 
@@ -83,7 +91,7 @@ function drivenFixture(fixture: JavaFixture): DrivenJavaSdk {
 				alt: origins.alt,
 				base: origins.url,
 				cell,
-				plans,
+				plans: { ...plans, ...opts.plans },
 				script: opts.script,
 				sdk: { client, package: pkg },
 			}
@@ -91,7 +99,7 @@ function drivenFixture(fixture: JavaFixture): DrivenJavaSdk {
 			const main = opts.probe === true ? join(sdk.dir, "Probe.java") : "Driver"
 			if (opts.probe === true) writeFileSync(main, PROBE)
 			const cp = [classes, sdk.out, ...sdk.classpath].join(":")
-			const ran = await execJava(21, [...(opts.jvmArgs ?? []), "-cp", cp, main], {
+			const ran = await execJava(opts.jdk ?? 21, [...(opts.jvmArgs ?? []), "-cp", cp, main], {
 				cwd: sdk.dir,
 				input: JSON.stringify(envelope),
 			})

@@ -14,5 +14,10 @@ record Call(String[] path, List<Arg> query, List<Arg> headers, Body body) {
     static Arg of(String name, Object value) {
       return new Arg(name, value == null ? null : Json.MAPPER.valueToTree(value));
     }
+
+    /** A stream cursor's arg: nothing sent when it is unset or empty. */
+    static Arg cursor(String name, String value) {
+      return of(name, value == null || value.isEmpty() ? null : value);
+    }
   }
 }

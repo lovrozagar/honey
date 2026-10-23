@@ -35,8 +35,11 @@ export type CompiledJavaSdk = {
 	readonly out: string
 	/** the driver `source`, class `main` (dotted), compiled against the SDK and run on the 21 JDK, synchronously */
 	run(main: string, source: string): JavaRun
-	/** `run`, asynchronously: the recording server answers while the program runs (a leg that needs it) */
-	exec(main: string, source: string): Promise<JavaRun>
+	/**
+	 * `run`, asynchronously: the recording server answers while the program runs (a leg that needs it), on `jdk`'s java
+	 * (21 by default; the program is `--release 17`, so 17 and 25 run the same classes)
+	 */
+	exec(main: string, source: string, jdk?: 17 | 21 | 25): Promise<JavaRun>
 }
 
 /* the three jars the emitted build declares, Maven-relative in the cache's repo */
@@ -184,11 +187,15 @@ function driven(dir: string, classpath: readonly string[], main: string, source:
 	return finished({ status: ran.status, stderr: ran.stderr, stdout: ran.stdout }, ready.diagnostics)
 }
 
-/** The driver `source` run asynchronously. */
-async function drivenAsync(dir: string, classpath: readonly string[], main: string, source: string): Promise<JavaRun> {
+/** The driver `source` run asynchronously on `jdk`'s java. */
+async function drivenAsync(
+	dir: string,
+	classpath: readonly string[],
+	{ jdk, main, source }: { readonly jdk: 17 | 21 | 25; readonly main: string; readonly source: string },
+): Promise<JavaRun> {
 	const ready = prepared(dir, classpath, main, source)
 	if ("status" in ready) return ready
-	const ran: AsyncRun = await execJava(21, ["-cp", ready.cp, ready.main], { cwd: ready.dir })
+	const ran: AsyncRun = await execJava(jdk, ["-cp", ready.cp, ready.main], { cwd: ready.dir })
 	return finished(ran, ready.diagnostics)
 }
 
@@ -220,6 +227,6 @@ export function compiledJavaSdk(files: Files): CompiledJavaSdk {
 		javac,
 		out: join(dir, "out"),
 		run: (main, source) => driven(dir, classpath, main, source),
-		exec: (main, source) => drivenAsync(dir, classpath, main, source),
+		exec: (main, source, jdk = 21) => drivenAsync(dir, classpath, { jdk, main, source }),
 	}
 }

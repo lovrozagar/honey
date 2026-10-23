@@ -21,6 +21,7 @@ import { errorClassFiles, errorKeyFiles } from "./sdk-errors.ts"
 import { type JavaCallPlan } from "./sdk-plan.ts"
 import { surfaceOf, type SurfaceEnv } from "./sdk-client.ts"
 import { javaTypeContext } from "./models.ts"
+import { SSE_FILES } from "./sse.ts"
 import { sdkModel } from "../../ir/sdk-model.ts"
 import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 
@@ -158,7 +159,7 @@ export function runtimeFiles(
 		...(features.json ? ["Json"] : []),
 		...(features.opt ? ["Opt"] : []),
 		...(features.transport ? ["Transport"] : []),
-		...(features.operations ? [...OPERATION_FILES, ...STALE_FILES] : []),
+		...(features.operations ? [...OPERATION_FILES, ...STALE_FILES, ...SSE_FILES] : []),
 	]
 	return Object.fromEntries(
 		names.map((name) => [

@@ -6,12 +6,15 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -35,8 +38,14 @@ final class Hops {
   }
 
   HttpResponse<byte[]> send(Redirects.Leg leg) {
-    HttpRequest request = request(leg);
-    return transmit(request);
+    return transmit(request(leg), BodyHandlers.ofByteArray());
+  }
+
+  /**
+   * {@code leg} sent with its body left unread: the deadline bounds the wait for its headers alone.
+   */
+  HttpResponse<Flow.Publisher<List<ByteBuffer>>> open(Redirects.Leg leg) {
+    return transmit(request(leg), BodyHandlers.ofPublisher());
   }
 
   private HttpRequest request(Redirects.Leg leg) {
@@ -80,10 +89,9 @@ final class Hops {
     }
   }
 
-  private HttpResponse<byte[]> transmit(HttpRequest request) {
+  private <T> HttpResponse<T> transmit(HttpRequest request, HttpResponse.BodyHandler<T> handler) {
     checkDeadline();
-    CompletableFuture<HttpResponse<byte[]>> sent =
-        http.sendAsync(request, BodyHandlers.ofByteArray());
+    CompletableFuture<HttpResponse<T>> sent = http.sendAsync(request, handler);
     if (deadline != null) {
       sent.orTimeout(deadline.remainingMillis(), TimeUnit.MILLISECONDS);
     }

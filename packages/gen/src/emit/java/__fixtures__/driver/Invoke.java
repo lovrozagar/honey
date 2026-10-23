@@ -38,6 +38,11 @@ final class Invoke {
     Method method = method(run, target, plan, holder);
     Object[] args = holder == null ? new Object[] {params, options} : new Object[] {params, holder, options};
     JsonNode cancel = Wire.member(entry, "cancel");
+    Observe.Ask ask =
+        new Observe.Ask(Wire.flag(call, "raw"), run.scripted(), Wire.flag(entry, "envelope"), holder);
+    if (Wire.member(plan, "stream") != null) {
+      return Streams.observe(new Streams.At(run, plan, call, ask, raw), method, target, args, cancel);
+    }
     Thread thread = Thread.currentThread();
     if (cancel != null && "before".equals(cancel.asString(""))) {
       thread.interrupt();
@@ -57,8 +62,6 @@ final class Invoke {
       }
       Thread.interrupted();
     }
-    Observe.Ask ask =
-        new Observe.Ask(Wire.flag(call, "raw"), run.scripted(), Wire.flag(entry, "envelope"), holder);
     return thrown != null
         ? Observe.thrown(run.sdk(), thrown, raw, ask)
         : Observe.returned(run.sdk(), plan, answer, raw, ask);
@@ -68,7 +71,7 @@ final class Invoke {
    * The timer that interrupts {@code thread} after the cancel's delay, or null for none (or a
    * before cancel).
    */
-  private static Timer cancelAfter(Thread thread, JsonNode cancel) {
+  static Timer cancelAfter(Thread thread, JsonNode cancel) {
     JsonNode ms = Wire.member(cancel, "afterMs");
     if (ms == null) {
       return null;

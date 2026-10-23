@@ -2,8 +2,10 @@
 package honey.runtime;
 
 import java.io.ByteArrayInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PushbackInputStream;
 import java.net.http.HttpResponse;
 import java.util.Locale;
 import java.util.zip.GZIPInputStream;
@@ -30,19 +32,64 @@ final class Decode {
    */
   static byte[] body(HttpResponse<byte[]> response, long cap, Deadline deadline) {
     byte[] raw = response.body();
-    String encoding =
-        response
-            .headers()
-            .firstValue("content-encoding")
-            .orElse("")
-            .trim()
-            .toLowerCase(Locale.ROOT);
+    String encoding = encoding(response);
     long limit = cap > 0 ? cap : MAX_ARRAY;
     if (!encoding.equals("gzip") && !encoding.equals("deflate")) {
       return within(raw, limit);
     }
     long size = count(raw, encoding, limit, deadline);
     return decoded(raw, encoding, size, deadline);
+  }
+
+  /** The response's content encoding, lower case; empty for none. */
+  static String encoding(HttpResponse<?> response) {
+    return response
+        .headers()
+        .firstValue("content-encoding")
+        .orElse("")
+        .trim()
+        .toLowerCase(Locale.ROOT);
+  }
+
+  /**
+   * A streamed body decoded as it flows under {@code encoding} (gzip or deflate, else as it is);
+   * the decoder starts on the first read, so opening it waits for no byte.
+   */
+  static InputStream stream(InputStream body, String encoding) {
+    if (!encoding.equals("gzip") && !encoding.equals("deflate")) {
+      return body;
+    }
+    return new FilterInputStream(body) {
+      private boolean started;
+
+      @Override
+      public int read() throws IOException {
+        byte[] one = new byte[1];
+        return read(one, 0, 1) < 0 ? -1 : one[0] & 0xff;
+      }
+
+      @Override
+      public int read(byte[] buffer, int offset, int length) throws IOException {
+        if (!started) {
+          started = true;
+          in = decoder(new PushbackInputStream(body, 2), encoding);
+        }
+        return in.read(buffer, offset, length);
+      }
+    };
+  }
+
+  /**
+   * {@code in} decoded as {@code encoding}: gzip, or deflate zlib-wrapped or raw (its first two
+   * bytes read).
+   */
+  private static InputStream decoder(PushbackInputStream in, String encoding) throws IOException {
+    if (encoding.equals("gzip")) {
+      return new GZIPInputStream(in, CHUNK);
+    }
+    byte[] head = in.readNBytes(2);
+    in.unread(head);
+    return inflater(in, zlibWrapped(head));
   }
 
   private static byte[] within(byte[] raw, long limit) {
@@ -95,7 +142,12 @@ final class Decode {
     if (encoding.equals("gzip")) {
       return new GZIPInputStream(in, CHUNK);
     }
-    if (zlibWrapped(raw)) {
+    return inflater(in, zlibWrapped(raw));
+  }
+
+  /** A deflate decoder over {@code in}: zlib-wrapped, or raw with its inflater ended on close. */
+  private static InputStream inflater(InputStream in, boolean wrapped) {
+    if (wrapped) {
       return new InflaterInputStream(in, new Inflater(), CHUNK);
     }
     Inflater inflater = new Inflater(true);

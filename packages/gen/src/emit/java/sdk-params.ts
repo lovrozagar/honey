@@ -7,13 +7,14 @@ import type { IRMultipartPart, IRSchema } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { compareCodeUnits, javaIdentifier, javaTypeName, NameScope } from "../shared/lang.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
+import { CURSOR, isLastEventIdHeader, LAST_EVENT_ID } from "./sse.ts"
 
 /** One record field: its spec name, its Java identifier and type, where it goes, and whether it is required. */
 export type Field = {
 	readonly name: string
 	readonly field: string
 	readonly type: string
-	readonly where: "path" | "body" | "query" | "header" | "key"
+	readonly where: "path" | "body" | "query" | "header" | "key" | "cursor"
 	readonly required: boolean
 }
 
@@ -27,13 +28,20 @@ const KEY_HEADER = "Idempotency-Key"
 const typeAt = (schema: IRSchema, op: SdkOp, name: string, ctx: JavaTypeContext) =>
 	javaTypeOf(schema, { ...ctx, fieldName: name, parentName: op.id })
 
-/** The record's fields in order: path params in path order, the body, the query, the headers, then the key. */
+/**
+ * The record's fields in order: path params in path order, the body, the query, the headers, then the key, or an SSE
+ * operation's cursor (J7): it holds its name first, so a param spelled the same claims `…2`, and a declared
+ * Last-Event-ID header folds into it. A stream takes no idempotency key.
+ */
 export function fieldsOf(op: SdkOp, ctx: JavaTypeContext): Field[] {
-	const scope = new NameScope(RECORD_RESERVED)
+	const sse = op.stream === "sse"
+	const scope = new NameScope([...RECORD_RESERVED, ...(sse ? [CURSOR] : [])])
 	const segments = op.pathSegments.flatMap((segment) => (segment.kind === "param" ? [segment.name] : []))
 	const path = segments.flatMap((name) => op.pathParams.filter((p) => p.name === name))
 	const query = [...op.query].sort((a, b) => compareCodeUnits(a.name, b.name))
-	const headers = [...op.headers].sort((a, b) => compareCodeUnits(a.name, b.name))
+	const headers = [...op.headers]
+		.filter((param) => !sse || !isLastEventIdHeader(param.name))
+		.sort((a, b) => compareCodeUnits(a.name, b.name))
 	const fields: Field[] = []
 	for (const param of path) {
 		fields.push({
@@ -70,7 +78,8 @@ export function fieldsOf(op: SdkOp, ctx: JavaTypeContext): Field[] {
 		})
 	}
 	const declared = headers.some((param) => param.name.toLowerCase() === KEY_HEADER.toLowerCase())
-	if (op.idempotent && !declared) {
+	if (sse) fields.push({ field: CURSOR, name: LAST_EVENT_ID, required: false, type: "String", where: "cursor" })
+	if (op.idempotent && !declared && op.stream === null) {
 		fields.push({
 			field: scope.claim("idempotencyKey"),
 			name: KEY_HEADER,

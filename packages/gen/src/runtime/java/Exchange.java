@@ -2,6 +2,9 @@
 package honey.runtime;
 
 import java.net.http.HttpClient;
+import java.util.Map;
+import java.util.function.Consumer;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * A client's exchange: its config, its one HTTP client (never following a redirect on its own), its
@@ -23,6 +26,16 @@ final class Exchange {
   /** Runs one call: its answer, its error status included; every other failure throws. */
   Answer run(Operation op, Call call, RequestOptions options) {
     return new Flight(this, op, call, options).run();
+  }
+
+  /** Opens one stream call: its events, once an error status has not thrown. */
+  <T> EventStream<T> events(
+      Operation op,
+      Call call,
+      RequestOptions options,
+      Consumer<Map<String, String>> headers,
+      TypeReference<T> type) {
+    return new Flight(this, op, call, options).events(headers, type);
   }
 
   ClientConfig config() {

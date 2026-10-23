@@ -12,6 +12,7 @@ import reservedWords from "../../../ir/__fixtures__/specs/python/reserved-words.
 import integerEnumStatus from "../../../ir/__fixtures__/specs/go/integer-enum-status.json" with { type: "json" }
 import nullablePrimitive from "../../../ir/__fixtures__/specs/go/nullable-primitive.json" with { type: "json" }
 import { errors, http, httpExtraPaths } from "../../shared/__fixtures__/documents-http.ts"
+import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { JavaSdkOptions } from "../sdk.ts"
 
@@ -48,6 +49,9 @@ export const FIXTURES = {
 	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
 	http: { document: httpDocument },
 	"http-safe": { document: httpDocument, options: { throwOnError: false } },
+	/** the event streams (phase d1): the shared `sse` document, as C#'s registry builds it */
+	sse: { document: streams.sse },
+	"sse-safe": { document: streams.sse, options: { throwOnError: false } },
 } as const satisfies Record<string, JavaFixture>
 
 export type FixtureKey = keyof typeof FIXTURES

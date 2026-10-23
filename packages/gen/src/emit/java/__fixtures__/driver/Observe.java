@@ -17,7 +17,11 @@ final class Observe {
   private Observe() {}
 
   /** One call's record: the observed, its error and its safe-mode result, each null when absent. */
-  record Outcome(JsonNode observed, JsonNode error, JsonNode result) {}
+  record Outcome(JsonNode observed, JsonNode error, JsonNode result, JsonNode stream) {
+    Outcome(JsonNode observed, JsonNode error, JsonNode result) {
+      this(observed, error, result, null);
+    }
+  }
 
   /**
    * What the script and the call ask for: the raw response, a traced run, and the envelope in each
@@ -37,7 +41,7 @@ final class Observe {
   }
 
   /** The `<Op>Headers` holder's fields, each declared header (as written) to its value; an absent optional one is absent. */
-  private static ObjectNode headersOf(JsonNode plan, Object holder) {
+  static ObjectNode headersOf(JsonNode plan, Object holder) {
     ObjectNode headers = Wire.object();
     for (var field : Wire.member(Wire.member(plan, "responseHeaders"), "fields").properties()) {
       Object value = Reflect.call(holder, field.getValue().asString());

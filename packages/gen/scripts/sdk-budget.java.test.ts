@@ -45,9 +45,22 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     ApiTimeoutException;
  *   - typed response headers, 1,164 B: Answer's header reader and its strict boolean parse;
  *   - UrlQuery +8 B: google-java-format's re-wrap of one doc comment.
+ * - phase d1, +18,815 B to 99,581 B measured, the ceiling 99,600 B, after a 392 B cut (the open's answer finished
+ *   as a call's: one received log, raw fill, status error and stale settle): SSE, core (shipped with every operation
+ *   SDK, C#'s CORE set; its SSE core is 13,275 B), nothing dead to cut (every member is reached by an emitted stream
+ *   method):
+ *   - the stream and its parser, 8,976 B: Sse 5,017, the WHATWG parser over bounded 64 KiB reads with its 1 MiB line
+ *     and 8 MiB event caps; EventStream 3,632, read once, its cursor the last delivered id, released by its end, an
+ *     error, close or an interrupt; SseEvent 327;
+ *   - the body's pump, 4,287 B: Pump, the publisher read through a queue any interrupt ends (JDK 17's own body stream
+ *     ignores one), its demand one buffer list at a time, a cancel held until the subscription arrives;
+ *   - the open, 3,851 B: Flight +2,877, the exchange's stream mode (the 2xx body left live, a refused open's body read at
+ *     most 64 KiB under the deadline, the hooks, raw, headersInto and the stale settle at the open); Hops +338, the open
+ *     whose deadline bounds the headers alone; Exchange +432, its entry; Call +204, the cursor sent only when set;
+ *   - decoding as it flows, 1,701 B: Decode's stream decoder, gzip or deflate started on the first read.
  * Each later phase raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 80800
+const JAVA_RUNTIME_BYTES = 99600
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

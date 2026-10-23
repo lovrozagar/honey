@@ -33,6 +33,14 @@ final class Bind {
         fields.put(param, header.getValue());
       }
     }
+    JsonNode cursor = Wire.member(call, "lastEventId");
+    if (cursor != null) {
+      String param = Wire.text(plan, "lastEventId");
+      if (param == null) {
+        throw new DriverException("the call sets lastEventId, and the method has no lastEventId field");
+      }
+      fields.put(param, cursor);
+    }
     String key = Wire.text(entry, "idempotencyKey");
     if (key != null) {
       String param = Wire.text(plan, "idempotencyKey");

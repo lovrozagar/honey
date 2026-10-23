@@ -35,14 +35,17 @@ final class Recorder {
     this.operation = operation;
   }
 
-  void called(long elapsedMs, JsonNode error, JsonNode result) {
+  void called(long elapsedMs, Observe.Outcome outcome) {
     ObjectNode entry = Wire.object();
     entry.put("elapsedMs", elapsedMs);
-    if (error != null) {
-      entry.set("error", error);
+    if (outcome.error() != null) {
+      entry.set("error", outcome.error());
     }
-    if (result != null) {
-      entry.set("result", result);
+    if (outcome.result() != null) {
+      entry.set("result", outcome.result());
+    }
+    if (outcome.stream() != null) {
+      entry.set("stream", outcome.stream());
     }
     calls.add(entry);
   }

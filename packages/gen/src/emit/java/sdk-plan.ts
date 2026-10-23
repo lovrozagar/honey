@@ -23,8 +23,10 @@ export type JavaCallPlan = {
 	readonly headers: Readonly<Record<string, string>>
 	/** the record fields a builder must set */
 	readonly required: readonly string[]
-	/** the idempotency key's record field; null when the operation is not keyed */
+	/** the idempotency key's record field; null when the operation is not keyed (a stream never is) */
 	readonly idempotencyKey: string | null
+	/** an SSE operation's cursor field, sent as Last-Event-ID; null for any other operation */
+	readonly lastEventId: string | null
 	readonly response: SdkResponseKind
 	/** the `<Op>Headers` holder the method takes as `headersInto`, each declared header to its accessor; null without one */
 	readonly responseHeaders: { readonly type: string; readonly fields: Readonly<Record<string, string>> } | null
