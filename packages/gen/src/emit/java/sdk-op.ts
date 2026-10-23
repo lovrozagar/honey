@@ -243,9 +243,7 @@ export function javaOp(op: SdkOp, name: string, env: OpEnv): JavaOp {
 	const multipart = op.body?.kind === "multipart" ? multipartRecord(op, op.body.parts, env.ctx, env.isArray) : null
 	const plan: Omit<JavaCallPlan, "accessors"> = {
 		body: op.body === undefined ? null : { kind: op.body.kind, param: "body" },
-		headers: Object.fromEntries(
-			fields.filter((f) => f.where === "header" || f.where === "key").map((f) => [f.name, f.field]),
-		),
+		headers: Object.fromEntries(fields.filter((f) => f.where === "header").map((f) => [f.name, f.field])),
 		idempotencyKey: fields.find((f) => f.where === "key")?.field ?? null,
 		...streamPlan(fields),
 		method: name,

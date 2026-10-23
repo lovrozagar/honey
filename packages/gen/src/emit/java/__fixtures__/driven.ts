@@ -48,6 +48,9 @@ export type DrivenJavaSdk = CompiledJavaSdk & {
 	): Promise<DriverRun & { readonly trace?: Trace<JavaError> }>
 }
 
+/** How long one driver run may take: its own stream watchdog fails a stalled stream at 10 s, so a hang ends here. */
+const DRIVER_BOUND_MS = 30_000
+
 /** The probe: the Driver under a shutdown hook that reports the process-global restricted-header property (Qc6). */
 const PROBE = `public final class Probe {
   public static void main(String[] args) throws Exception {
@@ -102,6 +105,7 @@ function drivenFixture(fixture: JavaFixture): DrivenJavaSdk {
 			const ran = await execJava(opts.jdk ?? 21, [...(opts.jvmArgs ?? []), "-cp", cp, main], {
 				cwd: sdk.dir,
 				input: JSON.stringify(envelope),
+				killAfterMs: DRIVER_BOUND_MS,
 			})
 			const out = ran.status === 0 ? parsed(ran.stdout, opts.script !== undefined) : { observed: undefined }
 			return { ...out, status: ran.status ?? 1, stderr: ran.stderr }

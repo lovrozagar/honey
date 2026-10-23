@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { homedir } from "node:os"
 import { join, matchesGlob, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { JAVA, RUST, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
+import { HARNESS, JAVA, RUST, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
 import * as env from "../../src/emit/java/__fixtures__/java-env.ts"
 
 const { gjfJava, javaCacheDir, javaEnv, javaHome, javaInstall, runGjf, runGradle, runJava, withJava } = env
@@ -193,8 +193,11 @@ const cachesJava = (step: string) =>
 	/honey-tmp\/java\b/.test(step) &&
 	/\}\}-java-\$\{\{ hashFiles\(/.test(step.replace(/\s+/g, " "))
 
-/** Whether gen-relative `path` is in the java project, or in the rust project that runs after it. */
-const owned = (path: string) => [...JAVA, ...RUST].some((glob) => matchesGlob(path, glob))
+/**
+ * Whether gen-relative `path` is in the java project, in the rust project that runs after it, or in the opt-in harness,
+ * whose java project runs Java's conformance runner and harness files (phase e)
+ */
+const owned = (path: string) => [...JAVA, ...RUST, ...HARNESS].some((glob) => matchesGlob(path, glob))
 
 /** The Gradle daemons alive now, as `pid cmdline`. */
 function gradleDaemons(): string[] {
@@ -303,7 +306,7 @@ describe("vitest runs gen's Java in its own project", () => {
 		expect(JAVA).toEqual(["src/emit/java/**/*.test.ts", "tests/structure/java-toolchain.test.ts"])
 	})
 
-	it("runs every test file reaching java-env in java, or in rust after it", () => {
+	it("runs every test file reaching java-env in java, in rust after it, or in the harness's java project", () => {
 		const reaching = others()
 			.filter(({ path, text }) => path.endsWith(".test.ts") && IMPORTS_ENV.test(text))
 			.map(({ path }) => path)

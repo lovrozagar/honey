@@ -89,8 +89,15 @@ final class Config {
     }
     JsonNode hooks = Wire.member(script, "hooks");
     if (hooks != null) {
-      Reflect.call(builder, "onRequest", requestHook(sdk, hooks, recorder));
-      Reflect.call(builder, "onResponse", responseHook(sdk, hooks, recorder));
+      /* one SDK hook per entry, as C#'s Script.cs installs its delegates: the SDK's own order runs them */
+      java.util.List<JsonNode> requests = entriesOf(hooks, "request");
+      for (int i = 0; i < requests.size(); i++) {
+        Reflect.call(builder, "onRequest", requestHook(sdk, i, requests.get(i), recorder));
+      }
+      java.util.List<JsonNode> responses = entriesOf(hooks, "response");
+      for (int i = 0; i < responses.size(); i++) {
+        Reflect.call(builder, "onResponse", responseHook(sdk, i, responses.get(i), recorder));
+      }
     }
     if (Wire.member(script, "onAuthExpired") != null) {
       Supplier<String> refresh = recorder::refresh;
@@ -127,28 +134,24 @@ final class Config {
    * One request hook that runs the script's request entries in order; an absent list is one no-op
    * entry.
    */
-  private static Object requestHook(Sdk sdk, JsonNode hooks, Recorder recorder) {
-    java.util.List<JsonNode> entries = entriesOf(hooks, "request");
+  /** The request hook for script entry {@code i}: it records the run and applies the entry. */
+  private static Object requestHook(Sdk sdk, int i, JsonNode entry, Recorder recorder) {
     return proxy(
         sdk,
         "RequestHook",
         (proxy, method, args) -> {
-          for (int i = 0; i < entries.size(); i++) {
-            recorder.request(i, entries.get(i), args[0]);
-          }
+          recorder.request(i, entry, args[0]);
           return null;
         });
   }
 
-  private static Object responseHook(Sdk sdk, JsonNode hooks, Recorder recorder) {
-    java.util.List<JsonNode> entries = entriesOf(hooks, "response");
+  /** The response hook for script entry {@code i}: it records the run and applies the entry. */
+  private static Object responseHook(Sdk sdk, int i, JsonNode entry, Recorder recorder) {
     return proxy(
         sdk,
         "ResponseHook",
         (proxy, method, args) -> {
-          for (int i = 0; i < entries.size(); i++) {
-            recorder.response(i, entries.get(i), args[0]);
-          }
+          recorder.response(i, entry, args[0]);
           return null;
         });
   }

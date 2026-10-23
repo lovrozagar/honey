@@ -19,7 +19,7 @@ export type JavaCallPlan = {
 	readonly body: { readonly kind: SdkBody["kind"]; readonly param: string } | null
 	/** each query param's spec name to its record field */
 	readonly query: Readonly<Record<string, string>>
-	/** each header param's spec name to its record field, the idempotency key's included */
+	/** each declared header param's spec name to its record field; the idempotency key is `idempotencyKey`'s (C#'s plan) */
 	readonly headers: Readonly<Record<string, string>>
 	/** the record fields a builder must set */
 	readonly required: readonly string[]
