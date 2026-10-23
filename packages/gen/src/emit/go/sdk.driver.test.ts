@@ -116,14 +116,17 @@ describe("goCallPlans: each operation's call plan, in the emitter's own names", 
 		expect(goCallPlans(NOTES)).toEqual({
 			"orgs.members.notes.create": {
 				body: "json",
+				bodyType: "NoteInput",
 				headers: { "X-Trace": "XTrace" },
 				members: ["Orgs", "Members", "Notes"],
 				method: "Create",
 				operation: "orgs.members.notes.create",
+				opts: "OrgsMembersNotesCreateOpts",
 				pathParams: ["org", "member"],
 				query: { tag: "Tag" },
 				response: "json",
 				responseHeaders: null,
+				returns: "(*Note, error)",
 				stream: null,
 			},
 		})

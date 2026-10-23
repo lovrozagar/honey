@@ -37,14 +37,15 @@ export const WEBSOCKET_SUM = [
 /* what client.go may import, each only when its code uses it */
 const CLIENT_IMPORTS: readonly (readonly [string, string])[] = [
 	["context", "context"],
+	["json", "encoding/json"],
 	["io", "io"],
 	["iter", "iter"],
 	["http", "net/http"],
 	["url", "net/url"],
 ]
 
-/* string and rune literals and line comments: text an import check must not read as code */
-const NOT_CODE = /"(?:[^"\\\n]|\\.)*"|`[^`]*`|'(?:[^'\\\n]|\\.)*'|\/\/[^\n]*/g
+/** String and rune literals and line comments: text an import check must not read as code (the CLI's cmd files too). */
+export const NOT_CODE = /"(?:[^"\\\n]|\\.)*"|`[^`]*`|'(?:[^'\\\n]|\\.)*'|\/\/[^\n]*/g
 
 /** A `.go` file of package `sdk` holding `decls`, importing each of `imports` (`[name, path]`) its code uses. */
 function goFile(decls: string, imports: readonly (readonly [string, string])[]): string {

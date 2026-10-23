@@ -280,3 +280,25 @@ goDescribe(
 		}, 600_000)
 	},
 )
+
+/* a JSON body with no schema: its parameter is a json.RawMessage, so client.go imports encoding/json (found by bit 17's CLI) */
+const RAW_BODY_DOCUMENT = {
+	info: { title: "Raw", version: "1" },
+	openapi: "3.1.0",
+	paths: {
+		"/raw": {
+			post: {
+				operationId: "raw.send",
+				requestBody: { content: { "application/json": { schema: {} } }, required: true },
+				responses: { 204: { description: "done" } },
+			},
+		},
+	},
+}
+
+goDescribe("a JSON body with no schema", () => {
+	it("compiles: the method takes a json.RawMessage, and client.go imports encoding/json", () => {
+		const sdk = compileGo(generateGoSdk(RAW_BODY_DOCUMENT, { modulePath: "example.com/rawbody" }).files)
+		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+	})
+})

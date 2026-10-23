@@ -3,11 +3,11 @@
  * floor toolchain), then linked once per content hash into a static binary (`CGO_ENABLED=0`, `-trimpath`) with the
  * version a release would stamp. `cli(args)` runs that binary as a user would, without blocking the event loop, so
  * an in-process server keeps answering meanwhile; its environment is only what the call passes, PATH aside, and its
- * HOME an empty directory of its own, so no config file of the machine's reaches it.
+ * HOME a fresh empty directory, so no config file of the machine's or another run's reaches it.
  */
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, renameSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, renameSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { type Compiled, compileGo } from "../../go/__fixtures__/compiled.ts"
 import { goCacheDir, runGo } from "../../go/__fixtures__/go-env.ts"
@@ -23,8 +23,8 @@ export type BuiltCli = Compiled & {
 	readonly binary: string
 	/** the link's errors, if any */
 	readonly linkErrors: string
-	/** run the binary with `args`, `env` as its environment beside PATH and HOME, `input` on stdin */
-	cli(args: readonly string[], options?: { readonly env?: NodeJS.ProcessEnv; readonly input?: string }): Promise<Ran>
+	/** run the binary with `args`, as `options` gives it */
+	cli(args: readonly string[], options?: RunOptions): Promise<Ran>
 }
 
 /** The module path a go.mod declares. */
@@ -63,11 +63,20 @@ function linkOnce(dir: string, modulePath: string, toolchain: string | undefined
 	return ""
 }
 
+/** How a run is given: its environment beside PATH and HOME, its stdin, and when to interrupt it. */
+export type RunOptions = {
+	/** the environment beside PATH; HOME is a fresh empty directory unless this names one */
+	readonly env?: NodeJS.ProcessEnv
+	readonly input?: string
+	/** once this settles, the run is sent SIGINT, as Ctrl-C sends it */
+	readonly interrupt?: Promise<unknown>
+}
+
 /** The binary's run with `args`, as a promise. */
-function runIn(binary: string, args: readonly string[], env: NodeJS.ProcessEnv, input: string): Promise<Ran> {
-	const home = goCacheDir("cli-home", String(process.pid))
+function runIn(binary: string, args: readonly string[], options: RunOptions): Promise<Ran> {
+	const home = mkdtempSync(join(goCacheDir("cli-home"), "home-"))
 	return new Promise((resolve, reject) => {
-		const child = spawn(binary, [...args], { env: { HOME: home, PATH: process.env.PATH, ...env } })
+		const child = spawn(binary, [...args], { env: { HOME: home, PATH: process.env.PATH, ...options.env } })
 		let stdout = ""
 		let stderr = ""
 		child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()))
@@ -77,7 +86,8 @@ function runIn(binary: string, args: readonly string[], env: NodeJS.ProcessEnv, 
 		child.stdin.on("error", () => {
 			/* a CLI that exits without reading its input: its exit status answers */
 		})
-		child.stdin.end(input)
+		child.stdin.end(options.input ?? "")
+		void options.interrupt?.then(() => child.kill("SIGINT"))
 	})
 }
 
@@ -90,7 +100,7 @@ export function builtCli(files: Readonly<Record<string, string>>, options: { rea
 	return {
 		...compiled,
 		binary,
-		cli: (args, run = {}) => runIn(binary, args, run.env ?? {}, run.input ?? ""),
+		cli: (args, run = {}) => runIn(binary, args, run),
 		linkErrors,
 	} satisfies BuiltCli
 }

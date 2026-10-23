@@ -252,33 +252,62 @@ System.out.println(spin.conns.size() + " " + spin.conns.get(0).closed + " " + Th
 	})
 })
 
-/** The 200 rounds: bound 50 ms, opens of 45–55 ms, a caller's interrupt at 40 ms on odd rounds; the misses counted. */
+/**
+ * The 200 rounds: bound 50 ms, opens of 45–55 ms, a caller's interrupt at 40 ms on odd rounds; the misses counted. A
+ * caller interrupt counts as lost only when it landed before the look (under one lock); at least 40 rounds must probe.
+ */
 const ROUNDS = `int stray = 0;
 int lost = 0;
 int succeeded = 0;
 int timedOut = 0;
+int probed = 0;
 for (int round = 0; round < 200; round++) {
   Spin spin = new Spin(45 + round % 11);
   ResumableConnection<JsonNode> rc = open(spin, 50);
   boolean caller = round % 2 == 1;
+  /* the caller's interrupt, marked under one lock as it lands: under load the timer may fire after the open */
+  Object lock = new Object();
+  boolean[] fired = {false};
+  CountDownLatch landed = new CountDownLatch(caller ? 1 : 0);
   if (caller) {
     Thread self = Thread.currentThread();
-    CompletableFuture.delayedExecutor(40, TimeUnit.MILLISECONDS).execute(self::interrupt);
+    CompletableFuture.delayedExecutor(40, TimeUnit.MILLISECONDS).execute(() -> {
+      synchronized (lock) {
+        self.interrupt();
+        fired[0] = true;
+      }
+      landed.countDown();
+    });
   }
   try {
     rc.open();
     succeeded++;
-    boolean set = Thread.currentThread().isInterrupted();
-    if (caller && !set) {
-      lost++;
-    }
-    if (!caller && set) {
-      stray++;
+    synchronized (lock) {
+      /* lost: delivered before this look, yet not set (the open took it); one landing after is no loss */
+      boolean set = Thread.currentThread().isInterrupted();
+      if (caller && fired[0]) {
+        probed++;
+      }
+      if (caller && fired[0] && !set) {
+        lost++;
+      }
+      if (!caller && set) {
+        stray++;
+      }
     }
   } catch (ApiTimeoutException e) {
     timedOut++;
     if (!caller && Thread.currentThread().isInterrupted()) {
       stray++;
+    }
+  }
+  /* a late caller interrupt lands before the round ends, so it never reaches the next round's open */
+  while (true) {
+    try {
+      landed.await();
+      break;
+    } catch (InterruptedException e) {
+      /* the caller's own interrupt, landing as the round waits for it */
     }
   }
   Thread.interrupted();
@@ -296,7 +325,8 @@ for (int round = 0; round < 200; round++) {
   Thread.interrupted();
   rc.close();
 }
-System.out.println(stray + " " + lost + " " + (succeeded > 0) + " " + (timedOut > 0));`
+/* non-vacuity: measured 54-55 probed rounds clean and beside 8 busy loops; a run where every interrupt lands late fails */
+System.out.println(stray + " " + lost + " " + (succeeded > 0) + " " + (timedOut > 0) + " " + (probed >= 40));`
 
 describe.skipIf(!JAVA)("the backoff is capped at the open bound (C#'s OpenLimit)", SLOW, () => {
 	/* new: RealtimeLoop.cs:131 (Math.Min(…, OpenLimit)); red under an uncapped backoff, which sleeps a 1 h delay's half */
@@ -413,6 +443,6 @@ try {
 	/* new: refinement (3)'s 200 rounds at the boundary: bound 50 ms, opens of 45–55 ms, a caller interrupt on odd rounds */
 	it("leaves no stray interrupt after a successful open and loses no caller interrupt, 200 rounds at the boundary", () => {
 		/* 200 rounds of about 110 ms each: a 60 s watchdog */
-		expect(probed(ROUNDS, 60)).toEqual(["0 0 true true"])
+		expect(probed(ROUNDS, 60)).toEqual(["0 0 true true true"])
 	})
 })

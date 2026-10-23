@@ -37,6 +37,12 @@ export type GoMethodCall = {
 	 */
 	readonly responseHeaders: GoResponseHeaders | null
 	readonly stream: SdkStream
+	/** the body parameter's Go type (`goBody`); null without one: the CLI declares the value it decodes into */
+	readonly bodyType: string | null
+	/** what the method returns, as its signature spells it: the CLI calls it in that shape */
+	readonly returns: string
+	/** the method's `<Op>Opts` type, as claimed (a clash gets a suffix) */
+	readonly opts: string
 }
 
 /** One operation's method, its client.go declarations by name (`<Op>Opts`, `<Op>Headers`), and how a caller reaches it. */
@@ -202,6 +208,12 @@ export function goMethod(op: SdkOp, name: string, receiver: Receiver, env: Metho
 	]
 	const decls: [string, string][] = [[opts, optsDecl(op, opts, fields, streamOpts)]]
 	if (headers) decls.push([headers.plan.type, headers.decl])
-	const call = { ...callOf(op, name, pathLocals, fields), responseHeaders: headers?.plan ?? null }
+	const call = {
+		...callOf(op, name, pathLocals, fields),
+		bodyType: body ? body.type : null,
+		opts,
+		responseHeaders: headers?.plan ?? null,
+		returns: shape.returns,
+	}
 	return { call, decls, lines }
 }
