@@ -4,8 +4,8 @@
  * the stream's error; a `take` that lets the connection go while the run goes on (the driver closes at take, Java's
  * try-with-resources, so this is the SDK's own release); the reader's interrupt ending an open stream quietly, its
  * cancel traced; the 10 s watchdog; and what the driver refuses on a call, nothing sent. Driven against the `sse`
- * registry document; the refusals run on hand-written plans laid over it, refused before the SDK loads. WebSocket and
- * realtime calls are d2's.
+ * registry document; the refusals run on hand-written plans laid over it, refused before the SDK loads: a realtime
+ * call's own (d2b) among them. The WebSocket and realtime observations: the d2a legs below, and `realtime.test.ts`.
  */
 import { describe, expect, it } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
@@ -266,7 +266,13 @@ const STREAM_REFUSALS: readonly (readonly [Call, Script | undefined, string])[] 
 	],
 	[ROOMS, { calls: [{ realtime: { maxReconnectAttempts: 1 } }] }, "a realtime script on a WebSocket operation"],
 	[{ ...ROOMS, raw: true }, undefined, "raw: true on a WebSocket operation, which has no single response to read"],
-	[LIVE, undefined, "a realtime operation is driven from phase d2b"],
+	[
+		{ operation: "feed.live", route: route("GET", "/feed") },
+		undefined,
+		"a realtime call needs take: the connection never ends by itself",
+	],
+	[LIVE, { calls: [{ ws: { on: true } }] }, "a ws script on a realtime operation"],
+	[{ ...LIVE, raw: true }, undefined, "raw: true on a realtime operation, which has no single response to read"],
 	[{ ...ECHO, take: 1 }, undefined, "take on an operation that does not stream"],
 	[{ ...ECHO, send: ["x"] }, undefined, "send on an operation that does not stream"],
 	[{ ...ECHO, lastEventId: "1" }, undefined, "lastEventId on an operation that does not stream"],
@@ -298,10 +304,11 @@ const SCRIPT_REFUSALS: readonly (readonly [Script, string])[] = [
 		"script: call 0: ws.send: a message holds exactly one of json, text and bytes",
 	],
 	[{ calls: [{ ws: { lines: 1 } as never }] }, "script: unknown member lines"],
+	[{ calls: [{ realtime: { retries: 1 } as never }] }, "script: call 0: unknown member retries"],
 ]
 
 describe.skipIf(!JAVA)("the Java test driver: what it refuses on a call, nothing sent", SLOW, () => {
-	/* new: C# sdk.driver.stream.test.ts:321 (WebSocket and realtime operations wait for d2) */
+	/* new: C# sdk.driver.stream.test.ts:321 (d2b: a realtime call needs take, and takes no ws script and no raw) */
 	it("exits 1 naming each stream control the operation cannot take, and what is another driver's alone, before the SDK loads", async () => {
 		const sdk = on()
 		const cases = [...REFUSALS, ...SCRIPT_REFUSALS.map(([script, reason]) => [ticks(), script, reason] as const)]

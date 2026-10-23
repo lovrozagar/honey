@@ -49,6 +49,18 @@ final class Bind {
     if (protocols != null) {
       fields.put(Wire.text(plan, "protocols"), protocols);
     }
+    JsonNode realtime = Wire.member(entry, "realtime");
+    JsonNode attempts = Wire.member(realtime, "maxReconnectAttempts");
+    if (attempts != null) {
+      fields.put(Wire.text(plan, "maxReconnectAttempts"), attempts);
+    }
+    JsonNode delay = Wire.member(realtime, "reconnectDelayMs");
+    if (delay != null) {
+      /* a Duration reads its ISO-8601 text exactly */
+      fields.put(
+          Wire.text(plan, "reconnectDelay"),
+          Wire.value(java.time.Duration.ofMillis(delay.asLong()).toString()));
+    }
     String key = Wire.text(entry, "idempotencyKey");
     if (key != null) {
       String param = Wire.text(plan, "idempotencyKey");

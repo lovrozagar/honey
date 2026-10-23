@@ -74,9 +74,29 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     3000-4999), its reason cut to 123 bytes on a code point; WsMessage 439;
  *   - the keepalive, 1,640 B: Keepalive, a ping each 20 s through the gate, its pong clock started when it is sent, an
  *     unanswered one ending the socket (C#'s KeepAliveInterval and KeepAliveTimeout, ClientWebSocket's own).
+ * - phase d2b, +28,836 B to 150,015 B measured, the ceiling 150,100 B, after a 235 B cut (the entry's interrupt check,
+ *   which the WebSocket dial makes first; the backoff's own 30 s cap, now the open bound as C#'s; the open's two end
+ *   paths folded into one): realtime, shipped only
+ *   with an SDK that has a realtime operation, beside the WebSocket files its WebSocket adapter dials through (C#'s
+ *   REALTIME set, 24,912 B; Java's 3,924 B more is the open bound's timer, C#'s CancelAfter, the options' builder, C#'s
+ *   init properties, the for-each's iterator, C#'s compiler-built async one, a close that cancels a pending open, C#'s
+ *   linked token, and a file per public type), nothing dead
+ *   to cut (every member is reached by an emitted realtime method or a caller's chain):
+ *   - the loop, 8,542 B: RealtimeLoop, the chain tried in order, the reconnect from the cursor with its jittered backoff
+ *     capped at the open bound, the give-up thrown once, the read an interrupt leaves reconnecting, close() from any
+ *     thread, and the open's end by its bound or by a close (close cancels a pending open, +531 B), each interrupting
+ *     only an open still running, the opener clearing only what they set (R4);
+ *   - the connection, 5,227 B: ResumableConnection, the public surface, the for-each over receive, the message parsed
+ *     as JSON or kept as a JSON string, the cursor advanced before it decodes;
+ *   - the dial, 5,223 B: Realtime, the call's entry and its dials: the upgrade through WsDial, the event stream and the
+ *     poll through the exchange with the cursor on each, a send POSTed, the call's raw holding the last open;
+ *   - the options and the contract, 5,857 B: TransportOptions 4,157, the cursor, its advance past a message and the
+ *     reconnect policy with its builder; TransportAdapter 444, TransportConnection 415, TransportMessage 271,
+ *     TransportKind 251 and ConnectionState 319;
+ *   - the adapters, 3,987 B: WsAdapter 1,093, SseAdapter 1,315 and LongPollAdapter 1,579, a 204 polling again.
  * Each later phase raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 121200
+const JAVA_RUNTIME_BYTES = 150100
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

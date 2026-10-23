@@ -12,8 +12,9 @@ import { snakeWords } from "../shared/lang.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
 import { assigned, docOf, layout } from "./sdk-decl.ts"
 import { type JavaHeaders, javaResponseHeaders } from "./sdk-headers.ts"
-import { sseMethodLines } from "./sse.ts"
-import { wsMethodLines } from "./ws.ts"
+import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY, realtimeMethodLines } from "./realtime.ts"
+import { CURSOR, sseMethodLines } from "./sse.ts"
+import { PROTOCOLS, TOKEN, wsMethodLines } from "./ws.ts"
 import { multipartRecordLines, paramsRecord } from "./sdk-record.ts"
 import type { JavaCallPlan } from "./sdk-plan.ts"
 import { type Field, fieldsOf, multipartRecord, paramsName } from "./sdk-params.ts"
@@ -149,6 +150,10 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 	}
 	if (op.stream === "ws")
 		return wsMethodLines(op, { call: callLines(fields, op), constant, name, params: paramsName(op, env.ctx) })
+	if (op.stream === "realtime") {
+		const params = paramsName(op, env.ctx)
+		return realtimeMethodLines(op, { call: callLines(fields, op), constant, name, params }, env.ctx)
+	}
 	const answer = answerOf(op, env)
 	const safe = !env.throwOnError
 	const isVoid = answer.type === "void" && !safe
@@ -214,16 +219,24 @@ function constantLines(op: SdkOp, constant: string): string[] {
 	return assigned("  ", `private static final Operation ${constant}`, { items, prefix: "new Operation(", suffix: ");" })
 }
 
-/** A stream's own fields as the plan names them: SSE's cursor, a socket's protocols and token; null where absent. */
+/**
+ * A stream's own fields as the plan names them: SSE's cursor, a socket's protocols and token, a realtime op's five;
+ * null where absent.
+ */
 const streamPlan = (fields: readonly Field[]) => {
 	const field = (where: Field["where"]) => fields.find((f) => f.where === where)?.field ?? null
-	return { lastEventId: field("cursor"), protocols: field("protocols"), reconnectToken: field("token") }
+	const own = (name: string) => fields.find((f) => f.where === "realtime" && f.name === name)?.field ?? null
+	return {
+		lastEventId: field("cursor") ?? own(CURSOR),
+		maxReconnectAttempts: own(MAX_RECONNECT_ATTEMPTS),
+		protocols: field("protocols") ?? own(PROTOCOLS),
+		reconnectDelay: own(RECONNECT_DELAY),
+		reconnectToken: field("token") ?? own(TOKEN),
+	}
 }
 
 /** One operation's text and plan, with its accessors left to the resource tree. */
 export function javaOp(op: SdkOp, name: string, env: OpEnv): JavaOp {
-	if (op.stream === "realtime")
-		throw new Error(`${op.id}: the Java SDK emits no realtime operation until phase d2b, where realtime lands`)
 	const fields = fieldsOf(op, env.ctx)
 	const headers = javaResponseHeaders(op, env)
 	const constant = constantOf(name)

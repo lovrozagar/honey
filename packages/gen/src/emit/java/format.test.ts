@@ -84,7 +84,8 @@ describe.skipIf(!JAVA)(
 		 * new: a signature, a record header's implements and a switch arm past 100 columns each stayed on one line; and
 		 * the runtime-gating combinations (the d2a ruling: an always-shipped file must never name a gated one), each
 		 * compiled -Werror: zero-op (above), plain operations (errors, http, fixtures), SSE alone (sse), WebSocket alone
-		 * (ws: the core and the WebSocket files), and SSE with WebSocket (streams)
+		 * (ws: the core and the WebSocket files), realtime alone (realtime: the core, the WebSocket and the realtime
+		 * files), and every stream kind together (streams)
 		 */
 		it.each(Object.keys(FIXTURES) as FixtureKey[])(
 			"compiles the %s fixture SDK clean, and GJF lists nothing",

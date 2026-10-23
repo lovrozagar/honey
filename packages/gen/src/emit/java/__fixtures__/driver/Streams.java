@@ -78,9 +78,11 @@ final class Streams {
     } catch (IllegalAccessException e) {
       throw new DriverException(Wire.text(at.plan(), "method") + " is not accessible");
     }
-    return "ws".equals(Wire.text(at.plan(), "stream"))
-        ? Sockets.frames(at, stream, Wire.member(at.entry(), "ws"))
-        : events(at, stream);
+    return switch (Wire.text(at.plan(), "stream")) {
+      case "ws" -> Sockets.frames(at, stream, Wire.member(at.entry(), "ws"));
+      case "realtime" -> Live.frames(at, stream);
+      default -> events(at, stream);
+    };
   }
 
   /**

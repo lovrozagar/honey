@@ -25,12 +25,16 @@ export type JavaCallPlan = {
 	readonly required: readonly string[]
 	/** the idempotency key's record field; null when the operation is not keyed (a stream never is) */
 	readonly idempotencyKey: string | null
-	/** an SSE operation's cursor field, sent as Last-Event-ID; null for any other operation */
+	/** an SSE or realtime operation's cursor field, sent as Last-Event-ID (realtime: also last_event_id); null otherwise */
 	readonly lastEventId: string | null
-	/** a WebSocket operation's subprotocols field; null for any other operation */
+	/** a WebSocket or realtime operation's subprotocols field; null for any other operation */
 	readonly protocols: string | null
-	/** a WebSocket operation's resume token field, sent as reconnect_token; null for any other operation */
+	/** a WebSocket or realtime operation's resume token field, sent as reconnect_token; null for any other operation */
 	readonly reconnectToken: string | null
+	/** a realtime operation's reconnect budget field; null for any other operation */
+	readonly maxReconnectAttempts: string | null
+	/** a realtime operation's reconnect delay field (a Duration); null for any other operation */
+	readonly reconnectDelay: string | null
 	readonly response: SdkResponseKind
 	/** the `<Op>Headers` holder the method takes as `headersInto`, each declared header to its accessor; null without one */
 	readonly responseHeaders: { readonly type: string; readonly fields: Readonly<Record<string, string>> } | null

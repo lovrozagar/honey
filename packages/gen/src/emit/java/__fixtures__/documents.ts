@@ -16,6 +16,8 @@ import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { JavaSdkOptions } from "../sdk.ts"
 
+type Json = Readonly<Record<string, unknown>>
+
 /** One SDK a Java gate builds: an OpenAPI document, made on use, and the emitter's options. */
 export type JavaFixture = {
 	readonly document: () => Readonly<Record<string, unknown>>
@@ -42,6 +44,36 @@ function fixtures(): Readonly<Record<string, unknown>> {
 	})
 }
 
+/** A query parameter `name` of JSON type `type`. */
+const query = (name: string, type: string, required = false) => ({ in: "query", name, required, schema: { type } })
+
+/**
+ * The shared `realtime` document with `clash.feed` beside it (C#'s registry path): two declared queries named like the
+ * realtime fields, which the emitter claims `maxReconnectAttempts2` and `reconnectDelay2`, so the fold runs executed.
+ */
+function realtime(): Json {
+	const shared = streams.realtime()
+	const clash = {
+		get: {
+			operationId: "clash.feed",
+			parameters: [
+				query("channel", "string", true),
+				query("max_reconnect_attempts", "integer"),
+				query("reconnect_delay", "integer"),
+			],
+			responses: {
+				200: {
+					content: { "text/event-stream": { schema: { $ref: "#/components/schemas/Payload" } } },
+					description: "ok",
+				},
+			},
+			"x-realtime": true,
+			"x-websocket": true,
+		},
+	}
+	return { ...shared, paths: { ...(shared.paths as Json), "/realtime-clash/feed": clash } }
+}
+
 /** Every Java SDK the gates build, by key. */
 export const FIXTURES = {
 	errors: { document: errors },
@@ -55,8 +87,11 @@ export const FIXTURES = {
 	/** the WebSockets (phase d2a): the shared `ws` document */
 	ws: { document: streams.ws },
 	"ws-safe": { document: streams.ws, options: { throwOnError: false } },
-	/** SSE and WebSocket operations in one SDK: the core and the WebSocket files together (the gating combinations) */
-	streams: { document: () => merged({ sse: streams.sse(), ws: streams.ws() }) },
+	/** the resumable connections (phase d2b): the shared `realtime` document and `clash.feed` (its WebSocket files too) */
+	realtime: { document: realtime },
+	"realtime-safe": { document: realtime, options: { throwOnError: false } },
+	/** every stream kind in one SDK: the core, the WebSocket and the realtime files together (the gating combinations) */
+	streams: { document: () => merged({ realtime: realtime(), sse: streams.sse(), ws: streams.ws() }) },
 } as const satisfies Record<string, JavaFixture>
 
 export type FixtureKey = keyof typeof FIXTURES

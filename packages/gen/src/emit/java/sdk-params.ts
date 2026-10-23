@@ -8,6 +8,7 @@ import type { SdkOp } from "../../ir/sdk-model.ts"
 import { compareCodeUnits, javaIdentifier, javaTypeName, NameScope } from "../shared/lang.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
 import { CURSOR, isLastEventIdHeader, LAST_EVENT_ID } from "./sse.ts"
+import { carriesRealtime, REALTIME_FIELDS } from "./realtime.ts"
 import { isReconnectTokenQuery, PROTOCOLS, RECONNECT_TOKEN, TOKEN } from "./ws.ts"
 
 /** One record field: its spec name, its Java identifier and type, where it goes, and whether it is required. */
@@ -15,7 +16,7 @@ export type Field = {
 	readonly name: string
 	readonly field: string
 	readonly type: string
-	readonly where: "path" | "body" | "query" | "header" | "key" | "cursor" | "protocols" | "token"
+	readonly where: "path" | "body" | "query" | "header" | "key" | "cursor" | "protocols" | "token" | "realtime"
 	readonly required: boolean
 }
 
@@ -29,6 +30,14 @@ const KEY_HEADER = "Idempotency-Key"
 const typeAt = (schema: IRSchema, op: SdkOp, name: string, ctx: JavaTypeContext) =>
 	javaTypeOf(schema, { ...ctx, fieldName: name, parentName: op.id })
 
+/** Whether a declared param is a stream field's resume channel, which folds into that field (J7, K2, R8). */
+function folds(op: SdkOp, name: string, where: "query" | "header"): boolean {
+	if (op.stream === "realtime") return carriesRealtime(name, where)
+	return where === "query"
+		? op.stream === "ws" && isReconnectTokenQuery(name)
+		: op.stream === "sse" && isLastEventIdHeader(name)
+}
+
 /**
  * The record's fields in order: path params in path order, the body, the query, the headers, then the key, or an SSE
  * operation's cursor (J7): it holds its name first, so a param spelled the same claims `…2`, and a declared
@@ -40,10 +49,10 @@ export function fieldsOf(op: SdkOp, ctx: JavaTypeContext): Field[] {
 	const segments = op.pathSegments.flatMap((segment) => (segment.kind === "param" ? [segment.name] : []))
 	const path = segments.flatMap((name) => op.pathParams.filter((p) => p.name === name))
 	const query = [...op.query]
-		.filter((param) => op.stream !== "ws" || !isReconnectTokenQuery(param.name))
+		.filter((param) => !folds(op, param.name, "query"))
 		.sort((a, b) => compareCodeUnits(a.name, b.name))
 	const headers = [...op.headers]
-		.filter((param) => op.stream !== "sse" || !isLastEventIdHeader(param.name))
+		.filter((param) => !folds(op, param.name, "header"))
 		.sort((a, b) => compareCodeUnits(a.name, b.name))
 	const fields: Field[] = []
 	for (const param of path) {
@@ -94,10 +103,21 @@ export function fieldsOf(op: SdkOp, ctx: JavaTypeContext): Field[] {
 	return fields
 }
 
-/** A stream's own fields, after the declared ones: SSE's cursor (J7), a socket's protocols and token (K2). */
+/**
+ * A stream's own fields, after the declared ones: SSE's cursor (J7), a socket's protocols and token (K2), a realtime
+ * op's cursor, protocols and reconnect policy (R8), which the runtime puts on each dial rather than the Call.
+ */
 function streamFields(op: SdkOp): Field[] {
 	if (op.stream === "sse")
 		return [{ field: CURSOR, name: LAST_EVENT_ID, required: false, type: "String", where: "cursor" }]
+	if (op.stream === "realtime")
+		return REALTIME_FIELDS.map((f) => ({
+			field: f.field,
+			name: f.field,
+			required: false,
+			type: f.type,
+			where: "realtime",
+		}))
 	if (op.stream !== "ws") return []
 	return [
 		{ field: PROTOCOLS, name: PROTOCOLS, required: false, type: "List<String>", where: "protocols" },

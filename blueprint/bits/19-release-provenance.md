@@ -64,6 +64,18 @@ Publish both packages and the generated SDKs correctly. Split v0 `plugin.ts` 864
 
 **Java WebSocket handshake visibility (surfaced bit 16 d2a, K4/K10).** `java.net.http.WebSocket` exposes neither the 101 response nor its headers, so a dial's `RawResponse` has status 101 and the ws:// URL with empty headers, where C# fills them (K10). A server's bad `Sec-WebSocket-Accept` is refused by the JDK itself as a 101 with a null message, so the SDK fails closed (a HoneyException, nothing delivered) but can't name that reason (K4). An unoffered subprotocol is named, because the SDK checks it itself. Document both as JDK limits.
 
+**Java realtime cancel model (surfaced bit 16 d2b, R3).** Java has no cancellation token, so a realtime call has no method token whose later cancel closes the connection. `close()` is the end. An interrupt of the reading thread is a cancel-safe read cancel: the transport is dropped and the connection is left RECONNECTING with its cursor. So after an interrupt `provenTransport` reads null, where C#'s closing token keeps it. Document the model per target; the grid asserts the cursor and state, not the proven transport after a cancel.
+
+**Java realtime open bound and close (surfaced bit 16 d2b, R4).** C# bounds each open with `CancelAfter(30 s)` and links its closing token into every reconnect. Java owns both mechanisms:
+- a timer interrupts the opening thread only while it still opens, under a lock;
+- `close()` stops a pending open the same way;
+- the opener clears only the interrupt it set, so a caller's own interrupt is never taken;
+- a bound ends the open as `ApiTimeoutException`, a close as a null read.
+
+A caller-supplied adapter that swallows interrupts isn't bounded until it returns; a late open is then closed and the open times out. The start-of-open closing check is the load half of a volatile store-then-load handshake with `close()`. Its mutant survives because no leg can schedule a close into that few-instruction window; this is a reviewer-ruled race guard, not dead code. The backoff is capped at the open bound (C# `RealtimeLoop.cs:131`).
+
+**Realtime session send encoding (surfaced bit 16 d2b).** Java's Jackson writes non-ASCII in a session send as UTF-8, as Python does; C#'s System.Text.Json escapes it as `\uXXXX`. Both are valid JSON. Decide at the sweep whether the grid pins one wire form or asserts the decoded value only.
+
 ## Files (from files.tsv — core `build`)
 - `src/build/{index,plugin,targets}.ts` (+test each), `src/build/cli.ts`/`cli-args.ts` (+test), `src/build/{glob,yaml}.ts` (+test).
 - release config: exports map, `files`, peer/optional-peer declarations (ts-morph, ws) per `00-rules.md`.

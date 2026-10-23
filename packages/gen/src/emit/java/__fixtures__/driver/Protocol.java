@@ -83,7 +83,7 @@ final class Protocol {
             : switch (stream) {
               case "sse" -> sseReason(call, entry);
               case "ws" -> wsReason(call, entry);
-              default -> "a realtime operation is driven from phase d2b";
+              default -> realtimeReason(call, entry);
             };
     if (reason != null) {
       throw new DriverException("call " + i + " (" + op + "): " + reason);
@@ -144,6 +144,20 @@ final class Protocol {
     return null;
   }
 
+  /** What a call on a realtime operation cannot take: a WebSocket script, raw, or no take. */
+  private static String realtimeReason(JsonNode call, JsonNode entry) {
+    if (Wire.member(entry, "ws") != null) {
+      return "a ws script on a realtime operation";
+    }
+    if (Wire.flag(call, "raw")) {
+      return "raw: true on a realtime operation, which has no single response to read";
+    }
+    if (Wire.member(call, "take") == null) {
+      return "a realtime call needs take: the connection never ends by itself";
+    }
+    return null;
+  }
+
   private static void scriptRefusal(JsonNode script, int cellCalls) {
     members(script, SCRIPT, "script");
     JsonNode entries = Wire.member(script, "calls");
@@ -176,6 +190,10 @@ final class Protocol {
     if (Wire.member(Wire.member(entry, "ws"), "readLimit") != null) {
       throw new DriverException(
           "script: call " + i + ": ws.readLimit is Go's SetReadLimit; a Java socket caps a message at 16 MiB");
+    }
+    JsonNode realtime = Wire.member(entry, "realtime");
+    if (realtime != null) {
+      members(realtime, java.util.Set.of("maxReconnectAttempts", "reconnectDelayMs"), "script: call " + i);
     }
     JsonNode ws = Wire.member(entry, "ws");
     if (ws != null) {

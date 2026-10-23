@@ -217,22 +217,43 @@ const WS_FILES = [
 	"WsMessage.java",
 ]
 
+/** The realtime runtime's files, sorted. */
+const REALTIME_FILES = [
+	"ConnectionState.java",
+	"LongPollAdapter.java",
+	"Realtime.java",
+	"RealtimeLoop.java",
+	"ResumableConnection.java",
+	"SseAdapter.java",
+	"TransportAdapter.java",
+	"TransportConnection.java",
+	"TransportKind.java",
+	"TransportMessage.java",
+	"TransportOptions.java",
+	"WsAdapter.java",
+]
+
+/** The names of `set` among `files`. */
+const names = (files: Files, set: readonly string[]) =>
+	Object.keys(files)
+		.map((path) => path.slice(path.lastIndexOf("/") + 1))
+		.filter((name) => set.includes(name))
+
 /** The SSE runtime's file names among `files`. */
 const sseFiles = (files: Files) =>
 	Object.keys(files)
 		.map((path) => path.slice(path.lastIndexOf("/") + 1))
 		.filter((name) => ["EventStream.java", "Pump.java", "Sse.java", "SseEvent.java"].includes(name))
 
-describe("generateJavaSdk: a streaming operation (SSE and WebSocket from phase d2a, realtime refused until d2b)", () => {
-	/* new, both ways (ruling 6): SSE and WebSocket ops emit; a realtime op stays refused, naming it and d2b */
-	it("emits an SSE and a WebSocket operation, and refuses a realtime one by name, saying it lands in phase d2b", () => {
+describe("generateJavaSdk: a streaming operation (SSE from d1, WebSocket from d2a, realtime from d2b)", () => {
+	/* new, the flip's end (ruling 6): SSE, WebSocket and realtime ops each emit their method; nothing stays refused */
+	it("emits an SSE, a WebSocket and a realtime operation, each with its own method", () => {
 		const resource = generateJavaSdk(sse()).files["src/main/java/ai/anyrow/TicksResource.java"] ?? ""
 		const rooms = generateJavaSdk(ws()).files["src/main/java/ai/anyrow/RoomsResource.java"] ?? ""
+		const feed = generateJavaSdk(realtime()).files["src/main/java/ai/anyrow/FeedResource.java"] ?? ""
 		expect(resource).toMatch(/^ {2}public EventStream<Tick> stream\(TicksStreamParams params\) \{$/m)
 		expect(rooms).toMatch(/^ {2}public TypedWebSocket socket\(RoomsSocketParams params\) \{$/m)
-		expect(() => generateJavaSdk(realtime())).toThrow(
-			/^[a-z.]+: the Java SDK emits no realtime operation until phase d2b, where realtime lands$/,
-		)
+		expect(feed).toMatch(/^ {2}public ResumableConnection<Payload> live\(FeedLiveParams params\) \{$/m)
 	})
 
 	/* new: SSE is core (C#'s CORE set): its runtime ships with every operation SDK, none with a zero-op SDK */
@@ -249,20 +270,18 @@ describe("generateJavaSdk: a streaming operation (SSE and WebSocket from phase d
 		}).toEqual({ plain: files, sse: files, zero: [] })
 	})
 
-	/* new: the WebSocket runtime ships only with a ws op (C#'s WS set: a ws or realtime op), none otherwise */
-	it("ships the WebSocket runtime files only with an SDK that has a WebSocket operation", () => {
-		const names = (files: Files) =>
-			Object.keys(files)
-				.map((path) => path.slice(path.lastIndexOf("/") + 1))
-				.filter((name) => WS_FILES.includes(name))
-		expect({
-			sse: names(generateJavaSdk(sse()).files),
-			ws: names(generateJavaSdk(ws()).files),
-			zero: names(generateJavaSdk(ZERO).files),
-		}).toEqual({
-			sse: [],
-			ws: WS_FILES,
-			zero: [],
+	/* new: C#'s sets (transport.ts:63): the WebSocket files with a ws or realtime op (realtime dials through them), the
+	 * realtime files with a realtime op only, none of either otherwise */
+	it("ships the WebSocket files with a WebSocket or realtime operation, and the realtime files with a realtime one only", () => {
+		const of = (document: Readonly<Record<string, unknown>>) => {
+			const files = generateJavaSdk(document).files
+			return { realtime: names(files, REALTIME_FILES), ws: names(files, WS_FILES) }
+		}
+		expect({ realtime: of(realtime()), sse: of(sse()), ws: of(ws()), zero: of(ZERO) }).toEqual({
+			realtime: { realtime: REALTIME_FILES, ws: WS_FILES },
+			sse: { realtime: [], ws: [] },
+			ws: { realtime: [], ws: WS_FILES },
+			zero: { realtime: [], ws: [] },
 		})
 	})
 })

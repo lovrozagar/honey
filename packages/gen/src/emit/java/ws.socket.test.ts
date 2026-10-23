@@ -184,13 +184,19 @@ System.out.println("read " + w.receive().text() + " " + fake.requested);`),
 })
 
 describe.skipIf(!JAVA)("the keepalive (K7): a ping each interval, a pong-less one ends the socket", SLOW, () => {
-	/* new: K7 */
+	/* new: K7; each ping answered on sight (5 ms polls, a 200 ms interval): a late sleep under load is no silent peer */
 	it("pings each interval while pongs answer, and the socket stays open", () => {
 		expect(
-			probed(`${OPEN(50)}
-for (int i = 0; i < 6; i++) {
-  Thread.sleep(50);
-  socket.onPong(fake, ByteBuffer.allocate(0));
+			probed(`${OPEN(200)}
+long end = System.nanoTime() + 1_000_000_000L;
+long answered = 0;
+while (System.nanoTime() < end) {
+  Thread.sleep(5);
+  long pings = fake.count("ping");
+  if (pings > answered) {
+    answered = pings;
+    socket.onPong(fake, ByteBuffer.allocate(0));
+  }
 }
 System.out.println((fake.count("ping") >= 3) + " " + fake.aborted + " " + runs);
 w.close();`),
@@ -227,8 +233,8 @@ describe.skipIf(!JAVA)("the keepalive (K7): it stops with the socket, and its pr
 		expect(
 			probed(`String[] ends = {"close", "server", "drop", "cap"};
 for (String end : ends) {
-  ${OPEN(30).split("\n").join("\n  ")}
-  for (int i = 0; i < 8; i++) {
+  ${OPEN(100).split("\n").join("\n  ")}
+  for (int i = 0; i < 15; i++) {
     Thread.sleep(10);
     socket.onPong(fake, ByteBuffer.allocate(0));
   }
@@ -285,16 +291,19 @@ w.close();`),
 	})
 
 	/* new: the pong-clock ruling: a send pending for three intervals is no dead peer; red under the clock at schedule */
+	/* the ping answered on sight, so no tick's phase decides it; the send pending over three 100 ms intervals */
 	it("starts the pong clock when the ping is sent: a send pending three intervals, then a ping and its pong, stays open", () => {
 		expect(
-			probed(`${OPEN(50)}
+			probed(`${OPEN(100)}
 fake.hold = true;
 CompletableFuture<Void> sending = CompletableFuture.runAsync(() -> w.send("x"));
-Thread.sleep(160);
+Thread.sleep(320);
 System.out.println("pending " + fake.aborted + " " + runs);
 fake.release();
 sending.join();
-Thread.sleep(70);
+for (int i = 0; i < 1000 && fake.count("ping") == 0; i++) {
+  Thread.sleep(2);
+}
 socket.onPong(fake, ByteBuffer.allocate(0));
 Thread.sleep(30);
 System.out.println("answered " + (fake.count("ping") >= 1) + " " + fake.aborted + " " + runs);
