@@ -10,6 +10,7 @@ A first-class Java SDK emitter + vendored runtime in `gen/emit/java/`. Java sour
 ## Files (from files.tsv — `gen/emit/java`, new)
 - `gen/emit/java/{sdk,models,http,json,sse,ws,errors,gradle}.ts` (+test each) + index.
 - `gen/runtime/java/*` — vendored HttpClient + Jackson runtime template.
+- As shipped (the close's mapping): the HTTP emission lives in `sdk-op.ts` + `sdk-params.ts` (the transport in `runtime/java`), the error emission in `sdk-errors.ts`; `java-harness` is two files, `tests/integration/java-harness.test.ts` + `java-harness.ws.test.ts`. `realtime.ts` (+5 tests) carries the reconnecting connection.
 
 ## Tests (named, written first)
 - `gen/emit/java/sdk.test.ts` — operations + `record` models from IR.
@@ -24,8 +25,12 @@ A first-class Java SDK emitter + vendored runtime in `gen/emit/java/`. Java sour
 - `gen/emit/java/redirect.test.ts` — **`Authorization` (and configured headers) are dropped on a cross-origin redirect** (H18.10): `java.net.http.HttpClient`'s `Redirect.NORMAL` drops `Authorization` but resends every configured header (`X-Api-Key`, `Cookie`), so the SDK owns the follow loop (`Redirect.NEVER`) and keeps only the safe set (Accept, Accept-Language, User-Agent) once a hop crosses origins; the kill leg asserts the configured header, not `Authorization` alone.
 - `gen/emit/java/http.stale.test.ts` — stale tracking (contract 47 §5.7: `x-invalidate`, the stale window, `staleMaxEntries`, `maxSourcesPerTarget`) at sibling parity, always shipped with the exchange; the O(1) selector lookup is proven against the O(n) exact-key-scan mutant by in-process CPU time (added at c2: the four siblings ship it and the grid is complete-or-red). Part of the cross-SDK auth-on-redirect conformance case.
 
+- `gen/emit/java/sdk.pagination.test.ts` — C1 is CUT (H20): no pager or auto-paging surface in any Java SDK.
+- `gen/emit/java/gradle.publish.test.ts` — the Maven Central publication (sources + javadoc jars, the POM from `info`, javadoc `-Xdoclint:all,-missing -Werror` at C#'s CS1591-waived parity); signing and the POM's license/scm/developers are the publisher's.
+
 ## Budget
-- token: per-operation size within budget.
+- token: per-operation size within budget. Closed at f: 144 surfaces (the five e2e apps × both modes; the widest overload plus its `<Op>Params` record header), max 60, median 30, ceiling `ceilingOf([60], 0.2)` = 72.
+- runtime: locked at zero headroom at 149,981 B, every file group named per phase in `scripts/sdk-budget.java.test.ts`.
 
 ## Downstream
 - On ruling, ping the Anyrow docs (session monorepo-92, or its successor) with the final public API. They drafted against the projection `AnyrowClient.builder()...build()`, operationId-named accessor methods (`client.row().list(...)` / `RowListParams.builder()`), exception-based errors, Maven coords `ai.anyrow:anyrow`; send any delta from that so the docs can follow.

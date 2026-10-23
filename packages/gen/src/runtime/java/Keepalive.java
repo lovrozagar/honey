@@ -43,7 +43,7 @@ final class Keepalive {
     start();
   }
 
-  /** The ping went out: its interval starts now. */
+  /** The ping goes out: its interval starts now, before a pong can answer it. */
   void sent() {
     pinged = System.nanoTime();
   }

@@ -210,7 +210,8 @@ export function javaCallPlans(
 function emitJava(document: Record<string, unknown>, options: JavaSdkOptions) {
 	const pkg = packageOf(options)
 	const dir = `src/main/java/${pkg.packageName.replaceAll(".", "/")}`
-	const ir = toIR(document as OpenApiDocument)
+	/* an operation without an operationId is named by the IR's derivation, as every sibling emitter asks */
+	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
 	const model = sdkModel(ir)
 	const ctx = javaTypeContext(ir, [pkg.clientName])
 	const isArray = (schema: Parameters<typeof model.resolve>[0]) => model.resolve(schema).kind === "array"
@@ -246,7 +247,7 @@ function emitJava(document: Record<string, unknown>, options: JavaSdkOptions) {
 	])
 	const client = operations ? surface.files[`${pkg.clientName}.java`] : `${MARKER}\n${clientJava(pkg)}`
 	const entries: [string, string][] = [
-		["build.gradle", `${MARKER}\n${buildGradle(pkg)}`],
+		["build.gradle", `${MARKER}\n${buildGradle(pkg, { description: ir.info.description, name: ir.info.title })}`],
 		["settings.gradle", `${MARKER}\n${settingsGradle(pkg)}`],
 		[`${dir}/${pkg.clientName}.java`, client as string],
 		...runtime,

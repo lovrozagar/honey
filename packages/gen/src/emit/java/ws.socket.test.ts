@@ -42,6 +42,7 @@ const FAKE = `final class Fake implements java.net.http.WebSocket {
   volatile boolean aborted;
   volatile boolean outputClosed;
   volatile String violation;
+  volatile java.net.http.WebSocket.Listener echo; // a fast peer: its pong before the ping's send completes
   private java.util.concurrent.CompletableFuture<java.net.http.WebSocket> pending;
 
   private synchronized java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sent(String frame) {
@@ -82,7 +83,9 @@ const FAKE = `final class Fake implements java.net.http.WebSocket {
   }
 
   public java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sendPing(java.nio.ByteBuffer message) {
-    return sent("ping");
+    java.util.concurrent.CompletableFuture<java.net.http.WebSocket> ping = sent("ping");
+    if (echo != null) echo.onPong(this, java.nio.ByteBuffer.allocate(0));
+    return ping;
   }
 
   public java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sendPong(java.nio.ByteBuffer message) {
@@ -184,20 +187,16 @@ System.out.println("read " + w.receive().text() + " " + fake.requested);`),
 })
 
 describe.skipIf(!JAVA)("the keepalive (K7): a ping each interval, a pong-less one ends the socket", SLOW, () => {
-	/* new: K7; each ping answered on sight (5 ms polls, a 200 ms interval): a late sleep under load is no silent peer */
+	/* new: K7; a fast peer pongs before the ping's send completes (f's red: a clock begun on completion erased it) */
 	it("pings each interval while pongs answer, and the socket stays open", () => {
 		expect(
-			probed(`${OPEN(200)}
-long end = System.nanoTime() + 1_000_000_000L;
-long answered = 0;
-while (System.nanoTime() < end) {
+			probed(`${OPEN(50)}
+fake.echo = socket;
+long end = System.nanoTime() + 10_000_000_000L;
+while (fake.count("ping") < 3 && System.nanoTime() < end) {
   Thread.sleep(5);
-  long pings = fake.count("ping");
-  if (pings > answered) {
-    answered = pings;
-    socket.onPong(fake, ByteBuffer.allocate(0));
-  }
 }
+Thread.sleep(120);
 System.out.println((fake.count("ping") >= 3) + " " + fake.aborted + " " + runs);
 w.close();`),
 		).toEqual(["true false []"])

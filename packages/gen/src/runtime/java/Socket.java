@@ -158,12 +158,8 @@ final class Socket implements WebSocket.Listener {
       return true;
     }
     deferredPing = false;
-    ws.sendPing(ByteBuffer.allocate(0))
-        .whenComplete(
-            (sent, error) -> {
-              keepalive.sent();
-              release();
-            });
+    keepalive.sent();
+    ws.sendPing(ByteBuffer.allocate(0)).whenComplete((sent, error) -> release());
     return true;
   }
 

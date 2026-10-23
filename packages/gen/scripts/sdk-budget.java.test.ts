@@ -1,14 +1,17 @@
 /**
  * The Java SDK's budgets (bit 16): the vendored runtime's bytes on disk (the G14 analog), measured, every file named,
- * split from `sdk-budget.test.ts` at its 500-line cap. Phase f adds the per-operation token ceiling (the G13 analog).
+ * split from `sdk-budget.test.ts` at its 500-line cap; and the per-operation token ceiling (the G13 analog, phase f).
  */
-import { resolve } from "node:path"
+import { readFileSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { runtimeFiles } from "../src/emit/java/sdk.ts"
-import { runtimeBytes } from "./sdk-budget.ts"
+import { generateJavaSdk, javaCallPlans, runtimeFiles } from "../src/emit/java/sdk.ts"
+import { ceilingOf, countTokens } from "./capture-token-budget.ts"
+import { runtimeBytes, v1JavaSdkSurfaces } from "./sdk-budget.ts"
 
 /*
- * G14 analog (bit 16), provisional until phase f locks it, measured over every runtime file:
+ * G14 analog (bit 16), locked at phase f at the exact measured bytes (zero headroom, as C#'s 129,851), over every
+ * runtime file:
  * - phase a, 450 B: Transport.java 450, the one HttpClient, built once on followRedirects(NEVER), and its base URL;
  * - phase b, +3,816 B to 4,266 B: Opt.java 3,106, the three-state optional (absent, null, value) with its reader and
  *   writer, equals/hashCode/toString for the records that hold one; Json.java 710, the one mapper, unknown properties
@@ -94,9 +97,13 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     reconnect policy with its builder; TransportAdapter 444, TransportConnection 415, TransportMessage 271,
  *     TransportKind 251 and ConnectionState 319;
  *   - the adapters, 3,987 B: WsAdapter 1,093, SseAdapter 1,315 and LongPollAdapter 1,579, a 204 polling again.
- * Each later phase raises it only by the bytes of a named feature, dead code cut first.
+ * - phase f, the lock: −34 B, the keepalive's ping marking its interval before the send rather than in the send's
+ *   completion, which erased a pong that came in first (the f battery's red); its other fixes are the emitter's (derived
+ *   operation ids, the answer statement's wrap, the publication), so the ceiling is the measured 149,981 B, provisional
+ *   150,100 → locked 149,981.
+ * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 150100
+const JAVA_RUNTIME_BYTES = 149981
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -108,5 +115,80 @@ describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () 
 			others: [],
 			over: 0,
 		})
+	})
+})
+
+const REPO = resolve(import.meta.dirname, "../../..")
+const APPS = ["compose", "defaults", "gateway", "kitchen", "surface"]
+/** An e2e app's emitted OpenAPI document. */
+const appSpec = (app: string) =>
+	JSON.parse(
+		readFileSync(join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`), "utf8"),
+	) as Record<string, unknown>
+
+/*
+ * G13 (bit 16, phase f): Java's own per-operation ceiling, as C#'s bit 15 set its 68. Measured over the five e2e apps'
+ * 72 operations in both throwOnError modes (144 surfaces, `v1JavaSdkSurfaces` over the emitted files; the ids the
+ * IR derives, item 0): max 60 (surface, putInAllByResourceId, safe mode: C#'s max too), median 30, min 21. A Java
+ * surface is the widest overload's signature and its <Op>Params record's header, both joined from google-java-format's
+ * wrap, since Java's arguments live in that record. 60 + 20% headroom = 72. An operation over it is fixed in the
+ * schema, never by raising the ceiling.
+ */
+const JAVA_SDK_CEILING = ceilingOf([60], 0.2)
+
+/** One operation's emitted files: a resource whose signature GJF wrapped, and its Params record. */
+const WRAPPED = {
+	"src/main/java/a/ItemsResource.java": `public final class ItemsResource {
+  public Map<String, JsonNode> getVeryLongName(
+      ItemsGetVeryLongNameParams params, RequestOptions options) {
+    return null;
+  }
+
+  public Map<String, JsonNode> getVeryLongName(ItemsGetVeryLongNameParams params) {
+    return null;
+  }
+}
+`,
+	"src/main/java/a/ItemsGetVeryLongNameParams.java": `public record ItemsGetVeryLongNameParams(
+    @JsonProperty("id") String id, @JsonInclude(JsonInclude.Include.NON_NULL) Long limit) {
+}
+`,
+}
+const PLAN = { "items.getVeryLongName": { method: "getVeryLongName", params: "ItemsGetVeryLongNameParams" } }
+
+describe("the v1 Java SDK within the budget (bit 16, G13)", () => {
+	/* new: phase f item 1 */
+	it("reads an operation's widest overload joined from GJF's wrap, and its Params header without annotations", () => {
+		expect(Object.fromEntries(v1JavaSdkSurfaces(WRAPPED, PLAN))).toEqual({
+			"items.getVeryLongName":
+				"public Map<String, JsonNode> getVeryLongName(ItemsGetVeryLongNameParams params, RequestOptions options) { public record ItemsGetVeryLongNameParams(String id, Long limit) {",
+		})
+	})
+
+	/* new: phase f item 1 (C#'s completeness: a surface the reader misses can never pass by going unmeasured) */
+	it("refuses an operation whose Params record it cannot find", () => {
+		const missing = { "src/main/java/a/ItemsResource.java": WRAPPED["src/main/java/a/ItemsResource.java"] }
+		expect(() => v1JavaSdkSurfaces(missing, PLAN)).toThrow(
+			"items.getVeryLongName: no getVeryLongName or ItemsGetVeryLongNameParams to measure",
+		)
+	})
+
+	/* new: phase f item 1 */
+	it(`keeps every e2e app's Java operations within ${JAVA_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+		const over: string[] = []
+		for (const app of APPS) {
+			const spec = appSpec(app)
+			for (const throwOnError of [true, false]) {
+				const plans = javaCallPlans(spec, { throwOnError })
+				const surfaces = v1JavaSdkSurfaces(generateJavaSdk(spec, { throwOnError }).files, plans)
+				if (surfaces.size !== Object.keys(plans).length)
+					over.push(`${app}: ${surfaces.size} of ${Object.keys(plans).length} measured`)
+				for (const [key, text] of surfaces) {
+					const tokens = countTokens(text)
+					if (tokens > JAVA_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
+				}
+			}
+		}
+		expect(over).toEqual([])
 	})
 })

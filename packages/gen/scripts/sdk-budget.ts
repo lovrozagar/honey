@@ -124,6 +124,34 @@ export function v1CSharpSdkSurfaces(clientCs: string): Map<string, string> {
 	return out
 }
 
+/** `text` on one line: google-java-format's wraps joined, the space inside a parenthesis dropped. */
+const joined = (text: string) => text.replace(/\s+/g, " ").replace(/\( /g, "(").replace(/ \)/g, ")").trim()
+
+/**
+ * The v1 Java SDK's per-operation surfaces (bit 16, G13), keyed by operation: Java's arguments live in its
+ * `<Op>Params` record, so a surface is the widest public overload of the operation's method (its signature, joined
+ * from GJF's wrap) and the record's header (its components, annotations dropped, joined). An operation whose method
+ * or record is not found is refused, so none passes by going unmeasured.
+ */
+export function v1JavaSdkSurfaces(
+	files: Readonly<Record<string, string>>,
+	plans: Readonly<Record<string, { readonly method: string; readonly params: string }>>,
+): Map<string, string> {
+	const out = new Map<string, string>()
+	const sources = Object.entries(files).filter(([path]) => path.endsWith(".java"))
+	for (const [operation, { method, params }] of Object.entries(plans)) {
+		const overload = new RegExp(`public [^;{]*? ${method}\\(\\s*${params} params[^)]*\\) \\{`, "g")
+		const signatures = sources.flatMap(([, text]) => [...text.matchAll(overload)].map((match) => joined(match[0])))
+		const widest = signatures.sort((a, b) => b.length - a.length)[0]
+		const record = sources.find(([path]) => path.endsWith(`/${params}.java`))?.[1]
+		const header = record === undefined ? undefined : /public record [^{]*\{/.exec(record)?.[0]
+		if (widest === undefined || header === undefined)
+			throw new Error(`${operation}: no ${method} or ${params} to measure`)
+		out.set(operation, `${widest} ${joined(header.replace(/@\w+(?:\.\w+)*(?:\([^)]*\))?\s*/g, ""))}`)
+	}
+	return out
+}
+
 /**
  * A vendored runtime directory's bloat measure (G14): its `ext` files in code-unit order and their bytes on disk
  * as shipped (00-rules:160), never string length, and every other file it holds, in code-unit order.

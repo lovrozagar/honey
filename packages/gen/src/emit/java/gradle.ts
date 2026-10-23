@@ -1,9 +1,11 @@
 /**
  * The Java package's build and its option rules (bit 16 phase a, D3, D4): a Gradle `java-library` build compiled
- * `--release 17` with `-Xlint:all -Werror`, Maven Central, and the one Jackson 3 dependency; no toolchain block, since
- * auto-provisioning would fetch, and no wrapper, a binary the consumer's own Gradle 9 replaces. Every name the build
- * and the sources spell comes from a validated option, never from spec text.
+ * `--release 17` with `-Xlint:all -Werror`, Maven Central, the one Jackson 3 dependency and the `mavenJava` publication;
+ * no toolchain block, since auto-provisioning would fetch, and no wrapper, a binary the consumer's own Gradle 9
+ * replaces. Every name the build and the sources spell comes from a validated option, never from spec text; the POM's
+ * name and description are the document's words, written only as escaped single-quoted Groovy strings.
  */
+import { escapeText } from "../shared/escape.ts"
 
 /** The package's identity, each part validated. */
 export type JavaPackage = {
@@ -113,17 +115,45 @@ export const validateClientName = (value: string): string =>
 /** A SemVer 2 version. */
 export const validateVersion = (value: string): string => (SEMVER.test(value) ? value : refuse("version", value))
 
-/** The `build.gradle`: the coordinates, `--release 17` under `-Xlint:all -Werror`, Maven Central, Jackson. */
-export const buildGradle = (pkg: JavaPackage): string => `plugins {
+/** The document's own words a POM carries; spec text, so the build writes it only through `groovyString`. */
+export type JavaPom = { readonly name?: string; readonly description?: string }
+
+/**
+ * `text` as a single-quoted Groovy string: Java's escapes (Groovy reads the same ones) and the apostrophe's, so spec
+ * text neither interpolates (no `$` in `'…'`) nor ends the string.
+ */
+const groovyString = (text: string) => `'${escapeText(text, "java").replaceAll("'", "\\'")}'`
+
+/**
+ * The `build.gradle`: the coordinates, `--release 17` under `-Xlint:all -Werror`, Maven Central, Jackson, and the
+ * publication Maven Central takes: `maven-publish`'s `mavenJava` from the Java component with its sources and javadoc
+ * jars, its POM named and described by the document (the artifact id and the name when it has none). Javadoc fails
+ * on every doclint finding but a missing comment (C#'s doc build waives CS1591 alone); signing and the POM's license,
+ * scm and developers are the publisher's.
+ */
+export const buildGradle = (pkg: JavaPackage, pom: JavaPom): string => {
+	const name = pom.name ?? pkg.artifactId
+	return `plugins {
     id 'java-library'
+    id 'maven-publish'
 }
 
 group = '${pkg.groupId}'
 version = '${pkg.version}'
 
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.release = 17
     options.compilerArgs += ['-Xlint:all', '-Werror']
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.addBooleanOption('Xdoclint:all,-missing', true)
+    options.addBooleanOption('Werror', true)
 }
 
 repositories {
@@ -133,7 +163,20 @@ repositories {
 dependencies {
     api '${JACKSON}'
 }
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            pom {
+                name = ${groovyString(name)}
+                description = ${groovyString(pom.description ?? name)}
+            }
+        }
+    }
+}
 `
+}
 
 /** The `settings.gradle`: the artifact id as the root project's name. */
 export const settingsGradle = (pkg: JavaPackage): string => `rootProject.name = '${pkg.artifactId}'\n`

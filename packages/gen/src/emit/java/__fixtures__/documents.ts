@@ -74,6 +74,41 @@ function realtime(): Json {
 	return { ...shared, paths: { ...(shared.paths as Json), "/realtime-clash/feed": clash } }
 }
 
+/**
+ * Operations without an operationId, each named by the IR's derivation (`toIR`'s `deriveOperationIds`, as every
+ * sibling emitter asks): ids shared by method and path (`x` thrice → `x`, `xPost`, `xPut`, `xPut2`), the root path
+ * (`getRoot`), and a derived id beside an explicit dotted one (`deleteUsers2`): the IR's own collision document
+ * (`ir/build.test.ts`). And a long derived id on two path params, whose call statements pass 100 columns (GJF wraps
+ * them). Each answers a JSON object.
+ */
+export function derivedIds(): Json {
+	const ok = {
+		responses: { 200: { content: { "application/json": { schema: { type: "object" } } }, description: "ok" } },
+	}
+	return {
+		info: { title: "Anyrow", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/": { get: ok },
+			"/a": { get: { ...ok, operationId: "x" }, post: { ...ok, operationId: "x" }, put: { ...ok, operationId: "x" } },
+			"/b": { put: { ...ok, operationId: "x" } },
+			"/users": { delete: { ...ok, operationId: "deleteUsers.all" }, post: ok },
+			"/users/": { delete: ok },
+			"/in-params/orgs/{orgId}/members/{memberId}": {
+				get: {
+					...ok,
+					parameters: ["orgId", "memberId"].map((name) => ({
+						in: "path",
+						name,
+						required: true,
+						schema: { type: "string" },
+					})),
+				},
+			},
+		},
+	}
+}
+
 /** Every Java SDK the gates build, by key. */
 export const FIXTURES = {
 	errors: { document: errors },
@@ -90,6 +125,8 @@ export const FIXTURES = {
 	/** the resumable connections (phase d2b): the shared `realtime` document and `clash.feed` (its WebSocket files too) */
 	realtime: { document: realtime },
 	"realtime-safe": { document: realtime, options: { throwOnError: false } },
+	/** operations without an id, named by the IR's derivation and its collision suffixes (phase f) */
+	derived: { document: derivedIds },
 	/** every stream kind in one SDK: the core, the WebSocket and the realtime files together (the gating combinations) */
 	streams: { document: () => merged({ realtime: realtime(), sse: streams.sse(), ws: streams.ws() }) },
 } as const satisfies Record<string, JavaFixture>

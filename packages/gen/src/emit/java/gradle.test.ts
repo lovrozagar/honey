@@ -138,8 +138,9 @@ describe("generateJavaSdk: the build's shape (D3)", () => {
 		expect(block(filesOf(), "dependencies")).toEqual(["api 'tools.jackson.core:jackson-databind:3.2.4'"])
 	})
 
-	it("applies the java-library plugin only", () => {
-		expect(block(filesOf(), "plugins")).toEqual(["id 'java-library'"])
+	/* phase f item 6 adds maven-publish: the build publishes to Maven Central (gradle.publish.test.ts) */
+	it("applies the java-library and maven-publish plugins only", () => {
+		expect(block(filesOf(), "plugins")).toEqual(["id 'java-library'", "id 'maven-publish'"])
 	})
 
 	it("compiles --release 17 with -Xlint:all and -Werror", () => {

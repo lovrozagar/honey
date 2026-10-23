@@ -136,24 +136,28 @@ function callLines(fields: readonly Field[], op: SdkOp): string[] {
 /** One method's name, its fields, and the holder of its response headers when it declares any. */
 type MethodSite = { readonly name: string; readonly fields: readonly Field[]; readonly headers: JavaHeaders | null }
 
+/** A stream operation's method lines (SSE, WebSocket or realtime), each kind's own emitter; null for a plain call. */
+function streamMethodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] | null {
+	if (op.stream === null) return null
+	const { fields, headers, name } = site
+	const constant = constantOf(name)
+	const params = paramsName(op, env.ctx)
+	const call = callLines(fields, op)
+	if (op.stream === "sse") return sseMethodLines(op, { call, constant, headers, name, params }, env.ctx)
+	if (op.stream === "ws") return wsMethodLines(op, { call, constant, name, params })
+	return realtimeMethodLines(op, { call, constant, name, params }, env.ctx)
+}
+
 /**
  * The method's lines: `op(params)` and `op(params, options)` for every operation. An operation with response headers
  * adds `op(params, headersInto, options)`, which fills `headersInto` from a 2xx before it reads the answer (null: none);
  * its two shorter overloads delegate to it.
  */
 function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
+	const streamed = streamMethodLines(op, site, env)
+	if (streamed !== null) return streamed
 	const { fields, headers, name } = site
 	const constant = constantOf(name)
-	if (op.stream === "sse") {
-		const params = paramsName(op, env.ctx)
-		return sseMethodLines(op, { call: callLines(fields, op), constant, headers, name, params }, env.ctx)
-	}
-	if (op.stream === "ws")
-		return wsMethodLines(op, { call: callLines(fields, op), constant, name, params: paramsName(op, env.ctx) })
-	if (op.stream === "realtime") {
-		const params = paramsName(op, env.ctx)
-		return realtimeMethodLines(op, { call: callLines(fields, op), constant, name, params }, env.ctx)
-	}
 	const answer = answerOf(op, env)
 	const safe = !env.throwOnError
 	const isVoid = answer.type === "void" && !safe
@@ -172,7 +176,11 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 				]
 	const body = [
 		...callLines(fields, op),
-		`    Answer answer = exchange.run(${constant}, call, options);`,
+		...assigned("    ", "Answer answer", {
+			items: [constant, "call", "options"],
+			prefix: "exchange.run(",
+			suffix: ");",
+		}),
 		...fill,
 		`    ${ret}answer.${reader};`,
 	]
