@@ -77,7 +77,7 @@ final class Hops {
    * The final map, checked after the hooks: a restricted name and a control character are the
    * caller's to fix.
    */
-  private static void validate(Map<String, String> headers) {
+  static void validate(Map<String, String> headers) {
     for (Map.Entry<String, String> header : headers.entrySet()) {
       String name = header.getKey();
       if (RESTRICTED.contains(name.toLowerCase(Locale.ROOT))) {

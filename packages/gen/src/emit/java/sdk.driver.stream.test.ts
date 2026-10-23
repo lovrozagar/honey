@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Observed } from "../../../tests/integration/conformance/matrix.ts"
 import { gone } from "../shared/__fixtures__/gone.ts"
+import { createHash } from "node:crypto"
 import { sse as sseDocument } from "../shared/__fixtures__/documents-streams.ts"
 import type { Script } from "../shared/__fixtures__/protocol.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
@@ -258,8 +259,14 @@ const STREAM_REFUSALS: readonly (readonly [Call, Script | undefined, string])[] 
 	[ticks(), { calls: [{ realtime: {} }] }, "a realtime script on an SSE operation"],
 	[ticks(), { calls: [{ ws: { on: true } }] }, "a ws script on an SSE operation"],
 	[ticks({ raw: true }), undefined, "raw: true on an SSE operation, which has no single response to read"],
-	[ROOMS, undefined, "a WebSocket operation is driven from phase d2"],
-	[LIVE, undefined, "a realtime operation is driven from phase d2"],
+	[
+		{ ...ROOMS, lastEventId: "1" },
+		undefined,
+		"lastEventId on a WebSocket operation: only an SSE or realtime call resumes by event id",
+	],
+	[ROOMS, { calls: [{ realtime: { maxReconnectAttempts: 1 } }] }, "a realtime script on a WebSocket operation"],
+	[{ ...ROOMS, raw: true }, undefined, "raw: true on a WebSocket operation, which has no single response to read"],
+	[LIVE, undefined, "a realtime operation is driven from phase d2b"],
 	[{ ...ECHO, take: 1 }, undefined, "take on an operation that does not stream"],
 	[{ ...ECHO, send: ["x"] }, undefined, "send on an operation that does not stream"],
 	[{ ...ECHO, lastEventId: "1" }, undefined, "lastEventId on an operation that does not stream"],
@@ -282,6 +289,15 @@ const SCRIPT_REFUSALS: readonly (readonly [Script, string])[] = [
 		{ calls: [{ isErrors: ["ErrSSELineTooLong"] }] },
 		"script: call 0: isErrors is Go's errors.Is; the Java trace records the type and text",
 	],
+	[
+		{ calls: [{ ws: { readLimit: 1024 } }] },
+		"script: call 0: ws.readLimit is Go's SetReadLimit; a Java socket caps a message at 16 MiB",
+	],
+	[
+		{ calls: [{ ws: { send: [{ json: 1, text: "t" } as never] } }] },
+		"script: call 0: ws.send: a message holds exactly one of json, text and bytes",
+	],
+	[{ calls: [{ ws: { lines: 1 } as never }] }, "script: unknown member lines"],
 ]
 
 describe.skipIf(!JAVA)("the Java test driver: what it refuses on a call, nothing sent", SLOW, () => {
@@ -298,6 +314,122 @@ describe.skipIf(!JAVA)("the Java test driver: what it refuses on a call, nothing
 		expect({ hops, runs: runs.map((run) => [run.status, run.stderr.trim(), run.observed]) }).toEqual({
 			hops: 0,
 			runs: cases.map(([, , reason]) => [1, `driver: ${reason}`, undefined]),
+		})
+	})
+})
+
+const ws = (steps: NonNullable<Reply["ws"]>["steps"]): Reply => ({ status: 101, ws: { steps } })
+const rooms = (extra: Partial<Call> = {}): Call => ({ ...ROOMS, ...extra })
+
+/** The `ws` registry SDK with the driver aimed at it, which must build. */
+function onWs(): DrivenJavaSdk {
+	const sdk = drivenJavaSdk("ws")
+	expect(sdk.built, sdk.diagnostics.join("\n")).toBe(true)
+	return sdk
+}
+
+describe("javaCallPlans: a WebSocket operation's plan", () => {
+	/* new: C# sdk.driver.stream.test.ts:172 (K2: a declared reconnect_token query folds into the token field) */
+	it("names the ws stream kind, the protocols and token fields, the folded query, and no idempotency key", () => {
+		expect(javaCallPlans(FIXTURES.ws.document())["rooms.socket"]).toEqual(
+			expect.objectContaining({
+				accessors: ["rooms"],
+				idempotencyKey: null,
+				lastEventId: null,
+				method: "socket",
+				protocols: "protocols",
+				query: { since: "since" },
+				reconnectToken: "reconnectToken",
+				stream: "ws",
+			}),
+		)
+	})
+})
+
+describe.skipIf(!JAVA)("the Java test driver: a WebSocket, TypedWebSocket", SLOW, () => {
+	/* new: C# sdk.driver.stream.test.ts:341 */
+	it("records handlers, sends the grid's text then the scripted JSON, text and bytes, reads take frames, and closes as scripted", async () => {
+		const send = [{ json: { a: 1 } }, { text: "t" }, { bytes: 3 }]
+		const script: Script = { calls: [{ ws: { close: { code: 1001, reason: "bye" }, on: true, send } }] }
+		const reply = ws([{ receive: 4 }, { json: { ok: true } }])
+		const { run, streams } = await drive(onWs(), [reply], [rooms({ send: ['{"x":1}'], take: 1 })], script)
+		expect({ observed: run.observed, stream: run.trace?.calls[0]?.stream }, run.stderr).toEqual({
+			observed: [{ frames: [{ ok: true }], kind: "frames" }],
+			stream: {
+				handlers: [
+					{ data: '{"ok":true}', event: "message" },
+					{ data: "bye", event: "close" },
+				],
+				yields: 1,
+			},
+		})
+		const three = createHash("sha256")
+			.update(Buffer.from([0, 1, 2]))
+			.digest("hex")
+		expect(streams[0]?.received).toEqual([
+			{ kind: "text", text: '{"x":1}' },
+			{ kind: "text", text: '{"a":1}' },
+			{ kind: "text", text: "t" },
+			{ kind: "binary", sha256: three, size: 3 },
+			{ code: 1001, kind: "close", reason: "bye" },
+		])
+	})
+})
+
+describe.skipIf(!JAVA)("the Java test driver: how a WebSocket read ends", SLOW, () => {
+	/* new: C# sdk.driver.stream.test.ts:382 */
+	it("ends on the server's close frame as closedBy, and on a drop with the error traced via stream, each end fired once", async () => {
+		const replies = [
+			ws([{ close: { code: 1000, reason: "done" } }]),
+			ws([{ text: "one" }, { waitMs: 50 }, { drop: true }]),
+		]
+		const script: Script = { calls: [{ ws: { on: true } }, { ws: { on: true } }] }
+		const { run } = await drive(onWs(), replies, [rooms(), rooms()], script)
+		const ends = (run.trace?.calls ?? []).map(({ error, stream }) => ({
+			chain: error?.chain,
+			closeError: stream?.closeError,
+			closedBy: stream?.closedBy,
+			handlers: stream?.handlers?.map((h) => `${h.event} ${h.data}`),
+			via: error?.via,
+		}))
+		expect(run.observed, run.stderr).toEqual([
+			{ frames: [], kind: "frames" },
+			{ frames: ["one"], kind: "frames" },
+		])
+		expect(ends).toEqual([
+			{
+				chain: undefined,
+				closeError: undefined,
+				closedBy: { code: 1000, reason: "done" },
+				handlers: ["close done"],
+				via: undefined,
+			},
+			{
+				chain: CONNECTION,
+				closeError: undefined,
+				closedBy: undefined,
+				handlers: ["message one", "error the WebSocket failed"],
+				via: "stream",
+			},
+		])
+	})
+
+	/* new: C# sdk.driver.stream.test.ts:418 */
+	it("keeps reading after a send fails: the server's close frame still waiting is closedBy, the send's error traced", async () => {
+		const reply = ws([{ close: { code: 4401, hangUp: true, reason: "unauthorized" } }])
+		const script: Script = { calls: [{ ws: { on: true, send: [{ bytes: 12 << 20 }] } }] }
+		const { run } = await drive(onWs(), [reply], [rooms()], script)
+		const call = run.trace?.calls[0]
+		const seen = {
+			closedBy: call?.stream?.closedBy,
+			error: [call?.error?.type, call?.error?.via],
+			yields: call?.stream?.yields,
+		}
+		expect({ ...seen, observed: run.observed }, run.stderr).toEqual({
+			closedBy: { code: 4401, reason: "unauthorized" },
+			error: ["ApiConnectionException", "stream"],
+			observed: [{ frames: [], kind: "frames" }],
+			yields: 0,
 		})
 	})
 })

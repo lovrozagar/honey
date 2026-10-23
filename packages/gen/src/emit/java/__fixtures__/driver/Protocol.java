@@ -27,7 +27,10 @@ final class Protocol {
 
   private Protocol() {}
 
-  /** Refuses the envelope's cell and script, the first problem found, before the SDK loads. */
+  /**
+   * Refuses the envelope's cell and script, the first problem found, before the SDK loads: the
+   * script's own decoding first (another driver's control is refused for what it is), then each call.
+   */
   static void check(JsonNode envelope, JsonNode script) {
     JsonNode cell = Wire.member(envelope, "cell");
     JsonNode calls = Wire.member(cell, "calls");
@@ -35,11 +38,11 @@ final class Protocol {
     if (setup != null) {
       setupRefusal(setup);
     }
-    for (int i = 0; i < calls.size(); i++) {
-      callRefusal(envelope, i, calls.get(i), script == null ? null : entry(script, i));
-    }
     if (script != null) {
       scriptRefusal(script, calls.size());
+    }
+    for (int i = 0; i < calls.size(); i++) {
+      callRefusal(envelope, i, calls.get(i), script == null ? null : entry(script, i));
     }
   }
 
@@ -75,7 +78,13 @@ final class Protocol {
     }
     String stream = Wire.text(plan, "stream");
     String reason =
-        stream == null ? plainReason(call, entry) : "sse".equals(stream) ? sseReason(call, entry) : later(stream);
+        stream == null
+            ? plainReason(call, entry)
+            : switch (stream) {
+              case "sse" -> sseReason(call, entry);
+              case "ws" -> wsReason(call, entry);
+              default -> "a realtime operation is driven from phase d2b";
+            };
     if (reason != null) {
       throw new DriverException("call " + i + " (" + op + "): " + reason);
     }
@@ -121,9 +130,18 @@ final class Protocol {
     return null;
   }
 
-  /** A WebSocket or realtime operation: driven from phase d2. */
-  private static String later(String stream) {
-    return ("ws".equals(stream) ? "a WebSocket" : "a realtime") + " operation is driven from phase d2";
+  /** What a call on a WebSocket operation cannot take: an event id, a realtime script, raw. */
+  private static String wsReason(JsonNode call, JsonNode entry) {
+    if (Wire.member(call, "lastEventId") != null) {
+      return "lastEventId on a WebSocket operation: only an SSE or realtime call resumes by event id";
+    }
+    if (Wire.member(entry, "realtime") != null) {
+      return "a realtime script on a WebSocket operation";
+    }
+    if (Wire.flag(call, "raw")) {
+      return "raw: true on a WebSocket operation, which has no single response to read";
+    }
+    return null;
   }
 
   private static void scriptRefusal(JsonNode script, int cellCalls) {
@@ -154,6 +172,20 @@ final class Protocol {
       throw new DriverException(
           "script: call " + i + ": taskCancel is a Python AsyncSDK task's; a Java call ends by its"
               + " thread's interrupt (cancel)");
+    }
+    if (Wire.member(Wire.member(entry, "ws"), "readLimit") != null) {
+      throw new DriverException(
+          "script: call " + i + ": ws.readLimit is Go's SetReadLimit; a Java socket caps a message at 16 MiB");
+    }
+    JsonNode ws = Wire.member(entry, "ws");
+    if (ws != null) {
+      members(ws, java.util.Set.of("close", "on", "send"), "script");
+      for (JsonNode message : Wire.items(Wire.member(ws, "send"))) {
+        if (message.size() != 1) {
+          throw new DriverException(
+              "script: call " + i + ": ws.send: a message holds exactly one of json, text and bytes");
+        }
+      }
     }
     if (Wire.member(entry, "isErrors") != null) {
       throw new DriverException(

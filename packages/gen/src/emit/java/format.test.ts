@@ -80,11 +80,23 @@ describe.skipIf(!JAVA)(
 			expect(compiledJavaSdk(generateJavaSdk(errors()).files).format()).toEqual([])
 		})
 
-		/* new: a signature, a record header's implements and a switch arm past 100 columns each stayed on one line */
-		it.each(Object.keys(FIXTURES) as FixtureKey[])("lists nothing for the %s fixture SDK", (key) => {
-			const fixture: JavaFixture = FIXTURES[key]
-			expect(compiledJavaSdk(generateJavaSdk(fixture.document(), fixture.options).files).format()).toEqual([])
-		})
+		/*
+		 * new: a signature, a record header's implements and a switch arm past 100 columns each stayed on one line; and
+		 * the runtime-gating combinations (the d2a ruling: an always-shipped file must never name a gated one), each
+		 * compiled -Werror: zero-op (above), plain operations (errors, http, fixtures), SSE alone (sse), WebSocket alone
+		 * (ws: the core and the WebSocket files), and SSE with WebSocket (streams)
+		 */
+		it.each(Object.keys(FIXTURES) as FixtureKey[])(
+			"compiles the %s fixture SDK clean, and GJF lists nothing",
+			(key) => {
+				const fixture: JavaFixture = FIXTURES[key]
+				const built = compiledJavaSdk(generateJavaSdk(fixture.document(), fixture.options).files)
+				expect({ diagnostics: built.javac.diagnostics, format: built.format() }).toEqual({
+					diagnostics: [],
+					format: [],
+				})
+			},
+		)
 	},
 )
 

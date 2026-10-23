@@ -102,13 +102,27 @@ export type AsyncRun = { readonly status: number | null; readonly stderr: string
 
 /**
  * The pinned JDK `major`'s `java` on `args`, asynchronously: `input` on stdin, both streams collected. Async so the
- * in-process recording server (shared/__fixtures__/recording-server.ts) answers the JVM while it runs.
+ * in-process recording server (shared/__fixtures__/recording-server.ts) answers the JVM while it runs. With `killAfterMs`,
+ * a JVM still running then is killed (status null), stderr saying so: a program that hangs reds in seconds, never at
+ * the describe's 600 s bound.
  */
-export function execJava(major: number, args: readonly string[], options: RunOptions = {}): Promise<AsyncRun> {
+export function execJava(
+	major: number,
+	args: readonly string[],
+	options: RunOptions & { readonly killAfterMs?: number } = {},
+): Promise<AsyncRun> {
 	return new Promise((done, reject) => {
 		const child = spawn(join(javaHome(major), "bin/java"), [...args], { cwd: options.cwd, env: javaEnv() })
 		let stdout = ""
 		let stderr = ""
+		const bound =
+			options.killAfterMs === undefined
+				? undefined
+				: setTimeout(() => {
+						stderr += `honey: the program was killed, still running after ${options.killAfterMs} ms\n`
+						child.kill("SIGKILL")
+					}, options.killAfterMs)
+		child.on("close", () => clearTimeout(bound))
 		child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
 			stdout += chunk
 		})

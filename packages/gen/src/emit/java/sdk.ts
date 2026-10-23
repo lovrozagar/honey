@@ -22,6 +22,7 @@ import { type JavaCallPlan } from "./sdk-plan.ts"
 import { surfaceOf, type SurfaceEnv } from "./sdk-client.ts"
 import { javaTypeContext } from "./models.ts"
 import { SSE_FILES } from "./sse.ts"
+import { WS_FILES } from "./ws.ts"
 import { sdkModel } from "../../ir/sdk-model.ts"
 import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 
@@ -113,6 +114,8 @@ export type JavaRuntimeFeatures = {
 	readonly operations: boolean
 	/** the phase-a transport holder, which a document with no operation ships alone */
 	readonly transport: boolean
+	/** the WebSocket runtime, which only a document with a WebSocket operation ships */
+	readonly ws: boolean
 }
 
 /** The vendored runtime's operation files, the exchange machinery a call needs. */
@@ -153,13 +156,14 @@ const OPERATION_FILES = [
 /** The vendored runtime's files by class name, read from disk on every call, in `packageName`; every file by default. */
 export function runtimeFiles(
 	packageName: string,
-	features: JavaRuntimeFeatures = { json: true, opt: true, operations: true, transport: true },
+	features: JavaRuntimeFeatures = { json: true, opt: true, operations: true, transport: true, ws: true },
 ): Record<string, string> {
 	const names = [
 		...(features.json ? ["Json"] : []),
 		...(features.opt ? ["Opt"] : []),
 		...(features.transport ? ["Transport"] : []),
 		...(features.operations ? [...OPERATION_FILES, ...STALE_FILES, ...SSE_FILES] : []),
+		...(features.ws ? WS_FILES : []),
 	]
 	return Object.fromEntries(
 		names.map((name) => [
@@ -222,6 +226,7 @@ function emitJava(document: Record<string, unknown>, options: JavaSdkOptions) {
 		operations,
 		opt: [...decls.values()].some((decl) => /\bOpt</.test(decl)) || operations,
 		transport: !operations,
+		ws: model.ops.some((op) => op.stream === "ws"),
 	}
 	const runtime = Object.entries(runtimeFiles(pkg.packageName, features)).map(([name, text]): [string, string] => [
 		`${dir}/${name}.java`,

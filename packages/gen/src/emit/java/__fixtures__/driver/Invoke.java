@@ -41,7 +41,7 @@ final class Invoke {
     Observe.Ask ask =
         new Observe.Ask(Wire.flag(call, "raw"), run.scripted(), Wire.flag(entry, "envelope"), holder);
     if (Wire.member(plan, "stream") != null) {
-      return Streams.observe(new Streams.At(run, plan, call, ask, raw), method, target, args, cancel);
+      return Streams.observe(new Streams.At(run, plan, call, entry, ask, raw), method, target, args, cancel);
     }
     Thread thread = Thread.currentThread();
     if (cancel != null && "before".equals(cancel.asString(""))) {

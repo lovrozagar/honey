@@ -58,9 +58,25 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     most 64 KiB under the deadline, the hooks, raw, headersInto and the stale settle at the open); Hops +338, the open
  *     whose deadline bounds the headers alone; Exchange +432, its entry; Call +204, the cursor sent only when set;
  *   - decoding as it flows, 1,701 B: Decode's stream decoder, gzip or deflate started on the first read.
+ * - phase d2a, +21,598 B to 121,179 B measured, the ceiling 121,200 B, after a 175 B cut (the end's second once-flag,
+ *   the keepalive's own stop flag folded into the socket's end, the facade's text helper): WebSocket, shipped only with
+ *   an SDK that has a WebSocket operation (C#'s WS set, 16,564 B; Java's 5,042 B more is what the JDK leaves to its
+ *   caller: the keepalive, the send gate and the client's legal close codes), nothing dead to cut (every member is
+ *   reached by an emitted socket method):
+ *   - the socket, 9,393 B: Socket, the JDK listener assembling each message up to 16 MiB (refused within one partial,
+ *     closed 1008), its demand pulled by receive alone, the one send gate every frame and ping takes, a remote end
+ *     queued behind the messages before it, the server's close echoed, close()'s echo awaited, one end event;
+ *   - the dial, 6,018 B net: WsDial 6,026, the call's headers layered with no hook and no log, a restricted name refused,
+ *     the subprotocols offered, the call's timeout bounding the handshake alone, a refused handshake as its status
+ *     exception (its body read at most 64 KiB) or a named 101 failure; Hops -8, its header check shared;
+ *   - the surface, 4,547 B: TypedWebSocket 2,760, the public socket (receive, the sends, the closes, closedBy,
+ *     subprotocol, the handlers); WsClose 1,348, the close and the codes a client may send (1000, 1001, 1008, 1011 and
+ *     3000-4999), its reason cut to 123 bytes on a code point; WsMessage 439;
+ *   - the keepalive, 1,640 B: Keepalive, a ping each 20 s through the gate, its pong clock started when it is sent, an
+ *     unanswered one ending the socket (C#'s KeepAliveInterval and KeepAliveTimeout, ClientWebSocket's own).
  * Each later phase raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 99600
+const JAVA_RUNTIME_BYTES = 121200
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

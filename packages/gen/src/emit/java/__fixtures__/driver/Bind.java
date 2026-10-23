@@ -41,6 +41,14 @@ final class Bind {
       }
       fields.put(param, cursor);
     }
+    JsonNode token = Wire.member(call, "reconnectToken");
+    if (token != null) {
+      fields.put(Wire.text(plan, "reconnectToken"), token);
+    }
+    JsonNode protocols = Wire.member(entry, "protocols");
+    if (protocols != null) {
+      fields.put(Wire.text(plan, "protocols"), protocols);
+    }
     String key = Wire.text(entry, "idempotencyKey");
     if (key != null) {
       String param = Wire.text(plan, "idempotencyKey");

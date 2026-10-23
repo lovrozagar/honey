@@ -8,13 +8,14 @@ import type { SdkOp } from "../../ir/sdk-model.ts"
 import { compareCodeUnits, javaIdentifier, javaTypeName, NameScope } from "../shared/lang.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
 import { CURSOR, isLastEventIdHeader, LAST_EVENT_ID } from "./sse.ts"
+import { isReconnectTokenQuery, PROTOCOLS, RECONNECT_TOKEN, TOKEN } from "./ws.ts"
 
 /** One record field: its spec name, its Java identifier and type, where it goes, and whether it is required. */
 export type Field = {
 	readonly name: string
 	readonly field: string
 	readonly type: string
-	readonly where: "path" | "body" | "query" | "header" | "key" | "cursor"
+	readonly where: "path" | "body" | "query" | "header" | "key" | "cursor" | "protocols" | "token"
 	readonly required: boolean
 }
 
@@ -34,13 +35,15 @@ const typeAt = (schema: IRSchema, op: SdkOp, name: string, ctx: JavaTypeContext)
  * Last-Event-ID header folds into it. A stream takes no idempotency key.
  */
 export function fieldsOf(op: SdkOp, ctx: JavaTypeContext): Field[] {
-	const sse = op.stream === "sse"
-	const scope = new NameScope([...RECORD_RESERVED, ...(sse ? [CURSOR] : [])])
+	const own = streamFields(op)
+	const scope = new NameScope([...RECORD_RESERVED, ...own.map((f) => f.field)])
 	const segments = op.pathSegments.flatMap((segment) => (segment.kind === "param" ? [segment.name] : []))
 	const path = segments.flatMap((name) => op.pathParams.filter((p) => p.name === name))
-	const query = [...op.query].sort((a, b) => compareCodeUnits(a.name, b.name))
+	const query = [...op.query]
+		.filter((param) => op.stream !== "ws" || !isReconnectTokenQuery(param.name))
+		.sort((a, b) => compareCodeUnits(a.name, b.name))
 	const headers = [...op.headers]
-		.filter((param) => !sse || !isLastEventIdHeader(param.name))
+		.filter((param) => op.stream !== "sse" || !isLastEventIdHeader(param.name))
 		.sort((a, b) => compareCodeUnits(a.name, b.name))
 	const fields: Field[] = []
 	for (const param of path) {
@@ -78,7 +81,7 @@ export function fieldsOf(op: SdkOp, ctx: JavaTypeContext): Field[] {
 		})
 	}
 	const declared = headers.some((param) => param.name.toLowerCase() === KEY_HEADER.toLowerCase())
-	if (sse) fields.push({ field: CURSOR, name: LAST_EVENT_ID, required: false, type: "String", where: "cursor" })
+	fields.push(...own)
 	if (op.idempotent && !declared && op.stream === null) {
 		fields.push({
 			field: scope.claim("idempotencyKey"),
@@ -89,6 +92,17 @@ export function fieldsOf(op: SdkOp, ctx: JavaTypeContext): Field[] {
 		})
 	}
 	return fields
+}
+
+/** A stream's own fields, after the declared ones: SSE's cursor (J7), a socket's protocols and token (K2). */
+function streamFields(op: SdkOp): Field[] {
+	if (op.stream === "sse")
+		return [{ field: CURSOR, name: LAST_EVENT_ID, required: false, type: "String", where: "cursor" }]
+	if (op.stream !== "ws") return []
+	return [
+		{ field: PROTOCOLS, name: PROTOCOLS, required: false, type: "List<String>", where: "protocols" },
+		{ field: TOKEN, name: RECONNECT_TOKEN, required: false, type: "String", where: "token" },
+	]
 }
 
 /** A body's Java type: a schema's, `String` for text, `BinaryBody` for binary, `<Op>Body` for multipart. */

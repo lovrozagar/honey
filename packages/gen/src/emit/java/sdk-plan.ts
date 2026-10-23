@@ -27,6 +27,10 @@ export type JavaCallPlan = {
 	readonly idempotencyKey: string | null
 	/** an SSE operation's cursor field, sent as Last-Event-ID; null for any other operation */
 	readonly lastEventId: string | null
+	/** a WebSocket operation's subprotocols field; null for any other operation */
+	readonly protocols: string | null
+	/** a WebSocket operation's resume token field, sent as reconnect_token; null for any other operation */
+	readonly reconnectToken: string | null
 	readonly response: SdkResponseKind
 	/** the `<Op>Headers` holder the method takes as `headersInto`, each declared header to its accessor; null without one */
 	readonly responseHeaders: { readonly type: string; readonly fields: Readonly<Record<string, string>> } | null

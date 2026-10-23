@@ -187,7 +187,10 @@ function driven(dir: string, classpath: readonly string[], main: string, source:
 	return finished({ status: ran.status, stderr: ran.stderr, stdout: ran.stdout }, ready.diagnostics)
 }
 
-/** The driver `source` run asynchronously on `jdk`'s java. */
+/** How long an asynchronous program may run: a hung socket or stream reds in seconds (the slowest green one runs 6 s). */
+const PROGRAM_BOUND_MS = 15_000
+
+/** The driver `source` run asynchronously on `jdk`'s java, killed if it outlives the bound. */
 async function drivenAsync(
 	dir: string,
 	classpath: readonly string[],
@@ -195,7 +198,10 @@ async function drivenAsync(
 ): Promise<JavaRun> {
 	const ready = prepared(dir, classpath, main, source)
 	if ("status" in ready) return ready
-	const ran: AsyncRun = await execJava(jdk, ["-cp", ready.cp, ready.main], { cwd: ready.dir })
+	const ran: AsyncRun = await execJava(jdk, ["-cp", ready.cp, ready.main], {
+		cwd: ready.dir,
+		killAfterMs: PROGRAM_BOUND_MS,
+	})
 	return finished(ran, ready.diagnostics)
 }
 

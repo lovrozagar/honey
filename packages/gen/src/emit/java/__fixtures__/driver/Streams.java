@@ -25,7 +25,7 @@ final class Streams {
   private Streams() {}
 
   /** What a stream call needs: the run, its plan, the grid call, its script entry and its ask. */
-  record At(Invoke.Run run, JsonNode plan, JsonNode call, Observe.Ask ask, Object raw) {}
+  record At(Invoke.Run run, JsonNode plan, JsonNode call, JsonNode entry, Observe.Ask ask, Object raw) {}
 
   /** {@code method} on {@code target} opened and read on a worker under the watchdog and the cancel. */
   static Observe.Outcome observe(At at, Method method, Object target, Object[] args, JsonNode cancel) {
@@ -78,7 +78,9 @@ final class Streams {
     } catch (IllegalAccessException e) {
       throw new DriverException(Wire.text(at.plan(), "method") + " is not accessible");
     }
-    return events(at, stream);
+    return "ws".equals(Wire.text(at.plan(), "stream"))
+        ? Sockets.frames(at, stream, Wire.member(at.entry(), "ws"))
+        : events(at, stream);
   }
 
   /**
@@ -148,7 +150,7 @@ final class Streams {
    * What an open stream delivered: its failure traced via "stream"; unscripted, a failure other than
    * a cancel fails the run.
    */
-  private static Observe.Outcome streamed(
+  static Observe.Outcome streamed(
       At at, ObjectNode seen, RuntimeException failure, ObjectNode trace) {
     if (failure == null) {
       return new Observe.Outcome(seen, null, null, trace);

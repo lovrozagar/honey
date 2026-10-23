@@ -52,6 +52,11 @@ export const FIXTURES = {
 	/** the event streams (phase d1): the shared `sse` document, as C#'s registry builds it */
 	sse: { document: streams.sse },
 	"sse-safe": { document: streams.sse, options: { throwOnError: false } },
+	/** the WebSockets (phase d2a): the shared `ws` document */
+	ws: { document: streams.ws },
+	"ws-safe": { document: streams.ws, options: { throwOnError: false } },
+	/** SSE and WebSocket operations in one SDK: the core and the WebSocket files together (the gating combinations) */
+	streams: { document: () => merged({ sse: streams.sse(), ws: streams.ws() }) },
 } as const satisfies Record<string, JavaFixture>
 
 export type FixtureKey = keyof typeof FIXTURES

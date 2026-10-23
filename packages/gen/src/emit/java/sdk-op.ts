@@ -13,6 +13,7 @@ import { type JavaTypeContext, javaTypeOf } from "./models.ts"
 import { assigned, docOf, layout } from "./sdk-decl.ts"
 import { type JavaHeaders, javaResponseHeaders } from "./sdk-headers.ts"
 import { sseMethodLines } from "./sse.ts"
+import { wsMethodLines } from "./ws.ts"
 import { multipartRecordLines, paramsRecord } from "./sdk-record.ts"
 import type { JavaCallPlan } from "./sdk-plan.ts"
 import { type Field, fieldsOf, multipartRecord, paramsName } from "./sdk-params.ts"
@@ -107,7 +108,7 @@ function multipartHelper(op: SdkOp, env: OpEnv): string[] {
 
 /** One query or header param's `Call.Arg`; the cursor's sends nothing when it is unset or empty. */
 const arg = (f: Field) =>
-	`Call.Arg.${f.where === "cursor" ? "cursor" : "of"}(${javaString(f.name)}, params.${f.field}())`
+	`Call.Arg.${f.where === "cursor" || f.where === "token" ? "cursor" : "of"}(${javaString(f.name)}, params.${f.field}())`
 
 /** One `List<Call.Arg>` local of `items`, as its own statement. */
 const list = (name: string, items: readonly string[]) =>
@@ -116,7 +117,7 @@ const list = (name: string, items: readonly string[]) =>
 /** The lines that build the `Call`: its path array, its query and header lists, its body, each as its own statement. */
 function callLines(fields: readonly Field[], op: SdkOp): string[] {
 	const path = fields.filter((f) => f.where === "path").map((f) => `params.${f.field}()`)
-	const query = fields.filter((f) => f.where === "query").map(arg)
+	const query = fields.filter((f) => f.where === "query" || f.where === "token").map(arg)
 	const headers = fields.filter((f) => f.where === "header" || f.where === "key" || f.where === "cursor").map(arg)
 	return [
 		`    String[] path = {${path.join(", ")}};`,
@@ -146,6 +147,8 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 		const params = paramsName(op, env.ctx)
 		return sseMethodLines(op, { call: callLines(fields, op), constant, headers, name, params }, env.ctx)
 	}
+	if (op.stream === "ws")
+		return wsMethodLines(op, { call: callLines(fields, op), constant, name, params: paramsName(op, env.ctx) })
 	const answer = answerOf(op, env)
 	const safe = !env.throwOnError
 	const isVoid = answer.type === "void" && !safe
@@ -211,12 +214,16 @@ function constantLines(op: SdkOp, constant: string): string[] {
 	return assigned("  ", `private static final Operation ${constant}`, { items, prefix: "new Operation(", suffix: ");" })
 }
 
+/** A stream's own fields as the plan names them: SSE's cursor, a socket's protocols and token; null where absent. */
+const streamPlan = (fields: readonly Field[]) => {
+	const field = (where: Field["where"]) => fields.find((f) => f.where === where)?.field ?? null
+	return { lastEventId: field("cursor"), protocols: field("protocols"), reconnectToken: field("token") }
+}
+
 /** One operation's text and plan, with its accessors left to the resource tree. */
 export function javaOp(op: SdkOp, name: string, env: OpEnv): JavaOp {
-	if (op.stream !== null && op.stream !== "sse")
-		throw new Error(
-			`${op.id}: the Java SDK emits no ${op.stream} operation until phase d2, where WebSocket and realtime land`,
-		)
+	if (op.stream === "realtime")
+		throw new Error(`${op.id}: the Java SDK emits no realtime operation until phase d2b, where realtime lands`)
 	const fields = fieldsOf(op, env.ctx)
 	const headers = javaResponseHeaders(op, env)
 	const constant = constantOf(name)
@@ -227,7 +234,7 @@ export function javaOp(op: SdkOp, name: string, env: OpEnv): JavaOp {
 			fields.filter((f) => f.where === "header" || f.where === "key").map((f) => [f.name, f.field]),
 		),
 		idempotencyKey: fields.find((f) => f.where === "key")?.field ?? null,
-		lastEventId: fields.find((f) => f.where === "cursor")?.field ?? null,
+		...streamPlan(fields),
 		method: name,
 		operation: op.id,
 		options: true,
