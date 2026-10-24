@@ -139,12 +139,12 @@ export type PartFlag = {
 /** Each parameter flag `op` takes, path ones first, and each scalar body field's, claimed in one scope beside the global flags. */
 export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Record<string, IRSchema>>): CommandFlags {
 	const scope = new NameScope(GLOBAL_FLAGS)
-	const declare: string[] = []
+	const lines: string[] = []
 	const opts: string[] = []
 	const usage: Usage[] = []
 	if (plan.pathParams.length > 0) {
 		const names = plan.pathParams.map((name) => scope.claim(kebab(name)))
-		declare.push(`\tp.Path(${names.map(goString).join(", ")})`)
+		lines.push(`\tp.Path(${names.map(goString).join(", ")})`)
 		usage.push(
 			...names.map((name, i) => ({ kind: STRING, name, param: plan.pathParams[i], positional: true, required: true })),
 		)
@@ -156,7 +156,7 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 			const name = scope.claim(kebab(spec.name))
 			const kind = kindOf(spec.schema, schemas)
 			usage.push({ kind, name, param: spec.name, positional: false, required: spec.required === true })
-			declare.push(flagLine(name, kind, spec.required === true, spec.description ?? ""))
+			lines.push(flagLine(name, kind, spec.required === true, spec.description ?? ""))
 			opts.push(
 				`\tif err := cli.Set(&opts.${field}, p.Values(${goString(name)})); err != nil {`,
 				"\t\treturn err",
@@ -166,19 +166,19 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 	}
 	params(op.query, plan.query)
 	params(op.headers, plan.headers)
-	if (op.stream !== null) streamFlags(op.stream, declare, opts)
+	if (op.stream !== null) streamFlags(op.stream, lines, opts)
 	if (op.body?.kind === "multipart") {
-		const parts = partFlags(op, plan, { declare, schemas, scope })
+		const parts = partFlags(op, plan, { declare: lines, schemas, scope })
 		for (const part of parts) {
 			const kind = part.file ? { ...STRING, kind: "path" } : (part.kind as Kind)
 			usage.push({ kind: { ...kind, list: part.list }, name: part.flag, positional: false, required: false })
 		}
-		return { declare, fields: [], opts, parts, usage }
+		return { declare: lines, fields: [], opts, parts, usage }
 	}
-	const fields = bodyFields(op, schemas, scope, declare)
+	const fields = bodyFields(op, schemas, scope, lines)
 	if (op.body !== undefined)
 		usage.push({ kind: { ...STRING, kind: op.body.kind }, name: "data", positional: false, required: op.body.required })
-	return { declare, fields, opts, parts: [], usage }
+	return { declare: lines, fields, opts, parts: [], usage }
 }
 
 /** A stream's cursor flags, each `[flag, its Opts field, usage]`: the names GLOBAL_FLAGS keeps from a parameter. */
@@ -187,10 +187,10 @@ const RECONNECT_TOKEN = ["reconnect-token", "ReconnectToken", "resume with this 
 const CURSOR = { realtime: [LAST_EVENT_ID, RECONNECT_TOKEN], sse: [LAST_EVENT_ID], ws: [RECONNECT_TOKEN] }
 
 /** A stream command's own flags: --take, a realtime one's --max-reconnects, and its cursor flags, each set into its Opts field. */
-function streamFlags(stream: NonNullable<SdkOp["stream"]>, declare: string[], opts: string[]): void {
-	declare.push("\tp.Take()")
+function streamFlags(stream: NonNullable<SdkOp["stream"]>, lines: string[], opts: string[]): void {
+	lines.push("\tp.Take()")
 	if (stream === "realtime") {
-		declare.push("\tp.MaxReconnects()")
+		lines.push("\tp.MaxReconnects()")
 		opts.push(
 			"\treconnects, err := p.Reconnects()",
 			"\tif err != nil {",
@@ -200,47 +200,47 @@ function streamFlags(stream: NonNullable<SdkOp["stream"]>, declare: string[], op
 		)
 	}
 	for (const [flag, field, usage] of CURSOR[stream]) {
-		declare.push(flagLine(flag, { enum: [], kind: "string", list: false }, false, usage))
+		lines.push(flagLine(flag, { enum: [], kind: "string", list: false }, false, usage))
 		opts.push(`\tif err := cli.Set(&opts.${field}, p.Values(${goString(flag)})); err != nil {`, "\t\treturn err", "\t}")
 	}
 }
 
-/** A multipart body's flags, each declared into `declare` by its part's name: a text part typed by its schema, a file part a path. */
+/** A multipart body's flags, each declared into `lines` by its part's name: a text part typed by its schema, a file part a path. */
 function partFlags(op: SdkOp, plan: GoCallPlan, at: FlagScope): PartFlag[] {
-	const { declare, schemas, scope } = at
+	const { declare: lines, schemas, scope } = at
 	const body = op.body as Extract<SdkOp["body"], { kind: "multipart" }>
 	return (plan.parts as NonNullable<GoCallPlan["parts"]>).map((part) => {
 		const flag = scope.claim(kebab(part.part))
 		if (part.file) {
-			declare.push(
+			lines.push(
 				`\tp.FileFlag(${goString(flag)}, ${part.list}, ${goString(`the ${part.part} part's file, or - for stdin`)})`,
 			)
 			return { field: part.field, file: true, flag, list: part.list }
 		}
 		const spec = body.parts.find((each) => each.name === part.part) as (typeof body.parts)[number]
 		const kind = { ...kindOf(spec.schema as IRSchema, schemas), list: part.list }
-		declare.push(flagLine(flag, kind, false, `the ${part.part} part`))
+		lines.push(flagLine(flag, kind, false, `the ${part.part} part`))
 		return { field: part.field, file: false, flag, kind, list: part.list }
 	})
 }
 
-/** The body's `--data`, then a flag per scalar field of a JSON or form object body, each declared into `declare`. */
+/** The body's `--data`, then a flag per scalar field of a JSON or form object body, each declared into `lines`. */
 function bodyFields(
 	op: SdkOp,
 	schemas: Readonly<Record<string, IRSchema>>,
 	scope: NameScope,
-	declare: string[],
+	lines: string[],
 ): [string, string][] {
 	const body = op.body
 	if (body === undefined) return []
-	declare.push(`\tp.Data(${goString(DATA_USAGE[body.kind])})`)
+	lines.push(`\tp.Data(${goString(DATA_USAGE[body.kind])})`)
 	const object = body.kind === "json" || body.kind === "form" ? resolved(body.schema, schemas) : null
 	if (object?.kind !== "object") return []
 	return object.fields.flatMap((field): [string, string][] => {
 		const kind = kindOf(field.schema, schemas)
 		if (kind.kind === "json") return []
 		const name = scope.claim(kebab(field.name))
-		declare.push(flagLine(name, kind, false, field.description ?? `the body's ${field.name}`))
+		lines.push(flagLine(name, kind, false, field.description ?? `the body's ${field.name}`))
 		return [[name, field.name]]
 	})
 }
