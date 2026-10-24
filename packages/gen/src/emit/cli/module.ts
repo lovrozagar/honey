@@ -15,7 +15,9 @@ import { compareCodeUnits } from "../shared/lang.ts"
 import { generateGoSdk, goCallPlans, WEBSOCKET, WEBSOCKET_SUM } from "../go/sdk.ts"
 import { commandTree } from "./commands.ts"
 import { discoveryEntries } from "./discovery.ts"
+import { installPs1, installSh } from "./install.ts"
 import { cmdFiles } from "./layout.ts"
+import { goreleaserFile, releaseWorkflow } from "./release.ts"
 import { skillFile, skillPath } from "./skills.ts"
 
 export type GoCliOptions = {
@@ -25,6 +27,8 @@ export type GoCliOptions = {
 	readonly modulePath?: string
 	/** the environment variables' prefix: uppercase words joined by `_`; the binary name's by default */
 	readonly envPrefix?: string
+	/** the GitHub repository the release is published to, `owner/name`; none by default (install scripts then need a base) */
+	readonly repo?: string
 }
 
 export type GeneratedGoCli = { readonly files: Readonly<Record<string, string>> }
@@ -80,6 +84,9 @@ const BINARY_NAME = /^(?=.{1,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MODULE_PATH =
 	/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\/[A-Za-z0-9_~-](?:[A-Za-z0-9._~-]*[A-Za-z0-9_~-])?)*$/
 const ENV_PREFIX = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
+/* a GitHub repository: its owner 1 to 39 letters, digits and single inner hyphens; its name 1 to 100 of letters,
+ * digits, `.`, `_` and `-`, not `.` or `..` and not ending in `.git` */
+const REPO = /^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}\/(?!\.\.?$)(?![\s\S]*\.git$)[A-Za-z0-9._-]{1,100}$/
 
 const refuse = (option: string, value: string): never => {
 	throw new Error(`Invalid ${option}: ${JSON.stringify(value)}`)
@@ -93,14 +100,18 @@ export const binaryNameOf = (title: string | undefined): string =>
 		.replace(/^[^a-z]+|-+$/g, "") || "api"
 
 /** The options with every default filled, each refused unless it matches its grammar. */
-function resolved(options: GoCliOptions, title: string | undefined): Required<GoCliOptions> {
+function resolved(
+	options: GoCliOptions,
+	title: string | undefined,
+): Required<Omit<GoCliOptions, "repo">> & Pick<GoCliOptions, "repo"> {
 	const binaryName = options.binaryName ?? binaryNameOf(title)
 	if (!BINARY_NAME.test(binaryName)) refuse("binaryName", binaryName)
 	const modulePath = options.modulePath ?? `example.com/${binaryName}`
 	if (!MODULE_PATH.test(modulePath)) refuse("modulePath", modulePath)
 	const envPrefix = options.envPrefix ?? binaryName.toUpperCase().replaceAll("-", "_")
 	if (!ENV_PREFIX.test(envPrefix)) refuse("envPrefix", envPrefix)
-	return { binaryName, envPrefix, modulePath }
+	if (options.repo !== undefined && !REPO.test(options.repo)) refuse("repo", options.repo)
+	return { binaryName, envPrefix, modulePath, repo: options.repo }
 }
 
 /** A go.sum line's order key: its module path, then its version with each number zero-padded, as Go sorts them. */
@@ -165,7 +176,8 @@ function embeddedSdk(document: Record<string, unknown>, modulePath: string) {
 /** The CLI module for `document`, by file name. */
 export function generateGoCli(document: Record<string, unknown>, options: GoCliOptions = {}): GeneratedGoCli {
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
-	const { binaryName, envPrefix, modulePath } = resolved(options, ir.info.title)
+	const { binaryName, envPrefix, modulePath, repo } = resolved(options, ir.info.title)
+	const install = { bin: binaryName, prefix: envPrefix, repo }
 	const sdk = embeddedSdk(document, modulePath)
 	const model = sdkModel(ir)
 	const nodes = commandTree(model.ops, goCallPlans(document))
@@ -175,6 +187,10 @@ export function generateGoCli(document: Record<string, unknown>, options: GoCliO
 			...moduleFiles(modulePath, sdk.websocket),
 			"main.go": mainFile(modulePath, binaryName),
 			[skillPath(binaryName)]: skillFile(binaryName, app.short, envPrefix, model.ops),
+			".goreleaser.yaml": goreleaserFile(binaryName, modulePath, repo),
+			".github/workflows/release.yml": releaseWorkflow(binaryName),
+			"install.sh": installSh(install),
+			"install.ps1": installPs1(install),
 			...cmdFiles(app, ir, nodes, discoveryEntries(nodes, model)),
 			...runtimeFiles(sdk.websocket),
 			...sdk.files,

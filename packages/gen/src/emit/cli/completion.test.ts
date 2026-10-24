@@ -9,12 +9,12 @@ import { join, resolve } from "node:path"
 import { beforeAll, describe, expect, it } from "vitest"
 import { goCacheDir, withGo } from "../go/__fixtures__/go-env.ts"
 import { builtCli } from "./__fixtures__/built.ts"
-import { type Shell, SHELLS, shellsInstall, syntaxCheck, withShells } from "./__fixtures__/shells.ts"
+import { type Shell, SHELLS, syntaxCheck, toolsInstall, withTools } from "./__fixtures__/tools.ts"
 import { shop } from "./__fixtures__/shop.ts"
 import { generateGoCli } from "./module.ts"
 
 const GO = withGo()
-const SHELLS_PRESENT = withShells()
+const TOOLS_PRESENT = withTools()
 const SLOW = { timeout: 600_000 }
 
 const built = () => builtCli(generateGoCli(shop()).files)
@@ -52,7 +52,7 @@ describe.skipIf(!GO)("dynamic completion (phase e)", SLOW, () => {
 	})
 })
 
-describe.skipIf(!GO || !SHELLS_PRESENT)("each shell's completion script (phase e)", SLOW, () => {
+describe.skipIf(!GO || !TOOLS_PRESENT)("each shell's completion script (phase e)", SLOW, () => {
 	beforeAll(() => void built(), SLOW.timeout)
 
 	it.each(SHELLS)("writes a %s script its shell parses, the shell rejecting a broken one", async (shell) => {
@@ -70,10 +70,10 @@ describe.skipIf(!GO || !SHELLS_PRESENT)("each shell's completion script (phase e
 	})
 })
 
-describe("the pinned shells in CI (phase e)", () => {
+describe("the pinned tools in CI (phase e)", () => {
 	it("installs them in the test job by the command the fixture names, verbatim", () => {
 		const workflow = readFileSync(resolve(import.meta.dirname, "../../../../../.github/workflows/ci.yml"), "utf8")
 		const test = workflow.slice(workflow.indexOf("\n  test:\n"), workflow.indexOf("\n  gen-rust:\n"))
-		expect(test.split("\n").some((line) => line.trim() === `run: ${shellsInstall()}`)).toBe(true)
+		expect(test.split("\n").some((line) => line.trim() === `run: ${toolsInstall()}`)).toBe(true)
 	})
 })

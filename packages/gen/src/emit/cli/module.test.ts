@@ -142,11 +142,15 @@ describe("generateGoCli: the zero-op module's files", () => {
 		const sdk = Object.keys(generateGoSdk(ZERO).files).filter((name) => name !== "go.mod" && name !== "go.sum")
 		expect(Object.keys(zero()).sort()).toEqual(
 			[
+				".github/workflows/release.yml",
+				".goreleaser.yaml",
 				"cmd/client.go",
 				"cmd/discovery.go",
 				"cmd/root.go",
 				"go.mod",
 				"go.sum",
+				"install.ps1",
+				"install.sh",
 				...CLI_RUNTIME.filter((name) => name !== "socket.go").map((name) => `internal/cli/${name}`),
 				"main.go",
 				"skills/anyrow/SKILL.md",

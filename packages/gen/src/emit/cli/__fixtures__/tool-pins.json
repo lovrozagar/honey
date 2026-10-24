@@ -5,11 +5,23 @@
 		"sha256": "8f643d10ad1abb0ef7072764c01ceb5cf61b2d373fda400cf60f0bad69b7e095",
 		"url": "https://github.com/fish-shell/fish-shell/releases/download/4.9.3/fish-4.9.3-linux-x86_64.tar.xz"
 	},
+	"goreleaser": {
+		"bin": "goreleaser",
+		"dir": "goreleaser-2.18.3",
+		"sha256": "b8dee4728bca1aba0d71a832a17cd0a3799f75372878e7ffa36aef2343bce0bc",
+		"url": "https://github.com/goreleaser/goreleaser/releases/download/v2.18.3/goreleaser_Linux_x86_64.tar.gz"
+	},
 	"pwsh": {
 		"bin": "pwsh",
 		"dir": "pwsh-7.6.6",
 		"sha256": "ddbc4a2d113bbd46d283cfedcbcd117a70caefd7673f41f2b4e0000badf103bc",
 		"url": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/powershell-7.6.6-linux-x64.tar.gz"
+	},
+	"shellcheck": {
+		"bin": "shellcheck-v0.11.0/shellcheck",
+		"dir": "shellcheck-0.11.0",
+		"sha256": "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198",
+		"url": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
 	},
 	"zsh": {
 		"bin": "bin/zsh",

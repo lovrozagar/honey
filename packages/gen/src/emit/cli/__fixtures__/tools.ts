@@ -1,7 +1,8 @@
 /**
- * The shells the CLI's completion scripts are checked by (bit 17 phase e): bash from the system, and fish, zsh and
- * PowerShell at the releases `shell-pins.json` pins by sha256, extracted into `$HOME/.cache/honey-tmp/tools/<dir>`
- * by `shellsInstall`'s command after each checksum passes; CI runs that command verbatim. zsh comes from
+ * The tools the CLI's generated files are checked by (bit 17 phases e and g): bash from the system; fish, zsh and
+ * PowerShell for the completion scripts and install.ps1; goreleaser for the release config; shellcheck for install.sh.
+ * Each is the release `tool-pins.json` pins by sha256, extracted into `$HOME/.cache/honey-tmp/tools/<dir>` by
+ * `toolsInstall`'s command after its checksum passes; CI runs that command verbatim. zsh comes from
  * romkatv/zsh-bin, which publishes no digest: its pin is the sha256 of the release asset whose gpg signature checked
  * out against the author's key (8B060F8B9EB395614A669F2A90ACE942EB90C3DD). A missing pin fails where toolchains are
  * required and skips anywhere else; nothing is fetched by a run.
@@ -11,7 +12,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 
-/** A pinned shell: its archive's URL and digest, the directory it extracts to, and its binary there. */
+/** A pinned tool: its archive's URL and digest, the directory it extracts to, and its binary there. */
 type Pin = { readonly bin: string; readonly dir: string; readonly sha256: string; readonly url: string }
 
 /** The shells a completion script is written for, as cobra names them. */
@@ -21,29 +22,30 @@ export type Shell = (typeof SHELLS)[number]
 /* this file's directory, repo-relative, as the install line names it from the repo's top level */
 const FIXTURES = "packages/gen/src/emit/cli/__fixtures__"
 
-const pins = (): Record<"fish" | "pwsh" | "zsh", Pin> =>
-	JSON.parse(readFileSync(resolve(import.meta.dirname, "shell-pins.json"), "utf8")) as Record<
-		"fish" | "pwsh" | "zsh",
-		Pin
-	>
+/** The pinned tools, by name. */
+export const TOOLS = ["fish", "goreleaser", "pwsh", "shellcheck", "zsh"] as const
+export type Tool = (typeof TOOLS)[number]
 
-/** Where the pinned shells live. */
+const pins = (): Record<Tool, Pin> =>
+	JSON.parse(readFileSync(resolve(import.meta.dirname, "tool-pins.json"), "utf8")) as Record<Tool, Pin>
+
+/** Where the pinned tools live. */
 const toolsDir = () => join(process.env.HOME ?? homedir(), ".cache/honey-tmp/tools")
 
-/** A pinned shell's binary. */
-const pinned = (name: "fish" | "pwsh" | "zsh") => join(toolsDir(), pins()[name].dir, pins()[name].bin)
+/** A pinned tool's binary. */
+export const toolBin = (name: Tool) => join(toolsDir(), pins()[name].dir, pins()[name].bin)
 
 /** The binary that checks `shell`'s scripts. */
 const checker = (shell: Shell) =>
-	shell === "bash" ? "bash" : pinned(({ fish: "fish", powershell: "pwsh", zsh: "zsh" } as const)[shell])
+	shell === "bash" ? "bash" : toolBin(({ fish: "fish", powershell: "pwsh", zsh: "zsh" } as const)[shell])
 
 /**
  * The command that installs every pin into the tools cache, from anywhere in the repo: each archive checked against
- * `shell-pins.json`'s sha256 before it is kept, then extracted whole or not at all.
+ * `tool-pins.json`'s sha256 before it is kept, then extracted whole or not at all.
  */
-export function shellsInstall(): string {
+export function toolsInstall(): string {
 	return [
-		`P="$(git rev-parse --show-toplevel)/${FIXTURES}/shell-pins.json" && D="$HOME/.cache/honey-tmp/tools" && mkdir -p "$D/dl"`,
+		`P="$(git rev-parse --show-toplevel)/${FIXTURES}/tool-pins.json" && D="$HOME/.cache/honey-tmp/tools" && mkdir -p "$D/dl"`,
 		`for k in $(jq -r 'keys[]' "$P"); do U="$(jq -r --arg k "$k" '.[$k].url' "$P")" && R="$(jq -r --arg k "$k" '.[$k].dir' "$P")"`,
 		`curl -fsSL -o "$D/dl/$k" "$U" && echo "$(jq -r --arg k "$k" '.[$k].sha256' "$P")  $D/dl/$k" | sha256sum -c -`,
 		`rm -rf "$D/$R" "$D/$R.partial" && mkdir -p "$D/$R.partial" && tar -xf "$D/dl/$k" -C "$D/$R.partial"`,
@@ -51,19 +53,18 @@ export function shellsInstall(): string {
 	].join(" && ")
 }
 
-/** Whether every shell is installed: nothing is fetched here. */
-export const hasShells = (): boolean =>
-	(["fish", "pwsh", "zsh"] as const).every((name) => existsSync(pinned(name))) &&
-	spawnSync("bash", ["--version"]).status === 0
+/** Whether every pinned tool and bash is installed: nothing is fetched here. */
+export const hasTools = (): boolean =>
+	TOOLS.every((name) => existsSync(toolBin(name))) && spawnSync("bash", ["--version"]).status === 0
 
 /**
- * Whether a test runs its shell half: false only where the shells may be absent. A missing pin fails where
+ * Whether a test runs its tools half: false only where the tools may be absent. A missing pin fails where
  * toolchains are required (CI, the pre-push battery), naming its install, and skips anywhere else.
  */
-export function withShells(): boolean {
-	const present = hasShells()
+export function withTools(): boolean {
+	const present = hasTools()
 	if (!present && process.env.HONEY_REQUIRE_TOOLCHAINS === "1")
-		throw new Error(`the pinned shells are required here and are not installed: ${shellsInstall()}`)
+		throw new Error(`the pinned tools are required here and are not installed: ${toolsInstall()}`)
 	return present
 }
 
