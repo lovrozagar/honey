@@ -3,25 +3,245 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-// Print writes an answer to stdout: bytes and text as they came, anything else as one line of
-// compact JSON.
-func Print(c *cobra.Command, answer any) error {
-	out := c.OutOrStdout()
-	switch v := answer.(type) {
-	case []byte:
-		_, err := out.Write(v)
-		return err
-	case string:
-		_, err := out.Write([]byte(v))
+// Answer is one call's outcome as the CLI prints it: the SDK's decoded data (bytes and text as
+// they came), the response it arrived on, and the response headers the operation declares.
+type Answer struct {
+	Data     any
+	Response *http.Response
+	Declared []string
+}
+
+// output is how a run prints: its format, whether it wraps the answer, and where it writes.
+type output struct {
+	format  string
+	include bool
+	raw     bool
+	file    string
+}
+
+// outputFlags declares the flags that choose how an answer is printed.
+func outputFlags(root *cobra.Command) {
+	f := root.PersistentFlags()
+	f.String("format", "", "json, ndjson, yaml or table (default table on a terminal, json otherwise)")
+	f.Bool("json", false, "print one line of compact JSON: --format json")
+	f.StringP("output", "o", "", "write the answer to this file instead of standard output")
+	f.BoolP("include", "i", false, "print {status, headers, data}: the declared response headers beside the data")
+	f.Bool("raw", false, "print {status, headers, body}: the response as it came")
+}
+
+// outputOf resolves c's output flags; stdout is where the answer goes when no file is named.
+func outputOf(c *cobra.Command, stdout io.Writer) (output, error) {
+	flags := c.Flags()
+	o := output{}
+	o.file, _ = flags.GetString("output")
+	o.include, _ = flags.GetBool("include")
+	o.raw, _ = flags.GetBool("raw")
+	o.format, _ = flags.GetString("format")
+	asJSON, _ := flags.GetBool("json")
+	switch {
+	case asJSON && o.format != "" && o.format != "json":
+		return output{format: "json"}, Usage("--json and --format %s disagree", o.format)
+	case asJSON:
+		o.format = "json"
+	case o.format == "" && o.file == "" && terminal(stdout):
+		o.format = "table"
+	case o.format == "":
+		o.format = "json"
+	}
+	switch o.format {
+	case "json", "ndjson", "yaml", "table":
+		return o, nil
+	}
+	return output{format: "json"}, Usage("--format %q: want json, ndjson, yaml or table", o.format)
+}
+
+// terminal is whether w is a terminal a person reads.
+func terminal(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// Print writes an answer by the run's output flags: to the file -o names, else to stdout.
+func Print(c *cobra.Command, answer Answer) error {
+	o, err := outputOf(c, c.OutOrStdout())
+	if err != nil {
 		return err
 	}
-	// the answer's text as sent: <, > and & stay themselves; Encode ends the line
-	encoder := json.NewEncoder(out)
+	text, err := o.render(answer, terminal(c.OutOrStdout()) && o.file == "")
+	if err != nil {
+		return err
+	}
+	if o.file != "" {
+		if err := os.WriteFile(o.file, text, 0o644); err != nil {
+			return Usage("-o: %v", err)
+		}
+		return nil
+	}
+	_, err = c.OutOrStdout().Write(text)
+	return err
+}
+
+// render is the bytes an answer prints as; tty is whether they reach a terminal.
+func (o output) render(answer Answer, tty bool) ([]byte, error) {
+	if o.raw {
+		return o.encode(rawOf(answer))
+	}
+	if data, ok := answer.Data.([]byte); ok {
+		if o.include || tty {
+			return nil, Usage("the answer is binary: write it with -o <file>, or pipe it")
+		}
+		return data, nil
+	}
+	if o.include {
+		return o.encode(map[string]any{"status": statusOf(answer), "headers": declared(answer), "data": answer.Data})
+	}
+	switch data := answer.Data.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		if tty {
+			data = escapeControls(data, true)
+		}
+		return []byte(data), nil
+	}
+	return o.encode(answer.Data)
+}
+
+func statusOf(answer Answer) int {
+	if answer.Response == nil {
+		return 0
+	}
+	return answer.Response.StatusCode
+}
+
+// declared is each declared response header the answer carried, by its lowercase name.
+func declared(answer Answer) map[string]string {
+	out := map[string]string{}
+	if answer.Response == nil {
+		return out
+	}
+	for _, name := range answer.Declared {
+		if values := answer.Response.Header.Values(name); len(values) > 0 {
+			out[strings.ToLower(name)] = strings.Join(values, ", ")
+		}
+	}
+	return out
+}
+
+// rawOf is the response as it came: its status, every header, and its body as text.
+func rawOf(answer Answer) map[string]any {
+	headers := map[string]string{}
+	body := ""
+	if answer.Response != nil {
+		for name, values := range answer.Response.Header {
+			headers[strings.ToLower(name)] = strings.Join(values, ", ")
+		}
+		if answer.Response.Body != nil {
+			read, _ := io.ReadAll(answer.Response.Body)
+			body = string(read)
+		}
+	}
+	return map[string]any{"status": statusOf(answer), "headers": headers, "body": body}
+}
+
+// encode writes v in the run's format, each line or document ended.
+func (o output) encode(v any) ([]byte, error) {
+	line, err := compact(v)
+	if err != nil || o.format == "json" {
+		return line, err
+	}
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	switch o.format {
+	case "ndjson":
+		return ndjson(value)
+	case "yaml":
+		return []byte(yamlOf(value)), nil
+	}
+	return tableOf(value), nil
+}
+
+// compact is v as one line of JSON, the line ended: <, > and & as themselves, and DEL and the
+// C1 controls (which Go leaves raw, and a terminal may act on) escaped, the value the same.
+func compact(v any) ([]byte, error) {
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
 	encoder.SetEscapeHTML(false)
-	return encoder.Encode(answer)
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+	var safe bytes.Buffer
+	for _, r := range out.String() {
+		if r >= 0x7f && r <= 0x9f {
+			fmt.Fprintf(&safe, "\\u%04x", r)
+			continue
+		}
+		safe.WriteRune(r)
+	}
+	return safe.Bytes(), nil
+}
+
+// ndjson is a list as one compact line per item; anything else as one line.
+func ndjson(value any) ([]byte, error) {
+	items, ok := value.([]any)
+	if !ok {
+		return compact(value)
+	}
+	var out bytes.Buffer
+	for _, item := range items {
+		line, err := compact(item)
+		if err != nil {
+			return nil, err
+		}
+		out.Write(line)
+	}
+	return out.Bytes(), nil
+}
+
+// escapeControls writes each control character as its Go escape (\x1b), so data never drives a
+// terminal; newlines and tabs stay as they are when keepLines.
+func escapeControls(text string, keepLines bool) string {
+	var out strings.Builder
+	for _, r := range text {
+		switch {
+		case keepLines && (r == '\n' || r == '\t'):
+			out.WriteRune(r)
+		case r < 0x20 || (r >= 0x7f && r <= 0x9f) || r == 0x2028 || r == 0x2029 || r == 0xfeff:
+			quoted := fmt.Sprintf("%+q", string(r))
+			out.WriteString(quoted[1 : len(quoted)-1])
+		default:
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+// sortedKeys is a map's keys in order.
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

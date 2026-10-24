@@ -201,7 +201,11 @@ describe.skipIf(!GO)("the config file: where it is found, and what it refuses (p
 			(s) => ({ SHOP_BASE_URL: s.url, ...config, ...("env" in given ? given.env : {}) }),
 			["items", "get", "i1", ...given.args],
 		)
-		expect([ran.status, ran.stderr.includes(message), ran.hops.length]).toEqual([4, true, 0])
+		expect([
+			ran.status,
+			(JSON.parse(ran.stderr) as { error: { message: string } }).error.message.includes(message),
+			ran.hops.length,
+		]).toEqual([4, true, 0])
 	})
 })
 
@@ -226,9 +230,11 @@ describe.skipIf(!GO)("the config file's key warning, and the API with no server 
 
 	it("refuses a call with no base URL when the API declares no server", async () => {
 		const ran = await run(() => ({}))
-		expect([ran.status, ran.stderr]).toEqual([
+		expect([ran.status, JSON.parse(ran.stderr)]).toEqual([
 			4,
-			"shop: no base URL: set --base-url, $SHOP_BASE_URL or base_url in the config file\n",
+			{
+				error: { kind: "usage", message: "no base URL: set --base-url, $SHOP_BASE_URL or base_url in the config file" },
+			},
 		])
 	})
 })
@@ -288,5 +294,31 @@ describe.skipIf(!GO)("--verbose: the call on stderr, every secret redacted (phas
 			secret: ran.stderr.includes(SECRET) || ran.stdout.includes(SECRET),
 			sent: sent !== undefined,
 		}).toEqual({ echo: true, logged: true, request: true, response: true, secret: false, sent: true })
+	})
+})
+
+describe.skipIf(!GO)("--verbose: a secret a URL carries escaped (phase c condition)", SLOW, () => {
+	/* each character here is escaped by the SDK, and `*`, `~` and the space differently in a path and a query */
+	const KEY = "k+y/z=1 *~"
+	it.each([
+		["path-escaped, as a path parameter", ["items", "get", KEY], (url: string) => url.split("/")[2] as string],
+		[
+			"query-escaped, as a query parameter",
+			["items", "list", "--timeout2", KEY],
+			(url: string) => url.split("timeout=")[1] as string,
+		],
+	])("redacts the API key %s, in the very form the wire carried", async (_, args, wired) => {
+		const ran = await run(
+			(s) => ({ SHOP_BASE_URL: s.url }),
+			[...args, "--api-key", KEY, "--verbose"],
+			[{ json: [], status: 200 }],
+		)
+		const form = wired(ran.hops[0]?.url ?? "")
+		expect({
+			differs: form !== KEY,
+			escaped: ran.stderr.includes(form),
+			raw: ran.stderr.includes(KEY),
+			redacted: (ran.stderr.split("\n")[0] ?? "").includes("[redacted]"),
+		}).toEqual({ differs: true, escaped: false, raw: false, redacted: true })
 	})
 })

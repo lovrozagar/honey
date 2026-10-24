@@ -69,6 +69,7 @@ func Root(app App) *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &UsageError{msg: err.Error()} })
 	globalFlags(root, app)
+	outputFlags(root)
 	Group(root)
 	return root
 }
@@ -94,33 +95,81 @@ func Run(root *cobra.Command, args []string, stdout, stderr io.Writer) int {
 	root.SetArgs(args)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	err := root.ExecuteContext(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", root.Name(), err)
+	cmd, err := root.ExecuteContextC(ctx)
+	if err == nil {
+		return ExitOK
 	}
-	if err != nil && ctx.Err() != nil {
+	interrupted := ctx.Err() != nil
+	report(cmd, err, interrupted)
+	if interrupted {
 		return ExitInterrupted
 	}
 	return Exit(err)
 }
 
-// Exit is the code for err: 0 for none, then by what failed (the Exit constants).
-func Exit(err error) int {
+// report writes err to stderr: under JSON (--json, or stdout not a terminal) as one line of
+// {"error": {kind, status, errorKey, message}}, else after the CLI's name.
+func report(cmd *cobra.Command, err error, interrupted bool) {
+	stderr := cmd.ErrOrStderr()
+	if o, _ := outputOf(cmd, cmd.OutOrStdout()); o.format != "json" {
+		fmt.Fprintf(stderr, "%s: %s\n", cmd.Root().Name(), escapeControls(err.Error(), false))
+		return
+	}
+	line, _ := compact(map[string]any{"error": described(err, interrupted)})
+	stderr.Write(line)
+}
+
+// described is err as a script reads it: its kind, and for an API answer its status and key.
+func described(err error, interrupted bool) map[string]any {
+	out := map[string]any{"kind": kindOf(err, interrupted), "message": err.Error()}
+	var api *APIError
+	if errors.As(err, &api) {
+		out["status"] = api.Status
+		if api.Key != "" {
+			out["errorKey"] = api.Key
+		}
+		if api.Message != "" {
+			out["message"] = api.Message
+		}
+	}
+	return out
+}
+
+func kindOf(err error, interrupted bool) string {
 	var usage *UsageError
 	var api *APIError
 	var network net.Error
 	switch {
-	case err == nil:
-		return ExitOK
+	case interrupted:
+		return "interrupted"
 	case errors.As(err, &usage):
-		return ExitUsage
+		return "usage"
 	case errors.As(err, &api):
-		return statusExit(api.Status)
-	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &network):
-		return ExitTransport
-	default:
-		return ExitError
+		return "api"
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &network) && network.Timeout():
+		return "timeout"
+	case errors.As(err, &network):
+		return "transport"
 	}
+	return "error"
+}
+
+// Exit is the code for err: 0 for none, then by its kind (the Exit constants).
+func Exit(err error) int {
+	if err == nil {
+		return ExitOK
+	}
+	switch kindOf(err, false) {
+	case "usage":
+		return ExitUsage
+	case "api":
+		var api *APIError
+		errors.As(err, &api)
+		return statusExit(api.Status)
+	case "timeout", "transport":
+		return ExitTransport
+	}
+	return ExitError
 }
 
 // statusExit is the code for an answer's status outside 2xx.

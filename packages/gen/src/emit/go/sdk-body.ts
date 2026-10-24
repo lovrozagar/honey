@@ -11,7 +11,16 @@ import { goExported, NameScope } from "../shared/lang.ts"
 import { type GoTypeContext, goTypeOf } from "./types.ts"
 
 /** A method's body: its parameter's type, the statements encoding it (failing with `fail`), and the expression the call sends. */
-export type GoBody = { readonly type: string; readonly lines: (fail: string) => string[]; readonly send: string }
+export type GoBody = {
+	readonly type: string
+	readonly lines: (fail: string) => string[]
+	readonly send: string
+	/** a multipart body's parts as `<Op>Body` names them: the CLI fills that struct by its fields */
+	readonly parts?: readonly GoPart[]
+}
+
+/** One multipart part: its spec name, its `<Op>Body` field, whether it is a file, whether it repeats. */
+export type GoPart = { readonly part: string; readonly field: string; readonly file: boolean; readonly list: boolean }
 
 /** Where the body lands: the method's body local, and the SDK's type context. */
 export type BodyEnv = { readonly local: string; readonly at: GoTypeContext }
@@ -72,7 +81,13 @@ function multipartBody(op: SdkOp, parts: readonly IRMultipartPart[], env: BodyEn
 		`\t\treturn ${fail}`,
 		"\t}",
 	]
-	return { lines, send: "mp", type }
+	const plan = parts.map((part, i) => ({
+		field: (fields[i] as PartField).name,
+		file: part.type === "file",
+		list: (fields[i] as PartField).type.startsWith("[]"),
+		part: part.name,
+	}))
+	return { lines, parts: plan, send: "mp", type }
 }
 
 /** The body of `op` as its method takes and sends it. */

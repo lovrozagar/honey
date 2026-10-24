@@ -16,7 +16,13 @@ import { goCacheDir, runGo } from "../../go/__fixtures__/go-env.ts"
 export const STAMPED = "v1.2.3-test"
 
 /** A run of the CLI: its exit status and output. */
-export type Ran = { readonly status: number; readonly stderr: string; readonly stdout: string }
+export type Ran = {
+	readonly status: number
+	readonly stderr: string
+	readonly stdout: string
+	/** stdout's bytes as written: a binary answer's, undecoded */
+	readonly stdoutBytes: Buffer
+}
 
 export type BuiltCli = Compiled & {
 	/** the linked binary's path; empty when the build or the link failed */
@@ -70,19 +76,32 @@ export type RunOptions = {
 	readonly input?: string
 	/** once this settles, the run is sent SIGINT, as Ctrl-C sends it */
 	readonly interrupt?: Promise<unknown>
+	/** run on a terminal: under script(1)'s pseudo-terminal, as a person types it (its \r\n read back as \n) */
+	readonly tty?: true
 }
+
+/** An argument as a POSIX shell reads it back: single-quoted, each quote closed and escaped. */
+const quoted = (arg: string) => `'${arg.replaceAll("'", "'\\''")}'`
 
 /** The binary's run with `args`, as a promise. */
 function runIn(binary: string, args: readonly string[], options: RunOptions): Promise<Ran> {
 	const home = mkdtempSync(join(goCacheDir("cli-home"), "home-"))
 	return new Promise((resolve, reject) => {
-		const child = spawn(binary, [...args], { env: { HOME: home, PATH: process.env.PATH, ...options.env } })
-		let stdout = ""
+		const env = { HOME: home, PATH: process.env.PATH, ...options.env }
+		const [command, argv] = options.tty
+			? ["script", ["-qec", [binary, ...args].map(quoted).join(" "), "/dev/null"]]
+			: [binary, [...args]]
+		const child = spawn(command, argv, { env })
+		const out: Buffer[] = []
 		let stderr = ""
-		child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()))
+		child.stdout.on("data", (chunk: Buffer) => out.push(chunk))
 		child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()))
 		child.once("error", reject)
-		child.once("close", (status) => resolve({ status: status ?? 1, stderr, stdout }))
+		const read = (text: string) => (options.tty ? text.replaceAll("\r\n", "\n") : text)
+		child.once("close", (status) => {
+			const stdoutBytes = Buffer.concat(out)
+			resolve({ status: status ?? 1, stderr: read(stderr), stdout: read(stdoutBytes.toString()), stdoutBytes })
+		})
 		child.stdin.on("error", () => {
 			/* a CLI that exits without reading its input: its exit status answers */
 		})

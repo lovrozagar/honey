@@ -25,9 +25,20 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *   - log.go 2,197: --verbose, the request and response on stderr with every credential header and secret redacted;
  *   - output.go 616: an answer as one line of compact JSON (bytes and text as they came);
  *   provisional 22,000.
+ * - phase c, +13,970 B to 35,963 B, after cutting a second error classification and a duplicated render path (214 B):
+ *   - output.go +6,158 to 6,774: --format json/ndjson/yaml/table, --json, table the default on a terminal, -i (status
+ *     and the declared headers), --raw, -o, a binary answer refused on a terminal or under -i, compact JSON with DEL
+ *     and C1 escaped, control characters escaped on a terminal;
+ *   - format.go 4,604: the YAML writer (keys and scalars quoted where a reader would misread them) and the table
+ *     (a column per key over a list of objects, a key and value per row for an object, nested values as JSON);
+ *   - run.go +1,361 to 5,549: an error on stderr as one JSON line by kind, status and key, else after the name with
+ *     its controls escaped; one classification feeding both the kind and the exit code;
+ *   - body.go +962 to 4,831: the multipart file parts, a file or standard input per part, repeatable;
+ *   - log.go +885 to 3,082: each secret also as the SDK percent-encodes it into a path and a query;
+ *   provisional 36,000.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const CLI_RUNTIME_BYTES = 22000
+const CLI_RUNTIME_BYTES = 36000
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

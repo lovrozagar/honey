@@ -67,7 +67,12 @@ const itemPaths = (): Json => ({
 	},
 	"/items/{id}": {
 		delete: { operationId: "items.delete", parameters: [path("id")], responses: NONE },
-		get: { operationId: "items.get", parameters: [path("id")], responses: ok(ITEM), summary: "Get an item" },
+		get: {
+			operationId: "items.get",
+			parameters: [path("id")],
+			responses: { 200: { ...json(ITEM), description: "ok", headers: { "x-item-version": { schema: STRING } } } },
+			summary: "Get an item",
+		},
 	},
 	"/items/{id}/tags/{tagId}": {
 		get: { operationId: "items.tags.get", parameters: [path("id"), path("tagId")], responses: ok(STRING) },
@@ -139,6 +144,7 @@ const otherPaths = (): Json => ({
 			responses: { 200: { content: { "text/event-stream": { schema: STRING } }, description: "events" } },
 		},
 	},
+	"/dump": { get: { operationId: "dump.get", responses: ok({}), summary: "Any JSON, as the API sends it" } },
 	"/health": {
 		get: { operationId: "health", responses: ok({ properties: { ok: { type: "boolean" } }, type: "object" }) },
 	},
@@ -149,7 +155,14 @@ const otherPaths = (): Json => ({
 			requestBody: {
 				content: {
 					"multipart/form-data": {
-						schema: { properties: { file: { format: "binary", type: "string" } }, type: "object" },
+						schema: {
+							properties: {
+								extras: { items: { format: "binary", type: "string" }, type: "array" },
+								file: { format: "binary", type: "string" },
+								note: STRING,
+							},
+							type: "object",
+						},
 					},
 				},
 			},

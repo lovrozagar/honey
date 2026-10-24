@@ -5,6 +5,7 @@ package cli
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -70,16 +71,43 @@ func (c Config) redact(text string) string {
 	return text
 }
 
-// secretsOf is the run's secret values: the API key, and each header whose name marks a credential.
+// secretsOf is the run's secret values: the API key, and each header whose name marks a
+// credential, each also as the SDK escapes it into a URL (a key holding + / = travels so).
 func secretsOf(cfg Config) []string {
 	var secrets []string
+	add := func(secret string) {
+		for _, form := range []string{secret, escaped(secret, "-_.!~*'()", false), escaped(secret, "*-._", true)} {
+			if !slices.Contains(secrets, form) {
+				secrets = append(secrets, form)
+			}
+		}
+	}
 	if cfg.APIKey != "" {
-		secrets = append(secrets, cfg.APIKey)
+		add(cfg.APIKey)
 	}
 	for name, value := range cfg.Headers {
 		if value != "" && secretHeader(name) {
-			secrets = append(secrets, value)
+			add(value)
 		}
 	}
 	return secrets
+}
+
+// escaped is s percent-encoded as the SDK encodes it: every byte but letters, digits and keep;
+// "-_.!~*'()" is a path segment's (encodeURIComponent), "*-._" with a space as '+' a query
+// value's (URLSearchParams).
+func escaped(s, keep string, spaceAsPlus bool) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || strings.IndexByte(keep, c) >= 0:
+			b.WriteByte(c)
+		case c == ' ' && spaceAsPlus:
+			b.WriteByte('+')
+		default:
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
 }

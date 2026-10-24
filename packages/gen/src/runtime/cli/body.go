@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -142,4 +143,34 @@ func (p *Params) Form(required bool, fields map[string]string) (url.Values, erro
 		return form, p.missing(required)
 	}
 	return form, nil
+}
+
+// Upload is one file a file part sends: its name and its bytes, streamed as read. Its media type
+// is left to the SDK (application/octet-stream).
+type Upload struct {
+	Filename string
+	Data     io.Reader
+}
+
+// FileFlag declares --name, the path of a file a part sends (- for standard input), repeatable
+// when list.
+func (p *Params) FileFlag(name string, list bool, usage string) {
+	p.Flag(name, "file", list, false, usage)
+}
+
+// Files opens each file --name was given, in order; none when it was not given.
+func (p *Params) Files(name string) ([]Upload, error) {
+	var uploads []Upload
+	for _, path := range p.Values(name) {
+		if path == "-" {
+			uploads = append(uploads, Upload{Filename: "stdin", Data: p.cmd.InOrStdin()})
+			continue
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, Usage("--%s: %v", name, err)
+		}
+		uploads = append(uploads, Upload{Filename: filepath.Base(path), Data: file})
+	}
+	return uploads, nil
 }

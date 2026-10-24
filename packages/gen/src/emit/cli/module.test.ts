@@ -117,6 +117,9 @@ require github.com/inconshreveable/mousetrap v1.1.0 // indirect
 
 const zero = (options = {}) => generateGoCli(ZERO, options).files
 
+/** A usage error as a piped run reports it: one JSON line on stderr. */
+const usage = (message: string) => `${JSON.stringify({ error: { kind: "usage", message } })}\n`
+
 describe("generateGoCli: the zero-op module's files", () => {
 	it("writes main.go, cmd/root.go, cmd/client.go and go.mod byte for byte", () => {
 		const files = zero()
@@ -250,15 +253,15 @@ describe.skipIf(!GO)("the zero-op module, built (phase a)", SLOW, () => {
 		}).toEqual({ bare: [0, "Anyrow", ""], version: [0, `${STAMPED}\n`, ""] })
 	})
 
-	it("exits 4 on an unknown command or flag, naming it on stderr after the CLI's name", async () => {
+	it("exits 4 on an unknown command or flag, reporting it on stderr as one JSON line when piped", async () => {
 		const { cli } = builtCli(zero())
 		const [command, flag] = [await cli(["frobnicate"]), await cli(["--nope"])]
 		expect({
 			command: [command.status, command.stdout, command.stderr],
 			flag: [flag.status, flag.stdout, flag.stderr],
 		}).toEqual({
-			command: [4, "", 'anyrow: unknown command "frobnicate" for "anyrow"\n'],
-			flag: [4, "", "anyrow: unknown flag: --nope\n"],
+			command: [4, "", usage('unknown command "frobnicate" for "anyrow"')],
+			flag: [4, "", usage("unknown flag: --nope")],
 		})
 	})
 })

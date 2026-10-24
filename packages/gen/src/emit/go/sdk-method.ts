@@ -9,7 +9,7 @@ import { mediaEssence, type SdkBody, type SdkOp, type SdkResponseKind, type SdkS
 import { goString, lineComment } from "../shared/escape.ts"
 import { goExported, goLocal, NameScope } from "../shared/lang.ts"
 import { type GoStream, type Shape, shapeOf } from "./sdk-answer.ts"
-import { type GoBody, goBody } from "./sdk-body.ts"
+import { type GoBody, type GoPart, goBody } from "./sdk-body.ts"
 import { type GoResponseHeaders, type OptsField, optsDecl, optsFields, optsLines, responseHeaders } from "./sdk-opts.ts"
 import { sseStream } from "./sse.ts"
 import { type GoTypeContext, goTypeOf } from "./types.ts"
@@ -43,6 +43,8 @@ export type GoMethodCall = {
 	readonly returns: string
 	/** the method's `<Op>Opts` type, as claimed (a clash gets a suffix) */
 	readonly opts: string
+	/** a multipart body's parts by their `<Op>Body` fields; null for any other body */
+	readonly parts: readonly GoPart[] | null
 }
 
 /** One operation's method, its client.go declarations by name (`<Op>Opts`, `<Op>Headers`), and how a caller reaches it. */
@@ -212,6 +214,7 @@ export function goMethod(op: SdkOp, name: string, receiver: Receiver, env: Metho
 		...callOf(op, name, pathLocals, fields),
 		bodyType: body ? body.type : null,
 		opts,
+		parts: body?.parts ?? null,
 		responseHeaders: headers?.plan ?? null,
 		returns: shape.returns,
 	}

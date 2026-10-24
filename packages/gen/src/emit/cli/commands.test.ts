@@ -58,9 +58,10 @@ const flat = (...ids: string[]): Json => ({
 })
 
 describe("the command tree (phase b)", () => {
-	it("gives each operation that answers once a command by its dotted id, verbs as authored", () => {
+	it("gives each operation that answers once a command by its dotted id, verbs as authored, multipart too", () => {
 		expect(paths(shop())).toEqual({
 			"bulk send": "bulk.send",
+			"dump get": "dump.get",
 			"files get": "files.get",
 			"files put": "files.put",
 			"forms submit": "forms.submit",
@@ -75,6 +76,7 @@ describe("the command tree (phase b)", () => {
 			"notes create": "notes.create",
 			"pets put": "pets.put",
 			"raw send": "raw.send",
+			"uploads create": "uploads.create",
 			version2: "version",
 		})
 	})
@@ -117,6 +119,9 @@ async function call(args: readonly string[], replies: readonly Reply[], options:
 }
 
 const OK = (json: unknown, status = 200): Reply => ({ json: json as Reply["json"], status })
+
+/** A usage error as a piped run reports it: one JSON line on stderr (phase c). */
+const usage = (message: string) => `${JSON.stringify({ error: { kind: "usage", message } })}\n`
 
 describe.skipIf(!GO)("the shop CLI's commands, built (phase b)", SLOW, () => {
 	it("reaches every command by its path", async () => {
@@ -186,7 +191,7 @@ describe.skipIf(!GO)("the shop CLI's usage errors, built (phase b)", SLOW, () =>
 		[["forms", "submit", "--b", "two"], 'invalid argument "two" for "--b" flag: not an integer'],
 	])("refuses %j with exit 4 before anything is sent", async (args, message) => {
 		const ran = await call(args, [])
-		expect([ran.status, ran.stderr, ran.hops.length]).toEqual([4, `shop: ${message}\n`, 0])
+		expect([ran.status, ran.stderr, ran.hops.length]).toEqual([4, usage(message), 0])
 	})
 })
 

@@ -18,7 +18,6 @@ export const GLOBAL_FLAGS = [
 	"base-url",
 	"config",
 	"data",
-	"file",
 	"format",
 	"header",
 	"help",
@@ -101,7 +100,19 @@ export type CommandFlags = {
 	readonly opts: readonly string[]
 	/** each body flag's name to its body key */
 	readonly fields: readonly (readonly [string, string])[]
+	/** a multipart body's parts: each one's flag, its `<Op>Body` field, whether a file, whether repeated */
+	readonly parts: readonly PartFlag[]
 }
+
+/** Where a command's flags are claimed and declared, and the schemas their kinds resolve by. */
+type FlagScope = {
+	readonly declare: string[]
+	readonly schemas: Readonly<Record<string, IRSchema>>
+	readonly scope: NameScope
+}
+
+/** One multipart part's flag, `--<part>`: a value for a text part, a path for a file part. */
+export type PartFlag = { readonly flag: string; readonly field: string; readonly file: boolean; readonly list: boolean }
 
 /** Each parameter flag `op` takes, path ones first, and each scalar body field's, claimed in one scope beside the global flags. */
 export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Record<string, IRSchema>>): CommandFlags {
@@ -127,8 +138,30 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 	}
 	params(op.query, plan.query)
 	params(op.headers, plan.headers)
+	if (op.body?.kind === "multipart")
+		return { declare, fields: [], opts, parts: partFlags(op, plan, { declare, schemas, scope }) }
 	const fields = bodyFields(op, schemas, scope, declare)
-	return { declare, fields, opts }
+	return { declare, fields, opts, parts: [] }
+}
+
+/** A multipart body's flags, each declared into `declare` by its part's name: a text part typed by its schema, a file part a path. */
+function partFlags(op: SdkOp, plan: GoCallPlan, at: FlagScope): PartFlag[] {
+	const { declare, schemas, scope } = at
+	const body = op.body as Extract<SdkOp["body"], { kind: "multipart" }>
+	return (plan.parts as NonNullable<GoCallPlan["parts"]>).map((part) => {
+		const flag = scope.claim(kebab(part.part))
+		if (part.file) {
+			declare.push(
+				`\tp.FileFlag(${goString(flag)}, ${part.list}, ${goString(`the ${part.part} part's file, or - for stdin`)})`,
+			)
+			return { field: part.field, file: true, flag, list: part.list }
+		}
+		const spec = body.parts.find((each) => each.name === part.part) as (typeof body.parts)[number]
+		declare.push(
+			flagLine(flag, { ...kindOf(spec.schema as IRSchema, schemas), list: part.list }, false, `the ${part.part} part`),
+		)
+		return { field: part.field, file: false, flag, list: part.list }
+	})
 }
 
 /** The body's `--data`, then a flag per scalar field of a JSON or form object body, each declared into `declare`. */
