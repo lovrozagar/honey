@@ -27,12 +27,6 @@ const ws = (steps: readonly WsStep[]): Reply => ({ status: 101, ws: { steps } })
 /** A realtime event `n` per entry, each carrying its id and reconnect token, the cursor the CLI reports. */
 const frames = (...ns: number[]): WsStep[] => ns.map((n) => ({ json: { id: `e${n}`, n, reconnect_token: `t${n}` } }))
 
-/** Settled once the server holds `n` hops: the latch an interrupt waits on. */
-const hopped = (server: RecordingServer, n = 1) =>
-	new Promise<void>((resolve) => {
-		const poll = setInterval(() => server.hops.length >= n && (clearInterval(poll), resolve()), 5)
-	})
-
 /** One run against a server answering `replies`; the run, the hops and their streams. */
 async function call(
 	args: readonly string[],
@@ -105,8 +99,9 @@ describe.skipIf(!GO)("a WebSocket command's end: a close, --take, Ctrl-C (phase 
 	})
 
 	it('sends a close frame 1000 "interrupted" on Ctrl-C, and exits 130', HOLD, async () => {
-		const ran = await call(["chat", "connect"], [ws([{ text: "a" }, { waitMs: 60_000 }])], (server) => ({
-			interrupt: hopped(server),
+		/* interrupted once the CLI printed the first message: its socket open, its Ctrl-C handling armed */
+		const ran = await call(["chat", "connect"], [ws([{ text: "a" }, { waitMs: 60_000 }])], () => ({
+			interruptOn: '"a"\n',
 		}))
 		expect([ran.status, ran.streams[0]?.received.at(-1), ran.streams[0]?.clientGone]).toEqual([
 			130,

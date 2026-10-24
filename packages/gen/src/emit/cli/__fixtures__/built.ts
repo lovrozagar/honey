@@ -76,6 +76,8 @@ export type RunOptions = {
 	readonly input?: string
 	/** once this settles, the run is sent SIGINT, as Ctrl-C sends it */
 	readonly interrupt?: Promise<unknown>
+	/** once stdout holds this text, the run is sent SIGINT: a latch on the CLI's own progress, past its setup */
+	readonly interruptOn?: string
 	/** run on a terminal: under script(1)'s pseudo-terminal, as a person types it (its \r\n read back as \n) */
 	readonly tty?: true
 }
@@ -94,7 +96,18 @@ function runIn(binary: string, args: readonly string[], options: RunOptions): Pr
 		const child = spawn(command, argv, { env })
 		const out: Buffer[] = []
 		let stderr = ""
-		child.stdout.on("data", (chunk: Buffer) => out.push(chunk))
+		let interrupted = false
+		child.stdout.on("data", (chunk: Buffer) => {
+			out.push(chunk)
+			if (
+				options.interruptOn === undefined ||
+				interrupted ||
+				!Buffer.concat(out).toString().includes(options.interruptOn)
+			)
+				return
+			interrupted = true
+			child.kill("SIGINT")
+		})
 		child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()))
 		child.once("error", reject)
 		const read = (text: string) => (options.tty ? text.replaceAll("\r\n", "\n") : text)
