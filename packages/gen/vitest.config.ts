@@ -130,7 +130,17 @@ export default defineConfig(({ mode }) =>
 								name === "go" ? [...harnessOf("go"), ...harnessOf("cli")] : harnessOf(name),
 							]),
 						),
-					).map((test) => ({ test: { ...test, hookTimeout: 60_000, testTimeout: 60_000 } })),
+					)
+						/* go's files each compile cold, the release leg six goreleaser targets: side by side on CI's
+						 * four cores they starve each other's compiles past the hook timeout, so they run one at a time */
+						.map((test) => ({
+							test: {
+								...test,
+								...(test.name === "go" && { fileParallelism: false }),
+								hookTimeout: 60_000,
+								testTimeout: 60_000,
+							},
+						})),
 					sequence: { sequencer: LongestFirst },
 				},
 			}

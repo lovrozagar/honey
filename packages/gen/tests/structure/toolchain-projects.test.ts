@@ -41,6 +41,7 @@ type Project = {
 	readonly extends?: boolean
 	readonly test: {
 		readonly exclude?: readonly string[]
+		readonly fileParallelism?: boolean
 		readonly hookTimeout?: number
 		readonly include?: readonly string[]
 		readonly name: string
@@ -281,6 +282,15 @@ describe("harness mode's projects", () => {
 		expect(projects.length).toBeGreaterThan(0)
 		expect(projects.map(({ extends: base, test }) => [base, test.testTimeout, test.hookTimeout])).toEqual(
 			projects.map(() => [undefined, 60_000, 60_000]),
+		)
+	})
+
+	/* go's files each compile cold (the SDK, the CLI, six release targets by goreleaser): run together on CI's four
+	 * cores, the release targets starved go-harness's SDK compile past its 60 s hook (CI run 40119477502) */
+	it("runs go's harness files one at a time, every other project's side by side", () => {
+		const projects = harness.projects ?? []
+		expect(projects.map(({ test }) => [test.name, test.fileParallelism])).toEqual(
+			projects.map(({ test }) => [test.name, test.name === "go" ? false : undefined]),
 		)
 	})
 })
