@@ -1,0 +1,148 @@
+/**
+ * The generate CLI's arguments (bit 17 phase h): `generate --spec <file> --target <name>... --out <dir> [--watch]` and
+ * each target's options as `--<target>-<option>`, named after its generate function's options and passed through
+ * untouched (each generator validates its own). Strict: an unknown flag, a missing value, a stray argument, an unknown
+ * target or an option for a target not asked for is a usage error.
+ */
+/** A target's option: a string, or a boolean given as `--x`, `--x=true` or `--x=false`. */
+type OptionKind = "string" | "boolean"
+
+/** Each target, its generate function's options by name and kind. */
+const TARGETS = {
+	cli: { binaryName: "string", envPrefix: "string", modulePath: "string", repo: "string" },
+	csharp: {
+		clientName: "string",
+		packageId: "string",
+		rootNamespace: "string",
+		throwOnError: "boolean",
+		version: "string",
+	},
+	go: { modulePath: "string", throwOnError: "boolean" },
+	java: {
+		artifactId: "string",
+		clientName: "string",
+		groupId: "string",
+		packageName: "string",
+		throwOnError: "boolean",
+		version: "string",
+	},
+	python: { packageName: "string", throwOnError: "boolean", version: "string" },
+	rust: { crateName: "string", throwOnError: "boolean", version: "string" },
+	ts: { name: "string", stem: "string" },
+} as const satisfies Record<string, Record<string, OptionKind>>
+
+export type Target = keyof typeof TARGETS
+export type Options = Record<string, string | boolean>
+
+/** What one `generate` run asks for. */
+export type Generate = {
+	readonly spec: string
+	readonly out: string
+	readonly targets: readonly Target[]
+	readonly options: Readonly<Record<Target, Options>>
+	readonly watch: boolean
+}
+
+/** The usage text, the options listed by target. */
+export function usage(): string {
+	return `usage: honey-codegen generate --spec <openapi.json> --target <name>... --out <dir> [--watch] [options]
+
+  --spec <file>     the OpenAPI document (JSON) to generate from
+  --target <name>   ts, go, rust, python, csharp, java or cli; repeat for more than one
+  --out <dir>       each target's files go under <dir>/<target>
+  --watch           generate again on each change of the spec
+  -h, --help        this text
+
+A target's options are its generator's, as --<target>-<option> (a boolean as --x, --x=true or --x=false):
+${Object.entries(TARGETS)
+	.map(
+		([target, options]) =>
+			`  ${target}: ${Object.keys(options)
+				.map((key) => `--${target}-${kebab(key)}`)
+				.join(" ")}`,
+	)
+	.join("\n")}
+
+Files are written over; none is deleted. A file a removed operation left (a go or cli target's stale
+<name>_cmds.go, say) stays until bit 19's cleanup, and can break the build: clear <out>/<target> first.
+`
+}
+
+/** A mistake in how the CLI was called: printed with the usage text. */
+export class UsageError extends Error {}
+
+function kebab(key: string): string {
+	return key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+}
+
+/** The `--<target>-<option>` flag `flag` names: its target, its option's name and kind; none for another flag. */
+function optionFlag(flag: string): { key: string; kind: OptionKind; target: Target } | undefined {
+	for (const [target, options] of Object.entries(TARGETS))
+		for (const [key, kind] of Object.entries(options))
+			if (flag === `${target}-${kebab(key)}`) return { key, kind: kind as OptionKind, target: target as Target }
+	return undefined
+}
+
+/** A flag's value: inline after `=`, else the next argument, which may not be another flag. */
+function valueOf(flag: string, inline: string | undefined, rest: string[]): string {
+	const value = inline ?? rest.shift()
+	if (value === undefined || value === "" || (inline === undefined && value.startsWith("--")))
+		throw new UsageError(`--${flag} requires a value`)
+	return value
+}
+
+/** A boolean flag's value: bare is true; inline `true` or `false`, else a usage error. */
+function booleanOf(flag: string, inline: string | undefined): boolean {
+	if (inline === undefined || inline === "true") return true
+	if (inline === "false") return false
+	throw new UsageError(`--${flag} takes true or false, not ${JSON.stringify(inline)}`)
+}
+
+/** One flag of `generate` into `into`. */
+function takeFlag(
+	arg: string,
+	rest: string[],
+	into: { -readonly [K in keyof Generate]: Generate[K] } & { targets: Target[] },
+) {
+	const [flag, inline] = arg.slice(2).split(/=(.*)/s, 2) as [string, string | undefined]
+	if (flag === "spec") into.spec = valueOf(flag, inline, rest)
+	else if (flag === "out") into.out = valueOf(flag, inline, rest)
+	else if (flag === "watch") into.watch = booleanOf(flag, inline)
+	else if (flag === "target") {
+		const target = valueOf(flag, inline, rest)
+		if (!Object.hasOwn(TARGETS, target))
+			throw new UsageError(`--target ${JSON.stringify(target)}: want one of ${Object.keys(TARGETS).join(", ")}`)
+		if (!into.targets.includes(target as Target)) into.targets.push(target as Target)
+	} else {
+		const option = optionFlag(flag)
+		if (option === undefined) throw new UsageError(`unknown option --${flag}`)
+		into.options[option.target][option.key] =
+			option.kind === "boolean" ? booleanOf(flag, inline) : valueOf(flag, inline, rest)
+	}
+}
+
+/** `argv` after `generate` as a run, or a usage error. */
+export function parseGenerate(argv: readonly string[]): Generate {
+	const rest = [...argv]
+	const into = {
+		options: Object.fromEntries(Object.keys(TARGETS).map((target) => [target, {}])) as Record<Target, Options>,
+		out: "",
+		spec: "",
+		targets: [] as Target[],
+		watch: false,
+	}
+	while (rest.length > 0) {
+		const arg = rest.shift() as string
+		if (!arg.startsWith("--") || arg === "--") throw new UsageError(`unexpected argument ${JSON.stringify(arg)}`)
+		takeFlag(arg, rest, into)
+	}
+	if (into.spec === "") throw new UsageError("--spec is required")
+	if (into.out === "") throw new UsageError("--out is required")
+	if (into.targets.length === 0) throw new UsageError("--target is required")
+	const unasked = Object.entries(into.options).filter(
+		([target, options]) => Object.keys(options).length > 0 && !into.targets.includes(target as Target),
+	)
+	if (unasked.length > 0)
+		throw new UsageError(`options for ${unasked.map(([target]) => target).join(", ")}, which no --target names`)
+	return into
+}

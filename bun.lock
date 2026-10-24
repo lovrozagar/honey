@@ -221,6 +221,12 @@
     "packages/gen": {
       "name": "@lovrozagar/honey-codegen",
       "version": "1.0.0",
+      "bin": {
+        "honey-codegen": "bin/honey-codegen.js",
+      },
+      "dependencies": {
+        "jiti": "2.7.0",
+      },
       "devDependencies": {
         "@total-typescript/ts-reset": "catalog:",
         "@types/node": "catalog:",

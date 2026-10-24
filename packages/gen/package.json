@@ -10,13 +10,21 @@
 		"url": "git+https://github.com/lovrozagar/honey.git",
 		"directory": "packages/gen"
 	},
+	"bin": {
+		"honey-codegen": "bin/honey-codegen.js"
+	},
 	"type": "module",
-	"exports": {},
+	"exports": {
+		"./cli": "./src/cli.ts"
+	},
 	"scripts": {
 		"capture:tokens": "bun scripts/capture-token-budget.ts",
 		"test": "vitest run --coverage",
 		"test:harness": "vitest run --mode harness",
 		"type:check": "tsc --noEmit -p tsconfig.json"
+	},
+	"dependencies": {
+		"jiti": "2.7.0"
 	},
 	"devDependencies": {
 		"@total-typescript/ts-reset": "catalog:",

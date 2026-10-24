@@ -98,7 +98,7 @@ jobs:
           key: >-
             ${{ runner.os }}-gobuild-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/**',
             'packages/gen/src/emit/cli/**', 'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**',
-            'packages/gen/src/runtime/go/**', 'packages/gen/src/runtime/cli/**',
+            'packages/gen/src/runtime/go/**', 'packages/gen/src/runtime/cli/**', 'packages/gen/src/cli.test.ts',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
@@ -203,7 +203,7 @@ jobs:
           key: >-
             ${{ runner.os }}-gobuild-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/**',
             'packages/gen/src/emit/cli/**', 'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**',
-            'packages/gen/src/runtime/go/**', 'packages/gen/src/runtime/cli/**',
+            'packages/gen/src/runtime/go/**', 'packages/gen/src/runtime/cli/**', 'packages/gen/src/cli.test.ts',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
