@@ -71,7 +71,7 @@ describe.skipIf(!GO)("a binary or multipart request (phase c)", SLOW, () => {
 		expect([ran.status, ran.hops[0]?.body.size, ran.hops[0]?.body.sha256]).toEqual([0, 65_536, sha256(bytes)])
 	})
 
-	it("sends a multipart body part by part: a text part, a file part, a repeated file part", async () => {
+	it("sends a multipart body part by part: a text part, a file part, a repeated file part, a part named like --format", async () => {
 		const dir = scratch()
 		for (const [name, text] of [
 			["main.txt", "main body"],
@@ -80,6 +80,10 @@ describe.skipIf(!GO)("a binary or multipart request (phase c)", SLOW, () => {
 		])
 			writeFileSync(join(dir, name as string), text as string)
 		const args = [
+			"--format2",
+			"md",
+			"--format",
+			"json",
 			"--note",
 			"hi",
 			"--file",
@@ -97,9 +101,10 @@ describe.skipIf(!GO)("a binary or multipart request (phase c)", SLOW, () => {
 			contentType: ran.hops[0]?.body.contentType?.startsWith("multipart/form-data; boundary="),
 			extras: [part("extras", "x1.txt", "first extra"), part("extras", "x2.txt", "second extra")],
 			file: part("file", "main.txt", "main body"),
+			format: body.includes('name="format"\r\n\r\nmd\r\n'),
 			note: body.includes('name="note"\r\n\r\nhi\r\n'),
 			status: ran.status,
-		}).toEqual({ contentType: true, extras: [true, true], file: true, note: true, status: 0 })
+		}).toEqual({ contentType: true, extras: [true, true], file: true, format: true, note: true, status: 0 })
 	})
 })
 

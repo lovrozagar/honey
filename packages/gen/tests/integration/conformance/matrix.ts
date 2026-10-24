@@ -30,6 +30,11 @@ export type Body =
 	| { readonly kind: "json"; readonly value: Json }
 	| { readonly contentType: string; readonly kind: "binary"; readonly size: number } // bytes i & 0xff
 export type Call = {
+	/**
+	 * CLI-only rows: the arguments the CLI runs as given after its setup; `$FILE` is a fresh path the runner reads back.
+	 * A local command (commands, config, completion) reaches no operation: its `operation` is empty.
+	 */
+	readonly argv?: readonly string[]
 	readonly body?: Body
 	readonly headers?: Readonly<Record<string, string>> // per call (C2)
 	readonly lastEventId?: string // SSE resume
@@ -66,6 +71,14 @@ export type Observed =
 	  }
 	| { readonly frames: readonly Json[]; readonly kind: "frames" }
 	| { readonly kind: "timeout" }
+	/** the CLI's own observation for a CLI-only row: its exit code, its stdout lines, each stderr line as JSON, a `$FILE` written */
+	| {
+			readonly exit: number
+			readonly file?: { readonly sha256: string; readonly size: number }
+			readonly kind: "cli"
+			readonly stderr: readonly Json[]
+			readonly stdout: readonly string[]
+	  }
 /** one request the app received (the harness reads these over HTTP); header names lower case */
 export type WireHop = {
 	readonly body: {

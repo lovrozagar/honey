@@ -7,6 +7,7 @@
 import { type ChildProcess, spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { BUILT_INS } from "../../../src/emit/cli/commands.ts"
 import { type Cell, cellsFor, compareCell, type Observed, type Target, type WireHop } from "./matrix.ts"
 
 export type ReferenceApp = {
@@ -129,11 +130,24 @@ export async function startReferenceApp(): Promise<ReferenceApp> {
 	}
 }
 
-/** The operationIds `cells` call that `document` does not name. */
-function unknownOperations(cells: readonly Cell[], document: Record<string, unknown>): string[] {
+/** The CLI's local commands, and cobra's completion entry: a CLI-only call running one reaches no operation. */
+const LOCAL_COMMANDS = [...BUILT_INS, "__complete"]
+
+/**
+ * The operationIds `cells` call that `document` does not name. An empty operation is a CLI local command's alone: any other
+ * argv with one throws, so no API call hides from this check.
+ */
+export function unknownOperations(cells: readonly Cell[], document: Record<string, unknown>): string[] {
 	const paths = (document.paths ?? {}) as Record<string, Record<string, { operationId?: unknown }>>
 	const named = new Set(Object.values(paths).flatMap((item) => Object.values(item).map((op) => op?.operationId)))
-	return [...new Set(cells.flatMap((cell) => cell.calls.map((call) => call.operation)))].filter((op) => !named.has(op))
+	const reached = cells.flatMap((cell) =>
+		cell.calls.filter((call) => {
+			if (call.operation !== "") return true
+			if (call.argv !== undefined && LOCAL_COMMANDS.includes(call.argv[0] ?? "")) return false
+			throw new Error(`${cell.key}: an empty operation is a CLI local command's, not ${JSON.stringify(call.argv?.[0])}`)
+		}),
+	)
+	return [...new Set(reached.map((call) => call.operation))].filter((op) => !named.has(op))
 }
 
 /**

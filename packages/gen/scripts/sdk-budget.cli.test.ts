@@ -54,9 +54,15 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *   - run.go +919 to 6,618: the App's server, discovery and skill; the API and local help groups, the two-line banner;
  *   - params.go +153 to 5,321: an enum flag's values completing;
  *   provisional 53,700.
+ * - phase f, +1,642 B to 55,319 B, nothing dead to cut (each line serves the redirect setting or its hint):
+ *   - config.go +994 to 8,270: --redirect same-origin|follow ($<PREFIX>_REDIRECT, the file's redirect), an unknown
+ *     value a usage error, and the setting read again where an error is reported;
+ *   - run.go +624 to 7,242: a redirect not followed names the way out (rerun with --redirect follow);
+ *   - target.go +24 to 3,316: `config` shows the redirect policy with its source;
+ *   provisional 55,400.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const CLI_RUNTIME_BYTES = 53700
+const CLI_RUNTIME_BYTES = 55400
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

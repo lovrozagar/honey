@@ -136,6 +136,7 @@ func Run(root *cobra.Command, args []string, stdout, stderr io.Writer) int {
 // report writes err to stderr: under JSON (--json, or stdout not a terminal) as one line of
 // {"error": {kind, status, errorKey, message}}, else after the CLI's name.
 func report(cmd *cobra.Command, err error, interrupted bool) {
+	err = redirectHint(cmd, err)
 	stderr := cmd.ErrOrStderr()
 	if o, _ := outputOf(cmd, cmd.OutOrStdout()); o.format != "json" {
 		fmt.Fprintf(stderr, "%s: %s\n", cmd.Root().Name(), escapeControls(err.Error(), false))
@@ -143,6 +144,19 @@ func report(cmd *cobra.Command, err error, interrupted bool) {
 	}
 	line, _ := compact(map[string]any{"error": described(err, interrupted)})
 	stderr.Write(line)
+}
+
+// redirectHint is err, a redirect the run did not follow named with the way out; the run's own
+// redirect setting decides, since under follow a redirect carrying a body is still not followed.
+func redirectHint(cmd *cobra.Command, err error) error {
+	var api *APIError
+	if !errors.As(err, &api) || api.Status < 300 || api.Status > 399 || redirectOf(cmd) == "follow" {
+		return err
+	}
+	hinted := *api
+	hinted.Message = fmt.Sprintf("the API answered %d, a redirect not followed: rerun with --redirect follow to follow it", api.Status)
+	hinted.Err = errors.New(hinted.Message)
+	return &hinted
 }
 
 // described is err as a script reads it: its kind, and for an API answer its status and key.

@@ -18,6 +18,9 @@ const SLOW = { timeout: 600_000 }
 
 const cli = () => builtCli(generateGoCli(catalog()).files)
 
+/** `config`'s redirect line. */
+const redirectLine = (text: string) => text.split("\n").find((each) => each.startsWith("redirect "))
+
 /** `config`'s base_url and target lines. */
 const targetLines = (text: string) => text.split("\n").filter((line) => /^(base_url|target) /.test(line))
 const zero = () =>
@@ -178,6 +181,7 @@ describe.skipIf(!GO)("config: secrets (phase e)", SLOW, () => {
 				base_url: { source: "default", value: "" },
 				headers: { source: "flag", value: { "X-Api-Token": "[redacted]", "X-Tenant": "acme" } },
 				quiet: { source: "default", value: false },
+				redirect: { source: "default", value: "same-origin" },
 				target: { host: "127.0.0.1:1", kind: "local" },
 				timeout: { source: "default", value: "30s" },
 				verbose: { source: "default", value: false },
@@ -188,11 +192,72 @@ describe.skipIf(!GO)("config: secrets (phase e)", SLOW, () => {
 				"base_url - (default)",
 				"headers X-Api-Token: [redacted]; X-Tenant: acme (flag)",
 				"quiet false (default)",
+				"redirect same-origin (default)",
 				"timeout 30s (default)",
 				"verbose false (default)",
 				"target local 127.0.0.1:1",
 				"",
 			].join("\n"),
 		})
+	})
+})
+
+describe.skipIf(!GO)("the redirect policy (phase f)", SLOW, () => {
+	beforeAll(() => void cli(), SLOW.timeout)
+
+	/** A cross-origin 307 from the primary origin to the alt one, then the alt's answer. */
+	const away = [{ redirect: { origin: "alt", path: "/away" }, status: 307 } as const, { json: "there", status: 200 }]
+
+	it("stops at a cross-origin redirect by default, exit 5, the message naming the way out", async () => {
+		const ran = await served(away, (server) =>
+			cli().cli(["orgs", "get", "a"], { env: { CATALOG_BASE_URL: server.url } }),
+		)
+		expect([ran.status, JSON.parse(ran.stderr)]).toEqual([
+			5,
+			{
+				error: {
+					kind: "api",
+					message: "the API answered 307, a redirect not followed: rerun with --redirect follow to follow it",
+					status: 307,
+				},
+			},
+		])
+	})
+
+	it("follows it under --redirect follow, the API key and a credential header left behind", async () => {
+		const { hops, ran } = await served(away, async (server) => ({
+			hops: server.hops,
+			ran: await cli().cli(["orgs", "get", "a", "--redirect", "follow", "--header", "X-Api-Key: k-2"], {
+				env: { CATALOG_API_KEY: "k-1", CATALOG_BASE_URL: server.url },
+			}),
+		}))
+		const carried = (i: number) => [hops[i]?.origin, hops[i]?.headers.authorization, hops[i]?.headers["x-api-key"]]
+		expect([ran.status, ran.stdout, carried(0), carried(1)]).toEqual([
+			0,
+			'"there"\n',
+			["primary", "Bearer k-1", "k-2"],
+			["alt", undefined, undefined],
+		])
+	})
+
+	it("takes the policy from --redirect, $CATALOG_REDIRECT or the file, and refuses any other value with exit 4", async () => {
+		const file = join(mkdtempSync(join(goCacheDir("tmp"), "redirect-")), "config.toml")
+		writeFileSync(file, 'redirect = "follow"\n', { mode: 0o600 })
+		const [byFile, byEnv, refused] = [
+			await cli().cli(["config", "--config", file], {}),
+			await cli().cli(["config", "--redirect", "same-origin"], { env: { CATALOG_REDIRECT: "follow" } }),
+			await cli().cli(["config", "--redirect", "always"], {}),
+		]
+		expect([
+			redirectLine(byFile.stdout),
+			redirectLine(byEnv.stdout),
+			refused.status,
+			JSON.parse(refused.stderr),
+		]).toEqual([
+			"redirect follow (file)",
+			"redirect same-origin (flag)",
+			4,
+			{ error: { kind: "usage", message: 'redirect "always": want same-origin or follow' } },
+		])
 	})
 })

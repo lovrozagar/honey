@@ -225,6 +225,147 @@ const requestId: Scenario[] = [
 	},
 ]
 
+/** A CLI-only call: `argv` as the CLI runs it, reaching `operation` (none for a local command). */
+const argv = (operation: string, args: readonly string[]): Call => ({
+	argv: args,
+	operation,
+	route: { method: "", path: "" },
+})
+
+/** The CLI's own observation: its exit code, stdout's lines, each stderr line as JSON. */
+const cli = (exit: number, stdout: readonly string[] = [], stderr: readonly Expected[] = []): Expected => ({
+	exit,
+	kind: "cli",
+	stderr,
+	stdout,
+})
+
+/** A usage or API error as the CLI's stderr carries it under JSON. */
+const failed = (fields: Record<string, Expected>): Expected => ({ error: fields })
+
+/* the echo with a fixed request id: one deterministic line */
+const ECHO_ARGS = ["echo", "get", "--header", "x-request-id: cli-1"]
+const ECHO_LINE = '{"method":"GET","requestId":"cli-1"}'
+
+/** The declared 404 as the CLI's stderr carries it. */
+const NOT_FOUND = failed({ errorKey: "not_found", kind: "api", message: "Not found", status: 404 })
+/* `config --json` under a fixed base URL and no other setting */
+const CONFIG_LINE =
+	'{"api_key":{"source":"default","value":""},"base_url":{"source":"flag","value":"http://127.0.0.1:9"},"headers":{"source":"default","value":{}},"quiet":{"source":"default","value":false},"redirect":{"source":"default","value":"same-origin"},"target":{"host":"127.0.0.1:9","kind":"local"},"timeout":{"source":"default","value":"30s"},"verbose":{"source":"default","value":false}}'
+/** The reference app's index as `conformance commands` prints it: an operation added reds this until it is listed. */
+const REFERENCE_INDEX = [
+	"local: commands completion config schema skill",
+	"boundary custom",
+	"boundary default",
+	"echo get",
+	"errors declared <status>",
+	"errors status <status>",
+	"events append",
+	"events socket (ws)",
+	"events stream (sse)",
+	"files get <name>",
+	"files put <name> --data binary",
+	"health",
+	"idempotent create",
+	"items create --data json",
+	"items delete <id>",
+	"items get <id>",
+	"items list [--limit integer] [--q string]",
+	"items patch <id> --data json",
+	"items update <id> [--flag] [--limit integer] [--q string] [--ratio number] [--tags string...] [--x-trace string] --data json",
+	"ping",
+	"redirect cross-origin",
+	"ticks stream (sse)",
+	"timing slow --ms integer",
+	"uploads blob --data binary",
+	"uploads form [--file path]",
+	"users create --data json",
+	"users delete <id>",
+	"users get <id>",
+	"users list",
+	"users update <id> --data json",
+	"validated create --data json",
+	"ws echo [--token string] (ws)",
+]
+/** `conformance __complete ""`: the top-level commands, then cobra's directive. */
+const REFERENCE_COMPLETION = [
+	"boundary",
+	"commands\tlist every command, one usage line each (text even when piped; --json: one object per line)",
+	"completion\tGenerate the autocompletion script for the specified shell",
+	"config\tthe settings this run resolves, each with its source, and where calls go",
+	"echo",
+	"errors",
+	"events",
+	"files",
+	"health",
+	"help\tHelp about any command",
+	"idempotent",
+	"items",
+	"ping",
+	"redirect",
+	"schema\ta command's request and answer: usage, method and path, body, result or events, errors",
+	"skill\tprint the agent skill (SKILL.md) this CLI ships",
+	"ticks",
+	"timing",
+	"uploads",
+	"users",
+	"validated",
+	"ws",
+	":4",
+]
+
+const exitCodes: Scenario[] = [
+	{
+		calls: [
+			argv("echo.get", ECHO_ARGS),
+			argv("errors.declared", ["errors", "declared", "404"]),
+			argv("errors.status", ["errors", "status", "500"]),
+			argv("echo.get", ["echo", "get", "--base-url", "http://127.0.0.1:1"]),
+			argv("echo.get", ["echo", "get", "--nope"]),
+			argv("redirect.crossOrigin", ["redirect", "cross-origin"]),
+		],
+		expect: [
+			cli(0, [ECHO_LINE]),
+			cli(1, [], [NOT_FOUND]),
+			cli(2, [], [failed({ kind: "api", message: "status 500", status: 500 })]),
+			cli(3, [], [failed({ kind: "transport", message: ANY })]),
+			cli(4, [], [failed({ kind: "usage", message: "unknown flag: --nope" })]),
+			cli(
+				5,
+				[],
+				[
+					failed({
+						kind: "api",
+						message: "the API answered 307, a redirect not followed: rerun with --redirect follow to follow it",
+						status: 307,
+					}),
+				],
+			),
+		],
+		id: "by-outcome",
+	},
+]
+
+const jsonUniform: Scenario[] = [
+	{
+		calls: [
+			argv("echo.get", ECHO_ARGS),
+			argv("errors.declared", ["errors", "declared", "404"]),
+			argv("", ["config", "--json", "--base-url", "http://127.0.0.1:9"]),
+		],
+		expect: [cli(0, [ECHO_LINE]), cli(1, [], [NOT_FOUND]), cli(0, [CONFIG_LINE])],
+		id: "one-line",
+	},
+]
+
+/** Rows only the CLI runs (dx/conformance:32). */
+const cliOnly = (id: string, asserted: string, scenarios: Scenario[]): Feature => ({
+	asserted,
+	id,
+	scenarios,
+	targets: ["cli"],
+})
+
 /** Rows every target runs. */
 const shared = (id: string, asserted: string, scenarios: Scenario[]): Feature => ({
 	asserted,
@@ -296,4 +437,28 @@ export const FEATURES: readonly Feature[] = [
 	]),
 	shared("auth", "a credential goes on-origin and is dropped on a cross-origin redirect (H18.10)", auth),
 	shared("request-id", "x-request-id round-trips: the hop's id is the one the app answers with", requestId),
+	cliOnly(
+		"exit-codes",
+		"the exit code by outcome: 0 ok, 1 a 4xx, 2 a 5xx, 3 no answer, 4 usage, 5 a redirect not followed",
+		exitCodes,
+	),
+	cliOnly("json-uniform", "every answer, error and local command under --json is one compact JSON line", jsonUniform),
+	cliOnly("output-file", "-o writes the answer's bytes to the file, stdout empty", [
+		{
+			calls: [argv("files.get", ["files", "get", "blob.bin", "-o", "$FILE"])],
+			expect: [{ exit: 0, file: { sha256: SHA_256B, size: 256 }, kind: "cli", stderr: [], stdout: [] }],
+			id: "bytes",
+			wire: [hop("GET", "/v1/files/blob.bin", { headers: { accept: OCTET } })],
+		},
+	]),
+	cliOnly("discovery", "commands lists the app's every operation, one usage line each", [
+		{ calls: [argv("", ["commands"])], expect: [cli(0, REFERENCE_INDEX)], id: "index" },
+	]),
+	cliOnly("completion", "shell completion offers the app's commands", [
+		{
+			calls: [argv("", ["__complete", ""])],
+			expect: [cli(0, REFERENCE_COMPLETION, ["Completion ended with directive: ShellCompDirectiveNoFileComp"])],
+			id: "commands",
+		},
+	]),
 ]

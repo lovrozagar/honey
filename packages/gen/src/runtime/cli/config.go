@@ -27,6 +27,8 @@ type Config struct {
 	Timeout time.Duration
 	Verbose bool
 	Quiet   bool
+	// Redirect is which redirects a call follows: same-origin (the default) or follow
+	Redirect string
 
 	log     io.Writer
 	secrets []string
@@ -38,12 +40,13 @@ type Config struct {
 
 // saved is the config file: TOML, an unknown key a usage error.
 type saved struct {
-	APIKey  string            `toml:"api_key"`
-	BaseURL string            `toml:"base_url"`
-	Timeout string            `toml:"timeout"`
-	Verbose *bool             `toml:"verbose"`
-	Quiet   *bool             `toml:"quiet"`
-	Headers map[string]string `toml:"headers"`
+	APIKey   string            `toml:"api_key"`
+	BaseURL  string            `toml:"base_url"`
+	Timeout  string            `toml:"timeout"`
+	Verbose  *bool             `toml:"verbose"`
+	Quiet    *bool             `toml:"quiet"`
+	Redirect string            `toml:"redirect"`
+	Headers  map[string]string `toml:"headers"`
 }
 
 // the root annotations holding the environment variables' prefix and the API's default base URL
@@ -62,6 +65,7 @@ func globalFlags(root *cobra.Command, app App) {
 	f.Duration("timeout", 0, "bound each call; 0 for 30s ("+env("TIMEOUT")+")")
 	f.Bool("verbose", false, "log each request and response to stderr, secrets redacted ("+env("VERBOSE")+")")
 	f.BoolP("quiet", "q", false, "no target line on a terminal's stderr ("+env("QUIET")+")")
+	f.String("redirect", "", "same-origin (the default) or follow, which also follows a cross-origin redirect without the credentials ("+env("REDIRECT")+")")
 	f.StringArray("header", nil, `send a header, "Name: value" (repeatable)`)
 	root.Annotations = map[string]string{envPrefixKey: app.EnvPrefix, serverKey: app.Server}
 }
@@ -87,11 +91,28 @@ func Settings(c *cobra.Command) (Config, error) {
 	if cfg.Quiet, cfg.sources["quiet"], err = boolSetting(flags, "quiet", prefix, file.Quiet); err != nil {
 		return Config{}, err
 	}
+	cfg.Redirect, cfg.sources["redirect"] = pick(flags, "redirect", prefix+"_REDIRECT", file.Redirect)
+	switch cfg.Redirect {
+	case "":
+		cfg.Redirect = "same-origin"
+	case "same-origin", "follow":
+	default:
+		return Config{}, Usage("redirect %q: want same-origin or follow", cfg.Redirect)
+	}
 	if cfg.Headers, cfg.sources["headers"], err = headers(flags, file.Headers); err != nil {
 		return Config{}, err
 	}
 	cfg.secrets = secretsOf(cfg)
 	return cfg, nil
+}
+
+// redirectOf is the run's redirect setting, resolved again where an error is reported (the config
+// file's warnings are not repeated).
+func redirectOf(c *cobra.Command) string {
+	prefix := c.Root().Annotations[envPrefixKey]
+	file, _ := readConfig(c.Flags(), prefix, c.Root().Name(), io.Discard)
+	redirect, _ := pick(c.Flags(), "redirect", prefix+"_REDIRECT", file.Redirect)
+	return redirect
 }
 
 // pick is a string setting and its source: its flag when given, else its environment variable

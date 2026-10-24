@@ -7,6 +7,7 @@ import { join, matchesGlob } from "node:path"
 import { describe, expect, it } from "vitest"
 import config, { HARNESS, TOOLCHAIN_PROJECTS } from "../../../vitest.config.ts"
 import { FEATURES } from "./features.ts"
+import { unknownOperations } from "./harness.ts"
 import {
 	type Cell,
 	cellsFor,
@@ -162,6 +163,58 @@ describe("the grid's shape", () => {
 	it("names no operation by a member the SDK instance owns", () => {
 		const operations = FEATURES.flatMap((f) => f.scenarios.flatMap((s) => s.calls.map((c) => c.operation)))
 		expect(operations.filter((op) => op.split(".").some((segment) => RESERVED.has(segment)))).toEqual([])
+	})
+})
+
+describe("the document check (unknownOperations)", () => {
+	/** A cell of one CLI-only call running `args` with an empty operation. */
+	const local = (args: string[]): Cell => ({
+		calls: [{ argv: args, operation: "", route: { method: "", path: "" } }],
+		expect: [],
+		feature: "f",
+		id: "s",
+		key: "f/s",
+	})
+
+	it("lets a CLI local command call no operation, and refuses an API command behind an empty one", () => {
+		const doc = { paths: { "/x": { get: { operationId: "x.get" } } } }
+		expect(
+			unknownOperations([local(["config", "--json"]), local(["commands"]), local(["__complete", ""])], doc),
+		).toEqual([])
+		expect(() => unknownOperations([local(["echo", "get"])], doc)).toThrow(
+			'f/s: an empty operation is a CLI local command\'s, not "echo"',
+		)
+	})
+})
+
+describe("the CLI's rows (dx/conformance:32)", () => {
+	it("gives the CLI the shared cells and its own five rows (dx/conformance:32), and no other target those rows", () => {
+		const own = ["completion", "discovery", "exit-codes", "json-uniform", "output-file"]
+		const others = TARGETS.filter((target) => target !== "cli")
+		expect({
+			cli: cellsFor("cli")
+				.map((cell) => cell.key)
+				.sort(),
+			leaked: others.flatMap((target) =>
+				cellsFor(target)
+					.filter((cell) => own.includes(cell.feature))
+					.map((cell) => cell.key),
+			),
+			rows: FEATURES.filter((f) => f.targets.length === 1 && f.targets[0] === "cli")
+				.map((f) => f.id)
+				.sort(),
+		}).toEqual({
+			cli: [
+				...TS_CELLS,
+				"completion/commands",
+				"discovery/index",
+				"exit-codes/by-outcome",
+				"json-uniform/one-line",
+				"output-file/bytes",
+			].sort(),
+			leaked: [],
+			rows: own,
+		})
 	})
 })
 

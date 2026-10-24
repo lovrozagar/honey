@@ -29,6 +29,7 @@ export const GLOBAL_FLAGS = [
 	"quiet",
 	"raw",
 	"reconnect-token",
+	"redirect",
 	"take",
 	"timeout",
 	"verbose",
@@ -113,6 +114,8 @@ export type Usage = {
 	readonly positional: boolean
 	readonly kind: Kind
 	readonly required: boolean
+	/** the parameter's own name, for a path, query or header parameter */
+	readonly param?: string
 }
 
 const STRING: Kind = { enum: [], kind: "string", list: false }
@@ -142,7 +145,9 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 	if (plan.pathParams.length > 0) {
 		const names = plan.pathParams.map((name) => scope.claim(kebab(name)))
 		declare.push(`\tp.Path(${names.map(goString).join(", ")})`)
-		usage.push(...names.map((name) => ({ kind: STRING, name, positional: true, required: true })))
+		usage.push(
+			...names.map((name, i) => ({ kind: STRING, name, param: plan.pathParams[i], positional: true, required: true })),
+		)
 	}
 	/* each param the SDK gives an Opts field, by the plan: a stream's channel param (Last-Event-ID) has none */
 	const params = (specs: readonly IRParam[], fields: Readonly<Record<string, string>>) => {
@@ -150,7 +155,7 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 			const spec = specs.find((each) => each.name === param) as IRParam
 			const name = scope.claim(kebab(spec.name))
 			const kind = kindOf(spec.schema, schemas)
-			usage.push({ kind, name, positional: false, required: spec.required === true })
+			usage.push({ kind, name, param: spec.name, positional: false, required: spec.required === true })
 			declare.push(flagLine(name, kind, spec.required === true, spec.description ?? ""))
 			opts.push(
 				`\tif err := cli.Set(&opts.${field}, p.Values(${goString(name)})); err != nil {`,

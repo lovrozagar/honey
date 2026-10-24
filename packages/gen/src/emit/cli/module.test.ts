@@ -87,6 +87,7 @@ func newClient(c *cobra.Command) (*sdk.Client, error) {
 \ts.Announce()
 \treturn sdk.NewClient(sdk.Config{
 \t\tBaseURL: s.BaseURL, BearerToken: s.APIKey, Headers: s.Headers, Timeout: s.Timeout,
+\t\tRedirect: sdk.RedirectPolicy(s.Redirect),
 \t\tOnRequest: []func(*sdk.RequestContext) error{func(rc *sdk.RequestContext) error {
 \t\t\ts.LogRequest(rc.Method, rc.URL, rc.Headers)
 \t\t\treturn nil

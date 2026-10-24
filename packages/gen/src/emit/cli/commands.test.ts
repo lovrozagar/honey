@@ -162,6 +162,11 @@ describe.skipIf(!GO)("the shop CLI's commands, built (phase b)", SLOW, () => {
 		})
 	})
 
+	it("suffixes a parameter named like a global flag, the global flag kept: --redirect2 to the query", async () => {
+		const ran = await call(["dump", "get", "--redirect2", "r", "--redirect", "follow"], [OK({ a: 1 })])
+		expect([ran.status, ran.hops[0]?.url, ran.stdout]).toEqual([0, "/dump?redirect=r", '{"a":1}\n'])
+	})
+
 	it("takes path parameters positionally or by flag, escaped as the SDK escapes them", async () => {
 		const [positional, flagged, mixed] = [
 			await call(["items", "get", "a b/ü"], [OK({ id: "a", name: "n" })]),

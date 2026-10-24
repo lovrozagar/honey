@@ -123,7 +123,13 @@ export default defineConfig(({ mode }) =>
 				test: {
 					projects: groups(
 						{ include: harnessOf("ts"), name: "ts" },
-						Object.fromEntries(Object.keys(TOOLCHAIN_PROJECTS).map((name) => [name, harnessOf(name)])),
+						/* the CLI's harness runs in go's project: its toolchain is Go's (built.ts reaches go-env) */
+						Object.fromEntries(
+							Object.keys(TOOLCHAIN_PROJECTS).map((name) => [
+								name,
+								name === "go" ? [...harnessOf("go"), ...harnessOf("cli")] : harnessOf(name),
+							]),
+						),
 					).map((test) => ({ test: { ...test, hookTimeout: 60_000, testTimeout: 60_000 } })),
 					sequence: { sequencer: LongestFirst },
 				},

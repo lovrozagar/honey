@@ -77,7 +77,7 @@ func (c Config) print(cmd *cobra.Command) error {
 	}
 	values := map[string]any{
 		"api_key": apiKey, "base_url": c.redact(c.BaseURL), "headers": headers,
-		"quiet": c.Quiet, "timeout": timeout, "verbose": c.Verbose,
+		"quiet": c.Quiet, "redirect": c.Redirect, "timeout": timeout, "verbose": c.Verbose,
 	}
 	kind, host := c.Target()
 	if jsonAsked(cmd) {

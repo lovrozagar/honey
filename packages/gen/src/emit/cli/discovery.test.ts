@@ -37,7 +37,7 @@ const SHOP_INDEX = [
 	"local: commands completion config schema skill",
 	"bulk send --data json",
 	"chat connect (ws)",
-	"dump get # Any JSON, as the API sends it",
+	"dump get [--redirect2 string] # Any JSON, as the API sends it",
 	"events stream (sse)",
 	"feed live [--channel string] (realtime)",
 	"files get <name>",
@@ -55,7 +55,7 @@ const SHOP_INDEX = [
 	"pets put [--data json]",
 	"raw send --data json",
 	"ticks stream (sse) # Ticks, typed",
-	"uploads create [--extras path...] [--file path] [--note string]",
+	"uploads create [--extras path...] [--file path] [--format2 string] [--note string]",
 	"version2",
 	"",
 ].join("\n")

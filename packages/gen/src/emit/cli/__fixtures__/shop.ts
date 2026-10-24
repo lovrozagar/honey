@@ -1,8 +1,8 @@
 /**
  * The CLI's command fixture (bit 17 phase b): every shape a command takes. It holds:
  * - a nested resource, two path params, and a flat id;
- * - ids that collide with the root's built-ins (`version`, `help`) and a parameter that collides with a global flag
- *   (`timeout`);
+ * - ids that collide with the root's built-ins (`version`, `help`), and parameters and a multipart part that collide
+ *   with global flags (`timeout`, `redirect`, the part `format`);
  * - every flag kind: integer, number, boolean, enum, a list, a header;
  * - a required query param and a JSON body with scalar and object fields;
  * - text, form and binary bodies, and binary and empty answers;
@@ -161,7 +161,14 @@ const streamPaths = (): Json => ({
 
 /** The flat ids, the built-in collisions, and the multipart operation. */
 const otherPaths = (): Json => ({
-	"/dump": { get: { operationId: "dump.get", responses: ok({}), summary: "Any JSON, as the API sends it" } },
+	"/dump": {
+		get: {
+			operationId: "dump.get",
+			parameters: [query("redirect", STRING)],
+			responses: ok({}),
+			summary: "Any JSON, as the API sends it",
+		},
+	},
 	"/health": {
 		get: { operationId: "health", responses: ok({ properties: { ok: { type: "boolean" } }, type: "object" }) },
 	},
@@ -176,6 +183,7 @@ const otherPaths = (): Json => ({
 							properties: {
 								extras: { items: { format: "binary", type: "string" }, type: "array" },
 								file: { format: "binary", type: "string" },
+								format: STRING,
 								note: STRING,
 							},
 							type: "object",
