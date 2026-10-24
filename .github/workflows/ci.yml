@@ -105,6 +105,10 @@ jobs:
           restore-keys: ${{ runner.os }}-gobuild-
       - run: touch "$RUNNER_TEMP/go-sdk-start"
       - run: bun install --frozen-lockfile
+      # the CLI's completion scripts parse in each shell (cli/completion.test.ts): fish, zsh and PowerShell at the
+      # releases shell-pins.json pins by sha256, under ~/.cache/honey-tmp/tools: the command a missing shell names
+      - name: Shells (shell-pins.json's fish, zsh and PowerShell)
+        run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/cli/__fixtures__/shell-pins.json" && D="$HOME/.cache/honey-tmp/tools" && mkdir -p "$D/dl" && for k in $(jq -r 'keys[]' "$P"); do U="$(jq -r --arg k "$k" '.[$k].url' "$P")" && R="$(jq -r --arg k "$k" '.[$k].dir' "$P")" && curl -fsSL -o "$D/dl/$k" "$U" && echo "$(jq -r --arg k "$k" '.[$k].sha256' "$P")  $D/dl/$k" | sha256sum -c - && rm -rf "$D/$R" "$D/$R.partial" && mkdir -p "$D/$R.partial" && tar -xf "$D/dl/$k" -C "$D/$R.partial" && chmod +x "$D/$R.partial/$(jq -r --arg k "$k" '.[$k].bin' "$P")" && mv "$D/$R.partial" "$D/$R" && rm "$D/dl/$k" || exit 1; done
       - run: bun run generate
       # frozen v0 tests listen on fixed ports inside the ephemeral range: reserve them so no automatically
       # assigned port (a client socket, a port-0 server another test left) holds one

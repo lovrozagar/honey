@@ -36,7 +36,7 @@ export const GLOBAL_FLAGS = [
 ]
 
 /** A flag's kind as the runtime checks it, whether it repeats, and its allowed values. */
-type Kind = { readonly kind: string; readonly list: boolean; readonly enum: readonly string[] }
+export type Kind = { readonly kind: string; readonly list: boolean; readonly enum: readonly string[] }
 
 const JSON_KIND: Kind = { enum: [], kind: "json", list: false }
 
@@ -103,7 +103,19 @@ export type CommandFlags = {
 	readonly fields: readonly (readonly [string, string])[]
 	/** a multipart body's parts: each one's flag, its `<Op>Body` field, whether a file, whether repeated */
 	readonly parts: readonly PartFlag[]
+	/** each argument a call takes, as discovery shows it (phase e): the path ones, the parameter flags, the body */
+	readonly usage: readonly Usage[]
 }
+
+/** One argument as discovery shows it: a positional path parameter, else a flag, with its kind and whether required. */
+export type Usage = {
+	readonly name: string
+	readonly positional: boolean
+	readonly kind: Kind
+	readonly required: boolean
+}
+
+const STRING: Kind = { enum: [], kind: "string", list: false }
 
 /** Where a command's flags are claimed and declared, and the schemas their kinds resolve by. */
 type FlagScope = {
@@ -112,24 +124,34 @@ type FlagScope = {
 	readonly scope: NameScope
 }
 
-/** One multipart part's flag, `--<part>`: a value for a text part, a path for a file part. */
-export type PartFlag = { readonly flag: string; readonly field: string; readonly file: boolean; readonly list: boolean }
+/** One multipart part's flag, `--<part>`: a value of `kind` for a text part, a path for a file part. */
+export type PartFlag = {
+	readonly flag: string
+	readonly field: string
+	readonly file: boolean
+	readonly list: boolean
+	readonly kind?: Kind
+}
 
 /** Each parameter flag `op` takes, path ones first, and each scalar body field's, claimed in one scope beside the global flags. */
 export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Record<string, IRSchema>>): CommandFlags {
 	const scope = new NameScope(GLOBAL_FLAGS)
 	const declare: string[] = []
 	const opts: string[] = []
+	const usage: Usage[] = []
 	if (plan.pathParams.length > 0) {
 		const names = plan.pathParams.map((name) => scope.claim(kebab(name)))
 		declare.push(`\tp.Path(${names.map(goString).join(", ")})`)
+		usage.push(...names.map((name) => ({ kind: STRING, name, positional: true, required: true })))
 	}
 	/* each param the SDK gives an Opts field, by the plan: a stream's channel param (Last-Event-ID) has none */
 	const params = (specs: readonly IRParam[], fields: Readonly<Record<string, string>>) => {
 		for (const [param, field] of Object.entries(fields)) {
 			const spec = specs.find((each) => each.name === param) as IRParam
 			const name = scope.claim(kebab(spec.name))
-			declare.push(flagLine(name, kindOf(spec.schema, schemas), spec.required === true, spec.description ?? ""))
+			const kind = kindOf(spec.schema, schemas)
+			usage.push({ kind, name, positional: false, required: spec.required === true })
+			declare.push(flagLine(name, kind, spec.required === true, spec.description ?? ""))
 			opts.push(
 				`\tif err := cli.Set(&opts.${field}, p.Values(${goString(name)})); err != nil {`,
 				"\t\treturn err",
@@ -140,10 +162,18 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 	params(op.query, plan.query)
 	params(op.headers, plan.headers)
 	if (op.stream !== null) streamFlags(op.stream, declare, opts)
-	if (op.body?.kind === "multipart")
-		return { declare, fields: [], opts, parts: partFlags(op, plan, { declare, schemas, scope }) }
+	if (op.body?.kind === "multipart") {
+		const parts = partFlags(op, plan, { declare, schemas, scope })
+		for (const part of parts) {
+			const kind = part.file ? { ...STRING, kind: "path" } : (part.kind as Kind)
+			usage.push({ kind: { ...kind, list: part.list }, name: part.flag, positional: false, required: false })
+		}
+		return { declare, fields: [], opts, parts, usage }
+	}
 	const fields = bodyFields(op, schemas, scope, declare)
-	return { declare, fields, opts, parts: [] }
+	if (op.body !== undefined)
+		usage.push({ kind: { ...STRING, kind: op.body.kind }, name: "data", positional: false, required: op.body.required })
+	return { declare, fields, opts, parts: [], usage }
 }
 
 /** A stream's cursor flags, each `[flag, its Opts field, usage]`: the names GLOBAL_FLAGS keeps from a parameter. */
@@ -183,10 +213,9 @@ function partFlags(op: SdkOp, plan: GoCallPlan, at: FlagScope): PartFlag[] {
 			return { field: part.field, file: true, flag, list: part.list }
 		}
 		const spec = body.parts.find((each) => each.name === part.part) as (typeof body.parts)[number]
-		declare.push(
-			flagLine(flag, { ...kindOf(spec.schema as IRSchema, schemas), list: part.list }, false, `the ${part.part} part`),
-		)
-		return { field: part.field, file: false, flag, list: part.list }
+		const kind = { ...kindOf(spec.schema as IRSchema, schemas), list: part.list }
+		declare.push(flagLine(flag, kind, false, `the ${part.part} part`))
+		return { field: part.field, file: false, flag, kind, list: part.list }
 	})
 }
 

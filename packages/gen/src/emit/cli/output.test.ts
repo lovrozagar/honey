@@ -4,7 +4,6 @@
  * characters escaped); table the default on a terminal; -i the declared response headers beside the data; --raw the
  * response as it came; -o to a file; and an error on stderr as one JSON line under JSON, by kind, else after the name.
  */
-import { spawnSync } from "node:child_process"
 import { mkdtempSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -12,6 +11,7 @@ import { goCacheDir, withGo } from "../go/__fixtures__/go-env.ts"
 import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { builtCli, type RunOptions } from "./__fixtures__/built.ts"
 import { shop } from "./__fixtures__/shop.ts"
+import { yamlValue } from "./__fixtures__/yaml.ts"
 import { generateGoCli } from "./module.ts"
 
 const GO = withGo()
@@ -39,19 +39,6 @@ const TRICKY = {
 	"# c": 2,
 	"1e3": 3,
 	"": 4,
-}
-
-/** YAML read back to its value by Bun's own YAML parser: an oracle apart from the emitter. */
-function yamlValue(text: string): unknown {
-	const parsed = spawnSync(
-		"bun",
-		["-e", "console.log(JSON.stringify(Bun.YAML.parse(require('fs').readFileSync(0, 'utf8'))))"],
-		{
-			encoding: "utf8",
-			input: text,
-		},
-	)
-	return JSON.parse(parsed.stdout) as unknown
 }
 
 describe.skipIf(!GO)("the formats (phase c)", SLOW, () => {
@@ -128,8 +115,8 @@ describe.skipIf(!GO)("a terminal, -i, --raw and -o (phase c)", SLOW, () => {
 	it("prints a table on a terminal, and --json there as on a pipe", async () => {
 		const answer: Reply = { json: [{ id: "a", name: "n" }], status: 200 }
 		const [table, json] = [
-			await call(["items", "list"], [answer], { tty: true }),
-			await call(["items", "list", "--json"], [answer], { tty: true }),
+			await call(["items", "list", "-q"], [answer], { tty: true }),
+			await call(["items", "list", "--json", "-q"], [answer], { tty: true }),
 		]
 		expect([table.stdout, json.stdout]).toEqual(["ID  NAME\na   n\n", '[{"id":"a","name":"n"}]\n'])
 	})

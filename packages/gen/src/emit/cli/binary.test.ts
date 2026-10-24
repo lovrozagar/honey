@@ -49,7 +49,7 @@ describe.skipIf(!GO)("a binary answer (phase c, A1)", SLOW, () => {
 
 	it("refuses to write bytes on a terminal, and to wrap them with -i, exit 4", async () => {
 		const [terminal, included] = [
-			await call(["files", "get", "blob.bin"], [{ bytes: 256, status: 200 }], { tty: true }),
+			await call(["files", "get", "blob.bin", "-q"], [{ bytes: 256, status: 200 }], { tty: true }),
 			await call(["files", "get", "blob.bin", "-i"], [{ bytes: 256, status: 200 }]),
 		]
 		expect({
@@ -108,7 +108,7 @@ describe.skipIf(!GO)("a text answer (phase c)", SLOW, () => {
 		const reply: Reply = { status: 200, text: "noted\u001b[2J\u0007 done\n" }
 		const [piped, terminal] = [
 			await call(["notes", "create", "--data", "x"], [reply]),
-			await call(["notes", "create", "--data", "x"], [reply], { tty: true }),
+			await call(["notes", "create", "--data", "x", "-q"], [reply], { tty: true }),
 		]
 		expect([piped.stdout, terminal.stdout]).toEqual(["noted\u001b[2J\u0007 done\n", "noted\\x1b[2J\\a done\n"])
 	})

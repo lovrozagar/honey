@@ -54,22 +54,45 @@ func (e *APIError) Error() string { return e.Err.Error() }
 
 func (e *APIError) Unwrap() error { return e.Err }
 
-// App names the CLI: its binary, its one-line description, its environment variables' prefix.
+// App is the CLI: its binary, its one-line description, its environment variables' prefix, the
+// API's default base URL (none when it declares no server), its commands as discovery shows
+// them, and the agent skill it ships.
 type App struct {
 	Name      string
 	Short     string
 	EnvPrefix string
+	Server    string
+	Discovery Discovery
+	Skill     string
 }
 
-// Root is the CLI's root command: --version prints the version alone, the global flags, no
-// default completion command, and an unknown command or flag is a usage error.
-func Root(app App) *cobra.Command {
-	root := &cobra.Command{Use: app.Name, Short: app.Short, Version: Version, SilenceErrors: true, SilenceUsage: true}
+// Root is the CLI's root command: the API's commands in one help group, the local ones
+// (commands, completion, config, schema, skill, help) in another, a two-line banner pointing an
+// agent at discovery, --version printing the version alone, the global flags, and an unknown
+// command or flag a usage error.
+func Root(app App, api ...*cobra.Command) *cobra.Command {
+	banner := fmt.Sprintf("Agents: `%[1]s commands` lists every command, one line each.\n"+
+		"`%[1]s schema <command>` shows one's request and answer; `%[1]s config` shows where calls go.", app.Name)
+	root := &cobra.Command{
+		Use: app.Name, Short: app.Short, Long: app.Short + "\n\n" + banner,
+		Version: Version, SilenceErrors: true, SilenceUsage: true,
+	}
 	root.SetVersionTemplate("{{.Version}}\n")
-	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &UsageError{msg: err.Error()} })
+	if len(api) > 0 {
+		root.AddGroup(&cobra.Group{ID: apiGroup, Title: "API commands:"})
+		for _, cmd := range api {
+			cmd.GroupID = apiGroup
+		}
+		root.AddCommand(api...)
+	}
+	root.AddGroup(&cobra.Group{ID: localGroup, Title: "Local commands:"})
+	root.SetHelpCommandGroupID(localGroup)
+	root.SetCompletionCommandGroupID(localGroup)
 	globalFlags(root, app)
 	outputFlags(root)
+	discover(root, app)
+	configCommand(root)
 	Group(root)
 	return root
 }

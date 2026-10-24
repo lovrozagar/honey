@@ -55,7 +55,7 @@ final class Conn implements TransportConnection {
 final class Spin implements TransportAdapter {
   volatile long ms;
   final java.util.List<Conn> conns = new java.util.concurrent.CopyOnWriteArrayList<>();
-  /* a probe's latch: counted down once an open is in progress, which then holds until held is set (1 s at most) */
+  /* a probe's latch: counted down once an open is in progress, which then holds until held is set (10 s at most) */
   volatile CountDownLatch dialing;
   volatile java.util.concurrent.atomic.AtomicBoolean held;
 
@@ -79,9 +79,13 @@ final class Spin implements TransportAdapter {
     if (dialing != null) {
       dialing.countDown();
       /* a spin, not a wait: an interrupt landing here stays set, as in the work below */
-      long limit = System.nanoTime() + 1_000_000_000L;
+      long limit = System.nanoTime() + 10_000_000_000L;
       while (!held.get() && System.nanoTime() < limit) {
         Thread.onSpinWait();
+      }
+      if (!held.get()) {
+        System.err.println("the hold cap was reached: the interrupter thread was starved for 10 s (a stalled scheduler, not the runtime)");
+        System.exit(4);
       }
     }
     while (System.nanoTime() < end) {
@@ -465,7 +469,7 @@ try {
 
 	/* new: refinement (3)'s 200 rounds at the boundary: bound 50 ms, opens of 45–55 ms, a caller interrupt on odd rounds */
 	it("leaves no stray interrupt after a successful open and loses no caller interrupt, 200 rounds at the boundary", () => {
-		/* 200 rounds of about 110 ms each; an interrupter that never fires holds each odd open its 1 s: a 150 s watchdog */
-		expect(probed(ROUNDS, 150)).toEqual(["0 0 true true 100"])
+		/* 200 rounds of about 110 ms each: a 60 s watchdog; a starved interrupter ends the probe at its first capped round */
+		expect(probed(ROUNDS, 60)).toEqual(["0 0 true true 100"])
 	})
 })

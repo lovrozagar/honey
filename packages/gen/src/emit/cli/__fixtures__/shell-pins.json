@@ -1,0 +1,20 @@
+{
+	"fish": {
+		"bin": "fish",
+		"dir": "fish-4.9.3",
+		"sha256": "8f643d10ad1abb0ef7072764c01ceb5cf61b2d373fda400cf60f0bad69b7e095",
+		"url": "https://github.com/fish-shell/fish-shell/releases/download/4.9.3/fish-4.9.3-linux-x86_64.tar.xz"
+	},
+	"pwsh": {
+		"bin": "pwsh",
+		"dir": "pwsh-7.6.6",
+		"sha256": "ddbc4a2d113bbd46d283cfedcbcd117a70caefd7673f41f2b4e0000badf103bc",
+		"url": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/powershell-7.6.6-linux-x64.tar.gz"
+	},
+	"zsh": {
+		"bin": "bin/zsh",
+		"dir": "zsh-5.8",
+		"sha256": "6df668fb6e9a12874e0d80518d582f2e99e512d4a4532fa73d938360aaddc838",
+		"url": "https://github.com/romkatv/zsh-bin/releases/download/v6.1.1/zsh-5.8-linux-x86_64.tar.gz"
+	}
+}

@@ -119,7 +119,7 @@ describe.skipIf(!GO)("an event stream's formats and output flags (phase d)", SLO
 	it("prints ndjson for a table: one warning when --format table asked for it, none for a terminal's default", async () => {
 		const [asked, terminal] = [
 			await call(["events", "stream", "--format", "table"], [sse(MIXED.slice(0, 1))]),
-			await call(["events", "stream"], [sse(MIXED.slice(0, 1))], { tty: true }),
+			await call(["events", "stream", "-q"], [sse(MIXED.slice(0, 1))], { tty: true }),
 		]
 		expect([asked.stdout, asked.stderr, terminal.stdout, terminal.stderr]).toEqual([
 			'{"data":42}\n',

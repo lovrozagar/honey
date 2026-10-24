@@ -44,9 +44,19 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     close frame on --take and on Ctrl-C, the close code as the outcome;
  *   - run.go +150 to 5,699: Ctrl-C ending a stream with no error still exits 130; Closed classed as transport;
  *   provisional 43,700.
+ * - phase e, +10,024 B to 53,677 B, after reusing sortedKeys for config's headers and cutting a second redaction of
+ *   credential headers (redact already holds their values), 156 B:
+ *   - discovery.go 4,339: `commands` (the local line, a usage line per command, --json one object each), `commands
+ *     search` (shared words, ties in path order, 5 at most), `schema` and its JSON, `skill`;
+ *   - target.go 3,292: the target (loopback local, else remote, by host), the terminal-only target line under -q,
+ *     `config` (each setting with its source, secrets redacted, as text or one JSON object);
+ *   - config.go +1,321 to 7,276: each setting's source, --quiet ($<PREFIX>_QUIET, the file's quiet), the API's server;
+ *   - run.go +919 to 6,618: the App's server, discovery and skill; the API and local help groups, the two-line banner;
+ *   - params.go +153 to 5,321: an enum flag's values completing;
+ *   provisional 53,700.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const CLI_RUNTIME_BYTES = 43700
+const CLI_RUNTIME_BYTES = 53700
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

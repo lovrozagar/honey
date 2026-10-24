@@ -91,7 +91,7 @@ func article(kind string) string {
 func NewParams(cmd *cobra.Command) *Params { return &Params{cmd: cmd} }
 
 // Flag declares --name of kind (string, integer, number, boolean or json), repeatable when list,
-// limited to enum when one is given; a required one must be given.
+// limited to enum when one is given, its values completing; a required one must be given.
 func (p *Params) Flag(name, kind string, list, required bool, usage string, enum ...string) {
 	if len(enum) > 0 {
 		usage = strings.TrimSpace(usage + " (one of " + strings.Join(enum, ", ") + ")")
@@ -100,6 +100,9 @@ func (p *Params) Flag(name, kind string, list, required bool, usage string, enum
 		usage = strings.TrimSpace(usage + " (required)")
 	}
 	flag := p.cmd.Flags().VarPF(&value{kind: kind, list: list, enum: enum}, name, "", usage)
+	if len(enum) > 0 {
+		p.cmd.RegisterFlagCompletionFunc(name, cobra.FixedCompletions(enum, cobra.ShellCompDirectiveNoFileComp))
+	}
 	if kind == "boolean" && !list {
 		flag.NoOptDefVal = "true"
 	}

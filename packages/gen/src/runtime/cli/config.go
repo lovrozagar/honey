@@ -26,9 +26,14 @@ type Config struct {
 	Headers map[string]string
 	Timeout time.Duration
 	Verbose bool
+	Quiet   bool
 
 	log     io.Writer
 	secrets []string
+	// each setting's source, by its config file key: flag, env, file or default
+	sources map[string]string
+	// the API's default base URL, the target when no setting names one
+	server string
 }
 
 // saved is the config file: TOML, an unknown key a usage error.
@@ -37,11 +42,15 @@ type saved struct {
 	BaseURL string            `toml:"base_url"`
 	Timeout string            `toml:"timeout"`
 	Verbose *bool             `toml:"verbose"`
+	Quiet   *bool             `toml:"quiet"`
 	Headers map[string]string `toml:"headers"`
 }
 
-// the root annotation holding the environment variables' prefix
-const envPrefixKey = "honey.envPrefix"
+// the root annotations holding the environment variables' prefix and the API's default base URL
+const (
+	envPrefixKey = "honey.envPrefix"
+	serverKey    = "honey.server"
+)
 
 // globalFlags declares the flags every command takes.
 func globalFlags(root *cobra.Command, app App) {
@@ -52,8 +61,9 @@ func globalFlags(root *cobra.Command, app App) {
 	f.String("config", "", "the config file ("+env("CONFIG")+"; default ~/.config/"+app.Name+"/config.toml)")
 	f.Duration("timeout", 0, "bound each call; 0 for 30s ("+env("TIMEOUT")+")")
 	f.Bool("verbose", false, "log each request and response to stderr, secrets redacted ("+env("VERBOSE")+")")
+	f.BoolP("quiet", "q", false, "no target line on a terminal's stderr ("+env("QUIET")+")")
 	f.StringArray("header", nil, `send a header, "Name: value" (repeatable)`)
-	root.Annotations = map[string]string{envPrefixKey: app.EnvPrefix}
+	root.Annotations = map[string]string{envPrefixKey: app.EnvPrefix, serverKey: app.Server}
 }
 
 // Settings resolves the run's settings for c.
@@ -65,66 +75,78 @@ func Settings(c *cobra.Command) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	cfg := Config{
-		APIKey:  pick(flags, "api-key", prefix+"_API_KEY", file.APIKey),
-		BaseURL: pick(flags, "base-url", prefix+"_BASE_URL", file.BaseURL),
-		log:     c.ErrOrStderr(),
-	}
-	if cfg.Timeout, err = timeout(flags, prefix, file.Timeout); err != nil {
+	cfg := Config{log: c.ErrOrStderr(), sources: map[string]string{}, server: root.Annotations[serverKey]}
+	cfg.APIKey, cfg.sources["api_key"] = pick(flags, "api-key", prefix+"_API_KEY", file.APIKey)
+	cfg.BaseURL, cfg.sources["base_url"] = pick(flags, "base-url", prefix+"_BASE_URL", file.BaseURL)
+	if cfg.Timeout, cfg.sources["timeout"], err = timeout(flags, prefix, file.Timeout); err != nil {
 		return Config{}, err
 	}
-	if cfg.Verbose, err = verbose(flags, prefix, file.Verbose); err != nil {
+	if cfg.Verbose, cfg.sources["verbose"], err = boolSetting(flags, "verbose", prefix, file.Verbose); err != nil {
 		return Config{}, err
 	}
-	if cfg.Headers, err = headers(flags, file.Headers); err != nil {
+	if cfg.Quiet, cfg.sources["quiet"], err = boolSetting(flags, "quiet", prefix, file.Quiet); err != nil {
+		return Config{}, err
+	}
+	if cfg.Headers, cfg.sources["headers"], err = headers(flags, file.Headers); err != nil {
 		return Config{}, err
 	}
 	cfg.secrets = secretsOf(cfg)
 	return cfg, nil
 }
 
-// pick is a string setting: its flag when given, else its environment variable when set, else the file's.
-func pick(flags *pflag.FlagSet, name, env, file string) string {
+// pick is a string setting and its source: its flag when given, else its environment variable
+// when set, else the file's, else none.
+func pick(flags *pflag.FlagSet, name, env, file string) (string, string) {
 	if flags.Changed(name) {
 		value, _ := flags.GetString(name)
-		return value
+		return value, "flag"
 	}
 	if value := os.Getenv(env); value != "" {
-		return value
+		return value, "env"
 	}
-	return file
+	if file != "" {
+		return file, "file"
+	}
+	return "", "default"
 }
 
-func timeout(flags *pflag.FlagSet, prefix, file string) (time.Duration, error) {
+func timeout(flags *pflag.FlagSet, prefix, file string) (time.Duration, string, error) {
 	if flags.Changed("timeout") {
-		return flags.GetDuration("timeout")
+		d, err := flags.GetDuration("timeout")
+		return d, "flag", err
 	}
-	raw, from := os.Getenv(prefix+"_TIMEOUT"), "$"+prefix+"_TIMEOUT"
+	raw, from, source := os.Getenv(prefix+"_TIMEOUT"), "$"+prefix+"_TIMEOUT", "env"
 	if raw == "" {
-		raw, from = file, "the config file's timeout"
+		raw, from, source = file, "the config file's timeout", "file"
 	}
 	if raw == "" {
-		return 0, nil
+		return 0, "default", nil
 	}
 	d, err := time.ParseDuration(raw)
 	if err != nil {
-		return 0, Usage("%s: %q is not a duration (30s, 1m)", from, raw)
+		return 0, "", Usage("%s: %q is not a duration (30s, 1m)", from, raw)
 	}
-	return d, nil
+	return d, source, nil
 }
 
-func verbose(flags *pflag.FlagSet, prefix string, file *bool) (bool, error) {
-	if flags.Changed("verbose") {
-		return flags.GetBool("verbose")
+// boolSetting is the boolean setting name and its source: its flag, $<PREFIX>_<NAME>, the file's.
+func boolSetting(flags *pflag.FlagSet, name, prefix string, file *bool) (bool, string, error) {
+	if flags.Changed(name) {
+		on, err := flags.GetBool(name)
+		return on, "flag", err
 	}
-	if raw := os.Getenv(prefix + "_VERBOSE"); raw != "" {
+	env := prefix + "_" + strings.ToUpper(name)
+	if raw := os.Getenv(env); raw != "" {
 		on, err := parseBool(raw)
 		if err != nil {
-			return false, Usage("$%s_VERBOSE: %q is not true or false", prefix, raw)
+			return false, "", Usage("$%s: %q is not true or false", env, raw)
 		}
-		return on, nil
+		return on, "env", nil
 	}
-	return file != nil && *file, nil
+	if file != nil {
+		return *file, "file", nil
+	}
+	return false, "default", nil
 }
 
 func parseBool(raw string) (bool, error) {
@@ -137,21 +159,23 @@ func parseBool(raw string) (bool, error) {
 	return false, errors.New("not a boolean")
 }
 
-// headers is the file's headers, each --header over the one of its name.
-func headers(flags *pflag.FlagSet, file map[string]string) (map[string]string, error) {
+// headers is the file's headers, each --header over the one of its name, and their source: flag
+// when any --header is given, else file when the file holds any.
+func headers(flags *pflag.FlagSet, file map[string]string) (map[string]string, string, error) {
 	out := map[string]string{}
+	source := "default"
 	for name, value := range file {
-		out[name] = value
+		out[name], source = value, "file"
 	}
 	given, _ := flags.GetStringArray("header")
 	for _, header := range given {
 		name, value, ok := strings.Cut(header, ":")
 		if !ok || strings.TrimSpace(name) == "" {
-			return nil, Usage("--header %q: want \"Name: value\"", header)
+			return nil, "", Usage("--header %q: want \"Name: value\"", header)
 		}
-		out[strings.TrimSpace(name)] = strings.TrimSpace(value)
+		out[strings.TrimSpace(name)], source = strings.TrimSpace(value), "flag"
 	}
-	return out, nil
+	return out, source, nil
 }
 
 // readConfig reads the config file: --config, else $<PREFIX>_CONFIG (each must exist), else the
