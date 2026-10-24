@@ -76,3 +76,33 @@ describe("WebSocket operations", () => {
 		expect([Object.keys(doc.paths), op(doc, "/open")["x-websocket"]]).toEqual([["/open"], true])
 	})
 })
+
+describe("a WS route's own keys", () => {
+	// v0: 10d1ae37cb
+	it("documents a WS route with its own keys alone: never deprecated, security, x-invalidate or x-mcp", () => {
+		const app = honey<{}>()
+		const every = {
+			deprecated: true,
+			description: "d",
+			invalidate: ["GET /users"],
+			mcp: true,
+			operationId: "live",
+			security: "jwt",
+			summary: "s",
+			tags: "sockets",
+		}
+		app
+			.ws("/live")
+			.meta(every as never)
+			.handler({ onMessage() {} })
+		expect(Object.keys(op(generateOpenApi(app, { info: INFO }), "/live"))).toEqual([
+			"x-websocket",
+			"summary",
+			"description",
+			"tags",
+			"operationId",
+			"x-honey-route",
+			"responses",
+		])
+	})
+})

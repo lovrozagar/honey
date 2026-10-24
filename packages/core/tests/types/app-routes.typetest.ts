@@ -14,6 +14,7 @@ import type {
 	InferRoutePaths,
 	InferRoutes,
 	MergeRoute,
+	OpenApiMeta,
 	RouteRecord,
 } from "../../src/routing/app-types.ts"
 
@@ -303,5 +304,23 @@ describe("route(sub) in the map", () => {
 		const api = honey<{}>().basePath("/api").route(users)
 		expectTypeOf<InferRoutePaths<typeof app>>().toEqualTypeOf<"/main" | "/v1/items">()
 		expectTypeOf<InferRoutePaths<typeof api>>().toEqualTypeOf<"/api/users" | "/api/users/:id">()
+	})
+})
+
+describe("the mcp meta", () => {
+	// v0: 90832b09a6
+	it("takes mcp in a route's meta as a boolean, and nothing else", () => {
+		const app = honey<{}>()
+		app
+			.get("/on")
+			.meta({ mcp: true })
+			.handler((ctx) => ctx.res.json("ok", {}))
+		app
+			.get("/off")
+			.meta({ mcp: false })
+			.handler((ctx) => ctx.res.json("ok", {}))
+		// @ts-expect-error mcp is a boolean, never a string
+		app.get("/bad").meta({ mcp: "yes" })
+		expectTypeOf<OpenApiMeta["mcp"]>().toEqualTypeOf<boolean | undefined>()
 	})
 })

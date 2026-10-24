@@ -304,6 +304,9 @@ describe("operation extensions", () => {
 	// v0: a61f2738d6
 	// v0: c4b90cd813
 	// v0: 5c9f93afc1
+	// v0: 39ef3cbd8e
+	// v0: 93c4736b18
+	// v0: 7b8ac1f593
 	it("reads the honey extensions, only a literal true counting as on", () => {
 		const on = {
 			"x-idempotency-key": true,
@@ -317,6 +320,7 @@ describe("operation extensions", () => {
 			operation({ "x-deprecated": true }).extensions,
 			operation({ deprecated: true }).extensions,
 			[false, "yes", {}].map((value) => operation({ "x-idempotency-key": value }).extensions.idempotencyKey),
+			[false, "true", {}, 1].map((value) => operation({ "x-mcp": value }).extensions.mcp),
 			operation({ responses: undefined }).responses,
 			operation({}).extensions,
 		]).toEqual([
@@ -324,6 +328,7 @@ describe("operation extensions", () => {
 			{ deprecated: true },
 			{ deprecated: true },
 			[undefined, undefined, undefined],
+			[undefined, undefined, undefined, undefined],
 			{},
 			{},
 		])

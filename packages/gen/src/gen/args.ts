@@ -26,6 +26,7 @@ const TARGETS = {
 		throwOnError: "boolean",
 		version: "string",
 	},
+	mcp: { envPrefix: "string", name: "string" },
 	python: { packageName: "string", throwOnError: "boolean", version: "string" },
 	rust: { crateName: "string", throwOnError: "boolean", version: "string" },
 	ts: { name: "string", stem: "string" },

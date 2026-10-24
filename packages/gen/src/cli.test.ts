@@ -95,6 +95,18 @@ describe("generate's files (phase h)", () => {
 		expect([ran.status, dirs.sort()]).toEqual([0, [...targets].sort()])
 	})
 
+	it("writes the MCP server under mcp/, its options passed to its generator", async () => {
+		const ping = { get: { operationId: "ping", responses: { 204: { description: "none" } }, "x-mcp": true } }
+		const { out, spec } = specDir({ ...(shop() as Record<string, unknown>), paths: { "/ping": ping } })
+		const ran = await run(["generate", "--spec", spec, "--target", "mcp", "--mcp-name", "kiosk", "--out", out])
+		const pkg = JSON.parse(readFileSync(join(out, "mcp", "package.json"), "utf8")) as { bin: Record<string, string> }
+		expect([ran.status, pkg.bin, filesUnder(out).includes("mcp/dist/server.js")]).toEqual([
+			0,
+			{ "kiosk-mcp": "dist/server.js" },
+			true,
+		])
+	})
+
 	it("writes to the process's own output and error when no io is given", async () => {
 		expect([await main(["--help"]), await main(["serve"])]).toEqual([0, 1])
 	})

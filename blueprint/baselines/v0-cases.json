@@ -47350,6 +47350,9 @@
 		"f2de36cde7": "a composite v0 smoke over the adversarial corpus, split in v1 into legs that each assert one part: the corpus CLI builds and vets (commands.test 'builds and vets the corpus's CLI'), a resource named root keeps the root (layout.test), an unknown flag exits 4 (module.test), a refused connection exits 3 (flags.test exit codes), a parameter named like a global flag is suffixed (commands.test --redirect2)",
 		"071a598bf9": "v1 sends no credential when none is configured and lets the API answer (a 401 exits 1); an API or an operation may be public, so a missing key is not a client-side error",
 		"4d458e3288": "the generated CLI's docs are --help, commands, schema and the embedded SKILL.md (ruled at e); a repo README for the author's module is the author's, documented at bit 20",
-		"9315fb0bff": "v1 invents no group summary: the index and the group's command list carry each command's own summary, and an invented one is token noise"
+		"9315fb0bff": "v1 invents no group summary: the index and the group's command list carry each command's own summary, and an invented one is token noise",
+		"71c7dd8647": "v0's server needed a bun install of @modelcontextprotocol/sdk before it ran; v1's emitted server vendors its runtime and depends on nothing (bit 18 Q1 ruling), so there is no install to pass: package.test packs it and installs it offline into a fresh prefix, its bin running under node and bun",
+		"9e1aebee8f": "v0 left package.json and README.md to a hand-kept mirror repo; v1 emits package.json, its bin the compiled entry and no dependency (bit 18 Q9/Q10 ruling; server.test 'declares the package by the server's name'), and no README, the docs being bit 20's",
+		"c50da3fa31": "v0 imported a separately generated TS SDK by a configured class name; v1 embeds the API's own TS SDK under src/sdk/ (server.test's file set), so there is no outside class name to emit"
 	}
 }

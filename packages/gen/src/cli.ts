@@ -13,6 +13,7 @@ import { generateGoCli } from "./emit/cli/module.ts"
 import { generateCSharpSdk } from "./emit/csharp/sdk.ts"
 import { generateGoSdk } from "./emit/go/sdk.ts"
 import { generateJavaSdk } from "./emit/java/sdk.ts"
+import { generateMcpServer } from "./emit/mcp/server.ts"
 import { generatePythonSdk } from "./emit/python/sdk.ts"
 import { generateRustSdk } from "./emit/rust/sdk.ts"
 import { formatFiles } from "./emit/shared/format.ts"
@@ -65,6 +66,8 @@ function filesOf(
 			return generateJavaSdk(document, options).files
 		case "cli":
 			return generateGoCli(document, options).files
+		case "mcp":
+			return generateMcpServer(document, options).files
 	}
 }
 

@@ -103,3 +103,7 @@ A caller-supplied adapter that swallows interrupts isn't bounded until it return
 - Go SDK dial hooks: the ws and realtime dials skip the `OnRequest`/`OnResponse` hooks (`runtime/go/ws.go:54`, `transport.go:156`, `transport_sse.go:36`, `transport_longpoll.go:67`), so a hook never sees a dial. Decide whether dials run the hooks (with sibling parity checked across every SDK) or the skip is documented; the CLI's `--verbose` relies on it to keep the reconnect token out of logs.
 - Go realtime 403 retry: the Go realtime chain retries a 403 through its backoff instead of failing at once, and long-poll's lazy `Connect` hides it until the first read. Make a 4xx refusal terminal (red-first, sibling parity) or document it.
 - Core stream routes emit no 2xx response in the document (kitchen `/api/events` and `/api/events-live`), so generated clients infer the stream from the route kind alone. Decide whether core emits the 2xx with its `text/event-stream` media type.
+
+**Bit 18 carry-ins (the MCP server).**
+- MCP protocol 2026-07-28: the vendored runtime speaks 2025-11-25, negotiating down to 2025-03-26, because no official client spoke 2026-07-28 at bit 18 (both clients' LATEST_PROTOCOL_VERSION was 2025-11-25, pinned by a leg). Adopt it once a client speaks it; the delta is server/discover and per-request `_meta`.
+- Streamable HTTP transport: the emitted server ships stdio only. Remote use needs the spec's Origin check, a localhost bind by default and an auth surface; it adds a POST handler over the same protocol core.

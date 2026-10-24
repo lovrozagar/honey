@@ -36,7 +36,7 @@ describe("generate's arguments (phase h)", () => {
 			"--target requires a value",
 			"--target requires a value",
 			'unexpected argument "stray"',
-			'--target "kotlin": want one of cli, csharp, go, java, python, rust, ts',
+			'--target "kotlin": want one of cli, csharp, go, java, mcp, python, rust, ts',
 			"options for rust, which no --target names",
 			'--go-throw-on-error takes true or false, not "maybe"',
 			"--spec is required",

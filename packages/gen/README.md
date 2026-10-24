@@ -10,7 +10,7 @@ honey-codegen generate --spec openapi.json --target ts --target cli --out genera
 ```
 
 - `--spec <file>`: the OpenAPI document, as JSON.
-- `--target <name>`: `ts`, `go`, `rust`, `python`, `csharp`, `java` or `cli`; repeat it for more than one. Each
+- `--target <name>`: `ts`, `go`, `rust`, `python`, `csharp`, `java`, `cli` or `mcp`; repeat it for more than one. Each
   target's files go under `<out>/<target>`.
 - `--<target>-<option>`: a target's options are its generator's, passed through as given (`--go-module-path`,
   `--rust-crate-name`, `--cli-binary-name`, a boolean as `--go-throw-on-error=false`). `honey-codegen --help` lists

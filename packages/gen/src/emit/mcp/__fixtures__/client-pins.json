@@ -1,0 +1,9 @@
+{
+	"name": "honey-mcp-clients",
+	"private": true,
+	"description": "The official MCP clients the bit 18 legs drive the emitted server with, pinned",
+	"dependencies": {
+		"@modelcontextprotocol/client": "2.4.0",
+		"@modelcontextprotocol/sdk": "1.32.2"
+	}
+}

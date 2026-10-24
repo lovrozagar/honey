@@ -91,13 +91,16 @@ describe("built-in policy: what is left out", () => {
 	// v0: 58272980cd
 	// v0: e4a255626d
 	// v0: f2bfba1b62
+	// v0: f8fc66712d
+	// v0: af8e8c6307
 	it("leaves out a falsy value, an empty invalidate and an mcp that is not true, and keeps a tag list as it is", () => {
 		const falsy = { deprecated: false, invalidate: [], mcp: "yes", security: "", summary: "", tags: "" }
 		expect([
 			apply(null, falsy).operation,
+			apply(null, { mcp: false }).operation,
 			apply(null, { tags: ["a", "b"] }).operation,
 			apply(null, { invalidate: null, summary: "s" }).operation,
-		]).toEqual([{}, { tags: ["a", "b"] }, { summary: "s" }])
+		]).toEqual([{}, {}, { tags: ["a", "b"] }, { summary: "s" }])
 	})
 })
 

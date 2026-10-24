@@ -54,6 +54,7 @@ describe("the document: OpenAPI 3.1, assembled", () => {
 		expect(generateOpenApi(a, { info: INFO })).not.toHaveProperty("components")
 	})
 
+	// v0: 2fe4516509
 	it("passes x-realtime, x-websocket and x-mcp through to the operation", () => {
 		const a = honey<{}>()
 		a.get("/live")
