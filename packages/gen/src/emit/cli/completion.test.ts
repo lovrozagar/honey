@@ -70,10 +70,15 @@ describe.skipIf(!GO || !TOOLS_PRESENT)("each shell's completion script (phase e)
 	})
 })
 
+/** Whether a workflow job's text runs the pinned tools install, verbatim. */
+const installs = (job: string) => job.split("\n").some((line) => line.trim() === `run: ${toolsInstall()}`)
+
 describe("the pinned tools in CI (phase e)", () => {
-	it("installs them in the test job by the command the fixture names, verbatim", () => {
+	it("installs them by the command the fixture names, verbatim, in each job whose tests use them", () => {
 		const workflow = readFileSync(resolve(import.meta.dirname, "../../../../../.github/workflows/ci.yml"), "utf8")
-		const test = workflow.slice(workflow.indexOf("\n  test:\n"), workflow.indexOf("\n  gen-rust:\n"))
-		expect(test.split("\n").some((line) => line.trim() === `run: ${toolsInstall()}`)).toBe(true)
+		/* test runs the unit legs; harness runs the release leg (tests/integration/cli-harness.release.test.ts) */
+		const job = (name: string, next: string | undefined) =>
+			workflow.slice(workflow.indexOf(`\n  ${name}:\n`), next ? workflow.indexOf(`\n  ${next}:\n`) : undefined)
+		expect([installs(job("test", "gen-rust")), installs(job("harness", undefined))]).toEqual([true, true])
 	})
 })

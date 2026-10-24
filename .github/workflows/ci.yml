@@ -798,6 +798,9 @@ jobs:
           "$HOME/.cache/honey-tmp/python/uv/bin/uv" pip install --python "$HOME/.cache/honey-tmp/python/v0-venv/bin/python" -r _v0/tests/python-requirements.txt
           echo "$HOME/.cache/honey-tmp/python/v0-venv/bin" >> "$GITHUB_PATH"
       - run: bun install --frozen-lockfile
+      # the release leg (cli-harness.release.test.ts) checks with goreleaser and shellcheck: the test job's tool install
+      - name: Tools (tool-pins.json's fish, zsh, PowerShell, goreleaser and shellcheck)
+        run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/cli/__fixtures__/tool-pins.json" && D="$HOME/.cache/honey-tmp/tools" && mkdir -p "$D/dl" && for k in $(jq -r 'keys[]' "$P"); do U="$(jq -r --arg k "$k" '.[$k].url' "$P")" && R="$(jq -r --arg k "$k" '.[$k].dir' "$P")" && curl -fsSL -o "$D/dl/$k" "$U" && echo "$(jq -r --arg k "$k" '.[$k].sha256' "$P")  $D/dl/$k" | sha256sum -c - && rm -rf "$D/$R" "$D/$R.partial" && mkdir -p "$D/$R.partial" && tar -xf "$D/dl/$k" -C "$D/$R.partial" && chmod +x "$D/$R.partial/$(jq -r --arg k "$k" '.[$k].bin' "$P")" && mv "$D/$R.partial" "$D/$R" && rm "$D/dl/$k" || exit 1; done
       - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
       - run: mkdir -p ~/.cache/honey-tmp/python/sdk && touch "$RUNNER_TEMP/python-sdk-start"
       - run: bun run test:harness
