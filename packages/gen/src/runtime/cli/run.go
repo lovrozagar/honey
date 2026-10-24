@@ -189,7 +189,7 @@ func kindOf(err error, interrupted bool) string {
 		return "api"
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &network) && network.Timeout():
 		return "timeout"
-	case errors.As(err, &network), errors.As(err, &closed):
+	case errors.As(err, &network), errors.As(err, &closed), errors.Is(err, io.ErrUnexpectedEOF):
 		return "transport"
 	}
 	return "error"

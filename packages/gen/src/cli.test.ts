@@ -4,7 +4,8 @@
  * hostile one is refused by its own generator with that generator's message; a spec that is not JSON refused; the go
  * and cli targets' whole trees, internal/sdk included, through gofmt, found by GOFMT, GOROOT, PATH or beside the real
  * go, and a refusal when there is none; `--watch` regenerating in a fresh child on each change of the spec until
- * stopped, no child left once it ends. Most legs run `main` in process; the bin legs prove the command a user runs.
+ * stopped, no child left once it ends. Most legs run `main` in process; the bin legs prove the command a user runs,
+ * under the Bun package.json pins (never PATH's newest).
  * Every child carries this file's mark, and the last leg fails on any that outlived its leg.
  */
 import { spawnSync } from "node:child_process"
@@ -15,11 +16,13 @@ import { findGofmt, main } from "./cli.ts"
 import { shop } from "./emit/cli/__fixtures__/shop.ts"
 import { goCacheDir, gofmtPath, withGo } from "./emit/go/__fixtures__/go-env.ts"
 import { usage } from "./gen/args.ts"
+import { pinnedBunVersion, withPinnedBun } from "./gen/__fixtures__/pinned-bun.ts"
 import { MARK_KEY, markOf, marked, reap } from "./gen/__fixtures__/survivors.ts"
 
 const GO = withGo()
 const SLOW = { timeout: 600_000 }
 const BIN = resolve(import.meta.dirname, "../bin/honey-codegen.js")
+const PINNED_BUN = withPinnedBun()
 const MARK = markOf()
 const scratch = (name: string) => mkdtempSync(join(goCacheDir("tmp"), `codegen-${name}-`))
 
@@ -49,9 +52,9 @@ const until = (ready: () => boolean) =>
 		}, 20)
 	})
 
-/** The bin run under this Node with `args`, its environment `env` alone (no Bun handoff). */
+/** The bin run under the pinned Bun with `args`, its environment `env` alone (no Bun handoff). */
 const bin = (args: readonly string[], env: NodeJS.ProcessEnv) =>
-	spawnSync(process.execPath, [BIN, ...args], {
+	spawnSync(PINNED_BUN as string, [BIN, ...args], {
 		encoding: "utf8",
 		env: { HONEY_NO_BUN_HANDOFF: "1", HOME: scratch("home"), [MARK_KEY]: MARK, ...env },
 	})
@@ -64,16 +67,6 @@ const filesUnder = (dir: string) =>
 		.sort()
 
 describe("generate's usage (phase h)", () => {
-	it("prints the usage with exit 1 on a usage error, and exit 0 under --help, through the bin", () => {
-		const [wrong, help] = [bin(["generate", "--nope"], {}), bin(["--help"], {})]
-		expect([wrong.status, wrong.stderr, help.status, help.stdout]).toEqual([
-			1,
-			`honey-codegen: unknown option --nope\n\n${usage()}\n`,
-			0,
-			`${usage()}\n`,
-		])
-	})
-
 	it("refuses no command and an unknown one, and names what bit 19 deletes", async () => {
 		const [none, unknown] = [await run([]), await run(["serve"])]
 		expect([none.status, none.out, unknown.status, unknown.err.split("\n")[0]]).toEqual([
@@ -122,19 +115,6 @@ describe("generate's files (phase h)", () => {
 		])
 	})
 
-	it("refuses a hostile option through the bin with its generator's own message, nothing written", () => {
-		const { out, spec } = specDir()
-		const hostile = 'shop"; rm -rf ~; "'
-		const ran = bin(["generate", "--spec", spec, "--target", "cli", "--cli-binary-name", hostile, "--out", out], {
-			GOFMT: "/nonexistent",
-		})
-		expect([ran.status, ran.stderr, existsSync(out)]).toEqual([
-			1,
-			`honey-codegen: Invalid binaryName: ${JSON.stringify(hostile)}\n`,
-			false,
-		])
-	})
-
 	it("refuses a spec that is not JSON, nothing written", async () => {
 		const { out, spec } = specDir("openapi: 3.1.0\n")
 		const ran = await run(["generate", "--spec", spec, "--target", "ts", "--out", out])
@@ -173,6 +153,32 @@ describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () =>
 		expect([ran.status, ran.err, existsSync(out)]).toEqual([
 			1,
 			"honey-codegen: gofmt is required for the go and cli targets (install Go, or set GOFMT)\n",
+			false,
+		])
+	})
+})
+
+/* skipped, its title naming the pinned Bun, where that Bun is not found; a failure under HONEY_REQUIRE_TOOLCHAINS */
+describe.skipIf(!PINNED_BUN)(`the bin under the pinned Bun ${pinnedBunVersion()} (phase h)`, () => {
+	it("prints the usage with exit 1 on a usage error, and exit 0 under --help, through the bin", () => {
+		const [wrong, help] = [bin(["generate", "--nope"], {}), bin(["--help"], {})]
+		expect([wrong.status, wrong.stderr, help.status, help.stdout]).toEqual([
+			1,
+			`honey-codegen: unknown option --nope\n\n${usage()}\n`,
+			0,
+			`${usage()}\n`,
+		])
+	})
+
+	it("refuses a hostile option through the bin with its generator's own message, nothing written", () => {
+		const { out, spec } = specDir()
+		const hostile = 'shop"; rm -rf ~; "'
+		const ran = bin(["generate", "--spec", spec, "--target", "cli", "--cli-binary-name", hostile, "--out", out], {
+			GOFMT: "/nonexistent",
+		})
+		expect([ran.status, ran.stderr, existsSync(out)]).toEqual([
+			1,
+			`honey-codegen: Invalid binaryName: ${JSON.stringify(hostile)}\n`,
 			false,
 		])
 	})

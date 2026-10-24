@@ -43960,8 +43960,8 @@
 			"reason": "HoneyRes core (json/text/html/csv/xml/noContent/redirect/raw, cookies via serializeCookie) is response/response.ts, born at bit 02 (re-cut from 04)"
 		},
 		"aeff0f4b4d": {
-			"feature": "17-cli-gold-standard",
-			"reason": "runs the honey bin's generate command under Bun (the codegen CLI, bit 17)"
+			"feature": "19-release-provenance",
+			"reason": "app loading under the CLI (--app, src/ir/load.ts) moved from bit 17 to 19 at bit 17 h: it needs core's public document entry and no-bind codegen flag, which land with the bit-19 cutover"
 		},
 		"af851d64d4": {
 			"feature": "02-finalize-middleware",
@@ -47327,6 +47327,29 @@
 		"efa2491888": "SDK referencing only the classes it emits is aa075eab3f, which constructs SDK over a stream-only namespace (a missing class would fail there)",
 		"f46ad54e65": "same mappings as the types.test.ts required row cbf80e6e36, optional row e74518d440 and key-order row 90d18a0b08",
 		"f54918816f": "same mapping as the types.test.ts nullable row 14dd8f60d4",
-		"f74b7d3356": "bearer_token sending Authorization: Bearer is 738f6220bc"
+		"f74b7d3356": "bearer_token sending Authorization: Bearer is 738f6220bc",
+		"e5c5e44f92": "pins a precedence doc comment in v0's config.go source; v1 proves the order by behavior instead: flags.test's global-settings legs run each setting from the file, the environment over it and the flag over both",
+		"59a10f1bf3": "pins v0's result shape { files, serviceMap, skippedOperations }; v1's generateGoCli returns { files } (GeneratedGoCli, module.ts): every operation gets a command, ws and realtime included, so none is skipped (commands.test 'gives each operation a command by its dotted id, verbs as authored, multipart and streams too'), and the service map is the TS SDK's alone",
+		"564f907264": "a bracket-balance text check standing in for compiling; v1 compiles and vets every emitted CLI it pins (module.test 'the zero-op module, built', commands.test's built shop CLI, hostile.test 'compiles and vets'), which an unbalanced bracket fails",
+		"663cc30ad5": "v1 checks enum values on flags alone; --data reaches the SDK's typed body as given (commands.test 'decodes --data into a pointer, a raw JSON value and a slice of the SDK's types, sending each as given'), and a nested enum is listed whole by `schema` (discovery.test 'lists a long enum whole')",
+		"8da2e2c7b2": "pins v0's ExitFor source switch, auth→4 included; v1's codes are by outcome (bit 17 b): a 401 is a 4xx and exits 1, 4 is a usage error; the 4xx/5xx/no-answer/redirect split is flags.test 'exits 0 on 2xx, 1 on 4xx, 2 on 5xx, 5 on a redirect it does not follow, 3 with no answer'",
+		"c39d3781d6": "v0 renamed a lone binary part --file; v1 names every part's flag by its part (flags.ts partFlags), so a lone part named avatar is --avatar; binary.test 'sends a multipart body part by part' sends each part by its own name",
+		"7aaadc0e30": "names v0's BuildMultipart helper; v1 hands the parts to the SDK's typed multipart body (commands.ts multipartLines), whose bytes on the wire binary.test 'sends a multipart body part by part' pins",
+		"ce48c50d44": "v0 folded the segments past the second into one kebab verb (extract table-stream); v1 makes every dotted segment a command (approved at phase b; commands.test 'gives each operation a command by its dotted id': items.tags.get → items tags get), so extract.table.stream is extract table stream",
+		"87b51b1f4f": "v0's four-segment fold (foo a-b-c); v1 keeps foo.a.b.c four commands deep, foo a b c, each segment a command (commands.test 'gives each operation a command by its dotted id')",
+		"71bdb5b27a": "v0 threw when two ids folded to one path; v1's tree folds nothing, and a command spelled like a group or a built-in is suffixed as the IR suffixes ids instead of refused (commands.test 'suffixes an id taking a built-in's name, and a command spelled like a group')",
+		"ce260e8fd1": "the regression guard on v0's three-segment fold; v1 has no fold to guard: extract.table.stream is the path extract table stream, as commands.test's dotted-id leg holds for items.tags.get",
+		"0660116814": "the regression guard on v0's four-segment fold; v1's tree has no fold: foo.a.b.c stays foo a b c (commands.test's dotted-id leg)",
+		"174d1893bf": "v0's mixed depth gave users list and users profile-update; v1 gives users list and users profile update, each segment a command (commands.test's dotted-id leg holds items get and items tags get side by side)",
+		"b0699efa7c": "v0's IR validator threw on a folded path collision; v1 folds no segment, and the one collision left, a command spelled like a group, is suffixed (commands.test 'suffixes … a command spelled like a group')",
+		"5006477f60": "v0's default was pretty JSON; ruling Q4: a piped run prints compact JSON byte-identical to --json, a terminal a table (output.test 'prints --json as one compact line, and a piped run with no flag byte for byte the same', 'prints a table on a terminal')",
+		"935b32806d": "names v0's sigs.k8s.io/yaml dependency; ruling Q1 keeps the CLI to cobra, pflag and go-toml with a hand-written YAML writer, whose output output.test 'prints yaml a YAML parser reads back to the very value' proves",
+		"69167152a7": "v0's SDK-replace mode (sdkModulePath, a go.mod replace); ruling Q2 drives the CLI through the embedded v1 Go SDK alone, under internal/sdk (module.test 'ships … the API's Go SDK under internal/sdk')",
+		"7820d0cb91": "v0 switched cmd imports between internal/sdk and sdkModulePath; with Q2's embedded SDK alone there is one path, which layout.test 'groups the standard library, cobra and the module's own packages' pins (<module>/internal/sdk)",
+		"1a53f39567": "names v0's StreamSSE helper; v1 ranges over the embedded SDK's own stream (commands.ts), whose events stream.test 'prints each event as one line' pins",
+		"f2de36cde7": "a composite v0 smoke over the adversarial corpus, split in v1 into legs that each assert one part: the corpus CLI builds and vets (commands.test 'builds and vets the corpus's CLI'), a resource named root keeps the root (layout.test), an unknown flag exits 4 (module.test), a refused connection exits 3 (flags.test exit codes), a parameter named like a global flag is suffixed (commands.test --redirect2)",
+		"071a598bf9": "v1 sends no credential when none is configured and lets the API answer (a 401 exits 1); an API or an operation may be public, so a missing key is not a client-side error",
+		"4d458e3288": "the generated CLI's docs are --help, commands, schema and the embedded SKILL.md (ruled at e); a repo README for the author's module is the author's, documented at bit 20",
+		"9315fb0bff": "v1 invents no group summary: the index and the group's command list carry each command's own summary, and an invented one is token noise"
 	}
 }

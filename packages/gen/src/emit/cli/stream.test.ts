@@ -42,6 +42,7 @@ const MIXED = ["data: 42\n\n", 'event: tick\nid: 1\ndata: {"n":1}\n\n', "event: 
 describe.skipIf(!GO)("an event stream as ndjson (phase d)", SLOW, () => {
 	beforeAll(() => void built(), SLOW.timeout)
 
+	// v0: 0c5b429788
 	it("prints each event as one line: its name and id when set, its data as JSON when it is, else as a string", async () => {
 		const ran = await call(["events", "stream"], [sse(MIXED)])
 		expect([ran.status, ran.stdout]).toEqual([
@@ -79,6 +80,7 @@ describe.skipIf(!GO)("an event stream as ndjson (phase d)", SLOW, () => {
 describe.skipIf(!GO)("an event stream's resume, its end and its error (phase d)", SLOW, () => {
 	beforeAll(() => void built(), SLOW.timeout)
 
+	// v0: f58ad4199a
 	it("resumes from --last-event-id, sent as the Last-Event-ID header", async () => {
 		const ran = await call(["events", "stream", "--last-event-id", "41"], [sse(["id: 42\ndata: x\n\n"])])
 		expect([ran.status, ran.hops[0]?.headers["last-event-id"], ran.stdout]).toEqual([
@@ -97,6 +99,16 @@ describe.skipIf(!GO)("an event stream's resume, its end and its error (phase d)"
 		},
 	)
 
+	// v0: 0ad77708fc
+	it("prints the events before a stream cut mid-way, then reports it as no answer, exit 3", async () => {
+		const ran = await call(["events", "stream"], [sse(["data: 1\n\n", "data: 2\n\n"], "drop")])
+		expect([ran.status, ran.stdout, (JSON.parse(ran.stderr) as { error: { kind: string } }).error.kind]).toEqual([
+			3,
+			'{"data":1}\n{"data":2}\n',
+			"transport",
+		])
+	})
+
 	it("reports an error status as the error envelope, exit 1", async () => {
 		const ran = await call(["events", "stream"], [{ json: { error_key: "gone", message: "no stream" }, status: 404 }])
 		expect([ran.status, JSON.parse(ran.stderr)]).toEqual([
@@ -109,6 +121,7 @@ describe.skipIf(!GO)("an event stream's resume, its end and its error (phase d)"
 describe.skipIf(!GO)("an event stream's formats and output flags (phase d)", SLOW, () => {
 	beforeAll(() => void built(), SLOW.timeout)
 
+	// v0: f623ca0438
 	it("prints a YAML document per event under --format yaml", async () => {
 		const ran = await call(["events", "stream", "--format", "yaml"], [sse(MIXED.slice(1))])
 		/* `n` is quoted: a YAML 1.1 reader takes it for false */
@@ -116,6 +129,7 @@ describe.skipIf(!GO)("an event stream's formats and output flags (phase d)", SLO
 		expect(ran.stdout).toBe([...docs, 'id: "1"', ""].join("\n"))
 	})
 
+	// v0: 9b77fcc391
 	it("prints ndjson for a table: one warning when --format table asked for it, none for a terminal's default", async () => {
 		const [asked, terminal] = [
 			await call(["events", "stream", "--format", "table"], [sse(MIXED.slice(0, 1))]),

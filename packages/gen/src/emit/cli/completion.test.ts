@@ -36,6 +36,7 @@ const BROKEN: Record<Shell, string> = {
 describe.skipIf(!GO)("dynamic completion (phase e)", SLOW, () => {
 	beforeAll(() => void built(), SLOW.timeout)
 
+	// v0: eb4b687194
 	it("offers the commands, a group's commands with their summaries, a command's flags, and an enum's values", async () => {
 		const [top, group, flags, values] = [
 			await candidates(["it"]),

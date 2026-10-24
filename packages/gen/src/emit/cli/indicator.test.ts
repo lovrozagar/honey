@@ -35,14 +35,23 @@ const group = (help: string, title: string) => {
 	return lines.slice(from + 1, end).map((line) => line.trim().split(/\s+/)[0])
 }
 
+/** A help section's flags by name: `title`'s lines up to the next blank one, `-i, --include` as include. */
+const flagsOf = (help: string, title: string) => {
+	const lines = help.split("\n")
+	const from = lines.indexOf(title)
+	return from < 0 ? [] : lines.slice(from + 1, lines.indexOf("", from)).map((line) => /--([\w-]+)/.exec(line)?.[1])
+}
+
 describe.skipIf(!GO)("the root help's groups (phase e)", SLOW, () => {
 	beforeAll(() => void cli(), SLOW.timeout)
 
-	it("lists the API's commands and the local ones apart, under a two-line banner naming discovery", async () => {
+	// v0: 9c5c5389d6
+	it("lists the API's commands and the local ones apart, under a two-line banner naming discovery, then the global flags", async () => {
 		const ran = await cli().cli(["--help"], {})
 		expect({
 			api: group(ran.stdout, "API commands:"),
 			banner: ran.stdout.split("\n").slice(0, 4),
+			flags: flagsOf(ran.stdout, "Flags:"),
 			local: group(ran.stdout, "Local commands:"),
 		}).toEqual({
 			api: ["deep", "hostile", "nodes", "orgs"],
@@ -51,6 +60,23 @@ describe.skipIf(!GO)("the root help's groups (phase e)", SLOW, () => {
 				"",
 				"Agents: `catalog commands` lists every command, one line each.",
 				"`catalog schema <command>` shows one's request and answer; `catalog config` shows where calls go.",
+			],
+			flags: [
+				"api-key",
+				"base-url",
+				"config",
+				"format",
+				"header",
+				"help",
+				"include",
+				"json",
+				"output",
+				"quiet",
+				"raw",
+				"redirect",
+				"timeout",
+				"verbose",
+				"version",
 			],
 			local: ["commands", "completion", "config", "help", "schema", "skill"],
 		})

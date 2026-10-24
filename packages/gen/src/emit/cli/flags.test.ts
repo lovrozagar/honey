@@ -7,17 +7,22 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 import type { IRSchema } from "../../ir/model.ts"
+import { sdkModel } from "../../ir/sdk-model.ts"
 import { goCacheDir, withGo } from "../go/__fixtures__/go-env.ts"
+import type { GoCallPlan } from "../go/sdk-client.ts"
+import { goCallPlans } from "../go/sdk.ts"
 import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { builtCli, type RunOptions } from "./__fixtures__/built.ts"
 import { shop } from "./__fixtures__/shop.ts"
-import { kebab, kindOf } from "./flags.ts"
+import { commandFlags, kebab, kindOf } from "./flags.ts"
 import { generateGoCli } from "./module.ts"
 
 const GO = withGo()
 
 describe("a flag's kind, by its schema (phase b)", () => {
+	// v0: 9e57eee9c6
 	const schemas = { Size: { enum: ["s", "m"], kind: "scalar", type: "string" } } as const
 	it.each([
 		["a null type", { kind: "scalar", type: "null" }, { enum: [], kind: "string", list: false }],
@@ -39,6 +44,7 @@ describe("a flag's kind, by its schema (phase b)", () => {
 			{ enum: ["s", "m"], kind: "string", list: true },
 		],
 		["a ref the document never defined", { kind: "ref", name: "Gone" }, { enum: [], kind: "json", list: false }],
+		["an empty enum", { enum: [], kind: "scalar", type: "string" }, { enum: [], kind: "string", list: false }],
 		[
 			"a list of objects",
 			{ items: { fields: [], kind: "object" }, kind: "array" },
@@ -48,8 +54,67 @@ describe("a flag's kind, by its schema (phase b)", () => {
 		expect(kindOf(schema as IRSchema, schemas as unknown as Record<string, IRSchema>)).toEqual(kind)
 	})
 
-	it("spells a name with no letter or digit as `value`", () => {
-		expect([kebab("--"), kebab("X-Trace"), kebab("tagId")]).toEqual(["value", "x-trace", "tag-id"])
+	// v0: 1cb2369a36
+	it("spells a name with no letter or digit as `value`, and camelCase and snake_case names in kebab case", () => {
+		expect([kebab("--"), kebab("X-Trace"), kebab("tagId"), kebab("project_id")]).toEqual([
+			"value",
+			"x-trace",
+			"tag-id",
+			"project-id",
+		])
+	})
+})
+
+const STR = { type: "string" }
+const JSON_BODY = (schema: unknown) => ({ content: { "application/json": { schema } }, required: true })
+
+/** The flags commandFlags gives the one operation of `paths`: each name with its parameter, and each body flag's key. */
+function namesOf(paths: Record<string, unknown>) {
+	const document = { info: { title: "T", version: "1" }, openapi: "3.1.0", paths }
+	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
+	const op = sdkModel(ir).ops[0] as Parameters<typeof commandFlags>[0]
+	const flags = commandFlags(op, goCallPlans(document)[op.id] as GoCallPlan, ir.schemas)
+	return { fields: flags.fields, usage: flags.usage.map((each) => [each.name, each.param ?? null]) }
+}
+
+describe("a command's flag names (H54, phase b)", () => {
+	// v0: 31a995afc9
+	// v0: 54011863df
+	// v0: f66a31ae3b
+	// v0: c3f85f7055
+	it("never lets two flags share a name: the path keeps its own, a query, header or body name after it suffixed, a global flag's too", () => {
+		const teams = {
+			"/teams/{id}": {
+				post: {
+					operationId: "teams.update",
+					parameters: [
+						{ in: "path", name: "id", required: true, schema: STR },
+						{ in: "query", name: "id", schema: STR },
+						{ in: "query", name: "timeout", schema: STR },
+						{ in: "header", name: "Id", schema: STR },
+					],
+					requestBody: JSON_BODY({
+						properties: { data: STR, id: STR, meta: { properties: { k: STR }, type: "object" } },
+						type: "object",
+					}),
+					responses: { 204: { description: "none" } },
+				},
+			},
+		}
+		/* the nested meta gets no flag of its own: --data alone carries it */
+		expect(namesOf(teams)).toEqual({
+			fields: [
+				["data2", "data"],
+				["id4", "id"],
+			],
+			usage: [
+				["id", "id"],
+				["id2", "id"],
+				["timeout2", "timeout"],
+				["id3", "Id"],
+				["data", null],
+			],
+		})
 	})
 })
 const SLOW = { timeout: 600_000 }
@@ -86,6 +151,68 @@ async function run(
 	})
 }
 
+/** A query parameter named `name` with `schema`. */
+const queryParam = (name: string, schema: unknown, description?: string) => ({ description, in: "query", name, schema })
+
+/** commandFlags' declarations for the one operation of `paths`. */
+function declarationsOf(paths: Record<string, unknown>): readonly string[] {
+	const document = { info: { title: "T", version: "1" }, openapi: "3.1.0", paths }
+	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
+	const op = sdkModel(ir).ops[0] as Parameters<typeof commandFlags>[0]
+	return commandFlags(op, goCallPlans(document)[op.id] as GoCallPlan, ir.schemas).declare
+}
+
+describe("a flag's default in its help (phase i)", () => {
+	// v0: 244250de01
+	it("shows a scalar default as cobra shows its own, a string quoted, and nothing for a list or an object", () => {
+		const parameters = [
+			queryParam("limit", { default: 20, type: "integer" }, "the page size"),
+			queryParam("order", { default: "asc", enum: ["asc", "desc"], type: "string" }),
+			queryParam("all", { default: true, type: "boolean" }),
+			queryParam("tags", { default: ["a"], items: STR, type: "array" }),
+			queryParam("filter", { default: { k: 1 }, type: "object" }),
+		]
+		expect(
+			declarationsOf({
+				"/x": { get: { operationId: "x.list", parameters, responses: { 204: { description: "none" } } } },
+			}),
+		).toEqual([
+			'\tp.Flag("all", "boolean", false, false, "(default true)")',
+			'\tp.Flag("filter", "json", false, false, "")',
+			'\tp.Flag("limit", "integer", false, false, "the page size (default 20)")',
+			'\tp.Flag("order", "string", false, false, "(default \\"asc\\")", "asc", "desc")',
+			'\tp.Flag("tags", "string", true, false, "")',
+		])
+	})
+})
+
+describe("a body's flags and a keyword's (phase b)", () => {
+	// v0: b6bcf28ada
+	// v0: 7776129ac9
+	it("gives a oneOf body --data alone, and keeps a path parameter named type as type", () => {
+		const oneOf = JSON_BODY({
+			oneOf: [
+				{ properties: { a: STR }, type: "object" },
+				{ properties: { b: STR }, type: "object" },
+			],
+		})
+		const type = [{ in: "path", name: "type", required: true, schema: STR }]
+		expect([
+			namesOf({
+				"/x": { post: { operationId: "x.send", requestBody: oneOf, responses: { 204: { description: "none" } } } },
+			}),
+			namesOf({
+				"/kinds/{type}": {
+					get: { operationId: "kinds.get", parameters: type, responses: { 204: { description: "none" } } },
+				},
+			}),
+		]).toEqual([
+			{ fields: [], usage: [["data", null]] },
+			{ fields: [], usage: [["type", "type"]] },
+		])
+	})
+})
+
 describe.skipIf(!GO)("the global settings: flag over environment over config file (phase b)", SLOW, () => {
 	it("takes the base URL from the config file, the environment over it, the flag over both", async () => {
 		const runs = [
@@ -103,6 +230,9 @@ describe.skipIf(!GO)("the global settings: flag over environment over config fil
 		])
 	})
 
+	// v0: bdab6ffcff
+	// v0: f703d65466
+	// v0: 86b0068a04
 	it("sends the API key from the config file, the environment over it, the flag over both, an empty variable unset", async () => {
 		const file = join(configDir('api_key = "k-config"\n'), "config.toml")
 		const keys = await Promise.all(
@@ -160,12 +290,23 @@ describe.skipIf(!GO)("the global settings: headers and verbose (phase b)", SLOW,
 })
 
 describe.skipIf(!GO)("the config file: where it is found, and what it refuses (phase b)", SLOW, () => {
-	it("reads $XDG_CONFIG_HOME/<name>/config.toml, else ~/.config/<name>/config.toml", async () => {
-		const [xdg, home] = [
+	// v0: fac3704eae
+	// v0: 33c4a2f9b0
+	// v0: 3004ceca09
+	it("reads $XDG_CONFIG_HOME/<name>/config.toml, else ~/.config/<name>/config.toml, and the file --config names over both", async () => {
+		const [xdg, home, named] = [
 			await run((s) => ({ XDG_CONFIG_HOME: configDir(`base_url = "${s.url}"\n`, "shop") })),
 			await run((s) => ({ HOME: configDir(`base_url = "${s.url}"\n`, ".config/shop") })),
+			await run(
+				() => ({ XDG_CONFIG_HOME: configDir(`base_url = "${REFUSED_URL}"\n`, "shop") }),
+				(s) => ["items", "get", "i1", "--config", join(configDir(`base_url = "${s.url}"\n`), "config.toml")],
+			),
 		]
-		expect([xdg.status, home.status, xdg.hops.length, home.hops.length]).toEqual([0, 0, 1, 1])
+		expect([xdg, home, named].map((ran) => [ran.status, ran.hops.length])).toEqual([
+			[0, 1],
+			[0, 1],
+			[0, 1],
+		])
 	})
 
 	it.each([
@@ -240,6 +381,10 @@ describe.skipIf(!GO)("the config file's key warning, and the API with no server 
 })
 
 describe.skipIf(!GO)("the exit codes a script branches on (phase b)", SLOW, () => {
+	// v0: 170d9f147b
+	// v0: 67fd700a0f
+	// v0: ccbe26320e
+	// v0: 52fc448ac0
 	it("exits 0 on 2xx, 1 on 4xx, 2 on 5xx, 5 on a redirect it does not follow, 3 with no answer", async () => {
 		const runs = await Promise.all(
 			[

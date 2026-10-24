@@ -18,6 +18,7 @@ export const GO = [
 	"src/emit/go/**/*.test.ts",
 	"src/emit/cli/**/*.test.ts",
 	"src/cli.test.ts",
+	"scripts/sdk-budget.cli.test.ts",
 	"src/emit/shared/escape.test.ts",
 	"src/emit/shared/gofmt.test.ts",
 	"tests/security/emit-adversarial.test.ts",

@@ -37,7 +37,7 @@ export type BuiltCli = Compiled & {
 const moduleOf = (files: Readonly<Record<string, string>>) => /^module (\S+)$/m.exec(files["go.mod"] ?? "")?.[1] ?? ""
 
 /** How the binary is linked: a release's flags, cgo off. */
-const linkSettings = (modulePath: string) => ({
+export const linkSettings = (modulePath: string) => ({
 	env: { CGO_ENABLED: "0" },
 	flags: ["-trimpath", "-ldflags", `-s -w -X ${modulePath}/internal/cli.Version=${STAMPED}`],
 })

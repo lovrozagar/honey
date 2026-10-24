@@ -17,6 +17,8 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - `docs/examples-compile.test.ts` — every docs code example compiles/runs (ported from v0 examples-compile).
 - `docs/new-capability.test.ts` — each v1-added capability has a page + an example + a named test.
 
+**Bit 17 carry-in.** The generated CLI module ships no README (its docs are `--help`, `commands`, `schema` and the embedded SKILL.md). Document how an API author writes the module's README and points it at the install one-liner and the release flow.
+
 ## Security corpus
 - none (docs); examples must not demonstrate an insecure default.
 

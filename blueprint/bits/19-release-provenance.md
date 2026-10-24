@@ -94,3 +94,12 @@ A caller-supplied adapter that swallows interrupts isn't bounded until it return
 ## Budget
 - perf: build time within threshold.
 - size/token: the vendored runtime glue template per language (`gen/runtime/<lang>/*`) has a byte budget, and emitted SDK types must share components across operations (no per-op re-inlining) — both bound shipped SDK size and the agent-token surface (gated with H6). A bloated template or un-deduped types fails the gate.
+
+**Bit 17 carry-ins (the CLI close).**
+- `honey-codegen generate --app`: generate from an app module, not only a JSON `--spec`. Needs core's public document entry and a no-bind codegen flag first; `src/ir/load.ts` and regression V072-2 moved here with it (files.tsv rows at 19).
+- Stale generated-file cleanup: `generate` writes over and deletes nothing today (stated in `--help` and the README). Decide whether it tracks and removes files a regeneration no longer emits.
+- CLI release signing and attestation: the emitted goreleaser config and release workflow (least-privilege) ship unsigned; decide on cosign/SLSA attestation of the archives and checksums, and whether the install scripts verify them.
+- Security sweep, help text: the CLI strips control characters from spec text through `helpText` (title, summaries, descriptions, the skill) and escapes DEL and C1 in its JSON output, and refuses binary bytes to a terminal (F2, pinned at bit 17 i on a built binary). Sweep every SDK's emitted doc comments and help for the same control-character and DEL/C1 handling.
+- Go SDK dial hooks: the ws and realtime dials skip the `OnRequest`/`OnResponse` hooks (`runtime/go/ws.go:54`, `transport.go:156`, `transport_sse.go:36`, `transport_longpoll.go:67`), so a hook never sees a dial. Decide whether dials run the hooks (with sibling parity checked across every SDK) or the skip is documented; the CLI's `--verbose` relies on it to keep the reconnect token out of logs.
+- Go realtime 403 retry: the Go realtime chain retries a 403 through its backoff instead of failing at once, and long-poll's lazy `Connect` hides it until the first read. Make a 4xx refusal terminal (red-first, sibling parity) or document it.
+- Core stream routes emit no 2xx response in the document (kitchen `/api/events` and `/api/events-live`), so generated clients infer the stream from the route kind alone. Decide whether core emits the 2xx with its `text/event-stream` media type.

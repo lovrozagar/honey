@@ -1,14 +1,29 @@
 /**
- * The generated CLI's budgets (bit 17): the vendored CLI runtime's bytes on disk (the G14 analog), measured, every
- * file named. Its per-operation token ceiling joins at phase i, measured from the built binary.
+ * The generated CLI's budgets (bit 17): the vendored CLI runtime's bytes on disk (the G14 analog), locked at the close;
+ * the tokens an agent reads from each e2e app's built binary (H6, G13: the CLI's own ceilings, read from what the
+ * binary prints); and the kitchen CLI's stripped static binary, linked as a release links it.
  */
-import { resolve } from "node:path"
+import { mkdtempSync, readFileSync, statSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { CLI_RUNTIME } from "../src/emit/cli/module.ts"
+import { toIR, type OpenApiDocument } from "../src/ir/build.ts"
+import { sdkModel } from "../src/ir/sdk-model.ts"
+import { builtCli, linkSettings } from "../src/emit/cli/__fixtures__/built.ts"
+import { commandTree } from "../src/emit/cli/commands.ts"
+import { discoveryEntries } from "../src/emit/cli/discovery.ts"
+import { CLI_RUNTIME, generateGoCli } from "../src/emit/cli/module.ts"
+import { goCacheDir, runGo, withGo } from "../src/emit/go/__fixtures__/go-env.ts"
+import { goCallPlans } from "../src/emit/go/sdk.ts"
+import { ceilingOf, countTokens } from "./capture-token-budget.ts"
 import { runtimeBytes } from "./sdk-budget.ts"
 
+const GO = withGo()
+const SLOW = { timeout: 600_000 }
+const REPO = resolve(import.meta.dirname, "../../..")
+
 /*
- * G14 analog (bit 17), provisional until the close locks it at the exact measured bytes:
+ * G14 analog (bit 17), locked at phase i at the exact measured bytes (zero headroom, as Java's 149,981), over every
+ * runtime file:
  * - phase a, 2,562 B: run.go, the root command's shape (--version alone, no default completion, an unknown command
  *   or flag a usage error), the run that maps an outcome to its exit code, and the version a release links in;
  *   provisional 2,600.
@@ -60,9 +75,14 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *   - run.go +624 to 7,242: a redirect not followed names the way out (rerun with --redirect follow);
  *   - target.go +24 to 3,316: `config` shows the redirect policy with its source;
  *   provisional 55,400.
+ * - phases g and h, no runtime change (the release files, the install scripts and the generate CLI are the emitter's
+ *   and the package's).
+ * - phase i, +37 B to 55,356 B: run.go classes a body cut short (io.ErrUnexpectedEOF, an event stream dropped mid-way)
+ *   as a transport failure, exit 3, not 1 (the v0 cases' recheck found it). The lock: nothing dead to cut, so the
+ *   ceiling is the measured 55,356 B, provisional 55,400 → locked 55,356.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const CLI_RUNTIME_BYTES = 55400
+const CLI_RUNTIME_BYTES = 55356
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -72,5 +92,106 @@ describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () =
 			others: [],
 			over: 0,
 		})
+	})
+})
+
+/** What an agent reads of a CLI, in o200k tokens: each surface's largest, as the binary prints it. */
+type Surfaces = {
+	/** `<bin> commands`, the whole index */
+	readonly index: number
+	/** the largest index line: one command's usage */
+	readonly command: number
+	/** the largest `<bin> schema <command>` */
+	readonly schema: number
+	/** the root help's two-line banner */
+	readonly banner: number
+	/** `<bin> skill`, SKILL.md */
+	readonly skill: number
+}
+
+/*
+ * H6, G13 (bit 17 phase i): the CLI's own ceilings, each app's own, at ceilingOf(measured, 0.2). Measured from each e2e
+ * app's built binary (cobra assembles help at run time, so the binary's output is the shipped text); each app's index
+ * is the emitter's line for line, and holds a command per call plan. The medians beside each max: per command 7, 4, 7,
+ * 7 and 7; schema 37, 11, 17, 24 and 34 (compose, defaults, gateway, kitchen, surface). The local line is 8 tokens of
+ * each index. The banner and the skill are fixed overhead, once per CLI. A surface over its ceiling is fixed in the
+ * emitter or the schema, never by raising the ceiling; a raise names the feature that adds the tokens.
+ */
+const MEASURED: Readonly<Record<string, Surfaces>> = {
+	compose: { banner: 41, command: 10, index: 59, schema: 50, skill: 384 },
+	defaults: { banner: 44, command: 7, index: 22, schema: 16, skill: 392 },
+	gateway: { banner: 44, command: 15, index: 61, schema: 45, skill: 392 },
+	kitchen: { banner: 47, command: 15, index: 175, schema: 46, skill: 441 },
+	surface: { banner: 44, command: 26, index: 274, schema: 66, skill: 433 },
+}
+const TOKEN_HEADROOM = 0.2
+
+/** An e2e app's emitted OpenAPI document. */
+const appSpec = (app: string) =>
+	JSON.parse(
+		readFileSync(join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`), "utf8"),
+	) as Record<string, unknown>
+
+/** `app`'s CLI built, and what its binary prints of each surface, beside what the emitter planned. */
+async function surfacesOf(app: string) {
+	const document = appSpec(app)
+	const model = sdkModel(toIR(document as OpenApiDocument, { deriveOperationIds: true }))
+	const plans = goCallPlans(document)
+	const entries = discoveryEntries(commandTree(model.ops, plans), model)
+	const cli = builtCli(generateGoCli(document).files)
+	const text = async (args: readonly string[]) => (await cli.cli(args)).stdout
+	const lines = (await text(["commands"])).split("\n").filter((line) => line !== "" && !line.startsWith("local:"))
+	const schemas = await Promise.all(entries.map((entry) => text(["schema", ...entry.path.split(" ")])))
+	const help = (await text(["--help"])).split("\n")
+	const at = help.findIndex((line) => line.startsWith("Agents: "))
+	const measured: Surfaces = {
+		banner: at < 0 ? 0 : countTokens(`${help[at]}\n${help[at + 1]}\n`),
+		command: Math.max(...lines.map((line) => countTokens(`${line}\n`))),
+		index: countTokens(await text(["commands"])),
+		schema: Math.max(...schemas.map(countTokens)),
+		skill: countTokens(await text(["skill"])),
+	}
+	return { emitted: entries.map((entry) => entry.line), lines, measured, plans: Object.keys(plans).length }
+}
+
+describe.skipIf(!GO)("the CLI's tokens within each app's ceilings (bit 17 phase i, H6)", SLOW, () => {
+	it.each(Object.keys(MEASURED))(
+		"keeps %s's index, each command, each schema, the banner and the skill within ceilingOf(measured, 0.2)",
+		async (app) => {
+			const { emitted, lines, measured, plans } = await surfacesOf(app)
+			const pinned = MEASURED[app] as Surfaces
+			const ceilings = Object.fromEntries(
+				Object.entries(pinned).map(([surface, tokens]) => [surface, ceilingOf([tokens], TOKEN_HEADROOM)]),
+			)
+			/* completeness: every command measured, so none can pass by going unread */
+			expect({ commands: lines.length, emitted: lines, plans }).toEqual({ commands: plans, emitted, plans })
+			expect(
+				Object.entries(measured).filter(([surface, tokens]) => tokens > (ceilings[surface] as number) || tokens === 0),
+			).toEqual([])
+		},
+	)
+})
+
+/*
+ * The static binary stays small (bits/12:26; Q12): the kitchen CLI linked as a release links it (CGO_ENABLED=0,
+ * -trimpath, -s -w, the version stamped) for linux/amd64 under the pinned Go, measured 9,932,960 B, ceiling
+ * ceilingOf(measured, 0.02). A raise names its cause (a new module dependency, a Go release, a runtime feature).
+ */
+const KITCHEN_STRIPPED = 9932960
+const SIZE_HEADROOM = 0.02
+
+describe.skipIf(!GO)("the CLI binary within its size (bit 17 phase i)", SLOW, () => {
+	it(`links the kitchen CLI for linux/amd64 within ceilingOf(${KITCHEN_STRIPPED}, ${SIZE_HEADROOM}) bytes`, () => {
+		const files = generateGoCli(appSpec("kitchen")).files
+		const cli = builtCli(files)
+		const modulePath = /^module (\S+)$/m.exec(files["go.mod"] ?? "")?.[1] ?? ""
+		const { env, flags } = linkSettings(modulePath)
+		const out = join(mkdtempSync(join(goCacheDir("tmp"), "size-")), "kitchen")
+		const link = runGo(["build", ...flags, "-o", out, "."], {
+			cwd: cli.dir,
+			env: { ...env, GOARCH: "amd64", GOOS: "linux" },
+		})
+		expect([link.status, link.stderr]).toEqual([0, ""])
+		expect(statSync(out).size).toBeLessThanOrEqual(ceilingOf([KITCHEN_STRIPPED], SIZE_HEADROOM))
 	})
 })

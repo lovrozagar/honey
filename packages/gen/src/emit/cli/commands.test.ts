@@ -100,15 +100,50 @@ describe("the command tree (phase b)", () => {
 			version2: "version",
 		})
 	})
+})
 
-	it("spells a segment in kebab case: a flat id at the root, a camelCase verb split", () => {
-		expect(paths(flat("getRoot", "items.listAll", "Users.byID"))).toEqual({
+describe("the command tree's spelling (phase b)", () => {
+	// v0: e3d4d69402
+	// v0: a6e1665aa3
+	// v0: a379f04849
+	// v0: d01695a16f
+	it("spells a segment in kebab case: a flat id at the root, a camelCase or snake_case segment split, a Go keyword kept", () => {
+		expect(
+			paths(flat("getRoot", "items.listAll", "Users.byID", "apiKey.list", "orders.list_users", "type.get")),
+		).toEqual({
+			"api-key list": "apiKey.list",
 			"get-root": "getRoot",
 			"items list-all": "items.listAll",
+			"orders list-users": "orders.list_users",
+			"type get": "type.get",
 			"users by-id": "Users.byID",
 		})
 	})
 })
+
+/** The flags a help section lists, by name: `title`'s lines up to the next blank one. */
+const flagsIn = (help: string, title: string) => {
+	const lines = help.split("\n")
+	const from = lines.indexOf(title)
+	return from < 0 ? [] : lines.slice(from + 1, lines.indexOf("", from)).map((line) => /--([\w-]+)/.exec(line)?.[1])
+}
+
+/** The flags every command takes, the root's own. */
+const GLOBAL_FLAGS = [
+	"api-key",
+	"base-url",
+	"config",
+	"format",
+	"header",
+	"include",
+	"json",
+	"output",
+	"quiet",
+	"raw",
+	"redirect",
+	"timeout",
+	"verbose",
+]
 
 /** The shop CLI, built once. */
 const built = () => builtCli(generateGoCli(shop()).files)
@@ -128,12 +163,19 @@ const OK = (json: unknown, status = 200): Reply => ({ json: json as Reply["json"
 const usage = (message: string) => `${JSON.stringify({ error: { kind: "usage", message } })}\n`
 
 describe.skipIf(!GO)("the shop CLI's commands, built (phase b)", SLOW, () => {
+	// v0: 26fff31936
 	it("reaches every command by its path", async () => {
 		const { cli } = built()
 		const helps = await Promise.all(Object.keys(paths(shop())).map((path) => cli([...path.split(" "), "--help"])))
 		expect(helps.filter((help) => help.status !== 0 || !help.stdout.includes("Usage:")).length).toBe(0)
 	})
 
+	// v0: e3eb4c21ca
+	// v0: 18ca35f45a
+	// v0: de89b4adfc
+	// v0: 11147d61b2
+	// v0: f9954a7bfd
+	// v0: e4dc3a8113
 	it("sends each flag kind to its query parameter and the header flag as the header, and prints the answer as one JSON line", async () => {
 		const flags = [
 			"--limit",
@@ -151,22 +193,31 @@ describe.skipIf(!GO)("the shop CLI's commands, built (phase b)", SLOW, () => {
 			"t",
 		]
 		const ran = await call(["items", "list", ...flags, "--x-trace", "tr"], [OK([{ id: "a", name: "<a&b>" }])])
+		/* a flag not given sends nothing */
+		const bare = await call(["items", "list"], [OK([])])
 		expect({
+			bare: [bare.hops[0]?.url, bare.hops[0]?.headers["x-trace"]],
 			out: [ran.status, ran.stdout, ran.stderr],
 			trace: ran.hops[0]?.headers["x-trace"],
 			url: ran.hops[0]?.url,
 		}).toEqual({
+			bare: ["/items", undefined],
 			out: [0, '[{"id":"a","name":"<a&b>"}]\n', ""],
 			trace: "tr",
 			url: "/items?flag=true&kind=cat&limit=3&ratio=0.5&tags=x&tags=y+z&timeout=t",
 		})
 	})
 
+	// v0: fe1c7a829b
 	it("suffixes a parameter named like a global flag, the global flag kept: --redirect2 to the query", async () => {
 		const ran = await call(["dump", "get", "--redirect2", "r", "--redirect", "follow"], [OK({ a: 1 })])
 		expect([ran.status, ran.hops[0]?.url, ran.stdout]).toEqual([0, "/dump?redirect=r", '{"a":1}\n'])
 	})
+})
 
+describe.skipIf(!GO)("the shop CLI's path parameters, built (phase b)", SLOW, () => {
+	// v0: f905463c58
+	// v0: 13618feb1f
 	it("takes path parameters positionally or by flag, escaped as the SDK escapes them", async () => {
 		const [positional, flagged, mixed] = [
 			await call(["items", "get", "a b/ü"], [OK({ id: "a", name: "n" })]),
@@ -182,6 +233,11 @@ describe.skipIf(!GO)("the shop CLI's commands, built (phase b)", SLOW, () => {
 })
 
 describe.skipIf(!GO)("the shop CLI's usage errors, built (phase b)", SLOW, () => {
+	// v0: d86ff93e70
+	// v0: 66b7627358
+	// v0: c6a07a5855
+	// v0: 8bc707fcbc
+	// v0: bf84053b57
 	it.each([
 		[["items", "get"], "shop items get takes 1 argument(s) <id>, got 0"],
 		[["items", "get", "a", "b"], "shop items get takes 1 argument(s) <id>, got 2"],
@@ -204,7 +260,35 @@ describe.skipIf(!GO)("the shop CLI's usage errors, built (phase b)", SLOW, () =>
 	})
 })
 
+describe.skipIf(!GO)("the shop CLI's help, and its other usage errors, built (phase i)", SLOW, () => {
+	// v0: 4291c49b93
+	it("lists a command's own flags in its help, the global ones apart", async () => {
+		const help = (await built().cli(["items", "list", "--help"])).stdout
+		expect([flagsIn(help, "Flags:"), flagsIn(help, "Global Flags:")]).toEqual([
+			["flag", "help", "kind", "limit", "ratio", "tags", "timeout2", "x-trace"],
+			GLOBAL_FLAGS,
+		])
+	})
+
+	// v0: 3bc6e66ddf
+	// v0: e64f44da0d
+	it.each([
+		[["items", "get", "i1", "--nope"], "unknown flag: --nope"],
+		[["items", "nope"], 'unknown command "nope" for "shop items"'],
+		[
+			["uploads", "create", "--file", "/nonexistent/x.txt"],
+			"--file: open /nonexistent/x.txt: no such file or directory",
+		],
+	])("refuses %j with exit 4 before anything is sent", async (args, message) => {
+		const ran = await call(args, [])
+		expect([ran.status, ran.stderr, ran.hops.length]).toEqual([4, usage(message), 0])
+	})
+})
+
 describe.skipIf(!GO)("the shop CLI's bodies and answers, built (phase b)", SLOW, () => {
+	// v0: 55d0cc2d19
+	// v0: eb78b7fb1d
+	// v0: e43a285c46
 	it("sends the JSON body from --data, each body flag over its key", async () => {
 		const [data, fields] = [
 			await call(
@@ -232,18 +316,6 @@ describe.skipIf(!GO)("the shop CLI's bodies and answers, built (phase b)", SLOW,
 		])
 	})
 
-	it("reads --data from a file with @ and from standard input with -", async () => {
-		const file = join(mkdtempSync(join(goCacheDir("cli-data"), "data-")), "body.json")
-		writeFileSync(file, '{"name":"file"}')
-		const [fromFile, fromStdin] = [
-			await call(["items", "create", "--data", `@${file}`], [OK({ id: "1", name: "file" }, 201)]),
-			await call(["items", "create", "--data", "-"], [OK({ id: "2", name: "stdin" }, 201)], {
-				input: '{"name":"stdin"}',
-			}),
-		]
-		expect([fromFile.hops[0]?.body.json, fromStdin.hops[0]?.body.json]).toEqual([{ name: "file" }, { name: "stdin" }])
-	})
-
 	it("sends text, form and binary bodies under their media types, and prints text and bytes as they came", async () => {
 		const [text, form, put, get] = [
 			await call(["notes", "create", "--data", "hello"], [{ status: 200, text: "noted" }]),
@@ -265,7 +337,24 @@ describe.skipIf(!GO)("the shop CLI's bodies and answers, built (phase b)", SLOW,
 	})
 })
 
+describe.skipIf(!GO)("the shop CLI's --data sources, built (phase b)", SLOW, () => {
+	// v0: 31c0c5de06
+	// v0: 477802b22c
+	it("reads --data from a file with @ and from standard input with -", async () => {
+		const file = join(mkdtempSync(join(goCacheDir("cli-data"), "data-")), "body.json")
+		writeFileSync(file, '{"name":"file"}')
+		const [fromFile, fromStdin] = [
+			await call(["items", "create", "--data", `@${file}`], [OK({ id: "1", name: "file" }, 201)]),
+			await call(["items", "create", "--data", "-"], [OK({ id: "2", name: "stdin" }, 201)], {
+				input: '{"name":"stdin"}',
+			}),
+		]
+		expect([fromFile.hops[0]?.body.json, fromStdin.hops[0]?.body.json]).toEqual([{ name: "file" }, { name: "stdin" }])
+	})
+})
+
 describe.skipIf(!GO)("the shop CLI's empty answers and flat ids, built (phase b)", SLOW, () => {
+	// v0: 7a7f7a5bbd
 	it("prints nothing for an empty answer, and calls a flat id at the root", async () => {
 		const [deleted, health] = [
 			await call(["items", "delete", "i1"], [{ status: 204 }]),

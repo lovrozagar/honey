@@ -71,6 +71,9 @@ describe.skipIf(!GO)("a binary or multipart request (phase c)", SLOW, () => {
 		expect([ran.status, ran.hops[0]?.body.size, ran.hops[0]?.body.sha256]).toEqual([0, 65_536, sha256(bytes)])
 	})
 
+	// v0: 16a477bafd
+	// v0: f73d16c601
+	// v0: d80859bdd8
 	it("sends a multipart body part by part: a text part, a file part, a repeated file part, a part named like --format", async () => {
 		const dir = scratch()
 		for (const [name, text] of [

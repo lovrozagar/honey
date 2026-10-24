@@ -51,6 +51,7 @@ describe.skipIf(!GO)("the formats (phase c)", SLOW, () => {
 		expect([flagged.stdout, piped.stdout === flagged.stdout]).toEqual(['[{"id":"a","name":"<x&y>"}]\n', true])
 	})
 
+	// v0: 4bc9131e15
 	it("prints ndjson a list item per line, and anything else as one line", async () => {
 		const [list, object] = [
 			await call(
@@ -75,6 +76,8 @@ describe.skipIf(!GO)("the formats (phase c)", SLOW, () => {
 		expect([ran.status, yamlValue(ran.stdout)]).toEqual([0, TRICKY])
 	})
 
+	// v0: 904c87c75b
+	// v0: 96c6447b4a
 	it("prints a table: a column per key over a list of objects, its controls escaped, nested values as JSON", async () => {
 		const rows = [
 			{ id: "a", name: "\u001b[31mred\u001b[0m", tags: ["x"] },
@@ -92,6 +95,29 @@ describe.skipIf(!GO)("the formats (phase c)", SLOW, () => {
 	})
 })
 
+/** A JSON answer as the server wrote it, byte for byte. */
+const jsonText = (text: string): Reply => ({ headers: { "content-type": "application/json" }, status: 200, text })
+
+describe.skipIf(!GO)("the formats' values: a scalar in a table, an integer past 2^53 (phase i)", SLOW, () => {
+	// v0: 22f354cbef
+	it("prints a scalar answer as its value in a table", async () => {
+		const ran = await call(["version2", "--format", "table"], [{ json: "1.2.3", status: 200 }])
+		expect(ran.stdout).toBe("1.2.3\n")
+	})
+
+	// v0: dd36c5aed5
+	it("prints an integer past 2^53 exactly, as JSON and in a table", async () => {
+		const [json, table] = [
+			await call(["dump", "get"], [jsonText('{"id":1234567890123456789,"n":[12345678901234567890]}')]),
+			await call(["dump", "get", "--format", "table"], [jsonText('{"id":1234567890123456789}')]),
+		]
+		expect([json.stdout, table.stdout]).toEqual([
+			'{"id":1234567890123456789,"n":[12345678901234567890]}\n',
+			"id  1234567890123456789\n",
+		])
+	})
+})
+
 describe.skipIf(!GO)("the formats' edges: JSON a terminal can't act on, a format refused (phase c)", SLOW, () => {
 	it("prints DEL and the C1 controls as JSON escapes, so no raw one reaches a terminal, the value the same", async () => {
 		const value = { csi: "a\u009b2Jb", del: "x\u007fy", nel: "\u0085" }
@@ -102,6 +128,7 @@ describe.skipIf(!GO)("the formats' edges: JSON a terminal can't act on, a format
 		])
 	})
 
+	// v0: f41df25070
 	it.each([
 		[["--format", "xml"], '--format "xml": want json, ndjson, yaml or table'],
 		[["--json", "--format", "yaml"], "--json and --format yaml disagree"],
@@ -177,6 +204,7 @@ describe.skipIf(!GO)("an error on stderr (phase c)", SLOW, () => {
 		])
 	})
 
+	// v0: 96c6447b4a
 	it("reports an error after the CLI's name in any other format, its controls escaped", async () => {
 		/* the SDK drops an API message's controls itself; a local error (a path as given) reaches the CLI raw */
 		const [api, local] = [

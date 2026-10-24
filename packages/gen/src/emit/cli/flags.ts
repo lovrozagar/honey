@@ -96,6 +96,21 @@ function flagLine(name: string, kind: Kind, required: boolean, usage: string): s
 	return `\tp.Flag(${[...args, ...kind.enum.map(goString)].join(", ")})`
 }
 
+/**
+ * A flag's help with its schema default as cobra shows its own: `(default 20)`, `(default "asc")`, `(default true)`; a
+ * string quoted with its controls dropped, as spec text is; nothing for a list, an object or no default. Display only:
+ * the CLI sends only what is given.
+ */
+function withDefault(usage: string, value: unknown): string {
+	const shown =
+		typeof value === "string"
+			? JSON.stringify(helpText(value))
+			: typeof value === "number" || typeof value === "boolean"
+				? String(value)
+				: undefined
+	return shown === undefined ? usage : [usage, `(default ${shown})`].filter((part) => part !== "").join(" ")
+}
+
 /** A command's flags: the declarations, and the statements setting each Opts field from its flag. */
 export type CommandFlags = {
 	readonly declare: readonly string[]
@@ -156,7 +171,7 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 			const name = scope.claim(kebab(spec.name))
 			const kind = kindOf(spec.schema, schemas)
 			usage.push({ kind, name, param: spec.name, positional: false, required: spec.required === true })
-			lines.push(flagLine(name, kind, spec.required === true, spec.description ?? ""))
+			lines.push(flagLine(name, kind, spec.required === true, withDefault(spec.description ?? "", spec.default)))
 			opts.push(
 				`\tif err := cli.Set(&opts.${field}, p.Values(${goString(name)})); err != nil {`,
 				"\t\treturn err",
