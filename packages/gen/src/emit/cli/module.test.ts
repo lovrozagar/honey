@@ -139,7 +139,7 @@ describe("generateGoCli: the zero-op module's files", () => {
 				"cmd/root.go",
 				"go.mod",
 				"go.sum",
-				...CLI_RUNTIME.map((name) => `internal/cli/${name}`),
+				...CLI_RUNTIME.filter((name) => name !== "socket.go").map((name) => `internal/cli/${name}`),
 				"main.go",
 				...sdk.map((name) => `internal/sdk/${name}`),
 			].sort(),
@@ -153,13 +153,17 @@ describe("generateGoCli: the zero-op module's files", () => {
 		expect(unmarked.map(([name]) => name)).toEqual([])
 	})
 
-	it("requires the WebSocket library, with its go.sum lines, when the embedded SDK needs it", () => {
+	it("requires the WebSocket library, with its go.sum lines and the runtime's socket.go, when the embedded SDK needs it", () => {
 		const files = generateGoCli(ws()).files
 		expect({
 			mod: files["go.mod"]?.includes("\tgithub.com/coder/websocket v1.8.15\n"),
+			socket: Object.hasOwn(files, "internal/cli/socket.go"),
 			sum: files["go.sum"]?.includes("github.com/coder/websocket v1.8.15 h1:"),
-		}).toEqual({ mod: true, sum: true })
-		expect(zero()["go.sum"]).not.toContain("coder/websocket")
+		}).toEqual({ mod: true, socket: true, sum: true })
+		expect([zero()["go.sum"]?.includes("coder/websocket"), Object.hasOwn(zero(), "internal/cli/socket.go")]).toEqual([
+			false,
+			false,
+		])
 	})
 })
 

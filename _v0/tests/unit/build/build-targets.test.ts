@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
-import { existsSync, writeFileSync } from "node:fs"
-import { type AddressInfo, createServer } from "node:net"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { createServer } from "node:net"
 import { resolve } from "node:path"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 import { createBuildPlugin } from "../../../src/build/index.ts"
@@ -12,18 +12,41 @@ const OUT_ROOT = resolve(CORE_ROOT, ".tmp-build-targets")
 type Target = "bun" | "cloudflare" | "node"
 
 /*
- * Each leg serves on a port the OS holds free when the suite starts, all three bound at once so none repeats. A
- * fixed port sits in Linux's ephemeral range, where any process on a shared machine may already listen on it, and
+ * Each leg serves on a port below the OS's ephemeral range, checked free when the suite starts, the three distinct.
+ * A port inside the range, even one the OS just handed out and released, can be drawn as any outgoing connection's
+ * source port on a shared machine before the leg's server binds it (EADDRINUSE); a port below it never is.
  * wrangler/workerd binds sockets beside its own --port.
  */
 const PORTS: Record<Target, number> = { bun: 0, cloudflare: 0, node: 0 }
 
+/* the first ephemeral port (Linux's ip_local_port_range; macOS's range starts higher still) */
+function ephemeralFloor(): number {
+	try {
+		return Number(readFileSync("/proc/sys/net/ipv4/ip_local_port_range", "utf8").trim().split(/\s+/)[0])
+	} catch {
+		return 32_768
+	}
+}
+
+function bindable(port: number): Promise<boolean> {
+	return new Promise((done) => {
+		const server = createServer()
+		server.once("error", () => done(false))
+		server.listen(port, "0.0.0.0", () => server.close(() => done(true)))
+	})
+}
+
 beforeAll(async () => {
-	const servers = Object.keys(PORTS).map(() => createServer())
-	await Promise.all(servers.map((server) => new Promise<void>((done) => server.listen(0, "0.0.0.0", done))))
-	const ports = servers.map((server) => (server.address() as AddressInfo).port)
-	await Promise.all(servers.map((server) => new Promise((done) => server.close(done))))
-	for (const [i, target] of (Object.keys(PORTS) as Target[]).entries()) PORTS[target] = ports[i] as number
+	const floor = ephemeralFloor()
+	const taken = new Set<number>()
+	for (const target of Object.keys(PORTS) as Target[]) {
+		let port = 0
+		while (port === 0 || taken.has(port) || !(await bindable(port))) {
+			port = 10_000 + Math.floor(Math.random() * (floor - 10_000))
+		}
+		taken.add(port)
+		PORTS[target] = port
+	}
 })
 
 const children: ChildProcess[] = []

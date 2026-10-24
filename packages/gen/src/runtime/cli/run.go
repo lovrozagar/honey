@@ -96,13 +96,16 @@ func Run(root *cobra.Command, args []string, stdout, stderr io.Writer) int {
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	cmd, err := root.ExecuteContextC(ctx)
-	if err == nil {
-		return ExitOK
-	}
+	/* a stream Ctrl-C ends returns no error: the interrupt is the outcome */
 	interrupted := ctx.Err() != nil
-	report(cmd, err, interrupted)
-	if interrupted {
+	if err != nil {
+		report(cmd, err, interrupted)
+	}
+	switch {
+	case interrupted:
 		return ExitInterrupted
+	case err == nil:
+		return ExitOK
 	}
 	return Exit(err)
 }
@@ -139,6 +142,7 @@ func kindOf(err error, interrupted bool) string {
 	var usage *UsageError
 	var api *APIError
 	var network net.Error
+	var closed *Closed
 	switch {
 	case interrupted:
 		return "interrupted"
@@ -148,7 +152,7 @@ func kindOf(err error, interrupted bool) string {
 		return "api"
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &network) && network.Timeout():
 		return "timeout"
-	case errors.As(err, &network):
+	case errors.As(err, &network), errors.As(err, &closed):
 		return "transport"
 	}
 	return "error"

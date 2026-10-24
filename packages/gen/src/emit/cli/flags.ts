@@ -24,6 +24,7 @@ export const GLOBAL_FLAGS = [
 	"include",
 	"json",
 	"last-event-id",
+	"max-reconnects",
 	"output",
 	"quiet",
 	"raw",
@@ -138,10 +139,35 @@ export function commandFlags(op: SdkOp, plan: GoCallPlan, schemas: Readonly<Reco
 	}
 	params(op.query, plan.query)
 	params(op.headers, plan.headers)
+	if (op.stream !== null) streamFlags(op.stream, declare, opts)
 	if (op.body?.kind === "multipart")
 		return { declare, fields: [], opts, parts: partFlags(op, plan, { declare, schemas, scope }) }
 	const fields = bodyFields(op, schemas, scope, declare)
 	return { declare, fields, opts, parts: [] }
+}
+
+/** A stream's cursor flags, each `[flag, its Opts field, usage]`: the names GLOBAL_FLAGS keeps from a parameter. */
+const LAST_EVENT_ID = ["last-event-id", "LastEventID", "resume after this event id"] as const
+const RECONNECT_TOKEN = ["reconnect-token", "ReconnectToken", "resume with this reconnect token"] as const
+const CURSOR = { realtime: [LAST_EVENT_ID, RECONNECT_TOKEN], sse: [LAST_EVENT_ID], ws: [RECONNECT_TOKEN] }
+
+/** A stream command's own flags: --take, a realtime one's --max-reconnects, and its cursor flags, each set into its Opts field. */
+function streamFlags(stream: NonNullable<SdkOp["stream"]>, declare: string[], opts: string[]): void {
+	declare.push("\tp.Take()")
+	if (stream === "realtime") {
+		declare.push("\tp.MaxReconnects()")
+		opts.push(
+			"\treconnects, err := p.Reconnects()",
+			"\tif err != nil {",
+			"\t\treturn err",
+			"\t}",
+			"\topts.MaxReconnectAttempts = reconnects",
+		)
+	}
+	for (const [flag, field, usage] of CURSOR[stream]) {
+		declare.push(flagLine(flag, { enum: [], kind: "string", list: false }, false, usage))
+		opts.push(`\tif err := cli.Set(&opts.${field}, p.Values(${goString(flag)})); err != nil {`, "\t\treturn err", "\t}")
+	}
 }
 
 /** A multipart body's flags, each declared into `declare` by its part's name: a text part typed by its schema, a file part a path. */

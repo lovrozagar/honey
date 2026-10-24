@@ -6,7 +6,8 @@
  * - every flag kind: integer, number, boolean, enum, a list, a header;
  * - a required query param and a JSON body with scalar and object fields;
  * - text, form and binary bodies, and binary and empty answers;
- * - a stream and a multipart operation, which phase b leaves to d and c.
+ * - a multipart operation (phase c);
+ * - the streams (phase d): untyped and typed server-sent events, a WebSocket, a realtime feed.
  * It declares no server, so a run needs a base URL.
  */
 type Json = Record<string, unknown>
@@ -136,14 +137,30 @@ const typedBodies = (): Json => ({
 	"/raw": { post: { operationId: "raw.send", requestBody: { ...json({}), required: true }, responses: NONE } },
 })
 
-/** The flat ids, the built-in collisions, and the stream and multipart operations phase b leaves for later. */
-const otherPaths = (): Json => ({
-	"/events": {
+/** A `text/event-stream` answer whose events are `schema`. */
+const events = (schema: Json) => ({ 200: { content: { "text/event-stream": { schema } }, description: "events" } })
+const TICK = { properties: { msg: STRING, n: { type: "integer" } }, required: ["n"], type: "object" }
+
+/** The streams: untyped and typed server-sent events, a WebSocket, a realtime feed with a declared query param. */
+const streamPaths = (): Json => ({
+	"/chat": {
+		get: { operationId: "chat.connect", responses: { 101: { description: "upgrade" } }, "x-websocket": true },
+	},
+	"/events": { get: { operationId: "events.stream", responses: events(STRING) } },
+	"/feed": {
 		get: {
-			operationId: "events.stream",
-			responses: { 200: { content: { "text/event-stream": { schema: STRING } }, description: "events" } },
+			operationId: "feed.live",
+			parameters: [query("channel", STRING)],
+			responses: events(TICK),
+			"x-realtime": true,
+			"x-websocket": true,
 		},
 	},
+	"/ticks": { get: { operationId: "ticks.stream", responses: events(TICK), summary: "Ticks, typed" } },
+})
+
+/** The flat ids, the built-in collisions, and the multipart operation. */
+const otherPaths = (): Json => ({
 	"/dump": { get: { operationId: "dump.get", responses: ok({}), summary: "Any JSON, as the API sends it" } },
 	"/health": {
 		get: { operationId: "health", responses: ok({ properties: { ok: { type: "boolean" } }, type: "object" }) },
@@ -172,12 +189,12 @@ const otherPaths = (): Json => ({
 	"/version": { get: { operationId: "version", responses: ok(STRING) } },
 })
 
-/** The shop API: its paths cover phase b's commands, and one each of the operations it leaves to c and d. */
+/** The shop API: every shape a command takes, phase b's to d's. */
 export function shop(): Json {
 	return {
 		info: { title: "Shop", version: "1" },
 		openapi: "3.1.0",
 		components: { schemas: { Pet: { properties: { name: STRING }, type: "object" } } },
-		paths: { ...itemPaths(), ...bodyPaths(), ...typedBodies(), ...otherPaths() },
+		paths: { ...itemPaths(), ...bodyPaths(), ...typedBodies(), ...streamPaths(), ...otherPaths() },
 	}
 }

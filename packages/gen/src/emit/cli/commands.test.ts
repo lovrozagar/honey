@@ -58,10 +58,13 @@ const flat = (...ids: string[]): Json => ({
 })
 
 describe("the command tree (phase b)", () => {
-	it("gives each operation that answers once a command by its dotted id, verbs as authored, multipart too", () => {
+	it("gives each operation a command by its dotted id, verbs as authored, multipart and streams too", () => {
 		expect(paths(shop())).toEqual({
 			"bulk send": "bulk.send",
+			"chat connect": "chat.connect",
 			"dump get": "dump.get",
+			"events stream": "events.stream",
+			"feed live": "feed.live",
 			"files get": "files.get",
 			"files put": "files.put",
 			"forms submit": "forms.submit",
@@ -76,6 +79,7 @@ describe("the command tree (phase b)", () => {
 			"notes create": "notes.create",
 			"pets put": "pets.put",
 			"raw send": "raw.send",
+			"ticks stream": "ticks.stream",
 			"uploads create": "uploads.create",
 			version2: "version",
 		})

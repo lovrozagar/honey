@@ -75,15 +75,19 @@ export function javaEnv(): NodeJS.ProcessEnv {
 	return { ...Object.fromEntries(kept), ...set, PATH: path }
 }
 
-/** How a Java command runs: in `cwd`, with `input` on stdin. */
-type RunOptions = { readonly cwd?: string; readonly input?: string }
+/** How a Java command runs: in `cwd`, with `input` on stdin, `env` over the env every run uses. */
+type RunOptions = {
+	readonly cwd?: string
+	readonly env?: Readonly<Record<string, string>>
+	readonly input?: string
+}
 
 /** `bin` of the cache on `args`, under the env every run uses. */
 function run(bin: string, args: readonly string[], options: RunOptions): SpawnSyncReturns<string> {
 	return spawnSync(bin, [...args], {
 		cwd: options.cwd,
 		encoding: "utf8",
-		env: javaEnv(),
+		env: { ...javaEnv(), ...options.env },
 		input: options.input,
 		maxBuffer: 1 << 26,
 	})

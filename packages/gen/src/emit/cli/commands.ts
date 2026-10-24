@@ -4,7 +4,7 @@
  * subgroup claims its name before a command, and at the root every built-in (completion, commands, config, help,
  * schema, skill, version) is taken first, so a clash is suffixed as the IR suffixes ids (`version2`). Each command calls
  * the embedded SDK's own method by the emitter's call plan, its body read from its flags (a multipart one part by
- * part), and prints the answer with the response it came on. Streams join at phase d.
+ * part), and prints the answer with the response it came on, or a stream's events one line each (phase d).
  */
 import type { IR } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
@@ -24,15 +24,12 @@ export type CommandNode = {
 	readonly op?: { readonly op: SdkOp; readonly plan: GoCallPlan }
 }
 
-/** Whether `op` has a command yet: it answers once (streams join at phase d). */
-export const commanded = (op: SdkOp): boolean => op.stream === null
-
 /** The raw tree: each segment's subtree, and the operation a path ends at. */
 type Raw = { readonly groups: Map<string, Raw>; readonly leaves: Map<string, { op: SdkOp; plan: GoCallPlan }> }
 
 function rawTree(ops: readonly SdkOp[], plans: Readonly<Record<string, GoCallPlan>>): Raw {
 	const root: Raw = { groups: new Map(), leaves: new Map() }
-	for (const op of [...ops].filter(commanded).sort((a, b) => compareCodeUnits(a.id, b.id))) {
+	for (const op of [...ops].sort((a, b) => compareCodeUnits(a.id, b.id))) {
 		let at = root
 		for (const segment of op.segments.slice(0, -1)) {
 			if (!at.groups.has(segment)) at.groups.set(segment, { groups: new Map(), leaves: new Map() })
@@ -124,6 +121,32 @@ function bodyLines(op: SdkOp, plan: GoCallPlan, flags: CommandFlags): [string[],
 	}
 }
 
+/** A stream's call: its stream opened first (its output flags checked), then each event printed as it comes. */
+function streamLines(call: string, stream: NonNullable<GoCallPlan["stream"]>): string[] {
+	const open = ["\tout, err := cli.OpenStream(c)", "\tif err != nil {", "\t\treturn err", "\t}", "\tdefer out.Close()"]
+	if (stream === "sse")
+		return [
+			...open,
+			`\tfor event, err := range ${call} {`,
+			"\t\tif err != nil {",
+			"\t\t\treturn failed(err)",
+			"\t\t}",
+			"\t\tif !out.Event(event.Event, event.ID, event.Data) {",
+			"\t\t\tbreak",
+			"\t\t}",
+			"\t}",
+			"\treturn out.Err()",
+		]
+	return [
+		...open,
+		`\tconn, err := ${call}`,
+		"\tif err != nil {",
+		"\t\treturn failed(err)",
+		"\t}",
+		stream === "realtime" ? "\treturn failed(out.Resume(conn))" : "\treturn out.Converse(conn)",
+	]
+}
+
 /** The call and what follows it, by what the method returns: the answer printed with the response it came on. */
 function callLines(call: string, plan: GoCallPlan): string[] {
 	const declared = Object.keys(plan.responseHeaders?.fields ?? {})
@@ -171,7 +194,9 @@ function opFunc(node: CommandNode, path: readonly string[], ir: IR): string[] {
 		"\tif err != nil {",
 		"\t\treturn err",
 		"\t}",
-		...callLines(`${method}(c.Context()${args}${bodyArg}, opts, sdk.WithResponseInto(&resp))`, plan),
+		...(plan.stream === null
+			? callLines(`${method}(c.Context()${args}${bodyArg}, opts, sdk.WithResponseInto(&resp))`, plan)
+			: streamLines(`${method}(c.Context()${args}${bodyArg}, opts)`, plan.stream)),
 	]
 	return [
 		...lineComment(`${node.fn} is \`${[...path, node.name].join(" ")}\`: ${op.method} ${op.path}.`, "//"),

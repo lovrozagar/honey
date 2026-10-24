@@ -58,28 +58,40 @@ function walk(dir: string): string[] {
 	})
 }
 
-/** The Gradle daemons alive now, as `pid cmdline`. */
-function gradleDaemons(): string[] {
+/** The environment variable that marks one build's Gradle processes: a forked daemon inherits its client's. */
+const GRADLE_RUN = "HONEY_GRADLE_RUN"
+
+/** `/proc/<pid>/<file>`, its NULs as spaces, or "" for a process that ended since the listing. */
+function procText(pid: string, file: string): string {
+	try {
+		return readFileSync(join("/proc", pid, file), "utf8").replaceAll("\0", " ")
+	} catch {
+		return ""
+	}
+}
+
+/** The Gradle daemons alive now that `mark`'s build started, as `pid cmdline`. */
+function gradleDaemons(mark: string): string[] {
 	return readdirSync("/proc")
 		.filter((name) => /^\d+$/.test(name))
 		.flatMap((pid) => {
-			const path = join("/proc", pid, "cmdline")
-			/* a process that ended since the listing has no cmdline left to read */
-			const line = existsSync(path) ? readFileSync(path, "utf8").replaceAll("\0", " ") : ""
-			return /GradleDaemon|GradleWrapperMain|gradle-launcher/.test(line) ? [`${pid} ${line.trim()}`] : []
+			const line = procText(pid, "cmdline")
+			if (!/GradleDaemon|GradleWrapperMain|gradle-launcher/.test(line)) return []
+			return ` ${procText(pid, "environ")}`.includes(` ${GRADLE_RUN}=${mark} `) ? [`${pid} ${line.trim()}`] : []
 		})
 }
 
 /**
- * The Gradle daemons alive that `before` did not hold, once the build's own single-use daemon has had 5 s to exit:
- * `--no-daemon` still forks one when the build's JVM arguments differ from the launcher's, and it outlives the build
- * by a moment.
+ * The Gradle daemons `mark`'s build left alive, once each has exited or 60 s have passed: `--no-daemon` still forks
+ * a single-use daemon when the build's JVM arguments differ from the launcher's, and on a loaded machine it outlives
+ * the build by seconds; a leaked daemon idles for hours, so the bound still finds it. The mark keeps another run's
+ * Gradle out.
  */
-function leftAfter(before: ReadonlySet<string>): string[] {
+function leftAfter(mark: string): string[] {
 	const pause = new Int32Array(new SharedArrayBuffer(4))
 	for (let waited = 0; ; waited += 100) {
-		const left = gradleDaemons().filter((line) => !before.has(line))
-		if (left.length === 0 || waited >= 5_000) return left
+		const left = gradleDaemons(mark)
+		if (left.length === 0 || waited >= 60_000) return left
 		Atomics.wait(pause, 0, 0, 100)
 	}
 }
@@ -226,9 +238,9 @@ export function compiledJavaSdk(files: Files): CompiledJavaSdk {
 			return listed.map((path) => relative(sourceRoot, path))
 		},
 		gradle: () => {
-			const before = new Set(gradleDaemons())
-			const status = runGradle(["-q", "build"], { cwd: dir }).status ?? 1
-			return { daemons: leftAfter(before), status }
+			const mark = randomUUID()
+			const status = runGradle(["-q", "build"], { cwd: dir, env: { [GRADLE_RUN]: mark } }).status ?? 1
+			return { daemons: leftAfter(mark), status }
 		},
 		javac,
 		out: join(dir, "out"),

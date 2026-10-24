@@ -55,6 +55,9 @@ final class Conn implements TransportConnection {
 final class Spin implements TransportAdapter {
   volatile long ms;
   final java.util.List<Conn> conns = new java.util.concurrent.CopyOnWriteArrayList<>();
+  /* a probe's latch: counted down once an open is in progress, which then holds until held is set (1 s at most) */
+  volatile CountDownLatch dialing;
+  volatile java.util.concurrent.atomic.AtomicBoolean held;
 
   Spin(long ms) {
     this.ms = ms;
@@ -73,6 +76,14 @@ final class Spin implements TransportAdapter {
   @Override
   public TransportConnection connect(String url, TransportOptions options) {
     long end = System.nanoTime() + ms * 1_000_000;
+    if (dialing != null) {
+      dialing.countDown();
+      /* a spin, not a wait: an interrupt landing here stays set, as in the work below */
+      long limit = System.nanoTime() + 1_000_000_000L;
+      while (!held.get() && System.nanoTime() < limit) {
+        Thread.onSpinWait();
+      }
+    }
     while (System.nanoTime() < end) {
       Thread.onSpinWait();
     }
@@ -253,8 +264,10 @@ System.out.println(spin.conns.size() + " " + spin.conns.get(0).closed + " " + Th
 })
 
 /**
- * The 200 rounds: bound 50 ms, opens of 45–55 ms, a caller's interrupt at 40 ms on odd rounds; the misses counted. A
- * caller interrupt counts as lost only when it landed before the look (under one lock); at least 40 rounds must probe.
+ * The 200 rounds: bound 50 ms, opens of 45–55 ms, a caller's interrupt inside the open on odd rounds; the misses
+ * counted. The interrupter waits on the open's latch (the adapter has the dial), and the open holds until it has landed,
+ * so every odd round probes, whatever the load: no timer races the open. A probe is the interrupt landing inside the
+ * open; a caller interrupt is lost when an open that succeeded no longer has it set (a timeout consumes it, by design).
  */
 const ROUNDS = `int stray = 0;
 int lost = 0;
@@ -265,30 +278,37 @@ for (int round = 0; round < 200; round++) {
   Spin spin = new Spin(45 + round % 11);
   ResumableConnection<JsonNode> rc = open(spin, 50);
   boolean caller = round % 2 == 1;
-  /* the caller's interrupt, marked under one lock as it lands: under load the timer may fire after the open */
+  /* the caller's interrupt, marked under one lock as it lands */
   Object lock = new Object();
-  boolean[] fired = {false};
+  java.util.concurrent.atomic.AtomicBoolean fired = new java.util.concurrent.atomic.AtomicBoolean();
   CountDownLatch landed = new CountDownLatch(caller ? 1 : 0);
   if (caller) {
     Thread self = Thread.currentThread();
-    CompletableFuture.delayedExecutor(40, TimeUnit.MILLISECONDS).execute(() -> {
+    CountDownLatch dialing = new CountDownLatch(1);
+    spin.dialing = dialing;
+    spin.held = fired;
+    new Thread(() -> {
+      try {
+        dialing.await();
+      } catch (InterruptedException e) {
+        return;
+      }
       synchronized (lock) {
         self.interrupt();
-        fired[0] = true;
+        fired.set(true);
       }
       landed.countDown();
-    });
+    }).start();
   }
   try {
     rc.open();
     succeeded++;
     synchronized (lock) {
-      /* lost: delivered before this look, yet not set (the open took it); one landing after is no loss */
       boolean set = Thread.currentThread().isInterrupted();
-      if (caller && fired[0]) {
+      if (caller && fired.get()) {
         probed++;
       }
-      if (caller && fired[0] && !set) {
+      if (caller && fired.get() && !set) {
         lost++;
       }
       if (!caller && set) {
@@ -297,6 +317,9 @@ for (int round = 0; round < 200; round++) {
     }
   } catch (ApiTimeoutException e) {
     timedOut++;
+    if (caller && fired.get()) {
+      probed++;
+    }
     if (!caller && Thread.currentThread().isInterrupted()) {
       stray++;
     }
@@ -325,8 +348,8 @@ for (int round = 0; round < 200; round++) {
   Thread.interrupted();
   rc.close();
 }
-/* non-vacuity: measured 54-55 probed rounds clean and beside 8 busy loops; a run where every interrupt lands late fails */
-System.out.println(stray + " " + lost + " " + (succeeded > 0) + " " + (timedOut > 0) + " " + (probed >= 40));`
+/* non-vacuity: every odd round probes, its interrupt landing inside the open */
+System.out.println(stray + " " + lost + " " + (succeeded > 0) + " " + (timedOut > 0) + " " + probed);`
 
 describe.skipIf(!JAVA)("the backoff is capped at the open bound (C#'s OpenLimit)", SLOW, () => {
 	/* new: RealtimeLoop.cs:131 (Math.Min(…, OpenLimit)); red under an uncapped backoff, which sleeps a 1 h delay's half */
@@ -442,7 +465,7 @@ try {
 
 	/* new: refinement (3)'s 200 rounds at the boundary: bound 50 ms, opens of 45–55 ms, a caller interrupt on odd rounds */
 	it("leaves no stray interrupt after a successful open and loses no caller interrupt, 200 rounds at the boundary", () => {
-		/* 200 rounds of about 110 ms each: a 60 s watchdog */
-		expect(probed(ROUNDS, 60)).toEqual(["0 0 true true true"])
+		/* 200 rounds of about 110 ms each; an interrupter that never fires holds each odd open its 1 s: a 150 s watchdog */
+		expect(probed(ROUNDS, 150)).toEqual(["0 0 true true 100"])
 	})
 })

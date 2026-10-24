@@ -36,9 +36,17 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *   - body.go +962 to 4,831: the multipart file parts, a file or standard input per part, repeatable;
  *   - log.go +885 to 3,082: each secret also as the SDK percent-encodes it into a path and a query;
  *   provisional 36,000.
+ * - phase d, +7,690 B to 43,653 B, after cutting Closed's Unwrap (kindOf takes any close as transport):
+ *   - stream.go 5,802: a stream's output (one line per event, a YAML document each, ndjson for a table, -o, --take,
+ *     -i and --raw refused), the SSE event line, a message's bytes as JSON, a string or base64, the realtime feed
+ *     followed to its end with its cursor on stderr, --max-reconnects, Closed (an abnormal close, a transport failure);
+ *   - socket.go 1,738, shipped only beside the WebSocket library: stdin lines as text frames, each message printed, a
+ *     close frame on --take and on Ctrl-C, the close code as the outcome;
+ *   - run.go +150 to 5,699: Ctrl-C ending a stream with no error still exits 130; Closed classed as transport;
+ *   provisional 43,700.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const CLI_RUNTIME_BYTES = 36000
+const CLI_RUNTIME_BYTES = 43700
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
