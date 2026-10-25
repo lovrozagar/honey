@@ -124,9 +124,18 @@ describe.skipIf(!CLIENTS)("the official clients (phase a)", SLOW, () => {
 })
 
 describe("the official clients in CI (phase a)", () => {
-	it("installs them in the test job by the command the fixture names, verbatim", () => {
+	it("installs them in the test job and the harness job (which requires them) by the command the fixture names, verbatim", () => {
 		const workflow = readFileSync(new URL("../../../../../.github/workflows/ci.yml", import.meta.url), "utf8")
-		const test = workflow.slice(workflow.indexOf("\n  test:\n"), workflow.indexOf("\n  gen-rust:\n"))
-		expect(test.split("\n").some((line) => line.trim() === `run: ${clientsInstall()}`)).toBe(true)
+		/* each job's lines, to the next job's name or the file's end */
+		const job = (name: string) => {
+			const start = workflow.indexOf(`\n  ${name}:\n`)
+			const next = workflow.slice(start + 1).search(/\n {2}[a-z-]+:\n/)
+			return workflow.slice(start, next < 0 ? undefined : start + 1 + next)
+		}
+		const installs = (name: string) =>
+			job(name)
+				.split("\n")
+				.some((line) => line.trim() === `run: ${clientsInstall()}`)
+		expect([installs("test"), installs("harness")]).toEqual([true, true])
 	})
 })
