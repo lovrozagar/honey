@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"iter"
 	"net/http"
+	"time"
 )
 
-// openStream sends a streaming request through every call's exchange (run), with no timeout: ctx
-// alone bounds it, and a non-2xx status is a typed error before any event. The caller owns the body.
+// openStream sends a streaming request through every call's exchange (run), the call's timeout
+// bounding it up to the headers, never the body. A non-2xx is a typed error. The caller owns the body.
 func openStream(ctx context.Context, cfg Config, c *call, opts []RequestOption) (*http.Response, error) {
 	if c.headers == nil {
 		c.headers = map[string]string{}
@@ -20,11 +22,34 @@ func openStream(ctx context.Context, cfg Config, c *call, opts []RequestOption) 
 		c.headers["Accept"] = "text/event-stream"
 	}
 	x := &exchange{cfg: cfg, rc: newRequestConfig(cfg, opts), c: c, stream: true}
-	result, err := x.run(ctx)
+	if x.rc.timeout <= 0 {
+		result, err := x.run(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return result.resp, nil
+	}
+	open, cancel := context.WithCancelCause(ctx)
+	timer := time.AfterFunc(x.rc.timeout, func() { cancel(context.DeadlineExceeded) })
+	result, err := x.run(open)
+	timer.Stop()
 	if err != nil {
+		cancel(nil)
 		return nil, err
 	}
+	result.resp.Body = releasing{result.resp.Body, cancel}
 	return result.resp, nil
+}
+
+// releasing is a stream's body that ends its open's context on Close.
+type releasing struct {
+	io.ReadCloser
+	cancel context.CancelCauseFunc
+}
+
+func (r releasing) Close() error {
+	r.cancel(nil)
+	return r.ReadCloser.Close()
 }
 
 // streamText yields the call's server-sent events with Data as sent.

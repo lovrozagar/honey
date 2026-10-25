@@ -113,6 +113,6 @@ export type ClientConfig = {
 	sseMaxBufferChars?: number
 	state?: Record<string, unknown>
 	throwOnError?: boolean
-	/** Milliseconds for a whole request, including reading the body. Streams are exempt. */
+	/** Milliseconds for a whole request, including reading the body; a stream's only up to its headers. */
 	timeout?: number
 }

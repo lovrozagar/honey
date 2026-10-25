@@ -212,20 +212,18 @@ export function createFallbackChain(opts: { timeout?: number; transports: Transp
 
 export type ResumableConnectionOpts = {
 	fallbackTimeout?: number
-	headers?: Record<string, string>
+	/** Each dial's headers; a function is read on every dial, so a rotated token reaches the reconnect. */
+	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
 	/** Ping every this many ms over WebSocket (a frame resets SSE's dead timer); a dead link reconnects. Off when unset. */
 	keepaliveInterval?: number
 	lastId?: number
 	/** Reconnects after a drop before the stream ends; 0 retries forever. Default 5. */
 	maxReconnectAttempts?: number
-	/** 401 on a request: return a fresh token to retry it once (null = give up). */
-	onAuthExpired?: (ctx: { rejectedToken: string | null }) => Promise<string | null>
 	onReconnected?: () => void
 	onReconnecting?: (attempt: number, transport: Transport) => void
 	reconnectDelayMs?: number
 	reconnectToken?: string
 	signal?: AbortSignal
-	token?: () => Promise<string> | string
 	transports: TransportAdapter[]
 	url: string
 }

@@ -159,7 +159,7 @@ export class HTTPClient {
 	async #send(call: Call, kind: RequestKind, meta?: RequestMeta, isRetry = false): Promise<Sent> {
 		const { method, opts, path } = call
 		const { body, headers, url } = await this.#prepare(call, kind, meta)
-		const timeout = kind === "stream" ? undefined : (opts.timeout ?? this.#config.timeout)
+		const timeout = opts.timeout ?? this.#config.timeout
 		const { done, exemptFromTimeout, signal } = requestSignal([opts.signal, this.#disposal], timeout)
 		const cleanups: Array<() => void> = [done]
 		const finish = () => {
@@ -255,6 +255,8 @@ export class HTTPClient {
 		return {
 			async *[Symbol.asyncIterator]() {
 				const sent = await send()
+				/* the timeout bounded the open; the stream itself is never cut by it */
+				sent.exemptFromTimeout()
 				if (!sent.response.ok) {
 					try {
 						throw await errorFromResponse(sent.response, limits)

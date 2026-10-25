@@ -394,9 +394,12 @@ describe("runtimeBytes", () => {
  * exchange -658 and the shared hook loop -25), the ResumableConnection.Close race fix (+232), the
  * close-code godoc pointer (+95), and a benign WebSocket Close after a server close (+100). No
  * runtime file goes unshipped (dead code). A future raise names its feature bytes and cuts dead and
- * duplicate code first; it is never silent.
+ * duplicate code first; it is never silent. Bit 19 b2, +958 B on the measured 89,964 to 90,922 B: an SSE stream's
+ * open bounded by the call's timeout up to its headers (stream.go +578: the timer, the cancel cause and the body that
+ * releases it; request.go +11: wrapTransportError reads context.Cause), and the realtime dials reading the client's
+ * current token (transport.go +300: headersOf; realtime.go +72; transport_longpoll.go -6; config.go +3).
  */
-const GO_RUNTIME_BYTES = 90_000
+const GO_RUNTIME_BYTES = 90_922
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`, () => {
@@ -438,9 +441,11 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * runtime file goes unshipped (dead code). A raise names its feature bytes and cuts dead and duplicate code
  * first; it is never silent. Bit 19 b1, +280 over the gate to 85,692 B: exchange.py +320, the header check
  * (a non-token name and any control but tab in a value refused as ConfigError naming the header; it was CR/LF/NUL
- * only, so \u0001 and DEL went out), the token and control patterns and `import re` its only bytes.
+ * only, so \u0001 and DEL went out), the token and control patterns and `import re` its only bytes. Bit 19 b2,
+ * +291 B to 85,983 B: an event stream's open bounded by the call's timeout up to its headers (send_async.py +270,
+ * the wait_for; config.py +21).
  */
-const PYTHON_RUNTIME_BYTES = 85_692
+const PYTHON_RUNTIME_BYTES = 85_983
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -500,11 +505,14 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * +296, http.ts -54), every body read in its chunks and refused past maxResponseBytes, the bit 11/18 response cap.
  * Bit 19 b1, +740 B to 108,781 B: the header check (headerValue: a non-token name or a control but tab in a value
  * refused as a TypeError naming the header, before Node's Headers can quote the value or Bun send it raw), in
- * request.ts's headersOf, which the header assembly moved into: request.ts +1,354, http.ts -614.
+ * request.ts's headersOf, which the header assembly moved into: request.ts +1,354, http.ts -614. Bit 19 b2, +343 B
+ * to 109,124 B: an explicit stream's open bounded by the call's timeout up to its headers (http.ts +72, config.ts
+ * +15), and a resumable connection's headers read on each dial (realtime-connection.ts +289; realtime.ts -33, its
+ * dead `token` and `onAuthExpired` options cut).
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 108_781
+const TS_RUNTIME_BYTES = 109_124
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

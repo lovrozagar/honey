@@ -37,6 +37,7 @@ type TransportOpts struct {
 	HTTPClient           *http.Client
 	MaxMessageBytes      int64
 	PollTimeout          time.Duration
+	headersOf            func() http.Header // a realtime method's: the client's headers at each dial
 }
 
 const (
@@ -44,13 +45,21 @@ const (
 	defaultPollTimeout     = 60 * time.Second
 )
 
-// dialHeaders is a copy of the headers for one dial, with an X-Request-Id: the caller's, else a
-// fresh one, so every dial of a connection is a request of its own.
+// headers is one dial's headers: the client's now (its current token), else a copy of Headers.
+func (o *TransportOpts) headers() http.Header {
+	if o.headersOf != nil {
+		return o.headersOf()
+	}
+	return o.Headers.Clone()
+}
+
+// dialHeaders is one dial's headers with an X-Request-Id: the caller's, else a fresh one, so every
+// dial of a connection is a request of its own.
 func (o *TransportOpts) dialHeaders() http.Header {
 	if o == nil {
 		return withRequestID(nil)
 	}
-	return withRequestID(o.Headers.Clone())
+	return withRequestID(o.headers())
 }
 
 func (o *TransportOpts) maxMessageBytes() int64 {

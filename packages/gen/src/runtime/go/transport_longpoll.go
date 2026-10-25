@@ -36,7 +36,7 @@ func (t *LongpollTransport) Connect(_ context.Context, rawURL string, opts *Tran
 			lp.pollTimeout = opts.PollTimeout
 		}
 		lp.cursor.ReconnectToken, lp.cursor.LastEventID = opts.ReconnectToken, opts.LastEventID
-		lp.headers = opts.Headers.Clone()
+		lp.headers = opts.headers()
 	}
 	lp.client = transportClient(client)
 	return lp, nil

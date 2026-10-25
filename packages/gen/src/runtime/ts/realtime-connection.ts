@@ -136,12 +136,18 @@ class Resumable implements ResumableConnection {
 		}
 	}
 
-	/** Dial the adapter at `index`; resolve once it is ready, its frames wired before the caller resumes. */
+	/** Dial adapter `index` with this dial's headers (a function's read now); resolve when ready, frames wired first. */
 	#dial(index: number): Promise<TransportConnection> {
+		const given = this.#opts.headers
+		if (typeof given === "function") return Promise.resolve(given()).then((headers) => this.#dialWith(index, headers))
+		return this.#dialWith(index, given)
+	}
+
+	#dialWith(index: number, headers: Record<string, string> | undefined): Promise<TransportConnection> {
 		return new Promise((resolve, reject) => {
 			if (this.#closed) return reject(new RealtimeConnectError("the connection is closed", "closed"))
 			const adapter = this.#opts.transports[index] as TransportAdapter
-			const opts = { headers: this.#opts.headers, lastId: this.#lastId, reconnectToken: this.#reconnectToken }
+			const opts = { headers, lastId: this.#lastId, reconnectToken: this.#reconnectToken }
 			const conn = adapter.connect(this.#opts.url, { ...opts, signal: this.#opts.signal })
 			this.#dialing = conn
 			let ready = false

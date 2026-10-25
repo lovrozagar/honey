@@ -37,7 +37,7 @@ class ClientConfig:
     ``base_url`` defaults to the API's first server. ``bearer_token`` (else ``api_key``) is sent as
     ``auth_header_name: auth_header_prefix + token``; unset, both follow the API's scheme, and a set
     name takes no prefix unless one is given. ``timeout`` (seconds; ``None`` or 0: none) bounds a
-    whole call, never a stream. A redirect to another origin is followed only under ``"follow"``, and
+    whole call, and a stream only up to its headers. A redirect to another origin is followed only under ``"follow"``, and
     never carries credentials, a body, or what an ``http_client`` adds. ``SDK`` runs the ``*_sync``
     hooks and a plain ``on_auth_expired``; ``AsyncSDK`` runs the others, and coroutine functions too.
     Either refuses, at construction, a hook it would not run.

@@ -250,13 +250,17 @@ describe("SDK SSE call: failure, abort and timers", () => {
 	})
 
 	// v0: f06250a5fe
-	it("sets no timeout timer for a stream, even under config.timeout", async () => {
+	/* bit 19 b2: config.timeout bounds the open up to the headers; the timer is cleared before any event */
+	it("clears config.timeout's timer once a stream's headers arrive, so the stream itself is never cut", async () => {
 		const set = vi.spyOn(globalThis, "setTimeout")
+		const cleared = vi.spyOn(globalThis, "clearTimeout")
 		const { fetch } = recordingFetch(() => eventStream(["data: hello\n\n"], { open: true }))
 		const iterator = (await sdkFor({ fetch, timeout: 30_000 })).events.stream({})[Symbol.asyncIterator]()
-		await iterator.next()
+		const first = await iterator.next()
+		const timers = set.mock.results.filter((_, i) => set.mock.calls[i]?.[1] === 30_000).map((r) => r.value)
+		const clearedBeforeEnd = timers.every((timer) => cleared.mock.calls.some(([id]) => id === timer))
 		await iterator.return?.()
-		expect(set.mock.calls.filter(([, ms]) => ms === 30_000)).toEqual([])
+		expect([first.value, timers.length, clearedBeforeEnd]).toEqual([{ data: "hello" }, 1, true])
 	})
 })
 

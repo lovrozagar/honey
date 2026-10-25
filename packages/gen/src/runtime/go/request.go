@@ -184,10 +184,10 @@ func (x *exchange) newRequest(ctx context.Context, token string, retry bool) (*h
 	return req, nil
 }
 
-// wrapTransportError names a failed exchange: a timeout or cancel wraps ctx.Err() (so errors.Is
+// wrapTransportError names a failed exchange: a timeout or cancel wraps ctx's cause (so errors.Is
 // matches context.DeadlineExceeded or context.Canceled), anything else the redacted cause.
 func wrapTransportError(ctx context.Context, err error) error {
-	switch ctxErr := ctx.Err(); {
+	switch ctxErr := context.Cause(ctx); {
 	case errors.Is(ctxErr, context.DeadlineExceeded):
 		return fmt.Errorf("honey: request timed out: %w", ctxErr)
 	case errors.Is(ctxErr, context.Canceled):

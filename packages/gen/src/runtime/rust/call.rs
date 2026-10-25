@@ -83,7 +83,7 @@ impl<T, H> Call<T, H> {
         }
     }
 
-    /// This call's timeout in place of the client's (zero: none); a stream is not bounded by it.
+    /// This call's timeout in place of the client's (zero: none); a stream is bounded by it up to its headers.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.overrides.timeout = Some(timeout);
         self

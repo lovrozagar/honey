@@ -130,8 +130,14 @@ class AsyncTransport(ClientCore):
         )
         chunks: list[bytes] = []
         try:
-            response = await self.http.send(
+            sending = self.http.send(
                 request, stream=True, follow_redirects=False, **cross(request, hop)
+            )
+            # a stream reads with no timeout, so the call's bounds its wait for the headers
+            response = await (
+                asyncio.wait_for(sending, x.timeout)
+                if x.stream and x.timeout
+                else sending
             )
             if x.stream and 200 <= response.status_code < 300:
                 return HttpAnswer(
@@ -143,7 +149,7 @@ class AsyncTransport(ClientCore):
                     x.check()
             finally:
                 await response.aclose()
-        except httpx2.TimeoutException as error:
+        except (httpx2.TimeoutException, TimeoutError) as error:
             raise APITimeoutError("the call ran past its timeout") from error
         except httpx2.HTTPError as error:
             raise APIConnectionError(

@@ -22,8 +22,8 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The client-wide settings; `..Default::default()` fills the rest.
 ///
-/// `timeout` bounds a whole regular call, reading the answer included (`None`: 30 s; zero: none);
-/// streams are not bounded by it. `max_response_bytes` caps a buffered answer (100 MiB; zero: no
+/// `timeout` bounds a whole regular call, reading the answer included (`None`: 30 s; zero: none),
+/// and a stream up to its headers, never its events. `max_response_bytes` caps a buffered answer (100 MiB; zero: no
 /// cap). `bearer_token` (else `api_key`) is the credential, sent as `auth_header_name:
 /// auth_header_prefix + token`; leave both `None` for the API's scheme, set the name and the prefix
 /// is yours (`None` meaning none), set only the prefix to keep the scheme's header. `http_builder`

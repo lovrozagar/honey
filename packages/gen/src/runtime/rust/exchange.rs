@@ -99,7 +99,7 @@ pub(crate) async fn send(
     run(inner, spec, ov, false).await.map(|(raw, _)| raw)
 }
 
-/// Sends `spec` for a stream: a 2xx comes back unread, without the timeout.
+/// Sends `spec` for a stream: a 2xx comes back unread, the timeout bounding it only up to its headers.
 pub(crate) async fn open(
     inner: &Inner,
     spec: &mut RequestSpec,
@@ -120,11 +120,8 @@ async fn run(
         return Err(e);
     }
     log.started();
-    let timeout = if stream {
-        None
-    } else {
-        ov.timeout.or(inner.timeout).filter(|d| !d.is_zero())
-    };
+    /* a stream's answer is its headers (the body is read later), so this bounds only its open */
+    let timeout = ov.timeout.or(inner.timeout).filter(|d| !d.is_zero());
     let meta = inner.stale.begin(spec.method.as_str(), &spec.path);
     let mut x = Exchange {
         inner,

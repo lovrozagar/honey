@@ -11,8 +11,8 @@ import (
 // Config holds the client-wide settings. Per-call RequestOptions override BaseURL, Timeout and
 // headers for one call without changing it.
 //
-// Timeout bounds a whole regular request, including reading the response body. Streams (SSE,
-// WebSocket, realtime) are not bounded by it. Zero means 30s; a negative value disables it.
+// Timeout bounds a whole regular request, body included, and an SSE stream up to its headers;
+// WebSocket and realtime are not bounded by it. Zero means 30s; a negative value disables it.
 //
 // Redirect picks which redirects are followed (RedirectSameOrigin by default). Under any policy, a
 // hop to another origin carries only Accept, Accept-Language and User-Agent. A caller-supplied

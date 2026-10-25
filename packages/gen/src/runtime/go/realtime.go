@@ -5,6 +5,7 @@ package sdk
 import (
 	"context"
 	"errors"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -92,8 +93,8 @@ func NewResumableConnection(baseURL string, transports []Transport, opts *Transp
 }
 
 // newRealtime connects the call's connection over the default WebSocket, SSE and long-poll chain,
-// with the client's auth, headers and redirect policy; ctx bounds the open. The headers hold no
-// X-Request-Id unless the caller set one: each dial then mints its own.
+// with the client's auth (its current token at each dial), headers and redirect policy; ctx bounds
+// the open. The headers hold no X-Request-Id unless the caller set one: each dial mints its own.
 func newRealtime(ctx context.Context, cfg Config, c *call, topts TransportOpts, opts []RequestOption) (*ResumableConnection, error) {
 	rc := newRequestConfig(cfg, opts)
 	u, err := buildURL(rc.baseURL, c.path, c.query)
@@ -101,7 +102,7 @@ func newRealtime(ctx context.Context, cfg Config, c *call, topts TransportOpts, 
 		return nil, err
 	}
 	topts.HTTPClient = streamClient(cfg)
-	topts.Headers = mergeHeaders(cfg, cfg.auth.current(cfg), "", c.headers, rc.headers)
+	topts.headersOf = func() http.Header { return mergeHeaders(cfg, cfg.auth.current(cfg), "", c.headers, rc.headers) }
 	r := NewResumableConnection(u, []Transport{&WsTransport{}, &SseTransport{}, &LongpollTransport{}}, &topts)
 	if err := r.Connect(ctx); err != nil {
 		return nil, err
