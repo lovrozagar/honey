@@ -5,6 +5,7 @@
 import { runtimeSource } from "./http.ts"
 
 const VALUES = [
+	"APIConnectionError",
 	"BadGatewayError",
 	"BadRequestError",
 	"ClientError",

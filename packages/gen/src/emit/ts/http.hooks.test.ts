@@ -384,7 +384,12 @@ describe("onLog (Q1): an entry at each exchange's start, answer and failure", ()
 			{ ...op("/missing"), event: "request_start", level: "debug" },
 			{ ...op("/missing"), event: "response_received", level: "warn", status: 404 },
 			{ ...op("/down"), event: "request_start", level: "debug" },
-			{ ...op("/down"), error: new TypeError("offline"), event: "error", level: "error" },
+			{
+				...op("/down"),
+				error: expect.objectContaining({ cause: new TypeError("offline"), name: "APIConnectionError" }),
+				event: "error",
+				level: "error",
+			},
 		])
 	})
 })

@@ -240,7 +240,11 @@ describe("calls", () => {
 	it("rejects with the fetch failure even in safe mode", async () => {
 		const { fetch } = recordingFetch(() => Promise.reject(new Error("network failure")))
 		const sdk = await sdkFor(USERS, { fetch })
-		await expect(sdk.users.list()).rejects.toThrow("network failure")
+		/* the fetch failure is the typed connection error's cause (bit 19 f2) */
+		await expect(sdk.users.list()).rejects.toMatchObject({
+			cause: new Error("network failure"),
+			name: "APIConnectionError",
+		})
 	})
 })
 

@@ -26,6 +26,7 @@ const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
 /* the error classes and helpers a consumer imports from the SDK beside the class */
 const RUNTIME_EXPORTS = [
+	"APIConnectionError",
 	"BadGatewayError",
 	"BadRequestError",
 	"ClientError",

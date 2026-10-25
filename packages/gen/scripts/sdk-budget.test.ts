@@ -548,10 +548,13 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * Bit 19 f, +402 B to 119,636 B: a realtime send's raw form, sendText, as the siblings' (sweep 14): the method and its
  * type (+113) with a one-line comment (+86), its text POSTed as text/plain over SSE and long-poll (+187), and safely
  * moved to realtime.ts so realtime-connection.ts stays at the line cap (+16: its import and export).
+ * Bit 19 f2, +699 B to 120,335 B: a network failure is APIConnectionError, the platform's error its cause, as the
+ * siblings' connection errors (error.ts +663: the class +88, the fetch wrapper that leaves an aborted request's error as
+ * it is +440, two short comments +135; http.ts +36, the client's fetch wrapped).
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 119_636
+const TS_RUNTIME_BYTES = 120_335
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

@@ -79,3 +79,22 @@ export function clientErrorFor<TBody>(init: ClientErrorInit<TBody>): ClientError
 export function isClientError<T = unknown>(e: unknown): e is ClientError<T> {
 	return e instanceof ClientError
 }
+
+/** A request with no answer; the platform error is its `cause`. */
+export class APIConnectionError extends Error {
+	override name = "APIConnectionError"
+}
+
+/** A fetch failure as APIConnectionError; an abort's as it is. */
+export function connectionErrors(fetch: typeof globalThis.fetch): typeof globalThis.fetch {
+	if (typeof fetch !== "function") return fetch
+	return async (input, init) => {
+		try {
+			return await fetch(input, init)
+		} catch (cause) {
+			if (init?.signal?.aborted) throw cause
+			const url = new URL(String(input))
+			throw new APIConnectionError(`${init?.method} ${url.origin}${url.pathname}: the connection failed`, { cause })
+		}
+	}
+}

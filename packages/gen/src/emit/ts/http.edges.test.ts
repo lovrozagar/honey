@@ -88,7 +88,8 @@ describe("one client over many calls", () => {
 	// v0: 23bdd81bee
 	it("a network failure rejects even in result mode", async () => {
 		const api = await appFor({ fetch: recordingFetch(() => Promise.reject(new TypeError("fetch failed"))).fetch })
-		await expect(api.get("/down")).rejects.toThrow(TypeError)
+		/* the platform's TypeError is the typed connection error's cause (bit 19 f2) */
+		await expect(api.get("/down")).rejects.toMatchObject({ cause: expect.any(TypeError), name: "APIConnectionError" })
 	})
 })
 

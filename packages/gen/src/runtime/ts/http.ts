@@ -1,6 +1,6 @@
 import type { ClientConfig, HeadersContext, RequestMeta } from "./config.ts"
 import { bindDefaultFetch, parseClientBaseURL } from "./defaults.ts"
-import { ClientError } from "./error.ts"
+import { ClientError, connectionErrors } from "./error.ts"
 import { exchangeLog, runRequestHooks, runResponseHooks } from "./hooks.ts"
 import { interpolatePath } from "./path.ts"
 import { fetchFollowing } from "./redirects.ts"
@@ -60,7 +60,7 @@ export class HTTPClient {
 	/** `disposal` aborts every request in flight and refuses later ones (a generated SDK's `dispose()`). */
 	constructor(config: ClientConfig, disposal?: AbortSignal) {
 		this.#config = config
-		this.#fetch = bindDefaultFetch(config.fetch)
+		this.#fetch = connectionErrors(bindDefaultFetch(config.fetch))
 		this.#disposal = disposal
 	}
 

@@ -2,7 +2,8 @@
  * The TS SDK's safe mode over its error kinds in the default run (bit 19 f, sweep 20; the grid runs it too, so no grid
  * doubling, Q11): an error status lands in the result beside its status and Response, its envelope as the error; a
  * path that cannot be built is a status-0 result; an undecodable 2xx is a result too (v0 7c6878d7c4, TS's own: the
- * siblings raise it); a timeout, the caller's abort, a refused connection and a throwing hook are thrown.
+ * siblings raise it); a timeout, the caller's abort, a refused connection (APIConnectionError, f2) and a throwing hook
+ * are thrown.
  */
 import { describe, expect, it } from "vitest"
 import { emittedSdk, recordingFetch } from "./__fixtures__/emitted.ts"
@@ -68,7 +69,7 @@ describe("safe mode over the TS SDK's error kinds (bit 19 f)", () => {
 			abort: ["thrown", "AbortError"],
 			hooked: ["thrown", "RangeError"],
 			path: ["result", 0, null, "ClientError", true],
-			refused: ["thrown", "TypeError"],
+			refused: ["thrown", "APIConnectionError"],
 			status: ["result", 404, null, "Object", true],
 			timeout: ["thrown", "TimeoutError"],
 			torn: ["result", 200, null, "ClientError", true],

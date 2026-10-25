@@ -31,6 +31,7 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - `ResumableConnection` is generic over its payload, its `send` returns `Promise<void>`, and `RealtimeOptions` is exported (bit 19 e2).
 - `ResumableConnectionOpts.lastId: number` becomes `lastEventId: string`, matching SSE ids and every other SDK's cursor (bit 19 e2).
 - A realtime connection sends raw text in every SDK (bit 19 f): Rust gains `send_text`, TS `ResumableConnection.sendText` (a text frame on WebSocket, a `text/plain` POST over SSE and long-poll); `send` still JSON-encodes.
+- A TS SDK network failure is `APIConnectionError` (its `cause` the platform error), not a raw `TypeError`, and safe mode throws it like every SDK, since no answer exists (bit 19 f2); an abort or timeout keeps its own error.
 - Generated SDK error messages read `HTTP <status>: <message>` (or `HTTP <status>` with no message) in every target (bit 19 d2): Go and Rust drop the reason phrase (they printed `404 Not Found: <message>`), and TS adds the prefix (it printed the message alone). Code matching on the old text changes; match the typed error and its status instead.
 - The TS SDK's SSE caps are UTF-8 bytes like every other SDK's (bit 19 d2): `sseMaxBufferChars` is replaced by `sseMaxLineBytes` (1 MiB) and `sseMaxEventBytes` (8 MiB).
 - The TS SDK speaks whatever HTTP version its platform's `fetch` negotiates (Node 26 may use HTTP/2; browsers choose their own); every other SDK is pinned to HTTP/1.1 (bit 19 d2).
