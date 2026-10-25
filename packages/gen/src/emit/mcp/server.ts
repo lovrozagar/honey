@@ -53,7 +53,8 @@ const entrySource = (app: { name: string; version: string; envPrefix: string }, 
 // $${app.envPrefix}_API_KEY, sent as the API's scheme says; the API is at $${app.envPrefix}_BASE_URL, else its first server, and
 // with neither it refuses to start. A call waits $${app.envPrefix}_TIMEOUT_MS milliseconds at most, 30 s by default, an
 // event stream's collect too. SIGINT and SIGTERM abort every call in flight and exit 0, no later reply written.
-import { bindTools, createSession, serveStdio } from "./mcp.runtime"
+// The API's answer is read at most 1 MiB, past it refused.
+import { BYTES_MAX, bindTools, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { toolSpecs } from "./tools.gen"
 
@@ -71,6 +72,7 @@ if (baseURL === "") {
 const config = {
 	baseURL,
 	headers: key === "" ? {} : { ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
+	maxResponseBytes: BYTES_MAX,
 	throwOnError: false,
 	timeout: Number(timeout),
 }

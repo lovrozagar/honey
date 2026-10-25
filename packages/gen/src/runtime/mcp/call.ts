@@ -99,7 +99,7 @@ export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding
 						timeout: binding.timeout,
 					})
 				const answer = (await send({ signal })) as Answer
-				const ok = answer.status >= 200 && answer.status < 300
+				const ok = answer.status >= 200 && answer.status < 300 && answer.error == null
 				return {
 					...(ok ? successOf(spec, answer, scrub) : failureOf(answer, scrub)),
 					_meta: { "honey/status": answer.status },

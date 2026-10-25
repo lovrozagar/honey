@@ -216,7 +216,7 @@ export class HTTPClient {
 	}
 
 	#reading(method: string, opts: RequestOptions, shouldThrow: boolean): Reading {
-		return { maxMessage: this.#config.maxErrorMessageChars, method, raw: opts.raw, shouldThrow }
+		return { limits: this.#config, method, raw: opts.raw, shouldThrow }
 	}
 
 	/** Throw mode: the parsed body, or a ClientError (a per-status subclass) on non-2xx. */
@@ -263,14 +263,14 @@ export class HTTPClient {
 	/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
 	streamOperation(op: Call & { meta?: RequestMeta; onOpen?: () => void }): AsyncIterable<SSEEvent> {
 		const send = () => this.#send(op, "stream", op.meta)
-		const maxMessage = this.#config.maxErrorMessageChars
+		const limits = this.#config
 		const iterate = (sent: Sent) => this.#iterate(sent)
 		return {
 			async *[Symbol.asyncIterator]() {
 				const sent = await send()
 				if (!sent.response.ok) {
 					try {
-						throw await errorFromResponse(sent.response, maxMessage)
+						throw await errorFromResponse(sent.response, limits)
 					} finally {
 						sent.done()
 					}

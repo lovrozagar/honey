@@ -5,8 +5,8 @@
  */
 import { readFileSync } from "node:fs"
 
-/* each module after the ones it imports */
-const RUNTIME_MODULES: readonly string[] = [
+/** The runtime modules under `runtime/ts`, each after the ones it imports. */
+export const RUNTIME_MODULES: readonly string[] = [
 	"media-type",
 	"defaults",
 	"redirect-policy",

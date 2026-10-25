@@ -63,9 +63,11 @@ const SLOW = { timeout: 120_000 }
  *   (ToolResult's `_meta`); provisional 29,700.
  * - phase g, no runtime change. The lock: nothing dead to cut, so the ceiling is the measured 29,649 B, provisional
  *   29,700 → locked 29,649.
+ * - the TS response cap (bit 11/18 fix), −81 B to 29,568 B: the SDK reads at most 1 MiB, so result.ts's note for
+ *   bytes past it is dead and cut (−105, with its doc); call.ts +24 (a 2xx whose body the SDK refused is a failure).
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 29649
+const MCP_RUNTIME_BYTES = 29568
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

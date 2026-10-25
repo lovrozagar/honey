@@ -1,14 +1,15 @@
 /**
  * A tool's result through the emitted server (bit 18 phase d, D1), its process against a recording server. A JSON
  * answer is text and structuredContent alike, an object as it is, any other value and an answer with declared headers
- * wrapped `{result, headers}`; text is text; bytes are image, audio or an embedded resource by their media type, and a
- * note past 1 MiB; text past 100,000 characters is cut with a note. A failure is isError: an answer outside 2xx its
+ * wrapped `{result, headers}`; text is text; bytes are image, audio or an embedded resource by their media type, a
+ * body past 1 MiB refused isError, read only to the cap; text past 100,000 characters is cut with a note. A failure is isError: an answer outside 2xx its
  * status with honey's error key and message, else its message and body; no answer `transport` or `timeout`. A body
  * argument goes as base64-decoded bytes (at most 1 MiB, refused otherwise) or text. Both official clients validate the
  * structuredContent against the outputSchema.
  */
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { flood } from "../shared/__fixtures__/flood-server.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { clientCheck, withClients } from "./__fixtures__/clients.ts"
 import { exchange, exchangeEach, initialize, request, written } from "./__fixtures__/written.ts"
@@ -58,21 +59,24 @@ const media = {
 	},
 }
 
-/** The media server run against a recording server answering `replies`, with `env`: its results and the hops. */
-async function run(
-	calls: readonly [string, Record<string, unknown>?][],
-	replies: readonly Reply[],
-	env: string[] = [],
-) {
+type Calls = readonly [string, Record<string, unknown>?][]
+
+/** The media server's results to `calls`, run against the API at `url` with `env`. */
+async function resultsAt(url: string, calls: Calls, env: string[] = []) {
 	const dir = written(generateMcpServer(media).files)
+	const lines = [
+		initialize("2025-11-25"),
+		...calls.map(([name, args], i) => request(i + 1, "tools/call", { arguments: args ?? {}, name })),
+	]
+	const command = ["env", `MEDIA_BASE_URL=${url}`, ...env, process.execPath, join(dir, "dist", "server.js")]
+	const ran = await exchangeEach(command, lines)
+	return ran.replies.slice(1).map((reply) => (reply as { result: Record<string, unknown> }).result)
+}
+
+/** The media server run against a recording server answering `replies`, with `env`: its results and the hops. */
+async function run(calls: Calls, replies: readonly Reply[], env: string[] = []) {
 	return served(replies, async (server) => {
-		const lines = [
-			initialize("2025-11-25"),
-			...calls.map(([name, args], i) => request(i + 1, "tools/call", { arguments: args ?? {}, name })),
-		]
-		const command = ["env", `MEDIA_BASE_URL=${server.url}`, ...env, process.execPath, join(dir, "dist", "server.js")]
-		const ran = await exchangeEach(command, lines)
-		const results = ran.replies.slice(1).map((reply) => (reply as { result: Record<string, unknown> }).result)
+		const results = await resultsAt(server.url, calls, env)
 		return { bodies: server.bodies, hops: server.hops, results, server: server.url }
 	})
 }
@@ -129,14 +133,14 @@ describe("a tool's JSON and text result (phase d)", SLOW, () => {
 
 describe("a tool's bytes result (phase d)", SLOW, () => {
 	// v0: 3ae872cf6f
-	it("answers an image and audio as their content, other bytes as an embedded resource, bytes past 1 MiB as a note", async () => {
+	it("answers an image and audio as their content, other bytes as an embedded resource, 1 MiB still whole", async () => {
 		const { results } = await run(
 			[["image_get"], ["audio_get"], ["pdf_get"], ["big_get"]],
 			[
 				{ bytes: 300, headers: { "content-type": "image/png" }, status: 200 },
 				{ bytes: 5, headers: { "content-type": "audio/mpeg" }, status: 200 },
 				{ bytes: 7, headers: { "content-type": "application/pdf; x=1" }, status: 200 },
-				{ bytes: MiB + 1, headers: { "content-type": "application/octet-stream" }, status: 200 },
+				{ bytes: MiB, headers: { "content-type": "application/octet-stream" }, status: 200 },
 			],
 		)
 		expect(results.map((result) => result.content)).toEqual([
@@ -148,8 +152,34 @@ describe("a tool's bytes result (phase d)", SLOW, () => {
 					type: "resource",
 				},
 			],
-			[{ text: `[application/octet-stream, ${MiB + 1} bytes: past the ${MiB}-byte cap]`, type: "text" }],
+			[
+				{
+					resource: { blob: pattern(MiB), mimeType: "application/octet-stream", uri: "honey://big_get/result" },
+					type: "resource",
+				},
+			],
 		])
+	})
+
+	it("refuses a body past 1 MiB isError, the API's status kept, the SDK reading only to the cap", async () => {
+		const api = await flood(64 * MiB, {
+			"content-length": String(64 * MiB),
+			"content-type": "application/octet-stream",
+		})
+		try {
+			const [result] = await resultsAt(api.url, [["big_get"]])
+			const message = `Response body is over the ${MiB}-byte cap (application/octet-stream, ${64 * MiB} bytes)`
+			expect([result, api.written() < 16 * MiB]).toEqual([
+				{
+					_meta: { "honey/status": 200 },
+					content: [{ text: JSON.stringify({ status: 200, message, body: null }), type: "text" }],
+					isError: true,
+				},
+				true,
+			])
+		} finally {
+			await api.close()
+		}
 	})
 })
 

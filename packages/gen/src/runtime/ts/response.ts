@@ -23,7 +23,8 @@ export type Reading = {
 	 */
 	declared?: string | null
 	headers?: readonly string[]
-	maxMessage?: number
+	/** the client's limits: an error message's characters, and the bytes a body may hold decoded */
+	limits?: Limits
 	method: string
 	raw?: boolean
 	shouldThrow: boolean
@@ -39,13 +40,57 @@ function sanitizeMessage(message: string, max: number): string {
 	return out.slice(0, max)
 }
 
-/** Read an error body: JSON when it parses, else the text, else null. Never throws on the body. */
-async function readErrorBody(response: Response): Promise<unknown> {
+/** What a client bounds an answer to: its error message's characters, and its body's decoded bytes. */
+export type Limits = { readonly maxErrorMessageChars?: number; readonly maxResponseBytes?: number }
+
+/** The most bytes a body may hold, decoded, before its read is refused: 100 MiB, as every other SDK's. */
+export const MAX_RESPONSE_BYTES = 100 * 1024 * 1024
+
+/** `response`'s body, read in the chunks it arrives in, refused past `max` decoded bytes with the body cancelled. */
+async function bodyBytes(response: Response, max = MAX_RESPONSE_BYTES): Promise<Uint8Array> {
+	const reader = response.body?.getReader()
+	if (reader === undefined) return new Uint8Array(0)
+	const chunks: Uint8Array[] = []
+	let size = 0
+	for (let next = await reader.read(); !next.done; next = await reader.read()) {
+		size += next.value.byteLength
+		if (size > max) {
+			/* not awaited: a cloned body's branch settles its cancel only once its twin cancels too */
+			reader.cancel().catch(() => {
+				/* the refusal stands whether or not the body cancels cleanly */
+			})
+			const sent = response.headers.get("content-length")
+			const what = [response.headers.get("content-type") ?? "no content type", sent && `${sent} bytes`]
+			const message = `Response body is over the ${max}-byte cap (${what.filter(Boolean).join(", ")})`
+			throw clientErrorFor({ body: null, message, response, status: response.status })
+		}
+		chunks.push(next.value)
+	}
+	const bytes = new Uint8Array(size)
+	let at = 0
+	for (const chunk of chunks) {
+		bytes.set(chunk, at)
+		at += chunk.byteLength
+	}
+	return bytes
+}
+
+/** `response`'s body as UTF-8 text, bounded as bodyBytes reads it. */
+const bodyText = async (response: Response, max?: number) => new TextDecoder().decode(await bodyBytes(response, max))
+
+/**
+ * Read an error body: JSON when it parses, else the text, else null; one past `max` bytes reads as null, and its
+ * `preserved` twin is cancelled with it, so the body's source stops.
+ */
+async function readErrorBody(response: Response, preserved: Response, max?: number): Promise<unknown> {
 	let text: string
 	try {
-		text = await response.text()
+		text = await bodyText(response, max)
 	} catch {
 		/* an unreadable body still answers with its status */
+		preserved.body?.cancel().catch(() => {
+			/* the twin may already be gone */
+		})
 		return null
 	}
 	if (text.length === 0) return null
@@ -57,16 +102,18 @@ async function readErrorBody(response: Response): Promise<unknown> {
 	}
 }
 
-/** The typed error a non-2xx answer becomes, its response kept readable. */
-export async function errorFromResponse(response: Response, maxMessage = 512): Promise<ClientError> {
+/** The typed error a non-2xx answer becomes, its response kept readable, its body and message bounded by `limits`. */
+export async function errorFromResponse(response: Response, limits: Limits = {}): Promise<ClientError> {
 	const preserved = response.clone()
-	const body = await readErrorBody(response)
+	const body = await readErrorBody(response, preserved, limits.maxResponseBytes)
 	const message =
 		typeof body === "object" && body !== null && "message" in body
 			? (body as Record<string, unknown>).message
 			: undefined
 	const text =
-		typeof message === "string" && message.length > 0 ? sanitizeMessage(message, maxMessage) : `HTTP ${response.status}`
+		typeof message === "string" && message.length > 0
+			? sanitizeMessage(message, limits.maxErrorMessageChars ?? 512)
+			: `HTTP ${response.status}`
 	return clientErrorFor({ body, message: text, response: preserved, status: response.status })
 }
 
@@ -87,7 +134,12 @@ function hasNoBody(response: Response, method: string): boolean {
  * otherwise by its content type: JSON parsed, text as text, anything else as bytes (A1), and null
  * when empty.
  */
-export async function parseBody(response: Response, method: string, declared?: string | null): Promise<unknown> {
+export async function parseBody(
+	response: Response,
+	method: string,
+	declared?: string | null,
+	max?: number,
+): Promise<unknown> {
 	if (declared === null || hasNoBody(response, method.toUpperCase())) {
 		await response.body?.cancel().catch(() => {
 			/* nothing to read: a cancel that fails changes nothing */
@@ -95,12 +147,12 @@ export async function parseBody(response: Response, method: string, declared?: s
 		return null
 	}
 	if (declared !== undefined) {
-		if (isTextMediaType(parseMediaType(declared))) return response.text()
-		return new Uint8Array(await response.arrayBuffer())
+		if (isTextMediaType(parseMediaType(declared))) return bodyText(response, max)
+		return bodyBytes(response, max)
 	}
 	const type = parseMediaType(response.headers.get("content-type"))
 	if (isJsonMediaType(type)) {
-		const text = await response.text()
+		const text = await bodyText(response, max)
 		if (text.length === 0) return null
 		try {
 			return JSON.parse(text)
@@ -113,8 +165,8 @@ export async function parseBody(response: Response, method: string, declared?: s
 			})
 		}
 	}
-	if (isTextMediaType(type)) return response.text()
-	const bytes = new Uint8Array(await response.arrayBuffer())
+	if (isTextMediaType(type)) return bodyText(response, max)
+	const bytes = await bodyBytes(response, max)
 	return bytes.byteLength === 0 ? null : bytes
 }
 
@@ -142,14 +194,15 @@ export async function finishRequest(sent: Sent, reading: Reading): Promise<unkno
 	try {
 		if (!response.ok) {
 			if (reading.raw && !shouldThrow) return response
-			const error = await errorFromResponse(response, reading.maxMessage)
+			const error = await errorFromResponse(response, reading.limits)
 			if (shouldThrow) throw error
 			return { data: null, error: safeErrorValue(error), response: error.response, status: response.status }
 		}
 		if (reading.raw) return response
-		if (shouldThrow) return await parseBody(response, method, reading.declared)
+		const max = reading.limits?.maxResponseBytes
+		if (shouldThrow) return await parseBody(response, method, reading.declared, max)
 		try {
-			return success(await parseBody(response, method, reading.declared), response, reading.headers)
+			return success(await parseBody(response, method, reading.declared, max), response, reading.headers)
 		} catch (e) {
 			return { data: null, error: e, response, status: response.status }
 		}

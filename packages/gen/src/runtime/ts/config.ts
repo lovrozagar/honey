@@ -85,6 +85,12 @@ export type ClientConfig = {
 	headers?: HeadersInit
 	/** The most characters of a server's error message a ClientError carries. Default 512. */
 	maxErrorMessageChars?: number
+	/**
+	 * The most bytes a response body may hold, decoded, before its read is refused with a ClientError and the body
+	 * cancelled: it is read in the chunks it arrives in, never whole. Default 100 MiB. Streams are bounded by their
+	 * own per-event caps instead.
+	 */
+	maxResponseBytes?: number
 	mode?: RequestMode
 	/**
 	 * Called on a 401. Return a fresh token to retry the request once with it (and use it for later

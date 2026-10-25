@@ -1,8 +1,8 @@
 /**
  * A tool's result (bit 18 phase d, D1), from the TS SDK's safe-mode answer: JSON as text, and as structuredContent
- * when the tool has an outputSchema; text as text; bytes as image, audio or an embedded resource, past 1 MiB a note.
- * A failure is `isError`: an answer outside 2xx its status and error, no answer `transport` or `timeout`. Text is cut
- * past 100,000 characters, a note saying so.
+ * when the tool has an outputSchema; text as text; bytes as image, audio or an embedded resource. A failure is
+ * `isError`: an answer outside 2xx or a body the SDK refused (past 1 MiB) its status and error, no answer
+ * `transport` or `timeout`. Text is cut past 100,000 characters, a note saying so.
  */
 import type { ToolResult } from "./server.ts"
 
@@ -41,8 +41,6 @@ export const json = (value: unknown, isError?: true): ToolResult => text(JSON.st
 /** `bytes` of the media type `type` as the tool's content: an image, audio, or an embedded resource. */
 function bytesResult(bytes: Uint8Array, type: string, tool: string): ToolResult {
 	const mimeType = type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
-	if (bytes.byteLength > BYTES_MAX)
-		return text(`[${mimeType}, ${bytes.byteLength} bytes: past the ${BYTES_MAX}-byte cap]`)
 	const data = Buffer.from(bytes).toString("base64")
 	const kind = mimeType.split("/")[0]
 	return {

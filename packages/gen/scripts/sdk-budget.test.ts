@@ -8,6 +8,7 @@ import { generatePythonSdk, pythonCallPlans } from "../src/emit/python/sdk.ts"
 import { runtimeFileNames as pythonRuntimeFileNames } from "../src/emit/python/transport.ts"
 import { runtimeFileNames as rustRuntimeFileNames } from "../src/emit/rust/http.ts"
 import { generateRustSdk, rustCallPlans } from "../src/emit/rust/sdk.ts"
+import { RUNTIME_MODULES } from "../src/emit/ts/http.ts"
 import { generateSdk } from "../src/emit/ts/sdk.ts"
 import { ceilingOf, countTokens, oversizedOperations } from "./capture-token-budget.ts"
 import {
@@ -479,6 +480,26 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 		const { bytes, names, others } = runtimeBytes(runtimeDir("csharp"), ".cs")
 		expect({ names, others, over: Math.max(0, bytes - CSHARP_RUNTIME_BYTES) }).toEqual({
 			names: csharpRuntimeFileNames({ realtime: true, ws: true }),
+			others: [],
+			over: 0,
+		})
+	})
+})
+
+/*
+ * G14 (bit 11): the vendored TS runtime's bloat guard, in bytes on disk as shipped (00-rules:160), never string length,
+ * locked at its measured bytes. 105,547 B → 108,041 B, +2,494 B: the bounded body read (response.ts +2,252, config.ts
+ * +296, http.ts -54), every body read in its chunks and refused past maxResponseBytes, the bit 11/18 response cap.
+ * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
+ * feature bytes and cuts dead and duplicate code first; it is never silent.
+ */
+const TS_RUNTIME_BYTES = 108_041
+
+describe("the TS runtime within its byte budget (bit 11, G14)", () => {
+	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
+		const { bytes, names, others } = runtimeBytes(runtimeDir("ts"), ".ts")
+		expect({ names, others, over: Math.max(0, bytes - TS_RUNTIME_BYTES) }).toEqual({
+			names: RUNTIME_MODULES.map((name) => `${name}.ts`).sort(),
 			others: [],
 			over: 0,
 		})
