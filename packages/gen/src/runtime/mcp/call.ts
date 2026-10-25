@@ -2,12 +2,14 @@
  * A tool's call through the API's TS SDK (bit 18): each tool as tools.gen.ts describes it, bound to the SDK client in
  * safe mode. Its arguments pass guard.ts first, else nothing is sent. They go back into the SDK's input groups (each
  * parameter under its own name: path, query or header; the body as JSON, a form, base64-decoded bytes at most 1 MiB, or
- * text, a raw body under its content type), the SDK member the operation sits at is called, and its answer becomes the
- * tool's result as result.ts shapes it, scrubbed of the API key.
+ * text, a raw body under its content type), the SDK member the operation sits at is called with the session's abort,
+ * and its answer becomes the tool's result as result.ts shapes it, scrubbed of the API key; an event stream's, the
+ * collect stream.ts runs.
  */
 import { redactor, refusal } from "./guard.ts"
 import { type Answer, BYTES_MAX, failureOf, json, successOf, unanswered } from "./result.ts"
 import type { Tool } from "./server.ts"
+import { collected } from "./stream.ts"
 
 /** The SDK input group a parameter goes in. */
 export type Group = "params" | "search" | "headers"
@@ -27,6 +29,15 @@ export type ToolSpec = {
 	/** whether structuredContent wraps the answer as `{result, headers}` */
 	readonly wrap?: true
 	readonly annotations?: Record<string, boolean>
+	/** an event stream's collect: its `max_events` and `last_event_id` properties */
+	readonly collect?: readonly [max: string, lastEventId: string]
+}
+
+/** How tools call: the key to scrub, a call's bound in ms, and a collect's own client, whose answer runs `seen`. */
+export type Binding = {
+	readonly secret: string
+	readonly timeout: number
+	readonly opening: (seen: () => void) => SdkClient
 }
 
 /* canonical base64: whole quads, the last one padded */
@@ -67,20 +78,31 @@ function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown
 	return [owner, method]
 }
 
-/** `specs` as tools calling `client` (in safe mode), every result scrubbed of `secret`, the API key. */
-export function bindTools(specs: readonly ToolSpec[], client: SdkClient, secret = ""): Tool[] {
-	const scrub = redactor(secret)
+/** `specs` as tools calling `client` (in safe mode) as `binding` says, every result scrubbed of the API key. */
+export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding: Binding): Tool[] {
+	const scrub = redactor(binding.secret)
 	return specs.map((spec) => ({
-		call: async (args) => {
+		call: async (args, signal, progress) => {
 			const paths = spec.args.filter(([, group]) => group === "params").map(([property]) => property)
 			const input = refusal(spec.inputSchema, paths, args) ?? inputOf(spec, args)
 			if (typeof input === "string") return json(scrub({ message: input }), true)
-			const [owner, method] = methodAt(client, spec.member)
+			let opened = false
+			const [owner, method] = methodAt(spec.collect ? binding.opening(() => (opened = true)) : client, spec.member)
+			const send = (more: object) => (method as (input: unknown) => unknown).call(owner, { ...input, ...more })
 			try {
-				const answer = (await (method as (input: unknown) => Promise<unknown>).call(owner, input)) as Answer
+				if (spec.collect)
+					return await collected(spec.collect, args, send, {
+						opened: () => opened,
+						progress,
+						scrub,
+						signal,
+						timeout: binding.timeout,
+					})
+				const answer = (await send({ signal })) as Answer
 				return answer.status >= 200 && answer.status < 300 ? successOf(spec, answer, scrub) : failureOf(answer, scrub)
 			} catch (error) {
-				return unanswered(error, scrub)
+				const status = (error as { status?: unknown } | null)?.status
+				return typeof status === "number" ? failureOf({ data: null, error, status }, scrub) : unanswered(error, scrub)
 			}
 		},
 		...(spec.description === undefined ? {} : { description: spec.description }),

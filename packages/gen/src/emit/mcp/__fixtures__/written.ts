@@ -90,6 +90,81 @@ export function exchange(
 	})
 }
 
+/** A running server: lines sent as the test goes, each line it writes seen as it comes. */
+export type Live = {
+	readonly lines: readonly Record<string, unknown>[]
+	send(line: string | object): void
+	/** settles with the first line written, before or after, that `test` holds for */
+	seen(test: (line: Record<string, unknown>) => boolean): Promise<Record<string, unknown>>
+	/** closes its input; settles as `exchange` does once it exits */
+	close(): Promise<Exchanged>
+}
+
+/** `command` started, its input left open: a latch can wait on what it wrote before the next line goes. */
+export function live(command: readonly string[]): Live {
+	const [program, ...args] = command as [string, ...string[]]
+	const child = spawn(program, args, { stdio: ["pipe", "pipe", "pipe"] })
+	const lines: Record<string, unknown>[] = []
+	const waiting: [(line: Record<string, unknown>) => boolean, (line: Record<string, unknown>) => void][] = []
+	let out = ""
+	let stderr = ""
+	child.stdout.on("data", (chunk: Buffer) => {
+		out += chunk.toString()
+		for (let end = out.indexOf("\n"); end >= 0; end = out.indexOf("\n")) {
+			const text = out.slice(0, end)
+			/* a line that is not JSON is kept as it came, for a leg to see, never thrown inside the stream */
+			let line: Record<string, unknown>
+			try {
+				line = JSON.parse(text) as Record<string, unknown>
+			} catch {
+				line = { unparsed: text }
+			}
+			out = out.slice(end + 1)
+			lines.push(line)
+			for (const wait of waiting.filter(([test]) => test(line))) {
+				waiting.splice(waiting.indexOf(wait), 1)
+				wait[1](line)
+			}
+		}
+	})
+	child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()))
+	const exited = new Promise<number | null>((settle) => child.once("close", settle))
+	return {
+		close: async () => {
+			child.stdin.end()
+			return { replies: lines, status: await exited, stderr }
+		},
+		lines,
+		seen: (test) =>
+			new Promise((settle) => {
+				const found = lines.find(test)
+				if (found === undefined) waiting.push([test, settle])
+				else settle(found)
+			}),
+		send: (line) => void child.stdin.write(`${typeof line === "string" ? line : JSON.stringify(line)}\n`),
+	}
+}
+
+/** The id of the request `line` is, when it is one. */
+const requestId = (line: string | object): unknown => {
+	const message = (typeof line === "string" ? JSON.parse(line) : line) as { id?: unknown; method?: unknown }
+	return typeof message.method === "string" ? message.id : undefined
+}
+
+/** `command` run with `lines` sent one by one, each request only once the one before it was answered; then closed. */
+export async function exchangeEach(
+	command: readonly string[],
+	lines: readonly (string | object)[],
+): Promise<Exchanged> {
+	const server = live(command)
+	for (const line of lines) {
+		server.send(line)
+		const id = requestId(line)
+		if (id !== undefined) await server.seen((written) => written.id === id && !("method" in written))
+	}
+	return server.close()
+}
+
 /** A JSON-RPC request line. */
 export const request = (id: number, method: string, params?: object) => ({
 	id,

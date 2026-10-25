@@ -1,7 +1,10 @@
 /**
  * MCP's stdio transport (bit 18): each message one line of JSON on standard input, each reply one line on standard
- * output, nothing else ever written there; a line that is not JSON answered as a parse error. Replies go out in the
- * order the requests came. The session ends when standard input does, once every reply is written.
+ * output, nothing else ever written there; a line that is not JSON answered as a parse error. Each message is answered
+ * as it comes, so calls run side by side and a reply goes out when its call is done, matched by its id; a protocol
+ * fault answers at once, in the order it came. One writer writes each reply whole. The session ends when standard input
+ * does, once every reply is written, or when `stop` aborts: every call in flight is aborted with it and settles, and
+ * no reply after is written.
  */
 import { ErrorCode, failure, isId, type Message } from "./jsonrpc.ts"
 import type { Session } from "./server.ts"
@@ -15,31 +18,33 @@ export type Stdio = {
 /** The process's own standard input and output. */
 const processStdio = (): Stdio => ({ input: process.stdin, write: (line) => void process.stdout.write(line) })
 
-/** Serves `session` over `stdio` until its input ends; settles once the last reply is written. */
-export function serveStdio(session: Session, stdio: Stdio = processStdio()): Promise<void> {
+/** Serves `session` over `stdio` until its input ends or `stopped` aborts; settles once the last reply is written. */
+export function serveStdio(session: Session, stdio: Stdio = processStdio(), stopped?: AbortSignal): Promise<void> {
 	const stop = new AbortController()
 	let pending = ""
-	let queue = Promise.resolve()
-	const send = (reply: unknown) => stdio.write(`${JSON.stringify(reply)}\n`)
+	const inFlight = new Set<Promise<void>>()
+	const send = (reply: unknown) => void (stop.signal.aborted || stdio.write(`${JSON.stringify(reply)}\n`))
 	const take = (line: string) => {
 		let message: Message
 		try {
 			message = JSON.parse(line) as Message
 		} catch {
-			queue = queue.then(() => send(failure(null, ErrorCode.ParseError, "Parse error")))
-			return
+			/* through the queue the answers take, so a fault still answers in the order it came */
+			return void Promise.resolve().then(() => send(failure(null, ErrorCode.ParseError, "Parse error")))
 		}
-		queue = queue.then(async () => {
-			try {
-				const reply = await session.answer(message, stop.signal)
-				if (reply !== undefined) send(reply)
-			} catch {
-				/* a fault inside a handler answers its request, and the session goes on */
-				send(failure(isId(message.id) ? message.id : null, ErrorCode.InternalError, "Internal error"))
-			}
-		})
+		const answered: Promise<void> = session.answer(message, stop.signal, send).then(
+			(reply) => void (reply === undefined || send(reply)),
+			/* a fault inside a handler answers its request, and the session goes on */
+			() => send(failure(isId(message.id) ? message.id : null, ErrorCode.InternalError, "Internal error")),
+		)
+		inFlight.add(answered)
+		void answered.then(() => inFlight.delete(answered))
 	}
 	return new Promise((settle) => {
+		stopped?.addEventListener("abort", () => {
+			stop.abort()
+			void Promise.all(inFlight).then(() => settle())
+		})
 		stdio.input.setEncoding("utf8")
 		stdio.input.on("data", (chunk: string) => {
 			pending += chunk
@@ -51,7 +56,7 @@ export function serveStdio(session: Session, stdio: Stdio = processStdio()): Pro
 		})
 		stdio.input.on("end", () => {
 			if (pending.trim() !== "") take(pending.trim())
-			void queue.then(() => settle())
+			void Promise.all(inFlight).then(() => settle())
 		})
 	})
 }

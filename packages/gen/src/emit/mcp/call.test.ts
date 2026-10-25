@@ -9,7 +9,7 @@
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
-import { exchange, initialize, request, written } from "./__fixtures__/written.ts"
+import { exchange, exchangeEach, initialize, request, written } from "./__fixtures__/written.ts"
 import { generateMcpServer } from "./server.ts"
 
 const SLOW = { timeout: 120_000 }
@@ -85,7 +85,7 @@ async function called(
 	const dir = written(generateMcpServer(document).files)
 	return served(replies, async (server) => {
 		const lines = [initialize("2025-11-25"), ...calls.map((call, i) => request(i + 1, "tools/call", call))]
-		const ran = await exchange(["env", ...env(server.url), process.execPath, join(dir, "dist", "server.js")], lines)
+		const ran = await exchangeEach(["env", ...env(server.url), process.execPath, join(dir, "dist", "server.js")], lines)
 		return { hops: server.hops, results: ran.replies.slice(1).map((reply) => (reply as { result: unknown }).result) }
 	})
 }

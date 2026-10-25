@@ -7,7 +7,7 @@
 import type { ToolResult } from "./server.ts"
 
 /** The most characters a result's text holds. */
-const TEXT_MAX = 100_000
+export const TEXT_MAX = 100_000
 
 /** The most bytes a result or a body argument holds. */
 export const BYTES_MAX = 1 << 20

@@ -1,12 +1,13 @@
 /**
- * The MCP server's tools (bit 18 phases b and d): one per operation marked `x-mcp` that a tool call can make, in the IR's
+ * The MCP server's tools (bit 18 phases b, d and e): one per operation marked `x-mcp` that a tool call can make, in the IR's
  * order. A tool's name is its operation id in snake case, only `[A-Za-z0-9_-]`, at most 64 characters (the tool-use
  * APIs an MCP client maps a tool onto accept no more), a name taken already suffixed `_2`, `_3`, … after truncating, so
  * it still fits. Its description is the operation's description or summary, controls dropped. Its inputSchema is flat:
  * each path, query and header parameter a property under its own name (one taken already suffixed, as the CLI's flags
  * are), the body under `body`: JSON or a form as its schema, bytes as a base64 string (Q4), text as a string; a
  * credential header is never an argument, the server sending the API key itself. Its outputSchema and annotations are
- * output-schema.ts's and annotations.ts's. Event streams, sockets and multipart are no tools until their phases.
+ * output-schema.ts's and annotations.ts's. An event stream is a bounded collect, taking `max_events` (1 to 100, 20 by
+ * default) and `last_event_id` to resume after. Sockets are no tools, and multipart waits for bits/19.
  */
 import type { IR, IROperation, IRParam } from "../../ir/model.ts"
 import { isJsonMedia, isTextMedia, mediaEssence, sdkModel } from "../../ir/sdk-model.ts"
@@ -32,6 +33,8 @@ export type ToolSpec = {
 	/** whether structuredContent wraps the answer as `{result, headers}` */
 	readonly wrap?: true
 	readonly annotations?: Annotations
+	/** an event stream's collect: its `max_events` and `last_event_id` properties */
+	readonly collect?: readonly [max: string, lastEventId: string]
 }
 
 /** How a body argument is sent: JSON, a urlencoded form, base64-decoded bytes, or text as it is. */
@@ -62,9 +65,8 @@ function bodySchema(op: IROperation, field: BodyField, ir: IR): JsonSchema {
 	return jsonSchemaOf(op.body.schema, ir.schemas)
 }
 
-/** What `op` is that no tool serves yet, or undefined when a tool can: a stream, a socket, a multipart body. */
+/** What `op` is that no tool serves yet, or undefined when a tool can: a socket, a multipart body. */
 export function untoolable(op: IROperation): string | undefined {
-	if (op.extensions.sse === true) return "an event stream"
 	if (op.extensions.websocket === true) return "a WebSocket"
 	if (op.extensions.realtime === true) return "a realtime channel"
 	return bodyField(op) === null ? "a multipart body" : undefined
@@ -111,13 +113,24 @@ function inputOf(op: IROperation, ir: IR) {
 		if (op.body.required) required.push(property)
 		body = field === "bytes" || field === "text" ? [property, field, op.body.contentType] : [property, field]
 	}
+	let collect: ToolSpec["collect"]
+	if (op.extensions.sse === true) {
+		collect = [scope.claim("max_events"), scope.claim("last_event_id")]
+		properties[collect[0]] = {
+			type: "integer",
+			minimum: 1,
+			maximum: 100,
+			description: "The most events to collect, 1 to 100; 20 when omitted",
+		}
+		properties[collect[1]] = { type: "string", description: "Resume after this event id: a collect's last_event_id" }
+	}
 	const inputSchema: JsonSchema = {
 		type: "object",
 		properties,
 		...(required.length > 0 ? { required } : {}),
 		additionalProperties: false,
 	}
-	return { args, body, inputSchema }
+	return { args, body, collect, inputSchema }
 }
 
 /** Every tool the IR's operations make, in their order. */
@@ -126,7 +139,7 @@ export function toolsOf(ir: IR): ToolSpec[] {
 	const model = sdkModel(ir)
 	const taken = new Set<string>()
 	return ir.operations.filter(isTool).map((op) => {
-		const { args, body, inputSchema } = inputOf(op, ir)
+		const { args, body, collect, inputSchema } = inputOf(op, ir)
 		/* the SDK model holds every operation of the IR */
 		const sdkOp = model.opsById.get(op.id) as NonNullable<ReturnType<typeof model.opsById.get>>
 		const annotations = annotationsOf(sdkOp)
@@ -140,6 +153,7 @@ export function toolsOf(ir: IR): ToolSpec[] {
 			...(body === undefined ? {} : { body }),
 			...outputOf(sdkOp, ir),
 			...(annotations === undefined ? {} : { annotations }),
+			...(collect === undefined ? {} : { collect }),
 		}
 	})
 }

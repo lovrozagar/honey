@@ -2,7 +2,8 @@
  * The MCP server's protocol (bit 18): initialize negotiating a revision, ping, tools/list and tools/call, and a JSON-RPC
  * error for a protocol fault (a malformed request, an unknown method or tool, arguments that are not an object). A
  * tool's own failure is its result, `isError`, never a protocol error. Under 2025-03-26, which predates them, a tool's
- * outputSchema and a result's structuredContent are left out.
+ * outputSchema and a result's structuredContent are left out. A call whose request carries a progressToken may report
+ * its progress, each step a notifications/progress before its result.
  */
 import { ErrorCode, failure, type Id, isId, type Message, type Reply, result } from "./jsonrpc.ts"
 
@@ -26,14 +27,24 @@ export type Tool = {
 	readonly inputSchema: Record<string, unknown>
 	readonly outputSchema?: Record<string, unknown>
 	readonly annotations?: Record<string, boolean>
-	readonly call: (args: Record<string, unknown>, signal: AbortSignal) => Promise<ToolResult>
+	readonly call: (
+		args: Record<string, unknown>,
+		signal: AbortSignal,
+		progress: (done: number) => void,
+	) => Promise<ToolResult>
 }
 
 /** Who the server is, as initialize answers. */
 export type ServerInfo = { readonly name: string; readonly version: string }
 
 /** One session's protocol: the answer to each message, the revision fixed by initialize. */
-export type Session = { readonly answer: (message: Message, signal: AbortSignal) => Promise<Reply | undefined> }
+export type Session = {
+	readonly answer: (
+		message: Message,
+		signal: AbortSignal,
+		notify: (message: object) => void,
+	) => Promise<Reply | undefined>
+}
 
 /** The tools/list entry for `tool` under `version`. */
 function listed(tool: Tool, structured: boolean): Record<string, unknown> {
@@ -58,15 +69,31 @@ export function createSession(info: ServerInfo, tools: readonly Tool[]): Session
 	const byName = new Map(tools.map((tool) => [tool.name, tool]))
 	let version: string = PROTOCOL_VERSIONS[0]
 	const structured = () => version >= STRUCTURED_SINCE
-	const call = async (id: Id, params: Record<string, unknown>, signal: AbortSignal) => {
+	/* a fault returns at once, not through a promise, so it answers in the order it came */
+	const call = (
+		id: Id,
+		params: Record<string, unknown>,
+		signal: AbortSignal,
+		notify: (message: object) => void,
+	): Reply | Promise<Reply> => {
 		const tool = typeof params.name === "string" ? byName.get(params.name) : undefined
 		if (tool === undefined) return failure(id, ErrorCode.InvalidParams, `Unknown tool: ${String(params.name)}`)
 		const args = params.arguments ?? {}
 		if (typeof args !== "object" || args === null || Array.isArray(args))
 			return failure(id, ErrorCode.InvalidParams, "Tool arguments must be an object")
-		return result(id, shaped(await tool.call(args as Record<string, unknown>, signal), structured()))
+		const token = (params._meta as { progressToken?: unknown } | undefined)?.progressToken
+		const progress = (done: number) =>
+			(typeof token === "string" || typeof token === "number") &&
+			notify({ jsonrpc: "2.0", method: "notifications/progress", params: { progress: done, progressToken: token } })
+		return tool
+			.call(args as Record<string, unknown>, signal, progress)
+			.then((outcome) => result(id, shaped(outcome, structured())))
 	}
-	const answer = async (message: Message, signal: AbortSignal): Promise<Reply | undefined> => {
+	const answer = async (
+		message: Message,
+		signal: AbortSignal,
+		notify: (message: object) => void,
+	): Promise<Reply | undefined> => {
 		if (message.jsonrpc !== "2.0" || typeof message.method !== "string")
 			return failure(isId(message.id) ? message.id : null, ErrorCode.InvalidRequest, "Invalid Request")
 		if (!isId(message.id)) return undefined
@@ -85,7 +112,7 @@ export function createSession(info: ServerInfo, tools: readonly Tool[]): Session
 			case "tools/list":
 				return result(message.id, { tools: tools.map((tool) => listed(tool, structured())) })
 			case "tools/call":
-				return call(message.id, params, signal)
+				return call(message.id, params, signal, notify)
 			default:
 				return failure(message.id, ErrorCode.MethodNotFound, `Method not found: ${message.method}`)
 		}

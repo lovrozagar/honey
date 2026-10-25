@@ -36,9 +36,21 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *   - call.ts +632: a raw body argument (base64-decoded bytes at most 1 MiB, or text, under its content type), the
  *     safe-mode answer routed to result.ts, outputSchema and annotations listed;
  *   provisional 23,400.
+ * - phase e, +6,172 B to 29,471 B:
+ *   - stream.ts 3,151: an event stream's bounded collect (end, max_events, the 100,000-character cap, the call's
+ *     timeout from its start as one AbortSignal), last_event_id to resume, each event a progress step, a cut a success
+ *     and a never-opened stream a timeout;
+ *   - call.ts +1,017: an SSE tool dispatched to the collect on a client of its own whose answer says it opened, the
+ *     session's abort on every call, a stream refused outside 2xx its failure, the binding;
+ *   - server.ts +767: notifications/progress for a call carrying a progressToken; a fault answered at once, a tool's
+ *     call through its promise;
+ *   - stdio.ts +662: every message answered as it comes, calls side by side, one writer; a stop signal aborting every
+ *     call in flight, settling once they have, no later reply written;
+ *   - guard.ts +568: minimum and maximum (max_events 1 to 100); result.ts +7 (TEXT_MAX exported);
+ *   provisional 29,500.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 23400
+const MCP_RUNTIME_BYTES = 29500
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

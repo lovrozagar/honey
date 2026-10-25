@@ -30,7 +30,7 @@ const { generateMcpServer } = (await import(
 const { literal } = (await import(
 	resolve(REPO, "packages/gen/src/emit/mcp/literal.ts")
 )) as typeof import("../../src/emit/mcp/literal.ts")
-const { exchange, initialize, request, written } = (await import(
+const { exchangeEach, initialize, request, written } = (await import(
 	resolve(REPO, "packages/gen/src/emit/mcp/__fixtures__/written.ts")
 )) as typeof import("../../src/emit/mcp/__fixtures__/written.ts")
 const { failures } = (await import(
@@ -91,7 +91,7 @@ async function vaultRun(lines: readonly (string | object)[], replies: readonly R
 	const dir = written(generateMcpServer(vault).files)
 	return served(replies, async (server) => {
 		const command = ["env", `VAULT_BASE_URL=${server.url}`, ...env, process.execPath, join(dir, "dist", "server.js")]
-		const ran = await exchange(command, [initialize("2025-11-25"), ...lines])
+		const ran = await exchangeEach(command, [initialize("2025-11-25"), ...lines])
 		return { hops: server.hops, replies: ran.replies.slice(1), stderr: ran.stderr }
 	})
 }

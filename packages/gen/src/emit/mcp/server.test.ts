@@ -47,7 +47,9 @@ describe("the package's files (phase a)", () => {
 			version: "1.2.0",
 		})
 	})
+})
 
+describe("the entry (phases a–e)", () => {
 	// v0: e2c533b3fe
 	it("writes the entry: the SDK client by the environment, the key as the API's scheme says, the tools served over stdio", () => {
 		const files = generateMcpServer(document()).files
@@ -56,7 +58,8 @@ describe("the package's files (phase a)", () => {
 
 // The shop MCP server: its tools over stdio, for the MCP client that starts it. The API key is
 // $SHOP_API_KEY, sent as the API's scheme says; the API is at $SHOP_BASE_URL, else its first server, and
-// with neither it refuses to start. A call waits $SHOP_TIMEOUT_MS milliseconds at most, 30 s by default.
+// with neither it refuses to start. A call waits $SHOP_TIMEOUT_MS milliseconds at most, 30 s by default, an
+// event stream's collect too. SIGINT and SIGTERM abort every call in flight and exit 0, no later reply written.
 import { bindTools, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { toolSpecs } from "./tools.gen"
@@ -72,14 +75,26 @@ if (baseURL === "") {
 	process.stderr.write("No API to call: set $SHOP_BASE_URL, since the API names no server\\n")
 	process.exit(1)
 }
-const client = new Api({
+const config = {
 	baseURL,
 	headers: key === "" ? {} : { "Authorization": "Bearer " + key },
 	throwOnError: false,
 	timeout: Number(timeout),
-})
+}
+const client = new Api(config)
+/* a collect's own client: its answer tells that collect its stream opened */
+const opening = (seen: () => void) => new Api({ ...config, onResponse: [() => void seen()] })
+const stop = new AbortController()
+for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abort())
 
-void serveStdio(createSession({ name: "shop", version: "1.2.0" }, bindTools(toolSpecs, client, key)))
+void serveStdio(
+	createSession(
+		{ name: "shop", version: "1.2.0" },
+		bindTools(toolSpecs, client, { opening, secret: key, timeout: Number(timeout) }),
+	),
+	undefined,
+	stop.signal,
+).then(() => stop.signal.aborted && process.stdout.write("", () => process.exit(0)))
 `,
 			'{\n\t"type": "commonjs"\n}\n',
 		])
@@ -173,7 +188,8 @@ const pkg = (doc: Record<string, unknown>) =>
 	JSON.parse(generateMcpServer(doc).files["package.json"] as string) as { name: string; version: string }
 
 describe("what no tool serves yet (phase d)", () => {
-	it("names each operation marked x-mcp that no tool serves, and what it is: a stream, a socket, a multipart body", () => {
+	// v0: 3663ef7b8a
+	it("names each operation marked x-mcp that no tool serves, and what it is: a socket, a multipart body", () => {
 		const marked = (id: string, more: Record<string, unknown>) => ({
 			operationId: id,
 			responses: OK,
@@ -195,7 +211,6 @@ describe("what no tool serves yet (phase d)", () => {
 		}
 		expect(generateMcpServer({ ...document(), paths }).skipped).toEqual([
 			"chat.open (a WebSocket)",
-			"events.watch (an event stream)",
 			"live.join (a realtime channel)",
 			"upload.send (a multipart body)",
 			"files.send (a multipart body)",

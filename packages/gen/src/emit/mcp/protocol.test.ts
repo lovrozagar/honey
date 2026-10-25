@@ -63,7 +63,7 @@ describe("the tools under each revision (phase a)", SLOW, () => {
 })
 
 describe("protocol faults (phase a)", SLOW, () => {
-	it("answers each with its JSON-RPC error, a notification with nothing, and goes on after each, in order", async () => {
+	it("answers each with its JSON-RPC error, a notification with nothing, and goes on after each; each fault in order", async () => {
 		const replies = await session("2025-11-25", [
 			"not json",
 			{ id: 1, method: "ping" },
@@ -74,14 +74,19 @@ describe("protocol faults (phase a)", SLOW, () => {
 			{ jsonrpc: "2.0", method: "notifications/initialized" },
 			request(6, "ping"),
 		])
-		expect(replies.slice(1)).toEqual([
-			{ error: { code: -32700, message: "Parse error" }, id: null, jsonrpc: "2.0" },
-			{ error: { code: -32600, message: "Invalid Request" }, id: 1, jsonrpc: "2.0" },
-			{ error: { code: -32601, message: "Method not found: nope" }, id: 2, jsonrpc: "2.0" },
-			{ error: { code: -32602, message: "Unknown tool: missing" }, id: 3, jsonrpc: "2.0" },
-			{ error: { code: -32602, message: "Tool arguments must be an object" }, id: 4, jsonrpc: "2.0" },
-			{ error: { code: -32603, message: "Internal error" }, id: 5, jsonrpc: "2.0" },
-			{ id: 6, jsonrpc: "2.0", result: {} },
+		/* a handler's own fault answers once its call is done, so it is matched by id; the protocol faults keep their order */
+		const faulted = { error: { code: -32603, message: "Internal error" }, id: 5, jsonrpc: "2.0" }
+		const rest = replies.slice(1).filter((reply) => (reply as { id?: unknown }).id !== 5)
+		expect([replies.slice(1).filter((reply) => (reply as { id?: unknown }).id === 5), rest]).toEqual([
+			[faulted],
+			[
+				{ error: { code: -32700, message: "Parse error" }, id: null, jsonrpc: "2.0" },
+				{ error: { code: -32600, message: "Invalid Request" }, id: 1, jsonrpc: "2.0" },
+				{ error: { code: -32601, message: "Method not found: nope" }, id: 2, jsonrpc: "2.0" },
+				{ error: { code: -32602, message: "Unknown tool: missing" }, id: 3, jsonrpc: "2.0" },
+				{ error: { code: -32602, message: "Tool arguments must be an object" }, id: 4, jsonrpc: "2.0" },
+				{ id: 6, jsonrpc: "2.0", result: {} },
+			],
 		])
 	})
 

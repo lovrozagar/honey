@@ -51,7 +51,8 @@ const entrySource = (app: { name: string; version: string; envPrefix: string }, 
 
 // The ${app.name} MCP server: its tools over stdio, for the MCP client that starts it. The API key is
 // $${app.envPrefix}_API_KEY, sent as the API's scheme says; the API is at $${app.envPrefix}_BASE_URL, else its first server, and
-// with neither it refuses to start. A call waits $${app.envPrefix}_TIMEOUT_MS milliseconds at most, 30 s by default.
+// with neither it refuses to start. A call waits $${app.envPrefix}_TIMEOUT_MS milliseconds at most, 30 s by default, an
+// event stream's collect too. SIGINT and SIGTERM abort every call in flight and exit 0, no later reply written.
 import { bindTools, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { toolSpecs } from "./tools.gen"
@@ -67,14 +68,26 @@ if (baseURL === "") {
 	process.stderr.write(${tsString(`No API to call: set $${app.envPrefix}_BASE_URL, since the API names no server\n`)})
 	process.exit(1)
 }
-const client = new Api({
+const config = {
 	baseURL,
 	headers: key === "" ? {} : { ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
 	throwOnError: false,
 	timeout: Number(timeout),
-})
+}
+const client = new Api(config)
+/* a collect's own client: its answer tells that collect its stream opened */
+const opening = (seen: () => void) => new Api({ ...config, onResponse: [() => void seen()] })
+const stop = new AbortController()
+for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abort())
 
-void serveStdio(createSession({ name: ${tsString(app.name)}, version: ${tsString(app.version)} }, bindTools(toolSpecs, client, key)))
+void serveStdio(
+	createSession(
+		{ name: ${tsString(app.name)}, version: ${tsString(app.version)} },
+		bindTools(toolSpecs, client, { opening, secret: key, timeout: Number(timeout) }),
+	),
+	undefined,
+	stop.signal,
+).then(() => stop.signal.aborted && process.stdout.write("", () => process.exit(0)))
 `
 
 /** tools.gen.ts: every tool's spec, as data the runtime binds to the SDK client. */

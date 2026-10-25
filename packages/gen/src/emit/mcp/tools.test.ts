@@ -31,7 +31,7 @@ const op = (operationId: string, more: Record<string, unknown> = {}) => ({
 describe("which operations are tools (phase b)", () => {
 	// v0: c22e287e6e
 	// v0: 787e53db6d
-	it("makes one of each operation marked x-mcp a tool can call, in the IR's order; no stream, socket or multipart", () => {
+	it("makes one of each operation marked x-mcp a tool can call, in the IR's order; no socket or multipart; an event stream a collect", () => {
 		const listed = tools({
 			"/a": { get: op("a.list"), post: op("a.create", { requestBody: json({ type: "object" }) }) },
 			"/b": { get: { operationId: "b.list", responses: OK } },
@@ -68,6 +68,7 @@ describe("which operations are tools (phase b)", () => {
 		expect(listed.map((tool) => [tool.name, tool.member, tool.body?.slice(1)])).toEqual([
 			["a_list", ["a", "list"], undefined],
 			["a_create", ["a", "create"], ["json"]],
+			["events_watch", ["events", "watch"], undefined],
 			["upload_send", ["upload", "send"], ["bytes", "application/octet-stream"]],
 			["text_send", ["text", "send"], ["text", "text/plain"]],
 			["png_send", ["png", "send"], ["bytes", "image/png"]],

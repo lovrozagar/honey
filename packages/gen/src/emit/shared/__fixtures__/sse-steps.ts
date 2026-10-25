@@ -1,7 +1,7 @@
 /**
  * The recording server's event streams (stream-server.ts holds the stage they run on, and the
  * WebSockets): a reply's `sse` script written step by step, each step flushed as it comes. A step is
- * raw text, raw bytes or a pause: JS strings cannot split a UTF-8 sequence across two writes, so a
+ * raw text, raw bytes, a pause, or a latch the test opens: JS strings cannot split a UTF-8 sequence across two writes, so a
  * `bytes` step carries the bytes themselves (base64), and a parser's split-sequence case is
  * expressible.
  */
@@ -9,8 +9,13 @@ import type { ServerResponse } from "node:http"
 import { constants, createDeflate, createGzip } from "node:zlib"
 import type { Stage, StreamRecord } from "./stream-server.ts"
 
-/** Raw text, written and flushed as given (CRLF, CR, a BOM, half an event); raw bytes, base64; or a pause. */
-export type SseStep = string | { readonly bytes: string } | { readonly waitMs: number }
+/** Raw text, written and flushed as given (CRLF, CR, a BOM, half an event); raw bytes, base64; a pause; or a latch. */
+export type SseStep =
+	| string
+	| { readonly bytes: string }
+	| { readonly waitMs: number }
+	/* the next step waits until the test's latch opens: a client's own signal, never a timer */
+	| { readonly after: () => Promise<unknown> }
 
 /**
  * An event stream: chunked, no content-length, `text/event-stream` unless `contentType`. Its end:
@@ -48,6 +53,7 @@ function sinkOf(res: ServerResponse, encoding: SseScript["encoding"]): Sink {
 /** `step` into `sink`: its text or bytes written, resolving once they left; a pause on `stage`. */
 async function written(sink: Sink, step: SseStep, stage: Stage): Promise<void> {
 	if (typeof step !== "string" && "waitMs" in step) return void (await stage.wait(step.waitMs))
+	if (typeof step !== "string" && "after" in step) return void (await step.after())
 	await sink.write(typeof step === "string" ? step : Buffer.from(step.bytes, "base64"))
 }
 

@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs"
 
 /** The runtime modules under `runtime/mcp`, each after the ones it imports. */
-export const MCP_RUNTIME: readonly string[] = ["jsonrpc", "server", "stdio", "guard", "result", "call"]
+export const MCP_RUNTIME: readonly string[] = ["jsonrpc", "server", "stdio", "guard", "result", "stream", "call"]
 
 /* an import of a sibling runtime module, on one line or several */
 const SIBLING_IMPORT = /^import\s+(?:type\s+)?\{[^}]*\}\s+from\s+"\.\/[\w-]+\.ts"\n/gm

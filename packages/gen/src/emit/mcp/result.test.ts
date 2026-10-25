@@ -11,7 +11,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { clientCheck, withClients } from "./__fixtures__/clients.ts"
-import { exchange, initialize, request, written } from "./__fixtures__/written.ts"
+import { exchange, exchangeEach, initialize, request, written } from "./__fixtures__/written.ts"
 import { generateMcpServer } from "./server.ts"
 
 const SLOW = { timeout: 120_000 }
@@ -71,7 +71,7 @@ async function run(
 			...calls.map(([name, args], i) => request(i + 1, "tools/call", { arguments: args ?? {}, name })),
 		]
 		const command = ["env", `MEDIA_BASE_URL=${server.url}`, ...env, process.execPath, join(dir, "dist", "server.js")]
-		const ran = await exchange(command, lines)
+		const ran = await exchangeEach(command, lines)
 		const results = ran.replies.slice(1).map((reply) => (reply as { result: Record<string, unknown> }).result)
 		return { bodies: server.bodies, hops: server.hops, results, server: server.url }
 	})

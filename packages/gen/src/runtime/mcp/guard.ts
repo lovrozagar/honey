@@ -18,6 +18,8 @@ type Schema = {
 	readonly items?: Schema | false
 	readonly prefixItems?: readonly Schema[]
 	readonly minItems?: number
+	readonly minimum?: number
+	readonly maximum?: number
 }
 
 /** `key` under the path `at`. */
@@ -77,11 +79,23 @@ function ownInvalid(schema: Schema, value: unknown, type: string, at: string): s
 	return undefined
 }
 
+/** Why the number `value` falls outside `schema`'s minimum or maximum. */
+function rangeInvalid(schema: Schema, value: unknown, where: string): string | undefined {
+	if (typeof value !== "number") return undefined
+	if (schema.minimum !== undefined && value < schema.minimum) return `${where} must be at least ${schema.minimum}`
+	return schema.maximum !== undefined && value > schema.maximum
+		? `${where} must be at most ${schema.maximum}`
+		: undefined
+}
+
 /** Why `value`, at `at`, fails `schema`; undefined when it conforms. */
 function invalid(schema: Schema, value: unknown, at: string): string | undefined {
 	const type = typeOf(value)
 	const where = at || "arguments"
-	const own = ownInvalid(schema, value, type, at) ?? schema.allOf?.map((one) => invalid(one, value, at)).find(Boolean)
+	const own =
+		ownInvalid(schema, value, type, at) ??
+		rangeInvalid(schema, value, at || "arguments") ??
+		schema.allOf?.map((one) => invalid(one, value, at)).find(Boolean)
 	if (own || (type !== "array" && type !== "object")) return own
 	return type === "array"
 		? itemsInvalid(schema, value as unknown[], where)

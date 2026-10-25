@@ -7,7 +7,9 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import type { IRSchema } from "../../ir/model.ts"
+import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import { jsonSchemaOf, NODE_BUDGET } from "./schema.ts"
+import { toolsOf } from "./tools.ts"
 
 const STR: IRSchema = { kind: "scalar", type: "string" }
 
@@ -182,7 +184,29 @@ function keywords(schema: Record<string, unknown>): string[] {
 
 describe("the runtime's argument check (phase c)", () => {
 	it("is given no keyword it does not check: every one emitted is checked or an annotation, every one checked emitted", () => {
-		const emitted = Object.values(EVERY_KIND).flatMap((schema) => keywords(jsonSchemaOf(schema, { S: STR })))
+		/* and what tools.ts writes beside schema.ts: an event stream's max_events and last_event_id */
+		const stream = toIR(
+			{
+				info: { title: "S", version: "1" },
+				openapi: "3.1.0",
+				paths: {
+					"/e": {
+						get: {
+							operationId: "e.watch",
+							responses: {
+								200: { content: { "text/event-stream": { schema: { type: "string" } } }, description: "e" },
+							},
+							"x-mcp": true,
+						},
+					},
+				},
+			} as unknown as OpenApiDocument,
+			{ deriveOperationIds: true },
+		)
+		const emitted = [
+			...Object.values(EVERY_KIND).flatMap((schema) => keywords(jsonSchemaOf(schema, { S: STR }))),
+			...toolsOf(stream).flatMap((tool) => keywords(tool.inputSchema)),
+		]
 		const guard = readFileSync(new URL("../../runtime/mcp/guard.ts", import.meta.url), "utf8")
 		const block = /\ntype Schema = \{\n([^}]*)\n\}/.exec(guard)?.[1] ?? ""
 		const checked = [...block.matchAll(/^\treadonly (\w+)\?:/gm)].map((match) => match[1])
