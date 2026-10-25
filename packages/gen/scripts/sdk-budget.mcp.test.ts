@@ -1,11 +1,21 @@
 /**
- * The generated MCP server's budgets (bit 18): the vendored MCP runtime's bytes on disk (the G14 analog), measured,
- * every file named. Its per-tool and per-app token ceilings join at phase g, read from the running server's tools/list.
+ * The generated MCP server's budgets (bit 18): the vendored MCP runtime's bytes on disk (the G14 analog), locked at
+ * the close, every file named; and the tokens an agent reads of each e2e app's tools (H6), read from what its running
+ * server answers to tools/list.
  */
-import { resolve } from "node:path"
+import { readFileSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import { exchange, initialize, request, written } from "../src/emit/mcp/__fixtures__/written.ts"
 import { MCP_RUNTIME } from "../src/emit/mcp/runtime.ts"
+import { generateMcpServer } from "../src/emit/mcp/server.ts"
+import { toolsOf } from "../src/emit/mcp/tools.ts"
+import { type OpenApiDocument, toIR } from "../src/ir/build.ts"
+import { ceilingOf, countTokens, markAllMcp } from "./capture-token-budget.ts"
 import { runtimeBytes } from "./sdk-budget.ts"
+
+const REPO = resolve(import.meta.dirname, "../../..")
+const SLOW = { timeout: 120_000 }
 
 /*
  * G14 analog (bit 18), provisional until the close locks it at the exact measured bytes:
@@ -51,9 +61,11 @@ import { runtimeBytes } from "./sdk-budget.ts"
  * - phase f, +178 B to 29,649 B: the status the API answered in a result's `_meta` (honey/status), observable to the
  *   conformance harness and to any client reading it: call.ts +136 (the spread on both answered paths), server.ts +42
  *   (ToolResult's `_meta`); provisional 29,700.
+ * - phase g, no runtime change. The lock: nothing dead to cut, so the ceiling is the measured 29,649 B, provisional
+ *   29,700 → locked 29,649.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 29700
+const MCP_RUNTIME_BYTES = 29649
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -64,4 +76,70 @@ describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () =
 			over: 0,
 		})
 	})
+})
+
+/** What an agent reads of an MCP server, in o200k tokens: its whole tools/list answer, and its largest tool. */
+type Tools = { readonly total: number; readonly largest: number }
+
+/*
+ * H6 (bit 18 phase g): the MCP server's own ceilings, each app's own, at ceilingOf(measured, 0.2). Measured from each
+ * e2e app's running server (tools/list over stdio, the answer as it is written), every operation opted in by
+ * markAllMcp. A list over its ceiling is fixed in the emitter or the schema, never by raising the ceiling; a raise names
+ * the feature that adds the tokens.
+ */
+const MEASURED: Readonly<Record<string, Tools>> = {
+	compose: { largest: 72, total: 363 },
+	defaults: { largest: 51, total: 127 },
+	gateway: { largest: 141, total: 367 },
+	kitchen: { largest: 71, total: 627 },
+	surface: { largest: 205, total: 2110 },
+}
+const TOKEN_HEADROOM = 0.2
+
+/** An e2e app's emitted OpenAPI document, every operation opted into the MCP server. */
+const appSpec = (app: string) =>
+	markAllMcp(
+		JSON.parse(readFileSync(join(REPO, `packages/core/tests/e2e/apps/${app}/src/_gen/openapi.gen.json`), "utf8")) as {
+			paths?: Record<string, Record<string, unknown>>
+		},
+	) as Record<string, unknown>
+
+/** `app`'s server run: what tools/list answers, measured, beside what the emitter wrote and what it skipped. */
+async function toolsOfApp(app: string) {
+	const document = appSpec(app)
+	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
+	const server = generateMcpServer(document, { envPrefix: "APP", name: "app" })
+	const dir = written(server.files)
+	const ran = await exchange(
+		["env", "APP_BASE_URL=http://127.0.0.1:9", process.execPath, join(dir, "dist", "server.js")],
+		[initialize("2025-11-25"), request(1, "tools/list")],
+	)
+	const answer = (ran.replies[1] as { result: { tools: Record<string, unknown>[] } }).result
+	const measured: Tools = {
+		largest: Math.max(...answer.tools.map((tool) => countTokens(JSON.stringify(tool)))),
+		total: countTokens(JSON.stringify(answer)),
+	}
+	return {
+		emitted: toolsOf(ir).map((tool) => tool.name),
+		listed: answer.tools.map((tool) => tool.name),
+		measured,
+		operations: ir.operations.length,
+		skipped: server.skipped.length,
+	}
+}
+
+describe("the MCP server's tokens within each app's ceilings (bit 18 phase g, H6)", SLOW, () => {
+	it.each(Object.keys(MEASURED))(
+		"keeps %s's tools/list and its largest tool within ceilingOf(measured, 0.2)",
+		async (app) => {
+			const { emitted, listed, measured, operations, skipped } = await toolsOfApp(app)
+			const pinned = MEASURED[app] as Tools
+			/* completeness: every operation a tool listed or a skip named, so none can pass by going unread */
+			expect({ accounted: listed.length + skipped, listed }).toEqual({ accounted: operations, listed: emitted })
+			expect({
+				largest: measured.largest <= ceilingOf([pinned.largest], TOKEN_HEADROOM) && measured.largest > 0,
+				total: measured.total <= ceilingOf([pinned.total], TOKEN_HEADROOM) && measured.total > 0,
+			}).toEqual({ largest: true, total: true })
+		},
+	)
 })

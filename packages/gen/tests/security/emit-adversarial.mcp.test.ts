@@ -33,6 +33,10 @@ const { literal } = (await import(
 const { exchangeEach, initialize, request, written } = (await import(
 	resolve(REPO, "packages/gen/src/emit/mcp/__fixtures__/written.ts")
 )) as typeof import("../../src/emit/mcp/__fixtures__/written.ts")
+const { toolsOf } = (await import(
+	resolve(REPO, "packages/gen/src/emit/mcp/tools.ts")
+)) as typeof import("../../src/emit/mcp/tools.ts")
+const { toIR } = (await import(resolve(REPO, "packages/gen/src/ir/build.ts"))) as typeof import("../../src/ir/build.ts")
 const { failures } = (await import(
 	resolve(REPO, "packages/gen/src/emit/shared/__fixtures__/escape-oracle.ts")
 )) as typeof import("../../src/emit/shared/__fixtures__/escape-oracle.ts")
@@ -199,7 +203,48 @@ describe("gen adversarial: spec text in tools.gen.ts (F2)", () => {
 		const named = ["__proto__", "constructor", "\u2028", "\u2029", "\uFEFF", "\0", "\uD800", '"; process.exit(1); "']
 		expect([named.map(literalProblem), failures(41, literalProblem, 2_000)]).toEqual([named.map(() => null), []])
 	})
+
+	it("writes every tool the emitter made from a hostile description and id as it made it, a name clients accept, over the F2 fuzz", () => {
+		const named = ['"; process.exit(1); "', "*/ evil /*", "\u2028\u2029", "${x}", "__proto__", "a".repeat(80), "\uD800"]
+		expect([named.map(toolProblem), failures(43, toolProblem, 500)]).toEqual([named.map(() => null), []])
+	})
 })
+
+/* the tool names the tool-use APIs an MCP client maps a tool onto accept (Q3) */
+const TOOL_NAME = /^[A-Za-z0-9_-]{1,64}$/
+
+/**
+ * Why `text`, as an operation's description and its id, does not reach tools.gen.ts as the emitter made the tool: a
+ * raw separator in the source, a name a client would refuse, or the tool reading back otherwise. An id the IR refuses
+ * makes no tool, so it has no problem here. As it made it is the shared escape's own: an unpaired surrogate U+FFFD.
+ */
+function toolProblem(text: string): string | null {
+	const document = {
+		info: { title: "F", version: "1" },
+		openapi: "3.1.0",
+		paths: {
+			"/f": {
+				get: { description: text, operationId: text, responses: { 204: { description: "none" } }, "x-mcp": true },
+			},
+		},
+	}
+	let tools: ReturnType<typeof toolsOf>
+	try {
+		tools = toolsOf(toIR(document as never, { deriveOperationIds: true }))
+	} catch {
+		return null
+	}
+	const source = literal(tools)
+	const raw = RAW.find((point) => source.includes(point))
+	if (raw !== undefined) return `raw U+${raw.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0")}`
+	if (!tools.every((tool) => TOOL_NAME.test(tool.name)))
+		return `a name clients refuse: ${tools.map((tool) => tool.name).join()}`
+	/* as the emitter made it under the shared escape's own policy: each unpaired surrogate U+FFFD */
+	const made = JSON.parse(JSON.stringify(tools), (_, value: unknown) =>
+		typeof value === "string" ? value.toWellFormed() : value,
+	) as unknown
+	return JSON.stringify(runInNewContext(`(${source})`)) === JSON.stringify(made) ? null : "it reads back otherwise"
+}
 
 /** The key every form of which must stay out of the server's answers: a space, a slash, a plus, quotes. */
 const KEY = 'k3y/+& "s3cret"'
