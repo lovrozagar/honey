@@ -436,9 +436,11 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * Counted: the 25 runtime .py files (85,372 B at bit 14's phase e: phase d cut every private-helper docstring,
  * 5,839 B, to fit; phase e's case-insensitive header fold added 178 B). The directory holds nothing else. No
  * runtime file goes unshipped (dead code). A raise names its feature bytes and cuts dead and duplicate code
- * first; it is never silent.
+ * first; it is never silent. Bit 19 b1, +280 over the gate to 85,692 B: exchange.py +320, the header check
+ * (a non-token name and any control but tab in a value refused as ConfigError naming the header; it was CR/LF/NUL
+ * only, so \u0001 and DEL went out), the token and control patterns and `import re` its only bytes.
  */
-const PYTHON_RUNTIME_BYTES = 85_412
+const PYTHON_RUNTIME_BYTES = 85_692
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -472,7 +474,13 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * time (Q-e4: the clock read from construction logged request_start at up to 54 ms on a cold first call under load);
  * Log has no dead member to cut.
  */
-const CSHARP_RUNTIME_BYTES = 129_851
+/*
+ * Bit 19 b1, +756 B to 130,607 B: the header check every request and WebSocket dial passes (Wire.Check: a non-token
+ * name or a control but tab in a value refused as ConfigException naming the header; a bad name was silently
+ * dropped by TryAddWithoutValidation and \u0001 and DEL went out raw). Wire.cs +939 (the check and its token set),
+ * Exchange.cs -212 (its CR/LF/NUL loop cut: Wire.Check covers it), WsDial.cs +29 (the dial's call).
+ */
+const CSHARP_RUNTIME_BYTES = 130_607
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {
@@ -490,10 +498,13 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * G14 (bit 11): the vendored TS runtime's bloat guard, in bytes on disk as shipped (00-rules:160), never string length,
  * locked at its measured bytes. 105,547 B → 108,041 B, +2,494 B: the bounded body read (response.ts +2,252, config.ts
  * +296, http.ts -54), every body read in its chunks and refused past maxResponseBytes, the bit 11/18 response cap.
+ * Bit 19 b1, +740 B to 108,781 B: the header check (headerValue: a non-token name or a control but tab in a value
+ * refused as a TypeError naming the header, before Node's Headers can quote the value or Bun send it raw), in
+ * request.ts's headersOf, which the header assembly moved into: request.ts +1,354, http.ts -614.
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 108_041
+const TS_RUNTIME_BYTES = 108_781
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

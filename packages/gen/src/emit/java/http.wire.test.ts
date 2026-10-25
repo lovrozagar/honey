@@ -167,6 +167,25 @@ describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectio
 	})
 })
 
+describe.skipIf(!JAVA)("bit 19 b1: a bomb for every encoding the SDK offers", SLOW, () => {
+	/* gzip's bombs are R8's legs; deflate, the other encoding offered, gets its own */
+	it("a deflate bomb (64 MiB streamed) past a 1 MiB cap is ApiConnectionException at the cap, observed null", async () => {
+		const reply: Reply = {
+			bytes: 64 * MIB,
+			deflate: true,
+			headers: { "content-type": "application/json" },
+			status: 200,
+		}
+		const run = await served([reply], (server) =>
+			runOn(server.url, [ECHO], { script: { config: { maxResponseBytes: MIB } } }),
+		)
+		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
+			error: capped(MIB),
+			observed: [null],
+		})
+	})
+})
+
 describe.skipIf(!JAVA)("R1: the exchange is HTTP/1.1 only", SLOW, () => {
 	/* pin: c1's Flight pins every request to HTTP_1_1, so no h2c upgrade is offered */
 	it("no Upgrade, HTTP2-Settings or Connection: Upgrade header reaches the wire", async () => {

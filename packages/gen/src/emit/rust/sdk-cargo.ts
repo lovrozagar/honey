@@ -23,7 +23,10 @@ const WEBSOCKET = "tokio-tungstenite"
 const DEPENDENCIES: readonly (readonly [name: string, requirement: string])[] = [
 	["bytes", '"1.12.1"'],
 	["futures-util", '{ version = "0.3.34", default-features = false, features = ["std", "sink"] }'],
-	["reqwest", '{ version = "0.13.5", default-features = false, features = ["rustls", "http2", "json", "stream"] }'],
+	[
+		"reqwest",
+		'{ version = "0.13.5", default-features = false, features = ["rustls", "http2", "json", "stream", "gzip", "deflate"] }',
+	],
 	["serde", '{ version = "1.0.229", features = ["derive"] }'],
 	["serde_json", '"1.0.154"'],
 	["tokio", '{ version = "1.53.3", features = ["rt", "macros", "time", "sync"] }'],

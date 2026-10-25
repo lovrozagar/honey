@@ -7,8 +7,8 @@ import { fetchFollowing } from "./redirects.ts"
 import {
 	defaultSearchParams,
 	encodeBody,
+	headersOf,
 	isReplayable,
-	newClientRequestId,
 	type RequestKind,
 	type RequestOptions,
 	requestInit,
@@ -99,24 +99,11 @@ export class HTTPClient {
 	}
 
 	async #headers(opts: RequestOptions, ctx: HeadersContext): Promise<Headers> {
-		const headers = new Headers()
 		const configured = this.#config.headers
 		const resolved = typeof configured === "function" ? await configured(ctx) : configured
-		for (const [k, v] of Object.entries(resolved ?? {})) if (v !== undefined) headers.set(k, v)
 		/* a refreshed token replaces the configured one; per-call headers still win */
-		if (this.#token !== null) headers.set(this.#authName, `${this.#authPrefix}${this.#token}`)
-		for (const [k, v] of Object.entries(opts.headers ?? {})) if (v !== undefined) headers.set(k, v)
-		const pairs = Object.entries(opts.cookies ?? {})
-			.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-			.join("; ")
-		if (pairs) {
-			const existing = headers.get("cookie")
-			headers.set("cookie", existing ? `${existing}; ${pairs}` : pairs)
-		}
-		/* auto correlation id: config and per-call win, an onRequest hook may overwrite it */
-		if (this.#config.requestId !== false && !headers.has("x-request-id"))
-			headers.set("x-request-id", newClientRequestId())
-		return headers
+		const auth = this.#token === null ? {} : { [this.#authName]: `${this.#authPrefix}${this.#token}` }
+		return headersOf([resolved ?? {}, auth, opts.headers ?? {}], opts.cookies, this.#config.requestId !== false)
 	}
 
 	/** Share one `onAuthExpired` call between concurrent 401s; reuse a token another request already got. */

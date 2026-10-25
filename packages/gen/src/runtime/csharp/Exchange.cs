@@ -112,13 +112,7 @@ internal sealed class Exchange(Transport client, Operation op, Call call, bool s
     {
         var request = new RequestContext(op.Method, url, DialHeaders(credential), shared) { Body = call.Body?.Content };
         await Hooks.RunAsync(client.Config.OnRequest, request, token).ConfigureAwait(false);
-        foreach (var (name, value) in request.Headers)
-        {
-            if (value.AsSpan().IndexOfAny("\r\n\0") >= 0)
-            {
-                throw new ConfigException($"the {name} header's value cannot be sent");
-            }
-        }
+        Wire.Check(request.Headers);
         var upload = request.Body is null ? call.Body?.Stream : null;
         var hop = new Hop(request.Method, request.Url, new Dictionary<string, string>(request.Headers, StringComparer.OrdinalIgnoreCase), request.Body, upload, false);
         var start = hop.Url;

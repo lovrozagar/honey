@@ -44,7 +44,8 @@ export type RecordedHop = {
  * One scripted answer: its status, at most one body (`json` with its content-type; `text` as given
  * and `bytes`, that many bytes `i & 0xff`, streamed in chunks so the size is no heap's concern), extra headers, a
  * wait before answering and a redirect target (`location`, on either listener). A body goes out with its length; under
- * `gzip` or `deflate`, encoded, with `content-encoding` and the encoded length (a streamed body is chunked, unlengthed).
+ * `gzip`, `deflate`, `brotli` or `zstd`, encoded, with `content-encoding` and the encoded length (a streamed body is
+ * chunked, unlengthed).
  * In place of a body: `sse`, an
  * event stream under the status and headers, or `ws` (status 101), the upgrade accepted and the socket
  * scripted. In place of the wait: `afterLeft`, held until hop `stream`'s client left it or `withinMs`
@@ -52,6 +53,7 @@ export type RecordedHop = {
  */
 export type Reply = {
 	readonly afterLeft?: AfterLeft
+	readonly brotli?: true
 	readonly bytes?: number
 	readonly deflate?: true
 	readonly delayMs?: number
@@ -65,6 +67,7 @@ export type Reply = {
 	readonly status: number
 	readonly text?: string
 	readonly ws?: WsScript
+	readonly zstd?: true
 }
 
 /** A reply's hold on another hop's stream: answered once its client left, or after `withinMs`; `seen(left)` first. */
@@ -166,8 +169,8 @@ function checked(replies: readonly Reply[]): readonly Reply[] {
 			(body) => body !== undefined,
 		)
 		if (bodies.length > 1) throw new Error(`reply ${i} names ${bodies.length} bodies; give at most one`)
-		if (reply.gzip !== undefined && reply.deflate !== undefined)
-			throw new Error(`reply ${i} names gzip and deflate; give one encoding`)
+		if ([reply.gzip, reply.deflate, reply.brotli, reply.zstd].filter((coded) => coded).length > 1)
+			throw new Error(`reply ${i} names more than one encoding; give one`)
 		if (reply.ws !== undefined && reply.status !== 101)
 			throw new Error(`reply ${i} accepts a WebSocket with status 101`)
 		if (reply.afterLeft !== undefined && reply.delayMs !== undefined)

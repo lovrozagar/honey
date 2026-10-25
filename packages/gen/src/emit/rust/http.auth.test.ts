@@ -231,8 +231,8 @@ describe.skipIf(!RUST)("the Rust SDK's auth refresh: an unreplayable body is nev
 	}, 600_000)
 })
 
-/* the headers a cross-origin hop may carry: the safe set, and what reqwest adds itself (accept, host; no accept-encoding) */
-const CROSS_ORIGIN_SAFE = new Set(["accept", "accept-language", "host", "user-agent"])
+/* the headers a cross-origin hop may carry: the safe set, and what reqwest adds itself (accept, accept-encoding, host) */
+const CROSS_ORIGIN_SAFE = new Set(["accept", "accept-encoding", "accept-language", "host", "user-agent"])
 
 /** A redirected request as a test pins it: where it went and the credentials it carried. */
 const redirected = (hop: RecordedHop | undefined) => ({

@@ -15,8 +15,8 @@ import { generateSdk, type SdkOptions } from "../sdk.ts"
 /** Where emitted files land: under the toolchain cache, never /tmp. */
 const root = () => join(process.env.HOME ?? homedir(), ".cache/honey-tmp/gen-ts")
 
-/** Write `files` once per content and import `entry` from them. */
-async function load(files: Readonly<Record<string, string>>, entry: string): Promise<Record<string, unknown>> {
+/** Write `files` once per content; the path of `entry` among them. */
+function writtenEntry(files: Readonly<Record<string, string>>, entry: string): string {
 	const ordered = Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 	const hash = createHash("sha256").update(JSON.stringify(ordered)).digest("hex").slice(0, 20)
 	const dir = join(root(), hash)
@@ -29,7 +29,18 @@ async function load(files: Readonly<Record<string, string>>, entry: string): Pro
 			renameSync(partial, join(dir, name))
 		}
 	}
-	return (await import(join(dir, entry))) as Record<string, unknown>
+	return join(dir, entry)
+}
+
+/** Write `files` once per content and import `entry` from them. */
+async function load(files: Readonly<Record<string, string>>, entry: string): Promise<Record<string, unknown>> {
+	return (await import(writtenEntry(files, entry))) as Record<string, unknown>
+}
+
+/** The path of the index file of the SDK `generateSdk` emits for `document`, for another runtime to import. */
+export function emittedSdkEntry(document: Record<string, unknown>, options: SdkOptions = { name: "TestSDK" }): string {
+	const { files, stem } = generateSdk(document, options)
+	return writtenEntry(files, `${stem}.index.gen.ts`)
 }
 
 /** The SDK `generateSdk` emits for `document`, imported from its index file. */

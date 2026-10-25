@@ -3,6 +3,7 @@
 credential last), the idempotency key and request id, each redirect, the retry after a 401, and the
 answer's error class and decoding. The shells only move bytes."""
 
+import re
 import time
 import uuid
 from collections.abc import Iterable, Mapping
@@ -44,6 +45,10 @@ SHAPES: Mapping[str, tuple[type, ...]] = {
     "object": (dict,),
     "string": (str,),
 }
+
+# RFC 9110's token, all a header name may hold; and every control character but tab, which no value may hold
+TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+CONTROL = re.compile(r"[\x00-\x08\x0a-\x1f\x7f]")
 
 
 class CallArgs(TypedDict, total=False):
@@ -138,7 +143,9 @@ class Exchange:
         ]
         shown = [(k, text(v)) for layer in layers for k, v in layer.items()]
         for name, value in shown:
-            if any(ch in value for ch in "\r\n\0"):
+            if not TOKEN.fullmatch(name):
+                raise ConfigError(f"the {name} header cannot be sent")
+            if CONTROL.search(value):
                 raise ConfigError(f"the {name} header's value cannot be sent")
         headers = folded(shown)
         body = (

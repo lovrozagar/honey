@@ -109,6 +109,7 @@ export const RUNTIME_BCL: readonly string[] = [
 	"ReadOnlySpan",
 	"Rune",
 	"SHA1",
+	"SearchValues",
 	"SemaphoreSlim",
 	"SocketsHttpHandler",
 	"Stopwatch",

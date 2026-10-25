@@ -1,10 +1,20 @@
 /**
- * A recording server's reply bodies (bit 16 phase c2): a reply's payload, its encoding (gzip or deflate, whole or as it
- * flows), its length or none when streamed, and the headers it goes out with. A `bytes` body is streamed in 64 KiB
+ * A recording server's reply bodies (bit 16 phase c2): a reply's payload, its encoding (gzip, deflate, and since bit 19
+ * b1 brotli and zstd, whole or as it flows), its length or none when streamed, and the headers it goes out with. A `bytes` body is streamed in 64 KiB
  * chunks, so a 512 MiB answer never exists whole in any heap (recording-server.ts holds the replies).
  */
 import { Readable } from "node:stream"
-import { createDeflate, createGzip, deflateSync, gzipSync } from "node:zlib"
+import {
+	brotliCompressSync,
+	constants,
+	createBrotliCompress,
+	createDeflate,
+	createGzip,
+	createZstdCompress,
+	deflateSync,
+	gzipSync,
+	zstdCompressSync,
+} from "node:zlib"
 import type { Reply, RecordedHop } from "./recording-server.ts"
 
 /** Both listeners' origins, by the name a hop and a redirect give them. */
@@ -24,17 +34,37 @@ function payloadOf(reply: Reply): [Buffer | Readable | string, Record<string, st
 	return [reply.text ?? "", {}]
 }
 
+const BROTLI = { params: { [constants.BROTLI_PARAM_QUALITY]: 4 } }
+
+/** A content coding a reply can carry: its streaming coder and its whole one. */
+type Coding = "br" | "deflate" | "gzip" | "zstd"
+const CODERS = {
+	/* quality 4: the default 11 takes seconds a megabyte, and a bomb needs ratio, not density */
+	br: [() => createBrotliCompress(BROTLI), (input: Buffer | string) => brotliCompressSync(input, BROTLI)],
+	deflate: [createDeflate, deflateSync],
+	gzip: [createGzip, gzipSync],
+	zstd: [createZstdCompress, zstdCompressSync],
+} as const
+
 /** The payload under its encoding: a buffer or string coded whole, a stream coded as it flows. */
-function encodedOf(payload: Buffer | Readable | string, encoding: "deflate" | "gzip" | undefined) {
+function encodedOf(payload: Buffer | Readable | string, encoding: Coding | undefined) {
 	if (encoding === undefined) return payload
-	if (payload instanceof Readable) return payload.pipe(encoding === "gzip" ? createGzip() : createDeflate())
-	return encoding === "gzip" ? gzipSync(payload) : deflateSync(payload)
+	const [streaming, whole] = CODERS[encoding]
+	return payload instanceof Readable ? payload.pipe(streaming()) : whole(payload)
 }
 
 /** The reply's body and every header it goes out with: its length (none when streamed), the implied ones, its encoding, a redirect's. */
 export function messageOf(reply: Reply, origins: Origins): [Buffer | Readable | string, Record<string, string>] {
 	const [payload, implied] = payloadOf(reply)
-	const encoding = reply.gzip ? "gzip" : reply.deflate ? "deflate" : undefined
+	const encoding: Coding | undefined = reply.gzip
+		? "gzip"
+		: reply.deflate
+			? "deflate"
+			: reply.brotli
+				? "br"
+				: reply.zstd
+					? "zstd"
+					: undefined
 	const body = encodedOf(payload, encoding)
 	const length: Record<string, string> =
 		body instanceof Readable ? {} : { "content-length": String(Buffer.byteLength(body)) }

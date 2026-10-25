@@ -61,6 +61,39 @@ export function defaultSearchParams(query: Record<string, unknown>): URLSearchPa
 	return params
 }
 
+/* RFC 9110's token: what a header name may hold */
+const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+/** `value` for the header `name`, else a TypeError naming the header, never the value (Node's Headers quotes it). */
+function headerValue(name: string, value: string): string {
+	if (!TOKEN.test(name)) throw new TypeError(`the ${name} header cannot be sent`)
+	for (let i = 0; i < value.length; i++) {
+		const cp = value.charCodeAt(i)
+		if ((cp < 0x20 && cp !== 0x09) || cp === 0x7f) throw new TypeError(`the ${name} header's value cannot be sent`)
+	}
+	return value
+}
+
+/** Each of `layers` over the last, checked; `cookies` joined on; a fresh `x-request-id` unless one is set. */
+export function headersOf(
+	layers: Record<string, string | undefined>[],
+	cookies: Record<string, string> = {},
+	requestId: boolean,
+): Headers {
+	const headers = new Headers()
+	for (const layer of layers)
+		for (const [k, v] of Object.entries(layer)) if (v !== undefined) headers.set(k, headerValue(k, v))
+	const pairs = Object.entries(cookies)
+		.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+		.join("; ")
+	if (pairs) {
+		const existing = headers.get("cookie")
+		headers.set("cookie", existing ? `${existing}; ${pairs}` : pairs)
+	}
+	if (requestId && !headers.has("x-request-id")) headers.set("x-request-id", newClientRequestId())
+	return headers
+}
+
 /**
  * RFC 4122 §4.4 UUID for `x-request-id`: `crypto.randomUUID` where it exists, else
  * `getRandomValues`, so older runtimes still work without node:crypto.

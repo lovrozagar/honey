@@ -20,7 +20,7 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 **Bit 17 carry-in.** The generated CLI module ships no README (its docs are `--help`, `commands`, `schema` and the embedded SKILL.md). Document how an API author writes the module's README and points it at the install one-liner and the release flow.
 
 **Bit 19 carry-in: the 1.0 migration notes.** Document each deliberate break from v0 0.7.x:
-- `@lovrozagar/honey/codegen` is removed with multi-document merge and scope-spec (bit 19 Q5). One service's document feeds each generate; several honey services combine through a gateway (`mergeTree`), which yields one document. Merging a third-party document is a post-1.0 IR feature.
+- The `@lovrozagar/honey/codegen` export goes: its SDK, CLI and MCP generators move to `@lovrozagar/honey-codegen` (the `honey-codegen generate` bin and its module API). Only v0's document-level `mergeSpecs` and `scopeSpec` (merging or cutting finished OpenAPI files) are removed (bit 19 Q5). Several honey services still combine into one source of truth through `mergeTree` over their route trees, and one merged tree still emits several documents (`codegen.openApi` outputs, each with its own securitySchemes and `filterRoutes`), as Anyrow's gateway does. Merging a third-party document is a post-1.0 IR feature.
 - `--app` takes a module that exports the app and binds nothing (bit 19 Q3); v0's no-bind flag has no v1 counterpart because v1 never serves implicitly.
 - The TS SDK's realtime `token?` option is removed (bit 19 Q8): the auth provider is read on every dial.
 - Generated SDK error messages read `HTTP <status>: <message>` in every target (bit 19 d2).

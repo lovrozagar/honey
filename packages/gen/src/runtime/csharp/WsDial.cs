@@ -57,6 +57,7 @@ internal static class WsDial
 
     private static HttpRequestMessage Request(Uri url, Dictionary<string, string> headers, string key, IReadOnlyList<string> protocols)
     {
+        Wire.Check(headers);
         headers["Connection"] = "Upgrade";
         headers["Upgrade"] = "websocket";
         headers["Sec-WebSocket-Version"] = "13";

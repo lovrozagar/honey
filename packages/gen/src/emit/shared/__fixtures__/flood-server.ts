@@ -10,6 +10,8 @@ export type Flood = {
 	readonly url: string
 	/** the body bytes written so far, across every request */
 	written(): number
+	/** each request's Accept-Encoding, in arrival order (null when it sent none) */
+	encodings(): readonly (string | null)[]
 	close(): Promise<void>
 }
 
@@ -21,8 +23,10 @@ export async function flood(
 ): Promise<Flood> {
 	const chunk64 = Buffer.alloc(64 * 1024, 0x61)
 	let written = 0
+	const encodings: (string | null)[] = []
 	const server = createServer((req, res) => {
 		req.resume()
+		encodings.push(req.headers["accept-encoding"] ?? null)
 		res.writeHead(status, headers)
 		if (Buffer.isBuffer(body)) {
 			written += body.byteLength
@@ -52,6 +56,7 @@ export async function flood(
 				server.close((error) => (error ? reject(error) : resolve()))
 			}),
 		url: `http://127.0.0.1:${port}`,
+		encodings: () => encodings,
 		written: () => written,
 	}
 }
