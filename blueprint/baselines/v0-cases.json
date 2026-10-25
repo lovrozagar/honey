@@ -47353,6 +47353,10 @@
 		"9315fb0bff": "v1 invents no group summary: the index and the group's command list carry each command's own summary, and an invented one is token noise",
 		"71c7dd8647": "v0's server needed a bun install of @modelcontextprotocol/sdk before it ran; v1's emitted server vendors its runtime and depends on nothing (bit 18 Q1 ruling), so there is no install to pass: package.test packs it and installs it offline into a fresh prefix, its bin running under node and bun",
 		"9e1aebee8f": "v0 left package.json and README.md to a hand-kept mirror repo; v1 emits package.json, its bin the compiled entry and no dependency (bit 18 Q9/Q10 ruling; server.test 'declares the package by the server's name'), and no README, the docs being bit 20's",
-		"c50da3fa31": "v0 imported a separately generated TS SDK by a configured class name; v1 embeds the API's own TS SDK under src/sdk/ (server.test's file set), so there is no outside class name to emit"
+		"c50da3fa31": "v0 imported a separately generated TS SDK by a configured class name; v1 embeds the API's own TS SDK under src/sdk/ (server.test's file set), so there is no outside class name to emit",
+		"7251f5ea7f": "v0 prefixed each tool with the project (`anyrow_create_user`); ruled cut at bit 18 Q3: an MCP client already namespaces a server's tools, so the prefix is tokens repeated in every name. The name is the operation id in snake case (tools.test 'is the operation id in snake case')",
+		"014351cec2": "v0 grouped a tool's input under params/search/json; ruled flat at bit 18 Q3, measured 7-13% fewer tokens across the e2e apps: each parameter a top-level property, the body under body (tools.test 'holds each parameter flat under its own name')",
+		"f898be8dd3": "its sanitize-to-[A-Za-z0-9_-] and 64-character cap are kept (tools.test 'keeps [A-Za-z0-9_-] only, at most 64 characters'); its third clause, collisions failing loudly, is replaced by bit 18 ruling 3: a taken name is suffixed _2 after truncating, as the IR and the CLI suffix",
+		"2c582373c8": "v1 matches the TS SDK's derived name, member and renamed member (tagged legs); the intact-constraint half needs validation keywords the IR does not carry (emitters read only the IR), carried to bits/19 as an IR-wide decision"
 	}
 }

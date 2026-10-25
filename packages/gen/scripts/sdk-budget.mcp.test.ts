@@ -16,9 +16,12 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     answered as an internal error, the session ended once stdin closes and the last reply is out;
  *   - jsonrpc.ts 1,573: the message, the error codes, the two reply shapes, the id check;
  *   provisional 8,400.
+ * - phase b, +3,615 B to 11,998 B, nothing dead to cut: call.ts 3,615, each tool bound to the SDK client, its flat
+ *   arguments back into the SDK input groups (path, query, header; the body as JSON or a form), the member walked to
+ *   its method, the answer as JSON text, a failure the tool's own result with its status; provisional 12,000.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 8400
+const MCP_RUNTIME_BYTES = 12000
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

@@ -10,7 +10,7 @@ import { createJiti } from "jiti"
 import { describe, expect, it } from "vitest"
 import { clientCheck, withClients } from "./__fixtures__/clients.ts"
 import { exchange, initialize, request, typeErrors, written } from "./__fixtures__/written.ts"
-import { MCP_RUNTIME, generateMcpServer, mcpRuntimeSource } from "./server.ts"
+import { erased, MCP_RUNTIME, generateMcpServer, mcpRuntimeSource } from "./server.ts"
 
 const CLIENTS = withClients()
 const SLOW = { timeout: 120_000 }
@@ -48,20 +48,52 @@ describe("the package's files (phase a)", () => {
 		})
 	})
 
-	it("writes the entry serving the tools over stdio under the server's name and version, the dist folder CommonJS", () => {
+	it("writes the entry: the SDK client by the environment, the key as the API's scheme says, the tools served over stdio", () => {
 		const files = generateMcpServer(document()).files
-		expect([files["src/server.ts"], files["dist/package.json"], files["src/tools.gen.ts"]]).toEqual([
+		expect([files["src/server.ts"], files["dist/package.json"]]).toEqual([
 			`${MARKER}
 
-// The shop MCP server: its tools over stdio, for the MCP client that starts it.
-import { createSession, serveStdio } from "./mcp.runtime"
-import { tools } from "./tools.gen"
+// The shop MCP server: its tools over stdio, for the MCP client that starts it. The API key is
+// $SHOP_API_KEY, sent as the API's scheme says; the API is at $SHOP_BASE_URL, else its first server.
+import { bindTools, createSession, serveStdio } from "./mcp.runtime"
+import { Api } from "./sdk/api.index.gen"
+import { toolSpecs } from "./tools.gen"
 
-void serveStdio(createSession({ name: "shop", version: "1.2.0" }, tools))
+const key = process.env["SHOP_API_KEY"] ?? ""
+const client = new Api({
+	baseURL: process.env["SHOP_BASE_URL"] || "",
+	headers: key === "" ? {} : { "Authorization": "Bearer " + key },
+	throwOnError: true,
+})
+
+void serveStdio(createSession({ name: "shop", version: "1.2.0" }, bindTools(toolSpecs, client)))
 `,
 			'{\n\t"type": "commonjs"\n}\n',
-			`${MARKER}\n\nimport type { Tool } from "./mcp.runtime"\n\nexport const tools: readonly Tool[] = []\n`,
 		])
+	})
+})
+
+describe("the tools file (phase b)", () => {
+	it("writes each tool's spec into tools.gen.ts as data the runtime binds", () => {
+		expect(generateMcpServer(document()).files["src/tools.gen.ts"]).toBe(`${MARKER}
+
+import type { ToolSpec } from "./mcp.runtime"
+
+export const toolSpecs: readonly ToolSpec[] = [
+	{
+		name: "items_list",
+		inputSchema: {
+			type: "object",
+			properties: {},
+		},
+		member: [
+			"items",
+			"list",
+		],
+		args: [],
+	},
+]
+`)
 	})
 })
 
@@ -108,6 +140,41 @@ describe("the compiled twin (phase a)", () => {
 				return files[path.replace(/^src\//, "dist/").replace(/\.ts$/, ".js")] !== `${shebang}${code}\n`
 			})
 		expect([drift, generateMcpServer(document()).files]).toEqual([[], files])
+	})
+})
+
+describe("what the generator refuses (phase b)", () => {
+	// v0: 9a0ef89116
+	it("refuses a document with no operation marked x-mcp, and one whose marked operations no tool can call", () => {
+		const socket = {
+			get: { operationId: "chat", responses: { 101: { description: "up" } }, "x-mcp": true, "x-websocket": true },
+		}
+		expect(
+			[
+				() =>
+					generateMcpServer({
+						...document(),
+						paths: { "/items": { get: { operationId: "items.list", responses: OK } } },
+					}),
+				() => generateMcpServer({ ...document(), paths: { "/chat": socket } }),
+			].map((generate) =>
+				(() => {
+					try {
+						generate()
+						return "generated"
+					} catch (error) {
+						return (error as Error).message
+					}
+				})(),
+			),
+		).toEqual([
+			"No operation is marked x-mcp: nothing to serve",
+			"No operation marked x-mcp is one a tool can call yet: nothing to serve",
+		])
+	})
+
+	it("refuses source the erasure cannot parse, writing no broken twin", () => {
+		expect(() => erased("src/x.ts", "const a = ;\n")).toThrow("src/x.ts does not parse:")
 	})
 })
 
@@ -158,6 +225,9 @@ describe("the written server (phase a)", SLOW, () => {
 
 	it.skipIf(!CLIENTS).each(["sdk", "v2"] as const)("lets %s connect and list its tools", async (client) => {
 		const saw = await clientCheck(client, [process.execPath, join(dir, "dist/server.js")])
-		expect([saw.latest, saw.tools]).toEqual(["2025-11-25", []])
+		expect([saw.latest, saw.tools]).toEqual([
+			"2025-11-25",
+			[{ inputSchema: { properties: {}, type: "object" }, name: "items_list" }],
+		])
 	})
 })

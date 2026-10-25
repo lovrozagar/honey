@@ -8,9 +8,12 @@
 import { readFileSync } from "node:fs"
 import { createJiti } from "jiti"
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
+import type { IR } from "../../ir/model.ts"
 import { binaryNameOf } from "../cli/module.ts"
 import { tsString } from "../shared/escape.ts"
 import { generateSdk } from "../ts/sdk.ts"
+import { literal } from "./literal.ts"
+import { toolsOf, type ToolSpec } from "./tools.ts"
 
 export type McpServerOptions = {
 	/** the server's name: lowercase words joined by `-`, at most 60 characters; by default the document title's */
@@ -22,7 +25,7 @@ export type McpServerOptions = {
 export type GeneratedMcpServer = { readonly files: Readonly<Record<string, string>> }
 
 /** The runtime modules under `runtime/mcp`, each after the ones it imports. */
-export const MCP_RUNTIME: readonly string[] = ["jsonrpc", "server", "stdio"]
+export const MCP_RUNTIME: readonly string[] = ["jsonrpc", "server", "stdio", "call"]
 
 /* a name leaves room for the bin's `-mcp`; a prefix is uppercase words joined by `_` */
 const NAME = /^(?=.{1,60}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
@@ -54,15 +57,28 @@ export function mcpRuntimeSource(): string {
 }
 
 /** The entry: the tools served over stdio under the server's name and version. */
-const entrySource = (name: string, version: string) =>
+const entrySource = (app: { name: string; version: string; envPrefix: string }, ir: IR) =>
 	`${MARKER}
 
-// The ${name} MCP server: its tools over stdio, for the MCP client that starts it.
-import { createSession, serveStdio } from "./mcp.runtime"
-import { tools } from "./tools.gen"
+// The ${app.name} MCP server: its tools over stdio, for the MCP client that starts it. The API key is
+// $${app.envPrefix}_API_KEY, sent as the API's scheme says; the API is at $${app.envPrefix}_BASE_URL, else its first server.
+import { bindTools, createSession, serveStdio } from "./mcp.runtime"
+import { Api } from "./sdk/api.index.gen"
+import { toolSpecs } from "./tools.gen"
 
-void serveStdio(createSession({ name: ${tsString(name)}, version: ${tsString(version)} }, tools))
+const key = process.env[${tsString(`${app.envPrefix}_API_KEY`)}] ?? ""
+const client = new Api({
+	baseURL: process.env[${tsString(`${app.envPrefix}_BASE_URL`)}] || ${tsString(ir.servers[0] ?? "")},
+	headers: key === "" ? {} : { ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
+	throwOnError: true,
+})
+
+void serveStdio(createSession({ name: ${tsString(app.name)}, version: ${tsString(app.version)} }, bindTools(toolSpecs, client)))
 `
+
+/** tools.gen.ts: every tool's spec, as data the runtime binds to the SDK client. */
+const toolsSource = (specs: readonly ToolSpec[]) =>
+	`${MARKER}\n\nimport type { ToolSpec } from "./mcp.runtime"\n\nexport const toolSpecs: readonly ToolSpec[] = ${literal(specs)}\n`
 
 /** The package: its bin the compiled entry, no dependency. */
 const packageJson = (name: string, version: string) =>
@@ -81,9 +97,12 @@ const packageJson = (name: string, version: string) =>
 	)}\n`
 
 /** `source` with its types erased, as CommonJS; the entry gets the shebang a bin needs. */
-function erased(path: string, source: string): string {
+export function erased(path: string, source: string): string {
 	const jiti = createJiti(import.meta.url, { fsCache: false, moduleCache: false })
 	const code = jiti.transform({ filename: path, source, ts: true })
+	/* jiti reports a parse error as code that throws it on load: refused here, so no broken twin is ever written */
+	if (code.includes("__JITI_ERROR__"))
+		throw new Error(`${path} does not parse: ${code.slice(code.indexOf("{"), code.lastIndexOf("}") + 1)}`)
 	return `${path === "src/server.ts" ? "#!/usr/bin/env node\n" : ""}${code.trimEnd()}\n`
 }
 
@@ -93,13 +112,20 @@ export function generateMcpServer(
 	options: McpServerOptions = {},
 ): GeneratedMcpServer {
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
-	const { name } = resolved(options, ir.info.title)
+	const { envPrefix, name } = resolved(options, ir.info.title)
 	const version = ir.info.version ?? "0.0.0"
+	const specs = toolsOf(ir)
+	if (specs.length === 0)
+		throw new Error(
+			ir.operations.some((op) => op.extensions.mcp === true)
+				? "No operation marked x-mcp is one a tool can call yet: nothing to serve"
+				: "No operation is marked x-mcp: nothing to serve",
+		)
 	const sdk = generateSdk(document, { name: "Api", stem: "api" })
 	const source: Record<string, string> = {
 		"src/mcp.runtime.ts": mcpRuntimeSource(),
-		"src/server.ts": entrySource(name, version),
-		"src/tools.gen.ts": `${MARKER}\n\nimport type { Tool } from "./mcp.runtime"\n\nexport const tools: readonly Tool[] = []\n`,
+		"src/server.ts": entrySource({ envPrefix, name, version }, ir),
+		"src/tools.gen.ts": toolsSource(specs),
 		...Object.fromEntries(Object.entries(sdk.files).map(([file, text]) => [`src/sdk/${file}`, text])),
 	}
 	const compiled = Object.fromEntries(
