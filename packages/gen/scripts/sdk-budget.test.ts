@@ -397,9 +397,10 @@ describe("runtimeBytes", () => {
  * duplicate code first; it is never silent. Bit 19 b2, +958 B on the measured 89,964 to 90,922 B: an SSE stream's
  * open bounded by the call's timeout up to its headers (stream.go +578: the timer, the cancel cause and the body that
  * releases it; request.go +11: wrapTransportError reads context.Cause), and the realtime dials reading the client's
- * current token (transport.go +300: headersOf; realtime.go +72; transport_longpoll.go -6; config.go +3).
+ * current token (transport.go +300: headersOf; realtime.go +72; transport_longpoll.go -6; config.go +3). Bit 19 b3,
+ * +73 B to 90,995 B: config.go's sentence that a caller Transport's own headers are the caller's and reach every hop.
  */
-const GO_RUNTIME_BYTES = 90_922
+const GO_RUNTIME_BYTES = 90_995
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`, () => {
@@ -508,11 +509,13 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * request.ts's headersOf, which the header assembly moved into: request.ts +1,354, http.ts -614. Bit 19 b2, +343 B
  * to 109,124 B: an explicit stream's open bounded by the call's timeout up to its headers (http.ts +72, config.ts
  * +15), and a resumable connection's headers read on each dial (realtime-connection.ts +289; realtime.ts -33, its
- * dead `token` and `onAuthExpired` options cut).
+ * dead `token` and `onAuthExpired` options cut). Bit 19 b3, +437 B to 109,561 B: the auth header pair defaulting to
+ * the API's scheme by the siblings' pair rule (sdk.ts +338: schemeAuth; http.ts +51: no prefix under a caller's name;
+ * config.ts +48).
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 109_124
+const TS_RUNTIME_BYTES = 109_561
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

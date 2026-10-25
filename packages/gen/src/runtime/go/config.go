@@ -16,7 +16,8 @@ import (
 //
 // Redirect picks which redirects are followed (RedirectSameOrigin by default). Under any policy, a
 // hop to another origin carries only Accept, Accept-Language and User-Agent. A caller-supplied
-// HTTPClient is cloned and held to the same rule.
+// HTTPClient is cloned and held to the same rule; headers its own Transport adds are the caller's,
+// and reach every hop.
 //
 // MaxResponseBytes caps a buffered response body. Zero means 100 MiB; a negative value disables
 // the cap.

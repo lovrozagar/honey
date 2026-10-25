@@ -23,6 +23,7 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - The `@lovrozagar/honey/codegen` export goes: its SDK, CLI and MCP generators move to `@lovrozagar/honey-codegen` (the `honey-codegen generate` bin and its module API). Only v0's document-level `mergeSpecs` and `scopeSpec` (merging or cutting finished OpenAPI files) are removed (bit 19 Q5). Several honey services still combine into one source of truth through `mergeTree` over their route trees, and one merged tree still emits several documents (`codegen.openApi` outputs, each with its own securitySchemes and `filterRoutes`), as Anyrow's gateway does. Merging a third-party document is a post-1.0 IR feature.
 - `--app` takes a module that exports the app and binds nothing (bit 19 Q3); v0's no-bind flag has no v1 counterpart because v1 never serves implicitly.
 - The TS SDK's realtime connection options `token?` and `onAuthExpired?` are removed (bit 19 Q8 and b2; neither was ever read): `headers` may be a function read on every dial, and the client-level `onAuthExpired` is the one refresh hook.
+- The TS SDK reads the spec's security scheme for its auth header (bit 19 b3), as every other SDK does: an apiKey scheme's header with no prefix, bearer as `Authorization: Bearer`. A caller's `authHeaderName` alone no longer implies `Bearer `; set `authHeaderPrefix` to keep one.
 - Generated SDK error messages read `HTTP <status>: <message>` in every target (bit 19 d2).
 
 ## Security corpus

@@ -72,9 +72,9 @@ export type AuthExpiredContext = {
 }
 
 export type ClientConfig = {
-	/** Header that carries the token from `onAuthExpired`. Default `Authorization`. */
+	/** The header for `onAuthExpired`'s token: unset, the API's scheme's; set, its prefix is yours (unset: none). */
 	authHeaderName?: string
-	/** Prefix for that header. Default `"Bearer "`. */
+	/** That header's prefix; set alone, the scheme's header keeps it. */
 	authHeaderPrefix?: string
 	/** Absolute `http(s):` / `ws(s):` URL, or a same-origin path such as `"/api"`. */
 	baseURL: string

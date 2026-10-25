@@ -73,7 +73,7 @@ export class HTTPClient {
 	}
 
 	get #authPrefix(): string {
-		return this.#config.authHeaderPrefix ?? "Bearer "
+		return this.#config.authHeaderPrefix ?? (this.#config.authHeaderName === undefined ? "Bearer " : "")
 	}
 
 	#query(search: Record<string, unknown>): URLSearchParams {

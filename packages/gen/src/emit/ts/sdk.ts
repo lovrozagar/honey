@@ -4,6 +4,7 @@
  * verbatim, and the index a consumer imports. Read from the IR alone (H2).
  */
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
+import type { IRAuth } from "../../ir/model.ts"
 import { tsString } from "../shared/escape.ts"
 import { words } from "../shared/lang.ts"
 import { runtimeSource } from "./http.ts"
@@ -91,11 +92,13 @@ function validated(options: SdkOptions): { name: string; stem: string } {
 
 /**
  * The class: the runtime's `SDKClient` over the service map, merged with the operations' interface.
- * A config without `baseURL` sends to `server`, the document's first one, when it declares any.
+ * A config without `baseURL` sends to `server`, the document's first one, when it declares any; its auth header
+ * pair defaults to the API's scheme (`auth`), as every sibling SDK's does.
  */
-function clientText(name: string, stem: string, server: string | undefined): string {
-	const config = server === undefined ? "config" : `{ ...config, baseURL: config.baseURL ?? ${tsString(server)} }`
-	return `import { SDKClient } from "./${stem}.runtime.gen"
+function clientText(name: string, stem: string, server: string | undefined, auth: IRAuth): string {
+	const based = server === undefined ? "config" : `{ ...config, baseURL: config.baseURL ?? ${tsString(server)} }`
+	const config = `schemeAuth(${based}, ${tsString(auth.headerName)}, ${tsString(auth.prefix)})`
+	return `import { SDKClient, schemeAuth } from "./${stem}.runtime.gen"
 import { serviceMap } from "./${stem}.map.gen"
 import type { ${name}Config, ${name}Operations } from "./${stem}.types.gen"
 
@@ -126,7 +129,7 @@ export function generateSdk(document: Record<string, unknown>, options: SdkOptio
 	const runtime = `${stem}.runtime.gen`
 	return {
 		files: {
-			[`${stem}.client.gen.ts`]: clientText(name, stem, ir.servers[0]),
+			[`${stem}.client.gen.ts`]: clientText(name, stem, ir.servers[0], ir.auth),
 			[`${stem}.index.gen.ts`]: indexText(name, stem),
 			[`${stem}.map.gen.ts`]: serviceMapText(ir, runtime),
 			[`${stem}.runtime.gen.ts`]: runtimeSource(),

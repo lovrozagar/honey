@@ -237,6 +237,12 @@ function memberOf(core: SdkCore, members: Map<string, unknown>, at: { child: Ser
 	return member
 }
 
+/** `config` with the API's auth scheme as its header pair's default. */
+export function schemeAuth<T extends ClientConfig>(config: T, headerName: string, prefix: string): T {
+	if (config.authHeaderName !== undefined) return config
+	return { ...config, authHeaderName: headerName, authHeaderPrefix: config.authHeaderPrefix ?? prefix }
+}
+
 /**
  * A generated SDK's base class. The instance is a Proxy over the service map: `sdk.users.create(input)`
  * dispatches the entry at `users.create`; the client's own members (`state`, `dispose`, `toString`)
