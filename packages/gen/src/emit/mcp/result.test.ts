@@ -104,12 +104,17 @@ describe("a tool's JSON and text result (phase d)", SLOW, () => {
 		const structured = [{ id: "1" }, { result: ["a", "b"] }, { result: { page: 1 }, headers: { "x-total": "2" } }]
 		expect(results).toEqual([
 			...structured.map((value) => ({
+				_meta: { "honey/status": 200 },
 				content: [{ text: JSON.stringify(value), type: "text" }],
 				structuredContent: value,
 			})),
-			{ content: [{ text: "plain words", type: "text" }] },
-			{ content: [{ text: `${"x".repeat(100_000)}\n[cut: 100000 of 100005 characters]`, type: "text" }] },
+			{ _meta: { "honey/status": 200 }, content: [{ text: "plain words", type: "text" }] },
 			{
+				_meta: { "honey/status": 200 },
+				content: [{ text: `${"x".repeat(100_000)}\n[cut: 100000 of 100005 characters]`, type: "text" }],
+			},
+			{
+				_meta: { "honey/status": 200 },
 				content: [
 					{
 						text: JSON.stringify({ message: "The API answered something other than the object its schema declares" }),
@@ -186,10 +191,46 @@ describe("a tool's failure (phase d)", SLOW, () => {
 			})(),
 		])
 		const kinds = [failed(timedOut.results[0]), failed(refused)].map(([isError, value]) => [isError, value.kind])
+		/* no answer, so no status: neither carries _meta */
+		expect([timedOut.results[0]?._meta, refused?._meta]).toEqual([undefined, undefined])
 		expect(kinds).toEqual([
 			[true, "timeout"],
 			[true, "transport"],
 		])
+	})
+})
+
+describe("a result's status (phase f)", SLOW, () => {
+	it("carries the status the API answered in _meta, on 200, 201, 202, 204, bytes and a failure", async () => {
+		const { results } = await run(
+			[["item_get"], ["item_get"], ["note_send", { body: "n" }], ["image_get"], ["item_get"], ["item_get"]],
+			[
+				{ json: { id: "1" }, status: 200 },
+				{ json: { id: "2" }, status: 201 },
+				{ status: 204 },
+				{ bytes: 3, headers: { "content-type": "image/png" }, status: 200 },
+				{ json: { id: "3" }, status: 202 },
+				{ json: { message: "gone" }, status: 410 },
+			],
+		)
+		expect(results.map((result) => result._meta)).toEqual(
+			[200, 201, 204, 200, 202, 410].map((status) => ({ "honey/status": status })),
+		)
+	})
+
+	it("follows no cross-origin redirect: the 302 is the result's failure, and the key never reaches the other origin", async () => {
+		const { hops, results } = await run(
+			[["item_get"]],
+			[{ redirect: { origin: "alt", path: "/item" }, status: 302 }],
+			["MEDIA_API_KEY=secret-key"],
+		)
+		const [isError, value] = failed(results[0])
+		expect([
+			isError,
+			value.status,
+			results[0]?._meta,
+			hops.map((hop) => [hop.origin, hop.url, hop.headers.authorization]),
+		]).toEqual([true, 302, { "honey/status": 302 }, [["primary", "/item", "Bearer secret-key"]]])
 	})
 })
 

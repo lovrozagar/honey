@@ -99,10 +99,16 @@ export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding
 						timeout: binding.timeout,
 					})
 				const answer = (await send({ signal })) as Answer
-				return answer.status >= 200 && answer.status < 300 ? successOf(spec, answer, scrub) : failureOf(answer, scrub)
+				const ok = answer.status >= 200 && answer.status < 300
+				return {
+					...(ok ? successOf(spec, answer, scrub) : failureOf(answer, scrub)),
+					_meta: { "honey/status": answer.status },
+				}
 			} catch (error) {
 				const status = (error as { status?: unknown } | null)?.status
-				return typeof status === "number" ? failureOf({ data: null, error, status }, scrub) : unanswered(error, scrub)
+				return typeof status === "number"
+					? { ...failureOf({ data: null, error, status }, scrub), _meta: { "honey/status": status } }
+					: unanswered(error, scrub)
 			}
 		},
 		...(spec.description === undefined ? {} : { description: spec.description }),

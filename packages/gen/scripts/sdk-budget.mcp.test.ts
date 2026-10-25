@@ -48,9 +48,12 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     call in flight, settling once they have, no later reply written;
  *   - guard.ts +568: minimum and maximum (max_events 1 to 100); result.ts +7 (TEXT_MAX exported);
  *   provisional 29,500.
+ * - phase f, +178 B to 29,649 B: the status the API answered in a result's `_meta` (honey/status), observable to the
+ *   conformance harness and to any client reading it: call.ts +136 (the spread on both answered paths), server.ts +42
+ *   (ToolResult's `_meta`); provisional 29,700.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 29500
+const MCP_RUNTIME_BYTES = 29700
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

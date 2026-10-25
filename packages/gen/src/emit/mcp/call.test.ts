@@ -115,7 +115,11 @@ describe("a tool call's wire (phase b)", SLOW, () => {
 				["PUT", "/items/a%20b?dryRun=true&tags=x&tags=y", "t", "application/json", { name: "n" }],
 				["POST", "/forms", undefined, "application/x-www-form-urlencoded", undefined],
 			],
-			{ content: [{ text: '{"id":"1"}', type: "text" }], structuredContent: { id: "1" } },
+			{
+				_meta: { "honey/status": 200 },
+				content: [{ text: '{"id":"1"}', type: "text" }],
+				structuredContent: { id: "1" },
+			},
 		])
 	})
 
@@ -207,7 +211,7 @@ describe("a tool call's arguments (phase c)", SLOW, () => {
 					content: [{ text: JSON.stringify({ message: `Invalid arguments: ${why}` }), type: "text" }],
 					isError: true,
 				})),
-				{ content: [{ text: "{}", type: "text" }], structuredContent: {} },
+				{ _meta: { "honey/status": 200 }, content: [{ text: "{}", type: "text" }], structuredContent: {} },
 			],
 			["/items/1?sort=asc"],
 		])

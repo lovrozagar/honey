@@ -124,7 +124,8 @@ export default defineConfig(({ mode }) =>
 			{
 				test: {
 					projects: groups(
-						{ include: harnessOf("ts"), name: "ts" },
+						/* the MCP server's harness runs beside ts's: its server and client are Node's */
+						{ include: [...harnessOf("ts"), ...harnessOf("mcp")], name: "ts" },
 						/* the CLI's harness runs in go's project: its toolchain is Go's (built.ts reaches go-env) */
 						Object.fromEntries(
 							Object.keys(TOOLCHAIN_PROJECTS).map((name) => [

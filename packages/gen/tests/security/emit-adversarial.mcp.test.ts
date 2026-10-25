@@ -130,7 +130,11 @@ describe("gen adversarial: an MCP tool's path argument (H18.11)", SLOW, () => {
 		expect([replies.map((reply) => (reply as { result: unknown }).result), hops.map((hop) => hop.url)]).toEqual([
 			[
 				...leaving.map(() => refused("name must stay within one path segment")),
-				...safe.map(() => ({ content: [{ text: "{}", type: "text" }], structuredContent: {} })),
+				...safe.map(() => ({
+					_meta: { "honey/status": 200 },
+					content: [{ text: "{}", type: "text" }],
+					structuredContent: {},
+				})),
 			],
 			["/files/a.b", "/files/...", "/files/a..b", "/files/%2541", "/files/x%2520y"],
 		])

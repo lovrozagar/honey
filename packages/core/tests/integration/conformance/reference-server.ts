@@ -76,12 +76,12 @@ export function createReferenceServer() {
 	const app = honey<{}>()
 	app
 		.post("/events")
-		.meta({ operationId: "events.append" })
+		.meta({ operationId: "events.append", mcp: true })
 		.output({ "application/json": { ok: Stored } })
 		.handler(async (ctx) => ctx.res.json("ok", append(await ctx.req.json())))
 	app
 		.get("/events")
-		.meta({ operationId: "events.stream" })
+		.meta({ operationId: "events.stream", mcp: true })
 		.output({ "text/event-stream": { ok: Payload } })
 		.handler((ctx) => ctx.res.sse(relay(follow)))
 	app

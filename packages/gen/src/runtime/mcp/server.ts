@@ -18,6 +18,7 @@ export type ToolResult = {
 	readonly content: readonly Record<string, unknown>[]
 	readonly structuredContent?: Record<string, unknown>
 	readonly isError?: true
+	readonly _meta?: Record<string, unknown>
 }
 
 /** A tool: what tools/list shows of it, and what tools/call runs. */

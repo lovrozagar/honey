@@ -1,40 +1,14 @@
 /**
  * The conformance grid's data: the targets and every row with its scenarios, plain JSON so a
  * non-TS runner reads a cell from stdin. Each row is one feature of blueprint/dx/conformance.md;
- * the shared rows run on every target. Bits 12–18 add their CLI-only and MCP-only rows here and
- * nowhere else. Every expectation is what the reference app (core `conformance/app.ts`) answers.
+ * the shared rows run on every target. Bits 12–18 add their CLI-only rows here and their MCP-only
+ * rows in features-mcp.ts, nowhere else. Every expectation is what the reference app (core `conformance/app.ts`) answers.
  */
-import type { Call, Expected, Feature, Hop, Scenario } from "./matrix.ts"
+import { ABSENT, ANY, call, data, error, events, hop, JSON_TYPE, OCTET, SHA_256B, SHA_64K } from "./cells.ts"
+import { MCP_ROWS } from "./features-mcp.ts"
+import type { Call, Expected, Feature, Scenario } from "./matrix.ts"
 
 export const TARGETS = ["ts", "go", "rust", "python", "csharp", "java", "cli", "mcp"] as const
-
-const ANY = { $any: true } as const
-const ABSENT = { $absent: true } as const
-const JSON_TYPE = "application/json"
-const OCTET = "application/octet-stream"
-/** sha256 of the bytes `i & 0xff` for i < 256 and for i < 65 536 */
-const SHA_256B = "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"
-const SHA_64K = "7daca2095d0438260fa849183dfc67faa459fdf4936e1bc91eec6b281b27e4c2"
-
-/** A call to `operation` at `method path`, with the rest of `more`. */
-const call = (operation: string, method: string, path: string, more: Partial<Call> = {}): Call => ({
-	operation,
-	route: { method, path },
-	...more,
-})
-
-/** An expected hop on the primary origin, with the rest of `more`. */
-const hop = (method: string, url: string, more: Partial<Hop> = {}): Hop => ({ method, origin: "primary", url, ...more })
-
-/** A data answer. */
-const data = (value: Expected, status = 200) => ({ data: value, kind: "data", status })
-
-/** An error answer by status and key. */
-const error = (status: number, errorKey: string): Expected => ({ errorKey, kind: "error", status })
-
-/** Events `from`..`to` named `event`, data `{ n }` and id `n`: the reference log's (`message`) or the ticks. */
-const events = (from: number, to: number, event = "message"): Expected[] =>
-	Array.from({ length: to - from + 1 }, (_, i) => ({ data: { n: from + i }, event, id: String(from + i) }))
 
 const getItem = (id: string, more: Partial<Call> = {}) =>
 	call("items.get", "GET", "/v1/items/:id", { params: { id }, ...more })
@@ -454,6 +428,7 @@ export const FEATURES: readonly Feature[] = [
 	cliOnly("discovery", "commands lists the app's every operation, one usage line each", [
 		{ calls: [argv("", ["commands"])], expect: [cli(0, REFERENCE_INDEX)], id: "index" },
 	]),
+	...MCP_ROWS,
 	cliOnly("completion", "shell completion offers the app's commands", [
 		{
 			calls: [argv("", ["__complete", ""])],

@@ -47,12 +47,12 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 	let next = 0
 	app
 		.get("/users")
-		.meta({ operationId: "users.list" })
+		.meta({ operationId: "users.list", mcp: true })
 		.output({ "application/json": { ok: z.array(UserSchema) } })
 		.handler((ctx) => ctx.res.json("ok", [...users.values()]))
 	app
 		.post("/users")
-		.meta({ invalidate: [LIST], operationId: "users.create" })
+		.meta({ invalidate: [LIST], operationId: "users.create", mcp: true })
 		.errors("invalid_input", "email_taken")
 		.input({ json: Fields })
 		.output({ "application/json": { created: UserSchema } })
@@ -67,7 +67,7 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 		})
 	app
 		.get("/users/:id")
-		.meta({ operationId: "users.get" })
+		.meta({ operationId: "users.get", mcp: true })
 		.errors("not_found")
 		.output({ "application/json": { ok: UserSchema } })
 		.handler((ctx) => {
@@ -77,7 +77,7 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 		})
 	app
 		.put("/users/:id")
-		.meta({ invalidate: [LIST, ONE], operationId: "users.update" })
+		.meta({ invalidate: [LIST, ONE], operationId: "users.update", mcp: true })
 		.input({ json: Fields })
 		.output({ "application/json": { ok: UserSchema } })
 		.handler((ctx) => {
@@ -87,7 +87,7 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 		})
 	app
 		.delete("/users/:id")
-		.meta({ invalidate: [LIST, ONE], operationId: "users.delete" })
+		.meta({ invalidate: [LIST, ONE], operationId: "users.delete", mcp: true })
 		.output({ headers: { no_content: z.object({}) } })
 		.handler((ctx) => {
 			users.delete(ctx.params.id)
@@ -99,7 +99,7 @@ function userRoutes(app: Secure, factory: typeof errors): void {
 function uploadRoutes(app: Secure): void {
 	app
 		.post("/uploads/blob")
-		.meta({ operationId: "uploads.blob" })
+		.meta({ operationId: "uploads.blob", mcp: true })
 		.input({ binary: ["application/octet-stream"] })
 		.output({ "application/json": { ok: z.object({ sha256: z.string(), size: z.number().int() }) } })
 		.handler((ctx) => {
@@ -108,7 +108,7 @@ function uploadRoutes(app: Secure): void {
 		})
 	app
 		.post("/uploads/form")
-		.meta({ operationId: "uploads.form" })
+		.meta({ operationId: "uploads.form", mcp: true })
 		.input({ form: z.object({ file: z.file() }) })
 		.output({ "application/json": { ok: z.object({ size: z.number().int() }) } })
 		.handler((ctx) => ctx.res.json("ok", { size: ctx.input.form.file.size }))

@@ -165,7 +165,7 @@ export type ConformanceApp = ReturnType<typeof withRequestIds>
 function itemRoutes(app: ConformanceApp): void {
 	app
 		.get("/items")
-		.meta({ operationId: "items.list" })
+		.meta({ operationId: "items.list", mcp: true })
 		.input({ search: z.object({ limit: z.coerce.number().int().optional(), q: z.string().optional() }) })
 		.output({ "application/json": { ok: z.array(Item) } })
 		.handler((ctx) => {
@@ -175,7 +175,7 @@ function itemRoutes(app: ConformanceApp): void {
 		})
 	app
 		.get("/items/:id")
-		.meta({ operationId: "items.get" })
+		.meta({ operationId: "items.get", mcp: true })
 		.errors("item_not_found")
 		.output({ "application/json": { ok: Item }, headers: { ok: z.object({ "x-item-version": z.string() }) } })
 		.handler((ctx) => {
@@ -184,7 +184,7 @@ function itemRoutes(app: ConformanceApp): void {
 		})
 	app
 		.post("/items")
-		.meta({ operationId: "items.create" })
+		.meta({ operationId: "items.create", mcp: true })
 		.errors("item_exists")
 		.input({ json: z.object({ n: z.number().int().optional(), name: z.string().min(3) }) })
 		.output({ "application/json": { created: Item } })
@@ -194,7 +194,7 @@ function itemRoutes(app: ConformanceApp): void {
 		})
 	app
 		.put("/items/:id")
-		.meta({ operationId: "items.update" })
+		.meta({ operationId: "items.update", mcp: true })
 		.input({
 			headers: z.object({ "x-trace": z.string().optional() }),
 			json: z.object({ n: z.number().int(), name: z.string() }),
@@ -210,13 +210,13 @@ function itemRoutes(app: ConformanceApp): void {
 		.handler((ctx) => ctx.res.json("ok", { id: ctx.params.id, n: ctx.input.json.n, name: ctx.input.json.name }))
 	app
 		.patch("/items/:id")
-		.meta({ operationId: "items.patch" })
+		.meta({ operationId: "items.patch", mcp: true })
 		.input({ json: z.object({ n: z.number().int().optional(), name: z.string().optional() }) })
 		.output({ "application/json": { ok: Patched } })
 		.handler((ctx) => ctx.res.json("ok", { ...item(ctx.params.id), ...ctx.input.json }))
 	app
 		.delete("/items/:id")
-		.meta({ operationId: "items.delete" })
+		.meta({ operationId: "items.delete", mcp: true })
 		.output({ headers: { no_content: z.object({}) } })
 		.handler((ctx) => ctx.res.noContent())
 }
@@ -225,7 +225,7 @@ function itemRoutes(app: ConformanceApp): void {
 function streamRoutes(app: ConformanceApp): void {
 	app
 		.get("/files/:name")
-		.meta({ operationId: "files.get" })
+		.meta({ operationId: "files.get", mcp: true })
 		.output({ "application/octet-stream": { ok: true } })
 		.handler((ctx) =>
 			ctx.res.binary(
@@ -235,7 +235,7 @@ function streamRoutes(app: ConformanceApp): void {
 		)
 	app
 		.put("/files/:name")
-		.meta({ operationId: "files.put" })
+		.meta({ operationId: "files.put", mcp: true })
 		.input({ binary: ["application/octet-stream"] })
 		.output({ "application/json": { ok: Digest } })
 		.handler((ctx) => {
@@ -244,7 +244,7 @@ function streamRoutes(app: ConformanceApp): void {
 		})
 	app
 		.get("/ticks")
-		.meta({ operationId: "ticks.stream" })
+		.meta({ operationId: "ticks.stream", mcp: true })
 		.output({ "text/event-stream": { ok: z.object({ n: z.number().int() }) } })
 		.handler((ctx) =>
 			ctx.res.sse(async (stream) => {
@@ -258,7 +258,7 @@ function streamRoutes(app: ConformanceApp): void {
 function hopRoutes(app: ConformanceApp, origins: () => Origins | null): void {
 	app
 		.get("/slow")
-		.meta({ operationId: "timing.slow" })
+		.meta({ operationId: "timing.slow", mcp: true })
 		.input({ search: z.object({ ms: z.coerce.number().int().min(0).max(10_000) }) })
 		.output({ "application/json": { ok: z.object({ ok: z.boolean() }) } })
 		.handler(async (ctx) => {
@@ -267,7 +267,7 @@ function hopRoutes(app: ConformanceApp, origins: () => Origins | null): void {
 		})
 	app
 		.get("/echo")
-		.meta({ operationId: "echo.get" })
+		.meta({ operationId: "echo.get", mcp: true })
 		.output({
 			"application/json": { ok: z.object({ method: z.string(), requestId: z.string() }) },
 			headers: { ok: z.object({ "x-request-id": z.string() }) },
@@ -281,7 +281,7 @@ function hopRoutes(app: ConformanceApp, origins: () => Origins | null): void {
 		)
 	app
 		.get("/redirect/cross-origin")
-		.meta({ operationId: "redirect.crossOrigin" })
+		.meta({ operationId: "redirect.crossOrigin", mcp: true })
 		.output({ redirect: { temporary_redirect: true } })
 		.handler((ctx) => ctx.res.redirect(`${origins()?.alt ?? ""}/v1/echo`, { status: 307 }))
 }
@@ -290,7 +290,7 @@ function hopRoutes(app: ConformanceApp, origins: () => Origins | null): void {
 function harnessRoutes(app: ConformanceApp): void {
 	app
 		.get("/errors/:status")
-		.meta({ operationId: "errors.status" })
+		.meta({ operationId: "errors.status", mcp: true })
 		.input({ params: z.object({ status: z.coerce.number().int().min(200).max(599) }) })
 		.handler((ctx) => {
 			const { status } = ctx.input.params
@@ -298,7 +298,7 @@ function harnessRoutes(app: ConformanceApp): void {
 		})
 	app
 		.get("/declared-errors/:status")
-		.meta({ operationId: "errors.declared" })
+		.meta({ operationId: "errors.declared", mcp: true })
 		.errors("bad_request", "not_found")
 		.output({ "application/json": { ok: z.object({ ok: z.boolean() }) } })
 		.handler((ctx) => {
@@ -308,7 +308,7 @@ function harnessRoutes(app: ConformanceApp): void {
 		})
 	app
 		.post("/idempotent")
-		.meta({ extensions: { "x-idempotency-key": true }, operationId: "idempotent.create" })
+		.meta({ extensions: { "x-idempotency-key": true }, operationId: "idempotent.create", mcp: true })
 		.output({ "application/json": { ok: z.object({ idempotencyKey: z.string().nullable() }) } })
 		.handler((ctx) => ctx.res.json("ok", { idempotencyKey: ctx.req.headers.get("idempotency-key") }))
 	app
@@ -318,25 +318,25 @@ function harnessRoutes(app: ConformanceApp): void {
 		.handler((ctx) => ctx.res.text("ok", "ok"))
 	app
 		.get("/ping")
-		.meta({ operationId: "ping" })
+		.meta({ operationId: "ping", mcp: true })
 		.output({ "application/json": { ok: z.object({ ping: z.literal("pong") }) } })
 		.handler((ctx) => ctx.res.json("ok", { ping: "pong" as const }))
 	app
 		.get("/boundary/default")
-		.meta({ operationId: "boundary.default" })
+		.meta({ operationId: "boundary.default", mcp: true })
 		.handler(() => {
 			throw new Error("unexpected crash")
 		})
 	app
 		.get("/boundary/custom")
-		.meta({ operationId: "boundary.custom" })
+		.meta({ operationId: "boundary.custom", mcp: true })
 		.boundary("limit_reached")
 		.handler(() => {
 			throw new Error("something broke")
 		})
 	app
 		.post("/validated")
-		.meta({ operationId: "validated.create" })
+		.meta({ operationId: "validated.create", mcp: true })
 		.input({ json: z.object({ name: z.string().min(3) }) })
 		.output({ "application/json": { ok: z.object({ name: z.string() }) } })
 		.handler((ctx) => ctx.res.json("ok", { name: ctx.input.json.name }))

@@ -218,6 +218,37 @@ describe("the CLI's rows (dx/conformance:32)", () => {
 	})
 })
 
+describe("the MCP server's rows (bit 18 f)", () => {
+	it("gives the MCP server the shared cells and its own five rows, and no other target those rows", () => {
+		const own = ["annotations", "binary-result", "gating", "output-schema", "token-budget"]
+		const others = TARGETS.filter((target) => target !== "mcp")
+		expect({
+			leaked: others.flatMap((target) =>
+				cellsFor(target)
+					.filter((cell) => own.includes(cell.feature))
+					.map((cell) => cell.key),
+			),
+			mcp: cellsFor("mcp")
+				.map((cell) => cell.key)
+				.sort(),
+			rows: FEATURES.filter((f) => f.targets.length === 1 && f.targets[0] === "mcp")
+				.map((f) => f.id)
+				.sort(),
+		}).toEqual({
+			leaked: [],
+			mcp: [
+				...TS_CELLS,
+				"annotations/by-method",
+				"binary-result/resource",
+				"gating/marked-only",
+				"output-schema/wrapped-or-not",
+				"token-budget/reference-app",
+			].sort(),
+			rows: own,
+		})
+	})
+})
+
 describe("cellsFor", () => {
 	it("gives each target exactly the scenarios of the rows that list it", () => {
 		expect(TARGETS.map((t) => cellsFor(t))).toEqual(TARGETS.map(cellsOfRows))
@@ -307,6 +338,21 @@ describe("compareCell on data", () => {
 			true,
 			true,
 		])
+	})
+})
+
+describe("compareCell on a ceiling", () => {
+	it("holds $atMost to a number no greater than its ceiling: equal passes, over fails, a non-number fails", () => {
+		const target = cell([{ data: { tokens: { $atMost: 100 } }, kind: "data", status: 200 }])
+		expect(
+			reds(target, [
+				data({ tokens: 99 }),
+				data({ tokens: 100 }),
+				data({ tokens: 101 }),
+				data({ tokens: "99" }),
+				data({}),
+			]),
+		).toEqual([false, false, true, true, true])
 	})
 })
 

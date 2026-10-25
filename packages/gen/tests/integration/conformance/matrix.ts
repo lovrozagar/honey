@@ -9,12 +9,16 @@ export { FEATURES, TARGETS } from "./features.ts"
 
 export type Target = (typeof TARGETS)[number]
 export type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json }
-/** where an expected value cannot be literal: present with any value, must not arrive, a UUID, or the call's own hop header */
+/**
+ * where an expected value cannot be literal: present with any value, must not arrive, a UUID, the call's own hop header,
+ * or a number no greater than a ceiling (a measured budget)
+ */
 export type Matcher =
 	| { readonly $any: true }
 	| { readonly $absent: true }
 	| { readonly $uuid: true }
 	| { readonly $hop: string }
+	| { readonly $atMost: number }
 export type Expected = Json | Matcher | readonly Expected[] | { readonly [key: string]: Expected }
 
 export type Auth =
@@ -38,6 +42,14 @@ export type Call = {
 	readonly body?: Body
 	readonly headers?: Readonly<Record<string, string>> // per call (C2)
 	readonly lastEventId?: string // SSE resume
+	/**
+	 * MCP-only rows: what the runner reads of the server instead of the call's answer: the listed tools' names, a few
+	 * tools' annotations or outputSchemas, the tools/list's tokens, or the call's result content
+	 */
+	readonly mcp?:
+		| { readonly read: "names" | "tokens" }
+		| { readonly read: "annotations" | "outputSchema"; readonly tools: readonly string[] }
+		| { readonly read: "content" }
 	readonly operation: string // operationId in the served document
 	readonly origin?: "alt" // per-call base URL (C2)
 	readonly params?: Readonly<Record<string, string>>
@@ -71,6 +83,8 @@ export type Observed =
 	  }
 	| { readonly frames: readonly Json[]; readonly kind: "frames" }
 	| { readonly kind: "timeout" }
+	/** an MCP-only row's read of the server: tool names, annotations, outputSchemas, tokens or a result's content */
+	| { readonly kind: "mcp"; readonly value: Json }
 	/** the CLI's own observation for a CLI-only row: its exit code, its stdout lines, each stderr line as JSON, a `$FILE` written */
 	| {
 			readonly exit: number
@@ -137,7 +151,7 @@ const show = (value: unknown) => (value === undefined ? "nothing" : JSON.stringi
 function matcherOf(expected: unknown): Matcher | null {
 	if (!isRecord(expected)) return null
 	const keys = Object.keys(expected)
-	return keys.length === 1 && ["$absent", "$any", "$hop", "$uuid"].includes(keys[0] as string)
+	return keys.length === 1 && ["$absent", "$any", "$atMost", "$hop", "$uuid"].includes(keys[0] as string)
 		? (expected as Matcher)
 		: null
 }
@@ -152,6 +166,7 @@ function satisfies(m: Matcher, actual: unknown, hop: WireHop | undefined): boole
 	if ("$absent" in m) return actual === undefined
 	if ("$any" in m) return actual !== undefined
 	if ("$uuid" in m) return typeof actual === "string" && UUID.test(actual)
+	if ("$atMost" in m) return typeof actual === "number" && actual <= m.$atMost
 	const header = hop?.headers[m.$hop.toLowerCase()]
 	return header !== undefined && actual === header
 }

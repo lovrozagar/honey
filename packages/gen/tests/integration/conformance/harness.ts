@@ -134,8 +134,8 @@ export async function startReferenceApp(): Promise<ReferenceApp> {
 const LOCAL_COMMANDS = [...BUILT_INS, "__complete"]
 
 /**
- * The operationIds `cells` call that `document` does not name. An empty operation is a CLI local command's alone: any other
- * argv with one throws, so no API call hides from this check.
+ * The operationIds `cells` call that `document` does not name. An empty operation is a CLI local command's or an MCP-only
+ * read of the server's tools alone: any other with one throws, so no API call hides from this check.
  */
 export function unknownOperations(cells: readonly Cell[], document: Record<string, unknown>): string[] {
 	const paths = (document.paths ?? {}) as Record<string, Record<string, { operationId?: unknown }>>
@@ -144,6 +144,8 @@ export function unknownOperations(cells: readonly Cell[], document: Record<strin
 		cell.calls.filter((call) => {
 			if (call.operation !== "") return true
 			if (call.argv !== undefined && LOCAL_COMMANDS.includes(call.argv[0] ?? "")) return false
+			/* an MCP-only read of the server's tools reaches no operation */
+			if (call.mcp !== undefined && call.argv === undefined) return false
 			throw new Error(`${cell.key}: an empty operation is a CLI local command's, not ${JSON.stringify(call.argv?.[0])}`)
 		}),
 	)

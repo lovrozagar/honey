@@ -102,6 +102,7 @@ jobs:
             'packages/gen/scripts/sdk-budget.cli.test.ts',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-gobuild-
       - run: touch "$RUNNER_TEMP/go-sdk-start"
@@ -212,6 +213,7 @@ jobs:
             'packages/gen/scripts/sdk-budget.cli.test.ts',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-gobuild-
       # gen compiles the emitted Rust at the toolchain rust-toolchain.toml pins (RUSTUP_TOOLCHAIN through its
@@ -239,6 +241,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/rust-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-rust-
       # gen runs every Python command through its python-env fixture, installed as in gen-python (which says why)
@@ -261,6 +264,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-python-
       # gen runs every dotnet through its csharp-env fixture, installed as in gen-csharp (which says why)
@@ -279,6 +283,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-dotnet-
       # gen runs every java, javac, google-java-format and Gradle through its java-env fixture: each pin in
@@ -298,6 +303,7 @@ jobs:
             'packages/gen/src/ir/**', 'packages/gen/src/runtime/java/**', 'packages/gen/tests/security/**',
             'packages/gen/tests/structure/mutation-harness*.ts', 'packages/gen/tests/structure/java-toolchain.test.ts',
             'packages/gen/tests/structure/compile-calls.ts', 'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-java-
       - run: mkdir -p ~/.cache/honey-tmp/rust/sdk && touch "$RUNNER_TEMP/rust-sdk-start"
@@ -366,6 +372,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-python-
       - run: mkdir -p ~/.cache/honey-tmp/python/sdk && touch "$RUNNER_TEMP/python-sdk-start"
@@ -420,6 +427,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-dotnet-
       # gen runs every dotnet through its csharp-env fixture: the global.json SDK from its tarball, checked
@@ -476,6 +484,7 @@ jobs:
             'packages/gen/src/ir/**', 'packages/gen/src/runtime/java/**', 'packages/gen/tests/security/**',
             'packages/gen/tests/structure/mutation-harness*.ts', 'packages/gen/tests/structure/java-toolchain.test.ts',
             'packages/gen/tests/structure/compile-calls.ts', 'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-java-
       # gen runs every java, javac, google-java-format and Gradle through its java-env fixture: each pin in
@@ -723,6 +732,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/csharp-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-dotnet-
       # gen runs every java, javac, google-java-format and Gradle through its java-env fixture: each pin in
@@ -742,6 +752,7 @@ jobs:
             'packages/gen/src/ir/**', 'packages/gen/src/runtime/java/**', 'packages/gen/tests/security/**',
             'packages/gen/tests/structure/mutation-harness*.ts', 'packages/gen/tests/structure/java-toolchain.test.ts',
             'packages/gen/tests/structure/compile-calls.ts', 'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-java-
       # gen's Rust caches for the toolchain files run below, keyed as in the test job
@@ -758,6 +769,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/rust-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts',
             'packages/core/tests/integration/conformance/**') }}
           restore-keys: ${{ runner.os }}-rust-harness-
@@ -775,6 +787,7 @@ jobs:
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
             'packages/gen/tests/integration/conformance/features.ts',
+            'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts',
             'packages/core/tests/integration/conformance/**') }}
           restore-keys: ${{ runner.os }}-python-harness-

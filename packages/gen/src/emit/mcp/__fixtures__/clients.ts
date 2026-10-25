@@ -107,5 +107,60 @@ export function clientCheck(
 	})
 }
 
+/** One step of a client session: list the tools, or call one. */
+export type Step = { readonly list: true } | { readonly call: { readonly name: string; readonly arguments: object } }
+
+/** The session script for `client`: connect, run each step in order, report every result (or its error) as one JSON line. */
+const sessionScript = (client: ClientName) =>
+	`${CLIENTS[client].join("\n")}
+const [command, ...rest] = JSON.parse(process.argv[2])
+const steps = JSON.parse(process.argv[3])
+const client = new Client({ name: "honey-conformance", version: "1.0.0" })
+await client.connect(new StdioClientTransport({ args: rest, command, env: process.env }))
+const out = []
+for (const step of steps) {
+	try {
+		out.push(step.list ? { tools: (await client.listTools()).tools } : { result: await client.callTool(step.call) })
+	} catch (error) {
+		out.push({ failed: String(error?.message ?? error) })
+	}
+}
+console.log(JSON.stringify(out))
+await client.close()
+`
+
+/** What one step gave: the tools listed, a call's result, or the client's error. */
+export type Stepped = {
+	readonly tools?: Record<string, unknown>[]
+	readonly result?: Record<string, unknown>
+	readonly failed?: string
+}
+
+/** `client` run against the server `command`, through `steps` in order: each step's tools, result or failure. */
+export function clientSession(
+	client: ClientName,
+	command: readonly string[],
+	steps: readonly Step[],
+): Promise<readonly Stepped[]> {
+	const path = join(clientsDir(), `session-${client}.mjs`)
+	writeFileSync(path, sessionScript(client))
+	return new Promise((settle, reject) => {
+		const child = spawn(process.execPath, [path, JSON.stringify(command), JSON.stringify(steps)], {
+			cwd: clientsDir(),
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+		let out = ""
+		let err = ""
+		child.stdout.on("data", (chunk: Buffer) => (out += chunk.toString()))
+		child.stderr.on("data", (chunk: Buffer) => (err += chunk.toString()))
+		child.once("error", reject)
+		child.once("close", (status) =>
+			status === 0
+				? settle(JSON.parse(out.trim().split("\n").at(-1) ?? "[]") as readonly Stepped[])
+				: reject(new Error(err)),
+		)
+	})
+}
+
 /** Whether npm can run here: the packed-install leg needs it. */
 export const hasNpm = (): boolean => spawnSync("npm", ["--version"]).status === 0
