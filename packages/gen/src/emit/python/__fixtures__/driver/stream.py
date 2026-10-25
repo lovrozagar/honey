@@ -232,15 +232,17 @@ async def frames(ws: Any, call: Call, script: WsScript, lens: Lens) -> Outcome:
     return streamed({"frames": read, "kind": "frames"}, failure, trace, lens)
 
 
-def json_or_text(text: str) -> Any:
+def wire_of(text: str) -> Any:
+    """A grid send as ``send`` takes it: a JSON text as its value (a string re-encoded), any other
+    text raw, as C#, Java and Go send it (sweep 14)."""
     try:
-        return json.loads(text)
+        return sendable(json.loads(text))
     except ValueError:
         return text
 
 
 async def live(conn: Any, call: Call, lens: Lens) -> Outcome:
-    """A ``ResumableConnection``: each grid ``send`` as its JSON value (else as a JSON string), then
+    """A ``ResumableConnection``: each grid ``send`` as its JSON value (else as raw text), then
     ``take`` values read (invoke.py refuses a realtime call without one). The first send or read
     error ends them, a read error also kept in ``realtime.errors``; a connection that ends first ends
     them quietly. Then ``close``, and the trace: the frames, the cursor ``conn.opts`` settled on
@@ -250,7 +252,7 @@ async def live(conn: Any, call: Call, lens: Lens) -> Outcome:
     failure: Exception | None = None
     for text in call.get("send", []):
         try:
-            await conn.send(sendable(json_or_text(text)))
+            await conn.send(wire_of(text))
         except Exception as error:
             if outside(error, lens):
                 raise

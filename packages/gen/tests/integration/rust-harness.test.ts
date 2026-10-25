@@ -374,8 +374,8 @@ rustDescribe("WebSocket", () => {
 			{ calls: [wsEcho({ search: { token: "valid-token" }, send: ["ping"], take: 1 })] },
 			wsOn(),
 		)
-		/* the bogus leg keeps v0's send (Fe6 overridden): the driver reads on after a send error, so the 4401 shows either way */
-		const bogus = await scripted({ calls: [wsEcho({ search: { token: "bogus-token" }, send: ["ping"] })] }, wsOn())
+		/* the bogus leg sends nothing (Fe8, sweep 19): the app refuses in onOpen, and a send into the closing socket pins nothing */
+		const bogus = await scripted({ calls: [wsEcho({ search: { token: "bogus-token" } })] }, wsOn())
 		/* ruling change (Fd2): v0's Err(Closed{4401, "unauthorized"}) is recv's None and closed_by() */
 		expect([valid.observed, bogus.observed, bogus.trace.calls[0]?.stream?.closedBy]).toEqual([
 			[{ frames: ["ping"], kind: "frames" }],

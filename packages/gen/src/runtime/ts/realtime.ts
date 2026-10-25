@@ -52,6 +52,15 @@ export type TransportConnection = {
 	send(data: string): Promise<void> | void
 }
 
+/** A swallowed callback: a consumer's hook must never break the reconnect loop. */
+export function safely(fn: (() => void) | undefined): void {
+	try {
+		fn?.()
+	} catch {
+		/* the consumer's callback threw; the connection carries on */
+	}
+}
+
 export type TransportAdapter = {
 	connect(url: string, opts: TransportOpts): TransportConnection
 }
@@ -277,6 +286,8 @@ export type ResumableConnection<T = unknown> = {
 	readonly provenTransport: Transport | null
 	/** Resolves once sent; over SSE and long-poll a POST, rejecting with its error. */
 	send(data: unknown): Promise<void>
+	/** `send`'s raw form: `text` as it is, a text frame or a POSTed text/plain body. */
+	sendText(text: string): Promise<void>
 	readonly state: ConnectionState
 	[Symbol.asyncIterator](): AsyncIterableIterator<T>
 }

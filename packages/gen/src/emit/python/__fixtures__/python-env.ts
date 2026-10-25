@@ -12,12 +12,10 @@ import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve as resolvePath } from "node:path"
+import { PY_FLOOR, pythonInstall, uvInstall } from "../../shared/__fixtures__/installs.ts"
 
 /** `file` at the repo root. */
 const atRoot = (file: string) => resolvePath(import.meta.dirname, "../../../../../..", file)
-
-/* the cache root as the install commands spell it, for a shell to expand */
-const SHELL_ROOT = "$HOME/.cache/honey-tmp/python"
 
 /** `pattern`'s first group in `<repo>/<file>`; throws naming the file when it does not match. */
 function pinIn(file: string, pattern: RegExp, what: string): string {
@@ -33,30 +31,12 @@ export const pinnedPython = (): string => pinIn(".python-version", /^(\d+\.\d+\.
 /** The pinned uv, as the repo root's `uv.toml` requires it (`required-version = "==0.13.1"`). */
 export const pinnedUv = (): string => pinIn("uv.toml", /^required-version = "==(\d+\.\d+\.\d+)"$/m, "exact uv version")
 
-/**
- * The interpreter the floor legs run under (G10): the oldest the emitted SDK supports. It is not x.y.0: uv has no
- * 3.11.0 build, and 3.11.1 and 3.11.3 need `libcrypt.so.1` (P7). Its minor is the emitted `requires-python`.
- */
-export const PY_FLOOR = "3.11.4"
-
 /** Where gen's Python lives: one area under the toolchain cache, made on first use. */
 export function pythonCacheDir(...parts: string[]): string {
 	const dir = join(process.env.HOME ?? homedir(), ".cache/honey-tmp/python", ...parts)
 	mkdirSync(dir, { recursive: true })
 	return dir
 }
-
-/**
- * The command that installs uv `version` into the honey cache, run by any uv (the user's, or CI's setup-uv), which
- * it leaves as it is: no `uv.toml` (the user's or the repo's) steers it, no Python downloads for the tool's own
- * venv, and its links go in the cache's `uv/bin`, never `~/.local/bin`.
- */
-export const uvInstall = (version: string): string =>
-	`UV_CACHE_DIR="${SHELL_ROOT}/uv-cache" UV_TOOL_DIR="${SHELL_ROOT}/uv/tools" UV_TOOL_BIN_DIR="${SHELL_ROOT}/uv/bin" uv tool install --no-config --no-python-downloads uv==${version}`
-
-/** The command that installs `versions` with the pinned uv, under the cache and linked nowhere (`--no-bin`). */
-export const pythonInstall = (versions: readonly string[]): string =>
-	`UV_CACHE_DIR="${SHELL_ROOT}/uv-cache" UV_PYTHON_INSTALL_DIR="${SHELL_ROOT}/pythons" UV_PYTHON_BIN_DIR="${SHELL_ROOT}/pybin" "${SHELL_ROOT}/uv/bin/uv" python install --no-bin ${versions.join(" ")}`
 
 /* the variables a caller's shell may set that would steer a uv, an interpreter or a tool */
 const STEERING = /^(?:PYTHON|VIRTUAL_ENV$|CONDA_|UV_|PIP_|MYPY|RUFF_)/
@@ -261,3 +241,5 @@ export function withPython(version = pinnedPython()): boolean {
 		)
 	return found.status === 0
 }
+
+export { PY_FLOOR, pythonInstall, uvInstall }

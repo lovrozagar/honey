@@ -259,6 +259,19 @@ goDescribe("the Go test driver: how a WebSocket read ends", () => {
 		])
 	}, 600_000)
 
+	it("keeps reading after a send fails: the server's close frame still waiting is closedBy, the send's error traced", async () => {
+		/* the server closes and hangs up before the client sends; 12 MiB outgrows the client's send buffer, so the send fails every time */
+		const reply = ws([{ close: { code: 4401, hangUp: true, reason: "unauthorized" } }])
+		const script: Script = { calls: [{ ws: { on: true, send: [{ bytes: 12 << 20 }] } }] }
+		const { run } = await drive(streamsSdk(), [reply], [socket()], script)
+		const call = run.trace?.calls[0]
+		expect({ error: call?.error?.via, observed: run.observed, stream: call?.stream }, run.stderr).toEqual({
+			error: "stream",
+			observed: [{ frames: [], kind: "frames" }],
+			stream: expect.objectContaining({ closedBy: { code: 4401, reason: "unauthorized" }, yields: 0 }),
+		})
+	}, 600_000)
+
 	it("fails the run when a stream never ends: stream stalled, after 10 s", async () => {
 		const started = Date.now()
 		const { run } = await drive(streamsSdk(), [ws([])], [socket()])

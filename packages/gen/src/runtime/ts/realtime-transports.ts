@@ -50,7 +50,11 @@ function connection(close: () => void, send: (data: string) => Promise<void> | v
 /** An HTTP transport: `run` until closed; a send POSTs through the client. */
 function httpConnection(at: Target, run: (conn: TransportConnection, signal: AbortSignal) => Promise<void>) {
 	const abort = new AbortController()
-	const post = (data: string) => at.http.request("POST", at.path, { ...at.opts, json: JSON.parse(data) }).then(() => {})
+	const post = (data: string) => {
+		const value = payloadOf(data)
+		const text = { body: new TextEncoder().encode(data), headers: { ...at.opts.headers, "content-type": "text/plain" } }
+		return at.http.request("POST", at.path, { ...at.opts, ...(value === data ? text : { json: value }) }).then(() => {})
+	}
 	const conn = connection(() => abort.abort(), post)
 	run(conn, abort.signal).catch((err: unknown) => abort.signal.aborted || conn.onError(err))
 	return conn

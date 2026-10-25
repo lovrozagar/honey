@@ -13,15 +13,17 @@ import { type SpawnSyncReturns, spawn, spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
+import {
+	DOTNET_RID,
+	DOTNET_SETTINGS as SETTINGS,
+	dotnetDirs as dirs,
+	dotnetInstall,
+} from "../../shared/__fixtures__/installs.ts"
 
 /** The pin file, at the repo root. */
 const globalJson = () => resolve(import.meta.dirname, "../../../../../../global.json")
 
 /* this dir, repo-relative, as the install line names it from the repo's top level */
-const FIXTURES = "packages/gen/src/emit/csharp/__fixtures__"
-
-/* the cache root as the install line spells it, for a shell to expand */
-const SHELL_ROOT = "$HOME/.cache/honey-tmp/dotnet"
 
 /**
  * The pinned SDK, as `global.json` holds it (`10.0.402`): an exact version that rolls forward to no other, so a
@@ -34,9 +36,6 @@ export function pinnedDotnet(): string {
 		throw new Error(`global.json pins no exact SDK with rollForward "disable":\n${text}`)
 	return sdk.version
 }
-
-/** The one runtime identifier the install names: CI's ubuntu-latest and every contributor machine so far. */
-export const DOTNET_RID = "linux-x64"
 
 /** The target framework the pinned SDK's major names (R1: one target, `net10.0`). */
 const tfm = () => `net${pinnedDotnet().split(".")[0]}.0`
@@ -62,32 +61,6 @@ export function dotnetRuntime(): string {
 /** The reference assemblies csc compiles against, from the pinned SDK's own targeting pack. */
 export const refPack = (): string =>
 	join(dotnetRoot(), "packs/Microsoft.NETCore.App.Ref", dotnetRuntime(), "ref", tfm())
-
-/** The dirs every .NET command runs with, under `root` (the cache, or the install line's `$D`). */
-const dirs = (root: string, version: string) => ({
-	DOTNET_CLI_HOME: `${root}/home`,
-	DOTNET_ROOT: `${root}/toolchain/${version}`,
-	NUGET_HTTP_CACHE_PATH: `${root}/nuget-http`,
-	NUGET_PACKAGES: `${root}/nuget`,
-	NUGET_PLUGINS_CACHE_PATH: `${root}/nuget-plugins`,
-	TMPDIR: `${root}/tmp`,
-})
-
-/* no telemetry, banner, first-run work, certificate or PATH edit; English output; no NuGet doc files; and the lean
- * switches (R7, mandatory): no MSBuild node reuse, no MSBuild server, no compiler server */
-const SETTINGS = {
-	DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false",
-	DOTNET_CLI_TELEMETRY_OPTOUT: "1",
-	DOTNET_CLI_UI_LANGUAGE: "en",
-	DOTNET_CLI_USE_MSBUILD_SERVER: "0",
-	DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: "1",
-	DOTNET_GENERATE_ASPNET_CERTIFICATE: "false",
-	DOTNET_NOLOGO: "1",
-	DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1",
-	MSBUILDDISABLENODEREUSE: "1",
-	NUGET_XMLDOC_MODE: "skip",
-	UseSharedCompilation: "false",
-} as const
 
 /** The flags every build passes besides the lean variables: the defaults leave `VBCSCompiler` alive (P2-C). */
 export const LEAN_BUILD = ["-nodeReuse:false", "-maxcpucount:1", "-p:UseSharedCompilation=false"] as const
@@ -155,35 +128,6 @@ export function runtimeConfig(): string {
 	return JSON.stringify({ runtimeOptions: { framework, rollForward: "Disable", tfm: tfm() } })
 }
 
-/**
- * The command that installs SDK `version` into the honey cache, from anywhere in the repo: Microsoft's tarball,
- * checked against `dotnet-sdk.sha512` before anything is extracted, extracted whole or not at all, then the seed
- * restore under the env every run uses, the one NuGet fetch (the build-time package an AOT-compatible build
- * pulls), so every later restore is offline. Its HOME is the cache's, since the fetch's certificate checks write
- * the runtime's revocation cache under HOME, and the user's `~/.dotnet` is left as it is.
- */
-export function dotnetInstall(version: string): string {
-	const tarball = `"$D/dl/dotnet-sdk-$V-${DOTNET_RID}.tar.gz"`
-	const env = Object.entries({ ...dirs("$D", "$V"), HOME: "$D/home", ...SETTINGS })
-		.map(([key, value]) => `${key}="${value}"`)
-		.join(" ")
-	return [
-		`V=${version}`,
-		`D="${SHELL_ROOT}"`,
-		`F="$(git rev-parse --show-toplevel)/${FIXTURES}"`,
-		`T="$D/toolchain/$V"`,
-		`mkdir -p "$D/dl" "$D/home" "$D/tmp"`,
-		`curl -fsSL -o ${tarball} "https://builds.dotnet.microsoft.com/dotnet/Sdk/$V/dotnet-sdk-$V-${DOTNET_RID}.tar.gz"`,
-		`(cd "$D/dl" && sha512sum -c "$F/dotnet-sdk.sha512")`,
-		`rm -rf "$T" "$T.partial"`,
-		`mkdir -p "$T.partial"`,
-		`tar -xzf ${tarball} -C "$T.partial"`,
-		`mv "$T.partial" "$T"`,
-		`rm ${tarball}`,
-		`${env} "$T/dotnet" restore "$F/seed/Seed.csproj" --source https://api.nuget.org/v3/index.json --artifacts-path "$D/tmp/seed"`,
-	].join(" && ")
-}
-
 /** Whether the pinned SDK and the seed's package are installed: nothing is fetched here. */
 export function hasDotnet(): boolean {
 	if (!existsSync(join(dotnetRoot(), "dotnet"))) return false
@@ -209,3 +153,5 @@ export function withDotnet(): boolean {
 		)
 	return present
 }
+
+export { DOTNET_RID, dotnetInstall }

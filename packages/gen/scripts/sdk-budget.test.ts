@@ -545,10 +545,13 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * connection and POSTed send (+646), the frames synthesized from bare payloads (+932), the string cursor (+395), the
  * client's one refresh per open behind a symbol key (+677), the SDK's dispatch and ResumableConnection<T> (+1,177),
  * +1,110 of one-line comments (http.ts +455, sdk.ts +420, realtime.ts +496, realtime-connection.ts +334).
+ * Bit 19 f, +402 B to 119,636 B: a realtime send's raw form, sendText, as the siblings' (sweep 14): the method and its
+ * type (+113) with a one-line comment (+86), its text POSTed as text/plain over SSE and long-poll (+187), and safely
+ * moved to realtime.ts so realtime-connection.ts stays at the line cap (+16: its import and export).
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 119_234
+const TS_RUNTIME_BYTES = 119_636
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

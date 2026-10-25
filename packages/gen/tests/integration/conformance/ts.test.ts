@@ -19,8 +19,8 @@ type Socket = {
 }
 type Sdk = { dispose(): void } & Record<string, unknown>
 type SdkClass = new (config: Input) => Sdk
-/** A service map node, read for one fact: `empty`, an operation declaring no success body. */
-type MapNode = { empty?: boolean } & Record<string, unknown>
+/** A service map node, read for two facts: `empty`, an operation declaring no success body, and `realtime`. */
+type MapNode = { empty?: boolean; realtime?: boolean } & Record<string, unknown>
 type App = Record<string, (path: string, input: Input) => Promise<unknown>>
 
 /** Each titled cell's v0 port, or the C5 case whose live leg it is: the suite names its `it` `<key> (<title>)`. */
@@ -66,6 +66,13 @@ function operationOf(sdk: Sdk, operation: string): (input: Input) => unknown {
 	for (const segment of operation.split(".")) member = (member as Record<string, unknown> | undefined)?.[segment]
 	if (typeof member !== "function") throw new Error(`ConformanceSDK has no operation ${operation}`)
 	return member as (input: Input) => unknown
+}
+
+/** Whether the operation is realtime, by the service map the SDK dispatches by. */
+function isRealtime(map: MapNode, operation: string): boolean {
+	let node: MapNode | undefined = map
+	for (const segment of operation.split(".")) node = node?.[segment] as MapNode | undefined
+	return node?.realtime === true
 }
 
 /** Whether the operation declares no success body, by the service map the SDK dispatches by. */
@@ -139,14 +146,39 @@ const isSocket = (value: unknown): value is Socket =>
 const isStream = (value: unknown): value is AsyncIterable<Event> =>
 	typeof value === "object" && value !== null && Symbol.asyncIterator in value
 
-type Resumable = AsyncIterable<Json> & { close(): void }
+type Resumable = AsyncIterable<Json> & {
+	close(): void
+	send(data: unknown): Promise<void>
+	sendText(text: string): Promise<void>
+}
+/** Whether `text` parses as JSON. */
+function isJson(text: string): boolean {
+	try {
+		JSON.parse(text)
+		return true
+	} catch {
+		return false
+	}
+}
+
 const isResumable = (value: unknown): value is Resumable => isStream(value) && "provenTransport" in value
 
-/** A realtime connection's first `take` values, read as Go's driver reads them (frames), then it is closed. */
-async function liveOf(connection: Resumable, take = Number.POSITIVE_INFINITY): Promise<Json[]> {
+/**
+ * A realtime connection's first `take` values, read as Go's driver reads them (frames), then it is closed. The call's
+ * `send` goes once it is `connected`, a JSON text as its value and any other as raw text (`sendText`).
+ */
+async function liveOf(connection: Resumable, call: Call, connected?: Promise<unknown>): Promise<Json[]> {
+	const values = connection[Symbol.asyncIterator]()
 	const frames: Json[] = []
 	try {
-		for await (const value of connection) if (frames.push(value) >= take) break
+		let next = values.next()
+		if (call.send?.length) await connected
+		for (const text of call.send ?? [])
+			await (isJson(text) ? connection.send(JSON.parse(text)) : connection.sendText(text))
+		for (let result = await next; !result.done; result = await next) {
+			if (frames.push(result.value) >= (call.take ?? Number.POSITIVE_INFINITY)) break
+			next = values.next()
+		}
 	} finally {
 		connection.close()
 	}
@@ -154,21 +186,21 @@ async function liveOf(connection: Resumable, take = Number.POSITIVE_INFINITY): P
 }
 
 /** One call's answer, normalized: a raw response, a socket, a realtime connection, an event stream or a safe-mode result. */
-async function observe(answer: unknown, call: Call): Promise<Observed> {
+async function observe(answer: unknown, call: Call, connected?: Promise<unknown>): Promise<Observed> {
 	if (answer instanceof Response) {
 		const headers = Object.fromEntries(answer.headers)
 		return { body: await answer.text(), headers, kind: "raw", status: answer.status }
 	}
 	if (isSocket(answer)) return { frames: await framesOf(answer, call), kind: "frames" }
-	if (isResumable(answer)) return { frames: await liveOf(answer, call.take), kind: "frames" }
+	if (isResumable(answer)) return { frames: await liveOf(answer, call, connected), kind: "frames" }
 	if (isStream(answer)) return { events: await eventsOf(answer, call.take), kind: "events" }
 	return settled(answer as Result)
 }
 
 /** Send one call: a timeout or abort is `timeout`, a thrown ClientError (a stream's non-2xx) an error. */
-async function attempt(fire: () => unknown, call: Call): Promise<Observed> {
+async function attempt(fire: () => unknown, call: Call, connected?: Promise<unknown>): Promise<Observed> {
 	try {
-		return await observe(await fire(), call)
+		return await observe(await fire(), call, connected)
 	} catch (e) {
 		if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return { kind: "timeout" }
 		const status = (e as { status?: unknown } | null)?.status
@@ -183,6 +215,11 @@ async function attempt(fire: () => unknown, call: Call): Promise<Observed> {
  */
 async function callOf(clients: { map: MapNode; safe: Sdk; thrower: Sdk }, call: Call, app: ReferenceApp) {
 	const input = inputOf(call, app)
+	/* a realtime op opens one connection, whatever its body: its sends wait for the open */
+	if (isRealtime(clients.map, call.operation)) {
+		const connected = new Promise((resolve) => (input.onReconnected = resolve))
+		return attempt(() => operationOf(clients.safe, call.operation)(input), call, connected)
+	}
 	if (call.raw || !declaresNoBody(clients.map, call.operation))
 		return attempt(() => operationOf(clients.safe, call.operation)(input), call)
 	const send = async () =>

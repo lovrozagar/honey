@@ -26,7 +26,7 @@ import { generateGoCli } from "../../../src/emit/cli/module.ts"
 import { GO_FLOOR, goCacheDir, withGo } from "../../../src/emit/go/__fixtures__/go-env.ts"
 import { goCallPlans } from "../../../src/emit/go/sdk.ts"
 import { type ReferenceApp, type TargetRunner, targetSuite } from "./harness.ts"
-import type { Call, Cell, Json, Observed, Setup } from "./matrix.ts"
+import { type Call, type Cell, cellsFor, type Json, type Observed, type Setup } from "./matrix.ts"
 
 /** The reference app's CLI: its title gives the binary and the variables' prefix. */
 const PREFIX = "CONFORMANCE"
@@ -205,10 +205,19 @@ async function observedArgv(cli: Built, argv: readonly string[], env: Record<str
  * The CLI runner: the reference app's CLI built, vetted and linked once from the served document. A call it cannot
  * express throws, and the cell is red, never skipped.
  */
+/** The shared cells the CLI lacks by design, each with its reason. */
+const LACKS: Readonly<Record<string, string>> = {
+	"json-status/realtime-send-non-ascii":
+		"a realtime command only prints its feed (Resume): standard input is sent by a WebSocket command alone (bit 17)",
+	"json-status/realtime-send-raw-text":
+		"a realtime command only prints its feed (Resume): standard input is sent by a WebSocket command alone (bit 17)",
+}
+
 function cliRunner(): TargetRunner {
 	let cli: Built | undefined
 	let commands = new Map<string, Command>()
 	return {
+		lacks: (cell) => Object.hasOwn(LACKS, cell.key),
 		async prepare(app) {
 			const built = builtCli(generateGoCli(app.document).files)
 			if (!built.built || built.vet.length > 0 || built.linkErrors !== "")
@@ -248,5 +257,12 @@ describe.skipIf(!withGo())("cli toolchain", () => {
 				vet: [],
 			})
 		}, 600_000)
+	})
+})
+
+describe("conformance × cli lacks", () => {
+	it("lacks only cells the grid holds for cli", () => {
+		const keys = new Set(cellsFor("cli").map((cell) => cell.key))
+		expect(Object.keys(LACKS).filter((key) => !keys.has(key))).toEqual([])
 	})
 })

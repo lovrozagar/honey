@@ -11,7 +11,7 @@ use crate::protocol::{Call, Observed};
 use crate::stream::streamed;
 use crate::trace::rust_error;
 
-/// The method's open connection: each grid `send` as its JSON value (else as a JSON string), so the
+/// The method's open connection: each grid `send` as its JSON value (else as raw text, send_text), so the
 /// wire carries the text; then `take` values read (protocol.rs refuses a realtime call without one),
 /// each as its JSON. The first send or read error is traced via "stream" and ends the reads, a read
 /// error also kept in `realtime.errors`; a connection that ends first (closed or canceled) ends them
@@ -31,8 +31,11 @@ where
     };
     let (mut frames, mut errors, mut failure) = (Vec::new(), Vec::new(), None);
     for text in call.send.iter().flatten() {
-        let message = serde_json::from_str(text).unwrap_or_else(|_| Value::String(text.clone()));
-        if let Err(e) = rc.send(&message).await {
+        let sent = match serde_json::from_str::<Value>(text) {
+            Ok(message) => rc.send(&message).await,
+            Err(_) => rc.send_text(text).await,
+        };
+        if let Err(e) = sent {
             failure = Some(e);
             break;
         }

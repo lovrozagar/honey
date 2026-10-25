@@ -14,6 +14,8 @@ const getItem = (id: string, more: Partial<Call> = {}) =>
 	call("items.get", "GET", "/v1/items/:id", { params: { id }, ...more })
 const echo = (more: Partial<Call> = {}) => call("echo.get", "GET", "/v1/echo", more)
 const echoed = data({ method: "GET", requestId: ANY })
+/** non-ASCII beside the characters encoders escape (Go `<>&`, .NET `'+\``): every target must round-trip its value */
+const ESCAPED = "é 中 🙂 <&> ' \" + `"
 
 const verbs: Scenario[] = [
 	{
@@ -53,6 +55,13 @@ const verbs: Scenario[] = [
 		id: "post",
 		wire: [hop("POST", "/v1/items", { body: { contentType: JSON_TYPE, json: { n: 1, name: "widget" } } })],
 	},
+	/* sweep 15: the wire compares the parsed body, so any valid escaping passes; the echoed name must be the same text */
+	{
+		calls: [call("items.create", "POST", "/v1/items", { body: { kind: "json", value: { name: ESCAPED } } })],
+		expect: [data({ id: "item-new", name: ESCAPED }, 201)],
+		id: "post-non-ascii",
+		wire: [hop("POST", "/v1/items", { body: { contentType: JSON_TYPE, json: { name: ESCAPED } } })],
+	},
 	{
 		calls: [
 			call("items.patch", "PATCH", "/v1/items/:id", {
@@ -83,6 +92,18 @@ const jsonStatus: Scenario[] = [
 		calls: [call("items.delete", "DELETE", "/v1/items/:id", { params: { id: "i2" } })],
 		expect: [data(null, 204)],
 		id: "no-content-204",
+	},
+	/* sweep 30: the same value through a realtime send, echoed back: the frame must parse to what was sent */
+	{
+		calls: [call("realtime.echo", "GET", "/v1/realtime/echo", { send: [JSON.stringify({ name: ESCAPED })], take: 1 })],
+		expect: [{ frames: [{ name: ESCAPED }], kind: "frames" }],
+		id: "realtime-send-non-ascii",
+	},
+	/* a send that is no JSON goes as raw text on every SDK (sweep 14): the echo wraps non-JSON text as { got } */
+	{
+		calls: [call("realtime.echo", "GET", "/v1/realtime/echo", { send: ["hello"], take: 1 })],
+		expect: [{ frames: [{ got: "hello" }], kind: "frames" }],
+		id: "realtime-send-raw-text",
 	},
 ]
 
@@ -261,6 +282,7 @@ const REFERENCE_INDEX = [
 	"items patch <id> --data json",
 	"items update <id> [--flag] [--limit integer] [--q string] [--ratio number] [--tags string...] [--x-trace string] --data json",
 	"ping",
+	"realtime echo (realtime)",
 	"realtime mixed (realtime)",
 	"realtime refused (realtime)",
 	"redirect cross-origin",

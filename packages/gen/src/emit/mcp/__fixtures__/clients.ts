@@ -9,8 +9,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-
-const FIXTURES = "packages/gen/src/emit/mcp/__fixtures__"
+import { clientsInstall } from "../../shared/__fixtures__/installs.ts"
 
 /** Where the clients are installed. */
 export const clientsDir = (): string => join(process.env.HOME ?? "", ".cache/honey-tmp/mcp-clients")
@@ -20,17 +19,6 @@ const lockSha = () =>
 	createHash("sha256")
 		.update(readFileSync(new URL("./client-lock.json", import.meta.url)))
 		.digest("hex")
-
-/** The command that installs the pinned clients, from anywhere in the repo: verified by npm ci, kept whole or not at all. */
-export function clientsInstall(): string {
-	return [
-		`P="$(git rev-parse --show-toplevel)/${FIXTURES}" && D="$HOME/.cache/honey-tmp/mcp-clients"`,
-		`rm -rf "$D.partial" && mkdir -p "$D.partial" && cp "$P/client-pins.json" "$D.partial/package.json"`,
-		`cp "$P/client-lock.json" "$D.partial/package-lock.json"`,
-		`(cd "$D.partial" && npm ci --ignore-scripts --no-audit --no-fund)`,
-		`sha256sum "$P/client-lock.json" | cut -d" " -f1 > "$D.partial/lock.sha256" && rm -rf "$D" && mv "$D.partial" "$D"`,
-	].join(" && ")
-}
 
 /** Whether the pinned clients are installed, from the lock checked in now. */
 export const hasClients = (): boolean => {
@@ -164,3 +152,5 @@ export function clientSession(
 
 /** Whether npm can run here: the packed-install leg needs it. */
 export const hasNpm = (): boolean => spawnSync("npm", ["--version"]).status === 0
+
+export { clientsInstall }

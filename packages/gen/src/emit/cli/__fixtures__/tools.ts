@@ -11,6 +11,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
+import { toolsInstall } from "../../shared/__fixtures__/installs.ts"
 
 /** A pinned tool: its archive's URL and digest, the directory it extracts to, and its binary there. */
 type Pin = { readonly bin: string; readonly dir: string; readonly sha256: string; readonly url: string }
@@ -20,7 +21,6 @@ export const SHELLS = ["bash", "zsh", "fish", "powershell"] as const
 export type Shell = (typeof SHELLS)[number]
 
 /* this file's directory, repo-relative, as the install line names it from the repo's top level */
-const FIXTURES = "packages/gen/src/emit/cli/__fixtures__"
 
 /** The pinned tools, by name. */
 export const TOOLS = ["fish", "goreleaser", "pwsh", "shellcheck", "zsh"] as const
@@ -38,20 +38,6 @@ export const toolBin = (name: Tool) => join(toolsDir(), pins()[name].dir, pins()
 /** The binary that checks `shell`'s scripts. */
 const checker = (shell: Shell) =>
 	shell === "bash" ? "bash" : toolBin(({ fish: "fish", powershell: "pwsh", zsh: "zsh" } as const)[shell])
-
-/**
- * The command that installs every pin into the tools cache, from anywhere in the repo: each archive checked against
- * `tool-pins.json`'s sha256 before it is kept, then extracted whole or not at all.
- */
-export function toolsInstall(): string {
-	return [
-		`P="$(git rev-parse --show-toplevel)/${FIXTURES}/tool-pins.json" && D="$HOME/.cache/honey-tmp/tools" && mkdir -p "$D/dl"`,
-		`for k in $(jq -r 'keys[]' "$P"); do U="$(jq -r --arg k "$k" '.[$k].url' "$P")" && R="$(jq -r --arg k "$k" '.[$k].dir' "$P")"`,
-		`curl -fsSL -o "$D/dl/$k" "$U" && echo "$(jq -r --arg k "$k" '.[$k].sha256' "$P")  $D/dl/$k" | sha256sum -c -`,
-		`rm -rf "$D/$R" "$D/$R.partial" && mkdir -p "$D/$R.partial" && tar -xf "$D/dl/$k" -C "$D/$R.partial"`,
-		`chmod +x "$D/$R.partial/$(jq -r --arg k "$k" '.[$k].bin' "$P")" && mv "$D/$R.partial" "$D/$R" && rm "$D/dl/$k" || exit 1; done`,
-	].join(" && ")
-}
 
 /** Whether every pinned tool and bash is installed: nothing is fetched here. */
 export const hasTools = (): boolean =>
@@ -83,3 +69,5 @@ export function syntaxCheck(shell: Shell, file: string): { readonly status: numb
 	const ran = spawnSync(checker(shell), args, { encoding: "utf8", env: { ...process.env, HOME: toolsDir() } })
 	return { errors: `${ran.stdout}${ran.stderr}`, status: ran.status ?? 1 }
 }
+
+export { toolsInstall }

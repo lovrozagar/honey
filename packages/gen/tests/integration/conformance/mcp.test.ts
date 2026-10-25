@@ -34,6 +34,8 @@ const LACKS: Readonly<Record<string, string>> = {
 		"the server's one credential is $<PREFIX>_API_KEY under the spec's scheme; it takes no other header (bits/19)",
 	"auth/cross-origin-redirect-drops":
 		"the server has no header or redirect configuration; it follows no cross-origin redirect (result.test pins it)",
+	"json-status/realtime-send-non-ascii": "a realtime operation is no tool: the server has no realtime send (bit 18 e)",
+	"json-status/realtime-send-raw-text": "a realtime operation is no tool: the server has no realtime send (bit 18 e)",
 	"overrides/base-url": "a tool has no per-call base URL: the server's $<PREFIX>_BASE_URL is every call's",
 	"overrides/headers": "a tool takes no per-call header beyond its operation's declared parameters",
 	"overrides/timeout": "a tool has no per-call timeout: the server's $<PREFIX>_TIMEOUT_MS is every call's",

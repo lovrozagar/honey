@@ -282,6 +282,36 @@ goDescribe("safe mode: an error status in SDKResult.Err, every other failure the
 	}, 600_000)
 })
 
+goDescribe("safe mode: a failure without an error status is the error return, never a result", () => {
+	/* ported from csharp/errors.safe.test.ts:78: every other failure is the error return, never a result */
+	it("keeps an undecodable 2xx, a timeout, a cancel and a hook throw out of the result, each the error return", async () => {
+		const sdk = errSdk(false)
+		const torn: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
+		const late: Reply = { delayMs: 2000, json: { id: "i1", name: "one" }, status: 200 }
+		const calls = [GET, { ...GET, timeoutMs: 300 }, GET]
+		const { hops, run } = await drive(sdk, [torn, late], calls, { calls: [null, null, { cancel: "before" }] })
+		const hooked = await drive(sdk, [], [GET], { hooks: { request: [{ fail: "boom" }] } })
+		const traces = [run, hooked.run].flatMap((r) => r.trace?.calls ?? [])
+		const deadline = run.trace?.calls[1]?.error?.deadline
+		expect({
+			deadline,
+			hops: [hops.length, hooked.hops.length],
+			landed: traces.map(landed),
+			observed: [run.observed, hooked.run.observed],
+		}).toEqual({
+			deadline: true,
+			hops: [2, 0],
+			landed: [
+				["return", undefined, false, [], undefined],
+				["return", undefined, false, [], undefined],
+				["return", undefined, true, [], undefined],
+				["return", undefined, false, [], undefined],
+			],
+			observed: [[null, { kind: "timeout" }, null], [null]],
+		})
+	}, 600_000)
+})
+
 goDescribe("the runtime's error types, from a consumer program", () => {
 	// v0: 473e487f9f
 	it("reaches a 404 as *NotFoundError, *ClientError and any Status() int, as HoneyRaiseForStatus raises it", () => {

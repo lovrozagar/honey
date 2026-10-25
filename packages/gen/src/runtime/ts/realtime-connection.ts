@@ -5,6 +5,7 @@ import {
 	type KeepaliveLoop,
 	RealtimeAbortError,
 	RealtimeConnectError,
+	safely,
 	type ServerFrame,
 	type Transport,
 	type TransportAdapter,
@@ -16,15 +17,6 @@ import {
 } from "./realtime.ts"
 
 type QueueEntry = { type: "done" } | { error: unknown; type: "error" } | { type: "value"; value: unknown }
-
-/** A swallowed callback: a consumer's hook must never break the reconnect loop. */
-function safely(fn: (() => void) | undefined): void {
-	try {
-		fn?.()
-	} catch {
-		/* the consumer's callback threw; the connection carries on */
-	}
-}
 
 /**
  * One logical stream over reconnecting transports: messages arrive in order through the async
@@ -258,8 +250,12 @@ export class Resumable implements ResumableConnection {
 		this.#later(() => void this.#connect(), this.#opts.reconnectDelayMs ?? 1000)
 	}
 
-	async send(data: unknown): Promise<void> {
-		if (!this.#closed) await this.#conn?.send(JSON.stringify(data))
+	send(data: unknown): Promise<void> {
+		return this.sendText(JSON.stringify(data))
+	}
+
+	async sendText(text: string): Promise<void> {
+		if (!this.#closed) await this.#conn?.send(text)
 	}
 
 	close(_reason?: string): void {

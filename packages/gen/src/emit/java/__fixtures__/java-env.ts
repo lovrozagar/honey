@@ -11,9 +11,9 @@ import { type SpawnSyncReturns, spawn, spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
+import { javaInstall } from "../../shared/__fixtures__/installs.ts"
 
 /* this dir, repo-relative, as the install line names it from the repo's top level */
-const FIXTURES = "packages/gen/src/emit/java/__fixtures__"
 
 /** A pinned download: where it comes from, its digest and its version. */
 type Pinned = { readonly sha256: string; readonly url: string; readonly version: string }
@@ -158,46 +158,6 @@ export function runGradle(args: readonly string[], options: RunOptions = {}): Sp
 	return run(gradleBin(), [...forced, ...args], options)
 }
 
-/* `query` is a jq filter over the pins whose `.url` and `.sha256` name one download; `$k` is the loop's JDK */
-const fetchLine = (query: string, out: string) =>
-	`curl -fsSL -o ${out} "$(jq -r --arg k "$k" '${query}.url' "$P")" && echo "$(jq -r --arg k "$k" '${query}.sha256' "$P")  ${out}" | sha256sum -c -`
-
-/**
- * The command that installs every pin into the honey cache, from anywhere in the repo: each JDK tarball, the
- * google-java-format jar, the Gradle zip and the Jackson set, each checked against `java-pins.json`'s sha256 before
- * it is kept, each JDK extracted whole or not at all. CI runs it verbatim.
- */
-export function javaInstall(): string {
-	const jdk = [
-		`for k in $(jq -r '.jdk | keys[]' "$P"); do R="$(jq -r --arg k "$k" '.jdk[$k].release' "$P")"`,
-		fetchLine(".jdk[$k]", `"$D/dl/$R.tar.gz"`),
-		`rm -rf "$D/toolchain/$R" "$D/toolchain/$R.partial" && mkdir -p "$D/toolchain/$R.partial"`,
-		`tar -xzf "$D/dl/$R.tar.gz" -C "$D/toolchain/$R.partial" --strip-components=1`,
-		`mv "$D/toolchain/$R.partial" "$D/toolchain/$R" && rm "$D/dl/$R.tar.gz" || exit 1; done`,
-	].join(" && ")
-	const gjf = fetchLine(".googleJavaFormat", `"$D/toolchain/google-java-format-$G.jar"`)
-	const gradle = [
-		fetchLine(".gradle", `"$D/dl/gradle.zip"`),
-		`rm -rf "$D/toolchain/gradle-$W" && unzip -q "$D/dl/gradle.zip" -d "$D/toolchain" && rm "$D/dl/gradle.zip"`,
-	].join(" && ")
-	const jackson = [
-		`for a in $(jq -r '.jackson.artifacts[].path' "$P"); do mkdir -p "$D/repo/$(dirname "$a")"`,
-		`curl -fsSL -o "$D/repo/$a" "$(jq -r .jackson.repository "$P")/$a"`,
-		`echo "$(jq -r --arg a "$a" '.jackson.artifacts[] | select(.path == $a) | .sha256' "$P")  $D/repo/$a" | sha256sum -c - || exit 1; done`,
-	].join(" && ")
-	return [
-		`P="$(git rev-parse --show-toplevel)/${FIXTURES}/java-pins.json"`,
-		`D="$HOME/.cache/honey-tmp/java"`,
-		`G="$(jq -r .googleJavaFormat.version "$P")"`,
-		`W="$(jq -r .gradle.version "$P")"`,
-		`mkdir -p "$D/dl" "$D/toolchain" "$D/repo" "$D/tmp"`,
-		jdk,
-		gjf,
-		gradle,
-		jackson,
-	].join(" && ")
-}
-
 /** Whether every pin is installed: each JDK's java, the jar, Gradle and the Jackson set. Nothing is fetched. */
 export function hasJava(): boolean {
 	const p = pins()
@@ -220,3 +180,5 @@ export function withJava(): boolean {
 		throw new Error(`the pinned Java toolchain is required here and is not installed: ${javaInstall()}`)
 	return present
 }
+
+export { javaInstall }

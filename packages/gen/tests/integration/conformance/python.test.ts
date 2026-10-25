@@ -134,6 +134,8 @@ describe.skipIf(!PY)("python toolchain", () => {
 
 		it("SDK lacks exactly the stream cells", () => {
 			expect(keysWhere(streams)).toEqual([
+				"json-status/realtime-send-non-ascii",
+				"json-status/realtime-send-raw-text",
 				"sse/typed-events",
 				"reconnect/sse-last-event-id",
 				"reconnect/ws-reconnect-token",

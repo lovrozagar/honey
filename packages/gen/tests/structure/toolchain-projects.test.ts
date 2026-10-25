@@ -13,6 +13,7 @@ import { dirname, join, matchesGlob, relative, resolve } from "node:path"
 import { ts } from "ts-morph"
 import { describe, expect, it } from "vitest"
 import type { TestSpecification } from "vitest/node"
+import { ciInstalls } from "../../src/emit/shared/__fixtures__/installs.ts"
 import config, { HARNESS, LongestFirst, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
 
 const GEN = resolve(import.meta.dirname, "../..")
@@ -230,6 +231,73 @@ describe("the default run's projects", () => {
 			expect(reached.filter((file) => others.some((other) => file.startsWith(`src/emit/${other}/`)))).toEqual([])
 		},
 	)
+})
+
+/** Each step of a job, as its trimmed lines: its own, then its `run` block's, one command a line. */
+const stepsOf = (job: string) =>
+	job.split(/^ {6}- /m).map((step) => {
+		const run = (/\brun: [|>]-?\n((?: {10}.*\n)*)|\brun: (.*)\n/.exec(step) ?? []).slice(1).join("")
+		return [...step.split("\n"), ...run.split("\n")].map((line) => line.trim()).filter(Boolean)
+	})
+
+const SCRIPTS = (dir: string) =>
+	(JSON.parse(readFileSync(join(GEN, dir, "package.json"), "utf8")) as { scripts: Record<string, string> }).scripts
+
+/**
+ * The harness projects `bun run <script>` from the repo root runs: through the root scripts to gen's `test:harness`,
+ * its `--project` filters (none: every harness project); none when the script never reaches it.
+ */
+function harnessRun(script: string, seen: ReadonlySet<string> = new Set()): string[] {
+	const text = SCRIPTS("../..")[script] ?? ""
+	if (seen.has(script)) return []
+	if (/--filter @lovrozagar\/honey-codegen test:harness\b/.test(text)) {
+		const filters = [...(SCRIPTS(".")["test:harness"] ?? "").matchAll(/--project (\S+)/g)].map(([, name]) => name)
+		return filters.length > 0 ? (filters as string[]) : (harness.projects ?? []).map(({ test }) => test.name)
+	}
+	return [...text.matchAll(/\bbun run ([\w:]+)/g)].flatMap(([, next]) =>
+		harnessRun(next as string, new Set([...seen, script])),
+	)
+}
+
+describe("CI installs what each project's fixtures run (carry-in #14)", () => {
+	const imports = diskImports()
+	const runFiles = ["src", "tests", "scripts"].flatMap(testFiles).filter((file) => !matches(file, resolved.exclude))
+	const harnessFiles = testFiles("tests").filter((file) => matches(file, HARNESS))
+	const installs = ciInstalls()
+
+	/** The install fixtures the files of project `name` in `run` reach. */
+	const needed = (files: readonly string[], run: Resolved["test"], name: string) => {
+		const own = files.filter((file) => projectsOf(file, run).includes(name))
+		return Object.keys(installs).filter((fixture) => own.some((file) => reaches(file, fixture, imports)))
+	}
+
+	it("names an install for every toolchain's env fixture and only fixtures that are there", () => {
+		expect(Object.values(ENV).filter((env) => !(env in installs))).toEqual([])
+		expect(Object.keys(installs).filter((fixture) => !existsSync(join(GEN, fixture)))).toEqual([])
+	})
+
+	it("runs each install a project's fixtures need, verbatim in one step, in every job that runs that project", () => {
+		const missing = Object.entries(jobs(WORKFLOW)).flatMap(([name, job]) => {
+			const shards = [...job.matchAll(/--project (\S+)/g)].map(([, project]) => project as string)
+			const harnessed = [...job.matchAll(/^ +- run: bun run ([\w:]+)$/gm)].flatMap(([, script]) =>
+				harnessRun(script as string),
+			)
+			const fixtures = new Set([
+				...shards.flatMap((project) => needed(runFiles, resolved, project)),
+				...harnessed.flatMap((project) => needed(harnessFiles, harness, project)),
+			])
+			const steps = stepsOf(job)
+			return [...fixtures]
+				.filter((fixture) => !steps.some((lines) => (installs[fixture] ?? []).every((line) => lines.includes(line))))
+				.map((fixture) => `${name}: ${fixture}`)
+		})
+		expect(missing).toEqual([])
+	})
+
+	it("reaches gen's whole harness from the harness job's script, and no harness from a gen shard's", () => {
+		expect(harnessRun("test:harness").sort()).toEqual((harness.projects ?? []).map(({ test }) => test.name).sort())
+		expect(harnessRun("test:gen")).toEqual([])
+	})
 })
 
 describe("CI's gen shards", () => {

@@ -328,15 +328,16 @@ describe("WebSocket", () => {
 
 	// v0: 0d13b22a22
 	it("echoes with ?token=valid-token and closes 4401 with nothing echoed for a bogus token", async () => {
-		const run = async (token: string) => {
+		/* the bogus leg sends nothing (Fe8, sweep 19): the app refuses in onOpen, and a send into the closing socket pins nothing */
+		const run = async (token: string, send?: string) => {
 			const socket = echoSocket({ token })
 			const { closed, frames, opened } = watch(socket)
 			socket.on("message", () => socket.close(1000, "done"))
 			await Promise.race([opened, closed])
-			socket.send("ping")
+			if (send !== undefined) socket.send(send)
 			return { code: (await closed).code, frames }
 		}
-		expect([await run("valid-token"), await run("bogus-token")]).toEqual([
+		expect([await run("valid-token", "ping"), await run("bogus-token")]).toEqual([
 			{ code: 1000, frames: ["ping"] },
 			{ code: 4401, frames: [] },
 		])

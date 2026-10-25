@@ -353,7 +353,8 @@ goDescribe("WebSocket", () => {
 			{ calls: [wsEcho({ search: { token: "valid-token" }, send: ["ping"], take: 1 })] },
 			wsOn(),
 		)
-		const bogus = await scripted({ calls: [wsEcho({ search: { token: "bogus-token" }, send: ["ping"] })] }, wsOn())
+		/* the bogus leg sends nothing (Fe8, sweep 19): the app refuses in onOpen, and a send into the closing socket pins nothing */
+		const bogus = await scripted({ calls: [wsEcho({ search: { token: "bogus-token" } })] }, wsOn())
 		expect([valid.observed, bogus.observed, bogus.trace.calls[0]?.stream?.closedBy]).toEqual([
 			[{ frames: ["ping"], kind: "frames" }],
 			[{ frames: [], kind: "frames" }],

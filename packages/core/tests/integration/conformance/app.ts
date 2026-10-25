@@ -86,6 +86,16 @@ const CATALOG = [
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 const item = (id: string) => ({ id, name: `item ${id}` })
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+/** A realtime echo's answer to `data`: JSON as it is, any other text as `{ got }`, so a quoted send shows. */
+function jsonOrGot(data: unknown): string {
+	const text = String(data)
+	try {
+		JSON.parse(text)
+		return text
+	} catch {
+		return JSON.stringify({ got: text })
+	}
+}
 
 /** The media type essence of a content-type header: lower case, parameters dropped. */
 function essence(contentType: string | null): string | null {
@@ -373,6 +383,11 @@ function harnessRoutes(app: ConformanceApp): void {
 
 /** `ws.echo`: echoes each frame; `__close__` closes 1000, a `token` other than `valid-token` closes 4401. */
 function socketRoutes(app: ConformanceApp): void {
+	/* a realtime op echoing each send, JSON as it is and other text as { got }: what an SDK's send encoded (sweep 30, 14) */
+	app
+		.ws("/realtime/echo")
+		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.echo" })
+		.handler({ onMessage: (_ctx, ws, data) => ws.send(jsonOrGot(data)) })
 	app
 		.ws("/ws/echo")
 		.meta({ operationId: "ws.echo" })

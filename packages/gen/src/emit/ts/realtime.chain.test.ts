@@ -25,6 +25,7 @@ const DOC = {
 }
 
 type Connection = AsyncIterable<unknown> & {
+	sendText(text: string): Promise<void>
 	close(): void
 	readonly provenTransport: string | null
 	send(data: unknown): Promise<void>
@@ -179,6 +180,22 @@ describe("a TS realtime operation's 401 refreshes once per open, and its send an
 			true,
 			null,
 		])
+	})
+})
+
+describe("a TS realtime connection's raw text send (bit 19 f, sweep 14)", () => {
+	it("POSTs a raw text send as text/plain, the text as it is (sweep 14)", async () => {
+		const { TestSDK } = (await emittedSdk(DOC)) as unknown as { TestSDK: new (config: object) => Sdk }
+		const posted = await served([status(404), sse([ev(1)], "hold"), { json: {}, status: 202 }], async (server) => {
+			const sdk = new TestSDK({ baseURL: server.url })
+			const connection = sdk.rt.feed({ reconnectDelayMs: 1 })
+			for await (const _ of connection) break
+			await connection.sendText("hello")
+			connection.close()
+			sdk.dispose()
+			return server.hops.slice(2).map((hop) => [hop.method, hop.body.contentType, server.bodies[2]?.toString()])
+		})
+		expect(posted).toEqual([["POST", "text/plain", "hello"]])
 	})
 })
 

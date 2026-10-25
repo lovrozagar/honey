@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
-import type { RustError, Trace } from "../shared/__fixtures__/protocol.ts"
+import type { RustError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
 import { type Reply, recordingServer, served } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
@@ -20,6 +20,7 @@ const MEMBERS: Call = {
 	params: { org: "o", "user-id": "u" },
 	route: { method: "GET", path: "/orgs/{org}/users/{user-id}" },
 }
+const USER: Call = { operation: "users.get", params: { id: "1" }, route: { method: "GET", path: "/users/{id}" } }
 
 /** error-keys.json's 400 envelope (`fields` set), with `success` the one member ErrorEnvelope keeps in `extra`. */
 const TAKEN = {
@@ -38,9 +39,12 @@ function driven(key: "fixtures-safe" | "http-safe"): DrivenRustSdk {
 	return sdk
 }
 
-/** `calls` run by `sdk` against a server answering `replies`: the run. */
-function drive(sdk: DrivenRustSdk, replies: readonly Reply[], calls: readonly Call[]) {
-	return served(replies, async (server) => ({ run: await sdk.runCalls({ calls, setup: {} }, server, {}) }))
+/** `calls` run by `sdk` under `script` against a server answering `replies`: the run and the hops. */
+function drive(sdk: DrivenRustSdk, replies: readonly Reply[], calls: readonly Call[], script: Script = {}) {
+	return served(replies, async (server) => {
+		const run = await sdk.runCalls({ calls, setup: {} }, server, script)
+		return { hops: server.hops.length, run }
+	})
 }
 
 /** `calls` against an origin that refuses every connection. */
@@ -75,6 +79,31 @@ describe.skipIf(!RUST)("safe mode: an error status in SdkResult.error, every oth
 			found: ["result", "Api", "NotFound", 404, "None", missed(404)],
 			gone: ["return", "Transport", undefined, undefined, undefined, undefined],
 			observed: [[failed(404)], [null]],
+		})
+	}, 600_000)
+
+	/* ported from csharp/errors.safe.test.ts:78: every other failure is the call's Err, never a result */
+	it("keeps an undecodable 2xx, a timeout, a cancel and a hook throw out of the result, each the call's Err", async () => {
+		const sdk = driven("http-safe")
+		const torn: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
+		const late: Reply = { delayMs: 2000, json: { id: "u", name: "n" }, status: 200 }
+		const calls = [USER, { ...MEMBERS, timeoutMs: 300 }, MEMBERS]
+		const script: Script = { calls: [null, null, { cancel: "before" }] }
+		const { hops, run } = await drive(sdk, [torn, late], calls, script)
+		const hooked = await drive(sdk, [], [MEMBERS], { hooks: { request: [{ fail: "boom" }] } })
+		const traces = [run, hooked.run].flatMap((r) => r.trace?.calls ?? [])
+		expect(
+			{ hops: [hops, hooked.hops], landed: traces.map(landed), observed: [run.observed, hooked.run.observed] },
+			run.stderr + hooked.run.stderr,
+		).toEqual({
+			hops: [2, 0],
+			landed: [
+				["return", "Decode", undefined, undefined, undefined, undefined],
+				["return", "Timeout", undefined, undefined, undefined, undefined],
+				["return", "Canceled", undefined, undefined, undefined, undefined],
+				["return", "Hook", undefined, undefined, undefined, undefined],
+			],
+			observed: [[null, { kind: "timeout" }, null], [null]],
 		})
 	}, 600_000)
 

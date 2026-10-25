@@ -132,8 +132,13 @@ impl<E: DeserializeOwned> ResumableConnection<E> {
     /// Sends `message` as JSON on the open transport (an SSE or long-poll one POSTs it).
     pub async fn send<T: Serialize + ?Sized>(&mut self, message: &T) -> Result<(), Error> {
         let text = serde_json::to_string(message).map_err(|e| Error::Decode(e.to_string()))?;
+        self.send_text(&text).await
+    }
+
+    /// Sends `text` as it is on the open transport (an SSE or long-poll one POSTs it).
+    pub async fn send_text(&mut self, text: &str) -> Result<(), Error> {
         match self.conn.as_mut() {
-            Some(conn) => conn.send(&text).await,
+            Some(conn) => conn.send(text).await,
             None => Err(Error::Closed),
         }
     }

@@ -438,4 +438,13 @@ describe.skipIf(!PY)("the Python test driver: realtime, ResumableConnection[T]",
 			url: "/feed?channel=c&last_event_id=0&reconnect_token=rt-0",
 		})
 	})
+
+	it("sends a send that is no JSON as its raw text, a JSON string as JSON (sweep 14)", async () => {
+		const reply = ws([{ receive: 2 }, { json: { n: 1 } }])
+		const { run, streams } = await drive(driven("realtime"), [reply], [feed({ send: ["hello", '"hi"'], take: 1 })], {})
+		expect(streams[0]?.received?.slice(0, 2), run.stderr).toEqual([
+			{ kind: "text", text: "hello" },
+			{ kind: "text", text: '"hi"' },
+		])
+	})
 })

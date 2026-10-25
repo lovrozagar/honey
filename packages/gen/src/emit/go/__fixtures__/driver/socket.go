@@ -135,12 +135,13 @@ func driveSocket(s streamCall) streamed {
 		return streamed{err: err}
 	}
 	st := &streamTrace{}
-	frames := []any{}
+	/* a failed send ends the sends, not the reads: a close frame the server sent first still waits to be read */
+	frames, readFailed, err := readFrames(ws, s, st)
+	if err != nil {
+		return streamed{err: err}
+	}
 	if failed == nil {
-		frames, failed, err = readFrames(ws, s, st)
-		if err != nil {
-			return streamed{err: err}
-		}
+		failed = readFailed
 	}
 	end := closeTrace{Code: 1000}
 	if script.Close != nil {

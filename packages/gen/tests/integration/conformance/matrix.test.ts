@@ -44,6 +44,8 @@ const TS_CELLS = [
 	"json-status/created-201",
 	"json-status/no-content-204",
 	"json-status/ok-200",
+	"json-status/realtime-send-non-ascii",
+	"json-status/realtime-send-raw-text",
 	"overrides/base-url",
 	"overrides/headers",
 	"overrides/timeout",
@@ -65,6 +67,7 @@ const TS_CELLS = [
 	"verbs/list-query",
 	"verbs/patch",
 	"verbs/post",
+	"verbs/post-non-ascii",
 	"verbs/reference-request",
 ]
 

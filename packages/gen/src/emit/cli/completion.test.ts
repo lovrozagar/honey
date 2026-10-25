@@ -2,14 +2,14 @@
  * Shell completion (bit 17 phase e, E1; cobra's generator, the runtime's enum flags): `__complete` offers the
  * commands, a group's commands with their summaries, a command's flags, and an enum flag's values; each of the four
  * shells' scripts parses in its own shell (bash -n, zsh -n, fish -n, PowerShell's parser), each checker proven to
- * reject a broken script; and CI installs the pinned shells by the very command the fixture names.
+ * reject a broken script. CI installs the pinned shells by the command the fixture names (toolchain-projects.test).
  */
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { beforeAll, describe, expect, it } from "vitest"
 import { goCacheDir, withGo } from "../go/__fixtures__/go-env.ts"
 import { builtCli } from "./__fixtures__/built.ts"
-import { type Shell, SHELLS, syntaxCheck, toolsInstall, withTools } from "./__fixtures__/tools.ts"
+import { type Shell, SHELLS, syntaxCheck, withTools } from "./__fixtures__/tools.ts"
 import { shop } from "./__fixtures__/shop.ts"
 import { generateGoCli } from "./module.ts"
 
@@ -68,18 +68,5 @@ describe.skipIf(!GO || !TOOLS_PRESENT)("each shell's completion script (phase e)
 			{ errors: "", status: 0 },
 			true,
 		])
-	})
-})
-
-/** Whether a workflow job's text runs the pinned tools install, verbatim. */
-const installs = (job: string) => job.split("\n").some((line) => line.trim() === `run: ${toolsInstall()}`)
-
-describe("the pinned tools in CI (phase e)", () => {
-	it("installs them by the command the fixture names, verbatim, in each job whose tests use them", () => {
-		const workflow = readFileSync(resolve(import.meta.dirname, "../../../../../.github/workflows/ci.yml"), "utf8")
-		/* test runs the unit legs; harness runs the release leg (tests/integration/cli-harness.release.test.ts) */
-		const job = (name: string, next: string | undefined) =>
-			workflow.slice(workflow.indexOf(`\n  ${name}:\n`), next ? workflow.indexOf(`\n  ${next}:\n`) : undefined)
-		expect([installs(job("test", "gen-rust")), installs(job("harness", undefined))]).toEqual([true, true])
 	})
 })

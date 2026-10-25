@@ -9,6 +9,7 @@ import { type SpawnSyncReturns, spawnSync } from "node:child_process"
 import { mkdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
+import { RUST_FLOOR } from "../../shared/__fixtures__/installs.ts"
 
 /** The pinned Rust channel, as the repo root's `rust-toolchain.toml` holds it (`1.99.1`). */
 export function pinnedRust(): string {
@@ -17,13 +18,6 @@ export function pinnedRust(): string {
 	if (channel === undefined) throw new Error(`rust-toolchain.toml names no channel:\n${toml}`)
 	return channel
 }
-
-/**
- * The toolchain the floor legs check under: the x.y.0 of the `rust-version` every emitted crate declares, so a
- * build and `clippy -D clippy::incompatible_msrv` there prove the floor the crate claims. `sdk-cargo.ts` writes
- * that line; the two move together.
- */
-export const RUST_FLOOR = "1.85.0"
 
 /** Where gen's Rust caches live: one area under the toolchain cache, made on first use. */
 export function rustCacheDir(...parts: string[]): string {
@@ -118,3 +112,5 @@ export function withRust(toolchain = pinnedRust()): boolean {
 		)
 	return rust
 }
+
+export { RUST_FLOOR }
