@@ -4,7 +4,7 @@
  */
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { MCP_RUNTIME } from "../src/emit/mcp/server.ts"
+import { MCP_RUNTIME } from "../src/emit/mcp/runtime.ts"
 import { runtimeBytes } from "./sdk-budget.ts"
 
 /*
@@ -19,9 +19,18 @@ import { runtimeBytes } from "./sdk-budget.ts"
  * - phase b, +3,615 B to 11,998 B, nothing dead to cut: call.ts 3,615, each tool bound to the SDK client, its flat
  *   arguments back into the SDK input groups (path, query, header; the body as JSON or a form), the member walked to
  *   its method, the answer as JSON text, a failure the tool's own result with its status; provisional 12,000.
+ * - phase c, +6,569 B to 18,567 B, the general validator cut to the keywords schema.ts emits (7,088 → 5,374), then
+ *   split in four for the complexity rule (+649), dead code cut (the redactor's sort and dedupe, the failure's body
+ *   spread):
+ *   - guard.ts 6,023: the inputSchema check 3,193 (its Schema type of the 11 keywords checked 529, the check 2,664 in
+ *     four functions: own keywords, items, fields, the walk), redaction 796 (as given, URL-encoded in either case,
+ *     form-encoded; keys included), the refusal composing the three 588, prototype keys 516, H18.11 decoding until
+ *     stable 394, the header 430, the path helper 106;
+ *   - call.ts +546: the refusal before any call, every result scrubbed, an answer's body echoed in its failure;
+ *   provisional 18,600. The base URL refusal is the emitted entry's, no runtime byte.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 12000
+const MCP_RUNTIME_BYTES = 18600
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

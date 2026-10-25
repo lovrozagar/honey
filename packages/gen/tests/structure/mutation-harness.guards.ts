@@ -19,8 +19,12 @@ import {
 	KEEP_CROSS_ORIGIN_HEADERS,
 	LEAKY_LOG,
 	localeOrder,
+	MCP_KEY_UNREDACTED,
+	MCP_PATHS_UNGUARDED,
+	MCP_PROTOTYPE_KEYS_ALLOWED,
 	patchedRuntime,
 	patchedRuntimeFiles,
+	plainProtoKey,
 	PYTHON_KEEP_CROSS_ORIGIN_HEADERS,
 	PYTHON_LEAKY_LOG,
 	PYTHON_RAW_PATH_PARAMS,
@@ -49,6 +53,9 @@ export const SUITES: Readonly<Record<Toolchain, string>> = {
 	rust: "tests/security/emit-adversarial.rust.test.ts",
 }
 
+/** The security file each MCP guard's mutant reruns alone: the only one that imports the MCP emitter. */
+export const MCP_SUITE = "tests/security/emit-adversarial.mcp.test.ts"
+
 export type Guard = {
 	/** what the suite must catch once this guard is gone */
 	catches: string
@@ -59,6 +66,8 @@ export type Guard = {
 	module: string
 	/** a toolchain the suite needs to run this guard's cases; without it the guard is skipped, never killed */
 	toolchain?: Toolchain
+	/** the one security file the mutant reruns, the only one that imports its module; by default its toolchain's */
+	suite?: string
 }
 
 export const GUARDS: readonly Guard[] = [
@@ -200,10 +209,42 @@ export const GUARDS: readonly Guard[] = [
 		module: "packages/gen/src/emit/csharp/transport.ts",
 		toolchain: "csharp",
 	},
+	{
+		catches:
+			"an MCP tool's path argument holding `/`, `\\`, `.` or `..`, or an encoding of one, sent off its segment (H18.11)",
+		disable: (original) => ({ mcpRuntimeSource: patchedRuntime(mcpRuntime(original), MCP_PATHS_UNGUARDED) }),
+		id: "mcp-path-segment",
+		module: "packages/gen/src/emit/mcp/runtime.ts",
+		suite: MCP_SUITE,
+	},
+	{
+		catches: "an MCP tool's argument holding `__proto__`, `constructor` or `prototype` as a key sent to the API",
+		disable: (original) => ({ mcpRuntimeSource: patchedRuntime(mcpRuntime(original), MCP_PROTOTYPE_KEYS_ALLOWED) }),
+		id: "mcp-prototype-arguments",
+		module: "packages/gen/src/emit/mcp/runtime.ts",
+		suite: MCP_SUITE,
+	},
+	{
+		catches: "a schema property named `__proto__` written as a plain key in tools.gen.ts, so tools/list drops it",
+		disable: (original) => ({ literal: plainProtoKey(original.literal as (value: unknown) => string) }),
+		id: "mcp-prototype-schema",
+		module: "packages/gen/src/emit/mcp/literal.ts",
+		suite: MCP_SUITE,
+	},
+	{
+		catches: "the API key, as given or URL-encoded, in an MCP result or an echoed error body",
+		disable: (original) => ({ mcpRuntimeSource: patchedRuntime(mcpRuntime(original), MCP_KEY_UNREDACTED) }),
+		id: "mcp-key-redaction",
+		module: "packages/gen/src/emit/mcp/runtime.ts",
+		suite: MCP_SUITE,
+	},
 ]
 
 /** The emitted runtime's reader, as the guarded module exports it. */
 const runtime = (original: Record<string, unknown>) => original.runtimeSource as () => string
+
+/** The MCP server's vendored runtime reader, as runtime.ts exports it. */
+const mcpRuntime = (original: Record<string, unknown>) => original.mcpRuntimeSource as () => string
 
 /** The emitted C# runtime's reader, as the guarded module exports it: its features and root namespace. */
 const csharpRuntime = (original: Record<string, unknown>) =>

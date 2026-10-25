@@ -5,7 +5,6 @@
  * types under an installed package's folder, so an installed server must ship JavaScript. The erasure is jiti's
  * transform, gen's own dependency, deterministic whichever runtime generates. No dependency, no build step.
  */
-import { readFileSync } from "node:fs"
 import { createJiti } from "jiti"
 import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IR } from "../../ir/model.ts"
@@ -13,6 +12,7 @@ import { binaryNameOf } from "../cli/module.ts"
 import { tsString } from "../shared/escape.ts"
 import { generateSdk } from "../ts/sdk.ts"
 import { literal } from "./literal.ts"
+import { mcpRuntimeSource } from "./runtime.ts"
 import { toolsOf, type ToolSpec } from "./tools.ts"
 
 export type McpServerOptions = {
@@ -24,14 +24,9 @@ export type McpServerOptions = {
 
 export type GeneratedMcpServer = { readonly files: Readonly<Record<string, string>> }
 
-/** The runtime modules under `runtime/mcp`, each after the ones it imports. */
-export const MCP_RUNTIME: readonly string[] = ["jsonrpc", "server", "stdio", "call"]
-
 /* a name leaves room for the bin's `-mcp`; a prefix is uppercase words joined by `_` */
 const NAME = /^(?=.{1,60}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const ENV_PREFIX = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
-/* an import of a sibling runtime module, on one line or several */
-const SIBLING_IMPORT = /^import\s+(?:type\s+)?\{[^}]*\}\s+from\s+"\.\/[\w-]+\.ts"\n/gm
 /* a version npm accepts in a package.json */
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
@@ -46,34 +41,30 @@ function resolved(options: McpServerOptions, title: string | undefined) {
 	return { envPrefix, name }
 }
 
-/** The vendored runtime as one module: each runtime/mcp module in order, their imports of each other dropped. */
-export function mcpRuntimeSource(): string {
-	const modules = MCP_RUNTIME.map((name) =>
-		readFileSync(new URL(`../../runtime/mcp/${name}.ts`, import.meta.url), "utf8")
-			.replace(SIBLING_IMPORT, "")
-			.trim(),
-	)
-	return `${MARKER}\n\n${modules.join("\n\n")}\n`
-}
-
 /** The entry: the tools served over stdio under the server's name and version. */
 const entrySource = (app: { name: string; version: string; envPrefix: string }, ir: IR) =>
 	`${MARKER}
 
 // The ${app.name} MCP server: its tools over stdio, for the MCP client that starts it. The API key is
-// $${app.envPrefix}_API_KEY, sent as the API's scheme says; the API is at $${app.envPrefix}_BASE_URL, else its first server.
+// $${app.envPrefix}_API_KEY, sent as the API's scheme says; the API is at $${app.envPrefix}_BASE_URL, else its first server, and
+// with neither it refuses to start.
 import { bindTools, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { toolSpecs } from "./tools.gen"
 
 const key = process.env[${tsString(`${app.envPrefix}_API_KEY`)}] ?? ""
+const baseURL = process.env[${tsString(`${app.envPrefix}_BASE_URL`)}] || ${tsString(ir.servers[0] ?? "")}
+if (baseURL === "") {
+	process.stderr.write(${tsString(`No API to call: set $${app.envPrefix}_BASE_URL, since the API names no server\n`)})
+	process.exit(1)
+}
 const client = new Api({
-	baseURL: process.env[${tsString(`${app.envPrefix}_BASE_URL`)}] || ${tsString(ir.servers[0] ?? "")},
+	baseURL,
 	headers: key === "" ? {} : { ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
 	throwOnError: true,
 })
 
-void serveStdio(createSession({ name: ${tsString(app.name)}, version: ${tsString(app.version)} }, bindTools(toolSpecs, client)))
+void serveStdio(createSession({ name: ${tsString(app.name)}, version: ${tsString(app.version)} }, bindTools(toolSpecs, client, key)))
 `
 
 /** tools.gen.ts: every tool's spec, as data the runtime binds to the SDK client. */

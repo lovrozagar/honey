@@ -178,3 +178,21 @@ export const CSHARP_LEAKY_LOG = [
 		'$"{op.Method} {client.Base}{UrlPath.Expand(op, call.Path)}?{UrlQuery.Encode(call.Query)} {client.Auth.Token}")',
 	],
 ] as const
+
+/* an MCP tool's path argument sent whatever it holds: H18.11's guard is given no parameter to check */
+export const MCP_PATHS_UNGUARDED = [["const leaving = paths.find(", "const leaving = ([] as string[]).find("]] as const
+
+/* an MCP tool's arguments never searched for a prototype-named key */
+export const MCP_PROTOTYPE_KEYS_ALLOWED = [
+	['const prototype = prototypeKey(args, "")', "const prototype = undefined as string | undefined"],
+] as const
+
+/* an MCP result carrying the API key as the API answered it: the scrubber gives every value back as it came */
+export const MCP_KEY_UNREDACTED = [["if (!secret) return (value) => value", "return (value) => value"]] as const
+
+/** A tools.gen.ts literal writing `__proto__` as a plain key, which sets the object's prototype instead of a property. */
+export function plainProtoKey(
+	literal: (value: unknown, indent?: string) => string,
+): (value: unknown, indent?: string) => string {
+	return (value, indent) => literal(value, indent).replaceAll('["__proto__"]:', '"__proto__":')
+}

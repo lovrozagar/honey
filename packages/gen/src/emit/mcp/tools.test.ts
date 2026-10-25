@@ -66,18 +66,19 @@ describe("which operations are tools (phase b)", () => {
 describe("a tool's name (phase b)", () => {
 	// v0: 31c0da95e0
 	// v0: ba83b05d44
-	it("is the operation id in snake case, every segment kept, a camelCase word split", () => {
+	// v0: f550f89729
+	it("is the operation id in snake case, every segment kept, a camelCase word split, its SDK member every segment deep", () => {
 		const listed = tools({
 			"/c": { post: op("checkout.sessions.create") },
 			"/u": { get: op("users.list") },
 			"/u/p": { patch: op("users.profile.update") },
 			"/x": { get: op("getHTTPStatus") },
 		})
-		expect(listed.map((tool) => tool.name)).toEqual([
-			"checkout_sessions_create",
-			"users_list",
-			"users_profile_update",
-			"get_http_status",
+		expect(listed.map((tool) => [tool.name, tool.member])).toEqual([
+			["checkout_sessions_create", ["checkout", "sessions", "create"]],
+			["users_list", ["users", "list"]],
+			["users_profile_update", ["users", "profile", "update"]],
+			["get_http_status", ["getHTTPStatus"]],
 		])
 	})
 
@@ -121,7 +122,7 @@ describe("a tool's description (phase b)", () => {
 
 describe("a tool's inputSchema (phase b)", () => {
 	// v0: 4ad3a5947d
-	it("holds each parameter flat under its own name, the body under body, credential headers never", () => {
+	it("holds each parameter flat under its own name, the body under body, credential headers never, no other key", () => {
 		const parameters = [
 			{ in: "path", name: "id", required: true, schema: STR },
 			{ in: "query", name: "limit", schema: { type: "integer" } },
@@ -156,6 +157,7 @@ describe("a tool's inputSchema (phase b)", () => {
 				},
 				required: ["id", "body2"],
 				type: "object",
+				additionalProperties: false,
 			},
 			[
 				["id", "params", "id"],

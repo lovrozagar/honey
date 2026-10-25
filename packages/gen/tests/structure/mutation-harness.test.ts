@@ -10,7 +10,15 @@ import { runtimeFiles as pythonRuntimeFiles } from "../../src/emit/python/transp
 import { rustCacheDir, withRust } from "../../src/emit/rust/__fixtures__/rust-env.ts"
 import { runtimeFiles as rustRuntimeFiles } from "../../src/emit/rust/http.ts"
 import { runSuite } from "./mutation-harness.ts"
-import { GUARDS, guardNamed, SUITES, skippedFor, type Toolchain, verdicts } from "./mutation-harness.guards.ts"
+import {
+	GUARDS,
+	guardNamed,
+	MCP_SUITE,
+	SUITES,
+	skippedFor,
+	type Toolchain,
+	verdicts,
+} from "./mutation-harness.guards.ts"
 
 /* a guard's suite reruns, its fuzz included, once per guard; a cold Rust cache pays the dependency build (Ff10) */
 const RUN = 600_000
@@ -135,7 +143,7 @@ describe("each guard's toolchain", () => {
 })
 
 describe("each guard's verdict", () => {
-	it("runs every guard, all 19, where .NET, Go, Rust and Python are present", () => {
+	it("runs every guard, all 23, where .NET, Go, Rust and Python are present", () => {
 		const ids = GUARDS.map((g) => g.id)
 		expect(verdicts(GUARDS, skippedFor(GUARDS, { csharp: true, go: true, python: true, rust: true }), () => 1)).toEqual(
 			{
@@ -144,7 +152,7 @@ describe("each guard's verdict", () => {
 				survived: [],
 			},
 		)
-		expect(ids).toHaveLength(19)
+		expect(ids).toHaveLength(23)
 	})
 
 	it("counts a skipped guard as neither killed nor survived, and never runs it", () => {
@@ -178,6 +186,21 @@ describe("each toolchain guard's suite", () => {
 		const language = /^src\/emit\/(?!shared\/)[^/]+\//
 		const crossing = sources("src/emit/shared", false).filter((file) => imports(file).some((to) => language.test(to)))
 		expect(crossing).toEqual([])
+	})
+
+	it("reruns each MCP guard's own security file alone, the only one that imports the MCP emitter", () => {
+		const naming = sources("tests/security", true).filter((file) =>
+			readFileSync(join(GEN, file), "utf8").includes("src/emit/mcp/"),
+		)
+		const mcp = GUARDS.filter((g) => g.module.startsWith("packages/gen/src/emit/mcp/"))
+		expect([naming, mcp.map((g) => [g.id, g.suite, g.toolchain])]).toEqual([
+			[MCP_SUITE],
+			["mcp-path-segment", "mcp-prototype-arguments", "mcp-prototype-schema", "mcp-key-redaction"].map((id) => [
+				id,
+				MCP_SUITE,
+				undefined,
+			]),
+		])
 	})
 })
 

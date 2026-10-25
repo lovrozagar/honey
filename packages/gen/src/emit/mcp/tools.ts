@@ -88,7 +88,12 @@ function inputOf(op: IROperation, ir: IR) {
 		if (op.body.required) required.push(property)
 		body = [property, field]
 	}
-	const inputSchema: JsonSchema = { type: "object", properties, ...(required.length > 0 ? { required } : {}) }
+	const inputSchema: JsonSchema = {
+		type: "object",
+		properties,
+		...(required.length > 0 ? { required } : {}),
+		additionalProperties: false,
+	}
 	return { args, body, inputSchema }
 }
 

@@ -1,9 +1,11 @@
 /**
  * A tool's call through the API's TS SDK (bit 18): each tool as tools.gen.ts describes it, bound to the SDK client. Its
- * flat arguments go back into the SDK's input groups (each parameter under its own name: path, query or header; the
- * body as JSON or a form), the SDK member the operation sits at is called, and its answer comes back as JSON text. A
- * failed the SDK raises is the tool's own result, `isError`, its message and status.
+ * arguments pass guard.ts first, else nothing is sent. They go back into the SDK's input groups (each parameter under
+ * its own name: path, query or header; the body as JSON or a form), the SDK member the operation sits at is called,
+ * and its answer comes back as JSON text. A failure the SDK raises is the tool's own result, `isError`: its message,
+ * and the status and body of an answer outside 2xx. Every result is scrubbed of the API key.
  */
+import { redactor, refusal } from "./guard.ts"
 import type { Tool, ToolResult } from "./server.ts"
 
 /** The SDK input group a parameter goes in. */
@@ -25,9 +27,9 @@ export type ToolSpec = {
 /** The SDK client a tool drives: its members walked key by key to the operation's method. */
 export type SdkClient = object
 
-/** A result of one text block. */
-const text = (value: string, isError?: true): ToolResult => ({
-	content: [{ text: value, type: "text" }],
+/** A result of one text block: `value` as JSON. */
+const text = (value: unknown, isError?: true): ToolResult => ({
+	content: [{ text: JSON.stringify(value ?? null), type: "text" }],
 	...(isError ? { isError } : {}),
 })
 
@@ -55,23 +57,27 @@ function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown
 	return [owner, method]
 }
 
-/** A failed as the tool reports it: its message, and the status of an answer outside 2xx. */
-function failed(error: unknown): ToolResult {
-	const status = (error as { status?: unknown } | null)?.status
+/** A failure as the tool reports it: its message, and the status and body of an answer outside 2xx. */
+function failed(error: unknown): object {
+	const { body, status } = (error ?? {}) as { body?: unknown; status?: unknown }
 	const message = error instanceof Error ? error.message : String(error)
-	return text(JSON.stringify(typeof status === "number" ? { message, status } : { message }), true)
+	return typeof status === "number" ? { message, status, body } : { message }
 }
 
-/** `specs` as tools calling `client`. */
-export function bindTools(specs: readonly ToolSpec[], client: SdkClient): Tool[] {
+/** `specs` as tools calling `client`, every result scrubbed of `secret`, the API key. */
+export function bindTools(specs: readonly ToolSpec[], client: SdkClient, secret = ""): Tool[] {
+	const scrub = redactor(secret)
 	return specs.map((spec) => ({
 		call: async (args) => {
+			const paths = spec.args.filter(([, group]) => group === "params").map(([property]) => property)
+			const refused = refusal(spec.inputSchema, paths, args)
+			if (refused !== undefined) return text(scrub({ message: refused }), true)
 			const [owner, method] = methodAt(client, spec.member)
 			try {
 				const data: unknown = await (method as (input: unknown) => Promise<unknown>).call(owner, inputOf(spec, args))
-				return text(JSON.stringify(data ?? null))
+				return text(scrub(data))
 			} catch (error) {
-				return failed(error)
+				return text(scrub(failed(error)), true)
 			}
 		},
 		...(spec.description === undefined ? {} : { description: spec.description }),

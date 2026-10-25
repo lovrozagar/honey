@@ -1,8 +1,10 @@
 /**
- * A tool call through the emitted server (bit 18 phase b), its process against a recording server: each argument where
- * its parameter goes (the path escaped as the SDK escapes it, the query, a header), the body as JSON or a form; the API
- * key as the API's scheme says, none sent without one, from $<PREFIX>_API_KEY; the API at $<PREFIX>_BASE_URL; an answer
- * outside 2xx the tool's own failure, isError with its status.
+ * A tool call through the emitted server (bit 18 phases b and c), its process against a recording server: each argument
+ * where its parameter goes (the path escaped as the SDK escapes it, the query, a header), the body as JSON or a form;
+ * the API key as the API's scheme says, none sent without one, from $<PREFIX>_API_KEY; the API at $<PREFIX>_BASE_URL,
+ * and with no server and none set no start at all; an answer outside 2xx the tool's own failure, isError with its
+ * status and body; arguments the inputSchema rejects refused before anything is sent, each refusal naming the argument.
+ * The adversarial corpus (H18.11, prototype keys, the key's redaction) is tests/security/emit-adversarial.mcp.test.ts.
  */
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -38,10 +40,31 @@ const shop = (security: Record<string, unknown> = {}) => ({
 					{ in: "path", name: "id", required: true, schema: STR },
 					{ in: "query", name: "dryRun", schema: { type: "boolean" } },
 					{ in: "query", name: "tags", schema: { items: STR, type: "array" } },
+					{ in: "query", name: "sort", schema: { enum: ["asc", "desc"], type: "string" } },
 					{ in: "header", name: "X-Trace", schema: STR },
 				],
 				requestBody: {
-					content: { "application/json": { schema: { properties: { name: STR }, type: "object" } } },
+					content: {
+						"application/json": {
+							schema: {
+								properties: {
+									both: {
+										allOf: [
+											{ properties: { a: STR }, type: "object" },
+											{ properties: { b: STR }, type: "object" },
+										],
+									},
+									kind: { const: "note" },
+									labels: { additionalProperties: STR, type: "object" },
+									name: STR,
+									note: { type: ["string", "null"] },
+									pair: { items: false, prefixItems: [STR, { type: "integer" }], type: "array" },
+									price: { type: "number" },
+								},
+								type: "object",
+							},
+						},
+					},
 					required: true,
 				},
 				responses: OK,
@@ -117,7 +140,7 @@ describe("a tool call's wire (phase b)", SLOW, () => {
 })
 
 describe("a tool call's failure (phase b)", SLOW, () => {
-	it("answers an API's status outside 2xx as the tool's own failure, isError with its status", async () => {
+	it("answers an API's status outside 2xx as the tool's own failure, isError with its status and body", async () => {
 		const { results } = await called(
 			shop(),
 			[{ arguments: { body: {}, id: "1" }, name: "items_update" }],
@@ -125,6 +148,88 @@ describe("a tool call's failure (phase b)", SLOW, () => {
 			(url) => [`SHOP_BASE_URL=${url}`],
 		)
 		const result = results[0] as { content: [{ text: string }]; isError?: true }
-		expect([result.isError, (JSON.parse(result.content[0].text) as { status: number }).status]).toEqual([true, 404])
+		const { body, status } = JSON.parse(result.content[0].text) as { body: unknown; status: number }
+		expect([result.isError, status, body]).toEqual([true, 404, { message: "no such item" }])
+	})
+})
+
+/** A call of `items_update` with `args` over the defaults (a path id and an empty body). */
+const update = (args: Record<string, unknown>) => ({ arguments: { body: {}, id: "1", ...args }, name: "items_update" })
+
+describe("a tool call's arguments (phase c)", SLOW, () => {
+	// v0: 2472ceb3b5
+	// v0: 9f544c8800
+	// v0: 93048b91fd
+	it("refuses arguments the inputSchema rejects, naming each, and sends nothing; conforming ones go", async () => {
+		const refused = [
+			[update({ id: 1 }), "id must be string"],
+			[{ arguments: { id: "1" }, name: "items_update" }, "body is required"],
+			[update({ extra: 1 }), "extra is not a declared property"],
+			[update({ dryRun: "yes" }), "dryRun must be boolean"],
+			[update({ sort: "up" }), 'sort must be one of ["asc","desc"]'],
+			[update({ tags: ["x", 2] }), "tags[1] must be string"],
+			[update({ body: { name: 5 } }), "body.name must be string"],
+			[update({ body: { note: 5 } }), "body.note matches none of its schemas"],
+			[update({ body: [] }), "body must be object"],
+			[update({ body: { price: "1" } }), "body.price must be number"],
+			[update({ body: { kind: "memo" } }), 'body.kind must be "note"'],
+			[update({ body: { both: { a: 1 } } }), "body.both.a must be string"],
+			[update({ body: { both: { b: 1 } } }), "body.both.b must be string"],
+			[update({ body: { labels: { x: 1 } } }), "body.labels.x must be string"],
+			[update({ body: { pair: ["a"] } }), "body.pair has too few items"],
+			[update({ body: { pair: ["a", "b"] } }), "body.pair[1] must be integer"],
+			[update({ body: { pair: ["a", 1, 2] } }), "body.pair[2] is past the last item"],
+			[{ arguments: { body: { a: 1 } }, name: "forms_send" }, "body.a must be string"],
+		] as const
+		const { hops, results } = await called(
+			shop(),
+			[
+				...refused.map(([call]) => call),
+				update({
+					body: {
+						both: { a: "x", b: "y" },
+						kind: "note",
+						labels: { x: "y" },
+						name: "n",
+						note: null,
+						pair: ["a", 1],
+						price: 3,
+					},
+					sort: "asc",
+				}),
+			],
+			[{ json: {}, status: 200 }],
+			(url) => [`SHOP_BASE_URL=${url}`],
+		)
+		expect([results, hops.map((hop) => hop.url)]).toEqual([
+			[
+				...refused.map(([, why]) => ({
+					content: [{ text: JSON.stringify({ message: `Invalid arguments: ${why}` }), type: "text" }],
+					isError: true,
+				})),
+				{ content: [{ text: "{}", type: "text" }] },
+			],
+			["/items/1?sort=asc"],
+		])
+	})
+})
+
+describe("a server's base URL (phase c)", SLOW, () => {
+	// v0: 0f9382a357
+	it("refuses to start with no base URL when the API names no server, and starts on the one set", async () => {
+		const dir = written(generateMcpServer(shop()).files)
+		const run = (env: string[]) =>
+			exchange(
+				["env", "-u", "SHOP_BASE_URL", ...env, process.execPath, join(dir, "dist", "server.js")],
+				[initialize("2025-11-25")],
+			)
+		const [none, set] = await Promise.all([run([]), run(["SHOP_BASE_URL=http://127.0.0.1:9"])])
+		expect([none.status, none.replies, none.stderr, set.status, set.replies.length]).toEqual([
+			1,
+			[],
+			"No API to call: set $SHOP_BASE_URL, since the API names no server\n",
+			0,
+			1,
+		])
 	})
 })

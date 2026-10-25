@@ -1,8 +1,10 @@
 /**
  * An IR schema as a tool's JSON Schema (bit 18 phase b): each kind as JSON Schema writes it; every ref inlined, a ref
  * back into one being inlined `{}`, a pure cycle of refs refused, a schema past the node budget refused fast;
- * descriptions with their controls dropped.
+ * descriptions with their controls dropped; no keyword the runtime's argument check (guard.ts) does not check, but the
+ * annotations it leaves alone.
  */
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import type { IRSchema } from "../../ir/model.ts"
 import { jsonSchemaOf, NODE_BUDGET } from "./schema.ts"
@@ -138,5 +140,54 @@ describe("the node budget (phase b)", () => {
 			`a schema inlines past ${NODE_BUDGET} nodes`,
 		)
 		expect(performance.now() - started).toBeLessThan(2000)
+	})
+})
+
+/** One schema of every IR kind, each with every option it takes: a kind added to the IR fails to type-check here. */
+const EVERY_KIND: { readonly [K in IRSchema["kind"]]: Extract<IRSchema, { kind: K }> } = {
+	allOf: { kind: "allOf", parts: [STR] },
+	array: { items: STR, kind: "array" },
+	binary: { kind: "binary" },
+	const: { kind: "const", type: "integer", value: 1 },
+	nullable: { inner: STR, kind: "nullable" },
+	object: {
+		additional: STR,
+		fields: [{ description: "d", name: "n", required: true, schema: STR }],
+		kind: "object",
+	},
+	ref: { kind: "ref", name: "S" },
+	scalar: { enum: ["a"], format: "email", kind: "scalar", type: "string" },
+	tuple: { items: [STR], kind: "tuple", required: 1, rest: STR },
+	union: { discriminator: { mapping: { a: "S" }, propertyName: "k" }, kind: "union", variants: [STR] },
+	unknown: { kind: "unknown" },
+}
+
+/* keywords that describe a value without constraining it: the argument check leaves them alone, as JSON Schema does */
+const ANNOTATIONS = ["contentEncoding", "description", "format"]
+
+/** Every keyword in `schema` and the schemas nested in it. */
+function keywords(schema: Record<string, unknown>): string[] {
+	return Object.entries(schema).flatMap(([keyword, value]) => {
+		const nested =
+			keyword === "properties"
+				? Object.values(value as Record<string, Record<string, unknown>>)
+				: Array.isArray(value) && ["allOf", "anyOf", "prefixItems"].includes(keyword)
+					? (value as Record<string, unknown>[])
+					: typeof value === "object" && value !== null && ["additionalProperties", "items"].includes(keyword)
+						? [value as Record<string, unknown>]
+						: []
+		return [keyword, ...nested.flatMap(keywords)]
+	})
+}
+
+describe("the runtime's argument check (phase c)", () => {
+	it("is given no keyword it does not check: every one emitted is checked or an annotation, every one checked emitted", () => {
+		const emitted = Object.values(EVERY_KIND).flatMap((schema) => keywords(jsonSchemaOf(schema, { S: STR })))
+		const guard = readFileSync(new URL("../../runtime/mcp/guard.ts", import.meta.url), "utf8")
+		const block = /\ntype Schema = \{\n([^}]*)\n\}/.exec(guard)?.[1] ?? ""
+		const checked = [...block.matchAll(/^\treadonly (\w+)\?:/gm)].map((match) => match[1])
+		expect([...new Set(emitted)].filter((keyword) => !ANNOTATIONS.includes(keyword)).sort()).toEqual(
+			[...checked].sort(),
+		)
 	})
 })

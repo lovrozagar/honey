@@ -17,6 +17,7 @@ const DOCUMENT = {
 	info: { title: "Shop", version: "1.2.0" },
 	openapi: "3.1.0",
 	paths: { "/items": { get: { operationId: "items.list", responses: OK, "x-mcp": true } } },
+	servers: [{ url: "https://shop.example.test" }],
 }
 
 /** The server packed by npm and installed globally into a fresh prefix: the installed bin's path. */
