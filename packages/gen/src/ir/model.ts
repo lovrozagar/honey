@@ -5,15 +5,26 @@
 
 export type IRScalarType = "boolean" | "integer" | "null" | "number" | "string"
 
+/** A value's constraint keywords as the spec states them (bit 19 c): a string's, a number's, an array's. */
+export type IRBounds = {
+	minLength?: number
+	maxLength?: number
+	pattern?: string
+	minimum?: number
+	maximum?: number
+	exclusiveMinimum?: number
+	exclusiveMaximum?: number
+}
+
 export type IRSchema =
-	| { kind: "scalar"; type: IRScalarType; format?: string; enum?: (boolean | number | string)[] }
+	| ({ kind: "scalar"; type: IRScalarType; format?: string; enum?: (boolean | number | string)[] } & IRBounds)
 	| {
 			kind: "const"
 			value: boolean | number | string
 			/** the declared `type`, when there is one */ type?: IRScalarType
 	  }
 	| { kind: "object"; fields: IRField[]; additional?: IRSchema | false }
-	| { kind: "array"; items: IRSchema }
+	| { kind: "array"; items: IRSchema; minItems?: number; maxItems?: number }
 	| {
 			kind: "tuple"
 			items: IRSchema[]

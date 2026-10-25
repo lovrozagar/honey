@@ -40,6 +40,8 @@ const LACKS: Readonly<Record<string, string>> = {
 	"raw-response/status-headers-body": "a tool returns its answer's data, never the raw response (Q11)",
 	"reconnect/ws-reconnect-token": "a WebSocket is no tool (bit 18 e)",
 	"request-id/explicit": "x-request-id is no declared parameter of the operation, so no tool argument (Q11)",
+	"typed-errors/validation-400":
+		"its name breaks the declared minLength 3, which the guard refuses on this target before anything is sent, naming it (bit 19 c, constraints.test)",
 	"verbs/reference-request":
 		"its path value holds a `/`, which H18.11 refuses on this target before anything is sent (emit-adversarial.mcp)",
 }

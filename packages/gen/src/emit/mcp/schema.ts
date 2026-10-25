@@ -52,12 +52,14 @@ function inlineRef(name: string, walk: Walk): JsonSchema {
 	return convert(target, { ...walk, open: [...walk.open, name] })
 }
 
-/** A scalar: its type, and its format and enum when it has them. */
+/** A scalar: its type, and its format, enum and constraint keywords when it has them. */
 function scalarOf(schema: Extract<IRSchema, { kind: "scalar" }>): JsonSchema {
+	const { enum: values, format, kind: _kind, type, ...bounds } = schema
 	return {
-		type: schema.type,
-		...(schema.format === undefined ? {} : { format: schema.format }),
-		...(schema.enum === undefined || schema.enum.length === 0 ? {} : { enum: schema.enum }),
+		type,
+		...(format === undefined ? {} : { format }),
+		...(values === undefined || values.length === 0 ? {} : { enum: values }),
+		...bounds,
 	}
 }
 
@@ -82,7 +84,12 @@ function convert(schema: IRSchema, walk: Walk): JsonSchema {
 		case "object":
 			return objectOf(schema.fields, schema.additional, walk)
 		case "array":
-			return { type: "array", items: convert(schema.items, walk) }
+			return {
+				type: "array",
+				items: convert(schema.items, walk),
+				...(schema.minItems === undefined ? {} : { minItems: schema.minItems }),
+				...(schema.maxItems === undefined ? {} : { maxItems: schema.maxItems }),
+			}
 		case "tuple":
 			return tupleOf(schema, walk)
 		case "union":

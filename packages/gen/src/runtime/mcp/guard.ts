@@ -18,8 +18,13 @@ type Schema = {
 	readonly items?: Schema | false
 	readonly prefixItems?: readonly Schema[]
 	readonly minItems?: number
+	readonly maxItems?: number
+	readonly minLength?: number
+	readonly maxLength?: number
 	readonly minimum?: number
 	readonly maximum?: number
+	readonly exclusiveMinimum?: number
+	readonly exclusiveMaximum?: number
 }
 
 /** `key` under the path `at`. */
@@ -45,6 +50,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 /** Why the array `list`, at `at`, fails `schema`'s items. */
 function itemsInvalid(schema: Schema, list: readonly unknown[], at: string): string | undefined {
 	if (list.length < (schema.minItems ?? 0)) return `${at} has too few items`
+	if (list.length > (schema.maxItems ?? Infinity)) return `${at} has too many items`
 	return list
 		.map((item, index) => {
 			const of = schema.prefixItems?.[index] ?? schema.items
@@ -79,13 +85,19 @@ function ownInvalid(schema: Schema, value: unknown, type: string, at: string): s
 	return undefined
 }
 
-/** Why the number `value` falls outside `schema`'s minimum or maximum. */
+/** Why the number `value` falls outside `schema`'s bounds, or the string `value` outside its length (code points). */
 function rangeInvalid(schema: Schema, value: unknown, where: string): string | undefined {
+	if (typeof value === "string") {
+		const length = [...value].length
+		if (length < (schema.minLength ?? 0)) return `${where} is too short`
+		return length > (schema.maxLength ?? Infinity) ? `${where} is too long` : undefined
+	}
 	if (typeof value !== "number") return undefined
-	if (schema.minimum !== undefined && value < schema.minimum) return `${where} must be at least ${schema.minimum}`
-	return schema.maximum !== undefined && value > schema.maximum
-		? `${where} must be at most ${schema.maximum}`
-		: undefined
+	const { exclusiveMaximum: below, exclusiveMinimum: above, maximum, minimum } = schema
+	if (minimum !== undefined && value < minimum) return `${where} must be at least ${minimum}`
+	if (maximum !== undefined && value > maximum) return `${where} must be at most ${maximum}`
+	if (above !== undefined && value <= above) return `${where} must be more than ${above}`
+	return below !== undefined && value >= below ? `${where} must be less than ${below}` : undefined
 }
 
 /** Why `value`, at `at`, fails `schema`; undefined when it conforms. */

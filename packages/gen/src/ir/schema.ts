@@ -46,9 +46,20 @@ function unionOf(schema: Json): IRSchema {
 	return { discriminator, kind: "union", variants }
 }
 
-/** A string or integer enum as a scalar; a mixed one as a union of consts; `null` when it is neither. */
+/**
+ * A string or integer enum as a scalar; a mixed one as a union of consts; `null` when it is neither. A null is never
+ * one of its values: it makes an untyped enum the nullable of its other values, a typed one is already nullable by its
+ * type or admits no null at all, and a null alone is the null type.
+ */
 function enumOf(schema: Json): IRSchema | null {
-	const values = schema.enum as (boolean | number | string)[]
+	const given = schema.enum as (boolean | number | string | null)[]
+	if (given.includes(null)) {
+		const rest = given.filter((value) => value !== null)
+		if (rest.length === 0) return { kind: "scalar", type: "null" }
+		const inner = enumOf({ ...schema, enum: rest })
+		return schema.type !== undefined || inner === null ? inner : { inner, kind: "nullable" }
+	}
+	const values = given as (boolean | number | string)[]
 	if (values.length === 0) return null
 	const all = (test: (value: unknown) => boolean) => schema.type === undefined && values.every(test)
 	if (schema.type === "string" || all((value) => typeof value === "string"))
@@ -101,12 +112,27 @@ function constOf(schema: Json): IRSchema | null {
 	return typed ? { kind: "const", type: schema.type as IRScalarType, value } : { kind: "const", value }
 }
 
+/* the constraint keywords a value carries (bit 19 c), each read when the spec states it with its JSON type */
+const BOUNDS = ["minLength", "maxLength", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"] as const
+
 function scalarOf(schema: Json): IRSchema | null {
 	if (!SCALARS.includes(schema.type)) return null
 	const scalar: Extract<IRSchema, { kind: "scalar" }> = { kind: "scalar", type: schema.type as IRScalarType }
 	if (typeof schema.format === "string") scalar.format = schema.format
 	if (Array.isArray(schema.enum)) scalar.enum = schema.enum as (boolean | number | string)[]
+	for (const bound of BOUNDS) if (typeof schema[bound] === "number") scalar[bound] = schema[bound] as number
+	if (typeof schema.pattern === "string") scalar.pattern = schema.pattern
 	return scalar
+}
+
+function arrayOf(schema: Json): IRSchema {
+	const array: Extract<IRSchema, { kind: "array" }> = {
+		items: schemaToIR(schema.items as Json | undefined),
+		kind: "array",
+	}
+	if (typeof schema.minItems === "number") array.minItems = schema.minItems
+	if (typeof schema.maxItems === "number") array.maxItems = schema.maxItems
+	return array
 }
 
 /* the order matters: a ref before anything it might also say, const before type, nullability before unions */
@@ -124,7 +150,7 @@ const READERS: readonly Reader[] = [
 	(schema) =>
 		schema.format === "binary" && (schema.type === "string" || schema.type === undefined) ? { kind: "binary" } : null,
 	tupleOf,
-	(schema) => (schema.type === "array" ? { items: schemaToIR(schema.items as Json | undefined), kind: "array" } : null),
+	(schema) => (schema.type === "array" ? arrayOf(schema) : null),
 	(schema) =>
 		schema.type === "object" || schema.properties !== undefined || schema.additionalProperties !== undefined
 			? objectOf(schema)

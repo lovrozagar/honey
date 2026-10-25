@@ -14,9 +14,11 @@ import { pascalWords } from "../shared/lang.ts"
 /** One union member: a `Literal` value, or a type. */
 export type Part = { readonly literal: string } | { readonly type: string }
 
-/** A JSON value as a member: `None`, a `Literal` value, or `float` (PEP 586 has no float literals). */
-export function valuePart(value: unknown): Part {
-	if (value === null) return { type: "None" }
+/**
+ * An enum or const value as a member: a `Literal` value, or `float` (PEP 586 has no float literals). Never a null: the
+ * IR keeps null out of every enum's values (a nullable says it) and reads a null const as unknown.
+ */
+export function valuePart(value: boolean | number | string): Part {
 	if (typeof value === "string") return { literal: pyString(value) }
 	if (typeof value === "boolean") return { literal: value ? "True" : "False" }
 	const integral = typeof value === "number" && Number.isInteger(value)

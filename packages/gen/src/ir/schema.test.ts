@@ -83,6 +83,58 @@ describe("schemaToIR: scalars, enums and consts", () => {
 	})
 })
 
+describe("schemaToIR: an enum's null, and the constraint keywords (bit 19 c)", () => {
+	it.each<[string, Json | undefined, IRSchema]>([
+		/* bit 19 c: a null is never an enum value, so the untyped and type-tagged forms read alike */
+		[
+			"an untyped enum holding a null, the nullable of its other values",
+			{ enum: ["a", null] },
+			{ inner: { enum: ["a"], kind: "scalar", type: "string" }, kind: "nullable" },
+		],
+		[
+			"a type-tagged nullable enum, its null not a value",
+			{ enum: ["a", null], type: ["string", "null"] },
+			{ inner: { enum: ["a"], kind: "scalar", type: "string" }, kind: "nullable" },
+		],
+		[
+			"a typed enum's null, never admitted, dropped",
+			{ enum: ["a", null], type: "string" },
+			{ enum: ["a"], kind: "scalar", type: "string" },
+		],
+		["an untyped enum of the null alone, the null type", { enum: [null] }, { kind: "scalar", type: "null" }],
+		[
+			"a typed enum of the null alone, the null type",
+			{ enum: [null], type: "string" },
+			{ kind: "scalar", type: "null" },
+		],
+		["an untyped enum of a null and an object, unreadable", { enum: [null, {}] }, { kind: "unknown" }],
+		["an enum of an object, unreadable", { enum: [{}] }, { kind: "unknown" }],
+		/* bit 19 c: the constraint keywords, carried for the emitters that state or check them */
+		[
+			"a string's length and pattern",
+			{ maxLength: 5, minLength: 1, pattern: "^a", type: "string" },
+			{ kind: "scalar", maxLength: 5, minLength: 1, pattern: "^a", type: "string" },
+		],
+		[
+			"a number's inclusive and exclusive bounds",
+			{ exclusiveMaximum: 10, exclusiveMinimum: 0, maximum: 9, minimum: 1, type: "number" },
+			{ exclusiveMaximum: 10, exclusiveMinimum: 0, kind: "scalar", maximum: 9, minimum: 1, type: "number" },
+		],
+		[
+			"an array's item bounds",
+			{ items: { type: "string" }, maxItems: 3, minItems: 1, type: "array" },
+			{ items: { kind: "scalar", type: "string" }, kind: "array", maxItems: 3, minItems: 1 },
+		],
+		[
+			"a bound of the wrong JSON type, not read",
+			{ minLength: "1", type: "string" },
+			{ kind: "scalar", type: "string" },
+		],
+	])("%s", (_name, schema, expected) => {
+		expect(schemaToIR(schema)).toEqual(expected)
+	})
+})
+
 describe("schemaToIR: consts and what has no shape", () => {
 	it.each<[string, Json | undefined, IRSchema]>([
 		["a string const", { const: "x" }, { kind: "const", value: "x" }],
@@ -96,7 +148,6 @@ describe("schemaToIR: consts and what has no shape", () => {
 		],
 		["a null const, which no SDK types", { const: null }, { kind: "unknown" }],
 		["an unknown type", { type: "date" }, { kind: "unknown" }],
-		["an enum holding a null, unreadable", { enum: ["a", null] }, { kind: "unknown" }],
 		["an empty schema", {}, { kind: "unknown" }],
 		// v0: 097f6e4b97
 		// v0: 7ae1354806

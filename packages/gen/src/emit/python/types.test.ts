@@ -115,8 +115,12 @@ describe("pyTypeOf: consts and enums are Literal, inline", () => {
 			title: "a null member of a typed enum is a None after the Literal",
 			type: 'Literal["a"] | None',
 		},
-		/* the IR reads an untyped enum holding a null as unknown (ir/schema.test.ts), so it is Any */
-		{ schema: { enum: ["a", null] }, title: "an untyped enum holding a null is Any", type: "Any" },
+		/* bit 19 c: the IR reads an untyped enum holding a null as the typed form does (ir/schema.test.ts) */
+		{
+			schema: { enum: ["a", null] },
+			title: "an untyped enum holding a null is the Literal then None, as a typed one",
+			type: 'Literal["a"] | None',
+		},
 	])("$title", (row) => {
 		expect(used(row)).toEqual(usedAs(row))
 	})

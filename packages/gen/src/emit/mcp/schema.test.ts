@@ -148,7 +148,7 @@ describe("the node budget (phase b)", () => {
 /** One schema of every IR kind, each with every option it takes: a kind added to the IR fails to type-check here. */
 const EVERY_KIND: { readonly [K in IRSchema["kind"]]: Extract<IRSchema, { kind: K }> } = {
 	allOf: { kind: "allOf", parts: [STR] },
-	array: { items: STR, kind: "array" },
+	array: { items: STR, kind: "array", maxItems: 2, minItems: 1 },
 	binary: { kind: "binary" },
 	const: { kind: "const", type: "integer", value: 1 },
 	nullable: { inner: STR, kind: "nullable" },
@@ -158,14 +158,27 @@ const EVERY_KIND: { readonly [K in IRSchema["kind"]]: Extract<IRSchema, { kind: 
 		kind: "object",
 	},
 	ref: { kind: "ref", name: "S" },
-	scalar: { enum: ["a"], format: "email", kind: "scalar", type: "string" },
+	scalar: {
+		enum: ["a"],
+		exclusiveMaximum: 9,
+		exclusiveMinimum: 0,
+		format: "email",
+		kind: "scalar",
+		maxLength: 5,
+		maximum: 8,
+		minLength: 1,
+		minimum: 1,
+		pattern: "^a",
+		type: "string",
+	},
 	tuple: { items: [STR], kind: "tuple", required: 1, rest: STR },
 	union: { discriminator: { mapping: { a: "S" }, propertyName: "k" }, kind: "union", variants: [STR] },
 	unknown: { kind: "unknown" },
 }
 
-/* keywords that describe a value without constraining it: the argument check leaves them alone, as JSON Schema does */
-const ANNOTATIONS = ["contentEncoding", "description", "format"]
+/* keywords the argument check leaves alone: those that describe a value without constraining it, as JSON Schema does,
+   and `pattern`, stated but never run (a spec regex on agent input is a ReDoS surface; the API validates it) */
+const ANNOTATIONS = ["contentEncoding", "description", "format", "pattern"]
 
 /** Every keyword in `schema` and the schemas nested in it. */
 function keywords(schema: Record<string, unknown>): string[] {

@@ -65,9 +65,12 @@ const SLOW = { timeout: 120_000 }
  *   29,700 → locked 29,649.
  * - the TS response cap (bit 11/18 fix), −81 B to 29,568 B: the SDK reads at most 1 MiB, so result.ts's note for
  *   bytes past it is dead and cut (−105, with its doc); call.ts +24 (a 2xx whose body the SDK refused is a failure).
+ * - bit 19 c, +734 B to 30,302 B: guard.ts checks the constraint keywords the IR now carries (maxItems, minLength and
+ *   maxLength in code points, exclusiveMinimum and exclusiveMaximum), each refusal naming the argument; pattern is
+ *   stated, never run.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 29568
+const MCP_RUNTIME_BYTES = 30302
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -88,13 +91,15 @@ type Tools = { readonly total: number; readonly largest: number }
  * e2e app's running server (tools/list over stdio, the answer as it is written), every operation opted in by
  * markAllMcp. A list over its ceiling is fixed in the emitter or the schema, never by raising the ceiling; a raise names
  * the feature that adds the tokens.
+ * - bit 19 c, the constraint keywords stated in each inputSchema (+17 tokens): surface's four `minLength: 1` arguments,
+ *   2,110 -> 2,127 total, its largest tool unchanged at 205; the other four apps declare no constraint and are unchanged.
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },
 	defaults: { largest: 51, total: 127 },
 	gateway: { largest: 141, total: 367 },
 	kitchen: { largest: 71, total: 627 },
-	surface: { largest: 205, total: 2110 },
+	surface: { largest: 205, total: 2127 },
 }
 const TOKEN_HEADROOM = 0.2
 

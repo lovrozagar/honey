@@ -55,9 +55,13 @@ const ITEM_SCHEMA = {
 	type: "object",
 }
 
-/** The reference app's tools/list measured in o200k tokens (ceilingOf(measured, 0.2)): the whole list, its largest tool. */
-const TOKENS_TOTAL = 2766
-const TOKENS_LARGEST = 244
+/**
+ * The reference app's tools/list measured in o200k tokens (ceilingOf(measured, 0.2)): the whole list, its largest tool.
+ * Measured 2,305 / 203 at bit 18 g; 2,534 / 222 after bit 19 c, the constraint keywords its zod schemas state now in
+ * each inputSchema (+229 / +19 tokens).
+ */
+const TOKENS_TOTAL = 3041
+const TOKENS_LARGEST = 267
 
 /** Rows only the MCP server runs (bit 18 f). */
 const mcpOnly = (id: string, asserted: string, scenarios: Scenario[]): Feature => ({
