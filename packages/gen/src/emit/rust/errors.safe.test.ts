@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
 import type { RustError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, recordingServer, served } from "../shared/__fixtures__/recording-server.ts"
+import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { type DrivenRustSdk, drivenRustSdk } from "./__fixtures__/driven.ts"
 import { withRust } from "./__fixtures__/rust-env.ts"
 
@@ -49,9 +49,7 @@ function drive(sdk: DrivenRustSdk, replies: readonly Reply[], calls: readonly Ca
 
 /** `calls` against an origin that refuses every connection. */
 async function refused(sdk: DrivenRustSdk, calls: readonly Call[]) {
-	const closed = await recordingServer([])
-	await closed.close()
-	return sdk.runCalls({ calls, setup: {} }, { url: closed.url }, {})
+	return sdk.runCalls({ calls, setup: {} }, { url: REFUSED_URL }, {})
 }
 
 type Traced = Trace<RustError>["calls"][number]

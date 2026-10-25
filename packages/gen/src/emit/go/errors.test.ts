@@ -4,7 +4,7 @@ import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
 import type { GoError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
 import { check, once, type Run, seen } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
-import { type Reply, recordingServer, served } from "../shared/__fixtures__/recording-server.ts"
+import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { generateGoSdk } from "./sdk.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
@@ -232,9 +232,7 @@ goDescribe("safe mode: an error status in SDKResult.Err, every other failure the
 		/* v0's name ("never returns non-nil error") was false in v0 too: a failure with no response is the error return */
 		const sdk = errSdk(false)
 		const notFound = await drive(sdk, [answer(404)], [GET], {})
-		const closed = await recordingServer([])
-		await closed.close()
-		const refused = await sdk.runCalls({ calls: [GET], setup: {} }, { url: closed.url }, {})
+		const refused = await sdk.runCalls({ calls: [GET], setup: {} }, { url: REFUSED_URL }, {})
 		const [found] = notFound.run.trace?.calls ?? []
 		const [lost] = refused.trace?.calls ?? []
 		expect({

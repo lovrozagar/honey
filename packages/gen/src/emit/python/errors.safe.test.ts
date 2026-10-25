@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
 import type { PythonError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, recordingServer, served } from "../shared/__fixtures__/recording-server.ts"
+import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { consume, once, seen } from "./__fixtures__/consumer.ts"
 import { type DrivenPythonSdk, drivenPythonSdk } from "./__fixtures__/driven.ts"
 import { withPython } from "./__fixtures__/python-env.ts"
@@ -43,9 +43,7 @@ function drive(client: Client, replies: readonly Reply[], calls: readonly Call[]
 
 /** `calls` on `client` against an origin that refuses every connection. */
 async function refused(client: Client, calls: readonly Call[]) {
-	const closed = await recordingServer([])
-	await closed.close()
-	return on(client).sdk.runCalls({ calls, setup: {} }, { url: closed.url }, { client, script: {} })
+	return on(client).sdk.runCalls({ calls, setup: {} }, { url: REFUSED_URL }, { client, script: {} })
 }
 
 type Traced = Trace<PythonError>["calls"][number]

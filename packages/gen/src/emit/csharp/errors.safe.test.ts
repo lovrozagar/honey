@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
 import type { CsError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, recordingServer, served } from "../shared/__fixtures__/recording-server.ts"
+import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { consume, seen } from "./__fixtures__/consumer.ts"
 import { withDotnet } from "./__fixtures__/csharp-env.ts"
 import { type DrivenCSharpSdk, drivenCSharpSdk } from "./__fixtures__/driven.ts"
@@ -41,9 +41,7 @@ function drive(replies: readonly Reply[], calls: readonly Call[], script: Script
 
 /** `calls` against an origin that refuses every connection. */
 async function refused(calls: readonly Call[]) {
-	const closed = await recordingServer([])
-	await closed.close()
-	return safe().runCalls({ calls, setup: {} }, { url: closed.url }, { script: {} })
+	return safe().runCalls({ calls, setup: {} }, { url: REFUSED_URL }, { script: {} })
 }
 
 type Traced = Trace<CsError>["calls"][number]

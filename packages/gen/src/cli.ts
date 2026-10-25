@@ -4,10 +4,11 @@
  * function's, spelled `--<target>-<option>` and passed through untouched: each generator validates its own. The go and
  * cli targets' whole trees go through gofmt (the post-pass), so a missing gofmt is a refusal, never unformatted Go.
  * `--watch` regenerates in a fresh child on each change of the spec. Parsing is strict: an unknown flag, a missing
- * value, a stray argument or an option for a target not asked for is a usage error. Loading an app (`--app`) waits for
- * bit 19, beside core's loaders; so does deleting the files a removed operation left.
+ * value, a stray argument or an option for a target not asked for is a usage error. Each target is written through
+ * write.ts: only changed files, a hashed manifest, a removed operation's unedited files deleted (bit 19 h1). Loading an
+ * app (`--app`) waits for phase h2, beside core's loaders.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync, statSync, watch } from "node:fs"
 import { basename, delimiter, dirname, join, resolve } from "node:path"
 import { generateGoCli } from "./emit/cli/module.ts"
 import { generateCSharpSdk } from "./emit/csharp/sdk.ts"
@@ -21,6 +22,7 @@ import { gofmtFormatter } from "./emit/shared/gofmt.ts"
 import { generateSdk } from "./emit/ts/sdk.ts"
 import { type Generate, type Options, parseGenerate, type Target, usage, UsageError } from "./gen/args.ts"
 import { runCli } from "./gen/process.ts"
+import { writeTarget } from "./gen/write.ts"
 
 /** An executable named `name` on PATH, or none. */
 function onPath(name: string, env: NodeJS.ProcessEnv): string | undefined {
@@ -75,14 +77,14 @@ function filesOf(
 	}
 }
 
-/** Every file a run writes, by its path under `out`: each target's under its name, Go's through gofmt; skips to `report`. */
+/** Every file a run writes, by target and its path under the target's directory, Go's through gofmt; skips to `report`. */
 export async function generated(
 	run: Generate,
 	document: Record<string, unknown>,
 	env: NodeJS.ProcessEnv,
 	report: (line: string) => void,
 ) {
-	const out: Record<string, string> = {}
+	const out: Partial<Record<Target, Readonly<Record<string, string>>>> = {}
 	for (const target of run.targets) {
 		let files = filesOf(target, document, run.options[target], report)
 		if (target === "go" || target === "cli") {
@@ -91,7 +93,7 @@ export async function generated(
 				throw new Error("gofmt is required for the go and cli targets (install Go, or set GOFMT)")
 			files = await formatFiles(files, { go: gofmtFormatter(gofmt) })
 		}
-		for (const [name, text] of Object.entries(files)) out[join(target, name)] = text
+		out[target] = files
 	}
 	return out
 }
@@ -114,14 +116,17 @@ const PROCESS_IO: Io = {
 	out: (text) => void process.stdout.write(text),
 }
 
-/** One generation: the spec read, every target generated, each file written under `out`. */
+/** One generation: the spec read, every target generated and written under `<out>/<target>`, its stale files deleted. */
 async function generateOnce(run: Generate, io: Io, env: NodeJS.ProcessEnv): Promise<number> {
-	const files = await generated(run, readSpec(run.spec), env, io.err)
-	for (const [name, text] of Object.entries(files)) {
-		mkdirSync(dirname(join(run.out, name)), { recursive: true })
-		writeFileSync(join(run.out, name), text)
+	let count = 0
+	for (const [target, files] of Object.entries(await generated(run, readSpec(run.spec), env, io.err))) {
+		for (const rel of writeTarget(join(run.out, target), files).kept)
+			io.err(
+				`honey-codegen: ${join(target, rel)} is stale but edited since it was generated, or not its to delete: kept\n`,
+			)
+		count += Object.keys(files).length
 	}
-	io.out(`honey-codegen: generated ${Object.keys(files).length} files into ${run.out}\n`)
+	io.out(`honey-codegen: generated ${count} files into ${run.out}\n`)
 	return 0
 }
 

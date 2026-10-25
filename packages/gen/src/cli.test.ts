@@ -1,6 +1,6 @@
 /**
  * The honey-codegen generate CLI (bit 17 phase h): a usage error is exit 1 with the usage text (and --help names what
- * is not deleted until bit 19); each target written under `<out>/<target>`, its options passed through untouched, so a
+ * a regeneration deletes); each target written under `<out>/<target>`, its options passed through untouched, so a
  * hostile one is refused by its own generator with that generator's message; a spec that is not JSON refused; the go
  * and cli targets' whole trees, internal/sdk included, through gofmt, found by GOFMT, GOROOT, PATH or beside the real
  * go, and a refusal when there is none; `--watch` regenerating in a fresh child on each change of the spec until
@@ -67,7 +67,7 @@ const filesUnder = (dir: string) =>
 		.sort()
 
 describe("generate's usage (phase h)", () => {
-	it("refuses no command and an unknown one, and names what bit 19 deletes", async () => {
+	it("refuses no command and an unknown one, and names what a regeneration deletes", async () => {
 		const [none, unknown] = [await run([]), await run(["serve"])]
 		expect([none.status, none.out, unknown.status, unknown.err.split("\n")[0]]).toEqual([
 			1,
@@ -75,7 +75,28 @@ describe("generate's usage (phase h)", () => {
 			1,
 			'honey-codegen: unknown command "serve"',
 		])
-		expect(usage()).toContain("none is deleted. A file a removed operation left (a go or cli target's stale")
+		expect(usage()).toContain(
+			"A regeneration deletes a\nfile the last run wrote and this one does not, unless it was edited since",
+		)
+	})
+})
+
+describe("generate's regeneration (bit 19 h1)", () => {
+	it("deletes the files the last run wrote and this one did not, keeping an edited one and naming it", async () => {
+		const { out, spec } = specDir()
+		const once = (stem: string, into = out) =>
+			run(["generate", "--spec", spec, "--target", "ts", "--ts-stem", stem, "--out", into])
+		await once("first")
+		const edited = filesUnder(out).find((name) => name.endsWith(".index.gen.ts")) as string
+		writeFileSync(join(out, edited), "// mine\n")
+		const second = await once("second")
+		const alone = specDir().out
+		await once("second", alone)
+		expect({ err: second.err, files: filesUnder(out), status: second.status }).toEqual({
+			err: `honey-codegen: ${edited} is stale but edited since it was generated, or not its to delete: kept\n`,
+			files: [...filesUnder(alone), edited].sort(),
+			status: 0,
+		})
 	})
 })
 
@@ -118,6 +139,7 @@ describe("generate's files (phase h)", () => {
 			0,
 			`honey-codegen: generated 5 files into ${out}\n`,
 			[
+				"ts/.honey-generated.json",
 				"ts/shop.client.gen.ts",
 				"ts/shop.index.gen.ts",
 				"ts/shop.map.gen.ts",

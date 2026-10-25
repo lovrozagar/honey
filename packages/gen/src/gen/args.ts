@@ -64,8 +64,9 @@ ${Object.entries(TARGETS)
 	)
 	.join("\n")}
 
-Files are written over; none is deleted. A file a removed operation left (a go or cli target's stale
-<name>_cmds.go, say) stays until bit 19's cleanup, and can break the build: clear <out>/<target> first.
+Each <out>/<target> keeps .honey-generated.json, every file it wrote with its sha256. A regeneration deletes a
+file the last run wrote and this one does not, unless it was edited since: that one is kept and named on stderr.
+Nothing outside <out>/<target> is written or deleted, and no symlink is followed.
 `
 }
 

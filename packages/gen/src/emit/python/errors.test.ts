@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
 import type { PythonError, Script } from "../shared/__fixtures__/protocol.ts"
-import { type Reply, recordingServer, served } from "../shared/__fixtures__/recording-server.ts"
+import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { errors } from "../shared/__fixtures__/documents-http.ts"
 import { checked, consume, once, seen } from "./__fixtures__/consumer.ts"
 import { type DrivenPythonSdk, drivenPythonSdk } from "./__fixtures__/driven.ts"
@@ -121,9 +121,7 @@ function drive(at: On, replies: readonly Reply[], calls: readonly Call[], script
 
 /** `calls` on `at` against an origin that refuses every connection. */
 async function refused(at: On, calls: readonly Call[]) {
-	const closed = await recordingServer([])
-	await closed.close()
-	return at.sdk.runCalls({ calls, setup: {} }, { url: closed.url }, { client: at.client, script: {} })
+	return at.sdk.runCalls({ calls, setup: {} }, { url: REFUSED_URL }, { client: at.client, script: {} })
 }
 
 type Run = Awaited<ReturnType<On["sdk"]["runCalls"]>>
