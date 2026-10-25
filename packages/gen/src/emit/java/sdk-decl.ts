@@ -29,11 +29,28 @@ export function assigned(indent: string, lhs: string, { items, prefix, suffix }:
 	return [`${indent}${lhs} =`, ...layout(prefix, items, suffix, `${indent}    `)]
 }
 
+/** Whether `cp` is a control, DEL, C1, the BOM or a line or paragraph separator: never raw in a doc comment. */
+const control = (cp: number) =>
+	cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0xfeff || cp === 0x2028 || cp === 0x2029
+
 /**
- * A `/** … *\/` doc comment at `indent`: one line when it fits in 100 columns, else google-java-format's filled lines, each
- * word on the first line it fits, after ` * `.
+ * Spec text as a doc comment holds it: each control a space; every backslash `&#92;`, so none begins a `\u` escape,
+ * which javac reads before it lexes, comments included (JLS 3.3); and `*\/` as `*&#47;`, so the comment never ends
+ * early. Javadoc renders both entities as the characters they stand for.
  */
-export function docOf(text: string, indent = "  "): string {
+const docText = (text: string) =>
+	[...text.toWellFormed()]
+		.map((ch) => (control(ch.codePointAt(0) as number) ? " " : ch))
+		.join("")
+		.replace(/\\/g, "&#92;")
+		.replace(/\*\//g, "*&#47;")
+
+/**
+ * A `/** … *\/` doc comment at `indent`, its text made safe (docText): one line when it fits in 100 columns, else
+ * google-java-format's filled lines, each word on the first line it fits, after ` * `.
+ */
+export function docOf(raw: string, indent = "  "): string {
+	const text = docText(raw)
 	const one = `${indent}/** ${text} */`
 	if (one.length <= WIDTH) return one
 	const available = WIDTH - indent.length - " * ".length
