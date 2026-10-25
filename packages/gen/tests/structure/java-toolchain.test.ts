@@ -7,12 +7,13 @@
  * required, naming the install. The default run runs on JDK 21; 17 and 25 run in CI's matrix. CI reads the same pins
  * file with `jq`, in every job that runs gen's Java, beside the `-java-` cache.
  */
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, matchesGlob, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { HARNESS, JAVA, RUST, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
+import { GRADLE_RUN, leftAfter } from "../../src/emit/java/__fixtures__/compiled.ts"
 import * as env from "../../src/emit/java/__fixtures__/java-env.ts"
 
 const { gjfJava, javaCacheDir, javaEnv, javaHome, javaInstall, runGjf, runGradle, runJava, withJava } = env
@@ -198,18 +199,6 @@ const cachesJava = (step: string) =>
  * whose java project runs Java's conformance runner and harness files (phase e)
  */
 const owned = (path: string) => [...JAVA, ...RUST, ...HARNESS].some((glob) => matchesGlob(path, glob))
-
-/** The Gradle daemons alive now, as `pid cmdline`. */
-function gradleDaemons(): string[] {
-	return readdirSync("/proc")
-		.filter((name) => /^\d+$/.test(name))
-		.flatMap((pid) => {
-			const path = join("/proc", pid, "cmdline")
-			/* a process that ended since the listing has no cmdline left to read */
-			const line = existsSync(path) ? readFileSync(path, "utf8").replaceAll("\0", " ") : ""
-			return /GradleDaemon|GradleWrapperMain|gradle-launcher/.test(line) ? [`${pid} ${line.trim()}`] : []
-		})
-}
 
 describe("Java runs through java-env.ts only", () => {
 	it("leaves no gen file spawning java, javac, javap, gradle or google-java-format, or launching a -jar, but java-env.ts", () => {
@@ -400,20 +389,21 @@ describe.skipIf(!PRESENT)("the pinned toolchains a run uses", () => {
 })
 
 describe.skipIf(!PRESENT)("a Gradle build's daemon", () => {
-	it("leaves no Gradle daemon alive after an offline build, checked by command line", async () => {
-		const before = new Set(gradleDaemons())
+	it("leaves no Gradle daemon alive after an offline build, its own processes found by their mark", () => {
+		/* the mark keeps another file's Gradle out: the java project runs its files side by side */
+		const mark = randomUUID()
 		const dir = mkdtempSync(join(javaCacheDir("tmp"), "gradle-"))
 		try {
 			writeFileSync(join(dir, "settings.gradle"), "rootProject.name = 'probe'\n")
 			writeFileSync(join(dir, "build.gradle"), "plugins { id 'java-library' }\n")
 			mkdirSync(join(dir, "src", "main", "java"), { recursive: true })
 			writeFileSync(join(dir, "src", "main", "java", "P.java"), "public class P {}\n")
-			const built = runGradle(["--offline", "--no-daemon", "build"], { cwd: dir })
-			expect([built.status, existsSync(join(dir, "build", "libs", "probe.jar"))]).toEqual([0, true])
-			await vi.waitFor(() => expect(gradleDaemons().filter((line) => !before.has(line))).toEqual([]), {
-				interval: 100,
-				timeout: 5_000,
-			})
+			const built = runGradle(["--offline", "--no-daemon", "build"], { cwd: dir, env: { [GRADLE_RUN]: mark } })
+			expect([built.status, existsSync(join(dir, "build", "libs", "probe.jar")), leftAfter(mark)]).toEqual([
+				0,
+				true,
+				[],
+			])
 		} finally {
 			rmSync(dir, { force: true, recursive: true })
 		}

@@ -59,7 +59,7 @@ function walk(dir: string): string[] {
 }
 
 /** The environment variable that marks one build's Gradle processes: a forked daemon inherits its client's. */
-const GRADLE_RUN = "HONEY_GRADLE_RUN"
+export const GRADLE_RUN = "HONEY_GRADLE_RUN"
 
 /** `/proc/<pid>/<file>`, its NULs as spaces, or "" for a process that ended since the listing. */
 function procText(pid: string, file: string): string {
@@ -87,7 +87,7 @@ function gradleDaemons(mark: string): string[] {
  * the build by seconds; a leaked daemon idles for hours, so the bound still finds it. The mark keeps another run's
  * Gradle out.
  */
-function leftAfter(mark: string): string[] {
+export function leftAfter(mark: string): string[] {
 	const pause = new Int32Array(new SharedArrayBuffer(4))
 	for (let waited = 0; ; waited += 100) {
 		const left = gradleDaemons(mark)
