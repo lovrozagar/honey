@@ -138,10 +138,12 @@ export function refusal(
 	return why && `Invalid arguments: ${why}`
 }
 
-/** A scrubber of `secret` from every string in a value, keys included, in any letter case (a hex escape's either). */
-export function redactor(secret: string): (value: unknown) => unknown {
-	if (!secret) return (value) => value
-	const forms = [secret, encodeURIComponent(secret), new URLSearchParams({ s: secret }).toString().slice(2)]
+/** A scrubber of `secrets` from every string in a value, keys included, in any letter case (a hex escape's either). */
+export function redactor(secrets: readonly string[]): (value: unknown) => unknown {
+	const forms = secrets
+		.filter(Boolean)
+		.flatMap((s) => [s, encodeURIComponent(s), new URLSearchParams({ s }).toString().slice(2)])
+	if (forms.length === 0) return (value) => value
 	const pattern = new RegExp(forms.map((form) => form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi")
 	const scrub = (value: unknown): unknown =>
 		typeof value === "string"
@@ -152,4 +154,23 @@ export function redactor(secret: string): (value: unknown) => unknown {
 					? value.map(scrub)
 					: Object.fromEntries(Object.entries(value).map(([key, item]) => [scrub(key) as string, scrub(item)]))
 	return scrub
+}
+
+/** `$<PREFIX>_HEADERS`, each header passing the SDK's `check`; else why not, quoting no value. */
+export function configHeaders(
+	text: string | undefined,
+	name: string,
+	check: (header: string, value: string) => unknown,
+) {
+	const shape = `Invalid $${name}: a JSON object of string values`
+	try {
+		const headers: unknown = JSON.parse(text || "{}")
+		if (typeof headers !== "object" || headers === null || Array.isArray(headers)) return shape
+		const entries = Object.entries(headers)
+		if (entries.some(([, value]) => typeof value !== "string")) return shape
+		for (const [header, value] of entries) check(header, value as string)
+		return headers as Record<string, string>
+	} catch (err) {
+		return err instanceof SyntaxError ? shape : `Invalid $${name}: ${(err as Error).message}`
+	}
 }

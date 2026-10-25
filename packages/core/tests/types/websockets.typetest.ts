@@ -7,6 +7,7 @@ import { describe, expectTypeOf, it } from "vitest"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { realtime } from "../../src/realtime/realtime.ts"
 import type { ConnContext } from "../../src/realtime/route.ts"
+import type { WsMeta } from "../../src/routing/ws-builder.ts"
 import type { RealtimePublisher } from "../../src/realtime/server.ts"
 import { honey } from "../../src/routing/app.ts"
 import type { WSAdapter, WSContext, WSHandler, WSReadyState } from "../../src/ws/contract.ts"
@@ -138,5 +139,42 @@ describe("realtime(app, path, opts)", () => {
 		realtime(app, "/b", { handler: () => {}, identify: () => 1 })
 		// @ts-expect-error slowConsumer is "close" or "drop"
 		realtime(app, "/c", { handler: () => {}, limits: { slowConsumer: "wait" } })
+	})
+})
+
+describe("app.ws(path).meta(): only the meta a WebSocket route reads (bit 19 g, carry-in #13)", () => {
+	it("takes the builtins a WebSocket route reads and the route's own keys", () => {
+		const app = honey()
+		app.ws("/live").meta({
+			area: "chat",
+			description: "the live feed",
+			extensions: { "x-realtime": true },
+			internal: false,
+			operationId: "live.feed",
+			summary: "live",
+			tags: ["ws"],
+		})
+		expectTypeOf<{ area: string; operationId: string; summary: string }>().toExtend<WsMeta>()
+	})
+
+	it("refuses the four builtins the build drops from a WebSocket route", () => {
+		const app = honey()
+		// @ts-expect-error a WebSocket route is never marked deprecated
+		app.ws("/a").meta({ deprecated: true })
+		// @ts-expect-error a WebSocket route declares no security requirement
+		app.ws("/b").meta({ security: ["bearer"] })
+		// @ts-expect-error a WebSocket route invalidates no read
+		app.ws("/c").meta({ invalidate: [] })
+		// @ts-expect-error a WebSocket route is no MCP tool
+		app.ws("/d").meta({ mcp: true })
+		expectTypeOf<{ deprecated: true }>().not.toExtend<WsMeta>()
+	})
+
+	it("holds a WebSocket route to the app's meta type, as an HTTP route", () => {
+		const app = honey().meta<{ team: string }>()
+		app.ws("/e").meta({ team: "core" })
+		// @ts-expect-error the app's meta key keeps its type
+		app.ws("/f").meta({ team: 1 })
+		expectTypeOf<{ team: number }>().not.toExtend<WsMeta<{ team: string }>>()
 	})
 })

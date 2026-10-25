@@ -30,10 +30,8 @@ const PREFIX = "CONFORMANCE"
  * arguments alone, and the server's environment is every call's configuration.
  */
 const LACKS: Readonly<Record<string, string>> = {
-	"auth/api-key-on-origin":
-		"the server's one credential is $<PREFIX>_API_KEY under the spec's scheme; it takes no other header (bits/19)",
 	"auth/cross-origin-redirect-drops":
-		"the server has no header or redirect configuration; it follows no cross-origin redirect (result.test pins it)",
+		"its operation declares no success body, so the tool's result is null where the followed echo answers JSON; the redirect, followed with the credentials dropped, is config.test's (bit 19 g)",
 	"json-status/realtime-send-non-ascii": "a realtime operation is no tool: the server has no realtime send (bit 18 e)",
 	"json-status/realtime-send-raw-text": "a realtime operation is no tool: the server has no realtime send (bit 18 e)",
 	"overrides/base-url": "a tool has no per-call base URL: the server's $<PREFIX>_BASE_URL is every call's",
@@ -190,14 +188,18 @@ function stepOf(call: Call, specs: Map<string, ToolSpec>): Step {
 	return { call: { arguments: argumentsOf(call, spec), name: spec.name } }
 }
 
-/** The environment a cell's setup gives the server: the API, and the bearer as its key. */
+/** The environment a cell's setup gives the server: the API, the bearer as its key, its headers and redirect policy. */
 function setupEnv(cell: Cell, app: ReferenceApp): string[] {
 	const setup = cell.setup
-	if (setup?.headers !== undefined || setup?.redirect !== undefined || setup?.auth?.kind === "header")
-		throw new Error(`${cell.key}: the server has no header or redirect configuration`)
+	const headers = {
+		...setup?.headers,
+		...(setup?.auth?.kind === "header" ? { [setup.auth.name]: setup.auth.value } : {}),
+	}
 	return [
 		`${PREFIX}_BASE_URL=${app.url}`,
 		...(setup?.auth?.kind === "bearer" ? [`${PREFIX}_API_KEY=${setup.auth.token}`] : []),
+		...(Object.keys(headers).length === 0 ? [] : [`${PREFIX}_HEADERS=${JSON.stringify(headers)}`]),
+		...(setup?.redirect === undefined ? [] : [`${PREFIX}_REDIRECT=${setup.redirect}`]),
 		...(setup?.timeoutMs === undefined ? [] : [`${PREFIX}_TIMEOUT_MS=${setup.timeoutMs}`]),
 	]
 }

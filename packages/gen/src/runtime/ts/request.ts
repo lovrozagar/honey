@@ -65,7 +65,7 @@ export function defaultSearchParams(query: Record<string, unknown>): URLSearchPa
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
 
 /** `value` for the header `name`, else a TypeError naming the header, never the value (Node's Headers quotes it). */
-function headerValue(name: string, value: string): string {
+export function headerValue(name: string, value: string): string {
 	if (!TOKEN.test(name)) throw new TypeError(`the ${name} header cannot be sent`)
 	for (let i = 0; i < value.length; i++) {
 		const cp = value.charCodeAt(i)

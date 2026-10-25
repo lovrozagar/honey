@@ -49,20 +49,18 @@ describe("the package's files (phase a)", () => {
 	})
 })
 
-describe("the entry (phases a–e)", () => {
-	// v0: e2c533b3fe
-	it("writes the entry: the SDK client by the environment, the key as the API's scheme says, the tools served over stdio", () => {
-		const files = generateMcpServer(document()).files
-		expect([files["src/server.ts"], files["dist/package.json"]]).toEqual([
-			`${MARKER}
+/** The shop server's entry, as the generator writes it. */
+const ENTRY = `${MARKER}
 
 // The shop MCP server: its tools over stdio, for the MCP client that starts it. The API key is
 // $SHOP_API_KEY, sent as the API's scheme says; the API is at $SHOP_BASE_URL, else its first server, and
 // with neither it refuses to start. A call waits $SHOP_TIMEOUT_MS milliseconds at most, 30 s by default, an
-// event stream's collect too. SIGINT and SIGTERM abort every call in flight and exit 0, no later reply written.
-// The API's answer is read at most 1 MiB, past it refused.
-import { BYTES_MAX, bindTools, createSession, serveStdio } from "./mcp.runtime"
+// event stream's collect too. $SHOP_HEADERS, a JSON object of string values, goes on every call, each value
+// scrubbed as the key is; $SHOP_REDIRECT is same-origin (the default) or follow. SIGINT and SIGTERM abort
+// every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.
+import { BYTES_MAX, bindTools, configHeaders, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
+import { headerValue } from "./sdk/api.runtime.gen"
 import { toolSpecs } from "./tools.gen"
 
 const key = process.env["SHOP_API_KEY"] ?? ""
@@ -76,10 +74,21 @@ if (baseURL === "") {
 	process.stderr.write("No API to call: set $SHOP_BASE_URL, since the API names no server\\n")
 	process.exit(1)
 }
+const headers = configHeaders(process.env["SHOP_HEADERS"], "SHOP_HEADERS", headerValue)
+if (typeof headers === "string") {
+	process.stderr.write(headers + "\\n")
+	process.exit(1)
+}
+const redirect = process.env["SHOP_REDIRECT"] || "same-origin"
+if (redirect !== "same-origin" && redirect !== "follow") {
+	process.stderr.write("Invalid $SHOP_REDIRECT: same-origin or follow\\n")
+	process.exit(1)
+}
 const config = {
 	baseURL,
-	headers: key === "" ? {} : { "Authorization": "Bearer " + key },
+	headers: key === "" ? headers : { ...headers, "Authorization": "Bearer " + key },
 	maxResponseBytes: BYTES_MAX,
+	redirect: redirect as "follow" | "same-origin",
 	throwOnError: false,
 	timeout: Number(timeout),
 }
@@ -92,14 +101,18 @@ for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abor
 void serveStdio(
 	createSession(
 		{ name: "shop", version: "1.2.0" },
-		bindTools(toolSpecs, client, { opening, secret: key, timeout: Number(timeout) }),
+		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout) }),
 	),
 	undefined,
 	stop.signal,
 ).then(() => stop.signal.aborted && process.stdout.write("", () => process.exit(0)))
-`,
-			'{\n\t"type": "commonjs"\n}\n',
-		])
+`
+
+describe("the entry (phases a–e)", () => {
+	// v0: e2c533b3fe
+	it("writes the entry: the SDK client by the environment, the key as the API's scheme says, the tools served over stdio", () => {
+		const files = generateMcpServer(document()).files
+		expect([files["src/server.ts"], files["dist/package.json"]]).toEqual([ENTRY, '{\n\t"type": "commonjs"\n}\n'])
 	})
 })
 

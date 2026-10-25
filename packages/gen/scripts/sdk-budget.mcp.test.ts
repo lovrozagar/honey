@@ -68,9 +68,13 @@ const SLOW = { timeout: 120_000 }
  * - bit 19 c, +734 B to 30,302 B: guard.ts checks the constraint keywords the IR now carries (maxItems, minLength and
  *   maxLength in code points, exclusiveMinimum and exclusiveMaximum), each refusal naming the argument; pattern is
  *   stated, never run.
+ * - bit 19 g, +863 B to 31,165 B: $<PREFIX>_HEADERS, a JSON object each header of which passes the SDK's own header
+ *   check (request.ts headerValue, b1's rule, passed in), each value sent on every call and scrubbed from results:
+ *   guard.ts configHeaders' parse and refusal +657, the redactor taking several secrets +89, two short comments +100;
+ *   call.ts +17. $<PREFIX>_REDIRECT lives in the emitted entry (+0 runtime).
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 30302
+const MCP_RUNTIME_BYTES = 31165
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

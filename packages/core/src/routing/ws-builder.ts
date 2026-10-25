@@ -14,6 +14,7 @@ import { createWsSession } from "../ws/session.ts"
 import { compileInput, type InferInputMap, type NonBodyInput, type InputStep } from "../input/input.ts"
 import { joinPatterns, parsePattern } from "./pattern.ts"
 import { addRoute, type HandleView, type HoneyGraph, type PendingRoute, settle } from "./register.ts"
+import type { DefaultMeta } from "./app-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { ParamsFromPath } from "./types.ts"
 
@@ -58,6 +59,14 @@ function upgrader(callbacks: WSHandler<unknown>, policy: WSOriginPolicy | null, 
 	}
 }
 
+/** The builtins the build drops from a WebSocket route (`ws: false`): an upgrade has none of them. */
+type HttpOnlyMeta = "deprecated" | "invalidate" | "mcp" | "security"
+
+/** What a WebSocket route's `.meta()` takes: an HTTP route's meta, the HTTP-only builtins refused. */
+export type WsMeta<TMeta = never> = Omit<Partial<DefaultMeta>, HttpOnlyMeta> & {
+	readonly [K in HttpOnlyMeta]?: never
+} & ([TMeta] extends [never] ? {} : TMeta)
+
 export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 	readonly #s: WSBuilderState
 
@@ -90,7 +99,9 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 		})
 	}
 
-	meta(meta: Record<string, unknown>): WSRouteBuilder<TCtx, TPath, TParent> {
+	meta<TRouteMeta extends WsMeta<TParent extends { readonly $meta: infer TMeta } ? TMeta : never>>(
+		meta: TRouteMeta,
+	): WSRouteBuilder<TCtx, TPath, TParent> {
 		return this.#next({ meta: { ...this.#s.meta, ...meta } })
 	}
 

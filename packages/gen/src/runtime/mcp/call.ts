@@ -33,9 +33,9 @@ export type ToolSpec = {
 	readonly collect?: readonly [max: string, lastEventId: string]
 }
 
-/** How tools call: the key to scrub, a call's bound in ms, and a collect's own client, whose answer runs `seen`. */
+/** How tools call: the secrets to scrub, a call's bound in ms, and a collect's own client, whose answer runs `seen`. */
 export type Binding = {
-	readonly secret: string
+	readonly secrets: readonly string[]
 	readonly timeout: number
 	readonly opening: (seen: () => void) => SdkClient
 }
@@ -78,9 +78,9 @@ function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown
 	return [owner, method]
 }
 
-/** `specs` as tools calling `client` (in safe mode) as `binding` says, every result scrubbed of the API key. */
+/** `specs` as tools calling `client` (in safe mode) as `binding` says, every result scrubbed of the secrets. */
 export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding: Binding): Tool[] {
-	const scrub = redactor(binding.secret)
+	const scrub = redactor(binding.secrets)
 	return specs.map((spec) => ({
 		call: async (args, signal, progress) => {
 			const paths = spec.args.filter(([, group]) => group === "params").map(([property]) => property)

@@ -24,7 +24,7 @@ export type McpServerOptions = {
 
 export type GeneratedMcpServer = {
 	readonly files: Readonly<Record<string, string>>
-	/** each operation marked x-mcp that no tool serves yet: its id and what it is */
+	/** each operation marked x-mcp that no tool serves: its id and what it is */
 	readonly skipped: readonly string[]
 }
 
@@ -52,10 +52,12 @@ const entrySource = (app: { name: string; version: string; envPrefix: string }, 
 // The ${app.name} MCP server: its tools over stdio, for the MCP client that starts it. The API key is
 // $${app.envPrefix}_API_KEY, sent as the API's scheme says; the API is at $${app.envPrefix}_BASE_URL, else its first server, and
 // with neither it refuses to start. A call waits $${app.envPrefix}_TIMEOUT_MS milliseconds at most, 30 s by default, an
-// event stream's collect too. SIGINT and SIGTERM abort every call in flight and exit 0, no later reply written.
-// The API's answer is read at most 1 MiB, past it refused.
-import { BYTES_MAX, bindTools, createSession, serveStdio } from "./mcp.runtime"
+// event stream's collect too. $${app.envPrefix}_HEADERS, a JSON object of string values, goes on every call, each value
+// scrubbed as the key is; $${app.envPrefix}_REDIRECT is same-origin (the default) or follow. SIGINT and SIGTERM abort
+// every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.
+import { BYTES_MAX, bindTools, configHeaders, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
+import { headerValue } from "./sdk/api.runtime.gen"
 import { toolSpecs } from "./tools.gen"
 
 const key = process.env[${tsString(`${app.envPrefix}_API_KEY`)}] ?? ""
@@ -69,10 +71,22 @@ if (baseURL === "") {
 	process.stderr.write(${tsString(`No API to call: set $${app.envPrefix}_BASE_URL, since the API names no server\n`)})
 	process.exit(1)
 }
+const headers = configHeaders(process.env[${tsString(`${app.envPrefix}_HEADERS`)}], ${tsString(`${app.envPrefix}_HEADERS`)}, headerValue)
+if (typeof headers === "string") {
+	process.stderr.write(headers + ${tsString("\n")})
+	process.exit(1)
+}
+const redirect = process.env[${tsString(`${app.envPrefix}_REDIRECT`)}] || "same-origin"
+if (redirect !== "same-origin" && redirect !== "follow") {
+	process.stderr.write(${tsString(`Invalid $${app.envPrefix}_REDIRECT: same-origin or follow
+`)})
+	process.exit(1)
+}
 const config = {
 	baseURL,
-	headers: key === "" ? {} : { ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
+	headers: key === "" ? headers : { ...headers, ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
 	maxResponseBytes: BYTES_MAX,
+	redirect: redirect as "follow" | "same-origin",
 	throwOnError: false,
 	timeout: Number(timeout),
 }
@@ -85,7 +99,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abor
 void serveStdio(
 	createSession(
 		{ name: ${tsString(app.name)}, version: ${tsString(app.version)} },
-		bindTools(toolSpecs, client, { opening, secret: key, timeout: Number(timeout) }),
+		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout) }),
 	),
 	undefined,
 	stop.signal,

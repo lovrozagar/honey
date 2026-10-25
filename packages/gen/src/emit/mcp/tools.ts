@@ -7,7 +7,7 @@
  * are), the body under `body`: JSON or a form as its schema, bytes as a base64 string (Q4), text as a string; a
  * credential header is never an argument, the server sending the API key itself. Its outputSchema and annotations are
  * output-schema.ts's and annotations.ts's. An event stream is a bounded collect, taking `max_events` (1 to 100, 20 by
- * default) and `last_event_id` to resume after. Sockets are no tools, and multipart waits for bits/19.
+ * default) and `last_event_id` to resume after. Sockets are no tools, nor is multipart, by decision (bit 19 g, #11).
  */
 import type { IR, IROperation, IRParam } from "../../ir/model.ts"
 import { isJsonMedia, isTextMedia, mediaEssence, sdkModel } from "../../ir/sdk-model.ts"
@@ -46,7 +46,7 @@ export const NAME_MAX = 64
 /** Headers that carry a credential: never a tool's argument. */
 const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"]
 
-/** How a body is sent, when a tool can send it: JSON, a urlencoded form, bytes or text; multipart not yet. */
+/** How a body is sent, when a tool can send it: JSON, a urlencoded form, bytes or text; never multipart. */
 function bodyField(op: IROperation): BodyField | null | undefined {
 	const body = op.body
 	if (body === undefined) return undefined
@@ -65,14 +65,14 @@ function bodySchema(op: IROperation, field: BodyField, ir: IR): JsonSchema {
 	return jsonSchemaOf(op.body.schema, ir.schemas)
 }
 
-/** What `op` is that no tool serves yet, or undefined when a tool can: a socket, a multipart body. */
+/** What `op` is that no tool serves, or undefined when a tool can: a socket, a multipart body. */
 export function untoolable(op: IROperation): string | undefined {
 	if (op.extensions.websocket === true) return "a WebSocket"
 	if (op.extensions.realtime === true) return "a realtime channel"
 	return bodyField(op) === null ? "a multipart body" : undefined
 }
 
-/** Whether `op` is a tool: marked `x-mcp`, and nothing no tool serves yet. */
+/** Whether `op` is a tool: marked `x-mcp`, and nothing no tool serves. */
 export const isTool = (op: IROperation): boolean => op.extensions.mcp === true && untoolable(op) === undefined
 
 /** The tool name for `id`, not one `taken` holds: snake case, sanitized, truncated, then suffixed. */
