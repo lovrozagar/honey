@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from "vitest"
 import { emittedSdk } from "./__fixtures__/emitted.ts"
 
-type Frame = { data: unknown; id: number; t: "msg" } | { reconnectToken: string; t: "ready" }
+type Frame = { data: unknown; id: string; t: "msg" } | { reconnectToken: string; t: "ready" }
 type Conn = {
 	close(): void
 	onClose: (reason: string) => void
@@ -16,11 +16,11 @@ type Conn = {
 	onFrame: (frame: Frame) => void
 	send(data: string): void
 }
-type Opts = { lastId?: number; reconnectToken?: string }
+type Opts = { lastEventId?: string; reconnectToken?: string }
 type Adapter = { connect(url: string, opts: Opts): Conn }
 type Realtime = {
 	createResumableConnection(opts: {
-		lastId?: number
+		lastEventId?: string
 		reconnectDelayMs?: number
 		transports: Adapter[]
 		url: string
@@ -37,18 +37,18 @@ const REALTIME = {
 const EVENTS = [1, 2, 3]
 
 /** A transport whose first dial sends events 1 and 2 then drops; every later dial resends what follows its cursor. */
-function resending(): { adapter: Adapter; cursors: (number | undefined)[] } {
-	const cursors: (number | undefined)[] = []
+function resending(): { adapter: Adapter; cursors: (string | undefined)[] } {
+	const cursors: (string | undefined)[] = []
 	const adapter: Adapter = {
 		connect(_url, opts) {
-			const dial = cursors.push(opts.lastId)
+			const dial = cursors.push(opts.lastEventId)
 			const conn: Conn = { close: () => {}, onClose: () => {}, onError: () => {}, onFrame: () => {}, send: () => {} }
 			queueMicrotask(async () => {
 				conn.onFrame({ reconnectToken: `rt-${dial}`, t: "ready" })
-				const after = EVENTS.filter((id) => id > (opts.lastId ?? 0))
+				const after = EVENTS.filter((id) => id > Number(opts.lastEventId ?? 0))
 				for (const id of dial === 1 ? after.slice(0, 2) : after) {
 					await Promise.resolve()
-					conn.onFrame({ data: id, id, t: "msg" })
+					conn.onFrame({ data: id, id: `${id}`, t: "msg" })
 				}
 				await Promise.resolve()
 				if (dial === 1) conn.onClose("network")
@@ -70,6 +70,6 @@ describe("a resumable connection across a reconnect (bit 19 d1)", () => {
 		await vi.waitFor(() => expect(cursors.length).toBe(2), { timeout: 5_000 })
 		const rest = [(await iterator.next()).value, (await iterator.next()).value]
 		connection.close()
-		expect({ cursors, delivered: [first, ...rest] }).toEqual({ cursors: [undefined, 2], delivered: [1, 2, 3] })
+		expect({ cursors, delivered: [first, ...rest] }).toEqual({ cursors: [undefined, "2"], delivered: [1, 2, 3] })
 	})
 })

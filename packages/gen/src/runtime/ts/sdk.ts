@@ -1,6 +1,8 @@
 import type { ClientConfig, RequestMeta } from "./config.ts"
 import { ClientError } from "./error.ts"
 import { HTTPClient } from "./http.ts"
+import type { ResumableConnection } from "./realtime.ts"
+import { type RealtimeOptions, realtimeConnection } from "./realtime-transports.ts"
 import { interpolatePath, PathParamError } from "./path.ts"
 import { newClientRequestId, type RequestOptions } from "./request.ts"
 import type { SSEEvent } from "./sse.ts"
@@ -45,7 +47,7 @@ export type InvalidationConfig = {
 export type SDKConfig = ClientConfig & { invalidation?: InvalidationConfig }
 
 /** What a call takes beyond `RequestOptions`: a WebSocket's protocols and resume token. */
-type CallInput = RequestOptions & { protocols?: string | string[]; reconnectToken?: string }
+type CallInput = RequestOptions & RealtimeOptions & { protocols?: string | string[] }
 
 type OperationFn = (input?: CallInput) => unknown
 
@@ -190,6 +192,11 @@ class SdkCore {
 		return entry.sse === "json" ? jsonEvents(events) : events
 	}
 
+	/** An x-realtime op: one resumable connection, dialed through the client. */
+	realtime(entry: ServiceEntry, input: CallInput): ResumableConnection {
+		return realtimeConnection(this.http, templateOf(entry), input)
+	}
+
 	connect(entry: ServiceEntry, input: CallInput): TypedWebSocket {
 		const url = new URL(this.http.buildWSUrl(templateOf(entry), { params: input.params, search: input.search }))
 		if (input.reconnectToken) url.searchParams.append("reconnect_token", input.reconnectToken)
@@ -205,8 +212,9 @@ class SdkCore {
 /** The function an entry is called through, named by its dotted member path for stack traces. */
 function callable(core: SdkCore, entry: ServiceEntry, name: string): OperationFn {
 	let fn: OperationFn
-	/* a realtime op dispatches by its transport; `realtime` only says the resume runtime applies */
-	if (entry.ws) fn = (input) => core.connect(entry, input ?? {})
+	/* a realtime op is one resumable connection; any other dispatches by its transport */
+	if (entry.realtime) fn = (input) => core.realtime(entry, input ?? {})
+	else if (entry.ws) fn = (input) => core.connect(entry, input ?? {})
 	else if (entry.sse) fn = (input) => core.stream(entry, input ?? {})
 	else fn = (input) => core.request(entry, input ?? {})
 	Object.defineProperty(fn, "name", { value: name })

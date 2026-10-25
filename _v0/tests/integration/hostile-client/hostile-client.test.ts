@@ -24,6 +24,15 @@ function available(cmd: string): boolean {
 	return spawnSync(cmd, ["--version"], { stdio: "ignore" }).status === 0
 }
 
+/** Whether the spawned Bun drops an over-limit connection with no close frame, as it did before 1.4.4. */
+function bunClosesAbruptly(): boolean {
+	const [major = 0, minor = 0, patch = 0] = spawnSync("bun", ["--version"], { encoding: "utf8" })
+		.stdout.trim()
+		.split(".")
+		.map(Number)
+	return major * 1e6 + minor * 1e3 + patch < 1_004_004
+}
+
 /** Write `raw`, wait `ms`, then reset the connection. */
 function writeThenReset(port: number, raw: string, ms: number): Promise<void> {
 	return new Promise((resolve) => {
@@ -210,8 +219,8 @@ for (const [name, argv] of Object.entries(RUNTIMES)) {
 			const out = await wsSession(`ws://127.0.0.1:${port}/ws`, {
 				act: (ws) => ws.send(Buffer.alloc(2 * 1024 * 1024 + 1)),
 			})
-			/* Bun drops the connection without a close frame (1006) when maxPayloadLength is exceeded */
-			expect(out.closeCode).toBe(name === "bun" ? 1006 : 1009)
+			/* Bun before 1.4.4 drops the connection without a close frame (1006) when maxPayloadLength is exceeded */
+			expect(out.closeCode).toBe(name === "bun" && bunClosesAbruptly() ? 1006 : 1009)
 			await alive(port)
 		})
 

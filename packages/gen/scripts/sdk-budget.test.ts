@@ -539,10 +539,16 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * transport refused, a drop by refusal included (+245: refused, #refuse), the most specific refusal its error (+240:
  * RANK, walkChain's pick), the chain moved into walkChain (+139), +130 of comments (realtime.ts +782,
  * realtime-connection.ts -28); RealtimeAuthError, which nothing threw, and #open's dead all_failed fallback cut (-186).
+ * Bit 19 e2, +7,592 B to 119,234 B: an x-realtime op is one resumable connection over WebSocket, SSE and long-poll
+ * (realtime-transports.ts +5,887, new): the WebSocket adapter with no credential, a failure before open the lowest
+ * refusal (+1,093), the SSE adapter (+808), the long-poll adapter with its 204 re-poll (+754), their shared HTTP
+ * connection and POSTed send (+646), the frames synthesized from bare payloads (+932), the string cursor (+395), the
+ * client's one refresh per open behind a symbol key (+677), the SDK's dispatch and ResumableConnection<T> (+1,177),
+ * +1,110 of one-line comments (http.ts +455, sdk.ts +420, realtime.ts +496, realtime-connection.ts +334).
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 111_642
+const TS_RUNTIME_BYTES = 119_234
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

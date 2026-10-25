@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest"
 import { emittedSdk } from "./__fixtures__/emitted.ts"
 
-type Frame = { data: unknown; id: number; t: "msg" } | { reconnectToken: string; t: "ready" }
+type Frame = { data: unknown; id: string; t: "msg" } | { reconnectToken: string; t: "ready" }
 type Conn = {
 	close(): void
 	onClose: (reason: string) => void
@@ -14,7 +14,7 @@ type Conn = {
 	onFrame: (frame: Frame) => void
 	send(data: string): void
 }
-type Opts = { headers?: Record<string, string>; lastId?: number; reconnectToken?: string }
+type Opts = { headers?: Record<string, string>; lastEventId?: string; reconnectToken?: string }
 type Adapter = { connect(url: string, opts: Opts): Conn }
 type Resumable = AsyncIterable<unknown> & { close(): void }
 type Headers = Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
@@ -43,7 +43,7 @@ function dropping(): { adapter: Adapter; seen: (Record<string, string> | undefin
 			queueMicrotask(async () => {
 				conn.onFrame({ reconnectToken: `rt-${dial}`, t: "ready" })
 				await Promise.resolve()
-				conn.onFrame({ data: dial, id: dial, t: "msg" })
+				conn.onFrame({ data: dial, id: `${dial}`, t: "msg" })
 				await Promise.resolve()
 				if (dial === 1) conn.onClose("network")
 			})

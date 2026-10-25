@@ -31,8 +31,9 @@ function safely(fn: (() => void) | undefined): void {
  * iterator, a drop reconnects (proven transport first, then the chain) and resumes from the last
  * message id with the server's reconnect token.
  */
-class Resumable implements ResumableConnection {
+export class Resumable implements ResumableConnection {
 	readonly #opts: ResumableConnectionOpts
+	readonly #refresh: (() => Promise<boolean>) | undefined
 	readonly #queue: QueueEntry[] = []
 	#pending: { reject: (err: unknown) => void; resolve: (result: IteratorResult<unknown>) => void } | null = null
 	#state: ConnectionState = "idle"
@@ -40,7 +41,7 @@ class Resumable implements ResumableConnection {
 	#keepalive: KeepaliveLoop | null = null
 	#attempts = 0
 	#proven: number | null = null
-	#lastId: number | undefined
+	#lastEventId: string | undefined
 	#reconnectToken: string | undefined
 	#started = false
 	#closed = false
@@ -49,9 +50,10 @@ class Resumable implements ResumableConnection {
 	/** the transport being dialed, closed with the connection */
 	#dialing: TransportConnection | null = null
 
-	constructor(opts: ResumableConnectionOpts) {
+	constructor(opts: ResumableConnectionOpts, refresh?: () => Promise<boolean>) {
 		this.#opts = opts
-		this.#lastId = opts.lastId
+		this.#refresh = refresh
+		this.#lastEventId = opts.lastEventId
 		this.#reconnectToken = opts.reconnectToken
 		if (opts.signal?.aborted) this.#end()
 		else opts.signal?.addEventListener("abort", () => this.#abort(), { once: true })
@@ -128,9 +130,10 @@ class Resumable implements ResumableConnection {
 	#onFrame(frame: ServerFrame): void {
 		this.#keepalive?.onFrame()
 		if (frame.t === "msg") {
-			this.#lastId = frame.id
+			this.#lastEventId = frame.id ?? this.#lastEventId
+			this.#reconnectToken = frame.reconnectToken || this.#reconnectToken
 			this.#enqueue({ type: "value", value: frame.data })
-		} else if (frame.t === "ready") this.#reconnectToken = frame.reconnectToken
+		} else if (frame.t === "ready") this.#reconnectToken = frame.reconnectToken || this.#reconnectToken
 		else if (frame.t === "pong") this.#keepalive?.onPong()
 		else {
 			this.#detach()
@@ -149,7 +152,7 @@ class Resumable implements ResumableConnection {
 		return new Promise((resolve, reject) => {
 			if (this.#closed) return reject(new RealtimeConnectError("the connection is closed", "closed"))
 			const adapter = this.#opts.transports[index] as TransportAdapter
-			const opts = { headers, lastId: this.#lastId, reconnectToken: this.#reconnectToken }
+			const opts = { headers, lastEventId: this.#lastEventId, reconnectToken: this.#reconnectToken }
 			const conn = adapter.connect(this.#opts.url, { ...opts, signal: this.#opts.signal })
 			this.#dialing = conn
 			let ready = false
@@ -178,7 +181,7 @@ class Resumable implements ResumableConnection {
 				this.#dialing = null
 				/* the connection from its ready frame on, so a drop before the caller resumes is seen */
 				this.#conn = conn
-				this.#reconnectToken = frame.reconnectToken
+				this.#reconnectToken = frame.reconnectToken || this.#reconnectToken
 				resolve(conn)
 			}
 			conn.onError = (err) => {
@@ -200,6 +203,7 @@ class Resumable implements ResumableConnection {
 				transports.length,
 				(i) => this.#dial(i),
 				(i) => (this.#proven = i),
+				this.#refresh,
 			)
 		return this.#proven === null ? walk() : this.#dial(this.#proven).catch(walk)
 	}
@@ -254,8 +258,8 @@ class Resumable implements ResumableConnection {
 		this.#later(() => void this.#connect(), this.#opts.reconnectDelayMs ?? 1000)
 	}
 
-	send(data: unknown): void {
-		if (!this.#closed) this.#conn?.send(JSON.stringify(data))
+	async send(data: unknown): Promise<void> {
+		if (!this.#closed) await this.#conn?.send(JSON.stringify(data))
 	}
 
 	close(_reason?: string): void {

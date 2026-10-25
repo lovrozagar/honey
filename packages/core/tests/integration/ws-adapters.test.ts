@@ -212,13 +212,19 @@ async function overWorkers(scenario: Scenario, expected: Outcome): Promise<Outco
 const SRC = fileURLToPath(new URL("../../src/", import.meta.url))
 
 /** A `bun` process serving scenarioApp; it prints its port, and exits on any stdin input. */
+/** Whether Bun `version` drops an over-limit connection with no close frame, as it did before 1.4.4. */
+const closesAbruptly = (version: string) => {
+	const [major = 0, minor = 0, patch = 0] = version.split(".").map(Number)
+	return major * 1e6 + minor * 1e3 + patch < 1_004_004
+}
+
 const BUN_APP = `
 const { serve } = await import(${JSON.stringify(`${SRC}adapters/serve.ts`)})
 const { honey } = await import(${JSON.stringify(`${SRC}routing/app.ts`)})
 const { bunWebSocket } = await import(${JSON.stringify(`${SRC}ws/bun.ts`)})
 const scenarioApp = ${scenarioApp.toString()}
 const handle = await serve(scenarioApp(honey, bunWebSocket({ maxPayload: 1024 })), { hostname: "127.0.0.1", port: 0 })
-console.log(handle.port)
+console.log(handle.port, Bun.version)
 process.stdin.once("data", () => process.exit(0))
 `
 
@@ -235,13 +241,14 @@ describe("app.ws(path) through every adapter: one app, one outcome table", () =>
 	it("Bun spawned, over real sockets: every scenario", async () => {
 		const child = spawn("bun", ["-e", BUN_APP], { stdio: ["pipe", "pipe", "inherit"] })
 		try {
-			const port = Number((await createInterface({ input: child.stdout })[Symbol.asyncIterator]().next()).value)
+			const line = String((await createInterface({ input: child.stdout })[Symbol.asyncIterator]().next()).value)
+			const [port, version] = line.split(" ") as [string, string]
 			const outcomes = []
 			for (const [, scenario, expected] of SCENARIOS)
 				outcomes.push(await overSocket(`ws://127.0.0.1:${port}`, scenario, expected))
-			/* Bun ends a connection over maxPayloadLength itself, with no close frame: the client sees 1006 */
+			/* Bun before 1.4.4 ends a connection over maxPayloadLength with no close frame: the client sees 1006 */
 			const onBun = SCENARIOS.map(([name, , expected]) =>
-				name.startsWith("closes 1009") ? { ...expected, close: 1006, reason: "" } : expected,
+				name.startsWith("closes 1009") && closesAbruptly(version) ? { ...expected, close: 1006, reason: "" } : expected,
 			)
 			expect(outcomes).toEqual(onBun)
 		} finally {

@@ -5,7 +5,7 @@
  */
 
 export type ServerFrame =
-	| { data: unknown; id: number; t: "msg" }
+	| { data: unknown; id?: string; reconnectToken?: string; t: "msg" }
 	| { t: "pong" }
 	| { reason: string; t: "bye" }
 	| { reconnectToken: string; t: "ready" }
@@ -38,7 +38,7 @@ export type ConnectionState = "closed" | "connected" | "connecting" | "draining"
 
 export type TransportOpts = {
 	headers?: Record<string, string>
-	lastId?: number
+	lastEventId?: string
 	reconnectToken?: string
 	signal?: AbortSignal
 }
@@ -49,7 +49,7 @@ export type TransportConnection = {
 	onClose: (reason: string) => void
 	onError: (err: unknown) => void
 	onFrame: (frame: ServerFrame) => void
-	send(data: string): void
+	send(data: string): Promise<void> | void
 }
 
 export type TransportAdapter = {
@@ -162,15 +162,17 @@ export function dialReady(
 	})
 }
 
-/** The dial statuses no retry changes, most specific highest. */
+/** The dial statuses no retry changes, most specific highest; a WebSocket refused without a status ranks lowest. */
 const RANK: Record<number, number> = { 400: 3, 401: 6, 403: 5, 404: 1, 405: 1, 410: 2, 422: 4 }
-const rank = (err: unknown) => RANK[(err as { status?: number } | null)?.status ?? 0] ?? 0
+const rank = (err: unknown) =>
+	RANK[(err as { status?: number } | null)?.status ?? 0] ?? Number((err as RealtimeError)?.reason === "upgrade_refused")
 export const refused = (err: unknown): boolean => rank(err) > 0
-/** Dial transport 0, 1, … until one opens; else its last transient failure, or every one refused, its most specific. */
+/** Dial 0, 1, … until one opens; else the last transient failure, or the most specific refusal. A 401 refreshes once. */
 export async function walkChain<T>(
 	count: number,
 	dial: (index: number) => Promise<T>,
 	opened: (index: number) => unknown,
+	refresh?: () => Promise<boolean>,
 ): Promise<T> {
 	let transient: unknown
 	let refusal: unknown
@@ -180,6 +182,14 @@ export async function walkChain<T>(
 			opened(i)
 			return conn
 		} catch (err) {
+			if (rank(err) === 6 && refresh) {
+				const fresh = await refresh()
+				refresh = undefined
+				if (fresh) {
+					;[i, transient, refusal] = [-1, undefined, undefined]
+					continue
+				}
+			}
 			if (!refused(err)) transient = err
 			else if (rank(err) > rank(refusal)) refusal = err
 		}
@@ -250,7 +260,7 @@ export type ResumableConnectionOpts = {
 	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
 	/** Ping every this many ms (WebSocket 20 s, SSE none, unless set; 0: none); one unanswered as long reconnects. */
 	keepaliveInterval?: number
-	lastId?: number
+	lastEventId?: string
 	/** Reconnects after a drop before the stream ends; 0 retries forever. Default 5. */
 	maxReconnectAttempts?: number
 	onReconnected?: () => void
@@ -262,10 +272,11 @@ export type ResumableConnectionOpts = {
 	url: string
 }
 
-export type ResumableConnection = {
+export type ResumableConnection<T = unknown> = {
 	close(reason?: string): void
 	readonly provenTransport: Transport | null
-	send(data: unknown): void
+	/** Resolves once sent; over SSE and long-poll a POST, rejecting with its error. */
+	send(data: unknown): Promise<void>
 	readonly state: ConnectionState
-	[Symbol.asyncIterator](): AsyncIterableIterator<unknown>
+	[Symbol.asyncIterator](): AsyncIterableIterator<T>
 }

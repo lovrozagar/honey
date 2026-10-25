@@ -31,12 +31,6 @@ const V0_PORTS: Readonly<Record<string, string>> = {
 	"sse/typed-events": "live leg of C5 11410bbf49",
 }
 
-/** The cells TS lacks, each with its reason. */
-const LACKS: Readonly<Record<string, string>> = {
-	"reconnect/refusal-mixed-retries": "pending bit 19 e2: TS realtime methods open one stream",
-	"reconnect/refusal-terminal": "pending bit 19 e2: TS realtime methods open one stream",
-}
-
 /** The client config a cell's setup asks for: the credential as a header, the timeout and redirect policy. */
 function configOf(app: ReferenceApp, setup: Setup = {}): Input {
 	const headers: Record<string, string> = { ...setup.headers }
@@ -145,13 +139,28 @@ const isSocket = (value: unknown): value is Socket =>
 const isStream = (value: unknown): value is AsyncIterable<Event> =>
 	typeof value === "object" && value !== null && Symbol.asyncIterator in value
 
-/** One call's answer, normalized: a raw response, a socket, an event stream or a safe-mode result. */
+type Resumable = AsyncIterable<Json> & { close(): void }
+const isResumable = (value: unknown): value is Resumable => isStream(value) && "provenTransport" in value
+
+/** A realtime connection's first `take` values, read as Go's driver reads them (frames), then it is closed. */
+async function liveOf(connection: Resumable, take = Number.POSITIVE_INFINITY): Promise<Json[]> {
+	const frames: Json[] = []
+	try {
+		for await (const value of connection) if (frames.push(value) >= take) break
+	} finally {
+		connection.close()
+	}
+	return frames
+}
+
+/** One call's answer, normalized: a raw response, a socket, a realtime connection, an event stream or a safe-mode result. */
 async function observe(answer: unknown, call: Call): Promise<Observed> {
 	if (answer instanceof Response) {
 		const headers = Object.fromEntries(answer.headers)
 		return { body: await answer.text(), headers, kind: "raw", status: answer.status }
 	}
 	if (isSocket(answer)) return { frames: await framesOf(answer, call), kind: "frames" }
+	if (isResumable(answer)) return { frames: await liveOf(answer, call.take), kind: "frames" }
 	if (isStream(answer)) return { events: await eventsOf(answer, call.take), kind: "events" }
 	return settled(answer as Result)
 }
@@ -181,14 +190,10 @@ async function callOf(clients: { map: MapNode; safe: Sdk; thrower: Sdk }, call: 
 	return attempt(send, call)
 }
 
-/**
- * The TS runner: the emitted SDK class built once from the served document, one instance per mode per cell; only
- * LACKS are left out.
- */
+/** The TS runner: the emitted SDK class built once from the served document, one instance per mode per cell. */
 function tsRunner() {
 	let built: { ConformanceSDK: SdkClass; map: MapNode } | undefined
 	return {
-		lacks: (cell: Cell) => Object.hasOwn(LACKS, cell.key),
 		async prepare(app: ReferenceApp): Promise<void> {
 			const sdk = await emittedSdk(app.document, { name: "ConformanceSDK" })
 			built = { ConformanceSDK: sdk.ConformanceSDK as SdkClass, map: sdk.serviceMap as MapNode }
@@ -218,11 +223,6 @@ describe("conformance × ts titles", () => {
 	it("titles only cells the grid holds for ts", () => {
 		const keys = new Set(cellsFor("ts").map((cell) => cell.key))
 		expect(Object.keys(V0_PORTS).filter((key) => !keys.has(key))).toEqual([])
-	})
-
-	it("lacks only cells the grid holds for ts", () => {
-		const keys = new Set(cellsFor("ts").map((cell) => cell.key))
-		expect(Object.keys(LACKS).filter((key) => !keys.has(key))).toEqual([])
 	})
 })
 

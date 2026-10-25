@@ -24,7 +24,10 @@ const RESERVED = [
 	"Omit",
 	"Promise",
 	"ReadableStream",
+	"RealtimeCallOptions",
+	"RealtimeOptions",
 	"Record",
+	"ResumableConnection",
 	"Response",
 	"SDKConfig",
 	"SDKResult",
@@ -46,6 +49,7 @@ const SHARED = `export type HttpOptions = {
 }
 export type SseOptions = Omit<HttpOptions, "idempotencyKey"> & { lastEventId?: string }
 export type WsOptions = { protocols?: string | string[]; reconnectToken?: string }
+export type RealtimeCallOptions = Omit<HttpOptions, "idempotencyKey" | "timeout"> & RealtimeOptions
 
 type ErrorField = { error_key: string; message: string; path: string }
 
@@ -171,8 +175,14 @@ function signatures(name: string, op: SdkOp, ctx: Context): string[] {
 		return `${input.required ? "input" : "input?"}: ${type}`
 	}
 	const key = quoteKey(name)
-	/* a realtime op is typed by its transport, as the runtime dispatches it */
-	const { sse, websocket } = op.ir.extensions
+	/* a realtime op is one resumable connection of its event data; any other is typed by its transport */
+	const { realtime, sse, websocket } = op.ir.extensions
+	if (realtime) {
+		const events = sseEventSchema(op.ir, ctx.resolve)
+		return [
+			`${key}(${arg("RealtimeCallOptions")}): ResumableConnection<${events ? irToTs(events, ctx.types) : "unknown"}>`,
+		]
+	}
 	if (websocket) return [`${key}(${arg("WsOptions")}): TypedWebSocket`]
 	if (sse) {
 		const events = sseEventSchema(op.ir, ctx.resolve)
@@ -236,7 +246,7 @@ export function sdkTypesText(ir: IR, name: string, runtime: string): string {
 	const schemas = model.schemaNames.map(
 		(schema) => `export type ${types.refName?.(schema)} = ${irToTs(ir.schemas[schema] as IRSchema, types)}`,
 	)
-	return `import type { SDKConfig, SSEEvent, TypedWebSocket } from "./${runtime}"
+	return `import type { RealtimeOptions, ResumableConnection, SDKConfig, SSEEvent, TypedWebSocket } from "./${runtime}"
 
 ${schemas.length === 0 ? "" : `${schemas.join("\n")}\n\n`}${SHARED}
 ${configText(name, ir.servers[0])}

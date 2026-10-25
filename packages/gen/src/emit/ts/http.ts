@@ -22,6 +22,7 @@ export const RUNTIME_MODULES: readonly string[] = [
 	"realtime",
 	"realtime-connection",
 	"http",
+	"realtime-transports",
 	"stale",
 	"app-types",
 	"app",

@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest"
 import { emittedSdk } from "./__fixtures__/emitted.ts"
 
-type Frame = { data: unknown; id: number; t: "msg" } | { reconnectToken: string; t: "ready" }
+type Frame = { data: unknown; id: string; t: "msg" } | { reconnectToken: string; t: "ready" }
 type Conn = {
 	close(): void
 	onClose: (reason: string) => void
@@ -46,7 +46,7 @@ function transports(scripts: Record<(typeof TRANSPORTS)[number], Step[]>) {
 					await new Promise((resolve) => setTimeout(resolve, 0))
 					for (const n of step.msgs) {
 						await Promise.resolve()
-						conn.onFrame({ data: n, id: n, t: "msg" })
+						conn.onFrame({ data: n, id: `${n}`, t: "msg" })
 					}
 					await Promise.resolve()
 					if (step.drop) conn.onError(Object.assign(new Error(`refused ${step.drop}`), { status: step.drop }))

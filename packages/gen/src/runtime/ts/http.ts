@@ -27,8 +27,11 @@ import { parseSSEStream, type SSEEvent } from "./sse.ts"
 /** One request, ready to send: where, with what, and the hooks' view of it. */
 type Prepared = { body: BodyInit | undefined; headers: Headers; url: URL }
 
-/** One call: its method, path template and options. */
-type Call = { method: string; opts: RequestOptions; path: string }
+/** One call: its method, path template and options; `refreshes: false` leaves a 401 to the realtime loop. */
+type Call = { method: string; opts: RequestOptions; path: string; refreshes?: false }
+
+/** The realtime loop's refresh key, exported by the SDK under no name. */
+export const REFRESH_AUTH = /* @__PURE__ */ Symbol("honey.refreshAuth")
 
 /** One operation of a generated SDK: the call, how it is read, and its stale view for the hooks. */
 export type Operation = Call & {
@@ -124,6 +127,11 @@ export class HTTPClient {
 		return this.#refreshing
 	}
 
+	/** The client's one shared refresh; whether a new token is in place. */
+	async [REFRESH_AUTH](): Promise<boolean> {
+		return (await this.#refresh(this.#token)) !== null
+	}
+
 	/** Build the request and let the `onRequest` hooks see and change it. */
 	async #prepare({ method, opts, path }: Call, kind: RequestKind, meta?: RequestMeta) {
 		const url = this.#url(path, opts)
@@ -169,7 +177,7 @@ export class HTTPClient {
 		const log = exchangeLog(this.#config.onLog, `${method.toUpperCase()} ${path}`)
 		try {
 			signal?.throwIfAborted()
-			let response = await this.#transmit(url, init, isRetry)
+			let response = await this.#transmit(url, init, isRetry || call.refreshes === false)
 			log.answered(response)
 			if (this.#config.onResponse) {
 				const retry = async () => {
@@ -248,7 +256,7 @@ export class HTTPClient {
 	}
 
 	/** An event stream, sent when iteration starts; `onOpen` runs once the answer is ok. */
-	streamOperation(op: Call & { meta?: RequestMeta; onOpen?: () => void }): AsyncIterable<SSEEvent> {
+	streamOperation(op: Call & { meta?: RequestMeta; onOpen?: (response: Response) => void }): AsyncIterable<SSEEvent> {
 		const send = () => this.#send(op, "stream", op.meta)
 		const limits = this.#config
 		const iterate = (sent: Sent) => this.#iterate(sent)
@@ -264,7 +272,7 @@ export class HTTPClient {
 						sent.done()
 					}
 				}
-				op.onOpen?.()
+				op.onOpen?.(sent.response)
 				yield* iterate(sent)
 			},
 		}

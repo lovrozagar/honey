@@ -11,7 +11,7 @@ import { generateSdk } from "./sdk.ts"
 type Json = Record<string, unknown>
 
 type Frame =
-	| { data: unknown; id: number; t: "msg" }
+	| { data: unknown; id: string; t: "msg" }
 	| { reason: string; t: "bye" }
 	| { reconnectToken: string; t: "ready" }
 	| { t: "pong" }
@@ -22,7 +22,7 @@ type Conn = {
 	onFrame: (frame: Frame) => void
 	send(data: string): void
 }
-type Opts = { headers?: Record<string, string>; lastId?: number; reconnectToken?: string; signal?: AbortSignal }
+type Opts = { headers?: Record<string, string>; lastEventId?: string; reconnectToken?: string; signal?: AbortSignal }
 type Adapter = { connect(url: string, opts: Opts): Conn }
 type ErrorClass = new (message: string, reason: string) => Error & { reason: string }
 type Keepalive = { onFrame(): void; onPong(): void; start(): void; stop(): void }
@@ -77,7 +77,7 @@ async function realtime(front: "app" | "sdk" = "sdk"): Promise<Realtime> {
 }
 
 const ready = (reconnectToken: string): Frame => ({ reconnectToken, t: "ready" })
-const msg = (id: number, data: unknown): Frame => ({ data, id, t: "msg" })
+const msg = (id: number, data: unknown): Frame => ({ data, id: `${id}`, t: "msg" })
 const tick = () => Promise.resolve()
 
 type Dial = { closed: boolean; opts: Opts; sent: string[]; url: string }
@@ -154,13 +154,18 @@ function stubReconnectServer(): string[] {
 	return opened
 }
 
-/** The first message the SDK's `reconnectWs` op receives for `input`, parsed. */
+/** The first message the SDK's `reconnectWs` op receives for `input`, parsed: a socket's, or a realtime op's first value. */
 async function firstMessage(document: Json, input?: Json): Promise<unknown> {
 	const mod = (await emittedSdk(document)) as unknown as { TestSDK: new (config: Json) => Json }
 	const sdk = new mod.TestSDK({ baseURL: "http://127.0.0.1:3000", fetch: recordingFetch().fetch })
-	const socket = (sdk.reconnectWs as (input?: Json) => Socket)(input)
-	const data = await new Promise<string>((resolve) => socket.on("message", resolve))
-	socket.close()
+	const opened = (sdk.reconnectWs as (input?: Json) => Socket | Resumable)(input)
+	if (!("on" in opened)) {
+		const [first] = await take(opened, 1)
+		opened.close()
+		return first
+	}
+	const data = await new Promise<string>((resolve) => opened.on("message", resolve))
+	opened.close()
 	return JSON.parse(data)
 }
 
@@ -303,7 +308,7 @@ describe("createResumableConnection over one transport", () => {
 		})
 		const connection = rt.createResumableConnection({
 			headers: { authorization: "Bearer t" },
-			lastId: 6,
+			lastEventId: "6",
 			onReconnected: () => log.push("connected"),
 			onReconnecting: (attempt: number) => log.push(`reconnecting ${attempt}`),
 			reconnectDelayMs: 1,
@@ -329,8 +334,8 @@ describe("createResumableConnection over one transport", () => {
 			["idle", 0],
 			["a", "b"],
 			[
-				["https://rt.example/feed", { headers, lastId: 6, reconnectToken: "rt-0" }],
-				["https://rt.example/feed", { headers, lastId: 7, reconnectToken: "rt-1" }],
+				["https://rt.example/feed", { headers, lastEventId: "6", reconnectToken: "rt-0" }],
+				["https://rt.example/feed", { headers, lastEventId: "7", reconnectToken: "rt-1" }],
 			],
 			[
 				[true, []],
@@ -379,7 +384,7 @@ describe("createResumableConnection over a fallback chain", () => {
 			],
 			2,
 			1,
-			{ lastId: 1, reconnectToken: "rt-flaky" },
+			{ lastEventId: "1", reconnectToken: "rt-flaky" },
 			"sse",
 			"closed",
 		])
@@ -458,8 +463,9 @@ sdk.rt.connect({ reconnectToken: 1 })
 	})
 })
 
-describe("a realtime op dispatches by its transport (C4)", () => {
-	it("sends a REST realtime op as a request and iterates an SSE realtime op's events", async () => {
+describe("a realtime op is one resumable connection, whatever its transport (bit 19 e2)", () => {
+	it("opens an SSE realtime op on SSE and a REST realtime op on long-poll, with no WebSocket", async () => {
+		vi.stubGlobal("WebSocket", undefined)
 		const ok = { 200: { content: { "application/json": { schema: { type: "object" } } }, description: "" } }
 		const events = { 200: { content: { "text/event-stream": { schema: { type: "string" } } }, description: "" } }
 		const document = {
@@ -478,13 +484,17 @@ describe("a realtime op dispatches by its transport (C4)", () => {
 		const { TestSDK } = (await emittedSdk(document)) as unknown as {
 			TestSDK: new (config: Json) => Record<string, any>
 		}
-		const sdk = new TestSDK({ baseURL: "https://api.test", fetch, throwOnError: true })
-		const seen: string[] = []
-		for await (const event of sdk.rt.feed()) seen.push(event.data)
-		expect([await sdk.rt.state(), seen, calls.map((r) => r.headers.get("accept"))]).toEqual([
+		const sdk = new TestSDK({ baseURL: "https://api.test", fetch })
+		const first = async (connection: Resumable) => {
+			const [value] = await take(connection, 1)
+			connection.close()
+			return value
+		}
+		const dials = () => [...new Set(calls.map((r) => `${new URL(r.url).pathname} ${r.headers.get("accept")}`))]
+		expect([await first(sdk.rt.state()), await first(sdk.rt.feed()), dials()]).toEqual([
 			{ live: true },
-			["a"],
-			["text/event-stream", null],
+			"a",
+			["/state text/event-stream", "/state null", "/feed text/event-stream"],
 		])
 	})
 })

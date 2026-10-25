@@ -46,6 +46,7 @@ const TYPES = [
 	"LogEntry",
 	"OnRequestContext",
 	"OnResponseContext",
+	"RealtimeOptions",
 	"RedirectPolicy",
 	"RequestOptions",
 	"ResumableConnection",
