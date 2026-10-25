@@ -92,11 +92,13 @@ expectType<IsOptional<EventOf<typeof sdk.ticks.stream>, "retry">>()`
 	})
 
 	// v0: e12ce313ff
-	it("an SSE method's input accepts lastEventId?: string and cookies, and the config sseMaxBufferChars", () => {
+	it("an SSE method's input accepts lastEventId?: string and cookies, and the config sseMaxLineBytes and sseMaxEventBytes", () => {
 		const consumer = `type I = Input<typeof sdk.events.stream>
 expectType<IsOptional<I, "lastEventId">>()
 expectType<Equal<I["lastEventId"], string | undefined>>()
 void sdk.events.stream({ cookies: { session: "abc" }, lastEventId: "e-1" })
+void new TestSDK({ baseURL: "https://api.example.com", sseMaxEventBytes: 64, sseMaxLineBytes: 64 })
+// @ts-expect-error the character cap is gone: its caps are in bytes
 void new TestSDK({ baseURL: "https://api.example.com", sseMaxBufferChars: 64 })`
 		expect(check(STREAMS, consumer)).toEqual([])
 	})

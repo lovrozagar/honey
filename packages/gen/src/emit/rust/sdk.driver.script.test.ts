@@ -396,7 +396,7 @@ describe.skipIf(!RUST)("the Rust test driver's script: a call's Rust error", () 
 			kind: "NotFound",
 			message: "gone",
 			status: 404,
-			text: "404 Not Found: gone",
+			text: "HTTP 404: gone",
 			variant: "Api",
 		})
 		const observed = { body: missing.json, errorKey: "member.missing", kind: "error", status: 404 }

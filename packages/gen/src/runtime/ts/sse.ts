@@ -7,7 +7,22 @@ export type SSEEvent<T = string> = {
 	retry?: number
 }
 
-const DEFAULT_MAX_BUFFER = 1024 * 1024
+/* the siblings' caps, in UTF-8 bytes */
+const MAX_LINE = 1 << 20
+const MAX_EVENT = 8 << 20
+
+/** `text`'s UTF-8 bytes, counted until past `max`. */
+function bytesOf(text: string, max = Infinity): number {
+	let bytes = 0
+	for (let i = 0; i < text.length && bytes <= max; i++) {
+		const unit = text.charCodeAt(i)
+		bytes += unit < 0x80 ? 1 : unit < 0x800 || (unit >= 0xd800 && unit < 0xe000) ? 2 : 3
+	}
+	return bytes
+}
+
+/** Whether `line` is over `max` UTF-8 bytes; a third of `max` in code units is within it, uncounted. */
+const overLine = (line: string, max: number) => line.length * 3 > max && bytesOf(line, max) > max
 
 /** One event being read: its fields as they arrive, dispatched on a blank line. */
 class EventFields {
@@ -47,8 +62,8 @@ class EventFields {
 		let value = colon === -1 ? "" : line.slice(colon + 1)
 		if (value.charCodeAt(0) === 32) value = value.slice(1)
 		if (field === "data") {
-			this.#size += value.length + 1
-			if (this.#size > this.#max) throw new Error(`SSE event exceeded ${this.#max} characters`)
+			this.#size += bytesOf(value) + (this.#hasData ? 1 : 0)
+			if (this.#size > this.#max) throw new Error(`SSE event exceeds ${this.#max} bytes`)
 			this.#data.push(value)
 			this.#hasData = true
 		} else if (field === "event") this.#event = value
@@ -83,16 +98,17 @@ function completeLines(pending: string, from: number): { lines: string[]; rest: 
  * Parse a `text/event-stream` body per the WHATWG "event stream interpretation" rules: lines end
  * at CRLF, LF or CR; a leading BOM is skipped; `id` persists until changed and an `id` holding NUL
  * is ignored; `retry` counts only when all ASCII digits; an event still open when the stream ends
- * is discarded. `maxBufferSize` caps an unterminated line and one event's data; exceeding it throws.
+ * is discarded. A line over `maxLineBytes` (1 MiB) or an event's data over `maxEventBytes` (8 MiB), in UTF-8 bytes,
+ * throws after every event completed before it.
  */
 export async function* parseSSEStream(
 	stream: ReadableStream<Uint8Array>,
-	opts?: { maxBufferSize?: number },
+	opts?: { maxLineBytes?: number; maxEventBytes?: number },
 ): AsyncGenerator<SSEEvent, void, undefined> {
 	const decoder = new TextDecoder()
 	const reader = stream.getReader()
-	const maxBuffer = opts?.maxBufferSize ?? DEFAULT_MAX_BUFFER
-	const fields = new EventFields(maxBuffer)
+	const { maxEventBytes = MAX_EVENT, maxLineBytes: maxLine = MAX_LINE } = opts ?? {}
+	const fields = new EventFields(maxEventBytes)
 	let pending = ""
 	let scanned = 0
 	let first = true
@@ -108,10 +124,11 @@ export async function* parseSSEStream(
 			scanned = complete.scanned
 			const { lines } = complete
 			for (const line of lines) {
+				if (overLine(line, maxLine)) throw new Error(`SSE line exceeds ${maxLine} bytes`)
 				const out = line === "" ? fields.dispatch() : fields.read(line)
 				if (out) yield out
 			}
-			if (pending.length > maxBuffer) throw new Error(`SSE buffer exceeded ${maxBuffer} characters`)
+			if (overLine(pending, maxLine)) throw new Error(`SSE line exceeds ${maxLine} bytes`)
 		}
 		/* a lone CR held back at the end of the stream still ends a blank line; anything else open is discarded */
 		if (pending === "\r") {

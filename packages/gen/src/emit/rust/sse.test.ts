@@ -190,14 +190,14 @@ const failedOpens = ({ hops, run }: Awaited<ReturnType<typeof drive>>) => ({
 const FAILED_OPENED = {
 	calls: [
 		{
-			error: { kind: "NotFound", status: 404, text: "404 Not Found: nope", variant: "Api", via: "return" },
+			error: { kind: "NotFound", status: 404, text: "HTTP 404: nope", variant: "Api", via: "return" },
 			stream: undefined,
 		},
 		{
 			error: {
 				kind: "InternalServer",
 				status: 500,
-				text: "500 Internal Server Error: boom",
+				text: "HTTP 500: boom",
 				variant: "Api",
 				via: "return",
 			},

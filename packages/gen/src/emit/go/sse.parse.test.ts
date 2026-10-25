@@ -183,6 +183,21 @@ goDescribe("SSE framing through the emitted SDK: the 8 MiB event cap", () => {
 	}, 600_000)
 })
 
+goDescribe("SSE framing through the emitted SDK: the 8 MiB event cap keeps the events before it (bit 19 d2)", () => {
+	it("delivers the event completed before an over-cap one in the same stream, then ends with ErrSSEEventTooLarge", async () => {
+		const { run } = await drive([sse([`data: ok\n\n${eventOf(8 * MiB + 1).text}`])], [list()], { calls: [CAPS] })
+		const call = run.trace?.calls[0]
+		expect(
+			{ observed: run.observed, sentinels: errorOf(call?.error)?.sentinels, stream: call?.stream },
+			run.stderr,
+		).toEqual({
+			observed: [{ events: [{ data: "ok" }], kind: "events" }],
+			sentinels: { ErrSSEEventTooLarge: true, ErrSSELineTooLong: false },
+			stream: { retry: [0], yields: 2 },
+		})
+	}, 600_000)
+})
+
 goDescribe("SSE framing through the emitted SDK: the id and retry fields", () => {
 	// v0: 6b81305c6b
 	it("keeps the id sticky across events, ignores an id holding NUL, and clears it on an empty id", async () => {

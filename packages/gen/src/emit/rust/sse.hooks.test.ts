@@ -201,7 +201,7 @@ describe.skipIf(!RUST)("an SSE open through a plain call's pipeline: on_log, by 
 				answered(TICKS, "info", 200),
 				start(TICKS),
 				answered(TICKS, "warn", 404),
-				logged(TICKS, "error", "error", { error: "404 Not Found: nope", status: 404 }),
+				logged(TICKS, "error", "error", { error: "HTTP 404: nope", status: 404 }),
 				start(PENDING),
 				answered(PENDING, "info", 200),
 			],

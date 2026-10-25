@@ -131,7 +131,7 @@ goDescribe("the Go test driver's script: {observed, trace} on stdout", () => {
 				{ event: "response_received", level: "info", operation, status: 200 },
 				{ event: "request_start", level: "debug", operation },
 				{ event: "response_received", level: "warn", operation, status: 404 },
-				{ error: "404 Not Found: gone", event: "error", level: "error", operation, status: 404 },
+				{ error: "HTTP 404: gone", event: "error", level: "error", operation, status: 404 },
 			],
 		})
 	}, 600_000)
@@ -288,7 +288,7 @@ goDescribe("the Go test driver's script: a call's Go error", () => {
 		const error = {
 			...plain({
 				chain: ["*sdk.UnprocessableEntityError", "*sdk.ClientError"],
-				text: "422 Unprocessable Entity: bad",
+				text: "HTTP 422: bad",
 				type: "*sdk.UnprocessableEntityError",
 			}),
 			keys: { "note.invalid": true, other: false },
@@ -379,7 +379,7 @@ goDescribe("the Go test driver's script: opt-in trace members", () => {
 				{ event: "response_received", level: "info", operation, status: 200 },
 				{ event: "request_start", level: "debug", operation },
 				{ event: "response_received", level: "warn", operation, status: 400 },
-				{ error: "400 Bad Request: Bad request", event: "error", level: "error", operation, status: 400 },
+				{ error: "HTTP 400: Bad request", event: "error", level: "error", operation, status: 400 },
 			],
 			starts: [0, 0],
 		})

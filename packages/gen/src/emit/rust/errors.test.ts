@@ -142,24 +142,24 @@ describe.skipIf(!RUST)("an error status as Error::Api, its kind by status", () =
 	// v0: 0506b8c599
 	it("reads each of the eleven named statuses as its ErrorKind, 429 as RateLimit", async () => {
 		/* G6: v0's eleven per-status structs and StatusError are one ApiError whose kind() names the status */
-		const named: [number, string, string][] = [
-			[400, "BadRequest", "Bad Request"],
-			[401, "Unauthorized", "Unauthorized"],
-			[403, "Forbidden", "Forbidden"],
-			[404, "NotFound", "Not Found"],
-			[409, "Conflict", "Conflict"],
-			[422, "UnprocessableEntity", "Unprocessable Entity"],
-			[429, "RateLimit", "Too Many Requests"],
-			[500, "InternalServer", "Internal Server Error"],
-			[502, "BadGateway", "Bad Gateway"],
-			[503, "ServiceUnavailable", "Service Unavailable"],
-			[504, "GatewayTimeout", "Gateway Timeout"],
+		const named: [number, string][] = [
+			[400, "BadRequest"],
+			[401, "Unauthorized"],
+			[403, "Forbidden"],
+			[404, "NotFound"],
+			[409, "Conflict"],
+			[422, "UnprocessableEntity"],
+			[429, "RateLimit"],
+			[500, "InternalServer"],
+			[502, "BadGateway"],
+			[503, "ServiceUnavailable"],
+			[504, "GatewayTimeout"],
 		]
 		const replies = named.map(([status]) => answer(status))
 		const calls = named.map(() => ITEM)
 		const { hops, run } = await drive(driven("errors"), replies, calls)
 		expect({ errors: errorsOf(run.trace?.calls), hops: hops.length, observed: run.observed }, run.stderr).toEqual({
-			errors: named.map(([status, kind, reason]) => unkeyed(status, kind, `${status} ${reason}: m`)),
+			errors: named.map(([status, kind]) => unkeyed(status, kind, `HTTP ${status}: m`)),
 			hops: named.length,
 			observed: named.map(([status]) => failed(status)),
 		})
@@ -170,7 +170,7 @@ describe.skipIf(!RUST)("an error status as Error::Api, its kind by status", () =
 		/* G6: v0's raise_for_status table is ApiError::kind(); a status outside it is Other, never a lost error */
 		const { run } = await drive(driven("errors"), [answer(418), answer(410)], [ITEM, ITEM])
 		expect({ errors: errorsOf(run.trace?.calls), observed: run.observed }, run.stderr).toEqual({
-			errors: [unkeyed(418, "Other", "418 I'm a teapot: m"), unkeyed(410, "Other", "410 Gone: m")],
+			errors: [unkeyed(418, "Other", "HTTP 418: m"), unkeyed(410, "Other", "HTTP 410: m")],
 			observed: [failed(418), failed(410)],
 		})
 	}, 600_000)
@@ -179,7 +179,7 @@ describe.skipIf(!RUST)("an error status as Error::Api, its kind by status", () =
 	it("reads a 500 whose body declares no key as InternalServer with no key", async () => {
 		/* G6: v0's per-op UsersCreateError with an Other(Error) fallback is not emitted; key() is None */
 		const { run } = await drive(driven("errors"), [{ json: { message: "boom" }, status: 500 }], [CREATE])
-		const boom = unkeyed(500, "InternalServer", "500 Internal Server Error: boom", "boom")
+		const boom = unkeyed(500, "InternalServer", "HTTP 500: boom", "boom")
 		expect(errorsOf(run.trace?.calls), run.stderr).toEqual([boom])
 	}, 600_000)
 })
@@ -195,7 +195,7 @@ describe.skipIf(!RUST)("a hostile error body in the error's text", () => {
 		expect({ message: error?.message, observed: run.observed, text: error?.text }, run.stderr).toEqual({
 			message,
 			observed: [{ body: hostile, errorKey: null, kind: "error", status: 500 }],
-			text: `500 Internal Server Error: ${message}`,
+			text: `HTTP 500: ${message}`,
 		})
 	}, 600_000)
 })
@@ -353,7 +353,7 @@ describe.skipIf(!RUST)("ApiError, ErrorKind and ErrorKey from a consumer program
 		const { run, wire } = await errorsConsumer()
 		expect({ ...seen(run, "api"), wire: wire.slice(0, 2) }, run.stderr).toEqual({
 			built: true,
-			out: ['404 no such item true Some("t9") 404 Not Found: no such item', "oops true oops None", "Some(422) None"],
+			out: ['404 no such item true Some("t9") HTTP 404: no such item', "oops true oops None", "Some(422) None"],
 			wire: ["GET /items/i1", "GET /items/i2"],
 		})
 	}, 600_000)

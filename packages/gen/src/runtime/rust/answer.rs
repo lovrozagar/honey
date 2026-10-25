@@ -32,7 +32,7 @@ fn decode_json<T: DeserializeOwned>(raw: &RawResponse) -> Result<T, Error> {
 }
 
 fn decode_text(raw: &RawResponse) -> Result<String, Error> {
-    String::from_utf8(raw.body.to_vec()).map_err(|e| Error::Decode(e.to_string()))
+    Ok(String::from_utf8_lossy(&raw.body).into_owned())
 }
 
 fn decode_binary(raw: &RawResponse) -> Result<Vec<u8>, Error> {

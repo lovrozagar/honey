@@ -116,9 +116,10 @@ describe("SDK SSE call: what it yields", () => {
 	})
 
 	// v0: 2dd02e57a0
-	it("config sseMaxBufferChars bounds an event: past it the iterator throws", async () => {
+	/* bit 19 d2: the cap is sseMaxEventBytes, in UTF-8 bytes (it was sseMaxBufferChars, in characters) */
+	it("config sseMaxEventBytes bounds an event: past it the iterator throws", async () => {
 		const { fetch } = recordingFetch(() => eventStream(["data: short\n\n", `data: ${"x".repeat(100)}\n\n`]))
-		const sdk = await sdkFor({ fetch, sseMaxBufferChars: 64 })
+		const sdk = await sdkFor({ fetch, sseMaxEventBytes: 64 })
 		const seen: string[] = []
 		const read = async () => {
 			for await (const event of sdk.events.stream() as AsyncIterable<Event>) seen.push(event.data)

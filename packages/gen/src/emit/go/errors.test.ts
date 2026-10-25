@@ -168,8 +168,8 @@ goDescribe("an error status as a Go error, through the driver", () => {
 			observed: run.observed,
 		}).toEqual({
 			errors: [
-				[418, "*sdk.ClientError", ["*sdk.ClientError"], "418 I'm a teapot: m"],
-				[410, "*sdk.ClientError", ["*sdk.ClientError"], "410 Gone: m"],
+				[418, "*sdk.ClientError", ["*sdk.ClientError"], "HTTP 418: m"],
+				[410, "*sdk.ClientError", ["*sdk.ClientError"], "HTTP 410: m"],
 			],
 			observed: [failed(418), failed(410)],
 		})
@@ -188,7 +188,7 @@ goDescribe("a hostile error body in the error's message", () => {
 			types: ["*sdk.InternalServerError", "*sdk.ClientError"],
 		})
 		/* v0: no ESC and at most 700 bytes; the exact text pins both and the cut */
-		expect(error?.text).toBe(`500 Internal Server Error: ]0;pwned${"x".repeat(504)}…`)
+		expect(error?.text).toBe(`HTTP 500: ]0;pwned${"x".repeat(504)}…`)
 	}, 600_000)
 })
 
@@ -290,9 +290,9 @@ goDescribe("the runtime's error types, from a consumer program", () => {
 			built: true,
 			out: [
 				"GET http://api.test/items/i1",
-				"true 404 404 Not Found: no such item",
+				"true 404 HTTP 404: no such item",
 				"true 404 true 404",
-				"*sdk.NotFoundError 404 Not Found: no such item",
+				"*sdk.NotFoundError HTTP 404: no such item",
 			],
 			vet: [],
 		})

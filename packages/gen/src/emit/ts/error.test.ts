@@ -201,7 +201,7 @@ describe("throw mode: a non-2xx rejects with the status's ClientError", () => {
 						error.message,
 					]
 				}),
-			).toEqual(STATUS_CLASSES.map(([status, name]) => [true, true, name, status, "who"]))
+			).toEqual(STATUS_CLASSES.map(([status, name]) => [true, true, name, status, `HTTP ${status}: who`]))
 		},
 	)
 })
@@ -257,7 +257,7 @@ describe("throw mode: what the thrown ClientError carries", () => {
 /* [answer, the thrown ClientError's message, its body] */
 const MESSAGES: ReadonlyArray<readonly [() => Response, string, unknown]> = [
 	// v0: 92c289628b
-	[json({ message: "not found" }, 404), "not found", { message: "not found" }],
+	[json({ message: "not found" }, 404), "HTTP 404: not found", { message: "not found" }],
 	// v0: 0df192ecdb
 	[json({ code: "ERR_X" }, 503), "HTTP 503", { code: "ERR_X" }],
 	// v0: 262dee1e93
@@ -268,20 +268,20 @@ const MESSAGES: ReadonlyArray<readonly [() => Response, string, unknown]> = [
 	// v0: ca13d2e174
 	[
 		json({ message: `${"x".repeat(10_000)}\u0001\u0002junk` }, 500),
-		"x".repeat(512),
+		`HTTP 500: ${"x".repeat(512)}`,
 		{ message: `${"x".repeat(10_000)}\u0001\u0002junk` },
 	],
 	// v0: fcfa5e14b0
 	[
 		json({ message: `${"x".repeat(1000)}\u0001\u0002junk` }, 500),
-		"x".repeat(512),
+		`HTTP 500: ${"x".repeat(512)}`,
 		{ message: `${"x".repeat(1000)}\u0001\u0002junk` },
 	],
 ]
 
 describe("the thrown ClientError's message", () => {
 	it.each(FRONTS)(
-		"%s: a string message, stripped of control characters and capped at 512, else HTTP <status>; the body untouched",
+		"%s: HTTP <status>: and a string message, stripped of control characters and capped at 512, else HTTP <status>; the body untouched",
 		async (front) => {
 			const thrown = await Promise.all(MESSAGES.map(([answer]) => rejection(front, answer)))
 			expect(thrown.map((error) => [error.message, error.body])).toEqual(
@@ -294,7 +294,7 @@ describe("the thrown ClientError's message", () => {
 	// v0: 8c5455f3ac
 	it.each(FRONTS)("%s: maxErrorMessageChars sets the cap", async (front) => {
 		const error = await rejection(front, json({ message: "x".repeat(100) }, 500), { maxErrorMessageChars: 8 })
-		expect(error.message).toBe("xxxxxxxx")
+		expect(error.message).toBe("HTTP 500: xxxxxxxx")
 	})
 })
 

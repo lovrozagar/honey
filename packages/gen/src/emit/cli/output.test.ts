@@ -213,7 +213,7 @@ describe.skipIf(!GO)("an error on stderr (phase c)", SLOW, () => {
 		]
 		expect([api.status, api.stderr, local.status, local.stderr, api.stdout + local.stdout]).toEqual([
 			2,
-			"shop: 500 Internal Server Error: bad [2J\n",
+			"shop: HTTP 500: bad [2J\n",
 			4,
 			"shop: --data: open /missing\\x1b[2J: no such file or directory\n",
 			"",

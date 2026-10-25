@@ -36,7 +36,7 @@ class SyncTransport(ClientCore):
             return SDKResult(None, error, x.raw.status, x.raw)
 
     def run(self, x: Exchange) -> HttpAnswer:
-        x.log.emit("debug", "request_start")
+        x.log.started()
         try:
             token = self.auth.token
             answer = self.attempt(x, token, False)

@@ -371,7 +371,7 @@ describe.skipIf(!RUST)("the default SSE and long-poll adapters on their own, sen
 		const { built, hops, out, run } = await adapted("sse")
 		expect({ built, out }, stderrOf(run)).toEqual({
 			built: true,
-			out: ['[{"n":1}]', "send Ok(())", 'send Err("Api 405 Method Not Allowed: no") Connected'],
+			out: ['[{"n":1}]', "send Ok(())", 'send Err("Api HTTP 405: no") Connected'],
 		})
 		expect(hops.map(dial)).toEqual([
 			"GET /feed sse",
@@ -396,7 +396,7 @@ describe.skipIf(!RUST)("the default SSE and long-poll adapters on their own, sen
 			out: [
 				'[{"id":"7","n":2,"reconnect_token":"rt-7"},[{"n":3},{"n":4}]]',
 				"send Ok(())",
-				'send Err("Api 405 Method Not Allowed: no") Connected',
+				'send Err("Api HTTP 405: no") Connected',
 				'[{"n":5}]',
 			],
 		})
@@ -422,7 +422,7 @@ describe.skipIf(!RUST)("an adapter's error status: from recv over long-poll, fro
 		const { built, hops, out, run } = await adapted("refused")
 		expect({ built, out }, stderrOf(run)).toEqual({
 			built: true,
-			out: ['[{"error":"Api 400 Bad Request: no"},"none"]', 'Err("Api 400 Bad Request: no")'],
+			out: ['[{"error":"Api HTTP 400: no"},"none"]', 'Err("Api HTTP 400: no")'],
 		})
 		expect(hops.map(dial)).toEqual(["GET /feed poll", "GET /feed sse"])
 	}, 600_000)

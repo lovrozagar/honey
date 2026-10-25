@@ -264,7 +264,7 @@ rustDescribe("a realtime connection gives up with the real error once, then None
 		).toMatchObject({
 			error: ["Api", 500, "stream"],
 			observed: frames(frame(1)),
-			realtime: { cursor: cursor("1", "rt-1"), errors: ["500 Internal Server Error: down"] },
+			realtime: { cursor: cursor("1", "rt-1"), errors: ["HTTP 500: down"] },
 			wire: [BARE, BARE, ...attempt, ...attempt],
 		})
 	}, 600_000)
@@ -282,7 +282,7 @@ rustDescribe("a realtime connection gives up with the real error once, then None
 			built: true,
 			hops: [...Array.from({ length: 5 }, () => BARE[0]), "/feed?channel=c&last_event_id=1&reconnect_token=rt-1"],
 			out: {
-				"no-reconnect": ["Connected", "err 400 Bad Request: bad", "Disconnected none"],
+				"no-reconnect": ["Connected", "err HTTP 400: bad", "Disconnected none"],
 				reconnecting: ["Connected ok Some(1)", "true Reconnecting", "Ok(()) Disconnected none"],
 			},
 		})

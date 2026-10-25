@@ -25,7 +25,7 @@ const DEPENDENCIES: readonly (readonly [name: string, requirement: string])[] = 
 	["futures-util", '{ version = "0.3.34", default-features = false, features = ["std", "sink"] }'],
 	[
 		"reqwest",
-		'{ version = "0.13.5", default-features = false, features = ["rustls", "http2", "json", "stream", "gzip", "deflate"] }',
+		'{ version = "0.13.5", default-features = false, features = ["rustls", "json", "stream", "gzip", "deflate"] }',
 	],
 	["serde", '{ version = "1.0.229", features = ["derive"] }'],
 	["serde_json", '"1.0.154"'],

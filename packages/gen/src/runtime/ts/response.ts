@@ -112,7 +112,7 @@ export async function errorFromResponse(response: Response, limits: Limits = {})
 			: undefined
 	const text =
 		typeof message === "string" && message.length > 0
-			? sanitizeMessage(message, limits.maxErrorMessageChars ?? 512)
+			? `HTTP ${response.status}: ${sanitizeMessage(message, limits.maxErrorMessageChars ?? 512)}`
 			: `HTTP ${response.status}`
 	return clientErrorFor({ body, message: text, response: preserved, status: response.status })
 }

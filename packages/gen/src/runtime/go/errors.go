@@ -59,10 +59,7 @@ type ClientError struct {
 }
 
 func (e *ClientError) Error() string {
-	head := strconv.Itoa(e.StatusCode)
-	if text := http.StatusText(e.StatusCode); text != "" {
-		head += " " + text
-	}
+	head := "HTTP " + strconv.Itoa(e.StatusCode)
 	if e.Message == "" {
 		return head
 	}

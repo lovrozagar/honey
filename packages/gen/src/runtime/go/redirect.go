@@ -29,12 +29,25 @@ const maxRedirects = 10
 // allowlist, so a header added later never leaks by default.
 var crossOriginSafeHeaders = []string{"Accept", "Accept-Language", "User-Agent"}
 
-// redirectClient is a copy of base (a fresh client when nil) whose CheckRedirect applies policy and
-// strips a cross-origin hop first, then defers to base's own CheckRedirect, so no client escapes it.
+// http1 is DefaultTransport's settings offering HTTP/1.1 alone (its clone's ALPN list starts with h2).
+var http1 = func() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Protocols = new(http.Protocols)
+	t.Protocols.SetHTTP1(true)
+	t.TLSClientConfig.NextProtos = []string{"http/1.1"}
+	return t
+}()
+
+// redirectClient is a copy of base (a fresh client when nil; http1 when it names no Transport) whose
+// CheckRedirect applies policy and strips a cross-origin hop first, then defers to base's own
+// CheckRedirect, so no client escapes it.
 func redirectClient(base *http.Client, policy RedirectPolicy) *http.Client {
 	c := &http.Client{}
 	if base != nil {
 		*c = *base
+	}
+	if c.Transport == nil {
+		c.Transport = http1
 	}
 	next := c.CheckRedirect
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {

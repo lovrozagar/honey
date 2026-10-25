@@ -73,7 +73,7 @@ class AsyncTransport(ClientCore):
         return live
 
     async def run(self, x: Exchange) -> tuple[HttpAnswer, LiveResponse]:
-        x.log.emit("debug", "request_start")
+        x.log.started()
         try:
             token = self.auth.token
             answer, live = await self.attempt(x, token, False)

@@ -189,16 +189,10 @@ impl ApiError {
     }
 }
 
-/// `404 Not Found: <message>`, as the Go SDK's error reads; no header or request detail.
+/// `HTTP 404: <message>`, as every SDK's error reads; no reason phrase, header or request detail.
 impl fmt::Display for ApiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0.status)?;
-        let reason = reqwest::StatusCode::from_u16(self.0.status)
-            .ok()
-            .and_then(|s| s.canonical_reason());
-        if let Some(reason) = reason {
-            write!(f, " {reason}")?;
-        }
+        write!(f, "HTTP {}", self.0.status)?;
         if !self.0.message.is_empty() {
             write!(f, ": {}", self.0.message)?;
         }

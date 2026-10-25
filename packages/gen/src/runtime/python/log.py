@@ -34,11 +34,18 @@ class CallLog:
         event: str,
         status: int | None = None,
         error: str | None = None,
+        took: int | None = None,
     ) -> None:
-        took = round((time.monotonic() - self.start) * 1000)
+        if took is None:
+            took = round((time.monotonic() - self.start) * 1000)
         if self.hook is not None:
             with contextlib.suppress(Exception):
                 self.hook(LogEntry(level, event, self.operation, took, status, error))
+
+    def started(self) -> None:
+        # the call's clock starts at request_start, so it logs 0, as every SDK's does
+        self.start = time.monotonic()
+        self.emit("debug", "request_start", took=0)
 
     def answered(self, status: int) -> None:
         self.emit("warn" if status >= 400 else "info", "response_received", status)

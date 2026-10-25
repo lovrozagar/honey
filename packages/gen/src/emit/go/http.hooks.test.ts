@@ -225,7 +225,7 @@ goDescribe("OnLog: the exchange by its operation template, never a path value, q
 			received("info", 200),
 			start,
 			received("warn", 404),
-			failed("404 Not Found: no such user", 404),
+			failed("HTTP 404: no such user", 404),
 		])
 	}, 600_000)
 

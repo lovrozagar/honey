@@ -25,7 +25,9 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - The TS SDK's realtime connection options `token?` and `onAuthExpired?` are removed (bit 19 Q8 and b2; neither was ever read): `headers` may be a function read on every dial, and the client-level `onAuthExpired` is the one refresh hook.
 - The TS SDK reads the spec's security scheme for its auth header (bit 19 b3), as every other SDK does: an apiKey scheme's header with no prefix, bearer as `Authorization: Bearer`. A caller's `authHeaderName` alone no longer implies `Bearer `; set `authHeaderPrefix` to keep one.
 - WebSocket keepalive is on by default in every SDK (bit 19 d1): a ping every 20 s, the connection ended when a pong does not come within the interval. New config: Go `Config.WSKeepalive` and `TransportOpts.KeepAlive`, Rust `ws_keepalive`, Python `ws_keepalive`; the TS realtime `keepaliveInterval` now defaults to 20 s (0 turns it off), and `keepaliveOf` is exported.
-- Generated SDK error messages read `HTTP <status>: <message>` in every target (bit 19 d2).
+- Generated SDK error messages read `HTTP <status>: <message>` (or `HTTP <status>` with no message) in every target (bit 19 d2): Go and Rust drop the reason phrase (they printed `404 Not Found: <message>`), and TS adds the prefix (it printed the message alone). Code matching on the old text changes; match the typed error and its status instead.
+- The TS SDK's SSE caps are UTF-8 bytes like every other SDK's (bit 19 d2): `sseMaxBufferChars` is replaced by `sseMaxLineBytes` (1 MiB) and `sseMaxEventBytes` (8 MiB).
+- The TS SDK speaks whatever HTTP version its platform's `fetch` negotiates (Node 26 may use HTTP/2; browsers choose their own); every other SDK is pinned to HTTP/1.1 (bit 19 d2).
 
 ## Security corpus
 - none (docs); examples must not demonstrate an insecure default.

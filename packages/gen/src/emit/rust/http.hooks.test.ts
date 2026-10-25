@@ -227,7 +227,7 @@ describe.skipIf(!RUST)(
 			const missing: Reply = { json: { message: "no such user" }, status: 404 }
 			const { run } = await drive([FOUND, missing], [GET, GET], { log: true }, BEARER)
 			expect({ log: run.trace?.log, secrets: secrets(run.trace?.log) }).toEqual({
-				log: [start, received("info", 200), start, received("warn", 404), failed("404 Not Found: no such user", 404)],
+				log: [start, received("info", 200), start, received("warn", 404), failed("HTTP 404: no such user", 404)],
 				secrets: [],
 			})
 		}, 600_000)

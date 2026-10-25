@@ -190,11 +190,11 @@ export class HTTPClient {
 	}
 
 	#iterate(sent: Sent): AsyncIterable<SSEEvent> {
-		const maxBufferSize = this.#config.sseMaxBufferChars
+		const caps = { maxEventBytes: this.#config.sseMaxEventBytes, maxLineBytes: this.#config.sseMaxLineBytes }
 		return {
 			async *[Symbol.asyncIterator]() {
 				try {
-					if (sent.response.body) yield* parseSSEStream(sent.response.body, { maxBufferSize })
+					if (sent.response.body) yield* parseSSEStream(sent.response.body, caps)
 				} finally {
 					sent.done()
 				}

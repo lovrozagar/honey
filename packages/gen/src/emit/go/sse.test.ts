@@ -466,7 +466,7 @@ goDescribe("an SSE open through a plain call's pipeline: OnLog", () => {
 				logged(TICKS, "response_received", "info", { status: 200 }),
 				logged(TICKS, "request_start", "debug"),
 				logged(TICKS, "response_received", "warn", { status: 404 }),
-				logged(TICKS, "error", "error", { error: "404 Not Found: nope", status: 404 }),
+				logged(TICKS, "error", "error", { error: "HTTP 404: nope", status: 404 }),
 				logged(PENDING, "request_start", "debug"),
 				logged(PENDING, "response_received", "info", { status: 200 }),
 			],
