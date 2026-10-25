@@ -13,7 +13,7 @@ import { tsString } from "../shared/escape.ts"
 import { generateSdk } from "../ts/sdk.ts"
 import { literal } from "./literal.ts"
 import { mcpRuntimeSource } from "./runtime.ts"
-import { toolsOf, type ToolSpec } from "./tools.ts"
+import { toolsOf, type ToolSpec, untoolable } from "./tools.ts"
 
 export type McpServerOptions = {
 	/** the server's name: lowercase words joined by `-`, at most 60 characters; by default the document title's */
@@ -22,7 +22,11 @@ export type McpServerOptions = {
 	readonly envPrefix?: string
 }
 
-export type GeneratedMcpServer = { readonly files: Readonly<Record<string, string>> }
+export type GeneratedMcpServer = {
+	readonly files: Readonly<Record<string, string>>
+	/** each operation marked x-mcp that no tool serves yet: its id and what it is */
+	readonly skipped: readonly string[]
+}
 
 /* a name leaves room for the bin's `-mcp`; a prefix is uppercase words joined by `_` */
 const NAME = /^(?=.{1,60}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
@@ -47,12 +51,17 @@ const entrySource = (app: { name: string; version: string; envPrefix: string }, 
 
 // The ${app.name} MCP server: its tools over stdio, for the MCP client that starts it. The API key is
 // $${app.envPrefix}_API_KEY, sent as the API's scheme says; the API is at $${app.envPrefix}_BASE_URL, else its first server, and
-// with neither it refuses to start.
+// with neither it refuses to start. A call waits $${app.envPrefix}_TIMEOUT_MS milliseconds at most, 30 s by default.
 import { bindTools, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { toolSpecs } from "./tools.gen"
 
 const key = process.env[${tsString(`${app.envPrefix}_API_KEY`)}] ?? ""
+const timeout = process.env[${tsString(`${app.envPrefix}_TIMEOUT_MS`)}] || "30000"
+if (!/^[1-9][0-9]{0,9}$/.test(timeout) || Number(timeout) > 2147483647) {
+	process.stderr.write(${tsString(`Invalid $${app.envPrefix}_TIMEOUT_MS: a whole number of milliseconds, 1 to 2147483647\n`)})
+	process.exit(1)
+}
 const baseURL = process.env[${tsString(`${app.envPrefix}_BASE_URL`)}] || ${tsString(ir.servers[0] ?? "")}
 if (baseURL === "") {
 	process.stderr.write(${tsString(`No API to call: set $${app.envPrefix}_BASE_URL, since the API names no server\n`)})
@@ -61,7 +70,8 @@ if (baseURL === "") {
 const client = new Api({
 	baseURL,
 	headers: key === "" ? {} : { ${tsString(ir.auth.headerName)}: ${tsString(ir.auth.prefix)} + key },
-	throwOnError: true,
+	throwOnError: false,
+	timeout: Number(timeout),
 })
 
 void serveStdio(createSession({ name: ${tsString(app.name)}, version: ${tsString(app.version)} }, bindTools(toolSpecs, client, key)))
@@ -132,5 +142,9 @@ export function generateMcpServer(
 			"dist/package.json": `${JSON.stringify({ type: "commonjs" }, null, "\t")}\n`,
 			...compiled,
 		},
+		skipped: ir.operations.flatMap((op) => {
+			const what = op.extensions.mcp === true ? untoolable(op) : undefined
+			return what === undefined ? [] : [`${op.id} (${what})`]
+		}),
 	}
 }

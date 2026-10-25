@@ -31,7 +31,7 @@ const op = (operationId: string, more: Record<string, unknown> = {}) => ({
 describe("which operations are tools (phase b)", () => {
 	// v0: c22e287e6e
 	// v0: 787e53db6d
-	it("makes one of each operation marked x-mcp a tool can call, in the IR's order; no stream, socket or bytes", () => {
+	it("makes one of each operation marked x-mcp a tool can call, in the IR's order; no stream, socket or multipart", () => {
 		const listed = tools({
 			"/a": { get: op("a.list"), post: op("a.create", { requestBody: json({ type: "object" }) }) },
 			"/b": { get: { operationId: "b.list", responses: OK } },
@@ -47,6 +47,16 @@ describe("which operations are tools (phase b)", () => {
 				}),
 			},
 			"/text": { post: op("text.send", { requestBody: { content: { "text/plain": { schema: STR } } } }) },
+			"/png": {
+				post: op("png.send", {
+					requestBody: { content: { "image/png": { schema: { format: "binary", type: "string" } } } },
+				}),
+			},
+			"/parts": {
+				post: op("parts.send", {
+					requestBody: { content: { "multipart/form-data": { schema: { properties: { a: STR }, type: "object" } } } },
+				}),
+			},
 			"/form": {
 				post: op("form.send", {
 					requestBody: {
@@ -55,10 +65,13 @@ describe("which operations are tools (phase b)", () => {
 				}),
 			},
 		})
-		expect(listed.map((tool) => [tool.name, tool.member, tool.body?.[1]])).toEqual([
+		expect(listed.map((tool) => [tool.name, tool.member, tool.body?.slice(1)])).toEqual([
 			["a_list", ["a", "list"], undefined],
-			["a_create", ["a", "create"], "json"],
-			["form_send", ["form", "send"], "form"],
+			["a_create", ["a", "create"], ["json"]],
+			["upload_send", ["upload", "send"], ["bytes", "application/octet-stream"]],
+			["text_send", ["text", "send"], ["text", "text/plain"]],
+			["png_send", ["png", "send"], ["bytes", "image/png"]],
+			["form_send", ["form", "send"], ["form"]],
 		])
 	})
 })

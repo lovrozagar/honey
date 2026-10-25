@@ -115,7 +115,7 @@ describe("a tool call's wire (phase b)", SLOW, () => {
 				["PUT", "/items/a%20b?dryRun=true&tags=x&tags=y", "t", "application/json", { name: "n" }],
 				["POST", "/forms", undefined, "application/x-www-form-urlencoded", undefined],
 			],
-			{ content: [{ text: '{"id":"1"}', type: "text" }] },
+			{ content: [{ text: '{"id":"1"}', type: "text" }], structuredContent: { id: "1" } },
 		])
 	})
 
@@ -207,9 +207,35 @@ describe("a tool call's arguments (phase c)", SLOW, () => {
 					content: [{ text: JSON.stringify({ message: `Invalid arguments: ${why}` }), type: "text" }],
 					isError: true,
 				})),
-				{ content: [{ text: "{}", type: "text" }] },
+				{ content: [{ text: "{}", type: "text" }], structuredContent: {} },
 			],
 			["/items/1?sort=asc"],
+		])
+	})
+})
+
+describe("a server's timeout (phase d)", SLOW, () => {
+	it("refuses to start on a $<PREFIX>_TIMEOUT_MS that is no whole number of milliseconds from 1 to 2147483647", async () => {
+		const dir = written(generateMcpServer(shop()).files)
+		const bad = ["abc", "-5", "0", "1.5", "007", "2147483648", "1e3"]
+		const runs = await Promise.all(
+			[...bad, "2147483647"].map((value) =>
+				exchange(
+					[
+						"env",
+						"SHOP_BASE_URL=http://127.0.0.1:9",
+						`SHOP_TIMEOUT_MS=${value}`,
+						process.execPath,
+						join(dir, "dist", "server.js"),
+					],
+					[initialize("2025-11-25")],
+				),
+			),
+		)
+		const refused = "Invalid $SHOP_TIMEOUT_MS: a whole number of milliseconds, 1 to 2147483647\n"
+		expect(runs.map((ran) => [ran.status, ran.stderr, ran.replies.length])).toEqual([
+			...bad.map(() => [1, refused, 0]),
+			[0, "", 1],
 		])
 	})
 })

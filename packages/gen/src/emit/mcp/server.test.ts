@@ -56,12 +56,17 @@ describe("the package's files (phase a)", () => {
 
 // The shop MCP server: its tools over stdio, for the MCP client that starts it. The API key is
 // $SHOP_API_KEY, sent as the API's scheme says; the API is at $SHOP_BASE_URL, else its first server, and
-// with neither it refuses to start.
+// with neither it refuses to start. A call waits $SHOP_TIMEOUT_MS milliseconds at most, 30 s by default.
 import { bindTools, createSession, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { toolSpecs } from "./tools.gen"
 
 const key = process.env["SHOP_API_KEY"] ?? ""
+const timeout = process.env["SHOP_TIMEOUT_MS"] || "30000"
+if (!/^[1-9][0-9]{0,9}$/.test(timeout) || Number(timeout) > 2147483647) {
+	process.stderr.write("Invalid $SHOP_TIMEOUT_MS: a whole number of milliseconds, 1 to 2147483647\\n")
+	process.exit(1)
+}
 const baseURL = process.env["SHOP_BASE_URL"] || "https://shop.example.test"
 if (baseURL === "") {
 	process.stderr.write("No API to call: set $SHOP_BASE_URL, since the API names no server\\n")
@@ -70,7 +75,8 @@ if (baseURL === "") {
 const client = new Api({
 	baseURL,
 	headers: key === "" ? {} : { "Authorization": "Bearer " + key },
-	throwOnError: true,
+	throwOnError: false,
+	timeout: Number(timeout),
 })
 
 void serveStdio(createSession({ name: "shop", version: "1.2.0" }, bindTools(toolSpecs, client, key)))
@@ -99,6 +105,13 @@ export const toolSpecs: readonly ToolSpec[] = [
 			"list",
 		],
 		args: [],
+		outputSchema: {
+			type: "object",
+			properties: {},
+		},
+		annotations: {
+			readOnlyHint: true,
+		},
 	},
 ]
 `)
@@ -159,6 +172,37 @@ describe("what the generator refuses (phase b)", () => {
 const pkg = (doc: Record<string, unknown>) =>
 	JSON.parse(generateMcpServer(doc).files["package.json"] as string) as { name: string; version: string }
 
+describe("what no tool serves yet (phase d)", () => {
+	it("names each operation marked x-mcp that no tool serves, and what it is: a stream, a socket, a multipart body", () => {
+		const marked = (id: string, more: Record<string, unknown>) => ({
+			operationId: id,
+			responses: OK,
+			"x-mcp": true,
+			...more,
+		})
+		const sse = { 200: { content: { "text/event-stream": { schema: { type: "string" } } }, description: "e" } }
+		const parts = { content: { "multipart/form-data": { schema: { properties: {}, type: "object" } } } }
+		const file = { properties: { file: { format: "binary", type: "string" } }, type: "object" }
+		const files = { content: { "multipart/form-data": { schema: file } } }
+		const paths = {
+			...document().paths,
+			"/chat": { get: marked("chat.open", { responses: { 101: { description: "up" } }, "x-websocket": true }) },
+			"/events": { get: marked("events.watch", { responses: sse }) },
+			"/live": { get: marked("live.join", { "x-realtime": true }) },
+			"/upload": { post: marked("upload.send", { requestBody: parts }) },
+			"/files": { post: marked("files.send", { requestBody: files }) },
+			"/quiet": { get: { operationId: "quiet.get", responses: OK } },
+		}
+		expect(generateMcpServer({ ...document(), paths }).skipped).toEqual([
+			"chat.open (a WebSocket)",
+			"events.watch (an event stream)",
+			"live.join (a realtime channel)",
+			"upload.send (a multipart body)",
+			"files.send (a multipart body)",
+		])
+	})
+})
+
 describe("the options (F2, phase a)", () => {
 	it("names the server by the title's words, and its version 0.0.0 when the document's is none npm accepts or none at all", () => {
 		const untagged = { ...document(), info: { title: "Shop" } }
@@ -204,7 +248,14 @@ describe("the written server (phase a)", SLOW, () => {
 		const saw = await clientCheck(client, [process.execPath, join(dir, "dist/server.js")])
 		expect([saw.latest, saw.tools]).toEqual([
 			"2025-11-25",
-			[{ inputSchema: { additionalProperties: false, properties: {}, type: "object" }, name: "items_list" }],
+			[
+				{
+					annotations: { readOnlyHint: true },
+					inputSchema: { additionalProperties: false, properties: {}, type: "object" },
+					name: "items_list",
+					outputSchema: { properties: {}, type: "object" },
+				},
+			],
 		])
 	})
 })

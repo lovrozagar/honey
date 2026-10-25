@@ -138,6 +138,26 @@ describe("generate's files (phase h)", () => {
 	})
 })
 
+describe("the generate report (bit 18 phase d)", () => {
+	it("names on stderr each MCP operation no tool serves yet, and still writes the server", async () => {
+		const ping = { get: { operationId: "ping", responses: { 204: { description: "none" } }, "x-mcp": true } }
+		const parts = { content: { "multipart/form-data": { schema: { properties: {}, type: "object" } } } }
+		const upload = {
+			post: { operationId: "upload", requestBody: parts, responses: { 204: { description: "none" } }, "x-mcp": true },
+		}
+		const { out, spec } = specDir({
+			...(shop() as Record<string, unknown>),
+			paths: { "/ping": ping, "/upload": upload },
+		})
+		const ran = await run(["generate", "--spec", spec, "--target", "mcp", "--out", out])
+		expect([ran.status, ran.err, filesUnder(out).includes("mcp/dist/server.js")]).toEqual([
+			0,
+			"honey-codegen: mcp: no tool serves upload (a multipart body) yet: skipped\n",
+			true,
+		])
+	})
+})
+
 describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () => {
 	it("writes the whole cli and go trees gofmt-clean, the embedded SDK under internal/sdk included", async () => {
 		const { out, spec } = specDir()

@@ -28,9 +28,17 @@ import { runtimeBytes } from "./sdk-budget.ts"
  *     stable 394, the header 430, the path helper 106;
  *   - call.ts +546: the refusal before any call, every result scrubbed, an answer's body echoed in its failure;
  *   provisional 18,600. The base URL refusal is the emitted entry's, no runtime byte.
+ * - phase d, +4,732 B to 23,299 B, dead code cut (a status-0 failure branch no guarded call reaches):
+ *   - result.ts 4,100: a 2xx as structuredContent (an object, or wrapped `{result, headers}`) and text 920, bytes as
+ *     image, audio or an embedded resource and the 1 MiB note 696, a failure's status with honey's error key and
+ *     message or its body 616, the 100,000-character text cut and JSON text 495, the transport and timeout kinds 400,
+ *     the safe-mode Answer type 231, the caps 167, the scrubber type 121, the header 454;
+ *   - call.ts +632: a raw body argument (base64-decoded bytes at most 1 MiB, or text, under its content type), the
+ *     safe-mode answer routed to result.ts, outputSchema and annotations listed;
+ *   provisional 23,400.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 18600
+const MCP_RUNTIME_BYTES = 23400
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

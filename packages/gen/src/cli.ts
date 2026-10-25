@@ -45,11 +45,12 @@ export function findGofmt(env: NodeJS.ProcessEnv = process.env): string | undefi
 	return onPath("gofmt", env) ?? (beside !== undefined && existsSync(beside) ? beside : undefined)
 }
 
-/** One target's files for `document`, by their path under the target's directory. */
+/** One target's files for `document`, by their path under the target's directory; what it leaves out to `report`. */
 function filesOf(
 	target: Target,
 	document: Record<string, unknown>,
 	options: Options,
+	report: (line: string) => void,
 ): Readonly<Record<string, string>> {
 	switch (target) {
 		case "ts":
@@ -66,16 +67,24 @@ function filesOf(
 			return generateJavaSdk(document, options).files
 		case "cli":
 			return generateGoCli(document, options).files
-		case "mcp":
-			return generateMcpServer(document, options).files
+		case "mcp": {
+			const server = generateMcpServer(document, options)
+			for (const op of server.skipped) report(`honey-codegen: mcp: no tool serves ${op} yet: skipped\n`)
+			return server.files
+		}
 	}
 }
 
-/** Every file a run writes, by its path under `out`: each target's under its name, Go's through gofmt. */
-export async function generated(run: Generate, document: Record<string, unknown>, env = process.env) {
+/** Every file a run writes, by its path under `out`: each target's under its name, Go's through gofmt; skips to `report`. */
+export async function generated(
+	run: Generate,
+	document: Record<string, unknown>,
+	env: NodeJS.ProcessEnv,
+	report: (line: string) => void,
+) {
 	const out: Record<string, string> = {}
 	for (const target of run.targets) {
-		let files = filesOf(target, document, run.options[target])
+		let files = filesOf(target, document, run.options[target], report)
 		if (target === "go" || target === "cli") {
 			const gofmt = findGofmt(env)
 			if (gofmt === undefined)
@@ -107,7 +116,7 @@ const PROCESS_IO: Io = {
 
 /** One generation: the spec read, every target generated, each file written under `out`. */
 async function generateOnce(run: Generate, io: Io, env: NodeJS.ProcessEnv): Promise<number> {
-	const files = await generated(run, readSpec(run.spec), env)
+	const files = await generated(run, readSpec(run.spec), env, io.err)
 	for (const [name, text] of Object.entries(files)) {
 		mkdirSync(dirname(join(run.out, name)), { recursive: true })
 		writeFileSync(join(run.out, name), text)
