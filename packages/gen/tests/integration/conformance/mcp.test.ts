@@ -39,6 +39,9 @@ const LACKS: Readonly<Record<string, string>> = {
 	"overrides/timeout": "a tool has no per-call timeout: the server's $<PREFIX>_TIMEOUT_MS is every call's",
 	"raw-response/status-headers-body": "a tool returns its answer's data, never the raw response (Q11)",
 	"reconnect/ws-reconnect-token": "a WebSocket is no tool (bit 18 e)",
+	"reconnect/refusal-terminal": "a realtime operation is no tool: the server has no reconnect loop to end (bit 18 e)",
+	"reconnect/refusal-mixed-retries":
+		"a realtime operation is no tool: the server has no reconnect loop to retry (bit 18 e)",
 	"request-id/explicit": "x-request-id is no declared parameter of the operation, so no tool argument (Q11)",
 	"typed-errors/validation-400":
 		"its name breaks the declared minLength 3, which the guard refuses on this target before anything is sent, naming it (bit 19 c, constraints.test)",

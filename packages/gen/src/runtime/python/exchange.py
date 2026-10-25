@@ -87,8 +87,10 @@ class Exchange:
         op: Operation[object],
         args: CallArgs,
         stream: bool = False,
+        refreshes: bool = True,
     ) -> None:
         self.core, self.op, self.args, self.stream = core, op, args, stream
+        self.refreshes = refreshes
         options: RequestOptions = args.get("options") or {}
         self.options = options
         self.params = dict(zip(op.path_params, args.get("path", ()), strict=True))
@@ -214,6 +216,7 @@ class Exchange:
         replayable = self.content is None or isinstance(self.content.payload, bytes)
         return (
             answer.status == 401
+            and self.refreshes
             and self.core.config.on_auth_expired is not None
             and replayable
         )

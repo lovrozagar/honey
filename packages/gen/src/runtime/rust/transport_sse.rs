@@ -45,7 +45,8 @@ impl Transport for SseTransport {
         opts: &'a TransportOpts,
     ) -> TransportFuture<'a, Result<Box<dyn TransportConn>, Error>> {
         Box::pin(async move {
-            let (mut spec, ov) = self.0.spec("GET", url);
+            let (mut spec, mut ov) = self.0.spec("GET", url);
+            self.0.hold(&mut ov).await;
             spec.query("reconnect_token", &cursor(&opts.reconnect_token));
             spec.header("Last-Event-ID", &cursor(&opts.last_event_id));
             let (events, raw) = text(Arc::clone(&self.0.inner), spec, ov).await?;
@@ -57,6 +58,10 @@ impl Transport for SseTransport {
             };
             Ok(Box::new(conn) as Box<dyn TransportConn>)
         })
+    }
+
+    fn refresh(&self) -> TransportFuture<'_, Result<bool, Error>> {
+        Box::pin(self.0.refresh())
     }
 }
 

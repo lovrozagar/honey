@@ -107,9 +107,16 @@ public interface ITransportAdapter
     Task<ITransportConnection> ConnectAsync(string url, TransportOptions options, CancellationToken cancellationToken);
 }
 
-/* what a call's default adapters dial with: its exchanges, each with a fresh RequestOptions.Raw of its own */
+internal interface IDialed
+{
+    Dial Dial { get; }
+}
+
+/* a call's default adapters' dials: fresh exchanges without a 401 refresh (the loop's) */
 internal sealed class Dial(Transport client, Operation op, Call call)
 {
+    private string? _used;
+
     public Transport Client => client;
 
     public Uri Url() => new Exchange(client, op, call).Url();
@@ -128,7 +135,7 @@ internal sealed class Dial(Transport client, Operation op, Call call)
 
     public async Task PostAsync(string text, CancellationToken cancellationToken)
     {
-        var post = With(op with { Method = "POST", Accept = null }, call with { Body = Body.Text(text, "application/json") }, false, null);
+        var post = With(op with { Method = "POST", Accept = null }, call with { Body = Body.Text(text, "application/json") }, false, null, true);
         var (_, error) = await post.RunAsync(cancellationToken).ConfigureAwait(false);
         if (error is not null)
         {
@@ -136,16 +143,20 @@ internal sealed class Dial(Transport client, Operation op, Call call)
         }
     }
 
+    public async Task<bool> RefreshAsync(CancellationToken cancellationToken) =>
+        client.Config.OnAuthExpired is { } hook && await client.Auth.RefreshAsync(_used, hook, cancellationToken).ConfigureAwait(false) is not null;
+
     /* the call's own Raw: the answer the connection last opened with, its body never read */
     public void Opened(RawResponse raw) => call.Options?.Raw?.Fill(raw.Status, raw.Headers, [], raw.Url!);
 
     private Call Cursored(TransportOptions cursor) =>
         call with { Query = [.. call.Query, Arg.Text("last_event_id", cursor.LastEventId), Arg.Text("reconnect_token", cursor.ReconnectToken)] };
 
-    private Exchange With(Operation dialed, Call at, bool stream, TimeSpan? timeout)
+    private Exchange With(Operation dialed, Call at, bool stream, TimeSpan? timeout, bool refreshes = false)
     {
         var options = at.Options ?? new RequestOptions();
-        return new Exchange(client, dialed, at with { Options = options with { Raw = new RawResponse(), Timeout = timeout ?? options.Timeout } }, stream);
+        _used = client.Auth.Token;
+        return new Exchange(client, dialed, at with { Options = options with { Raw = new RawResponse(), Timeout = timeout ?? options.Timeout } }, stream, refreshes);
     }
 }
 

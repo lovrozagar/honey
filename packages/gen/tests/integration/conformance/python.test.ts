@@ -28,8 +28,12 @@ const V0_PORTS: Readonly<Record<string, string>> = {
 	"verbs/reference-request": "v0 0b64837f4e",
 }
 
-/** Whether `cell` reads an SSE or WebSocket stream: what `SDK` has no method for by design (G2). */
+/**
+ * Whether `cell` reads an SSE, WebSocket or realtime stream (a stream's shape expected, or a call taking from one):
+ * what `SDK` has no method for by design (G2).
+ */
 const streams = (cell: Cell): boolean =>
+	cell.calls.some((call) => call.take !== undefined) ||
 	cell.expect.some((shape) => {
 		const kind = (shape as { readonly kind?: unknown } | null)?.kind
 		return kind === "events" || kind === "frames"
@@ -134,6 +138,8 @@ describe.skipIf(!PY)("python toolchain", () => {
 				"reconnect/sse-last-event-id",
 				"reconnect/ws-reconnect-token",
 				"reconnect/sse-from-start",
+				"reconnect/refusal-terminal",
+				"reconnect/refusal-mixed-retries",
 			])
 		})
 	})

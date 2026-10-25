@@ -12,6 +12,7 @@ from typing import Generic, Self, TypeVar, Unpack, cast
 from .body import dumps
 from .errors import (
     APIConnectionError,
+    APIStatusError,
     APITimeoutError,
     CanceledError,
     DecodeError,
@@ -40,6 +41,15 @@ __all__ = ["ConnectionState", "ResumableConnection"]
 T = TypeVar("T")
 
 JITTER = random.SystemRandom()
+
+
+WEIGHTS = {401: 6, 403: 5, 422: 4, 400: 3, 410: 2, 404: 1, 405: 1}
+
+
+def weight(error: Exception) -> int:
+    """A failure's weight: a transient one 7 (retried), else its refusal's rank."""
+    status = error.status if isinstance(error, APIStatusError) else 0
+    return WEIGHTS.get(status, 7)
 
 
 class ConnectionState(StrEnum):
@@ -81,19 +91,33 @@ class ResumableConnection(Generic[T]):
         return None if self.proven is None else self.proven.kind()
 
     async def connect(self) -> None:
-        """Opens the chain in order with the current cursor; the last failure when none opens."""
-        for adapter in self.adapters:
-            try:
-                self.conn = await adapter.connect(self.url, self.opts)
-            except (HoneyError, OSError) as error:
-                self.failure = error
-                continue
-            self.proven, self.state = adapter, ConnectionState.CONNECTED
-            return
-        raise self.failure
+        """Opens the chain in order, once more after a refreshed 401; else the heaviest failure."""
+        refreshed = False
+        while True:
+            best: Exception | None = None
+            for adapter in self.adapters:
+                try:
+                    self.conn = await adapter.connect(self.url, self.opts)
+                except (HoneyError, OSError) as error:
+                    if weight(error) == 6 and not refreshed:
+                        refreshed = True
+                        refresh = getattr(adapter, "refresh", None)
+                        if refresh is not None and await refresh():
+                            break
+                    if best is None or weight(error) > weight(best):
+                        best = error
+                    continue
+                self.proven, self.state = adapter, ConnectionState.CONNECTED
+                return
+            else:
+                self.failure = best or self.failure
+                raise self.failure
 
     async def reconnect(self) -> None:
-        while self.attempts < self.opts.max_reconnect_attempts:
+        while (
+            self.attempts < self.opts.max_reconnect_attempts
+            and weight(self.failure) == 7
+        ):
             base = self.opts.reconnect_delay_ms if self.retry is None else self.retry
             full = min(base / 1000 * 2**self.attempts, 30.0)
             await asyncio.sleep(full / 2 + JITTER.uniform(0, full / 2))

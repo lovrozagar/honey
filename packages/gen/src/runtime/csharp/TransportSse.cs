@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 namespace Honey.Runtime;
 
 /// <summary>A realtime call's event stream through its exchange: the cursor's id as Last-Event-ID, its token as a query param; a send is a POST.</summary>
-public sealed class SseAdapter : ITransportAdapter
+public sealed class SseAdapter : ITransportAdapter, IDialed
 {
     private readonly Dial _dial;
 
     internal SseAdapter(Dial dial) => _dial = dial;
+
+    Dial IDialed.Dial => _dial;
 
     /// <summary><c>sse</c>.</summary>
     public string Name => "sse";

@@ -30,25 +30,49 @@ const MAX_DELAY_MS: u64 = 30_000;
 /// The most one reconnect's open of the chain may take.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// A failure's weight: a transient one 7 (retried), else its refusal's rank.
+fn weight(e: &Error) -> u8 {
+    match e.status() {
+        Some(401) => 6,
+        Some(403) => 5,
+        Some(422) => 4,
+        Some(400) => 3,
+        Some(410) => 2,
+        Some(404 | 405) => 1,
+        _ => 7,
+    }
+}
+
 impl<E: DeserializeOwned> ResumableConnection<E> {
-    /// Opens the chain, the proven transport first, with the current cursor; the last failure when
-    /// none opens.
+    /// Opens the chain, the proven transport first, once more after a refreshed 401; else the heaviest failure.
     pub(crate) async fn open(&mut self) -> Result<(), Error> {
         let proven = self.proven;
         let rest = (0..self.transports.len()).filter(|&i| Some(i) != proven);
         let order: Vec<usize> = proven.into_iter().chain(rest).collect();
-        let mut last = Error::Config("no transport to open".into());
-        for i in order {
-            match self.transports[i].connect(&self.url, &self.opts).await {
-                Ok(conn) => {
-                    (self.conn, self.current, self.proven) = (Some(conn), Some(i), Some(i));
-                    self.state = ConnectionState::Connected;
-                    return Ok(());
+        let mut refreshed = false;
+        'chain: loop {
+            let mut best: Option<Error> = None;
+            for &i in &order {
+                let e = match self.transports[i].connect(&self.url, &self.opts).await {
+                    Ok(conn) => {
+                        (self.conn, self.current, self.proven) = (Some(conn), Some(i), Some(i));
+                        self.state = ConnectionState::Connected;
+                        return Ok(());
+                    }
+                    Err(e) => e,
+                };
+                if e.status() == Some(401) && !refreshed {
+                    refreshed = true;
+                    if self.transports[i].refresh().await? {
+                        continue 'chain;
+                    }
                 }
-                Err(e) => last = e,
+                if best.as_ref().is_none_or(|b| weight(&e) > weight(b)) {
+                    best = Some(e);
+                }
             }
+            return Err(best.unwrap_or_else(|| Error::Config("no transport to open".into())));
         }
-        Err(last)
     }
 
     /// `open`, bounded by 30 s.
@@ -81,7 +105,7 @@ impl<E: DeserializeOwned> ResumableConnection<E> {
     pub(crate) async fn reconnect(&mut self) -> Result<(), Error> {
         let limit = self.opts.max_reconnect_attempts.unwrap_or(DEFAULT_ATTEMPTS);
         loop {
-            if self.attempts >= limit {
+            if self.attempts >= limit || self.failure.as_ref().is_some_and(|e| weight(e) < 7) {
                 self.state = ConnectionState::Disconnected;
                 return Err(self.failure.take().unwrap_or(Error::Closed));
             }
@@ -134,6 +158,7 @@ pub(crate) fn connect<E: DeserializeOwned + Send + 'static>(
                     ov,
                     route: Some(route),
                     opened: Arc::default(),
+                    sent: Arc::default(),
                 };
                 let opened = Arc::clone(&dial.opened);
                 let chain: Vec<Box<dyn Transport>> = vec![

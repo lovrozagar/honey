@@ -7,11 +7,13 @@ using System.Threading.Tasks;
 namespace Honey.Runtime;
 
 /// <summary>A realtime call polled through its exchange: one GET per message with the cursor, held up to 60 s whatever the timeout (a 204 polls again); a send is a POST.</summary>
-public sealed class LongPollAdapter : ITransportAdapter
+public sealed class LongPollAdapter : ITransportAdapter, IDialed
 {
     private readonly Dial _dial;
 
     internal LongPollAdapter(Dial dial) => _dial = dial;
+
+    Dial IDialed.Dial => _dial;
 
     /// <summary><c>longpoll</c>.</summary>
     public string Name => "longpoll";

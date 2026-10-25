@@ -282,4 +282,9 @@ async def live(conn: Any, call: Call, lens: Lens) -> Outcome:
         },
         "yields": len(read),
     }
+    # a first read failing before any frame is the open's error: the grid's error or timeout
+    refused = None if read or failure is None else grid_outcome(failure, lens)
+    if failure is not None and errors and refused is not None:
+        error = python_error(failure, "stream", lens.envelope)
+        return Outcome(refused, error if lens.scripted else None, None, trace)
     return streamed({"frames": read, "kind": "frames"}, failure, trace, lens)

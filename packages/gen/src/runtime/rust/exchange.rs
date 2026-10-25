@@ -157,15 +157,22 @@ async fn run(
     answer
 }
 
+pub(crate) async fn token_of(inner: &Inner, ov: &Overrides) -> Option<String> {
+    match &ov.token {
+        Some(token) => token.clone(),
+        None => inner.auth.current().await,
+    }
+}
+
 impl Exchange<'_> {
     /// One send, and one more with a refreshed token when a replayable request got a 401.
     async fn with_auth(&mut self) -> Result<Answer, Error> {
-        let token = self.inner.auth.current().await;
+        let token = token_of(self.inner, self.ov).await;
         /* read before the first send, which takes a streamed body out of the spec */
         let replayable = self.spec.replayable();
         let first = self.attempt(token.as_deref(), false).await?;
         let hook = match &self.inner.on_auth_expired {
-            Some(hook) if first.0.status == 401 && replayable => hook,
+            Some(hook) if first.0.status == 401 && replayable && self.ov.token.is_none() => hook,
             _ => return Ok(first),
         };
         match self.inner.auth.refresh(hook, token.as_deref()).await? {

@@ -11,7 +11,7 @@ namespace Honey.Runtime;
 
 internal sealed record Answered(int Status, Dictionary<string, string> Headers, byte[] Body, Uri Url);
 
-internal sealed class Exchange(Transport client, Operation op, Call call, bool stream = false)
+internal sealed class Exchange(Transport client, Operation op, Call call, bool stream = false, bool refreshes = true)
 {
     private const int ReadBuffer = 81_920;
     private const long DefaultMaxResponseBytes = 100L << 20;
@@ -100,7 +100,7 @@ internal sealed class Exchange(Transport client, Operation op, Call call, bool s
         var state = client.Config.State ?? new Dictionary<string, object?>();
         var used = client.Auth.Token;
         var answer = await AttemptAsync(url, used, new CallState(false, _meta.Selector, _meta.IsStale, _meta.InvalidatedBy, state), token).ConfigureAwait(false);
-        if (answer.Status == 401 && client.Config.OnAuthExpired is { } hook && (call.Body?.Replayable ?? true)
+        if (answer.Status == 401 && refreshes && client.Config.OnAuthExpired is { } hook && (call.Body?.Replayable ?? true)
             && await client.Auth.RefreshAsync(used, hook, token).ConfigureAwait(false) is { } fresh)
         {
             answer = await AttemptAsync(url, fresh, new CallState(true, _meta.Selector, _meta.IsStale, _meta.InvalidatedBy, state), token).ConfigureAwait(false);

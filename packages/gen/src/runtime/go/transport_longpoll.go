@@ -37,6 +37,7 @@ func (t *LongpollTransport) Connect(_ context.Context, rawURL string, opts *Tran
 		}
 		lp.cursor.ReconnectToken, lp.cursor.LastEventID = opts.ReconnectToken, opts.LastEventID
 		lp.headers = opts.headers()
+		lp.hooks = &TransportOpts{onRequest: opts.onRequest, onResponse: opts.onResponse}
 	}
 	lp.client = transportClient(client)
 	return lp, nil
@@ -47,6 +48,7 @@ type longpollConn struct {
 	client      *http.Client
 	url         string
 	headers     http.Header
+	hooks       *TransportOpts /* the client's hooks, run on each poll */
 	mu          sync.Mutex
 	cursor      TransportOpts /* ReconnectToken and LastEventID only */
 	closed      bool
@@ -69,11 +71,17 @@ func (c *longpollConn) Recv(ctx context.Context) (any, error) {
 		return nil, err
 	}
 	req.Header = withRequestID(c.headers.Clone())
+	if req, err = c.hooks.hooked(req); err != nil {
+		return nil, err
+	}
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, wrapTransportError(pollCtx, err)
 	}
 	defer resp.Body.Close()
+	if err := c.hooks.heard(resp); err != nil {
+		return nil, err
+	}
 	body, err := readBody(resp.Body, defaultMaxMessageBytes)
 	if err != nil {
 		return nil, wrapTransportError(pollCtx, err)

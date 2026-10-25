@@ -322,11 +322,11 @@ rustDescribe("every realtime dial carries the call's params, the client's auth a
 
 rustDescribe("every reconnect dials with the client's current token (Fd5)", () => {
 	it("carries a refresh on one reconnect's stream to the next upgrade; only stream dials run hooks", async () => {
-		/* Fd5: the SSE and long-poll dials ride the shared exchange (hooks, the 401 refresh); the WebSocket dial
-		 * runs no hooks but reads the current token. Go dialed every reconnect with the construction-time token.
+		/* Fd5: the SSE and long-poll dials ride the shared exchange (hooks); a 401 on an open refreshes once and
+		 * restarts the chain with the fresh token (bit 19 e); the WebSocket dial runs no hooks but reads the current token. Go dialed every reconnect with the construction-time token.
 		 * A dial's hook sees its operation's path, as an ordinary call's does (ruled): never "" */
 		const expired: Reply = { json: { message: "expired" }, status: 401 }
-		const replies = [refused, sse([ev(1)], "drop"), refused, expired, sse([ev(2)], "drop"), refused]
+		const replies = [refused, sse([ev(1)], "drop"), refused, expired, refused, sse([ev(2)], "drop"), refused]
 		const script: Script = { ...QUICK, onAuthExpired: { tokens: ["new"] } }
 		const setup: Setup = { auth: { kind: "bearer", token: "old" } }
 		const { base, hops, run } = await drive([...replies, sse([ev(3)], "hold")], [live({ take: 3 })], {
@@ -342,14 +342,23 @@ rustDescribe("every reconnect dials with the client's current token (Fd5)", () =
 			hooked: [
 				[BARE[0], "/feed", false],
 				[first, "/feed", false],
-				[first, "/feed", true],
+				[first, "/feed", false],
 				[second, "/feed", false],
 			],
 			observed: frames(frame(1), frame(2), frame(3)),
 		})
 		const dials = hops.map((hop) => `${hop.headers.upgrade ?? "sse"} ${hop.headers.authorization}`)
 		const [ws, stream] = [(t: string) => `websocket Bearer ${t}`, (t: string) => `sse Bearer ${t}`]
-		expect(dials).toEqual([ws("old"), stream("old"), ws("old"), stream("old"), stream("new"), ws("new"), stream("new")])
+		expect(dials).toEqual([
+			ws("old"),
+			stream("old"),
+			ws("old"),
+			stream("old"),
+			ws("new"),
+			stream("new"),
+			ws("new"),
+			stream("new"),
+		])
 	}, 600_000)
 })
 

@@ -403,8 +403,13 @@ describe("runtimeBytes", () => {
  * with a pong deadline, one helper for the raw socket and the realtime transport (ws.go +778, transport.go +232,
  * config.go +127: WSKeepalive, realtime.go +66). Bit 19 d2, +343 B to 92,598 B: HTTP/1.1 pinned on the SDK's own
  * transport, its ALPN list narrowed (redirect.go +413), and the error text without the reason phrase (errors.go -70).
+ * Bit 19 e, +3,057 B to 95,655 B: a realtime refusal is terminal only when every transport refused (+570: a drop by
+ * refusal ends it, the upgrade's status a typed error), the most specific refusal its error (+194: refusalRank), a
+ * 401's one refresh per open restarting the chain (+573), the client's OnRequest and OnResponse on each SSE dial and
+ * poll (+1,483: hooked, heard), +237 of comments (realtime_loop.go +1,048, transport.go +1,265, realtime.go +240,
+ * transport_longpoll.go +291, transport_sse.go +213); the unreachable "no transports configured" error cut (-58).
  */
-const GO_RUNTIME_BYTES = 92_598
+const GO_RUNTIME_BYTES = 95_655
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`, () => {
@@ -451,8 +456,12 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * the wait_for; config.py +21). Bit 19 d1, +432 B to 86,415 B: last_event_id reports the last delivered event
  * (events.py +99), and the WebSocket keepalive made configurable (ws.py +197, config.py +136: ws_keepalive). Bit 19
  * d2, +228 B to 86,643 B: the call's clock starts at request_start (log.py +270: started(); each send file -21).
+ * Bit 19 e, +1,788 B to 88,431 B: a realtime refusal is terminal only when every transport refused (+66), the most
+ * specific refusal its error (+395: WEIGHTS, weight()), a 401's one refresh per open through the client's guard,
+ * restarting the chain (+1,126: the adapters' refresh(), Exchange(refreshes=False)), +201 of comments (realtime.py
+ * +919, transport.py +429, transport_ws.py +171, transport_sse.py +171, exchange.py +98).
  */
-const PYTHON_RUNTIME_BYTES = 86_643
+const PYTHON_RUNTIME_BYTES = 88_431
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -491,8 +500,13 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * name or a control but tab in a value refused as ConfigException naming the header; a bad name was silently
  * dropped by TryAddWithoutValidation and \u0001 and DEL went out raw). Wire.cs +939 (the check and its token set),
  * Exchange.cs -212 (its CR/LF/NUL loop cut: Wire.Check covers it), WsDial.cs +29 (the dial's call).
+ * Bit 19 e, +2,983 B to 133,590 B: a realtime refusal is terminal only when every transport refused, a lazy long-poll's
+ * first read included (+628), the most specific refusal its error (+391: Rank), a 401's one refresh per open
+ * restarting the chain (+1,538: IDialed, Dial's RefreshAsync and used token, the exchange's refreshes flag), +426 of
+ * comments (RealtimeLoop.cs +2,451, Adapters.cs +370, Exchange.cs +36, each transport +42); a dead `_refused` reset
+ * and a dead try/catch cut.
  */
-const CSHARP_RUNTIME_BYTES = 130_607
+const CSHARP_RUNTIME_BYTES = 133_590
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {
@@ -521,11 +535,14 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * wait twice the interval (realtime.ts +532: keepaliveOf; realtime-connection.ts -178). Bit 19 d2, +973 B to 110,888 B:
  * the event stream's caps in UTF-8 bytes, a line's and an event's, complete lines included (sse.ts +790, config.ts +113:
  * sseMaxLineBytes and sseMaxEventBytes for sseMaxBufferChars, http.ts +40), and `HTTP <status>: ` before a server
- * message (response.ts +30).
+ * message (response.ts +30). Bit 19 e, +754 B to 111,642 B: a resumable connection's refusal is terminal only when every
+ * transport refused, a drop by refusal included (+245: refused, #refuse), the most specific refusal its error (+240:
+ * RANK, walkChain's pick), the chain moved into walkChain (+139), +130 of comments (realtime.ts +782,
+ * realtime-connection.ts -28); RealtimeAuthError, which nothing threw, and #open's dead all_failed fallback cut (-186).
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 110_888
+const TS_RUNTIME_BYTES = 111_642
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

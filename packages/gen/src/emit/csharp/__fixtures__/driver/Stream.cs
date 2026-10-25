@@ -264,6 +264,12 @@ internal static class Streams
             ["errors"] = errors,
             ["proven"] = Sdk.Get(conn, "ProvenTransport")?.ToString()?.ToLowerInvariant(),
         };
+        /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error or timeout */
+        if (read.Count == 0 && errors.Count > 0 && Observe.Graded(at.Sdk, failure!, at.Lens.Raw) is { } refused)
+        {
+            var traced = at.Lens.Scripted ? Traces.ErrorOf(at.Sdk, failure!, "stream", at.Lens.Envelope) : null;
+            return new Outcome(refused, traced, Stream: trace);
+        }
         return Streamed(at, new JsonObject { ["frames"] = read, ["kind"] = "frames" }, failure, trace);
     }
 }

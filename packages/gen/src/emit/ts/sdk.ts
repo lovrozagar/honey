@@ -44,7 +44,6 @@ const RUNTIME_EXPORTS = [
 	"PathParamError",
 	"RateLimitError",
 	"RealtimeAbortError",
-	"RealtimeAuthError",
 	"RealtimeConnectError",
 	"RealtimeError",
 	"RealtimeKickedError",

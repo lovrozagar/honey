@@ -73,12 +73,7 @@ final class Observe {
    * script.
    */
   static Outcome thrown(Sdk sdk, Throwable error, Object raw, Ask ask) {
-    JsonNode seen = null;
-    if (instanceOf(sdk, "ApiException", error)) {
-      seen = errorOf(error, raw, ask);
-    } else if (instanceOf(sdk, "ApiTimeoutException", error)) {
-      seen = Wire.object().put("kind", "timeout");
-    }
+    JsonNode seen = graded(sdk, error, raw, ask);
     JsonNode trace = ask.scripted() ? Traces.error(sdk, error, "return", ask.envelope()) : null;
     if (seen == null && trace == null) {
       throw new DriverException(
@@ -88,6 +83,14 @@ final class Observe {
               + error.getMessage());
     }
     return new Outcome(seen, trace, null);
+  }
+
+  /** A status error or a timeout as the grid observes it, else null. */
+  static JsonNode graded(Sdk sdk, Throwable error, Object raw, Ask ask) {
+    if (instanceOf(sdk, "ApiException", error)) {
+      return errorOf(error, raw, ask);
+    }
+    return instanceOf(sdk, "ApiTimeoutException", error) ? Wire.object().put("kind", "timeout") : null;
   }
 
   private static boolean instanceOf(Sdk sdk, String simple, Object value) {

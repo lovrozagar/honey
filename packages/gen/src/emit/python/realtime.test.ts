@@ -369,11 +369,11 @@ describe.skipIf(!PY)("every dial carries the call's params, auth, headers and it
 
 describe.skipIf(!PY)("the SSE and long-poll dials ride the shared exchange; the WebSocket dial no hook", SLOW, () => {
 	it("carries a refresh to the next upgrade, the hooks seeing the cursor sent and the operation's path (Fd5)", async () => {
-		/* each stream dial gets the hooks, the log and the 401 refresh; the WebSocket dial reads the current
-		 * token and runs no hook and no log. HEAD's dials bypassed the exchange: no refresh, no log, no
+		/* each stream dial gets the hooks and the log; a 401 on an open refreshes once and restarts the chain with
+		 * the fresh token (bit 19 e); the WebSocket dial reads the current token and runs no hook and no log. HEAD's dials bypassed the exchange: no refresh, no log, no
 		 * on_response, and hooks that saw the URL without its cursor (on the WebSocket dial too) */
 		const expired: Reply = { json: { message: "expired" }, status: 401 }
-		const replies = [refused, sse([ev(1)], "drop"), refused, expired, sse([ev(2)], "drop"), refused]
+		const replies = [refused, sse([ev(1)], "drop"), refused, expired, refused, sse([ev(2)], "drop"), refused]
 		replies.push(sse([ev(3)], "hold"))
 		const script: Script = { ...QUICK, log: true, onAuthExpired: { tokens: ["new"] } }
 		const setup: Setup = { auth: { kind: "bearer", token: "old" } }
@@ -392,14 +392,16 @@ describe.skipIf(!PY)("the SSE and long-poll dials ride the shared exchange; the 
 			},
 			run.stderr,
 		).toEqual({
-			answered: ["200 false", "401 false", "200 true", "200 false"],
+			answered: ["200 false", "401 false", "200 false", "200 false"],
 			authExpired: 1,
-			hooked: [`${FEED_URL} /feed false`, `${first} /feed false`, `${first} /feed true`, `${second} /feed false`],
-			log: [...exchanged, ...exchanged, ...exchanged],
+			hooked: [`${FEED_URL} /feed false`, `${first} /feed false`, `${first} /feed false`, `${second} /feed false`],
+			log: [...exchanged, "request_start", "response_received 401", "error 401", ...exchanged, ...exchanged],
 			observed: frames(frame(1), frame(2), frame(3)),
 		})
 		const dials = hops.map((hop) => `${hop.headers.upgrade ?? "sse"} ${hop.headers.authorization?.slice(7)}`)
-		expect(dials.join(", ")).toBe("websocket old, sse old, websocket old, sse old, sse new, websocket new, sse new")
+		expect(dials.join(", ")).toBe(
+			"websocket old, sse old, websocket old, sse old, websocket new, sse new, websocket new, sse new",
+		)
 	})
 
 	it("follows a same-origin redirect on the event-stream dial, and caps a poll's answer at max_response_bytes", async () => {

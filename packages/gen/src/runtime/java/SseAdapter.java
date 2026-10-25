@@ -7,11 +7,16 @@ import java.util.Iterator;
  * A realtime call's event stream through its exchange: the cursor's id as Last-Event-ID, its token
  * as a query param; a send is a POST.
  */
-final class SseAdapter implements TransportAdapter {
+final class SseAdapter implements TransportAdapter, RealtimeLoop.Dialed {
   private final Realtime dial;
 
   SseAdapter(Realtime dial) {
     this.dial = dial;
+  }
+
+  @Override
+  public Realtime dial() {
+    return dial;
   }
 
   @Override

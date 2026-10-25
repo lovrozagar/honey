@@ -26,7 +26,6 @@ const VALUES = [
 	"PathParamError",
 	"RateLimitError",
 	"RealtimeAbortError",
-	"RealtimeAuthError",
 	"RealtimeConnectError",
 	"RealtimeError",
 	"RealtimeKickedError",

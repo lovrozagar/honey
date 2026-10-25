@@ -123,8 +123,11 @@ impl Runner<'_> {
         let start = Instant::now();
         let outcome = perform(&self.client, call, self.input, d).await?;
         self.recorder.called(start.elapsed(), &outcome);
-        let ungraded = match &outcome.error {
-            Some(e) if !self.scripted => outcome.observed.is_none() || e["via"] == "stream",
+        let ungraded = match (&outcome.error, &outcome.observed) {
+            (Some(_), None) => !self.scripted,
+            (Some(e), Some(seen)) if !self.scripted => {
+                e["via"] == "stream" && matches!(seen["kind"].as_str(), Some("events" | "frames"))
+            }
             _ => false,
         };
         match outcome {

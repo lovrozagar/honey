@@ -254,6 +254,35 @@ function streamRoutes(app: ConformanceApp): void {
 		)
 }
 
+/**
+ * The realtime feeds every transport dials (bit 19 e): `realtime.refused` refuses each with 403; `realtime.mixed`
+ * 404s the upgrade, 503s every poll and the first event stream since the wire mark, then streams `{ n: 1 }`.
+ */
+function realtimeRoutes(app: ConformanceApp, streams: { dialed: number }): void {
+	const feed = { "text/event-stream": { ok: z.object({ n: z.number().int() }) } }
+	app
+		.get("/realtime/refused")
+		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.refused", mcp: true })
+		.errors("limit_reached")
+		.output(feed)
+		.handler(() => {
+			throw errors.limit_reached()
+		})
+	app
+		.get("/realtime/mixed")
+		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.mixed", mcp: true })
+		.output(feed)
+		.handler((ctx) => {
+			if (ctx.req.headers.get("upgrade") !== null) return ctx.res.raw(new Response(null, { status: 404 }))
+			const stream = ctx.req.headers.get("accept")?.includes("text/event-stream") === true
+			if (!stream || streams.dialed++ === 0) return ctx.res.raw(new Response(null, { status: 503 }))
+			return ctx.res.sse(async (sse) => {
+				await sse.send({ data: { n: 1 }, event: "message", id: "1" })
+				sse.close()
+			})
+		})
+}
+
 /** `timing.slow`, `echo.get` and `redirect.crossOrigin`: per-call overrides, request ids and auth hops. */
 function hopRoutes(app: ConformanceApp, origins: () => Origins | null): void {
 	app
@@ -370,8 +399,10 @@ export function createConformanceApp(origins: () => Origins | null = () => null)
 	/* the reference server's ctx has no request id: it mounts under the capture alone */
 	captured.route("/resume", ref.app)
 	const app = withRequestIds(captured)
+	const streams = { dialed: 0 }
 	itemRoutes(app)
 	streamRoutes(app)
+	realtimeRoutes(app, streams)
 	hopRoutes(app, origins)
 	harnessRoutes(app)
 	socketRoutes(app)
@@ -379,7 +410,10 @@ export function createConformanceApp(origins: () => Origins | null = () => null)
 	app
 		.post("/__conformance/mark")
 		.meta({ internal: true })
-		.handler((ctx) => ctx.res.json("ok", { since: wire.mark() }))
+		.handler((ctx) => {
+			streams.dialed = 0
+			return ctx.res.json("ok", { since: wire.mark() })
+		})
 	app
 		.get("/__conformance/wire")
 		.meta({ internal: true })

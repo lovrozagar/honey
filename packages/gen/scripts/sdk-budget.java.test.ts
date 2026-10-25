@@ -104,9 +104,13 @@ import { runtimeBytes, v1JavaSdkSurfaces } from "./sdk-budget.ts"
  * - bit 19 d1, +219 B to 150,200 B: one ping waits at a time, a deferred one included (a tick racing a send's release
  *   deferred a second ping behind the first one's, sent while it still waited; found red in d1's gates): Socket.java +84
  *   (ping() returns while one waits), Keepalive.java +135 (waiting()).
+ * - bit 19 e, +2,951 B to 153,151 B: a realtime refusal is terminal only when every transport refused, a lazy
+ *   long-poll's first read included (+528), the most specific refusal its error (+531: rank()), a 401's one refresh per
+ *   open restarting the chain (+1,405: Dialed, Realtime's refresh() and used token, Flight's refreshes flag), +487 of
+ *   comments (RealtimeLoop.java +2,141, Realtime.java +290, Exchange.java +176, Flight.java +98, each adapter +82).
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 150200
+const JAVA_RUNTIME_BYTES = 153151
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

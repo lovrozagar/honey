@@ -38,6 +38,12 @@ final class Exchange {
     return new Flight(this, op, call, options).events(headers, type);
   }
 
+  Flight dial(Operation op, Call call, RequestOptions options) {
+    Flight flight = new Flight(this, op, call, options);
+    flight.refreshes = false;
+    return flight;
+  }
+
   ClientConfig config() {
     return config;
   }

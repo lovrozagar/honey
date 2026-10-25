@@ -61,9 +61,7 @@ internal static class Observe
     /// </summary>
     public static Outcome Thrown(Sdk sdk, Exception error, Lens lens)
     {
-        var seen = sdk.Is(error, "ApiStatusException") ? StatusOf(sdk, error, lens.Raw)
-            : sdk.Is(error, "ApiTimeoutException") ? new JsonObject { ["kind"] = "timeout" }
-            : null;
+        var seen = Graded(sdk, error, lens.Raw);
         if (lens.Scripted)
         {
             return new Outcome(seen, Traces.ErrorOf(sdk, error, "return", lens.Envelope));
@@ -72,6 +70,12 @@ internal static class Observe
             ? throw new DriverException($"the call threw {error.GetType().Name}, which the grid has no outcome for: {error.Message}")
             : new Outcome(seen);
     }
+
+    /// <summary>A status error or a timeout as the grid observes it, else null.</summary>
+    public static JsonNode? Graded(Sdk sdk, Exception error, bool raw) =>
+        sdk.Is(error, "ApiStatusException") ? StatusOf(sdk, error, raw)
+        : sdk.Is(error, "ApiTimeoutException") ? new JsonObject { ["kind"] = "timeout" }
+        : null;
 
     /// <summary>
     /// An <c>ApiStatusException</c> as the grid observes it: its raw response, or its status, its <c>Key</c> and its

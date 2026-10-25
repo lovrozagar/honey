@@ -7,11 +7,16 @@ import java.nio.charset.StandardCharsets;
  * A realtime call polled through its exchange: one GET per message with the cursor, held up to 60 s
  * whatever the timeout (a 204 polls again); a send is a POST.
  */
-final class LongPollAdapter implements TransportAdapter {
+final class LongPollAdapter implements TransportAdapter, RealtimeLoop.Dialed {
   private final Realtime dial;
 
   LongPollAdapter(Realtime dial) {
     this.dial = dial;
+  }
+
+  @Override
+  public Realtime dial() {
+    return dial;
   }
 
   @Override

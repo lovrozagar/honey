@@ -116,6 +116,8 @@ export type Hop = {
 }
 export type Scenario = {
 	readonly calls: readonly Call[]
+	/** a realtime call's dials: each hop is `hop`, at least one and at most `atMost` (one per transport, no redial) */
+	readonly dials?: { readonly atMost: number; readonly hop: Hop }
 	readonly expect: readonly Expected[] // one Observed shape per call
 	readonly id: string
 	readonly setup?: Setup
@@ -242,6 +244,11 @@ export function compareCell(cell: Cell, observed: readonly Observed[], wire: rea
 	const calls = Math.max(cell.expect.length, observed.length)
 	for (let i = 0; i < calls; i++)
 		compareResult(cell.expect[i], observed[i], { hop: wire[i], lines, where: `call ${i}` })
+	if (cell.dials !== undefined) {
+		const { atMost, hop } = cell.dials
+		if (wire.length < 1 || wire.length > atMost) lines.push(`dials: expected 1 to ${atMost}, got ${wire.length}`)
+		wire.forEach((actual, j) => compareHop(hop, actual, { hop: actual, lines, where: `dial ${j}` }))
+	}
 	if (cell.wire === undefined) return lines
 	if (cell.wire.length !== wire.length) lines.push(`hops: expected ${cell.wire.length}, got ${wire.length}`)
 	cell.wire.forEach((hop, j) => {

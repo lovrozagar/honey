@@ -44,11 +44,23 @@ func (t *SseTransport) Connect(ctx context.Context, rawURL string, opts *Transpo
 		req.Header.Set("Last-Event-ID", opts.LastEventID)
 	}
 	req.Header.Set("Accept", "text/event-stream")
+	if req, err = opts.hooked(req); err != nil {
+		stop()
+		cancel()
+		return nil, err
+	}
 	resp, err := transportClient(client).Do(req)
 	opened := stop()
+	var hookErr error
+	if err == nil {
+		hookErr = opts.heard(resp)
+	}
 	switch {
 	case err != nil:
 		err = wrapTransportError(ctx, err)
+	case hookErr != nil:
+		resp.Body.Close()
+		err = hookErr
 	case !opened:
 		/* ctx ended while the headers arrived */
 		resp.Body.Close()

@@ -5,6 +5,7 @@ package cli
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -13,13 +14,16 @@ import (
 // the text a redacted secret is written as
 const redacted = "[redacted]"
 
+// a realtime dial's resume cursor
+var resumeCursor = regexp.MustCompile(`([?&](?:reconnect_token|last_event_id)=)[^&#]*`)
+
 // LogRequest writes a request to stderr under --verbose: its method and URL, then its headers,
 // each secret redacted.
 func (c Config) LogRequest(method, url string, header http.Header) {
 	if !c.Verbose {
 		return
 	}
-	fmt.Fprintf(c.log, "> %s %s\n", method, c.redact(url))
+	fmt.Fprintf(c.log, "> %s %s\n", method, c.redact(resumeCursor.ReplaceAllString(url, "${1}"+redacted)))
 	c.logHeaders(">", header)
 }
 
@@ -52,7 +56,7 @@ func (c Config) logHeaders(mark string, header http.Header) {
 func secretHeader(name string) bool {
 	lower := strings.ToLower(name)
 	switch lower {
-	case "authorization", "proxy-authorization", "cookie", "set-cookie":
+	case "authorization", "proxy-authorization", "cookie", "set-cookie", "last-event-id":
 		return true
 	}
 	for _, word := range []string{"key", "token", "secret", "password", "session", "auth"} {

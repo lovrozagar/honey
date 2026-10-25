@@ -69,7 +69,10 @@ export function recordingFetch(answer: (request: Request) => Response | Promise<
 		/* a Request follows the caller's signal only weakly: hold it from that signal while the call is in
 		   flight, as a real fetch does, or a fake that waits on `request.signal` can be collected unaborted */
 		init?.signal?.addEventListener("abort", () => request.signal.aborted, { once: true })
-		calls.push(request.clone())
+		/* the record's signal is the one fetch received: a clone's follows it only weakly, and a gc leaves it unaborted */
+		const recorded = request.clone()
+		Object.defineProperty(recorded, "signal", { value: request.signal })
+		calls.push(recorded)
 		return answer(request)
 	}) as typeof globalThis.fetch
 	return { calls, fetch }

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
+from .auth import refresh_async
 from .config import RawResponse
 from .exchange import CallArgs, Exchange
 from .operation import Operation
@@ -111,8 +112,17 @@ class Dial:
         }
         if "body" in more:
             call["body"] = more["body"]
+        op = more.get("op", self.op)
         return Exchange(
-            self.core, more.get("op", self.op), cast("CallArgs", call), stream
+            self.core, op, cast("CallArgs", call), stream, refreshes=not stream
+        )
+
+    async def refresh(self, rejected: str | None) -> bool:
+        """The client's one ``on_auth_expired`` after a 401 on ``rejected``: whether a fresh token is in place."""
+        hook = self.core.config.on_auth_expired
+        return (
+            hook is not None
+            and await refresh_async(self.core.auth, hook, rejected) is not None
         )
 
     def opened(self, raw: RawResponse) -> None:

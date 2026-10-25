@@ -11,6 +11,8 @@ import {
 	type TransportConnection,
 	transportAt,
 	keepaliveOf,
+	refused,
+	walkChain,
 } from "./realtime.ts"
 
 type QueueEntry = { type: "done" } | { error: unknown; type: "error" } | { type: "value"; value: unknown }
@@ -159,10 +161,10 @@ class Resumable implements ResumableConnection {
 			const fail = (error: unknown) => {
 				cancel()
 				if (this.#dialing === conn) this.#dialing = null
-				if (ready) {
-					this.#detach()
-					this.#reconnect()
-				} else reject(error)
+				if (!ready) return reject(error)
+				this.#detach()
+				if (refused(error)) this.#refuse(error)
+				else this.#reconnect()
 			}
 			conn.onFrame = (frame) => {
 				/* a message before ready is kept; a goodbye before ready is the server refusing the open */
@@ -188,28 +190,18 @@ class Resumable implements ResumableConnection {
 		})
 	}
 
-	/** The proven transport first, then each in order; the first ready one becomes the connection. */
-	async #open(): Promise<TransportConnection> {
+	/** The proven transport first, then walkChain. */
+	#open(): Promise<TransportConnection> {
 		const { transports } = this.#opts
-		if (transports.length === 0) throw new RealtimeConnectError("No transports configured", "no_transports")
-		if (this.#proven !== null) {
-			try {
-				return await this.#dial(this.#proven)
-			} catch {
-				/* the proven transport failed: fall through to the whole chain */
-			}
-		}
-		let lastError: unknown = new RealtimeConnectError("All transports failed", "all_failed")
-		for (let i = 0; i < transports.length; i++) {
-			try {
-				const conn = await this.#dial(i)
-				this.#proven = i
-				return conn
-			} catch (err) {
-				lastError = err
-			}
-		}
-		throw lastError
+		if (transports.length === 0)
+			return Promise.reject(new RealtimeConnectError("No transports configured", "no_transports"))
+		const walk = () =>
+			walkChain(
+				transports.length,
+				(i) => this.#dial(i),
+				(i) => (this.#proven = i),
+			)
+		return this.#proven === null ? walk() : this.#dial(this.#proven).catch(walk)
 	}
 
 	#watch(conn: TransportConnection): void {
@@ -232,9 +224,16 @@ class Resumable implements ResumableConnection {
 			this.#attempts = 0
 			this.#watch(conn)
 			safely(this.#opts.onReconnected)
-		} catch {
-			this.#reconnect()
+		} catch (err) {
+			if (refused(err)) this.#refuse(err)
+			else this.#reconnect()
 		}
+	}
+
+	/** End the connection with a refusal no retry changes. */
+	#refuse(err: unknown): void {
+		this.#end()
+		this.#enqueue({ error: err, type: "error" })
 	}
 
 	/** After a drop or a failed open: wait, then dial again; past the attempt cap the stream ends. */

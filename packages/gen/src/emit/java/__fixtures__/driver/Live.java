@@ -46,6 +46,18 @@ final class Live {
         "proven",
         proven == null ? null : proven.toString().replace("_", "").toLowerCase(Locale.ROOT));
     trace.set("realtime", realtime);
+    /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error or timeout */
+    JsonNode refused =
+        read.isEmpty() && !errors.isEmpty()
+            ? Observe.graded(at.run().sdk(), failure, at.raw(), at.ask())
+            : null;
+    if (refused != null) {
+      JsonNode traced =
+          at.ask().scripted()
+              ? Traces.error(at.run().sdk(), failure, "stream", at.ask().envelope())
+              : null;
+      return new Observe.Outcome(refused, traced, null, trace);
+    }
     ObjectNode seen = Wire.object();
     seen.set("frames", read);
     seen.put("kind", "frames");

@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import tools.jackson.core.type.TypeReference;
 
 /**
@@ -23,6 +24,7 @@ final class Realtime {
   private final Operation op;
   private final Call call;
   private final RequestOptions options;
+  private volatile String used;
 
   private Realtime(Exchange exchange, Operation op, Call call, RequestOptions options) {
     this.exchange = exchange;
@@ -82,7 +84,7 @@ final class Realtime {
             call.body());
     RawResponse raw = new RawResponse();
     EventStream<String> stream =
-        exchange.events(sse, at, with(raw, null), null, new TypeReference<String>() {});
+        exchange.dial(sse, at, with(raw, null)).events(null, new TypeReference<String>() {});
     opened(raw);
     return stream;
   }
@@ -96,7 +98,7 @@ final class Realtime {
 
   /** One poll with the cursor as it stands. */
   Answer poll(TransportOptions cursor) {
-    return exchange.run(op, cursored(cursor), with(new RawResponse(), POLL_LIMIT));
+    return exchange.dial(op, cursored(cursor), with(new RawResponse(), POLL_LIMIT)).run();
   }
 
   /** {@code text} POSTed as JSON on the call's path, query and headers; its error status thrown. */
@@ -108,6 +110,11 @@ final class Realtime {
     if (answer.error() != null) {
       throw answer.error();
     }
+  }
+
+  boolean refresh() {
+    Supplier<String> hook = exchange.config().onAuthExpired();
+    return hook != null && exchange.credential().refresh(used, hook) != null;
   }
 
   /* the call's own raw: the answer the connection last opened with, its body never read */
@@ -134,6 +141,7 @@ final class Realtime {
   }
 
   private RequestOptions with(RawResponse raw, Duration timeout) {
+    used = exchange.credential().token();
     return RequestOptions.builder()
         .timeout(timeout != null ? timeout : options.timeout())
         .headers(options.headers())

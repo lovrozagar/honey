@@ -67,6 +67,16 @@ where
         json!({"cursor": cursor, "errors": errors, "proven": proven}),
     );
     st.insert("yields".into(), json!(frames.len()));
-    let error = failure.map(|e| rust_error(&e, "stream", how.envelope));
-    streamed(Observed::Frames { frames }, error, st)
+    match failure {
+        /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error or timeout */
+        Some(e @ (sdk::Error::Api(_) | sdk::Error::Timeout)) if frames.is_empty() && !errors.is_empty() => {
+            let mut outcome = failed(e, &how, "stream")?;
+            outcome.stream = Some(Value::Object(st));
+            Ok(outcome)
+        }
+        failure => {
+            let error = failure.map(|e| rust_error(&e, "stream", how.envelope));
+            streamed(Observed::Frames { frames }, error, st)
+        }
+    }
 }

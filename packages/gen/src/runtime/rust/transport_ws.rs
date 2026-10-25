@@ -36,12 +36,17 @@ impl Transport for WsTransport {
         opts: &'a TransportOpts,
     ) -> TransportFuture<'a, Result<Box<dyn TransportConn>, Error>> {
         Box::pin(async move {
-            let (mut spec, ov) = self.0.spec("GET", url);
+            let (mut spec, mut ov) = self.0.spec("GET", url);
+            self.0.hold(&mut ov).await;
             with_cursor(&mut spec, opts);
             let (socket, raw) = connect(&self.0.inner, &spec, &ov, &opts.protocols).await?;
             self.0.opened(raw);
             Ok(Box::new(socket) as Box<dyn TransportConn>)
         })
+    }
+
+    fn refresh(&self) -> TransportFuture<'_, Result<bool, Error>> {
+        Box::pin(self.0.refresh())
     }
 }
 

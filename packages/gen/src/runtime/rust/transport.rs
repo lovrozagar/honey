@@ -63,6 +63,11 @@ pub trait Transport: Send + Sync {
         url: &'a str,
         opts: &'a TransportOpts,
     ) -> TransportFuture<'a, Result<Box<dyn TransportConn>, Error>>;
+
+    /// After a 401 on `connect`: whether a fresh credential is in place (by default none).
+    fn refresh(&self) -> TransportFuture<'_, Result<bool, Error>> {
+        Box::pin(std::future::ready(Ok(false)))
+    }
 }
 
 /// A realtime method's own request, which each of its dials sends: its route, query and headers.
@@ -83,6 +88,7 @@ pub(crate) struct Dial {
     pub(crate) ov: Overrides,
     pub(crate) route: Option<Route>,
     pub(crate) opened: Arc<Mutex<Option<RawResponse>>>,
+    pub(crate) sent: Arc<Mutex<Option<String>>>,
 }
 
 impl Dial {
@@ -92,7 +98,35 @@ impl Dial {
             ov: Overrides::default(),
             route: None,
             opened: Arc::default(),
+            sent: Arc::default(),
         }
+    }
+
+    pub(crate) async fn hold(&self, ov: &mut Overrides) {
+        let token = self.inner.auth.current().await;
+        self.sent
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone_from(&token);
+        ov.token = Some(token);
+    }
+
+    /// The client's one `on_auth_expired` for the last dial's token: whether a fresh one is in place.
+    pub(crate) async fn refresh(&self) -> Result<bool, Error> {
+        let Some(hook) = &self.inner.on_auth_expired else {
+            return Ok(false);
+        };
+        let rejected = self
+            .sent
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        Ok(self
+            .inner
+            .auth
+            .refresh(hook, rejected.as_deref())
+            .await?
+            .is_some())
     }
 
     /// A `method` request: the method's own, else one to `url` as it is, its path the request's (so

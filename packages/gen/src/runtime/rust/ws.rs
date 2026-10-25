@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::{self, Message};
 use crate::call::{Overrides, RawResponse, Run, Signal};
 use crate::config::Inner;
 use crate::errors::{ApiError, Error};
-use crate::exchange::{headers_of, url_of};
+use crate::exchange::{headers_of, token_of, url_of};
 use crate::request::RequestSpec;
 
 /// The largest message either side may send.
@@ -267,7 +267,7 @@ pub(crate) async fn connect(
     let scheme = if url.scheme() == "https" { "wss" } else { "ws" };
     url.set_scheme(scheme)
         .map_err(|()| Error::Config("the base_url cannot carry a WebSocket".into()))?;
-    let token = inner.auth.current().await;
+    let token = token_of(inner, ov).await;
     let headers = headers_of(inner, spec, ov, token.as_deref())?;
     let mut request = url.as_str().into_client_request().map_err(transport)?;
     request.headers_mut().extend(headers);

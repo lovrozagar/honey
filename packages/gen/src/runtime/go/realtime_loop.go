@@ -6,12 +6,14 @@ import (
 	"context"
 	"errors"
 	"math/rand/v2"
+	"net/http"
 	"time"
 )
 
 // openChain tries the proven transport first, then the rest in order, each with the current
 // resume cursor. The first that opens becomes the connection and the proven transport. Once ctx
 // ends it tries no further transport: one that opens lazily (long-poll) would otherwise succeed.
+// The chain fails with its last transient failure, else its most specific refusal; a 401 restarts it once.
 func (r *ResumableConnection) openChain(ctx context.Context) error {
 	r.mu.Lock()
 	proven := r.provenIdx
@@ -26,14 +28,24 @@ func (r *ResumableConnection) openChain(ctx context.Context) error {
 			order = append(order, i)
 		}
 	}
-	lastErr := errors.New("honey: no transports configured")
-	for _, i := range order {
+	var transient, refusal error
+	refreshed := false
+	for n := 0; n < len(order); n++ {
+		i := order[n]
 		if err := ctx.Err(); err != nil {
 			return wrapTransportError(ctx, err)
 		}
 		c, err := r.transports[i].Connect(ctx, r.url, &opts)
+		if status(err) == http.StatusUnauthorized && !refreshed && opts.refresh != nil && opts.refresh(ctx) {
+			refreshed, n, transient, refusal = true, -1, nil, nil /* the chain anew, with the refreshed token */
+			continue
+		}
 		if err != nil {
-			lastErr = err
+			if !refused(err) {
+				transient = err
+			} else if refusal == nil || refusalRank[status(err)] > refusalRank[status(refusal)] {
+				refusal = err
+			}
 			continue
 		}
 		r.mu.Lock()
@@ -46,7 +58,10 @@ func (r *ResumableConnection) openChain(ctx context.Context) error {
 		r.mu.Unlock()
 		return nil
 	}
-	return lastErr
+	if transient != nil {
+		return transient
+	}
+	return refusal
 }
 
 // advance moves the resume cursor past a delivered value: the connection's own event ID when it
@@ -138,6 +153,11 @@ func (r *ResumableConnection) readLoop(done chan struct{}) {
 // attempts; it reports false when attempts ran out or the connection closed (Close ends the
 // transport before its ctx, so a read can fail first).
 func (r *ResumableConnection) reconnect(failed TransportConn, err error, attempts *int) bool {
+	if refused(err) {
+		_ = failed.Close()
+		r.fail(err)
+		return false
+	}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
@@ -167,5 +187,22 @@ func (r *ResumableConnection) reconnect(failed TransportConn, err error, attempt
 		if errors.Is(err, ErrConnectionClosed) {
 			return false
 		}
+		if refused(err) {
+			r.fail(err)
+			return false
+		}
 	}
 }
+
+func status(err error) int {
+	var ce *ClientError
+	if errors.As(err, &ce) {
+		return ce.StatusCode
+	}
+	return 0
+}
+
+// refusalRank ranks the statuses no retry changes, most specific highest; any other failure is transient.
+var refusalRank = map[int]int{401: 6, 403: 5, 422: 4, 400: 3, 410: 2, 404: 1, 405: 1}
+
+func refused(err error) bool { return refusalRank[status(err)] > 0 }

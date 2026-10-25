@@ -80,9 +80,11 @@ const REPO = resolve(import.meta.dirname, "../../..")
  * - phase i, +37 B to 55,356 B: run.go classes a body cut short (io.ErrUnexpectedEOF, an event stream dropped mid-way)
  *   as a transport failure, exit 3, not 1 (the v0 cases' recheck found it). The lock: nothing dead to cut, so the
  *   ceiling is the measured 55,356 B, provisional 55,400 → locked 55,356.
+ * - bit 19 e, +199 B to 55,555 B: log.go's secretsOf redacts a realtime dial's reconnect_token and last_event_id query
+ *   values and its Last-Event-ID header (+164), +35 of comments.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const CLI_RUNTIME_BYTES = 55356
+const CLI_RUNTIME_BYTES = 55555
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

@@ -24,10 +24,6 @@ export class RealtimeConnectError extends RealtimeError {
 	override name = "RealtimeConnectError"
 }
 
-export class RealtimeAuthError extends RealtimeError {
-	override name = "RealtimeAuthError"
-}
-
 export class RealtimeKickedError extends RealtimeError {
 	override name = "RealtimeKickedError"
 }
@@ -164,6 +160,31 @@ export function dialReady(
 			reject(new Error(reason))
 		}
 	})
+}
+
+/** The dial statuses no retry changes, most specific highest. */
+const RANK: Record<number, number> = { 400: 3, 401: 6, 403: 5, 404: 1, 405: 1, 410: 2, 422: 4 }
+const rank = (err: unknown) => RANK[(err as { status?: number } | null)?.status ?? 0] ?? 0
+export const refused = (err: unknown): boolean => rank(err) > 0
+/** Dial transport 0, 1, … until one opens; else its last transient failure, or every one refused, its most specific. */
+export async function walkChain<T>(
+	count: number,
+	dial: (index: number) => Promise<T>,
+	opened: (index: number) => unknown,
+): Promise<T> {
+	let transient: unknown
+	let refusal: unknown
+	for (let i = 0; i < count; i++) {
+		try {
+			const conn = await dial(i)
+			opened(i)
+			return conn
+		} catch (err) {
+			if (!refused(err)) transient = err
+			else if (rank(err) > rank(refusal)) refusal = err
+		}
+	}
+	throw transient ?? refusal
 }
 
 export type FallbackChain = {

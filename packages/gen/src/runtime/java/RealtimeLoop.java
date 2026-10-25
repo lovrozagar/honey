@@ -32,6 +32,17 @@ final class RealtimeLoop {
   private Duration retry;
   private int attempts;
 
+  /** This open's best refusal; whether nothing is read yet; whether a 401 may still refresh. */
+  private boolean refused;
+
+  private RuntimeException best;
+  private boolean fresh;
+  private boolean armed;
+
+  interface Dialed {
+    Realtime dial();
+  }
+
   RealtimeLoop(
       List<TransportAdapter> adapters, TransportOptions options, String url, Duration openLimit) {
     this.adapters = adapters;
@@ -51,6 +62,16 @@ final class RealtimeLoop {
 
   /** Opens the first adapter in order that opens; the last failure when none does. */
   void connect() {
+    armed = true;
+    chain();
+  }
+
+  /* the chain in order; refused only when every adapter refused, else its last transient failure */
+  private void chain() {
+    boolean every = !adapters.isEmpty();
+    RuntimeException top = null;
+    RuntimeException flaky = null;
+    refused = false;
     for (TransportAdapter adapter : adapters) {
       TransportConnection opened;
       try {
@@ -59,7 +80,16 @@ final class RealtimeLoop {
         if (!fails(e)) {
           throw e;
         }
-        failure = e;
+        if (refreshed(adapter, e)) {
+          chain();
+          return;
+        }
+        if (rank(e) == 0) {
+          every = false;
+          flaky = e;
+        } else if (rank(e) > rank(top)) {
+          top = e;
+        }
         continue;
       }
       if (closing) {
@@ -69,8 +99,13 @@ final class RealtimeLoop {
       conn = opened;
       proven = adapter;
       state = ConnectionState.CONNECTED;
+      refused = every;
+      best = top;
+      fresh = true;
       return;
     }
+    refused = every;
+    failure = flaky != null ? flaky : top != null ? top : failure;
     throw failure;
   }
 
@@ -80,6 +115,11 @@ final class RealtimeLoop {
    * never taken. A close ends it as CancellationException, the bound as ApiTimeoutException.
    */
   void open() {
+    armed = true;
+    bounded();
+  }
+
+  private void bounded() {
     Bound bound = new Bound(java.lang.Thread.currentThread());
     pending = bound;
     if (closing) {
@@ -91,7 +131,7 @@ final class RealtimeLoop {
         .thenRun(() -> bound.stop("bound"));
     RuntimeException failed = null;
     try {
-      connect();
+      chain();
     } catch (RuntimeException e) {
       failed = e;
     }
@@ -178,12 +218,23 @@ final class RealtimeLoop {
         }
         if (message != null) {
           attempts = 0;
+          fresh = false;
           if (message.retry() != null) {
             retry = message.retry();
           }
           return message;
         }
+        TransportAdapter was = proven;
         drop(open, ended);
+        if (fresh && refused && rank(ended) > 0) {
+          // a lazy long-poll's refused first read: the open's refusal
+          if (refreshed(was, ended)) {
+            bounded();
+            continue;
+          }
+          state = ConnectionState.DISCONNECTED;
+          throw rank(ended) > rank(best) ? ended : best;
+        }
       }
       return null;
     } catch (CancellationException e) {
@@ -242,6 +293,9 @@ final class RealtimeLoop {
         return;
       } catch (HoneyException e) {
         failure = e;
+        if (refused) {
+          break;
+        }
       }
     }
     state = ConnectionState.DISCONNECTED;
@@ -281,6 +335,30 @@ final class RealtimeLoop {
     } catch (RuntimeException e) {
       /* a dead transport's close is not the connection's failure */
     }
+  }
+
+  /** A deterministic refusal's rank, the most specific highest; 0 for a transient failure. */
+  private static int rank(RuntimeException e) {
+    return !(e instanceof ApiException a)
+        ? 0
+        : switch (a.status()) {
+          case 401 -> 6;
+          case 403 -> 5;
+          case 422 -> 4;
+          case 400 -> 3;
+          case 410 -> 2;
+          case 404, 405 -> 1;
+          default -> 0;
+        };
+  }
+
+  /** A 401's one refresh per open: whether the chain restarts. */
+  private boolean refreshed(TransportAdapter adapter, RuntimeException e) {
+    if (!armed || rank(e) != 6 || !(adapter instanceof Dialed dialed)) {
+      return false;
+    }
+    armed = false;
+    return dialed.dial().refresh();
   }
 
   /**

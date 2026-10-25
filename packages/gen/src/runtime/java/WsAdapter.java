@@ -5,11 +5,16 @@ package honey.runtime;
  * A realtime call's WebSocket: its own upgrade with the cursor as query params, no hook and no log
  * on the dial.
  */
-final class WsAdapter implements TransportAdapter {
+final class WsAdapter implements TransportAdapter, RealtimeLoop.Dialed {
   private final Realtime dial;
 
   WsAdapter(Realtime dial) {
     this.dial = dial;
+  }
+
+  @Override
+  public Realtime dial() {
+    return dial;
   }
 
   @Override

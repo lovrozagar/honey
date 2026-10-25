@@ -5,11 +5,13 @@ using System.Threading.Tasks;
 namespace Honey.Runtime;
 
 /// <summary>A realtime call's WebSocket: its own upgrade with the cursor as query params, no hook and no log on the dial.</summary>
-public sealed class WsAdapter : ITransportAdapter
+public sealed class WsAdapter : ITransportAdapter, IDialed
 {
     private readonly Dial _dial;
 
     internal WsAdapter(Dial dial) => _dial = dial;
+
+    Dial IDialed.Dial => _dial;
 
     /// <summary><c>ws</c>.</summary>
     public string Name => "ws";

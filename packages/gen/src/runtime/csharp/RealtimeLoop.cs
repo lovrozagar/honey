@@ -23,6 +23,11 @@ internal sealed class RealtimeLoop(IReadOnlyList<ITransportAdapter> adapters, Tr
     private OperationCanceledException? _canceled;
     private TimeSpan? _retry;
     private int _attempts;
+    /* this open's best refusal; whether nothing is read yet; whether a 401 may still refresh */
+    private bool _refused;
+    private Exception? _best;
+    private bool _fresh;
+    private bool _armed;
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
 
@@ -31,8 +36,16 @@ internal sealed class RealtimeLoop(IReadOnlyList<ITransportAdapter> adapters, Tr
     public void Bind(CancellationToken call) =>
         _registration = call.Register(static (loop, token) => ((RealtimeLoop)loop!).Cancel(token), this);
 
-    public async Task ConnectAsync(CancellationToken token)
+    public Task ConnectAsync(CancellationToken token)
     {
+        _armed = true;
+        return OpenAsync(token);
+    }
+
+    /* the chain in order; refused only when every adapter refused, else its last transient failure */
+    private async Task OpenAsync(CancellationToken token)
+    {
+        var (refused, best, transient) = (adapters.Count > 0, (Exception?)null, (Exception?)null);
         foreach (var adapter in adapters)
         {
             ITransportConnection conn;
@@ -42,7 +55,19 @@ internal sealed class RealtimeLoop(IReadOnlyList<ITransportAdapter> adapters, Tr
             }
             catch (Exception e) when (Fails(e))
             {
-                _failure = e;
+                if (await RefreshedAsync(adapter, e, token).ConfigureAwait(false))
+                {
+                    await OpenAsync(token).ConfigureAwait(false);
+                    return;
+                }
+                if (Rank(e) == 0)
+                {
+                    (refused, transient) = (false, e);
+                }
+                else if (Rank(e) > Rank(best))
+                {
+                    best = e;
+                }
                 continue;
             }
             if (_closing.IsCancellationRequested)
@@ -50,9 +75,10 @@ internal sealed class RealtimeLoop(IReadOnlyList<ITransportAdapter> adapters, Tr
                 await Quietly(conn).ConfigureAwait(false);
                 _closing.Token.ThrowIfCancellationRequested();
             }
-            (_conn, _proven, State) = (conn, adapter, ConnectionState.Connected);
+            (_conn, _proven, State, _refused, _best, _fresh) = (conn, adapter, ConnectionState.Connected, refused, best, true);
             return;
         }
+        (_refused, _failure) = (refused, transient ?? best ?? _failure);
         throw _failure;
     }
 
@@ -80,10 +106,22 @@ internal sealed class RealtimeLoop(IReadOnlyList<ITransportAdapter> adapters, Tr
                 }
                 if (message is not null)
                 {
-                    (_attempts, _retry) = (0, message.Retry ?? _retry);
+                    (_attempts, _retry, _fresh) = (0, message.Retry ?? _retry, false);
                     return message;
                 }
+                var opened = _proven!;
                 await DropAsync(conn, failure).ConfigureAwait(false);
+                if (_fresh && _refused && Rank(failure) > 0)
+                {
+                    /* a lazy long-poll's refused first read: the open's refusal */
+                    if (await RefreshedAsync(opened, failure, read.Token).ConfigureAwait(false))
+                    {
+                        await OpenAsync(read.Token).ConfigureAwait(false);
+                        continue;
+                    }
+                    State = ConnectionState.Disconnected;
+                    throw Rank(failure) > Rank(_best) ? failure : _best!;
+                }
             }
             return Ended();
         }
@@ -141,6 +179,10 @@ internal sealed class RealtimeLoop(IReadOnlyList<ITransportAdapter> adapters, Tr
             catch (Exception e) when (Fails(e))
             {
                 /* ConnectAsync kept the last adapter's failure */
+                if (_refused)
+                {
+                    break;
+                }
             }
             catch (OperationCanceledException e) when (!token.IsCancellationRequested)
             {
@@ -171,6 +213,21 @@ internal sealed class RealtimeLoop(IReadOnlyList<ITransportAdapter> adapters, Tr
         {
             /* a dead transport's close is not the connection's failure */
         }
+    }
+
+    /* a deterministic refusal's rank, the most specific highest; 0 for a transient failure */
+    private static int Rank(Exception? e) =>
+        (e as ApiStatusException)?.Status switch { 401 => 6, 403 => 5, 422 => 4, 400 => 3, 410 => 2, 404 or 405 => 1, _ => 0 };
+
+    /* a 401's one refresh per open: whether the chain restarts */
+    private async Task<bool> RefreshedAsync(ITransportAdapter adapter, Exception e, CancellationToken token)
+    {
+        if (!_armed || Rank(e) != 6 || adapter is not IDialed dialed)
+        {
+            return false;
+        }
+        _armed = false;
+        return await dialed.Dial.RefreshAsync(token).ConfigureAwait(false);
     }
 
     /* what an adapter's open or read throws when that transport failed; anything else is the caller's */

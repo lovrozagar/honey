@@ -44,6 +44,7 @@ const QUICK_ENTRY: CallScript = { realtime: { reconnectDelayMs: 10 } }
 const budget = (realtime: CallScript["realtime"]): Script => ({ calls: [{ realtime }] })
 const QUICK = budget({ reconnectDelayMs: 10 })
 const framed = (...values: readonly unknown[]) => ({ frames: values, kind: "frames" })
+const BAD_400 = { body: { message: "bad" }, errorKey: null, kind: "error", status: 400 }
 const frames = (...values: readonly unknown[]) => [framed(...values)]
 /** a long-poll answer: payload n, its cursor in `id` and `reconnect_token`; `Payload` declares no `id`, so a frame drops it */
 const polled = (n: number, id: string): Reply => ({ json: { id, n, reconnect_token: `rt-${id}` }, status: 200 })
@@ -223,17 +224,19 @@ describe.skipIf(!JAVA)("every dial carries the call's params, auth, headers and 
 			Array.from({ length: 8 }, () => "fixed"),
 		])
 		const refusal = [failure(fresh, 2), call(fresh, 2)?.stream?.realtime?.errors, fresh.run.observed?.[2]]
-		expect(refusal).toEqual([["BadRequestException", 400, "stream"], ["HTTP 400: bad"], framed()])
+		expect(refusal).toEqual([["BadRequestException", 400, "stream"], ["HTTP 400: bad"], BAD_400])
 	})
 })
 
 describe.skipIf(!JAVA)("the SSE and long-poll dials ride the exchange; the WebSocket dial runs no hook", SLOW, () => {
 	/* new: C# realtime.test.ts:370 */
 	it("carries a refresh to the next upgrade, the hooks seeing the cursor sent and the operation's path", async () => {
-		/* each stream dial gets the hooks, the log and the 401 refresh; the WebSocket dial reads the current
+		/* each stream dial gets the hooks and the log; the loop's one refresh per open restarts the chain, its
+		 * dials fresh exchanges (no retry); the WebSocket dial reads the current
 		 * token and runs no hook and no log */
 		const expired: Reply = { json: { message: "expired" }, status: 401 }
-		const replies = [refused, sse([ev(1)], "drop"), refused, expired, sse([ev(2)], "drop"), refused]
+		/* the reconnect's SSE 401 refreshes once and restarts the chain from the upgrade (bit 19 e) */
+		const replies = [refused, sse([ev(1)], "drop"), refused, expired, refused, sse([ev(2)], "drop"), refused]
 		replies.push(sse([ev(3)], "hold"))
 		/* `hooks: {}` installs the driver's recording hooks (one per phase), which C#'s driver always installs */
 		const script: Script = { ...QUICK, hooks: {}, log: true, onAuthExpired: { tokens: ["new"] } }
@@ -251,14 +254,15 @@ describe.skipIf(!JAVA)("the SSE and long-poll dials ride the exchange; the WebSo
 			observed: run.observed,
 		}
 		expect(seen, run.stderr).toEqual({
-			answered: ["200 false", "401 false", "200 true", "200 false"],
+			answered: ["200 false", "401 false", "200 false", "200 false"],
 			authExpired: 1,
-			hooked: [`${FEED_URL} /feed false`, `${first} /feed false`, `${first} /feed true`, `${second} /feed false`],
-			log: [...exchanged, ...exchanged, ...exchanged],
+			hooked: [`${FEED_URL} /feed false`, `${first} /feed false`, `${first} /feed false`, `${second} /feed false`],
+			log: [...exchanged, "request_start", "response_received 401", "error 401", ...exchanged, ...exchanged],
 			observed: frames(frame(1), frame(2), frame(3)),
 		})
 		const dials = hops.map((hop) => `${hop.headers.upgrade ?? "sse"} ${hop.headers.authorization?.slice(7)}`)
-		expect(dials.join(", ")).toBe("websocket old, sse old, websocket old, sse old, sse new, websocket new, sse new")
+		const restarted = "websocket old, sse old, websocket new, sse new"
+		expect(dials.join(", ")).toBe(`websocket old, sse old, ${restarted}, websocket new, sse new`)
 	})
 
 	/* new: C# realtime.test.ts:402 */

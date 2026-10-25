@@ -48,6 +48,8 @@ const TS_CELLS = [
 	"overrides/headers",
 	"overrides/timeout",
 	"raw-response/status-headers-body",
+	"reconnect/refusal-mixed-retries",
+	"reconnect/refusal-terminal",
 	"reconnect/sse-from-start",
 	"reconnect/sse-last-event-id",
 	"reconnect/ws-reconnect-token",
@@ -449,6 +451,13 @@ describe("compareCell on the wire", () => {
 			reds(target, [OK], [a, b, b]),
 			reds(cell(EXPECT_OK), [OK], [a, b]),
 		]).toEqual([[false], [true], [true], [true], [false]])
+	})
+
+	it("holds a realtime call's dials to one up to its ceiling, each the listed hop", () => {
+		const dial: Hop = { method: "GET", origin: "primary", url: "/v1/realtime/refused" }
+		const [target, at] = [{ ...cell(EXPECT_OK), dials: { atMost: 3, hop: dial } }, hop({}, { url: dial.url })]
+		const wires = [[at], [at, at, at], [], [at, at, at, at], [at, hop({})]]
+		expect(wires.map((wire) => reds(target, [OK], wire)[0])).toEqual([false, false, true, true, true])
 	})
 
 	it("compares a hop body only when the hop lists one", () => {

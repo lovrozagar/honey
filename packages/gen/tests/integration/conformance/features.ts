@@ -119,6 +119,19 @@ const reconnect: Scenario[] = [
 		id: "sse-from-start",
 		wire: [hop("GET", "/v1/resume/events", { headers: { "last-event-id": ABSENT } })],
 	},
+	/* every transport refused 403: the feed ends, each transport dialed once at most, never a redial (bit 19 e, #6) */
+	{
+		calls: [call("realtime.refused", "GET", "/v1/realtime/refused", { take: 1 })],
+		dials: { atMost: 3, hop: hop("GET", "/v1/realtime/refused") },
+		expect: [error(403, "limit_reached")],
+		id: "refusal-terminal",
+	},
+	/* the upgrade 404s, the first event stream and every poll 503: one transient failure backs off and retries */
+	{
+		calls: [call("realtime.mixed", "GET", "/v1/realtime/mixed", { take: 1 })],
+		expect: [{ frames: [{ n: 1 }], kind: "frames" }],
+		id: "refusal-mixed-retries",
+	},
 ]
 
 const overrides: Scenario[] = [
@@ -248,6 +261,8 @@ const REFERENCE_INDEX = [
 	"items patch <id> --data json",
 	"items update <id> [--flag] [--limit integer] [--q string] [--ratio number] [--tags string...] [--x-trace string] --data json",
 	"ping",
+	"realtime mixed (realtime)",
+	"realtime refused (realtime)",
 	"redirect cross-origin",
 	"ticks stream (sse)",
 	"timing slow --ms integer",
@@ -276,6 +291,7 @@ const REFERENCE_COMPLETION = [
 	"idempotent",
 	"items",
 	"ping",
+	"realtime",
 	"redirect",
 	"schema\ta command's request and answer: usage, method and path, body, result or events, errors",
 	"skill\tprint the agent skill (SKILL.md) this CLI ships",
@@ -393,7 +409,11 @@ export const FEATURES: readonly Feature[] = [
 			wire: [hop("GET", "/v1/ticks")],
 		},
 	]),
-	shared("reconnect", "SSE Last-Event-ID and WS reconnect_token resume the bit-06 reference log", reconnect),
+	shared(
+		"reconnect",
+		"SSE Last-Event-ID and WS reconnect_token resume the bit-06 reference log; a realtime refusal is terminal",
+		reconnect,
+	),
 	shared("overrides", "a per-call base URL, timeout or header applies to that call alone", overrides),
 	shared("raw-response", "status, headers and body reachable through the raw accessor", [
 		{

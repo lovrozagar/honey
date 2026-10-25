@@ -38,6 +38,10 @@ class WsAdapter:
 
     def __init__(self, dial: Dial) -> None:
         self.dial = dial
+        self.sent: str | None = None
+
+    async def refresh(self) -> bool:
+        return await self.dial.refresh(self.sent)
 
     def name(self) -> str:
         return "ws"
@@ -46,6 +50,7 @@ class WsAdapter:
         return TransportKind.WS
 
     async def connect(self, url: str, opts: TransportOpts) -> TransportConn:
+        self.sent = self.dial.core.auth.token
         x = self.dial.exchange(opts.cursor(), {}, True)
         socket = await self.dial.core.socket(x, opts.protocols)
         self.dial.opened(x.raw)

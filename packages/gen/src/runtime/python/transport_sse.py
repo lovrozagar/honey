@@ -39,6 +39,10 @@ class SseAdapter:
 
     def __init__(self, dial: Dial) -> None:
         self.dial = dial
+        self.sent: str | None = None
+
+    async def refresh(self) -> bool:
+        return await self.dial.refresh(self.sent)
 
     def name(self) -> str:
         return "sse"
@@ -49,6 +53,7 @@ class SseAdapter:
     async def connect(self, url: str, opts: TransportOpts) -> TransportConn:
         """The open stream: no read timeout, as a stream may idle."""
         resume = {"Accept": "text/event-stream", "Last-Event-ID": opts.last_event_id}
+        self.sent = self.dial.core.auth.token
         x = self.dial.exchange({"reconnect_token": opts.reconnect_token}, resume, True)
         live = await self.dial.core.opened(x)
         self.dial.opened(x.raw)

@@ -43,6 +43,7 @@ const QUICK = budget({ reconnectDelayMs: 10 })
 const refused: Reply = { json: { message: "no" }, status: 404 }
 const unavailable: Reply = { status: 503, text: "" }
 const bad: Reply = { json: { message: "bad" }, status: 400 }
+const BAD_400 = { body: { message: "bad" }, errorKey: null, kind: "error", status: 400 }
 type Step = string | { waitMs: number }
 const sse = (steps: readonly Step[], end: "close" | "drop" | "hold"): Reply => ({ sse: { end, steps }, status: 200 })
 /** event n of a resumable stream: SSE id n, payload n with reconnect token rt-n */
@@ -361,17 +362,16 @@ describe.skipIf(!DOTNET)("every dial carries the call's params, auth, headers an
 			Array.from({ length: 8 }, () => "fixed"),
 		])
 		const refusal = [failure(fresh, 2), call(fresh, 2)?.stream?.realtime?.errors, fresh.run.observed?.[2]]
-		expect(refusal).toEqual([["BadRequestException", 400, "stream"], ["HTTP 400: bad"], framed()])
+		expect(refusal).toEqual([["BadRequestException", 400, "stream"], ["HTTP 400: bad"], BAD_400])
 	})
 })
 
 describe.skipIf(!DOTNET)("the SSE and long-poll dials ride the exchange; the WebSocket dial runs no hook", SLOW, () => {
 	/* ported: python realtime.test.ts:371 */
 	it("carries a refresh to the next upgrade, the hooks seeing the cursor sent and the operation's path", async () => {
-		/* each stream dial gets the hooks, the log and the 401 refresh; the WebSocket dial reads the current
-		 * token and runs no hook and no log (ruled) */
+		/* stream dials get the hooks and log; an SSE 401 refreshes once, restarting the chain (bit 19 e); ws neither */
 		const expired: Reply = { json: { message: "expired" }, status: 401 }
-		const replies = [refused, sse([ev(1)], "drop"), refused, expired, sse([ev(2)], "drop"), refused]
+		const replies = [refused, sse([ev(1)], "drop"), refused, expired, refused, sse([ev(2)], "drop"), refused]
 		replies.push(sse([ev(3)], "hold"))
 		const script: Script = { ...QUICK, log: true, onAuthExpired: { tokens: ["new"] } }
 		const setup: Setup = { auth: { kind: "bearer", token: "old" } }
@@ -388,14 +388,15 @@ describe.skipIf(!DOTNET)("the SSE and long-poll dials ride the exchange; the Web
 			observed: run.observed,
 		}
 		expect(seen, run.stderr).toEqual({
-			answered: ["200 false", "401 false", "200 true", "200 false"],
+			answered: ["200 false", "401 false", "200 false", "200 false"],
 			authExpired: 1,
-			hooked: [`${FEED_URL} /feed false`, `${first} /feed false`, `${first} /feed true`, `${second} /feed false`],
-			log: [...exchanged, ...exchanged, ...exchanged],
+			hooked: [`${FEED_URL} /feed false`, `${first} /feed false`, `${first} /feed false`, `${second} /feed false`],
+			log: [...exchanged, "request_start", "response_received 401", "error 401", ...exchanged, ...exchanged],
 			observed: frames(frame(1), frame(2), frame(3)),
 		})
 		const dials = hops.map((hop) => `${hop.headers.upgrade ?? "sse"} ${hop.headers.authorization?.slice(7)}`)
-		expect(dials.join(", ")).toBe("websocket old, sse old, websocket old, sse old, sse new, websocket new, sse new")
+		const restarted = "websocket old, sse old, websocket new, sse new"
+		expect(dials.join(", ")).toBe(`websocket old, sse old, ${restarted}, websocket new, sse new`)
 	})
 
 	/* ported: python realtime.test.ts:405 */

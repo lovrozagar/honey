@@ -47,20 +47,13 @@ type Realtime = {
 	}): Keepalive
 	createResumableConnection(opts: Opts & Json & { transports: Adapter[]; url: string }): Resumable
 	RealtimeAbortError: ErrorClass
-	RealtimeAuthError: ErrorClass
 	RealtimeConnectError: ErrorClass
 	RealtimeError: ErrorClass
 	RealtimeKickedError: ErrorClass
 }
 type Socket = { close(): void; on(event: "message", handler: (data: string) => void): void }
 
-const ERRORS = [
-	"RealtimeError",
-	"RealtimeConnectError",
-	"RealtimeAuthError",
-	"RealtimeKickedError",
-	"RealtimeAbortError",
-] as const
+const ERRORS = ["RealtimeError", "RealtimeConnectError", "RealtimeKickedError", "RealtimeAbortError"] as const
 const EXPORTS = [...ERRORS, "createKeepaliveLoop", "createFallbackChain", "createResumableConnection"] as const
 
 /** An OpenAPI 3.1 document of `paths`. */

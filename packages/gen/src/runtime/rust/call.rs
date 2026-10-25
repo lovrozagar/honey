@@ -52,6 +52,8 @@ pub(crate) struct Overrides {
     pub(crate) headers: Vec<(String, String)>,
     pub(crate) base_url: Option<String>,
     pub(crate) cancel: Option<Signal>,
+    /// the token a realtime dial sends, its 401 the loop's to refresh
+    pub(crate) token: Option<Option<String>>,
 }
 
 /// One call to the API; `.await` sends it and resolves to `Result<T, Error>`. `H` is the

@@ -31,6 +31,12 @@ const V0_PORTS: Readonly<Record<string, string>> = {
 	"sse/typed-events": "live leg of C5 11410bbf49",
 }
 
+/** The cells TS lacks, each with its reason. */
+const LACKS: Readonly<Record<string, string>> = {
+	"reconnect/refusal-mixed-retries": "pending bit 19 e2: TS realtime methods open one stream",
+	"reconnect/refusal-terminal": "pending bit 19 e2: TS realtime methods open one stream",
+}
+
 /** The client config a cell's setup asks for: the credential as a header, the timeout and redirect policy. */
 function configOf(app: ReferenceApp, setup: Setup = {}): Input {
 	const headers: Record<string, string> = { ...setup.headers }
@@ -175,10 +181,14 @@ async function callOf(clients: { map: MapNode; safe: Sdk; thrower: Sdk }, call: 
 	return attempt(send, call)
 }
 
-/** The TS runner: the emitted SDK class built once from the served document, one instance per mode per cell. */
+/**
+ * The TS runner: the emitted SDK class built once from the served document, one instance per mode per cell; only
+ * LACKS are left out.
+ */
 function tsRunner() {
 	let built: { ConformanceSDK: SdkClass; map: MapNode } | undefined
 	return {
+		lacks: (cell: Cell) => Object.hasOwn(LACKS, cell.key),
 		async prepare(app: ReferenceApp): Promise<void> {
 			const sdk = await emittedSdk(app.document, { name: "ConformanceSDK" })
 			built = { ConformanceSDK: sdk.ConformanceSDK as SdkClass, map: sdk.serviceMap as MapNode }
@@ -208,6 +218,11 @@ describe("conformance × ts titles", () => {
 	it("titles only cells the grid holds for ts", () => {
 		const keys = new Set(cellsFor("ts").map((cell) => cell.key))
 		expect(Object.keys(V0_PORTS).filter((key) => !keys.has(key))).toEqual([])
+	})
+
+	it("lacks only cells the grid holds for ts", () => {
+		const keys = new Set(cellsFor("ts").map((cell) => cell.key))
+		expect(Object.keys(LACKS).filter((key) => !keys.has(key))).toEqual([])
 	})
 })
 

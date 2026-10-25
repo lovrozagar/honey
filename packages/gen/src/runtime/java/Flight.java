@@ -59,6 +59,9 @@ final class Flight {
   /** Whether this call opens a stream: its final 2xx body is left live. */
   private boolean stream;
 
+  /** Whether a 401 refreshes the token and retries. */
+  boolean refreshes = true;
+
   Flight(Exchange exchange, Operation op, Call call, RequestOptions options) {
     this.exchange = exchange;
     this.config = exchange.config();
@@ -122,7 +125,7 @@ final class Flight {
     String token = credential.token();
     Hop hop = attempt(url, token, false);
     boolean replayable = call.body() == null || call.body().replayable();
-    if (hop.status() == 401 && config.onAuthExpired() != null && replayable) {
+    if (hop.status() == 401 && refreshes && config.onAuthExpired() != null && replayable) {
       String fresh = credential.refresh(token, config.onAuthExpired());
       if (fresh != null) {
         hop = attempt(url, fresh, true);

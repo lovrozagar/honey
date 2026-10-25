@@ -37,8 +37,11 @@ type TransportOpts struct {
 	HTTPClient           *http.Client
 	MaxMessageBytes      int64
 	PollTimeout          time.Duration
-	KeepAlive            time.Duration      // ping interval and pong wait: zero 20s, negative none
-	headersOf            func() http.Header // a realtime method's: the client's headers at each dial
+	KeepAlive            time.Duration                 // ping interval and pong wait: zero 20s, negative none
+	headersOf            func() http.Header            // a realtime method's: the client's headers at each dial
+	refresh              func(context.Context) bool    // a realtime method's: OnAuthExpired once, whether it gave a token
+	onRequest            []func(*RequestContext) error // a realtime method's: the client's hooks, run on each HTTP dial
+	onResponse           []func(*ResponseContext) error
 }
 
 const (
@@ -52,6 +55,31 @@ func (o *TransportOpts) headers() http.Header {
 		return o.headersOf()
 	}
 	return o.Headers.Clone()
+}
+
+// hooked runs the OnRequest hooks on req.
+func (o *TransportOpts) hooked(req *http.Request) (*http.Request, error) {
+	if o == nil || len(o.onRequest) == 0 {
+		return req, nil
+	}
+	rc := &RequestContext{Method: req.Method, URL: req.URL.String(), Path: req.URL.Path, Headers: req.Header}
+	if err := runHooks("OnRequest", o.onRequest, rc); err != nil {
+		return nil, err
+	}
+	out, err := http.NewRequestWithContext(req.Context(), rc.Method, rc.URL, nil)
+	if err != nil {
+		return nil, err
+	}
+	out.Header = rc.Headers
+	return out, nil
+}
+
+// heard runs the OnResponse hooks on resp.
+func (o *TransportOpts) heard(resp *http.Response) error {
+	if o == nil || len(o.onResponse) == 0 {
+		return nil
+	}
+	return runHooks("OnResponse", o.onResponse, &ResponseContext{Status: resp.StatusCode, Headers: resp.Header})
 }
 
 // dialHeaders is one dial's headers with an X-Request-Id: the caller's, else a fresh one, so every
@@ -163,7 +191,11 @@ func (t *WsTransport) Connect(ctx context.Context, rawURL string, opts *Transpor
 		}
 		dialOpts.HTTPClient = transportClient(opts.HTTPClient)
 	}
-	conn, _, err := websocket.Dial(ctx, toWsURL(withQuery(rawURL, opts, true)), dialOpts)
+	conn, resp, err := websocket.Dial(ctx, toWsURL(withQuery(rawURL, opts, true)), dialOpts)
+	if err != nil && resp != nil && resp.StatusCode >= 400 {
+		body, _ := readBody(resp.Body, 64<<10)
+		return nil, raiseForStatus(resp, body)
+	}
 	if err != nil {
 		return nil, wrapTransportError(ctx, err)
 	}
