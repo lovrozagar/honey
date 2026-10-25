@@ -2,7 +2,6 @@ import {
 	type ConnectionState,
 	type ResumableConnection,
 	type ResumableConnectionOpts,
-	createKeepaliveLoop,
 	type KeepaliveLoop,
 	RealtimeAbortError,
 	RealtimeConnectError,
@@ -11,6 +10,7 @@ import {
 	type TransportAdapter,
 	type TransportConnection,
 	transportAt,
+	keepaliveOf,
 } from "./realtime.ts"
 
 type QueueEntry = { type: "done" } | { error: unknown; type: "error" } | { type: "value"; value: unknown }
@@ -213,15 +213,12 @@ class Resumable implements ResumableConnection {
 	}
 
 	#watch(conn: TransportConnection): void {
-		const interval = this.#opts.keepaliveInterval
-		if (interval === undefined || this.#proven === null) return
-		const onDead = () => {
+		if (this.#proven === null) return
+		this.#keepalive = keepaliveOf(this.#opts.keepaliveInterval, transportAt(this.#proven), conn, () => {
 			this.#detach()
 			this.#reconnect()
-		}
-		const sendPing = () => conn.send(JSON.stringify({ t: "ping" }))
-		this.#keepalive = createKeepaliveLoop({ interval, onDead, sendPing, transport: transportAt(this.#proven) })
-		this.#keepalive.start()
+		})
+		this.#keepalive?.start()
 	}
 
 	async #connect(): Promise<void> {

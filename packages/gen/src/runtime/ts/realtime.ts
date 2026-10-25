@@ -122,6 +122,19 @@ export function createKeepaliveLoop(opts: KeepaliveOptions): KeepaliveLoop {
 	return new Keepalive(opts)
 }
 
+/** The keepalive `set` gives `transport` (WebSocket 20 s unless set, SSE none; 0 none), dead an interval after a ping. */
+export function keepaliveOf(
+	set: number | undefined,
+	transport: Transport,
+	conn: { send(data: string): void },
+	onDead: () => void,
+): KeepaliveLoop | null {
+	const interval = set ?? (transport === "ws" ? 20_000 : 0)
+	if (interval <= 0) return null
+	const sendPing = () => conn.send(JSON.stringify({ t: "ping" }))
+	return createKeepaliveLoop({ interval, onDead, sendPing, timeout: 2 * interval, transport })
+}
+
 /** Dial `adapter` and resolve once it sends `ready`; reject on an error, a close or `timeout`. */
 export function dialReady(
 	adapter: TransportAdapter,
@@ -214,7 +227,7 @@ export type ResumableConnectionOpts = {
 	fallbackTimeout?: number
 	/** Each dial's headers; a function is read on every dial, so a rotated token reaches the reconnect. */
 	headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
-	/** Ping every this many ms over WebSocket (a frame resets SSE's dead timer); a dead link reconnects. Off when unset. */
+	/** Ping every this many ms (WebSocket 20 s, SSE none, unless set; 0: none); one unanswered as long reconnects. */
 	keepaliveInterval?: number
 	lastId?: number
 	/** Reconnects after a drop before the stream ends; 0 retries forever. Default 5. */

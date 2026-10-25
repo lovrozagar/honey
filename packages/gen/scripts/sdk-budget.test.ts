@@ -399,8 +399,11 @@ describe("runtimeBytes", () => {
  * releases it; request.go +11: wrapTransportError reads context.Cause), and the realtime dials reading the client's
  * current token (transport.go +300: headersOf; realtime.go +72; transport_longpoll.go -6; config.go +3). Bit 19 b3,
  * +73 B to 90,995 B: config.go's sentence that a caller Transport's own headers are the caller's and reach every hop.
+ * Bit 19 d1, +1,260 B to 92,255 B: an empty map parameter sends nothing (query.go +57), and a 20 s WebSocket keepalive
+ * with a pong deadline, one helper for the raw socket and the realtime transport (ws.go +778, transport.go +232,
+ * config.go +127: WSKeepalive, realtime.go +66).
  */
-const GO_RUNTIME_BYTES = 90_995
+const GO_RUNTIME_BYTES = 92_255
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`, () => {
@@ -444,9 +447,10 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * (a non-token name and any control but tab in a value refused as ConfigError naming the header; it was CR/LF/NUL
  * only, so \u0001 and DEL went out), the token and control patterns and `import re` its only bytes. Bit 19 b2,
  * +291 B to 85,983 B: an event stream's open bounded by the call's timeout up to its headers (send_async.py +270,
- * the wait_for; config.py +21).
+ * the wait_for; config.py +21). Bit 19 d1, +432 B to 86,415 B: last_event_id reports the last delivered event
+ * (events.py +99), and the WebSocket keepalive made configurable (ws.py +197, config.py +136: ws_keepalive).
  */
-const PYTHON_RUNTIME_BYTES = 85_983
+const PYTHON_RUNTIME_BYTES = 86_415
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -511,11 +515,12 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * +15), and a resumable connection's headers read on each dial (realtime-connection.ts +289; realtime.ts -33, its
  * dead `token` and `onAuthExpired` options cut). Bit 19 b3, +437 B to 109,561 B: the auth header pair defaulting to
  * the API's scheme by the siblings' pair rule (sdk.ts +338: schemeAuth; http.ts +51: no prefix under a caller's name;
- * config.ts +48).
+ * config.ts +48). Bit 19 d1, +354 B to 109,915 B: realtime WebSocket keepalive on by default at 20 s, its dead
+ * wait twice the interval (realtime.ts +532: keepaliveOf; realtime-connection.ts -178).
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
  */
-const TS_RUNTIME_BYTES = 109_561
+const TS_RUNTIME_BYTES = 109_915
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

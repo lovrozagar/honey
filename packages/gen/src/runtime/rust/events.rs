@@ -33,6 +33,8 @@ pub struct EventStream<T> {
     decode: fn(String) -> Result<T, Error>,
     cancel: Option<Signal>,
     done: bool,
+    /* the id of the last event handed out: a resume from it skips nothing */
+    delivered: String,
 }
 
 impl<T> EventStream<T> {
@@ -41,9 +43,9 @@ impl<T> EventStream<T> {
         std::future::poll_fn(|cx| Pin::new(&mut *self).poll_next(cx)).await
     }
 
-    /// The last event id seen, to resume from with `Last-Event-ID`.
+    /// The id of the last event delivered, to resume from with `Last-Event-ID`.
     pub fn last_event_id(&self) -> &str {
-        self.parser.last_id()
+        &self.delivered
     }
 
     /// Ends the stream: no further event, and the connection is let go.
@@ -85,6 +87,9 @@ impl<T> Stream for EventStream<T> {
             }
             if let Some(e) = self.ready.pop_front() {
                 let event = self.event(e);
+                if let Ok(delivered) = &event {
+                    self.delivered.clone_from(&delivered.id);
+                }
                 if event.is_err() {
                     /* data that is not the declared type ends the stream: never a silent skip */
                     self.end();
@@ -142,6 +147,7 @@ fn opened<T: Send + 'static>(
             decode,
             cancel: ov.cancel.clone(),
             done: false,
+            delivered: String::new(),
         };
         Ok((stream, raw))
     })

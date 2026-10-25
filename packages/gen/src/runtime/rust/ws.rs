@@ -9,6 +9,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use reqwest::header::HeaderValue;
+use tokio::io::AsyncReadExt;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
@@ -26,6 +27,12 @@ const MAX_MESSAGE: usize = 16 << 20;
 const MAX_REASON: usize = 123;
 /// How long `close` waits for the server's close frame.
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
+/// A ping each interval while a read waits; one unanswered as long ends the socket.
+struct Keepalive {
+    every: Duration,
+    due: tokio::time::Instant,
+    pinged: bool,
+}
 
 /// The close codes RFC 6455 names for a normal close, a peer going away and a protocol error.
 pub const WS_STATUS_NORMAL_CLOSURE: u16 = 1000;
@@ -61,6 +68,7 @@ pub struct TypedWebSocket {
     closed_by: Option<WsClose>,
     ended: bool,
     cancel: Option<Signal>,
+    keepalive: Option<Keepalive>,
 }
 
 /// Resolves once `signal` fires; never without one.
@@ -139,16 +147,27 @@ impl TypedWebSocket {
     pub async fn recv(&mut self) -> Option<Result<Vec<u8>, Error>> {
         while !self.ended {
             let signal = self.cancel.clone();
+            let at = self.keepalive.as_ref().map(|k| k.due);
+            let wait = tokio::time::sleep_until(at.unwrap_or_else(tokio::time::Instant::now));
             let read = tokio::select! {
                 biased;
                 () = canceled(signal) => None,
                 read = self.socket.next() => Some(read),
+                () = wait, if at.is_some() => {
+                    if let Some(e) = self.ping().await {
+                        return Some(Err(e));
+                    }
+                    continue;
+                }
             };
             let Some(read) = read else {
                 /* canceled: the reads end quietly, and close has nothing left to do */
                 self.ended = true;
                 break;
             };
+            if let (Some(k), Some(Ok(_))) = (self.keepalive.as_mut(), &read) {
+                k.pinged = false;
+            }
             match read {
                 Some(Ok(Message::Text(t))) => return Some(Ok(self.message(t.as_bytes()))),
                 Some(Ok(Message::Binary(b))) => return Some(Ok(self.message(&b))),
@@ -163,6 +182,20 @@ impl TypedWebSocket {
                 }
                 Some(Ok(_)) => {}
                 Some(Err(e)) => {
+                    if matches!(e, tungstenite::Error::Capacity(_)) {
+                        let frame = CloseFrame {
+                            code: CloseCode::Size,
+                            reason: "Message too big".into(),
+                        };
+                        let _ = self.socket.close(Some(frame)).await;
+                        /* drain to the server's end: a close with unread bytes resets, losing the frame */
+                        let raw = self.socket.get_mut();
+                        let drain = async {
+                            let mut sink = [0u8; 16 << 10];
+                            while matches!(raw.read(&mut sink).await, Ok(n) if n > 0) {}
+                        };
+                        let _ = tokio::time::timeout(CLOSE_WAIT, drain).await;
+                    }
                     let e = transport(e);
                     self.end(WsEvent::Error, e.to_string().as_bytes());
                     return Some(Err(e));
@@ -171,6 +204,22 @@ impl TypedWebSocket {
             }
         }
         None
+    }
+
+    /// A ping, or the end of a socket whose last one went unanswered.
+    async fn ping(&mut self) -> Option<Error> {
+        let k = self.keepalive.as_mut()?;
+        let sent = if k.pinged {
+            Err(Error::Transport("no pong within the keepalive".into()))
+        } else {
+            k.pinged = true;
+            k.due = tokio::time::Instant::now() + k.every;
+            let ping = self.socket.send(Message::Ping(Bytes::new()));
+            ping.await.map_err(transport)
+        };
+        let e = sent.err()?;
+        self.end(WsEvent::Error, e.to_string().as_bytes());
+        Some(e)
     }
 
     fn message(&mut self, data: &[u8]) -> Vec<u8> {
@@ -246,6 +295,11 @@ pub(crate) async fn connect(
         closed_by: None,
         ended: false,
         cancel: ov.cancel.clone(),
+        keepalive: inner.ws_keepalive.map(|every| Keepalive {
+            every,
+            due: tokio::time::Instant::now() + every,
+            pinged: false,
+        }),
     };
     Ok((socket, raw))
 }

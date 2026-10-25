@@ -28,6 +28,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// auth_header_prefix + token`; leave both `None` for the API's scheme, set the name and the prefix
 /// is yours (`None` meaning none), set only the prefix to keep the scheme's header. `http_builder`
 /// customizes the transport; the SDK always turns its redirects off and applies `redirect` itself.
+/// `ws_keepalive` is a WebSocket's ping interval and pong wait (`None`: 20 s; zero: none).
 ///
 /// Credentials belong here, in `bearer_token`, `api_key` and `headers`: a hop to another origin
 /// carries none of them. reqwest adds a header from the builder's `default_headers` to every hop
@@ -42,6 +43,7 @@ pub struct ClientConfig {
     pub headers: HashMap<String, String>,
     pub timeout: Option<Duration>,
     pub max_response_bytes: usize,
+    pub ws_keepalive: Option<Duration>,
     pub redirect: RedirectPolicy,
     /// The transport's builder. Its `default_headers` go on every hop, a cross-origin redirect
     /// included: `Authorization`, `Cookie`, `Proxy-Authorization`, `X-Api-Key` or the
@@ -67,6 +69,7 @@ impl Default for ClientConfig {
             headers: HashMap::new(),
             timeout: None,
             max_response_bytes: 100 << 20,
+            ws_keepalive: None,
             redirect: RedirectPolicy::default(),
             http_builder: None,
             invalidation: None,
@@ -148,6 +151,7 @@ pub(crate) struct Inner {
     pub(crate) auth: AuthState,
     pub(crate) timeout: Option<Duration>,
     pub(crate) max_response_bytes: usize,
+    pub(crate) ws_keepalive: Option<Duration>,
     pub(crate) redirect: RedirectPolicy,
     pub(crate) on_request: Vec<OnRequestHook>,
     pub(crate) on_response: Vec<OnResponseHook>,
@@ -219,6 +223,8 @@ impl Client {
             auth: AuthState::new(config.bearer_token.or(config.api_key)),
             timeout: (!timeout.is_zero()).then_some(timeout),
             max_response_bytes: config.max_response_bytes,
+            ws_keepalive: Some(config.ws_keepalive.unwrap_or(Duration::from_secs(20)))
+                .filter(|d| !d.is_zero()),
             redirect: config.redirect,
             on_request: config.on_request,
             on_response: config.on_response,

@@ -9,16 +9,14 @@
  * server close while no read waits; the 16 MiB cap refused within one partial. The wire legs: `ws.test.ts`.
  */
 import { describe, expect, it } from "vitest"
-import { type DrivenJavaSdk, drivenJavaSdk } from "./__fixtures__/driven.ts"
 import { withJava } from "./__fixtures__/java-env.ts"
+import { type DrivenJavaSdk, drivenJavaSdk } from "./__fixtures__/driven.ts"
+import { OPEN, prober } from "./__fixtures__/socket-probe.ts"
 
 /** Whether Java is pinned here: a missing toolchain fails where it is required and skips these legs elsewhere. */
 const JAVA = withJava()
 /** A cold gate compiles the SDK first. */
 const SLOW = { timeout: 600_000 }
-
-/** The `ws` SDK's package (the emitter's default), where the probes sit beside the package-private socket. */
-const PACKAGE = "ai.anyrow"
 
 let compiled: DrivenJavaSdk | undefined
 
@@ -29,147 +27,7 @@ function sdk(): DrivenJavaSdk {
 	return compiled
 }
 
-/**
- * The strict fake: every frame it is asked to send is recorded; a send's future completes at once unless `hold` is set,
- * when it stays pending until `release()`. A frame issued while another is pending fails with "Send pending" and closes
- * the output, the JDK's own contract (W17: a second data send behind a pending one throws "Send pending" on 17, 21 and
- * 25; W19: a ping or a close behind one is nondeterministic, often fatal): the SDK's gate must never let it happen.
- */
-const FAKE = `final class Fake implements java.net.http.WebSocket {
-  final java.util.List<String> frames = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-  volatile long requested;
-  volatile boolean hold;
-  volatile boolean aborted;
-  volatile boolean outputClosed;
-  volatile String violation;
-  volatile java.net.http.WebSocket.Listener echo; // a fast peer: its pong before the ping's send completes
-  private java.util.concurrent.CompletableFuture<java.net.http.WebSocket> pending;
-
-  private synchronized java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sent(String frame) {
-    if (pending != null && !pending.isDone()) {
-      violation = "Send pending: " + frame;
-      outputClosed = true;
-      return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Send pending"));
-    }
-    frames.add(frame);
-    pending = new java.util.concurrent.CompletableFuture<>();
-    if (!hold) {
-      pending.complete(this);
-    }
-    return pending;
-  }
-
-  synchronized void release() {
-    hold = false;
-    pending.complete(this);
-  }
-
-  synchronized void fail() {
-    pending.completeExceptionally(new java.io.IOException("Output closed"));
-  }
-
-  long count(String prefix) {
-    synchronized (frames) {
-      return frames.stream().filter(f -> f.startsWith(prefix)).count();
-    }
-  }
-
-  public java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sendText(CharSequence data, boolean last) {
-    return sent("text " + data.length());
-  }
-
-  public java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sendBinary(java.nio.ByteBuffer data, boolean last) {
-    return sent("binary " + data.remaining());
-  }
-
-  public java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sendPing(java.nio.ByteBuffer message) {
-    java.util.concurrent.CompletableFuture<java.net.http.WebSocket> ping = sent("ping");
-    if (echo != null) echo.onPong(this, java.nio.ByteBuffer.allocate(0));
-    return ping;
-  }
-
-  public java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sendPong(java.nio.ByteBuffer message) {
-    return sent("pong");
-  }
-
-  public java.util.concurrent.CompletableFuture<java.net.http.WebSocket> sendClose(int code, String reason) {
-    return sent("close " + code + " " + reason);
-  }
-
-  public void request(long n) {
-    requested += n;
-  }
-
-  public String getSubprotocol() {
-    return "";
-  }
-
-  public boolean isOutputClosed() {
-    return outputClosed;
-  }
-
-  public boolean isInputClosed() {
-    return false;
-  }
-
-  public void abort() {
-    aborted = true;
-  }
-}`
-
-/**
- * `body` as the probe's main beside the fake, with `ends(w)` recording each end handler run; its output lines. A probe
- * still running after 20 s prints `probe hung` and exits 3, so a mutant that never ends a socket reds at once.
- */
-function probed(body: string): string[] {
-	const source = `package ${PACKAGE};
-
-import java.nio.ByteBuffer;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.*;
-
-final class SocketProbe {
-  static List<String> ends(TypedWebSocket w) {
-    List<String> runs = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-    w.onClosed(c -> runs.add("closed " + c.status() + " " + c.reason()));
-    w.onError(e -> runs.add("error " + e.getMessage()));
-    return runs;
-  }
-
-  public static void main(String[] args) throws Exception {
-    Thread watchdog = new Thread(() -> {
-      try {
-        Thread.sleep(20_000);
-      } catch (InterruptedException e) {
-        return;
-      }
-      System.out.println("probe hung");
-      System.exit(3);
-    });
-    watchdog.setDaemon(true);
-    watchdog.start();
-${body
-	.split("\n")
-	.map((line) => `    ${line}`)
-	.join("\n")}
-    System.exit(0);
-  }
-}
-
-${FAKE}
-`
-	const run = sdk().run(`${PACKAGE}.SocketProbe`, source)
-	expect({ diagnostics: run.diagnostics, status: run.status }, run.stderr).toEqual({ diagnostics: [], status: 0 })
-	return run.stdout.split("\n").filter((line) => line !== "")
-}
-
-/** A socket over a fresh fake, its keepalive every `ms` ms, opened; `w` its TypedWebSocket, `runs` its ends. */
-const OPEN = (ms: number) => `Fake fake = new Fake();
-Socket socket = new Socket(Duration.ofMillis(${ms}));
-TypedWebSocket w = new TypedWebSocket(socket);
-List<String> runs = ends(w);
-socket.onOpen(fake);`
+const probed = prober(sdk)
 
 describe.skipIf(!JAVA)("a socket's demand: no background reader (condition 1)", SLOW, () => {
 	/* new: condition 1 (C# Ws.cs: a message fires as receive delivers it); red under a reader that asks ahead */
@@ -312,6 +170,20 @@ w.close();`),
 })
 
 describe.skipIf(!JAVA)("the pong clock and a close under a pending send", SLOW, () => {
+	/* bit 19 d1: a tick that read no ping waiting, racing a release, deferred a second ping behind the first one's send;
+	 * it went out though the first still waited for its pong. Driven here without the race: a ping held in flight, then
+	 * a second asked for. One ping waits at a time, a deferred one included. */
+	it("sends no second ping while one waits for its pong, a deferred one included", () => {
+		expect(
+			probed(`${OPEN(60_000)}
+fake.hold = true;
+socket.ping();
+socket.ping();
+fake.release();
+System.out.println(fake.count("ping") + " " + fake.aborted + " " + runs);`),
+		).toEqual(["1 false []"])
+	})
+
 	/* new: the pong-clock ruling's reverse: a ping that went out and no pong → the error path */
 	it("ends the socket when a ping that went out gets no pong within the interval", () => {
 		expect(

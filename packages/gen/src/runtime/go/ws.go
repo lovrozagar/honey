@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/coder/websocket"
@@ -29,10 +30,43 @@ const defaultWSReadLimit = 16 << 20
 // maxCloseReason is the most bytes a close frame's reason may hold.
 const maxCloseReason = 123
 
+// keepAlive pings conn every `every` (zero: 20s; negative: never), closing it on a ping unanswered as long.
+func keepAlive(conn *websocket.Conn, every time.Duration) func() {
+	ctx, stop := context.WithCancel(context.Background())
+	if every == 0 {
+		every = 20 * time.Second
+	}
+	if every < 0 {
+		return stop
+	}
+	go func() {
+		ticker := time.NewTicker(every)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			ping, cancel := context.WithTimeout(ctx, every)
+			err := conn.Ping(ping)
+			cancel()
+			if err != nil {
+				if ctx.Err() == nil {
+					_ = conn.CloseNow()
+				}
+				return
+			}
+		}
+	}()
+	return stop
+}
+
 // TypedWebSocket is an operation's WebSocket: Send and Read, plus On handlers as the TypeScript
 // client's escape hatch.
 type TypedWebSocket struct {
 	conn     *websocket.Conn
+	stop     func()
 	mu       sync.Mutex
 	handlers map[string][]func(data []byte)
 	closed   bool
@@ -63,12 +97,12 @@ func dialWebSocket(ctx context.Context, cfg Config, c *call, opts []RequestOptio
 		return nil, wrapTransportError(ctx, err)
 	}
 	rc.deliver(resp, nil)
-	return newTypedWebSocket(conn), nil
+	return newTypedWebSocket(conn, cfg.WSKeepalive), nil
 }
 
-func newTypedWebSocket(conn *websocket.Conn) *TypedWebSocket {
+func newTypedWebSocket(conn *websocket.Conn, every time.Duration) *TypedWebSocket {
 	conn.SetReadLimit(defaultWSReadLimit)
-	return &TypedWebSocket{conn: conn, handlers: map[string][]func(data []byte){}}
+	return &TypedWebSocket{conn: conn, stop: keepAlive(conn, every), handlers: map[string][]func(data []byte){}}
 }
 
 // SetReadLimit sets the largest inbound message, in bytes (default 16 MiB).
@@ -102,6 +136,7 @@ func (w *TypedWebSocket) Close(code websocket.StatusCode, reason string) error {
 		_, size := utf8.DecodeLastRuneInString(reason)
 		reason = reason[:len(reason)-size]
 	}
+	w.stop()
 	err := w.conn.Close(code, reason)
 	w.fireClose(reason)
 	if errors.Is(err, net.ErrClosed) {
@@ -115,6 +150,7 @@ func (w *TypedWebSocket) Close(code websocket.StatusCode, reason string) error {
 func (w *TypedWebSocket) Read(ctx context.Context) ([]byte, error) {
 	_, msg, err := w.conn.Read(ctx)
 	if err != nil {
+		w.stop()
 		var ce websocket.CloseError
 		if errors.As(err, &ce) {
 			w.fireClose(ce.Reason)

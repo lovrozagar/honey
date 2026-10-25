@@ -24,6 +24,7 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - `--app` takes a module that exports the app and binds nothing (bit 19 Q3); v0's no-bind flag has no v1 counterpart because v1 never serves implicitly.
 - The TS SDK's realtime connection options `token?` and `onAuthExpired?` are removed (bit 19 Q8 and b2; neither was ever read): `headers` may be a function read on every dial, and the client-level `onAuthExpired` is the one refresh hook.
 - The TS SDK reads the spec's security scheme for its auth header (bit 19 b3), as every other SDK does: an apiKey scheme's header with no prefix, bearer as `Authorization: Bearer`. A caller's `authHeaderName` alone no longer implies `Bearer `; set `authHeaderPrefix` to keep one.
+- WebSocket keepalive is on by default in every SDK (bit 19 d1): a ping every 20 s, the connection ended when a pong does not come within the interval. New config: Go `Config.WSKeepalive` and `TransportOpts.KeepAlive`, Rust `ws_keepalive`, Python `ws_keepalive`; the TS realtime `keepaliveInterval` now defaults to 20 s (0 turns it off), and `keepaliveOf` is exported.
 - Generated SDK error messages read `HTTP <status>: <message>` in every target (bit 19 d2).
 
 ## Security corpus

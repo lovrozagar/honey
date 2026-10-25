@@ -101,9 +101,4 @@ impl SseParser {
             retry,
         })
     }
-
-    /// The last event id seen.
-    pub(crate) fn last_id(&self) -> &str {
-        &self.last_id
-    }
 }

@@ -37,6 +37,7 @@ type TransportOpts struct {
 	HTTPClient           *http.Client
 	MaxMessageBytes      int64
 	PollTimeout          time.Duration
+	KeepAlive            time.Duration      // ping interval and pong wait: zero 20s, negative none
 	headersOf            func() http.Header // a realtime method's: the client's headers at each dial
 }
 
@@ -167,11 +168,16 @@ func (t *WsTransport) Connect(ctx context.Context, rawURL string, opts *Transpor
 		return nil, wrapTransportError(ctx, err)
 	}
 	conn.SetReadLimit(opts.maxMessageBytes())
-	return &wsConn{conn: conn}, nil
+	var every time.Duration
+	if opts != nil {
+		every = opts.KeepAlive
+	}
+	return &wsConn{conn: conn, stop: keepAlive(conn, every)}, nil
 }
 
 type wsConn struct {
 	conn *websocket.Conn
+	stop func()
 }
 
 func (c *wsConn) Kind() TransportKind { return TransportWs }
@@ -179,6 +185,7 @@ func (c *wsConn) Kind() TransportKind { return TransportWs }
 func (c *wsConn) Recv(ctx context.Context) (any, error) {
 	_, data, err := c.conn.Read(ctx)
 	if err != nil {
+		c.stop()
 		return nil, err
 	}
 	return decodePayload(data), nil
@@ -187,5 +194,6 @@ func (c *wsConn) Recv(ctx context.Context) (any, error) {
 func (c *wsConn) Send(ctx context.Context, data any) error { return writeFrame(ctx, c.conn, data) }
 
 func (c *wsConn) Close() error {
+	c.stop()
 	return c.conn.Close(websocket.StatusNormalClosure, "client close")
 }

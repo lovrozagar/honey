@@ -17,7 +17,7 @@ import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { 
 import { adversarialCorpus } from "../../shared/__fixtures__/adversarial-corpus.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
 import type { RustSdkOptions } from "../sdk.ts"
-import { errors, http } from "../../shared/__fixtures__/documents-http.ts"
+import { errors, http, httpExtraPaths } from "../../shared/__fixtures__/documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
 import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 
@@ -74,6 +74,8 @@ export const FIXTURES = {
 	/** the HTTP runtime's document (contract 19 §4.3): request build, auth, hooks, answers, stale marks, binary */
 	http: { document: http },
 	"http-safe": { document: http, options: { throwOnError: false } },
+	/** the header-rule paths Python, C# and Java add to `http` (bit 19 d1): a declared key, a map header and query */
+	keyed: { document: () => ({ info: { title: "Keyed", version: "1" }, openapi: "3.1.0", paths: httpExtraPaths() }) },
 	/** the realtime connections (contract 20 §4.3): a typed feed, and one declaring every stream field's name */
 	realtime: { document: streams.realtime },
 	/** a relative first server: an empty `base_url` is `Error::Config` */

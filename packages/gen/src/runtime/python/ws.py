@@ -221,8 +221,13 @@ async def open_socket(
                     answer.status_code, answer.headers, raw.body, x.core.keys
                 )
             stream = answer.extensions["network_stream"]
+            every = x.core.config.ws_keepalive or None
             async with AsyncWebSocketSession(
-                stream, max_message_size_bytes=16 << 20, response=answer
+                stream,
+                max_message_size_bytes=16 << 20,
+                keepalive_ping_interval_seconds=every,
+                keepalive_ping_timeout_seconds=every,
+                response=answer,
             ) as session:
                 opened.set_result(session)
                 await done.wait()

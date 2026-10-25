@@ -102,6 +102,9 @@ func newRealtime(ctx context.Context, cfg Config, c *call, topts TransportOpts, 
 		return nil, err
 	}
 	topts.HTTPClient = streamClient(cfg)
+	if topts.KeepAlive == 0 {
+		topts.KeepAlive = cfg.WSKeepalive
+	}
 	topts.headersOf = func() http.Header { return mergeHeaders(cfg, cfg.auth.current(cfg), "", c.headers, rc.headers) }
 	r := NewResumableConnection(u, []Transport{&WsTransport{}, &SseTransport{}, &LongpollTransport{}}, &topts)
 	if err := r.Connect(ctx); err != nil {

@@ -83,11 +83,12 @@ class EventStream(Generic[T]):
         self.pending: deque[RawEvent] = deque()
         self.failure: HoneyError | None = None
         self.ended = False
+        self.delivered = ""
 
     @property
     def last_event_id(self) -> str:
-        """The last event id seen, to resume from."""
-        return self.parser.last_id or ""
+        """The id of the last event delivered, to resume from: a resume from it skips nothing."""
+        return self.delivered
 
     def __aiter__(self) -> Self:
         return self
@@ -113,6 +114,7 @@ class EventStream(Generic[T]):
                 raise DecodeError(
                     f"an event's data is not a JSON {self.shape or 'value'}"
                 )
+        self.delivered = raw.id or ""
         return SseEvent(cast("T", data), raw.event, raw.id, raw.retry)
 
     async def pull(self) -> None:

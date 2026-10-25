@@ -153,6 +153,10 @@ final class Socket implements WebSocket.Listener {
     if (ended.get()) {
       return false;
     }
+    if (keepalive.waiting()) {
+      deferredPing = false;
+      return true;
+    }
     if (!gate.tryAcquire()) {
       deferredPing = true;
       return true;

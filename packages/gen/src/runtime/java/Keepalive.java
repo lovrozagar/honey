@@ -48,6 +48,11 @@ final class Keepalive {
     pinged = System.nanoTime();
   }
 
+  /** Whether a ping waits for its pong: no other goes out until one answers it. */
+  boolean waiting() {
+    return pinged != 0;
+  }
+
   /** A pong or a frame came in: the peer is alive. */
   void heard() {
     pinged = 0;

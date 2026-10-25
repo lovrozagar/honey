@@ -101,9 +101,12 @@ import { runtimeBytes, v1JavaSdkSurfaces } from "./sdk-budget.ts"
  *   completion, which erased a pong that came in first (the f battery's red); its other fixes are the emitter's (derived
  *   operation ids, the answer statement's wrap, the publication), so the ceiling is the measured 149,981 B, provisional
  *   150,100 → locked 149,981.
+ * - bit 19 d1, +219 B to 150,200 B: one ping waits at a time, a deferred one included (a tick racing a send's release
+ *   deferred a second ping behind the first one's, sent while it still waited; found red in d1's gates): Socket.java +84
+ *   (ping() returns while one waits), Keepalive.java +135 (waiting()).
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const JAVA_RUNTIME_BYTES = 149981
+const JAVA_RUNTIME_BYTES = 150200
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

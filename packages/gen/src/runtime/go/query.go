@@ -20,7 +20,7 @@ type queryPair struct {
 
 type queryList []queryPair
 
-// set appends v under key: nil and nil pointers are skipped, slices repeat the key.
+// set appends v under key: nil, nil pointers and empty maps are skipped, slices repeat the key.
 func (q *queryList) set(key string, v any) {
 	rv := reflect.ValueOf(v)
 	for rv.IsValid() && (rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface) {
@@ -29,7 +29,7 @@ func (q *queryList) set(key string, v any) {
 		}
 		rv = rv.Elem()
 	}
-	if !rv.IsValid() {
+	if !rv.IsValid() || rv.Kind() == reflect.Map && rv.Len() == 0 {
 		return
 	}
 	if (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) && rv.Type().Elem().Kind() != reflect.Uint8 {

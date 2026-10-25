@@ -44,15 +44,23 @@ export type WsStep =
 	| { readonly close: { readonly code: number; readonly hangUp?: true; readonly reason: string } }
 	| { readonly drop: true }
 
-/** A WebSocket endpoint: the subprotocol it answers with (as given, offered or not), then its steps; it holds after them. */
-export type WsScript = { readonly protocol?: string; readonly steps: readonly WsStep[] }
+/**
+ * A WebSocket endpoint: the subprotocol it answers with (as given, offered or not), then its steps; it holds after them.
+ * `pong: false` reads a ping and never answers it, a dead peer behind a live connection (the keepalive legs).
+ */
+export type WsScript = { readonly pong?: false; readonly protocol?: string; readonly steps: readonly WsStep[] }
 
 /**
  * One stream, filled while it runs: the client's frames (always empty for SSE) and whether the
  * client left first: an SSE body it closed before the server ended it, or a socket it ended with
  * no close frame. A server `drop` or the server closing is never the client leaving.
  */
-export type StreamRecord = { clientGone: boolean; readonly received: Received[] }
+export type StreamRecord = {
+	clientGone: boolean
+	readonly received: Received[]
+	/** the pings the client sent a socket scripted `pong: false`; absent otherwise */
+	pings?: number
+}
 
 /** What one server's streams share: the sockets and pauses `stop` ends, and the violations seen. */
 export type Stage = {
@@ -155,7 +163,8 @@ export function acceptUpgrade(
 	reply: { readonly headers?: Readonly<Record<string, string>>; readonly ws: WsScript; readonly stage: Stage },
 ): StreamRecord {
 	const { stage, ws } = reply
-	const record: StreamRecord = { clientGone: false, received: [] }
+	const record: StreamRecord =
+		ws.pong === false ? { clientGone: false, pings: 0, received: [] } : { clientGone: false, received: [] }
 	const problem = handshakeProblem(req)
 	if (problem !== null) {
 		stage.violation(`ws ${req.url}: ${problem}`)
@@ -207,7 +216,8 @@ const sendOn = (socket: Duplex, opcode: number, payload: Buffer) =>
 function frameIn(socket: Duplex, at: SessionState, record: StreamRecord, f: Frame): void {
 	const received = receivedOf(f)
 	if (received !== undefined) record.received.push(received)
-	if (f.opcode === PING) sendOn(socket, PONG, f.payload)
+	if (f.opcode === PING && record.pings === undefined) sendOn(socket, PONG, f.payload)
+	else if (f.opcode === PING) record.pings = (record.pings ?? 0) + 1
 	if (received?.kind === "text" || received?.kind === "binary") {
 		at.count++
 		for (const check of at.waiters) check()

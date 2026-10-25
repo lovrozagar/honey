@@ -22,6 +22,8 @@ import (
 // MaxResponseBytes caps a buffered response body. Zero means 100 MiB; a negative value disables
 // the cap.
 //
+// WSKeepalive is a WebSocket's ping interval and pong wait: zero means 20s, negative none.
+//
 // AuthHeaderName and AuthHeaderPrefix are a pair: leave both empty for the API's scheme; set the
 // name and the prefix is yours (empty means none); set only the prefix to keep the scheme's header.
 type Config struct {
@@ -39,6 +41,7 @@ type Config struct {
 	OnResponse       []func(*ResponseContext) error
 	OnLog            func(LogEntry)
 	MaxResponseBytes int64
+	WSKeepalive      time.Duration
 
 	auth *authState
 }
