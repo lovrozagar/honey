@@ -16,7 +16,7 @@ import { goCallPlans } from "../go/sdk.ts"
 import { REFUSED_URL, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { builtCli, type RunOptions } from "./__fixtures__/built.ts"
 import { shop } from "./__fixtures__/shop.ts"
-import { commandFlags, kebab, kindOf } from "./flags.ts"
+import { commandFlags, helpText, kebab, kindOf } from "./flags.ts"
 import { generateGoCli } from "./module.ts"
 
 const GO = withGo()
@@ -465,5 +465,11 @@ describe.skipIf(!GO)("--verbose: a secret a URL carries escaped (phase c conditi
 			raw: ran.stderr.includes(KEY),
 			redacted: (ran.stderr.split("\n")[0] ?? "").includes("[redacted]"),
 		}).toEqual({ differs: true, escaped: false, raw: false, redacted: true })
+	})
+})
+
+describe("helpText: spec text as a terminal shows it (bit 19 a)", () => {
+	it("drops every bidi control, as it drops the C0, DEL and C1 controls", () => {
+		expect(helpText("a‪b‮c⁦d⁩e‎f‏g؜h")).toBe("abcdefgh")
 	})
 })

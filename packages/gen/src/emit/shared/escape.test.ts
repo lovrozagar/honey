@@ -42,16 +42,16 @@ describe("wellFormed: text every target can encode", () => {
 describe("string literals: one escaper, one policy per target", () => {
 	const nasty = `q"b\\n\nr\rt\tz\0d\u007f e\u0001 ${LONE_HIGH} \u2028\u2029\u0085\uFEFF ${PAIR}`
 
-	it("TypeScript: JSON-style escapes, U+2028, U+2029 and the BOM visible", () => {
+	it("TypeScript: JSON-style escapes, DEL, C1, U+2028, U+2029 and the BOM visible", () => {
 		expect(tsString(nasty)).toBe(
-			'"q\\"b\\\\n\\nr\\rt\\tz\\u0000d\u007f e\\u0001 \uFFFD \\u2028\\u2029\u0085\\ufeff \u{1F600}"',
+			'"q\\"b\\\\n\\nr\\rt\\tz\\u0000d\\u007f e\\u0001 \uFFFD \\u2028\\u2029\\u0085\\ufeff \u{1F600}"',
 		)
 	})
 
 	// v0: 11147399aa
-	it("Go: named escapes, \\xHH for control bytes, the BOM as \\ufeff", () => {
+	it("Go: named escapes, \\xHH for control bytes, C1 and the BOM as \\uHHHH", () => {
 		expect(goString(nasty)).toBe(
-			'"q\\"b\\\\n\\nr\\rt\\tz\\x00d\\x7f e\\x01 \uFFFD \u2028\u2029\u0085\\ufeff \u{1F600}"',
+			'"q\\"b\\\\n\\nr\\rt\\tz\\x00d\\x7f e\\x01 \uFFFD \u2028\u2029\\u0085\\ufeff \u{1F600}"',
 		)
 	})
 
@@ -59,7 +59,7 @@ describe("string literals: one escaper, one policy per target", () => {
 	// v0: 50ae770575
 	it("Rust: named escapes and \\0, \\u{H} for other control code points and the BOM", () => {
 		expect(rustString(nasty)).toBe(
-			'"q\\"b\\\\n\\nr\\rt\\tz\\0d\\u{7f} e\\u{01} \uFFFD \u2028\u2029\u0085\\u{feff} \u{1F600}"',
+			'"q\\"b\\\\n\\nr\\rt\\tz\\0d\\u{7f} e\\u{01} \uFFFD \u2028\u2029\\u{85}\\u{feff} \u{1F600}"',
 		)
 		expect(rustString("\b\f\u0001")).toBe('"\\u{08}\\u{0c}\\u{01}"')
 	})
@@ -96,7 +96,7 @@ describe("Java string literals: one escaper, the \\u hazard kept", () => {
 
 	it("Java: named escapes, \\uHHHH for other control code points, DEL and the BOM, never \\x, the apostrophe raw", () => {
 		expect(javaString(nasty)).toBe(
-			'"q\\"b\\\\n\\nr\\rt\\tz\\u0000d\\u007f e\\u0001 \uFFFD \u2028\u2029\u0085\\ufeff \u{1F600}"',
+			'"q\\"b\\\\n\\nr\\rt\\tz\\u0000d\\u007f e\\u0001 \uFFFD \u2028\u2029\\u0085\\ufeff \u{1F600}"',
 		)
 		expect(javaString("\b\f\u000b\u001f")).toBe('"\\u0008\\u000c\\u000b\\u001f"')
 		expect(javaString("it's")).toBe('"it\'s"')
@@ -126,13 +126,13 @@ describe("comments: text that can never become code", () => {
 		]).toEqual([["// one", "// two", "// three", "//", "// four"], ["\t/// doc"], ["  #"]])
 	})
 
-	it("C# doc lines: split at every line break a C# lexer ends a line at, XML-escaped, control characters shown", () => {
+	it("C# doc lines: split at every line break a C# lexer ends a line at, XML-escaped, control characters and NEL shown", () => {
 		expect([
 			csDocLines("a<b&c\u2028d"),
 			csDocLines("x > y\r\nz\u0085w\u2029v"),
 			csDocLines("&lt; stays text"),
 			csDocLines(`a\u0000b${LONE_LOW}`),
-		]).toEqual([["a&lt;b&amp;c", "d"], ["x &gt; y", "z", "w", "v"], ["&amp;lt; stays text"], ["a\\u0000b\uFFFD"]])
+		]).toEqual([["a&lt;b&amp;c", "d"], ["x &gt; y", "z\\u0085w", "v"], ["&amp;lt; stays text"], ["a\\u0000b\uFFFD"]])
 	})
 
 	// v0: 0fd9637be3
@@ -261,5 +261,37 @@ describe("Java comments: a backslash before u never reaches javac as an escape",
 			["mail@host {&#64;code x}"],
 			["a\\\\u0041 * /"],
 		])
+	})
+})
+
+/* C1 and the bidi controls: unseen, or reordering what an editor shows (Trojan Source, CVE-2021-42574) */
+const INVISIBLE = "\u0080\u0085\u009f؜‎‏‪‮⁦⁩"
+const LITERAL_TARGETS = ["csharp", "go", "java", "python", "rust", "ts"] as const
+const rawIn = (text: string) => [...text].filter((ch) => INVISIBLE.includes(ch))
+
+describe("C1 and the bidi controls: shown in every literal and comment, never raw (bit 19 a)", () => {
+	it("escapes each in every target's string literal, and shows each in comment text", () => {
+		expect([
+			...LITERAL_TARGETS.map((target) => rawIn(stringLiteral(`a${INVISIBLE}b`, target))),
+			commentText(INVISIBLE),
+		]).toEqual([
+			...LITERAL_TARGETS.map(() => []),
+			"\\u0080\\u0085\\u009f\\u061c\\u200e\\u200f\\u202a\\u202e\\u2066\\u2069",
+		])
+	})
+
+	it("writes each as the target's own escape, reading back as itself", () => {
+		expect(LITERAL_TARGETS.map((target) => stringLiteral("‮\u0085", target))).toEqual([
+			'"\\u202e\\u0085"',
+			'"\\u202e\\u0085"',
+			'"\\u202e\\u0085"',
+			'"\\u202e\\u0085"',
+			'"\\u{202e}\\u{85}"',
+			'"\\u202e\\u0085"',
+		])
+	})
+
+	it("TypeScript writes DEL as \\u007f, as every other target escapes it", () => {
+		expect(tsString("a\u007fb")).toBe('"a\\u007fb"')
 	})
 })

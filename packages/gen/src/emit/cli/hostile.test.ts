@@ -18,7 +18,7 @@ const SLOW = { timeout: 600_000 }
 /** The printable hostile text: what a Go string, a shell, a format string or a comment would each misread. */
 const PRINTABLE = `Say "hi" 'x' \`y\` */ /* $(id) \${HOME} %s %d 100% \\ done`
 /** Controls the help drops: NUL, BEL, an escape sequence, a carriage return, DEL, C1 NEL, U+2028 and the BOM. */
-const CONTROLS = "\u0000\u0007\u001b[2J\r\u007f\u0085\u2028\ufeff"
+const CONTROLS = "\u0000\u0007\u001b[2J\r\u007f\u0085\u2028\ufeff\u202e\u2066\u200f\u061c"
 
 const TITLE = `Shop ${PRINTABLE}${CONTROLS}\nsecond line`
 /** A string default with quotes, format verbs, a backslash and the controls. */

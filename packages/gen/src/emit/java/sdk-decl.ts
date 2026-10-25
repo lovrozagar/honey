@@ -5,6 +5,7 @@
  * else each takes its own line. The suffix closes the last line. An assignment whose right side does not fit breaks
  * after `=` first.
  */
+import { invisible } from "../shared/escape.ts"
 
 /** The longest line google-java-format keeps. */
 const WIDTH = 100
@@ -29,9 +30,9 @@ export function assigned(indent: string, lhs: string, { items, prefix, suffix }:
 	return [`${indent}${lhs} =`, ...layout(prefix, items, suffix, `${indent}    `)]
 }
 
-/** Whether `cp` is a control, DEL, C1, the BOM or a line or paragraph separator: never raw in a doc comment. */
+/** Whether `cp` is a control, DEL, C1, the BOM, a line or paragraph separator or a bidi control: never raw in a doc. */
 const control = (cp: number) =>
-	cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0xfeff || cp === 0x2028 || cp === 0x2029
+	cp < 0x20 || cp === 0x7f || cp === 0xfeff || cp === 0x2028 || cp === 0x2029 || invisible(cp)
 
 /**
  * Spec text as a doc comment holds it: each control a space; every backslash `&#92;`, so none begins a `\u` escape,

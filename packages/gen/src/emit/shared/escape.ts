@@ -14,6 +14,18 @@ export function wellFormed(text: string): string {
 
 const hex = (cp: number, width: number) => cp.toString(16).padStart(width, "0")
 
+/**
+ * C1 and the bidi controls: unseen, or reordering what an editor shows (Trojan Source, CVE-2021-42574). Every
+ * literal writes them as an escape and every comment shows them as `\uXXXX`, so spec text reads as it runs.
+ */
+export const invisible = (cp: number): boolean =>
+	(cp >= 0x80 && cp <= 0x9f) ||
+	cp === 0x061c ||
+	cp === 0x200e ||
+	cp === 0x200f ||
+	(cp >= 0x202a && cp <= 0x202e) ||
+	(cp >= 0x2066 && cp <= 0x2069)
+
 /** How one target writes a code point inside `"…"`: an escape, or `null` to write it as it is. */
 type Policy = (cp: number) => string | null
 
@@ -23,29 +35,31 @@ const NAMED: Readonly<Record<number, string>> = { 0x09: "\\t", 0x0a: "\\n", 0x0d
 const POLICIES: Readonly<Record<Target, Policy>> = {
 	/* C#'s \x takes one to four hex digits, so it is never written: \uHHHH, fixed width, for every escape */
 	csharp: (cp) =>
-		cp < 0x20 || cp === 0x7f || cp === 0x85 || cp === 0x2028 || cp === 0x2029 || cp === 0xfeff
+		cp < 0x20 || cp === 0x7f || cp === 0x2028 || cp === 0x2029 || cp === 0xfeff || invisible(cp)
 			? `\\u${hex(cp, 4)}`
 			: null,
 	go: (cp) => {
 		if (cp < 0x20 || cp === 0x7f) return `\\x${hex(cp, 2)}`
-		return cp === 0xfeff ? "\\ufeff" : null
+		return cp === 0xfeff || invisible(cp) ? `\\u${hex(cp, 4)}` : null
 	},
 	/* Java has no \x: \uHHHH for every other control, DEL and the BOM. The apostrophe stays raw: javac takes it in
 	 * "…", and the backslash's own escape keeps every \u in the text from becoming one (JLS 3.3) */
-	java: (cp) => (cp < 0x20 || cp === 0x7f || cp === 0xfeff ? `\\u${hex(cp, 4)}` : null),
+	java: (cp) => (cp < 0x20 || cp === 0x7f || cp === 0xfeff || invisible(cp) ? `\\u${hex(cp, 4)}` : null),
 	python: (cp) => {
 		if (cp < 0x20 || cp === 0x7f) return `\\x${hex(cp, 2)}`
-		/* line separators, NEL and the BOM read as line ends or vanish in some tools: never raw */
-		return cp === 0x85 || cp === 0x2028 || cp === 0x2029 || cp === 0xfeff ? `\\u${hex(cp, 4)}` : null
+		/* line separators and the BOM read as line ends or vanish in some tools: never raw */
+		return cp === 0x2028 || cp === 0x2029 || cp === 0xfeff || invisible(cp) ? `\\u${hex(cp, 4)}` : null
 	},
 	rust: (cp) => {
 		if (cp === 0) return "\\0"
-		return cp < 0x20 || cp === 0x7f || cp === 0xfeff ? `\\u{${hex(cp, 2)}}` : null
+		return cp < 0x20 || cp === 0x7f || cp === 0xfeff || invisible(cp) ? `\\u{${hex(cp, 2)}}` : null
 	},
 	ts: (cp) => {
 		if (cp === 0x08) return "\\b"
 		if (cp === 0x0c) return "\\f"
-		return cp < 0x20 || cp === 0x2028 || cp === 0x2029 || cp === 0xfeff ? `\\u${hex(cp, 4)}` : null
+		return cp < 0x20 || cp === 0x7f || cp === 0x2028 || cp === 0x2029 || cp === 0xfeff || invisible(cp)
+			? `\\u${hex(cp, 4)}`
+			: null
 	},
 }
 
@@ -74,21 +88,23 @@ export const javaString = (text: string) => stringLiteral(text, "java")
 
 /**
  * Text for a comment or docstring: well-formed, with each character a compiler refuses even in a
- * comment (Go and Python refuse NUL, Go a BOM) shown as visible `\uXXXX`. Tab and line breaks stay;
- * the comment writers split lines themselves.
+ * comment (Go and Python refuse NUL, Go a BOM), and each C1 or bidi control, shown as visible
+ * `\uXXXX`. Tab and line breaks stay; the comment writers split lines themselves.
  */
 export function commentText(text: string): string {
 	let out = ""
 	for (const ch of wellFormed(text)) {
 		const cp = ch.codePointAt(0) as number
-		const hidden = (cp < 0x20 && cp !== 0x09 && cp !== 0x0a && cp !== 0x0d) || cp === 0x7f || cp === 0xfeff
+		const hidden =
+			(cp < 0x20 && cp !== 0x09 && cp !== 0x0a && cp !== 0x0d) || cp === 0x7f || cp === 0xfeff || invisible(cp)
 		out += hidden ? `\\u${hex(cp, 4)}` : ch
 	}
 	return out
 }
 
-/* every line break a comment writer splits at: a C# or JS lexer ends a line at U+0085, U+2028 and U+2029 too */
-const LINE_BREAKS = /\r\n|\r|\n|\u2028|\u2029|\u0085/
+/* every line break a comment writer splits at: a C# or JS lexer ends a line at U+2028 and U+2029 too (U+0085, C1,
+   never reaches a writer raw: commentText shows it) */
+const LINE_BREAKS = /\r\n|\r|\n|\u2028|\u2029/
 
 /** Comment lines of `text` behind `marker` (`//`, `///`, `#`): each line break in it starts a new comment line. */
 export function lineComment(text: string, marker: string, indent = ""): string[] {

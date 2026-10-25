@@ -113,14 +113,25 @@ function docProblem(text: string): string | null {
 	)
 	if (lexed.indexOf("*/") !== lexed.length - 2) return "the comment closes before its end"
 	if (/\\u/.test(doc)) return "a backslash javac could read as an escape"
-	const raw = (cp: number) => cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) || cp === 0xfeff || cp === 0x2028 || cp === 0x2029
+	const raw = (cp: number) =>
+		cp < 0x20 ||
+		(cp >= 0x7f && cp <= 0x9f) ||
+		[0xfeff, 0x2028, 0x2029, 0x061c, 0x200e, 0x200f].includes(cp) ||
+		(cp >= 0x202a && cp <= 0x202e) ||
+		(cp >= 0x2066 && cp <= 0x2069)
 	if ([...doc].some((ch) => raw(ch.codePointAt(0) as number))) return "a control raw"
 	return null
 }
 
 describe("gen adversarial: docOf, the Java emitter's doc comments", () => {
 	it("never closes early, never leaves a `\\u` escape, never a control, over named closers and the F2 fuzz", () => {
-		const named = [...CLOSERS.map((closer) => `a ${closer} ${PAYLOAD}`), "x\u0000y\u2028z", "\\", "\\\\u0041"]
+		const named = [
+			...CLOSERS.map((closer) => `a ${closer} ${PAYLOAD}`),
+			"x\u0000y\u2028z",
+			"\\",
+			"\\\\u0041",
+			"b\u202ei\u2066d\u061c",
+		]
 		expect([named.map(docProblem), failures(47, docProblem, 2_000)]).toEqual([named.map(() => null), []])
 	})
 })

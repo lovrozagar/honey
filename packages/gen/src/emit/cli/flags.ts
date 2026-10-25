@@ -9,7 +9,7 @@
 import type { IRParam, IRSchema } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import type { GoCallPlan } from "../go/sdk-client.ts"
-import { goString } from "../shared/escape.ts"
+import { goString, invisible } from "../shared/escape.ts"
 import { NameScope, words } from "../shared/lang.ts"
 
 /** The flags every command has, and those later phases give it: a parameter never takes one of these names. */
@@ -43,18 +43,20 @@ const JSON_KIND: Kind = { enum: [], kind: "json", list: false }
 
 /**
  * Spec text as a terminal shows it in help: line ends as `\n`, and every other control character (C0 but tab, DEL, C1,
- * the BOM, the line and paragraph separators) dropped, so no spec can move the cursor or recolor a user's terminal.
+ * the BOM, the line and paragraph separators, the bidi controls) dropped, so no spec can move the cursor, recolor a
+ * user's terminal or reorder what it shows.
  */
 export const helpText = (text: string): string =>
 	[...text.replace(/\r\n?/g, "\n")].filter((ch) => !hidden(ch.codePointAt(0) as number)).join("")
 
-/** Whether a code point is one help drops: a C0 control but tab and line feed, DEL, C1, the BOM, U+2028, U+2029. */
+/** Whether a code point is one help drops: a C0 control but tab and line feed, DEL, C1, the BOM, U+2028, U+2029, bidi. */
 const hidden = (cp: number) =>
 	(cp < 0x20 && cp !== 0x09 && cp !== 0x0a) ||
-	(cp >= 0x7f && cp <= 0x9f) ||
+	cp === 0x7f ||
 	cp === 0xfeff ||
 	cp === 0x2028 ||
-	cp === 0x2029
+	cp === 0x2029 ||
+	invisible(cp)
 
 /** A name as a flag spells it: its words, lowercase, joined by `-`. */
 export const kebab = (raw: string): string =>

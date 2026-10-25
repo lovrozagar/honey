@@ -53,16 +53,32 @@ const TOKENS: readonly string[] = [
 	"%s",
 	"{}",
 	"</script>",
+	"\u0080",
+	"\u009f",
+	"\u061c",
+	"\u200f",
+	"\u202e",
+	"\u2066",
 ]
+
+/** C1 and the bidi controls (Trojan Source, CVE-2021-42574): unseen or reordering in an editor, so never raw. */
+const invisible = (cp: number) =>
+	(cp >= 0x80 && cp <= 0x9f) ||
+	[0x061c, 0x200e, 0x200f].includes(cp) ||
+	(cp >= 0x202a && cp <= 0x202e) ||
+	(cp >= 0x2066 && cp <= 0x2069)
 
 /** What each target forbids raw inside `"…"`, or this layer escapes there by policy: the only escapes allowed. */
 const REQUIRED: Readonly<Record<Target, (cp: number) => boolean>> = {
-	csharp: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x85, 0x2028, 0x2029, 0xfeff].includes(cp),
-	go: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
-	java: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
-	python: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x85, 0x2028, 0x2029, 0xfeff].includes(cp),
-	rust: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff,
-	ts: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || [0x2028, 0x2029, 0xfeff].includes(cp),
+	csharp: (cp) =>
+		cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x2028, 0x2029, 0xfeff].includes(cp) || invisible(cp),
+	go: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff || invisible(cp),
+	java: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff || invisible(cp),
+	python: (cp) =>
+		cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x2028, 0x2029, 0xfeff].includes(cp) || invisible(cp),
+	rust: (cp) => cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || cp === 0xfeff || invisible(cp),
+	ts: (cp) =>
+		cp === 0x22 || cp === 0x5c || cp < 0x20 || cp === 0x7f || [0x2028, 0x2029, 0xfeff].includes(cp) || invisible(cp),
 }
 
 const SIMPLE: Readonly<Record<Target, Readonly<Record<string, string>>>> = {
@@ -249,8 +265,9 @@ export function literalProblem(target: Target, text: string): string | null {
 	return null
 }
 
-/** C0 (bar tab and line breaks), DEL and the BOM: never raw in comment text. */
-const hidden = (cp: number) => (cp < 0x20 && ![0x09, 0x0a, 0x0d].includes(cp)) || cp === 0x7f || cp === 0xfeff
+/** C0 (bar tab and line breaks), DEL, the BOM, C1 and the bidi controls: never raw in comment text. */
+const hidden = (cp: number) =>
+	(cp < 0x20 && ![0x09, 0x0a, 0x0d].includes(cp)) || cp === 0x7f || cp === 0xfeff || invisible(cp)
 
 /** What is wrong with the comment forms of `text`, or `null`. */
 export function commentProblem(text: string): string | null {

@@ -10,6 +10,74 @@ Publish both packages and the generated SDKs correctly. Split v0 `plugin.ts` 864
 
 **Cutover + real `prod` e2e (H14/H21).** The atomic workspace swap lands here (`_v0` leaves `workspaces`, `packages/core` joins as `@lovrozagar/honey`), and this bit owns the consumer e2e passing identically against v1. v0's `--mode prod` was a no-op grep swap (verified bit 00; `prod ≡ dev`, `cf` always local); v1 makes it real: `prod` builds each app and drives the full Playwright suite against the **served built bundle** (request-time parity of the shipped artifact — beyond `test:build`'s import smoke), and `cf prod` deploys a worker (CF creds, CI). Re-record `blueprint/baselines/e2e-expected.json` against v1, move the 5 `cf-prod` cells to CI, and add the ≥1 genuine `@prod-only` assertion that makes `prod` distinct from `dev`.
 
+**Sweep corrections (bit 19 research, 2026-10-25; supersede the item text below where they differ).** The research read every target's runtime at file:line (`~/.cache/honey-tmp/b19/research-sweep.md`). Landed before the sweep: the TS response cap (aea3954: decoded bytes past 100 MiB refused, the TS runtime's first G14 lock at 108,041 B, the MCP server reading at its 1 MiB cap) and the Java doc-comment and Unicode-escape fix (18b51a5).
+
+13 items hold as written. The 17 that differ, each with the corrected fact. The first 6 are material (the targets themselves are not as bits/19 says):
+
+1. **Item 2, realtime auth refresh (bits/19:15).**
+   - Bits/19 says reconnects reuse the construction token (v0 behavior), "consistent with TS".
+   - In fact Rust, Python, C# and Java re-read the token on every dial: ws.rs:221, ws.py:266, WsDial.cs:33, WsDial.java:84.
+   - Only TS (realtime-connection.ts:144) and Go (realtime.go:104, transport.go:53) reuse it. TS's `token?` option (realtime.ts:228) is never read (N3).
+2. **Item 7, caller-client cross-origin strip (bits/19:25).**
+   - "Java enforces it" holds only trivially: Java takes no caller client at all (Hops.java:30–34).
+   - A new Go gap: a caller RoundTripper's injected headers travel to every hop; only `req.Header` is stripped (redirect.go:56–80).
+3. **Item 12, stream-timeout granularity (bits/19:35).**
+   - Bits/19 says the per-target span differs but every target honors the invariant.
+   - In fact the open is **unbounded** in Go (stream.go:13–14, transport_sse.go:28), Rust (exchange.rs:123–127), Python both modes (send_async.py:123 `read=None`; exchange.py:100–101, send_sync.py:72), and TS's explicit `kind: "stream"` path (http.ts:175,265).
+   - A server that never sends headers holds the call (N5).
+4. **Item 17, SSE resume id (bits/19:45).**
+   - Bits/19 says Python, Go, Rust and TS resume from the last parsed id.
+   - In fact Go (transport_sse.go:134–137), C#, Java, Rust realtime (transport.rs:26,166) and Python realtime (transport.py:138–142) set the cursor **on delivery**.
+   - Only TS realtime sets it at frame receipt (realtime-connection.ts:128–129).
+   - The parse-time id exists only on the Rust/Python generic EventStream getters (events.rs:45–46, events.py:88–90), which no reconnect reads.
+5. **Item 25, WS close codes (bits/19:61).**
+   - Rust sends **no** close code on an over-cap message; it surfaces as a transport error (ws.rs:24,232).
+   - Python's generic branch closes with 1000 (ws.py:112–115), and which branch an over-cap message takes is unverified.
+   - TS has no WS cap at all (ws.ts).
+6. **Item 26, WS keepalive (bits/19:63).**
+   - Bits/19 says "no decision needed unless another target lacks a keepalive", but three do: Go, Rust and Python have no ping anywhere in their runtimes (N4).
+   - TS pings only on realtime and only when `keepaliveInterval` is set (realtime-connection.ts:210–211).
+
+The other 11:
+
+7. **Item 6, error message (bits/19:23):** TS prints the server message with no `HTTP <status>:` prefix (response.ts errorFromResponse, `HTTP ${status}` only when no message), an unlisted fourth form.
+8. **Item 8, charset (bits/19:27):** Rust does **not** honor charset. It decodes with strict `String::from_utf8` (answer.rs:34–35), so invalid bytes are an error where the others substitute U+FFFD.
+9. **Item 9, decompression (bits/19:29):**
+   - Go has no cap-free path: LimitReader at request.go:203–212.
+   - Python httpx2's default Accept-Encoding is unverified (not installed when read), so it gets a probe in phase b1.
+   - The TS half is closed by aea3954.
+10. **Item 10, HTTP version (bits/19:31):**
+    - Go (DefaultTransport, redirect.go:35) and Rust (the `http2` feature, sdk-cargo.ts:26) can negotiate h2 over TLS.
+    - The reference server is cleartext only (conformance/app.ts:394), so the grid cannot observe h2.
+    - Python and TS defaults are unverified: probe.
+11. **Item 11, header-rule parity (bits/19:33):**
+    - Go sends `{}` for an empty-map header **and** query param (query.go:23–41 has no map case; json.Marshal at :83). That's a behavior bug, not a coverage gap (N2).
+    - Java pins neither rule; TS has no Idempotency-Key leg.
+12. **Item 14, non-JSON realtime send (bits/19:39):** a wider split.
+    - Rust (live.rs:33–34) and Python (stream.py:138–141) quote the frame.
+    - C#, Java and Go send raw (Stream.cs:241–243, Live.java:62–66, live.go:51–52).
+    - The matrix declares raw text (matrix.ts:60).
+13. **Item 15, non-ASCII escaping (bits/19:41):** Go's json.Marshal escapes `< > &` (body.go:63). The .NET default also escapes `' + \``.
+14. **Item 16, bounded streaming read (bits/19:43):**
+    - TS uses one 1 MiB **character** limit for both line and event (sse.ts:10,51,114; config.ts:107): no 8 MiB event cap, no ordering leg.
+    - In the five others the event-cap legs pin no prior event.
+15. **Item 19, bogus-token send (bits/19:49):** TS also sends into the refused socket (ts-harness.test.ts:337).
+16. **Item 22, header validation (bits/19:55):**
+    - Python checks only CR/LF/NUL (exchange.py:141–142), so `\u0001`/`\u007f` pass.
+    - Go and TS have no SDK check; the platform refuses, and whether undici's error quotes the value is unverified (probe).
+17. **Item 30, realtime send encoding (bits/19:77):** Go also escapes `<>&` (ws.go:91).
+
+Item 18 (request_start clock) gains Java among those logging 0 (CallLog.java:19–20). That's an addition, not a contradiction, so it counts among the 13.
+
+New findings beyond the 30 items:
+
+- **N2.** Go sends `{}` for an empty-map header or query param (query.go:23–41,83) → phase d1, red-first.
+- **N3.** Go and TS realtime reuse the construction token; TS's `token?` option is dead (realtime.ts:228) → phase b2.
+- **N4.** Go, Rust and Python send no WebSocket keepalive → phase d1.
+- **N5.** Go, Rust, Python and TS-stream have no bound on the open → phase b2.
+
+**Decided-deferred past 1.0: MCP Streamable HTTP** (bit 18 carry-in). It adds a listening network surface with its own security corpus (Origin checks and DNS rebinding, the bind address, auth, sessions); the emitted server stays stdio-only and documents it.
+
 **Cross-SDK auth-config consistency sweep (surfaced bit 12, G/F2).** The SDKs diverge by target on how the auth header is configured: Go/Rust/the Go CLI/Python (bit 14 c) read `IR.auth` (the spec's security scheme) to default the header name and prefix, and C#/Java are ruled to read it too (bits 15/16); **TS alone** exposes only `authHeaderName`/`authHeaderPrefix` config with hard defaults `Authorization`/`Bearer ` and never reads `IR.auth`. This was **status quo from v0** (v0's `codegen.ts` TS SDK never read it either — not a v1 regression). Decide here whether to unify (TS also reads `IR.auth`, with a leg) or document TS's deliberate divergence; either way the conformance auth row already passes because every target sets auth explicitly. (Python was in this outlier set until bit 14 c made it read `IR.auth` with the pair rule, leaving TS the only one.)
 
 **Cross-SDK realtime auth-refresh sweep (surfaced bit 12 phase d).** Two related realtime-auth behaviors are deferred, consistent with TS: (1) `dialWebSocket` has no 401-refresh (TS's browser WebSocket can't either); (2) a realtime connection reuses its construction-time auth token across reconnects (v0 behavior) rather than picking up a token refreshed mid-connection. Neither is a conformance-grid cell (the reconnect cells test resume, not auth refresh). Decide at release whether to make reconnects use the current/refreshed token (and whether WS dials should 401-refresh) uniformly across SDKs, or document the per-target realtime-auth behavior. Note: this is distinct from the per-dial `X-Request-Id` (bit-12 Fd2), which is fixed.
