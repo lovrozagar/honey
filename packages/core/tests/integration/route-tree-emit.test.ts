@@ -11,6 +11,7 @@ import { generateRouteTree } from "../../../gen/src/emit/ts/route-tree.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { generateOpenApi } from "../../src/openapi/generate.ts"
+import { generateManifest } from "../../src/openapi/manifest.ts"
 import { serveOpenApi } from "../../src/openapi/serve.ts"
 import { type Honey, honey } from "../../src/routing/app.ts"
 import type { RouteEntry, RouteTree } from "../../src/routing/tree.ts"
@@ -30,6 +31,7 @@ import {
 	runtimeApp,
 } from "./route-tree-emit/reference.ts"
 import { caseLabel, rng, runs } from "./security/rng.ts"
+import { ws } from "../../src/ws/route.ts"
 
 type App = Honey<{}>
 
@@ -207,12 +209,12 @@ describe("route-tree emit: a booted app keeps the live app's scopes and mounts",
 	// v0: 4c53d6cec5
 	it("leaves the imported module untouched when one app serves its document and a websocket route beside it", async () => {
 		const live = chatApp()
-		live.ws("/live").handler({})
+		ws(live, "/live").handler({})
 		const module = await emitted(live)
 		const a = chatApp(module.routeTree).wsAdapter({
 			upgrade: () => ({ response: new Response(), socket: {} as never }),
 		})
-		a.ws("/live").handler({})
+		ws(a, "/live").handler({})
 		serveOpenApi(a, { title: "T", version: "1" })
 		const b = chatApp(module.routeTree)
 		expect([
@@ -225,6 +227,29 @@ describe("route-tree emit: a booted app keeps the live app's scopes and mounts",
 			["chat", "health", "live"],
 			["GET /chat", "GET /health", "WS /live"],
 			"WS /live",
+		])
+	})
+})
+
+describe("route-tree emit: a ws route through generation (bit 19 i2)", () => {
+	it("places a ws route under its base path in the tree, gen's module and the document; the manifest stays HTTP-only", async () => {
+		const app = honey<{}>()
+		app.get("/health").handler((c) => c.res.text("ok", "ok"))
+		ws(app.basePath("/v1"), "/rooms/:id").handler({})
+		const module = await emitted(app)
+		const doc = generateOpenApi(app, { info: { title: "T", version: "1" } })
+		expect([
+			Object.keys(app.toRouteTree().routes),
+			Object.keys(module.routes),
+			module.tree.s.v1?.s.rooms?.d?.c.ws,
+			generateManifest(app).routes.map((route) => `${route.method} ${route.path}`),
+			doc.paths["/v1/rooms/{id}"]?.get?.["x-websocket"],
+		]).toEqual([
+			["GET /health", "WS /v1/rooms/:id"],
+			["GET /health", "WS /v1/rooms/:id"],
+			"WS /v1/rooms/:id",
+			["GET /health"],
+			true,
 		])
 	})
 })

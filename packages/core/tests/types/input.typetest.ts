@@ -19,6 +19,7 @@ import { honey } from "../../src/routing/app.ts"
 import type { InferRouteCtx, InferRouteInput, InferRoutes } from "../../src/routing/app-types.ts"
 import type { InferOutput, StandardSchemaLike } from "../../src/validation/standard-schema.ts"
 import type { NormalizedIssue } from "../../src/validation/validate-input.ts"
+import { ws } from "../../src/ws/route.ts"
 
 const withDb = createMiddleware((_ctx, next) => next({ db: { query: (sql: string) => [sql] } }))
 const withAuth = createMiddleware((_ctx, next) => next({ userId: "u-1" }))
@@ -291,8 +292,7 @@ describe("the validation types", () => {
 describe("ws .input(): the non-body sources only", () => {
 	it("types ctx.input on the socket's callbacks; a body source is refused", () => {
 		const app = honey<{}>()
-		app
-			.ws("/live/:room")
+		ws(app, "/live/:room")
 			.input({ params: z.object({ room: z.string() }), search: z.object({ token: z.string() }) })
 			.handler({
 				onOpen: (ctx) => {
@@ -301,7 +301,7 @@ describe("ws .input(): the non-body sources only", () => {
 				},
 			})
 		// @ts-expect-error an upgrade has no body
-		app.ws("/b").input({ json: z.object({}) })
+		ws(app, "/b").input({ json: z.object({}) })
 	})
 })
 

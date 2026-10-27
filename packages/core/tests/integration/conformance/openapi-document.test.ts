@@ -14,6 +14,7 @@ import { toYaml } from "../../../src/openapi/yaml.ts"
 import { honey } from "../../../src/routing/app.ts"
 import { SILENT } from "../../../src/telemetry/logger.ts"
 import { createConformanceApp } from "./app.ts"
+import { ws } from "../../../src/ws/route.ts"
 
 const require = createRequire(import.meta.url)
 const OAS31 = join(import.meta.dirname, "oas31")
@@ -132,7 +133,7 @@ function cornerCases() {
 		.input({ search: v.object({ page: v.optional(v.pipe(v.number(), v.integer())) }) })
 		.output({ "application/json": { ok: v.strictObject({ items: v.tuple([v.string(), v.number()]) }) } })
 		.handler((c) => c.res.json("ok", { items: ["a", 1] }))
-	app.ws("/live/:room").handler({ onMessage() {} })
+	ws(app, "/live/:room").handler({ onMessage() {} })
 	return app
 }
 

@@ -1,5 +1,5 @@
 /**
- * `realtime(app, path, opts)`: a realtime route, built on `app.ws(path)` through the public API
+ * `realtime(app, path, opts)`: a realtime route, built on `ws(app, path)` through the public API
  * alone. A plain function the app module imports (`@lovrozagar/honey/realtime`); nothing registers
  * itself (H23), and an app that never calls it bundles none of it.
  *
@@ -11,10 +11,8 @@
  */
 import { type HoneyContext, REQUEST } from "../context/context.ts"
 import type { MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { Honey } from "../routing/app.ts"
-import type { ApplyScoped, ScopedMwEntry } from "../routing/app-types.ts"
-import type { MergePath } from "../routing/types.ts"
 import type { WSRouteBuilder, WSRouteCtx } from "../routing/ws-builder.ts"
+import { type AnyHoneyHandle, ws, type WsRouteOf } from "../ws/route.ts"
 import { type RealtimeOptions, resolveRealtimeConfig } from "./route.ts"
 import {
 	createRealtimePublisher,
@@ -23,23 +21,13 @@ import {
 	type RealtimeSession,
 } from "./server.ts"
 
-/** The ctx `app.ws(path)` hands its callbacks, which `identify` and `handler` receive. */
+/** The ctx `ws(app, path)` hands its callbacks, which `identify` and `handler` receive. */
 export type RealtimeCtx<TApp, TPath extends string> =
-	TApp extends Honey<
-		any,
-		infer TCtx,
-		any,
-		any,
-		any,
-		any,
-		infer TBase,
-		any,
-		infer TScoped extends readonly ScopedMwEntry[]
-	>
-		? WSRouteCtx<TCtx & ApplyScoped<TScoped, MergePath<TBase, TPath>>, MergePath<TBase, TPath>>
+	WsRouteOf<TApp, TPath> extends WSRouteBuilder<infer TCtx, infer TFull extends string, any>
+		? WSRouteCtx<TCtx, TFull>
 		: never
 
-export function realtime<TApp extends Honey<any, any, any, any, any, any, any, any, any>, const TPath extends string>(
+export function realtime<TApp extends AnyHoneyHandle, const TPath extends string>(
 	app: TApp,
 	path: TPath,
 	options: RealtimeOptions<RealtimeCtx<TApp, TPath>>,
@@ -57,7 +45,7 @@ export function realtime<TApp extends Honey<any, any, any, any, any, any, any, a
 		)
 		return next()
 	}
-	let route = app.ws(path) as WSRouteBuilder<unknown, string, unknown>
+	let route = ws(app, path) as WSRouteBuilder<unknown, string, unknown>
 	for (const mw of [...config.use, connect]) route = route.use(mw as MiddlewareFn<unknown, unknown>)
 	if (config.allowedOrigins !== null) route = route.origins(config.allowedOrigins)
 	const session = (ctx: unknown) => sessions.get(ctx as object) as RealtimeSession
@@ -65,7 +53,7 @@ export function realtime<TApp extends Honey<any, any, any, any, any, any, any, a
 		onClose: (ctx, _ws, _code, reason) => session(ctx).close(reason),
 		onError: (ctx, _ws, error) => session(ctx).error(error),
 		onMessage: (ctx, _ws, data) => session(ctx).message(data),
-		onOpen: (ctx, ws) => session(ctx).attach(ws),
+		onOpen: (ctx, socket) => session(ctx).attach(socket),
 	})
 	return createRealtimePublisher(config.bus, config.namespace)
 }

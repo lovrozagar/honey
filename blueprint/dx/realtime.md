@@ -4,7 +4,7 @@ SSE and WebSocket already ship in all SDKs (H8). v1 fixes typing + reconnect par
 
 | value | required | default | outcome | pitfall | test |
 | --- | --- | --- | --- | --- | --- |
-| WS route handler | yes (for WS) | — | handles an upgraded WebSocket; 101 performed by the adapter | the upgrade path is matched by a separate finalize plan | `routing/ws-builder.test.ts`, `integration/realtime.test.ts` |
+| WS route handler: `ws(app, path).handler({ … })` | yes (for WS) | — | handles an upgraded WebSocket; 101 performed by the adapter; `ws` is imported from `@lovrozagar/honey/ws`, not an app method (bit 19 i2) | the upgrade path is matched by a separate finalize plan | `routing/ws-builder.test.ts`, `integration/realtime.test.ts` |
 | WS `.input()` / `.meta()` / `.errors()` / `.origins()` / `.use()` | no | — | typed WS message input, meta, errors, origin policy, middleware | an open `origins` policy accepts any origin — set it | `routing/ws-builder.test.ts` |
 | WS origin policy | no | — | allow/deny upgrade by `Origin` (`ws-origin.ts`) | a missing policy is a cross-site WS risk [F1] | `ws/origin.test.ts` |
 | `ctx.res.sse(...)` | — | — | `text/event-stream`; v1 types the declared event schema [H8] | the declared event schema must reach the SDK types | `response/sse.test.ts` |

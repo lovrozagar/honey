@@ -1,5 +1,5 @@
 /**
- * The WebSocket route builder: what `app.ws(path)` returns. A ws route is an ordinary route record
+ * The WebSocket route builder: what `ws(app, path)` returns. A ws route is an ordinary route record
  * with method `WS`, so the chain, the scopes, meta and error declarations work as on any route; its
  * handler is the upgrade itself. The origin check and the chain run first, so a refused upgrade is
  * answered before any 101 (H18.12). `.input()` takes the non-body sources (an upgrade is a bodyless
@@ -141,7 +141,7 @@ export class WSRouteBuilder<TCtx, TPath extends string, TParent> {
 	}
 }
 
-/** The builder `app.ws(path)` starts on `view`'s handle, pending until `.handler()`. */
+/** The builder `ws(app, path)` starts on `view`'s handle, pending until `.handler()`. */
 export function startWsRoute<TCtx, TPath extends string, TParent>(
 	graph: HoneyGraph,
 	view: HandleView,

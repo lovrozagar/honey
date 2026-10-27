@@ -4,6 +4,7 @@ import * as z from "zod"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { readableStream } from "./input.ts"
+import { ws } from "../ws/route.ts"
 
 /** A POST of `body` with `type`, to `path`. */
 function post(path: string, body: BodyInit, type?: string): Request {
@@ -351,8 +352,7 @@ describe("ws .input(): validated before the upgrade", () => {
 				return { response: upgraded, socket }
 			},
 		})
-		app
-			.ws("/live")
+		ws(app, "/live")
 			.input({ search: z.object({ token: z.string().min(1) }) })
 			.handler({ onOpen: (ctx) => void opened.push(ctx.input) })
 		const headers = { connection: "Upgrade", upgrade: "websocket" }

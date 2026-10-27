@@ -28,6 +28,9 @@ const { WSContextImpl } = (await import(
 const { cfWebSocket } = (await import(
 	resolvePath(REPO, "packages/core/src/ws/cloudflare.ts")
 )) as typeof import("../../../src/ws/cloudflare.ts")
+const { ws } = (await import(
+	resolvePath(REPO, "packages/core/src/ws/route.ts")
+)) as typeof import("../../../src/ws/route.ts")
 
 type Raw = { bufferedAmount: number; closes: [number?, string?][]; readyState: number; sent: unknown[] }
 type Adapter = import("../../../src/ws/contract.ts").WSAdapter
@@ -47,12 +50,12 @@ function recordingAdapter(limits = { backpressureLimit: 1024, backpressurePolicy
 				readyState: 1,
 				send: (data: unknown) => void raw.sent.push(data),
 			}
-			const ws = new WSContextImpl(socket, limits)
-			opened.push({ handler, raw, ws })
-			handler.onOpen?.(undefined, ws)
+			const wsContext = new WSContextImpl(socket, limits)
+			opened.push({ handler, raw, ws: wsContext })
+			handler.onOpen?.(undefined, wsContext)
 			const response = new Response(null)
 			Object.defineProperty(response, "status", { value: 101 })
-			return { response, socket: ws }
+			return { response, socket: wsContext }
 		},
 	}
 	return { adapter, opened }
@@ -78,7 +81,7 @@ describe("v1 adversarial: cross-site WebSocket hijacking (H18.12)", () => {
 		const { adapter, opened } = recordingAdapter()
 		const app = honey<{}>().wsAdapter(adapter)
 		let opens = 0
-		app.ws("/live").handler({ onOpen: () => void opens++ })
+		ws(app, "/live").handler({ onOpen: () => void opens++ })
 		const res = await app.fetch(handshake("/live", headers), {})
 		await settle()
 		expect([res.status, opened.length, opens]).toEqual(status === 101 ? [101, 1, 1] : [403, 0, 0])
@@ -90,7 +93,7 @@ describe("v1 adversarial: a client that floods or stops reading", () => {
 		const { adapter, opened } = recordingAdapter()
 		const app = honey<{}>().wsAdapter(adapter)
 		let calls = 0
-		app.ws("/live").handler({
+		ws(app, "/live").handler({
 			onMessage: () => {
 				calls++
 				return new Promise(() => {})
@@ -109,7 +112,7 @@ describe("v1 adversarial: a client that floods or stops reading", () => {
 	] as const)("a reader that stopped reading meets the backpressure policy %s", async (policy, closes, sent) => {
 		const { adapter, opened } = recordingAdapter({ backpressureLimit: 1024, backpressurePolicy: policy })
 		const app = honey<{}>().wsAdapter(adapter)
-		app.ws("/live").handler({})
+		ws(app, "/live").handler({})
 		await app.fetch(handshake("/live"), {})
 		const [conn] = opened
 		if (conn === undefined) throw new Error("no connection")
@@ -140,7 +143,7 @@ describe("v1 adversarial: an oversized frame", () => {
 		})
 		const app = honey<{}>().wsAdapter(cfWebSocket({ maxPayload: 1024 }))
 		const seen: unknown[] = []
-		app.ws("/live").handler({ onMessage: (_ctx, _ws, data) => void seen.push(data) })
+		ws(app, "/live").handler({ onMessage: (_ctx, _ws, data) => void seen.push(data) })
 		await app.fetch(handshake("/live"), {})
 		server.dispatchEvent(new MessageEvent("message", { data: "x".repeat(4096) }))
 		await settle()
@@ -157,7 +160,7 @@ describe("v1 adversarial: a forged resume token", () => {
 		const { adapter } = recordingAdapter()
 		const seen: unknown[] = []
 		const app = honey<{}>().wsAdapter(adapter)
-		app.ws("/rooms/:room").handler({
+		ws(app, "/rooms/:room").handler({
 			onOpen: () => void seen.push("open"),
 			onReconnect: (ctx, _ws, given) => void seen.push([given, ctx.params.room, new URL(ctx.req.url).pathname]),
 		})

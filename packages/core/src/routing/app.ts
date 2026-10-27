@@ -5,7 +5,7 @@
  */
 import { type ExecutionCtx, type HoneyContext, isReservedCtxKey } from "../context/context.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
-import type { ApplyScoped, DeclaredMeta, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
+import type { DeclaredMeta, DefaultMeta, ScopedMwEntry, WithChainMeta } from "./app-types.ts"
 import { dispatch } from "./dispatch.ts"
 import { joinPatterns } from "./pattern.ts"
 import {
@@ -24,7 +24,6 @@ import { type StartOf, startRoute } from "./route-builder.ts"
 import type { AppSettings } from "./settings.ts"
 import { RouteTreeChain } from "./route-tree.ts"
 import type { HttpMethod, MergePath, PrefixRoutes } from "./types.ts"
-import { startWsRoute, type WSRouteBuilder } from "./ws-builder.ts"
 
 export { GRAPH } from "./register.ts"
 
@@ -273,13 +272,6 @@ export class Honey<
 	}
 	put<const TPath extends string>(path: TPath): StartOf<this, TPath, "PUT"> {
 		return this.#builder("PUT", path) as never
-	}
-
-	/** A WebSocket route: `.handler({ onOpen, onMessage, onClose, … })` registers it. */
-	ws<const TPath extends string>(
-		path: TPath,
-	): WSRouteBuilder<TCtx & ApplyScoped<TScopedMw, MergePath<TBasePath, TPath>>, MergePath<TBasePath, TPath>, this> {
-		return startWsRoute(this.#graph, this[VIEW], this, path)
 	}
 
 	/** The Fetch handler an adapter calls. Finalizes once; a later registration re-finalizes. */

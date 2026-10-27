@@ -50,15 +50,25 @@ beforeAll(() => {
 }, 180_000)
 afterAll(() => files.done())
 
-function bunBundle(name: string, lines: readonly string[]): string {
+/* the WebSocket route's modules, which an app reaches through ws(app, path) or realtime() alone */
+const WS_ROUTE = ["routing/ws-builder", "ws/origin", "ws/session", "ws/shared"]
+
+function bunBundle(name: string, lines: readonly string[], minify = true): string {
 	write(full, { [`${name}.ts`]: lines.join("\n") })
+	const flags = minify ? ["--minify"] : []
 	const built = run(
 		BUN as string,
-		["build", `${name}.ts`, "--outfile", `${name}.js`, "--minify", "--target", "bun"],
+		["build", `${name}.ts`, "--outfile", `${name}.js`, ...flags, "--target", "bun"],
 		full,
 	)
 	expect(built.code, built.out).toBe(0)
 	return readFileSync(join(full, `${name}.js`), "utf8")
+}
+
+/** The WebSocket route modules an unminified build carries, by their region comments (minifying inlines ws/shared's constant). */
+function wsRouteModules(name: string, lines: readonly string[]): string[] {
+	const js = bunBundle(`${name}-plain`, lines, false)
+	return WS_ROUTE.filter((path) => js.includes(`/dist/${path}.js\n`))
 }
 
 describe("the runtime bundle of an installed core (bit 19 i)", () => {
@@ -66,12 +76,13 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 	it.skipIf(!BUN)(
 		`bun ${pinnedBunVersion()} build of honey() leaves out tooling and every optional runtime feature`,
 		() => {
-			const js = bunBundle("minimal", [
+			const entry = [
 				'import { honey } from "@lovrozagar/honey"',
 				'const app = honey().get("/json").handler((ctx) => ctx.res.json("ok", { ok: true }))',
 				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
 				"",
-			])
+			]
+			const js = bunBundle("minimal", entry)
 			const leaked = Object.entries({ ...BUILD_TIME, effect: /\beffect\b/, "node:http": /createServer/ })
 				.filter(([, marker]) => marker.test(js))
 				.map(([name]) => name)
@@ -79,20 +90,17 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				.filter(([, marker]) => js.includes(marker))
 				.map(([name]) => name)
 			/*
-			 * what the wire carries: the router, context, responses and telemetry, measured 27,275 bytes gzipped (level 9,
-			 * the pinned bun 1.3.11 --minify), locked at the next 100. Over v0's 26,500 lock (v0's own bundle measures
-			 * 26,243 the same way) by the 1,120 bytes of the WebSocket route builder Honey.ws() reaches (routing/ws-builder,
-			 * ws/origin, ws/session, ws/shared; without them 26,155), which v0 kept behind the feature slot H23 cut. Phase i2
-			 * cuts it from the minimal graph and re-locks lower.
+			 * what the wire carries: the router, context, responses and telemetry, measured 26,155 bytes gzipped (level 9,
+			 * the pinned bun 1.3.11 --minify), locked at the next 100; under v0's 26,500 lock (v0's own bundle measures
+			 * 26,243 the same way). Bit 19 i2 cut the WebSocket route builder's 1,120 bytes (27,275 before): ws(app, path)
+			 * is an import, so routing/ws-builder, ws/origin, ws/session and ws/shared stay out until it is called.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
-			expect([leaked, features, gzipped < 27_300, builtBy], `${gzipped} bytes gzipped`).toEqual([
-				[],
-				[],
-				true,
-				pinnedBunVersion(),
-			])
+			expect(
+				[leaked, features, wsRouteModules("minimal", entry), gzipped < 26_200, builtBy],
+				`${gzipped} bytes gzipped`,
+			).toEqual([[], [], [], true, pinnedBunVersion()])
 		},
 		60_000,
 	)
@@ -101,7 +109,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 	it.skipIf(!BUN)(
 		`a feature is bundled once its entry is imported (bun ${pinnedBunVersion()})`,
 		() => {
-			const js = bunBundle("features", [
+			const entry = [
 				'import { honey } from "@lovrozagar/honey"',
 				'import { errorI18n } from "@lovrozagar/honey/i18n"',
 				'import { swagger } from "@lovrozagar/honey/openapi"',
@@ -114,11 +122,24 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				'realtime(app, "/rt", { handler: () => {} })',
 				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
 				"",
-			])
+			]
+			const js = bunBundle("features", entry)
 			const missing = Object.entries(OPTIONAL_FEATURES)
 				.filter(([, marker]) => !js.includes(marker))
 				.map(([name]) => name)
-			expect(missing).toEqual([])
+			const sockets = [
+				'import { honey } from "@lovrozagar/honey"',
+				'import { ws } from "@lovrozagar/honey/ws"',
+				"const app = honey()",
+				'ws(app, "/live").handler({})',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
+			expect([missing, wsRouteModules("features", entry), wsRouteModules("sockets", sockets)]).toEqual([
+				[],
+				WS_ROUTE,
+				WS_ROUTE,
+			])
 		},
 		60_000,
 	)

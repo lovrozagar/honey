@@ -6,6 +6,7 @@ import type { OnErrorFn } from "../routing/settings.ts"
 import { createLogger } from "../telemetry/logger.ts"
 import { HoneyError } from "./error.ts"
 import { defineErrors } from "./errors.ts"
+import { ws } from "../ws/route.ts"
 
 /** A json logger at trace whose lines are parsed into `lines`. */
 function recording() {
@@ -77,7 +78,7 @@ describe("onError: every thrown error reaches it, no framework answer does", () 
 		const app = honey<{}>().onError(onError).trailingSlash("strip")
 		app.post("/only-post").handler((ctx) => ctx.res.text("ok", "posted"))
 		app.get("/page").handler((ctx) => ctx.res.text("ok", "page"))
-		app.ws("/live").handler({})
+		ws(app, "/live").handler({})
 		const res = await app.fetch(request, {})
 		expect([res.status, onError.mock.calls]).toEqual([status, []])
 	})

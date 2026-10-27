@@ -7,6 +7,7 @@ import { createHoneyResponse, isHoneyResponse } from "../response/builder.ts"
 import { type Honey, honey } from "../routing/app.ts"
 import { createLogger } from "./logger.ts"
 import { runtimeOf } from "./request-log.ts"
+import { ws } from "../ws/route.ts"
 
 /** A json logger at trace whose lines are parsed into `lines`. */
 function recording() {
@@ -246,7 +247,7 @@ describe("requestLog: never changes what goes out", () => {
 			.logger(logger)
 			.requestLog(true)
 			.wsAdapter({ upgrade: () => ({ response: upgraded, socket }) })
-		a.ws("/live").handler({})
+		ws(a, "/live").handler({})
 		const res = await a.fetch(get("/live", { headers: { connection: "Upgrade", upgrade: "websocket" } }), {})
 		expect([res === upgraded, entries(lines).map((entry) => [entry.status, entry.kind])]).toEqual([
 			true,

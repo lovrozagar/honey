@@ -161,7 +161,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 	])(
 		"type-checks against every core subpath, the generated types included, with %s resolution and every strict flag",
 		(resolution, module) => {
-			expect(strictCheck(app, resolution, module)).toEqual([42, 0, ""])
+			expect(strictCheck(app, resolution, module)).toEqual([43, 0, ""])
 		},
 		60_000,
 	)
@@ -170,7 +170,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 		const dir = consumer(join(files.out, "core-only"), { "@lovrozagar/honey": `file:${tarballs.core}` }, [
 			"@types/node",
 		])
-		expect(strictCheck(dir, "Bundler", "ESNext")).toEqual([42, 0, ""])
+		expect(strictCheck(dir, "Bundler", "ESNext")).toEqual([43, 0, ""])
 	}, 60_000)
 
 	it("honey-codegen in the install generates a TypeScript SDK from the app, its runtime files read from dist/", () => {
@@ -234,8 +234,9 @@ describe("ws, core's optional peer, in a real install (bit 19 i)", () => {
 		'import { execFileSync } from "node:child_process"',
 		'import { honey } from "@lovrozagar/honey"',
 		'import { serve } from "@lovrozagar/honey/serve"',
+		'import { ws } from "@lovrozagar/honey/ws"',
 		"const app = honey()",
-		'app.ws("/live").handler({ onMessage: (_ctx, ws, data) => ws.send(data) })',
+		'ws(app, "/live").handler({ onMessage: (_ctx, ws, data) => ws.send(data) })',
 		'const server = await serve(app, { hostname: "127.0.0.1", port: 0 })',
 		"const echo = () => new Promise((done) => {",
 		"\tconst client = new WebSocket(`ws://127.0.0.1:${server.port}/live`)",

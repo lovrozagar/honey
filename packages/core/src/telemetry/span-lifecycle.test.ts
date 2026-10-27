@@ -9,6 +9,7 @@ import { createMiddleware, namedMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { recorder } from "./__fixtures__/recording-tracer.ts"
 import { createLogger } from "./logger.ts"
+import { ws } from "../ws/route.ts"
 
 const get = (path: string, init: RequestInit = {}) => new Request(`http://app.test${path}`, init)
 
@@ -45,7 +46,7 @@ describe("the root ends exactly once, on every exit", () => {
 			.use("/c", cors({ origin: "https://x.example" }))
 			.post("/c/x")
 			.handler((ctx) => ctx.res.text("ok", "c"))
-		app.ws("/sock").handler({})
+		ws(app, "/sock").handler({})
 		const exits: [Request, number][] = [
 			[get("/a"), 200],
 			[get("/missing"), 404],
@@ -193,7 +194,7 @@ describe("the root ends with the body, not the headers", () => {
 		const app = honey<{}>()
 			.telemetry(telemetry)
 			.wsAdapter({ upgrade: () => ({ response: upgraded, socket }) })
-		app.ws("/live").handler({})
+		ws(app, "/live").handler({})
 		await app.fetch(get("/live", { headers: { connection: "Upgrade", upgrade: "websocket" } }), {})
 		expect([spans[0]?.ended, spans[0]?.attributes["http.response.status_code"]]).toEqual([1, 101])
 	})

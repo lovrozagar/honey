@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { honey } from "../routing/app.ts"
 import { generateOpenApi } from "./generate.ts"
+import { ws } from "../ws/route.ts"
 
 const INFO = { title: "Test API", version: "1.0" }
 
@@ -60,7 +61,7 @@ describe("the document: OpenAPI 3.1, assembled", () => {
 		a.get("/live")
 			.meta({ extensions: { "x-realtime": true }, mcp: true })
 			.handler((c) => c.res.text("ok", "ok"))
-		a.ws("/socket").handler({ onMessage() {} })
+		ws(a, "/socket").handler({ onMessage() {} })
 		const doc = generateOpenApi(a, { info: INFO })
 		expect([
 			doc.paths["/live"]?.get?.["x-realtime"],

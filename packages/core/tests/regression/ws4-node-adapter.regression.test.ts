@@ -12,6 +12,7 @@ import { cors } from "../../src/middleware/cors.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { realtime } from "../../src/realtime/realtime.ts"
 import { type Honey, honey } from "../../src/routing/app.ts"
+import { ws } from "../../src/ws/route.ts"
 
 const servers: HoneyServer[] = []
 const crashes: unknown[] = []
@@ -90,7 +91,7 @@ describe("WS5: a failing upgrade on the Node adapter", () => {
 		const app = honey<{}>()
 		const guarded = app.use(slow)
 		guarded.get("/slow").handler((ctx) => ctx.res.text("ok", "slow"))
-		guarded.ws("/ws-slow").handler({})
+		ws(guarded, "/ws-slow").handler({})
 		const { base, port } = await listen(app)
 		for (const [path, upgrade] of [
 			["/slow", "x"],
@@ -117,7 +118,7 @@ describe("WS5: a failing upgrade on the Node adapter", () => {
 	// v0: 0dee8be5af
 	it("a sync throw in onOpen never writes an HTTP 500 onto the upgraded socket", async () => {
 		const app = honey<{}>()
-		app.ws("/ws-open-sync").handler({
+		ws(app, "/ws-open-sync").handler({
 			onOpen: () => {
 				throw new Error("open failed")
 			},
@@ -187,7 +188,7 @@ describe("WS5: the Node adapter keeps the origin policy", () => {
 	it("H: a cross-origin WebSocket upgrade carrying cookies is refused", async () => {
 		const app = honey<{}>()
 		let opened = false
-		app.ws("/ws-echo").handler({ onOpen: () => void (opened = true) })
+		ws(app, "/ws-echo").handler({ onOpen: () => void (opened = true) })
 		const { port } = await listen(app)
 		const status = await new Promise<number>((resolve) => {
 			const client = new WsClient(`ws://127.0.0.1:${port}/ws-echo`, {
@@ -270,13 +271,10 @@ describe("WS5: cors in front of a WebSocket route", () => {
 	// v0: 47af53fc4a
 	it("H29: the socket still opens through a chain with cors, and exchanges frames", async () => {
 		const app = honey<{}>()
-		app
-			.use(cors({ origin: "http://app.example" }))
-			.ws("/ws-cors")
-			.handler({
-				onMessage: (_ctx, ws, data) => ws.send(`echo:${String(data)}`),
-				onOpen: (_ctx, ws) => ws.send("ready"),
-			})
+		ws(app.use(cors({ origin: "http://app.example" })), "/ws-cors").handler({
+			onMessage: (_ctx, socket, data) => socket.send(`echo:${String(data)}`),
+			onOpen: (_ctx, socket) => socket.send("ready"),
+		})
 		const { base, port } = await listen(app)
 		const messages = await new Promise<string[]>((resolve, reject) => {
 			const got: string[] = []

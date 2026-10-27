@@ -16,6 +16,7 @@ import * as z from "zod"
 import { honey } from "../../../src/routing/app.ts"
 import type { SSEStream } from "../../../src/response/sse.ts"
 import type { WSContext } from "../../../src/ws/contract.ts"
+import { ws } from "../../../src/ws/route.ts"
 
 export type ReferenceEvent = { readonly data: unknown; readonly id: number }
 
@@ -67,9 +68,9 @@ export function createReferenceServer() {
 		return () => listeners.delete(deliver)
 	}
 
-	const open = (ws: WSContext, cursor: string | null): void => {
-		const deliver: Listener = (event) => ws.send({ data: event.data, id: event.id })
-		sockets.set(ws, deliver)
+	const open = (socket: WSContext, cursor: string | null): void => {
+		const deliver: Listener = (event) => socket.send({ data: event.data, id: event.id })
+		sockets.set(socket, deliver)
 		follow(positionOf(cursor), deliver)
 	}
 
@@ -84,17 +85,16 @@ export function createReferenceServer() {
 		.meta({ operationId: "events.stream", mcp: true })
 		.output({ "text/event-stream": { ok: Payload } })
 		.handler((ctx) => ctx.res.sse(relay(follow)))
-	app
-		.ws("/events/ws")
+	ws(app, "/events/ws")
 		.meta({ operationId: "events.socket" })
 		.handler({
-			onClose: (_ctx, ws) => {
-				const deliver = sockets.get(ws)
-				sockets.delete(ws)
+			onClose: (_ctx, socket) => {
+				const deliver = sockets.get(socket)
+				sockets.delete(socket)
 				if (deliver !== undefined) listeners.delete(deliver)
 			},
-			onOpen: (_ctx, ws) => open(ws, null),
-			onReconnect: (_ctx, ws, token) => open(ws, token),
+			onOpen: (_ctx, socket) => open(socket, null),
+			onReconnect: (_ctx, socket, token) => open(socket, token),
 		})
 
 	return {

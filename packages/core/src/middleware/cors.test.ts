@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { type Honey, honey } from "../routing/app.ts"
 import { cors, type CORSOptions } from "./cors.ts"
+import { ws } from "../ws/route.ts"
 
 const ORIGIN = "https://app.example.com"
 
@@ -374,10 +375,7 @@ describe("cors(): what it leaves alone", () => {
 		Object.defineProperty(upgraded, "status", { value: 101 })
 		const socket = { close() {}, raw: null, readyState: 1 as const, send() {} }
 		const app = honey<{}>().wsAdapter({ upgrade: () => ({ response: upgraded, socket }) })
-		app
-			.use(cors({ origin: ORIGIN }))
-			.ws("/live")
-			.handler({})
+		ws(app.use(cors({ origin: ORIGIN })), "/live").handler({})
 		const res = await app.fetch(
 			request("/live", { headers: { connection: "Upgrade", origin: ORIGIN, upgrade: "websocket" } }),
 			{},

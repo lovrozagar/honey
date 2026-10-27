@@ -3,6 +3,7 @@ import * as z from "zod"
 import { honey } from "../routing/app.ts"
 import { SILENT, type Logger } from "../telemetry/logger.ts"
 import { generateOpenApi } from "./generate.ts"
+import { ws } from "../ws/route.ts"
 
 const INFO = { title: "T", version: "1" }
 type Doc = ReturnType<typeof generateOpenApi>
@@ -34,12 +35,11 @@ describe("WebSocket operations", () => {
 			.get("/a")
 			.meta({ tenant: "orgId" })
 			.handler((c) => c.res.text("ok", "ok"))
-		app
-			.ws("/live")
+		ws(app, "/live")
 			.meta({ tenant: "orgId" } as never)
 			.input({ search: z.object({ secret: z.string().meta({ "x-internal": true }), token: z.string() }) })
 			.handler({ onMessage() {} })
-		app.ws("/ws/chat/:channelId").handler({ onMessage() {} })
+		ws(app, "/ws/chat/:channelId").handler({ onMessage() {} })
 		const doc = generateOpenApi(app, { info: INFO })
 		expect(params(doc, "/ws/chat/{channelId}").map((p) => [p.name, p.in])).toEqual([["channelId", "path"]])
 		expect([
@@ -54,7 +54,7 @@ describe("WebSocket operations", () => {
 	it("leaves out a WS route an HTTP GET of the same path shadows, and says so through the logger", () => {
 		const app = honey<{}>()
 		app.get("/chat").handler((c) => c.res.text("ok", "ok"))
-		app.ws("/chat").handler({ onMessage() {} })
+		ws(app, "/chat").handler({ onMessage() {} })
 		const { logger, warnings } = recording()
 		const doc = generateOpenApi(app, { info: INFO, logger })
 		expect([op(doc, "/chat")["x-websocket"], warnings]).toEqual([
@@ -66,12 +66,11 @@ describe("WebSocket operations", () => {
 	// v0: e61795b84c
 	it("leaves out a WS route marked internal and one filterRoutes rejects, keeping the rest", () => {
 		const app = honey<{}>()
-		app.ws("/open").handler({ onMessage() {} })
-		app
-			.ws("/hidden")
+		ws(app, "/open").handler({ onMessage() {} })
+		ws(app, "/hidden")
 			.meta({ internal: true })
 			.handler({ onMessage() {} })
-		app.ws("/filtered").handler({ onMessage() {} })
+		ws(app, "/filtered").handler({ onMessage() {} })
 		const doc = generateOpenApi(app, { filterRoutes: (route) => route.path !== "/filtered", info: INFO })
 		expect([Object.keys(doc.paths), op(doc, "/open")["x-websocket"]]).toEqual([["/open"], true])
 	})
@@ -91,8 +90,7 @@ describe("a WS route's own keys", () => {
 			summary: "s",
 			tags: "sockets",
 		}
-		app
-			.ws("/live")
+		ws(app, "/live")
 			.meta(every as never)
 			.handler({ onMessage() {} })
 		expect(Object.keys(op(generateOpenApi(app, { info: INFO }), "/live"))).toEqual([

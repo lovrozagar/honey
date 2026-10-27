@@ -1,5 +1,5 @@
 /**
- * app.ws(path) through every adapter: one self-contained app, one outcome table. Node serves it on
+ * ws(app, path) through every adapter: one self-contained app, one outcome table. Node serves it on
  * real sockets, a spawned `bun` serves the same function from its source, and Workers runs it over
  * a stubbed WebSocketPair. Bun's one difference is pinned (Ruling 13): past maxPayload it
  * force-closes with 1006 where Node and Workers close with 1009.
@@ -15,6 +15,7 @@ import { honey } from "../../src/routing/app.ts"
 import { cfWebSocket } from "../../src/ws/cloudflare.ts"
 import type { WSAdapter } from "../../src/ws/contract.ts"
 import { nodeWebSocket } from "../../src/ws/node.ts"
+import { ws } from "../../src/ws/route.ts"
 
 const servers: HoneyServer[] = []
 
@@ -35,33 +36,33 @@ async function listen(app: { fetch(request: Request, env: unknown): Response | P
  * One app for every adapter: echo, close, ordered callbacks, a throwing handler, a handler that
  * never settles. Self-contained, so a spawned `bun` runs this same function from its source.
  */
-function scenarioApp(make: typeof honey, adapter: WSAdapter) {
+function scenarioApp(make: typeof honey, route: typeof ws, adapter: WSAdapter) {
 	const app = make<{}>().wsAdapter(adapter)
-	app.ws("/echo").handler({ onMessage: (_ctx, ws, data) => ws.send(data) })
-	app.ws("/close").handler({ onMessage: (_ctx, ws) => ws.close(4001, "é".repeat(100)) })
-	app.ws("/order").handler({
-		onMessage: (_ctx, ws, data) => ws.send(`msg:${String(data)}`),
-		onOpen: async (_ctx, ws) => {
+	route(app, "/echo").handler({ onMessage: (_ctx, socket, data) => socket.send(data) })
+	route(app, "/close").handler({ onMessage: (_ctx, socket) => socket.close(4001, "é".repeat(100)) })
+	route(app, "/order").handler({
+		onMessage: (_ctx, socket, data) => socket.send(`msg:${String(data)}`),
+		onOpen: async (_ctx, socket) => {
 			await new Promise((resolve) => setTimeout(resolve, 30))
-			ws.send("open")
+			socket.send("open")
 		},
 	})
-	app.ws("/throw").handler({
-		onMessage: (_ctx, ws, data) => {
+	route(app, "/throw").handler({
+		onMessage: (_ctx, socket, data) => {
 			if (data === "boom") throw new Error("boom")
-			ws.send(data)
+			socket.send(data)
 		},
 	})
-	app.ws("/reject").handler({
-		onMessage: async (_ctx, ws, data) => {
+	route(app, "/reject").handler({
+		onMessage: async (_ctx, socket, data) => {
 			if (data === "boom") throw new Error("boom")
-			ws.send(data)
+			socket.send(data)
 		},
 		onOpen: () => {
 			throw new Error("open failed")
 		},
 	})
-	app.ws("/stall").handler({ onMessage: () => new Promise(() => {}) })
+	route(app, "/stall").handler({ onMessage: () => new Promise(() => {}) })
 	return app
 }
 
@@ -189,7 +190,7 @@ async function overWorkers(scenario: Scenario, expected: Outcome): Promise<Outco
 		serverSides.push(server)
 		return [new PairSocket(), server]
 	})
-	const app = scenarioApp(honey, cfWebSocket({ maxPayload: 1024 }))
+	const app = scenarioApp(honey, ws, cfWebSocket({ maxPayload: 1024 }))
 	const headers: Record<string, string> = { connection: "Upgrade", upgrade: "websocket", ...scenario.headers }
 	if (scenario.protocols) headers["sec-websocket-protocol"] = scenario.protocols.join(", ")
 	const res = await app.fetch(new Request(`https://app.example.com${scenario.path}`, { headers }), {})
@@ -222,15 +223,16 @@ const BUN_APP = `
 const { serve } = await import(${JSON.stringify(`${SRC}adapters/serve.ts`)})
 const { honey } = await import(${JSON.stringify(`${SRC}routing/app.ts`)})
 const { bunWebSocket } = await import(${JSON.stringify(`${SRC}ws/bun.ts`)})
+const { ws } = await import(${JSON.stringify(`${SRC}ws/route.ts`)})
 const scenarioApp = ${scenarioApp.toString()}
-const handle = await serve(scenarioApp(honey, bunWebSocket({ maxPayload: 1024 })), { hostname: "127.0.0.1", port: 0 })
+const handle = await serve(scenarioApp(honey, ws, bunWebSocket({ maxPayload: 1024 })), { hostname: "127.0.0.1", port: 0 })
 console.log(handle.port, Bun.version)
 process.stdin.once("data", () => process.exit(0))
 `
 
-describe("app.ws(path) through every adapter: one app, one outcome table", () => {
+describe("ws(app, path) through every adapter: one app, one outcome table", () => {
 	it.each(SCENARIOS)("Node over a real socket: %s", async (_name, scenario, expected) => {
-		const { port } = await listen(scenarioApp(honey, nodeWebSocket({ maxPayload: 1024 })))
+		const { port } = await listen(scenarioApp(honey, ws, nodeWebSocket({ maxPayload: 1024 })))
 		expect(await overSocket(`ws://127.0.0.1:${port}`, scenario, expected)).toEqual(expected)
 	})
 

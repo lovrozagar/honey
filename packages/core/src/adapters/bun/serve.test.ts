@@ -5,6 +5,7 @@ import { createLogger } from "../../telemetry/logger.ts"
 import { cfWebSocket } from "../../ws/cloudflare.ts"
 import { bunWebSocket } from "../../ws/bun.ts"
 import { serve } from "./serve.ts"
+import { ws } from "../../ws/route.ts"
 
 type BunOptions = {
 	error?: (error: unknown) => Response
@@ -146,7 +147,7 @@ describe("serve on Bun: WebSockets", () => {
 	it("answers Bun nothing once a request was upgraded, as Bun expects; other answers pass through", async () => {
 		const { calls, server } = fakeBun()
 		const app = honey<{}>()
-		app.ws("/live").handler({})
+		ws(app, "/live").handler({})
 		app.get("/page").handler((ctx) => ctx.res.text("ok", "page"))
 		app
 			.use(createMiddleware(async (_ctx, next) => next()))
@@ -165,7 +166,7 @@ describe("serve on Bun: WebSockets", () => {
 	it("an adapter swapped after serve() cannot reach Bun: the upgrade fails loudly, naming the fix", async () => {
 		const { calls, server } = fakeBun()
 		const app = honey<{}>()
-		app.ws("/live").handler({})
+		ws(app, "/live").handler({})
 		serve(app, options)
 		app.wsAdapter(bunWebSocket())
 		const { fetch } = calls.options as BunOptions

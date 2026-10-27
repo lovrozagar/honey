@@ -12,6 +12,7 @@ import { serve } from "../../src/adapters/serve.ts"
 import { honey } from "../../src/routing/app.ts"
 import type { WSAdapter } from "../../src/ws/contract.ts"
 import { nodeWebSocket } from "../../src/ws/node.ts"
+import { ws } from "../../src/ws/route.ts"
 
 /** The first message a client gets from `url`, with the client. */
 function firstMessage(url: string): Promise<[string, WsClient]> {
@@ -28,7 +29,7 @@ describe("WS5: the Node server lifecycle", () => {
 	// v0: 8a916c8d94
 	it("shutdown closes open WebSockets with 1001 and does not wait on idle keep-alive clients", async () => {
 		const app = honey<{}>()
-		app.ws("/ws").handler({ onOpen: (_ctx, ws) => ws.send("ready") })
+		ws(app, "/ws").handler({ onOpen: (_ctx, socket) => socket.send("ready") })
 		app.get("/x").handler((ctx) => ctx.res.text("ok", "x"))
 		const server = serveNode(app, { env: {}, hostname: "127.0.0.1", port: 0 })
 		await new Promise((resolve) => server.once("listening", resolve))
@@ -63,7 +64,7 @@ describe("WS5: the Node server lifecycle", () => {
 			},
 		}
 		const app = honey<{}>().wsAdapter(mine)
-		app.ws("/ws").handler({ onOpen: (_ctx, ws) => ws.send("ready") })
+		ws(app, "/ws").handler({ onOpen: (_ctx, socket) => socket.send("ready") })
 		const handle = await serve(app, { hostname: "127.0.0.1", port: 0 })
 		try {
 			const [message, client] = await firstMessage(`${handle.url.replace("http", "ws")}/ws`)

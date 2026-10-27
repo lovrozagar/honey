@@ -12,6 +12,7 @@ import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
 import { bunWebSocket } from "../../src/ws/bun.ts"
 import { NODE_UPGRADE, type NodeUpgrade, nodeWebSocket } from "../../src/ws/node.ts"
+import { ws } from "../../src/ws/route.ts"
 
 type FetchApp = { fetch(request: Request, env: unknown): Response | Promise<Response> }
 
@@ -96,7 +97,7 @@ function afterHandshake(port: number, bytes: string, quiet = 50, ceiling = 2000)
 /** A honey app with a ws route at /live and a page at /page. */
 function wsApp() {
 	const app = honey<{}>()
-	app.ws("/live").handler({})
+	ws(app, "/live").handler({})
 	app.get("/page").handler((ctx) => ctx.res.text("ok", "page"))
 	return app
 }
@@ -114,10 +115,7 @@ describe("WebSockets on Node: the 'upgrade' path", () => {
 	it("an upgrade the app refuses, or one to a path with no ws route, gets the app's whole answer on the socket, which then closes", async () => {
 		const app = wsApp()
 		const refusal = { "www-authenticate": "Bearer", "x-reason": "locked" }
-		app
-			.use(createMiddleware(() => new Response("no", { headers: refusal, status: 401 })))
-			.ws("/locked")
-			.handler({})
+		ws(app.use(createMiddleware(() => new Response("no", { headers: refusal, status: 401 }))), "/locked").handler({})
 		const { port } = await listen(app as unknown as FetchApp)
 		const [locked, page] = await Promise.all([exchange(port, HANDSHAKE("/locked")), exchange(port, HANDSHAKE("/page"))])
 		/* the refusal is a native stream, so Node chunks it; the page is buffered */
@@ -244,15 +242,15 @@ describe("WebSockets on Node: a client that leaves", () => {
 	it("a client that leaves before the app refuses is written nothing; a reset never crashes the server", async () => {
 		const release = gate()
 		const app = honey<{}>()
-		app
-			.use(
+		ws(
+			app.use(
 				createMiddleware(async () => {
 					await release.shut
 					return new Response("late", { status: 401 })
 				}),
-			)
-			.ws("/live")
-			.handler({})
+			),
+			"/live",
+		).handler({})
 		const onError = vi.fn()
 		const { base, port } = await listen(app as unknown as FetchApp, { onError })
 		const socket = connect(port, "127.0.0.1")
@@ -389,22 +387,22 @@ describe("Node without shouldUpgradeCallback: an Upgrade that is not WebSocket",
 
 /** An open client on `url` and the next message it receives, in order. */
 async function openClient(url: string) {
-	const ws = new WsClient(url)
+	const socket = new WsClient(url)
 	const inbox: string[] = []
 	const waiting: ((text: string) => void)[] = []
-	ws.on("message", (data) => {
+	socket.on("message", (data) => {
 		const text = String(data)
 		const take = waiting.shift()
 		if (take) take(text)
 		else inbox.push(text)
 	})
 	await new Promise((resolve, reject) => {
-		ws.once("open", resolve)
-		ws.once("error", reject)
+		socket.once("open", resolve)
+		socket.once("error", reject)
 	})
 	const next = () =>
 		new Promise<string>((resolve) => (inbox.length > 0 ? resolve(inbox.shift() as string) : waiting.push(resolve)))
-	return { next, ws }
+	return { next, ws: socket }
 }
 
 describe("WebSockets on Node: a storm of sockets", () => {
@@ -413,18 +411,18 @@ describe("WebSockets on Node: a storm of sockets", () => {
 		const room = new Set<{ send(data: string): void }>()
 		const closes: [number, string][] = []
 		const app = honey<{}>()
-		app.ws("/echo").handler({
-			onClose: (_ctx, ws, code, reason) => {
-				room.delete(ws)
+		ws(app, "/echo").handler({
+			onClose: (_ctx, socket, code, reason) => {
+				room.delete(socket)
 				closes.push([code, reason])
 			},
-			onMessage: (_ctx, ws, data) => {
+			onMessage: (_ctx, socket, data) => {
 				if (data === "boom") for (const peer of room) peer.send("all:boom")
-				else ws.send(`echo:${String(data)}`)
+				else socket.send(`echo:${String(data)}`)
 			},
-			onOpen: (_ctx, ws) => {
-				room.add(ws)
-				ws.send("hi")
+			onOpen: (_ctx, socket) => {
+				room.add(socket)
+				socket.send("hi")
 			},
 		})
 		const { port } = await listen(app as unknown as FetchApp)

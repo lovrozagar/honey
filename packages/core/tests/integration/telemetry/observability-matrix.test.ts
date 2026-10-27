@@ -16,6 +16,7 @@ import { honey } from "../../../src/routing/app.ts"
 import { type Recorded, recorder } from "../../../src/telemetry/__fixtures__/recording-tracer.ts"
 import { createLogger } from "../../../src/telemetry/logger.ts"
 import type { WSAdapter, WSContext, WSHandler } from "../../../src/ws/contract.ts"
+import { ws } from "../../../src/ws/route.ts"
 
 /** A json logger at trace whose lines are parsed into `lines`. */
 function recording() {
@@ -64,7 +65,7 @@ describe("the app logger reaches the ws and realtime sessions", () => {
 		const { lines, logger } = recording()
 		const { adapter, handlers, socket } = openingAdapter()
 		const app = honey<{}>().logger(logger).wsAdapter(adapter)
-		app.ws("/live").handler({
+		ws(app, "/live").handler({
 			onMessage: () => {
 				throw new Error("message broke")
 			},

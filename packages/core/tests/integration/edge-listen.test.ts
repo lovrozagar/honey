@@ -25,6 +25,7 @@ import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { etag } from "../../src/response/etag.ts"
 import { recorder } from "../../src/telemetry/__fixtures__/recording-tracer.ts"
 import { honey } from "../../src/routing/app.ts"
+import { ws } from "../../src/ws/route.ts"
 
 type App = { fetch(request: Request, env: {}): Response | Promise<Response> }
 
@@ -346,10 +347,7 @@ describe("header middleware over answers it cannot edit in place", () => {
 		Object.defineProperty(upgraded, "status", { value: 101 })
 		const socket = { close() {}, raw: null, readyState: 1 as const, send() {} }
 		const app = honey<{}>().wsAdapter({ upgrade: () => ({ response: upgraded, socket }) })
-		app
-			.use(mw as never)
-			.ws("/live")
-			.handler({})
+		ws(app.use(mw as never), "/live").handler({})
 		const headers = { connection: "Upgrade", origin: "http://app.test", upgrade: "websocket" }
 		expect(await app.fetch(new Request("http://localhost/live", { headers }), {})).toBe(upgraded)
 	})

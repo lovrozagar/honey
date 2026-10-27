@@ -1,52 +1,49 @@
 /**
- * WebSockets and realtime as typed: the app.ws(path) builder and the ctx its callbacks get, the
+ * WebSockets and realtime as typed: the ws(app, path) builder and the ctx its callbacks get, the
  * WSContext/WSHandler/WSAdapter shapes, wsAdapter(), and realtime()'s options, ConnContext and
  * publisher. WS `.input()` is typed at bit 08. Checked by typecheck.
  */
 import { describe, expectTypeOf, it } from "vitest"
+import type { HoneyContext } from "../../src/context/context.ts"
 import { createMiddleware } from "../../src/middleware/middleware.ts"
 import { realtime } from "../../src/realtime/realtime.ts"
 import type { ConnContext } from "../../src/realtime/route.ts"
-import type { WsMeta } from "../../src/routing/ws-builder.ts"
+import type { WSRouteBuilder, WsMeta } from "../../src/routing/ws-builder.ts"
 import type { RealtimePublisher } from "../../src/realtime/server.ts"
 import { honey } from "../../src/routing/app.ts"
 import type { WSAdapter, WSContext, WSHandler, WSReadyState } from "../../src/ws/contract.ts"
 import { nodeWebSocket } from "../../src/ws/node.ts"
+import { ws } from "../../src/ws/route.ts"
 
 const withUser = createMiddleware((_ctx, next) => next({ user: "ada" as const }))
 
-describe("app.ws(path): the ctx and the socket its callbacks get", () => {
+describe("ws(app, path): the ctx and the socket its callbacks get", () => {
 	it("every callback gets the route's params, env and what middleware added, and a WSContext", () => {
 		const app = honey<{ db: string }>()
-		app
-			.use(withUser)
-			.ws("/rooms/:room")
-			.handler({
-				onClose: (ctx, ws, code, reason) => {
-					expectTypeOf(ctx.params.room).toEqualTypeOf<string>()
-					expectTypeOf([ws, code, reason]).toEqualTypeOf<(WSContext | number | string)[]>()
-				},
-				onError: (ctx, _ws, error) => {
-					expectTypeOf(ctx.env.db).toEqualTypeOf<string>()
-					expectTypeOf(error).toEqualTypeOf<unknown>()
-				},
-				onMessage: (ctx, _ws, data) => {
-					expectTypeOf(ctx.user).toEqualTypeOf<"ada">()
-					expectTypeOf(data).toEqualTypeOf<ArrayBuffer | string>()
-				},
-				onOpen: (_ctx, ws) => {
-					expectTypeOf(ws).toEqualTypeOf<WSContext>()
-				},
-				onReconnect: (_ctx, _ws, token) => {
-					expectTypeOf(token).toEqualTypeOf<string>()
-				},
-			})
+		ws(app.use(withUser), "/rooms/:room").handler({
+			onClose: (ctx, socket, code, reason) => {
+				expectTypeOf(ctx.params.room).toEqualTypeOf<string>()
+				expectTypeOf([socket, code, reason]).toEqualTypeOf<(WSContext | number | string)[]>()
+			},
+			onError: (ctx, _ws, error) => {
+				expectTypeOf(ctx.env.db).toEqualTypeOf<string>()
+				expectTypeOf(error).toEqualTypeOf<unknown>()
+			},
+			onMessage: (ctx, _ws, data) => {
+				expectTypeOf(ctx.user).toEqualTypeOf<"ada">()
+				expectTypeOf(data).toEqualTypeOf<ArrayBuffer | string>()
+			},
+			onOpen: (_ctx, socket) => {
+				expectTypeOf(socket).toEqualTypeOf<WSContext>()
+			},
+			onReconnect: (_ctx, _ws, token) => {
+				expectTypeOf(token).toEqualTypeOf<string>()
+			},
+		})
 	})
 
 	it("a base path joins the params; a route-level use() adds to the ctx", () => {
-		honey<{}>()
-			.basePath("/org/:org")
-			.ws("/feed/:id")
+		ws(honey<{}>().basePath("/org/:org"), "/feed/:id")
 			.use(withUser)
 			.handler({
 				onOpen: (ctx) => {
@@ -58,9 +55,8 @@ describe("app.ws(path): the ctx and the socket its callbacks get", () => {
 
 	it("handler() hands back the app; origins, meta and errors keep the builder", () => {
 		const app = honey<{}>()
-		expectTypeOf(app.ws("/a").handler({})).toEqualTypeOf(app)
-		const built = app
-			.ws("/b")
+		expectTypeOf(ws(app, "/a").handler({})).toEqualTypeOf(app)
+		const built = ws(app, "/b")
 			.origins("*")
 			.origins(["https://app.example.com"])
 			.origins((origin) => origin.endsWith(".example.com"))
@@ -68,23 +64,60 @@ describe("app.ws(path): the ctx and the socket its callbacks get", () => {
 			.errors("forbidden")
 		expectTypeOf(built.handler({})).toEqualTypeOf(app)
 		// @ts-expect-error an origin policy is "*", a list or a predicate
-		app.ws("/c").origins("https://app.example.com")
+		ws(app, "/c").origins("https://app.example.com")
+	})
+})
+
+describe("ws(app, path): the ctx, params and parent of a WebSocket route", () => {
+	const withTenant = createMiddleware((_ctx, next) => next({ tenant: "acme" as const }))
+	type Params<T> = Record<string, string> & T
+
+	it("the app's ctx, and a scoped middleware's additions on a path under its scope alone", () => {
+		const app = honey<{ db: string }>().use(withUser).use("/rooms", withTenant)
+		ws(app, "/rooms/:id").handler({
+			onOpen: (ctx) => {
+				expectTypeOf(ctx.env.db).toEqualTypeOf<string>()
+				expectTypeOf(ctx.user).toEqualTypeOf<"ada">()
+				expectTypeOf(ctx.tenant).toEqualTypeOf<"acme">()
+				expectTypeOf(ctx.params).toEqualTypeOf<Params<{ id: string }>>()
+			},
+		})
+		// @ts-expect-error the scope is /rooms: /lobby gets no tenant
+		ws(app, "/lobby").handler({ onOpen: (ctx) => void ctx.tenant })
+		type Ctx = HoneyContext<{ db: string }> & { user: "ada" }
+		expectTypeOf(ws(app, "/rooms/:id")).toEqualTypeOf<
+			WSRouteBuilder<Ctx & { tenant: "acme" }, "/rooms/:id", typeof app>
+		>()
+		expectTypeOf(ws(app, "/lobby")).toEqualTypeOf<WSRouteBuilder<Ctx, "/lobby", typeof app>>()
+	})
+
+	it("params join a base path's, and handler() hands back the handle it was given", () => {
+		const org = honey<{}>().basePath("/org/:org")
+		ws(org, "/rooms/:id").handler({
+			onOpen: (ctx) => {
+				expectTypeOf(ctx.params).toEqualTypeOf<Params<{ id: string; org: string }>>()
+			},
+		})
+		expectTypeOf(ws(org, "/rooms/:id").handler({})).toEqualTypeOf(org)
+		expectTypeOf(ws(org, "/rooms/:id")).toEqualTypeOf<
+			WSRouteBuilder<HoneyContext<{}>, "/org/:org/rooms/:id", typeof org>
+		>()
 	})
 })
 
 describe("the socket, the handler and the adapter", () => {
 	// v0: 3277130810
 	it("WSContext sends text, bytes or a JSON value, never a bare number", () => {
-		const ws = {} as WSContext
-		expectTypeOf(ws.readyState).toEqualTypeOf<WSReadyState>()
+		const socket = {} as WSContext
+		expectTypeOf(socket.readyState).toEqualTypeOf<WSReadyState>()
 		expectTypeOf<WSReadyState>().toEqualTypeOf<0 | 1 | 2 | 3>()
-		expectTypeOf(ws.send).toBeCallableWith("text")
-		expectTypeOf(ws.send).toBeCallableWith(new ArrayBuffer(1))
-		expectTypeOf(ws.send).toBeCallableWith(new Uint8Array(1))
-		expectTypeOf(ws.send).toBeCallableWith({ n: 1 })
+		expectTypeOf(socket.send).toBeCallableWith("text")
+		expectTypeOf(socket.send).toBeCallableWith(new ArrayBuffer(1))
+		expectTypeOf(socket.send).toBeCallableWith(new Uint8Array(1))
+		expectTypeOf(socket.send).toBeCallableWith({ n: 1 })
 		// @ts-expect-error a number is not a message
-		ws.send(1)
-		expectTypeOf(ws.close).toBeCallableWith(1000, "bye")
+		socket.send(1)
+		expectTypeOf(socket.close).toBeCallableWith(1000, "bye")
 	})
 
 	it("every WSHandler callback is optional; an adapter upgrades with one", () => {
@@ -142,10 +175,10 @@ describe("realtime(app, path, opts)", () => {
 	})
 })
 
-describe("app.ws(path).meta(): only the meta a WebSocket route reads (bit 19 g, carry-in #13)", () => {
+describe("ws(app, path).meta(): only the meta a WebSocket route reads (bit 19 g, carry-in #13)", () => {
 	it("takes the builtins a WebSocket route reads and the route's own keys", () => {
 		const app = honey()
-		app.ws("/live").meta({
+		ws(app, "/live").meta({
 			area: "chat",
 			description: "the live feed",
 			extensions: { "x-realtime": true },
@@ -160,21 +193,21 @@ describe("app.ws(path).meta(): only the meta a WebSocket route reads (bit 19 g, 
 	it("refuses the four builtins the build drops from a WebSocket route", () => {
 		const app = honey()
 		// @ts-expect-error a WebSocket route is never marked deprecated
-		app.ws("/a").meta({ deprecated: true })
+		ws(app, "/a").meta({ deprecated: true })
 		// @ts-expect-error a WebSocket route declares no security requirement
-		app.ws("/b").meta({ security: ["bearer"] })
+		ws(app, "/b").meta({ security: ["bearer"] })
 		// @ts-expect-error a WebSocket route invalidates no read
-		app.ws("/c").meta({ invalidate: [] })
+		ws(app, "/c").meta({ invalidate: [] })
 		// @ts-expect-error a WebSocket route is no MCP tool
-		app.ws("/d").meta({ mcp: true })
+		ws(app, "/d").meta({ mcp: true })
 		expectTypeOf<{ deprecated: true }>().not.toExtend<WsMeta>()
 	})
 
 	it("holds a WebSocket route to the app's meta type, as an HTTP route", () => {
 		const app = honey().meta<{ team: string }>()
-		app.ws("/e").meta({ team: "core" })
+		ws(app, "/e").meta({ team: "core" })
 		// @ts-expect-error the app's meta key keeps its type
-		app.ws("/f").meta({ team: 1 })
+		ws(app, "/f").meta({ team: 1 })
 		expectTypeOf<{ team: number }>().not.toExtend<WsMeta<{ team: string }>>()
 	})
 })

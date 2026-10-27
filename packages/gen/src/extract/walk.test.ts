@@ -91,11 +91,12 @@ describe("registrations: the routes the program's own files register", () => {
 				"walk/app.ts",
 				lines(
 					'import { honey } from "@lovrozagar/honey"',
+					'import { ws } from "@lovrozagar/honey/ws"',
 					'import "dep"',
 					'import { more } from "./more.ts"',
 					"export const app = honey<{}>()",
 					'app.get("/a").handler((c) => c.res.text("ok", "ok"))',
-					'app.ws("/socket").handler({ onMessage: () => {} })',
+					'ws(app, "/socket").handler({ onMessage: () => {} })',
 					"const fake = { handler: (f: unknown) => f }",
 					"fake.handler(() => 1)",
 					"more(app)",
@@ -103,7 +104,7 @@ describe("registrations: the routes the program's own files register", () => {
 			)
 			const found = registrations(loadEntry(tsMorph, { entryPath, exportName: "app" }))
 			expect(found.map(({ at, methods, path }) => ({ at: at.slice(project.root.length + 1), methods, path }))).toEqual([
-				{ at: "walk/app.ts:5", methods: ["GET"], path: "/a" },
+				{ at: "walk/app.ts:6", methods: ["GET"], path: "/a" },
 				{ at: "walk/more.ts:2", methods: ["GET", "PUT"], path: "/more" },
 			])
 		},

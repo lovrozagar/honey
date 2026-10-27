@@ -6,6 +6,7 @@ import { type WSAdapter, WSContextImpl, type WSHandler } from "../ws/contract.ts
 import { createBus } from "./bus.ts"
 import { realtime } from "./realtime.ts"
 import type { ConnContext } from "./route.ts"
+import { ws } from "../ws/route.ts"
 
 type Raw = {
 	bufferedAmount: number
@@ -36,22 +37,22 @@ function testAdapter() {
 	const adapter: WSAdapter = {
 		upgrade(_req, _env, handler: WSHandler<unknown>) {
 			const raw: Raw = { bufferedAmount: 0, close: vi.fn(), readyState: 1, send: vi.fn() }
-			const ws = new WSContextImpl(raw)
+			const wsContext = new WSContextImpl(raw)
 			const socket: Socket = {
 				close(code, reason) {
 					if (raw.readyState === 3) return
 					raw.readyState = 3
-					handler.onClose?.(undefined, ws, code, reason)
+					handler.onClose?.(undefined, wsContext, code, reason)
 				},
-				error: (error) => handler.onError?.(undefined, ws, error),
-				message: (data) => handler.onMessage?.(undefined, ws, data),
+				error: (error) => handler.onError?.(undefined, wsContext, error),
+				message: (data) => handler.onMessage?.(undefined, wsContext, data),
 				raw,
 				sent: () => raw.send.mock.calls.map((call) => JSON.parse(call[0] as string) as unknown),
 			}
 			raw.close.mockImplementation((code, reason) => socket.close(code ?? 1005, reason ?? ""))
 			sockets.push(socket)
-			handler.onOpen?.(undefined, ws)
-			return { response: upgraded(), socket: ws }
+			handler.onOpen?.(undefined, wsContext)
+			return { response: upgraded(), socket: wsContext }
 		},
 	}
 	return { adapter, sockets }
@@ -88,7 +89,7 @@ describe("realtime(app, path, opts): registration", () => {
 		const opened: string[] = []
 		realtime(app, "/a", { handler: () => void opened.push("a") })
 		realtime(app, "/b", { handler: () => void opened.push("b") })
-		app.ws("/plain").handler({ onOpen: () => void opened.push("plain") })
+		ws(app, "/plain").handler({ onOpen: () => void opened.push("plain") })
 		app.get("/a").handler((ctx) => ctx.res.text("ok", "page"))
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 		const responses = await Promise.all(

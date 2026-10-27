@@ -6,6 +6,7 @@ import { readableStream } from "../input/input.ts"
 import { honey } from "../routing/app.ts"
 import { SILENT } from "../telemetry/logger.ts"
 import { generateOpenApi } from "./generate.ts"
+import { ws } from "../ws/route.ts"
 
 const INFO = { title: "T", version: "1" }
 type Doc = ReturnType<typeof generateOpenApi>
@@ -79,7 +80,7 @@ describe("paths: one item per concrete path, its methods inside", () => {
 		app.all("/any").handler((c) => c.res.text("ok", "ok"))
 		app.get("/opt/:id?").handler((c) => c.res.text("ok", "ok"))
 		app.on(["GET", "POST"], "/multi").handler((c) => c.res.text("ok", "ok"))
-		app.ws("/socket").handler({ onMessage() {} })
+		ws(app, "/socket").handler({ onMessage() {} })
 		const doc = generateOpenApi(app, { info: INFO })
 		const route = (path: string, method = "get") => op(doc, path, method)["x-honey-route"]
 		expect([
@@ -166,8 +167,7 @@ describe("operationIds", () => {
 			.get("/opt/:id?")
 			.meta({ operationId: "opt" })
 			.handler((c) => c.res.text("ok", "ok"))
-		app
-			.ws("/feed/:room?")
+		ws(app, "/feed/:room?")
 			.meta({ operationId: "feed" })
 			.handler({ onMessage() {} })
 		app

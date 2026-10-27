@@ -11,6 +11,7 @@ import { createNode, insertRoute, type RouteEntry, type RouteTree } from "../rou
 import { mergeTree } from "../routing/tree-merge.ts"
 import { SILENT, type Logger } from "../telemetry/logger.ts"
 import { generateOpenApi } from "./generate.ts"
+import { ws } from "../ws/route.ts"
 
 const INFO = { title: "T", version: "1" }
 
@@ -423,8 +424,7 @@ describe("generateOpenApi: schema-derived meta over every shape a route takes", 
 	it("reads a WS route's search, skips a binary body, unwraps a stream, and reads no output from an error, a bare body or none", () => {
 		const app = honey<{}>()
 		app.metaSpec({ schema: { entity: { expand: (e: { name: string }) => ({ "x-entity": e.name }) } } })
-		app
-			.ws("/live")
+		ws(app, "/live")
 			.input({ search: named("live") })
 			.handler({ onMessage() {} })
 		app

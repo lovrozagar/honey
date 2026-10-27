@@ -18,6 +18,7 @@ import { serveOpenApi } from "../../../src/openapi/serve.ts"
 import { honey } from "../../../src/routing/app.ts"
 import { createReferenceServer } from "./reference-server.ts"
 import { secureRoutes } from "./app-secure.ts"
+import { ws } from "../../../src/ws/route.ts"
 
 /** The app's two origins, known once both listeners are up. */
 export type Origins = { readonly alt: string; readonly url: string }
@@ -384,19 +385,18 @@ function harnessRoutes(app: ConformanceApp): void {
 /** `ws.echo`: echoes each frame; `__close__` closes 1000, a `token` other than `valid-token` closes 4401. */
 function socketRoutes(app: ConformanceApp): void {
 	/* a realtime op echoing each send, JSON as it is and other text as { got }: what an SDK's send encoded (sweep 30, 14) */
-	app
-		.ws("/realtime/echo")
+	ws(app, "/realtime/echo")
 		.meta({ extensions: { "x-realtime": true }, operationId: "realtime.echo" })
-		.handler({ onMessage: (_ctx, ws, data) => ws.send(jsonOrGot(data)) })
-	app
-		.ws("/ws/echo")
+		.handler({ onMessage: (_ctx, socket, data) => socket.send(jsonOrGot(data)) })
+	ws(app, "/ws/echo")
 		.meta({ operationId: "ws.echo" })
 		.input({ search: z.object({ token: z.string().optional() }) })
 		.handler({
-			onMessage: (_ctx, ws, data) => (data === "__close__" ? ws.close(1000, "server-initiated") : ws.send(data)),
-			onOpen: (ctx, ws) => {
+			onMessage: (_ctx, socket, data) =>
+				data === "__close__" ? socket.close(1000, "server-initiated") : socket.send(data),
+			onOpen: (ctx, socket) => {
 				const { token } = ctx.input.search
-				if (token !== undefined && token !== "valid-token") ws.close(4401, "unauthorized")
+				if (token !== undefined && token !== "valid-token") socket.close(4401, "unauthorized")
 			},
 		})
 }

@@ -21,6 +21,7 @@ import { createMiddleware as createMiddlewareV1 } from "../../packages/core/src/
 import { realtime } from "../../packages/core/src/realtime/realtime.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
 import { WSContextImpl as WSContextImplV1 } from "../../packages/core/src/ws/contract.ts"
+import { ws } from "../../packages/core/src/ws/route.ts"
 import { judge, median } from "./significance.ts"
 
 const SAMPLES = Number(process.env.WS_SAMPLES ?? 15)
@@ -68,12 +69,12 @@ function fakeAdapter(Impl: new (raw: never) => Socket, sent: ReturnType<typeof c
 	const conns: Conn[] = []
 	const adapter = {
 		upgrade(_req: Request, _env: unknown, handler: Handler) {
-			const ws = new Impl({ bufferedAmount: 0, close() {}, readyState: 1, send: () => sent.bump() } as never)
-			conns.push({ handler, ws })
-			handler.onOpen?.(undefined, ws)
+			const wsContext = new Impl({ bufferedAmount: 0, close() {}, readyState: 1, send: () => sent.bump() } as never)
+			conns.push({ handler, ws: wsContext })
+			handler.onOpen?.(undefined, wsContext)
 			const response = new Response(null)
 			Object.defineProperty(response, "status", { value: 101 })
-			return { response, socket: ws }
+			return { response, socket: wsContext }
 		},
 	}
 	return { adapter, conns }
@@ -87,22 +88,28 @@ const handshake = (path: string) =>
 type Builder = {
 	post(path: string): { handler(fn: (ctx: { res: { json(s: string, b: object): Response } }) => Response): unknown }
 	use(mw: unknown): Builder
-	ws(path: string): { handler(h: object): unknown }
 	wsAdapter(adapter: unknown): Builder
 }
 /** Registers a realtime route; what it returns publishes from a REST handler's ctx. */
 type RealtimeRoute = (path: string, opts: object) => (ctx: unknown, topic: string, data: unknown) => void
+/** Starts a ws route on a handle: v0's `.ws()` method, v1's `ws(app, path)`. */
+type SocketRoute = (handle: Builder, path: string) => { handler(h: object): unknown }
 
 /** One version's app: every scenario's routes, its counters, and its open connections. */
-function build(app: Builder, Impl: new (raw: never) => Socket, chainMw: unknown, route: RealtimeRoute) {
+function build(
+	app: Builder,
+	Impl: new (raw: never) => Socket,
+	chainMw: unknown,
+	routes: { realtime: RealtimeRoute; socket: SocketRoute },
+) {
+	const route = routes.realtime
 	const sent = counter()
 	const handled = counter()
 	const { adapter, conns } = fakeAdapter(Impl, sent)
 	app.wsAdapter(adapter)
-	app
-		.use(chainMw)
-		.ws("/live")
-		.handler({ onMessage: (_ctx: unknown, ws: { send(d: string): void }, data: string) => ws.send(data) })
+	routes
+		.socket(app.use(chainMw), "/live")
+		.handler({ onMessage: (_ctx: unknown, socket: { send(d: string): void }, data: string) => socket.send(data) })
 	const publish = route("/rt", { handler: (_ctx: unknown, conn: { join(t: string): void }) => conn.join("room") })
 	app.post("/pub").handler((ctx) => {
 		publish(ctx, "room", { n: 1 })
@@ -121,15 +128,21 @@ const v1App = honeyV1<{}>()
 const passV0 = createMiddleware((_ctx, next) => next())
 const passV1 = createMiddlewareV1((_ctx, next) => next())
 const apps = {
-	v0: build(v0App as unknown as Builder, WSContextImpl as never, passV0, (path, opts) => {
-		;(v0App as unknown as { realtime(p: string, o: object): unknown }).realtime(path, opts)
-		/* v0 needs the namespace named once an app has several realtime routes */
-		type Realtime = { namespace(name: string): { publish(t: string, d: unknown): void } }
-		return (ctx, topic, data) => (ctx as { realtime: Realtime }).realtime.namespace(path).publish(topic, data)
+	v0: build(v0App as unknown as Builder, WSContextImpl as never, passV0, {
+		realtime: (path, opts) => {
+			;(v0App as unknown as { realtime(p: string, o: object): unknown }).realtime(path, opts)
+			/* v0 needs the namespace named once an app has several realtime routes */
+			type Realtime = { namespace(name: string): { publish(t: string, d: unknown): void } }
+			return (ctx, topic, data) => (ctx as { realtime: Realtime }).realtime.namespace(path).publish(topic, data)
+		},
+		socket: (handle, path) => (handle as unknown as { ws(p: string): ReturnType<SocketRoute> }).ws(path),
 	}),
-	v1: build(v1App as unknown as Builder, WSContextImplV1 as never, passV1, (path, opts) => {
-		const publisher = realtime(v1App, path, opts as never)
-		return (_ctx, topic, data) => publisher.publish(topic, data)
+	v1: build(v1App as unknown as Builder, WSContextImplV1 as never, passV1, {
+		realtime: (path, opts) => {
+			const publisher = realtime(v1App, path, opts as never)
+			return (_ctx, topic, data) => publisher.publish(topic, data)
+		},
+		socket: (handle, path) => ws(handle as unknown as typeof v1App, path) as never,
 	}),
 }
 

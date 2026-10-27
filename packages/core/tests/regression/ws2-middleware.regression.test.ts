@@ -9,6 +9,7 @@ import { HoneyError } from "../../src/errors/error.ts"
 import { defineErrors } from "../../src/errors/errors.ts"
 import { createMiddleware, defineMiddleware } from "../../src/middleware/middleware.ts"
 import { honey } from "../../src/routing/app.ts"
+import { ws } from "../../src/ws/route.ts"
 
 type Fetchable = { fetch: (r: Request, env: never) => Response | Promise<Response> }
 
@@ -305,7 +306,7 @@ describe("websocket routes run the same order", () => {
 			},
 		})
 		app.use("/rooms", tracer(trace, "scoped"))
-		app.use(tracer(trace, "chain")).ws("/rooms/:id").handler({})
+		ws(app.use(tracer(trace, "chain")), "/rooms/:id").handler({})
 		const res = await app.fetch(
 			new Request("http://x/rooms/1", { headers: { connection: "Upgrade", upgrade: "websocket" } }),
 			{},

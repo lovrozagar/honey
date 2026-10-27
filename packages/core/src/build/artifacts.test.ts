@@ -114,10 +114,13 @@ const WITH_HIDDEN_ADDITION = [
 	'\t.handler((c) => c.res.text("ok", "h"))',
 ]
 
+/* a ws route after the app's chain; the import hoists */
+const WITH_SOCKET = ['import { ws } from "@lovrozagar/honey/ws"', 'ws(app, "/live").handler({})']
+
 describe("artifactsOf (bit 19 h2)", () => {
 	// v0: 7d37ebfc5c
 	it("writes every route into the tree's topology, a websocket's included", async () => {
-		const { dir } = fresh({ "src/app.ts": appSource({ extra: ['\t.ws("/live").handler({})'] }) })
+		const { dir } = fresh({ "src/app.ts": appSource({ extra: WITH_SOCKET }) })
 		const { files } = await artifacts({ app: "src/app.ts" }, dir)
 		expect(Object.keys(files)).toEqual(["src/_gen/routes.gen.ts"])
 		/* the leaf is the node's ws slot, an interned route id */

@@ -209,6 +209,11 @@
 			"types": "./dist/routing/tree.d.ts",
 			"default": "./dist/routing/tree.js"
 		},
+		"./ws": {
+			"honey-source": "./src/ws/route.ts",
+			"types": "./dist/ws/route.d.ts",
+			"default": "./dist/ws/route.js"
+		},
 		"./ws/bun": {
 			"honey-source": "./src/ws/bun.ts",
 			"types": "./dist/ws/bun.d.ts",

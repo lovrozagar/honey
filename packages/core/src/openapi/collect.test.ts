@@ -6,6 +6,7 @@ import { createMiddleware, defineMiddleware } from "../middleware/middleware.ts"
 import { honey } from "../routing/app.ts"
 import { createNode, insertRoute } from "../routing/tree.ts"
 import { collectRoutes } from "./collect.ts"
+import { ws } from "../ws/route.ts"
 
 describe("collectRoutes: one record per path a route serves", () => {
 	it("names each route by method and pattern, with its OpenAPI path and params, in registration order", () => {
@@ -39,16 +40,15 @@ describe("collectRoutes: one record per path a route serves", () => {
 
 	it("collects a WebSocket route apart, never as an operation", () => {
 		const app = honey<{}>()
-		app
-			.ws("/chat/:room")
+		ws(app, "/chat/:room")
 			.input({ search: z.object({ token: z.string() }) })
 			.handler({})
 		app.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
-		const { http, ws } = collectRoutes(app)
+		const { http, ws: sockets } = collectRoutes(app)
 		expect(http.map(({ id }) => id)).toEqual(["GET /health"])
-		expect(ws.map(({ id, input, params, path }) => ({ id, input: Object.keys(input ?? {}), params, path }))).toEqual([
-			{ id: "WS /chat/:room", input: ["search"], params: ["room"], path: "/chat/{room}" },
-		])
+		expect(
+			sockets.map(({ id, input, params, path }) => ({ id, input: Object.keys(input ?? {}), params, path })),
+		).toEqual([{ id: "WS /chat/:room", input: ["search"], params: ["room"], path: "/chat/{room}" }])
 	})
 
 	it("sees a route registered after an earlier collection", () => {
@@ -182,13 +182,9 @@ describe("collectRoutes: middleware meta reaches every route it runs on", () => 
 			.meta({ tenant: "explicit" } as never)
 			.handler((c) => c.res.json("ok", {}))
 		app.get("/other/thing").handler((c) => c.res.json("ok", {}))
-		app.ws("/late/ws").handler({ onMessage() {} })
-		app
-			.use(shard)
-			.ws("/chain-ws")
-			.handler({ onMessage() {} })
-		app
-			.ws("/route-ws")
+		ws(app, "/late/ws").handler({ onMessage() {} })
+		ws(app.use(shard), "/chain-ws").handler({ onMessage() {} })
+		ws(app, "/route-ws")
 			.use(shard as never)
 			.handler({ onMessage() {} })
 		app.use("/late", shard)
