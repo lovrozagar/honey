@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { extract, type FixtureProject, fixtureProject, lines, routeId, SLOW, shown } from "./__fixtures__/project.ts"
-import { extractTypes } from "./extract.ts"
+import * as tsMorph from "ts-morph"
+import { extractTypes, loadTsMorph } from "./extract.ts"
 
 /** The caller's route id, refusing "/bad" as the router would an invalid pattern. */
 function refusing(method: string, path: string): string {
@@ -444,5 +445,13 @@ describe("ts-morph is optional", () => {
 			null,
 			["ts-morph is not installed: middleware and env types are not extracted (install ts-morph to type ctx)"],
 		])
+	})
+})
+
+describe("loadTsMorph (bit 19 h2)", () => {
+	it("gives the installed ts-morph, undefined for one that is missing, and rethrows any other failure", async () => {
+		expect(await loadTsMorph()).toHaveProperty("Project", tsMorph.Project)
+		expect(await loadTsMorph("@honey/no-such-ts-morph")).toBeUndefined()
+		await expect(loadTsMorph("data:text/javascript,throw new Error('broken')")).rejects.toThrow("broken")
 	})
 })

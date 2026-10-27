@@ -1,5 +1,6 @@
 /**
- * The generate CLI's arguments (bit 17 phase h): `generate --spec <file> --target <name>... --out <dir> [--watch]` and
+ * The generate CLI's arguments (bit 17 phase h): `generate --spec <file>|--app <module>[#export] --target <name>...
+ * --out <dir> [--watch]` (`--app`, bit 19 h2) and
  * each target's options as `--<target>-<option>`, named after its generate function's options and passed through
  * untouched (each generator validates its own). Strict: an unknown flag, a missing value, a stray argument, an unknown
  * target or an option for a target not asked for is a usage error.
@@ -35,8 +36,9 @@ const TARGETS = {
 export type Target = keyof typeof TARGETS
 export type Options = Record<string, string | boolean>
 
-/** What one `generate` run asks for. */
+/** What one `generate` run asks for: a spec file or an app module (one, never both). */
 export type Generate = {
+	readonly app: string
 	readonly spec: string
 	readonly out: string
 	readonly targets: readonly Target[]
@@ -46,12 +48,16 @@ export type Generate = {
 
 /** The usage text, the options listed by target. */
 export function usage(): string {
-	return `usage: honey-codegen generate --spec <openapi.json> --target <name>... --out <dir> [--watch] [options]
+	return `usage: honey-codegen generate (--spec <openapi.json> | --app <module>[#export]) --target <name>... --out <dir>
+       [--watch] [options]
 
   --spec <file>     the OpenAPI document (JSON) to generate from
+  --app <module>    a honey app module instead: its export (#name, else app, else default) is the app, and its
+                    openApi export, if any, the document's options (core's generateOpenApi); the module
+                    exports the app and serves nothing: one that calls serve() as it loads is outside --app
   --target <name>   ts, go, rust, python, csharp, java or cli; repeat for more than one
   --out <dir>       each target's files go under <dir>/<target>
-  --watch           generate again on each change of the spec
+  --watch           generate again on each change of the spec or the app module
   -h, --help        this text
 
 A target's options are its generator's, as --<target>-<option> (a boolean as --x, --x=true or --x=false):
@@ -108,6 +114,7 @@ function takeFlag(
 ) {
 	const [flag, inline] = arg.slice(2).split(/=(.*)/s, 2) as [string, string | undefined]
 	if (flag === "spec") into.spec = valueOf(flag, inline, rest)
+	else if (flag === "app") into.app = valueOf(flag, inline, rest)
 	else if (flag === "out") into.out = valueOf(flag, inline, rest)
 	else if (flag === "watch") into.watch = booleanOf(flag, inline)
 	else if (flag === "target") {
@@ -127,6 +134,7 @@ function takeFlag(
 export function parseGenerate(argv: readonly string[]): Generate {
 	const rest = [...argv]
 	const into = {
+		app: "",
 		options: Object.fromEntries(Object.keys(TARGETS).map((target) => [target, {}])) as Record<Target, Options>,
 		out: "",
 		spec: "",
@@ -138,7 +146,8 @@ export function parseGenerate(argv: readonly string[]): Generate {
 		if (!arg.startsWith("--") || arg === "--") throw new UsageError(`unexpected argument ${JSON.stringify(arg)}`)
 		takeFlag(arg, rest, into)
 	}
-	if (into.spec === "") throw new UsageError("--spec is required")
+	if (into.spec !== "" && into.app !== "") throw new UsageError("--spec and --app each name the document: give one")
+	if (into.spec === "" && into.app === "") throw new UsageError("--spec or --app is required")
 	if (into.out === "") throw new UsageError("--out is required")
 	if (into.targets.length === 0) throw new UsageError("--target is required")
 	const unasked = Object.entries(into.options).filter(

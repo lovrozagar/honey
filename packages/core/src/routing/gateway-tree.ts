@@ -61,16 +61,25 @@ export function gatewayTree(app: App, source: RouteTree): RouteTree {
 /**
  * Give `app`'s routes the input and output declarations `source` holds for them where they
  * declare none: a gateway documents each service route by the service's schemas. Its own stay.
+ * A gateway serving its generated tree holds its services' routes as loaded leaves, without a
+ * record (bit 19 h2): those leaves take the schemas the same way.
  */
 export function overlaySchemas(app: App, source: RouteTree): void {
 	const g = app[GRAPH]
+	const leaves = dict<RouteEntry>()
 	for (const [id, entry] of Object.entries(source.routes)) {
 		const target = g.records.get(id)
-		if (target === undefined) continue
-		const live = entry.h as RouteHandler | undefined
-		const iv = target.iv ?? entry.iv ?? live?.iv ?? null
-		const out = target.out ?? entry.out ?? live?.out ?? null
-		g.records.set(id, { ...target, iv, out })
+		const leaf = g.loaded?.[id]
+		if (target !== undefined) g.records.set(id, { ...target, ...schemasOf(target, entry) })
+		else if (leaf !== undefined) leaves[id] = { ...leaf, ...schemasOf(leaf, entry) }
 	}
+	if (g.loaded !== null && Object.keys(leaves).length > 0)
+		g.loaded = Object.assign(dict<RouteEntry>(), g.loaded, leaves)
 	g.epoch++
+}
+
+/** `target`'s own schemas, else what `entry` declares, else its live record's. */
+function schemasOf(target: Pick<RouteEntry, "iv" | "out">, entry: RouteEntry): Pick<RouteHandler, "iv" | "out"> {
+	const live = entry.h as RouteHandler | undefined
+	return { iv: target.iv ?? entry.iv ?? live?.iv ?? null, out: target.out ?? entry.out ?? live?.out ?? null }
 }

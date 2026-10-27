@@ -155,6 +155,16 @@ function routeInputs(
 	return Object.fromEntries([...byId].filter((entry): entry is [string, string] => entry[1] !== null))
 }
 
+/** ts-morph, the optional peer, when installed; else undefined, which `extractTypes` reports once. */
+export async function loadTsMorph(specifier = "ts-morph"): Promise<TsMorph | undefined> {
+	try {
+		return (await import(specifier)) as TsMorph
+	} catch (error) {
+		if ((error as { code?: string }).code === "ERR_MODULE_NOT_FOUND") return undefined
+		throw error
+	}
+}
+
 /** The app's extracted types, or null (said once through `report`) without ts-morph. */
 export function extractTypes(options: ExtractOptions): ExtractedTypes | null {
 	const { exportName, report, routeId, tsMorph } = options

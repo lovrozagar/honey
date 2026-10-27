@@ -104,4 +104,20 @@ describe("overlaySchemas(): a gateway documents its downstream routes' shapes", 
 			null,
 		])
 	})
+	it("copies them onto the loaded leaves a gateway serving its generated tree holds without a record (bit 19 h2)", () => {
+		const theirs = { json: z.object({ theirs: z.string() }) }
+		const service = honey<{}>()
+		service
+			.post("/c")
+			.input(theirs)
+			.handler((c) => c.res.text("ok", "c"))
+		const merged = mergeTree([service.toRouteTree(), { worker: "service" }])
+		/* the generated file carries data only: no live record, no schemas */
+		const written = { ...merged, routes: { "POST /c": { mt: { worker: "service" } } } } as RouteTree
+		const app = honey<{}>().routeTree(written)
+		app.all("/*").handler((c) => c.res.text("ok", "forwarded"))
+		overlaySchemas(app, merged)
+		const [c] = collectRoutes(app).http
+		expect([c?.id, c?.input, c?.meta]).toEqual(["POST /c", theirs, { worker: "service" }])
+	})
 })

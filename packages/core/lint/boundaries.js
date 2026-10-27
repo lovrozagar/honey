@@ -32,6 +32,7 @@ const DISPATCHER = "adapters/serve.ts"
 const MESSAGES = {
 	adapter: "only the same runtime's adapter may import an adapter",
 	codegen: "core reaches honey-codegen from build/ only",
+	codegenStatic: "core imports honey-codegen through import() only: it is an optional peer",
 	escape: "an import stays inside its package's src (no _v0, no sibling package)",
 	internal: "honey-codegen reads @lovrozagar/honey through public subpaths only",
 	node: "node builtins are for the Node adapter and build-time code only",
@@ -80,11 +81,13 @@ function relativeProblem(where, spec, dynamic) {
 	return dynamic && where.pkg === "core" && where.rel === DISPATCHER ? null : "adapter"
 }
 
-function packageProblem(where, spec) {
+function packageProblem(where, spec, dynamic) {
 	if (spec === "ws" || spec.startsWith("ws/")) return where.bucket === "node" ? null : "ws"
 	if (spec === "ts-morph") return where.pkg === "gen" && where.rel.startsWith("extract/") ? null : "tsMorph"
-	if (spec.startsWith("@lovrozagar/honey-codegen"))
-		return where.pkg === "gen" || where.bucket === "build" ? null : "codegen"
+	if (spec.startsWith("@lovrozagar/honey-codegen")) {
+		if (where.pkg === "gen") return null
+		return where.bucket !== "build" ? "codegen" : dynamic ? null : "codegenStatic"
+	}
 	if (where.pkg === "gen" && spec.startsWith("@lovrozagar/honey/") && /\/(?:src|_v0|dist)\//.test(`${spec}/`)) {
 		return "internal"
 	}
@@ -95,7 +98,7 @@ function problemOf(where, spec, dynamic) {
 	if (spec.startsWith(".")) return relativeProblem(where, spec, dynamic)
 	if (isNodeBuiltin(spec))
 		return where.bucket === "node" || where.bucket === "build" || where.pkg === "gen" ? null : "node"
-	return packageProblem(where, spec)
+	return packageProblem(where, spec, dynamic)
 }
 
 export const rule = {
@@ -106,7 +109,9 @@ export const rule = {
 		const checkSource = (node) => {
 			const spec = node.source?.type === "Literal" ? node.source.value : null
 			if (typeof spec !== "string") return
-			const problem = problemOf(where, spec, node.type === "ImportExpression")
+			/* import() loads on demand and a type-only import is erased: neither loads with the module */
+			const deferred = node.type === "ImportExpression" || node.importKind === "type" || node.exportKind === "type"
+			const problem = problemOf(where, spec, deferred)
 			if (problem !== null) context.report({ message: MESSAGES[problem], node })
 		}
 		const checkGlobal = (node, identifier) => {

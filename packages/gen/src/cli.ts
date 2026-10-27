@@ -5,8 +5,8 @@
  * cli targets' whole trees go through gofmt (the post-pass), so a missing gofmt is a refusal, never unformatted Go.
  * `--watch` regenerates in a fresh child on each change of the spec. Parsing is strict: an unknown flag, a missing
  * value, a stray argument or an option for a target not asked for is a usage error. Each target is written through
- * write.ts: only changed files, a hashed manifest, a removed operation's unedited files deleted (bit 19 h1). Loading an
- * app (`--app`) waits for phase h2, beside core's loaders.
+ * write.ts: only changed files, a hashed manifest, a removed operation's unedited files deleted (bit 19 h1). `--app`
+ * generates from a honey app module instead of a spec, its document made by the app's own core (ir/load.ts, bit 19 h2).
  */
 import { existsSync, readFileSync, realpathSync, statSync, watch } from "node:fs"
 import { basename, delimiter, dirname, join, resolve } from "node:path"
@@ -22,6 +22,7 @@ import { gofmtFormatter } from "./emit/shared/gofmt.ts"
 import { generateSdk } from "./emit/ts/sdk.ts"
 import { type Generate, type Options, parseGenerate, type Target, usage, UsageError } from "./gen/args.ts"
 import { runCli } from "./gen/process.ts"
+import { appRef, loadAppDocument } from "./ir/load.ts"
 import { writeTarget } from "./gen/write.ts"
 
 /** An executable named `name` on PATH, or none. */
@@ -79,7 +80,7 @@ function filesOf(
 
 /** Every file a run writes, by target and its path under the target's directory, Go's through gofmt; skips to `report`. */
 export async function generated(
-	run: Generate,
+	run: Pick<Generate, "options" | "targets">,
 	document: Record<string, unknown>,
 	env: NodeJS.ProcessEnv,
 	report: (line: string) => void,
@@ -116,10 +117,15 @@ const PROCESS_IO: Io = {
 	out: (text) => void process.stdout.write(text),
 }
 
-/** One generation: the spec read, every target generated and written under `<out>/<target>`, its stale files deleted. */
-async function generateOnce(run: Generate, io: Io, env: NodeJS.ProcessEnv): Promise<number> {
+/** `document`'s targets generated and written under `<out>/<target>`, stale files deleted (core's plugin calls it too). */
+export async function writeGenerated(
+	run: Pick<Generate, "options" | "out" | "targets">,
+	document: Record<string, unknown>,
+	io: Io,
+	env: NodeJS.ProcessEnv,
+): Promise<number> {
 	let count = 0
-	for (const [target, files] of Object.entries(await generated(run, readSpec(run.spec), env, io.err))) {
+	for (const [target, files] of Object.entries(await generated(run, document, env, io.err))) {
 		for (const rel of writeTarget(join(run.out, target), files).kept)
 			io.err(
 				`honey-codegen: ${join(target, rel)} is stale but edited since it was generated, or not its to delete: kept\n`,
@@ -130,8 +136,14 @@ async function generateOnce(run: Generate, io: Io, env: NodeJS.ProcessEnv): Prom
 	return 0
 }
 
-/** What a run takes beside its arguments: the environment, and a signal that stops a watch. */
-export type RunOptions = { readonly env?: NodeJS.ProcessEnv; readonly signal?: AbortSignal }
+/** One generation: the spec read, or the app's document made (the module resolved from `cwd`), then written. */
+async function generateOnce(run: Generate, io: Io, env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
+	const document = run.app === "" ? readSpec(resolve(cwd, run.spec)) : await loadAppDocument(run.app, cwd)
+	return writeGenerated({ ...run, out: resolve(cwd, run.out) }, document, io, env)
+}
+
+/** What a run takes beside its arguments: the environment, the directory paths resolve from, a watch's stop signal. */
+export type RunOptions = { readonly cwd?: string; readonly env?: NodeJS.ProcessEnv; readonly signal?: AbortSignal }
 
 /**
  * Generates now and on each change of the spec, each run a fresh child after the one before it (a change during a run
@@ -142,15 +154,15 @@ function watchSpec(
 	run: Generate,
 	argv: readonly string[],
 	io: Io,
-	options: RunOptions & { readonly env: NodeJS.ProcessEnv },
+	options: RunOptions & { readonly cwd: string; readonly env: NodeJS.ProcessEnv },
 ): Promise<number> {
 	if (options.env.HONEY_CODEGEN_CHILD === "1") throw new Error("--watch is not allowed in a generation child")
 	const args = ["generate", ...argv.filter((arg) => arg !== "--watch" && !arg.startsWith("--watch="))]
-	const spec = resolve(run.spec)
+	const spec = resolve(options.cwd, run.app === "" ? run.spec : appRef(run.app).module)
 	let queue = Promise.resolve()
 	const generate = () => {
 		queue = queue.then(() =>
-			runCli(args, { cwd: process.cwd(), env: options.env }).catch((error: Error) =>
+			runCli(args, { cwd: options.cwd, env: options.env }).catch((error: Error) =>
 				io.err(`honey-codegen: ${error.message}\n`),
 			),
 		)
@@ -185,10 +197,10 @@ export async function main(argv: readonly string[], io: Io = PROCESS_IO, options
 		}
 		if (argv[0] !== "generate") throw new UsageError(`unknown command ${JSON.stringify(argv[0])}`)
 		const run = parseGenerate(argv.slice(1))
-		const env = options.env ?? process.env
+		const [env, cwd] = [options.env ?? process.env, options.cwd ?? process.cwd()]
 		return run.watch
-			? await watchSpec(run, argv.slice(1), io, { env, signal: options.signal })
-			: await generateOnce(run, io, env)
+			? await watchSpec(run, argv.slice(1), io, { cwd, env, signal: options.signal })
+			: await generateOnce(run, io, env, cwd)
 	} catch (error) {
 		if (error instanceof UsageError) {
 			io.err(`honey-codegen: ${error.message}\n\n${usage()}\n`)

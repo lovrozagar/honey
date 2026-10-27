@@ -102,6 +102,7 @@ function thrown(run: () => unknown): string | null {
 describe("generateRouteTree: the module", () => {
 	// v0: 04ac84d67d
 	// v0: 5a96d675c2
+	// v0: ae3a47f250
 	it("exports the topology with route-id leaves, the route data keyed by id, and routeTree over both", async () => {
 		const { routeTree, routes, tree } = await emitted(
 			treeOf([
@@ -170,6 +171,8 @@ describe("generateRouteTree: segments and records", () => {
 	})
 
 	// v0: aef1c13482
+	// v0: 6c99d44135
+	// v0: fa0d2533c1
 	it("builds every record of the topology null-prototype, and no two nodes share one", async () => {
 		const { tree } = await emitted(
 			treeOf([

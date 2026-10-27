@@ -9,6 +9,7 @@ const ESCAPE = "an import stays inside its package's src (no _v0, no sibling pac
 const WS = "ws is for the Node WebSocket adapter only"
 const TS_MORPH = "ts-morph is for honey-codegen's extract/ only"
 const CODEGEN = "core reaches honey-codegen from build/ only"
+const CODEGEN_STATIC = "core imports honey-codegen through import() only: it is an optional peer"
 const INTERNAL = "honey-codegen reads @lovrozagar/honey through public subpaths only"
 const global = (name: string) => `${name} is not available here (00-rules environments)`
 
@@ -82,11 +83,21 @@ describe("honey/boundaries: packages", () => {
 			"packages/gen/src/extract/extract.ts": 'import { Project } from "ts-morph"\n',
 			"packages/core/src/openapi/document.ts": 'import { generate } from "@lovrozagar/honey-codegen"\n',
 			"packages/core/src/build/plugin.ts": 'import { generateTypes } from "@lovrozagar/honey-codegen"\n',
+			"packages/core/src/build/generate.ts": [
+				'import type { RouteTreeV2 } from "@lovrozagar/honey-codegen"',
+				'export type { RouteTreeV2 } from "@lovrozagar/honey-codegen"',
+				'export { generateTypes } from "@lovrozagar/honey-codegen"',
+				'export const codegen = () => import("@lovrozagar/honey-codegen")',
+				"",
+			].join("\n"),
 		}
 		expect(reportsOf(rule, fixture)).toEqual([
 			{ file: "packages/core/src/ws/session.ts", message: WS },
 			{ file: "packages/gen/src/emit/ts/sdk.ts", message: TS_MORPH },
 			{ file: "packages/core/src/openapi/document.ts", message: CODEGEN },
+			/* bit 19 h2 (Q2): an optional peer, so build/ reaches it on demand, never as the module loads */
+			{ file: "packages/core/src/build/plugin.ts", message: CODEGEN_STATIC },
+			{ file: "packages/core/src/build/generate.ts", message: CODEGEN_STATIC },
 		])
 	})
 

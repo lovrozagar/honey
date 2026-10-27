@@ -39,7 +39,7 @@ describe("generate's arguments (phase h)", () => {
 			'--target "kotlin": want one of cli, csharp, go, java, mcp, python, rust, ts',
 			"options for rust, which no --target names",
 			'--go-throw-on-error takes true or false, not "maybe"',
-			"--spec is required",
+			"--spec or --app is required",
 			"--out is required",
 			"--target is required",
 			'unexpected argument "--"',

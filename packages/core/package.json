@@ -10,6 +10,9 @@
 		"url": "git+https://github.com/lovrozagar/honey.git",
 		"directory": "packages/core"
 	},
+	"bin": {
+		"honey": "bin/honey.js"
+	},
 	"type": "module",
 	"sideEffects": false,
 	"exports": {},
@@ -21,6 +24,7 @@
 		"jiti": "2.7.0"
 	},
 	"devDependencies": {
+		"@lovrozagar/honey-codegen": "workspace:*",
 		"@opentelemetry/api": "1.9.1",
 		"@opentelemetry/core": "2.11.0",
 		"@opentelemetry/sdk-trace-base": "2.11.0",
@@ -41,9 +45,13 @@
 		"zod": "catalog:"
 	},
 	"peerDependencies": {
+		"@lovrozagar/honey-codegen": ">=1.0.0",
 		"ws": ">=8.21.0"
 	},
 	"peerDependenciesMeta": {
+		"@lovrozagar/honey-codegen": {
+			"optional": true
+		},
 		"ws": {
 			"optional": true
 		}

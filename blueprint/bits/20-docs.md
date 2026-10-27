@@ -37,6 +37,12 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - Generated SDK error messages read `HTTP <status>: <message>` (or `HTTP <status>` with no message) in every target (bit 19 d2): Go and Rust drop the reason phrase (they printed `404 Not Found: <message>`), and TS adds the prefix (it printed the message alone). Code matching on the old text changes; match the typed error and its status instead.
 - The TS SDK's SSE caps are UTF-8 bytes like every other SDK's (bit 19 d2): `sseMaxBufferChars` is replaced by `sseMaxLineBytes` (1 MiB) and `sseMaxEventBytes` (8 MiB).
 - The TS SDK speaks whatever HTTP version its platform's `fetch` negotiates (Node 26 may use HTTP/2; browsers choose their own); every other SDK is pinned to HTTP/1.1 (bit 19 d2).
+- `honey()`'s `codegen.sdk` and `codegen.cli` are removed (bit 19 h2, Q1): the plugin writes the app's own artifacts (route tree, manifest, OpenAPI JSON/YAML, types), and `honey-codegen generate --app <module>` writes the SDKs, the CLI and MCP. Passing either key is an error naming that command.
+- A gateway config (`app` plus `codegen.mergeTree`, Anyrow's shape) works unchanged (bit 19 h2). The tree written is the services' merged routes plus the gateway's own, and the documents, manifest and types come from the served `app` (its errors and metaSpec included) with the services' schemas. A first run bootstraps the merged tree.
+- A gateway that adds an own route its generated tree lacks can't be imported over that tree: export the gateway's app, built without its tree, from the merge entry as `app`, and generation builds the tree from it before importing the served app (bit 19 h2). A non-gateway app that loads its own generated tree generates from an entry that builds it without that tree; v0's codegen-process tolerance has no v1 counterpart (Q3). The error names both fixes.
+- `honey()` transforms no module (bit 19 h2, Q4): v0 injected feature entries into the build; each feature is now a plain import.
+
+**Bit 19 h2 docs note (not a break, v0 parity):** a gateway's runtime `serveOpenApi` document has no service request or response bodies, because a generated tree carries no schemas. A gateway serves its generated document asset instead, as Anyrow does.
 
 ## Security corpus
 - none (docs); examples must not demonstrate an insecure default.

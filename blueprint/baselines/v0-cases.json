@@ -47358,6 +47358,13 @@
 		"014351cec2": "v0 grouped a tool's input under params/search/json; ruled flat at bit 18 Q3, measured 7-13% fewer tokens across the e2e apps: each parameter a top-level property, the body under body (tools.test 'holds each parameter flat under its own name')",
 		"f898be8dd3": "its sanitize-to-[A-Za-z0-9_-] and 64-character cap are kept (tools.test 'keeps [A-Za-z0-9_-] only, at most 64 characters'); its third clause, collisions failing loudly, is replaced by bit 18 ruling 3: a taken name is suffixed _2 after truncating, as the IR and the CLI suffix",
 		"2c582373c8": "v1 matches the TS SDK's derived name, member and renamed member (tagged legs); the intact-constraint half needs validation keywords the IR does not carry (emitters read only the IR), carried to bits/19 as an IR-wide decision",
-		"157386e13e": "v1 writes no in-file generated marker: write.ts records each file's hash in the per-target .honey-generated.json manifest (bit 19 Q6), so the x- marker key has no v1 home."
+		"157386e13e": "v1 writes no in-file generated marker: write.ts records each file's hash in the per-target .honey-generated.json manifest (bit 19 Q6), so the x- marker key has no v1 home.",
+		"8032749c4a": "v0 scanned the app's import graph for openapi() to inject its runtime; v1's document is registered by the explicit @lovrozagar/honey/openapi import the app writes (H23), so there is no call to find behind a re-export (bit 19 h2, Q4)",
+		"df0abfe219": "v1 parses no source for feature calls: each feature is a plain import the app writes (H23), so a call named in a comment or a string can never be mistaken for one (bit 19 h2, Q4)",
+		"adb72b9f14": "v1's build injects no serve: the node and bun entries call serve(app) themselves and the Worker entry exports app.fetch (targets.ts), so there is no injection to withhold from a Worker and no Bun.serve to tell apart (bit 19 h2, Q4)",
+		"99557aa5f7": "v1 walks no import graph: features are plain imports and code-splitting is plain dynamic import(), resolved by Vite itself (H23), so there is no traversal to stop at node_modules or externals (bit 19 h2, Q4)",
+		"48a23d7408": "v1 has no detection to override and no features option: each feature is an explicit import the app writes, and code-splitting is plain dynamic import() (H23) (bit 19 h2, Q4)",
+		"8aa74ab0f9": "v1's honey() plugin has no transform: a feature (openapi, serve) is a plain import the app writes, and nothing is injected ahead of a module's code (H23) (bit 19 h2, Q4)",
+		"1608c0c005": "the injection it guarded (line numbers kept, comments, strings and client code skipped) does not exist in v1: honey() transforms no module, each feature being the app's own plain import (H23) (bit 19 h2, Q4)"
 	}
 }

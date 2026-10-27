@@ -64,5 +64,8 @@ const bun = invokingBun()
 if (bun) handOff(bun)
 else {
 	const { main } = await entry()
-	process.exitCode = await main(process.argv.slice(2))
+	const code = await main(process.argv.slice(2))
+	/* an --app module may leave a timer or a socket open: the run is over once main returns, its output flushed */
+	for (const stream of [process.stdout, process.stderr]) await new Promise((done) => stream.write("", done))
+	process.exit(code)
 }

@@ -1,0 +1,160 @@
+/**
+ * The build plugin end to end (bit 19 h2, ported from v0's build-targets.test.ts): `vite build` of a v1 app for each
+ * target, the bundle then served (node, bun) or run by wrangler/workerd (cloudflare), answering its health route and
+ * its OpenAPI document. Until the cutover the package name resolves to v0, so `@lovrozagar/honey/serve` is aliased
+ * onto v1's source.
+ */
+import { type ChildProcess, spawn } from "node:child_process"
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { createServer } from "node:net"
+import { resolve } from "node:path"
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { type BuildTarget, createBuildPlugin } from "../../src/build/targets.ts"
+
+const CORE = resolve(import.meta.dirname, "../..")
+const OUT_ROOT = resolve(CORE, ".tmp-targets")
+const WRANGLER = resolve(CORE, "../../node_modules/.bin/wrangler")
+
+/*
+ * Each leg serves on a port below the OS's ephemeral range, checked free when the suite starts, the three distinct: a
+ * port inside the range can be drawn as an outgoing connection's source port before the leg's server binds it.
+ */
+const PORTS: Record<BuildTarget, number> = { bun: 0, cloudflare: 0, node: 0 }
+
+/* the first ephemeral port (Linux's ip_local_port_range; macOS's range starts higher still) */
+function ephemeralFloor(): number {
+	try {
+		return Number(readFileSync("/proc/sys/net/ipv4/ip_local_port_range", "utf8").trim().split(/\s+/)[0])
+	} catch {
+		return 32_768
+	}
+}
+
+function bindable(port: number): Promise<boolean> {
+	return new Promise((done) => {
+		const server = createServer()
+		server.once("error", () => done(false))
+		server.listen(port, "0.0.0.0", () => server.close(() => done(true)))
+	})
+}
+
+beforeAll(async () => {
+	const floor = ephemeralFloor()
+	const taken = new Set<number>()
+	for (const target of Object.keys(PORTS) as BuildTarget[]) {
+		let port = 0
+		while (port === 0 || taken.has(port) || !(await bindable(port)))
+			port = 10_000 + Math.floor(Math.random() * (floor - 10_000))
+		taken.add(port)
+		PORTS[target] = port
+	}
+})
+
+const children: (ChildProcess & { logs: () => string })[] = []
+/* each leg's server stops with its leg, so none outlives it into the next */
+afterEach(() => {
+	for (const child of children.splice(0)) child.kill("SIGTERM")
+})
+afterAll(() => rmSync(OUT_ROOT, { force: true, recursive: true }))
+
+async function viteBuild(target: BuildTarget): Promise<string> {
+	const outDir = resolve(OUT_ROOT, target)
+	const { build } = await import("vite")
+	await build({
+		configFile: false,
+		logLevel: "error",
+		plugins: [
+			createBuildPlugin(
+				{ minify: false, outDir, port: PORTS[target], target },
+				{ entry: "tests/build/fixture/app.ts", export: "app" },
+			),
+		],
+		resolve: { alias: { "@lovrozagar/honey/serve": resolve(CORE, "src/adapters/serve.ts") } },
+		root: CORE,
+	})
+	expect(existsSync(resolve(outDir, "index.js"))).toBe(true)
+	return outDir
+}
+
+function start(cmd: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) {
+	const child = spawn(cmd, args, {
+		cwd: options.cwd,
+		env: { ...process.env, ...options.env },
+		stdio: ["ignore", "pipe", "pipe"],
+	})
+	const logs: string[] = []
+	child.stdout?.on("data", (chunk: Buffer) => logs.push(chunk.toString()))
+	child.stderr?.on("data", (chunk: Buffer) => logs.push(chunk.toString()))
+	const started = Object.assign(child, { logs: () => logs.join("") })
+	children.push(started)
+	return started
+}
+
+/** Poll `/health` until it answers 200; a listener that never answers fails the probe, not the leg. */
+async function healthy(base: string, child: { logs: () => string }, timeoutMs: number): Promise<void> {
+	const deadline = Date.now() + timeoutMs
+	let last = ""
+	while (Date.now() < deadline) {
+		try {
+			const res = await fetch(`${base}/health`, { signal: AbortSignal.timeout(1_000) })
+			if (res.status === 200) return
+			last = `status ${res.status}`
+		} catch (err) {
+			last = err instanceof Error ? err.message : String(err)
+		}
+		await new Promise((r) => setTimeout(r, 80))
+	}
+	throw new Error(`no healthy server at ${base}: ${last}\n${child.logs()}`)
+}
+
+/** What the served bundle answers: its health route and its document's version, title and health path. */
+async function served(base: string) {
+	const health = await fetch(`${base}/health`)
+	const spec = (await (await fetch(`${base}/openapi.json`)).json()) as {
+		info: { title: string }
+		openapi: string
+		paths: Record<string, unknown>
+	}
+	return [health.status, await health.text(), spec.openapi, spec.info.title, "/health" in spec.paths]
+}
+
+const SERVED = [200, "ok", "3.1.0", "Build Fixture", true]
+
+describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
+	// v0: e6b3d639a5
+	it("cloudflare: vite build then wrangler/workerd serves health + openapi", async (ctx) => {
+		/* reported as skipped, never as passed: a missing toolchain must not read as a green run */
+		if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
+		const outDir = await viteBuild("cloudflare")
+		const wrangler = {
+			compatibility_date: "2026-01-20",
+			compatibility_flags: ["nodejs_compat"],
+			main: "index.js",
+			name: "honey-build-fixture",
+		}
+		writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
+		const port = String(PORTS.cloudflare)
+		const args = ["dev", "--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
+		const child = start(WRANGLER, args, { cwd: outDir })
+		await healthy(`http://127.0.0.1:${port}`, child, 25_000)
+		expect(await served(`http://127.0.0.1:${port}`)).toEqual(SERVED)
+	}, 90_000)
+
+	// v0: eb3666936c
+	it("node: vite build then node dist serves health + openapi", async () => {
+		const outDir = await viteBuild("node")
+		const child = start("node", ["--unhandled-rejections=strict", resolve(outDir, "index.js")], {
+			env: { PORT: String(PORTS.node) },
+		})
+		await healthy(`http://127.0.0.1:${PORTS.node}`, child, 20_000)
+		expect(await served(`http://127.0.0.1:${PORTS.node}`)).toEqual(SERVED)
+	}, 60_000)
+
+	// v0: 13fe7f3f01
+	it("bun: vite build then bun dist serves health + openapi", async () => {
+		const outDir = await viteBuild("bun")
+		const child = start("bun", [resolve(outDir, "index.js")], { env: { PORT: String(PORTS.bun) } })
+		await healthy(`http://127.0.0.1:${PORTS.bun}`, child, 20_000)
+		expect(await served(`http://127.0.0.1:${PORTS.bun}`)).toEqual(SERVED)
+	}, 60_000)
+})

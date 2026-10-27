@@ -12,11 +12,11 @@ const VENDORS = ["zod", "valibot", "arktype", "effect", "yup"]
 /* a static or dynamic import, or a re-export, of a vendor or one of its subpaths */
 const VENDOR_IMPORT = new RegExp(`(?:from|import)\\s*\\(?\\s*["'](?:${VENDORS.join("|")})(?:/[^"']*)?["']`)
 
-/** Every source file under src/, its colocated tests left out. */
+/** Every source file under src/, its colocated tests and test fixtures (__fixtures__, never shipped) left out. */
 function shipped(dir: string): string[] {
 	return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
 		const path = join(dir, entry.name)
-		if (entry.isDirectory()) return shipped(path)
+		if (entry.isDirectory()) return entry.name === "__fixtures__" ? [] : shipped(path)
 		return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [path] : []
 	})
 }
