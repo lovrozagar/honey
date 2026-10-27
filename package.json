@@ -44,6 +44,7 @@
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check",
 		"generate": "bun --bun run --filter './packages/core/tests/e2e/apps/*' generate",
+		"generate:check": "bun run generate && git diff --exit-code -- packages/core/tests/e2e/apps",
 		"grunt:antigravity": "antigravity --dangerously-skip-permissions",
 		"grunt:claude": "claude --dangerously-skip-permissions",
 		"grunt:codex": "codex --dangerously-bypass-approvals-and-sandbox",
