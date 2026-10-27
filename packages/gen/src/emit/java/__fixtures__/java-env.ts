@@ -93,9 +93,15 @@ function run(bin: string, args: readonly string[], options: RunOptions): SpawnSy
 	})
 }
 
+/**
+ * A JVM's own log, warnings included, routed to stderr: by default it goes to stdout, the program's channel, where a
+ * warning under load ("[0.004s][warning]...") broke a driver's JSON. Its format stays the default one.
+ */
+const JVM_LOG = ["-Xlog:disable", "-Xlog:all=warning:stderr:uptime,level,tags"]
+
 /** The pinned JDK `major`'s `java` on `args`. */
 export const runJava = (major: number, args: readonly string[], options: RunOptions = {}) =>
-	run(join(javaHome(major), "bin/java"), args, options)
+	run(join(javaHome(major), "bin/java"), [...JVM_LOG, ...args], options)
 
 /** The pinned JDK `major`'s `javac` on `args`. */
 export const runJavac = (major: number, args: readonly string[], options: RunOptions = {}) =>
@@ -116,7 +122,7 @@ export function execJava(
 	options: RunOptions & { readonly killAfterMs?: number } = {},
 ): Promise<AsyncRun> {
 	return new Promise((done, reject) => {
-		const child = spawn(join(javaHome(major), "bin/java"), [...args], { cwd: options.cwd, env: javaEnv() })
+		const child = spawn(join(javaHome(major), "bin/java"), [...JVM_LOG, ...args], { cwd: options.cwd, env: javaEnv() })
 		let stdout = ""
 		let stderr = ""
 		const bound =
@@ -141,7 +147,7 @@ export function execJava(
 
 /** google-java-format on `args`, on the 21 JDK. */
 export const runGjf = (args: readonly string[], options: RunOptions = {}) =>
-	run(gjfJava(), ["-jar", gjfJar(), ...args], options)
+	run(gjfJava(), [...JVM_LOG, "-jar", gjfJar(), ...args], options)
 
 /** The init script every Gradle run takes: the cache's repo is its only repository. */
 function offlineInit(): string {

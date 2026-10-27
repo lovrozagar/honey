@@ -16,7 +16,7 @@ import { HARNESS, JAVA, RUST, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
 import { GRADLE_RUN, leftAfter } from "../../src/emit/java/__fixtures__/compiled.ts"
 import * as env from "../../src/emit/java/__fixtures__/java-env.ts"
 
-const { gjfJava, javaCacheDir, javaEnv, javaHome, javaInstall, runGjf, runGradle, runJava, withJava } = env
+const { execJava, gjfJava, javaCacheDir, javaEnv, javaHome, javaInstall, runGjf, runGradle, runJava, withJava } = env
 
 const GEN = resolve(import.meta.dirname, "../..")
 const REPO = join(GEN, "../..")
@@ -352,6 +352,19 @@ describe.skipIf(!PRESENT)("the pinned toolchains a run uses", () => {
 		for (const major of ["17", "21", "25"] as const) {
 			expect(javaHome(Number(major)).startsWith(cache())).toBe(true)
 			expect(runJava(Number(major), ["-version"]).stderr).toContain(`version "${pins().jdk[major].version}"`)
+		}
+	})
+
+	/* a JVM writes its own warnings to stdout by default, where a driver's JSON goes: under load a thread warning
+	   broke a driver's parse ("[0.004s][warning]..."). NewSize over MaxNewSize warns on any host. */
+	it("keeps a JVM's own warning off stdout, the program's channel, and on stderr, on each pinned JDK", async () => {
+		const WARNS = ["-XX:NewSize=64m", "-XX:MaxNewSize=8m", "-version"]
+		for (const major of [17, 21, 25]) {
+			const runs = [runJava(major, WARNS), await execJava(major, WARNS)]
+			expect(runs.map((ran) => [ran.stdout, ran.stderr.includes("[warning][gc,ergo] NewSize")])).toEqual([
+				["", true],
+				["", true],
+			])
 		}
 	})
 
