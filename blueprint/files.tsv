@@ -849,6 +849,7 @@ tests/structure/check-tree.ts	core	src	00	pure parseRows(tsv) + checkTree(rows, 
 tests/structure/check-tree.test.ts	core	test	00	drives checkTree with fixtures + the real tree up to the current bit (--complete, H19.4) (gate)	—
 tests/structure/no-deno.test.ts	core	test	00	no deno token / ws/deno / ./ws/deno export remains outside _v0 history; bit 19 j1: v1's detectRuntime	—
 tests/structure/e2e-expected.test.ts	core	test	19	j2: a matching run passes, a CI-captured cell is skipped, one mismatched cell fails by name with the tests that moved, an appearing test and an unknown cell fail	—
+tests/structure/e2e-builds.test.ts	core	test	19	j2: the e2e build tier's time ceiling per runtime (Bun 5 s, Node 35 s, measured): a seeded 6 s Bun build fails Bun's ceiling and passes Node's; every cell carries both ceilings	—
 tests/structure/silent-failure.test.ts	core	test	07	codebase-wide invariant (H17): every catch in core logs (tag + onError on a server error) or carries a comment naming who reports it; no unclassified swallow remains	—
 tests/structure/privacy.test.ts	core	test	07	codebase-wide invariant (H17): no cookie/authorization/set-cookie/query/body/handler-input reaches any log field or span attribute; paths logged without the query; route ids, not raw paths, name spans — a grep/AST sweep of every log/span call site	—
 tests/structure/v0-inventory.ts	core	src	00	pure: parse every _v0/tests file (oxc-parser) → classify each case (file>describe>name) by feature → v0-cases.json. _v0/tests stays byte-frozen, no reshuffle (H13)	—
