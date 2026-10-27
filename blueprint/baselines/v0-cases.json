@@ -46682,7 +46682,6 @@
 		"f8ac6700ef": "v0 internal _registerStatic on the public type; v1 keeps graph state in a private #field, nothing to hide",
 		"9f9e7f0d32": "v0 serve({ cors: true }) option; v1 serve takes no middleware (cors is app.use(cors()), b rulings), covered by cors over a real listen",
 		"c4c263973e": "v0 serve({ cors: true }) option; v1 serve takes no middleware (cors is app.use(cors()), b rulings), covered by cors over a real listen",
-		"e76f7ba03c": "a wall-clock comparison of 404 timings: load-fragile, proves nothing stable; every v1 miss is one table lookup and one fixed answer",
 		"0c96e1482b": "v1 keeps route meta in the route map: InferRouteMeta is the route's meta (62fc72d2e4, app-routes.typetest); v0's never would assert the opposite",
 		"7e777fa89f": "documents v0's missing runtime check (a plain object passed through as the answer); v1's handler type forbids it (762541a430) and the pass-through is not a guarantee to pin",
 		"66aa708e60": "v0 asserts the search constructor value is kept ({constructor:\"x\"}); v1 extends the dangerous-key filter to search (H18.13), dropping __proto__/constructor/prototype before the validator. The no-pollution guarantee is covered by 4259eb4c23 (validator never sees them, null-proto result); the literal \"constructor is just a value\" contradicts the deliberate v1 hardening (same precedent as 78c407f3ba/2488556684)",
