@@ -1,14 +1,17 @@
 /**
  * The `honey` CLI (bit 19 h2): `generate` from the honey() config of a Vite config (a function-form one too, the
  * plugin asked for when there are several), from `--app` alone or over the config's app, strict about its flags;
- * through the bin on Node and Bun, ending once it has written whatever the app left running; `--watch`, each
+ * through the bin on Node and Bun, ending once it has written whatever the app left running, and handing its Bun child
+ * a signal that lands as it spawns it; `--watch`, each
  * generation a fresh child that sees edits to imported modules, an edit during a run queued, never looping on its own
  * outputs; and `init`, whose scaffold generates.
  */
-import { spawnSync } from "node:child_process"
-import { existsSync, readFileSync } from "node:fs"
+import { spawn, spawnSync } from "node:child_process"
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { MARK_KEY, marked, markOf, reap } from "../../../gen/src/gen/__fixtures__/survivors.ts"
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
 import { USAGE } from "./cli-args.ts"
 import { main } from "./cli.ts"
@@ -22,6 +25,8 @@ const HIDDEN_ADDITION = [
 	'\t.handler((c) => c.res.text("ok", "h"))',
 ]
 const BIN = resolve(import.meta.dirname, "../../bin/honey.js")
+/* the preload that signals the process as spawn returns: the window between the bin's spawn and its next statement */
+const SIGNAL_ON_SPAWN = resolve(import.meta.dirname, "../../../gen/tests/integration/signal-on-spawn.ts")
 const projects: Project[] = []
 const watches: { controller: AbortController; ended: Promise<unknown> }[] = []
 /* a watch ends once its last child is done: only then is its project removed */
@@ -233,6 +238,31 @@ describe("honey generate through the bin (bit 19 h2)", () => {
 		},
 		SLOW,
 	)
+})
+
+describe("honey generate through the bin, a signal as it spawns (CI 40547426989)", () => {
+	it("forwards a signal that lands the instant its Bun child is spawned, before any other statement", async () => {
+		const mark = markOf()
+		const dir = mkdtempSync(join(tmpdir(), "honey-bun-"))
+		/* a Bun that runs nothing: it only has to live until the bin hands it the signal */
+		writeFileSync(join(dir, "bun"), "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 })
+		const parent = spawn(process.execPath, ["--import", SIGNAL_ON_SPAWN, BIN, "generate"], {
+			env: {
+				[MARK_KEY]: mark,
+				PATH: process.env.PATH,
+				npm_config_user_agent: "bun/1.3.11",
+				npm_execpath: join(dir, "bun"),
+			},
+		})
+		const signal = await new Promise<NodeJS.Signals | null>((settle) =>
+			parent.on("exit", (_code, ended) => settle(ended)),
+		)
+		/* the child was handed the signal, so nothing carrying the mark outlives the parent for long */
+		const gone = await until(() => marked(mark).length === 0, 3_000)
+		reap(mark)
+		rmSync(dir, { recursive: true, force: true })
+		expect([signal, gone]).toEqual(["SIGTERM", true])
+	}, 30_000)
 })
 
 /** `honey generate --watch <args>` in `dir`, until the leg ends. */

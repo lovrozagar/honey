@@ -12,10 +12,19 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { findPinnedBun, pinnedBunVersion, withPinnedBun } from "../../src/gen/__fixtures__/pinned-bun.ts"
-import { MARK_KEY, markOf, reap } from "../../src/gen/__fixtures__/survivors.ts"
+import { MARK_KEY, marked, markOf, reap } from "../../src/gen/__fixtures__/survivors.ts"
 
 const MARK = markOf()
 const BIN = resolve(import.meta.dirname, "../../bin/honey-codegen.js")
+/* the preload that signals the process as spawn returns: the window between a bin's spawn and its next statement */
+const SIGNAL_ON_SPAWN = resolve(import.meta.dirname, "signal-on-spawn.ts")
+
+/** Whether `check()` came to hold within `ms`, polled each 20 ms (a leg asserts it, so a miss reds as an assertion). */
+async function until(check: () => boolean, ms: number): Promise<boolean> {
+	for (const start = Date.now(); !check(); await new Promise((done) => setTimeout(done, 20)))
+		if (Date.now() - start > ms) return false
+	return true
+}
 const PINNED = pinnedBunVersion()
 const PINNED_BUN = withPinnedBun()
 
@@ -104,6 +113,24 @@ describe("the bin's Bun handoff (phase h)", () => {
 			}
 		})()
 		expect([signal, alive]).toEqual(["SIGTERM", false])
+	}, 30_000)
+})
+
+describe("the bin's Bun handoff, a signal as it spawns (CI 40547426989)", () => {
+	it("forwards a signal that lands the instant its child is spawned, before any other statement", async () => {
+		/* this leg's own mark: what it waits on is its own child alone */
+		const mark = markOf()
+		const fake = fakeBun("exec sleep 30")
+		const parent = spawn(process.execPath, ["--import", SIGNAL_ON_SPAWN, BIN, "generate"], {
+			env: { [MARK_KEY]: mark, PATH: process.env.PATH, npm_config_user_agent: "bun/1.3.11", npm_execpath: fake.bun },
+		})
+		const signal = await new Promise<NodeJS.Signals | null>((settle) =>
+			parent.on("exit", (_code, ended) => settle(ended)),
+		)
+		/* the child was handed the signal, so nothing carrying the mark outlives the parent for long */
+		const gone = await until(() => marked(mark).length === 0, 3_000)
+		reap(mark)
+		expect([signal, gone]).toEqual(["SIGTERM", true])
 	}, 30_000)
 })
 

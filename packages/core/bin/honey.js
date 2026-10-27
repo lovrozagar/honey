@@ -24,12 +24,15 @@ function invokingBun() {
 // The handoff: Bun runs this file with our arguments; a signal we get is passed on to it, and we end as it ended,
 // its exit code or the same signal.
 function handOff(bun) {
-	const child = spawn(bun, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
+	// Forwarders first: a signal landing as spawn returns would otherwise end this process by its default action,
+	// orphaning the child. A handler runs from the event loop, after this block, so `child` is set by then.
+	let child
+	const forward = (signal) => child.kill(signal)
+	for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, forward)
+	child = spawn(bun, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
 		env: { ...process.env, HONEY_NO_BUN_HANDOFF: "1" },
 		stdio: "inherit",
 	})
-	const forward = (signal) => child.kill(signal)
-	for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, forward)
 	child.on("error", (error) => {
 		console.error(`honey: could not start ${bun}: ${error.message}`)
 		process.exit(1)
