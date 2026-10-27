@@ -41,6 +41,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./testing` | KEEP | the export lands with `src/testing/testing.ts` at bit 20 |
 | `./trust` | DELETE [H23] | `trustProxy` is cut; `ctx.ip` is the platform peer |
 | `./tree` | KEEP | |
+| `./ws` | ADD (bit 19 i2) | `ws(app, path)` → the WS route builder, plus the types `WsRouteOf` and `AnyHoneyHandle`; replaces the `app.ws(path)` method, so an app that opens no socket bundles no WS route code |
 | `./ws/bun`, `./ws/cloudflare`, `./ws/node`, `./ws/session` | KEEP | |
 | `./ws/deno` | DELETE [H15] | |
 
