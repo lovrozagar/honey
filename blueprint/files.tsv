@@ -900,6 +900,8 @@ tests/e2e/builds.ts	core	test	00	build-matrix e2e	e2e/apps/builds.ts
 tests/e2e/load.ts	core	test	00	load e2e	e2e/apps/load.ts
 tests/e2e/apps/{compose,defaults,gateway,kitchen,surface}	core	app	00	the 5 consumer apps (exercised by run.ts)	e2e/apps/*
 tests/e2e/{run-build,run-strict-consumer,playwright-app,stub-ws}.ts	core	app	00	e2e runner/support (build matrix, strict-consumer, playwright harness, ws stub) (R1)	e2e/*
+packages/core/tests/e2e/package.json	core	config	19	the e2e harness's own package scope (bit 19 i fix): private, never a workspace member; its files consume @lovrozagar/honey through node_modules (_v0 until j, v1 after), never as core's self-reference	—
+tests/structure/e2e-scope.test.ts	core	test	19	no file under tests/e2e that imports @lovrozagar/honey sits in core's own package scope, where Node and TypeScript would self-reference core's exports (CI 40528179621: stub-ws.ts reached v1's source while the apps reached v0's, and generate broke)	—
 tests/e2e/{bun,node,cf-workers,strict-consumer}/	core	app	00	per-runtime e2e harness dirs (R1)	e2e/*
 #
 # ============================== DELETED (H15) ==============================
