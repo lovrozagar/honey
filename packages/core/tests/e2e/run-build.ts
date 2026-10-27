@@ -108,6 +108,8 @@ interface Result {
 	status: Status
 }
 
+const SOURCE_CONDITION = "--conditions=honey-source"
+
 function gzipKb(path: string): number {
 	return Math.round(gzipSync(readFileSync(path)).length / 1024)
 }
@@ -124,7 +126,15 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 	const started = Date.now()
 	const proc = Bun.spawn(buildCommand(spec, runtime), {
 		cwd,
-		env: { ...process.env, HONEY_BUILD_TARGET: spec.target, NODE_ENV: "production" },
+		/* core is read as source in this checkout (R3): every process the build starts, on Node or Bun, the honey
+		   generate child the plugin spawns included, resolves it through the honey-source condition */
+		env: {
+			...process.env,
+			BUN_OPTIONS: SOURCE_CONDITION,
+			HONEY_BUILD_TARGET: spec.target,
+			NODE_ENV: "production",
+			NODE_OPTIONS: SOURCE_CONDITION,
+		},
 		stderr: verbose ? "inherit" : "pipe",
 		stdin: "ignore",
 		stdout: verbose ? "inherit" : "pipe",
@@ -165,20 +175,6 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 		}
 	}
 	return { gzipKb: kb, ms, name, status: "pass" }
-}
-
-/* builds bundle honey the way a consumer does, from the compiled dist/ — so build it first */
-{
-	const proc = Bun.spawn(["bun", "run", "build"], {
-		/* the package under test is v0 until the cutover swap (H21) */
-		cwd: join(import.meta.dir, "..", "..", "..", "..", "_v0"),
-		stderr: "inherit",
-		stdout: verbose ? "inherit" : "ignore",
-	})
-	if ((await proc.exited) !== 0) {
-		console.error("building the honey package failed")
-		process.exit(1)
-	}
 }
 
 const results: Result[] = []

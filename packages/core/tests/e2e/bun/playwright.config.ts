@@ -22,7 +22,8 @@ export default defineConfig({
 		trace: "on-first-retry",
 	},
 	webServer: {
-		command: "bun run src/server.ts",
+		/* resolve @lovrozagar/honey to its source, not a dist/ that may be stale or missing */
+		command: "bun --conditions=honey-source src/server.ts",
 		env: { HONEY_E2E_APP: app, PORT },
 		port: Number(PORT),
 		reuseExistingServer: process.env.HONEY_E2E_REUSE === "1",

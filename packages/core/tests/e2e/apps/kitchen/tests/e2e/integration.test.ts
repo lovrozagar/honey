@@ -354,18 +354,3 @@ test.describe("manifest", () => {
 		expect(postOrg.errors).toContain("org_slug_taken")
 	})
 })
-
-test.describe("generated route tree", () => {
-	test("GET /api/generated-tree → valid TypeScript route tree code", async ({ request }) => {
-		const res = await request.get("/api/generated-tree")
-		expect(res.status()).toBe(200)
-		const code = await res.text()
-		/* generated code imports its types from honey/tree */
-		expect(code).toContain('import type { RouteTree, TreeNode } from "@lovrozagar/honey/tree"')
-		/* topology with route ids at the leaves, per-route data beside it, no handler objects */
-		expect(code).toContain("export const tree: TreeNode")
-		expect(code).toContain('export const routes: RouteTree["routes"]')
-		expect(code).toContain("export const routeTree: RouteTree = { v: 2,")
-		expect(code).not.toContain("RouteHandler")
-	})
-})

@@ -12,6 +12,8 @@ type Fetcher = { fetch(request: Request, env: never): Response | Promise<Respons
 /* request ids, timestamps and durations differ between any two requests */
 const VOLATILE_HEADERS = new Set(["date", "server-timing", "x-request-id", "x-response-time"])
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+/* an unhandled error's 500 carries a fresh digest each time (errors/on-error.ts newDigest) */
+const DIGEST = /"digest":"[0-9a-f]+"/g
 
 function concretePath(pattern: string): string {
 	const out = pattern
@@ -72,7 +74,7 @@ async function snapshot(app: Fetcher, probe: Probe): Promise<string> {
 		.filter(([k]) => !VOLATILE_HEADERS.has(k))
 		.map(([k, v]) => `${k}: ${v.replace(UUID, "<uuid>")}`)
 		.sort()
-	const body = (await res.text()).replace(UUID, "<uuid>")
+	const body = (await res.text()).replace(UUID, "<uuid>").replace(DIGEST, '"digest":"<digest>"')
 	return `${res.status}\n${headers.join("\n")}\n\n${body}`
 }
 

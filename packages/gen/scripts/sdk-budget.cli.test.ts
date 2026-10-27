@@ -117,13 +117,15 @@ type Surfaces = {
  * is the emitter's line for line, and holds a command per call plan. The medians beside each max: per command 7, 4, 7,
  * 7 and 7; schema 37, 11, 17, 24 and 34 (compose, defaults, gateway, kitchen, surface). The local line is 8 tokens of
  * each index. The banner and the skill are fixed overhead, once per CLI. A surface over its ceiling is fixed in the
- * emitter or the schema, never by raising the ceiling; a raise names the feature that adds the tokens.
+ * emitter or the schema, never by raising the ceiling; a raise names the feature that adds the tokens. Bit 19 j1:
+ * kitchen's document is v1's, /api/generated-tree retired and carry-in #7's two stream commands added: its index
+ * 175 -> 176 and its skill 441 -> 444; every other surface and app unchanged.
  */
 const MEASURED: Readonly<Record<string, Surfaces>> = {
 	compose: { banner: 41, command: 10, index: 59, schema: 50, skill: 384 },
 	defaults: { banner: 44, command: 7, index: 22, schema: 16, skill: 392 },
 	gateway: { banner: 44, command: 15, index: 61, schema: 45, skill: 392 },
-	kitchen: { banner: 47, command: 15, index: 175, schema: 46, skill: 441 },
+	kitchen: { banner: 47, command: 15, index: 176, schema: 46, skill: 444 },
 	surface: { banner: 44, command: 26, index: 274, schema: 66, skill: 433 },
 }
 const TOKEN_HEADROOM = 0.2
@@ -178,8 +180,10 @@ describe.skipIf(!GO)("the CLI's tokens within each app's ceilings (bit 17 phase 
  * The static binary stays small (bits/12:26; Q12): the kitchen CLI linked as a release links it (CGO_ENABLED=0,
  * -trimpath, -s -w, the version stamped) for linux/amd64 under the pinned Go, measured 9,932,960 B, ceiling
  * ceilingOf(measured, 0.02). A raise names its cause (a new module dependency, a Go release, a runtime feature).
+ * Bit 19 j1: 9,953,440 B (+20,480 B), carry-in #7's two stream commands (/api/events, /api/events-live) in the
+ * cutover's v1-generated kitchen document.
  */
-const KITCHEN_STRIPPED = 9932960
+const KITCHEN_STRIPPED = 9953440
 const SIZE_HEADROOM = 0.02
 
 describe.skipIf(!GO)("the CLI binary within its size (bit 17 phase i)", SLOW, () => {

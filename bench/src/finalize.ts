@@ -10,7 +10,7 @@
  * cost is more than `FINALIZE_THRESHOLD` (default 0.10) over v0's AND outside the band of its own
  * samples. A ratio, so no baseline file and no dependence on the machine.
  */
-import { createMiddleware, honey } from "@lovrozagar/honey"
+import { createMiddleware, honey } from "../../_v0/src/index.ts"
 import { createMiddleware as createV1Middleware } from "../../packages/core/src/middleware/middleware.ts"
 import { GRAPH, honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
 import { finalTable } from "../../packages/core/src/routing/dispatch.ts"

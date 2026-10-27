@@ -13,22 +13,20 @@
  * drift by up to ~20% between Bun versions, so baselines are kept per runtime minor version; a
  * version without one runs as a hint only, and CI gates on the version it pins.
  *
- * Until the cutover (H21) the code under test is v1, built from packages/core/src, and the
- * committed baseline is v0's ratios: v1 must not be slower than v0 on any scenario it can
- * express. A scenario whose feature lands in a later bit prints as `pending bit NN`, one whose feature was cut as `cut`, never as a
- * pass. `HOTPATH_TARGET=v0` measures the v0 package, the only target `--update` records.
+ * The code under test is v1, from packages/core/src, and the committed baseline is v0's ratios: v1 must
+ * not be slower than v0 on any scenario. `HOTPATH_TARGET=v0` measures v0 from the frozen _v0/src, the
+ * only target `--update` records. The trust scenario retired at the cutover (j1): trustProxy is cut (H23).
  */
 import { readFileSync, writeFileSync } from "node:fs"
-import { createMiddleware, honey } from "@lovrozagar/honey"
+import { createMiddleware, honey } from "../../_v0/src/index.ts"
 import { cors as corsV1 } from "../../packages/core/src/middleware/cors.ts"
 import { createMiddleware as createV1Middleware } from "../../packages/core/src/middleware/middleware.ts"
 import { requestId as requestIdV1 } from "../../packages/core/src/middleware/request-id.ts"
 import { secureHeaders as secureHeadersV1 } from "../../packages/core/src/middleware/secure-headers.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
-import { cors } from "@lovrozagar/honey/cors"
-import { requestId } from "@lovrozagar/honey/request-id"
-import { secureHeaders } from "@lovrozagar/honey/secure-headers"
-import "@lovrozagar/honey/trust"
+import { cors } from "../../_v0/src/cors.ts"
+import { requestId } from "../../_v0/src/request-id.ts"
+import { secureHeaders } from "../../_v0/src/secure-headers.ts"
 import { judge, median } from "./significance.ts"
 
 const BASELINE_FILE = new URL("../../blueprint/baselines/hotpath.json", import.meta.url)
@@ -36,12 +34,6 @@ const THRESHOLD = Number(process.env.HOTPATH_THRESHOLD ?? 0.1)
 const SAMPLES = Number(process.env.HOTPATH_SAMPLES ?? 15)
 const ITERATIONS = Number(process.env.HOTPATH_ITERATIONS ?? 50_000)
 const TARGET = process.env.HOTPATH_TARGET === "v0" ? "v0" : "v1"
-
-/** Scenarios v1 does not run, and why: the bit whose feature they need, or the cut that removed it. */
-const PENDING_V1: Readonly<Record<string, string>> = {
-	/* trustProxy is cut (H23): v1 has no forwarded-client resolution to measure */
-	trust: "cut (H23)",
-}
 
 type Fetch = (req: Request) => Response | Promise<Response>
 
@@ -61,8 +53,6 @@ const passSchema = {
 
 function buildApp() {
 	const app = honey()
-	/* trust on: a hop count is O(1) and only resolves when a handler reads ctx.ip (the `trust` scenario) */
-	app.trustProxy(1)
 	app.get("/json").handler((ctx) => ctx.res.json("ok", { message: "Hello, World!" }))
 	app.get("/users/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
 	const chained = app.use(passthrough).use(passthrough)
@@ -77,8 +67,6 @@ function buildApp() {
 		.input({ json: passSchema })
 		.output({ "application/json": { ok: passSchema } })
 		.handler((ctx) => ctx.res.json("ok", ctx.input.json))
-	/* trust: resolving the client from X-Forwarded-For under trustProxy(1) */
-	app.get("/whoami").handler((ctx) => ctx.res.json("ok", { ip: ctx.ip }))
 	/* mw-stack: the REAL edge middleware that write response headers through HoneyOutHeaders
 	 * (cors + secureHeaders + requestId). compress + rateLimit (v1 A5/A6) join this stack once
 	 * they exist — this is the path bit 07's "mutate the plain record" contract guards. */
@@ -102,7 +90,7 @@ function buildApp() {
 	return app
 }
 
-/** The same routes for every scenario v1 can express; the rest wait for their bit (PENDING_V1). */
+/** The same routes as v0's app, for every scenario. */
 function buildV1App() {
 	const pass = createV1Middleware(async (_ctx, next) => next())
 	const app = honeyV1<{}>()
@@ -181,12 +169,6 @@ function buildRaw(): Fetch {
 		if (path.startsWith("/deep/")) return json({ e: path.split("/")[6] })
 		/* the floor for body handling: read + echo */
 		if (path === "/echo") return json(await req.json())
-		/* the floor for trust: read the forwarded header, take the client (1 hop from the right) */
-		if (path === "/whoami") {
-			const xff = req.headers.get("x-forwarded-for")
-			const parts = xff === null ? [] : xff.split(",").map((s) => s.trim())
-			return json({ ip: parts[parts.length - 1] ?? null })
-		}
 		return json({ error_key: "not_found", message: "not_found", status: 404, success: false }, 404)
 	}
 }
@@ -215,7 +197,6 @@ const SCENARIOS: Record<string, Scenario> = {
 		method: "POST",
 		path: "/echo",
 	},
-	trust: { headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" }, path: "/whoami" },
 	"mw-stack": { path: "/stack" },
 	"mw-sync": { path: "/sync/item" },
 	"many-routes": { path: "/deep/a/b/c/d/e" },
@@ -244,8 +225,7 @@ function targetFetch(): Fetch {
 	return (req) => app.fetch(req, {})
 }
 
-/** The scenarios the target can run: v1 skips those whose feature lands in a later bit. */
-const RUNNABLE = Object.entries(SCENARIOS).filter(([name]) => TARGET === "v0" || PENDING_V1[name] === undefined)
+const RUNNABLE = Object.entries(SCENARIOS)
 
 async function measure(): Promise<Record<string, Measured>> {
 	const honeyFetch = targetFetch()
@@ -331,13 +311,10 @@ const rows = verdicts.map(([name, r, v]) => ({
 	scenario: name,
 	status: v.status === "regressed" ? "REGRESSED" : v.status,
 }))
-const pending = Object.keys(SCENARIOS)
-	.filter((name) => results[name] === undefined)
-	.map((name) => ({ baseline: against[name] ?? "—", scenario: name, status: PENDING_V1[name] }))
 console.log(
 	`hotpath ${TARGET} on ${runtime} (${version}) vs baseline ${againstName}, threshold +${Math.round(THRESHOLD * 100)}%`,
 )
-console.table([...rows, ...pending])
+console.table(rows)
 if (advisory) {
 	console.log(`hotpath: no baseline for ${runtime}; advisory only. Record one with --update.`)
 } else if (failed) {

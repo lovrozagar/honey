@@ -14,7 +14,7 @@
  * `STREAMING_THRESHOLD` (default 0.10) over v0's AND outside the band of its own samples. A
  * ratio, so no baseline file and no dependence on the machine.
  */
-import { honey } from "@lovrozagar/honey"
+import { honey } from "../../_v0/src/index.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
 import { judge, median } from "./significance.ts"
 

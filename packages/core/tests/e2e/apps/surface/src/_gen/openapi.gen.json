@@ -1,13 +1,13 @@
 {
-  "x-generated": "honey checksum:a23fa721cb58",
+  "openapi": "3.1.0",
   "info": {
     "title": "Honey Surface",
     "version": "1.0.0"
   },
-  "openapi": "3.1.0",
   "paths": {
     "/in/all/{resourceId}": {
       "put": {
+        "x-honey-route": "PUT /in/all/:resourceId",
         "requestBody": {
           "content": {
             "application/json": {
@@ -54,14 +54,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReplaceInAllResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -71,7 +71,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -81,13 +82,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/in/cookies": {
       "get": {
+        "x-honey-route": "GET /in/cookies",
         "parameters": [
           {
             "in": "cookie",
@@ -108,14 +119,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListInCookiesResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -125,7 +136,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -135,13 +147,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/in/file": {
       "post": {
+        "x-honey-route": "POST /in/file",
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -159,14 +181,14 @@
         },
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateInFileResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -176,7 +198,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -186,7 +209,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
@@ -197,6 +229,7 @@
           "input"
         ],
         "operationId": "input.createForm",
+        "x-honey-route": "POST /in/form",
         "requestBody": {
           "content": {
             "application/x-www-form-urlencoded": {
@@ -209,14 +242,14 @@
         },
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateInFormResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -226,7 +259,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -236,13 +270,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/in/headers": {
       "get": {
+        "x-honey-route": "GET /in/headers",
         "parameters": [
           {
             "in": "header",
@@ -263,14 +307,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListInHeadersResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -280,7 +324,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -290,7 +335,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
@@ -301,6 +355,7 @@
           "input"
         ],
         "operationId": "input.createJson",
+        "x-honey-route": "POST /in/json",
         "requestBody": {
           "content": {
             "application/json": {
@@ -313,14 +368,14 @@
         },
         "responses": {
           "201": {
+            "description": "created",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateInJsonResponse201"
                 }
               }
-            },
-            "description": "created"
+            }
           },
           "400": {
             "content": {
@@ -330,7 +385,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -340,7 +396,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
@@ -351,16 +416,17 @@
           "input"
         ],
         "operationId": "input.none",
+        "x-honey-route": "GET /in/none",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListInNoneResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -370,7 +436,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -380,13 +447,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/in/params/{orgId}/members/{memberId}": {
       "get": {
+        "x-honey-route": "GET /in/params/:orgId/members/:memberId",
         "parameters": [
           {
             "in": "path",
@@ -409,14 +486,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GetInParamsMemberResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -426,7 +503,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -436,7 +514,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
@@ -447,6 +534,7 @@
           "input"
         ],
         "operationId": "input.search",
+        "x-honey-route": "GET /in/search",
         "parameters": [
           {
             "in": "query",
@@ -475,14 +563,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListInSearchResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -492,7 +580,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -502,7 +591,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
@@ -513,16 +611,17 @@
           "methods"
         ],
         "operationId": "resources.list",
+        "x-honey-route": "GET /methods/resource",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListMethodsResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -532,7 +631,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -542,7 +642,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       },
@@ -551,6 +660,7 @@
           "methods"
         ],
         "operationId": "resources.create",
+        "x-honey-route": "POST /methods/resource",
         "requestBody": {
           "content": {
             "application/json": {
@@ -563,14 +673,14 @@
         },
         "responses": {
           "201": {
+            "description": "created",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateInJsonResponse201"
                 }
               }
-            },
-            "description": "created"
+            }
           },
           "400": {
             "content": {
@@ -580,7 +690,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -590,7 +701,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
@@ -601,6 +721,7 @@
           "methods"
         ],
         "operationId": "resources.update",
+        "x-honey-route": "PUT /methods/resource/:id",
         "requestBody": {
           "content": {
             "application/json": {
@@ -624,14 +745,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReplaceMethodsResourceResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -641,7 +762,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -651,7 +773,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       },
@@ -660,6 +791,7 @@
           "methods"
         ],
         "operationId": "resources.patch",
+        "x-honey-route": "PATCH /methods/resource/:id",
         "requestBody": {
           "content": {
             "application/json": {
@@ -683,14 +815,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateInJsonResponse201"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -700,7 +832,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -710,7 +843,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       },
@@ -719,6 +861,7 @@
           "methods"
         ],
         "operationId": "resources.delete",
+        "x-honey-route": "DELETE /methods/resource/:id",
         "parameters": [
           {
             "in": "path",
@@ -738,7 +881,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -748,23 +892,33 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/binary": {
       "get": {
+        "x-honey-route": "GET /out/binary",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/octet-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ListOutBinaryResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -774,7 +928,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -784,23 +939,33 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/csv": {
       "get": {
+        "x-honey-route": "GET /out/csv",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "text/csv": {
                 "schema": {
                   "$ref": "#/components/schemas/ListOutCsvResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -810,7 +975,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -820,23 +986,33 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/html": {
       "get": {
+        "x-honey-route": "GET /out/html",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "text/html": {
                 "schema": {
                   "$ref": "#/components/schemas/ListOutCsvResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -846,7 +1022,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -856,13 +1033,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/multi-status": {
       "post": {
+        "x-honey-route": "POST /out/multi-status",
         "requestBody": {
           "content": {
             "application/json": {
@@ -875,14 +1062,14 @@
         },
         "responses": {
           "201": {
+            "description": "created",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateOutMultiStatuResponse201"
                 }
               }
-            },
-            "description": "created"
+            }
           },
           "400": {
             "content": {
@@ -892,7 +1079,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -902,23 +1090,36 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
           },
           "409": {
+            "description": "conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateOutMultiStatuResponse409"
                 }
               }
-            },
-            "description": "conflict"
+            }
+          }
+        },
+        "x-honey-errors": {
+          "conflict": {
+            "status": 409
+          },
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/no-content/{id}": {
       "delete": {
+        "x-honey-route": "DELETE /out/no-content/:id",
         "parameters": [
           {
             "in": "path",
@@ -938,7 +1139,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -948,7 +1150,8 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
           },
           "404": {
             "content": {
@@ -958,23 +1161,36 @@
                 }
               }
             },
-            "description": "not_found"
+            "description": "not_found",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "not_found": {
+            "status": 404
+          },
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/sse": {
       "get": {
+        "x-honey-route": "GET /out/sse",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ListOutCsvResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -984,7 +1200,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -994,23 +1211,33 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/text": {
       "get": {
+        "x-honey-route": "GET /out/text",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ListOutCsvResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -1020,7 +1247,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1030,23 +1258,33 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/out/xml": {
       "get": {
+        "x-honey-route": "GET /out/xml",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/xml": {
                 "schema": {
                   "$ref": "#/components/schemas/ListOutCsvResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -1056,7 +1294,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1066,13 +1305,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/rs/upload": {
       "post": {
+        "x-honey-route": "POST /rs/upload",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1085,14 +1334,14 @@
         },
         "responses": {
           "202": {
+            "description": "accepted",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateRsResponse202"
                 }
               }
-            },
-            "description": "accepted"
+            }
           },
           "400": {
             "content": {
@@ -1102,7 +1351,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1112,13 +1362,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/status/accepted": {
       "post": {
+        "x-honey-route": "POST /status/accepted",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1131,14 +1391,14 @@
         },
         "responses": {
           "202": {
+            "description": "accepted",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateStatuResponse202"
                 }
               }
-            },
-            "description": "accepted"
+            }
           },
           "400": {
             "content": {
@@ -1148,7 +1408,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1158,13 +1419,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/status/created": {
       "post": {
+        "x-honey-route": "POST /status/created",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1177,14 +1448,14 @@
         },
         "responses": {
           "201": {
+            "description": "created",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateInJsonResponse201"
                 }
               }
-            },
-            "description": "created"
+            }
           },
           "400": {
             "content": {
@@ -1194,7 +1465,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1204,13 +1476,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/status/no-content": {
       "delete": {
+        "x-honey-route": "DELETE /status/no-content",
         "responses": {
           "400": {
             "content": {
@@ -1220,7 +1502,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1230,23 +1513,33 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/status/ok": {
       "get": {
+        "x-honey-route": "GET /status/ok",
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListStatusResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -1256,7 +1549,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1266,13 +1560,23 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
     },
     "/stream/filtered": {
       "get": {
+        "x-honey-route": "GET /stream/filtered",
         "parameters": [
           {
             "in": "query",
@@ -1293,14 +1597,14 @@
         ],
         "responses": {
           "200": {
+            "description": "ok",
             "content": {
               "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ListOutCsvResponse200"
                 }
               }
-            },
-            "description": "ok"
+            }
           },
           "400": {
             "content": {
@@ -1310,7 +1614,8 @@
                 }
               }
             },
-            "description": "validation_error"
+            "description": "validation_error",
+            "x-honey-error": true
           },
           "401": {
             "content": {
@@ -1320,7 +1625,16 @@
                 }
               }
             },
-            "description": "unauthorized"
+            "description": "unauthorized",
+            "x-honey-error": true
+          }
+        },
+        "x-honey-errors": {
+          "unauthorized": {
+            "status": 401
+          },
+          "validation_error": {
+            "status": 400
           }
         }
       }
@@ -1332,6 +1646,7 @@
           "websocket"
         ],
         "operationId": "ws.chat",
+        "x-honey-route": "WS /ws/chat/:channelId",
         "parameters": [
           {
             "in": "path",
@@ -1356,6 +1671,7 @@
           "websocket"
         ],
         "operationId": "ws.echo",
+        "x-honey-route": "WS /ws/echo",
         "responses": {
           "101": {
             "description": "WebSocket upgrade"
@@ -1370,6 +1686,7 @@
           "websocket"
         ],
         "operationId": "ws.reconnect",
+        "x-honey-route": "WS /ws/reconnect",
         "responses": {
           "101": {
             "description": "WebSocket upgrade"
@@ -1384,6 +1701,7 @@
           "websocket"
         ],
         "operationId": "ws.joinRoom",
+        "x-honey-route": "WS /ws/room",
         "parameters": [
           {
             "in": "query",
@@ -1402,6 +1720,17 @@
       }
     }
   },
+  "tags": [
+    {
+      "name": "input"
+    },
+    {
+      "name": "methods"
+    },
+    {
+      "name": "websocket"
+    }
+  ],
   "components": {
     "schemas": {
       "ReplaceInAllRequest": {

@@ -8,6 +8,7 @@
  * and the build runtime catches a plugin that assumes one host's APIs.
  */
 import { existsSync, readdirSync } from "node:fs"
+import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -135,10 +136,13 @@ export function missingBuildApps(): string[] {
 	return knownBuildApps().filter((app) => !onDisk.has(app))
 }
 
+/* vite's bin, started by the runtime itself: bunx drops BUN_OPTIONS, the honey-source condition a checkout build needs */
+const VITE_BIN = join(dirname(createRequire(import.meta.url).resolve("vite/package.json")), "bin/vite.js")
+
 export function buildCommand(spec: BuildSpec, runtime: RuntimeId): string[] {
 	const cfg = ["--config", spec.config]
 	if (runtime === "bun") {
-		return ["bunx", "--bun", "vite", "build", ...cfg]
+		return ["bun", "--bun", VITE_BIN, "build", ...cfg]
 	}
-	return ["bunx", "vite", "build", ...cfg]
+	return ["node", VITE_BIN, "build", ...cfg]
 }

@@ -1,8 +1,8 @@
 import { defaultClientConditions, defaultServerConditions } from "vite"
 import { defineConfig } from "vitest/config"
 
-/* v1 only: v0 is the frozen oracle under /_v0 with its own config. Until cutover the package name
- * resolves to v0, so a structure test that imports it reads v0's source, never a stale dist/. */
+/* v1 only: /_v0 is frozen on disk as the inventory's source, never run. The package name resolves
+ * to this package, and a test that imports it reads its source, never a stale or missing dist/. */
 export default defineConfig({
 	resolve: { conditions: ["honey-source", ...defaultClientConditions] },
 	ssr: {

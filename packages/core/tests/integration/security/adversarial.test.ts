@@ -20,10 +20,7 @@ if (mutant !== undefined) {
 	})
 }
 
-/* the app under test is v0 until the cutover swap (H21); each bit retargets its cases as v1 lands */
-const { honey } = (await import(resolve(REPO, "_v0/src/index.ts"))) as typeof import("../../../../../_v0/src/index.ts")
-
-/* v1, from bit 02 on: imported after the mock, so a mutant reaches every module that uses it */
+/* imported after the mock, so a mutant reaches every module that uses it */
 const v1 = (await import(
 	resolve(REPO, "packages/core/src/routing/app.ts")
 )) as typeof import("../../../src/routing/app.ts")
@@ -44,7 +41,8 @@ const { createCookieSigner } = (await import(
 )) as typeof import("../../../src/context/cookie-sign.ts")
 
 function filesApp() {
-	return honey()
+	return v1
+		.honey<{}>()
 		.get("/files/:name")
 		.handler((ctx) => ctx.res.json("ok", { name: ctx.params.name }))
 }

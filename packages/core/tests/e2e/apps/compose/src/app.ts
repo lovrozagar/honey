@@ -1,7 +1,7 @@
 import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
-import "@lovrozagar/honey/openapi"
+import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
 import * as z from "zod"
 
 type Env = { JWT_SECRET: string; REDIS_URL: string }
@@ -27,7 +27,7 @@ const withSession = createMiddleware(async (_ctx, next) =>
 /** `routeTree`: boot from a generated route tree (`src/_gen/routes.gen.ts`) instead of building the trie. */
 export type AppOptions = { routeTree?: RouteTree }
 
-/** Shared base + .route() groups. User /docs keeps Scalar off /docs. */
+/** Shared base + .route() groups. User /docs owns /docs, so Scalar is served at /reference. */
 export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	const root = honey<Env>()
 	if (options?.routeTree) root.routeTree(options.routeTree)
@@ -74,7 +74,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		})
 
 	const app = publicRoutes.route(accountRoutes).route(resourceRoutes)
-	app.openapi({ docs: "scalar", title: "Honey Compose", version: "0.0.1" })
-	app.manifest()
-	return app
+	return serveManifest(
+		serveOpenApi(app, { docs: "scalar", docsPath: "/reference", title: "Honey Compose", version: "0.0.1" }),
+	)
 }

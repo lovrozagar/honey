@@ -1,11 +1,5 @@
 {
-  "x-generated": "honey checksum:915db7c846ce",
   "errors": [
-    {
-      "errorKey": "unauthorized",
-      "status": 401,
-      "statusKey": "unauthorized"
-    },
     {
       "errorKey": "api_error",
       "status": 500,
@@ -17,23 +11,41 @@
       "statusKey": "bad_request"
     },
     {
+      "errorKey": "org_limit_reached",
+      "status": 403,
+      "statusKey": "forbidden"
+    },
+    {
       "errorKey": "org_slug_taken",
       "status": 409,
       "statusKey": "conflict"
     },
     {
-      "errorKey": "org_limit_reached",
-      "status": 403,
-      "statusKey": "forbidden"
+      "errorKey": "unauthorized",
+      "status": 401,
+      "statusKey": "unauthorized"
     }
   ],
   "routes": [
     {
       "errors": [
-        "unauthorized",
         "api_error",
-        "invalid_input"
+        "invalid_input",
+        "unauthorized"
       ],
+      "input": {
+        "search": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
       "meta": {
         "description": "Test route",
         "summary": "Root test route",
@@ -43,36 +55,36 @@
       },
       "method": "GET",
       "middleware": [
-        "requestId",
-        "logger"
+        "requestId"
       ],
-      "params": [],
-      "path": "/api",
-      "input": {
-        "search": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/api"
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "requestId",
-        "logger",
         "cors"
       ],
       "params": [],
@@ -80,44 +92,55 @@
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "requestId",
-        "logger",
         "cors"
       ],
+      "output": {
+        "text/event-stream": {
+          "ok": {
+            "type": "string"
+          }
+        }
+      },
       "params": [],
       "path": "/api/events"
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "requestId",
-        "logger",
         "cors"
       ],
+      "output": {
+        "text/event-stream": {
+          "ok": {
+            "type": "string"
+          }
+        }
+      },
       "params": [],
       "path": "/api/events-live"
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "ALL",
       "middleware": [
         "requestId",
-        "logger",
         "cors"
       ],
       "params": [],
@@ -125,14 +148,13 @@
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "requestId",
-        "logger",
         "cors",
         "withDb",
         "withAuth"
@@ -142,17 +164,16 @@
     },
     {
       "errors": [
-        "unauthorized",
         "api_error",
-        "org_slug_taken",
+        "invalid_input",
         "org_limit_reached",
-        "invalid_input"
+        "org_slug_taken",
+        "unauthorized"
       ],
       "meta": {},
       "method": "POST",
       "middleware": [
         "requestId",
-        "logger",
         "cors",
         "withDb",
         "withAuth"
@@ -162,14 +183,13 @@
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "requestId",
-        "logger",
         "cors",
         "withDb",
         "withAuth"
@@ -181,14 +201,13 @@
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "DELETE",
       "middleware": [
         "requestId",
-        "logger",
         "cors",
         "withDb",
         "withAuth"
@@ -200,14 +219,13 @@
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "POST",
       "middleware": [
         "requestId",
-        "logger",
         "cors"
       ],
       "params": [
@@ -217,14 +235,13 @@
     },
     {
       "errors": [
-        "unauthorized",
-        "api_error"
+        "api_error",
+        "unauthorized"
       ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "requestId",
-        "logger",
         "cors"
       ],
       "params": [],
@@ -232,34 +249,18 @@
     },
     {
       "errors": [
-        "unauthorized",
         "api_error",
-        "org_limit_reached"
+        "org_limit_reached",
+        "unauthorized"
       ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "requestId",
-        "logger",
         "cors"
       ],
       "params": [],
       "path": "/api/boundary/custom"
-    },
-    {
-      "errors": [
-        "unauthorized",
-        "api_error"
-      ],
-      "meta": {},
-      "method": "GET",
-      "middleware": [
-        "requestId",
-        "logger",
-        "cors"
-      ],
-      "params": [],
-      "path": "/api/generated-tree"
     }
   ]
 }

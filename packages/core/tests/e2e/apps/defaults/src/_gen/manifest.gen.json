@@ -1,5 +1,4 @@
 {
-  "x-generated": "honey checksum:adad8cac5413",
   "errors": [],
   "routes": [
     {
@@ -25,16 +24,15 @@
       "meta": {},
       "method": "POST",
       "middleware": [],
-      "params": [],
-      "path": "/echo",
       "output": {
         "application/json": {
           "created": {
-            "vendor": "zod",
-            "version": 1
+            "type": "string"
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/echo"
     }
   ]
 }

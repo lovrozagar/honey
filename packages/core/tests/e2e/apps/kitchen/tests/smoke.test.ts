@@ -66,3 +66,16 @@ describe("serves identically from its generated route tree", () => {
 		expect(await compareApps(createApp(stubWs), createApp(stubWs, { routeTree }), probes)).toEqual([])
 	})
 })
+
+describe("its SSE routes in the generated document (carry-in #7)", () => {
+	test("GET /api/events and /api/events-live each document a 2xx text/event-stream answer", async () => {
+		const doc = (await Bun.file(new URL("../src/_gen/openapi.gen.json", import.meta.url)).json()) as {
+			paths: Record<string, { get: { responses: Record<string, { content?: Record<string, unknown> }> } }>
+		}
+		const streams = (path: string) =>
+			Object.entries(doc.paths[path]?.get.responses ?? {})
+				.filter(([status, answer]) => status.startsWith("2") && answer.content?.["text/event-stream"] !== undefined)
+				.map(([status]) => status)
+		expect([streams("/api/events"), streams("/api/events-live")]).toEqual([["200"], ["200"]])
+	})
+})

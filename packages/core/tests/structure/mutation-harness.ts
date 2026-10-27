@@ -63,16 +63,6 @@ export type Guard = {
 
 export const GUARDS: readonly Guard[] = [
 	{
-		/* the v0 guard that proves the mechanism until bit 07 registers v1's (H21: v0 serves until cutover) */
-		catches: "an encoded / or \\ reaching a route param",
-		disable: (original) => {
-			const normalizePath = original.normalizePath as NormalizePath
-			return { normalizePath: (raw: string) => normalizePath(raw, "allow") }
-		},
-		id: "encoded-separator",
-		module: "_v0/src/request-path.ts",
-	},
-	{
 		catches: "v1: an encoded / or \\ reaching a route param",
 		disable: (original) => {
 			const normalizePath = original.normalizePath as NormalizePath

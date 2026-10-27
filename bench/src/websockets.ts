@@ -14,9 +14,9 @@
  * `WS_THRESHOLD` (default 0.10) over v0's AND outside the band of its own samples. Each version
  * runs on its own WSContextImpl, so a send costs what that version's send costs.
  */
-import { createMiddleware, honey } from "@lovrozagar/honey"
-import "@lovrozagar/honey/realtime"
-import { WSContextImpl } from "@lovrozagar/honey/ws/cloudflare"
+import { createMiddleware, honey } from "../../_v0/src/index.ts"
+import "../../_v0/src/realtime/register.ts"
+import { WSContextImpl } from "../../_v0/src/ws/cloudflare.ts"
 import { createMiddleware as createMiddlewareV1 } from "../../packages/core/src/middleware/middleware.ts"
 import { realtime } from "../../packages/core/src/realtime/realtime.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"

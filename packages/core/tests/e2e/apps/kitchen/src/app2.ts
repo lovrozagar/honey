@@ -59,8 +59,8 @@ type _HelloCtx = Expect<
 /* InferRouteInput — input schema for path+method */
 type HelloInput = InferRouteInput<typeof app, "/hello", "get">
 type HelloPostInput = InferRouteInput<typeof app, "/hello", "post">
-type _HelloInput = Expect<Eq<HelloInput, { search: { q: string } }>>
-type _HelloPostInput = Expect<Eq<HelloPostInput, { json: { q: string } }>>
+type _HelloInput = Expect<Eq<HelloInput, { readonly search: { q: string } }>>
+type _HelloPostInput = Expect<Eq<HelloPostInput, { readonly json: { q: string } }>>
 
 /* InferRouteOutput — output schema for path+method */
 type HelloOutput = InferRouteOutput<typeof app, "/hello", "get">

@@ -9,9 +9,8 @@
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 import type { InferCtx } from "@lovrozagar/honey"
 import { cors } from "@lovrozagar/honey/cors"
-import { logger } from "@lovrozagar/honey/logger"
+import { createLogger } from "@lovrozagar/honey/logger"
 import { requestId } from "@lovrozagar/honey/request-id"
-import "@lovrozagar/honey/openapi"
 import * as z from "zod"
 
 const errors = defineErrors({ not_found: "not_found", unauthorized: "unauthorized" })
@@ -39,7 +38,7 @@ app.metaSpec({
 	strict: "error",
 })
 
-const base = app.use(requestId()).use(logger()).use(cors()).use(withUser)
+const base = app.logger(createLogger()).requestLog(true).use(requestId()).use(cors()).use(withUser)
 
 type Ctx = InferCtx<typeof base>
 

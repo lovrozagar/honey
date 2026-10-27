@@ -3,6 +3,8 @@ set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$DIR/.."
+# honey resolves to its source in this checkout (honey-source), in every bun or node process started here
+export BUN_OPTIONS="--conditions=honey-source" NODE_OPTIONS="--conditions=honey-source"
 BOMBARDIER="${BOMBARDIER:-/tmp/bombardier}"
 DURATION="${BENCH_DURATION:-10s}"
 CONNECTIONS="${BENCH_CONNECTIONS:-100}"

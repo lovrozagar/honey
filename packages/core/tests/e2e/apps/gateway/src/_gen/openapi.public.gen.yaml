@@ -1,8 +1,9 @@
-x-generated: "honey checksum:095b37ec4b77"
+openapi: "3.1.0"
 info:
   title: Honey Gateway (public)
   version: "0.0.1"
-openapi: "3.1.0"
+servers:
+  - url: /app
 paths:
   /articles/:
     get:
@@ -17,6 +18,7 @@ paths:
           - title
         sort:
           - title
+      x-honey-route: GET /articles
       parameters:
         - in: query
           name: cursor
@@ -25,18 +27,20 @@ paths:
             type: string
       responses:
         "200":
+          description: ok
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListArticlesResponse200"
-          description: ok
   /articles/meta/:
     get:
+      x-honey-route: GET /articles/meta
       responses:
         "200":
           description: Success
   /nl/c/{delivery}/{url}/:
     get:
+      x-honey-route: "GET /nl/c/:delivery/:url"
       parameters:
         - in: path
           name: delivery
@@ -53,16 +57,19 @@ paths:
           description: Success
   /ping/:
     get:
+      x-honey-route: GET /ping
       responses:
         "200":
           description: Success
   /users/:
     get:
+      x-honey-route: GET /users
       responses:
         "200":
           description: Success
   /users/{id}/:
     get:
+      x-honey-route: "GET /users/:id"
       parameters:
         - in: path
           name: id
@@ -74,11 +81,10 @@ paths:
           description: Success
   /v1/openapi/spec/:
     get:
+      x-honey-route: GET /v1/openapi/spec
       responses:
         "200":
           description: Success
-servers:
-  - url: /app
 components:
   schemas:
     ListArticlesResponse200:

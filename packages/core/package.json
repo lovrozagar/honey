@@ -264,6 +264,7 @@
 		"oxc-parser": "0.152.0",
 		"typescript": "catalog:",
 		"valibot": "catalog:",
+		"vite": "catalog:",
 		"vitest": "catalog:",
 		"ws": "catalog:",
 		"yup": "catalog:",

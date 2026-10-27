@@ -1,8 +1,8 @@
 import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, honey } from "@lovrozagar/honey"
-import "@lovrozagar/honey/openapi"
-import "@lovrozagar/honey/proxy"
+import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { proxy } from "@lovrozagar/honey/proxy"
 import * as z from "zod"
 import { routeTree as generatedTree } from "./_gen/routes.gen.ts"
 import { users } from "./users.ts"
@@ -172,9 +172,11 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	app.get("/v1/openapi/spec/").handler((ctx) => ctx.res.json("ok", { spec: "gateway" }))
 
 	/* every downstream route delegates here with its own pattern and meta */
-	app.all("/*").proxy({
-		destination: (_ctx, url, init) => users.fetch(new Request(new URL(url, "http://users.internal"), init), {}),
-	})
+	app.all("/*").handler(
+		proxy({
+			destination: (_ctx, url, init) => users.fetch(new Request(new URL(url, "http://users.internal"), init), {}),
+		}),
+	)
 
-	return app.openapi({ docs: "swagger", title: "Honey Gateway", version: "0.0.1" }).manifest()
+	return serveManifest(serveOpenApi(app, { docs: "swagger", title: "Honey Gateway", version: "0.0.1" }))
 }

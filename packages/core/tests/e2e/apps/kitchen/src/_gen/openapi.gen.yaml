@@ -1,8 +1,7 @@
-x-generated: "honey checksum:6b957d7eb075"
+openapi: "3.1.0"
 info:
   title: Honey E2E
   version: "0.0.1"
-openapi: "3.1.0"
 paths:
   /api:
     get:
@@ -10,6 +9,7 @@ paths:
       description: Test route
       tags:
         - test
+      x-honey-route: GET /api
       parameters:
         - in: query
           name: id
@@ -18,31 +18,42 @@ paths:
             type: string
       responses:
         "200":
+          description: ok
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListApiResponse200"
-          description: ok
         "400":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err400InvalidInput"
           description: invalid_input
+          x-honey-error: true
         "401":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        invalid_input:
+          status: 400
+        unauthorized:
+          status: 401
   /api/boundary/custom:
     get:
+      x-honey-route: GET /api/boundary/custom
       responses:
         "401":
           content:
@@ -50,20 +61,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "403":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err403OrgLimitReached"
           description: org_limit_reached
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        org_limit_reached:
+          status: 403
+        unauthorized:
+          status: 401
   /api/boundary/default:
     get:
+      x-honey-route: GET /api/boundary/default
       responses:
         "401":
           content:
@@ -71,14 +93,22 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
   /api/echo:
     get:
+      x-honey-route: ALL /api/echo
       responses:
         "401":
           content:
@@ -86,13 +116,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
     post:
+      x-honey-route: ALL /api/echo
       responses:
         "401":
           content:
@@ -100,13 +138,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
     put:
+      x-honey-route: ALL /api/echo
       responses:
         "401":
           content:
@@ -114,13 +160,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
     patch:
+      x-honey-route: ALL /api/echo
       responses:
         "401":
           content:
@@ -128,13 +182,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
     delete:
+      x-honey-route: ALL /api/echo
       responses:
         "401":
           content:
@@ -142,65 +204,87 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
   /api/echo-ws:
     get:
       x-websocket: true
+      x-honey-route: WS /api/echo-ws
       responses:
         "101":
           description: WebSocket upgrade
   /api/events:
     get:
+      x-honey-route: GET /api/events
       responses:
+        "200":
+          description: ok
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ListApiEventsResponse200"
         "401":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
   /api/events-live:
     get:
+      x-honey-route: GET /api/events-live
       responses:
+        "200":
+          description: ok
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ListApiEventsResponse200"
         "401":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
-  /api/generated-tree:
-    get:
-      responses:
-        "401":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Err401Unauthorized"
-          description: unauthorized
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Err500ApiError"
-          description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
   /api/health:
     get:
+      x-honey-route: GET /api/health
       responses:
         "401":
           content:
@@ -208,14 +292,22 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
   /api/realtime/broadcast/{topic}:
     post:
+      x-honey-route: "POST /api/realtime/broadcast/:topic"
       parameters:
         - in: path
           name: topic
@@ -229,15 +321,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
   /api/realtime/chat/{roomId}:
     get:
       x-websocket: true
+      x-honey-route: "WS /api/realtime/chat/:roomId"
       parameters:
         - in: path
           name: roomId
@@ -250,17 +350,20 @@ paths:
   /api/realtime/echo:
     get:
       x-websocket: true
+      x-honey-route: WS /api/realtime/echo
       responses:
         "101":
           description: WebSocket upgrade
   /api/reconnect-ws:
     get:
       x-websocket: true
+      x-honey-route: WS /api/reconnect-ws
       responses:
         "101":
           description: WebSocket upgrade
   /api/v1/organizations:
     get:
+      x-honey-route: GET /api/v1/organizations
       responses:
         "401":
           content:
@@ -268,13 +371,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
     post:
+      x-honey-route: POST /api/v1/organizations
       responses:
         "400":
           content:
@@ -282,32 +393,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err400InvalidInput"
           description: invalid_input
+          x-honey-error: true
         "401":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "403":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err403OrgLimitReached"
           description: org_limit_reached
+          x-honey-error: true
         "409":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreateApiV1OrganizationResponse409"
           description: org_slug_taken
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        invalid_input:
+          status: 400
+        org_limit_reached:
+          status: 403
+        org_slug_taken:
+          status: 409
+        unauthorized:
+          status: 401
   /api/v1/organizations/{orgId}:
     get:
+      x-honey-route: "GET /api/v1/organizations/:orgId"
       parameters:
         - in: path
           name: orgId
@@ -321,13 +449,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
     delete:
+      x-honey-route: "DELETE /api/v1/organizations/:orgId"
       parameters:
         - in: path
           name: orgId
@@ -341,18 +477,28 @@ paths:
               schema:
                 $ref: "#/components/schemas/Err401Unauthorized"
           description: unauthorized
+          x-honey-error: true
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Err500ApiError"
           description: api_error
+          x-honey-error: true
+      x-honey-errors:
+        api_error:
+          status: 500
+        unauthorized:
+          status: 401
   /api/v1/socket:
     get:
       x-websocket: true
+      x-honey-route: WS /api/v1/socket
       responses:
         "101":
           description: WebSocket upgrade
+tags:
+  - name: test
 components:
   schemas:
     ListApiResponse200:
@@ -527,6 +673,8 @@ components:
         - status_key
         - success
       type: object
+    ListApiEventsResponse200:
+      type: string
     CreateApiV1OrganizationResponse409:
       properties:
         error_key:

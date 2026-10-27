@@ -241,7 +241,8 @@ export function generateRouteTree(tree: RouteTreeV2): string {
 		HEAD,
 		consts.length > 0 ? `${consts.join("\n")}\n` : "",
 		`export const tree: TreeNode = ${nodeText(tree.root, intern)}\n`,
-		`export const routes: RouteTree["routes"] = S({\n${routes.map((route) => routeLine(route, intern)).join(",\n")}\n})\n`,
+		/* S typed by its entry: inferred from the literals, the union of entries would give each es the others' keys */
+		`export const routes: RouteTree["routes"] = S<RouteTree["routes"][string]>({\n${routes.map((route) => routeLine(route, intern)).join(",\n")}\n})\n`,
 		shape ?? "",
 		selectorType(routes, intern),
 		meta.length > 0 ? `export const meta: ${metaType} = S({\n${meta.join(",\n")}\n})\n` : "",

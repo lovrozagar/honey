@@ -1,11 +1,5 @@
 {
-  "x-generated": "honey checksum:5a67ebbfde41",
   "errors": [
-    {
-      "errorKey": "invalid_token",
-      "status": 401,
-      "statusKey": "unauthorized"
-    },
     {
       "errorKey": "expired_token",
       "status": 401,
@@ -17,21 +11,26 @@
       "statusKey": "forbidden"
     },
     {
-      "errorKey": "rate_limited",
-      "status": 429,
-      "statusKey": "too_many_requests"
+      "errorKey": "invalid_token",
+      "status": 401,
+      "statusKey": "unauthorized"
     },
     {
       "errorKey": "not_found",
       "status": 404,
       "statusKey": "not_found"
+    },
+    {
+      "errorKey": "rate_limited",
+      "status": 429,
+      "statusKey": "too_many_requests"
     }
   ],
   "routes": [
     {
       "errors": [
-        "invalid_token",
-        "expired_token"
+        "expired_token",
+        "invalid_token"
       ],
       "meta": {},
       "method": "GET",
@@ -44,8 +43,8 @@
     },
     {
       "errors": [
-        "invalid_token",
-        "expired_token"
+        "expired_token",
+        "invalid_token"
       ],
       "meta": {},
       "method": "GET",
@@ -58,9 +57,20 @@
     },
     {
       "errors": [
-        "invalid_token",
-        "expired_token"
+        "expired_token",
+        "invalid_token"
       ],
+      "input": {
+        "search": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "default": 1,
+              "type": "number"
+            }
+          }
+        }
+      },
       "meta": {},
       "method": "GET",
       "middleware": [
@@ -68,19 +78,13 @@
         "anonymous"
       ],
       "params": [],
-      "path": "/feed",
-      "input": {
-        "search": {
-          "vendor": "zod",
-          "version": 1
-        }
-      }
+      "path": "/feed"
     },
     {
       "errors": [
-        "invalid_token",
         "expired_token",
-        "forbidden"
+        "forbidden",
+        "invalid_token"
       ],
       "meta": {},
       "method": "GET",
@@ -93,32 +97,31 @@
     },
     {
       "errors": [
-        "invalid_token",
-        "expired_token",
-        "forbidden"
-      ],
-      "meta": {},
-      "method": "POST",
-      "middleware": [
-        "anonymous",
-        "anonymous"
-      ],
-      "params": [],
-      "path": "/account/settings",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      }
-    },
-    {
-      "errors": [
-        "invalid_token",
         "expired_token",
         "forbidden",
-        "rate_limited"
+        "invalid_token"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "notifications": {
+              "type": "boolean"
+            },
+            "theme": {
+              "type": "string",
+              "enum": [
+                "dark",
+                "light"
+              ]
+            }
+          },
+          "required": [
+            "notifications",
+            "theme"
+          ]
+        }
+      },
       "meta": {},
       "method": "POST",
       "middleware": [
@@ -126,20 +129,14 @@
         "anonymous"
       ],
       "params": [],
-      "path": "/resources",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      }
+      "path": "/account/settings"
     },
     {
       "errors": [
-        "invalid_token",
         "expired_token",
-        "not_found",
-        "forbidden"
+        "forbidden",
+        "invalid_token",
+        "not_found"
       ],
       "meta": {},
       "method": "GET",
@@ -154,10 +151,10 @@
     },
     {
       "errors": [
-        "invalid_token",
         "expired_token",
-        "not_found",
-        "forbidden"
+        "forbidden",
+        "invalid_token",
+        "not_found"
       ],
       "meta": {},
       "method": "DELETE",
@@ -169,6 +166,44 @@
         "resourceId"
       ],
       "path": "/resources/:resourceId"
+    },
+    {
+      "errors": [
+        "expired_token",
+        "forbidden",
+        "invalid_token",
+        "rate_limited"
+      ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "doc",
+                "image",
+                "video"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ]
+        }
+      },
+      "meta": {},
+      "method": "POST",
+      "middleware": [
+        "anonymous",
+        "anonymous"
+      ],
+      "params": [],
+      "path": "/resources"
     }
   ]
 }

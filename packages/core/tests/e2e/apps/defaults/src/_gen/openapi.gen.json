@@ -1,29 +1,30 @@
 {
-  "x-generated": "honey checksum:4748c662e763",
+  "openapi": "3.1.0",
   "info": {
     "title": "Honey Defaults",
     "version": "0.0.1"
   },
-  "openapi": "3.1.0",
   "paths": {
     "/echo": {
       "post": {
+        "x-honey-route": "POST /echo",
         "responses": {
           "201": {
+            "description": "created",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateEchoResponse201"
                 }
               }
-            },
-            "description": "created"
+            }
           }
         }
       }
     },
     "/health": {
       "get": {
+        "x-honey-route": "GET /health",
         "responses": {
           "200": {
             "description": "Success"
@@ -33,6 +34,7 @@
     },
     "/users/{id}": {
       "get": {
+        "x-honey-route": "GET /users/:id",
         "parameters": [
           {
             "in": "path",

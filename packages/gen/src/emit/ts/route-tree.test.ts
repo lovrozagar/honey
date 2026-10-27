@@ -452,3 +452,15 @@ describe("generateRouteTree: edges", () => {
 		expect([Object.keys(routes), routeTree.meta]).toEqual([[], {}])
 	})
 })
+
+describe("generateRouteTree: routes typed as RouteTree's entries", () => {
+	it("type-checks routes whose error statuses name different keys, each entry checked against RouteEntry", () => {
+		const tree = treeOf([
+			["GET", "/a", { bek: "api_error", ek: ["api_error"], es: { api_error: "internal_server_error" } }],
+			["POST", "/a", { bek: "api_error", ek: ["taken"], es: { taken: "conflict" } }],
+		])
+		expect(
+			typecheck(tree, `import { routes } from "./routes.gen.ts"\nexport const n = Object.keys(routes).length`),
+		).toEqual([])
+	})
+})

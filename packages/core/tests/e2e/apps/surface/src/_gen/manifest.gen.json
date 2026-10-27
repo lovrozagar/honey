@@ -1,16 +1,5 @@
 {
-  "x-generated": "honey checksum:38a71bfa557e",
   "errors": [
-    {
-      "errorKey": "unauthorized",
-      "status": 401,
-      "statusKey": "unauthorized"
-    },
-    {
-      "errorKey": "validation_error",
-      "status": 400,
-      "statusKey": "bad_request"
-    },
     {
       "errorKey": "conflict",
       "status": 409,
@@ -20,6 +9,16 @@
       "errorKey": "not_found",
       "status": 404,
       "statusKey": "not_found"
+    },
+    {
+      "errorKey": "unauthorized",
+      "status": 401,
+      "statusKey": "unauthorized"
+    },
+    {
+      "errorKey": "validation_error",
+      "status": 400,
+      "statusKey": "bad_request"
     }
   ],
   "routes": [
@@ -28,6 +27,23 @@
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "email",
+            "name"
+          ]
+        }
+      },
       "meta": {
         "operationId": "input.createJson",
         "tags": [
@@ -39,28 +55,47 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/in/json",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "created": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/in/json"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "form": {
+          "type": "object",
+          "properties": {
+            "password": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "password",
+            "username"
+          ]
+        }
+      },
       "meta": {
         "operationId": "input.createForm",
         "tags": [
@@ -72,28 +107,50 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/in/form",
-      "input": {
-        "form": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "token"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/in/form"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "search": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "number"
+            },
+            "page": {
+              "type": "number"
+            },
+            "q": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "limit",
+            "page"
+          ]
+        }
+      },
       "meta": {
         "operationId": "input.search",
         "tags": [
@@ -105,109 +162,181 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/in/search",
-      "input": {
-        "search": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "results"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/in/search"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
-      "meta": {},
-      "method": "GET",
-      "middleware": [
-        "anonymous",
-        "anonymous"
-      ],
-      "params": [],
-      "path": "/in/headers",
       "input": {
         "headers": {
-          "vendor": "zod",
-          "version": 1
+          "type": "object",
+          "properties": {
+            "x-api-key": {
+              "type": "string"
+            },
+            "x-request-id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "x-api-key",
+            "x-request-id"
+          ]
         }
       },
-      "output": {
-        "application/json": {
-          "ok": {
-            "vendor": "zod",
-            "version": 1
-          }
-        }
-      }
-    },
-    {
-      "errors": [
-        "unauthorized",
-        "validation_error"
-      ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
+      "output": {
+        "application/json": {
+          "ok": {
+            "type": "object",
+            "properties": {
+              "accepted": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "accepted"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
       "params": [],
-      "path": "/in/cookies",
+      "path": "/in/headers"
+    },
+    {
+      "errors": [
+        "unauthorized",
+        "validation_error"
+      ],
       "input": {
         "cookies": {
-          "vendor": "zod",
-          "version": 1
+          "type": "object",
+          "properties": {
+            "locale": {
+              "type": "string"
+            },
+            "sid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "locale",
+            "sid"
+          ]
         }
       },
-      "output": {
-        "application/json": {
-          "ok": {
-            "vendor": "zod",
-            "version": 1
-          }
-        }
-      }
-    },
-    {
-      "errors": [
-        "unauthorized",
-        "validation_error"
-      ],
       "meta": {},
       "method": "GET",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
+      "output": {
+        "application/json": {
+          "ok": {
+            "type": "object",
+            "properties": {
+              "locale": {
+                "type": "string"
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "locale",
+              "valid"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "params": [],
+      "path": "/in/cookies"
+    },
+    {
+      "errors": [
+        "unauthorized",
+        "validation_error"
+      ],
+      "input": {
+        "params": {
+          "type": "object",
+          "properties": {
+            "memberId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "orgId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "memberId",
+            "orgId"
+          ]
+        }
+      },
+      "meta": {},
+      "method": "GET",
+      "middleware": [
+        "anonymous",
+        "anonymous"
+      ],
+      "output": {
+        "application/json": {
+          "ok": {
+            "type": "object",
+            "properties": {
+              "memberId": {
+                "type": "string"
+              },
+              "orgId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "memberId",
+              "orgId"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
       "params": [
         "orgId",
         "memberId"
       ],
-      "path": "/in/params/:orgId/members/:memberId",
-      "input": {
-        "params": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
-      "output": {
-        "application/json": {
-          "ok": {
-            "vendor": "zod",
-            "version": 1
-          }
-        }
-      }
+      "path": "/in/params/:orgId/members/:memberId"
     },
     {
       "errors": [
@@ -225,82 +354,156 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/in/none",
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "ping": {
+                "type": "string",
+                "const": "pong"
+              }
+            },
+            "required": [
+              "ping"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/in/none"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "form": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "upload": {
+              "type": "string",
+              "format": "binary",
+              "contentEncoding": "binary"
+            }
+          },
+          "required": [
+            "title",
+            "upload"
+          ]
+        }
+      },
       "meta": {},
       "method": "POST",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/in/file",
-      "input": {
-        "form": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "title"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/in/file"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "headers": {
+          "type": "object",
+          "properties": {
+            "if-match": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "if-match"
+          ]
+        },
+        "json": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "data"
+          ]
+        },
+        "search": {
+          "type": "object",
+          "properties": {
+            "force": {
+              "type": "boolean"
+            },
+            "version": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "version"
+          ]
+        }
+      },
       "meta": {},
       "method": "PUT",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
-      "params": [
-        "resourceId"
-      ],
-      "path": "/in/all/:resourceId",
-      "input": {
-        "headers": {
-          "vendor": "zod",
-          "version": 1
-        },
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        },
-        "search": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "etag": {
+                "type": "string"
+              },
+              "version": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "etag",
+              "version"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [
+        "resourceId"
+      ],
+      "path": "/in/all/:resourceId"
     },
     {
       "errors": [
@@ -313,16 +516,15 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/out/text",
       "output": {
         "text/plain": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "string"
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/out/text"
     },
     {
       "errors": [
@@ -335,16 +537,15 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/out/html",
       "output": {
         "text/html": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "string"
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/out/html"
     },
     {
       "errors": [
@@ -357,16 +558,15 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/out/csv",
       "output": {
         "text/csv": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "string"
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/out/csv"
     },
     {
       "errors": [
@@ -379,16 +579,15 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/out/xml",
       "output": {
         "application/xml": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "string"
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/out/xml"
     },
     {
       "errors": [
@@ -401,16 +600,13 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/out/binary",
       "output": {
         "application/octet-stream": {
-          "ok": {
-            "vendor": "zod",
-            "version": 1
-          }
+          "ok": {}
         }
-      }
+      },
+      "params": [],
+      "path": "/out/binary"
     },
     {
       "errors": [
@@ -423,55 +619,85 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/out/sse",
       "output": {
         "text/event-stream": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "string"
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/out/sse"
     },
     {
       "errors": [
+        "conflict",
         "unauthorized",
-        "validation_error",
-        "conflict"
+        "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "slug"
+          ]
+        }
+      },
       "meta": {},
       "method": "POST",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/out/multi-status",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "conflict": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "existing": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "existing",
+              "message"
+            ],
+            "additionalProperties": false
           },
           "created": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "slug"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/out/multi-status"
     },
     {
       "errors": [
+        "not_found",
         "unauthorized",
-        "validation_error",
-        "not_found"
+        "validation_error"
       ],
       "meta": {},
       "method": "DELETE",
@@ -500,22 +726,46 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/methods/resource",
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "items"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/methods/resource"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
       "meta": {
         "operationId": "resources.create",
         "tags": [
@@ -527,28 +777,55 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/methods/resource",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "created": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/methods/resource"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
       "meta": {
         "operationId": "resources.update",
         "tags": [
@@ -560,34 +837,58 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [
-        "id"
-      ],
-      "path": "/methods/resource/:id",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        },
-        "params": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [
+        "id"
+      ],
+      "path": "/methods/resource/:id"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
       "meta": {
         "operationId": "resources.patch",
         "tags": [
@@ -599,28 +900,26 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [
-        "id"
-      ],
-      "path": "/methods/resource/:id",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        },
-        "params": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [
+        "id"
+      ],
+      "path": "/methods/resource/:id"
     },
     {
       "errors": [
@@ -654,72 +953,110 @@
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/status/ok",
       "output": {
         "application/json": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "v"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/status/ok"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "x"
+          ]
+        }
+      },
       "meta": {},
       "method": "POST",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/status/created",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "created": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/status/created"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "task"
+          ]
+        }
+      },
       "meta": {},
       "method": "POST",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/status/accepted",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "accepted": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "jobId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "jobId"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/status/accepted"
     },
     {
       "errors": [
@@ -740,56 +1077,84 @@
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "search": {
+          "type": "object",
+          "properties": {
+            "channel": {
+              "type": "string"
+            },
+            "since": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "channel"
+          ]
+        }
+      },
       "meta": {},
       "method": "GET",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/stream/filtered",
-      "input": {
-        "search": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "text/event-stream": {
           "ok": {
-            "vendor": "zod",
-            "version": 1
+            "type": "string"
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/stream/filtered"
     },
     {
       "errors": [
         "unauthorized",
         "validation_error"
       ],
+      "input": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "chunks": {
+              "type": "number"
+            },
+            "fileName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "chunks",
+            "fileName"
+          ]
+        }
+      },
       "meta": {},
       "method": "POST",
       "middleware": [
         "anonymous",
         "anonymous"
       ],
-      "params": [],
-      "path": "/rs/upload",
-      "input": {
-        "json": {
-          "vendor": "zod",
-          "version": 1
-        }
-      },
       "output": {
         "application/json": {
           "accepted": {
-            "vendor": "zod",
-            "version": 1
+            "type": "object",
+            "properties": {
+              "uploadId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "uploadId"
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "params": [],
+      "path": "/rs/upload"
     }
   ]
 }

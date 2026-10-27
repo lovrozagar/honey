@@ -13,17 +13,17 @@
  *   bun run packages/core/tests/e2e/run-strict-consumer.ts
  *   bun run packages/core/tests/e2e/run-strict-consumer.ts --keep     # leave the sandbox for inspection
  */
-import { mkdirSync, readdirSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { type AddressInfo, createServer } from "node:net"
+import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, "../../../..")
-/* the package under test is v0 until the cutover swap (H21) */
-const corePath = join(repoRoot, "_v0")
 const fixture = join(here, "strict-consumer")
-const sandbox = join(repoRoot, ".cache", "strict-consumer")
+/* outside the repo, so nothing the install lacks resolves from the repo's node_modules */
+const sandbox = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "honey-strict-consumer-"))
 const keep = process.argv.includes("--keep")
 
 const PKG = "@lovrozagar/honey"
@@ -50,19 +50,15 @@ async function run(cmd: string[], cwd: string): Promise<{ code: number; out: str
 	return { code, out: stdout + stderr }
 }
 
-rmSync(sandbox, { force: true, recursive: true })
-mkdirSync(sandbox, { recursive: true })
-
-/* 1. pack exactly what npm would publish */
+/* 1. pack both packages exactly as release.yml does: scripts/pack.ts, a staged copy, so the checkout stays source-only */
 console.log("packing …")
-const packed = await run(["npm", "pack", "--pack-destination", sandbox, "--silent"], corePath)
-if (packed.code !== 0) {
+const packed = await run(
+	["bun", join(repoRoot, "scripts/pack.ts"), sandbox, join(repoRoot, "packages/core"), join(repoRoot, "packages/gen")],
+	repoRoot,
+)
+const [coreTarball, genTarball] = packed.out.trim().split("\n")
+if (packed.code !== 0 || !coreTarball?.endsWith(".tgz") || !genTarball?.endsWith(".tgz")) {
 	console.error(packed.out)
-	process.exit(1)
-}
-const tarball = readdirSync(sandbox).find((f) => f.endsWith(".tgz"))
-if (!tarball) {
-	console.error("npm pack produced no tarball")
 	process.exit(1)
 }
 
@@ -75,7 +71,7 @@ await Bun.write(
 	join(consumer, "package.json"),
 	`${JSON.stringify(
 		{
-			dependencies: { [PKG]: `file:${join(sandbox, tarball)}`, zod: "4.3.6" },
+			dependencies: { [PKG]: `file:${coreTarball}`, "@lovrozagar/honey-codegen": `file:${genTarball}`, zod: "4.3.6" },
 			devDependencies: { typescript: "7.0.2", vite: "8.1.4" },
 			name: "strict-consumer-sandbox",
 			private: true,
@@ -132,12 +128,12 @@ if (inPackage.length === 0 && inConsumer.length === 0) {
 		join(consumer, "smoke.ts"),
 		[
 			'import { honey } from "@lovrozagar/honey"',
-			'import "@lovrozagar/honey/openapi"',
+			'import { serveOpenApi } from "@lovrozagar/honey/openapi"',
 			'import * as z from "zod"',
 			"const app = honey<{}>()",
 			'app.get("/hi").output({ "application/json": { ok: z.object({ ok: z.boolean() }) } })',
 			'\t.handler((c) => c.res.json("ok", { ok: true }))',
-			'app.openapi({ title: "T", version: "1" })',
+			'serveOpenApi(app, { title: "T", version: "1" })',
 			'const res = await app.fetch(new Request("http://x/hi"), {})',
 			"if (res.status !== 200) throw new Error(`route returned ${res.status}`)",
 			'const spec = await app.fetch(new Request("http://x/openapi.json"), {})',
@@ -181,7 +177,6 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 		join(dir, "node-smoke.mjs"),
 		[
 			'import { honey } from "@lovrozagar/honey"',
-			'import "@lovrozagar/honey/openapi"',
 			"const app = honey()",
 			'app.get("/hi").handler((c) => c.res.text("ok", "hi"))',
 			'const res = await app.fetch(new Request("http://x/hi"), {})',
@@ -199,10 +194,10 @@ async function nodeConsumer(dir: string): Promise<boolean> {
 		join(dir, "src", "server-app.ts"),
 		[
 			'import { honey } from "@lovrozagar/honey"',
-			'import "@lovrozagar/honey/serve"',
+			'import { serve } from "@lovrozagar/honey/serve"',
 			'export const app = honey().get("/health").handler((ctx) => ctx.res.text("ok", "ok"))',
 			"export default app",
-			`await app.serve({ port: ${port} })`,
+			`await serve(app, { port: ${port} })`,
 		].join("\n"),
 	)
 	await Bun.write(

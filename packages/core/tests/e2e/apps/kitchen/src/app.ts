@@ -1,12 +1,12 @@
 import type { InferCtx, MiddlewareFn, WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { defineErrors, HoneyError, honey } from "@lovrozagar/honey"
-import "@lovrozagar/honey/i18n"
-import "@lovrozagar/honey/openapi"
-import "@lovrozagar/honey/realtime"
 import { cors } from "@lovrozagar/honey/cors"
-import { createLogger, logger } from "@lovrozagar/honey/logger"
-import { generateFromApp } from "@lovrozagar/honey/plugin"
+import { errorI18n } from "@lovrozagar/honey/i18n"
+import { createLogger } from "@lovrozagar/honey/logger"
+import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { realtime } from "@lovrozagar/honey/realtime"
+import { ws } from "@lovrozagar/honey/ws"
 import { requestId } from "@lovrozagar/honey/request-id"
 import * as z from "zod"
 
@@ -66,7 +66,8 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 
 	const h = root
 		.use(requestId())
-		.use(logger({ instance: log }))
+		.logger(log)
+		.requestLog(true)
 		.errorFactory(errors)
 		.defaultErrors("unauthorized")
 		.defaultBoundary("api_error")
@@ -80,14 +81,16 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 			...defaultShape,
 			request_id: "e2e-req-001",
 		}))
-		.errorI18n({
-			errors: { de: deErrors, en: enErrors },
-			resolveLocale: (ctx) => {
-				const accept = ctx.req.headers.get("accept-language")
-				if (accept?.startsWith("de")) return "de"
-				return "en"
-			},
-		})
+		.errorI18n(
+			errorI18n({
+				errors: { de: deErrors, en: enErrors },
+				resolveLocale: (ctx) => {
+					const accept = ctx.req.headers.get("accept-language")
+					if (accept?.startsWith("de")) return "de"
+					return "en"
+				},
+			}),
+		)
 
 	h.get("/")
 		.input({ search: z.object({ id: z.string() }) })
@@ -127,30 +130,36 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	corsed.get("/health").handler((ctx) => ctx.res.text("ok", "ok"))
 
 	/* SSE endpoint — basic */
-	corsed.get("/events").handler((ctx) =>
-		ctx.res.sse(async (stream) => {
-			await stream.send({ data: "hello", event: "message", id: "1" })
-			await stream.send({ data: "world", event: "message", id: "2" })
-			stream.close()
-		}),
-	)
+	corsed
+		.get("/events")
+		.output({ "text/event-stream": { ok: z.string() } })
+		.handler((ctx) =>
+			ctx.res.sse(async (stream) => {
+				await stream.send({ data: "hello", event: "message", id: "1" })
+				await stream.send({ data: "world", event: "message", id: "2" })
+				stream.close()
+			}),
+		)
 
 	/* SSE endpoint — keepalive + retry + lastEventId */
-	corsed.get("/events-live").handler((ctx) =>
-		ctx.res.sse(
-			async (stream) => {
-				const resumeFrom = stream.lastEventId
-				if (resumeFrom) {
-					await stream.send({ data: `resumed from ${resumeFrom}`, event: "resume" })
-				}
-				await stream.send({ data: "live", event: "tick", id: "t1" })
-				/* keep stream open briefly to let keepalive fire */
-				await new Promise((r) => setTimeout(r, 250))
-				stream.close()
-			},
-			{ defaultRetry: 3000, keepalive: 100 },
-		),
-	)
+	corsed
+		.get("/events-live")
+		.output({ "text/event-stream": { ok: z.string() } })
+		.handler((ctx) =>
+			ctx.res.sse(
+				async (stream) => {
+					const resumeFrom = stream.lastEventId
+					if (resumeFrom) {
+						await stream.send({ data: `resumed from ${resumeFrom}`, event: "resume" })
+					}
+					await stream.send({ data: "live", event: "tick", id: "t1" })
+					/* keep stream open briefly to let keepalive fire */
+					await new Promise((r) => setTimeout(r, 250))
+					stream.close()
+				},
+				{ defaultRetry: 3000, keepalive: 100 },
+			),
+		)
 
 	/* catch-all for testing */
 	corsed.all("/echo").handler((ctx) => ctx.res.json("ok", { method: ctx.req.method }))
@@ -196,38 +205,38 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	/* ---- WebSocket routes ---- */
 
 	/* unauthenticated echo — sends back whatever it receives */
-	corsed.ws("/echo-ws").handler({
-		onMessage(_ctx, ws, data) {
-			ws.send(data)
+	ws(corsed, "/echo-ws").handler({
+		onMessage(_ctx, socket, data) {
+			socket.send(data)
 		},
-		onOpen(_ctx, ws) {
-			ws.send("connected")
+		onOpen(_ctx, socket) {
+			socket.send("connected")
 		},
 	})
 
 	/* authenticated socket */
-	authed.ws("/v1/socket").handler({
-		onMessage(ctx, ws, data) {
-			ws.send({ from: ctx.user.name, msg: data })
+	ws(authed, "/v1/socket").handler({
+		onMessage(ctx, socket, data) {
+			socket.send({ from: ctx.user.name, msg: data })
 		},
-		onOpen(ctx, ws) {
-			ws.send({ event: "welcome", user: ctx.user.id })
+		onOpen(ctx, socket) {
+			socket.send({ event: "welcome", user: ctx.user.id })
 		},
 	})
 
 	/* WS with reconnection protocol */
-	corsed.ws("/reconnect-ws").handler({
-		onOpen(_ctx, ws) {
-			ws.send(JSON.stringify({ event: "open", token: "fresh-token-123" }))
+	ws(corsed, "/reconnect-ws").handler({
+		onOpen(_ctx, socket) {
+			socket.send(JSON.stringify({ event: "open", token: "fresh-token-123" }))
 		},
-		onReconnect(_ctx, ws, token) {
-			ws.send(JSON.stringify({ event: "reconnected", token }))
+		onReconnect(_ctx, socket, token) {
+			socket.send(JSON.stringify({ event: "reconnected", token }))
 		},
 	})
 
 	/* ---- realtime routes ---- */
 
-	corsed.realtime("/realtime/echo", {
+	realtime(corsed, "/realtime/echo", {
 		handler: (_c, conn) => {
 			conn.send({ event: "connected", id: conn.id })
 			conn.on("message", (payload) => {
@@ -239,7 +248,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		},
 	})
 
-	corsed.realtime("/realtime/chat/:roomId", {
+	const chat = realtime(corsed, "/realtime/chat/:roomId", {
 		namespace: "chat",
 		handler: (_c, conn) => {
 			conn.join("room:default")
@@ -253,7 +262,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	/* REST endpoint that publishes to realtime subscribers */
 	corsed.post("/realtime/broadcast/:topic").handler(async (ctx) => {
 		const body = await ctx.req.json()
-		ctx.realtime.namespace("chat").publish(ctx.params.topic, body)
+		chat.publish(ctx.params.topic, body)
 		return ctx.res.json("ok", { published: true })
 	})
 
@@ -274,19 +283,14 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 
 	/* ---- codegen endpoints ---- */
 
-	corsed.openapi({
-		description: "Honey E2E Test API",
-		docs: "scalar",
-		title: "Honey E2E",
-		version: "1.0.0",
-	})
-
-	corsed.manifest()
-
-	corsed.get("/generated-tree").handler(async (ctx) => {
-		const artifacts = await generateFromApp(h)
-		return ctx.res.text("ok", artifacts.routeTree)
-	})
+	serveManifest(
+		serveOpenApi(corsed, {
+			description: "Honey E2E Test API",
+			docs: "scalar",
+			title: "Honey E2E",
+			version: "1.0.0",
+		}),
+	)
 
 	return h
 }

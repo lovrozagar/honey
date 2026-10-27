@@ -1,9 +1,8 @@
 import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-/* the purge ran in the frozen v0 package (H21); its detection is the one consumers run until cutover */
-import { detectRuntime } from "../../../../_v0/src/detect-runtime.ts"
 import { describe, expect, it } from "vitest"
+import { detectRuntime } from "../../src/runtime/detect-runtime.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 const SELF = "packages/core/tests/structure/no-deno.test.ts"
@@ -70,6 +69,6 @@ describe("node, bun and cloudflare detection still resolves", () => {
 
 	it("a Deno global alone is not a runtime", () => {
 		const g = { Deno: {}, navigator: { userAgent: "" } }
-		expect(() => detectRuntime(g)).toThrow(/could not detect a runtime/)
+		expect(() => detectRuntime(g)).toThrow(/could not detect the runtime/)
 	})
 })

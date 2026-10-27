@@ -1,5 +1,5 @@
 import { createMiddleware, honey } from "@lovrozagar/honey"
-import "@lovrozagar/honey/serve"
+import { serve } from "@lovrozagar/honey/serve"
 import * as z from "zod"
 
 const body = z.object({ age: z.number(), name: z.string() })
@@ -26,5 +26,5 @@ const app = honey()
 	.handler((ctx) => ctx.res.json("ok", { elapsed: performance.now() - ctx.startedAt }))
 
 const port = Number(process.env.PORT ?? 3100)
-await app.serve({ hostname: "0.0.0.0", port, runtime: "node" })
+await serve(app, { hostname: "0.0.0.0", port })
 console.log(`honey on :${port}`)

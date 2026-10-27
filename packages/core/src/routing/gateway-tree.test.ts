@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as z from "zod"
 import { collectRoutes } from "../openapi/collect.ts"
+import { serveOpenApi } from "../openapi/serve.ts"
 import { honey } from "./app.ts"
 import { gatewayTree, overlaySchemas } from "./gateway-tree.ts"
 import { createNode, insertRoute, type RouteEntry, type RouteTree } from "./tree.ts"
@@ -63,6 +64,25 @@ describe("gatewayTree(): what a gateway serves", () => {
 			"Gateway routes are also downstream routes in the merged tree: GET /users/list",
 		)
 		expect(() => gatewayTree(own(), own().toRouteTree())).not.toThrow()
+	})
+
+	it("leaves out the routes the gateway serves about itself (serveOpenApi): each app serving the tree mounts its own", async () => {
+		const users = honey<{}>()
+		users.get("/users/:id").handler((c) => c.res.text("ok", "remote"))
+		const downstream = mergeTree([users.toRouteTree(), { worker: "users" }])
+		const documented = () => serveOpenApi(own(), { title: "gateway", version: "1" })
+		expect(() => gatewayTree(documented(), downstream)).not.toThrow()
+		const tree = gatewayTree(documented(), downstream)
+		const app = serveOpenApi(own(tree), { title: "gateway", version: "1" })
+		expect([
+			Object.keys(tree.routes).sort(),
+			(await call(app, "/openapi.json"))[0],
+			await call(app, "/users/7"),
+		]).toEqual([
+			["GET /:slug", "GET /health", "GET /users/:id"],
+			200,
+			[200, '{"pattern":"/users/:id","worker":"users"}'],
+		])
 	})
 })
 

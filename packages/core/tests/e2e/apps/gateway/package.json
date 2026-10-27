@@ -7,8 +7,8 @@
 		".": "./src/app.ts"
 	},
 	"scripts": {
-		"generate": "honey generate",
-		"test": "bun test tests/smoke.test.ts",
+		"generate": "BUN_OPTIONS=--conditions=honey-source honey generate",
+		"test": "bun test --conditions=honey-source tests/smoke.test.ts",
 		"type:check": "tsc --noEmit"
 	},
 	"dependencies": {

@@ -2,7 +2,8 @@ import type { WSAdapter } from "@lovrozagar/honey"
 import type { RouteTree } from "@lovrozagar/honey/tree"
 import { createMiddleware, defineErrors, honey } from "@lovrozagar/honey"
 import { readableStream } from "@lovrozagar/honey/input"
-import "@lovrozagar/honey/openapi"
+import { serveManifest, serveOpenApi } from "@lovrozagar/honey/openapi"
+import { ws } from "@lovrozagar/honey/ws"
 import * as z from "zod"
 
 type Env = { API_KEY: string; DATABASE_URL: string }
@@ -39,7 +40,7 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	if (options?.routeTree) app.routeTree(options.routeTree)
 	if (wsAdapter) app.wsAdapter(wsAdapter)
 
-	return app
+	const routed = app
 		.errorFactory(errors)
 		.defaultErrors("unauthorized", "validation_error")
 		.defaultBoundary("validation_error")
@@ -212,48 +213,47 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		.output({ "application/json": { accepted: z.object({ uploadId: z.string() }) } })
 		.handler((ctx) => ctx.res.json("accepted", { uploadId: "up-1" }))
 
-		.ws("/ws/echo")
+	ws(routed, "/ws/echo")
 		.meta({ operationId: "ws.echo", tags: ["websocket"] })
 		.handler({
-			onMessage(_ctx, ws, data) {
-				ws.send(data)
+			onMessage(_ctx, socket, data) {
+				socket.send(data)
 			},
-			onOpen(_ctx, ws) {
-				ws.send("connected")
+			onOpen(_ctx, socket) {
+				socket.send("connected")
 			},
 		})
 
-		.ws("/ws/room")
+	ws(routed, "/ws/room")
 		.meta({ operationId: "ws.joinRoom", tags: ["websocket"] })
 		.input({ search: z.object({ roomId: z.string() }) })
 		.handler({
-			onMessage(_ctx, ws, data) {
-				ws.send(`room: ${data}`)
+			onMessage(_ctx, socket, data) {
+				socket.send(`room: ${data}`)
 			},
-			onOpen(_ctx, ws) {
-				ws.send("joined")
+			onOpen(_ctx, socket) {
+				socket.send("joined")
 			},
 		})
 
-		.ws("/ws/reconnect")
+	ws(routed, "/ws/reconnect")
 		.meta({ operationId: "ws.reconnect", tags: ["websocket"] })
 		.handler({
-			onOpen(_ctx, ws) {
-				ws.send(JSON.stringify({ event: "open", token: "reconnect-token-abc" }))
+			onOpen(_ctx, socket) {
+				socket.send(JSON.stringify({ event: "open", token: "reconnect-token-abc" }))
 			},
-			onReconnect(_ctx, ws, token) {
-				ws.send(JSON.stringify({ event: "resumed", token }))
+			onReconnect(_ctx, socket, token) {
+				socket.send(JSON.stringify({ event: "resumed", token }))
 			},
 		})
 
-		.ws("/ws/chat/:channelId")
+	ws(routed, "/ws/chat/:channelId")
 		.meta({ operationId: "ws.chat", tags: ["websocket"] })
 		.handler({
-			onMessage(_ctx, ws, data) {
-				ws.send(data)
+			onMessage(_ctx, socket, data) {
+				socket.send(data)
 			},
 		})
 
-		.openapi({ docs: "scalar", title: "Honey Surface", version: "1.0.0" })
-		.manifest()
+	return serveManifest(serveOpenApi(routed, { docs: "scalar", title: "Honey Surface", version: "1.0.0" }))
 }

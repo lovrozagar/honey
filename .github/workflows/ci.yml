@@ -118,24 +118,6 @@ jobs:
       - name: MCP clients (client-lock.json's @modelcontextprotocol/sdk and @modelcontextprotocol/client)
         run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/mcp/__fixtures__" && D="$HOME/.cache/honey-tmp/mcp-clients" && rm -rf "$D.partial" && mkdir -p "$D.partial" && cp "$P/client-pins.json" "$D.partial/package.json" && cp "$P/client-lock.json" "$D.partial/package-lock.json" && (cd "$D.partial" && npm ci --ignore-scripts --no-audit --no-fund) && sha256sum "$P/client-lock.json" | cut -d" " -f1 > "$D.partial/lock.sha256" && rm -rf "$D" && mv "$D.partial" "$D"
       - run: bun run generate
-      # frozen v0 tests listen on fixed ports inside the ephemeral range: reserve them so no automatically
-      # assigned port (a client socket, a port-0 server another test left) holds one
-      - run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=45910-45912,45986
-      # diagnostic, an open issue: v0's target-artifacts suite failed with EADDRINUSE on its reserved 45912 at
-      # ee8c46e and a386de5, so a process binds it explicitly; record every socket on 45910-45912 with its
-      # process until the job ends, and print them if the job fails
-      - name: Watch the v0 fixed ports
-        run: |
-          sudo nohup bash -c 'while :; do
-            ss -tanpH "( sport >= :45910 and sport <= :45912 )" | while read -r line; do
-              echo "$(date +%T.%N | cut -c1-12) $line"
-              for pid in $(grep -o "pid=[0-9]*" <<< "$line" | cut -d= -f2 | sort -u); do
-                echo "  $(ps -o pid=,ppid=,args= -p "$pid" | cut -c1-300)"
-              done
-            done
-            sleep 0.05
-          done' > "$RUNNER_TEMP/v0-ports.txt" 2>&1 &
-      - run: bun run test:v0
       - if: ${{ !cancelled() }}
         run: bun run test:v1
         env:
@@ -155,13 +137,6 @@ jobs:
           HONEY_REQUIRE_TOOLCHAINS: "1"
       - if: ${{ !cancelled() }}
         run: bun run test:bench
-      - name: The sockets on the v0 fixed ports
-        if: failure()
-        run: |
-          grep -v -e "^  " -e TIME-WAIT "$RUNNER_TEMP/v0-ports.txt" | sort -u -k2 | head -300
-          grep "^  " "$RUNNER_TEMP/v0-ports.txt" | sort -u | head -100
-          echo "--- the timeline, TIME-WAIT left out"
-          grep -v TIME-WAIT "$RUNNER_TEMP/v0-ports.txt" | head -1500
       # every SDK dir this run built or reused has a .complete newer than the start; the rest are stale
       # (their inputs changed), so the saved cache stays one run's SDKs instead of growing with each change.
       # Only the go project compiles SDKs, so the other shards use none of them.
@@ -555,11 +530,6 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      # the same app over raw sockets on Node (current and 22.12) and Bun
-      - working-directory: _v0
-        run: >-
-          bunx vitest run tests/integration/hostile-client tests/integration/stream-lifecycle
-          tests/integration/request-target
       # v1's adapters over raw sockets: Node current in-process, Bun spawned, and Node 22.12 spawned (its 'upgrade' fallback)
       - working-directory: packages/core
         run: HONEY_REQUIRE_NODE_LEGACY=1 bunx vitest run tests/integration/ws-adapters.test.ts
@@ -790,31 +760,6 @@ jobs:
             'packages/gen/tests/integration/conformance/matrix.ts',
             'packages/core/tests/integration/conformance/**') }}
           restore-keys: ${{ runner.os }}-python-harness-
-      # v0's emitted crates resolve crates.io without a lockfile, so their dependencies drift: key the
-      # cache by ISO week, restore the newest, and save it even when the run fails (below), so each
-      # week compiles the drift once and every later run starts warm. v0's tests pin their own target
-      # dir (_v0/tests/cargo-env.ts, byte-frozen until bit 20), so it stays in the checkout.
-      - id: cargo-week
-        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      - id: cargo-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            .cache/cargo-target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-toolchain.toml', '_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-${{ steps.cargo-week.outputs.week }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-${{ hashFiles('rust-toolchain.toml', '_v0/src/client-rust/**', '_v0/src/codegen-rust.ts') }}-
-            ${{ runner.os }}-cargo-
-      # v0's frozen harness on the pinned interpreter, with its one pinned list for CI and local runs (locally
-      # the harness fills .cache/python-venv from it); HONEY_PYTHON's bare python, ruff and mypy resolve here
-      - name: v0's harness Python (the pinned interpreter, _v0's pinned requirements)
-        run: |
-          export UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_PYTHON_INSTALL_DIR="$HOME/.cache/honey-tmp/python/pythons"
-          "$HOME/.cache/honey-tmp/python/uv/bin/uv" venv --python "$(cat .python-version)" "$HOME/.cache/honey-tmp/python/v0-venv"
-          "$HOME/.cache/honey-tmp/python/uv/bin/uv" pip install --python "$HOME/.cache/honey-tmp/python/v0-venv/bin/python" -r _v0/tests/python-requirements.txt
-          echo "$HOME/.cache/honey-tmp/python/v0-venv/bin" >> "$GITHUB_PATH"
       - run: bun install --frozen-lockfile
       # the release leg (cli-harness.release.test.ts) checks with goreleaser and shellcheck: the test job's tool install
       - name: Tools (tool-pins.json's fish, zsh, PowerShell, goreleaser and shellcheck)
@@ -823,7 +768,6 @@ jobs:
       - run: mkdir -p ~/.cache/honey-tmp/python/sdk && touch "$RUNNER_TEMP/python-sdk-start"
       - run: bun run test:harness
         env:
-          HONEY_PYTHON: python
           # a Python problem fails the job instead of skipping the Python SDK tests
           HONEY_REQUIRE_PYTHON: "1"
           # a missing Go, Rust, Python or .NET fails gen's conformance and harness files for it instead of skipping them
@@ -845,14 +789,6 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/python/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/python-sdk-start" -printf '%h\0' | xargs -0r rm -rf
-      - if: always() && steps.cargo-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            .cache/cargo-target
-          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
 
   # the release's conformance gate (bit 19): every cell of every target held by the harness's record (compareCell),
   # or lacked by design; a regressed or unrun cell fails it, and release.yml publishes only on this workflow green

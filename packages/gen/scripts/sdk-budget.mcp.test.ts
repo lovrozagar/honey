@@ -97,12 +97,16 @@ type Tools = { readonly total: number; readonly largest: number }
  * the feature that adds the tokens.
  * - bit 19 c, the constraint keywords stated in each inputSchema (+17 tokens): surface's four `minLength: 1` arguments,
  *   2,110 -> 2,127 total, its largest tool unchanged at 205; the other four apps declare no constraint and are unchanged.
+ * - bit 19 j1, the cutover: kitchen's document is v1's. /api/generated-tree retired with its route (one tool fewer);
+ *   carry-in #7 declares /api/events and /api/events-live as text/event-stream, so each is the emitter's stream-collect
+ *   tool (max_events, last_event_id, the events array), 186 and 187 tokens as surface's /out/sse is 205: kitchen
+ *   627 -> 905 total, its largest 71 -> 187 (get_api_events_live). The other four apps are unchanged.
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },
 	defaults: { largest: 51, total: 127 },
 	gateway: { largest: 141, total: 367 },
-	kitchen: { largest: 71, total: 627 },
+	kitchen: { largest: 187, total: 905 },
 	surface: { largest: 205, total: 2127 },
 }
 const TOKEN_HEADROOM = 0.2

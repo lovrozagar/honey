@@ -5,7 +5,7 @@ describe("the guard registry", () => {
 	it("names each guard once, with the module it lives in", () => {
 		const ids = GUARDS.map((g) => g.id)
 		expect(new Set(ids).size).toBe(ids.length)
-		expect(guardNamed("encoded-separator")).toMatchObject({ module: "_v0/src/request-path.ts" })
+		expect(guardNamed("v1-encoded-separator")).toMatchObject({ module: "packages/core/src/routing/request-path.ts" })
 	})
 
 	it("runs the plain suite when no mutant is named", () => {
