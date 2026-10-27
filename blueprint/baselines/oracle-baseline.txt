@@ -27,6 +27,13 @@ oracle.flaky: _v0/tests/unit/plugin/cli-generate.test.ts > honey generate CLI > 
             oracle.passed = 6712 + the flaky case = 6713.
 2026-10-14  bit 00 root move (packages/core/_v0 → /_v0, the complete v0 package, H21 option Z):
             unchanged, 6712 passed | 1 flaky | 40 skipped; oracle.scope is now _v0/tests
+2026-10-27  bit 19 i2 (ceb5570): v0 e76f7ba03c's 404 timing leg fixed red-first. It timed one cold
+            request per path (warm-up, up to 190x at idle) and passed an 8.3x length-leak mutant;
+            now warm medians, round-robin, within 4x. Count unchanged. Ported to v1 at j0a.
+2026-10-27  bit 19 j1: the v0 RUN retires with the workspace swap (R1). @lovrozagar/honey now
+            resolves to v1, so frozen v0 would test itself; the e2e cells, the oracle that matters,
+            run against v1. _v0/ stays on disk as the lose-nothing inventory source until bit 20;
+            oracle-count is retired and this file's numbers stop at the swap.
 
 Known flake (NOT a regression; pre-existing):
   _v0/tests/unit/plugin/cli-generate.test.ts:274
