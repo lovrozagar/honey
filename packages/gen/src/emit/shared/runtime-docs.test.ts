@@ -58,6 +58,12 @@ const PINS: readonly (readonly [string, keyof typeof FILES, string, string])[] =
 	],
 	["release", "csharp", "Runtime/Events.cs", "Each end lets the connection go: dispose it, or read it to its end."],
 	[
+		"ws release",
+		"python",
+		`${PYTHON}/ws.py`,
+		"Open it with ``async with`` or call ``close()`` to free its connection; a dropped socket frees it only when collected.",
+	],
+	[
 		"ws hook",
 		"ts",
 		"test-sdk.runtime.gen.ts",

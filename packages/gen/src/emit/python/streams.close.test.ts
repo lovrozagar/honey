@@ -7,9 +7,9 @@
  * (v0 N-CL). Consumers on the `sse`, `ws` and `realtime` registry documents.
  */
 import { describe, expect, it } from "vitest"
-import { sse as sseDocument } from "../shared/__fixtures__/documents-streams.ts"
+import { sse as sseDocument, ws as wsDocument } from "../shared/__fixtures__/documents-streams.ts"
 import { gone } from "../shared/__fixtures__/gone.ts"
-import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
+import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { consume, seen } from "./__fixtures__/consumer.ts"
 import type { FixtureKey } from "./__fixtures__/documents.ts"
 import { withPython } from "./__fixtures__/python-env.ts"
@@ -164,5 +164,41 @@ describe.skipIf(!PY)("freeing a stream's connection: async with, as the runtime 
 			{ ...seen(run), released: next.released(), says: events.replace(/\s*\n\s*/g, " ").includes(SCOPED_RELEASE) },
 			run.stderr,
 		).toEqual({ out: ["1", "2"], ran: true, released: true, says: true })
+	})
+})
+
+/* the scoped form for a socket: the first closed by its block, the second opened after it and held 0.5 s */
+const SCOPED_SOCKET = `async with aclient() as c:
+    async with await c.rooms.socket("r") as w:
+        note("open")
+    async with await c.rooms.socket("r") as again:
+        await asyncio.sleep(0.5)
+        note("again")`
+
+/** The release sentence the runtime's ws.py carries (k1): the scoped forms, never dropping it, free a connection. */
+const SOCKET_RELEASE =
+	"Open it with ``async with`` or call ``close()`` to free its connection; a dropped socket frees it only when collected."
+
+/** What the server had from the first socket when the second's upgrade came: its client frames, polled each 5 ms. */
+async function atSecondOpen(server: RecordingServer): Promise<readonly unknown[] | "never"> {
+	for (const start = Date.now(); Date.now() - start < 10_000; await new Promise((done) => setTimeout(done, 5)))
+		if (server.hops.length >= 2) return [...(server.streams[0]?.received ?? [])]
+	return "never"
+}
+
+describe.skipIf(!PY)("freeing a socket's connection: async with, as the runtime says (bit 19 k1)", SLOW, () => {
+	it("closes the socket on the server when its async with block ends, before the next opens, as ws.py tells a reader", async () => {
+		const open: Reply = { status: 101, ws: { steps: [] } }
+		const { first, run } = await served([open, open], async (server) => {
+			const program = consume("ws", "scoped_socket", { base: server.url, body: SCOPED_SOCKET })
+			return { first: await atSecondOpen(server), run: await program }
+		})
+		const doc = generatePythonSdk(wsDocument()).files["src/honey_sdk/_honey/ws.py"] ?? ""
+		expect({ ...seen(run), first, says: doc.replace(/\s*\n\s*/g, " ").includes(SOCKET_RELEASE) }, run.stderr).toEqual({
+			first: [{ code: 1000, kind: "close", reason: "" }],
+			out: ["open", "again"],
+			ran: true,
+			says: true,
+		})
 	})
 })

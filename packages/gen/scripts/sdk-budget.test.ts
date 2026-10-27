@@ -464,8 +464,10 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * +919, transport.py +429, transport_ws.py +171, transport_sse.py +171, exchange.py +98).
  * Bit 19 k1, +245 B of doc only, to 88,676 B: events.py +107 (`async with` or `aclose()` frees the connection, a
  * dropped stream only when collected), ws.py +138 (the dial runs no hook and no on_auth_expired refresh).
+ * Then +106 B of doc only, to 88,782 B: ws.py +106 (`async with` or `close()` frees a socket's connection, a dropped
+ * socket only when collected).
  */
-const PYTHON_RUNTIME_BYTES = 88_676
+const PYTHON_RUNTIME_BYTES = 88_782
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
