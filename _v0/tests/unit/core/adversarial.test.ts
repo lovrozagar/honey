@@ -209,17 +209,23 @@ describe("adversarial: timing attacks", () => {
 		const app = honey<{}>()
 		app.get("/secret-admin-panel").handler((ctx) => ctx.res.text("ok", "admin"))
 
-		const times: number[] = []
-		for (const path of ["/a", "/aaaaaaaaaa", "/secret-admin-pane", "/zzzzzzzzzzz"]) {
-			const start = performance.now()
-			await app.fetch(new Request(`http://localhost${path}`), {})
-			times.push(performance.now() - start)
-		}
+		const paths = ["/a", "/aaaaaaaaaa", "/secret-admin-pane", "/zzzzzzzzzzz"]
+		/* warmed first: one cold request per path timed the first request's warm-up, not the path (up to 190x idle) */
+		for (let round = 0; round < 50; round++)
+			for (const path of paths) await app.fetch(new Request(`http://localhost${path}`), {})
+		/* round-robin, so load on the machine lands on every path alike; each path judged by its median */
+		const samples = paths.map((): number[] => [])
+		for (let round = 0; round < 200; round++)
+			for (const [i, path] of paths.entries()) {
+				const start = performance.now()
+				await app.fetch(new Request(`http://localhost${path}`), {})
+				samples[i]?.push(performance.now() - start)
+			}
+		const medians = samples.map((times) => times.sort((a, b) => a - b)[times.length >> 1] ?? 0)
 
-		/* all 404 times should be within 10x of each other — no path-length timing leak */
-		const max = Math.max(...times)
-		const min = Math.min(...times)
-		expect(max / Math.max(min, 0.001)).toBeLessThan(100)
+		/* warm medians sit within 1.5x; 4x leaves headroom yet reds a leak linear in path length (8.6x over these paths),
+		   which the old 10x let through */
+		expect(Math.max(...medians) / Math.max(Math.min(...medians), 0.0001)).toBeLessThan(4)
 	})
 })
 
