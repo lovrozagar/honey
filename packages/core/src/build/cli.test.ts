@@ -188,11 +188,30 @@ describe("honey generate (bit 19 h2), continued (3)", () => {
 		"reports a failed generation and exits 1",
 		async () => {
 			const { dir } = fresh({ "src/app.ts": "export const app = 1\n" })
-			expect(await run(["generate", "--app", "src/app.ts"], dir)).toEqual({
-				err: `honey: generation failed: Expected a honey app as the app or default export of ${join(dir, "src/app.ts")}\n`,
+			const { err, out, status } = await run(["generate", "--app", "src/app.ts"], dir)
+			expect({ first: err.split("\n")[0], out, status }).toEqual({
+				first: `honey: generation failed: Expected a honey app as the app or default export of ${join(dir, "src/app.ts")}`,
 				out: "",
 				status: 1,
 			})
+		},
+		SLOW,
+	)
+})
+
+describe("honey generate's failure report (bit 19 j2)", () => {
+	it(
+		"follows a failed generation's message with the stack, naming the frame that threw",
+		async () => {
+			/* the diagnosis a once-seen failure lacked (j2): the message alone named no frame */
+			const { dir } = fresh({ "src/app.ts": 'export const app = 1\nthrow new Error("boom at load")\n' })
+			const { err, status } = await run(["generate", "--app", "src/app.ts"], dir)
+			const [first, ...frames] = err.trimEnd().split("\n")
+			expect([status, first, frames.some((line) => /^\s+at .*src\/app\.ts:2\b/.test(line))]).toEqual([
+				1,
+				"honey: generation failed: boom at load",
+				true,
+			])
 		},
 		SLOW,
 	)

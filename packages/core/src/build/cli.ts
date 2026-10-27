@@ -159,8 +159,18 @@ export async function main(argv: readonly string[], io: Io, options: RunOptions 
 		io.err(
 			error instanceof UsageError
 				? `honey: ${error.message}\n\n${USAGE}\n`
-				: `honey: generation failed: ${(error as Error).message}\n`,
+				: `honey: generation failed: ${(error as Error).message}\n${framesOf(error)}`,
 		)
 		return 1
 	}
+}
+
+/** The stack frames of `error`, a line each after the message, so a failure names where it was thrown. */
+function framesOf(error: unknown): string {
+	/* only frame lines survive: a missing stack's "undefined" and the stack's own message line are dropped */
+	return String((error as Error).stack)
+		.split("\n")
+		.filter((line) => /^\s+at /.test(line))
+		.map((line) => `${line}\n`)
+		.join("")
 }

@@ -17,6 +17,7 @@ import {
 	BUILD_SPECS,
 	type BuildSpec,
 	buildCommand,
+	overBuildCeiling,
 	buildCwd,
 	entryArtifact,
 	isRuntimeId,
@@ -157,9 +158,8 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 	}
 
 	const kb = gzipKb(join(cwd, entryArtifact(spec)))
-	if (ms > spec.maxBuildMs) {
-		return { detail: `built in ${ms}ms, over its ${spec.maxBuildMs}ms ceiling`, gzipKb: kb, ms, name, status: "fail" }
-	}
+	const slow = overBuildCeiling(spec, runtime, ms)
+	if (slow !== null) return { detail: slow, gzipKb: kb, ms, name, status: "fail" }
 	if (kb > spec.maxGzipKb) {
 		return {
 			detail: `bundle ${kb}KB gzipped exceeds the ${spec.maxGzipKb}KB budget — an optional dependency is likely being bundled`,
