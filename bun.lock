@@ -8,7 +8,7 @@
         "@clack/prompts": "^0.11.0",
         "@commitlint/cli": "21.2.4",
         "@commitlint/config-conventional": "21.2.4",
-        "@lovrozagar/grunt": "0.11.2",
+        "@lovrozagar/grunt": "0.12.0",
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/core": "2.11.0",
         "@opentelemetry/sdk-trace-base": "2.11.0",
@@ -496,7 +496,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@lovrozagar/grunt": ["@lovrozagar/grunt@0.11.2", "", { "dependencies": { "@clack/prompts": "^0.11.0", "cross-spawn": "^7.0.6", "smol-toml": "^1.8.0" }, "bin": { "grunt": "bin/grunt.js" } }, "sha512-Bbv928IPeLBQUkqlP5CMLP+oCmfuYsvq1dwq7EmsQEXlyxFLICVDx4+BlAo+NICwGUyqBnvGY9M3p0PbiPKlBQ=="],
+    "@lovrozagar/grunt": ["@lovrozagar/grunt@0.12.0", "", { "dependencies": { "@clack/prompts": "^0.11.0", "cross-spawn": "^7.0.6", "smol-toml": "^1.8.0" }, "bin": { "grunt": "bin/grunt.js" } }, "sha512-/871aFFJE5mhu7/vHPrEchpk9UcdKQZfEwH/dEFAKvsFTMog6jxg/wfHJ464hMNUK65U4gz4ckSA1NuIapZRvw=="],
 
     "@lovrozagar/honey": ["@lovrozagar/honey@workspace:_v0"],
 
