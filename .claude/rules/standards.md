@@ -11,6 +11,7 @@ Every change starts with a test: a bug, a reported issue, a review finding, a fe
 ## Every gate passes before moving on
 
 `bun run verify` runs every gate in order, stops at the first failure, and stamps the commit when all pass. For honey: `fmt:check`, `lint`, `typecheck`, `test`, then:
+- `generate:check`
 - `typecheck:consumers`
 - `test:consumers`
 - `test:e2e`

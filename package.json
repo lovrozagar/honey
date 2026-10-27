@@ -126,6 +126,7 @@
 	"standards": {
 		"repo": "honey",
 		"gates": [
+			"generate:check",
 			"typecheck:consumers",
 			"test:consumers",
 			"test:e2e"
