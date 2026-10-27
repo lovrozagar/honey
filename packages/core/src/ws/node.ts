@@ -111,7 +111,9 @@ export function nodeWebSocket(options?: NodeWebSocketOptions): WSAdapter {
 	/* the request being upgraded, for the protocol choice: ws asks synchronously within handleUpgrade */
 	let upgrading: Request | null = null
 	const serverOf = async (): Promise<WebSocketServer> => {
-		const { WebSocketServer } = (await loadWs()) as WsModule
+		/* ws's ESM entry, or its CommonJS one under default: what Node resolves a retry to once ws was installed */
+		const ws = (await loadWs()) as WsModule | { default: WsModule }
+		const { WebSocketServer } = "WebSocketServer" in ws ? ws : ws.default
 		server ??= new WebSocketServer({
 			/* asked only within handleUpgrade, so the request is the one being upgraded */
 			handleProtocols: () => selectProtocol(upgrading as Request, resolved) ?? false,

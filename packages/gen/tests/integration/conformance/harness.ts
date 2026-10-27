@@ -8,6 +8,7 @@ import { type ChildProcess, spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { BUILT_INS } from "../../../src/emit/cli/commands.ts"
+import { recordCell } from "./gate.ts"
 import { type Cell, cellsFor, compareCell, type Observed, type Target, type WireHop } from "./matrix.ts"
 
 export type ReferenceApp = {
@@ -41,6 +42,8 @@ export type TargetRunner = {
 }
 
 const APP = fileURLToPath(new URL("../../../../core/tests/integration/conformance/app.ts", import.meta.url))
+/** where each cell's observation is recorded for the release's conformance gate (gate.ts); unset, nowhere */
+const RECORD = process.env.HONEY_CONFORMANCE_RECORD
 const READY_MS = 15_000
 const KILL_MS = 5_000
 /** stderr kept for a failure message */
@@ -155,10 +158,14 @@ export function unknownOperations(cells: readonly Cell[], document: Record<strin
 /**
  * One `it` per cell of `runner.target` against one app for the file: mark the wire, run the cell,
  * read the wire, compare. Nothing is skippable: a runner that cannot express a cell throws, and only
- * the cells it `lacks` by design are left out. Returns the file's app, for a target's extra cases.
+ * the cells it `lacks` by design are left out. Each cell's observation, and each cell lacked, is recorded for the
+ * release's conformance gate. Returns the file's app, for a target's extra cases.
  */
 export function targetSuite(runner: TargetRunner): () => ReferenceApp {
-	const cells = cellsFor(runner.target).filter((cell) => !runner.lacks?.(cell))
+	const { target } = runner
+	const all = cellsFor(target)
+	const lacked = all.filter((cell) => runner.lacks?.(cell))
+	const cells = all.filter((cell) => !lacked.includes(cell))
 	const variant = runner.variant === undefined ? "" : ` (${runner.variant})`
 	let app: ReferenceApp | undefined
 	const current = (): ReferenceApp => {
@@ -170,6 +177,7 @@ export function targetSuite(runner: TargetRunner): () => ReferenceApp {
 			app = await startReferenceApp()
 			await runner.prepare(app)
 			expect(unknownOperations(cells, app.document), "operations the grid calls but the document lacks").toEqual([])
+			for (const { key } of lacked) recordCell(RECORD, { key, lacks: true, target })
 		}, runner.prepareTimeoutMs)
 		afterAll(() => app?.stop())
 		for (const cell of cells) {
@@ -178,7 +186,9 @@ export function targetSuite(runner: TargetRunner): () => ReferenceApp {
 				const live = current()
 				const since = await live.mark()
 				const observed = await runner.run(cell, live)
-				expect(compareCell(cell, observed, await live.wire(since))).toEqual([])
+				const wire = await live.wire(since)
+				recordCell(RECORD, { key: cell.key, observed, target, wire })
+				expect(compareCell(cell, observed, wire)).toEqual([])
 			})
 		}
 	})

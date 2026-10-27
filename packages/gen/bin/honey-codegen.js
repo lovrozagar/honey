@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The honey-codegen bin (bit 17 phase h). Bun runs the TypeScript source; a repository checkout (marked by
-// tsconfig.json, which is not published) runs the source on Node too, through jiti, so a stale dist/ never runs; an
-// installed package on any other runtime runs the compiled JavaScript.
+// The honey-codegen bin (bit 17 phase h). A repository checkout (marked by tsconfig.json, which is not published)
+// runs the TypeScript source, natively on Bun and through jiti on Node, so a stale dist/ never runs; an installed
+// package runs the compiled JavaScript on any runtime (the tarball ships dist/, not src/).
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { basename } from "node:path"
@@ -44,8 +44,8 @@ function handOff(bun) {
 }
 
 async function entry() {
-	if (isBun) return import("../src/cli.ts")
 	if (checkout) {
+		if (isBun) return import("../src/cli.ts")
 		const { createJiti } = await import("jiti")
 		return createJiti(import.meta.url).import("../src/cli.ts")
 	}

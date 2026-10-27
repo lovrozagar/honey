@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # release.yml runs all of it on the tagged commit before it publishes
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -23,10 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
@@ -42,8 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
@@ -62,24 +64,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # the integration suites run server fixtures as `node x.ts`: they need Node's type stripping,
       # which the runner image's default Node may not have
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       # gen compiles and runs the emitted Go SDK at the toolchain .go-version pins (GOTOOLCHAIN through
       # its go-env fixture), with the module cache and the pinned toolchain under ~/.cache/honey-tmp/go
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: .go-version
           cache: false
       # the pinned and floor toolchains and the WebSocket module: a change in any saves a new cache
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/honey-tmp/go/mod
           key: ${{ runner.os }}-gomod-test-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
@@ -90,7 +91,7 @@ jobs:
       # restores the last set and rebuilds only the SDKs whose content changed. It is apart from the module
       # cache above (no shared path), which changes only with the toolchains and the dependency set. This job
       # saves both; gen-rust only restores them.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/go/cache
@@ -137,6 +138,9 @@ jobs:
       - run: bun run test:v0
       - if: ${{ !cancelled() }}
         run: bun run test:v1
+        env:
+          # runtime-bundle's legs build with the pinned Bun (packageManager): a missing one fails instead of skipping
+          HONEY_REQUIRE_TOOLCHAINS: "1"
       # gen's shard: thresholds off here, since a shard covers only what its projects run; gen-coverage holds the
       # merge to them. The blob carries the results and the coverage, and the default reporter prints the run.
       - name: gen (unit and go)
@@ -165,7 +169,7 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/go/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/go-sdk-start" -printf '%h\0' | xargs -0r rm -rf
-      - uses: actions/upload-artifact@v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gen-blob-test
           path: ${{ runner.temp }}/gen-blob/test.json
@@ -183,25 +187,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # vitest runs on node
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: .go-version
           cache: false
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/honey-tmp/go/mod
           key: ${{ runner.os }}-gomod-test-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
           restore-keys: ${{ runner.os }}-gomod-test-
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/go/cache
@@ -228,7 +231,7 @@ jobs:
       # the registry, both target dirs and the compiled crates (rust/__fixtures__/compiled.ts), keyed like
       # gobuild on every input of a Rust compile (toolchain-projects.test.ts holds it to that); the emitted
       # crates carry their lock, so the registry changes only with what the key already hashes
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/rust/cargo
@@ -245,7 +248,7 @@ jobs:
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-rust-
       # gen runs every Python command through its python-env fixture, installed as in gen-python (which says why)
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version-file: uv.toml
           enable-cache: false
@@ -253,7 +256,7 @@ jobs:
         run: |
           UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_TOOL_DIR="$HOME/.cache/honey-tmp/python/uv/tools" UV_TOOL_BIN_DIR="$HOME/.cache/honey-tmp/python/uv/bin" uv tool install --no-config --no-python-downloads uv=="$(sed -n 's/^required-version = "==\(.*\)"$/\1/p' uv.toml)"
           UV_CACHE_DIR="$HOME/.cache/honey-tmp/python/uv-cache" UV_PYTHON_INSTALL_DIR="$HOME/.cache/honey-tmp/python/pythons" UV_PYTHON_BIN_DIR="$HOME/.cache/honey-tmp/python/pybin" "$HOME/.cache/honey-tmp/python/uv/bin/uv" python install --no-bin "$(cat .python-version)" 3.11.4
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/python/mypy
@@ -271,7 +274,7 @@ jobs:
       - name: .NET (global.json's SDK, and the seed restore)
         run: |
           V="$(sed -n 's/.*"version": "\(.*\)",/\1/p' global.json)" && D="$HOME/.cache/honey-tmp/dotnet" && F="$(git rev-parse --show-toplevel)/packages/gen/src/emit/csharp/__fixtures__" && T="$D/toolchain/$V" && mkdir -p "$D/dl" "$D/home" "$D/tmp" && curl -fsSL -o "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" "https://builds.dotnet.microsoft.com/dotnet/Sdk/$V/dotnet-sdk-$V-linux-x64.tar.gz" && (cd "$D/dl" && sha512sum -c "$F/dotnet-sdk.sha512") && rm -rf "$T" "$T.partial" && mkdir -p "$T.partial" && tar -xzf "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" -C "$T.partial" && mv "$T.partial" "$T" && rm "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" && DOTNET_CLI_HOME="$D/home" DOTNET_ROOT="$D/toolchain/$V" NUGET_HTTP_CACHE_PATH="$D/nuget-http" NUGET_PACKAGES="$D/nuget" NUGET_PLUGINS_CACHE_PATH="$D/nuget-plugins" TMPDIR="$D/tmp" HOME="$D/home" DOTNET_ADD_GLOBAL_TOOLS_TO_PATH="false" DOTNET_CLI_TELEMETRY_OPTOUT="1" DOTNET_CLI_UI_LANGUAGE="en" DOTNET_CLI_USE_MSBUILD_SERVER="0" DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE="1" DOTNET_GENERATE_ASPNET_CERTIFICATE="false" DOTNET_NOLOGO="1" DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1" MSBUILDDISABLENODEREUSE="1" NUGET_XMLDOC_MODE="skip" UseSharedCompilation="false" "$T/dotnet" restore "$F/seed/Seed.csproj" --source https://api.nuget.org/v3/index.json --artifacts-path "$D/tmp/seed"
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/dotnet/nuget
@@ -293,7 +296,7 @@ jobs:
         run: |
           P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/java/__fixtures__/java-pins.json" && D="$HOME/.cache/honey-tmp/java" && G="$(jq -r .googleJavaFormat.version "$P")" && W="$(jq -r .gradle.version "$P")" && mkdir -p "$D/dl" "$D/toolchain" "$D/repo" "$D/tmp" && for k in $(jq -r '.jdk | keys[]' "$P"); do R="$(jq -r --arg k "$k" '.jdk[$k].release' "$P")" && curl -fsSL -o "$D/dl/$R.tar.gz" "$(jq -r --arg k "$k" '.jdk[$k].url' "$P")" && echo "$(jq -r --arg k "$k" '.jdk[$k].sha256' "$P")  "$D/dl/$R.tar.gz"" | sha256sum -c - && rm -rf "$D/toolchain/$R" "$D/toolchain/$R.partial" && mkdir -p "$D/toolchain/$R.partial" && tar -xzf "$D/dl/$R.tar.gz" -C "$D/toolchain/$R.partial" --strip-components=1 && mv "$D/toolchain/$R.partial" "$D/toolchain/$R" && rm "$D/dl/$R.tar.gz" || exit 1; done && curl -fsSL -o "$D/toolchain/google-java-format-$G.jar" "$(jq -r --arg k "$k" '.googleJavaFormat.url' "$P")" && echo "$(jq -r --arg k "$k" '.googleJavaFormat.sha256' "$P")  "$D/toolchain/google-java-format-$G.jar"" | sha256sum -c - && curl -fsSL -o "$D/dl/gradle.zip" "$(jq -r --arg k "$k" '.gradle.url' "$P")" && echo "$(jq -r --arg k "$k" '.gradle.sha256' "$P")  "$D/dl/gradle.zip"" | sha256sum -c - && rm -rf "$D/toolchain/gradle-$W" && unzip -q "$D/dl/gradle.zip" -d "$D/toolchain" && rm "$D/dl/gradle.zip" && for a in $(jq -r '.jackson.artifacts[].path' "$P"); do mkdir -p "$D/repo/$(dirname "$a")" && curl -fsSL -o "$D/repo/$a" "$(jq -r .jackson.repository "$P")/$a" && echo "$(jq -r --arg a "$a" '.jackson.artifacts[] | select(.path == $a) | .sha256' "$P")  $D/repo/$a" | sha256sum -c - || exit 1; done
       # restored, never saved: gen-java owns it
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/java/sdk
@@ -322,7 +325,7 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/rust/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/rust-sdk-start" -printf '%h\0' | xargs -0r rm -rf
-      - uses: actions/upload-artifact@v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gen-blob-rust
           path: ${{ runner.temp }}/gen-blob/rust.json
@@ -335,13 +338,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # vitest runs on node
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       # gen runs every Python command through its python-env fixture, with the uv uv.toml pins and the interpreters
@@ -349,7 +351,7 @@ jobs:
       # setup-uv provides a uv at that pin (required-version fails any other), which installs the pinned uv into the
       # cache, which installs the interpreters: the commands a missing one names locally. None is cached: each
       # installs in about a second.
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version-file: uv.toml
           enable-cache: false
@@ -361,7 +363,7 @@ jobs:
       # input of a Python gate (toolchain-projects.test.ts holds it to that). uv's wheel cache is not saved: a venv
       # fetches its wheels once per run, then installs offline, and the markers that vouch for them go with it.
       # This job saves it; gen-rust only restores it.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/python/mypy
@@ -389,7 +391,7 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/python/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/python-sdk-start" -printf '%h\0' | xargs -0r rm -rf
-      - uses: actions/upload-artifact@v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gen-blob-python
           path: ${{ runner.temp }}/gen-blob/python.json
@@ -402,20 +404,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # vitest runs on node
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       # the gated SDKs, the driver and the one build-time package (Microsoft.NET.ILLink.Tasks), keyed like the
       # python and rust caches on every input of a .NET gate (toolchain-projects.test.ts holds it to that); the
       # SDK itself is not cached: the install below fetches the pinned tarball and checks its sha512. This job
       # saves it; gen-rust only restores it.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/dotnet/nuget
@@ -450,7 +451,7 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/dotnet/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/csharp-sdk-start" -printf '%h\0' | xargs -0r rm -rf
-      - uses: actions/upload-artifact@v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gen-blob-csharp
           path: ${{ runner.temp }}/gen-blob/csharp.json
@@ -462,19 +463,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # vitest runs on node
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       # the compiled SDKs and Gradle's home, keyed like the other compile caches on every input of a Java gate
       # (toolchain-projects.test.ts holds it to that); the toolchain itself is not cached: the install below fetches
       # each pin and checks its sha256. This job saves it; gen-rust and the harness only restore it.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/java/sdk
@@ -507,7 +507,7 @@ jobs:
         run: >-
           find ~/.cache/honey-tmp/java/sdk -mindepth 1 -maxdepth 1 -type d
           ! -newer "$RUNNER_TEMP/java-sdk-start" -print0 | xargs -0r rm -rf
-      - uses: actions/upload-artifact@v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gen-blob-java
           path: ${{ runner.temp }}/gen-blob/java.json
@@ -521,16 +521,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: gen-blob-*
           path: ${{ runner.temp }}/gen-blob
@@ -543,18 +542,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Node 22.12 has no shouldUpgradeCallback, so it exercises the adapter's 'upgrade' fallback
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22.12.0"
-          package-manager-cache: false
       - run: echo "HONEY_TEST_NODE_LEGACY=$(which node)" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
@@ -569,8 +566,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
@@ -584,7 +581,7 @@ jobs:
       - run: bun run bench:streaming || bun run bench:streaming
       # the Node bridge's per-request cost against v0's, on Node itself (node:http under Bun is
       # Bun's own implementation); a bare node:http handler is the reported floor
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
       - run: bun run bench:adapter || bun run bench:adapter
@@ -598,13 +595,12 @@ jobs:
       matrix:
         runtime: [node, bun]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # the node tier runs the built bundles on the oldest supported Node line, not the image default
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
@@ -623,12 +619,11 @@ jobs:
         # the oldest supported LTS and the current release: Node behavior differs across versions
         node: ["22", "current"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node }}
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
@@ -654,15 +649,14 @@ jobs:
           - runtime: cf-workers
             script: test:e2e:cf
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       # cf-workers still runs node for wrangler, playwright and the type-stripped fixtures
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node || 'current' }}
-          package-manager-cache: false
       - run: bun install --frozen-lockfile
       - run: bun run generate
       - run: bun run ${{ matrix.script }}
@@ -672,13 +666,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # vitest and the emitted SDK's WebSocket run on node: the global WebSocket needs Node >= 22
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: current
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
       # the MCP server's conformance runner requires the pinned clients here (HONEY_REQUIRE_TOOLCHAINS): as in the test job
@@ -686,12 +679,12 @@ jobs:
         run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/mcp/__fixtures__" && D="$HOME/.cache/honey-tmp/mcp-clients" && rm -rf "$D.partial" && mkdir -p "$D.partial" && cp "$P/client-pins.json" "$D.partial/package.json" && cp "$P/client-lock.json" "$D.partial/package-lock.json" && (cd "$D.partial" && npm ci --ignore-scripts --no-audit --no-fund) && sha256sum "$P/client-lock.json" | cut -d" " -f1 > "$D.partial/lock.sha256" && rm -rf "$D" && mv "$D.partial" "$D"
       # the pinned Go, the same as the test job and every local run; emitted go.mod files keep the go
       # 1.24 floor (`omitzero` on tri-state fields), which go vet enforces
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: .go-version
           cache: false
       # the pinned and floor toolchains and the WebSocket module: a change in any saves a new cache
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/honey-tmp/go/mod
           key: ${{ runner.os }}-gomod-harness-${{ hashFiles('.go-version', 'packages/gen/src/emit/go/__fixtures__/go-env.ts', 'packages/gen/src/emit/go/sdk.ts') }}
@@ -701,7 +694,7 @@ jobs:
       # setup-uv provides a uv at that pin (required-version fails any other), which installs the pinned uv into the
       # cache, which installs the interpreters: the commands a missing one names locally. None is cached: each
       # installs in about a second.
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version-file: uv.toml
           enable-cache: false
@@ -723,7 +716,7 @@ jobs:
         run: |
           V="$(sed -n 's/.*"version": "\(.*\)",/\1/p' global.json)" && D="$HOME/.cache/honey-tmp/dotnet" && F="$(git rev-parse --show-toplevel)/packages/gen/src/emit/csharp/__fixtures__" && T="$D/toolchain/$V" && mkdir -p "$D/dl" "$D/home" "$D/tmp" && curl -fsSL -o "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" "https://builds.dotnet.microsoft.com/dotnet/Sdk/$V/dotnet-sdk-$V-linux-x64.tar.gz" && (cd "$D/dl" && sha512sum -c "$F/dotnet-sdk.sha512") && rm -rf "$T" "$T.partial" && mkdir -p "$T.partial" && tar -xzf "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" -C "$T.partial" && mv "$T.partial" "$T" && rm "$D/dl/dotnet-sdk-$V-linux-x64.tar.gz" && DOTNET_CLI_HOME="$D/home" DOTNET_ROOT="$D/toolchain/$V" NUGET_HTTP_CACHE_PATH="$D/nuget-http" NUGET_PACKAGES="$D/nuget" NUGET_PLUGINS_CACHE_PATH="$D/nuget-plugins" TMPDIR="$D/tmp" HOME="$D/home" DOTNET_ADD_GLOBAL_TOOLS_TO_PATH="false" DOTNET_CLI_TELEMETRY_OPTOUT="1" DOTNET_CLI_UI_LANGUAGE="en" DOTNET_CLI_USE_MSBUILD_SERVER="0" DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE="1" DOTNET_GENERATE_ASPNET_CERTIFICATE="false" DOTNET_NOLOGO="1" DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1" MSBUILDDISABLENODEREUSE="1" NUGET_XMLDOC_MODE="skip" UseSharedCompilation="false" "$T/dotnet" restore "$F/seed/Seed.csproj" --source https://api.nuget.org/v3/index.json --artifacts-path "$D/tmp/seed"
       # restored, never saved: gen-csharp owns it; the served SDK builds here each run
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/dotnet/nuget
@@ -745,7 +738,7 @@ jobs:
         run: |
           P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/java/__fixtures__/java-pins.json" && D="$HOME/.cache/honey-tmp/java" && G="$(jq -r .googleJavaFormat.version "$P")" && W="$(jq -r .gradle.version "$P")" && mkdir -p "$D/dl" "$D/toolchain" "$D/repo" "$D/tmp" && for k in $(jq -r '.jdk | keys[]' "$P"); do R="$(jq -r --arg k "$k" '.jdk[$k].release' "$P")" && curl -fsSL -o "$D/dl/$R.tar.gz" "$(jq -r --arg k "$k" '.jdk[$k].url' "$P")" && echo "$(jq -r --arg k "$k" '.jdk[$k].sha256' "$P")  "$D/dl/$R.tar.gz"" | sha256sum -c - && rm -rf "$D/toolchain/$R" "$D/toolchain/$R.partial" && mkdir -p "$D/toolchain/$R.partial" && tar -xzf "$D/dl/$R.tar.gz" -C "$D/toolchain/$R.partial" --strip-components=1 && mv "$D/toolchain/$R.partial" "$D/toolchain/$R" && rm "$D/dl/$R.tar.gz" || exit 1; done && curl -fsSL -o "$D/toolchain/google-java-format-$G.jar" "$(jq -r --arg k "$k" '.googleJavaFormat.url' "$P")" && echo "$(jq -r --arg k "$k" '.googleJavaFormat.sha256' "$P")  "$D/toolchain/google-java-format-$G.jar"" | sha256sum -c - && curl -fsSL -o "$D/dl/gradle.zip" "$(jq -r --arg k "$k" '.gradle.url' "$P")" && echo "$(jq -r --arg k "$k" '.gradle.sha256' "$P")  "$D/dl/gradle.zip"" | sha256sum -c - && rm -rf "$D/toolchain/gradle-$W" && unzip -q "$D/dl/gradle.zip" -d "$D/toolchain" && rm "$D/dl/gradle.zip" && for a in $(jq -r '.jackson.artifacts[].path' "$P"); do mkdir -p "$D/repo/$(dirname "$a")" && curl -fsSL -o "$D/repo/$a" "$(jq -r .jackson.repository "$P")/$a" && echo "$(jq -r --arg a "$a" '.jackson.artifacts[] | select(.path == $a) | .sha256' "$P")  $D/repo/$a" | sha256sum -c - || exit 1; done
       # restored, never saved: gen-java owns it
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/java/sdk
@@ -759,7 +752,7 @@ jobs:
             'packages/gen/tests/integration/conformance/matrix.ts') }}
           restore-keys: ${{ runner.os }}-java-
       # gen's Rust caches for the toolchain files run below, keyed as in the test job
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/rust/cargo
@@ -779,7 +772,7 @@ jobs:
       # the gated SDKs and their mypy caches (python/__fixtures__/compiled.ts), keyed like gobuild and rust on every
       # input of a Python gate (toolchain-projects.test.ts holds it to that). uv's wheel cache is not saved: a venv
       # fetches its wheels once per run, then installs offline, and the markers that vouch for them go with it.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/honey-tmp/python/mypy
@@ -801,7 +794,7 @@ jobs:
       - id: cargo-week
         run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
       - id: cargo-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry
@@ -832,6 +825,14 @@ jobs:
           HONEY_REQUIRE_PYTHON: "1"
           # a missing Go, Rust, Python or .NET fails gen's conformance and harness files for it instead of skipping them
           HONEY_REQUIRE_TOOLCHAINS: "1"
+          # each conformance cell's observation, for the conformance job's gate
+          HONEY_CONFORMANCE_RECORD: ${{ runner.temp }}/conformance-cells
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: conformance-cells
+          path: ${{ runner.temp }}/conformance-cells
+          if-no-files-found: error
+          retention-days: 7
       # as in the test job: the saved cache keeps only the Rust SDKs this run built or reused
       - name: Prune the Rust SDKs this run did not use
         run: >-
@@ -842,10 +843,30 @@ jobs:
           find ~/.cache/honey-tmp/python/sdk -mindepth 2 -maxdepth 2 -name .complete
           ! -newer "$RUNNER_TEMP/python-sdk-start" -printf '%h\0' | xargs -0r rm -rf
       - if: always() && steps.cargo-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             .cache/cargo-target
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
+
+  # the release's conformance gate (bit 19): every cell of every target held by the harness's record (compareCell),
+  # or lacked by design; a regressed or unrun cell fails it, and release.yml publishes only on this workflow green
+  conformance:
+    name: conformance gate
+    needs: harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: conformance-cells
+          path: ${{ runner.temp }}/conformance-cells
+      - env:
+          CELLS: ${{ runner.temp }}/conformance-cells
+        run: bun packages/gen/tests/integration/conformance/gate.ts "$CELLS"

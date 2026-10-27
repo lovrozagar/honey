@@ -29,6 +29,8 @@ const SOURCE = /\.[cm]?[jt]s$/
 const TEST = /\.test\.[cm]?[jt]s$/
 
 function repoPath(path: string, pkg: string): string {
+	/* `./x` names a file at the repo root, as git lists it */
+	if (path.startsWith("./")) return path.slice(2)
 	return REPO_PREFIXES.some((prefix) => path.startsWith(prefix)) ? path : `packages/${pkg}/${path}`
 }
 

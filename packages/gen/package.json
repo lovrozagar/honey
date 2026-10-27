@@ -1,7 +1,6 @@
 {
 	"name": "@lovrozagar/honey-codegen",
 	"version": "1.0.0",
-	"private": true,
 	"description": "Generates SDKs (TypeScript, Go, Rust, Python, C#, Java), a CLI and an MCP server from any OpenAPI 3.x document.",
 	"license": "MIT",
 	"author": "lovrozagar",
@@ -13,12 +12,30 @@
 	"bin": {
 		"honey-codegen": "bin/honey-codegen.js"
 	},
+	"files": [
+		"bin",
+		"dist"
+	],
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts",
-		"./cli": "./src/cli.ts"
+		".": {
+			"honey-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./cli": {
+			"honey-source": "./src/cli.ts",
+			"types": "./dist/cli.d.ts",
+			"default": "./dist/cli.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
 	},
 	"scripts": {
+		"prepack": "bun scripts/build.ts",
 		"capture:tokens": "bun scripts/capture-token-budget.ts",
 		"test": "vitest run --coverage",
 		"test:harness": "vitest run --mode harness",
@@ -31,7 +48,7 @@
 		"@total-typescript/ts-reset": "catalog:",
 		"@types/node": "catalog:",
 		"@vitest/coverage-v8": "4.1.10",
-		"oxfmt": "^0.63.0",
+		"oxfmt": "0.63.0",
 		"ts-morph": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"

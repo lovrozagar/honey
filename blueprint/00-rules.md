@@ -103,6 +103,8 @@ Runtime detection (`detect-runtime`) returns a pure value; adapters branch on it
 | `jiti` | runtime dep | core | 2.7.0 | — | config/plugin loading |
 | `ws` | optional peer | **core** | the exact tested version | `>=` that version | the Node WebSocket adapter only |
 | `ts-morph` | optional peer | **gen** (not core) | the exact tested version | `>=` that version | `honey-codegen` type-extraction entry only — `honey/boundaries` keeps it out of core |
+| `oxfmt` | optional peer | **gen** | the exact tested version | `>=` that version | `honey-codegen`'s CLI only, imported lazily for the TS post-pass (Q12); absent, TS goes out as emitted |
+| `@lovrozagar/honey-codegen` | optional peer | **core** | `workspace:*` | `>=` the release | `src/build/` only, through `import()` or a type-only import (Q2) |
 
 (Exact dev versions are filled from the repo's lockfile at bit 00; the shape — exact dev + `>=` peer — is the pin.) `@lovrozagar/honey` declares `"sideEffects": false` for tree-shakeability (H19.3) — the whole runtime is side-effect-free, including `trust` (plain core code, no self-registration).
 

@@ -28,7 +28,8 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./ip-restrict` | KEEP | |
 | `./logger` | KEEP | the only `console` owner |
 | `./node` | KEEP | Node adapter |
-| `./openapi`, `./openapi/spec`, `./openapi/scalar`, `./openapi/swagger` | MODIFY [B1,B2,B3] | configurable `servers` + variables, `tags`/`externalDocs`, `webhooks` |
+| `./openapi`, `./openapi/scalar`, `./openapi/swagger` | MODIFY [B1,B2,B3] | configurable `servers` + variables, `tags`/`externalDocs`, `webhooks` |
+| `./openapi/spec` | DELETE (bit 19 i) | v0's `spec()` handler is `serveOpenApi` on `./openapi` |
 | `./plugin` | KEEP | |
 | `./powered-by`, `./pretty-json`, `./server-timing`, `./request-id`, `./timeout` | KEEP | |
 | `./proxy` | MODIFY [H15] | Deno branch removed |
@@ -37,8 +38,9 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./serve` | MODIFY [H15] | Deno runtime removed; node/bun/cf detection kept |
 | `./static` | MODIFY [A3] | Range / 206 / `Accept-Ranges` |
 | `./telemetry/otel` | KEEP | |
-| `./testing` | KEEP | |
-| `./trust`, `./tree` | KEEP | |
+| `./testing` | KEEP | the export lands with `src/testing/testing.ts` at bit 20 |
+| `./trust` | DELETE [H23] | `trustProxy` is cut; `ctx.ip` is the platform peer |
+| `./tree` | KEEP | |
 | `./ws/bun`, `./ws/cloudflare`, `./ws/node`, `./ws/session` | KEEP | |
 | `./ws/deno` | DELETE [H15] | |
 

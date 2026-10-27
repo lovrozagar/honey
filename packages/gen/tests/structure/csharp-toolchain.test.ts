@@ -153,7 +153,7 @@ const runs = (job: string) =>
 
 /** Whether a step saves or restores the dotnet cache, keyed on content hashes. */
 const cachesDotnet = (step: string) =>
-	/^uses: actions\/cache(?:\/restore)?@v4\n/.test(step) &&
+	/^uses: actions\/cache(?:\/restore)?@[0-9a-f]{40} # v\d+\.\d+\.\d+\n/.test(step) &&
 	/\}\}-dotnet-\$\{\{ hashFiles\(/.test(step.replace(/\s+/g, " "))
 
 describe("CI installs the SDK global.json pins", () => {

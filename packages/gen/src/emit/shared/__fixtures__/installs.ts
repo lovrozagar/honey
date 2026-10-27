@@ -161,7 +161,10 @@ export function clientsInstall(): string {
  */
 export function ciInstalls(): Readonly<Record<string, readonly string[]>> {
 	return {
-		"src/emit/go/__fixtures__/go-env.ts": ["uses: actions/setup-go@v5", "go-version-file: .go-version"],
+		"src/emit/go/__fixtures__/go-env.ts": [
+			"uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0",
+			"go-version-file: .go-version",
+		],
 		"src/emit/python/__fixtures__/python-env.ts": [
 			uvInstall(`"$(sed -n 's/^required-version = "==\\(.*\\)"$/\\1/p' uv.toml)"`),
 			pythonInstall(['"$(cat .python-version)"', PY_FLOOR]),

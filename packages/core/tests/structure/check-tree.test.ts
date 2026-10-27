@@ -22,6 +22,8 @@ const TSV = [
 	"packages/gen/src/_tokenizer/\tgen\tcorpus\t00\ttokenizer\t—",
 	"blueprint/baselines/{oracle,perf}-baseline.txt\tcore\tcorpus\t00\tbaselines\t—",
 	"_v0/\t—\tlegacy\t00\tv0\tpackages/core/*",
+	".oxlintrc.json\tcore\tconfig\t19\tlint config\t.oxlintrc.json",
+	"./scripts/pack.ts\tcore\tscript\t19\tthe packer\t—",
 	"",
 ].join("\n")
 
@@ -57,6 +59,8 @@ describe("parseRows", () => {
 			"packages/gen/src/_tokenizer/",
 			"blueprint/baselines/{oracle,perf}-baseline.txt",
 			"_v0/",
+			".oxlintrc.json",
+			"scripts/pack.ts",
 		])
 		expect(rows[0]).toMatchObject({ bit: 1, kind: "src" })
 		expect(rows[12]).toMatchObject({ bit: 0, kind: "legacy" })

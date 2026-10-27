@@ -26,8 +26,13 @@ function writePackages(): void {
 	pkg(
 		"fakepkg",
 		{ exports: { "./client": { types: "./dist/client.d.ts" }, "./private": null }, name: "fakepkg" },
-		/* an unreadable package.json on the way up is no package boundary */
-		{ "dist/client.d.ts": "export type Client<T> = { get(): T }\n", "dist/package.json": "{" },
+		/* an unreadable package.json on the way up is no package boundary; no export names dist/internal.d.ts */
+		{
+			"dist/client.d.ts":
+				'export type Client<T> = { get(): T }\nexport declare function hidden(): import("./internal").Hidden\n',
+			"dist/internal.d.ts": "export type Hidden = { h: 1 }\n",
+			"dist/package.json": "{",
+		},
 	)
 	pkg(
 		"@types/fakelib",
@@ -371,7 +376,7 @@ describe("types: a named type by reference, everything else exactly", () => {
 				"h72/app.ts",
 				lines(
 					'import { createMiddleware, honey } from "@lovrozagar/honey"',
-					'import type { Client } from "fakepkg/client"',
+					'import { type Client, hidden } from "fakepkg/client"',
 					'import type { Lib } from "fakelib"',
 					'import type { I } from "idxpkg"',
 					'import type { P } from "plainpkg/lib/thing"',
@@ -381,24 +386,26 @@ describe("types: a named type by reference, everything else exactly", () => {
 					"type Row = { id: string }",
 					"const mw = createMiddleware((_c, next) => {",
 					"\tconst client: Client<Row> = { get: () => ({ id: 'x' }) }",
+					"\tconst internal = hidden()",
 					"\tconst lib: Lib = { n: 1 }",
 					"\tconst own: Own = { o: true }",
 					"\tconst when: Date = new Date()",
 					"\tconst refs = {} as { i: I; p: P; s: S; t: T }",
-					"\treturn next({ client, lib, own, refs, when })",
+					"\treturn next({ client, internal, lib, own, refs, when })",
 					"})",
 					"export const app = honey<{}>().use(mw)",
 				),
 			)
 			expect(shown(extract(entryPath, { outputDir: join(project.root, "h72/_gen") }).types.middleware)).toEqual([
 				'client: import("fakepkg/client").Client<{ id: string }>',
+				'internal: import("../node_modules/fakepkg/dist/internal.d.ts").Hidden',
 				'lib: import("fakelib").Lib',
 				'own: import("../own.ts").Own',
 				'refs: { i: import("idxpkg").I; p: import("plainpkg/lib/thing").P; s: import("strpkg").S; t: import("@scope/typed").T }',
 				"when: Date",
 			])
 			/* from a directory above the file, a relative specifier still starts with ./ */
-			expect(shown(extract(entryPath, { outputDir: join(project.root, "h72") }).types.middleware)[2]).toBe(
+			expect(shown(extract(entryPath, { outputDir: join(project.root, "h72") }).types.middleware)[3]).toBe(
 				'own: import("./own.ts").Own',
 			)
 		},

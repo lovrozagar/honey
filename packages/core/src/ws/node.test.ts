@@ -262,6 +262,24 @@ describe("nodeWebSocket: containment and shutdown", () => {
 		adapter.closeAll?.(1001, "server shutting down")
 		await vi.waitFor(() => expect(codes).toEqual([1001]))
 	})
+})
+
+describe("nodeWebSocket: loading ws", () => {
+	/* Node hands a retried import("ws"), once ws is installed after a failed one, ws's CommonJS entry (bit 19 i) */
+	it("upgrades through ws's CommonJS entry, its exports under default", async () => {
+		const { WebSocketServer } = await vi.importActual<typeof import("ws")>("ws")
+		vi.doMock("ws", () => ({ default: { WebSocketServer } }))
+		const events = recording()
+		const { failures, port } = await upgradeServer(nodeWebSocket(), events.handler)
+		void connectTo(port).catch(() => undefined)
+		/* a failed upgrade leaves the client waiting: whichever comes first, the open or the adapter's failure */
+		const failed = vi.waitFor(() => {
+			if (failures.length === 0) throw new Error("no outcome yet")
+			return "failed"
+		})
+		const outcome = await Promise.race([events.opened.then(() => "open"), failed])
+		expect([outcome, failures.map((failure) => (failure as Error).message)]).toEqual(["open", []])
+	})
 
 	it("names the package to install when ws is missing, and loads it once installed", async () => {
 		vi.doMock("ws", () => {

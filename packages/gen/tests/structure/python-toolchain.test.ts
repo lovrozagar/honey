@@ -122,11 +122,11 @@ const runs = (job: string) =>
 	)
 
 /**
- * Whether a step is setup-uv at an exact release, reading the version from uv.toml, with its GitHub cache off:
- * setup-uv publishes no floating major tag past v7, so a bare `@v10` never resolves.
+ * Whether a step is setup-uv pinned by commit at an exact release, reading the version from uv.toml, with its GitHub
+ * cache off: setup-uv publishes no floating major tag past v7, so a bare `@v10` never resolves.
  */
 const setsUpUv = (step: string) =>
-	/^uses: astral-sh\/setup-uv@v\d+\.\d+\.\d+\n/.test(step) &&
+	/^uses: astral-sh\/setup-uv@[0-9a-f]{40} # v\d+\.\d+\.\d+\n/.test(step) &&
 	/^ {10}version-file: uv\.toml$/m.test(step) &&
 	/^ {10}enable-cache: false$/m.test(step)
 

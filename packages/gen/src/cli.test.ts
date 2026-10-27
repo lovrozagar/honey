@@ -3,7 +3,8 @@
  * a regeneration deletes); each target written under `<out>/<target>`, its options passed through untouched, so a
  * hostile one is refused by its own generator with that generator's message; a spec that is not JSON refused; the go
  * and cli targets' whole trees, internal/sdk included, through gofmt, found by GOFMT, GOROOT, PATH or beside the real
- * go, and a refusal when there is none; `--watch` regenerating in a fresh child on each change of the spec until
+ * go, and a refusal when there is none; the ts target's files as oxfmt formats them, and as emitted with no error
+ * when oxfmt does not resolve (bit 19 i, Q12); `--watch` regenerating in a fresh child on each change of the spec until
  * stopped, no child left once it ends. Most legs run `main` in process; the bin legs prove the command a user runs,
  * under the Bun package.json pins (never PATH's newest).
  * Every child carries this file's mark, and the last leg fails on any that outlived its leg.
@@ -12,10 +13,13 @@ import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { findGofmt, main } from "./cli.ts"
+import { format } from "oxfmt"
+import { findGofmt, generated, type GenerateContext, loadOxfmt, main } from "./cli.ts"
 import { shop } from "./emit/cli/__fixtures__/shop.ts"
+import { EMIT_STYLE } from "./emit/shared/format.ts"
+import { generateSdk } from "./emit/ts/sdk.ts"
 import { goCacheDir, gofmtPath, withGo } from "./emit/go/__fixtures__/go-env.ts"
-import { usage } from "./gen/args.ts"
+import { type Generate, usage } from "./gen/args.ts"
 import { pinnedBunVersion, withPinnedBun } from "./gen/__fixtures__/pinned-bun.ts"
 import { MARK_KEY, markOf, marked, reap } from "./gen/__fixtures__/survivors.ts"
 
@@ -157,6 +161,56 @@ describe("generate's files (phase h)", () => {
 			true,
 			false,
 		])
+	})
+})
+
+/** The shop's ts target as its generator emits it, before any post-pass. */
+const emitted = () => generateSdk(shop(), { name: "Shop" }).files
+
+/** A loadOxfmt's outcome as a value, a rejection as its message, so a wrong one is a mismatch, never a throw. */
+const settled = (specifier?: string) =>
+	loadOxfmt(specifier).then(
+		(loaded) => loaded,
+		(error: Error) => `rejected: ${error.message}`,
+	)
+
+describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
+	it("writes the ts target's files byte for byte as oxfmt formats them", async () => {
+		const { out, spec } = specDir()
+		const ran = await run(["generate", "--spec", spec, "--target", "ts", "--ts-name", "Shop", "--out", out])
+		const raw = Object.entries(emitted())
+		const formatted = await Promise.all(
+			raw.map(async ([name, text]) => [name, (await format(name, text, EMIT_STYLE)).code] as const),
+		)
+		expect({
+			/* not vacuous: oxfmt changes these two of the shop's files */
+			reformatted: formatted.filter(([name, code]) => code !== emitted()[name]).map(([name]) => name),
+			status: ran.status,
+			written: raw.map(([name]) => [name, readFileSync(join(out, "ts", name), "utf8")]),
+		}).toEqual({
+			reformatted: ["shop.index.gen.ts", "shop.types.gen.ts"],
+			status: 0,
+			written: formatted.map(([name, code]) => [name, code]),
+		})
+	})
+
+	it("writes them as emitted, with no error and nothing reported, when oxfmt does not resolve", async () => {
+		const reported: string[] = []
+		const context: GenerateContext = { env: {}, oxfmt: "@honey/no-such-oxfmt", report: (line) => reported.push(line) }
+		const options = { ts: { name: "Shop" } } as unknown as Generate["options"]
+		const files = await generated({ options, targets: ["ts"] }, shop(), context).then(
+			(out) => out.ts,
+			(error: Error) => error.message,
+		)
+		expect({ files, reported }).toEqual({ files: emitted(), reported: [] })
+	})
+
+	it("loads the installed oxfmt's format, undefined for a missing one, and rethrows any other failure", async () => {
+		expect([
+			await settled(),
+			await settled("@honey/no-such-oxfmt"),
+			await settled("data:text/javascript,throw new Error('broken')"),
+		]).toEqual([format, undefined, "rejected: broken"])
 	})
 })
 

@@ -2,7 +2,8 @@
  * The honey-codegen generate CLI (bit 17 phase h): `honey-codegen generate --spec <openapi.json> --target <name>...
  * --out <dir>` writes each target's generated files under `<out>/<target>`. A target's options are its generate
  * function's, spelled `--<target>-<option>` and passed through untouched: each generator validates its own. The go and
- * cli targets' whole trees go through gofmt (the post-pass), so a missing gofmt is a refusal, never unformatted Go.
+ * cli targets' whole trees go through gofmt (the post-pass), so a missing gofmt is a refusal, never unformatted Go; the
+ * ts target's files go through oxfmt, the optional peer, imported lazily, and go out as emitted without it (00-rules).
  * `--watch` regenerates in a fresh child on each change of the spec. Parsing is strict: an unknown flag, a missing
  * value, a stray argument or an option for a target not asked for is a usage error. Each target is written through
  * write.ts: only changed files, a hashed manifest, a removed operation's unedited files deleted (bit 19 h1). `--app`
@@ -17,7 +18,7 @@ import { generateJavaSdk } from "./emit/java/sdk.ts"
 import { generateMcpServer } from "./emit/mcp/server.ts"
 import { generatePythonSdk } from "./emit/python/sdk.ts"
 import { generateRustSdk } from "./emit/rust/sdk.ts"
-import { formatFiles } from "./emit/shared/format.ts"
+import { formatFiles, type Formatter } from "./emit/shared/format.ts"
 import { gofmtFormatter } from "./emit/shared/gofmt.ts"
 import { generateSdk } from "./emit/ts/sdk.ts"
 import { type Generate, type Options, parseGenerate, type Target, usage, UsageError } from "./gen/args.ts"
@@ -78,12 +79,29 @@ function filesOf(
 	}
 }
 
-/** Every file a run writes, by target and its path under the target's directory, Go's through gofmt; skips to `report`. */
+/** oxfmt's `format`, the optional peer, when installed; else undefined (TS then goes out as emitted). */
+export async function loadOxfmt(specifier = "oxfmt"): Promise<Formatter | undefined> {
+	try {
+		return ((await import(specifier)) as { format: Formatter }).format
+	} catch (error) {
+		if ((error as { code?: string }).code === "ERR_MODULE_NOT_FOUND") return undefined
+		throw error
+	}
+}
+
+/** What a generation reads beside its run: the environment, where skips are reported, the oxfmt module to load. */
+export type GenerateContext = {
+	readonly env: NodeJS.ProcessEnv
+	readonly report: (line: string) => void
+	/** oxfmt's specifier, "oxfmt" by default: a leg names a missing one to run without it */
+	readonly oxfmt?: string
+}
+
+/** Every file a run writes, by target and its path under the target's directory, Go's through gofmt, TS's through oxfmt. */
 export async function generated(
 	run: Pick<Generate, "options" | "targets">,
 	document: Record<string, unknown>,
-	env: NodeJS.ProcessEnv,
-	report: (line: string) => void,
+	{ env, oxfmt, report }: GenerateContext,
 ) {
 	const out: Partial<Record<Target, Readonly<Record<string, string>>>> = {}
 	for (const target of run.targets) {
@@ -93,6 +111,10 @@ export async function generated(
 			if (gofmt === undefined)
 				throw new Error("gofmt is required for the go and cli targets (install Go, or set GOFMT)")
 			files = await formatFiles(files, { go: gofmtFormatter(gofmt) })
+		}
+		if (target === "ts") {
+			const format = await loadOxfmt(oxfmt)
+			if (format !== undefined) files = await formatFiles(files, { ts: format })
 		}
 		out[target] = files
 	}
@@ -117,7 +139,7 @@ const PROCESS_IO: Io = {
 	out: (text) => void process.stdout.write(text),
 }
 
-/** `document`'s targets generated and written under `<out>/<target>`, stale files deleted (core's plugin calls it too). */
+/** `document`'s targets generated and written under `<out>/<target>`, stale files deleted. */
 export async function writeGenerated(
 	run: Pick<Generate, "options" | "out" | "targets">,
 	document: Record<string, unknown>,
@@ -125,7 +147,7 @@ export async function writeGenerated(
 	env: NodeJS.ProcessEnv,
 ): Promise<number> {
 	let count = 0
-	for (const [target, files] of Object.entries(await generated(run, document, env, io.err))) {
+	for (const [target, files] of Object.entries(await generated(run, document, { env, report: io.err }))) {
 		for (const rel of writeTarget(join(run.out, target), files).kept)
 			io.err(
 				`honey-codegen: ${join(target, rel)} is stale but edited since it was generated, or not its to delete: kept\n`,

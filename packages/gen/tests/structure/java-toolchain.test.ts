@@ -190,7 +190,7 @@ const runs = (job: string) =>
 
 /** Whether a step saves or restores the java cache, keyed on content hashes. */
 const cachesJava = (step: string) =>
-	/^uses: actions\/cache(?:\/restore)?@v4\n/.test(step) &&
+	/^uses: actions\/cache(?:\/restore)?@[0-9a-f]{40} # v\d+\.\d+\.\d+\n/.test(step) &&
 	/honey-tmp\/java\b/.test(step) &&
 	/\}\}-java-\$\{\{ hashFiles\(/.test(step.replace(/\s+/g, " "))
 
@@ -266,7 +266,9 @@ describe("CI installs the pins", () => {
 
 	it("saves the -java- cache in gen-java alone, and gen-coverage waits on gen-java", () => {
 		const gen = jobs(WORKFLOW)["gen-java"] ?? ""
-		expect(steps(gen).some((step) => step.startsWith("uses: actions/cache@v4\n") && cachesJava(step))).toBe(true)
+		expect(
+			steps(gen).some((step) => /^uses: actions\/cache@[0-9a-f]{40} # v\d+\.\d+\.\d+\n/.test(step) && cachesJava(step)),
+		).toBe(true)
 		expect(jobs(WORKFLOW)["gen-coverage"]).toMatch(/^ {4}needs: \[.*\bgen-java\b/m)
 	})
 

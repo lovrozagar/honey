@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// The honey bin (bit 19 h2), honey-codegen's twin. Bun runs the TypeScript source; a repository checkout (marked by
-// tsconfig.json, which is not published) runs the source on Node too, through jiti, so a stale dist/ never runs; an
-// installed package on any other runtime runs the compiled JavaScript.
+// The honey bin (bit 19 h2), honey-codegen's twin. A repository checkout (marked by tsconfig.json, which is not
+// published) runs the TypeScript source through jiti, so a stale dist/ never runs; an installed package runs the
+// compiled JavaScript on any runtime (the tarball ships dist/, not src/).
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
-import { basename } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const isBun = typeof globalThis.Bun !== "undefined"
@@ -43,11 +44,24 @@ function handOff(bun) {
 	})
 }
 
+// A checkout's specifier for `name` mapped to its source: each export's `honey-source` file. The published exports
+// send `default` to dist/, which a checkout does not build.
+function sourceAliases(name) {
+	const root = dirname(createRequire(import.meta.url).resolve(`${name}/package.json`))
+	const { exports = {} } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
+	return Object.fromEntries(
+		Object.entries(exports)
+			.filter(([, target]) => typeof target === "object" && target["honey-source"])
+			.map(([subpath, target]) => [name + subpath.slice(1), join(root, target["honey-source"])]),
+	)
+}
+
 async function entry() {
-	if (isBun) return import("../src/build/cli.ts")
 	if (checkout) {
+		/* jiti on Bun too: Bun's own loader would resolve honey-codegen to its unbuilt dist/ */
 		const { createJiti } = await import("jiti")
-		return createJiti(import.meta.url).import("../src/build/cli.ts")
+		const alias = sourceAliases("@lovrozagar/honey-codegen")
+		return createJiti(import.meta.url, { alias, tryNative: false }).import("../src/build/cli.ts")
 	}
 	try {
 		return await import("../dist/build/cli.js")

@@ -27,6 +27,9 @@ honey-codegen generate --spec openapi.json --target ts --target cli --out genera
 The `go` and `cli` targets format every Go file they write with gofmt, so they need Go installed. gofmt is found by
 `$GOFMT`, then `$GOROOT/bin/gofmt`, then `gofmt` on `PATH`, then beside the `go` on `PATH`. Without one they refuse.
 
+The `ts` target formats every file it writes with oxfmt, an optional peer: install `oxfmt` beside honey-codegen. Without
+it the files go out as emitted, valid TypeScript that is not formatted.
+
 **Stale files are deleted, edited ones kept.** Each `<out>/<target>` keeps `.honey-generated.json`: every file the run
 wrote, with its sha256. A file is rewritten only when its bytes change, through a temp file renamed over it. A
 regeneration deletes a file the last run wrote and this one does not (a `cli` target's old `<name>_cmds.go`, say), unless

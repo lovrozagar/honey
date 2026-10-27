@@ -1,7 +1,6 @@
 {
 	"name": "@lovrozagar/honey",
 	"version": "1.0.0",
-	"private": true,
 	"description": "Type-safe API framework built on Web Standards. Builder-pattern DX, precompiled radix tree in production.",
 	"license": "MIT",
 	"author": "lovrozagar",
@@ -13,10 +12,231 @@
 	"bin": {
 		"honey": "bin/honey.js"
 	},
+	"files": [
+		"bin",
+		"dist"
+	],
 	"type": "module",
 	"sideEffects": false,
-	"exports": {},
+	"exports": {
+		".": {
+			"honey-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./accepts": {
+			"honey-source": "./src/input/accepts.ts",
+			"types": "./dist/input/accepts.d.ts",
+			"default": "./dist/input/accepts.js"
+		},
+		"./body-limit": {
+			"honey-source": "./src/input/body-limit.ts",
+			"types": "./dist/input/body-limit.d.ts",
+			"default": "./dist/input/body-limit.js"
+		},
+		"./build": {
+			"honey-source": "./src/build/index.ts",
+			"types": "./dist/build/index.d.ts",
+			"default": "./dist/build/index.js"
+		},
+		"./cache-control": {
+			"honey-source": "./src/response/cache-control.ts",
+			"types": "./dist/response/cache-control.d.ts",
+			"default": "./dist/response/cache-control.js"
+		},
+		"./compress": {
+			"honey-source": "./src/middleware/compress.ts",
+			"types": "./dist/middleware/compress.d.ts",
+			"default": "./dist/middleware/compress.js"
+		},
+		"./cookie": {
+			"honey-source": "./src/context/cookie.ts",
+			"types": "./dist/context/cookie.d.ts",
+			"default": "./dist/context/cookie.js"
+		},
+		"./cookie-sign": {
+			"honey-source": "./src/context/cookie-sign.ts",
+			"types": "./dist/context/cookie-sign.d.ts",
+			"default": "./dist/context/cookie-sign.js"
+		},
+		"./cors": {
+			"honey-source": "./src/middleware/cors.ts",
+			"types": "./dist/middleware/cors.d.ts",
+			"default": "./dist/middleware/cors.js"
+		},
+		"./crypto": {
+			"honey-source": "./src/security/crypto.ts",
+			"types": "./dist/security/crypto.d.ts",
+			"default": "./dist/security/crypto.js"
+		},
+		"./csrf": {
+			"honey-source": "./src/middleware/csrf.ts",
+			"types": "./dist/middleware/csrf.d.ts",
+			"default": "./dist/middleware/csrf.js"
+		},
+		"./curl-logger": {
+			"honey-source": "./src/observability/curl-logger.ts",
+			"types": "./dist/observability/curl-logger.d.ts",
+			"default": "./dist/observability/curl-logger.js"
+		},
+		"./errors": {
+			"honey-source": "./src/errors/errors.ts",
+			"types": "./dist/errors/errors.d.ts",
+			"default": "./dist/errors/errors.js"
+		},
+		"./etag": {
+			"honey-source": "./src/response/etag.ts",
+			"types": "./dist/response/etag.d.ts",
+			"default": "./dist/response/etag.js"
+		},
+		"./i18n": {
+			"honey-source": "./src/i18n/index.ts",
+			"types": "./dist/i18n/index.d.ts",
+			"default": "./dist/i18n/index.js"
+		},
+		"./input": {
+			"honey-source": "./src/input/input.ts",
+			"types": "./dist/input/input.d.ts",
+			"default": "./dist/input/input.js"
+		},
+		"./ip-restrict": {
+			"honey-source": "./src/middleware/ip-restrict.ts",
+			"types": "./dist/middleware/ip-restrict.d.ts",
+			"default": "./dist/middleware/ip-restrict.js"
+		},
+		"./logger": {
+			"honey-source": "./src/telemetry/logger.ts",
+			"types": "./dist/telemetry/logger.d.ts",
+			"default": "./dist/telemetry/logger.js"
+		},
+		"./node": {
+			"honey-source": "./src/adapters/node/serve.ts",
+			"types": "./dist/adapters/node/serve.d.ts",
+			"default": "./dist/adapters/node/serve.js"
+		},
+		"./openapi": {
+			"honey-source": "./src/openapi/register.ts",
+			"types": "./dist/openapi/register.d.ts",
+			"default": "./dist/openapi/register.js"
+		},
+		"./openapi/scalar": {
+			"honey-source": "./src/openapi/scalar.ts",
+			"types": "./dist/openapi/scalar.d.ts",
+			"default": "./dist/openapi/scalar.js"
+		},
+		"./openapi/swagger": {
+			"honey-source": "./src/openapi/swagger.ts",
+			"types": "./dist/openapi/swagger.d.ts",
+			"default": "./dist/openapi/swagger.js"
+		},
+		"./plugin": {
+			"honey-source": "./src/build/plugin.ts",
+			"types": "./dist/build/plugin.d.ts",
+			"default": "./dist/build/plugin.js"
+		},
+		"./powered-by": {
+			"honey-source": "./src/middleware/powered-by.ts",
+			"types": "./dist/middleware/powered-by.d.ts",
+			"default": "./dist/middleware/powered-by.js"
+		},
+		"./pretty-json": {
+			"honey-source": "./src/response/pretty-json.ts",
+			"types": "./dist/response/pretty-json.d.ts",
+			"default": "./dist/response/pretty-json.js"
+		},
+		"./proxy": {
+			"honey-source": "./src/proxy/proxy.ts",
+			"types": "./dist/proxy/proxy.d.ts",
+			"default": "./dist/proxy/proxy.js"
+		},
+		"./range": {
+			"honey-source": "./src/response/range.ts",
+			"types": "./dist/response/range.d.ts",
+			"default": "./dist/response/range.js"
+		},
+		"./rate-limit": {
+			"honey-source": "./src/middleware/rate-limit.ts",
+			"types": "./dist/middleware/rate-limit.d.ts",
+			"default": "./dist/middleware/rate-limit.js"
+		},
+		"./realtime": {
+			"honey-source": "./src/realtime/realtime.ts",
+			"types": "./dist/realtime/realtime.d.ts",
+			"default": "./dist/realtime/realtime.js"
+		},
+		"./request-id": {
+			"honey-source": "./src/middleware/request-id.ts",
+			"types": "./dist/middleware/request-id.d.ts",
+			"default": "./dist/middleware/request-id.js"
+		},
+		"./request-to-curl": {
+			"honey-source": "./src/observability/request-to-curl.ts",
+			"types": "./dist/observability/request-to-curl.d.ts",
+			"default": "./dist/observability/request-to-curl.js"
+		},
+		"./secure-headers": {
+			"honey-source": "./src/middleware/secure-headers.ts",
+			"types": "./dist/middleware/secure-headers.d.ts",
+			"default": "./dist/middleware/secure-headers.js"
+		},
+		"./serve": {
+			"honey-source": "./src/adapters/serve.ts",
+			"types": "./dist/adapters/serve.d.ts",
+			"default": "./dist/adapters/serve.js"
+		},
+		"./server-timing": {
+			"honey-source": "./src/middleware/server-timing.ts",
+			"types": "./dist/middleware/server-timing.d.ts",
+			"default": "./dist/middleware/server-timing.js"
+		},
+		"./static": {
+			"honey-source": "./src/response/static.ts",
+			"types": "./dist/response/static.d.ts",
+			"default": "./dist/response/static.js"
+		},
+		"./telemetry/otel": {
+			"honey-source": "./src/telemetry/otel-subpath.ts",
+			"types": "./dist/telemetry/otel-subpath.d.ts",
+			"default": "./dist/telemetry/otel-subpath.js"
+		},
+		"./timeout": {
+			"honey-source": "./src/middleware/timeout.ts",
+			"types": "./dist/middleware/timeout.d.ts",
+			"default": "./dist/middleware/timeout.js"
+		},
+		"./tree": {
+			"honey-source": "./src/routing/tree.ts",
+			"types": "./dist/routing/tree.d.ts",
+			"default": "./dist/routing/tree.js"
+		},
+		"./ws/bun": {
+			"honey-source": "./src/ws/bun.ts",
+			"types": "./dist/ws/bun.d.ts",
+			"default": "./dist/ws/bun.js"
+		},
+		"./ws/cloudflare": {
+			"honey-source": "./src/ws/cloudflare.ts",
+			"types": "./dist/ws/cloudflare.d.ts",
+			"default": "./dist/ws/cloudflare.js"
+		},
+		"./ws/node": {
+			"honey-source": "./src/ws/node.ts",
+			"types": "./dist/ws/node.d.ts",
+			"default": "./dist/ws/node.js"
+		},
+		"./ws/session": {
+			"honey-source": "./src/ws/session.ts",
+			"types": "./dist/ws/session.d.ts",
+			"default": "./dist/ws/session.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
 	"scripts": {
+		"prepack": "bun scripts/build.ts",
 		"test": "vitest run --coverage",
 		"type:check": "tsc --noEmit -p tsconfig.json"
 	},

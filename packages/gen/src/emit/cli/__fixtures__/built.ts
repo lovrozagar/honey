@@ -129,10 +129,13 @@ export function builtCli(files: Readonly<Record<string, string>>, options: { rea
 	const modulePath = moduleOf(files)
 	const linkErrors = compiled.built ? linkOnce(compiled.dir, modulePath, options.toolchain) : ""
 	const binary = compiled.built && linkErrors === "" ? binaryIn(compiled.dir, modulePath) : ""
+	/* a run of a CLI that never built names why, never an empty path's TypeError */
+	const failed = () =>
+		Promise.reject(new Error(`the CLI did not build: ${linkErrors || compiled.stderr || "no binary"}`))
 	return {
 		...compiled,
 		binary,
-		cli: (args, run = {}) => runIn(binary, args, run),
+		cli: (args, run = {}) => (binary === "" ? failed() : runIn(binary, args, run)),
 		linkErrors,
 	} satisfies BuiltCli
 }
