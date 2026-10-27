@@ -70,6 +70,22 @@ export function serialized(generate: () => Promise<unknown>): () => Promise<unkn
 	return regenerate
 }
 
+/** How many recent saves a dev server remembers: Vite reports a save once per environment, back to back. */
+export const SAVES_REMEMBERED = 64
+
+/** `run` once per key, the last `limit` keys remembered: a call with a remembered key joins its run. */
+export function oncePerKey(run: () => Promise<unknown>, limit: number): (key: string) => Promise<unknown> {
+	const seen = new Map<string, Promise<unknown>>()
+	return (key) => {
+		const known = seen.get(key)
+		if (known !== undefined) return known
+		const started = run()
+		seen.set(key, started)
+		if (seen.size > limit) seen.delete(seen.keys().next().value as string)
+		return started
+	}
+}
+
 /** The route tree module as JavaScript: a dev server serves a virtual module untransformed. */
 export async function toJavaScript(
 	code: string,
@@ -103,7 +119,6 @@ export function honey(config: HoneyVitePluginConfig) {
 	const at = { command: "build" as "build" | "serve", configFile: undefined as string | undefined, index: -1 }
 	let [root, mode, outputs] = [process.cwd(), "production", generatedOutputs(resolved, process.cwd())]
 	let starting: Promise<unknown> | undefined
-	const saves = new Map<string, Promise<unknown>>()
 	const regenerate = serialized(async () => {
 		if (at.configFile === undefined || at.index < 0) return generateAndWrite(resolved, root)
 		/* a child: a fresh module graph, and whatever the app starts dies with it */
@@ -112,6 +127,11 @@ export function honey(config: HoneyVitePluginConfig) {
 			env: { HONEY_VITE_COMMAND: at.command, HONEY_VITE_MODE: mode },
 		})
 	})
+	const perSave = oncePerKey(
+		/* reported on stderr: a failed generation must not stop the dev server's HMR */
+		() => regenerate().catch((error: unknown) => process.stderr.write(`honey: generation failed: ${error}\n`)),
+		SAVES_REMEMBERED,
+	)
 	const plugin = {
 		/** read by `honey generate` to find this plugin's config in a loaded Vite config */
 		api: { honeyConfig: config },
@@ -131,14 +151,7 @@ export function honey(config: HoneyVitePluginConfig) {
 		async hotUpdate(this: unknown, ctx: HotUpdate): Promise<unknown[] | undefined> {
 			if (WATCH_IGNORE_RE.test(ctx.file) || isGeneratedOutput(ctx.file, outputs)) return undefined
 			if (resolved.watch.length === 0 || !matchesWatch(ctx.file, root)) return undefined
-			const key = `${ctx.file}\0${ctx.timestamp ?? Date.now()}`
-			const run =
-				saves.get(key) ??
-				/* reported on stderr: a failed generation must not stop the dev server's HMR */
-				regenerate().catch((error: unknown) => process.stderr.write(`honey: generation failed: ${error}\n`))
-			saves.set(key, run)
-			if (saves.size > 64) saves.delete(saves.keys().next().value as string)
-			await run
+			await perSave(`${ctx.file}\0${ctx.timestamp ?? Date.now()}`)
 			/* Vite passes the environment as `this`; its graph, else the server's */
 			const environment = (this as { environment?: { moduleGraph?: ModuleGraph } } | undefined)?.environment
 			const routes = (environment?.moduleGraph ?? ctx.server.moduleGraph).getModuleById(RESOLVED.routes)

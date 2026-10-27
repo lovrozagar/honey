@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
 import type { HoneyVitePluginConfig } from "./config.ts"
-import { honey, toJavaScript } from "./plugin.ts"
+import { honey, oncePerKey, SAVES_REMEMBERED, toJavaScript } from "./plugin.ts"
 
 const SLOW = 60_000
 const ROUTES = "\0virtual:honey/routes"
@@ -351,18 +351,17 @@ describe("honey() under load (bit 19 h2)", () => {
 		SLOW,
 	)
 
-	it("forgets all but the last 64 saves, so an old save's key generates again", async () => {
-		const made = fresh()
-		const evaluations = counted(made)
-		const plugin = pluginAt({ app: "src/app.ts", watch: ["src/**/*.ts"] }, made.dir)
-		const save = (timestamp: number) =>
-			plugin.hotUpdate({ file: join(made.dir, "src/app.ts"), modules: [], server: graph(undefined), timestamp })
-		for (let timestamp = 1; timestamp <= 65; timestamp++) await save(timestamp)
-		await save(65)
-		expect(evaluations()).toBe(65)
-		await save(1)
-		expect(evaluations()).toBe(66)
-	}, 180_000)
+	it("runs once per save key, and forgets all but the last SAVES_REMEMBERED keys, so an old one runs again", async () => {
+		let runs = 0
+		const perSave = oncePerKey(async () => void runs++, SAVES_REMEMBERED)
+		await Promise.all([perSave("a.ts\u00001"), perSave("a.ts\u00001")])
+		expect(runs).toBe(1)
+		for (let save = 2; save <= SAVES_REMEMBERED + 1; save++) await perSave(`a.ts\u0000${save}`)
+		await perSave(`a.ts\u0000${SAVES_REMEMBERED + 1}`)
+		expect(runs).toBe(SAVES_REMEMBERED + 1)
+		await perSave("a.ts\u00001")
+		expect(runs).toBe(SAVES_REMEMBERED + 2)
+	})
 
 	it(
 		"passes Vite's mode to its generation child",
