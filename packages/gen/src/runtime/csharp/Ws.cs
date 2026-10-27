@@ -25,7 +25,8 @@ public sealed record WsClose(WebSocketCloseStatus Status, string Reason);
 /// <see cref="Closed"/> or <see cref="Error"/> once: the server's close (echoed at once, its code in
 /// <see cref="ClosedBy"/>), the client's own <see cref="CloseAsync"/>, a drop, a message over the cap, or a cancel.
 /// The method's token or a read's own token closes it with 1000, and the pending read throws
-/// OperationCanceledException. Once it ended, a read answers null.
+/// OperationCanceledException. Once it ended, a read answers null. Its dial runs no OnRequest or OnResponse
+/// hook, and a refused handshake's 401 is its error, with no OnAuthExpired refresh.
 /// </summary>
 public sealed class TypedWebSocket : IAsyncDisposable
 {

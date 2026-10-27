@@ -15,7 +15,8 @@ import (
 
 // SSEEvent is one server-sent event. Data is the event's data decoded into T, or as sent for
 // SSEEvent[string]. ID is the last event ID seen on the stream so far (the spec's sticky "last
-// event ID buffer"), to resume from with Last-Event-ID.
+// event ID buffer"), to resume from with Last-Event-ID. A stream method's iterator closes the
+// response body when its range ends, a break included, so leaving the loop frees the connection.
 type SSEEvent[T any] struct {
 	Data  T
 	Event string

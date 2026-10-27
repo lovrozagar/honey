@@ -7,10 +7,13 @@
  * (v0 N-CL). Consumers on the `sse`, `ws` and `realtime` registry documents.
  */
 import { describe, expect, it } from "vitest"
+import { sse as sseDocument } from "../shared/__fixtures__/documents-streams.ts"
+import { gone } from "../shared/__fixtures__/gone.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { consume, seen } from "./__fixtures__/consumer.ts"
 import type { FixtureKey } from "./__fixtures__/documents.ts"
 import { withPython } from "./__fixtures__/python-env.ts"
+import { generatePythonSdk } from "./sdk.ts"
 
 /** Whether Python is here: a missing interpreter fails where it is required and skips these legs elsewhere (python-env). */
 const PY = withPython()
@@ -130,5 +133,36 @@ describe.skipIf(!PY)("a ResumableConnection closed under a recv in another task"
 		const replies = [refused, { status: 503, text: "" }, { delayMs: 3000, json: { n: 1 }, status: 200 }]
 		const run = await consumed("realtime", "polling", replies, POLLING)
 		expect(seen(run), run.stderr).toEqual({ out: ['["None", "disconnected", "longpoll"]'], ran: true })
+	})
+})
+
+/** An SSE answer: its frames, then the end (`hold` keeps the connection open until the client leaves). */
+const sse = (steps: readonly string[], end: "close" | "hold" = "close"): Reply => ({
+	sse: { end, steps },
+	status: 200,
+})
+
+/* the scoped form: each stream closed by its block, the second open answered only once the first's client left */
+const SCOPED = `async with aclient() as c:
+    async with await c.ticks.stream() as s:
+        note((await anext(s)).data["n"])
+    async with await c.ticks.stream() as last:
+        note((await anext(last)).data["n"])`
+
+/** The release sentence the runtime's events.py carries (k1): the scoped forms, never dropping it, free a connection. */
+const SCOPED_RELEASE =
+	"Open it with ``async with`` or call ``aclose()`` to free its connection; a dropped stream frees it only when collected."
+
+describe.skipIf(!PY)("freeing a stream's connection: async with, as the runtime says (bit 19 k1)", SLOW, () => {
+	it("lets the connection go when its async with block ends, while the program runs, as events.py tells a reader", async () => {
+		const next = gone(sse(['data: {"n":2}\n\n'], "hold"))
+		const run = await served([sse(['data: {"n":1}\n\n'], "hold"), next.reply], (server) =>
+			consume("sse", "scoped", { base: server.url, body: SCOPED }),
+		)
+		const events = generatePythonSdk(sseDocument()).files["src/honey_sdk/_honey/events.py"] ?? ""
+		expect(
+			{ ...seen(run), released: next.released(), says: events.replace(/\s*\n\s*/g, " ").includes(SCOPED_RELEASE) },
+			run.stderr,
+		).toEqual({ out: ["1", "2"], ran: true, released: true, says: true })
 	})
 })

@@ -38,7 +38,11 @@ public final class RequestOptions {
       return this;
     }
 
-    /** Sets headers this call adds, after the client's, before the credential. */
+    /**
+     * Sets headers this call adds, after the client's, before the credential. Connection,
+     * Content-Length, Expect, Host and Upgrade are the JDK's: naming one, here or in the client's
+     * headers, throws ConfigException rather than going unsent.
+     */
     public Builder headers(Map<String, String> headers) {
       this.headers = Map.copyOf(headers);
       return this;

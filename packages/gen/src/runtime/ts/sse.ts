@@ -99,7 +99,8 @@ function completeLines(pending: string, from: number): { lines: string[]; rest: 
  * at CRLF, LF or CR; a leading BOM is skipped; `id` persists until changed and an `id` holding NUL
  * is ignored; `retry` counts only when all ASCII digits; an event still open when the stream ends
  * is discarded. A line over `maxLineBytes` (1 MiB) or an event's data over `maxEventBytes` (8 MiB), in UTF-8 bytes,
- * throws after every event completed before it.
+ * throws after every event completed before it. Leaving a `for await` early (a break, return or throw) cancels the
+ * body's reader, which frees the connection.
  */
 export async function* parseSSEStream(
 	stream: ReadableStream<Uint8Array>,

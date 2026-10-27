@@ -408,8 +408,10 @@ describe("runtimeBytes", () => {
  * 401's one refresh per open restarting the chain (+573), the client's OnRequest and OnResponse on each SSE dial and
  * poll (+1,483: hooked, heard), +237 of comments (realtime_loop.go +1,048, transport.go +1,265, realtime.go +240,
  * transport_longpoll.go +291, transport_sse.go +213); the unreachable "no transports configured" error cut (-58).
+ * Bit 19 k1, +261 B of doc only, to 95,916 B: sse.go +136 (a range's end, a break included, frees the connection),
+ * ws.go +125 (the dial runs no OnRequest or OnResponse hook and no OnAuthExpired refresh).
  */
-const GO_RUNTIME_BYTES = 95_655
+const GO_RUNTIME_BYTES = 95_916
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`, () => {
@@ -460,8 +462,10 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * specific refusal its error (+395: WEIGHTS, weight()), a 401's one refresh per open through the client's guard,
  * restarting the chain (+1,126: the adapters' refresh(), Exchange(refreshes=False)), +201 of comments (realtime.py
  * +919, transport.py +429, transport_ws.py +171, transport_sse.py +171, exchange.py +98).
+ * Bit 19 k1, +245 B of doc only, to 88,676 B: events.py +107 (`async with` or `aclose()` frees the connection, a
+ * dropped stream only when collected), ws.py +138 (the dial runs no hook and no on_auth_expired refresh).
  */
-const PYTHON_RUNTIME_BYTES = 88_431
+const PYTHON_RUNTIME_BYTES = 88_676
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -505,8 +509,10 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * restarting the chain (+1,538: IDialed, Dial's RefreshAsync and used token, the exchange's refreshes flag), +426 of
  * comments (RealtimeLoop.cs +2,451, Adapters.cs +370, Exchange.cs +36, each transport +42); a dead `_refused` reset
  * and a dead try/catch cut.
+ * Bit 19 k1, +126 B of doc only, to 133,716 B: Ws.cs +126 (the dial runs no OnRequest or OnResponse hook and no
+ * OnAuthExpired refresh).
  */
-const CSHARP_RUNTIME_BYTES = 133_590
+const CSHARP_RUNTIME_BYTES = 133_716
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {
@@ -555,8 +561,11 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * $<PREFIX>_HEADERS with the SDK's own rule.
  * Counted: every runtime .ts file, each one RUNTIME_MODULES joins; the directory holds nothing else. A raise names its
  * feature bytes and cuts dead and duplicate code first; it is never silent.
+ * Bit 19 k1, +362 B of doc only, to 120,704 B: sse.ts +113 (leaving a `for await` early frees the connection),
+ * ws.ts +249 (the dial runs no onRequest or onResponse hook and no onAuthExpired refresh; the platform WebSocket
+ * has no ping and no message cap).
  */
-const TS_RUNTIME_BYTES = 120_342
+const TS_RUNTIME_BYTES = 120_704
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

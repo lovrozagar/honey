@@ -109,8 +109,10 @@ import { runtimeBytes, v1JavaSdkSurfaces } from "./sdk-budget.ts"
  *   open restarting the chain (+1,405: Dialed, Realtime's refresh() and used token, Flight's refreshes flag), +487 of
  *   comments (RealtimeLoop.java +2,141, Realtime.java +290, Exchange.java +176, Flight.java +98, each adapter +82).
  * A change raises it only by the bytes of a named feature, dead code cut first.
+ * Bit 19 k1, +313 B of doc only, to 153,464 B: TypedWebSocket.java +125 (the dial runs no onRequest or onResponse
+ * hook and no onAuthExpired refresh), RequestOptions.java +188 (the JDK's restricted headers throw ConfigException).
  */
-const JAVA_RUNTIME_BYTES = 153151
+const JAVA_RUNTIME_BYTES = 153464
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

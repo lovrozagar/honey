@@ -63,7 +63,8 @@ func keepAlive(conn *websocket.Conn, every time.Duration) func() {
 }
 
 // TypedWebSocket is an operation's WebSocket: Send and Read, plus On handlers as the TypeScript
-// client's escape hatch.
+// client's escape hatch. Its dial runs no OnRequest or OnResponse hook, and a refused handshake's
+// 401 is its error, with no OnAuthExpired refresh.
 type TypedWebSocket struct {
 	conn     *websocket.Conn
 	stop     func()

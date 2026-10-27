@@ -1,3 +1,7 @@
+/**
+ * An operation's WebSocket. Its dial runs no onRequest or onResponse hook, and a refused handshake's 401 is its error,
+ * with no onAuthExpired refresh. The platform WebSocket exposes no ping and no message cap, so this socket has neither.
+ */
 export type TypedWebSocket = {
 	close(code?: number, reason?: string): void
 	off(event: "binary" | "close" | "error" | "message" | "open", handler: (...args: never[]) => void): void

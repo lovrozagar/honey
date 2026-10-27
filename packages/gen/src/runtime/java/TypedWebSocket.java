@@ -11,7 +11,8 @@ import java.util.function.Consumer;
  * close (echoed with its code and reason), a drop, a message over 16 MiB (closed 1008), a keepalive
  * ping unanswered for 20 s, or {@link #close()}, fires exactly one of onClosed or onError, once; a
  * throwing handler is ignored. An interrupt of the reading thread closes it 1000. Close it, or open
- * it in try-with-resources.
+ * it in try-with-resources. Its dial runs no onRequest or onResponse hook, and a refused
+ * handshake's 401 is its error, with no onAuthExpired refresh.
  */
 public final class TypedWebSocket implements AutoCloseable {
   private final Socket socket;
