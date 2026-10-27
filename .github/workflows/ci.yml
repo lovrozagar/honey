@@ -560,6 +560,9 @@ jobs:
         run: >-
           bunx vitest run tests/integration/hostile-client tests/integration/stream-lifecycle
           tests/integration/request-target
+      # v1's adapters over raw sockets: Node current in-process, Bun spawned, and Node 22.12 spawned (its 'upgrade' fallback)
+      - working-directory: packages/core
+        run: HONEY_REQUIRE_NODE_LEGACY=1 bunx vitest run tests/integration/ws-adapters.test.ts
 
   hotpath:
     name: hot-path benchmark

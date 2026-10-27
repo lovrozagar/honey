@@ -2,10 +2,11 @@
  * ws(app, path) through every adapter: one self-contained app, one outcome table. Node serves it on
  * real sockets, a spawned `bun` serves the same function from its source, and Workers runs it over
  * a stubbed WebSocketPair. Bun's one difference is pinned (Ruling 13): past maxPayload it
- * force-closes with 1006 where Node and Workers close with 1009.
+ * force-closes with 1006 where Node and Workers close with 1009. A Node without shouldUpgradeCallback (22.12, at
+ * HONEY_TEST_NODE_LEGACY) serves it through the adapter's 'upgrade' fallback.
  */
 import { spawn } from "node:child_process"
-import type { AddressInfo } from "node:net"
+import { type AddressInfo, connect } from "node:net"
 import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -258,4 +259,76 @@ describe("ws(app, path) through every adapter: one app, one outcome table", () =
 			child.kill()
 		}
 	}, 30_000)
+})
+
+/** A Node without shouldUpgradeCallback (CI's 22.12): set, its leg runs; required by HONEY_REQUIRE_NODE_LEGACY=1. */
+const LEGACY_NODE = process.env.HONEY_TEST_NODE_LEGACY
+
+/** The same app served by that Node from source; it prints its port and whether it kept shouldUpgradeCallback. */
+const LEGACY_APP = `
+const { createServer } = await import("node:http")
+const { serve } = await import(${JSON.stringify(`${SRC}adapters/node/serve.ts`)})
+const { honey } = await import(${JSON.stringify(`${SRC}routing/app.ts`)})
+const { nodeWebSocket } = await import(${JSON.stringify(`${SRC}ws/node.ts`)})
+const { ws } = await import(${JSON.stringify(`${SRC}ws/route.ts`)})
+const scenarioApp = ${scenarioApp.toString()}
+const server = serve(scenarioApp(honey, ws, nodeWebSocket({ maxPayload: 1024 })), { env: {}, hostname: "127.0.0.1", port: 0 })
+await new Promise((resolve) => server.once("listening", resolve))
+const kept = createServer({ shouldUpgradeCallback: () => true }).shouldUpgradeCallback !== undefined
+console.log(server.address().port, kept)
+process.stdin.once("data", () => process.exit(0))
+`
+
+/** The status line a raw HTTP/1.1 `request` gets back on `port`, or "reset" when the socket closes without one. */
+function rawStatus(port: number, request: string): Promise<string> {
+	return new Promise((resolve) => {
+		const socket = connect(port, "127.0.0.1", () => socket.write(request))
+		let text = ""
+		socket.on("data", (chunk) => {
+			text += String(chunk)
+			if (text.includes("\r\n")) socket.destroy()
+		})
+		socket.on("error", () => socket.destroy())
+		socket.on("close", () => resolve(text.split("\r\n")[0] || "reset"))
+	})
+}
+
+describe("the 'upgrade' fallback on a Node without shouldUpgradeCallback (CI's Node 22.12)", () => {
+	it("is required where HONEY_REQUIRE_NODE_LEGACY=1 says so", () => {
+		expect(process.env.HONEY_REQUIRE_NODE_LEGACY === "1" && LEGACY_NODE === undefined).toBe(false)
+	})
+
+	it.skipIf(LEGACY_NODE === undefined)(
+		"serves every scenario, a bodiless non-WebSocket upgrade as a request, and refuses one with a body",
+		async () => {
+			const node = LEGACY_NODE as string
+			const child = spawn(
+				node,
+				["--experimental-strip-types", "--no-warnings", "--input-type=module", "-e", LEGACY_APP],
+				{
+					stdio: ["pipe", "pipe", "inherit"],
+				},
+			)
+			try {
+				const line = String((await createInterface({ input: child.stdout })[Symbol.asyncIterator]().next()).value)
+				const [port, kept] = line.split(" ") as [string, string]
+				const outcomes = []
+				for (const [, scenario, expected] of SCENARIOS)
+					outcomes.push(await overSocket(`ws://127.0.0.1:${port}`, scenario, expected))
+				const h2c = "Connection: Upgrade\r\nUpgrade: h2c\r\nHost: x\r\n"
+				const bodiless = await rawStatus(Number(port), `GET /nowhere HTTP/1.1\r\n${h2c}\r\n`)
+				const bodied = await rawStatus(Number(port), `POST /nowhere HTTP/1.1\r\n${h2c}Content-Length: 2\r\n\r\nhi`)
+				expect([kept, outcomes, bodiless, bodied]).toEqual([
+					"false",
+					SCENARIOS.map(([, , expected]) => expected),
+					"HTTP/1.1 404 Not Found",
+					"HTTP/1.1 400 Bad Request",
+				])
+			} finally {
+				child.stdin.write("exit\n")
+				child.kill()
+			}
+		},
+		30_000,
+	)
 })
