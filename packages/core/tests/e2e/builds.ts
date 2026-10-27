@@ -39,6 +39,8 @@ export interface BuildSpec {
 	 * catches that, so it is asserted rather than merely reported.
 	 */
 	maxGzipKb: number
+	/** Ceiling for one build of it, in ms, on either runtime (DEFAULT_MAX_BUILD_MS). */
+	maxBuildMs: number
 	/** Paths, relative to the app, wiped before the build. */
 	outDirs: string[]
 	/** Runtimes that can run this build. */
@@ -73,6 +75,15 @@ const DEFAULT_MAX_GZIP_KB: Record<TargetId, number> = {
 	node: 110,
 }
 
+/**
+ * One build's ceiling, every app, target and runtime (bit 19 j2): the measured worst per-cell median, times the CI
+ * runner's factor over this machine, times the measured spread of one cell's repeated builds. Measured on v1 (5 builds
+ * of each cell under bun 1.3.11, Node 22 and the current Node; j2/buildtimes.tsv): the worst median 4.6 s
+ * (defaults×bun built on Node 22); CI over local 1.91 at most (ceb5570, CI run 40563108456's build jobs against the
+ * same commit here); a cell's slowest build 3.96 × its median. 4.6 s × 1.91 × 3.96 = 34.8 s.
+ */
+const DEFAULT_MAX_BUILD_MS = 35_000
+
 const APP_BUILDS: AppBuild[] = [
 	{ app: "compose" },
 	{ app: "defaults" },
@@ -87,6 +98,7 @@ export const BUILD_SPECS: BuildSpec[] = APP_BUILDS.flatMap((entry) =>
 		config: "vite.build.config.ts",
 		expect: [`dist/${target}/index.js`],
 		id: `${entry.app}×${target}`,
+		maxBuildMs: DEFAULT_MAX_BUILD_MS,
 		maxGzipKb: entry.maxGzipKb?.[target] ?? DEFAULT_MAX_GZIP_KB[target],
 		outDirs: [`dist/${target}`],
 		runtimes: ALL_RUNTIMES,

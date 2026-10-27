@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { type ExpectedSet, mismatches, type Outcomes } from "./expected.ts"
 
 const ENVS = ["bun", "node", "cf"] as const
 type EnvName = (typeof ENVS)[number]
@@ -88,10 +89,13 @@ function parseArgs(argv: string[]): Args {
 	if (mode !== "dev" && mode !== "prod") {
 		throw new Error(`unknown --mode "${mode}". expected dev, prod`)
 	}
+	/* cf prod is the deployed worker, CI's cf-prod job (j3, Q15); locally cf runs as wrangler dev only */
+	if (mode === "prod" && env !== "bun" && env !== "node") {
+		throw new Error(`--mode prod runs on bun and node here; cf prod is CI's deployed worker (j3)`)
+	}
 	return { app, env, mode, record }
 }
 
-type Outcomes = { failed: string[]; passed: string[]; skipped: string[] }
 type Suite = { specs?: Spec[]; suites?: Suite[]; title: string }
 type Spec = { tests: Array<{ status: string }>; title: string }
 
@@ -115,24 +119,32 @@ function outcomesOf(report: { suites?: Suite[] }): Outcomes {
 	return out
 }
 
-function runCell(
-	env: EnvName,
-	app: string,
-	mode: "dev" | "prod",
-	recording: boolean,
-): { ok: boolean; outcomes: Outcomes | null } {
+/** prod serves the cell's built bundle: built here for `env`'s own target, on `env`'s own runtime */
+function buildForProd(env: "bun" | "node", app: string): boolean {
+	process.stdout.write(`\n=== build ${app} for ${env} (prod) ===\n`)
+	const built = spawnSync("bun", [join(here, "run-build.ts"), "--runtime", env, "--target", env, "--app", app], {
+		cwd: repoRoot,
+		stdio: "inherit",
+	})
+	return built.status === 0
+}
+
+function runCell(env: EnvName, app: string, mode: "dev" | "prod"): { ok: boolean; outcomes: Outcomes | null } {
 	process.stdout.write(`\n=== e2e ${env} × ${app} (${mode}) ===\n`)
+	if (mode === "prod" && env !== "cf" && !buildForProd(env, app)) {
+		process.stdout.write(`=== fail ${env} × ${app}: its prod build failed ===\n`)
+		return { ok: false, outcomes: null }
+	}
 	const reportFile = join(tmpdir(), `honey-e2e-${env}-${mode}-${app}.json`)
 	rmSync(reportFile, { force: true })
-	const record = recording ? { HONEY_E2E_RECORD: reportFile } : {}
 	const result = spawnSync("bun", ["run", "--filter", FILTER[env], "test"], {
 		cwd: repoRoot,
-		env: { ...process.env, ...record, HONEY_E2E_APP: app, HONEY_E2E_ENV: env, TEST_MODE: mode },
+		env: { ...process.env, HONEY_E2E_APP: app, HONEY_E2E_ENV: env, HONEY_E2E_RECORD: reportFile, TEST_MODE: mode },
 		stdio: "inherit",
 	})
 	const ok = result.status === 0
 	process.stdout.write(ok ? `=== pass ${env} × ${app} ===\n` : `=== fail ${env} × ${app} ===\n`)
-	if (!recording || !existsSync(reportFile)) return { ok, outcomes: null }
+	if (!existsSync(reportFile)) return { ok, outcomes: null }
 	return { ok, outcomes: outcomesOf(JSON.parse(readFileSync(reportFile, "utf8")) as { suites?: Suite[] }) }
 }
 
@@ -155,7 +167,7 @@ const recorded: Record<string, Outcomes> = {}
 
 for (const nextEnv of envs) {
 	for (const nextApp of apps) {
-		const cell = runCell(nextEnv, nextApp, mode, record !== null)
+		const cell = runCell(nextEnv, nextApp, mode)
 		results.push({ app: nextApp, env: nextEnv, ok: cell.ok })
 		if (cell.outcomes !== null) recorded[`${nextEnv}/${mode}/${nextApp}`] = cell.outcomes
 	}
@@ -178,6 +190,14 @@ for (const row of results) {
 	process.stdout.write(`${row.ok ? "pass" : "FAIL"}  ${row.env} × ${row.app}\n`)
 }
 
-if (failed.length > 0) {
+/* every cell held to the committed expected set, unless this run re-records it */
+const EXPECTED = join(repoRoot, "blueprint/baselines/e2e-expected.json")
+const moved = record === null ? mismatches(JSON.parse(readFileSync(EXPECTED, "utf8")) as ExpectedSet, recorded) : []
+if (moved.length > 0) {
+	process.stdout.write("\n=== cells that differ from blueprint/baselines/e2e-expected.json ===\n")
+	for (const line of moved) process.stdout.write(`${line}\n`)
+}
+
+if (failed.length > 0 || moved.length > 0) {
 	process.exit(1)
 }

@@ -29,13 +29,15 @@ const P11 = "WS /api/reconnect-ws"
 const P12 = "WS /api/realtime/echo"
 const P13 = "WS /api/realtime/chat/:roomId"
 const P14 = "POST /api/realtime/broadcast/:topic"
-const P15 = "GET /api/boundary/default"
-const P16 = "GET /api/boundary/custom"
+const P15 = "GET /api/served-from"
+const P16 = "GET /api/boundary/default"
+const P17 = "GET /api/boundary/custom"
 const A0 = [T0,T2]
 const J0 = {"api_error":T3,"unauthorized":T2}
+const M1 = {"internal":true} as unknown as MetaShape
 const M0 = {"description":"Test route","summary":"Root test route","tags":["test"]} as unknown as MetaShape
 
-export const tree: TreeNode = N(S({ "api": N(S({ "health": N(undefined, S({ GET: P1 })), "events": N(undefined, S({ GET: P2 })), "events-live": N(undefined, S({ GET: P3 })), "echo": N(undefined, S({ ALL: P4 })), "v1": N(S({ "organizations": N(undefined, S({ GET: P5, POST: P6 }), { n: "orgId", c: N(undefined, S({ GET: P7, DELETE: P8 })) }), "socket": N(undefined, null, null, null, P10) })), "echo-ws": N(undefined, null, null, null, P9), "reconnect-ws": N(undefined, null, null, null, P11), "realtime": N(S({ "echo": N(undefined, null, null, null, P12), "chat": N(undefined, null, { n: "roomId", c: N(undefined, null, null, null, P13) }), "broadcast": N(undefined, null, { n: "topic", c: N(undefined, S({ POST: P14 })) }) })), "boundary": N(S({ "default": N(undefined, S({ GET: P15 })), "custom": N(undefined, S({ GET: P16 })) })) }), S({ GET: P0 })) }))
+export const tree: TreeNode = N(S({ "api": N(S({ "health": N(undefined, S({ GET: P1 })), "events": N(undefined, S({ GET: P2 })), "events-live": N(undefined, S({ GET: P3 })), "echo": N(undefined, S({ ALL: P4 })), "v1": N(S({ "organizations": N(undefined, S({ GET: P5, POST: P6 }), { n: "orgId", c: N(undefined, S({ GET: P7, DELETE: P8 })) }), "socket": N(undefined, null, null, null, P10) })), "echo-ws": N(undefined, null, null, null, P9), "reconnect-ws": N(undefined, null, null, null, P11), "realtime": N(S({ "echo": N(undefined, null, null, null, P12), "chat": N(undefined, null, { n: "roomId", c: N(undefined, null, null, null, P13) }), "broadcast": N(undefined, null, { n: "topic", c: N(undefined, S({ POST: P14 })) }) })), "served-from": N(undefined, S({ GET: P15 })), "boundary": N(S({ "default": N(undefined, S({ GET: P16 })), "custom": N(undefined, S({ GET: P17 })) })) }), S({ GET: P0 })) }))
 
 export const routes: RouteTree["routes"] = S<RouteTree["routes"][string]>({
 	[P0]: { bek: T0, ek: [T0,T1,T2], es: {"api_error":T3,"invalid_input":T4,"unauthorized":T2}, mt: M0 },
@@ -53,21 +55,24 @@ export const routes: RouteTree["routes"] = S<RouteTree["routes"][string]>({
 	[P12]: { bek: T0, ek: A0, es: J0 },
 	[P13]: { bek: T0, ek: A0, es: J0 },
 	[P14]: { bek: T0, ek: A0, es: J0 },
-	[P15]: { bek: T0, ek: A0, es: J0 },
-	[P16]: { bek: T5, ek: [T0,T5,T2], es: {"api_error":T3,"org_limit_reached":T6,"unauthorized":T2} }
+	[P15]: { bek: T0, ek: A0, es: J0, mt: M1 },
+	[P16]: { bek: T0, ek: A0, es: J0 },
+	[P17]: { bek: T5, ek: [T0,T5,T2], es: {"api_error":T3,"org_limit_reached":T6,"unauthorized":T2} }
 })
 
 export type MetaShape = {
-	description: "Test route"
-	summary: "Root test route"
-	tags: ["test"]
+	description?: "Test route"
+	internal?: true
+	summary?: "Root test route"
+	tags?: ["test"]
 } & Record<string, unknown>
 
 
-export type RouteSelector = typeof P4 | typeof P8 | typeof P0 | typeof P16 | typeof P15 | typeof P2 | typeof P3 | typeof P1 | typeof P5 | typeof P7 | typeof P14 | typeof P6
+export type RouteSelector = typeof P4 | typeof P8 | typeof P0 | typeof P17 | typeof P16 | typeof P2 | typeof P3 | typeof P1 | typeof P5 | typeof P7 | typeof P14 | typeof P6
 
 export const meta: Record<string, MetaShape> = S({
-	[P0]: M0
+	[P0]: M0,
+	[P15]: M1
 })
 
 export const routeTree: RouteTree = { v: 2, root: tree, routes, meta }

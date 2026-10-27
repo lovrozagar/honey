@@ -238,6 +238,22 @@
         "api_error",
         "unauthorized"
       ],
+      "meta": {
+        "internal": true
+      },
+      "method": "GET",
+      "middleware": [
+        "requestId",
+        "cors"
+      ],
+      "params": [],
+      "path": "/api/served-from"
+    },
+    {
+      "errors": [
+        "api_error",
+        "unauthorized"
+      ],
       "meta": {},
       "method": "GET",
       "middleware": [

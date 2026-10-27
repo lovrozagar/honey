@@ -354,3 +354,12 @@ test.describe("manifest", () => {
 		expect(postOrg.errors).toContain("org_slug_taken")
 	})
 })
+
+test.describe("the served bundle (Q14)", () => {
+	test("@prod-only GET /api/served-from → the app runs from its built bundle, never from source", async ({
+		request,
+	}) => {
+		const res = await request.get("/api/served-from")
+		expect([res.status(), await res.json()]).toEqual([200, { bundle: true }])
+	})
+})

@@ -266,6 +266,12 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 		return ctx.res.json("ok", { published: true })
 	})
 
+	/* where the app runs from, its bundle (dist/) or its source: the @prod-only e2e leg reads it (Q14) */
+	corsed
+		.get("/served-from")
+		.meta({ internal: true })
+		.handler((ctx) => ctx.res.json("ok", { bundle: new URL(import.meta.url).pathname.includes("/dist/") }))
+
 	/* ---- boundary test routes ---- */
 
 	/* default boundary: unexpected throw → api_error (from defaultBoundary) */

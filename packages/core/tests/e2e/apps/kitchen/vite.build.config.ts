@@ -14,6 +14,9 @@ export default {
 	ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
 	plugins: [
 		...(base.plugins ?? []),
-		createBuildPlugin({ minify: true, outDir: `dist/${target}`, target }, { entry: "src/gen-app.ts", export: "app" }),
+		createBuildPlugin(
+			{ minify: true, outDir: `dist/${target}`, target },
+			{ entry: `src/serve-entry.${target}.ts`, export: "app" },
+		),
 	],
 }

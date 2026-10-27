@@ -606,7 +606,7 @@ jobs:
       - run: bun run test:packaging
 
   e2e:
-    name: e2e (${{ matrix.runtime }}${{ matrix.node && format(' {0}', matrix.node) || '' }})
+    name: e2e (${{ matrix.runtime }}${{ matrix.node && format(' {0}', matrix.node) || '' }}${{ matrix.prod && ' prod' || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -621,6 +621,18 @@ jobs:
             script: test:e2e:node
           - runtime: cf-workers
             script: test:e2e:cf
+          # prod (Q14): run.ts builds each app for the runtime, then Playwright drives the built bundle, no source
+          - runtime: node
+            node: "22"
+            prod: true
+            script: test:e2e:node:prod
+          - runtime: node
+            node: "current"
+            prod: true
+            script: test:e2e:node:prod
+          - runtime: bun
+            prod: true
+            script: test:e2e:bun:prod
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
