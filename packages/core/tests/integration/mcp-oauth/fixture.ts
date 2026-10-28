@@ -4,18 +4,20 @@
  * checks PKCE S256 and the RFC 8707 `resource` in both requests) and an orders app whose MCP endpoint is a resource
  * server: `mcp(app, "/mcp", handler, { oauth })`. Its routes check the token themselves, its audience the endpoint:
  * listing needs `orders:read`, creating `orders:write` (a 403 step-up challenge otherwise). Every request either
- * server answers is logged in order, so a leg reads the whole discovery, token and step-up sequence off it.
+ * server answers is logged in order, so a leg reads the whole discovery, token and step-up sequence off it. Both
+ * serve through `serve()`, the adapter of the runtime this process is, as the conformance app does: gen's leg runs
+ * the world on Bun, whose node:http lacks parts the Node adapter reads (Bun 1.3.11 has no `headersDistinct`).
  */
 import { createHash, randomBytes } from "node:crypto"
-import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import { written } from "../../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../../gen/src/emit/mcp/mounted.ts"
-import { type HoneyServer, serve } from "../../../src/adapters/node/serve.ts"
+import { serve, type ServeHandle } from "../../../src/adapters/serve.ts"
 import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
 import { oauth } from "../../../src/mcp/oauth.ts"
 import { generateOpenApi } from "../../../src/openapi/generate.ts"
 import { honey } from "../../../src/routing/app.ts"
+import { createLogger } from "../../../src/telemetry/logger.ts"
 import * as z from "zod"
 
 /** The client the stub authorization server knows, pre-registered, and where it sends the user back. */
@@ -52,11 +54,10 @@ const SCHEMES = {
 }
 
 /** A server answering `fetch` on a loopback port the OS picks: its origin. */
-async function listening(servers: HoneyServer[], fetch: (request: Request) => Promise<Response>): Promise<string> {
-	const server = serve({ fetch }, { env: {}, hostname: "127.0.0.1", port: 0 })
+async function listening(servers: ServeHandle[], fetch: (request: Request) => Promise<Response>): Promise<string> {
+	const server = await serve({ fetch }, { hostname: "127.0.0.1", port: 0 })
 	servers.push(server)
-	await new Promise((settle) => server.once("listening", settle))
-	return `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+	return server.url
 }
 
 /** `fetch` logging each answer as `<who> <method> <path> <status>`. */
@@ -128,7 +129,8 @@ function authorizationServer(issuer: () => string, tokens: Map<string, Token>, l
 
 /** The orders app, its routes checking the token (audience `endpoint()`) and the scope each needs. */
 function ordersApp(endpoint: () => string, tokens: Map<string, Token>) {
-	const app = honey()
+	/* an error the app answers 500 for reaches stderr, whatever NODE_ENV silences; stdout stays the leg's protocol */
+	const app = honey().logger(createLogger({ level: "error", write: (line) => void process.stderr.write(`${line}\n`) }))
 	/** The refusal of `request` for `needed`, or undefined when its token carries it. */
 	const refused = (request: Request, needed: string) => {
 		const token = tokens.get(/^Bearer (\S+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? "")
@@ -170,7 +172,7 @@ async function handlerOf(app: ReturnType<typeof honey>): Promise<McpHandler> {
 
 /** The stub authorization server and the orders app, listening. */
 export async function startOAuthWorld(): Promise<OAuthWorld> {
-	const servers: HoneyServer[] = []
+	const servers: ServeHandle[] = []
 	const log: string[] = []
 	const tokens = new Map<string, Token>()
 	let issuer = ""
@@ -199,6 +201,6 @@ export async function startOAuthWorld(): Promise<OAuthWorld> {
 		endpoint: endpoint(),
 		issuer,
 		log,
-		stop: async () => void (await Promise.all(servers.map((server) => server.shutdown(0)))),
+		stop: async () => void (await Promise.all(servers.map((server) => server.close(0)))),
 	}
 }

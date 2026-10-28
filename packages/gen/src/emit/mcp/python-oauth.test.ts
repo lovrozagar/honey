@@ -33,10 +33,8 @@ async function run(): Promise<[Record<string, unknown>, OAuthTarget, readonly st
 describe.skipIf(!withPython())("the mounted resource server under the Python client's OAuth (bit 21 f)", () => {
 	it("mcp 2.3.0: 401 → metadata → authorization server → PKCE token for the endpoint → call; 403 → step-up → call", async () => {
 		const [saw, { endpoint }, log] = await run()
-		const steps = log.filter(
-			(line) => line.startsWith("as ") || / 40[13]$/.test(line) || line.includes("/.well-known/"),
-		)
-		expect([saw, steps]).toEqual([
+		/* the whole log, never a filter of it: a world answering 500 (its stack on stderr) or nothing at all shows here */
+		expect([saw, log], "what the client saw, then every request the world answered").toEqual([
 			{
 				authorizations: ["orders:read", "orders:read orders:write"],
 				created: expect.objectContaining({ _meta: { "honey/status": 201 }, structuredContent: { created: "o-2" } }),
@@ -51,11 +49,14 @@ describe.skipIf(!withPython())("the mounted resource server under the Python cli
 				"as GET /authorize 302",
 				`as token resource=${endpoint} pkce=true`,
 				"as POST /token 200",
+				"app POST /mcp 200",
+				"app POST /mcp 200",
 				"app POST /mcp 403",
 				`as authorize scope=orders:read orders:write resource=${endpoint} method=S256`,
 				"as GET /authorize 302",
 				`as token resource=${endpoint} pkce=true`,
 				"as POST /token 200",
+				"app POST /mcp 200",
 			],
 		])
 	}, 300_000)

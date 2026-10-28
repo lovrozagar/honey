@@ -120,9 +120,9 @@ function session(client: keyof typeof CLIENTS, endpoint: string): Promise<Saw> {
 	})
 }
 
-/** The log's auth sequence: every refusal, every metadata read, every authorization server step. */
+/** The log's auth sequence: every refusal or server failure, every metadata read, every authorization server step. */
 const authSteps = (log: readonly string[]) =>
-	log.filter((line) => line.startsWith("as ") || / 40[13]$/.test(line) || line.includes("/.well-known/"))
+	log.filter((line) => line.startsWith("as ") || / (?:40[13]|5\d\d)$/.test(line) || line.includes("/.well-known/"))
 
 describe.skipIf(!withClients())("the mounted resource server under the official TS clients' OAuth (bit 21 f)", () => {
 	let world: OAuthWorld
