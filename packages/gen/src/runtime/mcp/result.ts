@@ -4,7 +4,7 @@
  * `isError`: an answer outside 2xx or a body the SDK refused (past 1 MiB) its status and error, no answer
  * `transport` or `timeout`. Text is cut past 100,000 characters, a note saying so.
  */
-import type { ToolResult } from "./server.ts"
+import type { ToolResult } from "./protocol.ts"
 
 /** The most characters a result's text holds. */
 export const TEXT_MAX = 100_000

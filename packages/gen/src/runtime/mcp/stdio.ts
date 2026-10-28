@@ -1,13 +1,14 @@
 /**
  * MCP's stdio transport (bit 18): each message one line of JSON on standard input, each reply one line on standard
  * output, nothing else ever written there; a line that is not JSON answered as a parse error. Each message is answered
- * as it comes, so calls run side by side and a reply goes out when its call is done, matched by its id; a protocol
- * fault answers at once, in the order it came. One writer writes each reply whole. The session ends when standard input
+ * as it comes: a fault at once, in the order it came, a call when it is done, matched by its id, so calls run side by
+ * side. One writer writes each reply whole. Bit 21 b: the connection keeps its negotiated legacy revision; a
+ * notifications/cancelled aborts the call it names, nothing more written for it. The session ends when standard input
  * does, once every reply is written, or when `stop` aborts: every call in flight is aborted with it and settles, and
  * no reply after is written.
  */
-import { ErrorCode, failure, isId, type Message } from "./jsonrpc.ts"
-import type { Session } from "./server.ts"
+import { ErrorCode, failure, isId } from "./jsonrpc.ts"
+import type { Connection, Protocol } from "./protocol.ts"
 
 /** Where the transport reads and writes: by default the process's standard input and output. */
 export type Stdio = {
@@ -18,25 +19,34 @@ export type Stdio = {
 /** The process's own standard input and output. */
 const processStdio = (): Stdio => ({ input: process.stdin, write: (line) => void process.stdout.write(line) })
 
-/** Serves `session` over `stdio` until its input ends or `stopped` aborts; settles once the last reply is written. */
-export function serveStdio(session: Session, stdio: Stdio = processStdio(), stopped?: AbortSignal): Promise<void> {
+/** Serves `protocol` over `stdio` until its input ends or `stopped` aborts; settles once the last reply is written. */
+export function serveStdio(protocol: Protocol, stdio: Stdio = processStdio(), stopped?: AbortSignal): Promise<void> {
 	const stop = new AbortController()
+	const connection: Connection = {}
+	/* each call in flight by its id: its own abort */
+	const calls = new Map<unknown, AbortController>()
 	let pending = ""
 	const inFlight = new Set<Promise<void>>()
-	const send = (reply: unknown) => void (stop.signal.aborted || stdio.write(`${JSON.stringify(reply)}\n`))
+	const writer = (signal: AbortSignal) => (reply: unknown) =>
+		void (signal.aborted || stdio.write(`${JSON.stringify(reply)}\n`))
 	const take = (line: string) => {
-		let message: Message
+		let message: { id?: unknown; method?: unknown; params?: { requestId?: unknown } } | null
 		try {
-			message = JSON.parse(line) as Message
+			message = JSON.parse(line) as typeof message
 		} catch {
-			/* through the queue the answers take, so a fault still answers in the order it came */
-			return void Promise.resolve().then(() => send(failure(null, ErrorCode.ParseError, "Parse error")))
+			return writer(stop.signal)(failure(null, ErrorCode.ParseError, "Parse error"))
 		}
-		const answered: Promise<void> = session.answer(message, stop.signal, send).then(
-			(reply) => void (reply === undefined || send(reply)),
-			/* a fault inside a handler answers its request, and the session goes on */
-			() => send(failure(isId(message.id) ? message.id : null, ErrorCode.InternalError, "Internal error")),
-		)
+		if (message?.method === "notifications/cancelled") return void calls.get(message.params?.requestId)?.abort()
+		const call = new AbortController()
+		const signal = AbortSignal.any([stop.signal, call.signal])
+		const send = writer(signal)
+		const id = message?.id
+		const done = (reply: unknown) =>
+			void (calls.get(id) === call && calls.delete(id), reply === undefined || send(reply))
+		const answer = protocol.answer(message, { connection, notify: send, signal })
+		if (!(answer instanceof Promise)) return done(answer)
+		if (isId(id)) calls.set(id, call)
+		const answered: Promise<void> = answer.then(done)
 		inFlight.add(answered)
 		void answered.then(() => inFlight.delete(answered))
 	}

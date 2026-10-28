@@ -3,11 +3,15 @@
  * negotiating a revision; under 2025-03-26 no outputSchema and no structuredContent, both from 2025-06-18; a JSON-RPC
  * error for each protocol fault (parse, request, method, unknown tool, arguments not an object, a handler's own fault),
  * the session going on after each; no reply to a notification; replies in request order; exit 0 once stdin closes and
- * every reply is out. Both official clients connect, their latest revision pinned.
+ * every reply is out. Both official clients connect, their latest revision pinned. Bit 21 b, dual-era: the modern
+ * revision 2026-07-28 from each request's own `_meta` (server/discover, `resultType`, the list's cache hints, another
+ * revision refused with those served, a `_meta` lacking its required fields invalid, ping, logging/setLevel and
+ * initialize gone), batches under 2025-03-26 alone, cancellation in both eras; each era's official TS clients
+ * (python-client.test.ts runs Python's).
  */
 import { describe, expect, it } from "vitest"
-import { clientCheck, withClients } from "./__fixtures__/clients.ts"
-import { exchange, initialize, request } from "./__fixtures__/written.ts"
+import { clientCheck, clientSession, type Step, withClients } from "./__fixtures__/clients.ts"
+import { exchange, initialize, live, request } from "./__fixtures__/written.ts"
 
 const SERVER = [
 	"bun",
@@ -16,6 +20,19 @@ const SERVER = [
 ]
 const CLIENTS = withClients()
 const SLOW = { timeout: 60_000 }
+
+/** A modern request's `_meta`: its revision and the client's capabilities, both required. */
+const META = {
+	"io.modelcontextprotocol/clientCapabilities": {},
+	"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+}
+
+/** A modern request: `params` with `meta` as its `_meta`. */
+const modern = (id: number, method: string, params: object = {}, meta: object = META) =>
+	request(id, method, { ...params, _meta: meta })
+
+/** The replies to `lines` sent with no initialize. */
+const answersTo = async (lines: readonly (string | object)[]) => (await exchange(SERVER, lines)).replies
 
 /** The replies to `lines` after an initialize asking for `version`, the initialize's own reply first. */
 const session = async (version: string, lines: readonly (string | object)[]) =>
@@ -115,9 +132,178 @@ describe.skipIf(!CLIENTS)("the official clients (phase a)", SLOW, () => {
 				[
 					["echo", true, { readOnlyHint: true }],
 					["faulty", false, undefined],
+					["hold", false, undefined],
+					["release", false, undefined],
 				],
 				{ content: [{ text: '{"echoed":"hi"}', type: "text" }], structuredContent: { echoed: "hi" } },
 			])
 		},
 	)
+})
+
+describe("the modern era, 2026-07-28 (bit 21 b)", SLOW, () => {
+	it("answers server/discover with every revision it serves, its capabilities and identity, complete and cacheable", async () => {
+		expect(await answersTo([modern(1, "server/discover")])).toEqual([
+			{
+				id: 1,
+				jsonrpc: "2.0",
+				result: {
+					_meta: { "io.modelcontextprotocol/serverInfo": { name: "one-tool", version: "1.0.0" } },
+					cacheScope: "private",
+					capabilities: { tools: {} },
+					resultType: "complete",
+					supportedVersions: ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"],
+					ttlMs: 300_000,
+				},
+			},
+		])
+	})
+
+	it("serves each request from its own _meta: every result complete, the list with its cache hints, whatever the connection negotiated", async () => {
+		const answered = (await session("2025-03-26", [
+			modern(1, "tools/list"),
+			modern(2, "tools/call", { arguments: { text: "hi" }, name: "echo" }),
+			request(3, "tools/list"),
+		])) as { id: number; result: Record<string, unknown> & { tools: Record<string, unknown>[] } }[]
+		/* a call answers once it is done, so each reply is read by its id */
+		const [listed, called, legacy] = [1, 2, 3].map((id) => answered.find((reply) => reply.id === id))
+		const { tools, ...hints } = listed?.result ?? { tools: [] }
+		expect([
+			hints,
+			tools.map((tool) => "outputSchema" in tool),
+			called?.result,
+			Object.keys(legacy?.result ?? {}),
+			legacy?.result.tools.map((tool) => "outputSchema" in tool),
+		]).toEqual([
+			{ cacheScope: "private", resultType: "complete", ttlMs: 300_000 },
+			[true, false, false, false],
+			{
+				content: [{ text: '{"echoed":"hi"}', type: "text" }],
+				resultType: "complete",
+				structuredContent: { echoed: "hi" },
+			},
+			["tools"],
+			[false, false, false, false],
+		])
+	})
+})
+
+describe("the modern era's refusals (bit 21 b)", SLOW, () => {
+	it.each(["2025-11-25", "2025-03-26", "1900-01-01"])(
+		"refuses %s in _meta with -32022, naming each revision it serves and the one asked",
+		async (asked) => {
+			const meta = { ...META, "io.modelcontextprotocol/protocolVersion": asked }
+			expect(await answersTo([modern(1, "tools/list", {}, meta)])).toEqual([
+				{
+					error: {
+						code: -32022,
+						data: { requested: asked, supported: ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"] },
+						message: "Unsupported protocol version",
+					},
+					id: 1,
+					jsonrpc: "2.0",
+				},
+			])
+		},
+	)
+
+	it("refuses a _meta whose revision is no string or that lacks the client's capabilities, with -32602", async () => {
+		const version = "io.modelcontextprotocol/protocolVersion"
+		const metas = [
+			{ [version]: "2026-07-28" },
+			{ ...META, [version]: 20260728 },
+			{ ...META, "io.modelcontextprotocol/clientCapabilities": null },
+		]
+		const answered = await answersTo(metas.map((meta, i) => modern(i + 1, "server/discover", {}, meta)))
+		const message = `Invalid params: needs ${version} and io.modelcontextprotocol/clientCapabilities`
+		expect(answered).toEqual([1, 2, 3].map((id) => ({ error: { code: -32602, message }, id, jsonrpc: "2.0" })))
+	})
+
+	it("answers ping, logging/setLevel and initialize as methods it does not have", async () => {
+		const methods = ["ping", "logging/setLevel", "initialize"]
+		expect(await answersTo(methods.map((method, i) => modern(i + 1, method)))).toEqual(
+			methods.map((method, i) => ({
+				error: { code: -32601, message: `Method not found: ${method}` },
+				id: i + 1,
+				jsonrpc: "2.0",
+			})),
+		)
+	})
+})
+
+describe("batches (bit 21 b)", SLOW, () => {
+	const notification = { jsonrpc: "2.0", method: "notifications/initialized" }
+	const invalid = { error: { code: -32600, message: "Invalid Request" }, id: null, jsonrpc: "2.0" }
+
+	it("answers a batch under 2025-03-26 as one array of its requests' replies, none for a notification, nothing for notifications alone", async () => {
+		const [, ...rest] = await session("2025-03-26", [
+			[request(1, "ping"), notification, request(2, "tools/list")],
+			[notification],
+			[],
+		])
+		const [batch] = rest.filter(Array.isArray) as { id: number; result: { tools?: Record<string, unknown>[] } }[][]
+		expect([
+			rest.length,
+			rest.filter((reply) => !Array.isArray(reply)),
+			batch?.map((reply) => [reply.id, reply.result.tools?.some((tool) => "outputSchema" in tool) ?? null]),
+		]).toEqual([
+			2,
+			[invalid],
+			[
+				[1, null],
+				[2, false],
+			],
+		])
+	})
+
+	it.each([["2025-11-25"], ["2025-06-18"], ["no initialize"], ["2026-07-28"]])(
+		"refuses a batch under %s with JSON-RPC's Invalid Request: every revision after 2025-03-26 dropped batches",
+		async (era) => {
+			const batch = era === "2026-07-28" ? [modern(1, "tools/list")] : [request(1, "ping")]
+			const lines = era.startsWith("20") && era !== "2026-07-28" ? [initialize(era), batch] : [batch]
+			expect((await answersTo(lines)).slice(lines.length - 1)).toEqual([invalid])
+		},
+	)
+})
+
+describe("cancellation (bit 21 b)", SLOW, () => {
+	it.each(["2026-07-28", "2025-11-25"])(
+		"under %s, aborts the call a notifications/cancelled names and writes nothing more for it; the session goes on",
+		async (era) => {
+			const server = live(SERVER)
+			const meta = (more: object) => (era === "2026-07-28" ? { ...META, ...more } : more)
+			if (era !== "2026-07-28") server.send(initialize(era))
+			server.send(request(1, "tools/call", { _meta: meta({ progressToken: "held" }), arguments: {}, name: "hold" }))
+			await server.seen((line) => line.method === "notifications/progress")
+			server.send({
+				jsonrpc: "2.0",
+				method: "notifications/cancelled",
+				params: { reason: "done waiting", requestId: 1 },
+			})
+			server.send(request(2, "tools/call", { _meta: meta({}), arguments: {}, name: "release" }))
+			await server.seen((line) => line.id === 2)
+			const { replies: written, status } = await server.close()
+			const lines = written as Record<string, unknown>[]
+			expect([
+				status,
+				lines.filter((line) => line.id === 1),
+				lines
+					.filter((line) => line.method === "notifications/progress")
+					.map((line) => (line.params as { progress: number }).progress),
+				(lines.find((line) => line.id === 2)?.result as { content: unknown } | undefined)?.content,
+			]).toEqual([0, [], [1], [{ text: "released", type: "text" }]])
+		},
+	)
+})
+
+describe.skipIf(!CLIENTS)("each era's official clients (bit 21 b)", SLOW, () => {
+	const steps: Step[] = [{ negotiated: true }, { call: { arguments: { text: "hi" }, name: "echo" } }]
+	it.each([
+		["sdk", "2025-11-25"],
+		["v2", "2025-11-25"],
+		["modern", "2026-07-28"],
+	] as const)("%s runs its session under %s and gets structuredContent", async (client, era) => {
+		const [negotiated, called] = await clientSession(client, SERVER, steps)
+		expect([negotiated, called?.result?.structuredContent]).toEqual([{ negotiated: era }, { echoed: "hi" }])
+	})
 })

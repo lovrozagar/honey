@@ -1,6 +1,6 @@
 /**
  * JSON-RPC 2.0 as MCP frames it (bit 18): a message, the error codes a server answers with, and the two reply shapes.
- * A request carries an id; a notification does not and is never answered.
+ * A request carries an id; a notification does not and is never answered. An error may carry data (bit 21 b).
  */
 
 /** One message as it arrives: anything may be missing or of the wrong type until checked. */
@@ -21,6 +21,7 @@ export const ErrorCode = {
 	InvalidRequest: -32600,
 	MethodNotFound: -32601,
 	ParseError: -32700,
+	UnsupportedProtocolVersion: -32022,
 } as const
 
 /** A reply: a request's result, or its error. */
@@ -29,15 +30,15 @@ export type Reply =
 	| {
 			readonly jsonrpc: "2.0"
 			readonly id: Id | null
-			readonly error: { readonly code: number; readonly message: string }
+			readonly error: { readonly code: number; readonly message: string; readonly data?: unknown }
 	  }
 
 /** The result reply to the request `id`. */
 export const result = (id: Id, value: unknown): Reply => ({ id, jsonrpc: "2.0", result: value })
 
-/** The error reply to the request `id` (null when it could not be read). */
-export const failure = (id: Id | null, code: number, message: string): Reply => ({
-	error: { code, message },
+/** The error reply to the request `id` (null when it could not be read), its `data` when given. */
+export const failure = (id: Id | null, code: number, message: string, data?: unknown): Reply => ({
+	error: { code, data, message },
 	id,
 	jsonrpc: "2.0",
 })

@@ -72,9 +72,26 @@ const SLOW = { timeout: 120_000 }
  *   check (request.ts headerValue, b1's rule, passed in), each value sent on every call and scrubbed from results:
  *   guard.ts configHeaders' parse and refusal +657, the redactor taking several secrets +89, two short comments +100;
  *   call.ts +17. $<PREFIX>_REDIRECT lives in the emitted entry (+0 runtime).
+ * - bit 21 b, +3,997 B to 35,162 B: dual-era, MCP 2026-07-28 beside 2025-11-25 down to 2025-03-26, the protocol split
+ *   from its transport. Dead code cut first: a sync-throw guard on a tool's call (every bound call is async, so it can
+ *   only reject) and a branch leaving `data` off an error (JSON drops it when undefined); nothing else is dead. By file:
+ *   - protocol.ts (server.ts renamed, 5,407 -> 8,730, +3,323): a modern request's `_meta` claim, read per request and
+ *     never from the connection, 303; its refusals (-32602 for a `_meta` without its revision or the client's
+ *     capabilities; -32022 naming every revision served and the one asked) 592; server/discover 211; the modern
+ *     marks (`resultType` on every result, `ttlMs` and `cacheScope` on a list) 257; the revisions and `_meta` keys
+ *     named (the modern, the batch one) 214; batches under 2025-03-26 alone 621 and their dispatch 112; the transport
+ *     seam (Connection, Context and Protocol for Session) 330; isObject, shared by params, arguments, `_meta` and
+ *     capabilities, 183; a handler's fault answered here, moved from stdio, 64; the complexity and length rules'
+ *     split (tools/call and the refusals their own functions, the Asked type, the per-era case labels) 260; docs 176;
+ *   - stdio.ts +525: notifications/cancelled aborting the call it names with nothing more written for it (each call's
+ *     own abort under the stop signal, the calls by id, its writer) 502; a fault written at once and a call when
+ *     done, with no promise around a reply, 172 less the parse error's queue −111; the connection's legacy revision
+ *     35; the handler's fault moved to the protocol −188; docs 111; imports 4;
+ *   - jsonrpc.ts +143: UnsupportedProtocolVersion (-32022) 36, an error's `data` 107;
+ *   - call.ts, result.ts, stream.ts +2 each: they import protocol.ts for server.ts.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 31165
+const MCP_RUNTIME_BYTES = 35162
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -101,6 +118,10 @@ type Tools = { readonly total: number; readonly largest: number }
  *   carry-in #7 declares /api/events and /api/events-live as text/event-stream, so each is the emitter's stream-collect
  *   tool (max_events, last_event_id, the events array), 186 and 187 tokens as surface's /out/sse is 205: kitchen
  *   627 -> 905 total, its largest 71 -> 187 (get_api_events_live). The other four apps are unchanged.
+ * - bit 21 b, the modern era (2026-07-28): its tools/list carries `resultType`, `cacheScope` and `ttlMs` (+16 tokens in
+ *   every app's total: compose 379, defaults 143, gateway 383, kitchen 921, surface 2,143), each tool as the legacy list
+ *   has it, so every largest is unchanged; the legacy list is unchanged. Both eras are held to the same ceilings: no
+ *   raise.
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },
@@ -119,7 +140,16 @@ const appSpec = (app: string) =>
 		},
 	) as Record<string, unknown>
 
-/** `app`'s server run: what tools/list answers, measured, beside what the emitter wrote and what it skipped. */
+/** A modern tools/list's `_meta`: the revision and the client's capabilities (bit 21 b). */
+const MODERN = {
+	"io.modelcontextprotocol/clientCapabilities": {},
+	"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+}
+
+/**
+ * `app`'s server run: what tools/list answers in each era (2025-11-25, then 2026-07-28), each measured, beside what the
+ * emitter wrote and what it skipped.
+ */
 async function toolsOfApp(app: string) {
 	const document = appSpec(app)
 	const ir = toIR(document as OpenApiDocument, { deriveOperationIds: true })
@@ -127,17 +157,23 @@ async function toolsOfApp(app: string) {
 	const dir = written(server.files)
 	const ran = await exchange(
 		["env", "APP_BASE_URL=http://127.0.0.1:9", process.execPath, join(dir, "dist", "server.js")],
-		[initialize("2025-11-25"), request(1, "tools/list")],
+		[initialize("2025-11-25"), request(1, "tools/list"), request(2, "tools/list", { _meta: MODERN })],
 	)
-	const answer = (ran.replies[1] as { result: { tools: Record<string, unknown>[] } }).result
-	const measured: Tools = {
-		largest: Math.max(...answer.tools.map((tool) => countTokens(JSON.stringify(tool)))),
-		total: countTokens(JSON.stringify(answer)),
-	}
+	const answers = [1, 2].map(
+		(id) =>
+			(
+				ran.replies.find((reply) => (reply as { id?: unknown }).id === id) as {
+					result: { tools: Record<string, unknown>[] }
+				}
+			).result,
+	)
 	return {
 		emitted: toolsOf(ir).map((tool) => tool.name),
-		listed: answer.tools.map((tool) => tool.name),
-		measured,
+		listed: answers.map((answer) => answer.tools.map((tool) => tool.name)),
+		measured: answers.map((answer): Tools => ({
+			largest: Math.max(...answer.tools.map((tool) => countTokens(JSON.stringify(tool)))),
+			total: countTokens(JSON.stringify(answer)),
+		})),
 		operations: ir.operations.length,
 		skipped: server.skipped.length,
 	}
@@ -145,16 +181,20 @@ async function toolsOfApp(app: string) {
 
 describe("the MCP server's tokens within each app's ceilings (bit 18 phase g, H6)", SLOW, () => {
 	it.each(Object.keys(MEASURED))(
-		"keeps %s's tools/list and its largest tool within ceilingOf(measured, 0.2)",
+		"keeps %s's tools/list and its largest tool within ceilingOf(measured, 0.2), in either era",
 		async (app) => {
 			const { emitted, listed, measured, operations, skipped } = await toolsOfApp(app)
 			const pinned = MEASURED[app] as Tools
 			/* completeness: every operation a tool listed or a skip named, so none can pass by going unread */
-			expect({ accounted: listed.length + skipped, listed }).toEqual({ accounted: operations, listed: emitted })
-			expect({
-				largest: measured.largest <= ceilingOf([pinned.largest], TOKEN_HEADROOM) && measured.largest > 0,
-				total: measured.total <= ceilingOf([pinned.total], TOKEN_HEADROOM) && measured.total > 0,
-			}).toEqual({ largest: true, total: true })
+			expect(listed.map((names) => ({ accounted: names.length + skipped, names }))).toEqual(
+				[0, 1].map(() => ({ accounted: operations, names: emitted })),
+			)
+			expect(
+				measured.map((each) => ({
+					largest: each.largest <= ceilingOf([pinned.largest], TOKEN_HEADROOM) && each.largest > 0,
+					total: each.total <= ceilingOf([pinned.total], TOKEN_HEADROOM) && each.total > 0,
+				})),
+			).toEqual([0, 1].map(() => ({ largest: true, total: true })))
 		},
 	)
 })

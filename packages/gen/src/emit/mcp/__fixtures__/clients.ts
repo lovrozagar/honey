@@ -3,13 +3,15 @@
  * @modelcontextprotocol/client 2.4.0, pinned by `client-lock.json` (npm ci checks every package's integrity) and
  * installed into the toolchain cache as bit 17's tools are: test fixtures only, never a dependency of gen. An install
  * whose lock is not the one checked in counts as absent. `clientCheck` runs one client against a server command and
- * reports what it saw.
+ * reports what it saw. Bit 21 b: `modern` is the v2 client pinned to 2026-07-28 (python-client.ts holds Python's), and
+ * a `negotiated` step reports the revision a session runs under.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { clientsInstall } from "../../shared/__fixtures__/installs.ts"
+import type { Step, Stepped } from "./steps.ts"
 
 /** Where the clients are installed. */
 export const clientsDir = (): string => join(process.env.HOME ?? "", ".cache/honey-tmp/mcp-clients")
@@ -45,7 +47,18 @@ const CLIENTS = {
 		'import { Client, LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/client"',
 		'import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"',
 	],
+	modern: [
+		'import { Client, LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/client"',
+		'import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"',
+	],
 } as const
+
+/** Each client's options beside its name: the modern one pinned to 2026-07-28, never falling back to initialize. */
+const OPTIONS: Readonly<Record<keyof typeof CLIENTS, string>> = {
+	modern: '{ versionNegotiation: { mode: { pin: "2026-07-28" } } }',
+	sdk: "{}",
+	v2: "{}",
+}
 
 export type ClientName = keyof typeof CLIENTS
 
@@ -63,7 +76,7 @@ const script = (client: ClientName) =>
 	`${CLIENTS[client].join("\n")}
 const [command, ...rest] = JSON.parse(process.argv[2])
 const call = JSON.parse(process.argv[3])
-const client = new Client({ name: "honey-check", version: "1.0.0" })
+const client = new Client({ name: "honey-check", version: "1.0.0" }, ${OPTIONS[client]})
 await client.connect(new StdioClientTransport({ args: rest, command, env: process.env }))
 const out = { latest: LATEST_PROTOCOL_VERSION, negotiated: client.getNegotiatedProtocolVersion?.() ?? client.transport?.protocolVersion ?? "", tools: (await client.listTools()).tools }
 if (call) try { out.called = await client.callTool(call) } catch (error) { out.failed = String(error?.message ?? error) }
@@ -95,20 +108,21 @@ export function clientCheck(
 	})
 }
 
-/** One step of a client session: list the tools, or call one. */
-export type Step = { readonly list: true } | { readonly call: { readonly name: string; readonly arguments: object } }
-
 /** The session script for `client`: connect, run each step in order, report every result (or its error) as one JSON line. */
 const sessionScript = (client: ClientName) =>
 	`${CLIENTS[client].join("\n")}
 const [command, ...rest] = JSON.parse(process.argv[2])
 const steps = JSON.parse(process.argv[3])
-const client = new Client({ name: "honey-conformance", version: "1.0.0" })
-await client.connect(new StdioClientTransport({ args: rest, command, env: process.env }))
+const client = new Client({ name: "honey-conformance", version: "1.0.0" }, ${OPTIONS[client]})
+const transport = new StdioClientTransport({ args: rest, command, env: process.env })
+/* sdk 1.32.2 keeps no negotiated revision on a stdio client: it hands it to the transport, when it can take one */
+let negotiated
+transport.setProtocolVersion ??= (version) => void (negotiated = version)
+await client.connect(transport)
 const out = []
 for (const step of steps) {
 	try {
-		out.push(step.list ? { tools: (await client.listTools()).tools } : { result: await client.callTool(step.call) })
+		out.push(step.negotiated ? { negotiated: client.getNegotiatedProtocolVersion?.() ?? negotiated } : step.list ? { tools: (await client.listTools()).tools } : { result: await client.callTool(step.call) })
 	} catch (error) {
 		out.push({ failed: String(error?.message ?? error) })
 	}
@@ -116,13 +130,6 @@ for (const step of steps) {
 console.log(JSON.stringify(out))
 await client.close()
 `
-
-/** What one step gave: the tools listed, a call's result, or the client's error. */
-export type Stepped = {
-	readonly tools?: Record<string, unknown>[]
-	readonly result?: Record<string, unknown>
-	readonly failed?: string
-}
 
 /** `client` run against the server `command`, through `steps` in order: each step's tools, result or failure. */
 export function clientSession(
@@ -154,3 +161,5 @@ export function clientSession(
 export const hasNpm = (): boolean => spawnSync("npm", ["--version"]).status === 0
 
 export { clientsInstall }
+
+export type { Step, Stepped }

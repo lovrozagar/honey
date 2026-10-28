@@ -8,7 +8,7 @@
  */
 import { redactor, refusal } from "./guard.ts"
 import { type Answer, BYTES_MAX, failureOf, json, successOf, unanswered } from "./result.ts"
-import type { Tool } from "./server.ts"
+import type { Tool } from "./protocol.ts"
 import { collected } from "./stream.ts"
 
 /** The SDK input group a parameter goes in. */

@@ -5,7 +5,7 @@
  * A cut is a success. Only a stream that never opened in time, its own client having had no answer, is a timeout.
  */
 import { json, TEXT_MAX } from "./result.ts"
-import type { ToolResult } from "./server.ts"
+import type { ToolResult } from "./protocol.ts"
 
 /** One event as the TS SDK yields it. */
 type Event = { readonly data: unknown; readonly event?: string; readonly id?: string }

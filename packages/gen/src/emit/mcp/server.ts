@@ -55,7 +55,7 @@ const entrySource = (app: { name: string; version: string; envPrefix: string }, 
 // event stream's collect too. $${app.envPrefix}_HEADERS, a JSON object of string values, goes on every call, each value
 // scrubbed as the key is; $${app.envPrefix}_REDIRECT is same-origin (the default) or follow. SIGINT and SIGTERM abort
 // every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.
-import { BYTES_MAX, bindTools, configHeaders, createSession, serveStdio } from "./mcp.runtime"
+import { BYTES_MAX, bindTools, configHeaders, createProtocol, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { headerValue } from "./sdk/api.runtime.gen"
 import { toolSpecs } from "./tools.gen"
@@ -97,7 +97,7 @@ const stop = new AbortController()
 for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abort())
 
 void serveStdio(
-	createSession(
+	createProtocol(
 		{ name: ${tsString(app.name)}, version: ${tsString(app.version)} },
 		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout) }),
 	),
