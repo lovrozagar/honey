@@ -545,23 +545,24 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       # Each bench: v1's cost as a ratio to a raw twin doing the same work, judged against its ceiling in
-      # blueprint/baselines/bench.json (the worst of six CI runs on these pins, plus 10%). One retry absorbs a
-      # noisy neighbor; two failures are a regression. A re-record runs these with BENCH_MODE=record.
+      # blueprint/baselines/bench.json (the worst of six CI runs on these pins, plus 10%): that margin is the
+      # noise budget, so a red is never retried away. A red with v1 unchanged is answered by a re-record
+      # (these steps with BENCH_MODE=record, the ceiling widened with its evidence), never a rerun.
       - name: hotpath
-        run: bun run bench:hotpath || bun run bench:hotpath
+        run: bun run bench:hotpath
       - name: finalize
-        run: bun run bench:finalize || bun run bench:finalize
+        run: bun run bench:finalize
       - name: streaming
-        run: bun run bench:streaming || bun run bench:streaming
+        run: bun run bench:streaming
       - name: websockets
-        run: bun run bench:websockets || bun run bench:websockets
+        run: bun run bench:websockets
       # the Node bridge on Node itself (node:http under Bun is Bun's own), on the version adapter's
       # ceilings were recorded with
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "26.12.1"
       - name: adapter
-        run: bun run bench:adapter || bun run bench:adapter
+        run: bun run bench:adapter
 
   build:
     name: build (${{ matrix.runtime }})

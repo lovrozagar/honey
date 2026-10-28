@@ -10,7 +10,9 @@
 				"post-1kib": {
 					"baseline": 4.225,
 					"catches": "+22%",
-					"ceiling": 5.17
+					"ceiling": 5.17,
+					"reportOnly": true,
+					"reason": "bimodal on CI: 2 runs at 2.38 and 2.41, 4 at 3.85–4.7; the ceiling 5.17 sits +115–117% over the fast mode, so a run landing there passes a slowdown of up to ~2.1×. Report-only until a re-record shows one mode."
 				},
 				"routed-json": {
 					"baseline": 1.53,
@@ -156,7 +158,7 @@
 			}
 		}
 	},
-	"note": "Per bench, runtime minor and scenario: v1 cost / its raw twin's, from the RATIO lines of 6 green CI runs of ci.yml's hotpath job at 95b6cd2 in record mode (n=6: push run 40635796971, dispatches 40637279965, 40638448479, 40639505880, 40640935318, 40642329012), under BUN_VERSION 1.3.11 and, for adapter, Node 26.12.1. baseline: the median of the 6. ceiling: the worst CI run plus a 10% margin (worst × 1.10), since 6 samples can understate the spread. A run whose median ratio is above its ceiling is REGRESSED. catches: ceiling ÷ baseline, so the gate catches a regression beyond +X% of the CI median. Re-record: run the job with BENCH_MODE=record, collect each step's RATIO lines over at least 6 runs, derive the same way, and commit the move with its reason.",
+	"note": "Per bench, runtime minor and scenario: v1 cost / its raw twin's, from the RATIO lines of 6 green CI runs of ci.yml's hotpath job at 95b6cd2 in record mode (n=6: push run 40635796971, dispatches 40637279965, 40638448479, 40639505880, 40640935318, 40642329012), under BUN_VERSION 1.3.11 and, for adapter, Node 26.12.1. baseline: the median of the 6. ceiling: the worst CI run plus a 10% margin (worst × 1.10), since 6 samples can understate the spread. A run whose median ratio is above its ceiling is REGRESSED. catches: ceiling ÷ baseline, so the gate catches a regression beyond +X% of the CI median. A reportOnly scenario is printed and never fails the run; its reason says why. No retry: a red with v1 unchanged is answered by a re-record, never a rerun. Re-record: run the job with BENCH_MODE=record, collect each step's RATIO lines over at least 6 runs, derive the same way, and commit the move with its reason.",
 	"runs": [
 		"40635796971",
 		"40637279965",

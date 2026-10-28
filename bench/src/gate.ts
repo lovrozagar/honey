@@ -12,8 +12,11 @@ import { halfWidth, median } from "./significance.ts"
 /** One scenario: each call times one sample of its side and returns that sample's cost, in any one unit. */
 export type Scenario = { name: string; raw(): Promise<number>; v1(): Promise<number> }
 
-/** A scenario's recorded ratios: the CI median, and the ceiling a run's median must not pass. */
-export type Ceiling = { baseline: number; catches: string; ceiling: number }
+/**
+ * A scenario's recorded ratios: the CI median, and the ceiling a run's median must not pass. A `reportOnly` one is
+ * judged and printed but never fails the run; its `reason` says why (bench.json).
+ */
+export type Ceiling = { baseline: number; catches: string; ceiling: number; reason?: string; reportOnly?: true }
 
 type BenchFile = { benches: Record<string, Record<string, Record<string, Ceiling>>>; note: string; runs: string[] }
 
@@ -28,18 +31,26 @@ export function ceilingsOf(bench: string, at = runtime): Record<string, Ceiling>
 	return (JSON.parse(readFileSync(FILE, "utf8")) as BenchFile).benches[bench]?.[at]
 }
 
-/** One scenario's report row: its median ratio judged against its ceiling, REGRESSED when above it. */
+/**
+ * One scenario's report row: its median ratio judged against its ceiling, REGRESSED when above it; a report-only
+ * scenario is labelled so instead, over or under, and never reads REGRESSED.
+ */
 export function rowOf(scenario: string, ratios: readonly number[], own: Ceiling | undefined) {
 	const ratio = median(ratios)
-	const status = own === undefined ? "unbaselined" : ratio > own.ceiling ? "REGRESSED" : "ok"
 	return {
 		band: `±${halfWidth(ratios).toFixed(2)}`,
 		baseline: own?.baseline ?? "—",
 		ceiling: own?.ceiling ?? "—",
 		ratio: Number(ratio.toFixed(2)),
 		scenario,
-		status,
+		status: statusOf(ratio, own),
 	}
+}
+
+function statusOf(ratio: number, own: Ceiling | undefined): string {
+	if (own === undefined) return "unbaselined"
+	if (own.reportOnly === true) return ratio > own.ceiling ? "report-only: over" : "report-only: ok"
+	return ratio > own.ceiling ? "REGRESSED" : "ok"
 }
 
 /** Interleaved samples of v1 and raw after one throwaway run of each, so both JITs have settled. */

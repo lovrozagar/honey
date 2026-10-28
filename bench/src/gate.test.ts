@@ -43,4 +43,12 @@ describe("the judge reads its ceilings from bench.json (bit 20 e3)", () => {
 	it("passes a ratio past the CI median but under the ceiling, and fails one above the ceiling", () => {
 		expect([under, over, rowOf("100x10", around(3.2), undefined).status]).toEqual(["ok", "REGRESSED", "unbaselined"])
 	})
+
+	it("prints a reportOnly scenario over its ceiling without failing the run, while a blocking one still fails it", () => {
+		/* adapter post-1kib, bimodal on CI (bench.json's reason), against finalize 100x10 over its ceiling */
+		const postOwn = ceilingsOf("adapter", "node 26.12")?.["post-1kib"]
+		const post = rowOf("post-1kib", around(6.2), postOwn).status
+		expect([postOwn?.reportOnly, postOwn?.ceiling, post]).toEqual([true, 5.17, "report-only: over"])
+		expect([exitCode("judge", true, ["ok", post]), exitCode("judge", true, [post, over])]).toEqual([0, 1])
+	})
 })
