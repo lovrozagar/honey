@@ -1,12 +1,12 @@
 v1 perf baseline — honey's own benchmarks must not regress.
-Machine-readable baseline: blueprint/baselines/hotpath.json (hotpath.ts reads it).
+Machine-readable baseline: blueprint/baselines/bench.json (bit 20 e3): every bench's CI median and
+ceiling (the worst of 6 green CI runs x 1.10). hotpath.json below is v0's frozen record; nothing reads it.
 
 == Hot-path gate (bench/src/hotpath.ts) ==
 In-process app.fetch cost / a minimal raw fetch handler, as a ratio, so machine and runtime
 speed cancel. 15 interleaved samples x 50k iterations per scenario, after a warm-up pass.
-Verdict (bench/src/significance.ts): a scenario regresses only when its median ratio is past
-baseline x 1.10 AND its rise over baseline is outside the 95% (Student t) band of its own
-samples; a rise inside the band prints as `noise`. HOTPATH_THRESHOLD defaults to 0.10.
+Verdict (bench/src/gate.ts, since bit 20 e3): a scenario regresses when its median ratio in one
+CI run is past its ceiling in bench.json; no retry. The history below is v0's era.
 
 Captured 2026-10-14, bun 1.4.3, this machine: AMD Ryzen 7 9800X3D, amd-pstate-epp, performance
 governor, boost ON (root-owned; not toggled), `taskset -c 2,3`. There is no pinned CI runner
