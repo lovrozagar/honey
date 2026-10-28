@@ -17,6 +17,11 @@
  * so an app that never imports it bundles none of the resource server. Here is only its hook: called once at mount
  * (its refusals before any route registers), its challenge on every 401 and on the handler's challenged 403, its
  * metadata route registered after the endpoint's. It needs `authenticate`, even when no tool declares security.
+ *
+ * Files (bit 21 g, opt-in, H23): `uploads` takes what `uploads(options)` from `@lovrozagar/honey/mcp/uploads`
+ * returns (called once at mount, its PUT route registered once the endpoint's path is checked free; each request's
+ * uploads handed to the handler), and `urlFiles` what `urlFiles(options)` from `@lovrozagar/honey/mcp/url-files` returns. Neither is
+ * imported here, so a mount without them bundles none of either.
  */
 import type { ExecutionCtx, HoneyContext } from "../context/context.ts"
 import type { TypedResponse } from "../response/response.ts"
@@ -31,7 +36,45 @@ export type McpMount = {
 	readonly origins: readonly string[]
 	/** the most bytes a request body may hold; the handler's own cap when unset */
 	readonly max: number | undefined
+	/** this request's uploads, when the mount takes them */
+	readonly uploads: McpUploading | undefined
+	/** the URL file fetch, when the mount has one */
+	readonly fetchFile: McpFileFetch | undefined
 }
+
+/** A call an upload is bound to: the credential headers its request carried, the tool, every argument. */
+export type McpUploadScope = {
+	readonly credential: string
+	readonly tool: string
+	readonly args: Record<string, unknown>
+}
+
+/** A file an upload is for: its id in the call, its declared size, its SHA-256 (base64url). */
+export type McpUploadFile = { readonly id: string; readonly size: number; readonly digest: string }
+
+/**
+ * One request's uploads: the URL a token is PUT under (`base/<token>`), the most bytes a file may declare, a file's
+ * token, and its bytes on the call's retry, taken once; `take` rejects a token the call does not hold and resolves the
+ * rule a missing upload breaks.
+ */
+export type McpUploading = {
+	readonly base: string
+	readonly max: number
+	readonly issue: (scope: McpUploadScope, file: McpUploadFile) => Promise<string>
+	readonly take: (scope: McpUploadScope, file: McpUploadFile, token: string) => Promise<Uint8Array | string>
+}
+
+/**
+ * The hook `uploads(options)` returns: called once at mount, once the endpoint's path is checked free, it registers the
+ * upload route and returns each request's uploads.
+ */
+export type McpUploads = (app: unknown, path: string) => (request: Request) => McpUploading
+
+/** What `urlFiles(options)` returns: a file's bytes, type and name fetched from its URL; rejects with the rule broken. */
+export type McpFileFetch = (
+	url: string,
+	signal: AbortSignal,
+) => Promise<{ readonly bytes: Uint8Array; readonly type: string; readonly name?: string }>
 
 /** The generated handler (`mcpHandler`): whether a tool requires a credential, the challenge it names, the endpoint. */
 export type McpHandler = {
@@ -73,6 +116,10 @@ export type McpOptions<TCtx = HoneyContext<unknown>> = {
 	readonly maxBodyBytes?: number
 	/** the opt-in OAuth 2.1 resource-server role: RFC 9728 metadata and Bearer challenges pointing at it */
 	readonly oauth?: McpProtectedResource
+	/** out-of-band file uploads, through the file-uploads extension: what `uploads(options)` returns */
+	readonly uploads?: McpUploads
+	/** file arguments given as https URLs the app fetches: what `urlFiles(options)` returns */
+	readonly urlFiles?: McpFileFetch
 }
 
 type McpContext = HoneyContext & { readonly res: { raw(response: Response): TypedResponse } }
@@ -95,7 +142,7 @@ const refusal = (status: number, challenge: string) =>
 
 /** Serve `handler`'s tools at `path` on `app`; returns `app`. */
 export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOptions<CtxOf<A>> = {}): A {
-	const { authenticate, maxBodyBytes, oauth, origins = [] } = options
+	const { authenticate, maxBodyBytes, oauth, origins = [], uploads, urlFiles } = options
 	if (oauth !== undefined && typeof authenticate !== "function")
 		throw new Error(
 			`mcp(${path}): oauth makes it a protected resource, so it needs authenticate: (request, ctx) => boolean`,
@@ -110,11 +157,18 @@ export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOp
 	if (!isStaticPattern(segments)) throw new Error(`cannot serve MCP at ${path}: its path is fixed, with no parameter`)
 	const resource = oauth?.(app, path)
 	for (const method of METHODS) assertRouteFree(handle[GRAPH], method.toUpperCase(), segments)
+	const files = uploads?.(app, path)
 	const serve = async (ctx: McpContext & CtxOf<A>) => {
 		if (typeof authenticate === "function" && !(await authenticate(ctx.req, ctx)))
 			return ctx.res.raw(refusal(401, resource ? resource.challenge(ctx.req, 401) : handler.challenge))
 		const dispatch = async (request: Request) => handle.fetch(request, ctx.env as never, ctx.executionCtx)
-		const answer = await handler.fetch(ctx.req, { dispatch, max: maxBodyBytes, origins })
+		const answer = await handler.fetch(ctx.req, {
+			dispatch,
+			fetchFile: urlFiles,
+			max: maxBodyBytes,
+			origins,
+			uploads: files?.(ctx.req),
+		})
 		const inner = answer.headers.get("www-authenticate")
 		/* under oauth the handler's 401, or its 403 with a challenge (insufficient_scope; an Origin 403 has none), is ours */
 		if (resource && (answer.status === 401 || (answer.status === 403 && inner !== null)))

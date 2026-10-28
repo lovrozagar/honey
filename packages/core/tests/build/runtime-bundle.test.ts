@@ -56,8 +56,9 @@ const WS_ROUTE = ["routing/ws-builder", "ws/origin", "ws/session", "ws/shared"]
 const GENERATION_ONLY = ["openapi/output-keys"]
 
 /* the MCP mount's modules: mcp(app, path, handler) reaches mount alone (bit 21 e, H24.3), oauth() its resource server
- * by an import of its own, so a mount without it carries none of it (bit 21 f, H23) */
-const MCP_ROUTE = ["mcp/mount", "mcp/oauth"]
+ * by an import of its own, so a mount without it carries none of it (bit 21 f, H23), and uploads() and urlFiles() the
+ * same (bit 21 g) */
+const MCP_ROUTE = ["mcp/mount", "mcp/oauth", "mcp/uploads", "mcp/url-files"]
 
 function bunBundle(name: string, lines: readonly string[], minify = true): string {
 	write(full, { [`${name}.ts`]: lines.join("\n") })
@@ -170,6 +171,18 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
 				"",
 			]
+			const filesMount = [
+				'import { honey } from "@lovrozagar/honey"',
+				'import { mcp } from "@lovrozagar/honey/mcp"',
+				'import { memoryUploadStore, uploads } from "@lovrozagar/honey/mcp/uploads"',
+				'import { urlFiles } from "@lovrozagar/honey/mcp/url-files"',
+				"const app = honey()",
+				'const handler = { challenge: "Bearer", fetch: async () => new Response(null), secured: false }',
+				"const store = memoryUploadStore()",
+				'mcp(app, "/mcp", handler, { uploads: uploads({ secret: "s".repeat(32), store }), urlFiles: urlFiles({ hosts: ["files.example"] }) })',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
 			expect([
 				missing,
 				wsRouteModules("features", entry),
@@ -177,7 +190,16 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				routeModules("features", entry, MCP_ROUTE),
 				routeModules("mounted", mounted, MCP_ROUTE),
 				routeModules("protected", protectedMount, MCP_ROUTE),
-			]).toEqual([[], WS_ROUTE, WS_ROUTE, [], ["mcp/mount"], MCP_ROUTE])
+				routeModules("files", filesMount, MCP_ROUTE),
+			]).toEqual([
+				[],
+				WS_ROUTE,
+				WS_ROUTE,
+				[],
+				["mcp/mount"],
+				["mcp/mount", "mcp/oauth"],
+				["mcp/mount", "mcp/uploads", "mcp/url-files"],
+			])
 		},
 		60_000,
 	)

@@ -33,14 +33,15 @@ A multipart operation marked `x-mcp` is a tool. Each text part is an argument wi
 part is a file argument, or a list of them when the part is an array. The form always goes as `multipart/form-data`,
 with or without a file in it.
 
-A file argument takes one of two values:
+A file argument takes one of these values:
 
 - **Inline**, as the provisional file-uploads extension (`io.modelcontextprotocol/files`, its draft at PR head
   `6101d34`) has it: `{ id, mimeType, size, digest: { algorithm: "sha-256", value }, name?, data }`. `data` is standard
   base64 with its padding: no whitespace, no `data:` prefix, no base64url. It must decode to exactly `size` bytes whose
   SHA-256, base64url without padding, is `digest.value`. All inline files of one call together are at most
-  `$<PREFIX>_MAX_INLINE_BYTES` decoded (1 MiB by default). A value without `data` asks for an upload, which this
-  server does not serve yet, so it does not advertise the extension: an official client sends an inline file anyway.
+  `$<PREFIX>_MAX_INLINE_BYTES` decoded (1 MiB by default). Every server with a file argument advertises the extension
+  in both eras, `capabilities.extensions["io.modelcontextprotocol/files"] = { maxInlineBytes }`. A value without
+  `data` asks for an upload, which only a mount with [uploads](#uploads) serves; elsewhere it's refused as a tool error.
 - **`{ path }`**, read by the server from its own disk, over stdio only:
   - The path resolves against `$<PREFIX>_FILE_ROOT`, the server's working directory at start by default. A root that
     is no directory stops the server at start.
@@ -56,8 +57,11 @@ A file argument takes one of two values:
 file to the kernel, so no path check sees it. Keep the root narrow and let no one who should not read a file link it
 there.
 
-Each file argument costs a tool 98 tokens of schema. The file-uploads extension is a draft that may still change;
-honey tracks it at every phase of bit 21.
+- **`{ url }`**, an https URL the app fetches: only on a mount with [files from URLs](#files-from-urls). A mounted
+  tool shows the inline value and, with `urlFiles`, the URL value; it never shows a path.
+
+Each file argument costs a tool 98 tokens of schema (FileInput and path); a mounted tool's costs 97 with the URL value
+and 64 without it. The file-uploads extension is a draft that may still change; honey tracks it at every phase of bit 21.
 
 ## Over HTTP
 
@@ -240,3 +244,115 @@ package's `examples/split-workers` shows the authorization server in full.
 
 **The standalone server** (`--http`) has no OAuth: it serves one local user on a loopback port with its own token, and
 calls the API with its own key, as the spec's advice for local servers says.
+
+### Uploads
+
+A file too big to inline goes out of band, through the file-uploads extension's upload flow (its draft at PR head
+`6101d34`). The client sends the file's metadata without `data`; the endpoint answers with an
+`io.modelcontextprotocol/files/upload` input request holding one upload target a file, an https URL under the
+endpoint; the client PUTs the bytes there and retries the call with the same arguments. Only a 2026-07-28 request
+that declares the extension in its `io.modelcontextprotocol/clientCapabilities` is asked to upload; any other gets a
+tool error. No shipping client implements the extension yet.
+
+| Value                        | What it is                                                                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uploads(options)`           | from `@lovrozagar/honey/mcp/uploads`: the uploads, handed to `mcp()` as its `uploads` option; an app that never imports it bundles none of it             |
+| `options.secret`             | the HMAC key upload tokens are signed with: at least 32 characters, your app's own secret (an env binding, never in source)                               |
+| `options.store`              | an `UploadStore`, where uploads wait for the retry                                                                                                        |
+| `options.ttlMs`              | how long a token works: 600000 (10 minutes) by default                                                                                                    |
+| `options.maxBytes`           | the most bytes one file may declare: 52428800 (50 MiB) by default; a larger one is a tool error before any upload                                         |
+| `options.origin`             | the endpoint's public origin, for an app whose requests don't carry it (behind a proxy); the request's own by default                                     |
+| `UploadStore`                | `{ claim(id, expires), put(id, bytes, expires), take(id) }`, each sync or async; `claim` true for the first caller alone, `take` removing what it returns |
+| `memoryUploadStore()`        | an in-memory `UploadStore` for one process: development, tests, a single Node or Bun server                                                               |
+| `PUT <path>/uploads/<token>` | the upload route `mcp()` registers: 204 when the bytes are taken                                                                                          |
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { type McpHandler, mcp } from "@lovrozagar/honey/mcp"
+import { memoryUploadStore, uploads } from "@lovrozagar/honey/mcp/uploads"
+
+/* in the app: import { mcpHandler } from "./_gen/mcp.gen.ts" */
+declare const mcpHandler: McpHandler
+declare const UPLOAD_SECRET: string
+
+const app = honey()
+mcp(app, "/mcp", mcpHandler, {
+	authenticate: (request) => /^ApiKey \S+$/.test(request.headers.get("authorization") ?? ""),
+	uploads: uploads({ secret: UPLOAD_SECRET, store: memoryUploadStore() }),
+})
+```
+
+**The token is the upload's only authority.** The client sends no credential to the upload URL (the draft has
+clients refuse `Authorization` and `Cookie` on it), so each URL carries a token: HMAC-SHA-256 under `secret` over a
+random id, the expiry, the file's declared size and SHA-256, the principal and the call. The principal is
+HMAC(`secret`, the credential headers the MCP request carried), keyed so a leaked URL or store gives no offline guess at
+the credential; the call is HMAC(`secret`, the tool, every argument, the file's id). Nothing of either reaches your
+routes, which get the same credential headers as any other call.
+
+What the endpoint checks:
+
+- **The PUT:** a token this app signed and not expired (else 403); the body counted as it streams, past the declared
+  size 413 (Content-Length is never trusted), then exactly that size with that SHA-256 (else 400). Only then is the
+  token claimed: the first PUT to claim it wins, any later one is 409. A refused PUT keeps and claims nothing, so a
+  client may retry a failed transfer.
+- **The retry:** each token checked again against the retry's own credential headers, tool and arguments; a mismatch,
+  a forged or an expired token is JSON-RPC -32602. The bytes are taken from the store once and checked again, so a
+  repeated retry finds nothing and the call never runs twice. A file the client reports `failed` is a tool error, and
+  the tool doesn't run.
+- **A credential that changes within the TTL** (a refreshed OAuth token, a rotated key) no longer matches, so the
+  retry is refused and the client starts the call again and re-uploads.
+
+**The store must claim atomically.** `claim` must return true to one caller alone, even when two PUTs race, and
+`take` must hand the bytes to one caller alone. On Workers that means a Durable Object, or D1 (`INSERT … ON CONFLICT
+DO NOTHING`, `DELETE … RETURNING`). **Workers KV cannot keep an upload one-shot**: it is eventually consistent, so two
+claims can both succeed. `memoryUploadStore()` is one process's memory: on Workers, or behind more than one instance,
+an upload PUT to one isolate is missing on another.
+
+**The upload route** is a real route on the handle: its basePath and every middleware apply, `bodyLimit` included,
+so set a limit that fits `maxBytes`. It's kept out of the OpenAPI documents and the tools. A middleware that refuses
+requests without a credential must let `<path>/uploads/*` through. Answer the CORS preflight for it if browser clients
+upload. The standalone `--http` server has no store and serves no uploads.
+
+### Files from URLs
+
+A mounted tool can take a file as `{ url }`, which the app fetches. It's off unless you pass `urlFiles`: without it
+no tool shows the URL value and one is refused. Today's clients can use it for files too big to inline, since it's a
+plain argument.
+
+| Value               | What it is                                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `urlFiles(options)` | from `@lovrozagar/honey/mcp/url-files`: the fetch, handed to `mcp()` as its `urlFiles` option; an app that never imports it bundles none of it     |
+| `options.hosts`     | the hosts files come from: each exact (`files.example.com`, or with its port, `files.example.com:8443`), or `*.example.com` for the hosts under it |
+| `options.maxBytes`  | the most bytes a file may hold: 52428800 (50 MiB) by default                                                                                       |
+| `options.timeoutMs` | how long a fetch may take, headers and body: 30000 (30 s) by default                                                                               |
+| `options.fetch`     | the fetch it runs, the platform's by default                                                                                                       |
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { type McpHandler, mcp } from "@lovrozagar/honey/mcp"
+import { urlFiles } from "@lovrozagar/honey/mcp/url-files"
+
+/* in the app: import { mcpHandler } from "./_gen/mcp.gen.ts" */
+declare const mcpHandler: McpHandler
+
+const app = honey()
+mcp(app, "/mcp", mcpHandler, { urlFiles: urlFiles({ hosts: ["files.example.com"] }) })
+```
+
+The guards:
+
+- **The host** must be one the list names exactly; `files.example.com` matches neither `a.files.example.com` nor
+  `evilfiles.example.com`. A `*.example.com` entry matches the hosts under `example.com`, never `example.com` itself.
+  The list takes names only: `urlFiles()` refuses an IP address in any form the URL parser reads as one (`127.0.0.1`,
+  `2130706433`, `0x7f.1`, `0177.0.0.1`, `[::ffff:127.0.0.1]`), so no private, loopback or link-local address is
+  ever listed.
+- **https only**, with no userinfo.
+- **No redirect is followed**, to any host: a 3xx is refused, even back to a listed host. Presigned URLs don't
+  redirect, and following only listed hosts would add a hop check for nothing.
+- **The size** is counted as the body streams and refused past `maxBytes`; Content-Length is never trusted.
+- **The time** covers the headers and the body; past `timeoutMs` the fetch is refused.
+- **No credential** of the MCP request goes with the fetch.
+
+**DNS is not resolved first.** The hosts are your own choice, so a listed host whose name points at a private address
+is yours to not list. Checking the resolved address wouldn't close that either, since fetch resolves the name again (DNS
+rebinding) and can't be pinned to an address on Workers or Bun. Workers' fetch reaches no private range at all.

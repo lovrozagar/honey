@@ -119,6 +119,16 @@
 			"types": "./dist/mcp/oauth.d.ts",
 			"default": "./dist/mcp/oauth.js"
 		},
+		"./mcp/uploads": {
+			"honey-source": "./src/mcp/uploads.ts",
+			"types": "./dist/mcp/uploads.d.ts",
+			"default": "./dist/mcp/uploads.js"
+		},
+		"./mcp/url-files": {
+			"honey-source": "./src/mcp/url-files.ts",
+			"types": "./dist/mcp/url-files.d.ts",
+			"default": "./dist/mcp/url-files.js"
+		},
 		"./node": {
 			"honey-source": "./src/adapters/node/serve.ts",
 			"types": "./dist/adapters/node/serve.d.ts",
