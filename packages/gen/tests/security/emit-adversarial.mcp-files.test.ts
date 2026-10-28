@@ -205,12 +205,15 @@ const inline = (bytes: Uint8Array, more: Record<string, unknown> = {}) => ({
 
 const ABC = new TextEncoder().encode("abc")
 
+/** A call's files with nothing uploaded, read or fetched. */
+const NONE = { signal: new AbortController().signal, taken: new Map<object, Uint8Array>() }
+
 /** A reader giving `abc` for any path. */
 const read: Read = async () => ABC
 
 /** What `fileOf` makes of `file` with `cap` inline bytes left: its text, or the rule that refused it. */
 async function inlineOf(file: Record<string, unknown>, cap = 1000): Promise<string> {
-	const part = await fileOf(file, undefined, { cap, left: cap })
+	const part = await fileOf(file, NONE, { cap, left: cap })
 	return typeof part === "string" ? part : `${part.name ?? "-"} ${part.type} ${new TextDecoder().decode(part.bytes)}`
 }
 
@@ -262,8 +265,8 @@ describe("inline data is canonical base64, its declared size, its digest", () =>
 
 	it("refuses a path where no reader is, and reads one where it is, under its base name", async () => {
 		const [refused, taken] = [
-			await fileOf({ path: "a/b.txt" }, undefined, { cap: 1, left: 1 }),
-			await fileOf({ path: "a/b.txt" }, read, { cap: 1, left: 1 }),
+			await fileOf({ path: "a/b.txt" }, NONE, { cap: 1, left: 1 }),
+			await fileOf({ path: "a/b.txt" }, { ...NONE, read }, { cap: 1, left: 1 }),
 		]
 		expect([refused, typeof taken === "string" ? taken : [taken.name, taken.type]]).toEqual([
 			"is a path, which only the stdio server reads",

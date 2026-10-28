@@ -98,6 +98,8 @@ type Gathered = {
 	readonly scope: NameScope
 	readonly properties: Record<string, JsonSchema>
 	readonly required: string[]
+	/** a file argument's schema */
+	readonly file: JsonSchema
 }
 
 /** `form`'s fields as arguments into `into`: a text part its schema; a file, or a list of them, files.ts's. */
@@ -109,10 +111,10 @@ function partsOf(form: IRSchema, ir: IR, into: Gathered): Part[] {
 		const schema = resolve(field.schema)
 		const files = schema.kind === "array" && resolve(schema.items).kind === "binary"
 		const kind = schema.kind === "binary" ? "file" : files ? "files" : "text"
-		const own = kind === "file" ? FILE_SCHEMA : jsonSchemaOf(field.schema, ir.schemas)
+		const own = kind === "file" ? into.file : jsonSchemaOf(field.schema, ir.schemas)
 		into.properties[property] = {
 			...own,
-			...(kind === "files" && { items: FILE_SCHEMA }),
+			...(kind === "files" && { items: into.file }),
 			...describe(field.description),
 		}
 		if (field.required) into.required.push(property)
@@ -133,7 +135,7 @@ function bodyOf(op: IROperation, ir: IR, into: Gathered): Pick<ToolSpec, "body" 
 }
 
 /** `op`'s flat inputSchema and how each property reaches the SDK input. */
-function inputOf(op: IROperation, ir: IR) {
+function inputOf(op: IROperation, ir: IR, file: JsonSchema) {
 	const scope = new NameScope()
 	const credentials = new Set([...CREDENTIAL_HEADERS, ir.auth.headerName.toLowerCase()])
 	/* null-prototype: a parameter named __proto__ is a property, never the object's prototype */
@@ -152,7 +154,7 @@ function inputOf(op: IROperation, ir: IR) {
 			if (group === "params" || param.required === true) required.push(property)
 			args.push([property, group, param.name])
 		}
-	const body = bodyOf(op, ir, { properties, required, scope })
+	const body = bodyOf(op, ir, { file, properties, required, scope })
 	let collect: ToolSpec["collect"]
 	if (op.extensions.sse === true) {
 		collect = [scope.claim("max_events"), scope.claim("last_event_id")]
@@ -174,12 +176,12 @@ function inputOf(op: IROperation, ir: IR) {
 }
 
 /** Every tool the IR's operations make, in their order. */
-export function toolsOf(ir: IR): ToolSpec[] {
+export function toolsOf(ir: IR, file: JsonSchema = FILE_SCHEMA): ToolSpec[] {
 	const members = sdkMemberPaths(ir)
 	const model = sdkModel(ir)
 	const taken = new Set<string>()
 	return ir.operations.filter(isTool).map((op) => {
-		const { args, body, collect, inputSchema } = inputOf(op, ir)
+		const { args, body, collect, inputSchema } = inputOf(op, ir, file)
 		/* the SDK model holds every operation of the IR */
 		const sdkOp = model.opsById.get(op.id) as NonNullable<ReturnType<typeof model.opsById.get>>
 		const annotations = annotationsOf(sdkOp)

@@ -72,7 +72,7 @@ if (read === undefined) {
 const filesNote = (prefix: string) => `
 // A file argument is inline (the file-uploads extension's FileInput, at most $${prefix}_MAX_INLINE_BYTES decoded in one
 // call, 1 MiB by default) or a path under $${prefix}_FILE_ROOT (the working directory by default), read whole, at most
-// $${prefix}_MAX_FILE_BYTES (50 MiB by default).`
+// $${prefix}_MAX_FILE_BYTES (50 MiB by default). An upload (a FileInput without data) and a URL are a mounted server's.`
 
 /** The entry's note on --http. */
 const httpNote = (prefix: string) => `//
@@ -116,7 +116,7 @@ ${BYTES}
 /** The protocol over the bound tools, served over Streamable HTTP with --http, else over stdio. */
 const serveSource = (app: App) => `const protocol = createProtocol(
 	{ name: ${tsString(app.name)}, version: ${tsString(app.version)} },
-	bindTools(toolSpecs, client, { opening, secrets: [key, token ?? "", ...Object.values(headers)], timeout: Number(timeout)${app.files ? ", inline" : ""} }),
+	bindTools(toolSpecs, client, { opening, secrets: [key, token ?? "", ...Object.values(headers)], timeout: Number(timeout)${app.files ? ", inline" : ""} }),${app.files ? "\n\tfilesCapability(inline)," : ""}
 )
 if (http) {
 	const max = bytes(${tsString(`${app.envPrefix}_MAX_BODY_BYTES`)}, "4194304")
@@ -149,7 +149,7 @@ const entrySource = (app: App, ir: IR) =>
 // scrubbed as the key is; $${app.envPrefix}_REDIRECT is same-origin (the default) or follow. SIGINT and SIGTERM abort
 // every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.${app.files ? filesNote(app.envPrefix) : ""}
 ${httpNote(app.envPrefix)}
-import { ${app.files ? "BYTES_MAX, bindTools, configHeaders, createProtocol, fileReader, listenHttp, serveHttp, serveStdio" : "BYTES_MAX, bindTools, configHeaders, createProtocol, listenHttp, serveHttp, serveStdio"} } from "./mcp.runtime"
+import { ${app.files ? "BYTES_MAX, bindTools, configHeaders, createProtocol, fileReader, filesCapability, listenHttp, serveHttp, serveStdio" : "BYTES_MAX, bindTools, configHeaders, createProtocol, listenHttp, serveHttp, serveStdio"} } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { headerValue } from "./sdk/api.runtime.gen"
 import { toolSpecs } from "./tools.gen"

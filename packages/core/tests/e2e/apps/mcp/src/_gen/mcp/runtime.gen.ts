@@ -52,13 +52,198 @@ export const isId = (value: unknown): value is Id =>
 	typeof value === "string" || (typeof value === "number" && Number.isFinite(value))
 
 /**
+ * A file argument's value (bit 21 c, g): the io.modelcontextprotocol/files draft's FileInput (PR head 6101d34), its data
+ * canonical base64 of its size and digest, a call's inline bytes capped; a path a reading transport reads; a URL a
+ * mount's fetch reads. The extension's wire shape lives here alone: its identifier, its advertisement, its upload flow
+ * (a mount's uploads, a 2026-07-28 request declaring it): an input request of one `omit` target a data-less file, and
+ * on the retry each file's bytes taken once by the token its requestState echoes.
+ */
+export const FILES = "io.modelcontextprotocol/files"
+
+/** The extension as advertised: the inline bytes one request may carry. */
+export const filesCapability = (maxInlineBytes: number) => ({ [FILES]: { maxInlineBytes } })
+
+/** Reads a file by its path, rejecting with the rule it breaks. */
+export type Read = (path: string) => Promise<Uint8Array>
+
+/** Fetches a file by its URL: its bytes, type and name; rejecting with the rule it breaks. */
+export type FetchFile = (
+	url: string,
+	signal: AbortSignal,
+) => Promise<{ bytes: Uint8Array; type: string; name?: string }>
+
+/* an upload's call (credential headers, tool, arguments) and file (id, size, SHA-256) */
+type Scope = { credential: string; tool: string; args: Record<string, unknown> }
+type Declared = { id: string; size: number; digest: string }
+
+/**
+ * A mount's uploads for one request: targets under `base/`, a file's size cap, a token, and the retry's bytes, taken
+ * once; `take` rejects a token the call does not hold and resolves a missing upload's rule.
+ */
+export type Uploads = {
+	readonly base: string
+	readonly max: number
+	readonly issue: (scope: Scope, file: Declared) => Promise<string>
+	readonly take: (scope: Scope, file: Declared, token: string) => Promise<Uint8Array | string>
+}
+
+/** A call's files: a path reader, a URL fetch, uploads and their credential; a modern request's params and client. */
+export type Files = {
+	readonly read?: Read
+	readonly fetch?: FetchFile
+	readonly uploads?: Uploads
+	readonly credential?: string
+	readonly asked?: Record<string, unknown>
+	readonly client?: { readonly extensions?: Record<string, unknown> }
+}
+
+/* canonical base64: whole quads, the last padded, its unused bits zero */
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/
+
+/** `text`'s bytes when it is canonical base64. */
+export const decoded = (text: string): Uint8Array<ArrayBuffer> | undefined =>
+	BASE64.test(text) ? Uint8Array.from(atob(text), (char) => char.charCodeAt(0)) : undefined
+
+/** `bytes` as base64, 32 KiB at a time (no Buffer, so a Worker runs it). */
+export function encoded(bytes: Uint8Array): string {
+	let text = ""
+	for (let at = 0; at < bytes.length; at += 32_768) text += String.fromCharCode(...bytes.subarray(at, at + 32_768))
+	return btoa(text)
+}
+
+/** `bytes`' SHA-256, base64url unpadded, as a FileInput's digest is. */
+export const digestOf = async (bytes: Uint8Array<ArrayBuffer>) =>
+	encoded(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+		.replace(/=+$/, "")
+		.replaceAll("+", "-")
+		.replaceAll("/", "_")
+
+/** An inline FileInput's bytes, `budget.left` the inline bytes still allowed; else the rule it breaks. */
+async function inlined(file: Record<string, unknown>, budget: { left: number; cap: number }) {
+	if (typeof file.data !== "string") return "has no data, and no upload is served here"
+	const bytes = decoded(file.data)
+	if (bytes === undefined) return "data is not base64"
+	if ((budget.left -= bytes.length) < 0) return `is past the ${budget.cap} inline bytes a call may carry`
+	if (bytes.length !== file.size) return "data does not decode to its size"
+	if ((await digestOf(bytes)) !== (file.digest as { value: unknown }).value) return "data does not match its digest"
+	return { bytes, ...named(file) }
+}
+
+/** A FileInput's type, and its name when it gives one. */
+const named = (file: Record<string, unknown>) => ({
+	type: String(file.mimeType),
+	...(typeof file.name === "string" && { name: file.name }),
+})
+
+/** A FileInput as its upload binds it. */
+const declared = (file: Record<string, unknown>): Declared => ({
+	digest: String((file.digest as { value: unknown }).value),
+	id: String(file.id),
+	size: Number(file.size),
+})
+
+type Pending = readonly (readonly [label: string, value: Record<string, unknown>])[]
+
+/** The first call's input request: one `omit` target a pending file, the tokens its requestState. */
+async function asked(uploads: Uploads, scope: Scope, pending: Pending) {
+	/* a whole size within the cap, a SHA-256's 43 base64url characters: no `.` in a token's fields */
+	const wrong = pending.find(([, { size, ...value }]) => {
+		const fits = Number.isSafeInteger(size) && (size as number) >= 0 && (size as number) <= uploads.max
+		return !(fits && /^[\w-]{43}$/.test(declared(value).digest))
+	})
+	if (wrong)
+		return `Invalid arguments: ${wrong[0]} needs a whole size within the ${uploads.max}-byte upload cap and a SHA-256`
+	const tokens = await Promise.all(pending.map(([, value]) => uploads.issue(scope, declared(value))))
+	const files = pending.map(([, value], at) => ({
+		credentials: "omit",
+		fileId: value.id,
+		url: `${uploads.base}/${tokens[at]}`,
+	}))
+	return {
+		inputRequired: {
+			inputRequests: { uploads: { method: `${FILES}/upload`, params: { files } } },
+			requestState: tokens.join(" "),
+		},
+	}
+}
+
+/** The retry's bytes: one outcome a pending file, the state one token a file in its order, each file taken once. */
+async function retried(uploads: Uploads, scope: Scope, pending: Pending, params: Record<string, unknown>) {
+	const answered = (params.inputResponses as { uploads?: { resultType?: unknown; files?: unknown } } | undefined)
+		?.uploads
+	const listed = Array.isArray(answered?.files) ? (answered.files as ({ fileId?: unknown } | null)[]) : []
+	const outcomes = new Map(listed.map((each) => [each?.fileId, (each as { status?: unknown } | null)?.status]))
+	const tokens = typeof params.requestState === "string" ? params.requestState.split(" ") : []
+	const answers = (status: string) => pending.filter(([, value]) => outcomes.get(value.id) === status)
+	const [completed, failed] = [answers("completed"), answers("failed")]
+	if (
+		answered?.resultType !== "complete" ||
+		tokens.length !== pending.length ||
+		listed.length !== pending.length ||
+		completed.length + failed.length !== pending.length
+	)
+		return { invalid: "requestState and inputResponses.uploads answer no upload this call asked for" }
+	if (failed[0]) return `Invalid arguments: ${failed[0][0]} failed to upload`
+	const taken = new Map<object, Uint8Array>()
+	for (const [at, [label, value]] of pending.entries()) {
+		let bytes: Uint8Array | string
+		try {
+			bytes = await uploads.take(scope, declared(value), tokens[at] as string)
+			/* a token this call does not hold is the state's refusal */
+		} catch (error) {
+			return { invalid: (error as Error).message }
+		}
+		if (typeof bytes === "string") return `Invalid arguments: ${label} ${bytes}`
+		taken.set(value, bytes)
+	}
+	return taken
+}
+
+/** The data-less FileInputs among `values` (`[label, value]`): asked for on the call, taken on its retry. */
+export function staged(tool: string, args: Record<string, unknown>, values: Pending, files: Files | undefined) {
+	const { asked: params, client, credential = "", uploads } = files ?? {}
+	const pending = values.filter(([, value]) => Object.hasOwn(value, "id") && value.data === undefined)
+	if (uploads === undefined || pending.length === 0) return new Map<object, Uint8Array>()
+	const extension = client?.extensions?.[FILES]
+	if (typeof extension !== "object" || extension === null)
+		return `Invalid arguments: ${pending[0]?.[0]} has no data, and an upload needs a 2026-07-28 request declaring ${FILES}`
+	const ids = values.flatMap(([, value]) => (Object.hasOwn(value, "id") ? [value.id] : []))
+	if (new Set(ids).size !== ids.length) return "Invalid arguments: a file id repeats"
+	const scope = { args, credential, tool }
+	return params?.requestState === undefined ? asked(uploads, scope, pending) : retried(uploads, scope, pending, params)
+}
+
+/** A file argument its inputSchema took: its bytes, name and type; else the rule it breaks. */
+export async function fileOf(
+	file: Record<string, unknown>,
+	files: Files & { readonly taken: Map<object, Uint8Array>; readonly signal: AbortSignal },
+	budget: { left: number; cap: number },
+) {
+	const uploaded = files.taken.get(file)
+	if (Object.hasOwn(file, "id")) return uploaded ? { bytes: uploaded, ...named(file) } : inlined(file, budget)
+	const { fetch, read } = files
+	const url = Object.hasOwn(file, "url")
+	if (url ? fetch === undefined : read === undefined)
+		return url ? "is a URL, which this server fetches none of" : "is a path, which only the stdio server reads"
+	try {
+		if (url) return await (fetch as FetchFile)(String(file.url), files.signal)
+		const path = String(file.path)
+		return { bytes: await (read as Read)(path), name: path.split(/[/\\]/).pop(), type: "application/octet-stream" }
+		/* a reader's or a fetch's refusal is its rule */
+	} catch (error) {
+		return (error as Error).message
+	}
+}
+
+/**
  * The MCP server's protocol (bit 18; dual-era, bit 21 b), whatever the transport. A request whose `_meta` names its
  * revision is modern (2026-07-28), served from itself alone: server/discover, tools/list (cached) and tools/call, each
  * result complete; another revision refused naming those served. Any other is legacy: initialize negotiates 2025-11-25
  * down to 2025-03-26 into the connection, then ping, tools/list and tools/call; under 2025-03-26 no outputSchema, no
  * structuredContent, and only there a batch. A fault answers at once, a call when done; a tool's failure is its result.
  * A call with a progressToken may report progress, each step a notifications/progress before its result. A transport
- * that reads files (bit 21 c: stdio) hands each call its reader.
+ * that reads files (bit 21 c: stdio) hands each call its reader; a mount its uploads and fetch, a modern call its
+ * params, so it may answer an input request or refuse its state (bit 21 g). `extensions` are advertised in both eras.
  */
 
 /** The revisions served, newest first: the modern, then each an initialize may negotiate, the newest by default. */
@@ -81,6 +266,9 @@ export type ToolResult = {
 	readonly _meta?: Record<string, unknown>
 }
 
+/** A call's answer: its result, a modern call's input request, or its params refused. */
+export type Outcome = ToolResult | { readonly inputRequired: Record<string, unknown> } | { readonly invalid: string }
+
 /** A tool: what tools/list shows of it, and what tools/call runs. */
 export type Tool = {
 	readonly name: string
@@ -92,8 +280,8 @@ export type Tool = {
 		args: Record<string, unknown>,
 		signal: AbortSignal,
 		progress: (done: number) => void,
-		read?: (path: string) => Promise<Uint8Array>,
-	) => Promise<ToolResult>
+		files?: Files,
+	) => Promise<Outcome>
 }
 
 /** Who the server is, as initialize and server/discover answer. */
@@ -102,12 +290,12 @@ export type ServerInfo = { readonly name: string; readonly version: string }
 /** A connection's legacy revision, once its initialize negotiated one. */
 export type Connection = { version?: string }
 
-/** A message's abort, where its notifications go, its connection, and its transport's file reader when it has one. */
+/** A message's abort, where its notifications go, its connection, and its transport's files. */
 export type Context = {
 	readonly signal: AbortSignal
 	readonly notify: (message: object) => void
 	readonly connection: Connection
-	readonly read?: (path: string) => Promise<Uint8Array>
+	readonly files?: Files
 }
 
 /** Each message's reply, a batch's, or none; a promise only for a call, never rejected. */
@@ -175,10 +363,22 @@ function called({ id, params }: Asked, tool: Tool | undefined, version: string, 
 			method: "notifications/progress",
 			params: { progress: done, progressToken: token },
 		})
-	return tool.call(args, context.signal, progress, context.read).then(
-		(outcome) => result(id, { ...shaped(outcome, version >= STRUCTURED_SINCE), ...(version === MODERN && COMPLETE) }),
-		() => failure(id, ErrorCode.InternalError, "Internal error"),
-	)
+	const modern = version === MODERN
+	const client = modern ? (claimed(params)?.[CAPABILITIES] as Files["client"]) : undefined
+	return tool
+		.call(args, context.signal, progress, modern ? { ...context.files, asked: params, client } : context.files)
+		.then(
+			(outcome) =>
+				"invalid" in outcome
+					? failure(id, ErrorCode.InvalidParams, `Invalid params: ${outcome.invalid}`)
+					: result(
+							id,
+							"inputRequired" in outcome
+								? { ...outcome.inputRequired, resultType: "input_required" }
+								: { ...shaped(outcome, version >= STRUCTURED_SINCE), ...(modern && COMPLETE) },
+						),
+			() => failure(id, ErrorCode.InternalError, "Internal error"),
+		)
 }
 
 /** A batch's replies, `one` answering each: only 2025-03-26 has batches, every later revision dropped them. */
@@ -195,8 +395,9 @@ function batch(
 	})
 }
 
-/** The protocol over `tools`, as `info` names the server. */
-export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protocol {
+/** The protocol over `tools`, as `info` names the server, advertising `extensions`. */
+export function createProtocol(info: ServerInfo, tools: readonly Tool[], extensions?: object): Protocol {
+	const capabilities = { tools: {}, ...(extensions && { extensions }) }
 	const byName = new Map(tools.map((tool) => [tool.name, tool]))
 	/* `method` under `version`: each era's own methods, and the tools in both; undefined for any other method */
 	const served = (request: Asked, method: string, version: string, context: Context) => {
@@ -206,7 +407,7 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protoc
 			case "server/discover":
 				return result(id, {
 					_meta: { "io.modelcontextprotocol/serverInfo": info },
-					capabilities: { tools: {} },
+					capabilities,
 					supportedVersions: PROTOCOL_VERSIONS,
 					...CACHED,
 				})
@@ -214,7 +415,7 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protoc
 				context.connection.version =
 					PROTOCOL_VERSIONS.slice(1).find((each) => each === params.protocolVersion) ?? LEGACY
 				return result(id, {
-					capabilities: { tools: {} },
+					capabilities,
 					protocolVersion: context.connection.version,
 					serverInfo: info,
 				})
@@ -253,70 +454,14 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protoc
 }
 
 /**
- * A file argument's value (bit 21 c): the io.modelcontextprotocol/files draft's FileInput (PR head 6101d34), its data
- * canonical base64 of its size and digest, a call's inline bytes capped; or a path a reading transport reads. The
- * extension is advertised from bit 21 g, with its uploads.
- */
-
-/** Reads a file by its path, rejecting with the rule it breaks. */
-export type Read = (path: string) => Promise<Uint8Array>
-
-/* canonical base64: whole quads, the last padded, its unused bits zero */
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/
-
-/** `text`'s bytes when it is canonical base64. */
-export const decoded = (text: string): Uint8Array<ArrayBuffer> | undefined =>
-	BASE64.test(text) ? Uint8Array.from(atob(text), (char) => char.charCodeAt(0)) : undefined
-
-/** `bytes` as base64, 32 KiB at a time (no Buffer, so a Worker runs it). */
-export function encoded(bytes: Uint8Array): string {
-	let text = ""
-	for (let at = 0; at < bytes.length; at += 32_768) text += String.fromCharCode(...bytes.subarray(at, at + 32_768))
-	return btoa(text)
-}
-
-/** An inline FileInput's bytes, `budget.left` the inline bytes still allowed; else the rule it breaks. */
-async function inlined(file: Record<string, unknown>, budget: { left: number; cap: number }) {
-	if (typeof file.data !== "string") return "has no data, and no upload is served here"
-	const bytes = decoded(file.data)
-	if (bytes === undefined) return "data is not base64"
-	if ((budget.left -= bytes.length) < 0) return `is past the ${budget.cap} inline bytes a call may carry`
-	if (bytes.length !== file.size) return "data does not decode to its size"
-	/* the digest is base64url, unpadded */
-	const digest = encoded(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
-		.replace(/=+$/, "")
-		.replaceAll("+", "-")
-		.replaceAll("/", "_")
-	if (digest !== (file.digest as { value: unknown }).value) return "data does not match its digest"
-	return { bytes, type: String(file.mimeType), ...(typeof file.name === "string" && { name: file.name }) }
-}
-
-/** A file argument its inputSchema took: its bytes, name and type; else the rule it breaks. */
-export async function fileOf(
-	file: Record<string, unknown>,
-	read: Read | undefined,
-	budget: { left: number; cap: number },
-) {
-	if (Object.hasOwn(file, "id")) return inlined(file, budget)
-	if (read === undefined) return "is a path, which only the stdio server reads"
-	const path = String(file.path)
-	try {
-		return { bytes: await read(path), name: path.split(/[/\\]/).pop(), type: "application/octet-stream" }
-		/* a reader's refusal is its rule */
-	} catch (error) {
-		return (error as Error).message
-	}
-}
-
-/**
  * MCP's Streamable HTTP transport (bit 21 d), web-standard (no node API): an Origin not its own nor listed 403, POST
  * alone 405, Accept naming JSON and SSE 406, JSON 415, a body past `max` as it streams 413. MCP-Protocol-Version picks
  * the era (absent: 2025-03-26); a modern request's headers match its body, else 400 -32020. No session id. JSON, or SSE
  * from a call's first progress. In 2026-07-28 a closed request or stream cancels its call. No path is read.
  */
 
-/** What the transport serves beside its own origin, and its body cap in bytes. */
-export type HttpOptions = { readonly origins?: readonly string[]; readonly max?: number }
+/** What the transport serves beside its own origin, its body cap in bytes, and its calls' files (a mount's). */
+export type HttpOptions = { readonly origins?: readonly string[]; readonly max?: number; readonly files?: Files }
 
 const SSE = { "cache-control": "no-cache", "content-type": "text/event-stream", "x-accel-buffering": "no" }
 
@@ -404,9 +549,14 @@ function statusOf(reply: Reply | Reply[], modern: boolean): number {
 
 /**
  * `protocol`'s answer to `body` under `version` as a Response: JSON, or an event stream once the call reports progress.
- * A modern request's call is cancelled by `closed` or its stream's close; a legacy one's by neither.
+ * A modern request's call is cancelled by `closed` or its stream's close; a legacy one's by neither. Its calls get `files`.
  */
-function streamed(protocol: Protocol, body: unknown, version: string, closed?: AbortSignal) {
+function streamed(
+	protocol: Protocol,
+	body: unknown,
+	version: string,
+	{ closed, files }: { closed?: AbortSignal; files?: Files },
+) {
 	const call = new AbortController()
 	const signal = closed ? AbortSignal.any([closed, call.signal]) : call.signal
 	return new Promise<Response>((settle) => {
@@ -421,7 +571,7 @@ function streamed(protocol: Protocol, body: unknown, version: string, closed?: A
 			}
 			write(message)
 		}
-		const answer = protocol.answer(body, { connection: { version }, notify, signal })
+		const answer = protocol.answer(body, { connection: { version }, files, notify, signal })
 		void Promise.resolve(answer).then((reply) => {
 			if (stream !== undefined) return void (write(reply), open && stream.close())
 			settle(reply === undefined ? answered(202) : answered(statusOf(reply, closed !== undefined), reply))
@@ -430,7 +580,7 @@ function streamed(protocol: Protocol, body: unknown, version: string, closed?: A
 }
 
 /** The Streamable HTTP endpoint serving `protocol`: its own origin and `origins`, a body at most `max` bytes. */
-export function serveHttp(protocol: Protocol, { max = 4_194_304, origins = [] }: HttpOptions = {}) {
+export function serveHttp(protocol: Protocol, { files, max = 4_194_304, origins = [] }: HttpOptions = {}) {
 	return async (request: Request): Promise<Response> => {
 		const unfitting = unfit(request, origins)
 		if (unfitting) return unfitting
@@ -455,7 +605,8 @@ export function serveHttp(protocol: Protocol, { max = 4_194_304, origins = [] }:
 		const message = isObject(body) ? body : {}
 		const refusal = misheaded(message, request.headers, version)
 		if (refusal) return refusal
-		return streamed(protocol, body, version ?? BATCHED, modernOf(message, version) ? request.signal : undefined)
+		const closed = modernOf(message, version) ? request.signal : undefined
+		return streamed(protocol, body, version ?? BATCHED, { closed, files })
 	}
 }
 
@@ -795,6 +946,7 @@ export async function collected(
  * text, a raw body under its content type), the SDK member the operation sits at is called with the session's abort,
  * and its answer becomes the tool's result as result.ts shapes it, scrubbed of the API key; an event stream's, the
  * collect stream.ts runs. Bit 21 c: a multipart form's parts are arguments, sent as multipart whether or not a file is.
+ * Bit 21 g: data-less FileInputs are staged first (files.ts), an input request or a refusal the answer.
  */
 
 /** The SDK input group a parameter goes in. */
@@ -856,25 +1008,37 @@ function inputOf(spec: ToolSpec, args: Record<string, unknown>): Record<string, 
 		: { ...input, body: bytes }
 }
 
-/** `input` with `args`' form as its multipart body, each file read or decoded; or why a part cannot be sent. */
+/**
+ * `input` with `args`' form as its multipart body, each file uploaded, read, fetched or decoded; else the answer. An
+ * input with no parts, or a refusal, is as it came.
+ */
 async function formed(
-	input: Record<string, Record<string, unknown>>,
-	parts: NonNullable<ToolSpec["parts"]>,
+	input: Record<string, unknown> | string,
+	spec: ToolSpec,
 	args: Record<string, unknown>,
-	files: { read: Read | undefined; cap: number; left: number },
+	files: Files & { readonly signal: AbortSignal; readonly cap: number; left: number },
 ) {
+	if (typeof input === "string" || spec.parts === undefined) return input
+	const items = spec.parts.flatMap(([property, name, kind]) =>
+		[args[property] ?? []].flat().map((item, at) => {
+			const label = `${property}${kind === "files" ? `[${at}]` : ""}`
+			return [label, name, kind === "text" ? undefined : (item as Record<string, unknown>), item] as const
+		}),
+	)
+	const values = items.flatMap(([label, , file]) => (file ? [[label, file] as const] : []))
+	const taken = await staged(spec.name, args, values, files)
+	if (!(taken instanceof Map)) return taken
 	const form = new FormData()
-	for (const [property, name, kind] of parts)
-		for (const [at, item] of [args[property] ?? []].flat().entries()) {
-			const file = kind === "text" ? undefined : await fileOf(item as Record<string, unknown>, files.read, files)
-			if (typeof file === "string") return `Invalid arguments: ${property}${kind === "files" ? `[${at}]` : ""} ${file}`
-			if (file)
-				form.append(name, new Blob([file.bytes as Uint8Array<ArrayBuffer>], { type: file.type }), file.name ?? name)
-			else form.append(name, typeof item === "string" ? item : JSON.stringify(item))
-		}
+	for (const [label, name, value, item] of items) {
+		const file = value && (await fileOf(value, { ...files, taken }, files))
+		if (typeof file === "string") return `Invalid arguments: ${label} ${file}`
+		if (file)
+			form.append(name, new Blob([file.bytes as Uint8Array<ArrayBuffer>], { type: file.type }), file.name ?? name)
+		else form.append(name, typeof item === "string" ? item : JSON.stringify(item))
+	}
 	/* fetch's own multipart encoding, its boundary in the content type */
 	const encoded = new Response(form)
-	const headers = { ...input.headers, "content-type": encoded.headers.get("content-type") }
+	const headers = { ...(input.headers as object), "content-type": encoded.headers.get("content-type") }
 	return { ...input, body: new Uint8Array(await encoded.arrayBuffer()), headers }
 }
 
@@ -893,17 +1057,17 @@ function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown
 export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding: Binding): Tool[] {
 	const scrub = redactor(binding.secrets)
 	return specs.map((spec) => ({
-		call: async (args, signal, progress, read) => {
+		call: async (args, signal, progress, files) => {
 			const paths = spec.args.filter(([, group]) => group === "params").map(([property]) => property)
-			let input = refusal(spec.inputSchema, paths, args) ?? inputOf(spec, args)
 			const cap = binding.inline ?? BYTES_MAX
-			if (typeof input !== "string" && spec.parts)
-				input = await formed(input as Record<string, Record<string, unknown>>, spec.parts, args, {
-					cap,
-					left: cap,
-					read,
-				})
+			const input = await formed(refusal(spec.inputSchema, paths, args) ?? inputOf(spec, args), spec, args, {
+				...files,
+				cap,
+				left: cap,
+				signal,
+			})
 			if (typeof input === "string") return json(scrub({ message: input }), true)
+			if ("inputRequired" in input || "invalid" in input) return input as Outcome
 			let opened = false
 			const [owner, method] = methodAt(spec.collect ? binding.opening(() => (opened = true)) : client, spec.member)
 			const send = (more: object) => (method as (input: unknown) => unknown).call(owner, { ...input, ...more })
@@ -941,7 +1105,9 @@ export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding
  * MCP mounted in the app itself (bit 21 e), web-standard: each request served over http.ts by tools bound to an SDK
  * client of its own, whose fetch dispatches in-process to the app. Only the request headers its security schemes name
  * go on each inner request, and only to the app's own origin: a call off it is refused, never sent. An inner 401, or
- * a 403 for insufficient_scope, is the endpoint's own answer with its challenge, never a tool's result.
+ * a 403 for insufficient_scope, is the endpoint's own answer with its challenge, never a tool's result. Bit 21 g: the
+ * file-uploads extension advertised for a file tool; the app's uploads (bound to the request's credential headers) and
+ * URL fetch reach each call; without the fetch no file argument shows its `{url}` value.
  */
 
 /** The SDK config a mounted call runs under. */
@@ -955,11 +1121,35 @@ export type MountConfig = {
 	readonly timeout: number
 }
 
-/** What a mount hands each request: the in-process dispatch, the origins served beside its own, the body cap. */
+/**
+ * What a mount hands each request: the in-process dispatch, the origins served beside its own, the body cap, and the
+ * app's opt-ins: its uploads for this request, its URL fetch.
+ */
 export type Mount = {
 	readonly dispatch: (request: Request) => Promise<Response>
 	readonly origins?: readonly string[]
 	readonly max?: number
+	readonly uploads?: Uploads | undefined
+	readonly fetchFile?: FetchFile | undefined
+}
+
+/** `schema`, a file argument's, without its `{url}` value. */
+const urlless = (schema: Record<string, unknown>) => ({
+	...schema,
+	anyOf: (schema.anyOf as { properties?: { url?: unknown } }[]).filter((value) => !value.properties?.url),
+})
+
+/** `spec` with no file argument showing a `{url}` value. */
+function fetchless(spec: ToolSpec): ToolSpec {
+	if (spec.parts === undefined) return spec
+	const properties = { ...(spec.inputSchema.properties as Record<string, Record<string, unknown>>) }
+	for (const [property, , kind] of spec.parts)
+		if (kind !== "text") {
+			const own = properties[property] as Record<string, unknown>
+			properties[property] =
+				kind === "file" ? urlless(own) : { ...own, items: urlless(own.items as Record<string, unknown>) }
+		}
+	return { ...spec, inputSchema: { ...spec.inputSchema, properties } }
 }
 
 /** The generated handler: whether any tool's operation needs a credential, the scheme a 401 names, the endpoint. */
@@ -983,10 +1173,14 @@ export type Mounting = {
 
 /** The handler serving `mounting`'s tools at a mount. */
 export function mountedMcp(mounting: Mounting): Mounted {
-	const { challenge, client, credentials, info, secured, server, specs, timeout = 30_000 } = mounting
+	const { challenge, client, credentials, info, secured, server, timeout = 30_000 } = mounting
+	const extensions = mounting.specs.some((spec) => spec.parts?.some(([, , kind]) => kind !== "text"))
+		? filesCapability(BYTES_MAX)
+		: undefined
+	const shown = mounting.specs.map(fetchless)
 	return {
 		challenge,
-		fetch: async (request, { dispatch, max, origins }) => {
+		fetch: async (request, { dispatch, fetchFile, max, origins, uploads }) => {
 			const origin = new URL(request.url).origin
 			const carried = credentials.flatMap((name) => {
 				const value = request.headers.get(name)
@@ -1010,13 +1204,15 @@ export function mountedMcp(mounting: Mounting): Mounted {
 				throwOnError: false,
 				timeout,
 			}
-			const tools = bindTools(specs, client(config), {
+			const tools = bindTools(fetchFile ? mounting.specs : shown, client(config), {
 				opening: (seen) => client({ ...config, onResponse: [() => void seen()] }),
 				/* each credential as sent, and its token after the scheme */
 				secrets: carried.flatMap(([, value]) => [value, value.replace(/^\S+ +/, "")]),
 				timeout,
 			})
-			const answer = await serveHttp(createProtocol(info, tools), { max, origins })(request)
+			const credential = carried.map(([name, value]) => `${name}: ${value}`).join("\n")
+			const files = { credential, ...(fetchFile && { fetch: fetchFile }), ...(uploads && { uploads }) }
+			const answer = await serveHttp(createProtocol(info, tools, extensions), { files, max, origins })(request)
 			if (refused === undefined) return answer
 			await answer.body?.cancel()
 			const named = refused.headers.get("www-authenticate") ?? challenge

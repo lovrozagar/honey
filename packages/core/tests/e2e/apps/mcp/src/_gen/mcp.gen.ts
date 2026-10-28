@@ -50,13 +50,13 @@ const toolSpecs: readonly ToolSpec[] = [
 						{
 							type: "object",
 							properties: {
-								path: {
+								url: {
 									type: "string",
-									description: "A file under the server's file root",
+									description: "An https URL the server fetches",
 								},
 							},
 							required: [
-								"path",
+								"url",
 							],
 							additionalProperties: false,
 						},
@@ -221,13 +221,13 @@ const toolSpecs: readonly ToolSpec[] = [
 						{
 							type: "object",
 							properties: {
-								path: {
+								url: {
 									type: "string",
-									description: "A file under the server's file root",
+									description: "An https URL the server fetches",
 								},
 							},
 							required: [
-								"path",
+								"url",
 							],
 							additionalProperties: false,
 						},
@@ -408,13 +408,13 @@ const toolSpecs: readonly ToolSpec[] = [
 						{
 							type: "object",
 							properties: {
-								path: {
+								url: {
 									type: "string",
-									description: "A file under the server's file root",
+									description: "An https URL the server fetches",
 								},
 							},
 							required: [
-								"path",
+								"url",
 							],
 							additionalProperties: false,
 						},
@@ -544,13 +544,13 @@ const toolSpecs: readonly ToolSpec[] = [
 						{
 							type: "object",
 							properties: {
-								path: {
+								url: {
 									type: "string",
-									description: "A file under the server's file root",
+									description: "An https URL the server fetches",
 								},
 							},
 							required: [
-								"path",
+								"url",
 							],
 							additionalProperties: false,
 						},
@@ -687,13 +687,13 @@ const toolSpecs: readonly ToolSpec[] = [
 						{
 							type: "object",
 							properties: {
-								path: {
+								url: {
 									type: "string",
-									description: "A file under the server's file root",
+									description: "An https URL the server fetches",
 								},
 							},
 							required: [
-								"path",
+								"url",
 							],
 							additionalProperties: false,
 						},

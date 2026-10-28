@@ -5,8 +5,10 @@
  * down to 2025-03-26 into the connection, then ping, tools/list and tools/call; under 2025-03-26 no outputSchema, no
  * structuredContent, and only there a batch. A fault answers at once, a call when done; a tool's failure is its result.
  * A call with a progressToken may report progress, each step a notifications/progress before its result. A transport
- * that reads files (bit 21 c: stdio) hands each call its reader.
+ * that reads files (bit 21 c: stdio) hands each call its reader; a mount its uploads and fetch, a modern call its
+ * params, so it may answer an input request or refuse its state (bit 21 g). `extensions` are advertised in both eras.
  */
+import type { Files } from "./files.ts"
 import { ErrorCode, failure, type Id, isId, type Message, type Reply, result } from "./jsonrpc.ts"
 
 /** The revisions served, newest first: the modern, then each an initialize may negotiate, the newest by default. */
@@ -29,6 +31,9 @@ export type ToolResult = {
 	readonly _meta?: Record<string, unknown>
 }
 
+/** A call's answer: its result, a modern call's input request, or its params refused. */
+export type Outcome = ToolResult | { readonly inputRequired: Record<string, unknown> } | { readonly invalid: string }
+
 /** A tool: what tools/list shows of it, and what tools/call runs. */
 export type Tool = {
 	readonly name: string
@@ -40,8 +45,8 @@ export type Tool = {
 		args: Record<string, unknown>,
 		signal: AbortSignal,
 		progress: (done: number) => void,
-		read?: (path: string) => Promise<Uint8Array>,
-	) => Promise<ToolResult>
+		files?: Files,
+	) => Promise<Outcome>
 }
 
 /** Who the server is, as initialize and server/discover answer. */
@@ -50,12 +55,12 @@ export type ServerInfo = { readonly name: string; readonly version: string }
 /** A connection's legacy revision, once its initialize negotiated one. */
 export type Connection = { version?: string }
 
-/** A message's abort, where its notifications go, its connection, and its transport's file reader when it has one. */
+/** A message's abort, where its notifications go, its connection, and its transport's files. */
 export type Context = {
 	readonly signal: AbortSignal
 	readonly notify: (message: object) => void
 	readonly connection: Connection
-	readonly read?: (path: string) => Promise<Uint8Array>
+	readonly files?: Files
 }
 
 /** Each message's reply, a batch's, or none; a promise only for a call, never rejected. */
@@ -123,10 +128,22 @@ function called({ id, params }: Asked, tool: Tool | undefined, version: string, 
 			method: "notifications/progress",
 			params: { progress: done, progressToken: token },
 		})
-	return tool.call(args, context.signal, progress, context.read).then(
-		(outcome) => result(id, { ...shaped(outcome, version >= STRUCTURED_SINCE), ...(version === MODERN && COMPLETE) }),
-		() => failure(id, ErrorCode.InternalError, "Internal error"),
-	)
+	const modern = version === MODERN
+	const client = modern ? (claimed(params)?.[CAPABILITIES] as Files["client"]) : undefined
+	return tool
+		.call(args, context.signal, progress, modern ? { ...context.files, asked: params, client } : context.files)
+		.then(
+			(outcome) =>
+				"invalid" in outcome
+					? failure(id, ErrorCode.InvalidParams, `Invalid params: ${outcome.invalid}`)
+					: result(
+							id,
+							"inputRequired" in outcome
+								? { ...outcome.inputRequired, resultType: "input_required" }
+								: { ...shaped(outcome, version >= STRUCTURED_SINCE), ...(modern && COMPLETE) },
+						),
+			() => failure(id, ErrorCode.InternalError, "Internal error"),
+		)
 }
 
 /** A batch's replies, `one` answering each: only 2025-03-26 has batches, every later revision dropped them. */
@@ -143,8 +160,9 @@ function batch(
 	})
 }
 
-/** The protocol over `tools`, as `info` names the server. */
-export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protocol {
+/** The protocol over `tools`, as `info` names the server, advertising `extensions`. */
+export function createProtocol(info: ServerInfo, tools: readonly Tool[], extensions?: object): Protocol {
+	const capabilities = { tools: {}, ...(extensions && { extensions }) }
 	const byName = new Map(tools.map((tool) => [tool.name, tool]))
 	/* `method` under `version`: each era's own methods, and the tools in both; undefined for any other method */
 	const served = (request: Asked, method: string, version: string, context: Context) => {
@@ -154,7 +172,7 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protoc
 			case "server/discover":
 				return result(id, {
 					_meta: { "io.modelcontextprotocol/serverInfo": info },
-					capabilities: { tools: {} },
+					capabilities,
 					supportedVersions: PROTOCOL_VERSIONS,
 					...CACHED,
 				})
@@ -162,7 +180,7 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protoc
 				context.connection.version =
 					PROTOCOL_VERSIONS.slice(1).find((each) => each === params.protocolVersion) ?? LEGACY
 				return result(id, {
-					capabilities: { tools: {} },
+					capabilities,
 					protocolVersion: context.connection.version,
 					serverInfo: info,
 				})

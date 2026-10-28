@@ -10,6 +10,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { anyrow } from "./__fixtures__/anyrow.ts"
 import { typeErrors, written } from "./__fixtures__/written.ts"
+import { MOUNTED_FILE_SCHEMA } from "./files.ts"
 import { generateMcpHandler } from "./mounted.ts"
 import { MCP_PORTABLE, mcpRuntimeSource } from "./runtime.ts"
 import { toolsOf } from "./tools.ts"
@@ -225,6 +226,69 @@ describe("the mounted handler serving Anyrow in process (bit 21 e)", () => {
 				],
 				["POST /api/v1/projects/p1/tables/t1/extract-stream", KEY, [["text", "t"]]],
 			],
+		])
+	})
+})
+
+/* built, so no file but runtime/mcp/files.ts names it (tests/structure/mcp-file-extension.test.ts) */
+const EXTENSION = ["io.modelcontextprotocol", "files"].join("/")
+
+/** `handler`'s answer to a JSON-RPC `method` with `params`: modern when `params` has `_meta`, else 2025-11-25. */
+async function answerOf(handler: Mounted, method: string, params: Record<string, unknown>, mount = {}) {
+	const modern = "_meta" in params
+	const answer = await handler.fetch(
+		new Request("https://anyrow.example/mcp", {
+			body: JSON.stringify({ id: 1, jsonrpc: "2.0", method, params }),
+			headers: {
+				accept: "application/json, text/event-stream",
+				"content-type": "application/json",
+				"mcp-protocol-version": modern ? "2026-07-28" : "2025-11-25",
+				...(modern && { "mcp-method": method }),
+			},
+			method: "POST",
+		}),
+		{ dispatch: async () => new Response(null, { status: 500 }), ...mount },
+	)
+	return ((await answer.json()) as { result: Record<string, unknown> }).result
+}
+
+const META = {
+	"io.modelcontextprotocol/clientCapabilities": {},
+	"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+}
+const INITIALIZE = { capabilities: {}, clientInfo: { name: "c", version: "1" }, protocolVersion: "2025-11-25" }
+
+/** A URL fetch the mount is given, fetching nothing. */
+const fetchFile = async () => ({ bytes: new Uint8Array(), type: "text/plain" })
+
+/** What `handler` advertises in server/discover, then in a legacy initialize. */
+const capabilities = async (handler: Mounted) => [
+	(await answerOf(handler, "server/discover", { _meta: META })).capabilities,
+	(await answerOf(handler, "initialize", INITIALIZE)).capabilities,
+]
+
+describe("the mounted handler's files and their advertisement (bit 21 g)", () => {
+	it("shows each file argument as the mounted schema with a URL fetch, the FileInput alone without one", async () => {
+		const { handler } = await mounted(anyrow())
+		const fileOf = async (mount: object) => {
+			const { tools } = (await answerOf(handler, "tools/list", {}, mount)) as {
+				tools: { inputSchema: { properties: { file?: unknown } } }[]
+			}
+			return [...new Set(tools.map((tool) => JSON.stringify(tool.inputSchema.properties.file)))]
+		}
+		const [first] = MOUNTED_FILE_SCHEMA.anyOf as object[]
+		expect([await fileOf({ fetchFile }), await fileOf({})]).toEqual([
+			[JSON.stringify(MOUNTED_FILE_SCHEMA)],
+			[JSON.stringify({ anyOf: [first] })],
+		])
+	})
+
+	it("advertises the extension with its 1 MiB inline cap in both eras when a tool takes a file; else nothing", async () => {
+		const [files, none] = await Promise.all([mounted(anyrow()), mounted(oneTool())])
+		const advertised = { extensions: { [EXTENSION]: { maxInlineBytes: 1_048_576 } }, tools: {} }
+		expect([await capabilities(files.handler), await capabilities(none.handler)]).toEqual([
+			[advertised, advertised],
+			[{ tools: {} }, { tools: {} }],
 		])
 	})
 })

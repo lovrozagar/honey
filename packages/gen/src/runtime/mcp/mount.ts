@@ -2,9 +2,12 @@
  * MCP mounted in the app itself (bit 21 e), web-standard: each request served over http.ts by tools bound to an SDK
  * client of its own, whose fetch dispatches in-process to the app. Only the request headers its security schemes name
  * go on each inner request, and only to the app's own origin: a call off it is refused, never sent. An inner 401, or
- * a 403 for insufficient_scope, is the endpoint's own answer with its challenge, never a tool's result.
+ * a 403 for insufficient_scope, is the endpoint's own answer with its challenge, never a tool's result. Bit 21 g: the
+ * file-uploads extension advertised for a file tool; the app's uploads (bound to the request's credential headers) and
+ * URL fetch reach each call; without the fetch no file argument shows its `{url}` value.
  */
 import { bindTools, type SdkClient, type ToolSpec } from "./call.ts"
+import { type FetchFile, filesCapability, type Uploads } from "./files.ts"
 import { serveHttp } from "./http.ts"
 import { createProtocol, type ServerInfo } from "./protocol.ts"
 import { BYTES_MAX } from "./result.ts"
@@ -20,11 +23,35 @@ export type MountConfig = {
 	readonly timeout: number
 }
 
-/** What a mount hands each request: the in-process dispatch, the origins served beside its own, the body cap. */
+/**
+ * What a mount hands each request: the in-process dispatch, the origins served beside its own, the body cap, and the
+ * app's opt-ins: its uploads for this request, its URL fetch.
+ */
 export type Mount = {
 	readonly dispatch: (request: Request) => Promise<Response>
 	readonly origins?: readonly string[]
 	readonly max?: number
+	readonly uploads?: Uploads | undefined
+	readonly fetchFile?: FetchFile | undefined
+}
+
+/** `schema`, a file argument's, without its `{url}` value. */
+const urlless = (schema: Record<string, unknown>) => ({
+	...schema,
+	anyOf: (schema.anyOf as { properties?: { url?: unknown } }[]).filter((value) => !value.properties?.url),
+})
+
+/** `spec` with no file argument showing a `{url}` value. */
+function fetchless(spec: ToolSpec): ToolSpec {
+	if (spec.parts === undefined) return spec
+	const properties = { ...(spec.inputSchema.properties as Record<string, Record<string, unknown>>) }
+	for (const [property, , kind] of spec.parts)
+		if (kind !== "text") {
+			const own = properties[property] as Record<string, unknown>
+			properties[property] =
+				kind === "file" ? urlless(own) : { ...own, items: urlless(own.items as Record<string, unknown>) }
+		}
+	return { ...spec, inputSchema: { ...spec.inputSchema, properties } }
 }
 
 /** The generated handler: whether any tool's operation needs a credential, the scheme a 401 names, the endpoint. */
@@ -48,10 +75,14 @@ export type Mounting = {
 
 /** The handler serving `mounting`'s tools at a mount. */
 export function mountedMcp(mounting: Mounting): Mounted {
-	const { challenge, client, credentials, info, secured, server, specs, timeout = 30_000 } = mounting
+	const { challenge, client, credentials, info, secured, server, timeout = 30_000 } = mounting
+	const extensions = mounting.specs.some((spec) => spec.parts?.some(([, , kind]) => kind !== "text"))
+		? filesCapability(BYTES_MAX)
+		: undefined
+	const shown = mounting.specs.map(fetchless)
 	return {
 		challenge,
-		fetch: async (request, { dispatch, max, origins }) => {
+		fetch: async (request, { dispatch, fetchFile, max, origins, uploads }) => {
 			const origin = new URL(request.url).origin
 			const carried = credentials.flatMap((name) => {
 				const value = request.headers.get(name)
@@ -75,13 +106,15 @@ export function mountedMcp(mounting: Mounting): Mounted {
 				throwOnError: false,
 				timeout,
 			}
-			const tools = bindTools(specs, client(config), {
+			const tools = bindTools(fetchFile ? mounting.specs : shown, client(config), {
 				opening: (seen) => client({ ...config, onResponse: [() => void seen()] }),
 				/* each credential as sent, and its token after the scheme */
 				secrets: carried.flatMap(([, value]) => [value, value.replace(/^\S+ +/, "")]),
 				timeout,
 			})
-			const answer = await serveHttp(createProtocol(info, tools), { max, origins })(request)
+			const credential = carried.map(([name, value]) => `${name}: ${value}`).join("\n")
+			const files = { credential, ...(fetchFile && { fetch: fetchFile }), ...(uploads && { uploads }) }
+			const answer = await serveHttp(createProtocol(info, tools, extensions), { files, max, origins })(request)
 			if (refused === undefined) return answer
 			await answer.body?.cancel()
 			const named = refused.headers.get("www-authenticate") ?? challenge

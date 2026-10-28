@@ -14,9 +14,10 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { bindTools, type ToolSpec } from "../../runtime/mcp/call.ts"
+import type { ToolResult } from "../../runtime/mcp/protocol.ts"
 import { type RecordingServer, served } from "../shared/__fixtures__/recording-server.ts"
 import { exchange, exchangeEach, initialize, request, scratchDir, written } from "./__fixtures__/written.ts"
-import { FILE_SCHEMA } from "./files.ts"
+import { FILE_SCHEMA, MOUNTED_FILE_SCHEMA } from "./files.ts"
 import { generateMcpServer } from "./server.ts"
 
 const SLOW = { timeout: 120_000 }
@@ -204,18 +205,19 @@ describe("the file settings and the extension served", SLOW, () => {
 		expect([ran.status, ran.stderr, ran.replies]).toEqual([1, stderr, []])
 	})
 
-	it("advertises the file-uploads extension in neither era before its uploads; a server taking no file reads no setting", async () => {
+	it("advertises the file-uploads extension in both eras with its inline cap; a server taking no file, nothing", async () => {
 		const asked = [initialize("2025-11-25"), request(1, "server/discover", { _meta: MODERN })]
 		const [files, none] = await Promise.all([
 			exchange(command(dir, ["DOCS_BASE_URL=http://127.0.0.1:9", "DOCS_MAX_INLINE_BYTES=0"]), asked),
 			exchange(command(plain, ["DOCS_BASE_URL=http://127.0.0.1:9", "DOCS_FILE_ROOT=/nonexistent/root"]), asked),
 		])
+		const advertised = { extensions: { [EXTENSION]: { maxInlineBytes: 0 } }, tools: {} }
 		expect([
-			[capabilities(files, 0), capabilities(files), JSON.stringify(files.replies).includes(EXTENSION)],
-			[capabilities(none, 0), capabilities(none), none.status],
+			[capabilities(files, 0), capabilities(files)],
+			[capabilities(none, 0), capabilities(none), JSON.stringify(none.replies).includes(EXTENSION), none.status],
 		]).toEqual([
-			[{ tools: {} }, { tools: {} }, false],
-			[{ tools: {} }, { tools: {} }, 0],
+			[advertised, advertised],
+			[{ tools: {} }, { tools: {} }, false, 0],
 		])
 	})
 })
@@ -224,6 +226,21 @@ describe("the file settings and the extension served", SLOW, () => {
 const KEYWORD = ["x", "mcp", "file"].join("-")
 
 describe("a file argument's schema: the extension's FileInput, or a path", () => {
+	it("takes an https URL in place of the path on a mount, its FileInput the same", () => {
+		const [marked, url] = MOUNTED_FILE_SCHEMA.anyOf as Record<string, unknown>[]
+		expect([marked, url]).toEqual([
+			(FILE_SCHEMA.anyOf as unknown[])[0],
+			{
+				additionalProperties: false,
+				properties: { url: { description: "An https URL the server fetches", type: "string" } },
+				required: ["url"],
+				type: "object",
+			},
+		])
+		expect(Object.keys(MOUNTED_FILE_SCHEMA)).toEqual(["anyOf"])
+		expect(Object.hasOwn(marked as object, KEYWORD)).toBe(true)
+	})
+
 	it("marks an object requiring id, mimeType, size and digest, the digest SHA-256; or takes a path alone", () => {
 		const [marked, path] = FILE_SCHEMA.anyOf as Record<string, unknown>[]
 		const { [KEYWORD]: descriptor, ...rest } = marked as Record<string, unknown>
@@ -293,7 +310,11 @@ describe("a call's file arguments refused before anything is sent", () => {
 		],
 	])("refuses %s", async (_, args, message) => {
 		const { sent, tool } = formTool()
-		const answer = await tool.call(JSON.parse(args) as Record<string, unknown>, new AbortController().signal, () => {})
+		const answer = (await tool.call(
+			JSON.parse(args) as Record<string, unknown>,
+			new AbortController().signal,
+			() => {},
+		)) as ToolResult
 		expect([answer.isError, JSON.parse(String(answer.content[0]?.text)) as unknown, sent]).toEqual([
 			true,
 			{ message: `Invalid arguments: ${message}` },

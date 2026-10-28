@@ -11,6 +11,7 @@ import { type OpenApiDocument, toIR } from "../../ir/build.ts"
 import type { IR, IROperation } from "../../ir/model.ts"
 import { tsString } from "../shared/escape.ts"
 import { generateSdk } from "../ts/sdk.ts"
+import { MOUNTED_FILE_SCHEMA } from "./files.ts"
 import { literal } from "./literal.ts"
 import { MCP_PORTABLE, mcpRuntimeSource } from "./runtime.ts"
 import { resolved } from "./server.ts"
@@ -84,7 +85,7 @@ export function generateMcpHandler(
 	if (!DIR.test(dir)) throw new Error(`Invalid dir: ${JSON.stringify(dir)}`)
 	const ir = toIR(spec as OpenApiDocument, { deriveOperationIds: true })
 	const { name } = resolved({ name: options.name }, ir.info.title)
-	const specs = toolsOf(ir)
+	const specs = toolsOf(ir, MOUNTED_FILE_SCHEMA)
 	if (specs.length === 0) throw new Error("No operation marked x-mcp is one a tool can call: nothing to mount")
 	const { credentials, secured } = securityOf(spec, ir)
 	const sdk = generateSdk(spec, { name: "Api", stem: "api" })

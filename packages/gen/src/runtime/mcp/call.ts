@@ -5,11 +5,12 @@
  * text, a raw body under its content type), the SDK member the operation sits at is called with the session's abort,
  * and its answer becomes the tool's result as result.ts shapes it, scrubbed of the API key; an event stream's, the
  * collect stream.ts runs. Bit 21 c: a multipart form's parts are arguments, sent as multipart whether or not a file is.
+ * Bit 21 g: data-less FileInputs are staged first (files.ts), an input request or a refusal the answer.
  */
-import { decoded, fileOf, type Read } from "./files.ts"
+import { decoded, type Files, fileOf, staged } from "./files.ts"
 import { redactor, refusal } from "./guard.ts"
 import { type Answer, BYTES_MAX, failureOf, json, successOf, unanswered } from "./result.ts"
-import type { Tool } from "./protocol.ts"
+import type { Outcome, Tool } from "./protocol.ts"
 import { collected } from "./stream.ts"
 
 /** The SDK input group a parameter goes in. */
@@ -71,25 +72,37 @@ function inputOf(spec: ToolSpec, args: Record<string, unknown>): Record<string, 
 		: { ...input, body: bytes }
 }
 
-/** `input` with `args`' form as its multipart body, each file read or decoded; or why a part cannot be sent. */
+/**
+ * `input` with `args`' form as its multipart body, each file uploaded, read, fetched or decoded; else the answer. An
+ * input with no parts, or a refusal, is as it came.
+ */
 async function formed(
-	input: Record<string, Record<string, unknown>>,
-	parts: NonNullable<ToolSpec["parts"]>,
+	input: Record<string, unknown> | string,
+	spec: ToolSpec,
 	args: Record<string, unknown>,
-	files: { read: Read | undefined; cap: number; left: number },
+	files: Files & { readonly signal: AbortSignal; readonly cap: number; left: number },
 ) {
+	if (typeof input === "string" || spec.parts === undefined) return input
+	const items = spec.parts.flatMap(([property, name, kind]) =>
+		[args[property] ?? []].flat().map((item, at) => {
+			const label = `${property}${kind === "files" ? `[${at}]` : ""}`
+			return [label, name, kind === "text" ? undefined : (item as Record<string, unknown>), item] as const
+		}),
+	)
+	const values = items.flatMap(([label, , file]) => (file ? [[label, file] as const] : []))
+	const taken = await staged(spec.name, args, values, files)
+	if (!(taken instanceof Map)) return taken
 	const form = new FormData()
-	for (const [property, name, kind] of parts)
-		for (const [at, item] of [args[property] ?? []].flat().entries()) {
-			const file = kind === "text" ? undefined : await fileOf(item as Record<string, unknown>, files.read, files)
-			if (typeof file === "string") return `Invalid arguments: ${property}${kind === "files" ? `[${at}]` : ""} ${file}`
-			if (file)
-				form.append(name, new Blob([file.bytes as Uint8Array<ArrayBuffer>], { type: file.type }), file.name ?? name)
-			else form.append(name, typeof item === "string" ? item : JSON.stringify(item))
-		}
+	for (const [label, name, value, item] of items) {
+		const file = value && (await fileOf(value, { ...files, taken }, files))
+		if (typeof file === "string") return `Invalid arguments: ${label} ${file}`
+		if (file)
+			form.append(name, new Blob([file.bytes as Uint8Array<ArrayBuffer>], { type: file.type }), file.name ?? name)
+		else form.append(name, typeof item === "string" ? item : JSON.stringify(item))
+	}
 	/* fetch's own multipart encoding, its boundary in the content type */
 	const encoded = new Response(form)
-	const headers = { ...input.headers, "content-type": encoded.headers.get("content-type") }
+	const headers = { ...(input.headers as object), "content-type": encoded.headers.get("content-type") }
 	return { ...input, body: new Uint8Array(await encoded.arrayBuffer()), headers }
 }
 
@@ -108,17 +121,17 @@ function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown
 export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding: Binding): Tool[] {
 	const scrub = redactor(binding.secrets)
 	return specs.map((spec) => ({
-		call: async (args, signal, progress, read) => {
+		call: async (args, signal, progress, files) => {
 			const paths = spec.args.filter(([, group]) => group === "params").map(([property]) => property)
-			let input = refusal(spec.inputSchema, paths, args) ?? inputOf(spec, args)
 			const cap = binding.inline ?? BYTES_MAX
-			if (typeof input !== "string" && spec.parts)
-				input = await formed(input as Record<string, Record<string, unknown>>, spec.parts, args, {
-					cap,
-					left: cap,
-					read,
-				})
+			const input = await formed(refusal(spec.inputSchema, paths, args) ?? inputOf(spec, args), spec, args, {
+				...files,
+				cap,
+				left: cap,
+				signal,
+			})
 			if (typeof input === "string") return json(scrub({ message: input }), true)
+			if ("inputRequired" in input || "invalid" in input) return input as Outcome
 			let opened = false
 			const [owner, method] = methodAt(spec.collect ? binding.opening(() => (opened = true)) : client, spec.member)
 			const send = (more: object) => (method as (input: unknown) => unknown).call(owner, { ...input, ...more })

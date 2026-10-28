@@ -9,8 +9,8 @@ import { readFileSync } from "node:fs"
 /** The portable runtime modules, each after the ones it imports: no node API, none of the node modules. */
 export const MCP_PORTABLE: readonly string[] = [
 	"jsonrpc",
-	"protocol",
 	"files",
+	"protocol",
 	"http",
 	"guard",
 	"result",
@@ -28,8 +28,8 @@ export const MCP_RUNTIME: readonly string[] = [...MCP_PORTABLE, ...MCP_NODE]
 /** The standalone package's: every module but the mount, which only an app's handler serves. */
 export const MCP_STANDALONE: readonly string[] = [
 	"jsonrpc",
-	"protocol",
 	"files",
+	"protocol",
 	"http",
 	"guard",
 	"result",

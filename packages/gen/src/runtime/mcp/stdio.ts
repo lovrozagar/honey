@@ -9,7 +9,8 @@
  * no reply after is written.
  */
 import { ErrorCode, failure, isId } from "./jsonrpc.ts"
-import type { Connection, Context, Protocol } from "./protocol.ts"
+import type { Read } from "./files.ts"
+import type { Connection, Protocol } from "./protocol.ts"
 
 /** Where the transport reads and writes: by default the process's standard input and output. */
 export type Stdio = {
@@ -25,7 +26,7 @@ export function serveStdio(
 	protocol: Protocol,
 	stdio: Stdio = processStdio(),
 	stopped?: AbortSignal,
-	read?: Context["read"],
+	read?: Read,
 ): Promise<void> {
 	const stop = new AbortController()
 	const connection: Connection = {}
@@ -49,7 +50,7 @@ export function serveStdio(
 		const id = message?.id
 		const done = (reply: unknown) =>
 			void (calls.get(id) === call && calls.delete(id), reply === undefined || send(reply))
-		const answer = protocol.answer(message, { connection, notify: send, read, signal })
+		const answer = protocol.answer(message, { connection, files: read && { read }, notify: send, signal })
 		if (!(answer instanceof Promise)) return done(answer)
 		if (isId(id)) calls.set(id, call)
 		const answered: Promise<void> = answer.then(done)

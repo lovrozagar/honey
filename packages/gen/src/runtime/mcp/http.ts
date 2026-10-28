@@ -4,12 +4,12 @@
  * the era (absent: 2025-03-26); a modern request's headers match its body, else 400 -32020. No session id. JSON, or SSE
  * from a call's first progress. In 2026-07-28 a closed request or stream cancels its call. No path is read.
  */
-import { decoded } from "./files.ts"
+import { decoded, type Files } from "./files.ts"
 import { ErrorCode, failure, isId, type Reply } from "./jsonrpc.ts"
 import { BATCHED, claimed, isObject, MODERN, type Protocol, PROTOCOL_VERSIONS, unserved, VERSION } from "./protocol.ts"
 
-/** What the transport serves beside its own origin, and its body cap in bytes. */
-export type HttpOptions = { readonly origins?: readonly string[]; readonly max?: number }
+/** What the transport serves beside its own origin, its body cap in bytes, and its calls' files (a mount's). */
+export type HttpOptions = { readonly origins?: readonly string[]; readonly max?: number; readonly files?: Files }
 
 const SSE = { "cache-control": "no-cache", "content-type": "text/event-stream", "x-accel-buffering": "no" }
 
@@ -97,9 +97,14 @@ function statusOf(reply: Reply | Reply[], modern: boolean): number {
 
 /**
  * `protocol`'s answer to `body` under `version` as a Response: JSON, or an event stream once the call reports progress.
- * A modern request's call is cancelled by `closed` or its stream's close; a legacy one's by neither.
+ * A modern request's call is cancelled by `closed` or its stream's close; a legacy one's by neither. Its calls get `files`.
  */
-function streamed(protocol: Protocol, body: unknown, version: string, closed?: AbortSignal) {
+function streamed(
+	protocol: Protocol,
+	body: unknown,
+	version: string,
+	{ closed, files }: { closed?: AbortSignal; files?: Files },
+) {
 	const call = new AbortController()
 	const signal = closed ? AbortSignal.any([closed, call.signal]) : call.signal
 	return new Promise<Response>((settle) => {
@@ -114,7 +119,7 @@ function streamed(protocol: Protocol, body: unknown, version: string, closed?: A
 			}
 			write(message)
 		}
-		const answer = protocol.answer(body, { connection: { version }, notify, signal })
+		const answer = protocol.answer(body, { connection: { version }, files, notify, signal })
 		void Promise.resolve(answer).then((reply) => {
 			if (stream !== undefined) return void (write(reply), open && stream.close())
 			settle(reply === undefined ? answered(202) : answered(statusOf(reply, closed !== undefined), reply))
@@ -123,7 +128,7 @@ function streamed(protocol: Protocol, body: unknown, version: string, closed?: A
 }
 
 /** The Streamable HTTP endpoint serving `protocol`: its own origin and `origins`, a body at most `max` bytes. */
-export function serveHttp(protocol: Protocol, { max = 4_194_304, origins = [] }: HttpOptions = {}) {
+export function serveHttp(protocol: Protocol, { files, max = 4_194_304, origins = [] }: HttpOptions = {}) {
 	return async (request: Request): Promise<Response> => {
 		const unfitting = unfit(request, origins)
 		if (unfitting) return unfitting
@@ -148,6 +153,7 @@ export function serveHttp(protocol: Protocol, { max = 4_194_304, origins = [] }:
 		const message = isObject(body) ? body : {}
 		const refusal = misheaded(message, request.headers, version)
 		if (refusal) return refusal
-		return streamed(protocol, body, version ?? BATCHED, modernOf(message, version) ? request.signal : undefined)
+		const closed = modernOf(message, version) ? request.signal : undefined
+		return streamed(protocol, body, version ?? BATCHED, { closed, files })
 	}
 }

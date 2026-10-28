@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest"
 import { exchange, initialize, request, written } from "../src/emit/mcp/__fixtures__/written.ts"
 import { MCP_NODE, MCP_PORTABLE, MCP_RUNTIME } from "../src/emit/mcp/runtime.ts"
 import { generateMcpServer } from "../src/emit/mcp/server.ts"
-import { toolsOf } from "../src/emit/mcp/tools.ts"
+import { MOUNTED_FILE_SCHEMA } from "../src/emit/mcp/files.ts"
+import { toolsOf, type ToolSpec } from "../src/emit/mcp/tools.ts"
 import { type OpenApiDocument, toIR } from "../src/ir/build.ts"
 import { ceilingOf, countTokens, markAllMcp } from "./capture-token-budget.ts"
 import { runtimeBytes } from "./sdk-budget.ts"
@@ -148,10 +149,28 @@ const SLOW = { timeout: 120_000 }
  *     Mount 260, the header and imports 677;
  *   - files.ts +251: `encoded`, base64 32 KiB at a time with no Buffer, +282; the inline digest through it -31;
  *   - result.ts +14: a bytes result's base64 through `encoded` (its import +38, Buffer's call -24).
+ * Bit 21 g (remote files): +9,800 B portable to 58,420, +38 B node to 10,016. Nothing was dead: c's fold-in had cut the
+ * advertisement, which g restores. By file:
+ * - files.ts +6,462: the upload flow 3,837 (`staged` 1,054: a 2026-07-28 request declaring the extension, its file
+ *   ids distinct; `asked` 1,025: each size within the cap and its SHA-256 well formed, the input request of one `omit`
+ *   target a file, the tokens its requestState; `retried` 1,672: one outcome a file, a failed one the tool's error,
+ *   each file's bytes taken once, a token the call does not hold invalid params; Pending 86); the uploads' types
+ *   (Uploads, its call and file) 685; Files, what a transport hands a call 363; the identifier and the advertisement
+ *   224; FetchFile 223; `declared` 220; the FileInput's type and name shared by inline and uploaded bytes, the digest
+ *   one helper 234; fileOf's uploaded bytes and URL fetch under the call's signal 411; the header 265;
+ * - mount.ts +1,727: no file argument showing `{url}` without the app's fetch (fetchless, urlless) 831; the handler's
+ *   advertisement, the credential an upload binds, the files handed to http.ts 438; Mount's uploads and fetch 159;
+ *   the header and imports 299;
+ * - protocol.ts +839: tools/call answering an input request or invalid params, the client's capabilities and params
+ *   handed to the call's files 421; Outcome 209; `extensions` advertised in both eras 88; the header and imports 208;
+ *   Tool and Context taking files for the reader -87;
+ * - call.ts +589: the form's values staged before any is read, a refusal or a partless input passed through 487; the
+ *   header and import 123; bindTools -21;
+ * - http.ts +183: the mount's files into each call's context; stdio.ts +38: its reader as the files.
  * A change raises a lock only by the bytes of a named feature, dead code cut first.
  */
-const MCP_PORTABLE_BYTES = 48620
-const MCP_NODE_BYTES = 9978
+const MCP_PORTABLE_BYTES = 58420
+const MCP_NODE_BYTES = 10016
 
 const RUNTIME_DIR = resolve(import.meta.dirname, "../src/runtime/mcp")
 
@@ -206,6 +225,9 @@ type Tools = { readonly total: number; readonly largest: number }
  * - bit 21 e fold-in: H6 is a gate. Every app's largest-tool ceiling is min(ceilingOf(measured, 0.2), 400), one rule
  *   (largestCeiling), so mcp's 426 is 400; every other app's is under 400 already (compose 87, defaults 62, gateway
  *   170, kitchen 225, surface 246) and unchanged.
+ * - bit 21 g, remote files: no standalone tool changes. A mounted tool's file argument shows the URL value in place of
+ *   the path (97 tokens, one fewer), or, on a mount without urlFiles, the FileInput alone (64, 34 fewer); so no mounted
+ *   tool costs more than its standalone one (Anyrow's extract_once 393 -> 392 mounted, 359 without urlFiles).
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },
@@ -276,6 +298,32 @@ describe("H6's per-tool cap (bit 21 e fold-in)", () => {
 			.map(([app, tools]) => [app, largestCeiling(tools.largest)] as const)
 			.filter(([, ceiling]) => ceiling > TOOL_MAX)
 		expect(over).toEqual([])
+	})
+})
+
+/** `spec`'s tokens as tools/list shows it (2025-11-25 on, with its outputSchema). */
+const listedTokens = (spec: ToolSpec) =>
+	countTokens(
+		JSON.stringify({
+			name: spec.name,
+			...(spec.description === undefined ? {} : { description: spec.description }),
+			inputSchema: spec.inputSchema,
+			...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
+			...(spec.annotations === undefined ? {} : { annotations: spec.annotations }),
+		}),
+	)
+
+describe("a mounted tool's tokens (bit 21 g)", () => {
+	it.each(["mcp", "surface"])("costs no more than %s's standalone tool, with or without the URL value", (app) => {
+		const ir = toIR(appSpec(app) as OpenApiDocument, { deriveOperationIds: true })
+		const urlless = { anyOf: (MOUNTED_FILE_SCHEMA.anyOf as object[]).slice(0, 1) }
+		const [standalone, mounted, bare] = [undefined, MOUNTED_FILE_SCHEMA, urlless].map((file) =>
+			toolsOf(ir, file).map(listedTokens),
+		)
+		const over = (standalone as number[]).flatMap((tokens, at) =>
+			[mounted, bare].flatMap((each) => (((each as number[])[at] as number) > Math.min(tokens, TOOL_MAX) ? [at] : [])),
+		)
+		expect([over, (standalone as number[]).length]).toEqual([[], (mounted as number[]).length])
 	})
 })
 
