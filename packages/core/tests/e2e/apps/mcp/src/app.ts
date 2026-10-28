@@ -2,11 +2,14 @@
  * The MCP e2e app (bit 21 e): routes.ts's five operations, and MCP mounted at /api/mcp on the handle under no guard,
  * its handler the plugin's own output. Its tools require the ApiKey scheme, so the mount authenticates before any
  * dispatch: a request without an `ApiKey <key>` credential is refused 401 there. The key itself is the inner routes'
- * to check, so a wrong one reaches them, and their 401 is the endpoint's.
+ * to check, so a wrong one reaches them, and their 401 is the endpoint's. Bit 21 g: out-of-band uploads, in this
+ * process's memory (one isolate under a local Worker; a deployed one needs a Durable Object or D1 store).
  */
 import type { WSAdapter } from "@lovrozagar/honey"
 import { mcp } from "@lovrozagar/honey/mcp"
+import { memoryUploadStore, uploads } from "@lovrozagar/honey/mcp/uploads"
 import { mcpHandler } from "./_gen/mcp.gen.ts"
+import { UPLOAD_SECRET } from "./key.ts"
 import { type AppOptions, createRoutes } from "./routes.ts"
 
 export { KEY } from "./key.ts"
@@ -16,5 +19,6 @@ export function createApp(_wsAdapter?: WSAdapter, options?: AppOptions) {
 	const app = createRoutes(options)
 	return mcp(app, "/mcp", mcpHandler, {
 		authenticate: (request) => /^ApiKey \S+$/.test(request.headers.get("authorization") ?? ""),
+		uploads: uploads({ secret: UPLOAD_SECRET, store: memoryUploadStore() }),
 	})
 }
