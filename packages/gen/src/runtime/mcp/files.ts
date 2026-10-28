@@ -1,13 +1,8 @@
 /**
  * A file argument's value (bit 21 c): the io.modelcontextprotocol/files draft's FileInput (PR head 6101d34), its data
- * canonical base64 of its size and digest, a call's inline bytes capped; or a path a reading transport reads.
+ * canonical base64 of its size and digest, a call's inline bytes capped; or a path a reading transport reads. The
+ * extension is advertised from bit 21 g, with its uploads.
  */
-
-/** The extension's identifier, as server/discover advertises it. */
-export const FILES = "io.modelcontextprotocol/files"
-
-/** server/discover's extensions for a server taking files. */
-export const filesCapability = (maxInlineBytes: number) => ({ [FILES]: { maxInlineBytes } })
 
 /** Reads a file by its path, rejecting with the rule it breaks. */
 export type Read = (path: string) => Promise<Uint8Array>

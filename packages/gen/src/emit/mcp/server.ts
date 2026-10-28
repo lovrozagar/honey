@@ -85,7 +85,7 @@ const entrySource = (app: App, ir: IR) =>
 // event stream's collect too. $${app.envPrefix}_HEADERS, a JSON object of string values, goes on every call, each value
 // scrubbed as the key is; $${app.envPrefix}_REDIRECT is same-origin (the default) or follow. SIGINT and SIGTERM abort
 // every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.${app.files ? filesNote(app.envPrefix) : ""}
-import { ${app.files ? "BYTES_MAX, bindTools, configHeaders, createProtocol, fileReader, filesCapability, serveStdio" : "BYTES_MAX, bindTools, configHeaders, createProtocol, serveStdio"} } from "./mcp.runtime"
+import { ${app.files ? "BYTES_MAX, bindTools, configHeaders, createProtocol, fileReader, serveStdio" : "BYTES_MAX, bindTools, configHeaders, createProtocol, serveStdio"} } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { headerValue } from "./sdk/api.runtime.gen"
 import { toolSpecs } from "./tools.gen"
@@ -129,7 +129,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abor
 void serveStdio(
 	createProtocol(
 		{ name: ${tsString(app.name)}, version: ${tsString(app.version)} },
-		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout)${app.files ? ", inline" : ""} }),${app.files ? "\n\t\tfilesCapability(inline)," : ""}
+		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout)${app.files ? ", inline" : ""} }),
 	),
 	undefined,
 	stop.signal,${app.files ? "\n\tread," : ""}

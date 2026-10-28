@@ -3,8 +3,8 @@
  * as multipart/form-data whether or not it holds a file (a call without its optional file, a form of text alone, never
  * urlencoded): each text part as given, each file its bytes under its name, a list of files a part each, read from the
  * root or decoded inline. The entry reads $<PREFIX>_FILE_ROOT (a directory, else no start), $<PREFIX>_MAX_FILE_BYTES and
- * $<PREFIX>_MAX_INLINE_BYTES (whole numbers, else no start), and server/discover advertises the file-uploads extension
- * with its inline cap; a server whose tools take no file reads none of it and advertises nothing. A file argument's
+ * $<PREFIX>_MAX_INLINE_BYTES (whole numbers, else no start); a server whose tools take no file reads none of them. The
+ * file-uploads extension is advertised in neither era until its uploads are served (bit 21 g). A file argument's
  * schema is the draft's FileInput or a path, and a call whose file is neither, holds a prototype-named key or passes the
  * inline cap is refused before anything is sent. The hostile paths and inline values are
  * tests/security/emit-adversarial.mcp-files.test.ts's.
@@ -14,7 +14,6 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { bindTools, type ToolSpec } from "../../runtime/mcp/call.ts"
-import { FILES } from "../../runtime/mcp/files.ts"
 import { type RecordingServer, served } from "../shared/__fixtures__/recording-server.ts"
 import { exchange, exchangeEach, initialize, request, scratchDir, written } from "./__fixtures__/written.ts"
 import { FILE_SCHEMA } from "./files.ts"
@@ -111,9 +110,13 @@ const messagesOf = (replies: readonly unknown[]) =>
 
 const MULTIPART = "multipart/form-data"
 
-/** The capabilities a server/discover answered. */
-const capabilities = (ran: { replies: readonly unknown[] }) =>
-	(ran.replies[0] as { result: { capabilities: unknown } }).result.capabilities
+/** The capabilities the reply `id` answered: initialize's or server/discover's. */
+const capabilities = (ran: { replies: readonly unknown[] }, id = 1) =>
+	(ran.replies.find((reply) => (reply as { id?: unknown }).id === id) as { result: { capabilities: unknown } }).result
+		.capabilities
+
+/* built, so no file but runtime/mcp/files.ts names it (tests/structure/mcp-file-extension.test.ts) */
+const EXTENSION = ["io.modelcontextprotocol", "files"].join("/")
 
 describe("a multipart form as the API receives it", SLOW, () => {
 	it("sends every form as multipart/form-data: files read and inline, a list a part each, text as given", async () => {
@@ -201,16 +204,18 @@ describe("the file settings and the extension served", SLOW, () => {
 		expect([ran.status, ran.stderr, ran.replies]).toEqual([1, stderr, []])
 	})
 
-	it("advertises the file-uploads extension with its inline cap; a server taking no file reads no setting, advertises none", async () => {
-		const discover = request(1, "server/discover", { _meta: MODERN })
+	it("advertises the file-uploads extension in neither era before its uploads; a server taking no file reads no setting", async () => {
+		const asked = [initialize("2025-11-25"), request(1, "server/discover", { _meta: MODERN })]
 		const [files, none] = await Promise.all([
-			exchange(command(dir, ["DOCS_BASE_URL=http://127.0.0.1:9", "DOCS_MAX_INLINE_BYTES=0"]), [discover]),
-			exchange(command(plain, ["DOCS_BASE_URL=http://127.0.0.1:9", "DOCS_FILE_ROOT=/nonexistent/root"]), [discover]),
+			exchange(command(dir, ["DOCS_BASE_URL=http://127.0.0.1:9", "DOCS_MAX_INLINE_BYTES=0"]), asked),
+			exchange(command(plain, ["DOCS_BASE_URL=http://127.0.0.1:9", "DOCS_FILE_ROOT=/nonexistent/root"]), asked),
 		])
-		expect([capabilities(files), capabilities(none), none.status]).toEqual([
-			{ extensions: { [FILES]: { maxInlineBytes: 0 } }, tools: {} },
-			{ tools: {} },
-			0,
+		expect([
+			[capabilities(files, 0), capabilities(files), JSON.stringify(files.replies).includes(EXTENSION)],
+			[capabilities(none, 0), capabilities(none), none.status],
+		]).toEqual([
+			[{ tools: {} }, { tools: {} }, false],
+			[{ tools: {} }, { tools: {} }, 0],
 		])
 	})
 })

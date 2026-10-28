@@ -37,8 +37,8 @@ A file argument takes one of two values:
   `6101d34`) has it: `{ id, mimeType, size, digest: { algorithm: "sha-256", value }, name?, data }`. `data` is standard
   base64 with its padding: no whitespace, no `data:` prefix, no base64url. It must decode to exactly `size` bytes whose
   SHA-256, base64url without padding, is `digest.value`. All inline files of one call together are at most
-  `$<PREFIX>_MAX_INLINE_BYTES` decoded (1 MiB by default), which `server/discover` advertises as the extension's
-  `maxInlineBytes`. A value without `data` asks for an upload, which this server does not serve.
+  `$<PREFIX>_MAX_INLINE_BYTES` decoded (1 MiB by default). A value without `data` asks for an upload, which this
+  server does not serve yet, so it does not advertise the extension: an official client sends an inline file anyway.
 - **`{ path }`**, read by the server from its own disk, over stdio only:
   - The path resolves against `$<PREFIX>_FILE_ROOT`, the server's working directory at start by default. A root that
     is no directory stops the server at start.

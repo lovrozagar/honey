@@ -108,9 +108,13 @@ const SLOW = { timeout: 120_000 }
  *   - protocol.ts +374: a call's reader from its transport's context (Tool.call +48, Context +100, the call +14)
  *     +162; server/discover's extensions (createProtocol's parameter +54, the capability +35) +89; docs +123;
  *   - stdio.ts +104: serveStdio's reader into every context +46 (its parameter, the type import, the context), docs +58.
+ * - bit 21 c fold-in, -350 B to 42,217 B: the file-uploads extension is advertised from bit 21 g, with its uploads, so
+ *   its advertisement is dead and cut: files.ts -216 (the identifier constant and filesCapability -280, the header's
+ *   note +64), protocol.ts -134 (createProtocol's extensions parameter -54, their spread in server/discover -35, docs
+ *   -45). The identifier stays named in files.ts's header, where g's capability lands.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 42567
+const MCP_RUNTIME_BYTES = 42217
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {

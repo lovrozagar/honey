@@ -5,7 +5,7 @@
  * down to 2025-03-26 into the connection, then ping, tools/list and tools/call; under 2025-03-26 no outputSchema, no
  * structuredContent, and only there a batch. A fault answers at once, a call when done; a tool's failure is its result.
  * A call with a progressToken may report progress, each step a notifications/progress before its result. A transport
- * that reads files (bit 21 c: stdio) hands each call its reader; server/discover names the extensions served.
+ * that reads files (bit 21 c: stdio) hands each call its reader.
  */
 import { ErrorCode, failure, type Id, isId, type Message, type Reply, result } from "./jsonrpc.ts"
 
@@ -137,8 +137,8 @@ function batch(
 	})
 }
 
-/** The protocol over `tools`, as `info` names the server, serving `extensions` when given. */
-export function createProtocol(info: ServerInfo, tools: readonly Tool[], extensions?: object): Protocol {
+/** The protocol over `tools`, as `info` names the server. */
+export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protocol {
 	const byName = new Map(tools.map((tool) => [tool.name, tool]))
 	/* `method` under `version`: each era's own methods, and the tools in both; undefined for any other method */
 	const served = (request: Asked, method: string, version: string, context: Context) => {
@@ -148,7 +148,7 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[], extensi
 			case "server/discover":
 				return result(id, {
 					_meta: { "io.modelcontextprotocol/serverInfo": info },
-					capabilities: { tools: {}, ...(extensions && { extensions }) },
+					capabilities: { tools: {} },
 					supportedVersions: PROTOCOL_VERSIONS,
 					...CACHED,
 				})
