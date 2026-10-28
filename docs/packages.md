@@ -17,6 +17,7 @@ generator.
 | `@lovrozagar/honey/ws/cloudflare`   | `cfWebSocket`                                                                                                                           |
 | `@lovrozagar/honey/ws/session`      | `createWsSession`: the session runtime a custom WebSocket adapter builds on                                                             |
 | `@lovrozagar/honey/realtime`        | `realtime(app, path, options)`: a resumable connection over WebSocket, SSE and long-poll                                                |
+| `@lovrozagar/honey/mcp`             | `mcp(app, path, handler, options?)`: the app's tools over MCP's Streamable HTTP, the handler `codegen.mcp` writes                       |
 | `@lovrozagar/honey/openapi`         | `serveOpenApi`, `serveManifest`, `generateOpenApi`, `generateManifest`, `toYaml`                                                        |
 | `@lovrozagar/honey/openapi/scalar`  | `scalar`, the Scalar API reference page                                                                                                 |
 | `@lovrozagar/honey/openapi/swagger` | `swagger`, the Swagger UI page                                                                                                          |
