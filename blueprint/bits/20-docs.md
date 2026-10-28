@@ -63,3 +63,19 @@ The commands, as the installers run them (document them for a user verifying by 
 
 ## Budget
 - token: the agent-facing docs/skills bundle is measured against the token budget (H6).
+
+## Shipped (the bit 20 close)
+
+Closed at f, on e3's e92e73d; the closing CI run is this stack's push, after the bench ceilings were re-derived from 11 or more CI samples (e3's first blocking run, 40645792418, reded websockets message-10k at 4.36 over a 4.114 ceiling drawn from 6). Each phase landed red-first, with one verify on its pushed tip:
+
+- **a** cc5e731: `testClient` at `@lovrozagar/honey/testing`, all 43 v0 testClient cases ported; `transport: "serve"` (real HTTP through `serve(app)`, this runtime's adapter) replaces v0's `"node"`; v0's unscoped cookie jar kept. 76aa619: the SSE-over-upgrade leg's producer yields per send (a microtask-only producer starved the first flush past 5 s under coverage); 9f8ffd2: a never-yielding SSE producer is held under 16 MB by backpressure over node:http.
+- **b** ce1f747: dx-coverage's pointer half; 13 dangling dx/ test pointers fixed (the research counted 9).
+- **c, c2** cb4c0e0, 049855f: docs/: 18 area pages, 11 capability pages, migration, streaming, testing, the CLI release flow, the SDK recipes (Rust's `block_on` included); one example program per language compiled against the SDK generated from kitchen's document, each page's SDK block a verbatim slice of it; dx-coverage's docs half, new-capability and examples-compile; per-operation doc comments in the TS and Java SDKs, so all six carry them (gen-api-ref retired on them).
+- **d** bfb20f8, 0eed73e, ab42a96: the npm READMEs (core new, gen rewritten), the root README as an 89-line front page, packages/core/docs/packaging.md, docs/packages.md; readmes.test; engines.node `>=22.12.0` (Node 20 lacks `Promise.withResolvers`).
+- **e** 4f376bb, 1bde177, 502dbd9: `_v0`'s 23 dependents cut (each red-checked with `_v0` moved aside), then `git rm -r _v0` alone (698 files), then what held only while it existed; v0 lives at 1a968f1, and v0-cases.json, tokens.json and hotpath.json are frozen as its records.
+- **e2, e3**: the finalize, adapter, streaming and websockets benches rebuilt as v1-to-raw-twin ratios (they had compared v1 with v0 live), with hotpath joining; baselines recorded on CI (blueprint/baselines/bench.json: median of 6 green runs, ceiling the worst × 1.10, each scenario's sensitivity stated), one run and no retry, a slowed mutant per scenario red; adapter post-1kib is report-only (bimodal on CI: 2 runs ~2.4, 4 at 3.85–4.7, ~+110% blind in its fast mode). hotpath had gated nothing in CI before e3 (its only baseline was Bun 1.4; CI pins 1.3.11).
+- **f**: COMPLETE = 20, every v0 case ported or retired with its reason.
+
+**Decisions:** docs are markdown under docs/ (a site deploy is the owner's call after 1.0); no agent bundle beyond the measured SKILL.md (tokens.json stays v0-derived by design); per-target READMEs are not a generated artifact.
+
+**Open at close:** j3 (cf prod) waits for the repository's Cloudflare secrets; the first `@lovrozagar/honey-codegen` npm publish and the trusted-publisher entries are the owner's; deploying docs/ as a site is the owner's call; the R5 Anyrow note awaits the owner's approval.
