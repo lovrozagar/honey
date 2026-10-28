@@ -5,9 +5,10 @@
  */
 import { spawn } from "node:child_process"
 
-/** A server listening: its endpoint, and its stop (SIGTERM), settling with its exit status. */
+/** A server listening: its endpoint, everything it wrote on stderr so far, and its stop (SIGTERM), settling with its exit status. */
 export type Serving = {
 	readonly url: string
+	stderr(): string
 	stop(): Promise<number | null>
 }
 
@@ -23,6 +24,7 @@ export function serving(command: readonly string[]): Promise<Serving> {
 			const url = / on (http:\/\/\S+\/mcp)\n/.exec(stderr)?.[1]
 			if (url !== undefined)
 				settle({
+					stderr: () => stderr,
 					stop: () => {
 						child.kill()
 						return exited

@@ -162,7 +162,7 @@ describe("starting with --http, served", SLOW, () => {
 })
 
 describe("the token, the API key and file paths over HTTP", SLOW, () => {
-	it("never sends the token to the API, sends the API its own key, and scrubs the token from a result", async () => {
+	it("never sends the token to the API, sends the API its own key, scrubs the token from a result, and logs neither", async () => {
 		const seen = await served([{ json: { echoed: `the token is ${TOKEN}` }, status: 200 }], async (api) => {
 			const server = await serving(
 				command(
@@ -174,13 +174,14 @@ describe("the token, the API key and file paths over HTTP", SLOW, () => {
 			const text = await answer.text()
 			await server.stop()
 			return [
+				[TOKEN, "api-key-1"].some((secret) => server.stderr().includes(secret)),
 				text.includes(TOKEN),
 				text.includes("the token is [redacted]"),
 				api.hops.map((hop) => Object.values(hop.headers).some((value) => value.includes(TOKEN))),
 				api.hops[0]?.headers.authorization,
 			]
 		})
-		expect(seen).toEqual([false, true, [false], "Bearer api-key-1"])
+		expect(seen).toEqual([false, false, true, [false], "Bearer api-key-1"])
 	})
 
 	it("refuses a file path as a tool error even with a file root holding it, and sends the API nothing", async () => {

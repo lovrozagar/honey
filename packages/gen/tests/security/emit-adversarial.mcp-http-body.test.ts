@@ -90,18 +90,24 @@ describe("the body's size and shape", () => {
 	})
 
 	it("answers deep nesting in params and in a guarded tool's arguments without falling over, then serves the next", async () => {
+		/* each answer within 5 s, or none: a fault left unanswered is a hang, which the leg names */
+		const within = async (sent: Promise<Response>) =>
+			Promise.race([
+				sent.then(read).then((answer) => answer.status),
+				new Promise((settle) => setTimeout(() => settle("no answer"), 5000)),
+			])
 		const answers = [
-			await read(await deepCall("echo", nest(100_000))),
-			await read(await deepCall("upload", `{"a":${nest(100_000)}}`)),
+			await within(deepCall("echo", nest(100_000))),
+			await within(deepCall("upload", `{"a":${nest(100_000)}}`)),
 		]
 		const next = await read(await post(LIST, { "mcp-protocol-version": "2025-11-25" }))
-		expect([...answers.map((answer) => answer.status), next.status]).toEqual([200, 200, 200])
+		expect([...answers, next.status]).toEqual([200, 200, 200])
 	})
 
 	it("pollutes no prototype: a __proto__ key at the top and in params claims no _meta", async () => {
 		const text = `{"__proto__":{"polluted":1},"id":1,"jsonrpc":"2.0","method":"tools/list","params":{"__proto__":{"_meta":${JSON.stringify(META)}}}}`
 		const answer = await read(await post(text, { "mcp-protocol-version": "2025-11-25" }))
-		const result = answer.json?.result as object
+		const result = (answer.json?.result ?? {}) as object
 		expect([answer.status, "resultType" in result, ({} as { polluted?: number }).polluted]).toEqual([
 			200,
 			false,

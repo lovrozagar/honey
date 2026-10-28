@@ -296,6 +296,35 @@ describe("cancellation (bit 21 b)", SLOW, () => {
 	)
 })
 
+describe("a duplicate id in flight (bit 21 h)", SLOW, () => {
+	it("answers each call under a repeated id on its own, the cancel naming that id reaching the later one alone", async () => {
+		const server = live(SERVER)
+		const hold = (token: string) =>
+			request(1, "tools/call", { _meta: { ...META, progressToken: token }, arguments: {}, name: "hold" })
+		const progressed = (token: string) => (line: Record<string, unknown>) =>
+			line.method === "notifications/progress" && (line.params as { progressToken?: unknown }).progressToken === token
+		server.send(hold("first"))
+		await server.seen(progressed("first"))
+		server.send(hold("second"))
+		await server.seen(progressed("second"))
+		server.send({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 1 } })
+		server.send(request(2, "tools/call", { _meta: META, arguments: {}, name: "release" }))
+		await server.seen((line) => line.id === 2)
+		const { replies, status } = await server.close()
+		const lines = replies as Record<string, unknown>[]
+		expect([
+			status,
+			lines
+				.filter((line) => line.method === "notifications/progress")
+				.map((line) => {
+					const { progress, progressToken } = line.params as { progress: number; progressToken: string }
+					return `${progressToken} ${progress}`
+				}),
+			lines.filter((line) => line.id === 1).map((line) => (line.result as { content: unknown }).content),
+		]).toEqual([0, ["first 1", "second 1", "first 2"], [[{ text: "released", type: "text" }]]])
+	})
+})
+
 describe.skipIf(!CLIENTS)("each era's official clients (bit 21 b)", SLOW, () => {
 	const steps: Step[] = [{ negotiated: true }, { call: { arguments: { text: "hi" }, name: "echo" } }]
 	it.each([

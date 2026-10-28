@@ -6,7 +6,8 @@
  * any other status stays the tool's, its status in `_meta`. A credential is scrubbed from every result. Bit 21 f: an
  * OAuth bearer (the MCP resource's own token) is a credential like any other: to the app's own routes alone.
  */
-import { beforeEach, describe, expect, it } from "vitest"
+import { inspect } from "node:util"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { type MountConfig, mountedMcp } from "../../src/runtime/mcp/mount.ts"
 import { codeOf, MODERN, modernHeaders, META, posting, read, resultOf } from "./mcp-http.ts"
 
@@ -25,6 +26,8 @@ async function dispatch(request: Request): Promise<Response> {
 		return new Response(null, { headers: { "www-authenticate": 'Bearer error="insufficient_scope"' }, status: 403 })
 	if (what === "forbidden") return Response.json({ message: "no" }, { status: 403 })
 	if (what === "bare") return new Response(null, { status: 401 })
+	if (what === "throws") throw new Error(`the app broke on ${credential}`)
+	if (what === "refused") return Response.json({ message: `refused ${credential}` }, { status: 422 })
 	if (credential === null)
 		return new Response(null, { headers: { "www-authenticate": 'ApiKey realm="app"' }, status: 401 })
 	return Response.json({ credential })
@@ -117,6 +120,30 @@ describe("the mounted handler's credential (bit 21 e)", () => {
 			[],
 		])
 	})
+})
+
+describe("the mounted handler's credential in errors and logs (bit 21 h)", () => {
+	it.each(["refused", "throws"])(
+		"scrubs the credential from the tool error of an inner call that %s with it, and writes it to no log",
+		async (what) => {
+			const logged: unknown[] = []
+			const record = (...args: unknown[]) => void logged.push(args)
+			for (const name of ["log", "info", "warn", "error", "debug"] as const)
+				vi.spyOn(console, name).mockImplementation(record)
+			vi.spyOn(process.stderr, "write").mockImplementation((chunk) => logged.push(chunk) > 0)
+			try {
+				const answer = await call("get", { what }, { authorization: KEY })
+				expect([
+					resultOf(answer)[0],
+					answer.text.includes("ak_0123456789abcdef"),
+					answer.text.includes("[redacted]"),
+					logged.some((each) => inspect(each, { depth: 20 }).includes("ak_0123456789abcdef")),
+				]).toEqual([true, false, true, false])
+			} finally {
+				vi.restoreAllMocks()
+			}
+		},
+	)
 })
 
 describe("the mounted handler's OAuth bearer (bit 21 f)", () => {
