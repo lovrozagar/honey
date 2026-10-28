@@ -44,6 +44,8 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./ws` | ADD (bit 19 i2) | `ws(app, path)` → the WS route builder, plus the types `WsRouteOf` and `AnyHoneyHandle`; replaces the `app.ws(path)` method, so an app that opens no socket bundles no WS route code |
 | `./mcp` | ADD (bit 21 e) | `mcp(app, path, handler, options?)` → mounts a generated MCP handler (`_gen/mcp.gen.ts`) on `path` (POST; GET/DELETE 405) under the app's middleware, auth before dispatch, optional OAuth resource metadata; an app that serves no MCP bundles none of it |
 | `./mcp/oauth` | ADD (bit 21 f) | `oauth(options)` (type `McpOAuthOptions`) → the opt-in OAuth 2.1 resource-server role for `mcp()`: RFC 9728 protected-resource metadata, 401 `Bearer resource_metadata` and 403 step-up challenges; no authorization server, no token validation; a mount without it carries none of it |
+| `./mcp/uploads` | ADD (bit 21 g) | `uploads(options)`, `memoryUploadStore()`, the `UploadStore` contract (`claim`, `put`, `take`) and `McpUploadsOptions` → out-of-band file uploads for `mcp()` (the files extension's MRTR flow, 2026-07-28): one-shot, scoped, expiring HMAC tokens bound to the forwarded credential; a mount without it carries none of it |
+| `./mcp/url-files` | ADD (bit 21 g) | `urlFiles(options)` and `McpUrlFilesOptions` → an opt-in `{url}` file value for `mcp()`: an exact-host (or explicit `*.`) allowlist, https only, no redirect followed, a streamed size cap, a timeout, IP literals refused; off unless imported |
 | `./ws/bun`, `./ws/cloudflare`, `./ws/node`, `./ws/session` | KEEP | |
 | `./ws/deno` | DELETE [H15] | |
 
