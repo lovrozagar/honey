@@ -212,6 +212,43 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 		)
 		expect([generated.code, existsSync(join(app, "sdk/ts/.honey-generated.json"))], generated.out).toEqual([0, true])
 	}, 60_000)
+
+	/* gen's installed --app loader on Bun is Bun's own import: jiti there evaluated a module that threw a second time,
+	 * through its Babel, whose stack hook then breaks follow-redirects' captureStackTrace in Vite's chunk (bit 20) */
+	it("honey-codegen on Bun in the install, a cold jiti cache, reads an app importing vite, a throwing one once", () => {
+		const cold = join(files.out, "codegen-cold-tmp")
+		mkdirSync(cold)
+		const log = join(app, "evaluations.log")
+		const generate = (module: string) =>
+			run(
+				"bun",
+				["node_modules/.bin/honey-codegen", "generate", "--app", module, "--target", "ts", "--out", "sdk-bun"],
+				app,
+				{ HONEY_NO_BUN_HANDOFF: "1", TMPDIR: cold },
+			)
+		try {
+			write(app, {
+				"src/throws.ts": `import { appendFileSync } from "node:fs"\nappendFileSync(${JSON.stringify(log)}, "x")\nthrow new Error("boom at load")\n`,
+				"src/vite-app.ts":
+					'import { defaultClientConditions } from "vite"\nexport { app } from "./app.ts"\nexport const conditions = defaultClientConditions\n',
+			})
+			const read = generate("src/vite-app.ts")
+			const thrown = generate("src/throws.ts")
+			expect(
+				[
+					read.code,
+					existsSync(join(app, "sdk-bun/ts/.honey-generated.json")),
+					thrown.code,
+					thrown.out.split("\n")[0],
+					readFileSync(log, "utf8"),
+				],
+				read.out,
+			).toEqual([0, true, 1, "honey-codegen: boom at load", "x"])
+		} finally {
+			for (const file of ["src/throws.ts", "src/vite-app.ts", "evaluations.log", "sdk-bun"])
+				rmSync(join(app, file), { force: true, recursive: true })
+		}
+	}, 60_000)
 })
 
 /* the bin's own file in a package laid out as an install (no tsconfig.json) or a checkout, each entry marked */

@@ -6,7 +6,7 @@
  * written, whatever handles the app's module left open.
  */
 import { spawnSync } from "node:child_process"
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { main } from "./cli.ts"
@@ -15,6 +15,7 @@ import { MARK_KEY, markOf, reap } from "./gen/__fixtures__/survivors.ts"
 import { appProject } from "./ir/__fixtures__/app-project.ts"
 
 const BIN = resolve(import.meta.dirname, "../bin/honey-codegen.js")
+const REPO = resolve(import.meta.dirname, "../../..")
 const PINNED_BUN = withPinnedBun()
 const MARK = markOf()
 const HONEY = 'import { honey } from "@lovrozagar/honey"\n'
@@ -153,6 +154,83 @@ describe.skipIf(!PINNED_BUN)(`generate --app through the bin under Bun ${pinnedB
 		const started = Date.now()
 		const run = bin(dir, ["generate", "--app", "src/app.ts", ...GENERATE.slice(1)])
 		expect([run.status, run.stderr, Date.now() - started < 30_000]).toEqual([0, "", true])
+	}, 90_000)
+})
+
+/** The bin started by Bun itself from `cwd`, a fresh TMPDIR (a cold jiti cache) and `env` over the rest, its run marked. */
+function onBun(cwd: string, env: NodeJS.ProcessEnv = {}) {
+	const tmp = join(cwd, "cold-tmp")
+	mkdirSync(tmp, { recursive: true })
+	return spawnSync(PINNED_BUN as string, [BIN, "generate", "--app", "src/app.ts", ...GENERATE.slice(1)], {
+		cwd,
+		encoding: "utf8",
+		env: { ...process.env, BUN_OPTIONS: "", [MARK_KEY]: MARK, TMPDIR: tmp, ...env },
+		timeout: 60_000,
+	})
+}
+
+describe.skipIf(!PINNED_BUN)(`generate --app on Bun ${pinnedBunVersion()}, by Bun's own import (bit 20)`, () => {
+	afterEach(() => void reap(MARK))
+
+	it("evaluates a module that throws at load once, and says why", () => {
+		const dir = project({
+			"src/app.ts":
+				'import { appendFileSync } from "node:fs"\nappendFileSync("evaluations.log", "x")\nthrow new Error("boom at load")\n',
+		})
+		const run = onBun(dir)
+		expect([run.status, run.stderr, readFileSync(join(dir, "evaluations.log"), "utf8")]).toEqual([
+			1,
+			"honey-codegen: boom at load\n",
+			"x",
+		])
+	}, 90_000)
+
+	/* Vite's Node chunk makes follow-redirects' errors with a non-Error captureStackTrace at load: once jiti's Babel has
+	 * hooked Error.prepareStackTrace, Bun throws "First argument must be an Error object" there */
+	it("generates from a module importing vite, a cold jiti cache", () => {
+		const dir = project({
+			"src/app.ts": `import { defaultClientConditions } from "vite"\n${HONEY}export const app = honey().get("/health").handler((c) => c.res.text("ok", "ok"))\nexport const conditions = defaultClientConditions\n`,
+		})
+		symlinkSync(join(REPO, "node_modules/vite"), join(dir, "node_modules/vite"), "dir")
+		const run = onBun(dir)
+		expect([run.status, run.stderr, existsSync(join(dir, "out/ts/.honey-generated.json"))]).toEqual([0, "", true])
+	}, 90_000)
+
+	it("reads a checkout core from its source, never a stale dist/ beside it", () => {
+		const stale = (file: string) =>
+			`import { appendFileSync } from "node:fs"\nappendFileSync("evaluations.log", "dist ")\nexport * from ${JSON.stringify(join(REPO, "packages/core/src", file))}\n`
+		const dir = project({
+			"node_modules/@lovrozagar/honey/dist/openapi/register.js": stale("openapi/register.ts"),
+			"node_modules/@lovrozagar/honey/dist/routing/app.js": stale("routing/app.ts"),
+			"src/app.ts": `${HONEY}export const app = honey().get("/health").handler((c) => c.res.text("ok", "ok"))\n`,
+		})
+		const run = onBun(dir)
+		expect([run.status, run.stderr, existsSync(join(dir, "evaluations.log"))]).toEqual([0, "", false])
+	}, 90_000)
+})
+
+describe.skipIf(!PINNED_BUN)(`the bin's honey-source hand-off on Bun ${pinnedBunVersion()} (bit 20)`, () => {
+	afterEach(() => void reap(MARK))
+
+	/* each Bun process the run starts logs one start (a preload), and the fourth ends itself: a loop is bounded */
+	it("hands off to itself once without the honey-source condition, and not at all with it in BUN_OPTIONS", () => {
+		const dir = project({
+			"src/app.ts": `${HONEY}export const app = honey().get("/health").handler((c) => c.res.text("ok", "ok"))\n`,
+		})
+		const starts = join(dir, "starts.log")
+		writeFileSync(
+			join(dir, "count.mjs"),
+			`import { appendFileSync, readFileSync } from "node:fs"\nappendFileSync(${JSON.stringify(starts)}, "s")\nif (readFileSync(${JSON.stringify(starts)}, "utf8").length > 3) process.exit(9)\n`,
+		)
+		const counted = (options: string) => {
+			writeFileSync(starts, "")
+			const run = onBun(dir, { BUN_OPTIONS: `--preload ${join(dir, "count.mjs")}${options}` })
+			return [run.status, run.stderr, readFileSync(starts, "utf8").length]
+		}
+		expect([counted(""), counted(" --conditions=honey-source")]).toEqual([
+			[0, "", 2],
+			[0, "", 1],
+		])
 	}, 90_000)
 })
 

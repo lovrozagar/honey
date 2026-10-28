@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The honey-codegen bin (bit 17 phase h). A repository checkout (marked by tsconfig.json, which is not published)
-// runs the TypeScript source, natively on Bun and through jiti on Node, so a stale dist/ never runs; an installed
-// package runs the compiled JavaScript on any runtime (the tarball ships dist/, not src/).
+// runs the TypeScript source, natively on Bun (under the honey-source condition) and through jiti on Node, so a stale
+// dist/ never runs; an installed package runs the compiled JavaScript on any runtime (the tarball ships dist/, not src/).
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { basename } from "node:path"
@@ -20,16 +20,16 @@ function invokingBun() {
 	return bun
 }
 
-// The handoff: Bun runs this file with our arguments; a signal we get is passed on to it, and we end as it ended,
-// its exit code or the same signal.
-function handOff(bun) {
+// The handoff: Bun runs this file with our arguments and `env` over ours; a signal we get is passed on to it, and we
+// end as it ended, its exit code or the same signal.
+function handOff(bun, env) {
 	// Forwarders first: a signal landing as spawn returns would otherwise end this process by its default action,
 	// orphaning the child. A handler runs from the event loop, after this block, so `child` is set by then.
 	let child
 	const forward = (signal) => child.kill(signal)
 	for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, forward)
 	child = spawn(bun, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
-		env: { ...process.env, HONEY_NO_BUN_HANDOFF: "1" },
+		env: { ...process.env, ...env, HONEY_NO_BUN_HANDOFF: "1" },
 		stdio: "inherit",
 	})
 	child.on("error", (error) => {
@@ -45,6 +45,14 @@ function handOff(bun) {
 		process.exit(code ?? 1)
 	})
 }
+
+// A checkout on Bun runs under the honey-source condition: an --app module's checkout core then resolves to its
+// source, never to an unbuilt or stale dist/ (bit 20). Set through BUN_OPTIONS when the caller did not, in the one
+// handoff, so a watch's generation children inherit it; Bun reports BUN_OPTIONS' flags in execArgv, so a Bun started
+// with it never hands off again.
+const SOURCE_CONDITION = "--conditions=honey-source"
+const sourceEnv = checkout ? { BUN_OPTIONS: `${process.env.BUN_OPTIONS ?? ""} ${SOURCE_CONDITION}`.trim() } : {}
+const unconditioned = isBun && checkout && !process.execArgv.includes(SOURCE_CONDITION)
 
 async function entry() {
 	if (checkout) {
@@ -64,7 +72,8 @@ async function entry() {
 }
 
 const bun = invokingBun()
-if (bun) handOff(bun)
+if (bun) handOff(bun, sourceEnv)
+else if (unconditioned) handOff(process.execPath, sourceEnv)
 else {
 	const { main } = await entry()
 	const code = await main(process.argv.slice(2))
