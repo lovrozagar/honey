@@ -45,6 +45,7 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - `@lovrozagar/honey/openapi/spec` is removed (bit 19 i): v0's `spec()` handler is `serveOpenApi` from `@lovrozagar/honey/openapi`, which mounts the JSON and YAML documents (and a docs page with `docs`) rather than returning a handler.
 - `app.ws(path)` becomes `ws(app, path)`, with `import { ws } from "@lovrozagar/honey/ws"` (bit 19 i2), the same shape as `realtime(app, path)`; it takes any handle `.ws()` was a method of (the app, a `.prefix()` base, a scoped chain) and types the route exactly as before. The method is gone so that an app that opens no socket bundles no WebSocket route code (about 1.1 KB gzipped).
 - `testClient` comes from `@lovrozagar/honey/testing` (bit 20 a), and its `transport: "node"` is `transport: "serve"`: it serves the app over real HTTP through `serve(app)`, so this runtime's own adapter answers (Node's on Node, Bun's on Bun). Its `app` takes any `{ fetch }` app; the cookie jar is v0's (name → value, no path or domain scoping).
+- `@lovrozagar/honey` and `@lovrozagar/honey-codegen` require Node 22.12 or later (bit 20 d; v0 said 20): core uses `Promise.withResolvers`, and CI's oldest Node is 22.12.0.
 - `app.serve(...)` is removed (bit 19 j1): `import { serve } from "@lovrozagar/honey/serve"`, then `await serve(app, { hostname, port })`.
 - An installed `@lovrozagar/honey` and `@lovrozagar/honey-codegen` run their compiled `dist/` on every runtime, Bun included (bit 19 i); v0's `bun` export condition to the TypeScript source is gone.
 
