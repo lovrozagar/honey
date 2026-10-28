@@ -1,11 +1,12 @@
 /**
  * An app's artifacts as text (bit 19 h2): the route tree, the manifest, each OpenAPI document (JSON and YAML, Q7) and
- * the types. This module runs inside the app's module graph: generate.ts loads it through the loader that loads the
+ * the types; bit 21 e: the MCP handler the app mounts, from its own unsanitized document of the routes `filterRoutes`
+ * keeps, honey-codegen's generateMcpHandler writing its entry and the companion directory's runtime and SDK. This module runs inside the app's module graph: generate.ts loads it through the loader that loads the
  * app, and it imports the app itself, so the app and the core reading it are one instance (core's symbols are
  * per module). source.ts says which tree is written and which app is documented.
  */
 import { existsSync, readFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
+import { basename, dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { generateOpenApi } from "../openapi/generate.ts"
 import { generateManifest } from "../openapi/manifest.ts"
@@ -15,7 +16,13 @@ import { routeId } from "../routing/pattern.ts"
 import type { RouteTree } from "../routing/tree.ts"
 import { sanitizeOpenApiSpec } from "../schema/sanitize-spec.ts"
 import type { EffectConverter } from "../schema/to-json-schema.ts"
-import { openApiOutputPaths, type ResolvedHoneyConfig, type ResolvedOpenApiOutput } from "./config.ts"
+import {
+	mcpPaths,
+	openApiOutputPaths,
+	type ResolvedHoneyConfig,
+	type ResolvedMcpOutput,
+	type ResolvedOpenApiOutput,
+} from "./config.ts"
 import { effectConverter } from "./loaders.ts"
 import { type Documented, type Source, sourceOf } from "./source.ts"
 
@@ -97,14 +104,38 @@ export async function prepare(
 	return { rewrite: current ? undefined : [tree, text], source }
 }
 
+/** The MCP handler's files for `app` as `mcp` asks, each by its path from the project root. */
+function mcpFiles(
+	app: Parameters<typeof generateOpenApi>[0],
+	mcp: ResolvedMcpOutput,
+	outputs: readonly ResolvedOpenApiOutput[],
+	{ codegen, effect }: { codegen: Codegen; effect: EffectConverter | undefined },
+): [string, string][] {
+	const document = generateOpenApi(app, {
+		converters: { effect },
+		filterRoutes: mcp.filterRoutes,
+		info: { title: outputs[0]?.title ?? "API", version: outputs[0]?.version ?? "0.0.0" },
+		invalidate: "off",
+		/* the first output's scheme wins a name, as the types' document has it */
+		securitySchemes:
+			mcp.securitySchemes ?? Object.assign({}, ...outputs.map((entry) => entry.securitySchemes ?? {}).reverse()),
+	})
+	const { entry, files } = codegen.generateMcpHandler(document as unknown as Record<string, unknown>, {
+		dir: mcp.dir,
+		...(mcp.name === undefined ? {} : { name: mcp.name }),
+	})
+	const [path, ...companions] = mcpPaths(mcp)
+	return [[path as string, entry], ...companions.map((at): [string, string] => [at, files[basename(at)] as string])]
+}
+
 /** Every artifact `config` asks for from `source`, by its path from the project root. */
 export async function artifactsOf(config: ResolvedHoneyConfig, run: Run, source: Source): Promise<[string, string][]> {
-	const { manifest, openApi, tree, types } = config.codegen
+	const { manifest, mcp, openApi, tree, types } = config.codegen
 	const files: [string, string][] = []
 	if (tree !== false) files.push([tree, run.codegen.generateRouteTree(source.tree)])
 	const documented = await source.documented()
 	if (manifest !== false) files.push([manifest, json(generateManifest(documented.app))])
-	const effect = openApi.length > 0 ? await effectConverter() : undefined
+	const effect = openApi.length > 0 || mcp !== false ? await effectConverter() : undefined
 	for (const [index, entry] of openApi.entries()) {
 		/* one report per generation, not one per document */
 		const published = documentOf(documented.app, entry, index === 0 ? config.codegen.invalidate : "off", effect)
@@ -112,6 +143,7 @@ export async function artifactsOf(config: ResolvedHoneyConfig, run: Run, source:
 		if (jsonPath !== null) files.push([jsonPath, json(published)])
 		files.push([yaml, toYaml(published)])
 	}
+	if (mcp !== false) files.push(...mcpFiles(documented.app, mcp, openApi, { codegen: run.codegen, effect }))
 	if (types !== false)
 		files.push([types.path, await typesOf(config, { ...documented, tree: source.tree }, run, types.path)])
 	return files

@@ -53,6 +53,9 @@ afterAll(() => files.done())
 /* the WebSocket route's modules, which an app reaches through ws(app, path) or realtime() alone */
 const WS_ROUTE = ["routing/ws-builder", "ws/origin", "ws/session", "ws/shared"]
 
+/* the MCP mount's module, which an app reaches through mcp(app, path, handler) alone (bit 21 e, H24.3) */
+const MCP_ROUTE = ["mcp/mount"]
+
 function bunBundle(name: string, lines: readonly string[], minify = true): string {
 	write(full, { [`${name}.ts`]: lines.join("\n") })
 	const flags = minify ? ["--minify"] : []
@@ -67,8 +70,13 @@ function bunBundle(name: string, lines: readonly string[], minify = true): strin
 
 /** The WebSocket route modules an unminified build carries, by their region comments (minifying inlines ws/shared's constant). */
 function wsRouteModules(name: string, lines: readonly string[]): string[] {
+	return routeModules(name, lines, WS_ROUTE)
+}
+
+/** Which of `modules` an unminified build of `lines` carries, by their region comments. */
+function routeModules(name: string, lines: readonly string[], modules: readonly string[]): string[] {
 	const js = bunBundle(`${name}-plain`, lines, false)
-	return WS_ROUTE.filter((path) => js.includes(`/dist/${path}.js\n`))
+	return modules.filter((path) => js.includes(`/dist/${path}.js\n`))
 }
 
 describe("the runtime bundle of an installed core (bit 19 i)", () => {
@@ -98,7 +106,7 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
 			expect(
-				[leaked, features, wsRouteModules("minimal", entry), gzipped < 26_200, builtBy],
+				[leaked, features, routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE]), gzipped < 26_200, builtBy],
 				`${gzipped} bytes gzipped`,
 			).toEqual([[], [], [], true, pinnedBunVersion()])
 		},
@@ -135,11 +143,21 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
 				"",
 			]
-			expect([missing, wsRouteModules("features", entry), wsRouteModules("sockets", sockets)]).toEqual([
-				[],
-				WS_ROUTE,
-				WS_ROUTE,
-			])
+			const mounted = [
+				'import { honey } from "@lovrozagar/honey"',
+				'import { mcp } from "@lovrozagar/honey/mcp"',
+				"const app = honey()",
+				'mcp(app, "/mcp", { challenge: "Bearer", fetch: async () => new Response(null), secured: false })',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
+			expect([
+				missing,
+				wsRouteModules("features", entry),
+				wsRouteModules("sockets", sockets),
+				routeModules("features", entry, MCP_ROUTE),
+				routeModules("mounted", mounted, MCP_ROUTE),
+			]).toEqual([[], WS_ROUTE, WS_ROUTE, [], MCP_ROUTE])
 		},
 		60_000,
 	)

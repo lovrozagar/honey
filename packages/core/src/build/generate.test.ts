@@ -23,7 +23,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { generateRouteTree } from "../../../gen/src/emit/ts/route-tree.ts"
 import { honey } from "../routing/app.ts"
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
-import { type HoneyVitePluginConfig, resolveHoneyConfig } from "./config.ts"
+import { type HoneyVitePluginConfig, MCP_COMPANIONS, resolveHoneyConfig } from "./config.ts"
 import { artifactsFor, generateAndWrite, loadCodegen } from "./generate.ts"
 
 const SLOW = 60_000
@@ -385,4 +385,45 @@ describe("a generation's reports (bit 19 h2)", () => {
 			"honey: generating the app's artifacts needs @lovrozagar/honey-codegen: add it to your devDependencies",
 		)
 	})
+})
+
+describe("the MCP handler output (bit 21 e)", () => {
+	it(
+		"writes the handler of the routes marked mcp that filterRoutes keeps, secured by the outputs' schemes, and its companions",
+		async () => {
+			const { dir } = fresh({
+				"src/app.ts": appSource({
+					extra: [
+						'\t.post("/orders").meta({ mcp: true, security: [{ apiKey: [] }] }).handler((c) => c.res.text("ok", "ok"))',
+						'\t.get("/hidden").meta({ mcp: true }).handler((c) => c.res.text("ok", "ok"))',
+					],
+				}),
+			})
+			const apiKey = { description: "Format: ApiKey {key}", in: "header", name: "Authorization", type: "apiKey" }
+			const { written } = await generate(
+				{
+					app: "src/app.ts",
+					codegen: {
+						mcp: { filterRoutes: (route) => route.path !== "/hidden" },
+						openApi: { path: "out/doc.json", securitySchemes: { apiKey }, title: "Gen", version: "1.0.0" },
+						tree: false,
+					},
+				},
+				dir,
+			)
+			const entry = read(dir, "src/_gen/mcp.gen.ts")
+			expect([
+				written.filter((file) => file.startsWith("src/")).sort(),
+				entry.match(/name: "[\w-]+"/g),
+				/secured: true/.test(entry),
+				read(dir, "src/_gen/mcp/runtime.gen.ts").includes("export function mountedMcp("),
+			]).toEqual([
+				["src/_gen/mcp.gen.ts", ...MCP_COMPANIONS.map((name) => `src/_gen/mcp/${name}`)].sort(),
+				['name: "post_orders"', 'name: "gen"'],
+				true,
+				true,
+			])
+		},
+		SLOW,
+	)
 })

@@ -65,8 +65,8 @@ export async function generateAndWrite(
 	root: string,
 	options: { load?: ModuleLoader; report?: Report } = {},
 ): Promise<string[]> {
-	const { manifest, openApi, tree, types } = config.codegen
-	if (tree === false && manifest === false && openApi.length === 0 && types === false) return []
+	const { manifest, mcp, openApi, tree, types } = config.codegen
+	if (tree === false && manifest === false && openApi.length === 0 && types === false && mcp === false) return []
 	const codegen = await loadCodegen()
 	const report = options.report ?? ((message) => void process.stderr.write(`honey: ${message}\n`))
 	const run = { codegen, report, root }

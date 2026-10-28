@@ -109,6 +109,11 @@
 			"types": "./dist/telemetry/logger.d.ts",
 			"default": "./dist/telemetry/logger.js"
 		},
+		"./mcp": {
+			"honey-source": "./src/mcp/mount.ts",
+			"types": "./dist/mcp/mount.d.ts",
+			"default": "./dist/mcp/mount.js"
+		},
 		"./node": {
 			"honey-source": "./src/adapters/node/serve.ts",
 			"types": "./dist/adapters/node/serve.d.ts",

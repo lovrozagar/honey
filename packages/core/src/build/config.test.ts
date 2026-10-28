@@ -9,6 +9,8 @@ import {
 	generatedOutputs,
 	type HoneyVitePluginConfig,
 	isGeneratedOutput,
+	MCP_COMPANIONS,
+	mcpPaths,
 	openApiOutputPaths,
 	resolveHoneyConfig,
 } from "./config.ts"
@@ -21,6 +23,7 @@ describe("resolveHoneyConfig (bit 19 h2)", () => {
 			codegen: {
 				invalidate: undefined,
 				manifest: false,
+				mcp: false,
 				mergeTree: undefined,
 				openApi: [],
 				tree: "src/_gen/routes.gen.ts",
@@ -107,6 +110,7 @@ describe("generatedOutputs (bit 19 h2)", () => {
 		const config = resolveHoneyConfig({
 			codegen: {
 				manifest: "out/m.json",
+				mcp: "gen/server.ts",
 				openApi: [
 					{ title: "A", version: "1" },
 					{ path: "docs/b.yml", title: "B", version: "1" },
@@ -116,11 +120,13 @@ describe("generatedOutputs (bit 19 h2)", () => {
 		})
 		const outputs = generatedOutputs(config, "/p")
 		expect(outputs).toEqual({
-			dirs: ["/p/src/_gen", "/p/out", "/p/docs"],
+			dirs: ["/p/src/_gen", "/p/out", "/p/gen", "/p/gen/server", "/p/docs"],
 			files: [
 				"/p/src/_gen/routes.gen.ts",
 				"/p/src/_gen/types.gen.d.ts",
 				"/p/out/m.json",
+				"/p/gen/server.ts",
+				...MCP_COMPANIONS.map((name) => `/p/gen/server/${name}`),
 				"/p/src/_gen/openapi.gen.json",
 				"/p/src/_gen/openapi.gen.yaml",
 				"/p/docs/b.yml",
@@ -129,5 +135,32 @@ describe("generatedOutputs (bit 19 h2)", () => {
 		expect(
 			[join("/p", "out/m.json"), "/p/out/m.json.x", "/p/src/app.ts"].map((file) => isGeneratedOutput(file, outputs)),
 		).toEqual([true, false, false])
+	})
+})
+
+describe("resolveHoneyConfig's MCP handler (bit 21 e)", () => {
+	it("reads true as src/_gen/mcp.gen.ts, a string as the path, an object with its options; its stem the directory", () => {
+		const filterRoutes = () => true
+		const outputs = [
+			true,
+			"gen/tools.ts",
+			{ filterRoutes, name: "shop", path: "gen/x.gen.ts", securitySchemes: { k: {} } },
+			{},
+			false,
+		].map((mcp) => resolveHoneyConfig({ codegen: { mcp } }).codegen.mcp)
+		expect(outputs).toEqual([
+			{ dir: "mcp", path: "src/_gen/mcp.gen.ts" },
+			{ dir: "tools", path: "gen/tools.ts" },
+			{ dir: "x", filterRoutes, name: "shop", path: "gen/x.gen.ts", securitySchemes: { k: {} } },
+			{ dir: "mcp", path: "src/_gen/mcp.gen.ts" },
+			false,
+		])
+	})
+
+	it("refuses an MCP output path that is no .ts module, and lists no file when the output is off", () => {
+		expect(() => resolveHoneyConfig({ codegen: { mcp: "gen/mcp.js" } })).toThrow(
+			'codegen.mcp: "gen/mcp.js" is no .ts module',
+		)
+		expect(mcpPaths(false)).toEqual([])
 	})
 })

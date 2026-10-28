@@ -9,7 +9,7 @@ import * as codegen from "../../../gen/src/index.ts"
 import { honey } from "../routing/app.ts"
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
 import { artifactsOf, documentOf, prepare, virtualCode } from "./artifacts.ts"
-import { type HoneyVitePluginConfig, resolveHoneyConfig } from "./config.ts"
+import { type HoneyVitePluginConfig, MCP_COMPANIONS, resolveHoneyConfig } from "./config.ts"
 import { sourceOf } from "./source.ts"
 
 /* type extraction (ts-morph) runs for seconds under coverage */
@@ -264,6 +264,54 @@ describe("sourceOf, natively (bit 19 h2)", () => {
 			"default",
 			join(dir, "src/app.ts"),
 			["GET /health", "POST /items"],
+		])
+	})
+})
+
+/* a tool requiring the `k` scheme */
+const WITH_TOOL = [
+	'\t.post("/orders")',
+	"\t.meta({ mcp: true, security: [{ k: [] }] } as never)",
+	'\t.handler((c) => c.res.text("ok", "o"))',
+]
+
+describe("artifactsOf's MCP handler (bit 21 e)", () => {
+	it("writes the handler and its companions, its name, version and schemes its own or the first output's", async () => {
+		const { dir } = fresh({ "src/app.ts": appSource({ extra: WITH_TOOL }) })
+		const k = { in: "header", name: "X-K", type: "apiKey" }
+		const bare = (
+			await artifacts({ app: "src/app.ts", codegen: { mcp: { securitySchemes: { k } }, tree: false } }, dir)
+		).files
+		const own = (
+			await artifacts(
+				{
+					app: "src/app.ts",
+					codegen: {
+						mcp: { name: "shop", path: "gen/shop.ts" },
+						openApi: [
+							{ path: "o.json", securitySchemes: { k: { ...k, name: "X-Other" } }, title: "T", version: "4" },
+							{ path: "p.json", title: "P", version: "5" },
+						],
+						tree: false,
+					},
+				},
+				dir,
+			)
+		).files
+		const stated = (entry: string | undefined) =>
+			["name", "version", "credentials", "secured"].map(
+				(key) => new RegExp(`${key}: ([^,\\n]+)`).exec((entry ?? "").split("export const mcpHandler")[1] ?? "")?.[1],
+			)
+		expect([
+			Object.keys(bare),
+			stated(bare["src/_gen/mcp.gen.ts"]),
+			Object.keys(own).filter((path) => path.startsWith("gen/")),
+			stated(own["gen/shop.ts"]),
+		]).toEqual([
+			["src/_gen/mcp.gen.ts", ...MCP_COMPANIONS.map((name) => `src/_gen/mcp/${name}`)],
+			['"api"', '"0.0.0" }', '["x-k"]', "true"],
+			["gen/shop.ts", ...MCP_COMPANIONS.map((name) => `gen/shop/${name}`)],
+			['"shop"', '"4" }', '["x-other"]', "true"],
 		])
 	})
 })
