@@ -1,7 +1,7 @@
 /**
  * The lose-nothing gate (H13): every v0 case of a feature whose bit has completed is either ported
- * (a v1 test carries `// v0: <id>`) or retired with a reason in the inventory. At bit 20, before
- * `_v0` is deleted, that covers every feature, so nothing v0 tested goes unaccounted.
+ * (a v1 test carries `// v0: <id>`) or retired with a reason in the inventory. At bit 20 that covers every
+ * feature, so nothing v0 tested went unaccounted when `_v0` was deleted; the inventory is frozen since.
  */
 import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"

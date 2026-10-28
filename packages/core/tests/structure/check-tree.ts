@@ -14,7 +14,7 @@ export type Row = { bit: number; kind: string; path: string; pkg: string }
 type Entry = { bit: number; implicitTest: boolean; pattern: string }
 
 /* rows that name a repo path; any other row is relative to its package */
-const REPO_PREFIXES = ["packages/", "bench/", "blueprint/", "_v0/", "."]
+const REPO_PREFIXES = ["packages/", "bench/", "blueprint/", "."]
 
 /* where an unlisted file is a defect; elsewhere only listed rows are checked */
 const CHECKED_ROOTS = [

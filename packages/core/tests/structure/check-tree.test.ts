@@ -21,7 +21,6 @@ const TSV = [
 	"scripts/capture.ts\tgen\tscript\t00\tcapture\t—",
 	"packages/gen/src/_tokenizer/\tgen\tcorpus\t00\ttokenizer\t—",
 	"blueprint/baselines/{oracle,perf}-baseline.txt\tcore\tcorpus\t00\tbaselines\t—",
-	"_v0/\t—\tlegacy\t00\tv0\tpackages/core/*",
 	".oxlintrc.json\tcore\tconfig\t19\tlint config\t.oxlintrc.json",
 	"./scripts/pack.ts\tcore\tscript\t19\tthe packer\t—",
 	"",
@@ -38,7 +37,6 @@ const BIT_00_FILES = [
 	"packages/gen/src/_tokenizer/o200k_base.json",
 	"blueprint/baselines/oracle-baseline.txt",
 	"blueprint/baselines/perf-baseline.txt",
-	"_v0/src/index.ts",
 ]
 
 const rows = parseRows(TSV)
@@ -58,12 +56,10 @@ describe("parseRows", () => {
 			"packages/gen/scripts/capture.ts",
 			"packages/gen/src/_tokenizer/",
 			"blueprint/baselines/{oracle,perf}-baseline.txt",
-			"_v0/",
 			".oxlintrc.json",
 			"scripts/pack.ts",
 		])
 		expect(rows[0]).toMatchObject({ bit: 1, kind: "src" })
-		expect(rows[12]).toMatchObject({ bit: 0, kind: "legacy" })
 	})
 })
 
@@ -102,13 +98,7 @@ describe("checkTree --complete 00", () => {
 	})
 
 	it("ignores files outside the checked roots", () => {
-		const files = [
-			...BIT_00_FILES,
-			"_v0/tests/x.test.ts",
-			"bench/src/run.sh",
-			"README.md",
-			"packages/core/package.json",
-		]
+		const files = [...BIT_00_FILES, "docs/README.md", "bench/src/run.sh", "README.md", "packages/core/package.json"]
 		expect(checkTree(rows, files, 0)).toEqual([])
 	})
 })
