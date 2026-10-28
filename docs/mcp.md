@@ -393,9 +393,10 @@ What the endpoint checks:
   retry is refused and the client starts the call again and re-uploads.
 
 **The store must claim atomically.** `claim` must return true to one caller alone, even when two PUTs race, and
-`take` must hand the bytes to one caller alone. On Workers that means a D1 row or a Durable Object for the claim and
-the take (`INSERT … ON CONFLICT DO NOTHING`, `DELETE … RETURNING`), with the bytes in R2: a D1 row, and a SQLite
-Durable Object's, holds at most 2 MB, far under the 50 MiB `maxBytes`.
+`take` must hand the bytes to one caller alone. On Workers that means a Durable Object (one an upload, exported from
+your app's entry; a honey-built Worker exports it) or a D1 row (`INSERT … ON CONFLICT DO NOTHING`, `DELETE …
+RETURNING`) for the claim and the take, with the bytes in R2: a D1 row, and a SQLite Durable Object's, holds at most
+2 MB, far under the 50 MiB `maxBytes`.
 [End to end](#end-to-end-an-api-key-gateway-on-workers) has such a store. **Workers KV cannot keep an upload
 one-shot**: it is eventually consistent, so two claims can both succeed. `memoryUploadStore()` is one process's
 memory: on Workers, or behind more than one instance, an upload PUT to one isolate is missing on another.
@@ -484,38 +485,65 @@ import * as z from "zod"
 /* in the app: import { mcpHandler } from "./_gen/mcp.gen.ts" */
 declare const mcpHandler: McpHandler
 
-/* as much of D1's and R2's binding types as the store uses */
-type D1 = {
-	prepare(query: string): {
-		bind(...values: unknown[]): { run(): Promise<{ meta: { changes: number } }>; first<T>(): Promise<T | null> }
-	}
-}
+/* as much of the binding types as the store and the key check use: D1, R2, a Durable Object's storage and namespace */
+type D1 = { prepare(query: string): { bind(...values: unknown[]): { first(): Promise<unknown> } } }
 type R2 = {
 	put(key: string, bytes: Uint8Array): Promise<unknown>
 	get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>
 	delete(key: string): Promise<void>
 }
-type Env = { readonly API_KEYS: D1; readonly UPLOADS_DB: D1; readonly UPLOADS: R2; readonly UPLOAD_SECRET: string }
+type Storage = { get(key: string): Promise<boolean | undefined>; put(key: string, value: boolean): Promise<void> }
+type Claims = { idFromName(name: string): unknown; get(id: unknown): { fetch(url: string): Promise<Response> } }
+type Env = {
+	readonly API_KEYS: D1
+	readonly UPLOAD_CLAIMS: Claims
+	readonly UPLOADS: R2
+	readonly UPLOAD_SECRET: string
+}
 
 /* the Worker's bindings at module scope: on Workers, import { env } from "cloudflare:workers" */
 declare const env: Env
 
-/*
- * One D1 row an upload is its claim and its take, each atomic; R2 holds its bytes.
- * CREATE TABLE uploads (id TEXT PRIMARY KEY, expires INTEGER NOT NULL, ready INTEGER NOT NULL DEFAULT 0)
- */
+/** One upload's claim and take, each atomic: an object runs one event at a time, whichever isolate sends it. */
+export class UploadClaim {
+	readonly #storage: Storage
+
+	constructor(state: { readonly storage: Storage }) {
+		this.#storage = state.storage
+	}
+
+	/** `/claim`: the first alone; `/stored`: its bytes are in R2; `/take`: once, and only once stored. 204, else 409. */
+	async fetch(request: Request): Promise<Response> {
+		const step = new URL(request.url).pathname
+		const [done, refused] = [new Response(null, { status: 204 }), new Response(null, { status: 409 })]
+		if (step === "/claim") {
+			if (await this.#storage.get("claimed")) return refused
+			await this.#storage.put("claimed", true)
+			return done
+		}
+		if (step === "/stored") {
+			await this.#storage.put("stored", true)
+			return done
+		}
+		if (!(await this.#storage.get("stored"))) return refused
+		await this.#storage.put("stored", false)
+		return done
+	}
+}
+
+/** A step of `id`'s claim: whether its object took it. */
+const step = async (id: string, name: string) =>
+	(await env.UPLOAD_CLAIMS.get(env.UPLOAD_CLAIMS.idFromName(id)).fetch(`https://claim/${name}`)).status === 204
+
+/* the claim and the take in the upload's object, the bytes in R2 (an object's storage holds 2 MB a value) */
 const store: UploadStore = {
-	claim: async (id, expires) => {
-		const insert = "INSERT INTO uploads (id, expires) VALUES (?, ?) ON CONFLICT DO NOTHING"
-		return (await env.UPLOADS_DB.prepare(insert).bind(id, expires).run()).meta.changes === 1
-	},
+	claim: (id) => step(id, "claim"),
 	put: async (id, bytes) => {
 		await env.UPLOADS.put(id, bytes)
-		await env.UPLOADS_DB.prepare("UPDATE uploads SET ready = 1 WHERE id = ?").bind(id).run()
+		await step(id, "stored")
 	},
 	take: async (id) => {
-		const taken = "DELETE FROM uploads WHERE id = ? AND ready = 1 AND expires > ? RETURNING id"
-		if ((await env.UPLOADS_DB.prepare(taken).bind(id, Date.now()).first<{ id: string }>()) === null) return undefined
+		if (!(await step(id, "take"))) return undefined
 		const object = await env.UPLOADS.get(id)
 		await env.UPLOADS.delete(id)
 		return object === null ? undefined : new Uint8Array(await object.arrayBuffer())
@@ -546,6 +574,20 @@ mcp(app, "/mcp", mcpHandler, {
 export default app
 ```
 
+Built by honey's build plugin for Workers, with this module as the app's entry
+(`createBuildPlugin({ target: "cloudflare" }, { entry: "src/app.ts", export: "default" })`), the Worker exports
+`UploadClaim` beside its default fetch: every named export of the entry passes through, so a Durable Object class, a
+`WorkerEntrypoint` or a Workflow is the Worker's own. An entry that exports a default beside a named app is refused,
+since the Worker's default is honey's fetch. Its config binds the class, the migration creating its namespace:
+
+```json
+{
+	"durable_objects": { "bindings": [{ "class_name": "UploadClaim", "name": "UPLOAD_CLAIMS" }] },
+	"migrations": [{ "new_sqlite_classes": ["UploadClaim"], "tag": "v1" }],
+	"r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "anyrow-uploads" }]
+}
+```
+
 What each part does:
 
 - **`authenticate`** refuses a request with no `ApiKey` credential before any tool runs (HTTP 401). It checks only
@@ -553,9 +595,9 @@ What each part does:
   their challenge, so the client sees an auth failure, never a tool result.
 - **The credential** reaches the routes as the MCP request sent it, because the `apiKey` scheme names
   `Authorization`. No other request header is carried.
-- **Uploads** go through the D1 row and R2. `UPLOAD_SECRET` is a Worker secret of at least 32 characters
-  (`wrangler secret put UPLOAD_SECRET`). Rows and objects past their expiry are left behind: delete them on a Cron
-  Trigger (`DELETE FROM uploads WHERE expires < ?`) and an R2 lifecycle rule.
+- **Uploads** are claimed and taken in one Durable Object an upload, their bytes in R2. `UPLOAD_SECRET` is a Worker
+  secret of at least 32 characters (`wrangler secret put UPLOAD_SECRET`). Bytes past their expiry are left behind in
+  R2: an R2 lifecycle rule deletes them.
 - **URL files** come only from `files.anyrow.example`, over https, with no redirect followed and the size counted as
   the body streams. List your own storage host, or an `*.` entry for the hosts under it.
 - **The app's `bodyLimit`**, if you set one, applies to the endpoint and to the upload route too, so set it to fit

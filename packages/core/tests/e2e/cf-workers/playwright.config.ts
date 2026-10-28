@@ -32,9 +32,8 @@ export default defineConfig({
  * dev resolves @lovrozagar/honey to its source through src/worker.ts; prod serves the app's built Workers bundle under
  * local workerd, unbundled and with no source condition: what a deploy runs (j3). The bundle is one file, no chunks.
  * A WEB_ONLY app (bit 21 h) runs its own configs, without nodejs_compat and with the Durable Object its uploads go
- * through: dev wrangler.mcp.jsonc (src/mcp-dev.ts, from source), prod wrangler.web.jsonc (src/mcp-prod.js: the built
- * bundle re-exported beside the object class, which honey's single-export Worker bundle cannot carry; wrangler bundles
- * the two with no source condition and no node compatibility, so a node built-in in the bundle still fails it).
+ * through: dev wrangler.mcp.jsonc (src/mcp-dev.ts, from source), prod wrangler.web.jsonc (the built bundle as above,
+ * which exports the object class itself: honey's build passes the entry's named exports on).
  */
 function webServer() {
 	const bundle = `../apps/${app}/dist/cloudflare/index.js`
@@ -43,11 +42,11 @@ function webServer() {
 	const env: Record<string, string> = isDev
 		? { HONEY_E2E_APP: app, PORT, WRANGLER_BUILD_CONDITIONS: "honey-source,workerd,worker,browser" }
 		: { PORT }
-	const command = web
-		? `bunx wrangler dev --config ${isDev ? "wrangler.mcp.jsonc" : "wrangler.web.jsonc"} --port ${PORT} --ip 0.0.0.0`
-		: isDev
-			? `bunx wrangler dev --port ${PORT} --ip 0.0.0.0 --var HONEY_E2E_APP:${app}`
-			: `bunx wrangler dev ${bundle} --config wrangler.jsonc --no-bundle --port ${PORT} --ip 0.0.0.0`
+	const command = isDev
+		? web
+			? `bunx wrangler dev --config wrangler.mcp.jsonc --port ${PORT} --ip 0.0.0.0`
+			: `bunx wrangler dev --port ${PORT} --ip 0.0.0.0 --var HONEY_E2E_APP:${app}`
+		: `bunx wrangler dev ${bundle} --config ${web ? "wrangler.web.jsonc" : "wrangler.jsonc"} --no-bundle --port ${PORT} --ip 0.0.0.0`
 	return {
 		command,
 		env,
