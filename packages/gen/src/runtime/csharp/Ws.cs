@@ -21,12 +21,11 @@ public sealed record WsMessage(WebSocketMessageType Type, byte[] Data)
 public sealed record WsClose(WebSocketCloseStatus Status, string Reason);
 
 /// <summary>
-/// An open WebSocket, read one whole message at a time (16 MiB at most) and written from any task. Its end fires
-/// <see cref="Closed"/> or <see cref="Error"/> once: the server's close (echoed at once, its code in
-/// <see cref="ClosedBy"/>), the client's own <see cref="CloseAsync"/>, a drop, a message over the cap, or a cancel.
-/// The method's token or a read's own token closes it with 1000, and the pending read throws
-/// OperationCanceledException. Once it ended, a read answers null. Its dial runs no OnRequest or OnResponse
-/// hook, and a refused handshake's 401 is its error, with no OnAuthExpired refresh.
+/// An open WebSocket, read one whole message at a time (16 MiB at most) and written from any task. It ends once, firing
+/// <see cref="Closed"/> or <see cref="Error"/>: on the server's close (echoed, its code in <see cref="ClosedBy"/>),
+/// <see cref="CloseAsync"/>, a drop, a message over the cap, or a cancel. The method's or a read's token closes it with
+/// 1000 and the pending read throws OperationCanceledException; a read after the end answers null. Its dial runs no
+/// OnRequest or OnResponse hook, and a refused handshake's 401 is its error, with no OnAuthExpired refresh.
 /// </summary>
 public sealed class TypedWebSocket : IAsyncDisposable
 {

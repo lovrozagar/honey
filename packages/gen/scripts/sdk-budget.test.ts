@@ -511,10 +511,10 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
  * restarting the chain (+1,538: IDialed, Dial's RefreshAsync and used token, the exchange's refreshes flag), +426 of
  * comments (RealtimeLoop.cs +2,451, Adapters.cs +370, Exchange.cs +36, each transport +42); a dead `_refused` reset
  * and a dead try/catch cut.
- * Bit 19 k1, +126 B of doc only, to 133,716 B: Ws.cs +126 (the dial runs no OnRequest or OnResponse hook and no
- * OnAuthExpired refresh).
+ * Bit 19 k1, +90 B of doc only, to 133,680 B: Ws.cs +126 (the dial runs no OnRequest or OnResponse hook and no
+ * OnAuthExpired refresh), then -36 rewording TypedWebSocket's summary to keep Ws.cs within 300 lines.
  */
-const CSHARP_RUNTIME_BYTES = 133_716
+const CSHARP_RUNTIME_BYTES = 133_680
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {
