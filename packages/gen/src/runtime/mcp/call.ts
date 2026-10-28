@@ -4,8 +4,9 @@
  * parameter under its own name: path, query or header; the body as JSON, a form, base64-decoded bytes at most 1 MiB, or
  * text, a raw body under its content type), the SDK member the operation sits at is called with the session's abort,
  * and its answer becomes the tool's result as result.ts shapes it, scrubbed of the API key; an event stream's, the
- * collect stream.ts runs.
+ * collect stream.ts runs. Bit 21 c: a multipart form's parts are arguments, sent as multipart whether or not a file is.
  */
+import { decoded, fileOf, type Read } from "./files.ts"
 import { redactor, refusal } from "./guard.ts"
 import { type Answer, BYTES_MAX, failureOf, json, successOf, unanswered } from "./result.ts"
 import type { Tool } from "./protocol.ts"
@@ -31,17 +32,20 @@ export type ToolSpec = {
 	readonly annotations?: Record<string, boolean>
 	/** an event stream's collect: its `max_events` and `last_event_id` properties */
 	readonly collect?: readonly [max: string, lastEventId: string]
+	/** a multipart form's parts: property, name in the form, kind */
+	readonly parts?: readonly (readonly [property: string, name: string, kind: "text" | "file" | "files"])[]
 }
 
-/** How tools call: the secrets to scrub, a call's bound in ms, and a collect's own client, whose answer runs `seen`. */
+/**
+ * How tools call: the secrets to scrub, a call's bound in ms, a collect's own client, whose answer runs `seen`, and the
+ * inline file bytes a call may carry.
+ */
 export type Binding = {
 	readonly secrets: readonly string[]
 	readonly timeout: number
 	readonly opening: (seen: () => void) => SdkClient
+	readonly inline?: number
 }
-
-/* canonical base64: whole quads, the last one padded */
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
 /** The SDK client a tool drives: its members walked key by key to the operation's method. */
 export type SdkClient = object
@@ -60,11 +64,33 @@ function inputOf(spec: ToolSpec, args: Record<string, unknown>): Record<string, 
 	if (field === "json" || field === "form") return { ...input, [field]: value }
 	;(input.headers as Record<string, unknown>)["content-type"] = contentType
 	if (field === "text") return { ...input, body: value }
-	if (!BASE64.test(String(value))) return `Invalid arguments: ${property} is not base64`
-	const bytes = Buffer.from(String(value), "base64")
+	const bytes = decoded(String(value))
+	if (bytes === undefined) return `Invalid arguments: ${property} is not base64`
 	return bytes.byteLength > BYTES_MAX
 		? `Invalid arguments: ${property} is past the ${BYTES_MAX}-byte cap`
 		: { ...input, body: bytes }
+}
+
+/** `input` with `args`' form as its multipart body, each file read or decoded; or why a part cannot be sent. */
+async function formed(
+	input: Record<string, Record<string, unknown>>,
+	parts: NonNullable<ToolSpec["parts"]>,
+	args: Record<string, unknown>,
+	files: { read: Read | undefined; cap: number; left: number },
+) {
+	const form = new FormData()
+	for (const [property, name, kind] of parts)
+		for (const [at, item] of [args[property] ?? []].flat().entries()) {
+			const file = kind === "text" ? undefined : await fileOf(item as Record<string, unknown>, files.read, files)
+			if (typeof file === "string") return `Invalid arguments: ${property}${kind === "files" ? `[${at}]` : ""} ${file}`
+			if (file)
+				form.append(name, new Blob([file.bytes as Uint8Array<ArrayBuffer>], { type: file.type }), file.name ?? name)
+			else form.append(name, typeof item === "string" ? item : JSON.stringify(item))
+		}
+	/* fetch's own multipart encoding, its boundary in the content type */
+	const encoded = new Response(form)
+	const headers = { ...input.headers, "content-type": encoded.headers.get("content-type") }
+	return { ...input, body: new Uint8Array(await encoded.arrayBuffer()), headers }
 }
 
 /** The method at `member` on `client`, with the object it is called on. */
@@ -82,9 +108,16 @@ function methodAt(client: SdkClient, member: readonly string[]): [owner: unknown
 export function bindTools(specs: readonly ToolSpec[], client: SdkClient, binding: Binding): Tool[] {
 	const scrub = redactor(binding.secrets)
 	return specs.map((spec) => ({
-		call: async (args, signal, progress) => {
+		call: async (args, signal, progress, read) => {
 			const paths = spec.args.filter(([, group]) => group === "params").map(([property]) => property)
-			const input = refusal(spec.inputSchema, paths, args) ?? inputOf(spec, args)
+			let input = refusal(spec.inputSchema, paths, args) ?? inputOf(spec, args)
+			const cap = binding.inline ?? BYTES_MAX
+			if (typeof input !== "string" && spec.parts)
+				input = await formed(input as Record<string, Record<string, unknown>>, spec.parts, args, {
+					cap,
+					left: cap,
+					read,
+				})
 			if (typeof input === "string") return json(scrub({ message: input }), true)
 			let opened = false
 			const [owner, method] = methodAt(spec.collect ? binding.opening(() => (opened = true)) : client, spec.member)

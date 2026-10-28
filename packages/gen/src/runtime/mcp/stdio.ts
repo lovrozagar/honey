@@ -3,12 +3,13 @@
  * output, nothing else ever written there; a line that is not JSON answered as a parse error. Each message is answered
  * as it comes: a fault at once, in the order it came, a call when it is done, matched by its id, so calls run side by
  * side. One writer writes each reply whole. Bit 21 b: the connection keeps its negotiated legacy revision; a
- * notifications/cancelled aborts the call it names, nothing more written for it. The session ends when standard input
+ * notifications/cancelled aborts the call it names, nothing more written for it. Bit 21 c: `read`, the file reader,
+ * reaches every call. The session ends when standard input
  * does, once every reply is written, or when `stop` aborts: every call in flight is aborted with it and settles, and
  * no reply after is written.
  */
 import { ErrorCode, failure, isId } from "./jsonrpc.ts"
-import type { Connection, Protocol } from "./protocol.ts"
+import type { Connection, Context, Protocol } from "./protocol.ts"
 
 /** Where the transport reads and writes: by default the process's standard input and output. */
 export type Stdio = {
@@ -20,7 +21,12 @@ export type Stdio = {
 const processStdio = (): Stdio => ({ input: process.stdin, write: (line) => void process.stdout.write(line) })
 
 /** Serves `protocol` over `stdio` until its input ends or `stopped` aborts; settles once the last reply is written. */
-export function serveStdio(protocol: Protocol, stdio: Stdio = processStdio(), stopped?: AbortSignal): Promise<void> {
+export function serveStdio(
+	protocol: Protocol,
+	stdio: Stdio = processStdio(),
+	stopped?: AbortSignal,
+	read?: Context["read"],
+): Promise<void> {
 	const stop = new AbortController()
 	const connection: Connection = {}
 	/* each call in flight by its id: its own abort */
@@ -43,7 +49,7 @@ export function serveStdio(protocol: Protocol, stdio: Stdio = processStdio(), st
 		const id = message?.id
 		const done = (reply: unknown) =>
 			void (calls.get(id) === call && calls.delete(id), reply === undefined || send(reply))
-		const answer = protocol.answer(message, { connection, notify: send, signal })
+		const answer = protocol.answer(message, { connection, notify: send, read, signal })
 		if (!(answer instanceof Promise)) return done(answer)
 		if (isId(id)) calls.set(id, call)
 		const answered: Promise<void> = answer.then(done)

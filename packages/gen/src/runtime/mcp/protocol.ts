@@ -4,7 +4,8 @@
  * result complete; another revision refused naming those served. Any other is legacy: initialize negotiates 2025-11-25
  * down to 2025-03-26 into the connection, then ping, tools/list and tools/call; under 2025-03-26 no outputSchema, no
  * structuredContent, and only there a batch. A fault answers at once, a call when done; a tool's failure is its result.
- * A call with a progressToken may report progress, each step a notifications/progress before its result.
+ * A call with a progressToken may report progress, each step a notifications/progress before its result. A transport
+ * that reads files (bit 21 c: stdio) hands each call its reader; server/discover names the extensions served.
  */
 import { ErrorCode, failure, type Id, isId, type Message, type Reply, result } from "./jsonrpc.ts"
 
@@ -39,6 +40,7 @@ export type Tool = {
 		args: Record<string, unknown>,
 		signal: AbortSignal,
 		progress: (done: number) => void,
+		read?: (path: string) => Promise<Uint8Array>,
 	) => Promise<ToolResult>
 }
 
@@ -48,11 +50,12 @@ export type ServerInfo = { readonly name: string; readonly version: string }
 /** A connection's legacy revision, once its initialize negotiated one. */
 export type Connection = { version?: string }
 
-/** A message's abort, where its notifications go, and its connection. */
+/** A message's abort, where its notifications go, its connection, and its transport's file reader when it has one. */
 export type Context = {
 	readonly signal: AbortSignal
 	readonly notify: (message: object) => void
 	readonly connection: Connection
+	readonly read?: (path: string) => Promise<Uint8Array>
 }
 
 /** Each message's reply, a batch's, or none; a promise only for a call, never rejected. */
@@ -114,7 +117,7 @@ function called({ id, params }: Asked, tool: Tool | undefined, version: string, 
 			method: "notifications/progress",
 			params: { progress: done, progressToken: token },
 		})
-	return tool.call(args, context.signal, progress).then(
+	return tool.call(args, context.signal, progress, context.read).then(
 		(outcome) => result(id, { ...shaped(outcome, version >= STRUCTURED_SINCE), ...(version === MODERN && COMPLETE) }),
 		() => failure(id, ErrorCode.InternalError, "Internal error"),
 	)
@@ -134,8 +137,8 @@ function batch(
 	})
 }
 
-/** The protocol over `tools`, as `info` names the server. */
-export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protocol {
+/** The protocol over `tools`, as `info` names the server, serving `extensions` when given. */
+export function createProtocol(info: ServerInfo, tools: readonly Tool[], extensions?: object): Protocol {
 	const byName = new Map(tools.map((tool) => [tool.name, tool]))
 	/* `method` under `version`: each era's own methods, and the tools in both; undefined for any other method */
 	const served = (request: Asked, method: string, version: string, context: Context) => {
@@ -145,7 +148,7 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protoc
 			case "server/discover":
 				return result(id, {
 					_meta: { "io.modelcontextprotocol/serverInfo": info },
-					capabilities: { tools: {} },
+					capabilities: { tools: {}, ...(extensions && { extensions }) },
 					supportedVersions: PROTOCOL_VERSIONS,
 					...CACHED,
 				})

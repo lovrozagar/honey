@@ -217,18 +217,18 @@ describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
 describe("the generate report (bit 18 phase d)", () => {
 	it("names on stderr each MCP operation no tool serves yet, and still writes the server", async () => {
 		const ping = { get: { operationId: "ping", responses: { 204: { description: "none" } }, "x-mcp": true } }
-		const parts = { content: { "multipart/form-data": { schema: { properties: {}, type: "object" } } } }
-		const upload = {
-			post: { operationId: "upload", requestBody: parts, responses: { 204: { description: "none" } }, "x-mcp": true },
+		/* a socket: a multipart form is a tool since bit 21 c */
+		const chat = {
+			get: { operationId: "chat", responses: { 101: { description: "up" } }, "x-mcp": true, "x-websocket": true },
 		}
 		const { out, spec } = specDir({
 			...(shop() as Record<string, unknown>),
-			paths: { "/ping": ping, "/upload": upload },
+			paths: { "/chat": chat, "/ping": ping },
 		})
 		const ran = await run(["generate", "--spec", spec, "--target", "mcp", "--out", out])
 		expect([ran.status, ran.err, filesUnder(out).includes("mcp/dist/server.js")]).toEqual([
 			0,
-			"honey-codegen: mcp: no tool serves upload (a multipart body) yet: skipped\n",
+			"honey-codegen: mcp: no tool serves chat (a WebSocket) yet: skipped\n",
 			true,
 		])
 	})

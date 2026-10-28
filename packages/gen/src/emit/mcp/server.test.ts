@@ -204,7 +204,7 @@ const pkg = (doc: Record<string, unknown>) =>
 
 describe("what no tool serves yet (phase d)", () => {
 	// v0: 3663ef7b8a
-	it("names each operation marked x-mcp that no tool serves, and what it is: a socket, a multipart body", () => {
+	it("names each operation marked x-mcp that no tool serves, and what it is: a socket; a multipart form is a tool (bit 21 c)", () => {
 		const marked = (id: string, more: Record<string, unknown>) => ({
 			operationId: id,
 			responses: OK,
@@ -227,8 +227,6 @@ describe("what no tool serves yet (phase d)", () => {
 		expect(generateMcpServer({ ...document(), paths }).skipped).toEqual([
 			"chat.open (a WebSocket)",
 			"live.join (a realtime channel)",
-			"upload.send (a multipart body)",
-			"files.send (a multipart body)",
 		])
 	})
 })

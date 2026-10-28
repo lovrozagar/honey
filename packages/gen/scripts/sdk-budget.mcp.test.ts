@@ -89,9 +89,28 @@ const SLOW = { timeout: 120_000 }
  *     35; the handler's fault moved to the protocol −188; docs 111; imports 4;
  *   - jsonrpc.ts +143: UnsupportedProtocolVersion (-32022) 36, an error's `data` 107;
  *   - call.ts, result.ts, stream.ts +2 each: they import protocol.ts for server.ts.
+ * - bit 21 c, +7,405 B to 42,567 B: file arguments over stdio (H24). Dead code cut first: call.ts's own base64 check and
+ *   Buffer decode (-280) give way to files.ts's canonical decoder, which the bytes body shares; the file schema is the
+ *   emitter's (emit/mcp/files.ts, tools.gen.ts data), so no runtime byte holds it. By file:
+ *   - files.ts 2,645 (new; the file-uploads extension's values): an inline FileInput checked (data present, canonical
+ *     base64, the call's inline bytes capped together, decoded to its size, its SHA-256 base64url digest) 993; a file
+ *     argument read or inlined, its rule as the refusal, a path's base name 609; the canonical base64 decoder (pad bits
+ *     zero, atob, no Buffer) 400; the extension's identifier and server/discover's maxInlineBytes 280; the Read type
+ *     126; the header 239;
+ *   - reader.ts 2,623 (new; the stdio file reader, node:fs): the read 1,640 (the root realpath'd at start, a directory
+ *     or no reader; the path realpath'd under it; open with no last link followed and no FIFO wait; the descriptor a
+ *     regular file, the inode realpath named, within the cap, read to exactly its size, closed), the open flags 132, the
+ *     refusal 120, the Disk seam a test swaps through 179, imports and header 554;
+ *   - call.ts +1,659: the multipart form (each part from its argument, one or many; a file read or decoded into a
+ *     Blob; text as given, else its JSON; encoded by fetch's own FormData, its boundary in the content type) +1,191;
+ *     the call (the reader passed in, the inline cap, the form when the spec has parts) +234; ToolSpec's parts +173;
+ *     Binding's inline cap +73; the import +56; the header +94; the decoder shared -162;
+ *   - protocol.ts +374: a call's reader from its transport's context (Tool.call +48, Context +100, the call +14)
+ *     +162; server/discover's extensions (createProtocol's parameter +54, the capability +35) +89; docs +123;
+ *   - stdio.ts +104: serveStdio's reader into every context +46 (its parameter, the type import, the context), docs +58.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 35162
+const MCP_RUNTIME_BYTES = 42567
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
@@ -122,13 +141,17 @@ type Tools = { readonly total: number; readonly largest: number }
  *   every app's total: compose 379, defaults 143, gateway 383, kitchen 921, surface 2,143), each tool as the legacy list
  *   has it, so every largest is unchanged; the legacy list is unchanged. Both eras are held to the same ceilings: no
  *   raise.
+ * - bit 21 c, multipart operations as tools (H24): surface's POST /in/file is a tool, post_in_file, 177 tokens (its
+ *   `file` part a file argument, 98 tokens of the file schema: the extension's FileInput marked and required, its
+ *   digest's algorithm, or a path); surface 2,127 -> 2,304 total, its largest still the SSE tool's 205, so ceilings
+ *   2,553 -> 2,765 total, 246 largest unchanged. The other four apps have no multipart operation and are unchanged.
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },
 	defaults: { largest: 51, total: 127 },
 	gateway: { largest: 141, total: 367 },
 	kitchen: { largest: 187, total: 905 },
-	surface: { largest: 205, total: 2127 },
+	surface: { largest: 205, total: 2304 },
 }
 const TOKEN_HEADROOM = 0.2
 

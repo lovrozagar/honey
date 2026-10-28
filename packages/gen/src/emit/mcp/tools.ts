@@ -7,13 +7,17 @@
  * are), the body under `body`: JSON or a form as its schema, bytes as a base64 string (Q4), text as a string; a
  * credential header is never an argument, the server sending the API key itself. Its outputSchema and annotations are
  * output-schema.ts's and annotations.ts's. An event stream is a bounded collect, taking `max_events` (1 to 100, 20 by
- * default) and `last_event_id` to resume after. Sockets are no tools, nor is multipart, by decision (bit 19 g, #11).
+ * default) and `last_event_id` to resume after. Sockets are no tools. A multipart form (bit 21 c, H24) is a tool too,
+ * each part its own argument: a text part as its schema, a file part (or a list of them) a file argument, files.ts's
+ * schema.
  */
-import type { IR, IROperation, IRParam } from "../../ir/model.ts"
+import type { IR, IROperation, IRParam, IRSchema } from "../../ir/model.ts"
+import { irResolver } from "../../ir/schema.ts"
 import { isJsonMedia, isTextMedia, mediaEssence, sdkModel } from "../../ir/sdk-model.ts"
 import { NameScope, snakeWords } from "../shared/lang.ts"
 import { sdkMemberPaths } from "../ts/service-map.ts"
 import { type Annotations, annotationsOf } from "./annotations.ts"
+import { FILE_SCHEMA } from "./files.ts"
 import { outputOf } from "./output-schema.ts"
 import { describe, jsonSchemaOf, type JsonSchema } from "./schema.ts"
 
@@ -35,10 +39,15 @@ export type ToolSpec = {
 	readonly annotations?: Annotations
 	/** an event stream's collect: its `max_events` and `last_event_id` properties */
 	readonly collect?: readonly [max: string, lastEventId: string]
+	/** a multipart form's parts: each one's property, its name in the form, and whether it is a file or a list of them */
+	readonly parts?: readonly Part[]
 }
 
-/** How a body argument is sent: JSON, a urlencoded form, base64-decoded bytes, or text as it is. */
-type BodyField = "json" | "form" | "bytes" | "text"
+/** A multipart form's part as a tool argument: its property, its name in the form, and what it is. */
+type Part = readonly [property: string, name: string, kind: "text" | "file" | "files"]
+
+/** How a body is sent: JSON, a urlencoded form, base64-decoded bytes, text as it is, or a multipart form's parts. */
+type BodyField = "json" | "form" | "bytes" | "text" | "parts"
 
 /** The most characters a tool name may have. */
 export const NAME_MAX = 64
@@ -46,15 +55,15 @@ export const NAME_MAX = 64
 /** Headers that carry a credential: never a tool's argument. */
 const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"]
 
-/** How a body is sent, when a tool can send it: JSON, a urlencoded form, bytes or text; never multipart. */
-function bodyField(op: IROperation): BodyField | null | undefined {
+/** How `op`'s body is sent: JSON, a urlencoded form, bytes, text, or a multipart form (a file in it or not) by parts. */
+function bodyField(op: IROperation): BodyField | undefined {
 	const body = op.body
 	if (body === undefined) return undefined
-	if (body.kind === "multipart") return null
 	if (body.kind === "stream") return "bytes"
 	if (isJsonMedia(body.contentType)) return "json"
-	if (mediaEssence(body.contentType) === "application/x-www-form-urlencoded") return "form"
-	if (mediaEssence(body.contentType) === "multipart/form-data") return null
+	const essence = mediaEssence(body.contentType)
+	if (essence === "application/x-www-form-urlencoded") return "form"
+	if (essence === "multipart/form-data") return "parts"
 	return isTextMedia(body.contentType) ? "text" : "bytes"
 }
 
@@ -65,11 +74,10 @@ function bodySchema(op: IROperation, field: BodyField, ir: IR): JsonSchema {
 	return jsonSchemaOf(op.body.schema, ir.schemas)
 }
 
-/** What `op` is that no tool serves, or undefined when a tool can: a socket, a multipart body. */
+/** What `op` is that no tool serves, or undefined when a tool can: a socket. */
 export function untoolable(op: IROperation): string | undefined {
 	if (op.extensions.websocket === true) return "a WebSocket"
-	if (op.extensions.realtime === true) return "a realtime channel"
-	return bodyField(op) === null ? "a multipart body" : undefined
+	return op.extensions.realtime === true ? "a realtime channel" : undefined
 }
 
 /** Whether `op` is a tool: marked `x-mcp`, and nothing no tool serves. */
@@ -83,6 +91,45 @@ export function toolName(id: string, taken: Set<string>): string {
 	for (let n = 2; taken.has(name); n++) name = `${base.slice(0, NAME_MAX - `_${n}`.length)}_${n}`
 	taken.add(name)
 	return name
+}
+
+/** A tool's properties as it gathers them: the names taken, each property's schema, and the required ones. */
+type Gathered = {
+	readonly scope: NameScope
+	readonly properties: Record<string, JsonSchema>
+	readonly required: string[]
+}
+
+/** `form`'s fields as arguments into `into`: a text part its schema; a file, or a list of them, files.ts's. */
+function partsOf(form: IRSchema, ir: IR, into: Gathered): Part[] {
+	const resolve = irResolver(ir.schemas)
+	const object = resolve(form)
+	return (object.kind === "object" ? object.fields : []).map((field) => {
+		const property = into.scope.claim(field.name)
+		const schema = resolve(field.schema)
+		const files = schema.kind === "array" && resolve(schema.items).kind === "binary"
+		const kind = schema.kind === "binary" ? "file" : files ? "files" : "text"
+		const own = kind === "file" ? FILE_SCHEMA : jsonSchemaOf(field.schema, ir.schemas)
+		into.properties[property] = {
+			...own,
+			...(kind === "files" && { items: FILE_SCHEMA }),
+			...describe(field.description),
+		}
+		if (field.required) into.required.push(property)
+		return [property, field.name, kind]
+	})
+}
+
+/** `op`'s body argument into `into`: its property, how it is sent and a raw body's content type; or its parts. */
+function bodyOf(op: IROperation, ir: IR, into: Gathered): Pick<ToolSpec, "body" | "parts"> {
+	const field = bodyField(op)
+	if (field === undefined || op.body === undefined) return {}
+	/* a multipart form is never a stream: it has its schema */
+	if (field === "parts") return { parts: partsOf((op.body as { schema: IRSchema }).schema, ir, into) }
+	const property = into.scope.claim("body")
+	into.properties[property] = bodySchema(op, field, ir)
+	if (op.body.required) into.required.push(property)
+	return { body: field === "bytes" || field === "text" ? [property, field, op.body.contentType] : [property, field] }
 }
 
 /** `op`'s flat inputSchema and how each property reaches the SDK input. */
@@ -105,14 +152,7 @@ function inputOf(op: IROperation, ir: IR) {
 			if (group === "params" || param.required === true) required.push(property)
 			args.push([property, group, param.name])
 		}
-	const field = bodyField(op)
-	let body: ToolSpec["body"]
-	if (field !== undefined && field !== null && op.body !== undefined) {
-		const property = scope.claim("body")
-		properties[property] = bodySchema(op, field, ir)
-		if (op.body.required) required.push(property)
-		body = field === "bytes" || field === "text" ? [property, field, op.body.contentType] : [property, field]
-	}
+	const body = bodyOf(op, ir, { properties, required, scope })
 	let collect: ToolSpec["collect"]
 	if (op.extensions.sse === true) {
 		collect = [scope.claim("max_events"), scope.claim("last_event_id")]
@@ -150,7 +190,7 @@ export function toolsOf(ir: IR): ToolSpec[] {
 			/* sdkMemberPaths holds every operation of the IR */
 			member: members.get(op.id) as string[],
 			args,
-			...(body === undefined ? {} : { body }),
+			...body,
 			...outputOf(sdkOp, ir),
 			...(annotations === undefined ? {} : { annotations }),
 			...(collect === undefined ? {} : { collect }),

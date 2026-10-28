@@ -7,6 +7,8 @@
 import { describe, expect, it } from "vitest"
 import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 import { erased, generateMcpServer } from "./server.ts"
+import { anyrow } from "./__fixtures__/anyrow.ts"
+import { FILE_SCHEMA } from "./files.ts"
 import { NAME_MAX, toolName, toolsOf } from "./tools.ts"
 
 const OK = { 200: { content: { "application/json": { schema: { type: "object" } } }, description: "ok" } }
@@ -31,7 +33,7 @@ const op = (operationId: string, more: Record<string, unknown> = {}) => ({
 describe("which operations are tools (phase b)", () => {
 	// v0: c22e287e6e
 	// v0: 787e53db6d
-	it("makes one of each operation marked x-mcp a tool can call, in the IR's order; no socket or multipart; an event stream a collect", () => {
+	it("makes one of each operation marked x-mcp a tool can call, in the IR's order; no socket; a multipart form its parts (bit 21 c); an event stream a collect", () => {
 		const listed = tools({
 			"/a": { get: op("a.list"), post: op("a.create", { requestBody: json({ type: "object" }) }) },
 			"/b": { get: { operationId: "b.list", responses: OK } },
@@ -72,8 +74,10 @@ describe("which operations are tools (phase b)", () => {
 			["upload_send", ["upload", "send"], ["bytes", "application/octet-stream"]],
 			["text_send", ["text", "send"], ["text", "text/plain"]],
 			["png_send", ["png", "send"], ["bytes", "image/png"]],
+			["parts_send", ["parts", "send"], undefined],
 			["form_send", ["form", "send"], ["form"]],
 		])
+		expect(listed.find((tool) => tool.name === "parts_send")?.parts).toEqual([["a", "a", "text"]])
 	})
 })
 
@@ -222,5 +226,90 @@ describe("spec text in tools.gen.ts (F2, phase b)", () => {
 				source.includes(JSON.stringify(evil).slice(1, -1)),
 			].map((check) => (typeof check === "function" ? (check(), "parsed") : check)),
 		).toEqual(["parsed", false, true])
+	})
+})
+
+describe("a multipart form's parts, each its own argument (bit 21 c)", () => {
+	it("makes a text part its schema, a file part files.ts's schema, a list of files an array of it; a clash suffixed", () => {
+		const form = {
+			properties: {
+				file: { description: "The upload", format: "binary", type: "string" },
+				files: { items: { format: "binary", type: "string" }, maxItems: 3, type: "array" },
+				id: STR,
+				n: { type: "integer" },
+			},
+			required: ["file"],
+			type: "object",
+		}
+		const [tool] = tools({
+			"/p/{id}": {
+				post: op("p.send", {
+					parameters: [{ in: "path", name: "id", required: true, schema: STR }],
+					requestBody: { content: { "multipart/form-data": { schema: form } } },
+				}),
+			},
+		})
+		expect([tool?.inputSchema, tool?.parts, tool?.body]).toEqual([
+			{
+				additionalProperties: false,
+				properties: {
+					file: { ...FILE_SCHEMA, description: "The upload" },
+					files: { items: FILE_SCHEMA, maxItems: 3, type: "array" },
+					id: STR,
+					id2: STR,
+					n: { type: "integer" },
+				},
+				required: ["id", "file"],
+				type: "object",
+			},
+			[
+				["file", "file", "file"],
+				["files", "files", "files"],
+				["id2", "id", "text"],
+				["n", "n", "text"],
+			],
+			undefined,
+		])
+	})
+})
+
+describe("a multipart form's parts, by the form (bit 21 c)", () => {
+	it("takes a multipart form with no schema as no arguments", () => {
+		const [tool] = tools({
+			"/p": { post: op("p.send", { requestBody: { content: { "multipart/form-data": {} } } }) },
+		})
+		expect([tool?.inputSchema.properties, tool?.parts]).toEqual([{}, []])
+	})
+
+	it("makes each of Anyrow's five multipart operations a tool, its form a ref, its path parameters first", () => {
+		const listed = toolsOf(toIR(anyrow() as unknown as OpenApiDocument, { deriveOperationIds: true }))
+		const parts = (kind: string) =>
+			listed.map((tool) => (tool.parts ?? []).filter((part) => part[2] === kind).map(([, name]) => name))
+		expect([
+			listed.map((tool) => [tool.name, Object.keys(tool.inputSchema.properties as object)]),
+			parts("file"),
+		]).toEqual([
+			[
+				["extract_once", ["project_id", "columns", "file", "instruction", "schema", "strictness", "text"]],
+				[
+					"extract_stream",
+					[
+						"project_id",
+						"columns",
+						"file",
+						"instruction",
+						"schema",
+						"strictness",
+						"text",
+						"max_events",
+						"last_event_id",
+					],
+				],
+				["suggest_schema", ["project_id", "file", "text"]],
+				["extract_table_once", ["project_id", "table_id", "file", "text"]],
+				["extract_table_stream", ["project_id", "table_id", "file", "text", "max_events", "last_event_id"]],
+			],
+			[["file"], ["file"], ["file"], ["file"], ["file"]],
+		])
 	})
 })

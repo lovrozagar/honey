@@ -16,7 +16,10 @@ const read = (mcp: NonNullable<Call["mcp"]>, more: Partial<Call> = {}): Call => 
 /** An MCP-only row's observation. */
 const mcp = (value: Expected): Expected => ({ kind: "mcp", value })
 
-/** The reference app's tools: every operation marked x-mcp a tool serves, `health` left unmarked (Q8). */
+/**
+ * The reference app's tools: every operation marked x-mcp a tool serves, `health` left unmarked (Q8); bit 21 c:
+ * `uploads_form`, a multipart form, a tool now.
+ */
 const TOOLS = [
 	"boundary_custom",
 	"boundary_default",
@@ -39,6 +42,7 @@ const TOOLS = [
 	"ticks_stream",
 	"timing_slow",
 	"uploads_blob",
+	"uploads_form",
 	"users_create",
 	"users_delete",
 	"users_get",
@@ -58,7 +62,8 @@ const ITEM_SCHEMA = {
 /**
  * The reference app's tools/list measured in o200k tokens (ceilingOf(measured, 0.2)): the whole list, its largest tool.
  * Measured 2,305 / 203 at bit 18 g; 2,534 / 222 after bit 19 c, the constraint keywords its zod schemas state now in
- * each inputSchema (+229 / +19 tokens).
+ * each inputSchema (+229 / +19 tokens); 2,711 / 222 at bit 21 c, the multipart `uploads_form` a tool (+177 tokens, 98
+ * of them its file argument), within the ceilings.
  */
 const TOKENS_TOTAL = 3041
 const TOKENS_LARGEST = 267

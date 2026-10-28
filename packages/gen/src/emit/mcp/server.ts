@@ -45,8 +45,38 @@ function resolved(options: McpServerOptions, title: string | undefined) {
 	return { envPrefix, name }
 }
 
+/** The server's name, version and environment prefix, and whether a tool of it takes a file. */
+type App = { readonly name: string; readonly version: string; readonly envPrefix: string; readonly files: boolean }
+
+/* a cap in bytes from the environment: a whole number, its default when unset */
+const BYTES = `const bytes = (name: string, fallback: string): number => {
+	const text = process.env[name] || fallback
+	if (/^(?:0|[1-9][0-9]{0,14})$/.test(text)) return Number(text)
+	process.stderr.write("Invalid $" + name + ": a whole number of bytes\\n")
+	return process.exit(1)
+}`
+
+/** A file-taking server's reader, its root and caps from the environment, the root refused at start unless a directory. */
+const filesSource = (prefix: string) => `${BYTES}
+const inline = bytes(${tsString(`${prefix}_MAX_INLINE_BYTES`)}, "1048576")
+const read = fileReader(
+	process.env[${tsString(`${prefix}_FILE_ROOT`)}] || process.cwd(),
+	bytes(${tsString(`${prefix}_MAX_FILE_BYTES`)}, "52428800"),
+)
+if (read === undefined) {
+	process.stderr.write(${tsString(`Invalid $${prefix}_FILE_ROOT: not a directory\n`)})
+	process.exit(1)
+}
+`
+
+/** The entry's note on files, when a tool takes one. */
+const filesNote = (prefix: string) => `
+// A file argument is inline (the file-uploads extension's FileInput, at most $${prefix}_MAX_INLINE_BYTES decoded in one
+// call, 1 MiB by default) or a path under $${prefix}_FILE_ROOT (the working directory by default), read whole, at most
+// $${prefix}_MAX_FILE_BYTES (50 MiB by default).`
+
 /** The entry: the tools served over stdio under the server's name and version. */
-const entrySource = (app: { name: string; version: string; envPrefix: string }, ir: IR) =>
+const entrySource = (app: App, ir: IR) =>
 	`${MARKER}
 
 // The ${app.name} MCP server: its tools over stdio, for the MCP client that starts it. The API key is
@@ -54,8 +84,8 @@ const entrySource = (app: { name: string; version: string; envPrefix: string }, 
 // with neither it refuses to start. A call waits $${app.envPrefix}_TIMEOUT_MS milliseconds at most, 30 s by default, an
 // event stream's collect too. $${app.envPrefix}_HEADERS, a JSON object of string values, goes on every call, each value
 // scrubbed as the key is; $${app.envPrefix}_REDIRECT is same-origin (the default) or follow. SIGINT and SIGTERM abort
-// every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.
-import { BYTES_MAX, bindTools, configHeaders, createProtocol, serveStdio } from "./mcp.runtime"
+// every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.${app.files ? filesNote(app.envPrefix) : ""}
+import { ${app.files ? "BYTES_MAX, bindTools, configHeaders, createProtocol, fileReader, filesCapability, serveStdio" : "BYTES_MAX, bindTools, configHeaders, createProtocol, serveStdio"} } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { headerValue } from "./sdk/api.runtime.gen"
 import { toolSpecs } from "./tools.gen"
@@ -90,7 +120,7 @@ const config = {
 	throwOnError: false,
 	timeout: Number(timeout),
 }
-const client = new Api(config)
+${app.files ? filesSource(app.envPrefix) : ""}const client = new Api(config)
 /* a collect's own client: its answer tells that collect its stream opened */
 const opening = (seen: () => void) => new Api({ ...config, onResponse: [() => void seen()] })
 const stop = new AbortController()
@@ -99,10 +129,10 @@ for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abor
 void serveStdio(
 	createProtocol(
 		{ name: ${tsString(app.name)}, version: ${tsString(app.version)} },
-		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout) }),
+		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout)${app.files ? ", inline" : ""} }),${app.files ? "\n\t\tfilesCapability(inline)," : ""}
 	),
 	undefined,
-	stop.signal,
+	stop.signal,${app.files ? "\n\tread," : ""}
 ).then(() => stop.signal.aborted && process.stdout.write("", () => process.exit(0)))
 `
 
@@ -154,7 +184,10 @@ export function generateMcpServer(
 	const sdk = generateSdk(document, { name: "Api", stem: "api" })
 	const source: Record<string, string> = {
 		"src/mcp.runtime.ts": mcpRuntimeSource(),
-		"src/server.ts": entrySource({ envPrefix, name, version }, ir),
+		"src/server.ts": entrySource(
+			{ envPrefix, files: specs.some((spec) => spec.parts?.some(([, , kind]) => kind !== "text")), name, version },
+			ir,
+		),
 		"src/tools.gen.ts": toolsSource(specs),
 		...Object.fromEntries(Object.entries(sdk.files).map(([file, text]) => [`src/sdk/${file}`, text])),
 	}
