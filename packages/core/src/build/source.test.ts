@@ -87,23 +87,7 @@ const routeIds = (dir: string) =>
 		...new Set([...read(dir, "src/_gen/routes.gen.ts").matchAll(/"((?:GET|POST|ALL) \/[^"]*)"/g)].map((m) => m[1])),
 	].sort()
 type Document = { paths: Record<string, Record<string, { requestBody?: object; responses: Record<string, unknown> }>> }
-const documentAt = (dir: string) => {
-	const d = JSON.parse(read(dir, "src/_gen/openapi.gen.json")) as Document
-	console.log(
-		"DOC",
-		JSON.stringify(
-			Object.fromEntries(
-				Object.entries(d.paths).map(([k, v]) => [
-					k,
-					Object.fromEntries(
-						Object.entries(v).map(([m, o]) => [m, { body: !!o.requestBody, responses: Object.keys(o.responses) }]),
-					),
-				]),
-			),
-		),
-	)
-	return d
-}
+const documentAt = (dir: string) => JSON.parse(read(dir, "src/_gen/openapi.gen.json")) as Document
 
 describe("a gateway's app (bit 19 h2)", () => {
 	it(
