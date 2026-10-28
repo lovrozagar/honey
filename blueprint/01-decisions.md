@@ -198,6 +198,28 @@ What is cut: `src/trust/*` (trust compile, XFF resolution, `ip.ts`'s CIDR, `clie
 
 **And the governing lesson:** an optional capability is **ordinary code reached through an ordinary import** — never a module that registers itself on import, never a global slot registry, never a `sideEffects` allowlist to prop it up, never injected machinery. I entertained v0's self-registering `@lovrozagar/honey/trust` entry; that was wrong and is forbidden (00-rules H19.3). `sideEffects` is `false`; the runtime is side-effect-free.
 
+## H24 — MCP files and remote MCP before 1.0 (supersedes bit 19's two MCP deferrals)
+
+The owner ruled (2026-10-28) that both land before 1.0: multipart operations as MCP tools with file arguments, and a remote MCP over Streamable HTTP. This **supersedes** "Decided-deferred past 1.0: MCP Streamable HTTP" (bits/19 :79, :208) and "MCP stays multipart-free" (bits/19 g, :194). Bit 21 carries it out. The spec target is MCP 2026-07-28, which is stateless: no `initialize`, `server/discover` a MUST, no sessions, GET or resumability, and `Mcp-Method`/`Mcp-Name` REQUIRED.
+
+1. **Dual-era, stateless.** One server serves the modern era (2026-07-28) and the legacy era (2025-11-25 … 2025-03-26) on both stdio and HTTP. Most clients in the field are still legacy (the TS sdk 1.32.2; the v2 client's default negotiation). The spec's era table says a modern-only server fails them, and a dual-era one works. No session id is minted in either era, which 2025-11-25 permits (sessions MAY). GET and DELETE answer 405.
+2. **A vendored runtime** (H9). The protocol, transports, tool shaping, files and guards stay in gen's dependency-free runtime, emitted into generated code. The official SDKs are our conformance clients, never a runtime dependency.
+3. **Core mounts, gen implements.** `mcp(app, path, handler, options?)` ships from a new subpath, `@lovrozagar/honey/mcp`, never the root. An app that serves no MCP bundles none of it, for the same reason as `./ws` (bit 19 i2). It is typed against a structural handler and imports nothing from gen (H2/H3). The handler is the plugin's generated `_gen/mcp.gen.ts`.
+4. **Auth:**
+   - **The default:** the app's own credential, carried as a header and forwarded in-process. It's the same app and the same resource server, so this is not token passthrough.
+   - **When the app has auth,** the endpoint refuses an unauthenticated request **before any dispatch**, so the protection never relies on each inner route alone.
+   - **Inner 401/403** become HTTP challenges.
+   - **OAuth 2.1** is an opt-in resource-server role (RFC 9728 PRM, RFC 8707 audience). honey ships no authorization server.
+   - **The standalone `--http`** binds 127.0.0.1, validates Host and Origin, and requires a token.
+5. **Files.**
+   - **The wire shape** follows the provisional `io.modelcontextprotocol/files` extension, pinned to PR head 6101d34 and isolated in one module.
+   - **`{path}`** is stdio-only and resolves inside a hard `$<PREFIX>_FILE_ROOT` after symlinks.
+   - **Over HTTP:** inline under a cap, upload references (one-shot, scoped, expiring), and an opt-in https URL fetch, which is off by default. The URL fetch allows exact hosts only, follows no redirect off the list, streams the size cap and times out.
+   - **Defaults:** path 50 MiB, inline 1 MiB, upload TTL 10 min, FILE_ROOT = cwd.
+6. **Batches** are accepted under 2025-03-26 only, and refused in every later era, as each spec says.
+
+Owner-only follow-ups, relayed, not honey's to fix: Anyrow's v0-built MCP server drops the file and text body and sends `Bearer` where its gateway takes `ApiKey`; its base extract routes skip per-plan file caps.
+
 ---
 
 ## Deep-dive gaps A1–G1

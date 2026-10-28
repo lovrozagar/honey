@@ -76,7 +76,7 @@ New findings beyond the 30 items:
 - **N4.** Go, Rust and Python send no WebSocket keepalive → phase d1.
 - **N5.** Go, Rust, Python and TS-stream have no bound on the open → phase b2.
 
-**Decided-deferred past 1.0: MCP Streamable HTTP** (bit 18 carry-in). It adds a listening network surface with its own security corpus (Origin checks and DNS rebinding, the bind address, auth, sessions); the emitted server stays stdio-only and documents it.
+**Decided-deferred past 1.0: MCP Streamable HTTP** (bit 18 carry-in). It adds a listening network surface with its own security corpus (Origin checks and DNS rebinding, the bind address, auth, sessions); the emitted server stays stdio-only and documents it. **Superseded by H24 (bit 21).**
 
 **Cross-SDK auth-config consistency sweep (surfaced bit 12, G/F2).** The SDKs diverge by target on how the auth header is configured: Go/Rust/the Go CLI/Python (bit 14 c) read `IR.auth` (the spec's security scheme) to default the header name and prefix, and C#/Java are ruled to read it too (bits 15/16); **TS alone** exposes only `authHeaderName`/`authHeaderPrefix` config with hard defaults `Authorization`/`Bearer ` and never reads `IR.auth`. This was **status quo from v0** (v0's `codegen.ts` TS SDK never read it either — not a v1 regression). Decide here whether to unify (TS also reads `IR.auth`, with a leg) or document TS's deliberate divergence; either way the conformance auth row already passes because every target sets auth explicitly. (Python was in this outlier set until bit 14 c made it read `IR.auth` with the pair rule, leaving TS the only one.)
 
@@ -191,7 +191,7 @@ Closed at k2, on k1's c77e304 (CI 40607219922). Phases, each landed red-first wi
 - **d1–d2** a1aa5e9, f9a0be1: empty maps send nothing, resume ids are those delivered, WS keepalive and 1009; SSE caps in bytes, HTTP/1.1 pinned outside TS, one error text, lossy UTF-8.
 - **e, e2** dca298e, b9a4570: a realtime refusal ends the connection, one token refresh per open; TS realtime operations over WebSocket, SSE and long-poll.
 - **f, f2** 0716af6, 881fb8c: raw realtime text send in every SDK, driver parity, safe-mode legs, one install source; a TS network failure is `APIConnectionError` with the platform error as its cause.
-- **g** a88ee49: MCP `$<PREFIX>_HEADERS` and `$<PREFIX>_REDIRECT`; WsMeta refuses the four HTTP-only builtins; MCP stays multipart-free.
+- **g** a88ee49: MCP `$<PREFIX>_HEADERS` and `$<PREFIX>_REDIRECT`; WsMeta refuses the four HTTP-only builtins; MCP stays multipart-free (superseded by H24, bit 21).
 - **h1, h2** e23afe2, 9340e3b: core's glob, cli-args and init; gen's write.ts with a hashed manifest; core's `honey()` plugin, generation and the `honey` CLI; gen's `--app` and its `.` entry. The gateway contract: tree = gatewayTree(entry.app ?? config.app, merged), documents from the served app overlaid with the merged schemas (Anyrow's shape, `tests/build/anyrow.test.ts`).
 - **i** d19d5d4: both packages publishable (exports with `honey-source` → src, `types`/`default` → dist; prepack builds dist; one packer, `scripts/pack.ts`, resolving `catalog:`/`workspace:`); release.yml publishes to npm only with provenance, OIDC-only, gated on ci.yml green on the tagged commit and on the conformance grid; the generated CLI's releases are signed (keyless cosign bundle over checksums.txt, actions/attest) and its install scripts verify them (`<PREFIX>_INSTALL_VERIFY=require`); oxfmt is the TS post-pass when it resolves.
 - **i2** 845f136: `ws(app, path)` from `./ws` replaces `app.ws(path)`; the minimal bundle drops the WS route builder's 1,120 B (26,155 B gzipped under the pinned bun 1.3.11, lock 26,200).
@@ -205,7 +205,7 @@ Fixes between phases, each red-first: c341545 (the e2e harness's own package sco
 - TS safe mode returns an undecodable 2xx as a result where every sibling throws: decided, not a gap.
 - The TS sweep of bit 17's findings needed no change; queued realtime frames survive a reconnect.
 - Rust binary deltas: +96,656 B at b1, −977,584 B at d2.
-- MCP Streamable HTTP is deferred past 1.0, with its security corpus (Origin check, localhost bind, auth surface) named for when it lands.
+- MCP Streamable HTTP is deferred past 1.0, with its security corpus (Origin check, localhost bind, auth surface) named for when it lands. **Superseded by H24 (bit 21).**
 - Q5: `mergeSpecs`/`scopeSpec` are removed. A scoped SDK is a per-output `codegen.openApi` document with `filterRoutes`, then `honey-codegen generate --spec` (26 v0 cases retired at k2).
 
 **Open at close:**

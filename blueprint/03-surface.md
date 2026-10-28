@@ -42,6 +42,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./trust` | DELETE [H23] | `trustProxy` is cut; `ctx.ip` is the platform peer |
 | `./tree` | KEEP | |
 | `./ws` | ADD (bit 19 i2) | `ws(app, path)` → the WS route builder, plus the types `WsRouteOf` and `AnyHoneyHandle`; replaces the `app.ws(path)` method, so an app that opens no socket bundles no WS route code |
+| `./mcp` | ADD (bit 21 e) | `mcp(app, path, handler, options?)` → mounts a generated MCP handler (`_gen/mcp.gen.ts`) on `path` (POST; GET/DELETE 405) under the app's middleware, auth before dispatch, optional OAuth resource metadata; an app that serves no MCP bundles none of it |
 | `./ws/bun`, `./ws/cloudflare`, `./ws/node`, `./ws/session` | KEEP | |
 | `./ws/deno` | DELETE [H15] | |
 
