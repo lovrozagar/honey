@@ -1,33 +1,27 @@
 /**
  * Hot-path regression gate: in-process `app.fetch` cost on the paths every request takes,
  * measured as a ratio to a minimal hand-written fetch handler run in the same process. The
- * ratio cancels most of the machine and runtime speed, so one committed baseline holds on a
- * laptop and on a CI runner.
+ * ratio cancels most of the machine and runtime speed.
  *
- *     bun bench/src/hotpath.ts            # compare against blueprint/baselines/hotpath.json
+ *     bun bench/src/hotpath.ts   # judged against blueprint/baselines/bench.json
  *
- * Exits 1 when a scenario regressed by `judge` (significance.ts): its median ratio is past the
- * baseline by more than `HOTPATH_THRESHOLD` (default 0.10) AND the rise is outside the 95% band
- * of its own samples. A rise inside the band prints as `noise`, never as a silent pass. Ratios
- * drift by up to ~20% between Bun versions, so baselines are kept per runtime minor version; a
- * version without one runs as a hint only, and CI gates on the version it pins.
+ * Judged as the other four benches are (gate.ts): a scenario whose median ratio is above its
+ * ceiling in bench.json, recorded from CI's own runs on the Bun it pins, is REGRESSED (exit 1).
+ * A runtime minor without ceilings runs as a hint only. Until bit 20 e3 it was judged against
+ * v0's ratios in blueprint/baselines/hotpath.json, kept frozen as v0's record (bun 1.4 only,
+ * so under CI's bun 1.3 it never gated).
  *
- * The code under test is v1, from packages/core/src, and the committed baseline is v0's ratios: v1 must
- * not be slower than v0 on any scenario. They were recorded from v0's source before it was deleted (bit 20
- * e; v0 lives at 1a968f1 in git): nothing re-records them, and a new runtime minor runs as a hint only.
- * The trust scenario retired at the cutover (j1): trustProxy is cut (H23).
+ * The code under test is v1, from packages/core/src. The trust scenario retired at the cutover
+ * (j1): trustProxy is cut (H23).
  */
-import { readFileSync } from "node:fs"
 import { cors as corsV1 } from "../../packages/core/src/middleware/cors.ts"
 import { createMiddleware as createV1Middleware } from "../../packages/core/src/middleware/middleware.ts"
 import { requestId as requestIdV1 } from "../../packages/core/src/middleware/request-id.ts"
 import { secureHeaders as secureHeadersV1 } from "../../packages/core/src/middleware/secure-headers.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
-import { exitCode, modeOf, ratioLine, RECORD_LABEL } from "./gate.ts"
-import { judge, median } from "./significance.ts"
+import { ceilingsOf, report, rowOf, runtime } from "./gate.ts"
+import { median } from "./significance.ts"
 
-const BASELINE_FILE = new URL("../../blueprint/baselines/hotpath.json", import.meta.url)
-const THRESHOLD = Number(process.env.HOTPATH_THRESHOLD ?? 0.1)
 const SAMPLES = Number(process.env.HOTPATH_SAMPLES ?? 15)
 const ITERATIONS = Number(process.env.HOTPATH_ITERATIONS ?? 50_000)
 
@@ -206,57 +200,13 @@ async function measure(): Promise<Record<string, Measured>> {
 	return out
 }
 
-/** Ratios drift between runtime versions, so a baseline is kept per runtime minor version. */
-type BaselineFile = { note: string; baselines: Record<string, Record<string, number>> }
-
 const version = typeof Bun !== "undefined" ? Bun.version : process.version.slice(1)
-const runtime = `${typeof Bun !== "undefined" ? "bun" : "node"} ${version.split(".").slice(0, 2).join(".")}`
 const results = await measure()
 
-function readBaselines(): BaselineFile {
-	try {
-		return JSON.parse(readFileSync(BASELINE_FILE, "utf8")) as BaselineFile
-	} catch {
-		return { baselines: {}, note: "" }
-	}
-}
-
-const file = readBaselines()
-const own = file.baselines[runtime]
-/* no baseline for this runtime version: compare against the newest one, but only as a hint */
-const advisory = own === undefined
-const [againstName, against] =
-	own !== undefined ? [runtime, own] : (Object.entries(file.baselines).at(-1) ?? ["none", {}])
-const verdicts = Object.entries(results).map(
-	([name, r]) => [name, r, judge(r.ratios, against[name], THRESHOLD)] as const,
-)
-const rows = verdicts.map(([name, r, v]) => ({
-	band: `±${v.halfWidth.toFixed(2)}`,
-	baseline: against[name] ?? "—",
+const own = ceilingsOf("hotpath")
+const rows = Object.entries(results).map(([name, r]) => ({
+	...rowOf(name, r.ratios, own?.[name]),
 	honey_ns: Math.round(r.honeyNs),
-	limit: v.limit === null ? "—" : Number(v.limit.toFixed(2)),
-	ratio: Number(v.ratio.toFixed(2)),
 	raw_ns: Math.round(r.rawNs),
-	scenario: name,
-	status: v.status === "regressed" ? "REGRESSED" : v.status,
 }))
-console.log(
-	`hotpath v1 on ${runtime} (${version}) vs baseline ${againstName}, threshold +${Math.round(THRESHOLD * 100)}%`,
-)
-/* CI pins bun 1.3 (BUN_VERSION) while hotpath.json holds only bun 1.4: there it has always run advisory, and it now
-   runs in record mode (BENCH_MODE=record) with the other benches until bit 20 e3 sets the gates */
-const mode = modeOf(process.env)
-if (mode === "record") console.log(`hotpath: ${RECORD_LABEL}`)
-console.table(rows)
-for (const row of rows) console.log(ratioLine("hotpath", row.scenario, row.ratio))
-if (advisory) {
-	console.log(`hotpath: no baseline for ${runtime}; advisory only (v0's ratios were recorded for the pinned runtimes).`)
-}
-const code = exitCode(
-	mode,
-	!advisory,
-	rows.map((row) => row.status),
-)
-if (code !== 0)
-	console.error("hotpath: a scenario regressed past the threshold: v1 is slower than v0's recorded ratio on it.")
-process.exitCode = code
+report("hotpath", `hotpath v1 on ${runtime} (${version}), ${SAMPLES} samples`, rows, own !== undefined)

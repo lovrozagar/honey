@@ -1,0 +1,168 @@
+{
+	"benches": {
+		"adapter": {
+			"node 26.12": {
+				"native-json": {
+					"baseline": 2.995,
+					"catches": "+24%",
+					"ceiling": 3.718
+				},
+				"post-1kib": {
+					"baseline": 4.225,
+					"catches": "+22%",
+					"ceiling": 5.17
+				},
+				"routed-json": {
+					"baseline": 1.53,
+					"catches": "+16%",
+					"ceiling": 1.771
+				},
+				"stacked-json": {
+					"baseline": 2.08,
+					"catches": "+13%",
+					"ceiling": 2.354
+				}
+			}
+		},
+		"finalize": {
+			"bun 1.3": {
+				"1000x10": {
+					"baseline": 2.45,
+					"catches": "+46%",
+					"ceiling": 3.575
+				},
+				"1000x100": {
+					"baseline": 0.74,
+					"catches": "+37%",
+					"ceiling": 1.012
+				},
+				"100x10": {
+					"baseline": 2.785,
+					"catches": "+35%",
+					"ceiling": 3.773
+				},
+				"100x100": {
+					"baseline": 0.85,
+					"catches": "+28%",
+					"ceiling": 1.089
+				},
+				"500x50": {
+					"baseline": 0.97,
+					"catches": "+24%",
+					"ceiling": 1.199
+				}
+			}
+		},
+		"hotpath": {
+			"bun 1.3": {
+				"body": {
+					"baseline": 1.85,
+					"catches": "+12%",
+					"ceiling": 2.079
+				},
+				"chain": {
+					"baseline": 1.9,
+					"catches": "+12%",
+					"ceiling": 2.134
+				},
+				"large-response": {
+					"baseline": 1.02,
+					"catches": "+10%",
+					"ceiling": 1.122
+				},
+				"many-routes": {
+					"baseline": 1.61,
+					"catches": "+13%",
+					"ceiling": 1.815
+				},
+				"mw-stack": {
+					"baseline": 2.02,
+					"catches": "+13%",
+					"ceiling": 2.288
+				},
+				"mw-sync": {
+					"baseline": 1.46,
+					"catches": "+11%",
+					"ceiling": 1.617
+				},
+				"not-found": {
+					"baseline": 7.53,
+					"catches": "+12%",
+					"ceiling": 8.448
+				},
+				"param": {
+					"baseline": 1.745,
+					"catches": "+12%",
+					"ceiling": 1.947
+				},
+				"scoped": {
+					"baseline": 1.745,
+					"catches": "+13%",
+					"ceiling": 1.98
+				},
+				"static": {
+					"baseline": 1.33,
+					"catches": "+12%",
+					"ceiling": 1.496
+				}
+			}
+		},
+		"streaming": {
+			"bun 1.3": {
+				"cancel-release": {
+					"baseline": 6.115,
+					"catches": "+24%",
+					"ceiling": 7.557
+				},
+				"generate-10k": {
+					"baseline": 1.28,
+					"catches": "+13%",
+					"ceiling": 1.452
+				},
+				"sse-1k": {
+					"baseline": 2.155,
+					"catches": "+15%",
+					"ceiling": 2.475
+				},
+				"stream-1mb": {
+					"baseline": 2.19,
+					"catches": "+36%",
+					"ceiling": 2.97
+				}
+			}
+		},
+		"websockets": {
+			"bun 1.3": {
+				"message-10k": {
+					"baseline": 3.475,
+					"catches": "+18%",
+					"ceiling": 4.114
+				},
+				"realtime-fanout": {
+					"baseline": 1.665,
+					"catches": "+23%",
+					"ceiling": 2.046
+				},
+				"realtime-inbound-10k": {
+					"baseline": 4.265,
+					"catches": "+45%",
+					"ceiling": 6.171
+				},
+				"upgrade-1k": {
+					"baseline": 2.7,
+					"catches": "+27%",
+					"ceiling": 3.432
+				}
+			}
+		}
+	},
+	"note": "Per bench, runtime minor and scenario: v1 cost / its raw twin's, from the RATIO lines of 6 green CI runs of ci.yml's hotpath job at 95b6cd2 in record mode (n=6: push run 40635796971, dispatches 40637279965, 40638448479, 40639505880, 40640935318, 40642329012), under BUN_VERSION 1.3.11 and, for adapter, Node 26.12.1. baseline: the median of the 6. ceiling: the worst CI run plus a 10% margin (worst × 1.10), since 6 samples can understate the spread. A run whose median ratio is above its ceiling is REGRESSED. catches: ceiling ÷ baseline, so the gate catches a regression beyond +X% of the CI median. Re-record: run the job with BENCH_MODE=record, collect each step's RATIO lines over at least 6 runs, derive the same way, and commit the move with its reason.",
+	"runs": [
+		"40635796971",
+		"40637279965",
+		"40638448479",
+		"40639505880",
+		"40640935318",
+		"40642329012"
+	]
+}

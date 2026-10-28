@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
-import { exitCode, modeOf, ratioLine, RECORD_LABEL } from "./gate.ts"
-import { judge } from "./significance.ts"
+import { ceilingsOf, exitCode, modeOf, ratioLine, RECORD_LABEL, rowOf } from "./gate.ts"
 
-/* a seeded over-tolerance ratio: samples tightly around 2.5 against a 2.0 baseline at +10% */
-const over = judge([2.49, 2.5, 2.51, 2.5, 2.49, 2.5, 2.51, 2.5, 2.5], 2, 0.1).status
-const status = over === "regressed" ? "REGRESSED" : over
+/* finalize 100x10 on CI's bun 1.3, from blueprint/baselines/bench.json: its CI median and its ceiling */
+const own = ceilingsOf("finalize", "bun 1.3")?.["100x10"]
+/* seeded ratios: samples tightly around 3.2 (past the CI median, under the ceiling) and around 4.2 (over it) */
+const around = (ratio: number) => [-0.01, 0, 0.01, 0, -0.01, 0, 0.01, 0, 0].map((d) => ratio + d)
+const under = rowOf("100x10", around(3.2), own).status
+const over = rowOf("100x10", around(4.2), own).status
 
-describe("the gate's two modes (bit 20 e2)", () => {
+describe("the gate's two modes", () => {
 	it("judges by default and records only under BENCH_MODE=record", () => {
 		expect([modeOf({}), modeOf({ BENCH_MODE: "judge" }), modeOf({ BENCH_MODE: "record" })]).toEqual([
 			"judge",
@@ -17,18 +19,28 @@ describe("the gate's two modes (bit 20 e2)", () => {
 
 	it("fails a judged run on a regressed scenario, never a recorded one, and never an unbaselined one", () => {
 		expect([
-			status,
-			exitCode("judge", true, ["ok", status]),
-			exitCode("record", true, ["ok", status]),
-			exitCode("judge", false, ["ok", status]),
-			exitCode("judge", true, ["ok", "noise"]),
+			over,
+			exitCode("judge", true, ["ok", over]),
+			exitCode("record", true, ["ok", over]),
+			exitCode("judge", false, ["ok", over]),
+			exitCode("judge", true, ["ok", under]),
 		]).toEqual(["REGRESSED", 1, 0, 0, 0])
 	})
 
 	it("prints one parseable ratio line per scenario, and names record mode as not a gate", () => {
 		expect([ratioLine("finalize", "100x10", 2.05), RECORD_LABEL]).toEqual([
 			"RATIO finalize 100x10 2.05",
-			"record mode, gating at e3",
+			"record mode, not gating",
 		])
+	})
+})
+
+describe("the judge reads its ceilings from bench.json (bit 20 e3)", () => {
+	it("holds finalize 100x10's CI median and ceiling for bun 1.3", () => {
+		expect([own?.baseline, own?.ceiling]).toEqual([2.785, 3.773])
+	})
+
+	it("passes a ratio past the CI median but under the ceiling, and fails one above the ceiling", () => {
+		expect([under, over, rowOf("100x10", around(3.2), undefined).status]).toEqual(["ok", "REGRESSED", "unbaselined"])
 	})
 })

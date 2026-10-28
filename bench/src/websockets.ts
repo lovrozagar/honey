@@ -7,8 +7,7 @@
  * - realtime-fanout: 100 joined connections, 1000 REST publishes, 100 000 frames out;
  * - realtime-inbound-10k: 10 000 JSON frames into one realtime connection (both lanes, parse, drain).
  *
- *     bun bench/src/websockets.ts            # gate against bench/baselines.json
- *     bun bench/src/websockets.ts --update   # record this runtime minor's baselines
+ *     bun bench/src/websockets.ts   # judged against blueprint/baselines/bench.json
  *
  * Each scenario is a ratio to a raw twin doing the same socket work by hand on the same counting
  * sockets: an Origin-checked upgrade that opens one, an echo, one JSON frame per publish sent to
@@ -237,6 +236,5 @@ await gate(
 	SCENARIOS.map(({ name, run }) => ({ name, raw: () => run(raw), v1: () => run(v1) })),
 	{
 		samples: Number(process.env.WS_SAMPLES ?? 15),
-		threshold: Number(process.env.WS_THRESHOLD ?? 0.1),
 	},
 )

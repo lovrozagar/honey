@@ -7,8 +7,7 @@
  * - cancel-release: 200 live SSE streams, each read once and cancelled, timed until the producer
  *   sees its signal abort.
  *
- *     bun bench/src/streaming.ts            # gate against bench/baselines.json
- *     bun bench/src/streaming.ts --update   # record this runtime minor's baselines
+ *     bun bench/src/streaming.ts   # judged against blueprint/baselines/bench.json
  *
  * Each scenario is a ratio to a raw twin: a hand-written fetch handler whose ReadableStream yields
  * the same bytes, one chunk per pull at high-water mark 0 as honey's producer does, read the same
@@ -134,6 +133,5 @@ await gate(
 	],
 	{
 		samples: Number(process.env.STREAMING_SAMPLES ?? 15),
-		threshold: Number(process.env.STREAMING_THRESHOLD ?? 0.1),
 	},
 )

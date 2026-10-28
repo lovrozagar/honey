@@ -23,6 +23,7 @@
 		"src/adapter.ts",
 		"src/finalize.ts",
 		"src/gate.ts",
+		"src/gate.test.ts",
 		"src/hotpath.ts",
 		"src/streaming.ts",
 		"src/websockets.ts",

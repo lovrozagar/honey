@@ -3,8 +3,7 @@
  * epoch, and every route is checked against every scope, so its cost grows with routes × scopes.
  * The warm per-request loop in hotpath.ts never sees it; this measures it on fresh apps.
  *
- *     bun bench/src/finalize.ts            # gate against bench/baselines.json
- *     bun bench/src/finalize.ts --update   # record this runtime minor's baselines
+ *     bun bench/src/finalize.ts   # judged against blueprint/baselines/bench.json
  *
  * Per grid point, v1's finalize is a ratio to a raw twin doing the work honey cannot skip: each
  * route keyed by method and path, and each route's scopes found by a segment-prefix test over every
@@ -73,7 +72,6 @@ await gate(
 	})),
 	{
 		samples: Number(process.env.FINALIZE_SAMPLES ?? 9),
-		threshold: Number(process.env.FINALIZE_THRESHOLD ?? 0.1),
 	},
 )
 if (kept < 0) console.log(kept)

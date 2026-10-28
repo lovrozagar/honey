@@ -6,8 +6,7 @@
  * and by v1's Node adapter. A client pipelines a batch of requests on one keep-alive connection,
  * so the server's work dominates the time.
  *
- *     node --conditions=honey-source bench/src/adapter.ts            # gate against bench/baselines.json
- *     node --conditions=honey-source bench/src/adapter.ts --update   # record this Node minor's baselines
+ *     node --conditions=honey-source bench/src/adapter.ts   # judged against blueprint/baselines/bench.json
  *
  * v1's per-request time is a ratio to raw's, in interleaved samples (gate.ts). Until bit 20 e it
  * was gated against v0's adapter.
@@ -171,7 +170,6 @@ await gate(
 	})),
 	{
 		samples: Number(process.env.ADAPTER_SAMPLES ?? 15),
-		threshold: Number(process.env.ADAPTER_THRESHOLD ?? 0.1),
 	},
 )
 
