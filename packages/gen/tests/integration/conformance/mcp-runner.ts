@@ -16,8 +16,7 @@
  */
 import { createHash } from "node:crypto"
 import { join } from "node:path"
-import { type ClientName, httpSession } from "../../../src/emit/mcp/__fixtures__/clients.ts"
-import type { Step, Stepped } from "../../../src/emit/mcp/__fixtures__/steps.ts"
+import type { HttpTarget, Step, Stepped } from "../../../src/emit/mcp/__fixtures__/steps.ts"
 import { written } from "../../../src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../src/emit/mcp/mounted.ts"
 import { generateMcpServer } from "../../../src/emit/mcp/server.ts"
@@ -263,7 +262,7 @@ export function mcpRunner(session: Session, era: string, variant?: string, http 
 const MOUNTED_LACKS: Readonly<Record<string, string>> = {
 	...LACKS,
 	"auth/api-key-on-origin":
-		"a mount carries the headers its security schemes name and no other, and the reference document declares no x-api-key scheme (its one credential header is the SDK's Authorization)",
+		"a mount carries the SDK's own credential header and the headers its tools' security schemes name, no other; the reference document declares no security scheme, so Authorization is the one header carried and x-api-key never reaches the call. It runs once that document declares an apiKey scheme in the x-api-key header, which every target shares",
 	"auth/cross-origin-redirect-drops":
 		"its operation declares no success body, so the tool's result is null where the followed echo answers JSON; a mount follows no redirect off the app's origin (same-origin), and a call off it is refused before dispatch (emit-adversarial.mcp-mount)",
 	"overrides/base-url": "a mount's calls go to its own app alone, in process: there is no other base URL",
@@ -282,12 +281,15 @@ function mountHeaders(cell: Cell): Record<string, string> {
 	}
 }
 
+/** One client's session over Streamable HTTP against a URL, every request carrying the target's headers. */
+export type HttpSession = (target: HttpTarget, steps: readonly Step[]) => Promise<readonly Stepped[]>
+
 /**
  * The MCP runner against the reference app with the handler the plugin writes mounted in it (bit 21 e): the app is
- * started once for its document, the handler generated from it, then started again mounting it at /v1/mcp. `client`
- * runs each cell over Streamable HTTP, its first step reporting the revision.
+ * started once for its document, the handler generated from it, then started again mounting it at /v1/mcp. `session`
+ * runs each cell over Streamable HTTP, its first step reporting the revision (bit 21 h: any client's, Python's too).
  */
-export function mcpMountedRunner(client: ClientName, era: string, variant: string): TargetRunner {
+export function mcpMountedRunner(session: HttpSession, era: string, variant: string): TargetRunner {
 	let specs = new Map<string, ToolSpec>()
 	return {
 		lacks: (cell) => Object.hasOwn(MOUNTED_LACKS, cell.key),
@@ -297,7 +299,7 @@ export function mcpMountedRunner(client: ClientName, era: string, variant: strin
 		async run(cell, app) {
 			const steps = cell.calls.map((call) => stepOf(call, specs))
 			const target = { headers: mountHeaders(cell), url: `${app.url}/v1/mcp` }
-			const [ran, ...stepped] = await httpSession(client, target, [{ negotiated: true }, ...steps])
+			const [ran, ...stepped] = await session(target, [{ negotiated: true }, ...steps])
 			if (ran?.negotiated !== era) throw new Error(`the session ran under ${JSON.stringify(ran)}, not ${era}`)
 			return cell.calls.map((call, i) => {
 				const one = stepped[i] ?? { failed: "no step" }

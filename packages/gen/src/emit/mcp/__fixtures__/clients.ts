@@ -15,7 +15,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { clientsInstall } from "../../shared/__fixtures__/installs.ts"
 import { serving } from "./http-server.ts"
-import type { Step, Stepped } from "./steps.ts"
+import type { HttpTarget, Step, Stepped } from "./steps.ts"
 
 /** Where the clients are installed. */
 export const clientsDir = (): string => join(process.env.HOME ?? "", ".cache/honey-tmp/mcp-clients")
@@ -167,9 +167,6 @@ export async function clientSession(
 	}
 }
 
-/** An HTTP endpoint a session connects to: its URL and the headers every request sends. */
-export type HttpTarget = { readonly url: string; readonly headers: Readonly<Record<string, string>> }
-
 /** `client` run over Streamable HTTP against `target`, through `steps` in order. */
 export const httpSession = (
 	client: ClientName,
@@ -208,4 +205,4 @@ export const hasNpm = (): boolean => spawnSync("npm", ["--version"]).status === 
 
 export { clientsInstall }
 
-export type { Step, Stepped }
+export type { HttpTarget, Step, Stepped }

@@ -4,14 +4,16 @@
  * `mcp==2.3.0` under the pinned interpreter) and installed into a venv under the toolchain cache through python-env,
  * the one way gen runs Python: a test fixture only, never a dependency of gen. A session runs steps.ts's steps and
  * reports each as the TS clients (clients.ts) do. Bit 21 d: given a token, it runs over Streamable HTTP against the
- * server `--http` started, the token its bearer on an httpx2 client's headers. Bit 21 f: `pythonOAuthSession` runs the
+ * server `--http` started, the token its bearer on an httpx2 client's headers. Bit 21 h: `pythonHttpSession` runs one
+ * against any URL with any headers (a mounted endpoint's credential). Pinned to 2026-07-28 it sends no initialize, so
+ * a request the endpoint refuses fails its own step. Bit 21 f: `pythonOAuthSession` runs the
  * client's own OAuth flow (`OAuthClientProvider` as the httpx2 client's auth) against a mounted resource server.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { execPython, pinnedPython, pythonCacheDir, venv } from "../../python/__fixtures__/python-env.ts"
 import { serving } from "./http-server.ts"
-import type { Step, Stepped } from "./steps.ts"
+import type { HttpTarget, Step, Stepped } from "./steps.ts"
 
 /** The session script: connect pinned to 2026-07-28, run each step, report every step's outcome as one JSON line. */
 const SESSION = `import json, os, sys
@@ -42,8 +44,7 @@ async def main():
     if isinstance(target, list):
         await steps(StdioServerParameters(command=target[0], args=target[1:], env=dict(os.environ)), out)
     else:
-        headers = {"Authorization": "Bearer " + target["token"]}
-        async with httpx2.AsyncClient(headers=headers, timeout=httpx2.Timeout(30, read=300)) as http:
+        async with httpx2.AsyncClient(headers=target["headers"], timeout=httpx2.Timeout(30, read=300)) as http:
             await steps(streamable_http_client(target["url"], http_client=http), out)
     print(json.dumps(out))
 
@@ -131,17 +132,18 @@ export async function pythonSession(
 	if (token === undefined) return session(command, steps)
 	const server = await serving(command)
 	try {
-		return await session({ token, url: server.url }, steps)
+		return await session({ headers: { authorization: `Bearer ${token}` }, url: server.url }, steps)
 	} finally {
 		await server.stop()
 	}
 }
 
-/** The session script against `target`: a command over stdio, or a URL and its token over HTTP. */
-async function session(
-	target: readonly string[] | { readonly url: string; readonly token: string },
-	steps: readonly Step[],
-) {
+/** The Python client over Streamable HTTP against `target`: any URL, its headers on every request; each step's outcome. */
+export const pythonHttpSession = (target: HttpTarget, steps: readonly Step[]): Promise<readonly Stepped[]> =>
+	session(target, steps)
+
+/** The session script against `target`: a command over stdio, or a URL and its headers over HTTP. */
+async function session(target: readonly string[] | HttpTarget, steps: readonly Step[]) {
 	/* one script per process: a concurrent writer in another worker never truncates the one this run reads */
 	const path = join(pythonCacheDir("mcp-client"), `session-${process.pid}.py`)
 	writeFileSync(path, SESSION)

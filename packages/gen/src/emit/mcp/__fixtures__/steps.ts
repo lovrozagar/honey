@@ -1,7 +1,11 @@
 /**
  * A client session's steps and what each gave (bit 21 b): types alone, shared by the TS clients (clients.ts) and the
  * Python one (python-client.ts), so the Python client's fixture reaches neither the npm clients nor their install.
+ * Bit 21 h: the HTTP endpoint a session connects to, for the same reason.
  */
+
+/** An HTTP endpoint a session connects to: its URL and the headers every request sends. */
+export type HttpTarget = { readonly url: string; readonly headers: Readonly<Record<string, string>> }
 
 /** One step of a client session: list the tools, call one, or report the revision negotiated. */
 export type Step =

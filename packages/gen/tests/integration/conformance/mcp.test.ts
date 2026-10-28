@@ -7,7 +7,7 @@
  * each call in process. Opt-in: `vitest run --mode harness`.
  */
 import { describe } from "vitest"
-import { clientSession, withClients } from "../../../src/emit/mcp/__fixtures__/clients.ts"
+import { clientSession, httpSession, withClients } from "../../../src/emit/mcp/__fixtures__/clients.ts"
 import { targetSuite } from "./harness.ts"
 import { MCP_TOKEN, mcpMountedRunner, mcpRunner } from "./mcp-runner.ts"
 
@@ -32,6 +32,14 @@ describe.skipIf(!withClients())("mcp clients", () => {
 			true,
 		),
 	)
-	targetSuite(mcpMountedRunner("sdk", "2025-11-25", "mounted, sdk client"))
-	targetSuite(mcpMountedRunner("modern", "2026-07-28", "mounted, 2026-07-28, v2 client"))
+	targetSuite(
+		mcpMountedRunner((target, steps) => httpSession("sdk", target, steps), "2025-11-25", "mounted, sdk client"),
+	)
+	targetSuite(
+		mcpMountedRunner(
+			(target, steps) => httpSession("modern", target, steps),
+			"2026-07-28",
+			"mounted, 2026-07-28, v2 client",
+		),
+	)
 })
