@@ -180,3 +180,36 @@ A caller-supplied adapter that swallows interrupts isn't bounded until it return
 - MCP server headers and redirects (surfaced bit 18 f): the emitted server's only credential is `$<PREFIX>_API_KEY` under the spec's scheme, and it follows no cross-origin redirect (the TS SDK's same-origin default, pinned by an MCP leg). So the conformance cells auth/api-key-on-origin and auth/cross-origin-redirect-drops are lacks by design for mcp. Decide whether the server takes `$<PREFIX>_HEADERS` (a JSON object, validated at start, scrubbed like the key) and a `$<PREFIX>_REDIRECT` policy, which fill both cells; H18.10 holds through the embedded SDK either way.
 - Core: a ws-false builtin on a WS route is silently dropped (surfaced bit 18 f). `app.ws(...).meta({ deprecated, security, invalidate, mcp })` typechecks, because the WS route's `.meta()` takes the full `OpenApiMeta` (`core/src/routing/app-types.ts:14-22`), and the build skips each `ws: false` builtin with no diagnostic (`core/src/meta/meta-spec-apply.ts:60`; builtins at `meta-spec.ts:136-140`). Recommended: refuse it at the type level, a WS route's meta type without those four keys, red first with a type test; a build-time diagnostic only if the type split proves unworkable. paths.ws.test.ts:82 keeps pinning the document side.
 - CI install steps per job, generically (surfaced twice: bit 17 g's CLI tools, bit 18 f's MCP clients, each a harness runner whose fixture install was missing from the harness job). Move each fixture's install-command builder (java-env, csharp-env, python-env, the CLI tools, the MCP clients) into one toolchain-free module the fixtures and the leg both import; toolchain-projects.test then maps each harness file and toolchain project, through the import graph it already walks, to the install commands its reached fixtures need, and requires each verbatim in every CI job that runs that project (reading each job's vitest project filters from ci.yml). Until then, completion.test and protocol.test guard their own fixture's step in the test and harness jobs.
+
+## Shipped (the bit 19 close)
+
+Closed at k2, on k1's c77e304 (CI 40607219922). Phases, each landed red-first with one verify on its pushed tip:
+
+- **a** 33efef9: C1 and bidi controls never reach an emitted literal, comment or help text raw.
+- **b1–b3** 0e00368, 97f2539, 9dbceae: unsendable headers refused by name, and a decompression bomb guarded for every offered encoding; a timeout bounds a stream's open, and realtime dials read the live token; the TS SDK's auth header follows the API's security scheme.
+- **c** a2fd7aa: an untyped enum's null reads as nullable; the IR carries the constraint keywords.
+- **d1–d2** a1aa5e9, f9a0be1: empty maps send nothing, resume ids are those delivered, WS keepalive and 1009; SSE caps in bytes, HTTP/1.1 pinned outside TS, one error text, lossy UTF-8.
+- **e, e2** dca298e, b9a4570: a realtime refusal ends the connection, one token refresh per open; TS realtime operations over WebSocket, SSE and long-poll.
+- **f, f2** 0716af6, 881fb8c: raw realtime text send in every SDK, driver parity, safe-mode legs, one install source; a TS network failure is `APIConnectionError` with the platform error as its cause.
+- **g** a88ee49: MCP `$<PREFIX>_HEADERS` and `$<PREFIX>_REDIRECT`; WsMeta refuses the four HTTP-only builtins; MCP stays multipart-free.
+- **h1, h2** e23afe2, 9340e3b: core's glob, cli-args and init; gen's write.ts with a hashed manifest; core's `honey()` plugin, generation and the `honey` CLI; gen's `--app` and its `.` entry. The gateway contract: tree = gatewayTree(entry.app ?? config.app, merged), documents from the served app overlaid with the merged schemas (Anyrow's shape, `tests/build/anyrow.test.ts`).
+- **i** d19d5d4: both packages publishable (exports with `honey-source` → src, `types`/`default` → dist; prepack builds dist; one packer, `scripts/pack.ts`, resolving `catalog:`/`workspace:`); release.yml publishes to npm only with provenance, OIDC-only, gated on ci.yml green on the tagged commit and on the conformance grid; the generated CLI's releases are signed (keyless cosign bundle over checksums.txt, actions/attest) and its install scripts verify them (`<PREFIX>_INSTALL_VERIFY=require`); oxfmt is the TS post-pass when it resolves.
+- **i2** 845f136: `ws(app, path)` from `./ws` replaces `app.ws(path)`; the minimal bundle drops the WS route builder's 1,120 B (26,155 B gzipped under the pinned bun 1.3.11, lock 26,200).
+- **j0–j2** 3361a73, a263f8f, c3b8ac1, 990bbd2: e76f7ba03c ported (404 timing within 4x on warm medians); a Node 22.12 leg for the `'upgrade'` fallback; the atomic cutover (packages/core is `@lovrozagar/honey`, the v0 test run retired, `_v0/` kept as the inventory source until bit 20); real prod (each app's served bundle with its runtime's WebSocket adapter, every e2e cell held to `e2e-expected.json` by test name, a build-time ceiling per runtime: Bun 5 s, Node 35 s).
+- **k1** 58a7ee1, 9716dd1, c77e304: the per-target sentences a user acts on, in each runtime's doc comments and dx/client.md's per-target table: an SSE stream's release (Python's corrected to `async with`/`aclose()`, its socket's to `async with`/`close()`, both proven by a real release leg), the WebSocket dial's no hook and no 401 refresh on all 6, Java's JDK-owned headers, Rust's default_headers; 14 pins, one per sentence per target; each runtime lock raised by its doc bytes alone.
+- **k2** 7d9ceda and the close: runtime directories listed as git sees them, so an ignored hook receipt can't red a budget or cache-key leg (it did twice); the 26 Q5 cases retired (mergeSpecs and scopeSpec, the pipeline cases naming anyrow.test.ts:220), COMPLETE = 19.
+
+Fixes between phases, each red-first: c341545 (the e2e harness's own package scope), c1255c4 (oncePerKey), 7ed0417 (signal forwarders before spawn), 837a31c (JVM log on stderr), ceb5570 (v0's 404 timing leg). Gate added: `generate:check` (ed0bb38, standards c2841e3).
+
+**Decided divergences and records:**
+- TS safe mode returns an undecodable 2xx as a result where every sibling throws: decided, not a gap.
+- The TS sweep of bit 17's findings needed no change; queued realtime frames survive a reconnect.
+- Rust binary deltas: +96,656 B at b1, −977,584 B at d2.
+- MCP Streamable HTTP is deferred past 1.0, with its security corpus (Origin check, localhost bind, auth surface) named for when it lands.
+- Q5: `mergeSpecs`/`scopeSpec` are removed. A scoped SDK is a per-output `codegen.openApi` document with `filterRoutes`, then `honey-codegen generate --spec` (26 v0 cases retired at k2).
+
+**Open at close:**
+- j3 (cf prod) waits for the repository's Cloudflare secrets; prepared as 52d1283 (cf-prod on main pushes only, never in a release's tag call).
+- The first `@lovrozagar/honey-codegen` publish and both packages' npm trusted-publisher entries are the owner's.
+- An unreproduced Bun 1.3.11 generation failure ("First argument must be an Error object"); a failed generation now prints its stack, so a recurrence names its frame.
+- ci.yml's setup-node v7.1.0 and checkout v7.0.1 bumps, as their own commit.

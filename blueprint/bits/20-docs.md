@@ -44,9 +44,15 @@ Per-SDK usage recipes are documented here, including: **Rust sync use via a toki
 - `@lovrozagar/honey/trust` and `trustProxy` are cut (H23): `ctx.ip` is the platform peer (`CF-Connecting-IP` on Workers, the socket on Node and Bun), never an `X-Forwarded-*` value. Behind your own proxy, read the header your proxy sets in your own code.
 - `@lovrozagar/honey/openapi/spec` is removed (bit 19 i): v0's `spec()` handler is `serveOpenApi` from `@lovrozagar/honey/openapi`, which mounts the JSON and YAML documents (and a docs page with `docs`) rather than returning a handler.
 - `app.ws(path)` becomes `ws(app, path)`, with `import { ws } from "@lovrozagar/honey/ws"` (bit 19 i2), the same shape as `realtime(app, path)`; it takes any handle `.ws()` was a method of (the app, a `.prefix()` base, a scoped chain) and types the route exactly as before. The method is gone so that an app that opens no socket bundles no WebSocket route code (about 1.1 KB gzipped).
+- `app.serve(...)` is removed (bit 19 j1): `import { serve } from "@lovrozagar/honey/serve"`, then `await serve(app, { hostname, port })`.
 - An installed `@lovrozagar/honey` and `@lovrozagar/honey-codegen` run their compiled `dist/` on every runtime, Bun included (bit 19 i); v0's `bun` export condition to the TypeScript source is gone.
 
 **Bit 19 i docs note (the generated CLI's release flow):** the emitted release workflow signs `checksums.txt` keyless with cosign (`checksums.txt.sigstore.json`) and attests it, and `install.sh`/`install.ps1` verify that bundle against the repo's release workflow when `cosign` is on PATH; `<PREFIX>_INSTALL_VERIFY=require` refuses to install without that check. A CLI generated without `--repo` installs by sha256 alone. The flow assumes a public repository: an anonymous one-liner cannot fetch a private repo's release assets, and attestations need a public repo or a paid plan.
+The commands, as the installers run them (document them for a user verifying by hand):
+- the checksums: `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '(?i)^https://github\.com/<owner>/<repo>/\.github/workflows/release\.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`;
+- an archive's build provenance: `gh attestation verify <archive> --repo <owner>/<repo>`.
+
+**Bit 19 i2/j docs notes:** the README's `app.realtime("/rt", …)` block is stale (v1 has `realtime(app, path)`), fixed in this bit's docs pass; the e2e apps, the README and the bench were moved to `ws(app, path)` at the cutover.
 
 **Bit 19 h2 docs note (not a break, v0 parity):** a gateway's runtime `serveOpenApi` document has no service request or response bodies, because a generated tree carries no schemas. A gateway serves its generated document asset instead, as Anyrow does.
 
