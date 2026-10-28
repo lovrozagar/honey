@@ -3,7 +3,8 @@
  * Only the headers the security schemes name ride each inner request, to the app's own origin alone: a call that
  * would leave it is refused before any dispatch, the credential with it. An inner 401 is the endpoint's HTTP 401 with
  * the inner challenge (the scheme's when it names none), a 403 for insufficient_scope its 403, never a tool's result;
- * any other status stays the tool's, its status in `_meta`. A credential is scrubbed from every result.
+ * any other status stays the tool's, its status in `_meta`. A credential is scrubbed from every result. Bit 21 f: an
+ * OAuth bearer (the MCP resource's own token) is a credential like any other: to the app's own routes alone.
  */
 import { beforeEach, describe, expect, it } from "vitest"
 import { type MountConfig, mountedMcp } from "../../src/runtime/mcp/mount.ts"
@@ -115,6 +116,20 @@ describe("the mounted handler's credential (bit 21 e)", () => {
 			"transport",
 			[],
 		])
+	})
+})
+
+describe("the mounted handler's OAuth bearer (bit 21 f)", () => {
+	it("sends the MCP resource's own token to the app's own routes alone: a call off the origin never carries it", async () => {
+		const bearer = "Bearer eyJ.mcp-resource-token"
+		const own = await call("get", { what: "who" }, { authorization: bearer })
+		const away = await call("away", {}, { authorization: bearer })
+		expect([
+			dispatched.map((each) => [each.url, each.headers.authorization]),
+			resultOf(own),
+			resultOf(away)[0],
+			[own.text, away.text].some((text) => text.includes("mcp-resource-token")),
+		]).toEqual([[["https://app.example/api/v1/who", bearer]], [undefined, { credential: "[redacted]" }], true, false])
 	})
 })
 

@@ -32,6 +32,7 @@ export const GO = [
 export const PYTHON = [
 	"src/emit/python/**/*.test.ts",
 	"src/emit/mcp/python-client.test.ts",
+	"src/emit/mcp/python-oauth.test.ts",
 	"src/emit/shared/ruff.test.ts",
 	"tests/security/emit-adversarial.python.test.ts",
 	"tests/structure/python-toolchain.test.ts",
