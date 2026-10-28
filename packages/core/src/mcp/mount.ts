@@ -13,20 +13,15 @@
  * the credential the request carries, which the inner routes check again. Mounting secured tools without it throws,
  * with no exception.
  *
- * OAuth (bit 21 f, opt-in): with `oauth`, the endpoint is an OAuth 2.1 resource server (oauth.ts): its RFC 9728
- * metadata served at the path-inserted well-known URI (a GET on the app's root, under the handle's middleware, as
- * internal and served as the endpoint), every 401 pointing at it, an inner insufficient_scope one 403 step-up
- * challenge. It needs `authenticate`, which validates the token (its audience this endpoint), even when no tool
- * declares security. The token the client sends is this resource's own, and goes only to the app's own routes.
+ * OAuth (bit 21 f, opt-in, H23): `oauth` takes what `oauth(options)` from `@lovrozagar/honey/mcp/oauth` returns,
+ * so an app that never imports it bundles none of the resource server. Here is only its hook: called once at mount
+ * (its refusals before any route registers), its challenge on every 401 and on the handler's challenged 403, its
+ * metadata route registered after the endpoint's. It needs `authenticate`, even when no tool declares security.
  */
 import type { ExecutionCtx, HoneyContext } from "../context/context.ts"
 import type { TypedResponse } from "../response/response.ts"
-import { startRoute } from "../routing/route-builder.ts"
 import { isStaticPattern, joinPatterns, parsePattern } from "../routing/pattern.ts"
 import { assertRouteFree, GRAPH, type HandleView, type HoneyGraph, SERVED, VIEW } from "../routing/register.ts"
-import { type McpOAuth, protectedResource } from "./oauth.ts"
-
-export type { McpOAuth } from "./oauth.ts"
 
 /** What the mount hands the handler on each request. */
 export type McpMount = {
@@ -45,6 +40,20 @@ export type McpHandler = {
 	readonly fetch: (request: Request, mount: McpMount) => Promise<Response>
 }
 
+/**
+ * The resource-server hook `oauth(options)` returns: called once at mount with the app and the mount path, it refuses
+ * an endpoint its options don't fit and answers the endpoint's Bearer challenges and its metadata route.
+ */
+export type McpProtectedResource = (
+	app: unknown,
+	path: string,
+) => {
+	/** the challenge of a `status` refusal of `request`, the handler's own `inner` challenge carried over */
+	readonly challenge: (request: Request, status: number, inner?: string | null) => string
+	/** registers the metadata route, once the endpoint's own are */
+	readonly register: () => void
+}
+
 /** Whether `request` carries a credential the app accepts; `false` is refused before any dispatch. */
 export type McpAuthenticate = (request: Request, ctx: HoneyContext) => boolean | Promise<boolean>
 
@@ -56,7 +65,7 @@ export type McpOptions = {
 	/** the most bytes a request body may hold (4 MiB by default); the app's bodyLimit applies before it */
 	readonly maxBodyBytes?: number
 	/** the opt-in OAuth 2.1 resource-server role: RFC 9728 metadata and Bearer challenges pointing at it */
-	readonly oauth?: McpOAuth
+	readonly oauth?: McpProtectedResource
 }
 
 type McpContext = HoneyContext & { readonly res: { raw(response: Response): TypedResponse } }
@@ -90,14 +99,10 @@ export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOp
 				"every request before any call",
 		)
 	const handle = app as unknown as McpHandle
-	const graph = handle[GRAPH]
-	const endpoint = joinPatterns(handle[VIEW].basePath, path)
-	const segments = parsePattern(endpoint)
+	const segments = parsePattern(joinPatterns(handle[VIEW].basePath, path))
 	if (!isStaticPattern(segments)) throw new Error(`cannot serve MCP at ${path}: its path is fixed, with no parameter`)
-	/* the URL a client sees: the prefix the app strips, then the path it routes */
-	const resource = oauth && protectedResource(oauth, joinPatterns(graph.settings.stripPrefix ?? "/", endpoint), path)
-	for (const method of METHODS) assertRouteFree(graph, method.toUpperCase(), segments)
-	if (resource) assertRouteFree(graph, "GET", parsePattern(resource.path))
+	const resource = oauth?.(app, path)
+	for (const method of METHODS) assertRouteFree(handle[GRAPH], method.toUpperCase(), segments)
 	const serve = async (ctx: McpContext) => {
 		if (typeof authenticate === "function" && !(await authenticate(ctx.req, ctx)))
 			return ctx.res.raw(refusal(401, resource ? resource.challenge(ctx.req, 401) : handler.challenge))
@@ -113,16 +118,6 @@ export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOp
 		handle[method](path)
 			.meta({ internal: true, [SERVED]: true })
 			.handler(serve)
-	if (resource)
-		/* on the root, under the handle's middleware: the metadata sits beside the origin, not under the basePath */
-		(
-			startRoute(graph, { ...handle[VIEW], basePath: "/" }, handle, {
-				extraMethods: [],
-				method: "GET",
-				path: resource.path,
-			}) as Registering
-		)
-			.meta({ internal: true, [SERVED]: true })
-			.handler((ctx: McpContext) => ctx.res.raw(Response.json(resource.metadata(ctx.req.url))))
+	resource?.register()
 	return app
 }

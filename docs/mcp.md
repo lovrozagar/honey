@@ -141,17 +141,18 @@ The mounted endpoint can act as an OAuth 2.1 resource server, the role the MCP a
 server. honey serves the resource server's discovery half only: it never issues tokens and never checks them. You
 bring the authorization server, and your own code (`authenticate` and each route) validates the token.
 
-| Value                        | What it is                                                                                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `oauth`                      | `mcp()`'s option (type `McpOAuth`, from `@lovrozagar/honey/mcp`) that makes the endpoint a resource server; it needs `authenticate`     |
-| `oauth.authorizationServers` | the issuer URLs of the authorization servers whose tokens the endpoint takes: at least one, each https (http only on a loopback host)   |
-| `oauth.scopesSupported`      | the scopes a client asks for when a 401 names none; `offline_access` is refused at mount                                                |
-| `oauth.resource`             | the endpoint's public URL, for an app whose requests don't carry its public origin (behind a proxy); it must be the endpoint's own path |
-| `oauth.resourceName`         | the endpoint's name as a user sees it                                                                                                   |
+| Value                          | What it is                                                                                                                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `oauth(options)`               | from `@lovrozagar/honey/mcp/oauth`: the resource server, handed to `mcp()` as its `oauth` option, which then needs `authenticate`; an app that never imports it bundles none of it |
+| `options.authorizationServers` | the issuer URLs of the authorization servers whose tokens the endpoint takes: at least one, each https (http only on a loopback host)                                              |
+| `options.scopesSupported`      | the scopes a client asks for when a 401 names none; `offline_access` is refused                                                                                                    |
+| `options.resource`             | the endpoint's public URL, for an app whose requests don't carry its public origin (behind a proxy); `mcp()` refuses one that isn't the endpoint's own path                        |
+| `options.resourceName`         | the endpoint's name as a user sees it                                                                                                                                              |
 
 ```ts
 import { honey } from "@lovrozagar/honey"
 import { type McpHandler, mcp } from "@lovrozagar/honey/mcp"
+import { oauth } from "@lovrozagar/honey/mcp/oauth"
 
 /* in the app: import { mcpHandler } from "./_gen/mcp.gen.ts" */
 declare const mcpHandler: McpHandler
@@ -182,12 +183,12 @@ app
 mcp(app, "/mcp", mcpHandler, {
 	authenticate: async (request, ctx) =>
 		(await (ctx.env as Env).AUTH_SERVER.validateToken(ENDPOINT, bearer(request))) !== null,
-	oauth: {
+	oauth: oauth({
 		authorizationServers: ["https://auth.example.com"],
 		resource: ENDPOINT,
 		resourceName: "Example",
 		scopesSupported: ["mcp:read"],
-	},
+	}),
 })
 ```
 
@@ -213,7 +214,8 @@ What the endpoint then serves:
   union of its scopes and the challenge's, and retries. The scopes come from the route's challenge alone, because only
   the route knows what it needs (it may depend on the arguments); name every scope the operation needs in one
   challenge. `offline_access` is dropped from it.
-- **Without `oauth`** none of this is served: no metadata route, and the challenges stay as above.
+- **Without `oauth`** none of this is served: no metadata route, and the challenges stay as above. `oauth()` refuses
+  its options when called; `mcp()` refuses a `resource` that isn't its endpoint, and `oauth` without `authenticate`.
 
 **The token.** The client sends a token issued for the endpoint (its audience the endpoint's URL, RFC 8707). Each
 tool call carries that token, in process, to the app's own routes: the same resource on the same origin, never
@@ -221,8 +223,8 @@ another service, and a call off the origin is refused before it leaves. So **you
 endpoint's URL as the token's audience**. `authenticate` checks the token on every request; the routes check it
 again, with the scopes each needs.
 
-**Behind a proxy.** The metadata's `resource` and the 401's `resource_metadata` use `oauth.resource`'s origin when it
-is set, and the request's own origin otherwise. honey trusts no forwarded header, so set `oauth.resource` when the
+**Behind a proxy.** The metadata's `resource` and the 401's `resource_metadata` use `resource`'s origin when it
+is set, and the request's own origin otherwise. honey trusts no forwarded header, so set `resource` when the
 app sees a different origin from the client's (TLS ended at a proxy, an internal host name). `mcp()` throws when it
 names another path, or has a query, fragment or userinfo.
 

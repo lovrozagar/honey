@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { written } from "../../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../../gen/src/emit/mcp/mounted.ts"
 import { type McpHandler, type McpOptions, mcp } from "../../../src/mcp/mount.ts"
+import { oauth } from "../../../src/mcp/oauth.ts"
 import { generateOpenApi } from "../../../src/openapi/generate.ts"
 import { honey } from "../../../src/routing/app.ts"
 
@@ -120,7 +121,7 @@ describe("mcp(..., { oauth }) protected resource metadata (bit 21 f, RFC 9728)",
 	it("serves it at the path-inserted URI, a basePath and a trailing slash folded in, the resource the endpoint", async () => {
 		const { app } = shop()
 		const v1 = app.basePath("/v1/")
-		mcp(v1, "/mcp/", await handlerOf(app), { authenticate, oauth: OAUTH })
+		mcp(v1, "/mcp/", await handlerOf(app), { authenticate, oauth: oauth(OAUTH) })
 		const served = await read(
 			await app.fetch(new Request("https://shop.example/.well-known/oauth-protected-resource/v1/mcp"), {}),
 		)
@@ -146,10 +147,13 @@ describe("mcp(..., { oauth }) protected resource metadata (bit 21 f, RFC 9728)",
 		const strippedApp = stripped.app.stripPrefix("/api")
 		mcp(strippedApp, "/mcp", await handlerOf(stripped.app), {
 			authenticate,
-			oauth: { authorizationServers: [ISSUER] },
+			oauth: oauth({ authorizationServers: [ISSUER] }),
 		})
 		const atRoot = shop()
-		mcp(atRoot.app, "/", await handlerOf(atRoot.app), { authenticate, oauth: { authorizationServers: [ISSUER] } })
+		mcp(atRoot.app, "/", await handlerOf(atRoot.app), {
+			authenticate,
+			oauth: oauth({ authorizationServers: [ISSUER] }),
+		})
 		expect([(await prm(strippedApp, "/api/mcp")).body, (await prm(atRoot.app, "")).body]).toEqual([
 			{
 				authorization_servers: [ISSUER],
@@ -166,7 +170,7 @@ describe("mcp(..., { oauth }) protected resource metadata (bit 21 f, RFC 9728), 
 		const { app } = shop()
 		mcp(app, "/mcp", await handlerOf(app), {
 			authenticate,
-			oauth: { ...OAUTH, resource: "https://Shop.Example:443/mcp/" },
+			oauth: oauth({ ...OAUTH, resource: "https://Shop.Example:443/mcp/" }),
 		})
 		const served = await read(
 			await app.fetch(new Request("http://10.0.0.7:8080/.well-known/oauth-protected-resource/mcp"), {}),
@@ -181,7 +185,7 @@ describe("mcp(..., { oauth }) protected resource metadata (bit 21 f, RFC 9728), 
 	it("keeps the metadata route out of the document and the tool set, with no PRM route at all without oauth", async () => {
 		const { app } = shop()
 		const handler = await handlerOf(app)
-		mcp(app.meta({ mcp: true }), "/mcp", handler, { authenticate, oauth: OAUTH })
+		mcp(app.meta({ mcp: true }), "/mcp", handler, { authenticate, oauth: oauth(OAUTH) })
 		const document = generateOpenApi(app, { info: { title: "Shop", version: "1.0.0" }, securitySchemes: SCHEMES })
 		const tools = generateMcpHandler(document as unknown as Record<string, unknown>).entry.match(/name: "\w+_\w+"/g)
 		const plain = shop()
@@ -203,9 +207,9 @@ describe("mcp(..., { oauth }) refusals at mount (bit 21 f)", () => {
 		const { app } = shop()
 		const handler = await handlerOf(app)
 		const mount =
-			(oauth: object, options: McpOptions = { authenticate }) =>
+			(overrides: object, options: McpOptions = { authenticate }) =>
 			() =>
-				mcp(honey(), "/mcp", handler, { ...options, oauth: { ...OAUTH, ...oauth } })
+				mcp(honey(), "/mcp", handler, { ...options, oauth: oauth({ ...OAUTH, ...overrides }) })
 		expect(
 			[
 				mount({ authorizationServers: [] }),
@@ -222,16 +226,16 @@ describe("mcp(..., { oauth }) refusals at mount (bit 21 f)", () => {
 				mount({ resource: "http://127.0.0.1:8080/mcp" }),
 			].map(refusal),
 		).toEqual([
-			"mcp(/mcp): oauth.authorizationServers lists no authorization server; RFC 9728 metadata needs at least one",
-			"mcp(/mcp): oauth.authorizationServers names http://auth.example, which is no https URL without userinfo, a query or a fragment",
-			"mcp(/mcp): oauth.authorizationServers names https://auth.example/?tenant=1, which is no https URL without userinfo, a query or a fragment",
-			"mcp(/mcp): oauth.authorizationServers names https://user:pw@auth.example, which is no https URL without userinfo, a query or a fragment",
-			"mcp(/mcp): oauth.scopesSupported lists offline_access, a scope the authorization server grants and a resource never asks for",
-			'mcp(/mcp): oauth.scopesSupported lists "orders \\"read\\"", which is no scope token',
-			"mcp(/mcp): oauth.resource https://shop.example/other is not this endpoint's URL, whose path is /mcp",
-			"mcp(/mcp): oauth.resource https://shop.example/mcp#frag is not this endpoint's URL, whose path is /mcp",
-			"mcp(/mcp): oauth.resource http://shop.example/mcp is not this endpoint's URL, whose path is /mcp",
-			"mcp(/mcp): oauth.resource shop.example/mcp is not this endpoint's URL, whose path is /mcp",
+			"oauth(): authorizationServers lists no authorization server; RFC 9728 metadata needs at least one",
+			"oauth(): authorizationServers names http://auth.example, which is no https URL without userinfo, a query or a fragment",
+			"oauth(): authorizationServers names https://auth.example/?tenant=1, which is no https URL without userinfo, a query or a fragment",
+			"oauth(): authorizationServers names https://user:pw@auth.example, which is no https URL without userinfo, a query or a fragment",
+			"oauth(): scopesSupported lists offline_access, a scope the authorization server grants and a resource never asks for",
+			'oauth(): scopesSupported lists "orders \\"read\\"", which is no scope token',
+			"mcp(/mcp): oauth's resource https://shop.example/other is not this endpoint's URL, whose path is /mcp",
+			"mcp(/mcp): oauth's resource https://shop.example/mcp#frag is not this endpoint's URL, whose path is /mcp",
+			"mcp(/mcp): oauth's resource http://shop.example/mcp is not this endpoint's URL, whose path is /mcp",
+			"mcp(/mcp): oauth's resource shop.example/mcp is not this endpoint's URL, whose path is /mcp",
 			"mcp(/mcp): oauth makes it a protected resource, so it needs authenticate: (request, ctx) => boolean",
 			"mounted",
 		])
@@ -241,7 +245,7 @@ describe("mcp(..., { oauth }) refusals at mount (bit 21 f)", () => {
 describe("mcp(..., { oauth }) challenges (bit 21 f, A26)", () => {
 	it("points a 401 at the metadata, invalid_token when a credential was refused, before any dispatch", async () => {
 		const { app, seen } = shop()
-		mcp(app, "/mcp", await handlerOf(app), { authenticate, oauth: OAUTH })
+		mcp(app, "/mcp", await handlerOf(app), { authenticate, oauth: oauth(OAUTH) })
 		const bare = await read(await app.fetch(rpc("https://shop.example/mcp", "tools/list"), {}))
 		const wrong = await read(
 			await app.fetch(rpc("https://shop.example/mcp", ...CREATE, { authorization: "Bearer forged" }), {}),
@@ -264,7 +268,7 @@ describe("mcp(..., { oauth }) challenges (bit 21 f, A26)", () => {
 
 	it("carries an inner 401's scopes as one quoted list beside the metadata", async () => {
 		const { app } = shop()
-		mcp(app, "/mcp", await handlerOf(app), { authenticate: () => true, oauth: OAUTH })
+		mcp(app, "/mcp", await handlerOf(app), { authenticate: () => true, oauth: oauth(OAUTH) })
 		const expired = await read(
 			await app.fetch(rpc("https://shop.example/mcp", ...CREATE, { authorization: "Bearer expired" }), {}),
 		)
@@ -285,7 +289,7 @@ describe("mcp(..., { oauth }) challenges (bit 21 f, A26), continued (2)", () => 
 		const results = []
 		for (const challenge of [NEEDED, tricky, "bearer error=insufficient_scope, scope=orders:write"]) {
 			const { app, seen } = shop(challenge)
-			mcp(app, "/mcp", await handlerOf(app), { authenticate, oauth: OAUTH })
+			mcp(app, "/mcp", await handlerOf(app), { authenticate, oauth: oauth(OAUTH) })
 			const answer = await read(
 				await app.fetch(rpc("https://shop.example/mcp", ...CREATE, { authorization: READ }), {}),
 			)
@@ -306,7 +310,7 @@ describe("mcp(..., { oauth }) challenges (bit 21 f, A26), continued (2)", () => 
 		const bare = await read(await app.fetch(rpc("https://shop.example/mcp", "tools/list"), {}))
 		const scoped = await read(await app.fetch(rpc("https://shop.example/mcp", ...CREATE, { authorization: READ }), {}))
 		const guarded = shop()
-		mcp(guarded.app, "/mcp", handler, { authenticate, oauth: OAUTH })
+		mcp(guarded.app, "/mcp", handler, { authenticate, oauth: oauth(OAUTH) })
 		const foreign = await read(
 			await guarded.app.fetch(
 				rpc("https://shop.example/mcp", "tools/list", {}, { authorization: READ, origin: "https://evil.example" }),
@@ -324,7 +328,7 @@ describe("mcp(..., { oauth }) challenges (bit 21 f, A26), continued (2)", () => 
 describe("mcp(..., { oauth }) no token passthrough (bit 21 f, SC26)", () => {
 	it("sends the resource's own token to the app's own route in process, and nothing over the network", async () => {
 		const { app, seen } = shop()
-		mcp(app, "/mcp", await handlerOf(app), { authenticate, oauth: OAUTH })
+		mcp(app, "/mcp", await handlerOf(app), { authenticate, oauth: oauth(OAUTH) })
 		/* refused, not called through: a passthrough would be recorded, never sent */
 		const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("no network in this leg"))
 		const called = await read(await app.fetch(rpc("https://shop.example/mcp", ...CREATE, { authorization: WRITE }), {}))

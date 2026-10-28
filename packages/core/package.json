@@ -114,6 +114,11 @@
 			"types": "./dist/mcp/mount.d.ts",
 			"default": "./dist/mcp/mount.js"
 		},
+		"./mcp/oauth": {
+			"honey-source": "./src/mcp/oauth.ts",
+			"types": "./dist/mcp/oauth.d.ts",
+			"default": "./dist/mcp/oauth.js"
+		},
 		"./node": {
 			"honey-source": "./src/adapters/node/serve.ts",
 			"types": "./dist/adapters/node/serve.d.ts",

@@ -13,6 +13,7 @@ import { written } from "../../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../../gen/src/emit/mcp/mounted.ts"
 import { type HoneyServer, serve } from "../../../src/adapters/node/serve.ts"
 import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
+import { oauth } from "../../../src/mcp/oauth.ts"
 import { generateOpenApi } from "../../../src/openapi/generate.ts"
 import { honey } from "../../../src/routing/app.ts"
 import * as z from "zod"
@@ -188,7 +189,7 @@ export async function startOAuthWorld(): Promise<OAuthWorld> {
 		/* the endpoint takes any token issued for it; each route checks the scope it needs */
 		authenticate: (request) =>
 			tokens.get(/^Bearer (\S+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? "")?.audience === endpoint(),
-		oauth: { authorizationServers: [issuer], resourceName: "Orders", scopesSupported: ["orders:read"] },
+		oauth: oauth({ authorizationServers: [issuer], resourceName: "Orders", scopesSupported: ["orders:read"] }),
 	})
 	origin = await listening(
 		servers,

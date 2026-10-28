@@ -53,7 +53,8 @@ afterAll(() => files.done())
 /* the WebSocket route's modules, which an app reaches through ws(app, path) or realtime() alone */
 const WS_ROUTE = ["routing/ws-builder", "ws/origin", "ws/session", "ws/shared"]
 
-/* the MCP mount's modules, which an app reaches through mcp(app, path, handler) alone (bit 21 e, H24.3; f: oauth) */
+/* the MCP mount's modules: mcp(app, path, handler) reaches mount alone (bit 21 e, H24.3), oauth() its resource server
+ * by an import of its own, so a mount without it carries none of it (bit 21 f, H23) */
 const MCP_ROUTE = ["mcp/mount", "mcp/oauth"]
 
 function bunBundle(name: string, lines: readonly string[], minify = true): string {
@@ -151,13 +152,24 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
 				"",
 			]
+			const protectedMount = [
+				'import { honey } from "@lovrozagar/honey"',
+				'import { mcp } from "@lovrozagar/honey/mcp"',
+				'import { oauth } from "@lovrozagar/honey/mcp/oauth"',
+				"const app = honey()",
+				'const handler = { challenge: "Bearer", fetch: async () => new Response(null), secured: false }',
+				'mcp(app, "/mcp", handler, { authenticate: () => true, oauth: oauth({ authorizationServers: ["https://as.example"] }) })',
+				"export default { fetch: (req: Request) => app.fetch(req, {}) }",
+				"",
+			]
 			expect([
 				missing,
 				wsRouteModules("features", entry),
 				wsRouteModules("sockets", sockets),
 				routeModules("features", entry, MCP_ROUTE),
 				routeModules("mounted", mounted, MCP_ROUTE),
-			]).toEqual([[], WS_ROUTE, WS_ROUTE, [], MCP_ROUTE])
+				routeModules("protected", protectedMount, MCP_ROUTE),
+			]).toEqual([[], WS_ROUTE, WS_ROUTE, [], ["mcp/mount"], MCP_ROUTE])
 		},
 		60_000,
 	)
