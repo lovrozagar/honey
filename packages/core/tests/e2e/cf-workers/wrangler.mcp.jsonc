@@ -1,0 +1,10 @@
+// The cf host's dev config for the mcp app (bit 21 h): its own entry from source, web APIs alone (no nodejs_compat),
+// and the Durable Object class its uploads go through. Local only: wrangler.jsonc stays the honey-cf-e2e deploy's.
+{
+	"compatibility_date": "2026-01-20",
+	"durable_objects": { "bindings": [{ "class_name": "McpUploads", "name": "MCP_UPLOADS" }] },
+	"main": "src/mcp-dev.ts",
+	"migrations": [{ "new_sqlite_classes": ["McpUploads"], "tag": "v1" }],
+	"name": "honey-cf-e2e-mcp",
+	"workers_dev": true,
+}

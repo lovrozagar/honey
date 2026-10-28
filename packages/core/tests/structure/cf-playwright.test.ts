@@ -2,7 +2,8 @@
  * The cf e2e host's Playwright config (bit 20 j3): dev serves src/worker.ts with core read as source; prod serves the
  * app's built Workers bundle under local workerd, unbundled and with no source condition; with HONEY_CF_URL set (a
  * deployed worker), prod targets that URL and starts no local server, and its WebSockets dial that host too (bit 20:
- * every live WebSocket leg dialed localhost and got no frame).
+ * every live WebSocket leg dialed localhost and got no frame). Bit 21 h: the mcp app runs its own configs, each binding
+ * the Durable Object its uploads go through.
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -43,6 +44,18 @@ describe("the cf e2e host's Playwright config", () => {
 		expect([use?.baseURL, webServer?.command, webServer?.env]).toEqual([
 			"http://localhost:4102",
 			"bunx wrangler dev ../apps/kitchen/dist/cloudflare/index.js --config wrangler.jsonc --no-bundle --port 4102 --ip 0.0.0.0",
+			{ PORT: "4102" },
+		])
+	})
+
+	it("serves the mcp app under its own configs, each with its uploads' Durable Object and no node compatibility", async () => {
+		/* one after the other: each load stubs the process's env */
+		const dev = (await configUnder({ HONEY_E2E_APP: "mcp", TEST_MODE: "dev" })).webServer
+		const prod = (await configUnder({ HONEY_E2E_APP: "mcp", TEST_MODE: "prod" })).webServer
+		expect([dev?.command, dev?.env?.WRANGLER_BUILD_CONDITIONS, prod?.command, prod?.env]).toEqual([
+			"bunx wrangler dev --config wrangler.mcp.jsonc --port 4102 --ip 0.0.0.0",
+			"honey-source,workerd,worker,browser",
+			"bunx wrangler dev --config wrangler.web.jsonc --port 4102 --ip 0.0.0.0",
 			{ PORT: "4102" },
 		])
 	})

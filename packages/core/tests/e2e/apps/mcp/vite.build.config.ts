@@ -15,7 +15,13 @@ export default {
 	plugins: [
 		...(base.plugins ?? []),
 		createBuildPlugin(
-			{ minify: true, outDir: `dist/${target}`, target },
+			/* a Worker's own module (uploads-store.cloudflare.ts reads its bindings there), provided at run time */
+			{
+				external: target === "cloudflare" ? ["cloudflare:workers"] : [],
+				minify: true,
+				outDir: `dist/${target}`,
+				target,
+			},
 			{ entry: `src/serve-entry.${target}.ts`, export: "app" },
 		),
 	],

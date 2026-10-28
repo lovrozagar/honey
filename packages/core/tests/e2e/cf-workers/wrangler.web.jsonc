@@ -1,8 +1,11 @@
 // The cf host's prod config for an app whose Workers bundle must run on web APIs alone (bit 21 e, the MCP app):
 // wrangler.jsonc without nodejs_compat, so a node built-in anywhere in the bundle fails it at load under workerd.
+// Bit 21 h: its main module is the built bundle beside the Durable Object class its uploads go through (mcp-prod.js).
 {
 	"compatibility_date": "2026-01-20",
-	"main": "src/worker.ts",
+	"durable_objects": { "bindings": [{ "class_name": "McpUploads", "name": "MCP_UPLOADS" }] },
+	"main": "src/mcp-prod.js",
+	"migrations": [{ "new_sqlite_classes": ["McpUploads"], "tag": "v1" }],
 	"name": "honey-cf-e2e",
 	"workers_dev": true,
 }

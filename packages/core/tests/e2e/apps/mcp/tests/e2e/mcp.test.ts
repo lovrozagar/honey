@@ -177,3 +177,35 @@ test.describe("MCP uploads at /api/mcp (bit 21 g)", () => {
 		])
 	})
 })
+
+test.describe("MCP uploads at /api/mcp, raced (bit 21 h)", () => {
+	test("lets one of eight racing PUTs claim the upload, the rest 409, and runs the call on its bytes once", async () => {
+		const { data: _, ...metadata } = pdf
+		const args = { file: metadata, project_id: "p1", table_id: "t1" }
+		const asked = await modernCall("extract_table_once", args)
+		const [target] = (asked.inputRequests as { uploads: { params: { files: { url: string }[] } } }).uploads.params.files
+		const statuses = await Promise.all(
+			Array.from(
+				{ length: 8 },
+				async () => (await fetch(target?.url as string, { body: INVOICE, method: "PUT" })).status,
+			),
+		)
+		const retry = {
+			inputResponses: { uploads: { files: [{ fileId: "invoice.pdf", status: "completed" }], resultType: "complete" } },
+			requestState: asked.requestState,
+		}
+		const [answered, again] = [
+			await modernCall("extract_table_once", args, retry),
+			await modernCall("extract_table_once", args, retry),
+		]
+		expect([
+			statuses.toSorted(),
+			(answered.structuredContent as { files: unknown[] }).files,
+			(again.content as { text: string }[])[0]?.text.includes("was not uploaded, or its upload was taken"),
+		]).toEqual([
+			[204, 409, 409, 409, 409, 409, 409, 409],
+			[{ file_name: "invoice.pdf", sha256: sha(INVOICE), size: INVOICE.length }],
+			true,
+		])
+	})
+})
