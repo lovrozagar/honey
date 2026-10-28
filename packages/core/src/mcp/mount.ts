@@ -54,12 +54,19 @@ export type McpProtectedResource = (
 	readonly register: () => void
 }
 
-/** Whether `request` carries a credential the app accepts; `false` is refused before any dispatch. */
-export type McpAuthenticate = (request: Request, ctx: HoneyContext) => boolean | Promise<boolean>
+/**
+ * Whether `request` carries a credential the app accepts; `false` is refused before any dispatch. `ctx` is the
+ * mounting handle's own, as its routes see it: its env, and what its middleware adds.
+ */
+export type McpAuthenticate<TCtx = HoneyContext<unknown>> = (request: Request, ctx: TCtx) => boolean | Promise<boolean>
 
-export type McpOptions = {
+/** The ctx a handle's routes are given (its `$ctx`); any app's, for anything else. */
+type CtxOf<A> = A extends { readonly $ctx: infer TCtx } ? TCtx : HoneyContext<unknown>
+
+/** What `mcp()` takes beside the handler; `TCtx` is the ctx `authenticate` is given, any app's by default. */
+export type McpOptions<TCtx = HoneyContext<unknown>> = {
 	/** the check run on every request before any dispatch; required when a tool requires a credential */
-	readonly authenticate?: McpAuthenticate
+	readonly authenticate?: McpAuthenticate<TCtx>
 	/** browser origins served beside the endpoint's own; any other Origin is 403 */
 	readonly origins?: readonly string[]
 	/** the most bytes a request body may hold (4 MiB by default); the app's bodyLimit applies before it */
@@ -87,7 +94,7 @@ const refusal = (status: number, challenge: string) =>
 	new Response(null, { headers: { "www-authenticate": challenge }, status })
 
 /** Serve `handler`'s tools at `path` on `app`; returns `app`. */
-export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOptions = {}): A {
+export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOptions<CtxOf<A>> = {}): A {
 	const { authenticate, maxBodyBytes, oauth, origins = [] } = options
 	if (oauth !== undefined && typeof authenticate !== "function")
 		throw new Error(
@@ -103,7 +110,7 @@ export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOp
 	if (!isStaticPattern(segments)) throw new Error(`cannot serve MCP at ${path}: its path is fixed, with no parameter`)
 	const resource = oauth?.(app, path)
 	for (const method of METHODS) assertRouteFree(handle[GRAPH], method.toUpperCase(), segments)
-	const serve = async (ctx: McpContext) => {
+	const serve = async (ctx: McpContext & CtxOf<A>) => {
 		if (typeof authenticate === "function" && !(await authenticate(ctx.req, ctx)))
 			return ctx.res.raw(refusal(401, resource ? resource.challenge(ctx.req, 401) : handler.challenge))
 		const dispatch = async (request: Request) => handle.fetch(request, ctx.env as never, ctx.executionCtx)

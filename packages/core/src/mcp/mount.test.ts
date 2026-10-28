@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { describe, expect, it } from "vitest"
+import { describe, expect, expectTypeOf, it } from "vitest"
 import { written } from "../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../gen/src/emit/mcp/mounted.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
@@ -138,12 +138,29 @@ describe("mcp(app, path, handler) auth (bit 21 e, R4), continued (3)", () => {
 		const regions: unknown[] = []
 		mcp(app, "/mcp", await handlerOf(app), {
 			authenticate: (_, ctx) => {
-				regions.push((ctx.env as Env).REGION, ctx.req.url)
+				regions.push(ctx.env.REGION, ctx.req.url)
 				return false
 			},
 		})
 		await app.fetch(rpc("tools/list"), { REGION: "us" })
 		expect(regions).toEqual(["us", "https://shop.example/mcp"])
+	})
+
+	it("types authenticate's ctx as the handle's own: its env, and what its middleware adds", async () => {
+		const { app } = shop()
+		const handler = await handlerOf(app)
+		const seen: unknown[] = []
+		mcp(app.use(createMiddleware((_ctx, next) => next({ tenant: "t-1" }))), "/mcp", handler, {
+			authenticate: (_, ctx) => {
+				expectTypeOf(ctx.env).toEqualTypeOf<Env>()
+				expectTypeOf(ctx.tenant).toEqualTypeOf<string>()
+				// @ts-expect-error a binding the app's env does not declare
+				seen.push(ctx.env.DB, ctx.env.REGION, ctx.tenant)
+				return false
+			},
+		})
+		await app.fetch(rpc("tools/list"), { REGION: "eu" })
+		expect(seen).toEqual([undefined, "eu", "t-1"])
 	})
 })
 

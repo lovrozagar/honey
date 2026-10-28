@@ -181,8 +181,7 @@ app
 	})
 
 mcp(app, "/mcp", mcpHandler, {
-	authenticate: async (request, ctx) =>
-		(await (ctx.env as Env).AUTH_SERVER.validateToken(ENDPOINT, bearer(request))) !== null,
+	authenticate: async (request, ctx) => (await ctx.env.AUTH_SERVER.validateToken(ENDPOINT, bearer(request))) !== null,
 	oauth: oauth({
 		authorizationServers: ["https://auth.example.com"],
 		resource: ENDPOINT,
