@@ -4,6 +4,7 @@
  * `isError`: an answer outside 2xx or a body the SDK refused (past 1 MiB) its status and error, no answer
  * `transport` or `timeout`. Text is cut past 100,000 characters, a note saying so.
  */
+import { encoded } from "./files.ts"
 import type { ToolResult } from "./protocol.ts"
 
 /** The most characters a result's text holds. */
@@ -41,7 +42,7 @@ export const json = (value: unknown, isError?: true): ToolResult => text(JSON.st
 /** `bytes` of the media type `type` as the tool's content: an image, audio, or an embedded resource. */
 function bytesResult(bytes: Uint8Array, type: string, tool: string): ToolResult {
 	const mimeType = type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
-	const data = Buffer.from(bytes).toString("base64")
+	const data = encoded(bytes)
 	const kind = mimeType.split("/")[0]
 	return {
 		content: [

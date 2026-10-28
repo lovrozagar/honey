@@ -14,6 +14,13 @@ const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[
 export const decoded = (text: string): Uint8Array<ArrayBuffer> | undefined =>
 	BASE64.test(text) ? Uint8Array.from(atob(text), (char) => char.charCodeAt(0)) : undefined
 
+/** `bytes` as base64, 32 KiB at a time (no Buffer, so a Worker runs it). */
+export function encoded(bytes: Uint8Array): string {
+	let text = ""
+	for (let at = 0; at < bytes.length; at += 32_768) text += String.fromCharCode(...bytes.subarray(at, at + 32_768))
+	return btoa(text)
+}
+
 /** An inline FileInput's bytes, `budget.left` the inline bytes still allowed; else the rule it breaks. */
 async function inlined(file: Record<string, unknown>, budget: { left: number; cap: number }) {
 	if (typeof file.data !== "string") return "has no data, and no upload is served here"
@@ -21,9 +28,11 @@ async function inlined(file: Record<string, unknown>, budget: { left: number; ca
 	if (bytes === undefined) return "data is not base64"
 	if ((budget.left -= bytes.length) < 0) return `is past the ${budget.cap} inline bytes a call may carry`
 	if (bytes.length !== file.size) return "data does not decode to its size"
-	const hash = String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
 	/* the digest is base64url, unpadded */
-	const digest = btoa(hash).replace(/=+$/, "").replaceAll("+", "-").replaceAll("/", "_")
+	const digest = encoded(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+		.replace(/=+$/, "")
+		.replaceAll("+", "-")
+		.replaceAll("/", "_")
 	if (digest !== (file.digest as { value: unknown }).value) return "data does not match its digest"
 	return { bytes, type: String(file.mimeType), ...(typeof file.name === "string" && { name: file.name }) }
 }

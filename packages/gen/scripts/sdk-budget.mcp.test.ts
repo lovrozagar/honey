@@ -3,11 +3,11 @@
  * the close, every file named; and the tokens an agent reads of each e2e app's tools (H6), read from what its running
  * server answers to tools/list.
  */
-import { readFileSync } from "node:fs"
+import { readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { exchange, initialize, request, written } from "../src/emit/mcp/__fixtures__/written.ts"
-import { MCP_RUNTIME } from "../src/emit/mcp/runtime.ts"
+import { MCP_NODE, MCP_PORTABLE, MCP_RUNTIME } from "../src/emit/mcp/runtime.ts"
 import { generateMcpServer } from "../src/emit/mcp/server.ts"
 import { toolsOf } from "../src/emit/mcp/tools.ts"
 import { type OpenApiDocument, toIR } from "../src/ir/build.ts"
@@ -136,17 +136,44 @@ const SLOW = { timeout: 120_000 }
  *   - protocol.ts +210: `claimed`, a modern request's `_meta`, shared with the transport, 251 less its inline use -69;
  *     MODERN, BATCHED, VERSION, isObject and unserved exported for the transport +28;
  *   - jsonrpc.ts +90: HeaderMismatch (-32020) 25; docs 65.
- * A change raises it only by the bytes of a named feature, dead code cut first.
+ * - bit 21 e, +4,103 B to 58,598 B, now two locks, the runtime split by where it runs (H24.3): the portable part an app
+ *   mounts, web APIs alone so a Worker runs it, 48,620 B (jsonrpc, protocol, files, http, guard, result, stream, call,
+ *   mount), and the node part the standalone package adds, 9,978 B (stdio 3,503, reader 2,623, listen 3,852, each
+ *   unchanged). Nothing in the runtime it builds on was dead; the one node call in the portable part, result.ts's
+ *   Buffer, gave way to the encoder files.ts now shares. By file:
+ *   - mount.ts 3,838 (new; MCP mounted in the app): the handler 1,927 (per request: the credential headers the schemes
+ *     name read from it; the in-process fetch refusing a call off the app's origin, carrying them on, keeping an inner
+ *     401 or insufficient_scope 403; the SDK config; the tools bound, the credentials scrubbed; the inner refusal
+ *     answered as the endpoint's own, its challenge kept or the scheme's), Mounting 400, MountConfig 304, Mounted 270,
+ *     Mount 260, the header and imports 677;
+ *   - files.ts +251: `encoded`, base64 32 KiB at a time with no Buffer, +282; the inline digest through it -31;
+ *   - result.ts +14: a bytes result's base64 through `encoded` (its import +38, Buffer's call -24).
+ * A change raises a lock only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 54495
+const MCP_PORTABLE_BYTES = 48620
+const MCP_NODE_BYTES = 9978
+
+const RUNTIME_DIR = resolve(import.meta.dirname, "../src/runtime/mcp")
+
+/** The bytes on disk of the runtime `modules`. */
+const bytesOf = (modules: readonly string[]) =>
+	modules.reduce((sum, name) => sum + statSync(join(RUNTIME_DIR, `${name}.ts`)).size, 0)
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
-	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
-		const { bytes, names, others } = runtimeBytes(resolve(import.meta.dirname, "../src/runtime/mcp"), ".ts")
-		expect({ names, others, over: Math.max(0, bytes - MCP_RUNTIME_BYTES) }).toEqual({
+	it(`ships every runtime file it holds, the portable within ${MCP_PORTABLE_BYTES} bytes and the node within ${MCP_NODE_BYTES}, nothing else beside them`, () => {
+		const { bytes, names, others } = runtimeBytes(RUNTIME_DIR, ".ts")
+		expect({
+			names,
+			others,
+			over: [bytesOf(MCP_PORTABLE) - MCP_PORTABLE_BYTES, bytesOf(MCP_NODE) - MCP_NODE_BYTES].map((by) =>
+				Math.max(0, by),
+			),
+			whole: bytes === bytesOf(MCP_RUNTIME),
+		}).toEqual({
 			names: MCP_RUNTIME.map((name) => `${name}.ts`).sort(),
 			others: [],
-			over: 0,
+			over: [0, 0],
+			whole: true,
 		})
 	})
 })
