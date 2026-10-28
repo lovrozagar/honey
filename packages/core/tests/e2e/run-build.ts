@@ -2,7 +2,10 @@
 /**
  * Build tier. Every e2e app is built for every deploy target it declares, on the
  * runtime you pick. A target passes when the build exits 0, emits the artifacts its
- * spec names, and stays under its size budget.
+ * spec names, stays under its size budget and its runtime's hang guard, and its time over
+ * the honey-free reference build's is within its recorded ceiling (build-gate.ts says how,
+ * and why a ratio). Every built cell prints a `RATIO build` line; BUILD_MODE=record prints
+ * them without judging, for CI to record the ceilings from.
  *
  *   bun run packages/core/tests/e2e/run-build.ts
  *   bun run packages/core/tests/e2e/run-build.ts --runtime bun
@@ -17,18 +20,30 @@ import {
 	BUILD_SPECS,
 	type BuildSpec,
 	buildCommand,
-	overBuildCeiling,
 	buildCwd,
 	entryArtifact,
 	isRuntimeId,
 	isTargetId,
 	knownBuildApps,
 	missingBuildApps,
+	REFERENCE_BUILD,
 	RUNTIME_IDS,
 	type RuntimeId,
 	TARGET_IDS,
+	type TargetId,
 	unregisteredBuildApps,
+	viteBuildCommand,
 } from "./builds.ts"
+import {
+	judgeBuild,
+	median,
+	modeOf,
+	ratioLine,
+	readBaseline,
+	REFERENCE_SAMPLES,
+	referenceLine,
+	runtimeKey,
+} from "./build-gate.ts"
 
 function arg(flag: string): string | undefined {
 	const i = process.argv.indexOf(flag)
@@ -101,6 +116,9 @@ if (specs.length === 0) {
 
 type Status = "fail" | "pass" | "skip"
 
+const mode = modeOf(process.env)
+const baseline = readBaseline()
+
 interface Result {
 	detail?: string
 	gzipKb?: number
@@ -115,24 +133,17 @@ function gzipKb(path: string): number {
 	return Math.round(gzipSync(readFileSync(path)).length / 1024)
 }
 
-async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
-	const name = `${spec.id} on ${runtime}`
-	const cwd = buildCwd(spec)
-	for (const dir of spec.outDirs) {
-		rmSync(join(cwd, dir), { force: true, recursive: true })
-	}
-
-	const dirtyBefore = checkGenerated ? await dirtyTrackedFiles(cwd) : []
-
-	const started = Date.now()
-	const proc = Bun.spawn(buildCommand(spec, runtime), {
+/** One `vite build` in `cwd` for `target`, timed: its exit code, output and wall time in ms. */
+async function timedBuild(command: string[], cwd: string, target: TargetId) {
+	const started = performance.now()
+	const proc = Bun.spawn(command, {
 		cwd,
 		/* core is read as source in this checkout (R3): every process the build starts, on Node or Bun, the honey
 		   generate child the plugin spawns included, resolves it through the honey-source condition */
 		env: {
 			...process.env,
 			BUN_OPTIONS: SOURCE_CONDITION,
-			HONEY_BUILD_TARGET: spec.target,
+			HONEY_BUILD_TARGET: target,
 			NODE_ENV: "production",
 			NODE_OPTIONS: SOURCE_CONDITION,
 		},
@@ -145,10 +156,58 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 		verbose ? Promise.resolve("") : new Response(proc.stdout).text(),
 		verbose ? Promise.resolve("") : new Response(proc.stderr).text(),
 	])
-	const ms = Date.now() - started
+	return { code, ms: performance.now() - started, output: `${stdout}${stderr}` }
+}
+
+/* the version each runtime that runs `vite build` reports, for the key its ceilings are kept under */
+const versions = new Map<RuntimeId, string>()
+async function keyOf(runtime: RuntimeId): Promise<string> {
+	if (!versions.has(runtime)) {
+		const proc = Bun.spawn([runtime, "--version"], { stderr: "pipe", stdout: "pipe" })
+		const [out] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
+		versions.set(runtime, out.trim())
+	}
+	return runtimeKey(runtime, versions.get(runtime) as string)
+}
+
+/*
+ * The honey-free reference's median ms per runtime and target, built where that target's first cell builds, so both
+ * see the same runner: one untimed warm-up, then REFERENCE_SAMPLES timed builds.
+ */
+const references = new Map<string, number>()
+async function referenceMs(runtime: RuntimeId, target: TargetId): Promise<number> {
+	const id = `${runtime} ${target}`
+	const known = references.get(id)
+	if (known !== undefined) return known
+	const command = viteBuildCommand(REFERENCE_BUILD.config, runtime)
+	const samples: number[] = []
+	for (let sample = 0; sample <= REFERENCE_SAMPLES; sample++) {
+		const built = await timedBuild(command, REFERENCE_BUILD.cwd, target)
+		if (built.code !== 0) {
+			process.stdout.write(built.output)
+			throw new Error(`the reference build for ${target} on ${runtime} exited ${built.code}`)
+		}
+		if (sample > 0) samples.push(built.ms)
+	}
+	console.log(referenceLine(await keyOf(runtime), target, samples))
+	references.set(id, median(samples))
+	return median(samples)
+}
+
+async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
+	const name = `${spec.id} on ${runtime}`
+	const cwd = buildCwd(spec)
+	for (const dir of spec.outDirs) {
+		rmSync(join(cwd, dir), { force: true, recursive: true })
+	}
+	const reference = await referenceMs(runtime, spec.target)
+
+	const dirtyBefore = checkGenerated ? await dirtyTrackedFiles(cwd) : []
+
+	const { code, ms, output } = await timedBuild(buildCommand(spec, runtime), cwd, spec.target)
 
 	if (code !== 0) {
-		if (!verbose) process.stdout.write(`${stdout}${stderr}`)
+		process.stdout.write(output)
 		return { detail: `build exited ${code}`, ms, name, status: "fail" }
 	}
 
@@ -158,8 +217,12 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 	}
 
 	const kb = gzipKb(join(cwd, entryArtifact(spec)))
-	const slow = overBuildCeiling(spec, runtime, ms)
-	if (slow !== null) return { detail: slow, gzipKb: kb, ms, name, status: "fail" }
+	const key = await keyOf(runtime)
+	const verdict = judgeBuild({ ceiling: baseline?.builds[key]?.[spec.id], mode, ms, referenceMs: reference, runtime })
+	console.log(ratioLine(key, spec.id, verdict.ratio, ms, reference))
+	if (verdict.failures.length > 0) {
+		return { detail: verdict.failures.join("; "), gzipKb: kb, ms, name, status: "fail" }
+	}
 	if (kb > spec.maxGzipKb) {
 		return {
 			detail: `bundle ${kb}KB gzipped exceeds the ${spec.maxGzipKb}KB budget — an optional dependency is likely being bundled`,
@@ -182,6 +245,13 @@ async function runBuild(spec: BuildSpec, runtime: RuntimeId): Promise<Result> {
 
 const results: Result[] = []
 console.log(`build runtimes=${runtimes.join(",")} targets=${specs.map((s) => s.id).join(",")}\n`)
+console.log(
+	mode === "record"
+		? "build gate: record mode, ratios printed and not judged (the hang guard still judges)\n"
+		: baseline === undefined
+			? "build gate: no recorded ceilings yet (blueprint/baselines/build.json), ratios report-only\n"
+			: "build gate: ratios judged against blueprint/baselines/build.json\n",
+)
 
 for (const runtime of runtimes) {
 	for (const spec of specs) {

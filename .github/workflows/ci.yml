@@ -11,6 +11,11 @@ on:
         type: choice
         options: [judge, record]
         default: judge
+      build_mode:
+        description: "judge the e2e build-time ratios, or record their RATIO lines for blueprint/baselines/build.json"
+        type: choice
+        options: [judge, record]
+        default: judge
   # release.yml runs all of it on the tagged commit before it publishes
   workflow_call:
 
@@ -607,7 +612,11 @@ jobs:
       - run: bun run generate
       # --check-generated: the checkout is clean here, so a build that rewrites a
       # committed generated file means it is stale or codegen is not deterministic.
+      # each cell's time over a honey-free reference build's, judged against blueprint/baselines/build.json; a
+      # dispatch with build_mode=record prints the RATIO lines its ceilings are derived from (build-gate.ts)
       - run: bun packages/core/tests/e2e/run-build.ts --runtime ${{ matrix.runtime }} --check-generated
+        env:
+          BUILD_MODE: ${{ inputs.build_mode || 'judge' }}
 
   packaging:
     name: packaging (node ${{ matrix.node }})
@@ -678,8 +687,10 @@ jobs:
       - name: MCP clients (client-lock.json's @modelcontextprotocol/sdk and @modelcontextprotocol/client)
         run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/mcp/__fixtures__" && D="$HOME/.cache/honey-tmp/mcp-clients" && rm -rf "$D.partial" && mkdir -p "$D.partial" && cp "$P/client-pins.json" "$D.partial/package.json" && cp "$P/client-lock.json" "$D.partial/package-lock.json" && (cd "$D.partial" && npm ci --ignore-scripts --no-audit --no-fund) && sha256sum "$P/client-lock.json" | cut -d" " -f1 > "$D.partial/lock.sha256" && rm -rf "$D" && mv "$D.partial" "$D"
       - run: bun run generate
+      # a prod cell builds its app through run-build.ts first, under the same build gate as the build job
       - run: bun run ${{ matrix.script }}
         env:
+          BUILD_MODE: ${{ inputs.build_mode || 'judge' }}
           HONEY_REQUIRE_TOOLCHAINS: "1"
 
   harness:

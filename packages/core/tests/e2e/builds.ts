@@ -39,8 +39,6 @@ export interface BuildSpec {
 	 * catches that, so it is asserted rather than merely reported.
 	 */
 	maxGzipKb: number
-	/** Ceiling for one build of it, in ms, per runtime that runs the build (MAX_BUILD_MS). */
-	maxBuildMs: Record<RuntimeId, number>
 	/** Paths, relative to the app, wiped before the build. */
 	outDirs: string[]
 	/** Runtimes that can run this build. */
@@ -75,20 +73,6 @@ const DEFAULT_MAX_GZIP_KB: Record<TargetId, number> = {
 	node: 110,
 }
 
-/**
- * One build's ceiling per runtime that runs `vite build` (bit 19 j2), every app and target alike: that runtime's worst
- * per-cell median, times the CI runner's factor over this machine (1.91 at most: ceb5570, CI run 40563108456's build
- * jobs against the same commit timed here), times that runtime's own spread (a cell's slowest build over its median),
- * rounded up to the next second. Measured on v1, 5 builds of each cell (j2/buildtimes.tsv):
- * - bun 1.3.11: worst median 1.7 s (surface×node), spread 1.33 → 1.7 × 1.91 × 1.33 = 4.3 s → 5 s. CI's first v1 run
- *   (40582174256) built every Bun cell in 2.4–2.8 s.
- * - Node (22 and current): worst median 4.6 s (defaults×bun on Node 22), spread 3.96 → 4.6 × 1.91 × 3.96 = 34.8 s →
- *   35 s. That spread was measured at load averages of 13–28 on a shared machine (Bun's at 8–10): a re-measure on a
- *   quiet runner is the reason to tighten it. CI built every Node cell in 6.0–6.5 s.
- * One shared ceiling would give Bun Node's 35 s, so a 10x Bun regression would pass.
- */
-const MAX_BUILD_MS: Record<RuntimeId, number> = { bun: 5_000, node: 35_000 }
-
 const APP_BUILDS: AppBuild[] = [
 	{ app: "compose" },
 	{ app: "defaults" },
@@ -104,19 +88,12 @@ export const BUILD_SPECS: BuildSpec[] = APP_BUILDS.flatMap((entry) =>
 		config: "vite.build.config.ts",
 		expect: [`dist/${target}/index.js`],
 		id: `${entry.app}×${target}`,
-		maxBuildMs: MAX_BUILD_MS,
 		maxGzipKb: entry.maxGzipKb?.[target] ?? DEFAULT_MAX_GZIP_KB[target],
 		outDirs: [`dist/${target}`],
 		runtimes: ALL_RUNTIMES,
 		target,
 	})),
 )
-
-/** Why a build of `spec` on `runtime` that took `ms` is over its ceiling, or null when it is within it. */
-export function overBuildCeiling(spec: BuildSpec, runtime: RuntimeId, ms: number): string | null {
-	const ceiling = spec.maxBuildMs[runtime]
-	return ms > ceiling ? `built in ${ms}ms, over its ${ceiling}ms ceiling on ${runtime}` : null
-}
 
 export function isRuntimeId(name: string): name is RuntimeId {
 	return (RUNTIME_IDS as readonly string[]).includes(name)
@@ -163,10 +140,18 @@ export function missingBuildApps(): string[] {
 /* vite's bin, started by the runtime itself: bunx drops BUN_OPTIONS, the honey-source condition a checkout build needs */
 const VITE_BIN = join(dirname(createRequire(import.meta.url).resolve("vite/package.json")), "bin/vite.js")
 
-export function buildCommand(spec: BuildSpec, runtime: RuntimeId): string[] {
-	const cfg = ["--config", spec.config]
+/** `vite build` with `config` (relative to the cwd it runs in), started by `runtime` itself. */
+export function viteBuildCommand(config: string, runtime: RuntimeId): string[] {
+	const cfg = ["--config", config]
 	if (runtime === "bun") {
 		return ["bun", "--bun", VITE_BIN, "build", ...cfg]
 	}
 	return ["node", VITE_BIN, "build", ...cfg]
 }
+
+export function buildCommand(spec: BuildSpec, runtime: RuntimeId): string[] {
+	return viteBuildCommand(spec.config, runtime)
+}
+
+/** The build gate's honey-free reference (reference/vite.config.ts): where it builds and the config it builds with. */
+export const REFERENCE_BUILD = { config: "vite.config.ts", cwd: join(e2eRoot, "reference") } as const
