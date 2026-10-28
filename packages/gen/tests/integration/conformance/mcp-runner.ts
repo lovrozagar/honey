@@ -7,7 +7,9 @@
  * and `last_event_id`; the setup reaches it as the server's environment (the bearer as $CONFORMANCE_API_KEY). The observation is read from the result: the status from `_meta`
  * (honey/status), the data from structuredContent (a wrapped answer's `result` and `headers`) or the text, bytes from
  * a resource or image block, an error from an isError result's text, a stream from the collect's events. An MCP-only
- * row reads the server instead: its tool names, annotations, outputSchemas, tokens, or a result's content.
+ * row reads the server instead: its tool names, annotations, outputSchemas, tokens, or a result's content. Bit 21 d:
+ * over HTTP, the same server serves `--http` on a port the OS picks, `MCP_TOKEN` its bearer, and every cell runs the
+ * same; each LACKS reason holds there too, since the MCP request's own headers reach no API call (no passthrough).
  */
 import { createHash } from "node:crypto"
 import { join } from "node:path"
@@ -23,6 +25,9 @@ import type { Call, Cell, Json, Observed } from "./matrix.ts"
 /** The reference app's server: its variables' prefix. */
 const PREFIX = "CONFORMANCE"
 
+/** The bearer every HTTP session sends, $CONFORMANCE_MCP_TOKEN to the server. */
+export const MCP_TOKEN = "conformance-mcp-token"
+
 /**
  * The cells the MCP server has no way to express, by design, each with its reason: a tool takes its operation's
  * arguments alone, and the server's environment is every call's configuration.
@@ -33,7 +38,8 @@ const LACKS: Readonly<Record<string, string>> = {
 	"json-status/realtime-send-non-ascii": "a realtime operation is no tool: the server has no realtime send (bit 18 e)",
 	"json-status/realtime-send-raw-text": "a realtime operation is no tool: the server has no realtime send (bit 18 e)",
 	"overrides/base-url": "a tool has no per-call base URL: the server's $<PREFIX>_BASE_URL is every call's",
-	"overrides/headers": "a tool takes no per-call header beyond its operation's declared parameters",
+	"overrides/headers":
+		"a tool takes no per-call header beyond its operation's declared parameters, and over HTTP the MCP request's own headers reach no API call",
 	"overrides/timeout": "a tool has no per-call timeout: the server's $<PREFIX>_TIMEOUT_MS is every call's",
 	"raw-response/status-headers-body": "a tool returns its answer's data, never the raw response (Q11)",
 	"reconnect/ws-reconnect-token": "a WebSocket is no tool (bit 18 e)",
@@ -154,6 +160,8 @@ function dataOf(structured: Record<string, Json>, spec: ToolSpec, status: number
 
 /** What an MCP-only read observes of the tools listed or of a call's result. */
 function readOf(read: NonNullable<Call["mcp"]>, stepped: Stepped): Observed {
+	/* a failed step is no empty list: read as one, the token ceilings would hold on nothing */
+	if (stepped.failed !== undefined) throw new Error(`the client failed: ${stepped.failed}`)
 	const tools = stepped.tools ?? []
 	const byName = new Map(tools.map((tool) => [tool.name as string, tool]))
 	switch (read.read) {
@@ -209,8 +217,9 @@ export type Session = (command: readonly string[], steps: readonly Step[]) => Pr
  * The MCP runner for a client's `session`: the reference app's server generated and written once from the served
  * document. A call it cannot express throws, and the cell is red, never skipped; only LACKS are left out, each with
  * its reason. Every session first reports its revision, and one under another revision than `era` fails the cell.
+ * With `http`, the server serves `--http` on a port the OS picks, its token MCP_TOKEN, and the session connects to it.
  */
-export function mcpRunner(session: Session, era: string, variant?: string): TargetRunner {
+export function mcpRunner(session: Session, era: string, variant?: string, http = false): TargetRunner {
 	let dir = ""
 	let specs = new Map<string, ToolSpec>()
 	return {
@@ -221,7 +230,14 @@ export function mcpRunner(session: Session, era: string, variant?: string): Targ
 		},
 		async run(cell, app) {
 			const steps = cell.calls.map((call) => stepOf(call, specs))
-			const command = ["env", ...setupEnv(cell, app), process.execPath, join(dir, "dist", "server.js")]
+			const command = [
+				"env",
+				...setupEnv(cell, app),
+				...(http ? [`${PREFIX}_MCP_TOKEN=${MCP_TOKEN}`] : []),
+				process.execPath,
+				join(dir, "dist", "server.js"),
+				...(http ? ["--http", "--port", "0"] : []),
+			]
 			const [ran, ...stepped] = await session(command, [{ negotiated: true }, ...steps])
 			if (ran?.negotiated !== era) throw new Error(`the session ran under ${JSON.stringify(ran)}, not ${era}`)
 			return cell.calls.map((call, i) => {
