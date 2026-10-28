@@ -247,6 +247,8 @@ jobs:
             'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
+            'packages/gen/src/emit/mcp/python-client.test.ts', 'packages/gen/src/emit/mcp/__fixtures__/python-client.ts',
+            'packages/gen/src/emit/mcp/__fixtures__/client-constraints.txt',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
@@ -354,6 +356,8 @@ jobs:
             'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
+            'packages/gen/src/emit/mcp/python-client.test.ts', 'packages/gen/src/emit/mcp/__fixtures__/python-client.ts',
+            'packages/gen/src/emit/mcp/__fixtures__/client-constraints.txt',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts') }}
@@ -792,6 +796,8 @@ jobs:
             'packages/gen/src/emit/shared/**', 'packages/gen/src/ir/**', 'packages/gen/src/runtime/python/**',
             'packages/gen/tests/security/**', 'packages/gen/tests/structure/mutation-harness*.ts',
             'packages/gen/tests/structure/python-toolchain.test.ts', 'packages/gen/tests/structure/compile-calls.ts',
+            'packages/gen/src/emit/mcp/python-client.test.ts', 'packages/gen/src/emit/mcp/__fixtures__/python-client.ts',
+            'packages/gen/src/emit/mcp/__fixtures__/client-constraints.txt',
             'packages/gen/tests/integration/conformance/features.ts',
             'packages/gen/tests/integration/conformance/features-mcp.ts', 'packages/gen/tests/integration/conformance/cells.ts',
             'packages/gen/tests/integration/conformance/matrix.ts',
