@@ -161,3 +161,60 @@ describe("memoryUploadStore()", () => {
 		}
 	})
 })
+
+/** A body of the declared size, one byte more, then 1 KiB a pull, each only when its reader asks; what it saw. */
+function overflowing(bytes: Uint8Array) {
+	const seen = { cancelled: false, pulled: 0 }
+	const body = new ReadableStream<Uint8Array>(
+		{
+			cancel: () => void (seen.cancelled = true),
+			pull: (source) => {
+				seen.pulled += 1
+				if (seen.pulled === 1) source.enqueue(bytes.slice())
+				else if (seen.pulled === 2) source.enqueue(new Uint8Array(1))
+				else if (seen.pulled < 100) source.enqueue(new Uint8Array(1024))
+				else source.close()
+			},
+		},
+		{ highWaterMark: 0 },
+	)
+	return { body, seen }
+}
+
+describe("the upload route's size cap, as the body streams (bit 21 g)", () => {
+	it.each([
+		["no Content-Length", undefined],
+		["a Content-Length claiming the declared size", String(BYTES.length)],
+	])(
+		"stops reading one byte past the declared size, with %s: 413, the source cancelled, not drained",
+		async (_, length) => {
+			const served = mcp(app(), "/mcp", handler, { uploads: uploads({ secret: SECRET, store: memoryUploadStore() }) })
+			const fetcher = async (request: Request) => served.fetch(request, {})
+			const call = {
+				args: { file: await fileInput("f", BYTES) },
+				bytes: {},
+				endpoint: "https://shop.example/mcp",
+				headers: {},
+				name: "file_save",
+			}
+			const asked = await callWithUploads(fetcher, call, { retry: (params) => params })
+			const { body, seen } = overflowing(BYTES)
+			const request = new Request(
+				asked.targets[0]?.url as string,
+				{
+					body,
+					duplex: "half",
+					headers: length === undefined ? {} : { "content-length": length },
+					method: "PUT",
+				} as RequestInit,
+			)
+			const answer = await fetcher(request)
+			expect([answer.status, request.headers.get("content-length"), seen.cancelled, seen.pulled <= 3]).toEqual([
+				413,
+				length ?? null,
+				true,
+				true,
+			])
+		},
+	)
+})
