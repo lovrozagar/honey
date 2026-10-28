@@ -13,5 +13,5 @@
 			"large-response": 1.01
 		}
 	},
-	"note": "app.fetch cost / minimal raw fetch handler, median of 3 runs of 15 interleaved samples, per runtime minor version. bun 1.4 recorded 2026-10-14 on this machine (AMD Ryzen 7 9800X3D, amd-pstate-epp, performance governor, boost on, taskset -c 2,3; no pinned CI runner yet). Regenerate with `taskset -c 2,3 bun bench/src/hotpath.ts --update` and commit the move with its reason."
+	"note": "app.fetch cost / minimal raw fetch handler, median of 3 runs of 15 interleaved samples, per runtime minor version. bun 1.4 recorded 2026-10-14 on this machine (AMD Ryzen 7 9800X3D, amd-pstate-epp, performance governor, boost on, taskset -c 2,3; no pinned CI runner yet). v0's ratios, recorded before _v0 was deleted (bit 20 e, v0 at 1a968f1); nothing regenerates them."
 }
