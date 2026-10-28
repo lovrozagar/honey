@@ -121,14 +121,17 @@ describe("honey generate --watch on Bun (bit 20 k-fix)", () => {
 
 /**
  * `honey generate --app src/app.ts` on Bun in a checkout, BUN_OPTIONS `options` after a preload that logs each Bun
- * process the run starts: its exit code, stdout, and that count. Stopped once more than two have started, so a hand-off
- * that never sees the condition reds on its count instead of re-running itself without end.
+ * process the run starts: its exit code, stdout, that count and stderr's first line. Stopped once more than two have
+ * started, so a hand-off that never sees the condition reds on its count instead of re-running itself without end.
+ * `strip`: the preload also takes --conditions=honey-source out of execArgv, as a Bun that stopped reporting it would.
  */
-async function starts(options: string): Promise<[number | null, string, number]> {
+async function starts(options: string, strip = false): Promise<[number | null, string, number, string]> {
 	const mark = markOf()
 	const made = fresh({ "src/app.ts": appSource() })
 	const log = join(made.dir, "starts.log")
-	made.write("count.cjs", `require("node:fs").appendFileSync(${JSON.stringify(log)}, "x")\n`)
+	const unseen =
+		'const at = process.execArgv.indexOf("--conditions=honey-source")\nif (at >= 0) process.execArgv.splice(at, 1)\n'
+	made.write("count.cjs", `require("node:fs").appendFileSync(${JSON.stringify(log)}, "x")\n${strip ? unseen : ""}`)
 	const child = spawn("bun", [BIN, "generate", "--app", "src/app.ts"], {
 		cwd: made.dir,
 		env: {
@@ -138,8 +141,9 @@ async function starts(options: string): Promise<[number | null, string, number]>
 			HONEY_NO_BUN_HANDOFF: "1",
 		},
 	})
-	let [out, code] = ["", null as number | null]
+	let [out, err, code] = ["", "", null as number | null]
 	child.stdout.on("data", (chunk: Buffer) => void (out += chunk.toString()))
+	child.stderr.on("data", (chunk: Buffer) => void (err += chunk.toString()))
 	const ended = new Promise<void>((settle) => child.on("exit", (exited) => settle(void (code = exited))))
 	let exited = false
 	void ended.then(() => (exited = true))
@@ -147,14 +151,14 @@ async function starts(options: string): Promise<[number | null, string, number]>
 	if (!exited) child.kill("SIGTERM")
 	await ended
 	reap(mark)
-	return [code, out, read(made.dir, "starts.log").length]
+	return [code, out, read(made.dir, "starts.log").length, err.split("\n")[0] ?? ""]
 }
 
 describe("the bin on Bun without the honey-source condition (bit 20 k-fix)", () => {
 	it(
 		"hands off to itself exactly once with the condition set, and generates",
 		async () => {
-			expect(await starts("")).toEqual([0, "honey: generated\n", 2])
+			expect(await starts("")).toEqual([0, "honey: generated\n", 2, ""])
 		},
 		SLOW,
 	)
@@ -162,7 +166,20 @@ describe("the bin on Bun without the honey-source condition (bit 20 k-fix)", () 
 	it(
 		"runs at once when BUN_OPTIONS sets it: Bun reports it in execArgv, which the hand-off's child relies on",
 		async () => {
-			expect(await starts("--conditions=honey-source")).toEqual([0, "honey: generated\n", 1])
+			expect(await starts("--conditions=honey-source")).toEqual([0, "honey: generated\n", 1, ""])
+		},
+		SLOW,
+	)
+
+	it(
+		"refuses a second hand-off when its child does not see the condition, after exactly two starts",
+		async () => {
+			expect(await starts("", true)).toEqual([
+				1,
+				"",
+				2,
+				"honey: Bun hand-off loop: --conditions=honey-source not visible after re-exec",
+			])
 		},
 		SLOW,
 	)

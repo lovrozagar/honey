@@ -51,8 +51,16 @@ function handOff(bun, env) {
 // handoff, so a watch's generation children inherit it; Bun reports BUN_OPTIONS' flags in execArgv, so a Bun started
 // with it never hands off again.
 const SOURCE_CONDITION = "--conditions=honey-source"
-const sourceEnv = checkout ? { BUN_OPTIONS: `${process.env.BUN_OPTIONS ?? ""} ${SOURCE_CONDITION}`.trim() } : {}
 const unconditioned = isBun && checkout && !process.execArgv.includes(SOURCE_CONDITION)
+// The hand-off's backstop: its child carries HONEY_BUN_HANDOFF, the depth of hand-offs before it. A child that would
+// hand off again (the condition set but not in its execArgv) refuses instead of re-running itself without end.
+const handOffDepth = Number(process.env.HONEY_BUN_HANDOFF ?? 0)
+const sourceEnv = checkout
+	? {
+			BUN_OPTIONS: `${process.env.BUN_OPTIONS ?? ""} ${SOURCE_CONDITION}`.trim(),
+			HONEY_BUN_HANDOFF: String(handOffDepth + 1),
+		}
+	: {}
 
 async function entry() {
 	if (checkout) {
@@ -73,7 +81,10 @@ async function entry() {
 
 const bun = invokingBun()
 if (bun) handOff(bun, sourceEnv)
-else if (unconditioned) handOff(process.execPath, sourceEnv)
+else if (unconditioned && handOffDepth >= 1) {
+	console.error("honey-codegen: Bun hand-off loop: --conditions=honey-source not visible after re-exec")
+	process.exit(1)
+} else if (unconditioned) handOff(process.execPath, sourceEnv)
 else {
 	const { main } = await entry()
 	const code = await main(process.argv.slice(2))

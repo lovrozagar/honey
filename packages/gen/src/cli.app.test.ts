@@ -209,27 +209,41 @@ describe.skipIf(!PINNED_BUN)(`generate --app on Bun ${pinnedBunVersion()}, by Bu
 	}, 90_000)
 })
 
+/**
+ * The bin on Bun over a fresh app, BUN_OPTIONS `options` after a preload that logs each Bun process the run starts and
+ * ends the fourth itself, so a loop is bounded: its exit code, stderr and that count. `strip`: the preload also takes
+ * --conditions=honey-source out of execArgv, as a Bun that stopped reporting it would.
+ */
+function counted(options: string, strip = false): [number | null, string, number] {
+	const dir = project({
+		"src/app.ts": `${HONEY}export const app = honey().get("/health").handler((c) => c.res.text("ok", "ok"))\n`,
+	})
+	const starts = join(dir, "starts.log")
+	const unseen =
+		'const at = process.execArgv.indexOf("--conditions=honey-source")\nif (at >= 0) process.execArgv.splice(at, 1)\n'
+	writeFileSync(
+		join(dir, "count.mjs"),
+		`import { appendFileSync, readFileSync } from "node:fs"\nappendFileSync(${JSON.stringify(starts)}, "s")\nif (readFileSync(${JSON.stringify(starts)}, "utf8").length > 3) process.exit(9)\n${strip ? unseen : ""}`,
+	)
+	const run = onBun(dir, { BUN_OPTIONS: `--preload ${join(dir, "count.mjs")}${options}` })
+	return [run.status, run.stderr, readFileSync(starts, "utf8").length]
+}
+
 describe.skipIf(!PINNED_BUN)(`the bin's honey-source hand-off on Bun ${pinnedBunVersion()} (bit 20)`, () => {
 	afterEach(() => void reap(MARK))
 
-	/* each Bun process the run starts logs one start (a preload), and the fourth ends itself: a loop is bounded */
 	it("hands off to itself once without the honey-source condition, and not at all with it in BUN_OPTIONS", () => {
-		const dir = project({
-			"src/app.ts": `${HONEY}export const app = honey().get("/health").handler((c) => c.res.text("ok", "ok"))\n`,
-		})
-		const starts = join(dir, "starts.log")
-		writeFileSync(
-			join(dir, "count.mjs"),
-			`import { appendFileSync, readFileSync } from "node:fs"\nappendFileSync(${JSON.stringify(starts)}, "s")\nif (readFileSync(${JSON.stringify(starts)}, "utf8").length > 3) process.exit(9)\n`,
-		)
-		const counted = (options: string) => {
-			writeFileSync(starts, "")
-			const run = onBun(dir, { BUN_OPTIONS: `--preload ${join(dir, "count.mjs")}${options}` })
-			return [run.status, run.stderr, readFileSync(starts, "utf8").length]
-		}
 		expect([counted(""), counted(" --conditions=honey-source")]).toEqual([
 			[0, "", 2],
 			[0, "", 1],
+		])
+	}, 90_000)
+
+	it("refuses a second hand-off when its child does not see the condition, after exactly two starts", () => {
+		expect(counted("", true)).toEqual([
+			1,
+			"honey-codegen: Bun hand-off loop: --conditions=honey-source not visible after re-exec\n",
+			2,
 		])
 	}, 90_000)
 })
