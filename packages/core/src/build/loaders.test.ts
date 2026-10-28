@@ -126,6 +126,23 @@ describe("a module loader on Bun's global (bit 20 k-fix)", () => {
 		const load = await createModuleLoader({ fresh: false, from: dir })
 		expect((await load(join(dir, "plain.ts"))).v).toBe(9)
 	})
+
+	it("refuses a reload that finds no project module to evict, rather than read a stale graph", async () => {
+		const dir = project({})
+		/* a registry keyed otherwise than the loader reads, as a Bun upgrade could leave it: nothing it would evict */
+		const installedOnly = { "/p/node_modules/dep/index.js": 1 }
+		const withApp = { "/p/node_modules/dep/index.js": 1, "/p/src/app.ts": 1 }
+		const reload = (registry: Record<string, unknown>) =>
+			createModuleLoader({ fresh: true, from: dir, reload: true }, registry).then(
+				() => "loaded",
+				(error: Error) => error.message,
+			)
+		expect([await reload(installedOnly), await reload(withApp), Object.keys(withApp)]).toEqual([
+			"Bun's module registry held none of the project's modules to evict: a reload would read them stale",
+			"loaded",
+			["/p/node_modules/dep/index.js"],
+		])
+	})
 })
 
 describe("Effect's JSON Schema converter (bit 19 h2)", () => {

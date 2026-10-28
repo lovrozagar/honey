@@ -5,7 +5,7 @@
  * tarball's own `build/artifacts` (generate.ts `artifactsFor`). A bin picks dist/ in an install and the source in a
  * checkout; `ws`, core's optional peer, fails with an install hint until it is installed, then works in that process.
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { CORE, consumer, pack, REPO, run, scratch, type Tarballs, write } from "./fixture/packed.ts"
@@ -92,7 +92,7 @@ beforeAll(() => {
 	app = consumer(
 		join(files.out, "app"),
 		{ "@lovrozagar/honey": `file:${tarballs.core}`, "@lovrozagar/honey-codegen": `file:${tarballs.gen}` },
-		["zod", "@types/node"],
+		["zod", "@types/node", "vite"],
 	)
 	write(app, { "src/app.ts": APP, "src/selectors.ts": SELECTORS })
 }, 180_000)
@@ -153,6 +153,37 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 			[0, true, true],
 		)
 		expect(readFileSync(tree, "utf8")).toContain('"health"')
+	}, 60_000)
+
+	/* Vite's own Node chunk makes follow-redirects' errors with a non-Error captureStackTrace at load: on Bun, once jiti's
+	 * Babel has hooked Error.prepareStackTrace, that throws "First argument must be an Error object" (bit 20 k-fix) */
+	it("honey generate on Bun in the install, a cold jiti cache, reads a config importing vite, a throwing one once", () => {
+		const cold = join(files.out, "cold-tmp")
+		mkdirSync(cold)
+		const generate = () =>
+			run("bun", ["node_modules/.bin/honey", "generate"], app, { HONEY_NO_BUN_HANDOFF: "1", TMPDIR: cold })
+		const log = join(app, "evaluations.log")
+		try {
+			write(app, {
+				"vite.config.ts":
+					'import { defaultClientConditions } from "vite"\nimport { honey } from "@lovrozagar/honey/plugin"\nexport default { resolve: { conditions: [...defaultClientConditions] }, plugins: [honey({ app: "src/app.ts" })] }\n',
+			})
+			const read = generate()
+			write(app, {
+				"vite.config.ts": `import { appendFileSync } from "node:fs"\nappendFileSync(${JSON.stringify(log)}, "x")\nthrow new Error("boom at load")\n`,
+			})
+			const thrown = generate()
+			expect([
+				read.code,
+				read.out.split("\n")[0],
+				thrown.code,
+				thrown.out.split("\n")[0],
+				readFileSync(log, "utf8"),
+			]).toEqual([0, "honey: generated", 1, "honey: generation failed: boom at load", "x"])
+		} finally {
+			rmSync(join(app, "vite.config.ts"), { force: true })
+			rmSync(log, { force: true })
+		}
 	}, 60_000)
 
 	it.each([

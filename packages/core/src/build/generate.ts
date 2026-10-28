@@ -77,7 +77,10 @@ export async function generateAndWrite(
 		/* a gateway app imports the tree this writes: written first, then the pass redone over it on a fresh graph */
 		codegen.writeFileIfChanged(resolve(root, rewrite[0]), rewrite[1])
 		written.push(resolve(root, rewrite[0]))
-		graph = await inAppGraph(root)
+		graph = await inAppGraph(
+			root,
+			await createModuleLoader({ fresh: true, from: resolve(root, "index.ts"), reload: true }),
+		)
 		;({ source } = await graph.prepare(config, { ...run, first: false }))
 	}
 	/* the tree just written is the same text again, so it is not rewritten nor listed twice */

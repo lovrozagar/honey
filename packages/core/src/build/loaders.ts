@@ -16,6 +16,8 @@ export type ModuleLoaderOptions = {
 	fresh: boolean
 	/** the file imports resolve from */
 	from: string
+	/** a fresh loader after one that evaluated the project in this process: on Bun it must evict some module */
+	reload?: boolean
 }
 
 /** Bun's module registry, its ES modules included, keyed by path: what a fresh loader evicts. */
@@ -30,7 +32,7 @@ export async function createModuleLoader(
 	options: ModuleLoaderOptions,
 	registry = bunRegistry(),
 ): Promise<ModuleLoader> {
-	const evaluate = registry === undefined ? await jitiEvaluator(options) : bunEvaluator(registry, options.fresh)
+	const evaluate = registry === undefined ? await jitiEvaluator(options) : bunEvaluator(registry, options)
 	const loaded = new Map<string, Promise<Record<string, unknown>>>()
 	return (path) => {
 		const abs = resolve(path)
@@ -55,10 +57,17 @@ async function jitiEvaluator(
 	return (path) => jiti.import(path) as Promise<Record<string, unknown>>
 }
 
-function bunEvaluator(registry: ModuleRegistry, fresh: boolean): (path: string) => Promise<Record<string, unknown>> {
+function bunEvaluator(
+	registry: ModuleRegistry,
+	options: ModuleLoaderOptions,
+): (path: string) => Promise<Record<string, unknown>> {
 	/* Bun keeps a module for the process: evicted, the next import evaluates it anew. Every module outside
 	 * node_modules goes, what a user may have edited or a generation written (a gateway's tree) */
-	if (fresh) for (const key of Object.keys(registry)) if (!/[\\/]node_modules[\\/]/.test(key)) delete registry[key]
+	const evicted = options.fresh ? Object.keys(registry).filter((key) => !/[\\/]node_modules[\\/]/.test(key)) : []
+	for (const key of evicted) delete registry[key]
+	/* a registry keyed otherwise than this reads (a Bun upgrade) leaves a reload the stale graph: said, not served */
+	if (options.reload === true && evicted.length === 0)
+		throw new Error("Bun's module registry held none of the project's modules to evict: a reload would read them stale")
 	return (path) => import(pathToFileURL(path).href) as Promise<Record<string, unknown>>
 }
 
