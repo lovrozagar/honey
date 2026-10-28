@@ -55,7 +55,12 @@
 				"packages/gen/src/**",
 				"packages/gen/tests/**",
 				"bench/src/significance.ts",
-				"bench/src/significance.test.ts"
+				"bench/src/significance.test.ts",
+				"bench/src/gate.ts",
+				"bench/src/finalize.ts",
+				"bench/src/adapter.ts",
+				"bench/src/streaming.ts",
+				"bench/src/websockets.ts"
 			],
 			"plugins": ["typescript", "unicorn", "oxc", "vitest"],
 			"rules": {

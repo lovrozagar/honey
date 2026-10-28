@@ -23,6 +23,7 @@ import { createMiddleware as createV1Middleware } from "../../packages/core/src/
 import { requestId as requestIdV1 } from "../../packages/core/src/middleware/request-id.ts"
 import { secureHeaders as secureHeadersV1 } from "../../packages/core/src/middleware/secure-headers.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
+import { exitCode, modeOf, ratioLine, RECORD_LABEL } from "./gate.ts"
 import { judge, median } from "./significance.ts"
 
 const BASELINE_FILE = new URL("../../blueprint/baselines/hotpath.json", import.meta.url)
@@ -229,7 +230,6 @@ const [againstName, against] =
 const verdicts = Object.entries(results).map(
 	([name, r]) => [name, r, judge(r.ratios, against[name], THRESHOLD)] as const,
 )
-const failed = verdicts.some(([, , v]) => v.status === "regressed")
 const rows = verdicts.map(([name, r, v]) => ({
 	band: `±${v.halfWidth.toFixed(2)}`,
 	baseline: against[name] ?? "—",
@@ -243,10 +243,20 @@ const rows = verdicts.map(([name, r, v]) => ({
 console.log(
 	`hotpath v1 on ${runtime} (${version}) vs baseline ${againstName}, threshold +${Math.round(THRESHOLD * 100)}%`,
 )
+/* CI pins bun 1.3 (BUN_VERSION) while hotpath.json holds only bun 1.4: there it has always run advisory, and it now
+   runs in record mode (BENCH_MODE=record) with the other benches until bit 20 e3 sets the gates */
+const mode = modeOf(process.env)
+if (mode === "record") console.log(`hotpath: ${RECORD_LABEL}`)
 console.table(rows)
+for (const row of rows) console.log(ratioLine("hotpath", row.scenario, row.ratio))
 if (advisory) {
 	console.log(`hotpath: no baseline for ${runtime}; advisory only (v0's ratios were recorded for the pinned runtimes).`)
-} else if (failed) {
-	console.error("hotpath: a scenario regressed past the threshold: v1 is slower than v0's recorded ratio on it.")
-	process.exit(1)
 }
+const code = exitCode(
+	mode,
+	!advisory,
+	rows.map((row) => row.status),
+)
+if (code !== 0)
+	console.error("hotpath: a scenario regressed past the threshold: v1 is slower than v0's recorded ratio on it.")
+process.exitCode = code

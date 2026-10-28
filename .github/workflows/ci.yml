@@ -544,10 +544,36 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      # v1's app.fetch cost as a ratio to a raw fetch handler, against v0's ratios in
-      # blueprint/baselines/hotpath.json (recorded with BUN_VERSION). One retry absorbs a noisy
-      # neighbor; two failures are a regression.
-      - run: bun run bench:hotpath || bun run bench:hotpath
+      # Record mode (BENCH_MODE=record), gating at e3: each bench prints a `RATIO <bench> <scenario> <value>` line
+      # per scenario and exits 0 whatever the ratios, so CI runs collect the spread bit 20 e3 sets the gates from.
+      # hotpath: v1's app.fetch over a raw fetch handler, against v0's ratios in hotpath.json, which holds bun 1.4
+      # only: under BUN_VERSION's 1.3 it has always run advisory. The other four: v1 over a raw twin doing the same
+      # work, against bench/baselines.json (recorded with BUN_VERSION, and adapter's with the Node pinned below).
+      - name: hotpath (record mode, gating at e3)
+        env:
+          BENCH_MODE: record
+        run: bun run bench:hotpath
+      - name: finalize (record mode, gating at e3)
+        env:
+          BENCH_MODE: record
+        run: bun run bench:finalize
+      - name: streaming (record mode, gating at e3)
+        env:
+          BENCH_MODE: record
+        run: bun run bench:streaming
+      - name: websockets (record mode, gating at e3)
+        env:
+          BENCH_MODE: record
+        run: bun run bench:websockets
+      # the Node bridge on Node itself (node:http under Bun is Bun's own), on the version adapter's
+      # baseline was recorded with
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "26.12.1"
+      - name: adapter (record mode, gating at e3)
+        env:
+          BENCH_MODE: record
+        run: bun run bench:adapter
 
   build:
     name: build (${{ matrix.runtime }})

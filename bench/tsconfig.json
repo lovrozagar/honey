@@ -20,7 +20,12 @@
 		"src/apps/bun/**/*.ts",
 		"src/apps/node/**/*.ts",
 		"src/middleware.ts",
+		"src/adapter.ts",
+		"src/finalize.ts",
+		"src/gate.ts",
 		"src/hotpath.ts",
+		"src/streaming.ts",
+		"src/websockets.ts",
 		"src/significance.ts",
 		"src/significance.test.ts"
 	]
