@@ -192,3 +192,138 @@ describe("the e2e build gate's ceilings", () => {
 		expect(owed).toEqual([])
 	})
 })
+
+/*
+ * Record runs across two code versions (the by-commit derive): six runs at an older commit, six at the newest, each
+ * a Bun job (classed by its surface build) and a Node job. surface×cloudflare and surface×node carry the same ratios'
+ * spread on both; mcp×cloudflare moved from ~3.4 to ~4.65 (a changed app), so its groups' ranges do not overlap.
+ */
+type Version = { commit: string; created: string }
+/** Six runs at one commit: each run's Bun-job runner class and each cell's ratio, run by run. */
+type CommitRuns = {
+	classes: readonly ("fast" | "slow")[]
+	mcp: readonly number[]
+	node: readonly number[]
+	surface: readonly number[]
+}
+
+const OLD: Version = { commit: "7731b1f", created: "2026-10-29T08:00:00Z" }
+const NEW: Version = { commit: "b2946ee", created: "2026-10-29T12:00:00Z" }
+const RUNS: Record<"new" | "old", CommitRuns> = {
+	new: {
+		classes: ["fast", "slow", "fast", "slow", "slow", "slow"],
+		mcp: [4.6, 4.7, 4.5, 4.8, 4.6, 4.7],
+		node: [27.1, 27.4, 26.9, 27.3, 27.2, 27.0],
+		surface: [15.1, 15.2, 14.95, 15.0, 15.25, 15.05],
+	},
+	old: {
+		classes: ["fast", "slow", "fast", "slow", "slow", "slow"],
+		mcp: [3.4, 3.3, 3.5, 3.4, 3.3, 3.4],
+		node: [27.0, 27.3, 27.2, 26.8, 27.4, 27.1],
+		surface: [15.0, 14.9, 15.2, 15.3, 15.1, 15.0],
+	},
+}
+
+/** One run's two jobs at `version`: its Bun job on a `runner`-class machine, and its Node job. */
+function commitRun(
+	version: Version,
+	run: string,
+	runner: "fast" | "slow",
+	ratios: { mcp: number; node: number; surface: number },
+) {
+	const surfaceMs = runner === "fast" ? 2_700 : 4_600
+	const bun = (cell: string, ratio: number) => ({
+		cell,
+		key: KEY,
+		ms: surfaceMs,
+		ratio,
+		referenceMs: surfaceMs / ratio,
+	})
+	const node = { cell: "surface×node", key: "node 22", ms: 2_100, ratio: ratios.node, referenceMs: 77 }
+	return [
+		{ ...version, job: "build (bun)", ratios: [bun(CELL, ratios.surface), bun("mcp×cloudflare", ratios.mcp)], run },
+		{ ...version, job: "build (node)", ratios: [node], run },
+	]
+}
+
+/** Every job of six runs at `version` numbered from `from`, the Bun jobs on `classes`' runner classes. */
+const commitRuns = (version: Version, from: number, runs: CommitRuns, classes = runs.classes) =>
+	classes.flatMap((runner, i) =>
+		commitRun(version, String(from + i), runner, {
+			mcp: runs.mcp[i] as number,
+			node: runs.node[i] as number,
+			surface: runs.surface[i] as number,
+		}),
+	)
+
+describe("the e2e build gate's derive across commits", () => {
+	const decided = gate.deriveByCommit([...commitRuns(OLD, 1, RUNS.old), ...commitRuns(NEW, 7, RUNS.new)])
+	const row = (cell: string) => decided.find((each) => each.cell === cell)
+
+	it("pools a cell whose commit groups agree within each runner class's range: its n is both groups'", () => {
+		expect([row(CELL)?.decision, row(CELL)?.n, row("surface×node")?.decision, row("surface×node")?.n]).toEqual([
+			"pooled",
+			12,
+			"pooled",
+			12,
+		])
+		expect(row(CELL)?.ceiling).toEqual({
+			baseline: 15.07,
+			byClass: { fast: 15.05, slow: 15.07 },
+			catches: "+12%",
+			ceiling: 16.83,
+		})
+	})
+
+	it("derives a shifted cell from the newest commit's runs alone", () => {
+		expect(row("mcp×cloudflare")).toEqual({
+			cell: "mcp×cloudflare",
+			ceiling: { baseline: 4.65, byClass: { fast: 4.55, slow: 4.7 }, catches: "+14%", ceiling: 5.28 },
+			decision: "new-only",
+			groups: [
+				{ classes: { fast: 2, slow: 4 }, commit: OLD.commit, n: 6 },
+				{ classes: { fast: 2, slow: 4 }, commit: NEW.commit, n: 6 },
+			],
+			key: KEY,
+			n: 6,
+		})
+	})
+})
+
+describe("the e2e build gate's derive across commits: the runner classes it asks for", () => {
+	it("asks the runner classes of a commit's Bun jobs, not of each cell: a cell built only on slow runners derives", () => {
+		/* surface×bun, built only in each run's e2e (bun prod) job, landed slow every time; build (bun) did not */
+		const slowCell = (run: number) => ({
+			...NEW,
+			job: "e2e (bun prod)",
+			ratios: [{ cell: "surface×bun", key: KEY, ms: 4_600, ratio: 15 + run / 100, referenceMs: 4_600 / 15 }],
+			run: String(run),
+		})
+		const derived = gate.deriveByCommit([...commitRuns(NEW, 7, RUNS.new), ...[7, 8, 9, 10, 11, 12].map(slowCell)])
+		const cell = derived.find((each) => each.cell === "surface×bun")
+		expect([cell?.groups, cell?.refused, cell?.ceiling?.ceiling]).toEqual([
+			[{ classes: { slow: 6 }, commit: NEW.commit, n: 6 }],
+			undefined,
+			16.63,
+		])
+	})
+
+	it("refuses a shifted cell whose newest group misses a runner class, by name, and still pools an agreeing one", () => {
+		const slowOnly = gate.deriveByCommit([
+			...commitRuns(OLD, 1, RUNS.old),
+			...commitRuns(NEW, 7, RUNS.new, ["slow", "slow", "slow", "slow", "slow", "slow"]),
+		])
+		const of = (cell: string) => slowOnly.find((each) => each.cell === cell)
+		expect([
+			of("mcp×cloudflare")?.refused,
+			of("mcp×cloudflare")?.ceiling,
+			of(CELL)?.decision,
+			of(CELL)?.refused,
+		]).toEqual([
+			`${KEY} mcp×cloudflare: new-only from ${NEW.commit}: 6 runs, no fast Bun job`,
+			undefined,
+			"pooled",
+			undefined,
+		])
+	})
+})

@@ -177,28 +177,139 @@ export function deriveCeilings(
 				`${runs.size} runs, classes ${[...classes].sort().join(",")}`,
 		)
 	}
-	const values = new Map<string, { byClass: Map<string, number[]>; ratios: number[] }>()
-	for (const job of classed) {
-		for (const record of job.ratios) {
-			const id = `${record.key}\t${record.cell}`
-			const entry = values.get(id) ?? { byClass: new Map(), ratios: [] }
-			entry.ratios.push(record.ratio)
-			entry.byClass.set(job.class, [...(entry.byClass.get(job.class) ?? []), record.ratio])
-			values.set(id, entry)
-		}
-	}
 	const out: Record<string, Record<string, BuildCeiling>> = {}
-	for (const [id, entry] of [...values].sort(([a], [b]) => a.localeCompare(b))) {
+	for (const [id, samples] of samplesByCell(classed)) {
 		const [key, cell] = id.split("\t") as [string, string]
-		const baseline = Number(median(entry.ratios).toFixed(2))
-		const ceiling = Number((Math.max(...entry.ratios) * 1.1).toFixed(2))
-		const byClass = Object.fromEntries(
-			[...entry.byClass].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, Number(median(v).toFixed(2))]),
-		)
-		const catches = `+${Math.round((ceiling / baseline - 1) * 100)}%`
-		out[key] = { ...out[key], [cell]: { baseline, byClass, catches, ceiling } }
+		out[key] = { ...out[key], [cell]: ceilingOf(samples) }
 	}
 	return out
+}
+
+/** One cell's ratio from one job: its runner class and its run. */
+type Sample = { class: RunnerClass; ratio: number; run: string }
+
+/** Every cell's samples, keyed `<runtime key>\t<cell>`, in key order. */
+function samplesByCell(jobs: readonly { class: RunnerClass; ratios: readonly RatioRecord[]; run: string }[]) {
+	const cells = new Map<string, Sample[]>()
+	for (const job of jobs) {
+		for (const record of job.ratios) {
+			const id = `${record.key}\t${record.cell}`
+			cells.set(id, [...(cells.get(id) ?? []), { class: job.class, ratio: record.ratio, run: job.run }])
+		}
+	}
+	return [...cells].sort(([a], [b]) => a.localeCompare(b))
+}
+
+/** A cell's ceiling from its samples: the median, the worst x 1.10, and each runner class's median. */
+function ceilingOf(samples: readonly Sample[]): BuildCeiling {
+	const ratios = samples.map((sample) => sample.ratio)
+	const baseline = Number(median(ratios).toFixed(2))
+	const ceiling = Number((Math.max(...ratios) * 1.1).toFixed(2))
+	const byClass = Object.fromEntries(
+		classesOf(samples).map((each) => [each, Number(median(ratiosOf(samples, each)).toFixed(2))]),
+	)
+	return { baseline, byClass, catches: `+${Math.round((ceiling / baseline - 1) * 100)}%`, ceiling }
+}
+
+const classesOf = (samples: readonly Sample[]) => [...new Set(samples.map((sample) => sample.class))].sort()
+const ratiosOf = (samples: readonly Sample[], runner: RunnerClass) =>
+	samples.filter((sample) => sample.class === runner).map((sample) => sample.ratio)
+
+/** One record-mode CI job with its run's head commit and creation time (gh run view's headSha and createdAt). */
+export type CommitJob = { commit: string; created: string; job: string; ratios: readonly RatioRecord[]; run: string }
+
+/** A cell's derive across commits: its groups, whether they pooled, and its ceiling or why it has none. */
+export type CellDecision = {
+	cell: string
+	ceiling?: BuildCeiling
+	decision: "new-only" | "pooled"
+	groups: { classes: Partial<Record<RunnerClass, number>>; commit: string; n: number }[]
+	key: string
+	/** The samples the ceiling comes from: every group's when pooled, the newest commit's otherwise. */
+	n: number
+	/** Why the cell gets no ceiling: what its decided samples lack. */
+	refused?: string
+}
+
+/** Whether `value` lies within `range`'s min-max, both ends included. */
+const within = (value: number, range: readonly number[]) => value >= Math.min(...range) && value <= Math.max(...range)
+
+/**
+ * Whether two commit groups of one cell measure the same code: for every runner class both carry (a Node job's is
+ * `unclassified`, so Node compares its whole range), each group's median lies within the other's min-max. Groups
+ * with no class in common cannot be shown to agree.
+ */
+function agree(a: readonly Sample[], b: readonly Sample[]): boolean {
+	const shared = classesOf(a).filter((each) => classesOf(b).includes(each))
+	return (
+		shared.length > 0 &&
+		shared.every((each) => {
+			const [x, y] = [ratiosOf(a, each), ratiosOf(b, each)]
+			return within(median(x), y) && within(median(y), x)
+		})
+	)
+}
+
+/**
+ * What a cell's decided samples lack for a ceiling under `key`: 6+ runs carrying the cell, and on Bun, as
+ * deriveCeilings asks, the fast and the slow runner class among the Bun jobs of the commits they come from
+ * (`classes`): a cell built in one job per run (a Bun ×node cell, build (bun) alone) would otherwise wait on that one
+ * job landing on a fast runner.
+ */
+function lacks(key: string, samples: readonly Sample[], classes: readonly RunnerClass[]): string | undefined {
+	const runs = new Set(samples.map((sample) => sample.run)).size
+	const missing = [
+		...(runs < MIN_RECORD_RUNS ? [`fewer than ${MIN_RECORD_RUNS}`] : []),
+		...(key.startsWith("bun ") ? (["fast", "slow"] as const).filter((each) => !classes.includes(each)) : []).map(
+			(each) => `no ${each} Bun job`,
+		),
+	]
+	return missing.length === 0 ? undefined : `${runs} runs, ${missing.join(", ")}`
+}
+
+/**
+ * The ceilings from record runs spanning code versions, cell by cell. Each cell's samples are grouped by their run's
+ * head commit; when every two groups agree (agree) they pool, else the cell is derived from the newest commit's group
+ * alone (newest by its latest run's creation), since a changed app's older runs measure other code. Either way the
+ * decided samples need 6+ runs and, on Bun, both runner classes, or the cell is refused, naming what it lacks.
+ */
+export function deriveByCommit(jobs: readonly CommitJob[]): CellDecision[] {
+	const latest = new Map<string, string>()
+	for (const job of jobs) {
+		if ((latest.get(job.commit) ?? "") < job.created) latest.set(job.commit, job.created)
+	}
+	const commits = [...latest].sort(([, a], [, b]) => a.localeCompare(b)).map(([commit]) => commit)
+	const commitOf = new Map(jobs.map((job) => [job.run, job.commit]))
+	const classesAt = (at: readonly string[]) =>
+		[...new Set(jobs.filter((job) => at.includes(job.commit)).map((job) => jobClass(job.ratios)))].sort()
+	return samplesByCell(jobs.map((job) => ({ ...job, class: jobClass(job.ratios) }))).map(([id, samples]) => {
+		const [key, cell] = id.split("\t") as [string, string]
+		const groups = commits
+			.map((commit) => ({ commit, samples: samples.filter((sample) => commitOf.get(sample.run) === commit) }))
+			.filter((group) => group.samples.length > 0)
+		const pooled = groups.every((group, i) => groups.slice(i + 1).every((other) => agree(group.samples, other.samples)))
+		const newest = groups.at(-1) as (typeof groups)[number]
+		const decided = pooled ? samples : newest.samples
+		const missing = lacks(key, decided, classesAt(pooled ? commits : [newest.commit]))
+		const decision = pooled ? ("pooled" as const) : ("new-only" as const)
+		return {
+			cell,
+			...(missing === undefined ? { ceiling: ceilingOf(decided) } : {}),
+			decision,
+			groups: groups.map((group) => ({
+				classes: Object.fromEntries(
+					classesOf(group.samples).map((each) => [each, ratiosOf(group.samples, each).length]),
+				),
+				commit: group.commit,
+				n: group.samples.length,
+			})),
+			key,
+			n: decided.length,
+			...(missing === undefined
+				? {}
+				: { refused: `${key} ${cell}: ${pooled ? "pooled" : `new-only from ${newest.commit}`}: ${missing}` }),
+		}
+	})
 }
 
 /** Cells of `cells` with no ceiling under each of `keys`: what a baseline still lacks. */
