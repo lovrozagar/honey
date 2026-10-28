@@ -10,9 +10,8 @@
  *
  * Auth, fail-closed: when any tool's operation requires a credential, the mount needs `authenticate`, run on every
  * request before any dispatch; `false` is HTTP 401 with the scheme's challenge. Its answer reaches the tools only as
- * the credential the request carries, which the inner routes check again. `"app-middleware"` names the app's own
- * middleware as that check instead: with none, a call still reaches no route unauthenticated, its inner 401 the
- * endpoint's HTTP 401.
+ * the credential the request carries, which the inner routes check again. Mounting secured tools without it throws,
+ * with no exception.
  */
 import type { ExecutionCtx, HoneyContext } from "../context/context.ts"
 import type { TypedResponse } from "../response/response.ts"
@@ -40,8 +39,8 @@ export type McpHandler = {
 export type McpAuthenticate = (request: Request, ctx: HoneyContext) => boolean | Promise<boolean>
 
 export type McpOptions = {
-	/** the check run before any dispatch; `"app-middleware"` when the app's own middleware refuses at `path` */
-	readonly authenticate?: McpAuthenticate | "app-middleware"
+	/** the check run on every request before any dispatch; required when a tool requires a credential */
+	readonly authenticate?: McpAuthenticate
 	/** browser origins served beside the endpoint's own; any other Origin is 403 */
 	readonly origins?: readonly string[]
 	/** the most bytes a request body may hold (4 MiB by default); the app's bodyLimit applies before it */
@@ -62,10 +61,10 @@ const METHODS = ["post", "get", "delete"] as const
 /** Serve `handler`'s tools at `path` on `app`; returns `app`. */
 export function mcp<A>(app: A, path: string, handler: McpHandler, options: McpOptions = {}): A {
 	const { authenticate, maxBodyBytes, origins = [] } = options
-	if (handler.secured && authenticate === undefined)
+	if (handler.secured && typeof authenticate !== "function")
 		throw new Error(
-			`mcp(${path}): its tools require a credential, so it needs authenticate: (request, ctx) => boolean, run before ` +
-				'any call, or authenticate: "app-middleware" when the app\'s own middleware refuses an unauthenticated request there',
+			`mcp(${path}): its tools require a credential, so it needs authenticate: (request, ctx) => boolean, run on ` +
+				"every request before any call",
 		)
 	const handle = app as unknown as McpHandle
 	const segments = parsePattern(joinPatterns(handle[VIEW].basePath, path))

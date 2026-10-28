@@ -88,3 +88,49 @@ SHOP_MCP_TOKEN=$(openssl rand -hex 32) SHOP_API_KEY=… shop-mcp --http --port 8
   read its own disk.
 - **Answers.** An answer is JSON, or an event stream once a call reports progress. Under 2026-07-28, closing the request
   or its stream cancels the call; under 2025-11-25 a disconnect is no cancel, as that revision says.
+
+## Mounting in your app
+
+An app can serve its own tools itself, at a path of its own, over Streamable HTTP: the same tools, each call
+dispatched in process through the app, so its middleware, limits and every route's own auth run again.
+
+| Value                               | What it is                                                                                                                                                                                           |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codegen.mcp`                       | the `honey()` plugin output that writes the mounted handler: the entry `src/_gen/mcp.gen.ts` (exporting `mcpHandler`) plus its companion directory `src/_gen/mcp/`, the runtime and the API's TS SDK |
+| `mcp(app, path, handler, options?)` | from `@lovrozagar/honey/mcp`: mounts the generated handler at `path`, POST only (GET and DELETE answer 405), under the app's basePath and middleware, auth before any dispatch                       |
+| `authenticate(request, ctx)`        | required when any mounted tool's operation declares security, else `mcp()` throws at mount; it returns a boolean only, and `false` gets HTTP 401 with `WWW-Authenticate`                             |
+
+The plugin writes the handler from the app's own routes marked `mcp: true`:
+
+```ts
+import { honey } from "@lovrozagar/honey/plugin"
+
+export default { plugins: [honey({ app: "src/app.ts", codegen: { mcp: true } })] }
+```
+
+The app mounts it, checking the credential before any tool runs:
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { type McpHandler, mcp } from "@lovrozagar/honey/mcp"
+
+/* in the app: import { mcpHandler } from "./_gen/mcp.gen.ts" */
+declare const mcpHandler: McpHandler
+
+const app = honey()
+mcp(app, "/mcp", mcpHandler, {
+	authenticate: (request) => /^ApiKey \S+$/.test(request.headers.get("authorization") ?? ""),
+})
+```
+
+- **Fail-closed, no exceptions.** When any tool's operation declares security, `mcp()` throws unless it is given an
+  `authenticate` function. There is no option that skips it.
+- **The credential.** Each tool call carries the MCP request's own credential headers, the ones the tools' security
+  schemes name (`Authorization` for an http, OAuth or OpenID scheme, an API key's own header) and no other. The inner
+  routes check it again; `authenticate`'s answer reaches them as nothing else.
+- **An inner 401** (or a 403 for `insufficient_scope`) is the endpoint's HTTP answer with that challenge, never a
+  tool result. Any other status stays the tool's result, its status in `_meta` `honey/status`.
+- **Only the app's own origin.** A call that would leave the app's origin is refused before it is dispatched, so the
+  credential never leaves the app.
+- **Bodies** are capped at 4 MiB as they stream (`maxBodyBytes` changes it), after the app's own `bodyLimit`. A browser
+  `Origin` other than the endpoint's own is refused 403 unless listed in `origins`.

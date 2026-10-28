@@ -89,7 +89,7 @@ describe("mcp(app, path, handler) auth (bit 21 e, R4)", () => {
 		const { app } = shop()
 		const handler = await handlerOf(app)
 		expect(() => mcp(app, "/mcp", handler)).toThrow(
-			'mcp(/mcp): its tools require a credential, so it needs authenticate: (request, ctx) => boolean, run before any call, or authenticate: "app-middleware" when the app\'s own middleware refuses an unauthenticated request there',
+			"mcp(/mcp): its tools require a credential, so it needs authenticate: (request, ctx) => boolean, run on every request before any call",
 		)
 	})
 })
@@ -133,29 +133,6 @@ describe("mcp(app, path, handler) auth (bit 21 e, R4), continued (2)", () => {
 })
 
 describe("mcp(app, path, handler) auth (bit 21 e, R4), continued (3)", () => {
-	it('with "app-middleware" and no middleware at the path, an unauthenticated call is still HTTP 401, never a 200', async () => {
-		const { app, seen } = shop()
-		mcp(app, "/mcp", await handlerOf(app), { authenticate: "app-middleware" })
-		const called = await read(await app.fetch(rpc(...ORDER), {}))
-		expect([called, seen.map((each) => each.authorization)]).toEqual([
-			{ challenge: 'ApiKey realm="shop"', result: undefined, status: 401 },
-			[null],
-		])
-	})
-
-	it('with "app-middleware", the app\'s own middleware refuses before the handler runs', async () => {
-		const { app, seen } = shop()
-		const handler = await handlerOf(app)
-		const guarded = app.use(
-			createMiddleware(async (ctx, next) =>
-				ctx.req.headers.get("authorization") === KEY ? next() : new Response("no", { status: 401 }),
-			),
-		)
-		mcp(guarded, "/mcp", handler, { authenticate: "app-middleware" })
-		const listed = await app.fetch(rpc("tools/list"), {})
-		expect([listed.status, await listed.text(), seen]).toEqual([401, "no", []])
-	})
-
 	it("hands authenticate the request and the route's ctx, its env too", async () => {
 		const { app } = shop()
 		const regions: unknown[] = []

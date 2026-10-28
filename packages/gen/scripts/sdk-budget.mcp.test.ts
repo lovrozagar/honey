@@ -203,6 +203,9 @@ type Tools = { readonly total: number; readonly largest: number }
  * - bit 21 e, a sixth app, mcp (MCP mounted in the app): Anyrow's five multipart operations as tools, 1,509 tokens
  *   (1,525 in 2026-07-28), its largest extract_stream's 355 (a file argument, five text arguments, the collect's two and
  *   its events), under H6's ~400; ceilings 1,811 total, 426 largest. The other five apps are unchanged.
+ * - bit 21 e fold-in: H6 is a gate. Every app's largest-tool ceiling is min(ceilingOf(measured, 0.2), 400), one rule
+ *   (largestCeiling), so mcp's 426 is 400; every other app's is under 400 already (compose 87, defaults 62, gateway
+ *   170, kitchen 225, surface 246) and unchanged.
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },
@@ -213,6 +216,12 @@ const MEASURED: Readonly<Record<string, Tools>> = {
 	surface: { largest: 205, total: 2304 },
 }
 const TOKEN_HEADROOM = 0.2
+
+/* H6 (00-rules): ~400 tokens a tool schema at most, so no app's largest-tool ceiling passes it (bit 21 e fold-in) */
+const TOOL_MAX = 400
+
+/** An app's largest-tool ceiling: its measured largest with the headroom, never past H6's TOOL_MAX. */
+const largestCeiling = (measured: number) => Math.min(ceilingOf([measured], TOKEN_HEADROOM), TOOL_MAX)
 
 /** An e2e app's emitted OpenAPI document, every operation opted into the MCP server. */
 const appSpec = (app: string) =>
@@ -261,9 +270,18 @@ async function toolsOfApp(app: string) {
 	}
 }
 
+describe("H6's per-tool cap (bit 21 e fold-in)", () => {
+	it("caps every app's largest-tool ceiling at 400 tokens", () => {
+		const over = Object.entries(MEASURED)
+			.map(([app, tools]) => [app, largestCeiling(tools.largest)] as const)
+			.filter(([, ceiling]) => ceiling > TOOL_MAX)
+		expect(over).toEqual([])
+	})
+})
+
 describe("the MCP server's tokens within each app's ceilings (bit 18 phase g, H6)", SLOW, () => {
 	it.each(Object.keys(MEASURED))(
-		"keeps %s's tools/list and its largest tool within ceilingOf(measured, 0.2), in either era",
+		"keeps %s's tools/list within ceilingOf(measured, 0.2) and its largest tool within that capped at 400, in either era",
 		async (app) => {
 			const { emitted, listed, measured, operations, skipped } = await toolsOfApp(app)
 			const pinned = MEASURED[app] as Tools
@@ -273,7 +291,7 @@ describe("the MCP server's tokens within each app's ceilings (bit 18 phase g, H6
 			)
 			expect(
 				measured.map((each) => ({
-					largest: each.largest <= ceilingOf([pinned.largest], TOKEN_HEADROOM) && each.largest > 0,
+					largest: each.largest <= largestCeiling(pinned.largest) && each.largest > 0,
 					total: each.total <= ceilingOf([pinned.total], TOKEN_HEADROOM) && each.total > 0,
 				})),
 			).toEqual([0, 1].map(() => ({ largest: true, total: true })))
