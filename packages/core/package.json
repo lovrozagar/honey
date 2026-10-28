@@ -199,6 +199,11 @@
 			"types": "./dist/telemetry/otel-subpath.d.ts",
 			"default": "./dist/telemetry/otel-subpath.js"
 		},
+		"./testing": {
+			"honey-source": "./src/testing/testing.ts",
+			"types": "./dist/testing/testing.d.ts",
+			"default": "./dist/testing/testing.js"
+		},
 		"./timeout": {
 			"honey-source": "./src/middleware/timeout.ts",
 			"types": "./dist/middleware/timeout.d.ts",
