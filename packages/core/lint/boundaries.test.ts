@@ -5,7 +5,7 @@ import { oxlintReports, reportsOf } from "./rule-harness.ts"
 const rule = plugin.rules.boundaries
 const NODE = "node builtins are for the Node adapter and build-time code only"
 const ADAPTER = "only the same runtime's adapter may import an adapter"
-const ESCAPE = "an import stays inside its package's src (no _v0, no sibling package)"
+const ESCAPE = "an import stays inside its package's src (no repo path outside it, no sibling package)"
 const WS = "ws is for the Node WebSocket adapter only"
 const TS_MORPH = "ts-morph is for honey-codegen's extract/ only"
 const CODEGEN = "core reaches honey-codegen from build/ only"
@@ -58,9 +58,9 @@ describe("honey/boundaries: imports", () => {
 		])
 	})
 
-	it("never leaves the package's src: no _v0, no sibling package by path", () => {
+	it("never leaves the package's src: no repo path outside it, no sibling package by path", () => {
 		const fixture = {
-			"packages/core/src/routing/app.ts": 'import { Honey } from "../../_v0/src/index.ts"\n',
+			"packages/core/src/routing/app.ts": 'import { judge } from "../../../../bench/src/significance.ts"\n',
 			"packages/core/src/errors/error.ts": 'export * from "../../../gen/src/ir/model.ts"\n',
 			"packages/gen/src/ir/build.ts": 'import { x } from "../../../core/src/routing/app.ts"\n',
 			"packages/core/src/routing/match.ts":
@@ -106,13 +106,11 @@ describe("honey/boundaries: packages", () => {
 			"packages/gen/src/ir/load.ts": [
 				'import type { OpenApiSpec } from "@lovrozagar/honey/openapi"',
 				'import { x } from "@lovrozagar/honey/src/routing/app.ts"',
-				'import { y } from "@lovrozagar/honey/_v0/src/codegen.ts"',
 				'import { z } from "@lovrozagar/honey/dist/index.js"',
 				"",
 			].join("\n"),
 		}
 		expect(reportsOf(rule, fixture)).toEqual([
-			{ file: "packages/gen/src/ir/load.ts", message: INTERNAL },
 			{ file: "packages/gen/src/ir/load.ts", message: INTERNAL },
 			{ file: "packages/gen/src/ir/load.ts", message: INTERNAL },
 		])
@@ -152,7 +150,7 @@ describe("honey/boundaries: runtime globals", () => {
 	it("ignores tests and files outside the packages' src", () => {
 		const fixture = {
 			"packages/core/src/routing/app.test.ts": 'import { readFileSync } from "node:fs"\nexport const a = process.env\n',
-			"packages/core/tests/integration/routing.test.ts": 'import { x } from "../../_v0/src/index.ts"\n',
+			"packages/core/tests/integration/routing.test.ts": 'import { x } from "../../../../bench/src/significance.ts"\n',
 			"bench/src/hotpath.ts": 'import { readFileSync } from "node:fs"\n',
 		}
 		expect(reportsOf(rule, fixture)).toEqual([])

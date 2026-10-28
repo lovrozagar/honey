@@ -248,7 +248,7 @@ describe.skipIf(!PY)("SSE framing through the emitted Python SDK: the 1 MiB line
 		}).toEqual({ error: undefined, events: [true], stream: { retry: [null], yields: 1 } })
 	})
 
-	/* V0BUG: v0's _sse.py counted a line's characters, not its bytes (_v0/src/client-python/_sse.py:84-87), and
+	/* V0BUG: v0's _sse.py counted a line's characters, not its bytes (v0 at 1a968f1: src/client-python/_sse.py:84-87), and
 	 * raised a RuntimeError that reconnected a realtime stream (N-SSE-CAP); the committed parser kept the count */
 	it("counts the line cap in bytes: 400,000 three-byte characters (1.2 MB, under 1 Mi characters) are refused", async () => {
 		const { run } = await drive([sse([`data: ${"€".repeat(400_000)}\n\n`, "data: never\n\n"])], [text()])
@@ -272,7 +272,7 @@ function eventOf(size: number): { data: string; text: string } {
 
 describe.skipIf(!PY)("SSE framing through the emitted Python SDK: the 8 MiB event cap", SLOW, () => {
 	/* V0BUG: v0's _sse.py counted a newline after every data line, one more than the join holds, so an event of
-	 * exactly 8 MiB was refused (_v0/src/client-python/_sse.py:103-105); the committed parser kept the count */
+	 * exactly 8 MiB was refused (v0 at 1a968f1: src/client-python/_sse.py:103-105); the committed parser kept the count */
 	it("delivers an event of exactly 8 MiB, its joining newlines counted, and ends one over it with the event cap's error and no event", async () => {
 		const limit = eventOf(8 * MiB)
 		const over = eventOf(8 * MiB + 1)

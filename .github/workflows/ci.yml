@@ -548,16 +548,6 @@ jobs:
       # blueprint/baselines/hotpath.json (recorded with BUN_VERSION). One retry absorbs a noisy
       # neighbor; two failures are a regression.
       - run: bun run bench:hotpath || bun run bench:hotpath
-      # v1's finalize cost against v0's, in the same process: no baseline, no machine dependence
-      - run: bun run bench:finalize || bun run bench:finalize
-      # streaming throughput and cancel-to-release latency against v0's, in the same process
-      - run: bun run bench:streaming || bun run bench:streaming
-      # the Node bridge's per-request cost against v0's, on Node itself (node:http under Bun is
-      # Bun's own implementation); a bare node:http handler is the reported floor
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: current
-      - run: bun run bench:adapter || bun run bench:adapter
 
   build:
     name: build (${{ matrix.runtime }})

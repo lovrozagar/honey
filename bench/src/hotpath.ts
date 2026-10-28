@@ -5,7 +5,6 @@
  * laptop and on a CI runner.
  *
  *     bun bench/src/hotpath.ts            # compare against blueprint/baselines/hotpath.json
- *     bun bench/src/hotpath.ts --update   # record a new baseline (commit it with the change that moved it)
  *
  * Exits 1 when a scenario regressed by `judge` (significance.ts): its median ratio is past the
  * baseline by more than `HOTPATH_THRESHOLD` (default 0.10) AND the rise is outside the 95% band
@@ -14,30 +13,24 @@
  * version without one runs as a hint only, and CI gates on the version it pins.
  *
  * The code under test is v1, from packages/core/src, and the committed baseline is v0's ratios: v1 must
- * not be slower than v0 on any scenario. `HOTPATH_TARGET=v0` measures v0 from the frozen _v0/src, the
- * only target `--update` records. The trust scenario retired at the cutover (j1): trustProxy is cut (H23).
+ * not be slower than v0 on any scenario. They were recorded from v0's source before it was deleted (bit 20
+ * e; v0 lives at 1a968f1 in git): nothing re-records them, and a new runtime minor runs as a hint only.
+ * The trust scenario retired at the cutover (j1): trustProxy is cut (H23).
  */
-import { readFileSync, writeFileSync } from "node:fs"
-import { createMiddleware, honey } from "../../_v0/src/index.ts"
+import { readFileSync } from "node:fs"
 import { cors as corsV1 } from "../../packages/core/src/middleware/cors.ts"
 import { createMiddleware as createV1Middleware } from "../../packages/core/src/middleware/middleware.ts"
 import { requestId as requestIdV1 } from "../../packages/core/src/middleware/request-id.ts"
 import { secureHeaders as secureHeadersV1 } from "../../packages/core/src/middleware/secure-headers.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
-import { cors } from "../../_v0/src/cors.ts"
-import { requestId } from "../../_v0/src/request-id.ts"
-import { secureHeaders } from "../../_v0/src/secure-headers.ts"
 import { judge, median } from "./significance.ts"
 
 const BASELINE_FILE = new URL("../../blueprint/baselines/hotpath.json", import.meta.url)
 const THRESHOLD = Number(process.env.HOTPATH_THRESHOLD ?? 0.1)
 const SAMPLES = Number(process.env.HOTPATH_SAMPLES ?? 15)
 const ITERATIONS = Number(process.env.HOTPATH_ITERATIONS ?? 50_000)
-const TARGET = process.env.HOTPATH_TARGET === "v0" ? "v0" : "v1"
 
 type Fetch = (req: Request) => Response | Promise<Response>
-
-const passthrough = createMiddleware(async (_ctx, next) => next())
 
 /* A minimal standard-schema (no validator dependency): exercises honey's validate plumbing
  * on the input and output paths. `body` reads the request body once; `output` validates from
@@ -49,45 +42,6 @@ const passSchema = {
 		vendor: "bench",
 		version: 1 as const,
 	},
-}
-
-function buildApp() {
-	const app = honey()
-	app.get("/json").handler((ctx) => ctx.res.json("ok", { message: "Hello, World!" }))
-	app.get("/users/:id").handler((ctx) => ctx.res.json("ok", { id: ctx.params.id }))
-	const chained = app.use(passthrough).use(passthrough)
-	chained.get("/chain").handler((ctx) => ctx.res.json("ok", { ok: true }))
-	/* many unrelated scopes and one that covers the route: the per-route chain is compiled once */
-	for (let i = 0; i < 50; i++) app.use(`/area${i}`, passthrough)
-	app.use("/scoped", passthrough)
-	app.get("/scoped/item").handler((ctx) => ctx.res.json("ok", { ok: true }))
-	/* body + output validation: read the body once, validate in, validate out from retained raw */
-	app
-		.post("/echo")
-		.input({ json: passSchema })
-		.output({ "application/json": { ok: passSchema } })
-		.handler((ctx) => ctx.res.json("ok", ctx.input.json))
-	/* mw-stack: the REAL edge middleware that write response headers through HoneyOutHeaders
-	 * (cors + secureHeaders + requestId). compress + rateLimit (v1 A5/A6) join this stack once
-	 * they exist — this is the path bit 07's "mutate the plain record" contract guards. */
-	const stacked = app.use(requestId()).use(secureHeaders()).use(cors())
-	stacked.get("/stack").handler((ctx) => ctx.res.json("ok", { ok: true }))
-	/* mw-sync: a synchronously-written middleware — the only scenario that can show the bit-02
-	 * sync-spine win (async middleware always box). */
-	const syncPass = createMiddleware((_ctx, next) => next())
-	app.use("/sync", syncPass)
-	app.get("/sync/item").handler((ctx) => ctx.res.json("ok", { ok: true }))
-	/* many-routes: a few hundred routes + a deep backtracking target */
-	for (let i = 0; i < 300; i++) app.get(`/r${i}/:a/:b`).handler((ctx) => ctx.res.json("ok", { a: ctx.params.a }))
-	app.get("/deep/:a/:b/:c/:d/:e").handler((ctx) => ctx.res.json("ok", { e: ctx.params.e }))
-	/* large-response: a multi-KB JSON body WITH an output schema, so output validation decodes
-	 * the retained raw at scale (the no-clone decode path bit 08 pins) */
-	const big = { items: Array.from({ length: 500 }, (_, i) => ({ id: i, name: `n${i}`, ok: true })) }
-	app
-		.get("/large")
-		.output({ "application/json": { ok: passSchema } })
-		.handler((ctx) => ctx.res.json("ok", big))
-	return app
 }
 
 /** The same routes as v0's app, for every scenario. */
@@ -217,10 +171,6 @@ async function timePerOp(fetch: Fetch, make: Request | (() => Request), expectSt
 type Measured = { honeyNs: number; rawNs: number; ratio: number; ratios: number[] }
 
 function targetFetch(): Fetch {
-	if (TARGET === "v0") {
-		const app = buildApp()
-		return (req) => app.fetch(req, {})
-	}
 	const app = buildV1App()
 	return (req) => app.fetch(req, {})
 }
@@ -260,10 +210,6 @@ type BaselineFile = { note: string; baselines: Record<string, Record<string, num
 
 const version = typeof Bun !== "undefined" ? Bun.version : process.version.slice(1)
 const runtime = `${typeof Bun !== "undefined" ? "bun" : "node"} ${version.split(".").slice(0, 2).join(".")}`
-if (process.argv.includes("--update") && TARGET !== "v0") {
-	console.error("hotpath: the baseline is v0's reference until the cutover; record it with HOTPATH_TARGET=v0 --update")
-	process.exit(2)
-}
 const results = await measure()
 
 function readBaselines(): BaselineFile {
@@ -272,23 +218,6 @@ function readBaselines(): BaselineFile {
 	} catch {
 		return { baselines: {}, note: "" }
 	}
-}
-
-if (process.argv.includes("--update")) {
-	/* a baseline is the median of three full runs, so one noisy run does not set the bar */
-	const runs = [results, await measure(), await measure()]
-	const ratios = Object.fromEntries(
-		Object.keys(results).map((k) => [k, Number(median(runs.map((r) => r[k]?.ratio ?? 0)).toFixed(2))]),
-	)
-	const file = readBaselines()
-	file.note =
-		"app.fetch cost / minimal raw fetch handler, median of interleaved samples, per runtime minor version. Regenerate with `bun bench/src/hotpath.ts --update` (CI gates on the Bun version it pins)."
-	file.baselines[runtime] = ratios
-	file.baselines = Object.fromEntries(Object.entries(file.baselines).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-	writeFileSync(BASELINE_FILE, `${JSON.stringify(file, null, "\t")}\n`)
-	console.log(`hotpath baseline written for ${runtime} (${version})`)
-	console.table(ratios)
-	process.exit(0)
 }
 
 const file = readBaselines()
@@ -312,14 +241,12 @@ const rows = verdicts.map(([name, r, v]) => ({
 	status: v.status === "regressed" ? "REGRESSED" : v.status,
 }))
 console.log(
-	`hotpath ${TARGET} on ${runtime} (${version}) vs baseline ${againstName}, threshold +${Math.round(THRESHOLD * 100)}%`,
+	`hotpath v1 on ${runtime} (${version}) vs baseline ${againstName}, threshold +${Math.round(THRESHOLD * 100)}%`,
 )
 console.table(rows)
 if (advisory) {
-	console.log(`hotpath: no baseline for ${runtime}; advisory only. Record one with --update.`)
+	console.log(`hotpath: no baseline for ${runtime}; advisory only (v0's ratios were recorded for the pinned runtimes).`)
 } else if (failed) {
-	console.error(
-		"hotpath: a scenario regressed past the threshold. If the slowdown is intended, re-record the baseline.",
-	)
+	console.error("hotpath: a scenario regressed past the threshold: v1 is slower than v0's recorded ratio on it.")
 	process.exit(1)
 }

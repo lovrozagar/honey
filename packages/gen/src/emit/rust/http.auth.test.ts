@@ -283,7 +283,7 @@ describe.skipIf(!RUST)("the Rust SDK's redirects: a cross-origin hop is followed
 })
 
 describe.skipIf(!RUST)("the Rust SDK's redirects: a caller's http_builder", () => {
-	/* V0BUG: v0 used a caller reqwest::Client as is, its redirect policy unguarded (_v0/src/codegen-rust.ts:1159-1162);
+	/* V0BUG: v0 used a caller reqwest::Client as is, its redirect policy unguarded (v0 at 1a968f1: src/codegen-rust.ts:1159-1162);
 	   v1 takes a ClientBuilder, forces Policy::none() and runs its own loop (R3) */
 	// v0: ba9c8d6a80
 	it("sends through it, its user agent on both hops, its Policy::limited(10) replaced by the SDK's strip", async () => {

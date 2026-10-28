@@ -255,7 +255,7 @@ rustDescribe("SSE framing through the emitted Rust SDK: the 8 MiB event cap", ()
 rustDescribe("SSE framing through the emitted Rust SDK: a cap keeps the events completed before it", () => {
 	/*
 	 * V0BUG: v0's SseParser::feed returned Err for the whole chunk, dropping the events it had completed in
-	 * it (_v0/src/client-rust/sse.rs:42-67), and phase b kept that shape (sse.rs feed). Over the wire this
+	 * it (v0 at 1a968f1: src/client-rust/sse.rs:42-67), and phase b kept that shape (sse.rs feed). Over the wire this
 	 * leg pins the outcome only: hyper hands over at most 417,792 B a read (DEFAULT_MAX_BUFFER_SIZE), and
 	 * the event ends at least 1 MiB before the cap is crossed, so the two never share a chunk.
 	 */
@@ -344,7 +344,7 @@ fn main() {
 `
 
 rustDescribe("the shipped event-stream parser: a cap keeps the events its chunk completed before it", () => {
-	/* V0BUG: v0's SseParser::feed returned Err for the whole chunk, dropping the events it had completed in it (_v0/src/client-rust/sse.rs:42-67); phase b kept that shape */
+	/* V0BUG: v0's SseParser::feed returned Err for the whole chunk, dropping the events it had completed in it (v0 at 1a968f1: src/client-rust/sse.rs:42-67); phase b kept that shape */
 	it("yields the event one chunk completed before an over-cap line or event, then the cap's error, as when fed apart", async () => {
 		const crate = compiledRust("sse", { programs: { parser: PARSER } })
 		expect({ built: crate.built }, crate.stderr).toEqual({ built: true })

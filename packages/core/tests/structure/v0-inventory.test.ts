@@ -1,105 +1,11 @@
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { buildInventory, casesOf, classify, FEATURES, unaccounted, type V0Case } from "./v0-inventory.ts"
+import { type Feature, FEATURES, unaccounted, type V0Case } from "./v0-inventory.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 
-const SOURCE = [
-	'import { describe, expect, it } from "vitest"',
-	'describe("cookies", () => {',
-	'\tit("signs", () => {})',
-	'\tdescribe.each([1, 2])("pair %i", () => {',
-	'\t\tit.skipIf(true)("skips on ci", () => {})',
-	"\t})",
-	"\tfor (const n of [1, 2]) it(`loops ${n}`, () => {})",
-	"})",
-	'it.todo("later")',
-	'test("plain", () => {})',
-	'it("signs", () => {})',
-	"",
-].join("\n")
-
-describe("casesOf", () => {
-	it("names every case by its describe path, through each / skipIf / todo / loops", () => {
-		expect(casesOf("_v0/tests/unit/cookie/c.test.ts", SOURCE).map((c) => c.name)).toEqual([
-			"cookies > signs",
-			"cookies > pair %i > skips on ci",
-			"cookies > loops ${n}",
-			"later",
-			"plain",
-			"signs",
-		])
-	})
-
-	it("gives each case a stable short id, distinct for repeated names", () => {
-		const first = casesOf("_v0/tests/unit/cookie/c.test.ts", SOURCE)
-		const again = casesOf("_v0/tests/unit/cookie/c.test.ts", SOURCE)
-		expect(first.map((c) => c.id)).toEqual(again.map((c) => c.id))
-		expect(new Set(first.map((c) => c.id)).size).toBe(first.length)
-		expect(first[0]?.id).toMatch(/^[0-9a-f]{10}$/)
-		const other = casesOf("_v0/tests/unit/cookie/d.test.ts", SOURCE)
-		expect(other[0]?.id).not.toBe(first[0]?.id)
-	})
-})
-
-const LOOP_SOURCE = [
-	'import { describe, it } from "vitest"',
-	"const CASES = [",
-	'\t{ id: "rust: keywords", lang: "rust" },',
-	'\t{ id: "go: namespace", lang: "go" },',
-	'\t...(["go", "rust"] as const).map((lang) => ({ id: `shared [${lang}]`, lang })),',
-	"]",
-	'describe("compile findings", () => {',
-	"\tfor (const c of CASES) (c.skip ? it.skip : c.fail ? it.fails : it)(c.id, async () => {})",
-	"})",
-	"const run = cond ? it.skip : it",
-	"for (const v of [{ n: 1 }, { n: 2 }]) run(`vec ${v.n}`, () => {})",
-	"",
-].join("\n")
-
-describe("casesOf: loop sites", () => {
-	const cases = casesOf("_v0/tests/unit/codegen/x.test.ts", LOOP_SOURCE)
-
-	it("expands a loop whose elements carry a target lang that spans bits, through a conditional callee", () => {
-		const cf = cases.filter((c) => c.name.startsWith("compile findings")).map((c) => [c.name, c.feature])
-		expect(cf).toEqual([
-			["compile findings > rust: keywords", "13-rust-sdk"],
-			["compile findings > go: namespace", "12-go-sdk"],
-			["compile findings > shared [go]", "12-go-sdk"],
-			["compile findings > shared [rust]", "13-rust-sdk"],
-		])
-	})
-
-	it("keeps a loop with no lang discriminator as one raw-text case, resolving an it alias", () => {
-		const vec = cases.filter((c) => c.name.endsWith("vec ${v.n}"))
-		expect(vec.map((c) => c.name)).toEqual(["vec ${v.n}"])
-	})
-})
-
-describe("classify", () => {
-	it("homes a case with the bit that owns its feature", () => {
-		expect(classify("_v0/tests/unit/codegen/codegen-mcp.test.ts", "tools > input schema")).toBe("18-mcp")
-		expect(classify("_v0/tests/unit/codegen/go-cli/basic-crud.test.ts", "generates commands")).toBe(
-			"17-cli-gold-standard",
-		)
-		expect(classify("_v0/tests/integration/sdk-harness/rust-harness.test.ts", "compiles")).toBe("13-rust-sdk")
-		expect(classify("_v0/tests/unit/client/sse.test.ts", "parses events")).toBe("11-ts-client")
-		expect(classify("_v0/tests/unit/cors/preflight.test.ts", "preflight")).toBe("07-security-middleware")
-		expect(classify("_v0/tests/unit/cookie/cookie.test.ts", "round trips")).toBe("02-finalize-middleware")
-		expect(classify("_v0/tests/unit/request/client-ip.test.ts", "trusted hops")).toBe("03-request-trust-adapters")
-		expect(classify("_v0/tests/unit/realtime/server.test.ts", "publishes")).toBe("06-realtime")
-		expect(classify("_v0/tests/unit/core/core.test.ts", "matches a param route")).toBe("01-core-route-model")
-	})
-
-	it("reads the titles of a session-dump file to find its feature", () => {
-		expect(classify("_v0/tests/integration/bug-hunt-7.test.ts", "SSE stream > closes on abort")).toBe(
-			"05-streaming-sse-range",
-		)
-		expect(classify("_v0/tests/integration/bug-hunt-7.test.ts", "validation > rejects bad json")).toBe("08-io")
-		expect(classify("_v0/tests/unit/core/edge-cases-3.test.ts", "openapi > emits tags")).toBe("10-openapi-emit")
-	})
-
+describe("FEATURES", () => {
 	it("only names features a bit owns", () => {
 		const bits = FEATURES.map((f) => f.slice(0, 2))
 		expect(bits).toEqual([...bits].toSorted())
@@ -138,11 +44,18 @@ describe("unaccounted", () => {
 	})
 })
 
-describe("the committed inventory", () => {
-	it("matches what the frozen v0 suite holds now", () => {
+describe("the committed inventory, frozen since _v0 went (bit 20 e)", () => {
+	it("holds unique ids, each case under a feature a bit owns, and tallies that match its cases", () => {
 		const committed = JSON.parse(readFileSync(join(REPO, "blueprint/baselines/v0-cases.json"), "utf8")) as {
 			cases: V0Case[]
+			features: Record<Feature, number>
 		}
-		expect(buildInventory(REPO).cases).toEqual(committed.cases)
+		const ids = committed.cases.map((c) => c.id)
+		const tallies = Object.fromEntries(FEATURES.map((f) => [f, committed.cases.filter((c) => c.feature === f).length]))
+		expect([
+			new Set(ids).size === ids.length,
+			committed.cases.filter((c) => !(FEATURES as readonly string[]).includes(c.feature)).map((c) => c.id),
+			committed.features,
+		]).toEqual([true, [], tallies])
 	})
 })

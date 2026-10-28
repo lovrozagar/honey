@@ -33,7 +33,7 @@ const MESSAGES = {
 	adapter: "only the same runtime's adapter may import an adapter",
 	codegen: "core reaches honey-codegen from build/ only",
 	codegenStatic: "core imports honey-codegen through import() only: it is an optional peer",
-	escape: "an import stays inside its package's src (no _v0, no sibling package)",
+	escape: "an import stays inside its package's src (no repo path outside it, no sibling package)",
 	internal: "honey-codegen reads @lovrozagar/honey through public subpaths only",
 	node: "node builtins are for the Node adapter and build-time code only",
 	tsMorph: "ts-morph is for honey-codegen's extract/ only",
@@ -88,7 +88,7 @@ function packageProblem(where, spec, dynamic) {
 		if (where.pkg === "gen") return null
 		return where.bucket !== "build" ? "codegen" : dynamic ? null : "codegenStatic"
 	}
-	if (where.pkg === "gen" && spec.startsWith("@lovrozagar/honey/") && /\/(?:src|_v0|dist)\//.test(`${spec}/`)) {
+	if (where.pkg === "gen" && spec.startsWith("@lovrozagar/honey/") && /\/(?:src|dist)\//.test(`${spec}/`)) {
 		return "internal"
 	}
 	return null

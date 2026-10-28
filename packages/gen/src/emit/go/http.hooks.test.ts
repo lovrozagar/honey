@@ -237,7 +237,7 @@ goDescribe("OnLog: the exchange by its operation template, never a path value, q
 	}, 600_000)
 
 	/* V0BUG: v0's LogEntry carried the raw transport error, a *url.Error naming the concrete URL and
-	   so every path value (_v0/src/client-go/runtime.go:157-169); v1's entry names the operation template */
+	   so every path value (v0 at 1a968f1: src/client-go/runtime.go:157-169); v1's entry names the operation template */
 	it("names no path param value in a transport error's text: the operation template stands for the URL", async () => {
 		const text = JSON.stringify(await refused())
 		expect([ORG, USER_ID].filter((value) => text.includes(value))).toEqual([])

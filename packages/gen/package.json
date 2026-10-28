@@ -36,7 +36,6 @@
 	},
 	"scripts": {
 		"prepack": "bun scripts/build.ts",
-		"capture:tokens": "bun scripts/capture-token-budget.ts",
 		"test": "vitest run --coverage",
 		"test:harness": "vitest run --mode harness",
 		"type:check": "tsc --noEmit -p tsconfig.json"

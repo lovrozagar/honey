@@ -6,25 +6,14 @@
  *     bun bench/src/middleware.ts            # gate
  *     bun bench/src/middleware.ts --update   # record the v1-only ceilings for this runtime minor
  *
- * The eight middlewares v0 has, alone and stacked, gate v1 against v0 in the same process, as
- * streaming.ts does: interleaved samples, failing (exit 1) when v1's median is more than
- * `MIDDLEWARE_THRESHOLD` (default 0.10) over v0's AND outside the band of its own samples.
- *
- * rateLimit and compress are new in v1 (A5/A6): no v0 to compare with, so each is gated as its
- * cost over the same route without it, against a ceiling recorded per runtime minor in
- * blueprint/baselines/middleware.json, as hotpath.ts gates against its baseline. A runtime
- * without a recorded ceiling runs as a hint only.
+ * Each middleware, alone and stacked, is gated as its cost over the same route without it, against a
+ * ceiling recorded per runtime minor in blueprint/baselines/middleware.json: interleaved samples, failing
+ * (exit 1) when the median is more than `MIDDLEWARE_THRESHOLD` (default 0.10) past the ceiling AND outside
+ * the band of its own samples. Until bit 20 e the eight v0 also had were gated against v0 in the same
+ * process; v0 is deleted, so they join rateLimit and compress here. A scenario or runtime without a
+ * recorded ceiling runs as a hint only.
  */
 import { readFileSync, writeFileSync } from "node:fs"
-import { honey } from "../../_v0/src/index.ts"
-import { cors } from "../../_v0/src/cors.ts"
-import { csrf } from "../../_v0/src/csrf.ts"
-import { ipRestrict } from "../../_v0/src/ip-restrict.ts"
-import { poweredBy } from "../../_v0/src/powered-by.ts"
-import { requestId } from "../../_v0/src/request-id.ts"
-import { secureHeaders } from "../../_v0/src/secure-headers.ts"
-import { serverTiming } from "../../_v0/src/server-timing.ts"
-import { timeout } from "../../_v0/src/timeout.ts"
 import { compress as compressV1 } from "../../packages/core/src/middleware/compress.ts"
 import { cors as corsV1 } from "../../packages/core/src/middleware/cors.ts"
 import { csrf as csrfV1 } from "../../packages/core/src/middleware/csrf.ts"
@@ -73,66 +62,58 @@ function app(make: () => unknown, middleware: readonly unknown[], body: unknown 
 	return root as unknown as FetchApp
 }
 
-const v0 = () => honey()
 const v1 = () => honeyV1<{}>()
 
-/** The eight middlewares both versions have, each configured alike and on its working path. */
-const PAIRED_MIDDLEWARE = {
-	cors: [() => cors(), () => corsV1()],
-	csrf: [() => csrf(), () => csrfV1()],
-	ipRestrict: [
-		() => ipRestrict({ allowList: ["203.0.113.0/24"] }),
-		() => ipRestrictV1({ allowList: ["203.0.113.0/24"] }),
-	],
-	poweredBy: [() => poweredBy(), () => poweredByV1()],
-	requestId: [() => requestId(), () => requestIdV1()],
-	secureHeaders: [() => secureHeaders(), () => secureHeadersV1()],
-	serverTiming: [() => serverTiming(), () => serverTimingV1()],
-	timeout: [() => timeout({ duration: 5000 }), () => timeoutV1({ duration: 5000 })],
+/** The eight middlewares v0 also had, each on its working path; csrf's is a same-origin POST. */
+const EIGHT = {
+	cors: () => corsV1(),
+	csrf: () => csrfV1(),
+	ipRestrict: () => ipRestrictV1({ allowList: ["203.0.113.0/24"] }),
+	poweredBy: () => poweredByV1(),
+	requestId: () => requestIdV1(),
+	secureHeaders: () => secureHeadersV1(),
+	serverTiming: () => serverTimingV1(),
+	timeout: () => timeoutV1({ duration: 5000 }),
 } as const
-
-type Paired = { method: string; versions: { v0: FetchApp; v1: FetchApp } }
-
-function paired(): Record<string, Paired> {
-	const out: Record<string, Paired> = {}
-	for (const [name, [old, current]] of Object.entries(PAIRED_MIDDLEWARE)) {
-		out[name] = {
-			method: name === "csrf" ? "POST" : "GET",
-			versions: { v0: app(v0, [old()]), v1: app(v1, [current()]) },
-		}
-	}
-	const all = Object.values(PAIRED_MIDDLEWARE)
-	out["stack-8"] = {
-		method: "POST",
-		versions: {
-			v0: app(
-				v0,
-				all.map(([old]) => old()),
-			),
-			v1: app(
-				v1,
-				all.map(([, current]) => current()),
-			),
-		},
-	}
-	return out
-}
 
 /** A rate limit no bench run reaches: every request is counted and answered. */
 function unlimited() {
 	return rateLimitV1({ limit: Number.MAX_SAFE_INTEGER, windowMs: 3_600_000 })
 }
 
-/** The new middlewares, each against the same route without it. */
-type Ceiling = { bare: FetchApp; iterations: number; subject: FetchApp }
+/** Each middleware and the stacks, against the same route without it. */
+type Ceiling = { bare: FetchApp; iterations: number; method: string; subject: FetchApp }
 
 function ceilings(): Record<string, Ceiling> {
-	const stack10 = () => [...Object.values(PAIRED_MIDDLEWARE).map(([, current]) => current()), unlimited(), compressV1()]
+	const eight = () => Object.values(EIGHT).map((make) => make())
+	const alone = Object.fromEntries(
+		Object.entries(EIGHT).map(([name, make]) => [
+			name,
+			{
+				bare: app(v1, []),
+				iterations: ITERATIONS,
+				method: name === "csrf" ? "POST" : "GET",
+				subject: app(v1, [make()]),
+			},
+		]),
+	)
 	return {
-		"compress-gzip-4k": { bare: app(v1, [], BIG), iterations: GZIP_ITERATIONS, subject: app(v1, [compressV1()], BIG) },
-		"compress-skip": { bare: app(v1, []), iterations: ITERATIONS, subject: app(v1, [compressV1()]) },
-		rateLimit: { bare: app(v1, []), iterations: ITERATIONS, subject: app(v1, [unlimited()]) },
-		"stack-10": { bare: app(v1, []), iterations: ITERATIONS, subject: app(v1, stack10()) },
+		...alone,
+		"compress-gzip-4k": {
+			bare: app(v1, [], BIG),
+			iterations: GZIP_ITERATIONS,
+			method: "GET",
+			subject: app(v1, [compressV1()], BIG),
+		},
+		"compress-skip": { bare: app(v1, []), iterations: ITERATIONS, method: "GET", subject: app(v1, [compressV1()]) },
+		rateLimit: { bare: app(v1, []), iterations: ITERATIONS, method: "GET", subject: app(v1, [unlimited()]) },
+		"stack-8": { bare: app(v1, []), iterations: ITERATIONS, method: "POST", subject: app(v1, eight()) },
+		"stack-10": {
+			bare: app(v1, []),
+			iterations: ITERATIONS,
+			method: "POST",
+			subject: app(v1, [...eight(), unlimited(), compressV1()]),
+		},
 	}
 }
 
@@ -176,7 +157,7 @@ async function interleaved(a: FetchApp, b: FetchApp, req: Request, iterations: n
 async function measureCeilings(): Promise<Record<string, { bareNs: number; ns: number; ratios: number[] }>> {
 	const out: Record<string, { bareNs: number; ns: number; ratios: number[] }> = {}
 	for (const [name, c] of Object.entries(ceilings())) {
-		const point = await interleaved(c.subject, c.bare, request("GET"), c.iterations)
+		const point = await interleaved(c.subject, c.bare, request(c.method), c.iterations)
 		out[name] = { bareNs: point.b, ns: point.a, ratios: point.ratios }
 	}
 	return out
@@ -203,26 +184,12 @@ if (process.argv.includes("--update")) {
 	)
 	const file = readBaselines()
 	file.note =
-		"rateLimit / compress (no v0) per-request cost: v1 app.fetch with the middleware / the same route without it, median of interleaved samples, per runtime minor version. Regenerate with `taskset -c 2,3 bun bench/src/middleware.ts --update` on a quiet machine and commit the move with its reason."
+		"per-request cost of each middleware and the stacks: v1 app.fetch with it / the same route without it, median of interleaved samples, per runtime minor version. Regenerate with `taskset -c 2,3 bun bench/src/middleware.ts --update` on a quiet machine and commit the move with its reason."
 	file.baselines[runtime] = ratios
 	writeFileSync(BASELINE_FILE, `${JSON.stringify(file, null, "\t")}\n`)
 	console.log(`middleware ceilings written for ${runtime} (${version})`)
 	console.table(ratios)
 	process.exit(0)
-}
-
-const pairedRows = []
-for (const [name, p] of Object.entries(paired())) {
-	const point = await interleaved(p.versions.v1, p.versions.v0, request(p.method), ITERATIONS)
-	const verdict = judge(point.ratios, 1, THRESHOLD)
-	pairedRows.push({
-		band: `±${verdict.halfWidth.toFixed(2)}`,
-		scenario: name,
-		status: verdict.status === "regressed" ? "REGRESSED" : verdict.status,
-		v0_ns: Math.round(point.b),
-		v1_ns: Math.round(point.a),
-		v1_over_v0: Number(verdict.ratio.toFixed(2)),
-	})
 }
 
 const file = readBaselines()
@@ -239,11 +206,9 @@ const ceilingRows = Object.entries(await measureCeilings()).map(([name, m]) => {
 	}
 })
 
-console.log(`middleware v1 vs v0 on ${runtime} (${version}), threshold +${Math.round(THRESHOLD * 100)}%`)
-console.table(pairedRows)
-console.log(`middleware v1-only ceilings (cost over the bare route) on ${runtime}`)
+console.log(`middleware ceilings (cost over the bare route) on ${runtime}, threshold +${Math.round(THRESHOLD * 100)}%`)
 console.table(ceilingRows)
-const failed = [...pairedRows, ...ceilingRows].some((row) => row.status === "REGRESSED")
+const failed = ceilingRows.some((row) => row.status === "REGRESSED")
 if (own === undefined)
 	console.log(`middleware: no ceilings for ${runtime}; those rows are a hint. Record them with --update.`)
 if (failed) {
