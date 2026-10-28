@@ -6,7 +6,7 @@ Test names point at the v1 homes (colocated unit sibling, or a feature-named `te
 
 | file | area |
 | --- | --- |
-| `app-settings.md` | `honey()` and the app-level chain (`trustProxy`, `basePath`, `context`, `onError`, telemetry) |
+| `app-settings.md` | `honey()` and the app-level chain (`basePath`, `context`, `onError`, telemetry) |
 | `routing.md` | route registration, methods, patterns, the route builder |
 | `input-output.md` | `.input()` / `.output()`, media types, response headers, binary, errors |
 | `middleware.md` | `use()` and the edge middleware set (cors, secure-headers, csrf, rate-limit, compress, request-id, timeout, body-limit, server-timing, powered-by, ip-restrict) |
