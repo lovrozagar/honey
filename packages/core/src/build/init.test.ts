@@ -101,13 +101,21 @@ describe("honey init", () => {
 	})
 })
 
+/* a spawned bun process, as cli.test's legs: 0.3-0.6 s here even with coverage under load, yet it once passed vitest's
+   5 s default in a full parallel run (bit 20 d) that no rerun reproduced; a process start gets the spawning legs' bound */
+const SPAWN = 60_000
+
 describe("the scaffolded app", () => {
 	// v0: b3cda555b0
-	it("scaffolded app can serve /health and /openapi.json", async () => {
-		init()
-		const { stdout } = await promisify(execFile)("bun", ["-e", served(join(dir, "src/app.ts"))], { cwd: SRC })
-		expect(JSON.parse(stdout)).toEqual([200, "ok", "3.1.0", "Honey", 200, true])
-	})
+	it(
+		"scaffolded app can serve /health and /openapi.json",
+		async () => {
+			init()
+			const { stdout } = await promisify(execFile)("bun", ["-e", served(join(dir, "src/app.ts"))], { cwd: SRC })
+			expect(JSON.parse(stdout)).toEqual([200, "ok", "3.1.0", "Honey", 200, true])
+		},
+		SPAWN,
+	)
 })
 
 describe("honey init and an existing package.json", () => {
