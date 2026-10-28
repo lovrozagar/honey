@@ -38,7 +38,7 @@ Every public export of both packages, tagged **KEEP** (re-homed and split, behav
 | `./serve` | MODIFY [H15] | Deno runtime removed; node/bun/cf detection kept |
 | `./static` | MODIFY [A3] | Range / 206 / `Accept-Ranges` |
 | `./telemetry/otel` | KEEP | |
-| `./testing` | KEEP | the export lands with `src/testing/testing.ts` at bit 20 |
+| `./testing` | KEEP (bit 20 a) | `testClient`, with the types `TestClient`, `TestClientOptions` and `TestRequestOptions` (src/testing/testing.ts); v0's `transport: "node"` is `transport: "serve"` |
 | `./trust` | DELETE [H23] | `trustProxy` is cut; `ctx.ip` is the platform peer |
 | `./tree` | KEEP | |
 | `./ws` | ADD (bit 19 i2) | `ws(app, path)` → the WS route builder, plus the types `WsRouteOf` and `AnyHoneyHandle`; replaces the `app.ws(path)` method, so an app that opens no socket bundles no WS route code |
