@@ -3,7 +3,8 @@
  * before any formatter runs (G13), and the bytes a vendored runtime ships (G14). `sdk-budget.test.ts` holds the
  * gates; `capture-token-budget.ts` keeps v0's capture.
  */
-import { readdirSync, statSync } from "node:fs"
+import { execFileSync } from "node:child_process"
+import { statSync } from "node:fs"
 import { join } from "node:path"
 import { compareCodeUnits } from "../src/emit/shared/lang.ts"
 
@@ -153,11 +154,25 @@ export function v1JavaSdkSurfaces(
 }
 
 /**
+ * The entries directly in `dir`, as git sees them, in code-unit order: tracked or untracked, never ignored. An ignored
+ * entry (a session hook's `.tmp` receipt) ships nowhere and is no compile input; an untracked one is a file nobody
+ * registered yet, so it still counts.
+ */
+export function listedEntries(dir: string): string[] {
+	const listed = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."], {
+		cwd: dir,
+		encoding: "utf8",
+	})
+	const entries = listed.split("\0").filter((path) => path !== "")
+	return [...new Set(entries.map((path) => path.split("/")[0] as string))].sort(compareCodeUnits)
+}
+
+/**
  * A vendored runtime directory's bloat measure (G14): its `ext` files in code-unit order and their bytes on disk
  * as shipped (00-rules:160), never string length, and every other file it holds, in code-unit order.
  */
 export function runtimeBytes(dir: string, ext: string): { bytes: number; names: string[]; others: string[] } {
-	const all = readdirSync(dir).sort(compareCodeUnits)
+	const all = listedEntries(dir)
 	const names = all.filter((name) => name.endsWith(ext))
 	const bytes = names.reduce((sum, name) => sum + statSync(join(dir, name)).size, 0)
 	return { bytes, names, others: all.filter((name) => !name.endsWith(ext)) }

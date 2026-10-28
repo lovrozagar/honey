@@ -13,6 +13,7 @@ import { dirname, join, matchesGlob, relative, resolve } from "node:path"
 import { ts } from "ts-morph"
 import { describe, expect, it } from "vitest"
 import type { TestSpecification } from "vitest/node"
+import { listedEntries } from "../../scripts/sdk-budget.ts"
 import { ciInstalls } from "../../src/emit/shared/__fixtures__/installs.ts"
 import config, { HARNESS, LongestFirst, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
 
@@ -153,9 +154,9 @@ const shardsOf = (workflow: string) =>
 			.filter(([, projects]) => projects.length > 0),
 	) as Record<string, string[]>
 
-/** The files directly in gen-relative `dir`; none where it is not there yet. */
+/** The entries directly in gen-relative `dir`, as git sees them (never an ignored one); none where it is not there yet. */
 const dirFiles = (dir: string) =>
-	existsSync(join(GEN, dir)) ? readdirSync(join(GEN, dir)).map((name) => join(dir, name)) : []
+	existsSync(join(GEN, dir)) ? listedEntries(join(GEN, dir)).map((name) => join(dir, name)) : []
 
 /**
  * Every file a `name` compile in the default run is built from: the compile fixture's import closure (the
