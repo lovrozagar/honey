@@ -264,6 +264,8 @@ describe("OutputSchemas: what .output() takes", () => {
 		route.output({ "application/json": { ok: z.string() }, headers: { okay: z.object({}) } })
 		// @ts-expect-error a redirect that names no status
 		route.output({ redirect: { foundd: true } })
+		// @ts-expect-error an outer key that is no media type, headers or redirect
+		route.output({ orders: { ok: z.string() } })
 	})
 })
 

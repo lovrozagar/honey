@@ -28,11 +28,14 @@ export type OutputSchemas = {
 } & { readonly headers?: HeaderSchemas; readonly redirect?: RedirectStatuses }
 
 /**
- * `TOutput` with every key under a media type, `headers` or `redirect` that names no status
- * mapped to `never`: intersected with the declaration, a typo is an error where it is written.
+ * `TOutput` with every key under a media type, `headers` or `redirect` that names no status, and every outer key
+ * that is none of those, mapped to `never`: intersected with the declaration, a typo is an error where it is
+ * written. `assertOutputKeys` (output-keys.ts) refuses the same keys at runtime.
  */
 export type KnownStatusKeys<TOutput> = {
-	readonly [CT in keyof TOutput]: { readonly [K in keyof TOutput[CT]]: K extends StatusKey ? TOutput[CT][K] : never }
+	readonly [CT in keyof TOutput]: CT extends `${string}/${string}` | "headers" | "redirect"
+		? { readonly [K in keyof TOutput[CT]]: K extends StatusKey ? TOutput[CT][K] : never }
+		: never
 }
 
 /** The helper each media type is answered with. */

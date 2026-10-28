@@ -4,6 +4,7 @@
  */
 import { canonical, expandOptional, parsePattern, type RouteId, routeId, type Segment } from "./pattern.ts"
 import type { InputSchemas } from "../input/input.ts"
+import { assertOutputKeys } from "./output-keys.ts"
 import type { OutputSchemas } from "./output-types.ts"
 import type { RouteRecord } from "./record.ts"
 import type { HttpMethod } from "./types.ts"
@@ -231,8 +232,15 @@ function wellFormed(node: TreeNode): boolean {
 	return !isObject(node.d) || wellFormed(node.d.c)
 }
 
-/** Reject a tree whose leaves are not route ids: a `routes.gen.ts` written by an older honey holds handler objects there. */
+/**
+ * Reject a tree whose leaves are not route ids (a `routes.gen.ts` written by an older honey holds handler objects
+ * there), or whose route declares output under a key `.output()` refuses.
+ */
 export function assertTreeFormat(tree: { root?: unknown; routes?: unknown; v?: unknown }): void {
 	if (!isObject(tree) || !isObject(tree.root) || !isObject(tree.routes)) throw new Error(STALE)
 	if (!wellFormed(tree.root as TreeNode)) throw new Error(STALE)
+	for (const [id, entry] of Object.entries(tree.routes)) {
+		const { out } = entry as RouteEntry
+		if (isObject(out)) assertOutputKeys(out, id)
+	}
 }
