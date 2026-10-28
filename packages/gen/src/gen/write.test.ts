@@ -13,12 +13,13 @@ import {
 	rmSync,
 	statSync,
 	symlinkSync,
+	watch,
 	writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { MANIFEST, writeFileIfChanged, writeTarget } from "./write.ts"
+import { isWriteTemp, MANIFEST, writeFileIfChanged, writeTarget } from "./write.ts"
 
 const dirs: string[] = []
 afterEach(() => {
@@ -195,6 +196,29 @@ describe("every path stays under the target's directory, no symlink followed (bi
 			[],
 			["../x", "link/keep.txt"],
 			"theirs",
+		])
+	})
+})
+
+describe("a write's temp file, named for a reader listing the directory meanwhile (bit 21)", () => {
+	it("names each temp file a write makes as one, and neither a generated file nor the manifest", async () => {
+		const out = scratch()
+		const seen = new Set<string>()
+		/* every name the directory saw, in order: the manifest's rename into place is the write's last */
+		const watcher = watch(out)
+		const settled = new Promise<void>((done) =>
+			watcher.on("change", (_, name) => {
+				seen.add(String(name))
+				if (name === MANIFEST) done()
+			}),
+		)
+		writeTarget(out, { "shop.gen.ts": "export const a = 1\n" })
+		await settled
+		watcher.close()
+		const names = [...seen]
+		expect([names.filter((name) => !isWriteTemp(name)).sort(), names.filter(isWriteTemp).length]).toEqual([
+			[MANIFEST, "shop.gen.ts"],
+			2,
 		])
 	})
 })

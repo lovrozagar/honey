@@ -6,10 +6,23 @@
  * written, whatever handles the app's module left open.
  */
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	symlinkSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { main } from "./cli.ts"
+import { isWriteTemp } from "./gen/write.ts"
 import { pinnedBunVersion, withPinnedBun } from "./gen/__fixtures__/pinned-bun.ts"
 import { MARK_KEY, markOf, reap } from "./gen/__fixtures__/survivors.ts"
 import { appProject } from "./ir/__fixtures__/app-project.ts"
@@ -47,12 +60,60 @@ async function run(argv: readonly string[], cwd: string) {
 	return { err, logged, out, status }
 }
 
-/** Every generated file's text under `dir`, joined. */
-const textUnder = (dir: string) =>
-	readdirSync(dir, { recursive: true, withFileTypes: true })
-		.filter((entry) => entry.isFile())
-		.map((entry) => readFileSync(join(entry.parentPath, entry.name), "utf8"))
-		.join("\n")
+/**
+ * Every generated file's text under `dir`, joined, or none while a regeneration is under way there. A write's temp
+ * file is never a generated one, so it is not read: the rename that ends the write takes it away. A listed file or
+ * directory gone before it is read was deleted by the regeneration as stale, so the text is not there yet. `read` is
+ * the seam a leg changes the tree through between the listing and the reading.
+ */
+function textUnder(dir: string, read = (path: string) => readFileSync(path, "utf8")): string | undefined {
+	try {
+		return readdirSync(dir, { recursive: true, withFileTypes: true })
+			.filter((entry) => entry.isFile() && !isWriteTemp(entry.name))
+			.map((entry) => read(join(entry.parentPath, entry.name)))
+			.join("\n")
+	} catch (error) {
+		/* gone between the listing and the reading, or not written yet: a later poll reads the settled tree */
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
+		throw error
+	}
+}
+
+/** A tree of `files` under a fresh directory. */
+const tree = (files: Record<string, string>) => {
+	const dir = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "codegen-read-"))
+	projects.push(() => rmSync(dir, { force: true, recursive: true }))
+	for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+	return dir
+}
+
+/** A read that first does `change` to the tree, once, as a regeneration landing between listing and reading. */
+const changing = (change: () => void) => {
+	let pending = true
+	return (path: string) => {
+		if (pending) {
+			pending = false
+			change()
+		}
+		return readFileSync(path, "utf8")
+	}
+}
+
+describe("the generated text read while a regeneration writes (bit 21)", () => {
+	it("reads past a write's temp file renamed into place after the listing, to the file it became", () => {
+		const dir = tree({ ".4242.k3x9q.tmp": "export const a = 2\n", "a.ts": "export const a = 1\n" })
+		const read = changing(() => renameSync(join(dir, ".4242.k3x9q.tmp"), join(dir, "a.ts")))
+		expect(textUnder(dir, read)).toBe("export const a = 2\n")
+	})
+
+	it("holds the text as not yet there when a regeneration deletes a listed file before it is read", () => {
+		const dir = tree({ "a.ts": "export const a = 1\n", "b.ts": "export const b = 1\n" })
+		const read = changing(() => {
+			for (const name of ["a.ts", "b.ts"]) unlinkSync(join(dir, name))
+		})
+		expect(textUnder(dir, read)).toBeUndefined()
+	})
+})
 
 const GENERATE = ["generate", "--target", "ts", "--out", "out"]
 
@@ -268,8 +329,7 @@ describe("generate --app --watch (bit 19 h2)", () => {
 			env: { ...process.env, [MARK_KEY]: MARK },
 			signal: stop.signal,
 		})
-		const holds = (path: string) =>
-			until(() => existsSync(join(dir, "out/ts")) && textUnder(join(dir, "out/ts")).includes(`"${path}"`))
+		const holds = (path: string) => until(() => textUnder(join(dir, "out/ts"))?.includes(`"${path}"`) === true)
 		expect(await holds("/first")).toBe(true)
 		writeFileSync(join(dir, "src/app.ts"), route("/second"))
 		expect(await holds("/second")).toBe(true)

@@ -50,6 +50,12 @@ function confined(dir: string, rel: string): string {
 	return path
 }
 
+/**
+ * Whether `name` is a temp file a write is still renaming into place: `.<pid>.<base-36 random>.tmp`, never a file a
+ * target generates. A reader that lists a directory while it is written skips these, for the rename takes them away.
+ */
+export const isWriteTemp = (name: string): boolean => /^\.\d+\.[0-9a-z]*\.tmp$/.test(name)
+
 /** Write `text` to `path` only when its bytes differ, through a temp file renamed over it; whether it was written. */
 export function writeFileIfChanged(path: string, text: string): boolean {
 	if (existsSync(path) && readFileSync(path, "utf8") === text) return false
