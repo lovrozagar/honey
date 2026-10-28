@@ -54,7 +54,25 @@ export function docOf(raw: string, indent = "  "): string {
 	const text = docText(raw)
 	const one = `${indent}/** ${text} */`
 	if (one.length <= WIDTH) return one
+	return docBlock([filled(text, WIDTH - indent.length - " * ".length)], indent)
+}
+
+/**
+ * A doc comment of several paragraphs, as google-java-format writes one: the first as it is, each later one after a
+ * blank ` *` line and opened by `<p>`, every paragraph's text made safe (docText) and filled to 100 columns. One
+ * paragraph is docOf.
+ */
+export function docParagraphs(raws: readonly string[], indent = "  "): string {
+	if (raws.length === 1) return docOf(raws[0] as string, indent)
 	const available = WIDTH - indent.length - " * ".length
+	return docBlock(
+		raws.map((raw, i) => filled(i === 0 ? docText(raw) : `<p>${docText(raw)}`, available)),
+		indent,
+	)
+}
+
+/** The words of `text` filled into lines of at most `available` columns, each word on the first line it fits. */
+function filled(text: string, available: number): string[] {
 	const lines: string[] = []
 	let line = ""
 	for (const word of text.split(/\s+/).filter((w) => w !== "")) {
@@ -66,5 +84,12 @@ export function docOf(raw: string, indent = "  "): string {
 		}
 	}
 	lines.push(line)
-	return [`${indent}/**`, ...lines.map((l) => `${indent} * ${l}`), `${indent} */`].join("\n")
+	return lines
+}
+
+/** A `/** … *\/` block at `indent` of `paragraphs` (each its lines), a blank ` *` line between two. */
+function docBlock(paragraphs: readonly (readonly string[])[], indent: string): string {
+	const lines = paragraphs.flatMap((paragraph, i) => [...(i === 0 ? [] : [""]), ...paragraph])
+	const body = lines.map((line) => (line === "" ? `${indent} *` : `${indent} * ${line}`))
+	return [`${indent}/**`, ...body, `${indent} */`].join("\n")
 }

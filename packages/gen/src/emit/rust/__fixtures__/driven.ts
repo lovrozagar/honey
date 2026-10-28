@@ -11,7 +11,7 @@ import { join } from "node:path"
 import type { RustError, Script, Trace } from "../../shared/__fixtures__/protocol.ts"
 import type { RustCallPlan } from "../sdk-plan.ts"
 import { rustCallPlans } from "../sdk.ts"
-import { compiledFixture, type RustCrate } from "./compiled.ts"
+import { compiledFixture, type Program, type RustCrate } from "./compiled.ts"
 import { dispatchRs } from "./dispatch.ts"
 import { FIXTURES, type FixtureKey, type RustFixture } from "./documents.ts"
 
@@ -73,18 +73,23 @@ function drivenFixture(fixture: RustFixture): DrivenRustSdk {
 export const drivenRustSdk = (key: FixtureKey): DrivenRustSdk => drivenFixture(FIXTURES[key])
 
 /**
- * The reference app's served document (`GET /v1/openapi.json`) as an SDK, at the default options: driven, or
- * with `{check, toolchain}` checked as a library under that toolchain (the floor leg). Compiled once per content
- * hash like a registry entry, so the harness files that compile it share one build.
+ * A document a harness file serves or holds (the reference app's `GET /v1/openapi.json`, the docs' API) as an SDK,
+ * at the default options: driven; with `{check, toolchain}` checked as a library under that toolchain (the floor
+ * leg); or with `{programs}` built with those bins beside it (the docs' example). Compiled once per content hash like
+ * a registry entry, so the harness files that compile it share one build.
  */
 export function servedRustSdk(document: Readonly<Record<string, unknown>>): DrivenRustSdk
 export function servedRustSdk(
 	document: Readonly<Record<string, unknown>>,
-	options: { readonly check: true; readonly toolchain: string },
+	options:
+		| { readonly check: true; readonly toolchain: string }
+		| { readonly programs: Readonly<Record<string, Program>> },
 ): RustCrate
 export function servedRustSdk(
 	document: Readonly<Record<string, unknown>>,
-	options?: { readonly check: true; readonly toolchain: string },
+	options?:
+		| { readonly check: true; readonly toolchain: string }
+		| { readonly programs: Readonly<Record<string, Program>> },
 ): DrivenRustSdk | RustCrate {
 	const fixture: RustFixture = { document: () => document }
 	return options === undefined ? drivenFixture(fixture) : compiledFixture(fixture, options)

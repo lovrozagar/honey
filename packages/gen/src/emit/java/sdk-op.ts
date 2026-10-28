@@ -10,7 +10,7 @@ import type { SdkOp } from "../../ir/sdk-model.ts"
 import { javaString } from "../shared/escape.ts"
 import { snakeWords } from "../shared/lang.ts"
 import { type JavaTypeContext, javaTypeOf } from "./models.ts"
-import { assigned, docOf, layout } from "./sdk-decl.ts"
+import { assigned, docParagraphs, layout } from "./sdk-decl.ts"
 import { type JavaHeaders, javaResponseHeaders } from "./sdk-headers.ts"
 import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY, realtimeMethodLines } from "./realtime.ts"
 import { CURSOR, sseMethodLines } from "./sse.ts"
@@ -45,6 +45,9 @@ export type JavaOp = {
 }
 
 const UNKNOWN: IRSchema = { kind: "unknown" }
+
+/** A method's javadoc paragraphs: the operation's id, then its summary and description, as the other SDKs carry them. */
+const paragraphsOf = (op: SdkOp): string[] => [op.id, op.summary, op.description].filter((text) => text !== "")
 
 /** The constant's name for a method: its words upper-cased, `_OPERATION` after them. */
 export const constantOf = (method: string) => `${snakeWords(method).toUpperCase()}_OPERATION`
@@ -188,12 +191,12 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 	/* an overload's signature, broken as google-java-format breaks one past 100 columns */
 	const signature = (args: readonly string[]) => layout(`public ${returns} ${name}(`, args, ") {", "  ")
 	return [
-		docOf(op.id),
+		docParagraphs(paragraphsOf(op)),
 		...signature([`${params} params`]),
 		`    ${ret}${name}(params, null${via});`,
 		"  }",
 		"",
-		docOf(op.id),
+		docParagraphs(paragraphsOf(op)),
 		...signature([`${params} params`, "RequestOptions options"]),
 		...shorter,
 		"  }",
@@ -201,7 +204,7 @@ function methodLines(op: SdkOp, site: MethodSite, env: OpEnv): string[] {
 		...(headers === null
 			? []
 			: [
-					docOf(op.id),
+					docParagraphs(paragraphsOf(op)),
 					...signature([`${params} params`, `${headers.type} headersInto`, "RequestOptions options"]),
 					...body,
 					"  }",

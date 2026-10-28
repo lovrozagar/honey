@@ -203,12 +203,33 @@ function signatures(name: string, op: SdkOp, ctx: Context): string[] {
 
 type Context = { ops: Map<string, SdkOp>; resolve: (schema: IRSchema) => IRSchema; types: TypeOptions }
 
+/* every line break a comment splits at, as the shared comment writers split (escape.ts) */
+const LINE_BREAKS = /\r\n|\r|\n|\u2028|\u2029/
+
+/**
+ * `op`'s summary and description as a JSDoc block above its overloads at `indent`, a paragraph each, as Go, Rust,
+ * Python and C# write them; spec text made inert by blockCommentText. None for an operation with neither.
+ */
+function opDoc(op: SdkOp, indent: string): string[] {
+	const paragraphs = [op.summary, op.description].filter((text) => text !== "")
+	if (paragraphs.length === 0) return []
+	const lines = paragraphs.flatMap((text, i) => [
+		...(i === 0 ? [] : [""]),
+		...blockCommentText(text).split(LINE_BREAKS),
+	])
+	return [
+		`${indent}/**`,
+		...lines.map((line) => (line.trim() === "" ? `${indent} *` : `${indent} * ${line}`)),
+		`${indent} */`,
+	]
+}
+
 /** A namespace's members as type-literal lines, nested namespaces as nested literals. */
 function members(ns: IRNamespace, ctx: Context, indent: string): string[] {
 	return [...ns.entries].flatMap(([name, entry]) => {
 		if (entry.kind === "method") {
 			const op = ctx.ops.get(entry.op.id) as SdkOp
-			return signatures(name, op, ctx).map((line) => `${indent}${line}`)
+			return [...opDoc(op, indent), ...signatures(name, op, ctx).map((line) => `${indent}${line}`)]
 		}
 		return [`${indent}${quoteKey(name)}: {`, ...members(entry.ns, ctx, `${indent}\t`), `${indent}}`]
 	})
