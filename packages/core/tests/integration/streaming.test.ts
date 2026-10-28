@@ -204,6 +204,39 @@ describe("a stream ends when its client drops the socket", () => {
 	})
 })
 
+describe("a never-yielding SSE producer facing a client that stopped reading", () => {
+	it("is held back by backpressure over node:http: what it sent stays under 16 MB", async () => {
+		let sent = 0
+		const data = "x".repeat(1024)
+		const app = honey<{}>()
+		app.get("/flood").handler((ctx) =>
+			ctx.res.sse(async (stream) => {
+				/* no I/O, no yield: only demand stops it; bounded so a mutant that never waits ends instead of spinning */
+				for (let i = 0; i < 50_000 && !stream.closed; i++) {
+					await stream.send({ data, event: "flood" })
+					sent++
+				}
+			}),
+		)
+		const server = serve(app, { env: {}, hostname: "127.0.0.1", port: 0 })
+		await new Promise((resolve) => server.once("listening", resolve))
+		const { port } = server.address() as AddressInfo
+		try {
+			const socket = connect(port, "127.0.0.1")
+			socket.on("error", () => {})
+			socket.write("GET /flood HTTP/1.1\r\nHost: h\r\n\r\n")
+			socket.pause()
+			await new Promise((resolve) => setTimeout(resolve, 300))
+			const held = sent
+			socket.destroy()
+			/* the pipeline's and the socket's buffers hold a few MB at most; a send that never waits sends all 50 000 (~50 MB) */
+			expect(held * 1_045).toBeLessThan(16 * 1024 * 1024)
+		} finally {
+			await server.shutdown(0)
+		}
+	})
+})
+
 describe("HEAD and range from a route", () => {
 	// v0: 38b62aecf2
 	it("HEAD on a streaming route answers its head and never runs the producer", async () => {
