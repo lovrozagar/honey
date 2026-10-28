@@ -23,8 +23,9 @@ const SELF = "tests/structure/rust-toolchain.test.ts"
 const ENV = "src/emit/rust/__fixtures__/rust-env.ts"
 /* the fixture files that define the compiles outside the registry */
 const DEFINING = ["src/emit/rust/__fixtures__/compiled.ts", "src/emit/rust/__fixtures__/driven.ts"]
-/* the fixture documents a default run may compile (G17), each a FIXTURES entry (Fb5) */
-const FIXTURE_BUDGET = 16
+/* the fixture documents a default run may compile (G17), each a FIXTURES entry (Fb5); 17 since bit 20 c's `docs` (the
+   docs' Rust example, compiled against the Kitchen e2e app's document) */
+const FIXTURE_BUDGET = 17
 
 /* a spawn of a Rust tool, or a list of commands whose entry starts with one (a list of language names is not one) */
 const RUST_COMMAND =

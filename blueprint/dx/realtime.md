@@ -12,7 +12,7 @@ SSE and WebSocket already ship in all SDKs (H8). v1 fixes typing + reconnect par
 | `Last-Event-ID` resume | — | — | resume a dropped SSE/WS stream from the last id | reconnect parity is uniform across all SDKs in v1 | `realtime/server.test.ts`, `integration/realtime.test.ts` |
 | reference resume server | — | ships | the conformance target the SDK reconnect tests run against | kept in `tests/` so reconnect is actually exercised | `integration/realtime.test.ts` |
 | realtime bus / publisher (`RealtimeBus`, `RealtimePublisher`) | no | — | server-side pub/sub backing the resume stream | at-least-once vs at-most-once is the app's choice | `realtime/bus.test.ts` |
-| runtimes | — | node / bun / cf | per-runtime WS adapters (`ws/{node,bun,cloudflare}.ts`) | Deno adapter removed (H15) | `ws/node.test.ts` |
+| runtimes | — | node / bun / cf | per-runtime WS adapters (`ws/{node,bun,cloudflare}.ts`) | one adapter per runtime: `nodeWebSocket()`, `bunWebSocket()`, `cfWebSocket()` | `ws/node.test.ts` |
 
 ## The SDK side (bit 19 k1)
 

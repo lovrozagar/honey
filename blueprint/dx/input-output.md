@@ -7,7 +7,7 @@
 | value | required | default | outcome | pitfall | test |
 | --- | --- | --- | --- | --- | --- |
 | `.input({ params })` | no | — | typed, validated path params | validation runs after match; a bad value is a 4xx, not a miss | `input/params.test.ts` |
-| `.input({ query })` | no | — | typed, validated query | arrays/coercion follow the schema, not ad-hoc parsing | `input/query.test.ts` |
+| `.input({ search })` | no | — | typed, validated query | arrays/coercion follow the schema, not ad-hoc parsing | `input/query.test.ts` |
 | `.input({ headers })` | no | — | typed, validated request headers | header names are case-insensitive | `input/headers.test.ts` |
 | `.input({ json })` | no | — | validated JSON body; asserts content-type | a wrong content-type is a 415 before validation | `input/json.test.ts` |
 | `.input({ form })` | no | — | multipart / urlencoded body | file parts follow the body-limit | `input/form.test.ts` |

@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- | --- |
 | `honey<TEnv>()` | yes | — | a fresh app typed to `TEnv` | `TEnv` is the runtime env (Workers bindings); it is not request data | `routing/app.test.ts` |
 | `.basePath(prefix)` | no | `/` | rebases every route and the OpenAPI path under `prefix` | patterns are rebased at `.use` time; registering before `basePath` is a different path | `routing/request-path.test.ts`, `integration/routing.test.ts` |
-| `.context(fn)` | no | identity | extends `ctx` with the returned object, typed into the handler | a `context` that performs I/O runs on every request; keep it pure or memoize | `context/context.test.ts` |
+| `.context(values)` | no | none | static values every route registered through the new handle finds on `ctx`, typed into the handler | values are fixed at registration; per-request data belongs in middleware (`next({ … })`); a reserved ctx key throws | `context/context.test.ts` |
 | `.use(mw)` | no | — | installs middleware on this handle and its descendants | a `use()` that never registers a route is reported at finalize | `middleware/middleware.test.ts`, `integration/middleware.test.ts` |
 | `.onError(handler)` | no | native projector | maps a thrown value to a response before error telemetry | a throw inside `onError` is logged and falls back to the native projector | `errors/on-error.test.ts`, `integration/errors.test.ts` |
 | `telemetry` adapter | no | none | `onRequest` (once), `onResponse`/`onError` (once each), `onMiddleware` durations | `onRequest` fires once; every exit pairs with exactly one response/error | `telemetry/otel.test.ts` |

@@ -17,6 +17,7 @@ import realtimeLongpoll from "../../../ir/__fixtures__/specs/rust/realtime-longp
 import realtimeSse from "../../../ir/__fixtures__/specs/rust/realtime-sse.json" with { type: "json" }
 import realtime from "../../../ir/__fixtures__/specs/rust/realtime.json" with { type: "json" }
 import { adversarialCorpus } from "../../shared/__fixtures__/adversarial-corpus.ts"
+import { docsDocument } from "../../shared/__fixtures__/docs-blocks.ts"
 import { errors } from "../../shared/__fixtures__/documents-http.ts"
 import * as streams from "../../shared/__fixtures__/documents-streams.ts"
 import { merged } from "../../shared/__fixtures__/merge.ts"
@@ -101,6 +102,8 @@ export const FIXTURES = {
 		},
 	},
 	/** the declared error keys (G6/G7): bit 13's `errors` document, shared (contract 29 §4.3) */
+	/** the docs' examples: the Kitchen e2e app's document (docs/sdk-recipes.md, docs/examples/) */
+	docs: { document: docsDocument },
 	errors: { document: errors },
 	fixtures: { document: fixtures },
 	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },

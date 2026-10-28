@@ -20,6 +20,7 @@ import type { RustSdkOptions } from "../sdk.ts"
 import { errors, http, httpExtraPaths } from "../../shared/__fixtures__/documents-http.ts"
 import { relative, surface, types } from "./documents-specs.ts"
 import * as streams from "../../shared/__fixtures__/documents-streams.ts"
+import { docsDocument } from "../../shared/__fixtures__/docs-blocks.ts"
 
 /**
  * One crate a run compiles: an OpenAPI document the emitter writes a crate for (made on use: a module runs no
@@ -68,6 +69,8 @@ export const FIXTURES = {
 		},
 	},
 	/** the declared error keys (G6/G7): colliding idents, an envelope's enum, `<Key>Data` schemas (contract 19 §4.3) */
+	/** the docs' examples: the Kitchen e2e app's document (docs/sdk-recipes.md, docs/examples/) */
+	docs: { document: docsDocument },
 	errors: { document: errors },
 	fixtures: { document: fixtures },
 	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },

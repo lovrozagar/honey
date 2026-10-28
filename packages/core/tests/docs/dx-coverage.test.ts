@@ -1,59 +1,13 @@
 /**
  * The dx/ pages hold to the code (bit 20): every test a dx/ row names exists, as a files.tsv row, the colocated test of
- * a src row, or a named integration, telemetry or e2e suite. A dangling pointer is a promise no test keeps. The docs
- * half (every dx/ value on a docs page) joins in phase c.
+ * a src row, or a named integration, telemetry or e2e suite. A dangling pointer is a promise no test keeps. And every
+ * dx/ value appears on its area's page under docs/, so no public value goes undocumented.
  */
-import { execFileSync } from "node:child_process"
-import { readdirSync, readFileSync } from "node:fs"
-import { join, matchesGlob, resolve } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { parseRows } from "../structure/check-tree.ts"
-
-const REPO = resolve(import.meta.dirname, "../../../..")
-const DX = join(REPO, "blueprint/dx")
-
-/** One dx/ row's test pointer: the page and line it sits on, and the path or glob it names. */
-type Pointer = { at: string; ref: string }
-
-/** Every backticked path in the `test` cell (the last column) of each table row of `markdown`, from page `page`. */
-export function pointersOf(page: string, markdown: string): Pointer[] {
-	return markdown.split("\n").flatMap((line, index) => {
-		if (!line.startsWith("| ") || line.startsWith("| ---") || line.startsWith("| value ")) return []
-		const cells = line.slice(1, -1).split(" | ")
-		if (cells.length < 6) return []
-		const test = cells.at(-1) ?? ""
-		return [...test.matchAll(/`([^`]+)`/g)].map(([, ref]) => ({ at: `${page}:${index + 1}`, ref: ref as string }))
-	})
-}
-
-/** Whether `file` answers pointer `ref`: a glob matches it anywhere below, a path is its tail. */
-const answers = (ref: string, file: string) =>
-	ref.includes("*") ? matchesGlob(file, `**/${ref}`) : file.endsWith(`/${ref}`)
-
-/**
- * The pointers no file answers: a pointer (a path suffix or a glob) answers when it matches a tracked file under
- * packages/ that is a files.tsv row, the colocated test of a src row, or a named integration, telemetry or e2e suite.
- */
-export function dangling(pointers: readonly Pointer[], tracked: readonly string[], rows: readonly string[]): string[] {
-	const rowSet = new Set(rows)
-	const siblings = new Set(
-		rows.filter((row) => /(?<!\.test)\.ts$/.test(row)).map((row) => row.replace(/\.ts$/, ".test.ts")),
-	)
-	const named = (file: string) =>
-		rowSet.has(file) || siblings.has(file) || /\/tests\/(integration|telemetry|e2e)\//.test(file)
-	return pointers
-		.filter(({ ref }) => !tracked.some((file) => named(file) && answers(ref, file)))
-		.map(({ at, ref }) => `${at} ${ref}`)
-}
-
-const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", "packages"], {
-	cwd: REPO,
-	encoding: "utf8",
-})
-	.split("\n")
-	.filter((file) => file !== "")
-const rows = parseRows(readFileSync(join(REPO, "blueprint/files.tsv"), "utf8")).map((row) => row.path)
-const pages = readdirSync(DX).filter((name) => name.endsWith(".md"))
+import { REPO } from "../../../gen/src/emit/shared/__fixtures__/docs-blocks.ts"
+import { DX, dangling, pages, pointersOf, rows, tracked, undocumented } from "./dx.ts"
 
 describe("dx/ pointers", () => {
 	it("names only tests that exist, on every dx/ page", () => {
@@ -70,5 +24,33 @@ describe("dx/ pointers", () => {
 			"| b | no | — | — | — | `nowhere/bogus.test.ts`, `emit/*/binary.test.ts` |",
 		].join("\n")
 		expect(dangling(pointersOf("fixture.md", table), tracked, rows)).toEqual(["fixture.md:4 nowhere/bogus.test.ts"])
+	})
+})
+
+describe("dx/ values on docs pages", () => {
+	it("documents every dx/ value on its area's docs page (docs/<area>.md)", () => {
+		const missing = pages
+			.filter((page) => page !== "README.md")
+			.flatMap((page) => {
+				const docs = join(REPO, "docs", page)
+				const text = existsSync(docs) ? readFileSync(docs, "utf8") : ""
+				return undocumented(page, readFileSync(join(DX, page), "utf8"), text)
+			})
+		expect(missing).toEqual([])
+	})
+
+	it("reports a value its page leaves out, by its dx/ page and line, and skips a row still proposed", () => {
+		const table = [
+			"| value | required | default | outcome | pitfall | test |",
+			"| --- | --- | --- | --- | --- | --- |",
+			"| `cors(options)` / `csrf(options)` | no | — | — | — | `middleware/cors.test.ts` |",
+			"| trailing slash | — | — | — | — | `routing/request-path.test.ts` |",
+			"| `:id(\\d+)` | no | off | **proposed** | — | decision only (bit 01) |",
+		].join("\n")
+		const docs = "Use `cors(options)` for cross-origin calls."
+		expect(undocumented("fixture.md", table, docs)).toEqual([
+			"fixture.md:3 csrf(options)",
+			"fixture.md:4 trailing slash",
+		])
 	})
 })
