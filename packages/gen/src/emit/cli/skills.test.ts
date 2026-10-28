@@ -15,6 +15,7 @@ import { shop } from "./__fixtures__/shop.ts"
 import { yamlValue } from "./__fixtures__/yaml.ts"
 import { generateGoCli } from "./module.ts"
 import { skillFile, skillPath } from "./skills.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 const GO = withGo()
 const SLOW = { timeout: 600_000 }
@@ -32,41 +33,53 @@ const skillOf = (doc: Record<string, unknown>, bin: string) => {
 }
 
 describe("SKILL.md (phase e)", () => {
-	it("has the frontmatter Agent Skills reads: the binary's name and a one-line description", () => {
-		const meta = frontmatter(generateGoCli(shop()).files[skillPath("shop")] ?? "")
-		expect([Object.keys(meta), meta.name, meta.description]).toEqual([
-			["name", "description"],
-			"shop",
-			"Call the Shop API from the shell with shop: find a command, read its request and answer, call it, and branch on its JSON output and exit code.",
-		])
-	})
+	it(
+		"has the frontmatter Agent Skills reads: the binary's name and a one-line description",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const meta = frontmatter(generateGoCli(shop()).files[skillPath("shop")] ?? "")
+			expect([Object.keys(meta), meta.name, meta.description]).toEqual([
+				["name", "description"],
+				"shop",
+				"Call the Shop API from the shell with shop: find a command, read its request and answer, call it, and branch on its JSON output and exit code.",
+			])
+		},
+	)
 
-	it("keeps a hostile or long title one YAML scalar within 1024 characters, no control character in it", () => {
-		const long = frontmatter(
-			skillOf({ ...catalog(), info: { title: `${"Very ".repeat(300)}API`, version: "1" } }, "catalog"),
-		)
-		const hostile = frontmatter(
-			skillOf({ ...catalog(), info: { title: `A: "b" ${HOSTILE}\n# c`, version: "1" } }, "catalog"),
-		)
-		expect({
-			controls: hasControl(hostile.description ?? ""),
-			hostile: hostile.description?.startsWith('Call the A: "b" [2J # c API'),
-			long: (long.description?.length ?? 0) <= 1024,
-			names: [long.name, hostile.name],
-		}).toEqual({ controls: false, hostile: true, long: true, names: ["catalog", "catalog"] })
-	})
+	it(
+		"keeps a hostile or long title one YAML scalar within 1024 characters, no control character in it",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const long = frontmatter(
+				skillOf({ ...catalog(), info: { title: `${"Very ".repeat(300)}API`, version: "1" } }, "catalog"),
+			)
+			const hostile = frontmatter(
+				skillOf({ ...catalog(), info: { title: `A: "b" ${HOSTILE}\n# c`, version: "1" } }, "catalog"),
+			)
+			expect({
+				controls: hasControl(hostile.description ?? ""),
+				hostile: hostile.description?.startsWith('Call the A: "b" [2J # c API'),
+				long: (long.description?.length ?? 0) <= 1024,
+				names: [long.name, hostile.name],
+			}).toEqual({ controls: false, hostile: true, long: true, names: ["catalog", "catalog"] })
+		},
+	)
 
-	it("names an untitled API by its binary, and an SSE-only one's streams without the ws or realtime lines", () => {
-		const sse = { ...shop(), paths: { "/ticks": (shop().paths as Record<string, unknown>)["/ticks"] } }
-		const [untitled, onlySse] = [
-			skillOf({ ...catalog(), info: { title: " \n ", version: "1" } }, "catalog"),
-			skillOf(sse, "shop"),
-		]
-		expect([
-			frontmatter(untitled).description?.startsWith("Call the catalog API"),
-			onlySse.split("## Streams\n")[1]?.split("\n\n")[0],
-		]).toEqual([true, "A stream command (sse) prints one JSON line per event; `--take N` ends it after N."])
-	})
+	it(
+		"names an untitled API by its binary, and an SSE-only one's streams without the ws or realtime lines",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const sse = { ...shop(), paths: { "/ticks": (shop().paths as Record<string, unknown>)["/ticks"] } }
+			const [untitled, onlySse] = [
+				skillOf({ ...catalog(), info: { title: " \n ", version: "1" } }, "catalog"),
+				skillOf(sse, "shop"),
+			]
+			expect([
+				frontmatter(untitled).description?.startsWith("Call the catalog API"),
+				onlySse.split("## Streams\n")[1]?.split("\n\n")[0],
+			]).toEqual([true, "A stream command (sse) prints one JSON line per event; `--take N` ends it after N."])
+		},
+	)
 
 	it("has its streams section only for an API with streams, naming the kinds it has", () => {
 		const [streams, none] = [skillOf(shop(), "shop"), skillOf(catalog(), "catalog")]

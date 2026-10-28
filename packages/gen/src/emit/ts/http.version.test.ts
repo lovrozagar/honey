@@ -11,6 +11,7 @@ import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { alpnServer, trusted } from "../shared/__fixtures__/alpn-server.ts"
 import { emittedSdkEntry } from "./__fixtures__/emitted.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /** One JSON GET: the SDK method `ping.get`. */
 const DOC = {
@@ -48,16 +49,20 @@ describe("the TS SDK's HTTP version is its platform fetch's (bit 19 d2)", () => 
 		/* node loads the emitted SDK's extensionless imports through jiti's loader, its fetch the platform's own */
 		["node", [process.execPath, "--import", import.meta.resolve("jiti/register")], { alpn: "h2", version: "2.0" }],
 		["bun", ["bun"], { alpn: "http/1.1", version: "1.1" }],
-	] as const)("%s: negotiates what its fetch offers, recorded", async (_name, runtime, negotiated) => {
-		const server = await alpnServer()
-		try {
-			const entry = emittedSdkEntry(DOC)
-			const program = join(dirname(entry), `version-call-${_name}.ts`)
-			writeFileSync(program, CALL(entry, server.url))
-			const run = await trusted(() => ran(runtime, program, process.env.SSL_CERT_FILE ?? ""))
-			expect([run.status, run.stdout.trim(), server.seen()], run.stderr).toEqual([0, "called", [negotiated]])
-		} finally {
-			await server.close()
-		}
-	})
+	] as const)(
+		"%s: negotiates what its fetch offers, recorded",
+		{ timeout: SPAWN_TIMEOUT },
+		async (_name, runtime, negotiated) => {
+			const server = await alpnServer()
+			try {
+				const entry = emittedSdkEntry(DOC)
+				const program = join(dirname(entry), `version-call-${_name}.ts`)
+				writeFileSync(program, CALL(entry, server.url))
+				const run = await trusted(() => ran(runtime, program, process.env.SSL_CERT_FILE ?? ""))
+				expect([run.status, run.stdout.trim(), server.seen()], run.stderr).toEqual([0, "called", [negotiated]])
+			} finally {
+				await server.close()
+			}
+		},
+	)
 })

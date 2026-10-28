@@ -11,7 +11,7 @@ import { program } from "../../src/emit/python/__fixtures__/consumer.ts"
 import { type DrivenPythonSdk, servedPythonSdk } from "../../src/emit/python/__fixtures__/driven.ts"
 import { withPython } from "../../src/emit/python/__fixtures__/python-env.ts"
 import type { PythonError, Script, Trace } from "../../src/emit/shared/__fixtures__/protocol.ts"
-import { type ReferenceApp, startReferenceApp } from "./conformance/harness.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp } from "./conformance/harness.ts"
 import type { Call, Json, Observed, Setup, WireHop } from "./conformance/matrix.ts"
 
 type Client = (typeof CLIENTS)[number]
@@ -145,7 +145,7 @@ beforeAll(async () => {
 	reference = await startReferenceApp()
 	pythonSdk = servedPythonSdk(reference.document)
 	expect(pythonSdk.imported, pythonSdk.stderr).toBe(true)
-})
+}, SPAWN_TIMEOUT)
 
 afterAll(() => reference?.stop())
 

@@ -3,6 +3,7 @@ import { goString } from "../shared/escape.ts"
 import { compileGo } from "./__fixtures__/compiled.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { generateGoSdk } from "./sdk.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /** Whether Go is here: a missing one fails where it is required and skips the Go tests elsewhere (go-env). */
 const GO = withGo()
@@ -297,8 +298,12 @@ const RAW_BODY_DOCUMENT = {
 }
 
 goDescribe("a JSON body with no schema", () => {
-	it("compiles: the method takes a json.RawMessage, and client.go imports encoding/json", () => {
-		const sdk = compileGo(generateGoSdk(RAW_BODY_DOCUMENT, { modulePath: "example.com/rawbody" }).files)
-		expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	})
+	it(
+		"compiles: the method takes a json.RawMessage, and client.go imports encoding/json",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const sdk = compileGo(generateGoSdk(RAW_BODY_DOCUMENT, { modulePath: "example.com/rawbody" }).files)
+			expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+		},
+	)
 })

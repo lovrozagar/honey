@@ -10,6 +10,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { runtimeBytes } from "./sdk-budget.ts"
+import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
 
 const repos: string[] = []
 afterEach(() => {
@@ -30,17 +31,21 @@ function runtimeRepo(): string {
 }
 
 describe("a runtime directory's listing", () => {
-	it("leaves out an ignored entry: a hook's .tmp receipt is no runtime file", () => {
+	it("leaves out an ignored entry: a hook's .tmp receipt is no runtime file", { timeout: SPAWN_TIMEOUT }, () => {
 		const dir = runtimeRepo()
 		mkdirSync(join(dir, ".tmp/grunt"), { recursive: true })
 		writeFileSync(join(dir, ".tmp/grunt/receipt.txt"), "session\n")
 		expect(runtimeBytes(dir, ".py")).toEqual({ bytes: 6, names: ["a.py"], others: [] })
 	})
 
-	it("keeps an untracked entry that is not ignored: a new file nobody registered is still caught", () => {
-		const dir = runtimeRepo()
-		writeFileSync(join(dir, "stray.txt"), "?\n")
-		writeFileSync(join(dir, "b.py"), "y = 2\n")
-		expect(runtimeBytes(dir, ".py")).toEqual({ bytes: 12, names: ["a.py", "b.py"], others: ["stray.txt"] })
-	})
+	it(
+		"keeps an untracked entry that is not ignored: a new file nobody registered is still caught",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const dir = runtimeRepo()
+			writeFileSync(join(dir, "stray.txt"), "?\n")
+			writeFileSync(join(dir, "b.py"), "y = 2\n")
+			expect(runtimeBytes(dir, ".py")).toEqual({ bytes: 12, names: ["a.py", "b.py"], others: ["stray.txt"] })
+		},
+	)
 })

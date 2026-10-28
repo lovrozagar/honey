@@ -16,6 +16,7 @@ import { shop } from "./__fixtures__/shop.ts"
 import { toolBin, withTools } from "./__fixtures__/tools.ts"
 import { yamlValue } from "./__fixtures__/yaml.ts"
 import { generateGoCli } from "./module.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 const TOOLS = withTools()
 
@@ -125,15 +126,19 @@ describe("the release files (phase g)", () => {
 		expect([generated[".goreleaser.yaml"], generated[".github/workflows/release.yml"]]).toEqual([GORELEASER, WORKFLOW])
 	})
 
-	it("releases to the git remote's repository when none is named, and keeps every value a YAML string", () => {
-		const bare = files({ binaryName: "true" })[".goreleaser.yaml"] ?? ""
-		const parsed = yamlValue(bare) as { project_name: unknown; release?: unknown }
-		expect([parsed.project_name, parsed.release, bare.includes("owner: OWNER, name: homebrew-tap")]).toEqual([
-			"true",
-			undefined,
-			true,
-		])
-	})
+	it(
+		"releases to the git remote's repository when none is named, and keeps every value a YAML string",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const bare = files({ binaryName: "true" })[".goreleaser.yaml"] ?? ""
+			const parsed = yamlValue(bare) as { project_name: unknown; release?: unknown }
+			expect([parsed.project_name, parsed.release, bare.includes("owner: OWNER, name: homebrew-tap")]).toEqual([
+				"true",
+				undefined,
+				true,
+			])
+		},
+	)
 
 	it.each([
 		"acme",
@@ -161,49 +166,53 @@ describe("the release files (phase g)", () => {
 })
 
 describe("the release's signature and attestation (bit 19 i, carry-in #3)", () => {
-	it("signs checksums.txt, attests the archives it lists, pins every action, and grants the OIDC token to the release job alone", () => {
-		const generated = files()
-		type Step = { uses: string; with?: unknown }
-		type Job = { permissions: unknown; steps: Step[] }
-		const config = yamlValue(generated[".goreleaser.yaml"] ?? "") as { signs: unknown }
-		const workflow = yamlValue(generated[".github/workflows/release.yml"] ?? "") as {
-			jobs: Record<string, Job>
-			permissions: unknown
-		}
-		const steps = Object.values(workflow.jobs).flatMap((job) => job.steps)
-		expect({
-			attest: steps.filter((step) => step.uses.startsWith("actions/attest@")).map((step) => step.with),
-			jobs: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) => [name, job.permissions])),
-			order: steps.map((step) => step.uses.split("@")[0]),
-			permissions: workflow.permissions,
-			signs: config.signs,
-			unpinned: steps.filter((step) => !/@[0-9a-f]{40}$/.test(step.uses)).map((step) => step.uses),
-		}).toEqual({
-			attest: [{ "subject-checksums": "dist/checksums.txt" }],
-			jobs: { release: { attestations: "write", contents: "write", "id-token": "write" } },
-			order: [
-				"actions/checkout",
-				"actions/setup-go",
-				"sigstore/cosign-installer",
-				"goreleaser/goreleaser-action",
-				"actions/attest",
-			],
-			permissions: { contents: "read" },
-			signs: [
-				{
-					args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"],
-					artifacts: "checksum",
-					cmd: "cosign",
-					signature: "${artifact}.sigstore.json",
-				},
-			],
-			unpinned: [],
-		})
-	})
+	it(
+		"signs checksums.txt, attests the archives it lists, pins every action, and grants the OIDC token to the release job alone",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const generated = files()
+			type Step = { uses: string; with?: unknown }
+			type Job = { permissions: unknown; steps: Step[] }
+			const config = yamlValue(generated[".goreleaser.yaml"] ?? "") as { signs: unknown }
+			const workflow = yamlValue(generated[".github/workflows/release.yml"] ?? "") as {
+				jobs: Record<string, Job>
+				permissions: unknown
+			}
+			const steps = Object.values(workflow.jobs).flatMap((job) => job.steps)
+			expect({
+				attest: steps.filter((step) => step.uses.startsWith("actions/attest@")).map((step) => step.with),
+				jobs: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) => [name, job.permissions])),
+				order: steps.map((step) => step.uses.split("@")[0]),
+				permissions: workflow.permissions,
+				signs: config.signs,
+				unpinned: steps.filter((step) => !/@[0-9a-f]{40}$/.test(step.uses)).map((step) => step.uses),
+			}).toEqual({
+				attest: [{ "subject-checksums": "dist/checksums.txt" }],
+				jobs: { release: { attestations: "write", contents: "write", "id-token": "write" } },
+				order: [
+					"actions/checkout",
+					"actions/setup-go",
+					"sigstore/cosign-installer",
+					"goreleaser/goreleaser-action",
+					"actions/attest",
+				],
+				permissions: { contents: "read" },
+				signs: [
+					{
+						args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"],
+						artifacts: "checksum",
+						cmd: "cosign",
+						signature: "${artifact}.sigstore.json",
+					},
+				],
+				unpinned: [],
+			})
+		},
+	)
 })
 
 describe.skipIf(!TOOLS)("goreleaser check (phase g)", () => {
-	it("passes the config with a repository, and without one beside a GitHub remote", () => {
+	it("passes the config with a repository, and without one beside a GitHub remote", { timeout: SPAWN_TIMEOUT }, () => {
 		const runs = [written(files()), written(files({}), "https://github.com/acme/shop.git")].map((dir) =>
 			spawnSync(toolBin("goreleaser"), ["check"], { cwd: dir, encoding: "utf8" }),
 		)

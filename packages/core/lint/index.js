@@ -6,6 +6,7 @@ import { rule as noHeaderMode } from "./no-header-mode.js"
 import { rule as noModuleSideEffects } from "./no-module-side-effects.js"
 import { rule as noModuleState } from "./no-module-state.js"
 import { rule as noV8Ignore } from "./no-v8-ignore.js"
+import { rule as spawnTimeout } from "./spawn-timeout.js"
 
 export default {
 	meta: { name: "honey" },
@@ -17,5 +18,6 @@ export default {
 		"no-module-side-effects": noModuleSideEffects,
 		"no-module-state": noModuleState,
 		"no-v8-ignore": noV8Ignore,
+		"spawn-timeout": spawnTimeout,
 	},
 }

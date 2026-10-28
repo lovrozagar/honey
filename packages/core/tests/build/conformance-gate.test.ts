@@ -18,6 +18,7 @@ import {
 } from "../../../gen/tests/integration/conformance/gate.ts"
 import { type Cell, cellsFor, TARGETS, type Target } from "../../../gen/tests/integration/conformance/matrix.ts"
 import { caller, jobsRunning, ROOT, type Step, upstream, workflow } from "./fixture/workflows.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const GATE = "packages/gen/tests/integration/conformance/gate.ts"
 
@@ -49,20 +50,24 @@ describe("the release waits on the harness and its gate", () => {
 		}
 	})
 
-	it("records every cell the harness runs, with every toolchain required, and gates that record", () => {
-		const harness = step("harness", "bun run test:harness")
-		expect(harness?.env?.HONEY_REQUIRE_TOOLCHAINS).toBe("1")
-		const recorded = harness?.env?.HONEY_CONFORMANCE_RECORD
-		expect(recorded).toEqual(expect.stringMatching(/\S/))
-		const upload = step("harness", "actions/upload-artifact@")
-		expect(upload?.with?.path).toBe(recorded)
-		expect(upload?.with?.["if-no-files-found"]).toBe("error")
-		const download = step("conformance", "actions/download-artifact@")
-		expect(download?.with?.name).toBe(upload?.with?.name)
-		const gate = step("conformance", GATE)
-		expect(gate?.run).toBe(`bun ${GATE} "$CELLS"`)
-		expect(gate?.env?.CELLS).toBe(download?.with?.path)
-	})
+	it(
+		"records every cell the harness runs, with every toolchain required, and gates that record",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const harness = step("harness", "bun run test:harness")
+			expect(harness?.env?.HONEY_REQUIRE_TOOLCHAINS).toBe("1")
+			const recorded = harness?.env?.HONEY_CONFORMANCE_RECORD
+			expect(recorded).toEqual(expect.stringMatching(/\S/))
+			const upload = step("harness", "actions/upload-artifact@")
+			expect(upload?.with?.path).toBe(recorded)
+			expect(upload?.with?.["if-no-files-found"]).toBe("error")
+			const download = step("conformance", "actions/download-artifact@")
+			expect(download?.with?.name).toBe(upload?.with?.name)
+			const gate = step("conformance", GATE)
+			expect(gate?.run).toBe(`bun ${GATE} "$CELLS"`)
+			expect(gate?.env?.CELLS).toBe(download?.with?.path)
+		},
+	)
 })
 
 /* a two-target grid of one-call cells: the gate's rules, independent of the grid's rows */
@@ -136,15 +141,19 @@ const gate = (dir: string) => {
 describe("the gate script over the real grid", () => {
 	const total = TARGETS.reduce((n, target) => n + cellsFor(target).length, 0)
 
-	it("blocks a release when the harness recorded nothing: every cell of every target is not run", () => {
-		const { out, status } = gate(scratch())
-		expect(status).toBe(1)
-		const blocked = out.split("\n").filter((line) => line.endsWith(": not run"))
-		expect(blocked).toHaveLength(total)
-		expect(new Set(blocked.map((line) => line.split(" ")[0]))).toEqual(new Set(TARGETS))
-	})
+	it(
+		"blocks a release when the harness recorded nothing: every cell of every target is not run",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { out, status } = gate(scratch())
+			expect(status).toBe(1)
+			const blocked = out.split("\n").filter((line) => line.endsWith(": not run"))
+			expect(blocked).toHaveLength(total)
+			expect(new Set(blocked.map((line) => line.split(" ")[0]))).toEqual(new Set(TARGETS))
+		},
+	)
 
-	it("passes once every cell of every target is accounted for, and says how many", () => {
+	it("passes once every cell of every target is accounted for, and says how many", { timeout: SPAWN_TIMEOUT }, () => {
 		const dir = scratch()
 		for (const target of TARGETS) for (const { key } of cellsFor(target)) recordCell(dir, lacks(target, key))
 		const { out, status } = gate(dir)

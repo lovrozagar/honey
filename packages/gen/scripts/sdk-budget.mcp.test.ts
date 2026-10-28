@@ -14,6 +14,7 @@ import { toolsOf, type ToolSpec } from "../src/emit/mcp/tools.ts"
 import { type OpenApiDocument, toIR } from "../src/ir/build.ts"
 import { ceilingOf, countTokens, markAllMcp } from "./capture-token-budget.ts"
 import { runtimeBytes } from "./sdk-budget.ts"
+import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../..")
 const SLOW = { timeout: 120_000 }
@@ -179,22 +180,26 @@ const bytesOf = (modules: readonly string[]) =>
 	modules.reduce((sum, name) => sum + statSync(join(RUNTIME_DIR, `${name}.ts`)).size, 0)
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
-	it(`ships every runtime file it holds, the portable within ${MCP_PORTABLE_BYTES} bytes and the node within ${MCP_NODE_BYTES}, nothing else beside them`, () => {
-		const { bytes, names, others } = runtimeBytes(RUNTIME_DIR, ".ts")
-		expect({
-			names,
-			others,
-			over: [bytesOf(MCP_PORTABLE) - MCP_PORTABLE_BYTES, bytesOf(MCP_NODE) - MCP_NODE_BYTES].map((by) =>
-				Math.max(0, by),
-			),
-			whole: bytes === bytesOf(MCP_RUNTIME),
-		}).toEqual({
-			names: MCP_RUNTIME.map((name) => `${name}.ts`).sort(),
-			others: [],
-			over: [0, 0],
-			whole: true,
-		})
-	})
+	it(
+		`ships every runtime file it holds, the portable within ${MCP_PORTABLE_BYTES} bytes and the node within ${MCP_NODE_BYTES}, nothing else beside them`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names, others } = runtimeBytes(RUNTIME_DIR, ".ts")
+			expect({
+				names,
+				others,
+				over: [bytesOf(MCP_PORTABLE) - MCP_PORTABLE_BYTES, bytesOf(MCP_NODE) - MCP_NODE_BYTES].map((by) =>
+					Math.max(0, by),
+				),
+				whole: bytes === bytesOf(MCP_RUNTIME),
+			}).toEqual({
+				names: MCP_RUNTIME.map((name) => `${name}.ts`).sort(),
+				others: [],
+				over: [0, 0],
+				whole: true,
+			})
+		},
+	)
 })
 
 /** What an agent reads of an MCP server, in o200k tokens: its whole tools/list answer, and its largest tool. */

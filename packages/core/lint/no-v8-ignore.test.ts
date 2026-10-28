@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./no-v8-ignore.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
+import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const rule = plugin.rules["no-v8-ignore"]
 const MESSAGE = "coverage ignore hints are forbidden; delete the code or give it a case"
@@ -30,7 +31,7 @@ describe("honey/no-v8-ignore", () => {
 		expect(reportsOf(rule, fixture)).toEqual([])
 	})
 
-	it("fails oxlint through the honey plugin entry", () => {
+	it("fails oxlint through the honey plugin entry", { timeout: SPAWN_TIMEOUT }, () => {
 		const fixture = {
 			"packages/core/src/a.ts": "/* v8 ignore next */\nexport const a = 1\n",
 			"packages/core/src/b.ts": "export const b = 1\n",

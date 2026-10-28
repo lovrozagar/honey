@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { emittedApp, emittedSdk } from "../../../src/emit/ts/__fixtures__/emitted.ts"
-import { type ReferenceApp, startReferenceApp, targetSuite } from "./harness.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp, targetSuite } from "./harness.ts"
 import { type Call, type Cell, cellsFor, compareCell, type Json, type Observed, type Setup } from "./matrix.ts"
 
 type Input = Record<string, unknown>
@@ -267,7 +267,7 @@ describe("app front", () => {
 	let app: ReferenceApp | undefined
 	beforeAll(async () => {
 		app = await startReferenceApp()
-	})
+	}, SPAWN_TIMEOUT)
 	afterAll(() => app?.stop())
 
 	// v0: 1a11479004

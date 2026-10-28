@@ -20,6 +20,7 @@ import { CLEAN, formatted, pythonNames, ruffGate, ruffGates, written } from "./_
 import { allOrder, isortMembers } from "./sdk-imports.ts"
 import { generatePythonSdk } from "./sdk.ts"
 import { runtimeFiles } from "./transport.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /** Whether Python is here: a missing toolchain fails where it is required and skips these legs elsewhere (python-env). */
 const PY = withPython()
@@ -62,28 +63,39 @@ describe("the emitted Python package through the ruff pass", () => {
 		300_000,
 	)
 
-	it.skipIf(!PY)("ships a runtime the ruff pass leaves as it is, clean under the same rule list", async () => {
-		const runtime: Readonly<Record<string, string>> = runtimeFiles({ realtime: true, ws: true })
-		const pass = await formatted(runtime)
-		expect({ reached: pass.seen, unchanged: pass.files }).toEqual({ reached: pythonNames(runtime), unchanged: runtime })
-		expect(pass.seen.length).toBeGreaterThan(0)
-		const dir = written(
-			"runtime",
-			Object.fromEntries(Object.entries(runtime).map(([name, text]) => [join("_honey", name), text])),
-		)
-		expect(ruffGates(dir)).toEqual(CLEAN)
-	})
+	it.skipIf(!PY)(
+		"ships a runtime the ruff pass leaves as it is, clean under the same rule list",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const runtime: Readonly<Record<string, string>> = runtimeFiles({ realtime: true, ws: true })
+			const pass = await formatted(runtime)
+			expect({ reached: pass.seen, unchanged: pass.files }).toEqual({
+				reached: pythonNames(runtime),
+				unchanged: runtime,
+			})
+			expect(pass.seen.length).toBeGreaterThan(0)
+			const dir = written(
+				"runtime",
+				Object.fromEntries(Object.entries(runtime).map(([name, text]) => [join("_honey", name), text])),
+			)
+			expect(ruffGates(dir)).toEqual(CLEAN)
+		},
+	)
 
-	it.skipIf(!PY)("keeps the test driver formatted and clean under the same rule list", () => {
-		const driver = join(import.meta.dirname, "__fixtures__", "driver")
-		const files = Object.fromEntries(
-			readdirSync(driver)
-				.filter((name) => name.endsWith(".py"))
-				.map((name) => [name, readFileSync(join(driver, name), "utf8")]),
-		)
-		expect(Object.keys(files).length).toBeGreaterThan(0)
-		expect(ruffGates(written("driver", files))).toEqual(CLEAN)
-	})
+	it.skipIf(!PY)(
+		"keeps the test driver formatted and clean under the same rule list",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const driver = join(import.meta.dirname, "__fixtures__", "driver")
+			const files = Object.fromEntries(
+				readdirSync(driver)
+					.filter((name) => name.endsWith(".py"))
+					.map((name) => [name, readFileSync(join(driver, name), "utf8")]),
+			)
+			expect(Object.keys(files).length).toBeGreaterThan(0)
+			expect(ruffGates(written("driver", files))).toEqual(CLEAN)
+		},
+	)
 })
 
 /* every member name class ruff orders differently: constants, classes, the rest; `_` against a letter; digits;
@@ -112,7 +124,7 @@ const NAMES = [
 ]
 
 describe("the import and __all__ orders, against the pinned ruff", () => {
-	it.skipIf(!PY)("orders import members as I001 and __all__ as RUF022 rewrite them", () => {
+	it.skipIf(!PY)("orders import members as I001 and __all__ as RUF022 rewrite them", { timeout: SPAWN_TIMEOUT }, () => {
 		const source = `from x import (${NAMES.join(", ")})\n\n__all__ = [${NAMES.map((name) => `"${name}"`).join(", ")}]\n`
 		const fixed = runRuff(
 			[

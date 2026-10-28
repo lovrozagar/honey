@@ -15,6 +15,7 @@ import { afterAll, describe, expect, it } from "vitest"
 import { withPinnedBun } from "../../../gen/src/gen/__fixtures__/pinned-bun.ts"
 import { BUILD_SPECS, type BuildSpec, buildCommand, buildCwd, entryArtifact } from "../e2e/builds.ts"
 import { scratch } from "./fixture/packed.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const TRAP = join(import.meta.dirname, "fixture", "stack-hook-trap.ts")
 function defaultsCell(): BuildSpec {
@@ -70,7 +71,8 @@ function coldBuild(bun: string, version: string) {
 }
 
 describe.skipIf(buns.size === 0)("a cold Bun build of an e2e app", () => {
-	it.each([...buns])("replaces no Error.prepareStackTrace on Bun %s", (version, bun) => {
+	/* a process start, timed by the runner: 1.6 s here, 6.8 s on a slow CI runner (run 40774978593) */
+	it.each([...buns])("replaces no Error.prepareStackTrace on Bun %s", { timeout: SPAWN_TIMEOUT }, (version, bun) => {
 		const { code, entries, output } = coldBuild(bun, version)
 		/* the trap ran in Vite and in the generate child, or a clean log would prove nothing */
 		const started = entries.filter((entry) => entry.kind === "start")

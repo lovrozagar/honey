@@ -16,6 +16,7 @@ import { MCP_PORTABLE, mcpRuntimeSource } from "./runtime.ts"
 import { toolsOf } from "./tools.ts"
 import { toIR, type OpenApiDocument } from "../../ir/build.ts"
 import type { Mounted } from "../../runtime/mcp/mount.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 const KEY = "ApiKey ak_0123456789abcdef"
 const CSV = new TextEncoder().encode("name,qty\nbolt,4\n")
@@ -56,7 +57,7 @@ const stated = (document: Record<string, unknown>) => {
 	return [/secured: (\w+)/.exec(entry)?.[1], /credentials: (\[[^\]]*\])/.exec(entry)?.[1]]
 }
 
-describe("the mounted handler's files (bit 21 e)", () => {
+describe("the mounted handler's files (bit 21 e)", { timeout: SPAWN_TIMEOUT }, () => {
 	it("writes the tool table and mcpHandler over the portable runtime and the SDK, strict tsc clean", async () => {
 		const document = anyrow()
 		const { entry, files, skipped } = generateMcpHandler(document)

@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { type DrivenCSharpSdk, servedCSharpSdk } from "../../src/emit/csharp/__fixtures__/driven.ts"
 import { withDotnet } from "../../src/emit/csharp/__fixtures__/csharp-env.ts"
 import type { CsError, Script, Trace } from "../../src/emit/shared/__fixtures__/protocol.ts"
-import { type ReferenceApp, startReferenceApp } from "./conformance/harness.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp } from "./conformance/harness.ts"
 import type { Call, Observed, WireHop } from "./conformance/matrix.ts"
 
 type Run = { hops: readonly WireHop[]; observed: readonly Observed[]; trace: Trace<CsError> }
@@ -63,7 +63,7 @@ beforeAll(async () => {
 	reference = await startReferenceApp()
 	csharpSdk = servedCSharpSdk(reference.document)
 	expect(csharpSdk.built, csharpSdk.diagnostics.join("\n")).toBe(true)
-})
+}, SPAWN_TIMEOUT)
 
 afterAll(() => reference?.stop())
 

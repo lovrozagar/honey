@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { COMPLETE, checkTree, parseRows } from "./check-tree.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 
@@ -121,7 +122,7 @@ describe("checkTree --complete 01", () => {
 })
 
 describe("the repository", () => {
-	it(`matches files.tsv up to bit ${String(COMPLETE).padStart(2, "0")}`, () => {
+	it(`matches files.tsv up to bit ${String(COMPLETE).padStart(2, "0")}`, { timeout: SPAWN_TIMEOUT }, () => {
 		const tsv = readFileSync(join(REPO, "blueprint/files.tsv"), "utf8")
 		const files = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
 			cwd: REPO,

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest"
 import { pythonCacheDir, ruffPath, runRuff, withPython } from "../python/__fixtures__/python-env.ts"
 import { EMIT_STYLE, formatFiles } from "./format.ts"
 import { ruffFormatter } from "./ruff.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 const UNFORMATTED = "def add(a:int,b:int)->int:\n  return a+b\n"
 /* four spaces and 88 columns, whatever EMIT_STYLE says: ruff has its own layout and the adapter passes it no options */
@@ -22,63 +23,80 @@ const PY = withPython()
 const ruff = () => ruffFormatter(ruffPath())
 
 describe("ruffFormatter: the Python post-pass (R2), under the extension key py", () => {
-	it.skipIf(!PY)("formats every Python file with the pinned ruff and leaves any other file as it is", async () => {
-		const files = await formatFiles(
-			{ "a.go": "package x\n", "a.py": UNFORMATTED, "pyproject.toml": "[project]\n", "src/pkg/b.py": UNFORMATTED },
-			{ py: ruff() },
-		)
-		expect(files).toEqual({
-			"a.go": "package x\n",
-			"a.py": FORMATTED,
-			"pyproject.toml": "[project]\n",
-			"src/pkg/b.py": FORMATTED,
-		})
-	})
+	it.skipIf(!PY)(
+		"formats every Python file with the pinned ruff and leaves any other file as it is",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const files = await formatFiles(
+				{ "a.go": "package x\n", "a.py": UNFORMATTED, "pyproject.toml": "[project]\n", "src/pkg/b.py": UNFORMATTED },
+				{ py: ruff() },
+			)
+			expect(files).toEqual({
+				"a.go": "package x\n",
+				"a.py": FORMATTED,
+				"pyproject.toml": "[project]\n",
+				"src/pkg/b.py": FORMATTED,
+			})
+		},
+	)
 
-	it.skipIf(!PY)("reports a file ruff cannot parse as an error, naming it", async () => {
+	it.skipIf(!PY)("reports a file ruff cannot parse as an error, naming it", { timeout: SPAWN_TIMEOUT }, async () => {
 		await expect(formatFiles({ "bad.py": "def (\n" }, { py: ruff() })).rejects.toThrow(
 			/could not format bad\.py: .*Failed to parse bad\.py:1:5/,
 		)
 	})
 
-	it.skipIf(!PY)("answers a non-zero exit with the source as given and ruff's stderr", async () => {
-		const source = "def (\n"
-		expect(await ruff()("bad.py", source, EMIT_STYLE)).toEqual({
-			code: source,
-			errors: [expect.stringMatching(/^error: Failed to parse bad\.py:1:5: Expected an identifier/)],
-		})
-	})
+	it.skipIf(!PY)(
+		"answers a non-zero exit with the source as given and ruff's stderr",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const source = "def (\n"
+			expect(await ruff()("bad.py", source, EMIT_STYLE)).toEqual({
+				code: source,
+				errors: [expect.stringMatching(/^error: Failed to parse bad\.py:1:5: Expected an identifier/)],
+			})
+		},
+	)
 
-	it("reports a ruff it cannot run as an error rather than passing the file through", async () => {
-		const { code, errors } = await ruffFormatter("/nonexistent/ruff")("a.py", UNFORMATTED, EMIT_STYLE)
-		expect({ code, errors: errors.length }).toEqual({ code: UNFORMATTED, errors: 1 })
-	})
+	it(
+		"reports a ruff it cannot run as an error rather than passing the file through",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const { code, errors } = await ruffFormatter("/nonexistent/ruff")("a.py", UNFORMATTED, EMIT_STYLE)
+			expect({ code, errors: errors.length }).toEqual({ code: UNFORMATTED, errors: 1 })
+		},
+	)
 })
 
 describe("ruffFormatter: a ruff that stops reading", () => {
-	it("answers with its failure when the binary exits before taking the input", async () => {
+	it("answers with its failure when the binary exits before taking the input", { timeout: SPAWN_TIMEOUT }, async () => {
 		const source = `def main() -> None: ...\n# ${"x".repeat(1 << 22)}\n`
 		const { code, errors } = await ruffFormatter("false")("big.py", source, EMIT_STYLE)
 		expect([code === source, errors.length]).toEqual([true, 1])
 	})
 
-	it("answers with its exit status when the binary closes its input and exits later", async () => {
-		/* the write fails while the binary still runs: the pipe error is ignored, the exit status answers */
-		const bin = join(mkdtempSync(join(pythonCacheDir("tmp"), "ruff-closes-")), "ruff")
-		writeFileSync(bin, "#!/bin/sh\nexec 0<&-\nsleep 1\nexit 3\n", { mode: 0o755 })
-		try {
-			const source = `# ${"x".repeat(1 << 22)}\n`
-			const { code, errors } = await ruffFormatter(bin)("big.py", source, EMIT_STYLE)
-			expect([code === source, errors]).toEqual([true, [`${bin} exited with status 3`]])
-		} finally {
-			rmSync(join(bin, ".."), { force: true, recursive: true })
-		}
-	})
+	it(
+		"answers with its exit status when the binary closes its input and exits later",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			/* the write fails while the binary still runs: the pipe error is ignored, the exit status answers */
+			const bin = join(mkdtempSync(join(pythonCacheDir("tmp"), "ruff-closes-")), "ruff")
+			writeFileSync(bin, "#!/bin/sh\nexec 0<&-\nsleep 1\nexit 3\n", { mode: 0o755 })
+			try {
+				const source = `# ${"x".repeat(1 << 22)}\n`
+				const { code, errors } = await ruffFormatter(bin)("big.py", source, EMIT_STYLE)
+				expect([code === source, errors]).toEqual([true, [`${bin} exited with status 3`]])
+			} finally {
+				rmSync(join(bin, ".."), { force: true, recursive: true })
+			}
+		},
+	)
 })
 
 describe("ruffFormatter: no configuration but its own", () => {
 	it.skipIf(!PY)(
 		"ignores a [tool.ruff] in the cwd's ancestors: line-length 20 there leaves the output at 88 columns",
+		{ timeout: SPAWN_TIMEOUT },
 		async () => {
 			const root = mkdtempSync(join(pythonCacheDir("tmp"), "ruff-toml-"))
 			const cwd = join(root, "pkg", "src")

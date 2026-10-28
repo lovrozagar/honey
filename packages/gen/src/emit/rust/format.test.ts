@@ -16,6 +16,7 @@ import { FIXTURES } from "./__fixtures__/documents.ts"
 import { RUST_FLOOR, runRustfmt, rustCacheDir, rustfmtPath, withRust } from "./__fixtures__/rust-env.ts"
 import { runtimeFiles } from "./http.ts"
 import { generateRustSdk } from "./sdk.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /** Whether Rust is here: a missing toolchain fails where it is required and skips these legs elsewhere (rust-env). */
 const RUST = withRust()
@@ -58,7 +59,7 @@ describe("the emitted Rust SDK through the rustfmt pass", () => {
 		600_000,
 	)
 
-	it.skipIf(!RUST)("ships a runtime the rustfmt pass leaves as it is", async () => {
+	it.skipIf(!RUST)("ships a runtime the rustfmt pass leaves as it is", { timeout: SPAWN_TIMEOUT }, async () => {
 		const runtime = rustOf(runtimeFiles({ realtime: true, ws: true }))
 		expect(Object.keys(runtime).length).toBeGreaterThan(0)
 		expect(await formatFiles(runtime, { rs: rustfmtFormatter(rustfmtPath()) })).toEqual(runtime)

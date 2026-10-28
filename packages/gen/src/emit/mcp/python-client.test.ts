@@ -13,7 +13,10 @@ const SERVER = [
 	`await (await import(${JSON.stringify(new URL("./__fixtures__/one-tool.ts", import.meta.url).pathname)})).main()`,
 ]
 
-describe.skipIf(!withPython())("the Python client (bit 21 b)", { timeout: 300_000 }, () => {
+/* a cold venv installing mcp 2.3.0 and its pinned dependencies, then a stdio session: 8fa1d3c's bound for it */
+const PYTHON_CLIENT = 300_000
+
+describe.skipIf(!withPython())("the Python client (bit 21 b)", { timeout: PYTHON_CLIENT }, () => {
 	it("mcp 2.3.0, pinned to 2026-07-28, lists the tools with their schemas and gets structuredContent, complete", async () => {
 		const [negotiated, listed, called] = await pythonSession(SERVER, [
 			{ negotiated: true },

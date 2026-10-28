@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest"
 import { generateJavaSdk, javaCallPlans, runtimeFiles } from "../src/emit/java/sdk.ts"
 import { ceilingOf, countTokens } from "./capture-token-budget.ts"
 import { runtimeBytes, v1JavaSdkSurfaces } from "./sdk-budget.ts"
+import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
 
 /*
  * G14 analog (bit 16), locked at phase f at the exact measured bytes (zero headroom, as C#'s 129,851), over every
@@ -115,16 +116,20 @@ import { runtimeBytes, v1JavaSdkSurfaces } from "./sdk-budget.ts"
 const JAVA_RUNTIME_BYTES = 153464
 
 describe("the Java runtime within its byte budget (bit 16, the G14 analog)", () => {
-	it(`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
-		const { bytes, names, others } = runtimeBytes(resolve(import.meta.dirname, "../src/runtime/java"), ".java")
-		expect({ names, others, over: Math.max(0, bytes - JAVA_RUNTIME_BYTES) }).toEqual({
-			names: Object.keys(runtimeFiles("x"))
-				.map((name) => `${name}.java`)
-				.sort(),
-			others: [],
-			over: 0,
-		})
-	})
+	it(
+		`ships every runtime file it holds, all of them within ${JAVA_RUNTIME_BYTES} bytes, nothing else beside them`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names, others } = runtimeBytes(resolve(import.meta.dirname, "../src/runtime/java"), ".java")
+			expect({ names, others, over: Math.max(0, bytes - JAVA_RUNTIME_BYTES) }).toEqual({
+				names: Object.keys(runtimeFiles("x"))
+					.map((name) => `${name}.java`)
+					.sort(),
+				others: [],
+				over: 0,
+			})
+		},
+	)
 })
 
 const REPO = resolve(import.meta.dirname, "../../..")

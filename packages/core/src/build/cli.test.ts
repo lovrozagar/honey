@@ -15,6 +15,7 @@ import { MARK_KEY, marked, markOf, reap } from "../../../gen/src/gen/__fixtures_
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
 import { USAGE } from "./cli-args.ts"
 import { main } from "./cli.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const SLOW = 60_000
 /* an internal route whose own middleware adds to ctx: extracted, never documented, so the types report it */
@@ -66,20 +67,24 @@ async function until(check: () => boolean, ms = 20_000): Promise<boolean> {
 describe("honey generate (bit 19 h2)", () => {
 	// v0: 959b999f6f
 	// v0: b4d1303b14
-	it("prints usage and exits 1 with no command or an unknown one, and with neither a config nor --app", async () => {
-		const { dir } = fresh()
-		const runs = [await run([], dir), await run(["serve"], dir), await run(["generate"], dir)]
-		expect(runs.map(({ err, status }) => [status, err.split("\n")[0]])).toEqual([
-			[1, "honey: missing command"],
-			[1, "honey: unknown command: serve"],
-			[1, "honey: no config found: add honey() to a vite.config.ts, or pass --app"],
-		])
-		expect(runs[0]?.err.endsWith(`${USAGE}\n`)).toBe(true)
-		expect([await run(["--help"], dir), await run(["generate", "-h"], dir)]).toEqual([
-			{ err: "", out: `${USAGE}\n`, status: 0 },
-			{ err: "", out: `${USAGE}\n`, status: 0 },
-		])
-	})
+	it(
+		"prints usage and exits 1 with no command or an unknown one, and with neither a config nor --app",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const { dir } = fresh()
+			const runs = [await run([], dir), await run(["serve"], dir), await run(["generate"], dir)]
+			expect(runs.map(({ err, status }) => [status, err.split("\n")[0]])).toEqual([
+				[1, "honey: missing command"],
+				[1, "honey: unknown command: serve"],
+				[1, "honey: no config found: add honey() to a vite.config.ts, or pass --app"],
+			])
+			expect(runs[0]?.err.endsWith(`${USAGE}\n`)).toBe(true)
+			expect([await run(["--help"], dir), await run(["generate", "-h"], dir)]).toEqual([
+				{ err: "", out: `${USAGE}\n`, status: 0 },
+				{ err: "", out: `${USAGE}\n`, status: 0 },
+			])
+		},
+	)
 
 	// v0: 62e5575589
 	// v0: 6e3d7e688e
@@ -420,7 +425,7 @@ describe("honey generate's edges (bit 19 h2)", () => {
 		SLOW,
 	)
 
-	it("runs from the process's own directory and environment by default", async () => {
+	it("runs from the process's own directory and environment by default", { timeout: SPAWN_TIMEOUT }, async () => {
 		let out = ""
 		expect(await main(["--help"], { err: () => {}, out: (text) => void (out += text) })).toBe(0)
 		expect(out).toBe(`${USAGE}\n`)

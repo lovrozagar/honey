@@ -17,6 +17,7 @@ import { RUST_FLOOR, withRust } from "./__fixtures__/rust-env.ts"
 import { served } from "../shared/__fixtures__/recording-server.ts"
 import type { RustCallPlan } from "./sdk-plan.ts"
 import { rustCallPlans } from "./sdk.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /** Whether Rust is here: a missing toolchain fails where it is required and skips these legs elsewhere (rust-env). */
 const RUST = withRust()
@@ -136,62 +137,79 @@ describe("dispatchRs: the driver's dispatch.rs, one match arm per call plan", ()
 })
 
 describe.skipIf(!RUST)("the compile cache: one compile per content hash, a shared target dir", () => {
-	it("builds a registry crate once: a second compile reads its marker and spawns no cargo", () => {
-		const first = compiledRust("cache")
-		expect({ built: first.built, complete: existsSync(join(first.dir, ".complete")) }, first.stderr).toEqual({
-			built: true,
-			complete: true,
-		})
-		/* no cargo to find: a second compile that spawned one could not build */
-		vi.stubEnv("PATH", "")
-		const second = compiledRust("cache")
-		expect({ built: second.built, dir: second.dir, fresh: second.fresh }).toEqual({
-			built: true,
-			dir: first.dir,
-			fresh: false,
-		})
-	})
+	it(
+		"builds a registry crate once: a second compile reads its marker and spawns no cargo",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const first = compiledRust("cache")
+			expect({ built: first.built, complete: existsSync(join(first.dir, ".complete")) }, first.stderr).toEqual({
+				built: true,
+				complete: true,
+			})
+			/* no cargo to find: a second compile that spawned one could not build */
+			vi.stubEnv("PATH", "")
+			const second = compiledRust("cache")
+			expect({ built: second.built, dir: second.dir, fresh: second.fresh }).toEqual({
+				built: true,
+				dir: first.dir,
+				fresh: false,
+			})
+		},
+	)
 
-	it("builds programs as bins in a copy of the crate, runs them on stdin, and keeps the shipped crate as emitted", async () => {
-		const crate = compiledRust("cache", { programs: { pair: PAIR, probe: PROBE } })
-		expect(crate.built, crate.stderr).toBe(true)
-		expect(await crate.exec("probe", "hi\n")).toEqual({ status: 0, stderr: "", stdout: "1 hi" })
-		expect(await crate.exec("pair", "")).toEqual({ status: 0, stderr: "", stdout: "3" })
-		await expect(crate.exec("nope", "")).rejects.toThrow("no program nope")
-		const markers = [".clippy", ".complete"]
-		expect(filesUnder(crate.dir).filter((file) => !markers.includes(file))).toEqual(
-			Object.keys(FIXTURES.cache.files).sort(),
-		)
-		vi.stubEnv("PATH", "")
-		const again = compiledRust("cache", { programs: { pair: PAIR, probe: PROBE } })
-		expect({ built: again.built, fresh: again.fresh }).toEqual({ built: true, fresh: false })
-		expect(await again.exec("probe", "again")).toEqual({ status: 0, stderr: "", stdout: "1 again" })
-	})
+	it(
+		"builds programs as bins in a copy of the crate, runs them on stdin, and keeps the shipped crate as emitted",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const crate = compiledRust("cache", { programs: { pair: PAIR, probe: PROBE } })
+			expect(crate.built, crate.stderr).toBe(true)
+			expect(await crate.exec("probe", "hi\n")).toEqual({ status: 0, stderr: "", stdout: "1 hi" })
+			expect(await crate.exec("pair", "")).toEqual({ status: 0, stderr: "", stdout: "3" })
+			await expect(crate.exec("nope", "")).rejects.toThrow("no program nope")
+			const markers = [".clippy", ".complete"]
+			expect(filesUnder(crate.dir).filter((file) => !markers.includes(file))).toEqual(
+				Object.keys(FIXTURES.cache.files).sort(),
+			)
+			vi.stubEnv("PATH", "")
+			const again = compiledRust("cache", { programs: { pair: PAIR, probe: PROBE } })
+			expect({ built: again.built, fresh: again.fresh }).toEqual({ built: true, fresh: false })
+			expect(await again.exec("probe", "again")).toEqual({ status: 0, stderr: "", stdout: "1 again" })
+		},
+	)
 
-	it("runs a program that never reads its stdin, however large the input, its exit status the answer", async () => {
-		const crate = compiledRust("cache", { programs: { pair: PAIR, probe: PROBE } })
-		/* more than a pipe holds: the program exits before the write ends, which must not surface as EPIPE */
-		expect(await crate.exec("pair", "x".repeat(4 << 20))).toEqual({ status: 0, stderr: "", stdout: "3" })
-	})
+	it(
+		"runs a program that never reads its stdin, however large the input, its exit status the answer",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const crate = compiledRust("cache", { programs: { pair: PAIR, probe: PROBE } })
+			/* more than a pipe holds: the program exits before the write ends, which must not surface as EPIPE */
+			expect(await crate.exec("pair", "x".repeat(4 << 20))).toEqual({ status: 0, stderr: "", stdout: "3" })
+		},
+	)
 })
 
 describe.skipIf(!RUST)("the compile options: clippy, and the floor toolchain", () => {
-	it("reports clippy's findings under -D clippy::incompatible_msrv, kept once per crate", () => {
-		expect(compiledRust("cache").clippy()).toEqual([])
-		const canary = compiledRust("canary")
-		expect(canary.built, canary.stderr).toBe(true)
-		const findings = canary.clippy()
-		/* short format names no lint: incompatible_msrv says what the floor lacks */
-		expect(
-			findings.some((line) => /: error: current MSRV .* is `1\.85\.0`/.test(line)),
-			findings.join("\n"),
-		).toBe(true)
-		vi.stubEnv("PATH", "")
-		expect(compiledRust("canary").clippy()).toEqual(findings)
-	})
+	it(
+		"reports clippy's findings under -D clippy::incompatible_msrv, kept once per crate",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			expect(compiledRust("cache").clippy()).toEqual([])
+			const canary = compiledRust("canary")
+			expect(canary.built, canary.stderr).toBe(true)
+			const findings = canary.clippy()
+			/* short format names no lint: incompatible_msrv says what the floor lacks */
+			expect(
+				findings.some((line) => /: error: current MSRV .* is `1\.85\.0`/.test(line)),
+				findings.join("\n"),
+			).toBe(true)
+			vi.stubEnv("PATH", "")
+			expect(compiledRust("canary").clippy()).toEqual(findings)
+		},
+	)
 
 	it.skipIf(!FLOOR)(
 		"checks under the floor toolchain in a crate dir of its own: 1.85.0 rejects what is stable later",
+		{ timeout: SPAWN_TIMEOUT },
 		() => {
 			const floor = compiledRust("canary", { check: true, toolchain: RUST_FLOOR })
 			expect({ built: floor.built, rejected: floor.stderr.includes("E0658") }, floor.stderr).toEqual({

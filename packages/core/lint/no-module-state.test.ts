@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./no-module-state.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
+import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const rule = plugin.rules["no-module-state"]
 const MESSAGE =
@@ -60,7 +61,7 @@ describe("honey/no-module-state: scope", () => {
 		expect(reportsOf(rule, fixture)).toEqual([])
 	})
 
-	it("fails oxlint through the honey plugin entry", () => {
+	it("fails oxlint through the honey plugin entry", { timeout: SPAWN_TIMEOUT }, () => {
 		const fixture = {
 			"packages/core/src/a.ts": "let n = 0\nexport const get = () => n\n",
 			"packages/core/src/b.ts":

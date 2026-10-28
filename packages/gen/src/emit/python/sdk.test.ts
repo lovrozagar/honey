@@ -19,6 +19,7 @@ import realtimeApi from "../../ir/__fixtures__/specs/rust/realtime.json" with { 
 import { FIXTURES } from "./__fixtures__/documents.ts"
 import { pinnedPython, runPython, venv, withPython } from "./__fixtures__/python-env.ts"
 import { generatePythonSdk, type PythonSdkOptions, pythonCallPlans } from "./sdk.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 type Json = Record<string, unknown>
 
@@ -206,36 +207,46 @@ describe("generatePythonSdk: the package's files", () => {
 })
 
 describe.skipIf(!PY)("generatePythonSdk: pyproject.toml, read by tomllib", () => {
-	it("declares honey-sdk 0.1.0 for Python >=3.11 on httpx2, built by hatchling from src/honey_sdk", () => {
-		const toml = pyproject(minimal)
-		expect(toml).toEqual({
-			"build-system": { "build-backend": "hatchling.build", requires: ["hatchling>=1.27"] },
-			project: {
-				dependencies: ["httpx2>=2.12.0,<3"],
-				name: "honey-sdk",
-				"requires-python": ">=3.11",
-				version: "0.1.0",
-			},
-			tool: { hatch: { build: { targets: { wheel: { packages: ["src/honey_sdk"] } } } } },
-		})
-	})
+	it(
+		"declares honey-sdk 0.1.0 for Python >=3.11 on httpx2, built by hatchling from src/honey_sdk",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const toml = pyproject(minimal)
+			expect(toml).toEqual({
+				"build-system": { "build-backend": "hatchling.build", requires: ["hatchling>=1.27"] },
+				project: {
+					dependencies: ["httpx2>=2.12.0,<3"],
+					name: "honey-sdk",
+					"requires-python": ">=3.11",
+					version: "0.1.0",
+				},
+				tool: { hatch: { build: { targets: { wheel: { packages: ["src/honey_sdk"] } } } } },
+			})
+		},
+	)
 
-	it("depends on httpx2[ws] for a WebSocket or realtime API", () => {
+	it("depends on httpx2[ws] for a WebSocket or realtime API", { timeout: SPAWN_TIMEOUT }, () => {
 		expect([dependencies(wsApi), dependencies(realtimeApi)]).toEqual([
 			["httpx2[ws]>=2.12.0,<3"],
 			["httpx2[ws]>=2.12.0,<3"],
 		])
 	})
 
-	it("takes packageName and version into the distribution name, the version and the src/<package> path", () => {
-		const options = { packageName: "acme_sdk", version: "1.0.0" }
-		const toml = pyproject(minimal, options)
-		expect({
-			elsewhere: keysOf(minimal, options).filter((key) => key !== "pyproject.toml" && !key.startsWith("src/acme_sdk/")),
-			packages: (toml.tool as { hatch: { build: { targets: { wheel: Json } } } }).hatch.build.targets.wheel.packages,
-			project: { name: (toml.project as Json).name, version: (toml.project as Json).version },
-		}).toEqual({ elsewhere: [], packages: ["src/acme_sdk"], project: { name: "acme-sdk", version: "1.0.0" } })
-	})
+	it(
+		"takes packageName and version into the distribution name, the version and the src/<package> path",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const options = { packageName: "acme_sdk", version: "1.0.0" }
+			const toml = pyproject(minimal, options)
+			expect({
+				elsewhere: keysOf(minimal, options).filter(
+					(key) => key !== "pyproject.toml" && !key.startsWith("src/acme_sdk/"),
+				),
+				packages: (toml.tool as { hatch: { build: { targets: { wheel: Json } } } }).hatch.build.targets.wheel.packages,
+				project: { name: (toml.project as Json).name, version: (toml.project as Json).version },
+			}).toEqual({ elsewhere: [], packages: ["src/acme_sdk"], project: { name: "acme-sdk", version: "1.0.0" } })
+		},
+	)
 })
 
 describe("generatePythonSdk: the options it refuses", () => {

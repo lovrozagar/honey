@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, 
 import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { CORE, consumer, pack, REPO, run, scratch, type Tarballs, write } from "./fixture/packed.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const TSC = join(REPO, "node_modules/typescript/bin/tsc")
 const files = scratch("packaging")
@@ -99,24 +100,28 @@ beforeAll(() => {
 afterAll(() => files.done())
 
 describe.sequential("the tarballs, installed (bit 19 i)", () => {
-	it("publish manifests with no workspace: or catalog: specifier, each dev pin at its repo version", () => {
-		const published = Object.values(tarballs).map((tarball) => {
-			const manifest = run("tar", ["-xOzf", tarball, "package/package.json"], files.out)
-			return JSON.parse(manifest.out) as { devDependencies: Record<string, string>; name: string }
-		})
-		const unresolved = published.flatMap(
-			({ name, ...fields }) =>
-				JSON.stringify(fields)
-					.match(/"(?:workspace|catalog):[^"]*"/g)
-					?.map((spec) => `${name} ${spec}`) ?? [],
-		)
-		const [core] = published
-		expect([unresolved, core?.devDependencies["@lovrozagar/honey-codegen"], core?.devDependencies.typescript]).toEqual([
-			[],
-			"1.0.0",
-			"7.0.2",
-		])
-	})
+	it(
+		"publish manifests with no workspace: or catalog: specifier, each dev pin at its repo version",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const published = Object.values(tarballs).map((tarball) => {
+				const manifest = run("tar", ["-xOzf", tarball, "package/package.json"], files.out)
+				return JSON.parse(manifest.out) as { devDependencies: Record<string, string>; name: string }
+			})
+			const unresolved = published.flatMap(
+				({ name, ...fields }) =>
+					JSON.stringify(fields)
+						.match(/"(?:workspace|catalog):[^"]*"/g)
+						?.map((spec) => `${name} ${spec}`) ?? [],
+			)
+			const [core] = published
+			expect([
+				unresolved,
+				core?.devDependencies["@lovrozagar/honey-codegen"],
+				core?.devDependencies.typescript,
+			]).toEqual([[], "1.0.0", "7.0.2"])
+		},
+	)
 
 	it("carry bin/, dist/, the README and the license but no source, and every export's files", () => {
 		const missing: string[] = []
@@ -282,18 +287,30 @@ describe("each shipped bin picks what it runs (bit 19 i)", () => {
 	] as const
 
 	// v0: 4982f5f697
-	it.each(BINS)("%s on Node in a repository checkout runs the source, never a possibly stale dist/", (bin, entry) => {
-		expect(runBin("node", binLayout(bin, entry, true), bin)).toBe("source")
-	})
+	it.each(BINS)(
+		"%s on Node in a repository checkout runs the source, never a possibly stale dist/",
+		{ timeout: SPAWN_TIMEOUT },
+		(bin, entry) => {
+			expect(runBin("node", binLayout(bin, entry, true), bin)).toBe("source")
+		},
+	)
 
 	// v0: 13cea3f296
-	it.each(BINS)("%s on Node in an installed package (no tsconfig.json) runs the compiled dist/", (bin, entry) => {
-		expect(runBin("node", binLayout(bin, entry, false), bin)).toBe("dist")
-	})
+	it.each(BINS)(
+		"%s on Node in an installed package (no tsconfig.json) runs the compiled dist/",
+		{ timeout: SPAWN_TIMEOUT },
+		(bin, entry) => {
+			expect(runBin("node", binLayout(bin, entry, false), bin)).toBe("dist")
+		},
+	)
 
-	it.each(BINS)("%s on Bun in an installed package runs dist/ too: the tarball ships no source", (bin, entry) => {
-		expect(runBin("bun", binLayout(bin, entry, false), bin)).toBe("dist")
-	})
+	it.each(BINS)(
+		"%s on Bun in an installed package runs dist/ too: the tarball ships no source",
+		{ timeout: SPAWN_TIMEOUT },
+		(bin, entry) => {
+			expect(runBin("bun", binLayout(bin, entry, false), bin)).toBe("dist")
+		},
+	)
 })
 
 describe("ws, core's optional peer, in a real install (bit 19 i)", () => {

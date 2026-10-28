@@ -16,6 +16,7 @@ import type { TestSpecification } from "vitest/node"
 import { listedEntries } from "../../scripts/sdk-budget.ts"
 import { ciInstalls } from "../../src/emit/shared/__fixtures__/installs.ts"
 import config, { HARNESS, LongestFirst, TOOLCHAIN_PROJECTS } from "../../vitest.config.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const GEN = resolve(import.meta.dirname, "../..")
 
@@ -208,14 +209,18 @@ describe("the default run's projects", () => {
 	)
 
 	/* every job that saves or restores the cache names one key, so the shards share what the job owning it saves */
-	it.each(Object.keys(CACHE) as Toolchain[])("keys CI's %s compile cache on every input of its compiles", (name) => {
-		const [key, ...pins] = CACHE[name]
-		const [globs = [], ...others] = cacheKeyGlobs(WORKFLOW, key)
-		const inputs = [...pins, ...compileInputs(name, runFiles, imports)]
-		expect(globs.length).toBeGreaterThan(0)
-		expect(inputs.filter((file) => !globs.some((glob) => matchesGlob(file, glob)))).toEqual([])
-		expect(others).toEqual(others.map(() => globs))
-	})
+	it.each(Object.keys(CACHE) as Toolchain[])(
+		"keys CI's %s compile cache on every input of its compiles",
+		{ timeout: SPAWN_TIMEOUT },
+		(name) => {
+			const [key, ...pins] = CACHE[name]
+			const [globs = [], ...others] = cacheKeyGlobs(WORKFLOW, key)
+			const inputs = [...pins, ...compileInputs(name, runFiles, imports)]
+			expect(globs.length).toBeGreaterThan(0)
+			expect(inputs.filter((file) => !globs.some((glob) => matchesGlob(file, glob)))).toEqual([])
+			expect(others).toEqual(others.map(() => globs))
+		},
+	)
 
 	it("names no toolchain glob that matches no file", () => {
 		const globs = Object.values(TOOLCHAIN_PROJECTS).flat()
@@ -225,6 +230,7 @@ describe("the default run's projects", () => {
 	/* a fixture reaching another language's emitter would run it in this one's compiles and miss this one's cache key */
 	it.each(Object.keys(ENV) as Toolchain[])(
 		"keeps %s's compile fixtures off every other language's emit tree",
+		{ timeout: SPAWN_TIMEOUT },
 		(name) => {
 			const fixtures = dirFiles(`src/emit/${name}/__fixtures__`).filter((file) => file.endsWith(".ts"))
 			const others = (Object.keys(ENV) as Toolchain[]).filter((other) => other !== name)

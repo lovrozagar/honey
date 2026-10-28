@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./boundaries.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
+import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const rule = plugin.rules.boundaries
 const NODE = "node builtins are for the Node adapter and build-time code only"
@@ -156,7 +157,7 @@ describe("honey/boundaries: runtime globals", () => {
 		expect(reportsOf(rule, fixture)).toEqual([])
 	})
 
-	it("fails oxlint through the honey plugin entry", () => {
+	it("fails oxlint through the honey plugin entry", { timeout: SPAWN_TIMEOUT }, () => {
 		const fixture = {
 			"packages/core/src/routing/app.ts": 'import { readFileSync } from "node:fs"\n',
 			"packages/core/src/adapters/node/serve.ts": 'import { createServer } from "node:http"\n',

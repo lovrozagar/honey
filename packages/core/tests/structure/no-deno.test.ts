@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { detectRuntime } from "../../src/runtime/detect-runtime.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 const SELF = "packages/core/tests/structure/no-deno.test.ts"
@@ -36,7 +37,7 @@ function mentionsDeno(file: string): boolean {
 }
 
 describe("Deno is gone (H15)", () => {
-	it("no file outside history names deno", () => {
+	it("no file outside history names deno", { timeout: SPAWN_TIMEOUT }, () => {
 		expect(repoFiles().filter(mentionsDeno)).toEqual([])
 	})
 

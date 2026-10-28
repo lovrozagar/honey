@@ -9,6 +9,7 @@ import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { COMPLETE } from "./check-tree.ts"
 import { type Reassignment, unaccounted, type V0Case } from "./v0-inventory.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 const V1_ROOTS = [
@@ -60,20 +61,24 @@ describe(`v0 cases accounted for through bit ${String(COMPLETE).padStart(2, "0")
 		expect(Number.isInteger(COMPLETE)).toBe(true)
 	})
 
-	it("every port tag names a real v0 case", () => {
+	it("every port tag names a real v0 case", { timeout: SPAWN_TIMEOUT }, () => {
 		expect([...portedIds()].filter((id) => !known.has(id))).toEqual([])
 	})
 
-	it("tags at most one v0 id per line (the gate reads only the first; a second would silently drop)", () => {
-		expect(multiIdTagLines()).toEqual([])
-	})
+	it(
+		"tags at most one v0 id per line (the gate reads only the first; a second would silently drop)",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			expect(multiIdTagLines()).toEqual([])
+		},
+	)
 
 	it("every retirement and reassignment names a real v0 case", () => {
 		const listed = [...Object.keys(inventory.retired), ...Object.keys(inventory.reassigned)]
 		expect(listed.filter((id) => !known.has(id))).toEqual([])
 	})
 
-	it("every case of a completed feature is ported or retired", () => {
+	it("every case of a completed feature is ported or retired", { timeout: SPAWN_TIMEOUT }, () => {
 		const accounting = {
 			complete: COMPLETE,
 			ported: portedIds(),

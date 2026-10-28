@@ -12,7 +12,7 @@ import type { GateOptions } from "../../../src/emit/python/__fixtures__/compiled
 import { type DrivenPythonSdk, servedPythonSdk } from "../../../src/emit/python/__fixtures__/driven.ts"
 import { PY_FLOOR, resolve, withPython } from "../../../src/emit/python/__fixtures__/python-env.ts"
 import { generatePythonSdk, pythonCallPlans } from "../../../src/emit/python/sdk.ts"
-import { type TargetRunner, targetSuite } from "./harness.ts"
+import { SPAWN_TIMEOUT, type TargetRunner, targetSuite } from "./harness.ts"
 import { type Cell, cellsFor, type Observed } from "./matrix.ts"
 
 const PY = withPython()
@@ -110,7 +110,7 @@ describe.skipIf(!PY)("python toolchain", () => {
 	describe.skipIf(!FLOOR)("python 3.11.4 floor", () => {
 		const floor = targetSuite(pythonRunner({ client: "async", python: "floor", variant: "floor 3.11.4" }))
 
-		it("the floor constraints resolve today as committed", () => {
+		it("the floor constraints resolve today as committed", { timeout: SPAWN_TIMEOUT }, () => {
 			const manifest = generatePythonSdk(floor().document).files["pyproject.toml"] ?? ""
 			const requirements = JSON.parse(/^dependencies = (\[.*\])$/m.exec(manifest)?.[1] ?? "[]") as string[]
 			const resolved = resolve(requirements, { python: PY_FLOOR, resolution: "lowest-direct" })

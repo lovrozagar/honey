@@ -19,6 +19,7 @@ import {
 	type Toolchain,
 	verdicts,
 } from "./mutation-harness.guards.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 /* a guard's suite reruns, its fuzz included, once per guard; a cold Rust cache pays the dependency build (Ff10) */
 const RUN = 600_000
@@ -205,45 +206,57 @@ describe("each toolchain guard's suite", () => {
 })
 
 describe("the harness where a toolchain is required", () => {
-	it("fails before any suite run instead of skipping when Go is required and absent", () => {
-		/* a PATH of one empty directory hides every go; the harness itself runs under this process's own runtime */
-		const harness = join(import.meta.dirname, "mutation-harness.ts")
-		const env = { ...process.env, HONEY_REQUIRE_GO: "1", PATH: goCacheDir("empty-path") }
-		const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
-		expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
-		expect(run.stderr).toMatch(/Go is required here/)
-	})
+	it(
+		"fails before any suite run instead of skipping when Go is required and absent",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			/* a PATH of one empty directory hides every go; the harness itself runs under this process's own runtime */
+			const harness = join(import.meta.dirname, "mutation-harness.ts")
+			const env = { ...process.env, HONEY_REQUIRE_GO: "1", PATH: goCacheDir("empty-path") }
+			const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
+			expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
+			expect(run.stderr).toMatch(/Go is required here/)
+		},
+	)
 
-	it("fails before any suite run instead of skipping when Rust is required and absent", () => {
-		/* Go's flags cleared, or Go would throw first and name itself */
-		const harness = join(import.meta.dirname, "mutation-harness.ts")
-		const env = {
-			...process.env,
-			HONEY_REQUIRE_GO: "",
-			HONEY_REQUIRE_RUST: "1",
-			HONEY_REQUIRE_TOOLCHAINS: "",
-			PATH: rustCacheDir("empty-path"),
-		}
-		const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
-		expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
-		expect(run.stderr).toMatch(/Rust .* is required here/)
-	})
+	it(
+		"fails before any suite run instead of skipping when Rust is required and absent",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			/* Go's flags cleared, or Go would throw first and name itself */
+			const harness = join(import.meta.dirname, "mutation-harness.ts")
+			const env = {
+				...process.env,
+				HONEY_REQUIRE_GO: "",
+				HONEY_REQUIRE_RUST: "1",
+				HONEY_REQUIRE_TOOLCHAINS: "",
+				PATH: rustCacheDir("empty-path"),
+			}
+			const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
+			expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
+			expect(run.stderr).toMatch(/Rust .* is required here/)
+		},
+	)
 
-	it("fails before any suite run instead of skipping when Python is required and absent", () => {
-		/* Python is found through the pinned uv under HOME, never on PATH, so an empty HOME hides it (python-env) */
-		const harness = join(import.meta.dirname, "mutation-harness.ts")
-		const env = {
-			...process.env,
-			HOME: pythonCacheDir("tmp", "no-uv"),
-			HONEY_REQUIRE_GO: "",
-			HONEY_REQUIRE_PYTHON: "1",
-			HONEY_REQUIRE_RUST: "",
-			HONEY_REQUIRE_TOOLCHAINS: "",
-		}
-		const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
-		expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
-		expect(run.stderr).toMatch(/Python .* is required here/)
-	})
+	it(
+		"fails before any suite run instead of skipping when Python is required and absent",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			/* Python is found through the pinned uv under HOME, never on PATH, so an empty HOME hides it (python-env) */
+			const harness = join(import.meta.dirname, "mutation-harness.ts")
+			const env = {
+				...process.env,
+				HOME: pythonCacheDir("tmp", "no-uv"),
+				HONEY_REQUIRE_GO: "",
+				HONEY_REQUIRE_PYTHON: "1",
+				HONEY_REQUIRE_RUST: "",
+				HONEY_REQUIRE_TOOLCHAINS: "",
+			}
+			const run = spawnSync(process.execPath, [harness], { encoding: "utf8", env, timeout: 60_000 })
+			expect({ status: run.status, stdout: run.stdout }).toEqual({ status: 1, stdout: "" })
+			expect(run.stderr).toMatch(/Python .* is required here/)
+		},
+	)
 })
 
 describe("the emit adversarial suite against each guard", () => {

@@ -28,6 +28,7 @@ import { compiledCSharp } from "../../src/emit/csharp/__fixtures__/compiled.ts"
 import * as env from "../../src/emit/csharp/__fixtures__/csharp-env.ts"
 import { FIXTURES } from "../../src/emit/csharp/__fixtures__/documents.ts"
 import { callsOf } from "./compile-calls.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const { LEAN_BUILD, csharpCacheDir, dotnetEnv, dotnetInstall, dotnetRoot, pinnedDotnet, runDotnet, withDotnet } = env
 
@@ -345,15 +346,19 @@ describe("lean builds", () => {
 
 	/* the gates' own build step (compiled.ts) passes LEAN_BUILD under dotnetEnv: a cold gate builds here, a warm
 	 * one spawns nothing, and neither leaves a server; the fresh project above is the leg a warm cache cannot skip */
-	it.skipIf(!DOTNET)("leave no compiler server or MSBuild node behind a gate's build", async () => {
-		const before = new Set(buildServers())
-		const sdk = compiledCSharp("cache")
-		expect({ built: sdk.built, diagnostics: sdk.diagnostics }).toEqual({ built: true, diagnostics: [] })
-		await vi.waitFor(() => expect(buildServers().filter((line) => !before.has(line))).toEqual([]), {
-			interval: 100,
-			timeout: 3_000,
-		})
-	})
+	it.skipIf(!DOTNET)(
+		"leave no compiler server or MSBuild node behind a gate's build",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const before = new Set(buildServers())
+			const sdk = compiledCSharp("cache")
+			expect({ built: sdk.built, diagnostics: sdk.diagnostics }).toEqual({ built: true, diagnostics: [] })
+			await vi.waitFor(() => expect(buildServers().filter((line) => !before.has(line))).toEqual([]), {
+				interval: 100,
+				timeout: 3_000,
+			})
+		},
+	)
 })
 
 const CS_COMPILED = "src/emit/csharp/__fixtures__/compiled.ts"

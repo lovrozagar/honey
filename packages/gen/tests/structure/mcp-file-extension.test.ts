@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const GEN = resolve(import.meta.dirname, "../..")
 /* built, so this file names neither */
@@ -26,11 +27,19 @@ function naming(text: string): string[] {
 }
 
 describe("the file-uploads extension's two modules", () => {
-	it("names the extension's file keyword in emit/mcp/files.ts and nowhere else in gen", () => {
-		expect(naming(KEYWORD)).toEqual(["src/emit/mcp/files.ts"])
-	})
+	it(
+		"names the extension's file keyword in emit/mcp/files.ts and nowhere else in gen",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			expect(naming(KEYWORD)).toEqual(["src/emit/mcp/files.ts"])
+		},
+	)
 
-	it("names the extension's identifier in runtime/mcp/files.ts and nowhere else in gen", () => {
-		expect(naming(IDENTIFIER)).toEqual(["src/runtime/mcp/files.ts"])
-	})
+	it(
+		"names the extension's identifier in runtime/mcp/files.ts and nowhere else in gen",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			expect(naming(IDENTIFIER)).toEqual(["src/runtime/mcp/files.ts"])
+		},
+	)
 })

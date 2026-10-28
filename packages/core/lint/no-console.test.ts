@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest"
 import plugin, { PROTOCOL } from "./no-console.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
+import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const rule = plugin.rules["no-console"]
 const MESSAGE = "console belongs to telemetry/logger.ts; log through the logger"
@@ -78,7 +79,7 @@ describe("honey/no-console: what stays allowed", () => {
 		expect(reportsOf(rule, fixture).map((report) => report.file)).toEqual(Object.keys(fixture))
 	})
 
-	it("fails oxlint through the honey plugin entry", () => {
+	it("fails oxlint through the honey plugin entry", { timeout: SPAWN_TIMEOUT }, () => {
 		const fixture = {
 			"packages/core/src/routing/app.ts": LOG,
 			"packages/core/src/telemetry/logger.ts": LOG,

@@ -19,6 +19,7 @@ import { drivenPythonSdk } from "./__fixtures__/driven.ts"
 import { PY_FLOOR, withPython } from "./__fixtures__/python-env.ts"
 import type { PythonCallPlan } from "./sdk-plan.ts"
 import { pythonCallPlans } from "./sdk.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /* every spawn counted, so a gate the cache answers is shown to start no process at all */
 vi.mock("node:child_process", async (original) => {
@@ -64,7 +65,7 @@ const filesUnder = (dir: string) =>
 		.map((entry) => join(entry.parentPath, entry.name).slice(dir.length + 1))
 		.sort()
 
-describe.skipIf(!PY)("the gate cache: one gate per content hash", () => {
+describe.skipIf(!PY)("the gate cache: one gate per content hash", { timeout: SPAWN_TIMEOUT }, () => {
 	it("gates a registry package once: a second gate reads its marker and spawns nothing", () => {
 		const first = compiledPython("cache")
 		expect({ complete: existsSync(join(first.dir, ".complete")), imported: first.imported }, first.stderr).toEqual({
@@ -119,16 +120,20 @@ describe.skipIf(!PY)("the gate cache: one gate per content hash", () => {
 })
 
 describe.skipIf(!PY)("the gate options: the floor interpreter and its constraints", () => {
-	it.skipIf(!FLOOR)("gates under the floor interpreter in a dir of its own: 3.11.4 lacks itertools.batched", () => {
-		const floor = compiledPython("canary", { python: "floor" })
-		expect({ imported: floor.imported, rejected: floor.stderr.includes("batched") }, floor.stderr).toEqual({
-			imported: false,
-			rejected: true,
-		})
-		const cache = compiledPython("cache", { python: "floor" })
-		expect(cache.imported, cache.stderr).toBe(true)
-		expect(new Set([floor.dir, cache.dir, compiledPython("canary").dir, compiledPython("cache").dir]).size).toBe(4)
-	})
+	it.skipIf(!FLOOR)(
+		"gates under the floor interpreter in a dir of its own: 3.11.4 lacks itertools.batched",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const floor = compiledPython("canary", { python: "floor" })
+			expect({ imported: floor.imported, rejected: floor.stderr.includes("batched") }, floor.stderr).toEqual({
+				imported: false,
+				rejected: true,
+			})
+			const cache = compiledPython("cache", { python: "floor" })
+			expect(cache.imported, cache.stderr).toBe(true)
+			expect(new Set([floor.dir, cache.dir, compiledPython("canary").dir, compiledPython("cache").dir]).size).toBe(4)
+		},
+	)
 })
 
 describe("program: a consumer body indented into main", () => {

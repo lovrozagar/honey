@@ -26,6 +26,7 @@ import { isWriteTemp } from "./gen/write.ts"
 import { pinnedBunVersion, withPinnedBun } from "./gen/__fixtures__/pinned-bun.ts"
 import { MARK_KEY, markOf, reap } from "./gen/__fixtures__/survivors.ts"
 import { appProject } from "./ir/__fixtures__/app-project.ts"
+import { SPAWN_TIMEOUT } from "./gen/__fixtures__/spawn-timeout.ts"
 
 const BIN = resolve(import.meta.dirname, "../bin/honey-codegen.js")
 const REPO = resolve(import.meta.dirname, "../../..")
@@ -120,7 +121,7 @@ const GENERATE = ["generate", "--target", "ts", "--out", "out"]
 describe("generate --app (bit 19 h2)", () => {
 	// v0: 801b406e79
 	// v0: cb437d7688
-	it("generates the TypeScript SDK from an app module, no spec given", async () => {
+	it("generates the TypeScript SDK from an app module, no spec given", { timeout: SPAWN_TIMEOUT }, async () => {
 		const dir = project({
 			"src/app.ts": `${HONEY}export const app = honey().get("/health").meta({ operationId: "health.get" }).handler((c) => c.res.text("ok", "ok"))\n`,
 		})
@@ -130,55 +131,67 @@ describe("generate --app (bit 19 h2)", () => {
 	})
 
 	// v0: f3c257c447
-	it("refuses --spec beside --app, an --app with no value and an unknown flag, writing nothing", async () => {
-		const dir = project({ "src/app.ts": `${HONEY}export const app = honey()\n`, "stale.json": "{}" })
-		const firstLines = []
-		for (const argv of [
-			[...GENERATE, "--spec", "stale.json", "--app", "src/app.ts"],
-			[...GENERATE, "--app"],
-			[...GENERATE, "--app", "src/app.ts", "--manifset"],
-		])
-			firstLines.push(await run(argv, dir).then(({ err, status }) => [status, err.split("\n")[0]]))
-		expect(firstLines).toEqual([
-			[1, "honey-codegen: --spec and --app each name the document: give one"],
-			[1, "honey-codegen: --app requires a value"],
-			[1, "honey-codegen: unknown option --manifset"],
-		])
-		expect(readdirSync(dir).sort()).toEqual(["node_modules", "src", "stale.json"])
-	})
+	it(
+		"refuses --spec beside --app, an --app with no value and an unknown flag, writing nothing",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const dir = project({ "src/app.ts": `${HONEY}export const app = honey()\n`, "stale.json": "{}" })
+			const firstLines = []
+			for (const argv of [
+				[...GENERATE, "--spec", "stale.json", "--app", "src/app.ts"],
+				[...GENERATE, "--app"],
+				[...GENERATE, "--app", "src/app.ts", "--manifset"],
+			])
+				firstLines.push(await run(argv, dir).then(({ err, status }) => [status, err.split("\n")[0]]))
+			expect(firstLines).toEqual([
+				[1, "honey-codegen: --spec and --app each name the document: give one"],
+				[1, "honey-codegen: --app requires a value"],
+				[1, "honey-codegen: unknown option --manifset"],
+			])
+			expect(readdirSync(dir).sort()).toEqual(["node_modules", "src", "stale.json"])
+		},
+	)
 })
 
 describe("generate --app with the module's openApi options (bit 19 h2)", () => {
 	// v0: 13874dcde2
-	it("takes a security scheme the module's openApi declares as declared, and the SDK sends it", async () => {
-		const route = `honey().get("/t").meta({ operationId: "t.get", security: "iaTesterKey" }).handler((c) => c.res.json("ok", {}))`
-		const scheme = `{ iaTesterKey: { in: "header", name: "x-ia-tester-key", type: "apiKey" } }`
-		const dir = project({
-			"src/bare.ts": `${HONEY}export const app = ${route}\n`,
-			"src/declared.ts": `${HONEY}export const app = ${route}\nexport const openApi = { info: { title: "t", version: "1" }, securitySchemes: ${scheme} }\n`,
-		})
-		const bare = await run(["generate", "--app", "src/bare.ts", "--target", "ts", "--out", "bare"], dir)
-		const declared = await run(["generate", "--app", "src/declared.ts", ...GENERATE.slice(1)], dir)
-		expect([
-			/not declared/.test(bare.logged),
-			/not declared|UNKNOWN_SECURITY/.test(declared.logged),
-			declared.status,
-		]).toEqual([true, false, 0])
-		expect(textUnder(join(dir, "out/ts"))).toContain("x-ia-tester-key")
-	})
+	it(
+		"takes a security scheme the module's openApi declares as declared, and the SDK sends it",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const route = `honey().get("/t").meta({ operationId: "t.get", security: "iaTesterKey" }).handler((c) => c.res.json("ok", {}))`
+			const scheme = `{ iaTesterKey: { in: "header", name: "x-ia-tester-key", type: "apiKey" } }`
+			const dir = project({
+				"src/bare.ts": `${HONEY}export const app = ${route}\n`,
+				"src/declared.ts": `${HONEY}export const app = ${route}\nexport const openApi = { info: { title: "t", version: "1" }, securitySchemes: ${scheme} }\n`,
+			})
+			const bare = await run(["generate", "--app", "src/bare.ts", "--target", "ts", "--out", "bare"], dir)
+			const declared = await run(["generate", "--app", "src/declared.ts", ...GENERATE.slice(1)], dir)
+			expect([
+				/not declared/.test(bare.logged),
+				/not declared|UNKNOWN_SECURITY/.test(declared.logged),
+				declared.status,
+			]).toEqual([true, false, 0])
+			expect(textUnder(join(dir, "out/ts"))).toContain("x-ia-tester-key")
+		},
+	)
 
 	// v0: cfefebba33
-	it("says nothing of a mutation's missing invalidate when the module's openApi turns the check off", async () => {
-		const routes = `honey().post("/tables").meta({ operationId: "tables.create" }).handler((c) => c.res.text("ok", "ok")).get("/tables").meta({ operationId: "tables.list" }).handler((c) => c.res.text("ok", "ok"))`
-		const dir = project({
-			"src/checked.ts": `${HONEY}export const app = ${routes}\n`,
-			"src/off.ts": `${HONEY}export const app = ${routes}\nexport const openApi = { info: { title: "t", version: "1" }, invalidate: "off" }\n`,
-		})
-		const targets = ["--target", "ts", "--target", "python"]
-		const checked = await run(["generate", "--app", "src/checked.ts", ...targets, "--out", "checked"], dir)
-		const off = await run(["generate", "--app", "src/off.ts", ...targets, "--out", "off"], dir)
-		expect([/POST\s+\/tables → GET \/tables/.test(checked.logged), off.logged, off.status]).toEqual([true, "", 0])
-	})
+	it(
+		"says nothing of a mutation's missing invalidate when the module's openApi turns the check off",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const routes = `honey().post("/tables").meta({ operationId: "tables.create" }).handler((c) => c.res.text("ok", "ok")).get("/tables").meta({ operationId: "tables.list" }).handler((c) => c.res.text("ok", "ok"))`
+			const dir = project({
+				"src/checked.ts": `${HONEY}export const app = ${routes}\n`,
+				"src/off.ts": `${HONEY}export const app = ${routes}\nexport const openApi = { info: { title: "t", version: "1" }, invalidate: "off" }\n`,
+			})
+			const targets = ["--target", "ts", "--target", "python"]
+			const checked = await run(["generate", "--app", "src/checked.ts", ...targets, "--out", "checked"], dir)
+			const off = await run(["generate", "--app", "src/off.ts", ...targets, "--out", "off"], dir)
+			expect([/POST\s+\/tables → GET \/tables/.test(checked.logged), off.logged, off.status]).toEqual([true, "", 0])
+		},
+	)
 })
 
 describe.skipIf(!PINNED_BUN)(`generate --app through the bin under Bun ${pinnedBunVersion()} (bit 19 h2)`, () => {

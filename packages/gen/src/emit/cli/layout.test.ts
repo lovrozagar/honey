@@ -16,6 +16,7 @@ import { goCallPlans } from "../go/sdk.ts"
 import { commandTree } from "./commands.ts"
 import { discoveryEntries } from "./discovery.ts"
 import { cmdFiles } from "./layout.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 const OK = { 200: { content: { "application/json": { schema: { type: "object" } } }, description: "ok" } }
 const ID = { in: "path", name: "id", required: true, schema: { type: "string" } }
@@ -204,7 +205,7 @@ describe("the cmd files' imports (bit 17)", () => {
 })
 
 describe.skipIf(!withGo())("the cmd files, as gofmt reads them (bit 17)", () => {
-	it("writes every cmd file gofmt-clean as written, with a server and without", () => {
+	it("writes every cmd file gofmt-clean as written, with a server and without", { timeout: SPAWN_TIMEOUT }, () => {
 		const dir = mkdtempSync(join(goCacheDir("tmp"), "layout-"))
 		for (const declared of [true, false])
 			for (const [name, text] of Object.entries(files(declared))) {

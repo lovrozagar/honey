@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./content-type-exact-essence.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
+import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const rule = plugin.rules["content-type-exact-essence"]
 const MESSAGE = "compare a media type by its parsed essence, never by prefix (H18.2)"
@@ -46,7 +47,7 @@ describe("honey/content-type-exact-essence", () => {
 		expect(reportsOf(rule, fixture)).toEqual([])
 	})
 
-	it("fails oxlint through the honey plugin entry", () => {
+	it("fails oxlint through the honey plugin entry", { timeout: SPAWN_TIMEOUT }, () => {
 		const fixture = {
 			"packages/core/src/a.ts": 'export const f = (ct: string) => ct.startsWith("application/json")\n',
 			"packages/core/src/b.ts": 'export const f = (ct: string) => ct === "application/json"\n',

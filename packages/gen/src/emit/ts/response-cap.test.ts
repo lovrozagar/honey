@@ -11,6 +11,7 @@ import { brotliCompressSync, constants, deflateSync, gzipSync, zstdCompressSync 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { type Flood, flood } from "../shared/__fixtures__/flood-server.ts"
 import { emittedApp, emittedSdk, emittedSdkEntry } from "./__fixtures__/emitted.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 type Front = "app" | "sdk"
 type Outcome = { data?: unknown; error?: { body?: unknown; message?: string; status?: number } | null; status?: number }
@@ -174,27 +175,31 @@ console.log(JSON.stringify({ message: outcome.error?.message ?? null, status: ou
 `
 
 describe("the response cap under Bun, whose fetch asks for gzip, deflate, br and zstd (bit 19 b1)", () => {
-	it.each(["gzip", "deflate", "br", "zstd"] as const)("refuses a %s bomb on its decoded bytes", async (coding) => {
-		const bomb = coded(coding)
-		served = await flood(bomb, {
-			"content-encoding": coding,
-			"content-length": String(bomb.byteLength),
-			"content-type": "application/octet-stream",
-		})
-		const entry = emittedSdkEntry(DOC)
-		const program = join(dirname(entry), `bun-call-${coding}.ts`)
-		writeFileSync(program, BUN_CALL(entry, served.url))
-		/* async: the flood server answering it runs on this process's event loop */
-		const ran = await new Promise<{ status: number | null; stderr: string; stdout: string }>((resolve) => {
-			execFile("bun", [program], { encoding: "utf8", timeout: 120_000 }, (error, stdout, stderr) =>
-				resolve({ status: error ? (typeof error.code === "number" ? error.code : 1) : 0, stderr, stdout }),
-			)
-		})
-		const message = `Response body is over the ${MiB}-byte cap (application/octet-stream, ${bomb.byteLength} bytes)`
-		expect([ran.status, served.encodings(), JSON.parse(ran.stdout || "null")], ran.stderr).toEqual([
-			0,
-			["gzip, deflate, br, zstd"],
-			{ message, status: 200 },
-		])
-	})
+	it.each(["gzip", "deflate", "br", "zstd"] as const)(
+		"refuses a %s bomb on its decoded bytes",
+		{ timeout: SPAWN_TIMEOUT },
+		async (coding) => {
+			const bomb = coded(coding)
+			served = await flood(bomb, {
+				"content-encoding": coding,
+				"content-length": String(bomb.byteLength),
+				"content-type": "application/octet-stream",
+			})
+			const entry = emittedSdkEntry(DOC)
+			const program = join(dirname(entry), `bun-call-${coding}.ts`)
+			writeFileSync(program, BUN_CALL(entry, served.url))
+			/* async: the flood server answering it runs on this process's event loop */
+			const ran = await new Promise<{ status: number | null; stderr: string; stdout: string }>((resolve) => {
+				execFile("bun", [program], { encoding: "utf8", timeout: 120_000 }, (error, stdout, stderr) =>
+					resolve({ status: error ? (typeof error.code === "number" ? error.code : 1) : 0, stderr, stdout }),
+				)
+			})
+			const message = `Response body is over the ${MiB}-byte cap (application/octet-stream, ${bomb.byteLength} bytes)`
+			expect([ran.status, served.encodings(), JSON.parse(ran.stdout || "null")], ran.stderr).toEqual([
+				0,
+				["gzip, deflate, br, zstd"],
+				{ message, status: 200 },
+			])
+		},
+	)
 })

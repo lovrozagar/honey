@@ -10,6 +10,7 @@ import { spawn } from "node:child_process"
 import { describe, expect, it } from "vitest"
 import { gone } from "./__fixtures__/gone.ts"
 import { type RecordingServer, type Reply, recordingServer, served } from "./__fixtures__/recording-server.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 type Mode = "exit" | "late" | "release" | "teardown"
 
@@ -60,34 +61,46 @@ async function verdict(mode: Mode) {
 }
 
 describe("the release check: a close the program's exit made is no release", () => {
-	it("decides each program's release as it happened: only the one that let go before its next request", async () => {
-		const verdicts = {
-			exit: await verdict("exit"),
-			release: await verdict("release"),
-			teardown: await verdict("teardown"),
-		}
-		expect(verdicts).toEqual({
-			exit: { code: 0, released: false },
-			release: { code: 0, released: true },
-			teardown: { code: 0, released: false },
-		})
-	})
+	it(
+		"decides each program's release as it happened: only the one that let go before its next request",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const verdicts = {
+				exit: await verdict("exit"),
+				release: await verdict("release"),
+				teardown: await verdict("teardown"),
+			}
+			expect(verdicts).toEqual({
+				exit: { code: 0, released: false },
+				release: { code: 0, released: true },
+				teardown: { code: 0, released: false },
+			})
+		},
+	)
 
-	it("is what the old check got wrong: it passed the leak a teardown closes 200 ms before the exit", async () => {
-		expect(await oldVerdict("teardown")).toBe(true)
-	})
+	it(
+		"is what the old check got wrong: it passed the leak a teardown closes 200 ms before the exit",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			expect(await oldVerdict("teardown")).toBe(true)
+		},
+	)
 })
 
 describe("the release check's held reply: when it goes out", () => {
-	it("answers the held reply once a close that came after it is seen, not at the bound", async () => {
-		const check = gone(NEXT, { withinMs: 4_000 })
-		const start = performance.now()
-		await served([HELD, check.reply], (server) => program(server, "late"))
-		expect({ fast: performance.now() - start < 2_000, released: check.released() }).toEqual({
-			fast: true,
-			released: true,
-		})
-	})
+	it(
+		"answers the held reply once a close that came after it is seen, not at the bound",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const check = gone(NEXT, { withinMs: 4_000 })
+			const start = performance.now()
+			await served([HELD, check.reply], (server) => program(server, "late"))
+			expect({ fast: performance.now() - start < 2_000, released: check.released() }).toEqual({
+				fast: true,
+				released: true,
+			})
+		},
+	)
 
 	it("is no release when the stream it names was never opened", async () => {
 		const check = gone(NEXT, { stream: 5 })

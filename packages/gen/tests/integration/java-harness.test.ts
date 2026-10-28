@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { type DrivenJavaSdk, servedJavaSdk } from "../../src/emit/java/__fixtures__/driven.ts"
 import { withJava } from "../../src/emit/java/__fixtures__/java-env.ts"
 import type { JavaError, Script, Trace } from "../../src/emit/shared/__fixtures__/protocol.ts"
-import { type ReferenceApp, startReferenceApp } from "./conformance/harness.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp } from "./conformance/harness.ts"
 import type { Call, Json, Observed, Setup, WireHop } from "./conformance/matrix.ts"
 
 type Drive = { calls: readonly Call[]; setup?: Setup }
@@ -167,7 +167,7 @@ beforeAll(async () => {
 	reference = await startReferenceApp()
 	javaSdk = servedJavaSdk(reference.document)
 	expect(javaSdk.built, javaSdk.diagnostics.join("\n")).toBe(true)
-})
+}, SPAWN_TIMEOUT)
 
 afterAll(() => reference?.stop())
 

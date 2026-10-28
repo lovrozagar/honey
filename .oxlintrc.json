@@ -95,6 +95,12 @@
 			}
 		},
 		{
+			"files": ["packages/core/**/*.test.ts", "packages/gen/**/*.test.ts"],
+			"rules": {
+				"honey/spawn-timeout": "error"
+			}
+		},
+		{
 			"files": [
 				"packages/core/src/**/*.test.ts",
 				"packages/core/lint/**/*.test.ts",

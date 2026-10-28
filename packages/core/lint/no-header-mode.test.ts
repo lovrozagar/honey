@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./no-header-mode.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
+import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const rule = plugin.rules["no-header-mode"]
 const MESSAGE = "a request header never selects an internal mode: do not read a honey-namespaced header (H19.7)"
@@ -35,7 +36,7 @@ describe("honey/no-header-mode", () => {
 		expect(reportsOf(rule, fixture)).toEqual([])
 	})
 
-	it("fails oxlint through the honey plugin entry", () => {
+	it("fails oxlint through the honey plugin entry", { timeout: SPAWN_TIMEOUT }, () => {
 		const fixture = {
 			"packages/core/src/a.ts": 'export const f = (h: Headers) => h.get("x-honey-debug")\n',
 			"packages/core/src/b.ts": 'export const f = (h: Headers) => h.get("accept")\n',

@@ -20,6 +20,7 @@ import { urlFiles } from "../../src/mcp/url-files.ts"
 import { generateOpenApi } from "../../src/openapi/generate.ts"
 import { honey } from "../../src/routing/app.ts"
 import { fileInput } from "./mcp-files/client.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const KEY = "ApiKey ak_files"
 const SCHEMES = {
@@ -91,6 +92,7 @@ afterAll(async () => {
 describe.skipIf(!withClients())("remote files under the official TS clients (bit 21 g)", () => {
 	it.each(["sdk", "modern"] as const)(
 		"%s lists the {url} value, sends a file by URL, gets no upload request",
+		{ timeout: SPAWN_TIMEOUT },
 		async (client) => {
 			hosted.length = 0
 			const metadata = await fileInput("f-1", CSV, "text/csv")

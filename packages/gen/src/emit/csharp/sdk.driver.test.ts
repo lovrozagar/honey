@@ -19,6 +19,7 @@ import { FIXTURES } from "./__fixtures__/documents.ts"
 import { drivenCSharpSdk, driverDll } from "./__fixtures__/driven.ts"
 import type { CSharpCallPlan } from "./sdk-plan.ts"
 import { csharpCallPlans } from "./sdk.ts"
+import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 
 /* every spawn counted, so a gate the cache answers is shown to start no process at all */
 vi.mock("node:child_process", async (original) => {
@@ -71,7 +72,7 @@ const filesUnder = (dir: string) =>
 		.map((entry) => join(entry.parentPath, entry.name).slice(dir.length + 1))
 		.sort()
 
-describe.skipIf(!DOTNET)("the gate cache: one build per content hash", () => {
+describe.skipIf(!DOTNET)("the gate cache: one build per content hash", { timeout: SPAWN_TIMEOUT }, () => {
 	it("builds a registry project once: a second gate reads its marker and spawns nothing", () => {
 		const first = compiledCSharp("cache")
 		expect(
@@ -119,19 +120,23 @@ describe.skipIf(!DOTNET)("the gate cache: one build per content hash", () => {
 })
 
 describe.skipIf(!DOTNET)("the gate's format runs, checks and programs: once per dir, program text or compile", () => {
-	it("runs the format gate once per dir: clean for the cache project, the mis-indented line for the canary", () => {
-		const findings = compiledCSharp("canary").format()
-		expect(findings).toEqual(["Canary.cs(8,9): error WHITESPACE: Fix whitespace formatting. Delete 2 characters."])
-		expect(compiledCSharp("cache").format()).toEqual([])
-		const before = spawns()
-		expect({ canary: compiledCSharp("canary").format(), cache: compiledCSharp("cache").format() }).toEqual({
-			cache: [],
-			canary: findings,
-		})
-		expect(spawns() - before).toBe(0)
-	})
+	it(
+		"runs the format gate once per dir: clean for the cache project, the mis-indented line for the canary",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const findings = compiledCSharp("canary").format()
+			expect(findings).toEqual(["Canary.cs(8,9): error WHITESPACE: Fix whitespace formatting. Delete 2 characters."])
+			expect(compiledCSharp("cache").format()).toEqual([])
+			const before = spawns()
+			expect({ canary: compiledCSharp("canary").format(), cache: compiledCSharp("cache").format() }).toEqual({
+				cache: [],
+				canary: findings,
+			})
+			expect(spawns() - before).toBe(0)
+		},
+	)
 
-	it("reports csc's errors for a consumer program by line, once per program", () => {
+	it("reports csc's errors for a consumer program by line, once per program", { timeout: SPAWN_TIMEOUT }, () => {
 		const sdk = compiledCSharp("cache")
 		const bad = "internal static class P\n{\n    private static void Main() { string s = Cache.Probe.One.Value; }\n}\n"
 		expect(sdk.check(PROBE)).toEqual([])
@@ -140,17 +145,21 @@ describe.skipIf(!DOTNET)("the gate's format runs, checks and programs: once per 
 		expect({ again: sdk.check(bad), spawned: spawns() - before }).toMatchObject({ spawned: 0 })
 	})
 
-	it("runs a program beside the dll with its args and its input on stdin, however large an unread input", async () => {
-		const sdk = compiledCSharp("cache")
-		expect(await sdk.exec(PROBE, "hi\n", ["base"])).toEqual({ status: 0, stderr: "", stdout: "1 base hi\n" })
-		/* more than a pipe holds: the program exits before the write ends, which must not surface as EPIPE */
-		expect(await sdk.exec(SILENT, "x".repeat(4 << 20))).toEqual({ status: 0, stderr: "", stdout: "3\n" })
-		const broken = await sdk.exec("internal static class P { }\n", "")
-		expect([broken.status, broken.stderr]).toEqual([
-			1,
-			"error CS5001: Program does not contain a static 'Main' method suitable for an entry point",
-		])
-	})
+	it(
+		"runs a program beside the dll with its args and its input on stdin, however large an unread input",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const sdk = compiledCSharp("cache")
+			expect(await sdk.exec(PROBE, "hi\n", ["base"])).toEqual({ status: 0, stderr: "", stdout: "1 base hi\n" })
+			/* more than a pipe holds: the program exits before the write ends, which must not surface as EPIPE */
+			expect(await sdk.exec(SILENT, "x".repeat(4 << 20))).toEqual({ status: 0, stderr: "", stdout: "3\n" })
+			const broken = await sdk.exec("internal static class P { }\n", "")
+			expect([broken.status, broken.stderr]).toEqual([
+				1,
+				"error CS5001: Program does not contain a static 'Main' method suitable for an entry point",
+			])
+		},
+	)
 })
 
 /** The driver run on `envelope` as given: the refusals come before the SDK loads, so no SDK need be gated. */
@@ -168,36 +177,48 @@ const envelopeOf = (cell: object, plans: Readonly<Record<string, CSharpCallPlan>
 })
 
 describe.skipIf(!DOTNET)("the C# test driver: its build and what it refuses", () => {
-	it("builds once per source hash, with no SDK: the same dll, the second time with no spawn", () => {
-		const dll = driverDll()
-		expect(existsSync(dll)).toBe(true)
-		const before = spawns()
-		expect({ dll: driverDll(), spawned: spawns() - before }).toEqual({ dll, spawned: 0 })
-	})
+	it(
+		"builds once per source hash, with no SDK: the same dll, the second time with no spawn",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const dll = driverDll()
+			expect(existsSync(dll)).toBe(true)
+			const before = spawns()
+			expect({ dll: driverDll(), spawned: spawns() - before }).toEqual({ dll, spawned: 0 })
+		},
+	)
 
-	it("refuses a multipart body before the SDK loads: a consumer program sends FileParts", async () => {
-		const upload = { body: { kind: "json", value: {} }, operation: OP, route: { method: "POST", path: "/" } }
-		const multipart: CSharpCallPlan = { ...NOTES, body: { kind: "multipart", param: "body" } }
-		expect(await driverOn(envelopeOf({ calls: [upload] }, { [OP]: multipart }))).toEqual({
-			status: 1,
-			stderr: `driver: call 0 (${OP}): a multipart body is driven by a consumer program (FilePart)`,
-			stdout: "",
-		})
-	})
+	it(
+		"refuses a multipart body before the SDK loads: a consumer program sends FileParts",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const upload = { body: { kind: "json", value: {} }, operation: OP, route: { method: "POST", path: "/" } }
+			const multipart: CSharpCallPlan = { ...NOTES, body: { kind: "multipart", param: "body" } }
+			expect(await driverOn(envelopeOf({ calls: [upload] }, { [OP]: multipart }))).toEqual({
+				status: 1,
+				stderr: `driver: call 0 (${OP}): a multipart body is driven by a consumer program (FilePart)`,
+				stdout: "",
+			})
+		},
+	)
 
-	it("decodes a script strictly before the SDK loads; refuses an unknown call member and an SDK exporting no JsonSerializerContext", async () => {
-		const create = { operation: OP, route: { method: "POST", path: "/" } }
-		const scripted = (script: object) => ({ ...envelopeOf({ calls: [create] }, { [OP]: NOTES }), script })
-		expect((await driverOn(scripted({ calls: [{ wait: 1 }] }))).stderr).toBe("driver: script: unknown member wait")
-		expect((await driverOn(scripted({ hooks: { request: [{ setHeader: ["X"] }] } }))).stderr).toBe(
-			"driver: script: a request hook's setHeader is [name, value]",
-		)
-		const unknown = envelopeOf({ calls: [{ ...create, cancel: true }] }, { [OP]: NOTES })
-		expect((await driverOn(unknown)).stderr).toMatch(/^driver: the envelope does not decode: .*'cancel'/)
-		expect((await driverOn(envelopeOf({ calls: [create] }, { [OP]: NOTES }))).stderr).toBe(
-			"driver: the SDK exports 0 JsonSerializerContext types, not one",
-		)
-	})
+	it(
+		"decodes a script strictly before the SDK loads; refuses an unknown call member and an SDK exporting no JsonSerializerContext",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const create = { operation: OP, route: { method: "POST", path: "/" } }
+			const scripted = (script: object) => ({ ...envelopeOf({ calls: [create] }, { [OP]: NOTES }), script })
+			expect((await driverOn(scripted({ calls: [{ wait: 1 }] }))).stderr).toBe("driver: script: unknown member wait")
+			expect((await driverOn(scripted({ hooks: { request: [{ setHeader: ["X"] }] } }))).stderr).toBe(
+				"driver: script: a request hook's setHeader is [name, value]",
+			)
+			const unknown = envelopeOf({ calls: [{ ...create, cancel: true }] }, { [OP]: NOTES })
+			expect((await driverOn(unknown)).stderr).toMatch(/^driver: the envelope does not decode: .*'cancel'/)
+			expect((await driverOn(envelopeOf({ calls: [create] }, { [OP]: NOTES }))).stderr).toBe(
+				"driver: the SDK exports 0 JsonSerializerContext types, not one",
+			)
+		},
+	)
 })
 
 describe("csharpCallPlans: each operation's call plan, in the emitter's own names", () => {

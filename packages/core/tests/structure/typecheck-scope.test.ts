@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const ROOT = join(import.meta.dirname, "../../../..")
 /* checked against the packed tarball by test:packaging: in the tree it resolves no published exports (bit 19 i) */
@@ -53,7 +54,7 @@ function checkedBy(scripts: Record<string, string>, gates: readonly string[]): S
 }
 
 describe("every tracked tsconfig.json is type-checked by a gate (bit 20 k-fix)", () => {
-	it("names none a gate leaves unchecked", () => {
+	it("names none a gate leaves unchecked", { timeout: SPAWN_TIMEOUT }, () => {
 		const root = manifestAt(".")
 		const checked = checkedBy(root.scripts ?? {}, ["typecheck", ...(root.standards?.gates ?? [])])
 		const unchecked = tracked("tsconfig.json").filter((path) => !checked.has(path) && !PACKED_ONLY.includes(path))

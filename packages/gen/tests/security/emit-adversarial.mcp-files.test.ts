@@ -19,6 +19,7 @@ import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { fileOf, type Read } from "../../src/runtime/mcp/files.ts"
 import { type Disk, fileReader } from "../../src/runtime/mcp/reader.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const HOME = join(process.env.HOME ?? "", ".cache/honey-tmp/gen-mcp")
 const NODE_DISK: Disk = { open, realpath, stat }
@@ -51,7 +52,7 @@ const socket = createServer()
 beforeAll(async () => {
 	made = tree()
 	await new Promise<void>((listening) => socket.listen(join(made.root, "sock"), listening))
-})
+}, SPAWN_TIMEOUT)
 afterAll(() => new Promise<void>((closed) => socket.close(() => closed())))
 
 /** What reading `path` under `root` (capped at `max`, through `disk`) gives: its text, or the rule that refused it. */

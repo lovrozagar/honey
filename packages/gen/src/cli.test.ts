@@ -22,6 +22,7 @@ import { goCacheDir, gofmtPath, withGo } from "./emit/go/__fixtures__/go-env.ts"
 import { type Generate, usage } from "./gen/args.ts"
 import { pinnedBunVersion, withPinnedBun } from "./gen/__fixtures__/pinned-bun.ts"
 import { MARK_KEY, markOf, marked, reap } from "./gen/__fixtures__/survivors.ts"
+import { SPAWN_TIMEOUT } from "./gen/__fixtures__/spawn-timeout.ts"
 
 const GO = withGo()
 const SLOW = { timeout: 600_000 }
@@ -71,40 +72,48 @@ const filesUnder = (dir: string) =>
 		.sort()
 
 describe("generate's usage (phase h)", () => {
-	it("refuses no command and an unknown one, and names what a regeneration deletes", async () => {
-		const [none, unknown] = [await run([]), await run(["serve"])]
-		expect([none.status, none.out, unknown.status, unknown.err.split("\n")[0]]).toEqual([
-			1,
-			`${usage()}\n`,
-			1,
-			'honey-codegen: unknown command "serve"',
-		])
-		expect(usage()).toContain(
-			"A regeneration deletes a\nfile the last run wrote and this one does not, unless it was edited since",
-		)
-	})
+	it(
+		"refuses no command and an unknown one, and names what a regeneration deletes",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const [none, unknown] = [await run([]), await run(["serve"])]
+			expect([none.status, none.out, unknown.status, unknown.err.split("\n")[0]]).toEqual([
+				1,
+				`${usage()}\n`,
+				1,
+				'honey-codegen: unknown command "serve"',
+			])
+			expect(usage()).toContain(
+				"A regeneration deletes a\nfile the last run wrote and this one does not, unless it was edited since",
+			)
+		},
+	)
 })
 
 describe("generate's regeneration (bit 19 h1)", () => {
-	it("deletes the files the last run wrote and this one did not, keeping an edited one and naming it", async () => {
-		const { out, spec } = specDir()
-		const once = (stem: string, into = out) =>
-			run(["generate", "--spec", spec, "--target", "ts", "--ts-stem", stem, "--out", into])
-		await once("first")
-		const edited = filesUnder(out).find((name) => name.endsWith(".index.gen.ts")) as string
-		writeFileSync(join(out, edited), "// mine\n")
-		const second = await once("second")
-		const alone = specDir().out
-		await once("second", alone)
-		expect({ err: second.err, files: filesUnder(out), status: second.status }).toEqual({
-			err: `honey-codegen: ${edited} is stale but edited since it was generated, or not its to delete: kept\n`,
-			files: [...filesUnder(alone), edited].sort(),
-			status: 0,
-		})
-	})
+	it(
+		"deletes the files the last run wrote and this one did not, keeping an edited one and naming it",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const { out, spec } = specDir()
+			const once = (stem: string, into = out) =>
+				run(["generate", "--spec", spec, "--target", "ts", "--ts-stem", stem, "--out", into])
+			await once("first")
+			const edited = filesUnder(out).find((name) => name.endsWith(".index.gen.ts")) as string
+			writeFileSync(join(out, edited), "// mine\n")
+			const second = await once("second")
+			const alone = specDir().out
+			await once("second", alone)
+			expect({ err: second.err, files: filesUnder(out), status: second.status }).toEqual({
+				err: `honey-codegen: ${edited} is stale but edited since it was generated, or not its to delete: kept\n`,
+				files: [...filesUnder(alone), edited].sort(),
+				status: 0,
+			})
+		},
+	)
 })
 
-describe("generate's files (phase h)", () => {
+describe("generate's files (phase h)", { timeout: SPAWN_TIMEOUT }, () => {
 	it("writes every SDK target under its own name", async () => {
 		const { out, spec } = specDir()
 		const targets = ["rust", "python", "csharp", "java"]
@@ -175,7 +184,7 @@ const settled = (specifier?: string) =>
 	)
 
 describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
-	it("writes the ts target's files byte for byte as oxfmt formats them", async () => {
+	it("writes the ts target's files byte for byte as oxfmt formats them", { timeout: SPAWN_TIMEOUT }, async () => {
 		const { out, spec } = specDir()
 		const ran = await run(["generate", "--spec", spec, "--target", "ts", "--ts-name", "Shop", "--out", out])
 		const raw = Object.entries(emitted())
@@ -194,16 +203,20 @@ describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
 		})
 	})
 
-	it("writes them as emitted, with no error and nothing reported, when oxfmt does not resolve", async () => {
-		const reported: string[] = []
-		const context: GenerateContext = { env: {}, oxfmt: "@honey/no-such-oxfmt", report: (line) => reported.push(line) }
-		const options = { ts: { name: "Shop" } } as unknown as Generate["options"]
-		const files = await generated({ options, targets: ["ts"] }, shop(), context).then(
-			(out) => out.ts,
-			(error: Error) => error.message,
-		)
-		expect({ files, reported }).toEqual({ files: emitted(), reported: [] })
-	})
+	it(
+		"writes them as emitted, with no error and nothing reported, when oxfmt does not resolve",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const reported: string[] = []
+			const context: GenerateContext = { env: {}, oxfmt: "@honey/no-such-oxfmt", report: (line) => reported.push(line) }
+			const options = { ts: { name: "Shop" } } as unknown as Generate["options"]
+			const files = await generated({ options, targets: ["ts"] }, shop(), context).then(
+				(out) => out.ts,
+				(error: Error) => error.message,
+			)
+			expect({ files, reported }).toEqual({ files: emitted(), reported: [] })
+		},
+	)
 
 	it("loads the installed oxfmt's format, undefined for a missing one, and rethrows any other failure", async () => {
 		expect([
@@ -215,23 +228,27 @@ describe("the ts tree through oxfmt (bit 19 i, Q12)", () => {
 })
 
 describe("the generate report (bit 18 phase d)", () => {
-	it("names on stderr each MCP operation no tool serves yet, and still writes the server", async () => {
-		const ping = { get: { operationId: "ping", responses: { 204: { description: "none" } }, "x-mcp": true } }
-		/* a socket: a multipart form is a tool since bit 21 c */
-		const chat = {
-			get: { operationId: "chat", responses: { 101: { description: "up" } }, "x-mcp": true, "x-websocket": true },
-		}
-		const { out, spec } = specDir({
-			...(shop() as Record<string, unknown>),
-			paths: { "/chat": chat, "/ping": ping },
-		})
-		const ran = await run(["generate", "--spec", spec, "--target", "mcp", "--out", out])
-		expect([ran.status, ran.err, filesUnder(out).includes("mcp/dist/server.js")]).toEqual([
-			0,
-			"honey-codegen: mcp: no tool serves chat (a WebSocket) yet: skipped\n",
-			true,
-		])
-	})
+	it(
+		"names on stderr each MCP operation no tool serves yet, and still writes the server",
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const ping = { get: { operationId: "ping", responses: { 204: { description: "none" } }, "x-mcp": true } }
+			/* a socket: a multipart form is a tool since bit 21 c */
+			const chat = {
+				get: { operationId: "chat", responses: { 101: { description: "up" } }, "x-mcp": true, "x-websocket": true },
+			}
+			const { out, spec } = specDir({
+				...(shop() as Record<string, unknown>),
+				paths: { "/chat": chat, "/ping": ping },
+			})
+			const ran = await run(["generate", "--spec", spec, "--target", "mcp", "--out", out])
+			expect([ran.status, ran.err, filesUnder(out).includes("mcp/dist/server.js")]).toEqual([
+				0,
+				"honey-codegen: mcp: no tool serves chat (a WebSocket) yet: skipped\n",
+				true,
+			])
+		},
+	)
 })
 
 describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () => {
@@ -268,28 +285,36 @@ describe.skipIf(!GO)("the go and cli trees through gofmt (phase h)", SLOW, () =>
 
 /* skipped, its title naming the pinned Bun, where that Bun is not found; a failure under HONEY_REQUIRE_TOOLCHAINS */
 describe.skipIf(!PINNED_BUN)(`the bin under the pinned Bun ${pinnedBunVersion()} (phase h)`, () => {
-	it("prints the usage with exit 1 on a usage error, and exit 0 under --help, through the bin", () => {
-		const [wrong, help] = [bin(["generate", "--nope"], {}), bin(["--help"], {})]
-		expect([wrong.status, wrong.stderr, help.status, help.stdout]).toEqual([
-			1,
-			`honey-codegen: unknown option --nope\n\n${usage()}\n`,
-			0,
-			`${usage()}\n`,
-		])
-	})
+	it(
+		"prints the usage with exit 1 on a usage error, and exit 0 under --help, through the bin",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const [wrong, help] = [bin(["generate", "--nope"], {}), bin(["--help"], {})]
+			expect([wrong.status, wrong.stderr, help.status, help.stdout]).toEqual([
+				1,
+				`honey-codegen: unknown option --nope\n\n${usage()}\n`,
+				0,
+				`${usage()}\n`,
+			])
+		},
+	)
 
-	it("refuses a hostile option through the bin with its generator's own message, nothing written", () => {
-		const { out, spec } = specDir()
-		const hostile = 'shop"; rm -rf ~; "'
-		const ran = bin(["generate", "--spec", spec, "--target", "cli", "--cli-binary-name", hostile, "--out", out], {
-			GOFMT: "/nonexistent",
-		})
-		expect([ran.status, ran.stderr, existsSync(out)]).toEqual([
-			1,
-			`honey-codegen: Invalid binaryName: ${JSON.stringify(hostile)}\n`,
-			false,
-		])
-	})
+	it(
+		"refuses a hostile option through the bin with its generator's own message, nothing written",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { out, spec } = specDir()
+			const hostile = 'shop"; rm -rf ~; "'
+			const ran = bin(["generate", "--spec", spec, "--target", "cli", "--cli-binary-name", hostile, "--out", out], {
+				GOFMT: "/nonexistent",
+			})
+			expect([ran.status, ran.stderr, existsSync(out)]).toEqual([
+				1,
+				`honey-codegen: Invalid binaryName: ${JSON.stringify(hostile)}\n`,
+				false,
+			])
+		},
+	)
 })
 
 describe("finding gofmt (phase h)", () => {
@@ -325,7 +350,7 @@ describe("finding gofmt (phase h)", () => {
 })
 
 describe("generate --watch (phase h)", () => {
-	it("refuses --watch in a generation child, nothing written", async () => {
+	it("refuses --watch in a generation child, nothing written", { timeout: SPAWN_TIMEOUT }, async () => {
 		const { out, spec } = specDir()
 		const argv = ["generate", "--spec", spec, "--target", "ts", "--out", out, "--watch"]
 		const ran = await run(argv, { ...process.env, [MARK_KEY]: MARK, HONEY_CODEGEN_CHILD: "1" })

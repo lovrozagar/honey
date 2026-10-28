@@ -10,6 +10,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
 import { caller, jobsRunning, ROOT, type Step, stepsRunning, upstream, workflow } from "./fixture/workflows.ts"
+import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
 
 const release = workflow("release.yml")
 const RELEASE_TEXT = readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8")
@@ -104,7 +105,7 @@ describe("release.yml: what is published", () => {
 		expect(registries.filter((url) => url !== "https://registry.npmjs.org")).toEqual([])
 	})
 
-	it("packs each package from its directory after checking it against the tag", () => {
+	it("packs each package from its directory after checking it against the tag", { timeout: SPAWN_TIMEOUT }, () => {
 		const packs = stepsRunning(release, "scripts/pack.ts")
 		for (const [name, dir] of Object.entries(SHIPPED)) {
 			const steps = allSteps()
@@ -136,14 +137,18 @@ describe("release.yml: each package's tag check, run", () => {
 	}
 
 	for (const name of Object.keys(SHIPPED)) {
-		it(`${name}: passes at the tag's version, refuses another version, another name or a branch`, () => {
-			expect(check(name, { name, version: "1.2.3" }, "tag", "v1.2.3")).toEqual({ out: "", status: 0 })
-			const older = check(name, { name, version: "1.2.2" }, "tag", "v1.2.3")
-			expect(older.status).toBe(1)
-			expect(older.out).toContain(`${name}@1.2.2`)
-			expect(check(name, { name: `${name}-other`, version: "1.2.3" }, "tag", "v1.2.3").status).toBe(1)
-			expect(check(name, { name, version: "1.2.3" }, "branch", "main").status).toBe(1)
-		})
+		it(
+			`${name}: passes at the tag's version, refuses another version, another name or a branch`,
+			{ timeout: SPAWN_TIMEOUT },
+			() => {
+				expect(check(name, { name, version: "1.2.3" }, "tag", "v1.2.3")).toEqual({ out: "", status: 0 })
+				const older = check(name, { name, version: "1.2.2" }, "tag", "v1.2.3")
+				expect(older.status).toBe(1)
+				expect(older.out).toContain(`${name}@1.2.2`)
+				expect(check(name, { name: `${name}-other`, version: "1.2.3" }, "tag", "v1.2.3").status).toBe(1)
+				expect(check(name, { name, version: "1.2.3" }, "branch", "main").status).toBe(1)
+			},
+		)
 	}
 })
 

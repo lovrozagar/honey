@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { type DrivenPythonSdk, servedPythonSdk } from "../../src/emit/python/__fixtures__/driven.ts"
 import { withPython } from "../../src/emit/python/__fixtures__/python-env.ts"
 import type { PythonError, Script, Trace } from "../../src/emit/shared/__fixtures__/protocol.ts"
-import { type ReferenceApp, startReferenceApp } from "./conformance/harness.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp } from "./conformance/harness.ts"
 import type { Call, Observed, WireHop } from "./conformance/matrix.ts"
 
 type Run = { hops: readonly WireHop[]; observed: readonly Observed[]; trace: Trace<PythonError> }
@@ -56,7 +56,7 @@ beforeAll(async () => {
 	reference = await startReferenceApp()
 	pythonSdk = servedPythonSdk(reference.document)
 	expect(pythonSdk.imported, pythonSdk.stderr).toBe(true)
-})
+}, SPAWN_TIMEOUT)
 
 afterAll(() => reference?.stop())
 

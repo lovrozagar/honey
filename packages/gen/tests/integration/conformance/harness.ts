@@ -10,6 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { BUILT_INS } from "../../../src/emit/cli/commands.ts"
 import { recordCell } from "./gate.ts"
 import { type Cell, cellsFor, compareCell, type Observed, type Target, type WireHop } from "./matrix.ts"
+/* the bound of a hook or leg that starts the reference app or compiles an SDK: the shared spawn scale */
+export { SPAWN_TIMEOUT } from "../../../src/gen/__fixtures__/spawn-timeout.ts"
 
 export type ReferenceApp = {
 	/** same app, second listener: another origin */

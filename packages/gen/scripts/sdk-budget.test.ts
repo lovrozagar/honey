@@ -19,6 +19,7 @@ import {
 	v1RustSdkSurfaces,
 	v1SdkSurfaces,
 } from "./sdk-budget.ts"
+import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../..")
 const APPS = ["compose", "defaults", "gateway", "kitchen", "surface"]
@@ -372,17 +373,21 @@ describe("the v1 C# SDK within the budget (bit 15, G13)", () => {
 })
 
 describe("runtimeBytes", () => {
-	it("counts bytes on disk, never string length, of the files with its extension, holding every other file apart", () => {
-		const dir = runtimeDir("rust")
-		const { bytes, names, others } = runtimeBytes(dir, ".rs")
-		const length = names.reduce((sum, name) => sum + readFileSync(join(dir, name), "utf8").length, 0)
-		const onDisk = names.reduce((sum, name) => sum + readFileSync(join(dir, name)).byteLength, 0)
-		expect({ bytes, multiByte: bytes > length, others }).toEqual({
-			bytes: onDisk,
-			multiByte: true,
-			others: ["Cargo.lock"],
-		})
-	})
+	it(
+		"counts bytes on disk, never string length, of the files with its extension, holding every other file apart",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const dir = runtimeDir("rust")
+			const { bytes, names, others } = runtimeBytes(dir, ".rs")
+			const length = names.reduce((sum, name) => sum + readFileSync(join(dir, name), "utf8").length, 0)
+			const onDisk = names.reduce((sum, name) => sum + readFileSync(join(dir, name)).byteLength, 0)
+			expect({ bytes, multiByte: bytes > length, others }).toEqual({
+				bytes: onDisk,
+				multiByte: true,
+				others: ["Cargo.lock"],
+			})
+		},
+	)
 })
 
 /*
@@ -414,13 +419,17 @@ describe("runtimeBytes", () => {
 const GO_RUNTIME_BYTES = 95_916
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
-	it(`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`, () => {
-		const { bytes, names } = runtimeBytes(runtimeDir("go"), ".go")
-		expect({ names, over: Math.max(0, bytes - GO_RUNTIME_BYTES) }).toEqual({
-			names: runtimeFileNames({ realtime: true, ws: true }),
-			over: 0,
-		})
-	})
+	it(
+		`ships every runtime file it holds, all of them within ${GO_RUNTIME_BYTES} bytes`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names } = runtimeBytes(runtimeDir("go"), ".go")
+			expect({ names, over: Math.max(0, bytes - GO_RUNTIME_BYTES) }).toEqual({
+				names: runtimeFileNames({ realtime: true, ws: true }),
+				over: 0,
+			})
+		},
+	)
 })
 
 /*
@@ -435,14 +444,18 @@ describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 const RUST_RUNTIME_BYTES = 136_273
 
 describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
-	it(`ships every runtime file it holds, all of them within ${RUST_RUNTIME_BYTES} bytes, the lock template aside`, () => {
-		const { bytes, names, others } = runtimeBytes(runtimeDir("rust"), ".rs")
-		expect({ names, others, over: Math.max(0, bytes - RUST_RUNTIME_BYTES) }).toEqual({
-			names: rustRuntimeFileNames({ realtime: true, ws: true }),
-			others: ["Cargo.lock"],
-			over: 0,
-		})
-	})
+	it(
+		`ships every runtime file it holds, all of them within ${RUST_RUNTIME_BYTES} bytes, the lock template aside`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names, others } = runtimeBytes(runtimeDir("rust"), ".rs")
+			expect({ names, others, over: Math.max(0, bytes - RUST_RUNTIME_BYTES) }).toEqual({
+				names: rustRuntimeFileNames({ realtime: true, ws: true }),
+				others: ["Cargo.lock"],
+				over: 0,
+			})
+		},
+	)
 })
 
 /*
@@ -470,14 +483,18 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
 const PYTHON_RUNTIME_BYTES = 88_782
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
-	it(`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
-		const { bytes, names, others } = runtimeBytes(runtimeDir("python"), ".py")
-		expect({ names, others, over: Math.max(0, bytes - PYTHON_RUNTIME_BYTES) }).toEqual({
-			names: pythonRuntimeFileNames({ realtime: true, ws: true }),
-			others: [],
-			over: 0,
-		})
-	})
+	it(
+		`ships every runtime file it holds, all of them within ${PYTHON_RUNTIME_BYTES} bytes, nothing else beside them`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names, others } = runtimeBytes(runtimeDir("python"), ".py")
+			expect({ names, others, over: Math.max(0, bytes - PYTHON_RUNTIME_BYTES) }).toEqual({
+				names: pythonRuntimeFileNames({ realtime: true, ws: true }),
+				others: [],
+				over: 0,
+			})
+		},
+	)
 })
 
 /*
@@ -517,15 +534,19 @@ describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 const CSHARP_RUNTIME_BYTES = 133_680
 
 describe("the C# runtime within its byte budget (bit 15, G14)", () => {
-	it(`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`, async () => {
-		const { runtimeFileNames: csharpRuntimeFileNames } = await import("../src/emit/csharp/transport.ts")
-		const { bytes, names, others } = runtimeBytes(runtimeDir("csharp"), ".cs")
-		expect({ names, others, over: Math.max(0, bytes - CSHARP_RUNTIME_BYTES) }).toEqual({
-			names: csharpRuntimeFileNames({ realtime: true, ws: true }),
-			others: [],
-			over: 0,
-		})
-	})
+	it(
+		`ships every runtime file it holds, all of them within ${CSHARP_RUNTIME_BYTES} bytes, nothing else beside them`,
+		{ timeout: SPAWN_TIMEOUT },
+		async () => {
+			const { runtimeFileNames: csharpRuntimeFileNames } = await import("../src/emit/csharp/transport.ts")
+			const { bytes, names, others } = runtimeBytes(runtimeDir("csharp"), ".cs")
+			expect({ names, others, over: Math.max(0, bytes - CSHARP_RUNTIME_BYTES) }).toEqual({
+				names: csharpRuntimeFileNames({ realtime: true, ws: true }),
+				others: [],
+				over: 0,
+			})
+		},
+	)
 })
 
 /*
@@ -573,12 +594,16 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
 const TS_RUNTIME_BYTES = 120_794
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
-	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
-		const { bytes, names, others } = runtimeBytes(runtimeDir("ts"), ".ts")
-		expect({ names, others, over: Math.max(0, bytes - TS_RUNTIME_BYTES) }).toEqual({
-			names: RUNTIME_MODULES.map((name) => `${name}.ts`).sort(),
-			others: [],
-			over: 0,
-		})
-	})
+	it(
+		`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names, others } = runtimeBytes(runtimeDir("ts"), ".ts")
+			expect({ names, others, over: Math.max(0, bytes - TS_RUNTIME_BYTES) }).toEqual({
+				names: RUNTIME_MODULES.map((name) => `${name}.ts`).sort(),
+				others: [],
+				over: 0,
+			})
+		},
+	)
 })

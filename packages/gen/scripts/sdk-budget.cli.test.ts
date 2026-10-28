@@ -16,6 +16,7 @@ import { goCacheDir, runGo, withGo } from "../src/emit/go/__fixtures__/go-env.ts
 import { goCallPlans } from "../src/emit/go/sdk.ts"
 import { ceilingOf, countTokens } from "./capture-token-budget.ts"
 import { runtimeBytes } from "./sdk-budget.ts"
+import { SPAWN_TIMEOUT } from "../src/gen/__fixtures__/spawn-timeout.ts"
 
 const GO = withGo()
 const SLOW = { timeout: 600_000 }
@@ -87,14 +88,18 @@ const REPO = resolve(import.meta.dirname, "../../..")
 const CLI_RUNTIME_BYTES = 55555
 
 describe("the CLI runtime within its byte budget (bit 17, the G14 analog)", () => {
-	it(`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
-		const { bytes, names, others } = runtimeBytes(resolve(import.meta.dirname, "../src/runtime/cli"), ".go")
-		expect({ names, others, over: Math.max(0, bytes - CLI_RUNTIME_BYTES) }).toEqual({
-			names: [...CLI_RUNTIME].sort(),
-			others: [],
-			over: 0,
-		})
-	})
+	it(
+		`ships every runtime file it holds, all of them within ${CLI_RUNTIME_BYTES} bytes, nothing else beside them`,
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const { bytes, names, others } = runtimeBytes(resolve(import.meta.dirname, "../src/runtime/cli"), ".go")
+			expect({ names, others, over: Math.max(0, bytes - CLI_RUNTIME_BYTES) }).toEqual({
+				names: [...CLI_RUNTIME].sort(),
+				others: [],
+				over: 0,
+			})
+		},
+	)
 })
 
 /** What an agent reads of a CLI, in o200k tokens: each surface's largest, as the binary prints it. */

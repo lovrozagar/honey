@@ -12,7 +12,7 @@ import { clientOf, program } from "../../src/emit/csharp/__fixtures__/consumer.t
 import { type DrivenCSharpSdk, servedCSharpSdk } from "../../src/emit/csharp/__fixtures__/driven.ts"
 import { withDotnet } from "../../src/emit/csharp/__fixtures__/csharp-env.ts"
 import type { CsError, Script, Trace } from "../../src/emit/shared/__fixtures__/protocol.ts"
-import { type ReferenceApp, startReferenceApp } from "./conformance/harness.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp } from "./conformance/harness.ts"
 import type { Call, Json, Observed, Setup, WireHop } from "./conformance/matrix.ts"
 
 type Drive = { calls: readonly Call[]; setup?: Setup }
@@ -137,7 +137,7 @@ beforeAll(async () => {
 	reference = await startReferenceApp()
 	csharpSdk = servedCSharpSdk(reference.document)
 	expect(csharpSdk.built, csharpSdk.diagnostics.join("\n")).toBe(true)
-})
+}, SPAWN_TIMEOUT)
 
 afterAll(() => reference?.stop())
 

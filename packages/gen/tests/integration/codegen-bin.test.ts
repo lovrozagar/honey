@@ -13,6 +13,7 @@ import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { findPinnedBun, pinnedBunVersion, withPinnedBun } from "../../src/gen/__fixtures__/pinned-bun.ts"
 import { MARK_KEY, marked, markOf, reap } from "../../src/gen/__fixtures__/survivors.ts"
+import { SPAWN_TIMEOUT } from "../../src/gen/__fixtures__/spawn-timeout.ts"
 
 const MARK = markOf()
 const BIN = resolve(import.meta.dirname, "../../bin/honey-codegen.js")
@@ -56,37 +57,45 @@ const underBunRun = (args: readonly string[], bun: string, env: NodeJS.ProcessEn
 	})
 
 describe.skipIf(PINNED_BUN === undefined)(`the bin under the pinned Bun ${PINNED} (phase h)`, () => {
-	it("hands its arguments to the Bun that started it, once, the child marked against handing off again", () => {
-		const fake = fakeBun(`exec ${PINNED_BUN} "$@"`)
-		const ran = underBunRun(["--help"], fake.bun)
-		expect([
-			ran.status,
-			ran.stdout.startsWith("usage: honey-codegen generate"),
-			readFileSync(fake.log, "utf8"),
-		]).toEqual([0, true, `1 ${BIN} --help\n`])
-	})
+	it(
+		"hands its arguments to the Bun that started it, once, the child marked against handing off again",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const fake = fakeBun(`exec ${PINNED_BUN} "$@"`)
+			const ran = underBunRun(["--help"], fake.bun)
+			expect([
+				ran.status,
+				ran.stdout.startsWith("usage: honey-codegen generate"),
+				readFileSync(fake.log, "utf8"),
+			]).toEqual([0, true, `1 ${BIN} --help\n`])
+		},
+	)
 })
 
 describe("the bin's Bun handoff (phase h)", () => {
-	it("hands nothing off under HONEY_NO_BUN_HANDOFF, nor for another runtime or an npm_execpath that is not a bun", () => {
-		const fake = fakeBun("exit 9")
-		const runs = [
-			underBunRun(["--help"], fake.bun, { HONEY_NO_BUN_HANDOFF: "1" }),
-			underBunRun(["--help"], fake.bun, { npm_config_user_agent: "npm/10.9.2 node/v24.11.0 linux x64" }),
-			underBunRun(["--help"], "/bin/true"),
-		]
-		/* each ran the CLI itself on Node: its usage printed, nothing handed to the fake */
-		expect([runs.map((ran) => [ran.status, usage(ran.stdout)]), existsSync(fake.log)]).toEqual([
-			[
-				[0, true],
-				[0, true],
-				[0, true],
-			],
-			false,
-		])
-	})
+	it(
+		"hands nothing off under HONEY_NO_BUN_HANDOFF, nor for another runtime or an npm_execpath that is not a bun",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const fake = fakeBun("exit 9")
+			const runs = [
+				underBunRun(["--help"], fake.bun, { HONEY_NO_BUN_HANDOFF: "1" }),
+				underBunRun(["--help"], fake.bun, { npm_config_user_agent: "npm/10.9.2 node/v24.11.0 linux x64" }),
+				underBunRun(["--help"], "/bin/true"),
+			]
+			/* each ran the CLI itself on Node: its usage printed, nothing handed to the fake */
+			expect([runs.map((ran) => [ran.status, usage(ran.stdout)]), existsSync(fake.log)]).toEqual([
+				[
+					[0, true],
+					[0, true],
+					[0, true],
+				],
+				false,
+			])
+		},
+	)
 
-	it("ends with the child's exit code", () => {
+	it("ends with the child's exit code", { timeout: SPAWN_TIMEOUT }, () => {
 		const ran = underBunRun(["generate"], fakeBun("exit 7").bun)
 		expect(ran.status).toBe(7)
 	})
@@ -142,38 +151,46 @@ function bunAt(dir: string, version: string): string {
 }
 
 describe("finding the pinned Bun (phase i)", () => {
-	it("takes HONEY_PINNED_BUN, then mise's, then ~/.bun's, each only at the pinned version", () => {
-		const root = mkdtempSync(join(tmpdir(), "codegen-pin-"))
-		const named = bunAt(join(root, "named"), "1.3.11")
-		const mised = bunAt(join(root, "mise", "bin"), "1.3.11")
-		const tools = join(root, "tools")
-		mkdirSync(tools)
-		writeFileSync(join(tools, "mise"), `#!/bin/sh\n[ "$2" = bun@1.3.11 ] && echo ${join(root, "mise")}\n`, {
-			mode: 0o755,
-		})
-		const home = join(root, "home")
-		const homed = bunAt(join(home, ".bun", "bin"), "1.3.11")
-		const newer = join(root, "newer")
-		bunAt(join(newer, ".bun", "bin"), "1.4.3")
-		const empty = join(root, "empty")
-		mkdirSync(empty)
-		const find = (env: NodeJS.ProcessEnv) => findPinnedBun({ PATH: tools, ...env }, "1.3.11")
-		expect([
-			find({ HOME: home, HONEY_PINNED_BUN: named }),
-			find({ HOME: home }),
-			find({ HOME: home, PATH: empty }),
-			find({ HOME: newer, PATH: empty }),
-		]).toEqual([named, mised, homed, undefined])
-		expect(() => find({ HONEY_PINNED_BUN: bunAt(join(root, "wrong"), "1.4.3") })).toThrow(
-			`is Bun 1.4.3, not the pinned 1.3.11`,
-		)
-	})
+	it(
+		"takes HONEY_PINNED_BUN, then mise's, then ~/.bun's, each only at the pinned version",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			const root = mkdtempSync(join(tmpdir(), "codegen-pin-"))
+			const named = bunAt(join(root, "named"), "1.3.11")
+			const mised = bunAt(join(root, "mise", "bin"), "1.3.11")
+			const tools = join(root, "tools")
+			mkdirSync(tools)
+			writeFileSync(join(tools, "mise"), `#!/bin/sh\n[ "$2" = bun@1.3.11 ] && echo ${join(root, "mise")}\n`, {
+				mode: 0o755,
+			})
+			const home = join(root, "home")
+			const homed = bunAt(join(home, ".bun", "bin"), "1.3.11")
+			const newer = join(root, "newer")
+			bunAt(join(newer, ".bun", "bin"), "1.4.3")
+			const empty = join(root, "empty")
+			mkdirSync(empty)
+			const find = (env: NodeJS.ProcessEnv) => findPinnedBun({ PATH: tools, ...env }, "1.3.11")
+			expect([
+				find({ HOME: home, HONEY_PINNED_BUN: named }),
+				find({ HOME: home }),
+				find({ HOME: home, PATH: empty }),
+				find({ HOME: newer, PATH: empty }),
+			]).toEqual([named, mised, homed, undefined])
+			expect(() => find({ HONEY_PINNED_BUN: bunAt(join(root, "wrong"), "1.4.3") })).toThrow(
+				`is Bun 1.4.3, not the pinned 1.3.11`,
+			)
+		},
+	)
 
-	it("fails where toolchains are required and the pinned Bun is not found, naming the version", () => {
-		expect(() => withPinnedBun({ HOME: "/nonexistent", HONEY_REQUIRE_TOOLCHAINS: "1", PATH: "/nonexistent" })).toThrow(
-			`Bun ${PINNED} (package.json's packageManager) is required here and is not found`,
-		)
-	})
+	it(
+		"fails where toolchains are required and the pinned Bun is not found, naming the version",
+		{ timeout: SPAWN_TIMEOUT },
+		() => {
+			expect(() =>
+				withPinnedBun({ HOME: "/nonexistent", HONEY_REQUIRE_TOOLCHAINS: "1", PATH: "/nonexistent" }),
+			).toThrow(`Bun ${PINNED} (package.json's packageManager) is required here and is not found`)
+		},
+	)
 })
 
 describe("no process left behind (phase h)", () => {
