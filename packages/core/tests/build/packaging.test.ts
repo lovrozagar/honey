@@ -118,7 +118,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 		])
 	})
 
-	it("carry bin/, dist/ and the license but no source, and every export's files", () => {
+	it("carry bin/, dist/, the README and the license but no source, and every export's files", () => {
 		const missing: string[] = []
 		for (const pkg of ["@lovrozagar/honey", "@lovrozagar/honey-codegen"]) {
 			const root = join(app, "node_modules", pkg)
@@ -130,7 +130,7 @@ describe.sequential("the tarballs, installed (bit 19 i)", () => {
 			}
 		}
 		expect([readdirSync(join(app, "node_modules/@lovrozagar/honey")).sort(), missing]).toEqual([
-			["LICENSE", "bin", "dist", "package.json"],
+			["LICENSE", "README.md", "bin", "dist", "package.json"],
 			[],
 		])
 		expect(readdirSync(join(app, "node_modules/@lovrozagar/honey-codegen")).sort()).toEqual([

@@ -11,6 +11,7 @@ client and an MCP server. These pages cover each part, each with an example the 
 - [Input and output](input-output.md)
 - [Middleware](middleware.md)
 - [Testing an app](testing.md)
+- [Package exports](packages.md)
 
 ## The server
 

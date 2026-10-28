@@ -1,6 +1,32 @@
 # @lovrozagar/honey-codegen
 
-Generates SDKs (TypeScript, Go, Rust, Python, C#, Java) and a Go CLI from an OpenAPI 3.x document.
+Generates SDKs (TypeScript, Go, Rust, Python, C#, Java), a Go command-line client and an MCP server from an OpenAPI
+3.x document, or straight from a [`@lovrozagar/honey`](https://www.npmjs.com/package/@lovrozagar/honey) app.
+
+## Install
+
+```sh
+npm install --save-dev @lovrozagar/honey-codegen
+```
+
+Node 22.12 or later, or Bun 1.3 or later.
+
+## Start
+
+From a document:
+
+```sh
+npx honey-codegen generate --spec openapi.json --target ts --target python --out generated
+```
+
+From a honey app module, with no document written first:
+
+```sh
+npx honey-codegen generate --app src/app.ts --target ts --target go --go-module-path github.com/acme/shop/sdk \
+  --out generated
+```
+
+The targets are `ts`, `go`, `rust`, `python`, `csharp`, `java`, `cli` and `mcp`.
 
 ## honey-codegen generate
 
@@ -35,3 +61,16 @@ wrote, with its sha256. A file is rewritten only when its bytes change, through 
 regeneration deletes a file the last run wrote and this one does not (a `cli` target's old `<name>_cmds.go`, say), unless
 it was edited since: that one is kept and named on stderr. A file the manifest never listed is never deleted, nothing
 outside `<out>/<target>` is touched, and no symlink is followed. Without a manifest, nothing is deleted.
+
+## Documentation
+
+- [Code generation](https://github.com/lovrozagar/honey/blob/main/docs/codegen.md): every target and its options.
+- [Generated clients](https://github.com/lovrozagar/honey/blob/main/docs/client.md) and their
+  [per-language recipes](https://github.com/lovrozagar/honey/blob/main/docs/sdk-recipes.md).
+- [The generated CLI](https://github.com/lovrozagar/honey/blob/main/docs/cli.md),
+  [releasing it](https://github.com/lovrozagar/honey/blob/main/docs/cli-release.md), and
+  [the MCP server](https://github.com/lovrozagar/honey/blob/main/docs/mcp.md).
+
+## License
+
+MIT

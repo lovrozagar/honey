@@ -43,8 +43,16 @@ export function blocksOf(page: string, markdown: string): Block[] {
 	return blocks
 }
 
-/** Every page's blocks. */
-export const allBlocks = (pages: readonly string[] = pagesUnder()): Block[] =>
+/** The READMEs and the packaging doc, outside docs/ but compiled with it (bit 20 d). */
+export const READMES = [
+	"README.md",
+	"packages/core/README.md",
+	"packages/gen/README.md",
+	"packages/core/docs/packaging.md",
+]
+
+/** Every page's blocks: docs/ and the READMEs. */
+export const allBlocks = (pages: readonly string[] = [...pagesUnder(), ...READMES]): Block[] =>
 	pages.flatMap((page) => blocksOf(page, readFileSync(join(REPO, page), "utf8")))
 
 /** The example program in `lang` (`docs/examples/<lang>/<file>`). */
