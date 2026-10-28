@@ -1,6 +1,7 @@
 /**
  * JSON-RPC 2.0 as MCP frames it (bit 18): a message, the error codes a server answers with, and the two reply shapes.
- * A request carries an id; a notification does not and is never answered. An error may carry data (bit 21 b).
+ * A request carries an id; a notification does not and is never answered. An error may carry data (bit 21 b). Bit 21 d:
+ * -32020, the HTTP headers disagreeing with the body.
  */
 
 /** One message as it arrives: anything may be missing or of the wrong type until checked. */
@@ -16,6 +17,7 @@ export type Id = string | number
 
 /** The error codes this server answers with. */
 export const ErrorCode = {
+	HeaderMismatch: -32020,
 	InternalError: -32603,
 	InvalidParams: -32602,
 	InvalidRequest: -32600,

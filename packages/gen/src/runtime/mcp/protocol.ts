@@ -13,8 +13,8 @@ import { ErrorCode, failure, type Id, isId, type Message, type Reply, result } f
 export const PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"] as const
 
 /* the one with per-request _meta; the first with outputSchema and structuredContent; the last with batches */
-const [MODERN, LEGACY, STRUCTURED_SINCE, BATCHED] = PROTOCOL_VERSIONS
-const VERSION = "io.modelcontextprotocol/protocolVersion"
+export const [MODERN, LEGACY, STRUCTURED_SINCE, BATCHED] = PROTOCOL_VERSIONS
+export const VERSION = "io.modelcontextprotocol/protocolVersion"
 const CAPABILITIES = "io.modelcontextprotocol/clientCapabilities"
 
 /* a modern result is complete; a list cached by its caller alone, 5 minutes */
@@ -67,7 +67,7 @@ export type Protocol = {
 }
 
 /** Whether `value` is a JSON object. */
-const isObject = (value: unknown): value is Record<string, unknown> =>
+export const isObject = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null && !Array.isArray(value)
 
 /** The tools/list entry for `tool`: its outputSchema only when `structured`. */
@@ -88,11 +88,17 @@ function shaped(outcome: ToolResult, structured: boolean): ToolResult {
 	return rest
 }
 
+/** A modern request's `_meta`: one that names its revision. */
+export function claimed(params: Record<string, unknown>): Record<string, unknown> | undefined {
+	const meta = params._meta
+	return isObject(meta) && VERSION in meta ? meta : undefined
+}
+
 /** A request as a tools/call reads it: its id and its params. */
 type Asked = { readonly id: Id; readonly params: Record<string, unknown> }
 
 /** A modern request's refusal: a `_meta` without its revision or the client's capabilities, or a revision not served. */
-function unserved(id: Id, meta: Record<string, unknown>): Reply | undefined {
+export function unserved(id: Id, meta: Record<string, unknown>): Reply | undefined {
 	const asked = meta[VERSION]
 	if (typeof asked !== "string" || !isObject(meta[CAPABILITIES]))
 		return failure(id, ErrorCode.InvalidParams, `Invalid params: needs ${VERSION} and ${CAPABILITIES}`)
@@ -181,8 +187,7 @@ export function createProtocol(info: ServerInfo, tools: readonly Tool[]): Protoc
 		if (!isId(id)) return undefined
 		const params = isObject(given) ? given : {}
 		/* a modern request's revision is its own `_meta`'s, never the connection's */
-		const claim = params._meta
-		const meta = isObject(claim) && VERSION in claim ? claim : undefined
+		const meta = claimed(params)
 		const version = meta === undefined ? (context.connection.version ?? LEGACY) : MODERN
 		return (
 			(meta && unserved(id, meta)) ??

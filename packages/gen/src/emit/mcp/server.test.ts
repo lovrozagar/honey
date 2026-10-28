@@ -58,10 +58,50 @@ const ENTRY = `${MARKER}
 // event stream's collect too. $SHOP_HEADERS, a JSON object of string values, goes on every call, each value
 // scrubbed as the key is; $SHOP_REDIRECT is same-origin (the default) or follow. SIGINT and SIGTERM abort
 // every call in flight and exit 0, no later reply written. The API's answer is read at most 1 MiB, past it refused.
-import { BYTES_MAX, bindTools, configHeaders, createProtocol, serveStdio } from "./mcp.runtime"
+//
+// With --http it serves Streamable HTTP at /mcp instead, on --host (127.0.0.1 by default; another needs --expose,
+// which also answers for any Host name) and --port (8000 by default; 0 picks one), and says where on stderr. Every
+// request sends $SHOP_MCP_TOKEN as \`Authorization: Bearer\`; with no token it refuses to start unless
+// --no-auth, which --expose refuses. The token is never sent to the API. A browser Origin other than the server's own is
+// refused unless listed in $SHOP_MCP_ORIGINS (comma-separated); a body is read at most
+// $SHOP_MAX_BODY_BYTES, 4 MiB by default. A file argument over HTTP is inline: no path is read.
+import { BYTES_MAX, bindTools, configHeaders, createProtocol, listenHttp, serveHttp, serveStdio } from "./mcp.runtime"
 import { Api } from "./sdk/api.index.gen"
 import { headerValue } from "./sdk/api.runtime.gen"
 import { toolSpecs } from "./tools.gen"
+
+const refuse = (message: string): never => {
+	process.stderr.write(message + "\\n")
+	return process.exit(1)
+}
+/* the command line: nothing for stdio; --http [--port N] [--host H] [--no-auth] [--expose] for Streamable HTTP */
+const flags = new Map<string, string>()
+const args = process.argv.slice(2)
+for (let at = 0; at < args.length; at++) {
+	const arg = args[at] as string
+	if (!["--http", "--port", "--host", "--no-auth", "--expose"].includes(arg) || flags.has(arg))
+		refuse("Unknown argument: " + arg)
+	flags.set(arg, arg === "--port" || arg === "--host" ? (args[++at] ?? "") : "")
+}
+const http = flags.has("--http")
+if (flags.size > 0 && !http) refuse("--port, --host, --no-auth and --expose serve HTTP: pass --http")
+const token = process.env["SHOP_MCP_TOKEN"] || undefined
+if (http && token === undefined && !flags.has("--no-auth"))
+	refuse("No token: set $SHOP_MCP_TOKEN, which every request sends as Authorization: Bearer, or pass --no-auth")
+if (token !== undefined && flags.has("--no-auth")) refuse("--no-auth, yet $SHOP_MCP_TOKEN is set: unset one")
+const host = flags.get("--host") ?? "127.0.0.1"
+const exposed = flags.has("--expose")
+if (!exposed && !["127.0.0.1", "localhost", "::1"].includes(host))
+	refuse("--host " + host + " is no loopback address: pass --expose to serve beyond this machine")
+if (exposed && token === undefined) refuse("--expose needs $SHOP_MCP_TOKEN")
+const port = flags.get("--port") ?? "8000"
+if (!/^(?:0|[1-9][0-9]{0,4})$/.test(port) || Number(port) > 65535) refuse("Invalid --port: 0 to 65535")
+const bytes = (name: string, fallback: string): number => {
+	const text = process.env[name] || fallback
+	if (/^(?:0|[1-9][0-9]{0,14})$/.test(text)) return Number(text)
+	process.stderr.write("Invalid $" + name + ": a whole number of bytes\\n")
+	return process.exit(1)
+}
 
 const key = process.env["SHOP_API_KEY"] ?? ""
 const timeout = process.env["SHOP_TIMEOUT_MS"] || "30000"
@@ -95,17 +135,28 @@ const config = {
 const client = new Api(config)
 /* a collect's own client: its answer tells that collect its stream opened */
 const opening = (seen: () => void) => new Api({ ...config, onResponse: [() => void seen()] })
-const stop = new AbortController()
-for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abort())
-
-void serveStdio(
-	createProtocol(
-		{ name: "shop", version: "1.2.0" },
-		bindTools(toolSpecs, client, { opening, secrets: [key, ...Object.values(headers)], timeout: Number(timeout) }),
-	),
-	undefined,
-	stop.signal,
-).then(() => stop.signal.aborted && process.stdout.write("", () => process.exit(0)))
+const protocol = createProtocol(
+	{ name: "shop", version: "1.2.0" },
+	bindTools(toolSpecs, client, { opening, secrets: [key, token ?? "", ...Object.values(headers)], timeout: Number(timeout) }),
+)
+if (http) {
+	const max = bytes("SHOP_MAX_BODY_BYTES", "4194304")
+	const origins = (process.env["SHOP_MCP_ORIGINS"] ?? "").split(",").map((each) => each.trim()).filter(Boolean)
+	for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => process.exit(0))
+	listenHttp(serveHttp(protocol, { max, origins }), { exposed, host, port: Number(port), token }).then(
+		(server) => {
+			const { port: bound } = server.address() as { port: number }
+			process.stderr.write("shop MCP server on http://" + (host.includes(":") ? "[" + host + "]" : host) + ":" + bound + "/mcp\\n")
+		},
+		(error: Error) => refuse("Cannot listen on " + host + ":" + port + ": " + error.message),
+	)
+} else {
+	const stop = new AbortController()
+	for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => stop.abort())
+	void serveStdio(protocol, undefined, stop.signal).then(
+		() => stop.signal.aborted && process.stdout.write("", () => process.exit(0)),
+	)
+}
 `
 
 describe("the entry (phases a–e)", () => {

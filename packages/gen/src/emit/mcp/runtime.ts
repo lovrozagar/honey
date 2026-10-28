@@ -11,6 +11,8 @@ export const MCP_RUNTIME: readonly string[] = [
 	"protocol",
 	"stdio",
 	"files",
+	"http",
+	"listen",
 	"reader",
 	"guard",
 	"result",

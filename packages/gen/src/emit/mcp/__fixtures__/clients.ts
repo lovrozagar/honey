@@ -4,13 +4,15 @@
  * installed into the toolchain cache as bit 17's tools are: test fixtures only, never a dependency of gen. An install
  * whose lock is not the one checked in counts as absent. `clientCheck` runs one client against a server command and
  * reports what it saw. Bit 21 b: `modern` is the v2 client pinned to 2026-07-28 (python-client.ts holds Python's), and
- * a `negotiated` step reports the revision a session runs under.
+ * a `negotiated` step reports the revision a session runs under. Bit 21 d: given a token, a session runs over
+ * Streamable HTTP against the server `--http` started, the token sent as its bearer through the client's own headers.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { clientsInstall } from "../../shared/__fixtures__/installs.ts"
+import { serving } from "./http-server.ts"
 import type { Step, Stepped } from "./steps.ts"
 
 /** Where the clients are installed. */
@@ -36,19 +38,20 @@ export function withClients(): boolean {
 	return present
 }
 
-/** Each client: its import of the client class and the stdio transport, and of its latest protocol revision. */
+/** Each client: its import of the client class, the stdio and Streamable HTTP transports, and its latest revision. */
 const CLIENTS = {
 	sdk: [
 		'import { Client } from "@modelcontextprotocol/sdk/client/index.js"',
 		'import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"',
+		'import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"',
 		'import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js"',
 	],
 	v2: [
-		'import { Client, LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/client"',
+		'import { Client, LATEST_PROTOCOL_VERSION, StreamableHTTPClientTransport } from "@modelcontextprotocol/client"',
 		'import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"',
 	],
 	modern: [
-		'import { Client, LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/client"',
+		'import { Client, LATEST_PROTOCOL_VERSION, StreamableHTTPClientTransport } from "@modelcontextprotocol/client"',
 		'import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"',
 	],
 } as const
@@ -108,21 +111,26 @@ export function clientCheck(
 	})
 }
 
-/** The session script for `client`: connect, run each step in order, report every result (or its error) as one JSON line. */
+/**
+ * The session script for `client`: connect (over stdio to a command, or over HTTP to a URL with a bearer), run each step
+ * in order, report every result (or its error) as one JSON line.
+ */
 const sessionScript = (client: ClientName) =>
 	`${CLIENTS[client].join("\n")}
-const [command, ...rest] = JSON.parse(process.argv[2])
+const target = JSON.parse(process.argv[2])
 const steps = JSON.parse(process.argv[3])
 const client = new Client({ name: "honey-conformance", version: "1.0.0" }, ${OPTIONS[client]})
-const transport = new StdioClientTransport({ args: rest, command, env: process.env })
-/* sdk 1.32.2 keeps no negotiated revision on a stdio client: it hands it to the transport, when it can take one */
+const transport = Array.isArray(target)
+	? new StdioClientTransport({ args: target.slice(1), command: target[0], env: process.env })
+	: new StreamableHTTPClientTransport(new URL(target.url), { requestInit: { headers: { authorization: "Bearer " + target.token } } })
+/* sdk 1.32.2 keeps no negotiated revision on a client: it hands it to the transport, which over stdio keeps none */
 let negotiated
 transport.setProtocolVersion ??= (version) => void (negotiated = version)
 await client.connect(transport)
 const out = []
 for (const step of steps) {
 	try {
-		out.push(step.negotiated ? { negotiated: client.getNegotiatedProtocolVersion?.() ?? negotiated } : step.list ? { tools: (await client.listTools()).tools } : { result: await client.callTool(step.call) })
+		out.push(step.negotiated ? { negotiated: client.getNegotiatedProtocolVersion?.() ?? negotiated ?? transport.protocolVersion } : step.list ? { tools: (await client.listTools()).tools } : { result: await client.callTool(step.call) })
 	} catch (error) {
 		out.push({ failed: String(error?.message ?? error) })
 	}
@@ -131,16 +139,35 @@ console.log(JSON.stringify(out))
 await client.close()
 `
 
-/** `client` run against the server `command`, through `steps` in order: each step's tools, result or failure. */
-export function clientSession(
+/**
+ * `client` run against the server `command`, through `steps` in order: each step's tools, result or failure. Given a
+ * `token`, the command serves `--http` and the session runs over Streamable HTTP with it as the bearer.
+ */
+export async function clientSession(
 	client: ClientName,
 	command: readonly string[],
+	steps: readonly Step[],
+	token?: string,
+): Promise<readonly Stepped[]> {
+	if (token === undefined) return session(client, command, steps)
+	const server = await serving(command)
+	try {
+		return await session(client, { token, url: server.url }, steps)
+	} finally {
+		await server.stop()
+	}
+}
+
+/** `client`'s session script against `target`: a command over stdio, or a URL and its token over HTTP. */
+function session(
+	client: ClientName,
+	target: readonly string[] | { readonly url: string; readonly token: string },
 	steps: readonly Step[],
 ): Promise<readonly Stepped[]> {
 	const path = join(clientsDir(), `session-${client}.mjs`)
 	writeFileSync(path, sessionScript(client))
 	return new Promise((settle, reject) => {
-		const child = spawn(process.execPath, [path, JSON.stringify(command), JSON.stringify(steps)], {
+		const child = spawn(process.execPath, [path, JSON.stringify(target), JSON.stringify(steps)], {
 			cwd: clientsDir(),
 			stdio: ["ignore", "pipe", "pipe"],
 		})

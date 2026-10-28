@@ -112,9 +112,33 @@ const SLOW = { timeout: 120_000 }
  *   its advertisement is dead and cut: files.ts -216 (the identifier constant and filesCapability -280, the header's
  *   note +64), protocol.ts -134 (createProtocol's extensions parameter -54, their spread in server/discover -35, docs
  *   -45). The identifier stays named in files.ts's header, where g's capability lands.
+ * - bit 21 d, +12,278 B to 54,495 B: MCP's Streamable HTTP transport, dual-era and stateless, and the standalone server
+ *   the bin serves with --http (H24). Nothing in the runtime it builds on was dead; in its own first cut the transport
+ *   refusals' JSON-RPC bodies (403, 406, 413, 415: a MAY) were cut, and the listener's hand-written body pump gave way to
+ *   node's pipeline, which also cancels the body's stream when the client leaves. By file:
+ *   - http.ts 8,126 (new; web-standard, no node API, so a Worker mounts it): the reply as JSON or as an event stream
+ *     from the call's first progress (unbuffered), a modern call cancelled by its closed request or stream and a legacy
+ *     one by neither, 1,330; the endpoint (the body capped and parsed, -32700; an unserved MCP-Protocol-Version 400
+ *     -32022 naming the revisions served; the era read from the header, absent 2025-03-26; dispatch) 1,257; a message
+ *     its era refuses (a client's response 202 before 2026-07-28 and 400 in it; a modern request's headers not its
+ *     body's 400 -32020, its `_meta` refused 400) 967; the Origin (its own or listed, else 403), POST (else 405 with
+ *     Allow), Accept (406) and Content-Type (415) 790; MCP-Protocol-Version, Mcp-Method and Mcp-Name matched against
+ *     the body 684; a `=?base64?…?=` header value decoded as UTF-8, a malformed one refused, 533; the body counted as it
+ *     streams, whatever Content-Length says, 494; a reply's status (a modern unknown method 404, an unreadable message
+ *     400) 374; whether a request is modern 280 and its params 155; a response 277; the options type 174; the SSE
+ *     headers 109; the header and imports 702;
+ *   - listen.ts 3,852 (new; node, the standalone bin's): a request's answer (a Host not a loopback name with the bound
+ *     port 421, unless exposed; no bearer 401 with its challenge; a path not /mcp 404; else the handler's; a Request
+ *     node cannot make 400) 1,218; the server (each answer written or piped, a response closed early aborting its
+ *     request, listening) 1,034; a Request from node's (every header as sent, a repeat joined; the body a web stream;
+ *     the close its signal) 446; the bearer compared on SHA-256 digests in constant time 356; the Listen type 222; the
+ *     header and imports 576;
+ *   - protocol.ts +210: `claimed`, a modern request's `_meta`, shared with the transport, 251 less its inline use -69;
+ *     MODERN, BATCHED, VERSION, isObject and unserved exported for the transport +28;
+ *   - jsonrpc.ts +90: HeaderMismatch (-32020) 25; docs 65.
  * A change raises it only by the bytes of a named feature, dead code cut first.
  */
-const MCP_RUNTIME_BYTES = 42217
+const MCP_RUNTIME_BYTES = 54495
 
 describe("the MCP runtime within its byte budget (bit 18, the G14 analog)", () => {
 	it(`ships every runtime file it holds, all of them within ${MCP_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
