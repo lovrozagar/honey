@@ -11,12 +11,12 @@ const EXPECTED: ExpectedSet = {
 	cells: {
 		"bun/dev/kitchen": cell(["a > one", "a > two"]),
 		"bun/prod/kitchen": cell(["a > one", "a > two", "a > @prod-only bundle"]),
-		"cf/prod/kitchen": { capturedBy: "CI's cf-prod job (j3)" },
+		"cf/prod/kitchen": cell(["a > one", "a > two", "a > @prod-only bundle"]),
 	},
 }
 
 describe("the e2e expected set holds every cell a run ran (j2)", () => {
-	it("passes a run whose cells match, and leaves a CI-captured cell to CI", () => {
+	it("passes a run whose cells match", () => {
 		expect(
 			mismatches(EXPECTED, {
 				"bun/dev/kitchen": cell(["a > one", "a > two"]),
@@ -41,5 +41,11 @@ describe("the e2e expected set holds every cell a run ran (j2)", () => {
 				"node/dev/kitchen": cell(["a > one"]),
 			}),
 		).toEqual(["bun/dev/kitchen: passed gains [a > three]", "node/dev/kitchen: not in the expected set"])
+	})
+
+	it("holds a cf prod cell like any other: local workerd runs the bundle (j3)", () => {
+		expect(
+			mismatches(EXPECTED, { "cf/prod/kitchen": cell(["a > one", "a > two"], ["a > @prod-only bundle"]) }),
+		).toEqual(["cf/prod/kitchen: passed lacks [a > @prod-only bundle]; failed gains [a > @prod-only bundle]"])
 	})
 })

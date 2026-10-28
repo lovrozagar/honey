@@ -270,7 +270,9 @@ export function createApp(wsAdapter?: WSAdapter, options?: AppOptions) {
 	corsed
 		.get("/served-from")
 		.meta({ internal: true })
-		.handler((ctx) => ctx.res.json("ok", { bundle: new URL(import.meta.url).pathname.includes("/dist/") }))
+		.handler((ctx) =>
+			ctx.res.json("ok", { bundle: (import.meta as { env?: { HONEY_BUNDLE?: boolean } }).env?.HONEY_BUNDLE === true }),
+		)
 
 	/* ---- boundary test routes ---- */
 

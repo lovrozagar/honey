@@ -12,6 +12,8 @@ export default {
 	/* in this checkout core is read as source: honey-source, as every repo consumer resolves it (R3) */
 	resolve: { conditions: ["honey-source", ...defaultClientConditions] },
 	ssr: { resolve: { conditions: ["honey-source", ...defaultServerConditions] } },
+	/* only a built bundle carries it: what /api/served-from reports on every target (workerd has no import.meta.url) */
+	define: { "import.meta.env.HONEY_BUNDLE": "true" },
 	plugins: [
 		...(base.plugins ?? []),
 		createBuildPlugin(

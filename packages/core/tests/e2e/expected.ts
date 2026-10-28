@@ -7,10 +7,7 @@
 /** One cell's tests by outcome, each named `file > describe … > title`, sorted. */
 export type Outcomes = { failed: string[]; passed: string[]; skipped: string[] }
 
-/** A cell only CI runs (cf prod, the deployed worker): recorded there, never compared by a local run. */
-export type CiCell = { capturedBy: string }
-
-export type ExpectedSet = { cells: Record<string, CiCell | Outcomes> }
+export type ExpectedSet = { cells: Record<string, Outcomes> }
 
 const OUTCOMES = ["passed", "failed", "skipped"] as const
 
@@ -29,7 +26,6 @@ export function mismatches(expected: ExpectedSet, ran: Readonly<Record<string, O
 	return Object.entries(ran).flatMap(([name, got]) => {
 		const want = expected.cells[name]
 		if (want === undefined) return [`${name}: not in the expected set`]
-		if ("capturedBy" in want) return []
 		const clauses = OUTCOMES.flatMap((kind) => moved(kind, want[kind], got[kind]))
 		return clauses.length > 0 ? [`${name}: ${clauses.join("; ")}`] : []
 	})

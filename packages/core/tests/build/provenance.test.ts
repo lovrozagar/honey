@@ -147,6 +147,21 @@ describe("release.yml: each package's tag check, run", () => {
 	}
 })
 
+/**
+ * Whether a job `if` runs under `github`: ci.yml's forms only (`==`, `&&`, `||`, parentheses, startsWith over
+ * github.event_name and github.ref, quoted strings); anything else throws, so a new form is never judged unread.
+ */
+function runsUnder(condition: string | undefined, github: { event_name: string; ref: string }): boolean {
+	if (condition === undefined) return true
+	const js = condition
+		.replace(/github\.(event_name|ref)\b/g, (_, key: "event_name" | "ref") => JSON.stringify(github[key]))
+		.replace(/startsWith\(/g, "starts(")
+		.replace(/'([^']*)'/g, (_, text: string) => JSON.stringify(text))
+		.replace(/==/g, "===")
+	if (!/^(?:\s|"[^"]*"|===|&&|\|\||[(),]|starts)*$/.test(js)) throw new Error(`unread job condition: ${condition}`)
+	return new Function("starts", `return ${js}`)((text: string, prefix: string) => text.startsWith(prefix)) as boolean
+}
+
 describe("release.yml: publishing waits on ci.yml green on the tagged commit", () => {
 	const ci = caller(release, "./.github/workflows/ci.yml")
 
@@ -170,5 +185,20 @@ describe("release.yml: publishing waits on ci.yml green on the tagged commit", (
 		expect(Object.keys(release.jobs[ci as string] ?? {}).filter((key) => key === "with" || key === "secrets")).toEqual(
 			[],
 		)
+	})
+
+	it("runs no ci.yml job that reads a secret on a tag's call: a release never waits on one", () => {
+		/* a called workflow sees its caller's context: release.yml's tag push */
+		const tag = { event_name: "push", ref: "refs/tags/v1.0.0" }
+		const running = Object.entries(workflow("ci.yml").jobs).filter(([, job]) => runsUnder(job.if, tag))
+		expect(running.filter(([, job]) => JSON.stringify(job).includes("secrets.")).map(([id]) => id)).toEqual([])
+		/* the evaluator itself: main's push and a pull request each answered */
+		expect([
+			runsUnder("github.event_name == 'push' && github.ref == 'refs/heads/main'", {
+				event_name: "push",
+				ref: "refs/heads/main",
+			}),
+			runsUnder("github.event_name == 'pull_request'", tag),
+		]).toEqual([true, false])
 	})
 })

@@ -89,10 +89,6 @@ function parseArgs(argv: string[]): Args {
 	if (mode !== "dev" && mode !== "prod") {
 		throw new Error(`unknown --mode "${mode}". expected dev, prod`)
 	}
-	/* cf prod is the deployed worker, CI's cf-prod job (j3, Q15); locally cf runs as wrangler dev only */
-	if (mode === "prod" && env !== "bun" && env !== "node") {
-		throw new Error(`--mode prod runs on bun and node here; cf prod is CI's deployed worker (j3)`)
-	}
 	return { app, env, mode, record }
 }
 
@@ -119,10 +115,18 @@ function outcomesOf(report: { suites?: Suite[] }): Outcomes {
 	return out
 }
 
-/** prod serves the cell's built bundle: built here for `env`'s own target, on `env`'s own runtime */
-function buildForProd(env: "bun" | "node", app: string): boolean {
-	process.stdout.write(`\n=== build ${app} for ${env} (prod) ===\n`)
-	const built = spawnSync("bun", [join(here, "run-build.ts"), "--runtime", env, "--target", env, "--app", app], {
+/* the deploy target each env's prod bundle is built for, and the runtime that builds it (cf builds on bun) */
+const PROD_BUILD: Record<EnvName, { runtime: "bun" | "node"; target: string }> = {
+	bun: { runtime: "bun", target: "bun" },
+	cf: { runtime: "bun", target: "cloudflare" },
+	node: { runtime: "node", target: "node" },
+}
+
+/** prod serves the cell's built bundle: built here for `env`'s own target (cf: the Workers bundle, j3) */
+function buildForProd(env: EnvName, app: string): boolean {
+	const { runtime, target } = PROD_BUILD[env]
+	process.stdout.write(`\n=== build ${app} for ${target} (prod) ===\n`)
+	const built = spawnSync("bun", [join(here, "run-build.ts"), "--runtime", runtime, "--target", target, "--app", app], {
 		cwd: repoRoot,
 		stdio: "inherit",
 	})
@@ -131,7 +135,7 @@ function buildForProd(env: "bun" | "node", app: string): boolean {
 
 function runCell(env: EnvName, app: string, mode: "dev" | "prod"): { ok: boolean; outcomes: Outcomes | null } {
 	process.stdout.write(`\n=== e2e ${env} × ${app} (${mode}) ===\n`)
-	if (mode === "prod" && env !== "cf" && !buildForProd(env, app)) {
+	if (mode === "prod" && process.env.HONEY_CF_URL === undefined && !buildForProd(env, app)) {
 		process.stdout.write(`=== fail ${env} × ${app}: its prod build failed ===\n`)
 		return { ok: false, outcomes: null }
 	}
@@ -180,7 +184,7 @@ if (record !== null) {
 	const cells = { ...previous.cells, ...recorded }
 	const sorted = Object.fromEntries(Object.entries(cells).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
 	const note =
-		"e2e expected set: per cell (env/mode/app) the Playwright tests that pass, skip and fail. Re-record with `bun packages/core/tests/e2e/run.ts --env all --mode <dev|prod> --record blueprint/baselines/e2e-expected.json`."
+		"e2e expected set: per cell (env/mode/app) the Playwright tests that pass, skip and fail; run.ts fails a cell that differs. Re-record with `bun packages/core/tests/e2e/run.ts --env <env> --mode <dev|prod> --record blueprint/baselines/e2e-expected.json`."
 	writeFileSync(record, `${JSON.stringify({ cells: sorted, note }, null, "\t")}\n`)
 }
 

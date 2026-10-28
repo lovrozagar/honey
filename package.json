@@ -78,6 +78,7 @@
 		"test:e2e:all": "bun packages/core/tests/e2e/run.ts --env all",
 		"test:e2e:bun:prod": "bun packages/core/tests/e2e/run.ts --env bun --mode prod",
 		"test:e2e:cf": "bun packages/core/tests/e2e/run.ts --env cf",
+		"test:e2e:cf:prod": "bun packages/core/tests/e2e/run.ts --env cf --mode prod",
 		"test:e2e:node": "bun packages/core/tests/e2e/run.ts --env node",
 		"test:e2e:node:prod": "bun packages/core/tests/e2e/run.ts --env node --mode prod",
 		"test:gen": "bun run --filter @lovrozagar/honey-codegen test",
