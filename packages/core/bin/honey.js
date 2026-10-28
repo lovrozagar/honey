@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The honey bin (bit 19 h2), honey-codegen's twin. A repository checkout (marked by tsconfig.json, which is not
-// published) runs the TypeScript source through jiti, so a stale dist/ never runs; an installed package runs the
-// compiled JavaScript on any runtime (the tarball ships dist/, not src/).
+// published) runs the TypeScript source, through jiti on Node, so a stale dist/ never runs; an installed package runs
+// the compiled JavaScript on any runtime (the tarball ships dist/, not src/).
 import { spawn } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { createRequire } from "node:module"
@@ -21,16 +21,16 @@ function invokingBun() {
 	return bun
 }
 
-// The handoff: Bun runs this file with our arguments; a signal we get is passed on to it, and we end as it ended,
-// its exit code or the same signal.
-function handOff(bun) {
+// The handoff: Bun runs this file with our arguments and `env` over ours; a signal we get is passed on to it, and we
+// end as it ended, its exit code or the same signal.
+function handOff(bun, env = {}) {
 	// Forwarders first: a signal landing as spawn returns would otherwise end this process by its default action,
 	// orphaning the child. A handler runs from the event loop, after this block, so `child` is set by then.
 	let child
 	const forward = (signal) => child.kill(signal)
 	for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, forward)
 	child = spawn(bun, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
-		env: { ...process.env, HONEY_NO_BUN_HANDOFF: "1" },
+		env: { ...process.env, ...env, HONEY_NO_BUN_HANDOFF: "1" },
 		stdio: "inherit",
 	})
 	child.on("error", (error) => {
@@ -59,9 +59,17 @@ function sourceAliases(name) {
 	)
 }
 
+// A checkout on Bun runs its source natively, under the honey-source condition: honey-codegen, and an app's honey,
+// resolve to source then, not to the unbuilt dist/. Set through BUN_OPTIONS when the caller did not, so every
+// generation child inherits it.
+const SOURCE_CONDITION = "--conditions=honey-source"
+const unconditioned = isBun && checkout && !process.execArgv.includes(SOURCE_CONDITION)
+
 async function entry() {
 	if (checkout) {
-		/* jiti on Bun too: Bun's own loader would resolve honey-codegen to its unbuilt dist/ */
+		/* never jiti on Bun: its Babel, loaded on any fs-cache miss, hooks Error.prepareStackTrace, and Bun's own then
+		 * throws "First argument must be an Error object" at a captureStackTrace on a non-Error (bit 20 k-fix) */
+		if (isBun) return import("../src/build/cli.ts")
 		const { createJiti } = await import("jiti")
 		const alias = sourceAliases("@lovrozagar/honey-codegen")
 		return createJiti(import.meta.url, { alias, tryNative: false }).import("../src/build/cli.ts")
@@ -79,6 +87,8 @@ async function entry() {
 
 const bun = invokingBun()
 if (bun) handOff(bun)
+else if (unconditioned)
+	handOff(process.execPath, { BUN_OPTIONS: `${process.env.BUN_OPTIONS ?? ""} ${SOURCE_CONDITION}`.trim() })
 else {
 	const { main } = await entry()
 	const io = { err: (text) => process.stderr.write(text), out: (text) => process.stdout.write(text) }

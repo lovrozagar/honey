@@ -1,61 +1,65 @@
 /**
- * The build tooling's loaders: user modules (the Vite config, the app) through jiti on any runtime, so `honey
- * generate` reads a TypeScript config on plain Node (H70b); and Effect's JSON Schema converter, when effect is
+ * The build tooling's loaders: user modules (the Vite config, the app) through jiti on Node, so `honey generate`
+ * reads a TypeScript config on plain Node (H70b), and through Bun's own import on Bun; and Effect's JSON Schema converter, when effect is
  * installed, for the documents core generates (core never imports a validator, F2).
  */
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
+import { createRequire } from "node:module"
 import { join, resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 import type { EffectConverter } from "../schema/to-json-schema.ts"
 
 export type ModuleLoader = (path: string) => Promise<Record<string, unknown>>
 
 export type ModuleLoaderOptions = {
-	/** specifiers jiti maps to files, as `sourceAliases` gives them */
-	alias?: Record<string, string>
-	/** no module cache between loaders: a process that outlives one generation sees edited modules */
+	/** no module shared with an earlier fresh loader: a generation's redo pass sees the tree its first pass wrote */
 	fresh: boolean
 	/** the file imports resolve from */
 	from: string
 }
 
-/** A loader for one generation: each path evaluated at most once, so the app never runs twice. */
-export async function createModuleLoader(options: ModuleLoaderOptions): Promise<ModuleLoader> {
-	const { createJiti } = await import("jiti")
-	const jiti = createJiti(options.from, {
-		alias: options.alias,
-		fsCache: false,
-		interopDefault: true,
-		moduleCache: !options.fresh,
-	})
+/** Bun's module registry, its ES modules included, keyed by path: what a fresh loader evicts. */
+export type ModuleRegistry = Record<string, unknown>
+
+/**
+ * A loader for one generation: each path evaluated at most once, so the app never runs twice. Through jiti on Node;
+ * on Bun (`registry` is its module registry), Bun's own import: jiti there re-evaluates a module that threw through
+ * its Babel, whose stack hook then breaks Bun (bit 20 k-fix).
+ */
+export async function createModuleLoader(
+	options: ModuleLoaderOptions,
+	registry = bunRegistry(),
+): Promise<ModuleLoader> {
+	const evaluate = registry === undefined ? await jitiEvaluator(options) : bunEvaluator(registry, options.fresh)
 	const loaded = new Map<string, Promise<Record<string, unknown>>>()
 	return (path) => {
 		const abs = resolve(path)
 		let mod = loaded.get(abs)
 		if (!mod) {
-			mod = jiti.import(abs) as Promise<Record<string, unknown>>
+			mod = evaluate(abs)
 			loaded.set(abs, mod)
 		}
 		return mod
 	}
 }
 
-/**
- * The package's specifiers mapped to its source, for running honey from source on Node: each export's
- * `honey-source` file under `packageRoot`. Undefined when the package names none.
- */
-export function sourceAliases(packageRoot: string): Record<string, string> | undefined {
-	const path = join(packageRoot, "package.json")
-	if (!existsSync(path)) return undefined
-	const pkg = JSON.parse(readFileSync(path, "utf8")) as {
-		exports?: Record<string, { "honey-source"?: string } | string>
-		name?: string
-	}
-	const aliases: Record<string, string> = {}
-	for (const [subpath, target] of Object.entries(pkg.exports ?? {})) {
-		const source = typeof target === "object" ? target["honey-source"] : undefined
-		if (source && pkg.name) aliases[pkg.name + subpath.slice(1)] = join(packageRoot, source)
-	}
-	return Object.keys(aliases).length > 0 ? aliases : undefined
+function bunRegistry(): ModuleRegistry | undefined {
+	return typeof (globalThis as { Bun?: unknown }).Bun === "undefined" ? undefined : createRequire(import.meta.url).cache
+}
+
+async function jitiEvaluator(
+	options: ModuleLoaderOptions,
+): Promise<(path: string) => Promise<Record<string, unknown>>> {
+	const { createJiti } = await import("jiti")
+	const jiti = createJiti(options.from, { fsCache: false, interopDefault: true, moduleCache: !options.fresh })
+	return (path) => jiti.import(path) as Promise<Record<string, unknown>>
+}
+
+function bunEvaluator(registry: ModuleRegistry, fresh: boolean): (path: string) => Promise<Record<string, unknown>> {
+	/* Bun keeps a module for the process: evicted, the next import evaluates it anew. Every module outside
+	 * node_modules goes, what a user may have edited or a generation written (a gateway's tree) */
+	if (fresh) for (const key of Object.keys(registry)) if (!/[\\/]node_modules[\\/]/.test(key)) delete registry[key]
+	return (path) => import(pathToFileURL(path).href) as Promise<Record<string, unknown>>
 }
 
 export const VITE_CONFIG_FILES: readonly string[] = [

@@ -1,7 +1,7 @@
 /**
  * The build tooling's loaders (bit 19 h2): a TypeScript Vite config found and read on plain Node through jiti (v0
- * H70b), each module evaluated once per loader, the `honey()` configs read off the plugin objects, the package's
- * source aliases, and Effect's converter when effect is installed.
+ * H70b), each module evaluated once per loader, through Bun's own import on Bun, the `honey()` configs read off the
+ * plugin objects, and Effect's converter when effect is installed.
  */
 import { execFile } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
@@ -9,21 +9,15 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
 import { Schema } from "effect"
-import { afterEach, describe, expect, it } from "vitest"
-import {
-	createModuleLoader,
-	effectConverter,
-	findViteConfig,
-	loadPluginConfigs,
-	type ModuleLoader,
-	sourceAliases,
-} from "./loaders.ts"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { createModuleLoader, effectConverter, findViteConfig, loadPluginConfigs, type ModuleLoader } from "./loaders.ts"
 
 const LOADERS = new URL("./loaders.ts", import.meta.url).pathname
 const ENV = { command: "build", mode: "production" } as const
 const dirs: string[] = []
 
 afterEach(() => {
+	vi.unstubAllGlobals()
 	for (const dir of dirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
@@ -106,37 +100,31 @@ describe("a module loader for one generation (bit 19 h2)", () => {
 		expect([first, fresh, (globalThis as { __loads?: number }).__loads]).toEqual([[1, 1], 2, 2])
 	})
 
-	it("maps an aliased specifier to its file", async () => {
-		const dir = project({ "app.ts": 'export { v } from "@scope/lib"\n', "lib.ts": "export const v = 7\n" })
-		const load = await createModuleLoader({ alias: { "@scope/lib": join(dir, "lib.ts") }, fresh: false, from: dir })
-		expect((await load(join(dir, "app.ts"))).v).toBe(7)
+	it("on Bun, imports each path once per loader; a fresh loader evicts what Bun holds outside node_modules", async () => {
+		const dir = project({ "native.ts": "globalThis.__native = (globalThis.__native ?? 0) + 1\nexport const n = 3\n" })
+		const path = join(dir, "native.ts")
+		/* Bun's registry as the loader sees it: an installed module, and a module of the project's */
+		const registry = () => ({ "/p/node_modules/dep/index.js": 1, "/p/src/app.ts": 1 })
+		const [kept, evicted] = [registry(), registry()]
+		const load = await createModuleLoader({ fresh: false, from: dir }, kept)
+		const first = [await counted(load, path), await counted(load, path)]
+		await createModuleLoader({ fresh: true, from: dir }, evicted)
+		expect([first, (globalThis as { __native?: number }).__native, Object.keys(kept), Object.keys(evicted)]).toEqual([
+			[3, 3],
+			1,
+			["/p/node_modules/dep/index.js", "/p/src/app.ts"],
+			["/p/node_modules/dep/index.js"],
+		])
 	})
 })
 
-describe("the package's source aliases (bit 19 h2)", () => {
-	it("maps each export naming a honey-source file, and none without one", () => {
-		const exports = {
-			".": { "honey-source": "./src/index.ts" },
-			"./plain": "./dist/plain.js",
-			"./serve": { "honey-source": "./src/serve.ts" },
-		}
-		const pkg = project({ "package.json": JSON.stringify({ exports, name: "@x/honey" }) })
-		const bare = project({ "package.json": JSON.stringify({ exports: { ".": "./dist/index.js" }, name: "@x/honey" }) })
-		const unnamed = project({ "package.json": JSON.stringify({ exports }) })
-		const none = project({ "package.json": JSON.stringify({ name: "@x/honey" }) })
-		expect([
-			sourceAliases(pkg),
-			sourceAliases(bare),
-			sourceAliases(unnamed),
-			sourceAliases(none),
-			sourceAliases(project({})),
-		]).toEqual([
-			{ "@x/honey": join(pkg, "src/index.ts"), "@x/honey/serve": join(pkg, "src/serve.ts") },
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-		])
+describe("a module loader on Bun's global (bit 20 k-fix)", () => {
+	it("takes Bun's module registry, and imports a module as Bun's own import does", async () => {
+		const dir = project({ "plain.ts": "export const v = 9\n" })
+		vi.stubGlobal("Bun", {})
+		/* not fresh: a fresh loader would evict from the registry this test runner's process holds */
+		const load = await createModuleLoader({ fresh: false, from: dir })
+		expect((await load(join(dir, "plain.ts"))).v).toBe(9)
 	})
 })
 

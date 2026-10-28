@@ -15,6 +15,8 @@ function appFor(env: WorkerEnv) {
 
 export default {
 	fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext) {
-		return appFor(env).fetch(request, env, ctx)
+		/* an app gets the worker's env, not the one it declares (compose's and surface's name vars no app reads), as
+		 * serve() hands it `{}` on Bun and Node */
+		return appFor(env).fetch(request, env as never, ctx)
 	},
 }

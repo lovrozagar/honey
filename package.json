@@ -88,7 +88,7 @@
 		"test:packaging": "bun packages/core/tests/e2e/run-strict-consumer.ts",
 		"test:v1": "cd packages/core && vitest run --coverage",
 		"typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/gen/tsconfig.json && tsc --noEmit -p bench/tsconfig.json",
-		"typecheck:consumers": "bun run --filter './packages/core/tests/e2e/apps/*' type:check",
+		"typecheck:consumers": "bun run --filter './packages/core/tests/e2e/apps/*' --filter @honey/e2e-bun --filter @honey/e2e-node --filter @honey/e2e-cf-workers type:check",
 		"verify": "bun scripts/verify.ts"
 	},
 	"devDependencies": {

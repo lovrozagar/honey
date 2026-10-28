@@ -148,7 +148,7 @@ class NodeRequest {
 		return this.#asFetch().blob()
 	}
 
-	clone(): Request {
+	clone(): ReturnType<Request["clone"]> {
 		return this.#asFetch().clone()
 	}
 

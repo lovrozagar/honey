@@ -5,8 +5,9 @@
  * schemas; with no config.app, from an app booted on the tree. A first run (no tree yet) bootstraps the merged tree; a gateway whose tree is stale only
  * in its services' leaves regenerates over it; a new own route, which its stale tree cannot hold, names the fix.
  */
+import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { type Project, project } from "./__fixtures__/project.ts"
 import { type HoneyVitePluginConfig, resolveHoneyConfig } from "./config.ts"
@@ -15,6 +16,7 @@ import { sourceOf } from "./source.ts"
 import { honey } from "./plugin.ts"
 
 const SLOW = 60_000
+const BIN = resolve(import.meta.dirname, "../../bin/honey.js")
 const projects: Project[] = []
 afterEach(() => {
 	for (const made of projects.splice(0)) made.done()
@@ -224,6 +226,33 @@ describe("a gateway over its own tree (bit 19 h2, Anyrow's shape)", () => {
 				"/items",
 				"/orders",
 				"/robots.txt",
+			])
+		},
+		SLOW,
+	)
+})
+
+describe("a gateway over its own tree on Bun (bit 20 k-fix)", () => {
+	it(
+		"regenerates over a tree stale in its services' leaves, the redo pass documenting the tree just written",
+		async () => {
+			const made = await seeded()
+			made.write("src/down.ts", downSource(['\t.get("/added").handler((c) => c.res.text("ok", "new"))']))
+			made.write(
+				"vite.config.ts",
+				`import { honey } from "@lovrozagar/honey/plugin"\nexport default { plugins: [honey(${JSON.stringify(SERVED)})] }\n`,
+			)
+			/* Bun keeps each module for the process: the redo pass's fresh graph must not be the first pass's */
+			const done = spawnSync("bun", [BIN, "generate"], {
+				cwd: made.dir,
+				encoding: "utf8",
+				env: { ...process.env, HONEY_NO_BUN_HANDOFF: "1" },
+				timeout: SLOW,
+			})
+			expect([done.status, done.stderr, Object.keys(documentAt(made.dir).paths).sort()]).toEqual([
+				0,
+				"",
+				["/added", "/health", "/items", "/orders", "/robots.txt"],
 			])
 		},
 		SLOW,
