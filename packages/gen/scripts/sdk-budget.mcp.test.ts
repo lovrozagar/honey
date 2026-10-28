@@ -20,157 +20,74 @@ const REPO = resolve(import.meta.dirname, "../../..")
 const SLOW = { timeout: 120_000 }
 
 /*
- * G14 analog (bit 18), provisional until the close locks it at the exact measured bytes:
- * - phase a, 8,383 B, nothing dead to cut (each member serves the protocol a client speaks):
- *   - server.ts 4,598: initialize negotiating 2025-11-25 down to 2025-03-26, ping, tools/list and tools/call, a
- *     protocol error for each fault, outputSchema and structuredContent left out under 2025-03-26;
- *   - stdio.ts 2,212: one message a line in and out, a parse error answered, replies in order, a handler's fault
- *     answered as an internal error, the session ended once stdin closes and the last reply is out;
- *   - jsonrpc.ts 1,573: the message, the error codes, the two reply shapes, the id check;
- *   provisional 8,400.
- * - phase b, +3,615 B to 11,998 B, nothing dead to cut: call.ts 3,615, each tool bound to the SDK client, its flat
- *   arguments back into the SDK input groups (path, query, header; the body as JSON or a form), the member walked to
- *   its method, the answer as JSON text, a failure the tool's own result with its status; provisional 12,000.
- * - phase c, +6,569 B to 18,567 B, the general validator cut to the keywords schema.ts emits (7,088 → 5,374), then
- *   split in four for the complexity rule (+649), dead code cut (the redactor's sort and dedupe, the failure's body
- *   spread):
- *   - guard.ts 6,023: the inputSchema check 3,193 (its Schema type of the 11 keywords checked 529, the check 2,664 in
- *     four functions: own keywords, items, fields, the walk), redaction 796 (as given, URL-encoded in either case,
- *     form-encoded; keys included), the refusal composing the three 588, prototype keys 516, H18.11 decoding until
- *     stable 394, the header 430, the path helper 106;
- *   - call.ts +546: the refusal before any call, every result scrubbed, an answer's body echoed in its failure;
- *   provisional 18,600. The base URL refusal is the emitted entry's, no runtime byte.
- * - phase d, +4,732 B to 23,299 B, dead code cut (a status-0 failure branch no guarded call reaches):
- *   - result.ts 4,100: a 2xx as structuredContent (an object, or wrapped `{result, headers}`) and text 920, bytes as
- *     image, audio or an embedded resource and the 1 MiB note 696, a failure's status with honey's error key and
- *     message or its body 616, the 100,000-character text cut and JSON text 495, the transport and timeout kinds 400,
- *     the safe-mode Answer type 231, the caps 167, the scrubber type 121, the header 454;
- *   - call.ts +632: a raw body argument (base64-decoded bytes at most 1 MiB, or text, under its content type), the
- *     safe-mode answer routed to result.ts, outputSchema and annotations listed;
- *   provisional 23,400.
- * - phase e, +6,172 B to 29,471 B:
- *   - stream.ts 3,151: an event stream's bounded collect (end, max_events, the 100,000-character cap, the call's
- *     timeout from its start as one AbortSignal), last_event_id to resume, each event a progress step, a cut a success
- *     and a never-opened stream a timeout;
- *   - call.ts +1,017: an SSE tool dispatched to the collect on a client of its own whose answer says it opened, the
- *     session's abort on every call, a stream refused outside 2xx its failure, the binding;
- *   - server.ts +767: notifications/progress for a call carrying a progressToken; a fault answered at once, a tool's
- *     call through its promise;
- *   - stdio.ts +662: every message answered as it comes, calls side by side, one writer; a stop signal aborting every
- *     call in flight, settling once they have, no later reply written;
- *   - guard.ts +568: minimum and maximum (max_events 1 to 100); result.ts +7 (TEXT_MAX exported);
- *   provisional 29,500.
- * - phase f, +178 B to 29,649 B: the status the API answered in a result's `_meta` (honey/status), observable to the
- *   conformance harness and to any client reading it: call.ts +136 (the spread on both answered paths), server.ts +42
- *   (ToolResult's `_meta`); provisional 29,700.
- * - phase g, no runtime change. The lock: nothing dead to cut, so the ceiling is the measured 29,649 B, provisional
- *   29,700 → locked 29,649.
- * - the TS response cap (bit 11/18 fix), −81 B to 29,568 B: the SDK reads at most 1 MiB, so result.ts's note for
- *   bytes past it is dead and cut (−105, with its doc); call.ts +24 (a 2xx whose body the SDK refused is a failure).
- * - bit 19 c, +734 B to 30,302 B: guard.ts checks the constraint keywords the IR now carries (maxItems, minLength and
- *   maxLength in code points, exclusiveMinimum and exclusiveMaximum), each refusal naming the argument; pattern is
- *   stated, never run.
- * - bit 19 g, +863 B to 31,165 B: $<PREFIX>_HEADERS, a JSON object each header of which passes the SDK's own header
- *   check (request.ts headerValue, b1's rule, passed in), each value sent on every call and scrubbed from results:
- *   guard.ts configHeaders' parse and refusal +657, the redactor taking several secrets +89, two short comments +100;
- *   call.ts +17. $<PREFIX>_REDIRECT lives in the emitted entry (+0 runtime).
- * - bit 21 b, +3,997 B to 35,162 B: dual-era, MCP 2026-07-28 beside 2025-11-25 down to 2025-03-26, the protocol split
- *   from its transport. Dead code cut first: a sync-throw guard on a tool's call (every bound call is async, so it can
- *   only reject) and a branch leaving `data` off an error (JSON drops it when undefined); nothing else is dead. By file:
- *   - protocol.ts (server.ts renamed, 5,407 -> 8,730, +3,323): a modern request's `_meta` claim, read per request and
- *     never from the connection, 303; its refusals (-32602 for a `_meta` without its revision or the client's
- *     capabilities; -32022 naming every revision served and the one asked) 592; server/discover 211; the modern
- *     marks (`resultType` on every result, `ttlMs` and `cacheScope` on a list) 257; the revisions and `_meta` keys
- *     named (the modern, the batch one) 214; batches under 2025-03-26 alone 621 and their dispatch 112; the transport
- *     seam (Connection, Context and Protocol for Session) 330; isObject, shared by params, arguments, `_meta` and
- *     capabilities, 183; a handler's fault answered here, moved from stdio, 64; the complexity and length rules'
- *     split (tools/call and the refusals their own functions, the Asked type, the per-era case labels) 260; docs 176;
- *   - stdio.ts +525: notifications/cancelled aborting the call it names with nothing more written for it (each call's
- *     own abort under the stop signal, the calls by id, its writer) 502; a fault written at once and a call when
- *     done, with no promise around a reply, 172 less the parse error's queue −111; the connection's legacy revision
- *     35; the handler's fault moved to the protocol −188; docs 111; imports 4;
- *   - jsonrpc.ts +143: UnsupportedProtocolVersion (-32022) 36, an error's `data` 107;
- *   - call.ts, result.ts, stream.ts +2 each: they import protocol.ts for server.ts.
- * - bit 21 c, +7,405 B to 42,567 B: file arguments over stdio (H24). Dead code cut first: call.ts's own base64 check and
- *   Buffer decode (-280) give way to files.ts's canonical decoder, which the bytes body shares; the file schema is the
- *   emitter's (emit/mcp/files.ts, tools.gen.ts data), so no runtime byte holds it. By file:
- *   - files.ts 2,645 (new; the file-uploads extension's values): an inline FileInput checked (data present, canonical
- *     base64, the call's inline bytes capped together, decoded to its size, its SHA-256 base64url digest) 993; a file
- *     argument read or inlined, its rule as the refusal, a path's base name 609; the canonical base64 decoder (pad bits
- *     zero, atob, no Buffer) 400; the extension's identifier and server/discover's maxInlineBytes 280; the Read type
- *     126; the header 239;
- *   - reader.ts 2,623 (new; the stdio file reader, node:fs): the read 1,640 (the root realpath'd at start, a directory
- *     or no reader; the path realpath'd under it; open with no last link followed and no FIFO wait; the descriptor a
- *     regular file, the inode realpath named, within the cap, read to exactly its size, closed), the open flags 132, the
- *     refusal 120, the Disk seam a test swaps through 179, imports and header 554;
- *   - call.ts +1,659: the multipart form (each part from its argument, one or many; a file read or decoded into a
- *     Blob; text as given, else its JSON; encoded by fetch's own FormData, its boundary in the content type) +1,191;
- *     the call (the reader passed in, the inline cap, the form when the spec has parts) +234; ToolSpec's parts +173;
- *     Binding's inline cap +73; the import +56; the header +94; the decoder shared -162;
- *   - protocol.ts +374: a call's reader from its transport's context (Tool.call +48, Context +100, the call +14)
- *     +162; server/discover's extensions (createProtocol's parameter +54, the capability +35) +89; docs +123;
- *   - stdio.ts +104: serveStdio's reader into every context +46 (its parameter, the type import, the context), docs +58.
- * - bit 21 c fold-in, -350 B to 42,217 B: the file-uploads extension is advertised from bit 21 g, with its uploads, so
- *   its advertisement is dead and cut: files.ts -216 (the identifier constant and filesCapability -280, the header's
- *   note +64), protocol.ts -134 (createProtocol's extensions parameter -54, their spread in server/discover -35, docs
- *   -45). The identifier stays named in files.ts's header, where g's capability lands.
- * - bit 21 d, +12,278 B to 54,495 B: MCP's Streamable HTTP transport, dual-era and stateless, and the standalone server
- *   the bin serves with --http (H24). Nothing in the runtime it builds on was dead; in its own first cut the transport
- *   refusals' JSON-RPC bodies (403, 406, 413, 415: a MAY) were cut, and the listener's hand-written body pump gave way to
- *   node's pipeline, which also cancels the body's stream when the client leaves. By file:
- *   - http.ts 8,126 (new; web-standard, no node API, so a Worker mounts it): the reply as JSON or as an event stream
- *     from the call's first progress (unbuffered), a modern call cancelled by its closed request or stream and a legacy
- *     one by neither, 1,330; the endpoint (the body capped and parsed, -32700; an unserved MCP-Protocol-Version 400
- *     -32022 naming the revisions served; the era read from the header, absent 2025-03-26; dispatch) 1,257; a message
- *     its era refuses (a client's response 202 before 2026-07-28 and 400 in it; a modern request's headers not its
- *     body's 400 -32020, its `_meta` refused 400) 967; the Origin (its own or listed, else 403), POST (else 405 with
- *     Allow), Accept (406) and Content-Type (415) 790; MCP-Protocol-Version, Mcp-Method and Mcp-Name matched against
- *     the body 684; a `=?base64?…?=` header value decoded as UTF-8, a malformed one refused, 533; the body counted as it
- *     streams, whatever Content-Length says, 494; a reply's status (a modern unknown method 404, an unreadable message
- *     400) 374; whether a request is modern 280 and its params 155; a response 277; the options type 174; the SSE
- *     headers 109; the header and imports 702;
- *   - listen.ts 3,852 (new; node, the standalone bin's): a request's answer (a Host not a loopback name with the bound
- *     port 421, unless exposed; no bearer 401 with its challenge; a path not /mcp 404; else the handler's; a Request
- *     node cannot make 400) 1,218; the server (each answer written or piped, a response closed early aborting its
- *     request, listening) 1,034; a Request from node's (every header as sent, a repeat joined; the body a web stream;
- *     the close its signal) 446; the bearer compared on SHA-256 digests in constant time 356; the Listen type 222; the
- *     header and imports 576;
- *   - protocol.ts +210: `claimed`, a modern request's `_meta`, shared with the transport, 251 less its inline use -69;
- *     MODERN, BATCHED, VERSION, isObject and unserved exported for the transport +28;
- *   - jsonrpc.ts +90: HeaderMismatch (-32020) 25; docs 65.
- * - bit 21 e, +4,103 B to 58,598 B, now two locks, the runtime split by where it runs (H24.3): the portable part an app
- *   mounts, web APIs alone so a Worker runs it, 48,620 B (jsonrpc, protocol, files, http, guard, result, stream, call,
- *   mount), and the node part the standalone package adds, 9,978 B (stdio 3,503, reader 2,623, listen 3,852, each
- *   unchanged). Nothing in the runtime it builds on was dead; the one node call in the portable part, result.ts's
- *   Buffer, gave way to the encoder files.ts now shares. By file:
- *   - mount.ts 3,838 (new; MCP mounted in the app): the handler 1,927 (per request: the credential headers the schemes
- *     name read from it; the in-process fetch refusing a call off the app's origin, carrying them on, keeping an inner
- *     401 or insufficient_scope 403; the SDK config; the tools bound, the credentials scrubbed; the inner refusal
- *     answered as the endpoint's own, its challenge kept or the scheme's), Mounting 400, MountConfig 304, Mounted 270,
- *     Mount 260, the header and imports 677;
- *   - files.ts +251: `encoded`, base64 32 KiB at a time with no Buffer, +282; the inline digest through it -31;
- *   - result.ts +14: a bytes result's base64 through `encoded` (its import +38, Buffer's call -24).
- * Bit 21 g (remote files): +9,800 B portable to 58,420, +38 B node to 10,016. Nothing was dead: c's fold-in had cut the
- * advertisement, which g restores. By file:
- * - files.ts +6,462: the upload flow 3,837 (`staged` 1,054: a 2026-07-28 request declaring the extension, its file
- *   ids distinct; `asked` 1,025: each size within the cap and its SHA-256 well formed, the input request of one `omit`
- *   target a file, the tokens its requestState; `retried` 1,672: one outcome a file, a failed one the tool's error,
- *   each file's bytes taken once, a token the call does not hold invalid params; Pending 86); the uploads' types
- *   (Uploads, its call and file) 685; Files, what a transport hands a call 363; the identifier and the advertisement
- *   224; FetchFile 223; `declared` 220; the FileInput's type and name shared by inline and uploaded bytes, the digest
- *   one helper 234; fileOf's uploaded bytes and URL fetch under the call's signal 411; the header 265;
- * - mount.ts +1,727: no file argument showing `{url}` without the app's fetch (fetchless, urlless) 831; the handler's
- *   advertisement, the credential an upload binds, the files handed to http.ts 438; Mount's uploads and fetch 159;
- *   the header and imports 299;
- * - protocol.ts +839: tools/call answering an input request or invalid params, the client's capabilities and params
- *   handed to the call's files 421; Outcome 209; `extensions` advertised in both eras 88; the header and imports 208;
- *   Tool and Context taking files for the reader -87;
- * - call.ts +589: the form's values staged before any is read, a refusal or a partless input passed through 487; the
- *   header and import 123; bindTools -21;
- * - http.ts +183: the mount's files into each call's context; stdio.ts +38: its reader as the files.
- * A change raises a lock only by the bytes of a named feature, dead code cut first.
+ * G14 analog (bit 18), locked at the bit 21 close: the bytes on disk of the vendored runtime, two locks by where it
+ * runs (H24.3). Every byte is named below by file and feature (each file's features sum to it, the files to the lock);
+ * a file's header comment and imports are one item. A change raises a lock only by the bytes of a named feature, dead
+ * code cut first.
+ *
+ * The portable part, 58,402 B: web APIs alone, so an app mounts it on Workers, Node or Bun.
+ * - protocol.ts 10,019: createProtocol 2,422 (initialize per request and stateless, ping, server/discover, tools/list,
+ *   the dispatch by era); tools/call 1,464 (an unknown tool, its arguments, an input request or invalid params, the
+ *   result, a fault answered as an internal error); the types (ToolResult, Outcome, Tool, ServerInfo, Connection,
+ *   Context, Protocol) 1,742; header and imports 1,096; a modern request's `_meta` claim and its refusals (-32602,
+ *   -32022 naming every revision served) 992; a tool listed and a result shaped per revision 760; batches under
+ *   2025-03-26 alone 621; the revisions and `_meta` keys named 537; the modern marks (resultType, cacheScope, ttlMs)
+ *   195; isObject 190.
+ * - files.ts 9,142 (the file-uploads extension, PR head 6101d34): the upload flow (`retried` 1,672: one outcome a
+ *   file, a failed one the tool's error, each file's bytes taken once, a token the call does not hold invalid params;
+ *   `asked` 1,025: each size within the cap and its SHA-256 well formed, the input request, the tokens as
+ *   requestState; `staged` 1,054: a 2026-07-28 request declaring the extension, its file ids distinct) 3,751; the types
+ *   (Read, FetchFile, Scope, Declared, Uploads, Files, Pending) 1,483; fileOf (a value read, inlined, uploaded or
+ *   fetched under the call's signal) 1,018; an inline FileInput checked (data present, the call's inline bytes capped
+ *   together, its size and digest) 710; canonical base64 in and out, no Buffer 682; header and the identifier 622; the
+ *   FileInput's name and declared size and digest 425; the SHA-256 digest 281; the advertisement 170.
+ * - http.ts 8,309 (Streamable HTTP, dual-era, stateless): the reply as JSON or as an event stream from the first
+ *   progress, a modern call cancelled by its closed request or stream 1,405; serveHttp (the endpoint: the body capped
+ *   and parsed, an unserved MCP-Protocol-Version, dispatch) 1,299; a message its era refuses (a client's response,
+ *   headers not the body's, `_meta` refused) 967; Origin, POST, Accept and Content-Type 790; header and imports 714;
+ *   MCP-Protocol-Version, Mcp-Method and Mcp-Name matched to the body 684; a `=?base64?…?=` value decoded 533; the body
+ *   counted as it streams 494; a message's params and era 435; a reply's status 374; a response 277; the options 228;
+ *   the SSE headers 109.
+ * - guard.ts 8,171: the inputSchema check (items, fields, own keywords, ranges, the walk) 3,525; the redactor (as
+ *   given, URL- and form-encoded, keys included) 849; $<PREFIX>_HEADERS parsed and refused 793; the Schema type of the
+ *   keywords checked 741; the refusal 588; prototype keys 516; header 430; H18.11's path segment 394; type and
+ *   equality helpers 229; the path helper 106.
+ * - call.ts 8,237: bindTools (each tool bound to the SDK client, refused before any call, scrubbed, its answer or its
+ *   collect) 2,085; the multipart form (each part from its argument; a file staged, read or decoded into a Blob; text as
+ *   given, else its JSON) 1,678; ToolSpec 1,268; flat arguments back into the SDK's input groups 1,157; header and
+ *   imports 1,123; the member walked to its method 364; Binding 335; SdkClient 126; Group 101.
+ * - mount.ts 5,547 (MCP mounted in the app): mountedMcp (per request: the credential headers its schemes name, the
+ *   in-process fetch refusing a call off the app's origin and keeping an inner 401 or insufficient_scope 403, the SDK
+ *   config, each call bound to 30 s, the tools bound and the credentials scrubbed, the files handed on, the inner
+ *   refusal answered as the endpoint's own) 2,394; header and imports 978; no file argument showing `{url}` without the
+ *   app's fetch 831; Mount 419; Mounting 351; MountConfig 304; Mounted 270.
+ * - result.ts 4,018: a 2xx as structuredContent and text 920; a failure's status, error key and message or body 616;
+ *   bytes as image, audio or an embedded resource 548; header and imports 513; text and JSON results, the text cap 495;
+ *   a call with no answer (transport, timeout) 400; Answer 231; the caps 174; Scrub 121.
+ * - stream.ts 3,153: an event stream's bounded collect (end, max_events, the text cap, the call's bound) 1,075; each
+ *   event read, a progress step, resumed by last_event_id 1,059; header and imports 573; its types 446.
+ * - jsonrpc.ts 1,806: the reply makers 401; the message and id types 338; header 304; Reply 304; the error codes 269;
+ *   the id check 190.
+ *
+ * The node part, 10,016 B: what the standalone package adds.
+ * - stdio.ts 3,541: serveStdio (one message a line, each answered as it comes, calls by id with their own abort,
+ *   notifications/cancelled, one writer, a stop aborting every call in flight) 2,224; header and imports 952; the
+ *   Stdio seam 365.
+ * - listen.ts 3,852: a request's answer (a Host not served 421, no bearer 401, another path 404) 1,218; the server
+ *   (each answer written or piped, a closed response aborting its request) 1,034; header and imports 576; a Request
+ *   from node's 446; the bearer compared on SHA-256 digests in constant time 356; Listen 222.
+ * - reader.ts 2,623: the read (the root realpath'd, the path under it, no last link followed, no FIFO wait, a regular
+ *   file and the inode realpath named, within the cap, read to exactly its size) 1,638; header and imports 554; the
+ *   Disk seam 179; the open flags 132; the refusal 120.
+ *
+ * History (the whole, then the portable and node locks): bit 18 closed at 29,649; the TS response cap -81 to 29,568;
+ * bit 19 c +734 to 30,302; bit 19 g +863 to 31,165 (bit 21's start); bit 21 b +3,997 to 35,162 (dual-era); c +7,405
+ * to 42,567 (file arguments over stdio); c's fold-in -350 to 42,217; d +12,278 to 54,495 (Streamable HTTP, the
+ * standalone --http); e +4,103 to 58,598, split into portable 48,620 and node 9,978 (the mount); g +9,800 portable and
+ * +38 node to 58,420 and 10,016 (uploads and URL files); h -18 portable to 58,402 (the mount's unused timeout option
+ * cut). Bit 21 in all: +37,253 B over its start, 31,165 -> 68,418.
  */
-const MCP_PORTABLE_BYTES = 58420
+const MCP_PORTABLE_BYTES = 58402
 const MCP_NODE_BYTES = 10016
 
 const RUNTIME_DIR = resolve(import.meta.dirname, "../src/runtime/mcp")

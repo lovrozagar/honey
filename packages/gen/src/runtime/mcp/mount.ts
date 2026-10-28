@@ -61,7 +61,7 @@ export type Mounted = {
 	readonly fetch: (request: Request, mount: Mount) => Promise<Response>
 }
 
-/** A mounted server: its tools and SDK, the credential headers, its server path, a call's bound in ms. */
+/** A mounted server: its tools and SDK, the credential headers, its server path. */
 export type Mounting = {
 	readonly info: ServerInfo
 	readonly specs: readonly ToolSpec[]
@@ -70,12 +70,12 @@ export type Mounting = {
 	readonly secured: boolean
 	readonly challenge: string
 	readonly server: string
-	readonly timeout?: number
 }
 
-/** The handler serving `mounting`'s tools at a mount. */
+/** The handler serving `mounting`'s tools at a mount, each call bound to 30 s. */
 export function mountedMcp(mounting: Mounting): Mounted {
-	const { challenge, client, credentials, info, secured, server, timeout = 30_000 } = mounting
+	const { challenge, client, credentials, info, secured, server } = mounting
+	const timeout = 30_000
 	const extensions = mounting.specs.some((spec) => spec.parts?.some(([, , kind]) => kind !== "text"))
 		? filesCapability(BYTES_MAX)
 		: undefined
