@@ -53,8 +53,8 @@ afterAll(() => files.done())
 /* the WebSocket route's modules, which an app reaches through ws(app, path) or realtime() alone */
 const WS_ROUTE = ["routing/ws-builder", "ws/origin", "ws/session", "ws/shared"]
 
-/* the MCP mount's module, which an app reaches through mcp(app, path, handler) alone (bit 21 e, H24.3) */
-const MCP_ROUTE = ["mcp/mount"]
+/* the MCP mount's modules, which an app reaches through mcp(app, path, handler) alone (bit 21 e, H24.3; f: oauth) */
+const MCP_ROUTE = ["mcp/mount", "mcp/oauth"]
 
 function bunBundle(name: string, lines: readonly string[], minify = true): string {
 	write(full, { [`${name}.ts`]: lines.join("\n") })
