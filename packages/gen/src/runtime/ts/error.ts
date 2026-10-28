@@ -88,7 +88,8 @@ export class APIConnectionError extends Error {
 /** A fetch failure as APIConnectionError; an abort's as it is. */
 export function connectionErrors(fetch: typeof globalThis.fetch): typeof globalThis.fetch {
 	if (typeof fetch !== "function") return fetch
-	return async (input, init) => {
+	/* asserted, as Bun's fetch type also names `preconnect` */
+	return (async (input, init) => {
 		try {
 			return await fetch(input, init)
 		} catch (cause) {
@@ -96,5 +97,5 @@ export function connectionErrors(fetch: typeof globalThis.fetch): typeof globalT
 			const url = new URL(String(input))
 			throw new APIConnectionError(`${init?.method} ${url.origin}${url.pathname}: the connection failed`, { cause })
 		}
-	}
+	}) as typeof globalThis.fetch
 }

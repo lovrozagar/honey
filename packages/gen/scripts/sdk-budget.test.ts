@@ -566,8 +566,11 @@ describe("the C# runtime within its byte budget (bit 15, G14)", () => {
  * Bit 19 k1, +362 B of doc only, to 120,704 B: sse.ts +113 (leaving a `for await` early frees the connection),
  * ws.ts +249 (the dial runs no onRequest or onResponse hook and no onAuthExpired refresh; the platform WebSocket
  * has no ping and no message cap).
+ * Bit 21 e, +90 B to 120,794 B: connectionErrors' fetch wrapper asserted as the platform's fetch (+29) with its one-line
+ * reason (+61), so a generated SDK type-checks under Bun's types, whose fetch also names `preconnect`: the MCP app's
+ * mounted handler embeds the SDK, and its Bun host's type check is the first to read it there.
  */
-const TS_RUNTIME_BYTES = 120_704
+const TS_RUNTIME_BYTES = 120_794
 
 describe("the TS runtime within its byte budget (bit 11, G14)", () => {
 	it(`ships every runtime file it holds, all of them within ${TS_RUNTIME_BYTES} bytes, nothing else beside them`, () => {
