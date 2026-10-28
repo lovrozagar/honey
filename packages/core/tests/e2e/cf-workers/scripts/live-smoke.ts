@@ -5,6 +5,8 @@
  * Defaults are a real storm, not a handshake. Override with:
  *   HONEY_CF_STORM=20000 HONEY_CF_WS=80 HONEY_CF_CONCURRENCY=400
  */
+import { wsBaseOf } from "../../playwright-app.ts"
+
 const BASE = (process.env.HONEY_CF_LIVE_URL ?? "https://honey-cf-e2e.lovro-zagar5.workers.dev").replace(/\/$/, "")
 const STORM = Number(process.env.HONEY_CF_STORM ?? 8_000)
 const SPEC = Math.max(200, Math.floor(STORM / 10))
@@ -121,7 +123,7 @@ try {
 clearTimeout(abortTimer)
 if ((await (await fetch(`${BASE}/api/health`)).text()) !== "ok") fail("health after abort")
 
-const wsUrl = `${BASE.replace("https://", "wss://")}/api/echo-ws`
+const wsUrl = `${wsBaseOf(BASE)}/api/echo-ws`
 
 async function echoOnce(label: string, attempt = 0): Promise<void> {
 	try {
@@ -157,7 +159,7 @@ async function echoOnce(label: string, attempt = 0): Promise<void> {
 }
 
 await new Promise<void>((resolve, reject) => {
-	const ws = new WebSocket(`${BASE.replace("https://", "wss://")}/api/realtime/echo`)
+	const ws = new WebSocket(`${wsBaseOf(BASE)}/api/realtime/echo`)
 	const timer = setTimeout(() => {
 		ws.close()
 		reject(new Error("realtime echo: timeout"))

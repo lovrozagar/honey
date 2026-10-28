@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test"
-import { e2eAppName, e2eAppTestDir, e2eReporter } from "../playwright-app.ts"
+import { e2eAppName, e2eAppTestDir, e2eBaseUrl, e2eReporter } from "../playwright-app.ts"
 
 const PORT = "4101"
 process.env.PORT = PORT
@@ -18,7 +18,7 @@ export default defineConfig({
 	testDir: e2eAppTestDir(),
 	timeout: 30_000,
 	use: {
-		baseURL: `http://localhost:${PORT}`,
+		baseURL: e2eBaseUrl(),
 		trace: "on-first-retry",
 	},
 	webServer: {

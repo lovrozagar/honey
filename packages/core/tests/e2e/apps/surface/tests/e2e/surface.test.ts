@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test"
+import { e2eWsBase } from "../../../../playwright-app.ts"
 
-const WS_PORT = process.env.PORT ?? "4100"
-const WS_HOST = process.env.WS_HOST ?? "localhost"
-const WS_BASE = `ws://${WS_HOST}:${WS_PORT}`
+const WS_BASE = e2eWsBase()
 
 function connectWs(path: string): {
 	close(code?: number, reason?: string): void
