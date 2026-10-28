@@ -400,6 +400,26 @@ describe("the PUT, continued (2)", () => {
 	})
 })
 
+describe("the PUT's refusals, each rule named (bit 21 h)", () => {
+	it("names the rule a refused PUT broke: short of its size, or another digest", async () => {
+		const on = world()
+		const run = await saved(on, { put: () => null })
+		const url = String(run.targets[0]?.url)
+		const refusals = []
+		for (const body of [BYTES.slice(0, -1), BYTES.map((byte, at) => (at === 0 ? byte ^ 1 : byte))]) {
+			const answer = await put(on, url, body)
+			refusals.push([answer.status, await answer.text()])
+		}
+		expect([run.puts, refusals]).toEqual([
+			[400],
+			[
+				[400, `the upload is not its ${BYTES.length} bytes`],
+				[400, "the upload does not match its digest"],
+			],
+		])
+	})
+})
+
 describe("the retry's outcomes (the draft's Retry, :292-330)", () => {
 	it("runs nothing on a failed outcome, a missing one, or a request that never declared the extension", async () => {
 		const on = world()

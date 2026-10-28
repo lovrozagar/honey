@@ -167,11 +167,16 @@ describe("urlFiles: no IP address is a listed host (R6)", () => {
 	it("refuses an IP address in any form the URL parser reads, none being listed", async () => {
 		expect(
 			await Promise.all(
-				["https://2130706433/ok", "https://0x7f.0.0.1/ok", "https://[::1]/ok", "https://[::ffff:127.0.0.1]/ok"].map(
-					(url) => got(url),
-				),
+				[
+					"https://2130706433/ok",
+					"https://0x7f.0.0.1/ok",
+					"https://0177.0.0.1/ok",
+					"https://[::1]/ok",
+					"https://[::ffff:127.0.0.1]/ok",
+				].map((url) => got(url)),
 			),
 		).toEqual([
+			"is on 127.0.0.1, a host this server fetches no file from",
 			"is on 127.0.0.1, a host this server fetches no file from",
 			"is on 127.0.0.1, a host this server fetches no file from",
 			"is on [::1], a host this server fetches no file from",
@@ -221,6 +226,27 @@ describe("urlFiles: the size streamed, the time, the answer's own type and name 
 		expect(await got("https://files.test/chunked")).toBe(`is past the ${CAP}-byte cap`)
 		await new Promise((settled) => setTimeout(settled, 100))
 		expect([chunked.whole, chunked.written < CHUNKS]).toEqual([false, true])
+	})
+
+	it("refuses a body past maxBytes whose Content-Length says it fits, counting what streams", async () => {
+		let pulled = 0
+		const lying = urlFiles({
+			fetch: async () =>
+				new Response(
+					new ReadableStream<Uint8Array>({
+						/* past the cap by four chunks, then the end: a reader trusting the length takes it all */
+						pull: (controller) =>
+							void (++pulled > CAP / CHUNK + 4 ? controller.close() : controller.enqueue(new Uint8Array(CHUNK))),
+					}),
+					{ headers: { "content-length": "8", "content-type": "text/plain" } },
+				),
+			hosts: HOSTS,
+			maxBytes: CAP,
+		})
+		expect([await got("https://files.test/lying", lying), pulled <= CAP / CHUNK + 2]).toEqual([
+			`is past the ${CAP}-byte cap`,
+			true,
+		])
 	})
 
 	it("refuses a body still coming past timeoutMs, headers and body together", async () => {

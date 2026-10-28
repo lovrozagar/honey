@@ -2,6 +2,7 @@ import { join } from "node:path"
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { written } from "../../../gen/src/emit/mcp/__fixtures__/written.ts"
 import { generateMcpHandler } from "../../../gen/src/emit/mcp/mounted.ts"
+import { bodyLimit } from "../input/body-limit.ts"
 import { createMiddleware } from "../middleware/middleware.ts"
 import { generateOpenApi } from "../openapi/generate.ts"
 import { honey } from "../routing/app.ts"
@@ -190,6 +191,50 @@ describe("mcp(app, path, handler) routes (bit 21 e)", () => {
 				[405, "POST"],
 			],
 			["/v1/mcp", "/v1/mcp", "/v1/mcp", "/v1/mcp", "/v1/mcp"],
+		])
+	})
+})
+
+describe("mcp(app, path, handler) under the app's bodyLimit (bit 21 h)", () => {
+	it("refuses a body past the app's bodyLimit with its 413 before the endpoint reads it, chunked or declared", async () => {
+		const { app, seen } = shop(false)
+		const handler = await handlerOf(app)
+		mcp(app.use(bodyLimit({ maxSize: 64 })), "/mcp", handler)
+		const body = JSON.stringify({
+			id: 1,
+			jsonrpc: "2.0",
+			method: ORDER[0],
+			params: { ...ORDER[1], pad: "x".repeat(100) },
+		})
+		const headers = { accept: ACCEPT, "content-type": "application/json", "mcp-protocol-version": "2025-11-25" }
+		const chunked = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode(body))
+				controller.close()
+			},
+		})
+		const answers = await Promise.all(
+			[body, chunked].map((sent) =>
+				app.fetch(
+					new Request("https://shop.example/mcp", {
+						body: sent,
+						duplex: "half",
+						headers,
+						method: "POST",
+					} as RequestInit),
+					{},
+				),
+			),
+		)
+		const keys = await Promise.all(
+			answers.map(async (answer) => [answer.status, (await answer.text()).includes("content_too_large")]),
+		)
+		expect([keys, seen]).toEqual([
+			[
+				[413, true],
+				[413, true],
+			],
+			[],
 		])
 	})
 })
