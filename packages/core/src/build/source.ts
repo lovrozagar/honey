@@ -9,6 +9,7 @@
  */
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
+import { assertTreeOutputKeys } from "../openapi/output-keys.ts"
 import { type Honey, honey } from "../routing/app.ts"
 import { gatewayTree, overlaySchemas } from "../routing/gateway-tree.ts"
 import type { RouteTree } from "../routing/tree.ts"
@@ -86,11 +87,21 @@ async function gatewayOf(config: ResolvedHoneyConfig, root: string, first: boole
 	return { documented, loadsTree: true, tree }
 }
 
-/** The app `config` names, or a gateway's (`first` lets a gateway's first run bootstrap); each module imported once. */
-export async function sourceOf(config: ResolvedHoneyConfig, root: string, first = false): Promise<Source> {
-	if (config.codegen.mergeTree !== undefined) return gatewayOf(config, root, first)
+/** The app `config` names: its snapshot is the tree written. */
+async function appSource(config: ResolvedHoneyConfig, root: string): Promise<Source> {
 	if (config.app === undefined) throw new Error("No app configured: set app, or codegen.mergeTree for a gateway")
 	const documented = await appOf(config, root)
 	const tree = await unlessStale(() => documented.app.toRouteTree(), config)
 	return { documented: async () => documented, loadsTree: false, tree }
+}
+
+/**
+ * The app `config` names, or a gateway's (`first` lets a gateway's first run bootstrap); each module imported once.
+ * Its tree holds no output key `.output()`'s types refuse: a generated tree is checked here, never where it is served.
+ */
+export async function sourceOf(config: ResolvedHoneyConfig, root: string, first = false): Promise<Source> {
+	const source =
+		config.codegen.mergeTree === undefined ? await appSource(config, root) : await gatewayOf(config, root, first)
+	assertTreeOutputKeys(source.tree)
+	return source
 }

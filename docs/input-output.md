@@ -7,8 +7,9 @@ answered 400 with the failing fields, and `ctx.input` holds the parsed values, t
 `.output()` declares what it answers, the media type as the outer key and the status as the inner one. Any media
 type works, `image/gif` or `application/zip` included, and a status may declare its response headers, which reach the
 OpenAPI document and the SDKs' typed accessors. An outer key that is no `type/subtype`, `headers` or `redirect`, or an
-inner key that names no status (`orders` where `ok` was meant), is a type error, and `.output()` throws on it naming
-the key. `ctx.res` builds the answer: `json`, `text`, `html`, `binary`, `sse`, `redirect`, and `raw` for any
+inner key that names no status (`orders` where `ok` was meant), is a type error. Untyped, it fails where the app is
+documented (`honey generate`, `generateOpenApi`, `serveOpenApi`), naming the route and the key; serving requests never
+checks it. `ctx.res` builds the answer: `json`, `text`, `html`, `binary`, `sse`, `redirect`, and `raw` for any
 `Response`.
 
 ## Example

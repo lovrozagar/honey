@@ -22,6 +22,7 @@ import {
 	UNNAMED_WILDCARD,
 } from "../routing/pattern.ts"
 import type { RouteEntry } from "../routing/tree.ts"
+import { assertOutputKeys } from "./output-keys.ts"
 
 /** One path a WebSocket route serves. */
 export type CollectedWsRoute = {
@@ -116,13 +117,18 @@ function resolved(plan: Plan | undefined, entry: RouteEntry | undefined) {
 	return { errorKeys: [...(entry?.ek ?? [])].sort(compareCodeUnits), errors: null, meta }
 }
 
-/** A route's pattern and declarations: its record's, else its loaded tree entry's. */
+/**
+ * A route's pattern and declarations: its record's, else its loaded tree entry's. Its output holds no key the types
+ * refuse (assertOutputKeys): every document, manifest and generated type reads routes from here.
+ */
 function declarations(g: HoneyGraph, id: string) {
 	const record = g.records.get(id)
 	const entry = g.loaded?.[id]
+	const output = record?.out ?? entry?.out ?? null
+	if (output !== null) assertOutputKeys(output, id)
 	return {
 		input: record?.iv ?? entry?.iv ?? null,
-		output: record?.out ?? entry?.out ?? null,
+		output,
 		segments: record?.sg ?? parsePattern(splitRouteId(id).pattern),
 	}
 }

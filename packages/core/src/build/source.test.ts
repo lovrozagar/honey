@@ -89,6 +89,38 @@ const routeIds = (dir: string) =>
 type Document = { paths: Record<string, Record<string, { requestBody?: object; responses: Record<string, unknown> }>> }
 const documentAt = (dir: string) => JSON.parse(read(dir, "src/_gen/openapi.gen.json")) as Document
 
+/** A service whose `GET /bad` declares output under `orders`, a name no status has (a JS app's, or a cast's). */
+const BAD_OUTPUT = [
+	'import { honey } from "@lovrozagar/honey"',
+	"export const app = honey()",
+	'app.get("/bad").output({ "application/json": { orders: true } } as never).handler((c) => c.res.noContent())',
+	"",
+].join("\n")
+
+describe("honey generate: an output key that names no status (bit 21 f2)", () => {
+	it(
+		"refuses an app's tree and a gateway's merged tree that hold one, naming the route, and writes nothing",
+		async () => {
+			const made = project({
+				"src/app.ts": BAD_OUTPUT,
+				"src/route-tree.ts":
+					'import { mergeTree } from "@lovrozagar/honey"\nimport { app } from "./app.ts"\nexport const tree = mergeTree([app.toRouteTree(), { worker: "down" }])\n',
+			})
+			projects.push(made)
+			const refused = 'GET /bad: .output() key "orders" under application/json is none of accepted'
+			const results = [
+				await generate({ app: "src/app.ts" }, made.dir),
+				await generate({ codegen: { mergeTree: "src/route-tree.ts" } }, made.dir),
+			]
+			expect([
+				results.map((result) => typeof result === "string" && result.startsWith(refused)),
+				existsSync(join(made.dir, "src/_gen")),
+			]).toEqual([[true, true], false])
+		},
+		SLOW,
+	)
+})
+
 describe("a gateway's app (bit 19 h2)", () => {
 	it(
 		"builds the tree from the merge entry's app export, and imports config.app only once that tree is written",

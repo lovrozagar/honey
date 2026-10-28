@@ -30,7 +30,7 @@ export type OutputSchemas = {
 /**
  * `TOutput` with every key under a media type, `headers` or `redirect` that names no status, and every outer key
  * that is none of those, mapped to `never`: intersected with the declaration, a typo is an error where it is
- * written. `assertOutputKeys` (output-keys.ts) refuses the same keys at runtime.
+ * written. `assertOutputKeys` (openapi/output-keys.ts) refuses the same keys where an app is documented.
  */
 export type KnownStatusKeys<TOutput> = {
 	readonly [CT in keyof TOutput]: CT extends `${string}/${string}` | "headers" | "redirect"

@@ -52,6 +52,8 @@ afterAll(() => files.done())
 
 /* the WebSocket route's modules, which an app reaches through ws(app, path) or realtime() alone */
 const WS_ROUTE = ["routing/ws-builder", "ws/origin", "ws/session", "ws/shared"]
+/* the output-key check runs where an app is documented or its tree generated, never on a request (bit 21 f2) */
+const GENERATION_ONLY = ["openapi/output-keys"]
 
 /* the MCP mount's modules: mcp(app, path, handler) reaches mount alone (bit 21 e, H24.3), oauth() its resource server
  * by an import of its own, so a mount without it carries none of it (bit 21 f, H23) */
@@ -103,13 +105,17 @@ describe("the runtime bundle of an installed core (bit 19 i)", () => {
 			 * the pinned bun 1.3.11 --minify), locked at the next 100; under v0's 26,500 lock (v0's own bundle measures
 			 * 26,243 the same way). Bit 19 i2 cut the WebSocket route builder's 1,120 bytes (27,275 before): ws(app, path)
 			 * is an import, so routing/ws-builder, ws/origin, ws/session and ws/shared stay out until it is called.
-			 * Bit 21 f2 refuses an .output() key that is no media type or status, at definition and in a loaded tree
-			 * (routing/output-keys, which every route reaches): +164 bytes gzipped, 26,293 measured, locked at 26,300.
 			 */
 			const gzipped = gzipSync(js, { level: 9 }).length
 			const builtBy = run(BUN as string, ["--version"], full).out.trim()
 			expect(
-				[leaked, features, routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE]), gzipped < 26_300, builtBy],
+				[
+					leaked,
+					features,
+					routeModules("minimal", entry, [...WS_ROUTE, ...MCP_ROUTE, ...GENERATION_ONLY]),
+					gzipped < 26_200,
+					builtBy,
+				],
 				`${gzipped} bytes gzipped`,
 			).toEqual([[], [], [], true, pinnedBunVersion()])
 		},

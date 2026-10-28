@@ -143,13 +143,6 @@ describe("routeTree(): leaves nothing serves, and stale trees", () => {
 			"routeTree(): leaf GET /x has no route entry",
 		)
 	})
-
-	it("refuses a tree whose route declares output under a key that names no status", () => {
-		const tree = treeOf([["GET", "/o", { out: { "application/json": { orders: z.string() } } as never }]])
-		expect(() => honey<{}>().routeTree(tree)).toThrow(
-			'GET /o: .output() key "orders" under application/json is none of',
-		)
-	})
 })
 
 describe("toRouteTree(): a snapshot another app serves", () => {

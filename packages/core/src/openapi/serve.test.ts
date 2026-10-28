@@ -210,6 +210,25 @@ describe("serveOpenApi: a failed build", () => {
 	})
 })
 
+describe("serveOpenApi: an output key that names no status (bit 21 f2)", () => {
+	it("answers the document 500, logging the refusal that names the route, its failed build kept", async () => {
+		const logged: unknown[] = []
+		const app = honey<{}>().logger({ ...SILENT, error: (fields: unknown) => void logged.push(fields) })
+		app
+			.get("/bad")
+			.output({ "application/json": { orders: z.string() } } as never)
+			.handler((c) => c.res.noContent())
+		serveOpenApi(app, { title: "T", version: "1" })
+		const statuses = [(await get(app, "/openapi.json")).status, (await get(app, "/openapi.yaml")).status]
+		const messages = logged.map((fields) => (fields as { err: { message: string } }).err.message)
+		expect([
+			statuses,
+			messages.length,
+			messages.every((m) => m.startsWith('GET /bad: .output() key "orders"')),
+		]).toEqual([[500, 500], 2, true])
+	})
+})
+
 describe("serveOpenApi: caching headers", () => {
 	// v0: df54b1782a
 	it("sends a strong ETag with no-cache and nosniff, answers a match with an empty 304, and tags a changed document anew", async () => {

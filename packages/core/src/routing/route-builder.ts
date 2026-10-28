@@ -5,7 +5,6 @@
  */
 import type { ERROR_META } from "../errors/errors.ts"
 import { compileInput, type InputSchemas, type InputStep, type InputTypes } from "../input/input.ts"
-import { assertOutputKeys } from "./output-keys.ts"
 import type { KnownStatusKeys, OutputSchemas } from "./output-types.ts"
 import type { ErrorFactories } from "./settings.ts"
 import type { MaybePromise, MiddlewareFn, RuntimeMiddleware } from "../middleware/middleware.ts"
@@ -238,7 +237,6 @@ export class RouteBuilder<B extends BuilderTypes> {
 	output<const TOutput extends OutputSchemas>(
 		schemas: TOutput & KnownStatusKeys<TOutput>,
 	): BuilderChain<Next<B, { output: TOutput; used: B["used"] | "output" }>> {
-		assertOutputKeys(schemas, this.#s.pending.id)
 		return this.#next({ output: schemas })
 	}
 
