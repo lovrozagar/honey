@@ -27,6 +27,96 @@ honey-codegen generate --spec openapi.json --target mcp --out ./mcp
 | file argument                                     | inline or `{path}`      | a multipart file part, sent as `multipart/form-data` with the form's text parts                                                   | a path is read only over stdio, inside `$<PREFIX>_FILE_ROOT`      |
 | `--http`                                          | stdio                   | Streamable HTTP at `/mcp` on `127.0.0.1:8000`, a bearer token required                                                            | the token is `$<PREFIX>_MCP_TOKEN`; it never reaches the API      |
 
+## Where to host
+
+There are two ways to serve the tools, and they run in different places:
+
+- **The mounted endpoint, `mcp()` in your app** ([Mounting in your app](#mounting-in-your-app)), runs wherever the
+  app runs: Workers, Node or Bun. It uses web APIs only, dispatches each call in process through the app, and the
+  app's own auth guards it. **It's the recommended way to serve MCP remotely.**
+- **The standalone package (`<name>-mcp`) needs Node.** Use it for local stdio installs (Claude Desktop, Claude Code,
+  Cursor), or run `--http` as a long-running process on a server or container platform. Never on serverless or
+  Workers: it holds a listening socket and reads local files.
+
+## Install for Claude Desktop and Claude Code
+
+The standalone server runs over stdio, started by the client. Generate it, then point the client at its
+`dist/server.js`:
+
+```sh
+honey-codegen generate --spec openapi.json --target mcp --out ./mcp
+```
+
+The server's name is the document's title, lower case and hyphenated (`Anyrow` gives `anyrow`, its bin
+`anyrow-mcp`), or the mcp target's `name` option. Its environment variables are that name upper case with `_` for
+`-` (`ANYROW_…`), or the target's `envPrefix` option.
+
+| Variable                     | Default                     | What it does                                                                                      |
+| ---------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `$<PREFIX>_BASE_URL`         | the document's first server | the API every call goes to                                                                        |
+| `$<PREFIX>_API_KEY`          | none                        | the credential, sent as the document's scheme says; scrubbed from every result                    |
+| `$<PREFIX>_HEADERS`          | none                        | a JSON object of headers sent on every call, each scrubbed from results                           |
+| `$<PREFIX>_REDIRECT`         | `same-origin`               | `same-origin`, or `follow` to follow a redirect off the API's origin with its credentials dropped |
+| `$<PREFIX>_TIMEOUT_MS`       | `30000` (30 s)              | each call's bound, an event stream's collect included                                             |
+| `$<PREFIX>_FILE_ROOT`        | the client's working dir    | the only directory a `{ path }` file argument is read from (see below)                            |
+| `$<PREFIX>_MAX_FILE_BYTES`   | `52428800` (50 MiB)         | the largest file a path may name                                                                  |
+| `$<PREFIX>_MAX_INLINE_BYTES` | `1048576` (1 MiB)           | all inline files of one call together, decoded                                                    |
+
+**Claude Desktop** reads `claude_desktop_config.json` (Settings, Developer, Edit Config):
+
+```json
+{
+	"mcpServers": {
+		"anyrow": {
+			"command": "node",
+			"args": ["/Users/me/anyrow/mcp/dist/server.js"],
+			"env": {
+				"ANYROW_API_KEY": "ak_…",
+				"ANYROW_FILE_ROOT": "/Users/me/Documents/invoices",
+				"ANYROW_MAX_FILE_BYTES": "10485760"
+			}
+		}
+	}
+}
+```
+
+**Claude Code** adds it from the command line:
+
+```sh
+claude mcp add --transport stdio anyrow \
+  --env ANYROW_API_KEY=ak_… --env ANYROW_FILE_ROOT="$HOME/Documents/invoices" \
+  -- node "$HOME/anyrow/mcp/dist/server.js"
+```
+
+**Set `$<PREFIX>_FILE_ROOT` to the narrowest directory the agent needs.** A desktop client starts the server in a
+working directory of its own choosing, often your home directory, and that is the root when the variable is unset.
+A path argument can never leave the root, but everything under it is readable to the agent. Cursor takes the same
+`command`, `args` and `env` in its `mcp.json`.
+
+## Clients
+
+Which credential each client can send decides how a remote endpoint must authenticate:
+
+| Client                               | A fixed header (`Authorization: ApiKey …`) | OAuth ([OAuth](#oauth))                       |
+| ------------------------------------ | ------------------------------------------ | --------------------------------------------- |
+| Claude custom connectors             | yes ("Request headers")                    | yes                                           |
+| Claude Code                          | yes (`--header`)                           | yes                                           |
+| Cursor, VS Code, Gemini CLI          | yes (`headers`)                            | yes                                           |
+| Copilot Studio                       | yes (an API key header)                    | yes                                           |
+| ChatGPT                              | **no**                                     | **required** (or no auth at all), PKCE `S256` |
+| Anthropic Messages API MCP connector | only `authorization_token`, as `Bearer`    | the token you pass                            |
+
+- **A header-only endpoint** (the `ApiKey` scheme, below) reaches every client except ChatGPT.
+- **ChatGPT** needs [`oauth`](#oauth) on the mount.
+- **The Messages API connector** sends `Authorization: Bearer <authorization_token>`, so it reaches an `ApiKey`
+  endpoint only if the app also takes `Bearer <key>`.
+
+Claude Code against a mounted endpoint:
+
+```sh
+claude mcp add --transport http anyrow https://api.example.com/mcp --header "Authorization: ApiKey ak_…"
+```
+
 ## File arguments
 
 A multipart operation marked `x-mcp` is a tool. Each text part is an argument with the part's own schema; each file
@@ -303,10 +393,12 @@ What the endpoint checks:
   retry is refused and the client starts the call again and re-uploads.
 
 **The store must claim atomically.** `claim` must return true to one caller alone, even when two PUTs race, and
-`take` must hand the bytes to one caller alone. On Workers that means a Durable Object, or D1 (`INSERT … ON CONFLICT
-DO NOTHING`, `DELETE … RETURNING`). **Workers KV cannot keep an upload one-shot**: it is eventually consistent, so two
-claims can both succeed. `memoryUploadStore()` is one process's memory: on Workers, or behind more than one instance,
-an upload PUT to one isolate is missing on another.
+`take` must hand the bytes to one caller alone. On Workers that means a D1 row or a Durable Object for the claim and
+the take (`INSERT … ON CONFLICT DO NOTHING`, `DELETE … RETURNING`), with the bytes in R2: a D1 row, and a SQLite
+Durable Object's, holds at most 2 MB, far under the 50 MiB `maxBytes`.
+[End to end](#end-to-end-an-api-key-gateway-on-workers) has such a store. **Workers KV cannot keep an upload
+one-shot**: it is eventually consistent, so two claims can both succeed. `memoryUploadStore()` is one process's
+memory: on Workers, or behind more than one instance, an upload PUT to one isolate is missing on another.
 
 **The upload route** is a real route on the handle: its basePath and every middleware apply, `bodyLimit` included,
 so set a limit that fits `maxBytes`. It's kept out of the OpenAPI documents and the tools. A middleware that refuses
@@ -356,3 +448,116 @@ The guards:
 **DNS is not resolved first.** The hosts are your own choice, so a listed host whose name points at a private address
 is yours to not list. Checking the resolved address wouldn't close that either, since fetch resolves the name again (DNS
 rebinding) and can't be pinned to an address on Workers or Bun. Workers' fetch reaches no private range at all.
+
+## End to end: an API-key gateway on Workers
+
+An API whose public operations take files, guarded by an API key in `Authorization: ApiKey <key>`, served as MCP
+from the same Worker: the tools at `/mcp`, large files uploaded out of band, and files fetched from your own storage
+host.
+
+The plugin writes the handler, the scheme naming the header:
+
+```ts
+import { honey } from "@lovrozagar/honey/plugin"
+
+const apiKey = { description: "Format: ApiKey {key}", in: "header", name: "Authorization", type: "apiKey" }
+
+export default {
+	plugins: [
+		honey({
+			app: "src/app.ts",
+			codegen: { mcp: true, openApi: { securitySchemes: { apiKey }, title: "Anyrow", version: "1.0.0" } },
+		}),
+	],
+}
+```
+
+The Worker:
+
+```ts
+import { createMiddleware, honey } from "@lovrozagar/honey"
+import { type McpHandler, mcp } from "@lovrozagar/honey/mcp"
+import { type UploadStore, uploads } from "@lovrozagar/honey/mcp/uploads"
+import { urlFiles } from "@lovrozagar/honey/mcp/url-files"
+import * as z from "zod"
+
+/* in the app: import { mcpHandler } from "./_gen/mcp.gen.ts" */
+declare const mcpHandler: McpHandler
+
+/* as much of D1's and R2's binding types as the store uses */
+type D1 = {
+	prepare(query: string): {
+		bind(...values: unknown[]): { run(): Promise<{ meta: { changes: number } }>; first<T>(): Promise<T | null> }
+	}
+}
+type R2 = {
+	put(key: string, bytes: Uint8Array): Promise<unknown>
+	get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>
+	delete(key: string): Promise<void>
+}
+type Env = { readonly API_KEYS: D1; readonly UPLOADS_DB: D1; readonly UPLOADS: R2; readonly UPLOAD_SECRET: string }
+
+/* the Worker's bindings at module scope: on Workers, import { env } from "cloudflare:workers" */
+declare const env: Env
+
+/*
+ * One D1 row an upload is its claim and its take, each atomic; R2 holds its bytes.
+ * CREATE TABLE uploads (id TEXT PRIMARY KEY, expires INTEGER NOT NULL, ready INTEGER NOT NULL DEFAULT 0)
+ */
+const store: UploadStore = {
+	claim: async (id, expires) => {
+		const insert = "INSERT INTO uploads (id, expires) VALUES (?, ?) ON CONFLICT DO NOTHING"
+		return (await env.UPLOADS_DB.prepare(insert).bind(id, expires).run()).meta.changes === 1
+	},
+	put: async (id, bytes) => {
+		await env.UPLOADS.put(id, bytes)
+		await env.UPLOADS_DB.prepare("UPDATE uploads SET ready = 1 WHERE id = ?").bind(id).run()
+	},
+	take: async (id) => {
+		const taken = "DELETE FROM uploads WHERE id = ? AND ready = 1 AND expires > ? RETURNING id"
+		if ((await env.UPLOADS_DB.prepare(taken).bind(id, Date.now()).first<{ id: string }>()) === null) return undefined
+		const object = await env.UPLOADS.get(id)
+		await env.UPLOADS.delete(id)
+		return object === null ? undefined : new Uint8Array(await object.arrayBuffer())
+	},
+}
+
+/* every route checks the key: a 401 naming the scheme otherwise, which the endpoint answers as its own */
+const apiKeyAccess = createMiddleware<{ req: Request; env: Env }>(async (ctx, next) => {
+	const key = /^ApiKey (\S+)$/.exec(ctx.req.headers.get("authorization") ?? "")?.[1]
+	const known = key && (await ctx.env.API_KEYS.prepare("SELECT 1 FROM keys WHERE key = ?").bind(key).first())
+	return known ? next() : new Response(null, { headers: { "www-authenticate": "ApiKey" }, status: 401 })
+})
+
+const app = honey<Env>()
+app
+	.use(apiKeyAccess)
+	.post("/v1/projects/:project_id/extract")
+	.meta({ mcp: true, operationId: "extract.once", security: [{ apiKey: [] }] })
+	.input({ form: z.object({ file: z.file(), instruction: z.string().optional() }) })
+	.handler(async (ctx) => ctx.res.json("ok", { name: ctx.input.form.file.name, size: ctx.input.form.file.size }))
+
+mcp(app, "/mcp", mcpHandler, {
+	authenticate: (request) => /^ApiKey \S+$/.test(request.headers.get("authorization") ?? ""),
+	uploads: uploads({ secret: env.UPLOAD_SECRET, store }),
+	urlFiles: urlFiles({ hosts: ["files.anyrow.example"] }),
+})
+
+export default app
+```
+
+What each part does:
+
+- **`authenticate`** refuses a request with no `ApiKey` credential before any tool runs (HTTP 401). It checks only
+  the credential's shape. The key itself is the routes' to check, and a key they refuse is the endpoint's own 401 with
+  their challenge, so the client sees an auth failure, never a tool result.
+- **The credential** reaches the routes as the MCP request sent it, because the `apiKey` scheme names
+  `Authorization`. No other request header is carried.
+- **Uploads** go through the D1 row and R2. `UPLOAD_SECRET` is a Worker secret of at least 32 characters
+  (`wrangler secret put UPLOAD_SECRET`). Rows and objects past their expiry are left behind: delete them on a Cron
+  Trigger (`DELETE FROM uploads WHERE expires < ?`) and an R2 lifecycle rule.
+- **URL files** come only from `files.anyrow.example`, over https, with no redirect followed and the size counted as
+  the body streams. List your own storage host, or an `*.` entry for the hosts under it.
+- **The app's `bodyLimit`**, if you set one, applies to the endpoint and to the upload route too, so set it to fit
+  the uploads' `maxBytes`.
+- **The clients** that can connect: every one in [Clients](#clients) except ChatGPT, which needs [OAuth](#oauth).

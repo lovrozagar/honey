@@ -25,9 +25,10 @@ import { assertRouteFree, GRAPH, type HandleView, type HoneyGraph, SERVED, VIEW 
 import type { McpUploading, McpUploads } from "./mount.ts"
 
 /**
- * Where uploads wait for their call's retry. Each method may be async. On Workers, a store with an atomic claim is a
- * Durable Object or D1 (`INSERT … ON CONFLICT DO NOTHING`, `DELETE … RETURNING`); KV is eventually consistent, so two
- * claims can both succeed there, and it cannot keep an upload one-shot.
+ * Where uploads wait for their call's retry. Each method may be async. On Workers, the atomic claim and take are a D1
+ * row or a Durable Object's (`INSERT … ON CONFLICT DO NOTHING`, `DELETE … RETURNING`) and the bytes R2's, since either
+ * row holds at most 2 MB; KV is eventually consistent, so two claims can both succeed there, and it cannot keep an
+ * upload one-shot.
  */
 export type UploadStore = {
 	/** marks `id` used, atomically: true for its first claim alone; it need be kept only until `expires` (ms epoch) */
