@@ -149,6 +149,18 @@
         "typescript": "catalog:",
       },
     },
+    "packages/core/tests/e2e/apps/mcp": {
+      "name": "@honey/e2e-mcp",
+      "version": "0.0.1",
+      "dependencies": {
+        "@lovrozagar/honey": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@playwright/test": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/core/tests/e2e/apps/surface": {
       "name": "@honey/e2e-surface",
       "version": "0.0.1",
@@ -169,6 +181,7 @@
         "@honey/e2e-defaults": "workspace:*",
         "@honey/e2e-gateway": "workspace:*",
         "@honey/e2e-kitchen": "workspace:*",
+        "@honey/e2e-mcp": "workspace:*",
         "@honey/e2e-surface": "workspace:*",
         "@lovrozagar/honey": "workspace:*",
       },
@@ -186,6 +199,7 @@
         "@honey/e2e-defaults": "workspace:*",
         "@honey/e2e-gateway": "workspace:*",
         "@honey/e2e-kitchen": "workspace:*",
+        "@honey/e2e-mcp": "workspace:*",
         "@honey/e2e-surface": "workspace:*",
         "@lovrozagar/honey": "workspace:*",
       },
@@ -204,6 +218,7 @@
         "@honey/e2e-defaults": "workspace:*",
         "@honey/e2e-gateway": "workspace:*",
         "@honey/e2e-kitchen": "workspace:*",
+        "@honey/e2e-mcp": "workspace:*",
         "@honey/e2e-surface": "workspace:*",
         "@lovrozagar/honey": "workspace:*",
         "ws": "catalog:",
@@ -420,6 +435,8 @@
     "@honey/e2e-gateway": ["@honey/e2e-gateway@workspace:packages/core/tests/e2e/apps/gateway"],
 
     "@honey/e2e-kitchen": ["@honey/e2e-kitchen@workspace:packages/core/tests/e2e/apps/kitchen"],
+
+    "@honey/e2e-mcp": ["@honey/e2e-mcp@workspace:packages/core/tests/e2e/apps/mcp"],
 
     "@honey/e2e-node": ["@honey/e2e-node@workspace:packages/core/tests/e2e/node"],
 

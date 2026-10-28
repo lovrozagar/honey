@@ -9,10 +9,11 @@ export type Step =
 	| { readonly call: { readonly name: string; readonly arguments: object } }
 	| { readonly negotiated: true }
 
-/** What one step gave: the tools listed, a call's result, the revision negotiated, or the client's error. */
+/** What one step gave: the tools listed, a call's result, the revision negotiated, or the client's error and its status. */
 export type Stepped = {
 	readonly tools?: Record<string, unknown>[]
 	readonly result?: Record<string, unknown>
 	readonly negotiated?: string
 	readonly failed?: string
+	readonly code?: number
 }

@@ -6,6 +6,8 @@
  * reports what it saw. Bit 21 b: `modern` is the v2 client pinned to 2026-07-28 (python-client.ts holds Python's), and
  * a `negotiated` step reports the revision a session runs under. Bit 21 d: given a token, a session runs over
  * Streamable HTTP against the server `--http` started, the token sent as its bearer through the client's own headers.
+ * Bit 21 e: `httpSession` runs one against any URL, with any headers (a mounted endpoint's credential); a connect the
+ * endpoint refuses is the session's one failed step.
  */
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
@@ -112,8 +114,8 @@ export function clientCheck(
 }
 
 /**
- * The session script for `client`: connect (over stdio to a command, or over HTTP to a URL with a bearer), run each step
- * in order, report every result (or its error) as one JSON line.
+ * The session script for `client`: connect (over stdio to a command, or over HTTP to a URL with its headers), run each
+ * step in order, report every result (or its error) as one JSON line; a refused connect, one failed step.
  */
 const sessionScript = (client: ClientName) =>
 	`${CLIENTS[client].join("\n")}
@@ -122,17 +124,24 @@ const steps = JSON.parse(process.argv[3])
 const client = new Client({ name: "honey-conformance", version: "1.0.0" }, ${OPTIONS[client]})
 const transport = Array.isArray(target)
 	? new StdioClientTransport({ args: target.slice(1), command: target[0], env: process.env })
-	: new StreamableHTTPClientTransport(new URL(target.url), { requestInit: { headers: { authorization: "Bearer " + target.token } } })
+	: new StreamableHTTPClientTransport(new URL(target.url), { requestInit: { headers: target.headers } })
 /* sdk 1.32.2 keeps no negotiated revision on a client: it hands it to the transport, which over stdio keeps none */
 let negotiated
+/* a failed step: its message, and the HTTP status a transport error carries */
+const failure = (error) => ({ failed: String(error?.message ?? error), ...(typeof error?.code === "number" && { code: error.code }) })
 transport.setProtocolVersion ??= (version) => void (negotiated = version)
-await client.connect(transport)
+try {
+	await client.connect(transport)
+} catch (error) {
+	console.log(JSON.stringify([failure(error)]))
+	process.exit(0)
+}
 const out = []
 for (const step of steps) {
 	try {
 		out.push(step.negotiated ? { negotiated: client.getNegotiatedProtocolVersion?.() ?? negotiated ?? transport.protocolVersion } : step.list ? { tools: (await client.listTools()).tools } : { result: await client.callTool(step.call) })
 	} catch (error) {
-		out.push({ failed: String(error?.message ?? error) })
+		out.push(failure(error))
 	}
 }
 console.log(JSON.stringify(out))
@@ -152,16 +161,26 @@ export async function clientSession(
 	if (token === undefined) return session(client, command, steps)
 	const server = await serving(command)
 	try {
-		return await session(client, { token, url: server.url }, steps)
+		return await session(client, { headers: { authorization: `Bearer ${token}` }, url: server.url }, steps)
 	} finally {
 		await server.stop()
 	}
 }
 
-/** `client`'s session script against `target`: a command over stdio, or a URL and its token over HTTP. */
+/** An HTTP endpoint a session connects to: its URL and the headers every request sends. */
+export type HttpTarget = { readonly url: string; readonly headers: Readonly<Record<string, string>> }
+
+/** `client` run over Streamable HTTP against `target`, through `steps` in order. */
+export const httpSession = (
+	client: ClientName,
+	target: HttpTarget,
+	steps: readonly Step[],
+): Promise<readonly Stepped[]> => session(client, target, steps)
+
+/** `client`'s session script against `target`: a command over stdio, or a URL and its headers over HTTP. */
 function session(
 	client: ClientName,
-	target: readonly string[] | { readonly url: string; readonly token: string },
+	target: readonly string[] | HttpTarget,
 	steps: readonly Step[],
 ): Promise<readonly Stepped[]> {
 	const path = join(clientsDir(), `session-${client}.mjs`)

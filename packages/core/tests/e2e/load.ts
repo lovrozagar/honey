@@ -3,6 +3,7 @@ import { createApp as createCompose } from "@honey/e2e-compose"
 import { createApp as createDefaults } from "@honey/e2e-defaults"
 import { createApp as createGateway } from "@honey/e2e-gateway"
 import { createApp as createKitchen } from "@honey/e2e-kitchen"
+import { createApp as createMcp } from "@honey/e2e-mcp"
 import { createApp as createSurface } from "@honey/e2e-surface"
 
 export const e2eApps = {
@@ -10,6 +11,7 @@ export const e2eApps = {
 	defaults: createDefaults,
 	gateway: createGateway,
 	kitchen: createKitchen,
+	mcp: createMcp,
 	surface: createSurface,
 } as const
 

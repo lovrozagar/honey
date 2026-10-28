@@ -672,8 +672,13 @@ jobs:
         with:
           node-version: ${{ matrix.node || 'current' }}
       - run: bun install --frozen-lockfile
+      # the MCP app's cells drive the mounted endpoint with the pinned official clients (bit 21 e): as in the test job
+      - name: MCP clients (client-lock.json's @modelcontextprotocol/sdk and @modelcontextprotocol/client)
+        run: P="$(git rev-parse --show-toplevel)/packages/gen/src/emit/mcp/__fixtures__" && D="$HOME/.cache/honey-tmp/mcp-clients" && rm -rf "$D.partial" && mkdir -p "$D.partial" && cp "$P/client-pins.json" "$D.partial/package.json" && cp "$P/client-lock.json" "$D.partial/package-lock.json" && (cd "$D.partial" && npm ci --ignore-scripts --no-audit --no-fund) && sha256sum "$P/client-lock.json" | cut -d" " -f1 > "$D.partial/lock.sha256" && rm -rf "$D" && mv "$D.partial" "$D"
       - run: bun run generate
       - run: bun run ${{ matrix.script }}
+        env:
+          HONEY_REQUIRE_TOOLCHAINS: "1"
 
   harness:
     name: harness

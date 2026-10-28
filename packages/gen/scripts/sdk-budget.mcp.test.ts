@@ -200,12 +200,16 @@ type Tools = { readonly total: number; readonly largest: number }
  *   `file` part a file argument, 98 tokens of the file schema: the extension's FileInput marked and required, its
  *   digest's algorithm, or a path); surface 2,127 -> 2,304 total, its largest still the SSE tool's 205, so ceilings
  *   2,553 -> 2,765 total, 246 largest unchanged. The other four apps have no multipart operation and are unchanged.
+ * - bit 21 e, a sixth app, mcp (MCP mounted in the app): Anyrow's five multipart operations as tools, 1,509 tokens
+ *   (1,525 in 2026-07-28), its largest extract_stream's 355 (a file argument, five text arguments, the collect's two and
+ *   its events), under H6's ~400; ceilings 1,811 total, 426 largest. The other five apps are unchanged.
  */
 const MEASURED: Readonly<Record<string, Tools>> = {
 	compose: { largest: 72, total: 363 },
 	defaults: { largest: 51, total: 127 },
 	gateway: { largest: 141, total: 367 },
 	kitchen: { largest: 187, total: 905 },
+	mcp: { largest: 355, total: 1509 },
 	surface: { largest: 205, total: 2304 },
 }
 const TOKEN_HEADROOM = 0.2

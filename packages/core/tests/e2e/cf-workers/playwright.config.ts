@@ -10,6 +10,8 @@ const isDev = mode === "dev"
 const app = e2eAppName()
 /* a deployed worker's https URL (the live run): prod targets it, and no local server starts */
 const deployed = process.env.HONEY_CF_URL
+/* the apps whose Workers bundle runs with no node compatibility at all: the MCP mount's portable runtime (bit 21 e) */
+const WEB_ONLY = new Set(["mcp"])
 
 export default defineConfig({
 	...e2eReporter(),
@@ -29,9 +31,11 @@ export default defineConfig({
 /**
  * dev resolves @lovrozagar/honey to its source through src/worker.ts; prod serves the app's built Workers bundle under
  * local workerd, unbundled and with no source condition: what a deploy runs (j3). The bundle is one file, no chunks.
+ * A WEB_ONLY app's runs under wrangler.web.jsonc, without nodejs_compat.
  */
 function webServer() {
 	const bundle = `../apps/${app}/dist/cloudflare/index.js`
+	const config = WEB_ONLY.has(app) ? "wrangler.web.jsonc" : "wrangler.jsonc"
 	/* dev: honey-source first, then wrangler's defaults; prod: nothing resolves, the bundle is already built */
 	const env: Record<string, string> = isDev
 		? { HONEY_E2E_APP: app, PORT, WRANGLER_BUILD_CONDITIONS: "honey-source,workerd,worker,browser" }
@@ -39,7 +43,7 @@ function webServer() {
 	return {
 		command: isDev
 			? `bunx wrangler dev --port ${PORT} --ip 0.0.0.0 --var HONEY_E2E_APP:${app}`
-			: `bunx wrangler dev ${bundle} --config wrangler.jsonc --no-bundle --port ${PORT} --ip 0.0.0.0`,
+			: `bunx wrangler dev ${bundle} --config ${config} --no-bundle --port ${PORT} --ip 0.0.0.0`,
 		env,
 		port: Number(PORT),
 		reuseExistingServer: process.env.HONEY_E2E_REUSE === "1",

@@ -16,6 +16,7 @@
 		"@honey/e2e-defaults": "workspace:*",
 		"@honey/e2e-gateway": "workspace:*",
 		"@honey/e2e-kitchen": "workspace:*",
+		"@honey/e2e-mcp": "workspace:*",
 		"@honey/e2e-surface": "workspace:*",
 		"@lovrozagar/honey": "workspace:*"
 	},

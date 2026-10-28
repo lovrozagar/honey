@@ -1,0 +1,242 @@
+openapi: "3.1.0"
+info:
+  title: Honey MCP
+  version: "1.0.0"
+servers:
+  - url: /api
+paths:
+  /v1/projects/{project_id}/extract:
+    post:
+      operationId: extract.once
+      security:
+        - apiKey:
+            - "extract:write"
+      x-mcp: true
+      x-honey-route: "POST /v1/projects/:project_id/extract"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsExtractRequest"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsExtractRequest"
+        required: true
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateProjectsExtractResponse200"
+  /v1/projects/{project_id}/extract-stream:
+    post:
+      operationId: extract.stream
+      security:
+        - apiKey:
+            - "extract:write"
+      x-mcp: true
+      x-honey-route: "POST /v1/projects/:project_id/extract-stream"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsExtractRequest"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsExtractRequest"
+        required: true
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/CreateProjectsExtractStreamResponse200"
+  /v1/projects/{project_id}/suggest-schema:
+    post:
+      operationId: suggest.schema
+      security:
+        - apiKey:
+            - "extract:write"
+      x-mcp: true
+      x-honey-route: "POST /v1/projects/:project_id/suggest-schema"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsSuggestSchemaRequest"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsSuggestSchemaRequest"
+        required: true
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateProjectsExtractResponse200"
+  /v1/projects/{project_id}/tables/{table_id}/extract:
+    post:
+      operationId: extract.table.once
+      security:
+        - apiKey:
+            - "extract:write"
+      x-mcp: true
+      x-honey-route: "POST /v1/projects/:project_id/tables/:table_id/extract"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsSuggestSchemaRequest"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsSuggestSchemaRequest"
+        required: true
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: table_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateProjectsExtractResponse200"
+  /v1/projects/{project_id}/tables/{table_id}/extract-stream:
+    post:
+      operationId: extract.table.stream
+      security:
+        - apiKey:
+            - "extract:write"
+      x-mcp: true
+      x-honey-route: "POST /v1/projects/:project_id/tables/:table_id/extract-stream"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsSuggestSchemaRequest"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/CreateProjectsSuggestSchemaRequest"
+        required: true
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: table_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/CreateProjectsExtractStreamResponse200"
+components:
+  securitySchemes:
+    apiKey:
+      description: "API key authentication. Format: ApiKey {your_api_key}"
+      in: header
+      name: Authorization
+      type: apiKey
+  schemas:
+    CreateProjectsExtractRequest:
+      type: object
+      properties:
+        columns:
+          type: string
+        file:
+          type: string
+          format: binary
+          contentEncoding: binary
+        instruction:
+          type: string
+          maxLength: 1000000
+        schema:
+          type: string
+        strictness:
+          type: string
+          enum:
+            - strict
+            - balanced
+            - flexible
+        text:
+          type: string
+          maxLength: 1000000
+    CreateProjectsExtractResponse200:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              file_name:
+                type: string
+              sha256:
+                type: string
+              size:
+                type: number
+            required:
+              - file_name
+              - sha256
+              - size
+            additionalProperties: false
+        status:
+          type: string
+        texts:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties:
+            type: string
+      required:
+        - files
+        - status
+        - texts
+      additionalProperties: false
+    CreateProjectsExtractStreamResponse200:
+      type: string
+    CreateProjectsSuggestSchemaRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          contentEncoding: binary
+        text:
+          type: string
+          maxLength: 1000000

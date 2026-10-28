@@ -94,6 +94,7 @@ const APP_BUILDS: AppBuild[] = [
 	{ app: "defaults" },
 	{ app: "gateway" },
 	{ app: "kitchen" },
+	{ app: "mcp" },
 	{ app: "surface" },
 ]
 
