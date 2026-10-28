@@ -10,6 +10,7 @@ import { createServer } from "node:net"
 import { resolve } from "node:path"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { type BuildTarget, createBuildPlugin } from "../../src/build/targets.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const CORE = resolve(import.meta.dirname, "../..")
 const OUT_ROOT = resolve(CORE, ".tmp-targets")
@@ -57,18 +58,17 @@ afterEach(() => {
 })
 afterAll(() => rmSync(OUT_ROOT, { force: true, recursive: true }))
 
-async function viteBuild(target: BuildTarget): Promise<string> {
-	const outDir = resolve(OUT_ROOT, target)
+async function viteBuild(
+	target: BuildTarget,
+	entry = "tests/build/fixture/app.ts",
+	dir: string = target,
+): Promise<string> {
+	const outDir = resolve(OUT_ROOT, dir)
 	const { build } = await import("vite")
 	await build({
 		configFile: false,
 		logLevel: "error",
-		plugins: [
-			createBuildPlugin(
-				{ minify: false, outDir, port: PORTS[target], target },
-				{ entry: "tests/build/fixture/app.ts", export: "app" },
-			),
-		],
+		plugins: [createBuildPlugin({ minify: false, outDir, port: PORTS[target], target }, { entry, export: "app" })],
 		resolve: { alias: { "@lovrozagar/honey/serve": resolve(CORE, "src/adapters/serve.ts") } },
 		root: CORE,
 	})
@@ -107,6 +107,23 @@ async function healthy(base: string, child: { logs: () => string }, timeoutMs: n
 	throw new Error(`no healthy server at ${base}: ${last}\n${child.logs()}`)
 }
 
+/** Poll `/count` until the Worker's object answers its first count, `1`. */
+async function counted(base: string, child: { logs: () => string }, timeoutMs: number): Promise<void> {
+	const deadline = Date.now() + timeoutMs
+	let last = ""
+	while (Date.now() < deadline) {
+		try {
+			const res = await fetch(`${base}/count`, { signal: AbortSignal.timeout(1_000) })
+			last = `${res.status} ${await res.text()}`
+			if (last === "200 1") return
+		} catch (err) {
+			last = err instanceof Error ? err.message : String(err)
+		}
+		await new Promise((r) => setTimeout(r, 80))
+	}
+	throw new Error(`no counter at ${base}: ${last}\n${child.logs()}`)
+}
+
 /** What the served bundle answers: its health route and its document's version, title and health path. */
 async function served(base: string) {
 	const health = await fetch(`${base}/health`)
@@ -139,6 +156,35 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 		await healthy(`http://127.0.0.1:${port}`, child, 25_000)
 		expect(await served(`http://127.0.0.1:${port}`)).toEqual(SERVED)
 	}, 90_000)
+
+	it(
+		"cloudflare: the Worker exports the entry's Durable Object class, which workerd then serves (bit 21 h)",
+		async (ctx) => {
+			if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
+			const outDir = await viteBuild("cloudflare", "tests/build/fixture/worker-object.ts", "cloudflare-object")
+			const exported = /export\s*\{[^}]*\bCounter\b[^}]*\}/.test(readFileSync(resolve(outDir, "index.js"), "utf8"))
+			expect(exported).toBe(true)
+			const wrangler = {
+				compatibility_date: "2026-01-20",
+				durable_objects: { bindings: [{ class_name: "Counter", name: "COUNTER" }] },
+				main: "index.js",
+				migrations: [{ new_sqlite_classes: ["Counter"], tag: "v1" }],
+				name: "honey-build-object-fixture",
+			}
+			writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
+			const port = String(PORTS.cloudflare)
+			const args = ["dev", "--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
+			const persist = ["--persist-to", resolve(outDir, "state")]
+			const child = start(WRANGLER, [...args, ...persist], { cwd: outDir })
+			const base = `http://127.0.0.1:${port}`
+			await counted(base, child, 25_000)
+			expect([await (await fetch(`${base}/count`)).text(), await (await fetch(`${base}/count`)).text()]).toEqual([
+				"2",
+				"3",
+			])
+		},
+		SPAWN_TIMEOUT,
+	)
 
 	// v0: eb3666936c
 	it("node: vite build then node dist serves health + openapi", async () => {

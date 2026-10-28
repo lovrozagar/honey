@@ -11,8 +11,28 @@ const APP = { entry: "src/app.ts", export: "app" }
 const plugin = (target: BuildTarget, overrides?: Partial<HoneyBuildConfig>) =>
 	createBuildPlugin({ target, ...overrides }, APP)
 
-/** The entry module the plugin answers for its virtual id. */
-const entryOf = (built: ReturnType<typeof createBuildPlugin>) => built.load("\0virtual:honey-build-entry")?.code ?? ""
+/** The entry module the plugin answers for its virtual id on node or bun. */
+const entryOf = (built: ReturnType<typeof createBuildPlugin>) =>
+	(built.load.call(context([]), "\0virtual:honey-build-entry") as { code: string } | undefined)?.code ?? ""
+
+/** A build's context whose app entry exports `exports`, or that resolves no entry at all. */
+function context(exports: readonly string[], resolved = true) {
+	return {
+		load: async ({ id }: { id: string }) => ({ exports: id === "/app/src/app.ts" ? exports : null }),
+		resolve: async (source: string) => (resolved && source === "./src/app.ts" ? { id: "/app/src/app.ts" } : null),
+	}
+}
+
+/** The Worker entry the plugin answers on cloudflare, its app entry exporting `exports`. */
+const workerOf = async (exports: readonly string[], app = APP) =>
+	(
+		(await createBuildPlugin({ target: "cloudflare" }, app).load.call(
+			context(exports),
+			"\0virtual:honey-build-entry",
+		)) as {
+			code: string
+		}
+	).code
 
 type Built = {
 	build: {
@@ -49,13 +69,15 @@ describe("the build plugin's identity and virtual entry (bit 19 h2)", () => {
 
 	// v0: b0b0937126
 	it("loads entry code with moduleType js", () => {
-		const loaded = plugin("node").load("\0virtual:honey-build-entry")
+		const loaded = plugin("node").load.call(context([]), "\0virtual:honey-build-entry") as
+			| { code: string; moduleType: string }
+			| undefined
 		expect([loaded?.moduleType, Boolean(loaded?.code)]).toEqual(["js", true])
 	})
 
 	// v0: 8896ddb8da
 	it("returns undefined for other ids from load", () => {
-		expect(plugin("node").load("./other.ts")).toBeUndefined()
+		expect(plugin("node").load.call(context([]), "./other.ts")).toBeUndefined()
 	})
 
 	it("refuses a target it does not build (H15)", () => {
@@ -160,16 +182,18 @@ describe("the build entry per target (bit 19 h2)", () => {
 		expect(entryOf(plugin("node", { port: 8080 }))).toContain("process.env.PORT ?? 8080")
 		expect(entryOf(plugin("bun", { port: 4000 }))).toContain("process.env.PORT ?? 4000")
 	})
+})
 
+describe("the build entry on cloudflare (bit 19 h2)", () => {
 	// v0: d3d2b0e62d
-	it("exports default with fetch on cloudflare", () => {
-		const entry = entryOf(plugin("cloudflare"))
+	it("exports default with fetch on cloudflare", async () => {
+		const entry = await workerOf(["app"])
 		expect([entry.includes("export default {"), entry.includes("app.fetch(req, env, ctx)")]).toEqual([true, true])
 	})
 
 	// v0: 859e502913
-	it("has no port variable or PORT env reference on cloudflare", () => {
-		const entry = entryOf(plugin("cloudflare"))
+	it("has no port variable or PORT env reference on cloudflare", async () => {
+		const entry = await workerOf(["app"])
 		expect([entry.includes("const port"), entry.includes("PORT"), entry.includes("serve")]).toEqual([
 			false,
 			false,
@@ -178,7 +202,49 @@ describe("the build entry per target (bit 19 h2)", () => {
 	})
 
 	// v0: 5057aca745
-	it("ignores port config silently on cloudflare", () => {
-		expect(entryOf(plugin("cloudflare", { port: 9999 }))).not.toContain("9999")
+	it("ignores port config silently on cloudflare", async () => {
+		const built = plugin("cloudflare", { port: 9999 })
+		const entry = (await built.load.call(context(["app"]), "\0virtual:honey-build-entry")) as { code: string }
+		expect(entry.code).not.toContain("9999")
+	})
+})
+
+describe("a Worker's named exports (bit 21 h)", () => {
+	it("passes every named export of the app's entry through, beside honey's default fetch, the app itself not", async () => {
+		const entry = await workerOf(["app", "McpUploads", "Jobs", "with-dash"])
+		expect([
+			entry.includes('export { McpUploads, Jobs, "with-dash" } from "./src/app.ts"'),
+			entry.includes("export default {"),
+			/\bexport \{[^}]*\bapp\b/.test(entry),
+		]).toEqual([true, true, false])
+	})
+
+	it("passes them on beside an app that is the entry's default export", async () => {
+		const entry = await workerOf(["default", "McpUploads"], { entry: "src/app.ts", export: "default" })
+		expect([
+			entry.includes('import app from "./src/app.ts"'),
+			entry.includes('export { McpUploads } from "./src/app.ts"'),
+		]).toEqual([true, true])
+	})
+
+	it("adds no export line when the entry has none beside the app", async () => {
+		expect((await workerOf(["app"])).includes("export {")).toBe(false)
+	})
+
+	it("refuses an entry exporting a default beside its named app: a Worker's default is honey's fetch", async () => {
+		await expect(workerOf(["app", "default", "McpUploads"])).rejects.toThrow(
+			"honey build: src/app.ts exports a default beside its app \"app\": a Worker's default export is honey's fetch handler, so the entry's own default would be lost; drop it, or export the app as the default",
+		)
+	})
+
+	it("refuses an app entry the build cannot resolve", async () => {
+		const built = createBuildPlugin({ target: "cloudflare" }, APP)
+		await expect(built.load.call(context([], false), "\0virtual:honey-build-entry")).rejects.toThrow(
+			"honey build: cannot resolve the app entry ./src/app.ts",
+		)
+	})
+
+	it.each(["node", "bun"] as const)("%s: no export is passed on: a server's module exports nothing", (target) => {
+		expect(entryOf(plugin(target)).includes("export")).toBe(false)
 	})
 })
