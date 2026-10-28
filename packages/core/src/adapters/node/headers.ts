@@ -1,11 +1,24 @@
 import type { IncomingMessage } from "node:http"
 
+/** Every raw header value under its lowercased name, in order: what `headersDistinct` holds on Node. */
+function distinctOf(raw: readonly string[]): Map<string, string[]> {
+	const all = new Map<string, string[]>()
+	for (let i = 0; i < raw.length; i += 2) {
+		const key = (raw[i] as string).toLowerCase()
+		const values = all.get(key)
+		if (values === undefined) all.set(key, [raw[i + 1] as string])
+		else values.push(raw[i + 1] as string)
+	}
+	return all
+}
+
 /**
- * Fetch's `Headers` over Node's parsed headers. `get` and `has` read the maps Node already built;
+ * Fetch's `Headers` over Node's parsed headers. `get` and `has` read maps over what Node parsed;
  * a real `Headers` is built only when something iterates or writes, and answers from then on.
  */
 export class NodeHeaders {
 	readonly #incoming: IncomingMessage
+	#distinct: Map<string, string[]> | null = null
 	#native: Headers | null = null
 
 	constructor(incoming: IncomingMessage) {
@@ -14,15 +27,15 @@ export class NodeHeaders {
 
 	/**
 	 * Every value, joined as Fetch joins them. Node's `headers` map keeps only the first
-	 * `Authorization`, `Host`, …; `headersDistinct` keeps them all, so the answer does not change
-	 * once something iterates.
+	 * `Authorization`, `Host`, …; the raw pairs keep them all, so the answer does not change once
+	 * something iterates. Built from `rawHeaders`, never `headersDistinct`: Bun's node:http before
+	 * 1.4 has no `headersDistinct`.
 	 */
 	get(name: string): string | null {
 		if (this.#native !== null) return this.#native.get(name)
-		const all = this.#incoming.headersDistinct
-		const key = name.toLowerCase()
-		if (!Object.hasOwn(all, key)) return null
-		const values = all[key] as string[]
+		this.#distinct ??= distinctOf(this.#incoming.rawHeaders)
+		const values = this.#distinct.get(name.toLowerCase())
+		if (values === undefined) return null
 		return values.length === 1 ? (values[0] as string) : values.join(", ")
 	}
 

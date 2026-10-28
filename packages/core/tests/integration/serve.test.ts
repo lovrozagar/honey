@@ -4,6 +4,7 @@
  * survives a client leaving, a graceful drain, and a port free again after close().
  */
 import { spawn } from "node:child_process"
+import { connect } from "node:net"
 import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -114,6 +115,47 @@ describe("serve(app) on Bun", () => {
 			])
 			child.stdin.write("close\n")
 			expect((await lines.next()).value).toBe("closed")
+		} finally {
+			child.kill()
+		}
+	}, 20_000)
+})
+
+/** A `bun` process serving through the Node adapter itself, answering the headers it read; it prints its port. */
+const BUN_NODE_ADAPTER = `
+const { serve } = await import(${JSON.stringify(`${SRC}adapters/node/serve.ts`)})
+const read = (request) => [request.headers.get("X-Multi"), request.headers.get("authorization"), request.headers.get("missing")]
+const answer = (body) => new Response(body, { headers: { "content-length": String(body.length) } })
+const server = serve({ fetch: (request) => answer(JSON.stringify(read(request))) }, { env: {}, hostname: "127.0.0.1", port: 0 })
+server.once("listening", () => console.log(server.address().port))
+process.stdin.once("data", () => server.close(() => process.exit(0)))
+`
+
+/** `head` sent over a fresh connection to `port`, its answer read until the server closes it. */
+function rawRequest(port: number, head: string): Promise<string> {
+	return new Promise((settle, fail) => {
+		const socket = connect(port, "127.0.0.1", () => socket.write(head))
+		let answer = ""
+		socket.on("data", (chunk: Buffer) => (answer += chunk.toString()))
+		socket.once("error", fail)
+		socket.once("close", () => settle(answer))
+	})
+}
+
+describe("the Node adapter on Bun's node:http", () => {
+	it("reads a repeated header joined, a single one as sent and a missing one as null", async () => {
+		const child = spawn("bun", ["-e", BUN_NODE_ADAPTER], { stdio: ["pipe", "pipe", "inherit"] })
+		const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]()
+		try {
+			const port = Number((await lines.next()).value)
+			const head =
+				"GET / HTTP/1.1\r\nHost: h\r\nX-Multi: 1\r\nx-multi: 2\r\nAuthorization: a\r\nConnection: close\r\n\r\n"
+			const answer = await rawRequest(port, head)
+			expect([answer.split("\r\n")[0], answer.slice(answer.indexOf("\r\n\r\n") + 4)]).toEqual([
+				"HTTP/1.1 200 OK",
+				JSON.stringify(["1, 2", "a", null]),
+			])
+			child.stdin.write("close\n")
 		} finally {
 			child.kill()
 		}
