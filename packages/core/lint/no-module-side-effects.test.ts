@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./no-module-side-effects.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
-import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../tests/fixture/spawn-timeout.ts"
 
 const rule = plugin.rules["no-module-side-effects"]
 const MESSAGE = "module scope runs no code: mark a pure call /* @__PURE__ */ or move it into a function"

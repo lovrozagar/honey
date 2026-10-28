@@ -20,7 +20,7 @@ import { urlFiles } from "../../src/mcp/url-files.ts"
 import { generateOpenApi } from "../../src/openapi/generate.ts"
 import { honey } from "../../src/routing/app.ts"
 import { fileInput } from "./mcp-files/client.ts"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const KEY = "ApiKey ak_files"
 const SCHEMES = {

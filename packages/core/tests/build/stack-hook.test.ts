@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from "vitest"
 import { withPinnedBun } from "../../../gen/src/gen/__fixtures__/pinned-bun.ts"
 import { BUILD_SPECS, type BuildSpec, buildCommand, buildCwd, entryArtifact } from "../e2e/builds.ts"
 import { scratch } from "./fixture/packed.ts"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const TRAP = join(import.meta.dirname, "fixture", "stack-hook-trap.ts")
 function defaultsCell(): BuildSpec {

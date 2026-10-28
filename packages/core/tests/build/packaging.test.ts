@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, 
 import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { CORE, consumer, pack, REPO, run, scratch, type Tarballs, write } from "./fixture/packed.ts"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const TSC = join(REPO, "node_modules/typescript/bin/tsc")
 const files = scratch("packaging")

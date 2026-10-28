@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./no-module-state.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
-import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../tests/fixture/spawn-timeout.ts"
 
 const rule = plugin.rules["no-module-state"]
 const MESSAGE =

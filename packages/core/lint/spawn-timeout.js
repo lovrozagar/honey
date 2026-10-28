@@ -4,22 +4,30 @@
  * (.each, .skipIf … included) whose callback spawns (spawners.js) passes a timeout itself or inherits one: from its
  * describe's timeout, or from a file-scope `vi.setConfig({ testTimeout })`. vitest's hook (beforeAll … afterEach)
  * passes its own or inherits `vi.setConfig({ hookTimeout })`: a describe's timeout never bounds a hook (vitest 4,
- * probed). An inherited bound is named, never a bare number: SPAWN_TIMEOUT (SHARED) or the file's measured bound. Scope:
+ * probed). An inherited bound is named, never a bare number: SPAWN_TIMEOUT or the file's measured bound. Each package
+ * keeps its own SPAWN_TIMEOUT (SHARED; gen never imports core, nor core gen's src), held equal by core's
+ * tests/structure/spawn-timeout-twins.test.ts, and a message names the file's own package's. Scope:
  * the test files core's and gen's vitest projects run; core's tests/e2e run under bun test and Playwright instead. */
 import { repoPath, spawnScope, spawnsIn } from "./spawners.js"
 
-export const SHARED = "packages/gen/src/gen/__fixtures__/spawn-timeout.ts"
+/** Each package's own SPAWN_TIMEOUT module. */
+export const SHARED = {
+	core: "packages/core/tests/fixture/spawn-timeout.ts",
+	gen: "packages/gen/src/gen/__fixtures__/spawn-timeout.ts",
+}
 const TESTS = new Set(["it", "test"])
 const SUITES = new Set(["describe", "suite"])
 const HOOKS = new Set(["afterAll", "afterEach", "beforeAll", "beforeEach"])
-const FIX = `pass SPAWN_TIMEOUT (${SHARED}) as its timeout`
-const NAMED = `name it: SPAWN_TIMEOUT (${SHARED}), or the file's measured bound`
-
-export const MESSAGES = {
-	config: (key) => `vi.setConfig's ${key} is a bare number; ${NAMED}`,
-	hook: `a hook that spawns a process needs its own timeout, vitest's 10 s default is not a process start's: ${FIX}`,
-	suite: `a describe's timeout is a bare number; ${NAMED}`,
-	test: `a test that spawns a process needs an explicit timeout, vitest's 5 s default is not a process start's: ${FIX}`,
+/** The messages for a file of package `pkg`, naming that package's SPAWN_TIMEOUT module as the fix. */
+export function messagesOf(pkg) {
+	const fix = `pass SPAWN_TIMEOUT (${SHARED[pkg]}) as its timeout`
+	const named = `name it: SPAWN_TIMEOUT (${SHARED[pkg]}), or the file's measured bound`
+	return {
+		config: (key) => `vi.setConfig's ${key} is a bare number; ${named}`,
+		hook: `a hook that spawns a process needs its own timeout, vitest's 10 s default is not a process start's: ${fix}`,
+		suite: `a describe's timeout is a bare number; ${named}`,
+		test: `a test that spawns a process needs an explicit timeout, vitest's 5 s default is not a process start's: ${fix}`,
+	}
 }
 
 function inScope(path) {
@@ -98,7 +106,7 @@ function fileConfig(program, ctx) {
 			const key = p.key?.name
 			if (key !== "hookTimeout" && key !== "testTimeout") continue
 			inherited[key] = true
-			if (isBare(p.value)) ctx.report(p.value, MESSAGES.config(key))
+			if (isBare(p.value)) ctx.report(p.value, ctx.messages.config(key))
 		}
 	}
 	return inherited
@@ -127,7 +135,7 @@ function checkSuite(node, testInherited, ctx) {
 	const { timeout } = partsOf(node.arguments, ctx.constants)
 	if (timeout === undefined) return testInherited
 	/* bare when written at the call: a named options object (cli.test's SLOW) names its bound */
-	if (isBare(timeout) && timeout.start >= node.start && timeout.end <= node.end) ctx.report(timeout, MESSAGES.suite)
+	if (isBare(timeout) && timeout.start >= node.start && timeout.end <= node.end) ctx.report(timeout, ctx.messages.suite)
 	return true
 }
 
@@ -138,10 +146,10 @@ function checkCall(node, testInherited, ctx) {
 	if (SUITES.has(base)) return checkSuite(node, testInherited, ctx)
 	if (TESTS.has(base)) {
 		const { callback, timeout } = partsOf(node.arguments, ctx.constants)
-		if (timeout === undefined && !testInherited && ctx.spawns(callback)) ctx.report(node, MESSAGES.test)
+		if (timeout === undefined && !testInherited && ctx.spawns(callback)) ctx.report(node, ctx.messages.test)
 	} else if (HOOKS.has(base) && node.callee.type === "Identifier") {
 		const own = node.arguments.length >= 2 || ctx.hookInherited
-		if (!own && ctx.spawns(node.arguments[0])) ctx.report(node, MESSAGES.hook)
+		if (!own && ctx.spawns(node.arguments[0])) ctx.report(node, ctx.messages.hook)
 	}
 	return testInherited
 }
@@ -165,6 +173,7 @@ export const rule = {
 				const scope = spawnScope(program, path)
 				const ctx = {
 					constants: constantsOf(program),
+					messages: messagesOf(path.split("/")[1]),
 					report: (node, message) => context.report({ message, node }),
 					spawns: (fn) =>
 						fn !== undefined && (fn.type === "Identifier" ? scope.names.has(fn.name) : spawnsIn(fn.body, scope)),

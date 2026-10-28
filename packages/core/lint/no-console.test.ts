@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest"
 import plugin, { PROTOCOL } from "./no-console.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
-import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../tests/fixture/spawn-timeout.ts"
 
 const rule = plugin.rules["no-console"]
 const MESSAGE = "console belongs to telemetry/logger.ts; log through the logger"

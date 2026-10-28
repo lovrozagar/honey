@@ -9,7 +9,7 @@ import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { COMPLETE } from "./check-tree.ts"
 import { type Reassignment, unaccounted, type V0Case } from "./v0-inventory.ts"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const REPO = resolve(import.meta.dirname, "../../../..")
 const V1_ROOTS = [

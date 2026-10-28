@@ -10,7 +10,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
 import { caller, jobsRunning, ROOT, type Step, stepsRunning, upstream, workflow } from "./fixture/workflows.ts"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const release = workflow("release.yml")
 const RELEASE_TEXT = readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8")

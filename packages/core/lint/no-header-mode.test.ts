@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./no-header-mode.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
-import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../tests/fixture/spawn-timeout.ts"
 
 const rule = plugin.rules["no-header-mode"]
 const MESSAGE = "a request header never selects an internal mode: do not read a honey-namespaced header (H19.7)"

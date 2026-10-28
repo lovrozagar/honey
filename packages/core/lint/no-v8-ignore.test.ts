@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import plugin from "./no-v8-ignore.js"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
-import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../tests/fixture/spawn-timeout.ts"
 
 const rule = plugin.rules["no-v8-ignore"]
 const MESSAGE = "coverage ignore hints are forbidden; delete the code or give it a case"

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { SPAWN_TIMEOUT } from "../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../tests/fixture/spawn-timeout.ts"
 import { oxlintReports, reportsOf } from "./rule-harness.ts"
-import { MESSAGES, rule } from "./spawn-timeout.js"
+import { messagesOf, rule, SHARED } from "./spawn-timeout.js"
 
 const FILE = "packages/core/src/build/x.test.ts"
-const SHARED_IMPORT = 'import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"\n'
+const SHARED_IMPORT = 'import { SPAWN_TIMEOUT } from "../../../tests/fixture/spawn-timeout.ts"\n'
+const MESSAGES = messagesOf("core")
 const VITEST = 'import { afterAll, beforeAll, describe, expect, it, test, vi } from "vitest"\n'
 const CHILD = 'import { spawnSync } from "node:child_process"\n'
 const SPAWNS = '() => { expect(spawnSync("git", ["status"]).status).toBe(0) }'
@@ -15,7 +16,7 @@ const messages = (code: string, path = FILE) => reportsOf(rule, { [path]: code }
 describe("honey/spawn-timeout: a test that spawns", () => {
 	it("is refused without a timeout, with the shared constant named as the fix", () => {
 		expect(messages(`${VITEST}${CHILD}it("spawns", ${SPAWNS})\n`)).toEqual([MESSAGES.test])
-		expect(MESSAGES.test).toContain("SPAWN_TIMEOUT (packages/gen/src/gen/__fixtures__/spawn-timeout.ts)")
+		expect(MESSAGES.test).toContain("SPAWN_TIMEOUT (packages/core/tests/fixture/spawn-timeout.ts)")
 	})
 
 	it("passes a timeout of its own: trailing, as options, or as a named options object", () => {
@@ -122,10 +123,12 @@ describe("honey/spawn-timeout: scope", () => {
 			"packages/core/tests/e2e/apps/x/c.test.ts": code,
 			"packages/gen/tests/d.test.ts": code,
 		}
-		expect(reportsOf(rule, files).map((r) => r.file)).toEqual([
-			"packages/core/src/a.test.ts",
-			"packages/gen/tests/d.test.ts",
+		expect(reportsOf(rule, files)).toEqual([
+			{ file: "packages/core/src/a.test.ts", message: messagesOf("core").test },
+			{ file: "packages/gen/tests/d.test.ts", message: messagesOf("gen").test },
 		])
+		/* each names its own package's module: gen never imports core, nor core gen's src */
+		expect(messagesOf("gen").test).toContain(`SPAWN_TIMEOUT (${SHARED.gen})`)
 	})
 
 	it("fails oxlint through the honey plugin entry", { timeout: SPAWN_TIMEOUT }, () => {

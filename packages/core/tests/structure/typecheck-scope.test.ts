@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const ROOT = join(import.meta.dirname, "../../../..")
 /* checked against the packed tarball by test:packaging: in the tree it resolves no published exports (bit 19 i) */

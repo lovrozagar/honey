@@ -18,7 +18,7 @@ import {
 } from "../../../gen/tests/integration/conformance/gate.ts"
 import { type Cell, cellsFor, TARGETS, type Target } from "../../../gen/tests/integration/conformance/matrix.ts"
 import { caller, jobsRunning, ROOT, type Step, upstream, workflow } from "./fixture/workflows.ts"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../fixture/spawn-timeout.ts"
 
 const GATE = "packages/gen/tests/integration/conformance/gate.ts"
 

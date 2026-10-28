@@ -15,7 +15,7 @@ import { MARK_KEY, marked, markOf, reap } from "../../../gen/src/gen/__fixtures_
 import { appSource, type Project, project } from "./__fixtures__/project.ts"
 import { USAGE } from "./cli-args.ts"
 import { main } from "./cli.ts"
-import { SPAWN_TIMEOUT } from "../../../gen/src/gen/__fixtures__/spawn-timeout.ts"
+import { SPAWN_TIMEOUT } from "../../tests/fixture/spawn-timeout.ts"
 
 const SLOW = 60_000
 /* an internal route whose own middleware adds to ctx: extracted, never documented, so the types report it */
