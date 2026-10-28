@@ -51,6 +51,10 @@ function exchange(port: number, bytes: string): Promise<string> {
 }
 
 /** A promise and the function that settles it. */
+/** `settled`'s value, or `stalled` when it has not settled within 2 s: a wait that names where it stopped. */
+const within = (settled: Promise<string>, stalled: string) =>
+	Promise.race([settled, new Promise<string>((resolve) => setTimeout(() => resolve(stalled), 2_000))])
+
 function gate<T = void>() {
 	let open!: (value: T) => void
 	const shut = new Promise<T>((resolve) => (open = resolve))
@@ -346,6 +350,15 @@ describe("Node without shouldUpgradeCallback: an Upgrade that is not WebSocket",
 		expect([raw.split("\r\n")[0], raw.endsWith("page")]).toEqual(["HTTP/1.1 200 OK", true])
 	})
 
+	it("one with a body is refused: its bytes are already on the raw socket", async () => {
+		const raw = await upgradePath(
+			"POST /page HTTP/1.1\r\nHost: h\r\nUpgrade: h2c\r\nConnection: Upgrade\r\nContent-Length: 7\r\n\r\npayload",
+		)
+		expect(raw.split("\r\n")[0]).toBe("HTTP/1.1 400 Bad Request")
+	})
+})
+
+describe("Node without shouldUpgradeCallback: an SSE route on that path", () => {
 	// v0: 0557d1458c
 	it("an SSE route reached that way streams, and its producer ends when the client leaves", async () => {
 		const ended = gate()
@@ -353,7 +366,12 @@ describe("Node without shouldUpgradeCallback: an Upgrade that is not WebSocket",
 		app.get("/events").handler((ctx) =>
 			ctx.res.sse(async (stream) => {
 				try {
-					while (!stream.closed) await stream.send({ data: "1", event: "tick" })
+					while (!stream.closed) {
+						await stream.send({ data: "1", event: "tick" })
+						/* a producer that never awaits I/O starves the event loop: the first tick reached the socket only
+						   once Node's stream buffers filled, ~0.7 s plain and ~1.6 s under coverage (5 s timeouts in verify) */
+						await new Promise((resolve) => setImmediate(resolve))
+					}
 				} finally {
 					ended.open()
 				}
@@ -361,27 +379,27 @@ describe("Node without shouldUpgradeCallback: an Upgrade that is not WebSocket",
 		)
 		const { server } = await listen(app as unknown as FetchApp)
 		const port = await frontFor(server)
-		const raw = await new Promise<string>((resolve) => {
-			const socket = connect(port, "127.0.0.1")
-			let out = ""
-			socket.on("error", () => {})
-			socket.on("data", (chunk) => {
-				out += chunk.toString("latin1")
-				if (!out.includes("event: tick")) return
-				socket.destroy()
-				resolve(out)
-			})
-			socket.write("GET /events HTTP/1.1\r\nHost: h\r\nConnection: Upgrade\r\nUpgrade: x\r\n\r\n")
-		})
-		await ended.shut
-		expect(raw.split("\r\n")[0]).toBe("HTTP/1.1 200 OK")
-	})
-
-	it("one with a body is refused: its bytes are already on the raw socket", async () => {
-		const raw = await upgradePath(
-			"POST /page HTTP/1.1\r\nHost: h\r\nUpgrade: h2c\r\nConnection: Upgrade\r\nContent-Length: 7\r\n\r\npayload",
+		/* each wait bounded and named, so a stall reds as the stage it stopped at, never a bare timeout (bit 20 a) */
+		const raw = await within(
+			new Promise<string>((resolve) => {
+				const socket = connect(port, "127.0.0.1")
+				let out = ""
+				socket.on("error", () => {})
+				socket.on("data", (chunk) => {
+					out += chunk.toString("latin1")
+					if (!out.includes("event: tick")) return
+					socket.destroy()
+					resolve(out)
+				})
+				socket.write("GET /events HTTP/1.1\r\nHost: h\r\nConnection: Upgrade\r\nUpgrade: x\r\n\r\n")
+			}),
+			"no tick within 2 s",
 		)
-		expect(raw.split("\r\n")[0]).toBe("HTTP/1.1 400 Bad Request")
+		const stage = await within(
+			ended.shut.then(() => "producer ended"),
+			"producer still running 2 s after the client left",
+		)
+		expect([raw.split("\r\n")[0], stage]).toEqual(["HTTP/1.1 200 OK", "producer ended"])
 	})
 })
 
