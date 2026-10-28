@@ -39,6 +39,8 @@ export type TargetRunner = {
 	readonly titles?: Readonly<Record<string, string>>
 	/** a second runner of one target, titled `conformance × <target> (<variant>)` */
 	readonly variant?: string
+	/** how the file's app starts, when not as startReferenceApp() does: the mounted MCP endpoint's (bit 21 e) */
+	readonly start?: () => Promise<ReferenceApp>
 }
 
 const APP = fileURLToPath(new URL("../../../../core/tests/integration/conformance/app.ts", import.meta.url))
@@ -106,9 +108,9 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 	return (await res.json()) as T
 }
 
-/** Spawn the reference app, wait for both listeners, and fetch its document. */
-export async function startReferenceApp(): Promise<ReferenceApp> {
-	const child = spawn("bun", [APP], { stdio: ["pipe", "pipe", "pipe"] })
+/** Spawn the reference app, `env` beside this process's, wait for both listeners, and fetch its document. */
+export async function startReferenceApp(env: Readonly<Record<string, string>> = {}): Promise<ReferenceApp> {
+	const child = spawn("bun", [APP], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] })
 	let err = ""
 	child.stderr.on("data", (chunk: Buffer) => {
 		err = (err + chunk.toString()).slice(-TAIL)
@@ -174,7 +176,7 @@ export function targetSuite(runner: TargetRunner): () => ReferenceApp {
 	}
 	describe(`conformance × ${runner.target}${variant}`, () => {
 		beforeAll(async () => {
-			app = await startReferenceApp()
+			app = await (runner.start ?? startReferenceApp)()
 			await runner.prepare(app)
 			expect(unknownOperations(cells, app.document), "operations the grid calls but the document lacks").toEqual([])
 			for (const { key } of lacked) recordCell(RECORD, { key, lacks: true, target })

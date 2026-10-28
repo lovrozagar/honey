@@ -14,6 +14,7 @@ import { defineErrors } from "../../../src/errors/errors.ts"
 import { errorI18n } from "../../../src/i18n/error-i18n.ts"
 import type { NextFn } from "../../../src/middleware/middleware.ts"
 import { requestId } from "../../../src/middleware/request-id.ts"
+import { type McpHandler, mcp } from "../../../src/mcp/mount.ts"
 import { serveOpenApi } from "../../../src/openapi/serve.ts"
 import { honey } from "../../../src/routing/app.ts"
 import { createReferenceServer } from "./reference-server.ts"
@@ -436,10 +437,15 @@ export function createConformanceApp(origins: () => Origins | null = () => null)
 	return serveOpenApi(app, { title: "Conformance", version: "1.0.0" })
 }
 
-/** Serve on two loopback listeners, print the readiness line, and stop on a signal or a closed stdin. */
+/**
+ * Serve on two loopback listeners, print the readiness line, and stop on a signal or a closed stdin. With
+ * $HONEY_CONFORMANCE_MCP naming a generated MCP handler module, it is mounted at /v1/mcp (bit 21 e).
+ */
 async function main(): Promise<void> {
 	let origins: Origins | null = null
 	const app = createConformanceApp(() => origins)
+	const handler = process.env.HONEY_CONFORMANCE_MCP
+	if (handler !== undefined) mcp(app, "/mcp", ((await import(handler)) as { mcpHandler: McpHandler }).mcpHandler)
 	const listeners: ServeHandle[] = await Promise.all([0, 1].map(() => serve(app, { hostname: "127.0.0.1", port: 0 })))
 	const [primary, alt] = listeners as [ServeHandle, ServeHandle]
 	origins = { alt: alt.url, url: primary.url }

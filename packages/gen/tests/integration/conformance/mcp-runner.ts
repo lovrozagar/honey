@@ -10,16 +10,21 @@
  * row reads the server instead: its tool names, annotations, outputSchemas, tokens, or a result's content. Bit 21 d:
  * over HTTP, the same server serves `--http` on a port the OS picks, `MCP_TOKEN` its bearer, and every cell runs the
  * same; each LACKS reason holds there too, since the MCP request's own headers reach no API call (no passthrough).
+ * Bit 21 e: `mcpMountedRunner` runs the grid against the handler the plugin writes, mounted in the reference app itself
+ * at /v1/mcp; each call dispatches in-process, and the cell's credential is the MCP request's own header, which the
+ * mount carries in, the headers its schemes name alone. MOUNTED_LACKS says per cell what that changes.
  */
 import { createHash } from "node:crypto"
 import { join } from "node:path"
+import { type ClientName, httpSession } from "../../../src/emit/mcp/__fixtures__/clients.ts"
 import type { Step, Stepped } from "../../../src/emit/mcp/__fixtures__/steps.ts"
 import { written } from "../../../src/emit/mcp/__fixtures__/written.ts"
+import { generateMcpHandler } from "../../../src/emit/mcp/mounted.ts"
 import { generateMcpServer } from "../../../src/emit/mcp/server.ts"
 import { isTool, toolsOf, type ToolSpec } from "../../../src/emit/mcp/tools.ts"
 import { toIR, type OpenApiDocument } from "../../../src/ir/build.ts"
 import { countTokens } from "../../../scripts/capture-token-budget.ts"
-import type { ReferenceApp, TargetRunner } from "./harness.ts"
+import { type ReferenceApp, startReferenceApp, type TargetRunner } from "./harness.ts"
 import type { Call, Cell, Json, Observed } from "./matrix.ts"
 
 /** The reference app's server: its variables' prefix. */
@@ -248,5 +253,70 @@ export function mcpRunner(session: Session, era: string, variant?: string, http 
 		},
 		target: "mcp",
 		...(variant === undefined ? {} : { variant }),
+	}
+}
+
+/**
+ * The cells the mounted endpoint has no way to express, each with its reason. Every call carries the MCP request's
+ * credential in process, so a header cell runs where its header is the scheme's; the rest is the app's to decide.
+ */
+const MOUNTED_LACKS: Readonly<Record<string, string>> = {
+	...LACKS,
+	"auth/api-key-on-origin":
+		"a mount carries the headers its security schemes name and no other, and the reference document declares no x-api-key scheme (its one credential header is the SDK's Authorization)",
+	"auth/cross-origin-redirect-drops":
+		"its operation declares no success body, so the tool's result is null where the followed echo answers JSON; a mount follows no redirect off the app's origin (same-origin), and a call off it is refused before dispatch (emit-adversarial.mcp-mount)",
+	"overrides/base-url": "a mount's calls go to its own app alone, in process: there is no other base URL",
+	"overrides/headers":
+		"a tool takes no per-call header beyond its operation's declared parameters, and a mount carries only the credential headers its schemes name",
+	"overrides/timeout": "a tool has no per-call timeout: the handler's 30 s bound is every call's",
+}
+
+/** The MCP request's own headers for a cell: its credential, and its headers as a client would send them. */
+function mountHeaders(cell: Cell): Record<string, string> {
+	const setup = cell.setup
+	return {
+		...setup?.headers,
+		...(setup?.auth?.kind === "header" ? { [setup.auth.name]: setup.auth.value } : {}),
+		...(setup?.auth?.kind === "bearer" ? { authorization: `Bearer ${setup.auth.token}` } : {}),
+	}
+}
+
+/**
+ * The MCP runner against the reference app with the handler the plugin writes mounted in it (bit 21 e): the app is
+ * started once for its document, the handler generated from it, then started again mounting it at /v1/mcp. `client`
+ * runs each cell over Streamable HTTP, its first step reporting the revision.
+ */
+export function mcpMountedRunner(client: ClientName, era: string, variant: string): TargetRunner {
+	let specs = new Map<string, ToolSpec>()
+	return {
+		lacks: (cell) => Object.hasOwn(MOUNTED_LACKS, cell.key),
+		async prepare(app) {
+			specs = specsOf(app.document)
+		},
+		async run(cell, app) {
+			const steps = cell.calls.map((call) => stepOf(call, specs))
+			const target = { headers: mountHeaders(cell), url: `${app.url}/v1/mcp` }
+			const [ran, ...stepped] = await httpSession(client, target, [{ negotiated: true }, ...steps])
+			if (ran?.negotiated !== era) throw new Error(`the session ran under ${JSON.stringify(ran)}, not ${era}`)
+			return cell.calls.map((call, i) => {
+				const one = stepped[i] ?? { failed: "no step" }
+				if (call.mcp !== undefined) return readOf(call.mcp, one)
+				return observedOf(one, specs.get(call.operation) as ToolSpec)
+			})
+		},
+		async start() {
+			const plain = await startReferenceApp()
+			const { document } = plain
+			await plain.stop()
+			const { entry, files } = generateMcpHandler(document)
+			const dir = written({
+				"mcp.gen.ts": entry,
+				...Object.fromEntries(Object.entries(files).map(([name, text]) => [`mcp/${name}`, text])),
+			})
+			return startReferenceApp({ HONEY_CONFORMANCE_MCP: join(dir, "mcp.gen.ts") })
+		},
+		target: "mcp",
+		variant,
 	}
 }
