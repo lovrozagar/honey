@@ -37,7 +37,7 @@ describe("the gate's two modes", () => {
 
 describe("the judge reads its ceilings from bench.json (bit 20 e3)", () => {
 	it("holds finalize 100x10's CI median and ceiling for bun 1.3", () => {
-		expect([own?.baseline, own?.ceiling]).toEqual([2.785, 3.773])
+		expect([own?.baseline, own?.ceiling]).toEqual([2.575, 3.773])
 	})
 
 	it("passes a ratio past the CI median but under the ceiling, and fails one above the ceiling", () => {
@@ -48,7 +48,7 @@ describe("the judge reads its ceilings from bench.json (bit 20 e3)", () => {
 		/* adapter post-1kib, bimodal on CI (bench.json's reason), against finalize 100x10 over its ceiling */
 		const postOwn = ceilingsOf("adapter", "node 26.12")?.["post-1kib"]
 		const post = rowOf("post-1kib", around(6.2), postOwn).status
-		expect([postOwn?.reportOnly, postOwn?.ceiling, post]).toEqual([true, 5.17, "report-only: over"])
+		expect([postOwn?.reportOnly, postOwn?.ceiling, post]).toEqual([true, 5.302, "report-only: over"])
 		expect([exitCode("judge", true, ["ok", post]), exitCode("judge", true, [post, over])]).toEqual([0, 1])
 	})
 })

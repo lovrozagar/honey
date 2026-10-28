@@ -3,25 +3,25 @@
 		"adapter": {
 			"node 26.12": {
 				"native-json": {
-					"baseline": 2.995,
-					"catches": "+24%",
+					"baseline": 3.13,
+					"catches": "+19%",
 					"ceiling": 3.718
 				},
 				"post-1kib": {
-					"baseline": 4.225,
-					"catches": "+22%",
-					"ceiling": 5.17,
+					"baseline": 4.61,
+					"catches": "+15%",
+					"ceiling": 5.302,
 					"reportOnly": true,
-					"reason": "bimodal on CI: 2 runs at 2.38 and 2.41, 4 at 3.85–4.7; the ceiling 5.17 sits +115–117% over the fast mode, so a run landing there passes a slowdown of up to ~2.1×. Report-only until a re-record shows one mode."
+					"reason": "bimodal on CI: 2 runs at 2.38 and 2.41, 4 at 3.85–4.82; the ceiling 5.302 sits +120–123% over the fast mode, so a run landing there passes a slowdown of up to ~2.1×. Report-only until a re-record shows one mode."
 				},
 				"routed-json": {
-					"baseline": 1.53,
-					"catches": "+16%",
-					"ceiling": 1.771
+					"baseline": 1.57,
+					"catches": "+14%",
+					"ceiling": 1.793
 				},
 				"stacked-json": {
-					"baseline": 2.08,
-					"catches": "+13%",
+					"baseline": 2.07,
+					"catches": "+14%",
 					"ceiling": 2.354
 				}
 			}
@@ -29,28 +29,28 @@
 		"finalize": {
 			"bun 1.3": {
 				"1000x10": {
-					"baseline": 2.45,
-					"catches": "+46%",
+					"baseline": 2.34,
+					"catches": "+53%",
 					"ceiling": 3.575
 				},
 				"1000x100": {
-					"baseline": 0.74,
-					"catches": "+37%",
+					"baseline": 0.715,
+					"catches": "+42%",
 					"ceiling": 1.012
 				},
 				"100x10": {
-					"baseline": 2.785,
-					"catches": "+35%",
+					"baseline": 2.575,
+					"catches": "+47%",
 					"ceiling": 3.773
 				},
 				"100x100": {
-					"baseline": 0.85,
-					"catches": "+28%",
+					"baseline": 0.73,
+					"catches": "+49%",
 					"ceiling": 1.089
 				},
 				"500x50": {
-					"baseline": 0.97,
-					"catches": "+24%",
+					"baseline": 0.93,
+					"catches": "+29%",
 					"ceiling": 1.199
 				}
 			}
@@ -58,18 +58,18 @@
 		"hotpath": {
 			"bun 1.3": {
 				"body": {
-					"baseline": 1.85,
-					"catches": "+12%",
-					"ceiling": 2.079
+					"baseline": 1.845,
+					"catches": "+14%",
+					"ceiling": 2.112
 				},
 				"chain": {
-					"baseline": 1.9,
-					"catches": "+12%",
-					"ceiling": 2.134
+					"baseline": 1.89,
+					"catches": "+13%",
+					"ceiling": 2.145
 				},
 				"large-response": {
-					"baseline": 1.02,
-					"catches": "+10%",
+					"baseline": 1.015,
+					"catches": "+11%",
 					"ceiling": 1.122
 				},
 				"many-routes": {
@@ -83,28 +83,28 @@
 					"ceiling": 2.288
 				},
 				"mw-sync": {
-					"baseline": 1.46,
-					"catches": "+11%",
+					"baseline": 1.445,
+					"catches": "+12%",
 					"ceiling": 1.617
 				},
 				"not-found": {
-					"baseline": 7.53,
-					"catches": "+12%",
-					"ceiling": 8.448
+					"baseline": 7.595,
+					"catches": "+14%",
+					"ceiling": 8.668
 				},
 				"param": {
 					"baseline": 1.745,
 					"catches": "+12%",
-					"ceiling": 1.947
+					"ceiling": 1.958
 				},
 				"scoped": {
-					"baseline": 1.745,
-					"catches": "+13%",
-					"ceiling": 1.98
+					"baseline": 1.74,
+					"catches": "+14%",
+					"ceiling": 1.991
 				},
 				"static": {
-					"baseline": 1.33,
-					"catches": "+12%",
+					"baseline": 1.325,
+					"catches": "+13%",
 					"ceiling": 1.496
 				}
 			}
@@ -112,23 +112,23 @@
 		"streaming": {
 			"bun 1.3": {
 				"cancel-release": {
-					"baseline": 6.115,
-					"catches": "+24%",
-					"ceiling": 7.557
+					"baseline": 6.69,
+					"catches": "+17%",
+					"ceiling": 7.81
 				},
 				"generate-10k": {
-					"baseline": 1.28,
-					"catches": "+13%",
+					"baseline": 1.26,
+					"catches": "+15%",
 					"ceiling": 1.452
 				},
 				"sse-1k": {
-					"baseline": 2.155,
-					"catches": "+15%",
+					"baseline": 2.09,
+					"catches": "+18%",
 					"ceiling": 2.475
 				},
 				"stream-1mb": {
-					"baseline": 2.19,
-					"catches": "+36%",
+					"baseline": 2.015,
+					"catches": "+47%",
 					"ceiling": 2.97
 				}
 			}
@@ -136,35 +136,41 @@
 		"websockets": {
 			"bun 1.3": {
 				"message-10k": {
-					"baseline": 3.475,
-					"catches": "+18%",
-					"ceiling": 4.114
+					"baseline": 3.565,
+					"catches": "+35%",
+					"ceiling": 4.796
 				},
 				"realtime-fanout": {
-					"baseline": 1.665,
-					"catches": "+23%",
+					"baseline": 1.695,
+					"catches": "+21%",
 					"ceiling": 2.046
 				},
 				"realtime-inbound-10k": {
-					"baseline": 4.265,
-					"catches": "+45%",
+					"baseline": 4.135,
+					"catches": "+49%",
 					"ceiling": 6.171
 				},
 				"upgrade-1k": {
-					"baseline": 2.7,
-					"catches": "+27%",
+					"baseline": 2.655,
+					"catches": "+29%",
 					"ceiling": 3.432
 				}
 			}
 		}
 	},
-	"note": "Per bench, runtime minor and scenario: v1 cost / its raw twin's, from the RATIO lines of 6 green CI runs of ci.yml's hotpath job at 95b6cd2 in record mode (n=6: push run 40635796971, dispatches 40637279965, 40638448479, 40639505880, 40640935318, 40642329012), under BUN_VERSION 1.3.11 and, for adapter, Node 26.12.1. baseline: the median of the 6. ceiling: the worst CI run plus a 10% margin (worst × 1.10), since 6 samples can understate the spread. A run whose median ratio is above its ceiling is REGRESSED. catches: ceiling ÷ baseline, so the gate catches a regression beyond +X% of the CI median. A reportOnly scenario is printed and never fails the run; its reason says why. No retry: a red with v1 unchanged is answered by a re-record, never a rerun. Re-record: run the job with BENCH_MODE=record, collect each step's RATIO lines over at least 6 runs, derive the same way, and commit the move with its reason.",
+	"note": "Per bench, runtime minor and scenario: v1 cost / its raw twin's, from the RATIO lines of CI runs of ci.yml's hotpath job: 6 green runs at 95b6cd2 in record mode (push run 40635796971, dispatches 40637279965, 40638448479, 40639505880, 40640935318, 40642329012) and run 40645792418 at e92e73d, the first blocking run, red on websockets message-10k (4.36 over its 4.114 ceiling, v1 unchanged; the measurement byte-identical to the recording's), whose 23 lines join as evidence (adapter's step never ran there); push run 40648018748 at 3f3c22d (judged, green); and the re-record's 4 dispatches with bench_mode=record (40649639049, 40651282669, 40652790834, 40654595647): n=12, adapter n=11. Under BUN_VERSION 1.3.11 and, for adapter, Node 26.12.1. baseline: the median of the runs. ceiling: the worst CI run plus a 10% margin (worst × 1.10), since a handful of samples can understate the spread. A run whose median ratio is above its ceiling is REGRESSED. catches: ceiling ÷ baseline, so the gate catches a regression beyond +X% of the CI median. A reportOnly scenario is printed and never fails the run; its reason says why. No retry: a red with v1 unchanged is answered by a re-record, never a rerun. Re-record: run the job with BENCH_MODE=record, collect each step's RATIO lines over at least 6 runs, derive the same way, and commit the move with its reason.",
 	"runs": [
 		"40635796971",
 		"40637279965",
 		"40638448479",
 		"40639505880",
 		"40640935318",
-		"40642329012"
+		"40642329012",
+		"40645792418",
+		"40648018748",
+		"40649639049",
+		"40651282669",
+		"40652790834",
+		"40654595647"
 	]
 }
