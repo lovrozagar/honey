@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      bench_mode:
+        description: "judge the bench gates, or record their RATIO lines for a re-record (00-rules perf gate)"
+        type: choice
+        options: [judge, record]
+        default: judge
   # release.yml runs all of it on the tagged commit before it publishes
   workflow_call:
 
@@ -547,15 +553,23 @@ jobs:
       # Each bench: v1's cost as a ratio to a raw twin doing the same work, judged against its ceiling in
       # blueprint/baselines/bench.json (the worst of six CI runs on these pins, plus 10%): that margin is the
       # noise budget, so a red is never retried away. A red with v1 unchanged is answered by a re-record
-      # (these steps with BENCH_MODE=record, the ceiling widened with its evidence), never a rerun.
+      # (dispatch this workflow with bench_mode=record, the ceiling widened with its evidence), never a rerun.
       - name: hotpath
         run: bun run bench:hotpath
+        env:
+          BENCH_MODE: ${{ inputs.bench_mode || 'judge' }}
       - name: finalize
         run: bun run bench:finalize
+        env:
+          BENCH_MODE: ${{ inputs.bench_mode || 'judge' }}
       - name: streaming
         run: bun run bench:streaming
+        env:
+          BENCH_MODE: ${{ inputs.bench_mode || 'judge' }}
       - name: websockets
         run: bun run bench:websockets
+        env:
+          BENCH_MODE: ${{ inputs.bench_mode || 'judge' }}
       # the Node bridge on Node itself (node:http under Bun is Bun's own), on the version adapter's
       # ceilings were recorded with
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -563,6 +577,8 @@ jobs:
           node-version: "26.12.1"
       - name: adapter
         run: bun run bench:adapter
+        env:
+          BENCH_MODE: ${{ inputs.bench_mode || 'judge' }}
 
   build:
     name: build (${{ matrix.runtime }})
