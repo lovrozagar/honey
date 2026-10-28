@@ -134,3 +134,108 @@ mcp(app, "/mcp", mcpHandler, {
   credential never leaves the app.
 - **Bodies** are capped at 4 MiB as they stream (`maxBodyBytes` changes it), after the app's own `bodyLimit`. A browser
   `Origin` other than the endpoint's own is refused 403 unless listed in `origins`.
+
+### OAuth
+
+The mounted endpoint can act as an OAuth 2.1 resource server, the role the MCP authorization spec gives a protected
+server. honey serves the resource server's discovery half only: it never issues tokens and never checks them. You
+bring the authorization server, and your own code (`authenticate` and each route) validates the token.
+
+| Value                        | What it is                                                                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `oauth`                      | `mcp()`'s option (type `McpOAuth`, from `@lovrozagar/honey/mcp`) that makes the endpoint a resource server; it needs `authenticate`     |
+| `oauth.authorizationServers` | the issuer URLs of the authorization servers whose tokens the endpoint takes: at least one, each https (http only on a loopback host)   |
+| `oauth.scopesSupported`      | the scopes a client asks for when a 401 names none; `offline_access` is refused at mount                                                |
+| `oauth.resource`             | the endpoint's public URL, for an app whose requests don't carry its public origin (behind a proxy); it must be the endpoint's own path |
+| `oauth.resourceName`         | the endpoint's name as a user sees it                                                                                                   |
+
+```ts
+import { honey } from "@lovrozagar/honey"
+import { type McpHandler, mcp } from "@lovrozagar/honey/mcp"
+
+/* in the app: import { mcpHandler } from "./_gen/mcp.gen.ts" */
+declare const mcpHandler: McpHandler
+
+/* the authorization server's Worker, bound as AUTH_SERVER: @cloudflare/workers-oauth-provider's validateToken */
+type Env = {
+	readonly AUTH_SERVER: { validateToken(resource: string, token: string): Promise<{ scope: string[] } | null> }
+}
+
+const ENDPOINT = "https://mcp.example.com/mcp"
+const bearer = (request: Request) => /^Bearer (\S+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? ""
+const refused = (status: number, challenge: string) =>
+	new Response(null, { headers: { "www-authenticate": challenge }, status })
+
+const app = honey<Env>()
+app
+	.post("/orders")
+	.meta({ mcp: true, security: [{ oauth: ["mcp:write"] }] })
+	.handler(async (ctx) => {
+		/* the route checks the token again, for the endpoint as its audience, and names every scope it needs */
+		const granted = await ctx.env.AUTH_SERVER.validateToken(ENDPOINT, bearer(ctx.req))
+		if (granted === null) return ctx.res.raw(refused(401, 'Bearer error="invalid_token"'))
+		if (!granted.scope.includes("mcp:write"))
+			return ctx.res.raw(refused(403, 'Bearer error="insufficient_scope", scope="mcp:read mcp:write"'))
+		return ctx.res.json("created", { id: "o-1" })
+	})
+
+mcp(app, "/mcp", mcpHandler, {
+	authenticate: async (request, ctx) =>
+		(await (ctx.env as Env).AUTH_SERVER.validateToken(ENDPOINT, bearer(request))) !== null,
+	oauth: {
+		authorizationServers: ["https://auth.example.com"],
+		resource: ENDPOINT,
+		resourceName: "Example",
+		scopesSupported: ["mcp:read"],
+	},
+})
+```
+
+What the endpoint then serves:
+
+- **Protected Resource Metadata** (RFC 9728) at the well-known URI with the endpoint's path inserted:
+  `https://mcp.example.com/.well-known/oauth-protected-resource/mcp` for an endpoint at `/mcp`, the basePath and a
+  stripped prefix included. It holds `resource` (the endpoint's URL, with no trailing slash),
+  `authorization_servers`, `scopes_supported` when set, `bearer_methods_supported: ["header"]` and `resource_name`
+  when set. It's a GET route under the same middleware as the endpoint, kept out of the OpenAPI documents and the
+  tools; a middleware that refuses requests without a credential must let it through.
+- **The root form** `/.well-known/oauth-protected-resource` is served only for an endpoint at `/`. Clients read the
+  metadata URL off the 401 first, then try the path-inserted URI, and the root last; a root document for an endpoint
+  at `/mcp` would have to name the origin itself as the resource, and RFC 9728 requires the document's `resource` to
+  be the one its URL was built from.
+- **401** when `authenticate` returns `false`, or a route refuses the token: `WWW-Authenticate: Bearer
+  resource_metadata="…"`, with `error="invalid_token"` when the request carried a credential, and the route's own
+  `scope` when its challenge names one. A 401 from `authenticate` names no scope: no operation is known before the
+  body is read, so the client asks for `scopes_supported`.
+- **403 step-up.** A route that answers 403 with `WWW-Authenticate: Bearer error="insufficient_scope",
+  scope="mcp:read mcp:write"` makes the endpoint answer HTTP 403 with `Bearer error="insufficient_scope",
+  scope="mcp:read mcp:write", resource_metadata="…"`, never a tool result. The client then authorizes again for the
+  union of its scopes and the challenge's, and retries. The scopes come from the route's challenge alone, because only
+  the route knows what it needs (it may depend on the arguments); name every scope the operation needs in one
+  challenge. `offline_access` is dropped from it.
+- **Without `oauth`** none of this is served: no metadata route, and the challenges stay as above.
+
+**The token.** The client sends a token issued for the endpoint (its audience the endpoint's URL, RFC 8707). Each
+tool call carries that token, in process, to the app's own routes: the same resource on the same origin, never
+another service, and a call off the origin is refused before it leaves. So **your routes' validator must accept the
+endpoint's URL as the token's audience**. `authenticate` checks the token on every request; the routes check it
+again, with the scopes each needs.
+
+**Behind a proxy.** The metadata's `resource` and the 401's `resource_metadata` use `oauth.resource`'s origin when it
+is set, and the request's own origin otherwise. honey trusts no forwarded header, so set `oauth.resource` when the
+app sees a different origin from the client's (TLS ended at a proxy, an internal host name). `mcp()` throws when it
+names another path, or has a query, fragment or userinfo.
+
+**Which clients need it.** ChatGPT connects only to a server with no auth or with OAuth, so an endpoint that needs a
+credential needs `oauth` for it. Claude's custom connectors, Claude Code, Cursor, VS Code, Gemini CLI and Copilot Studio
+take OAuth too, or a fixed `Authorization` header instead. Anthropic's Messages API connector sends only a
+Bearer `authorization_token`.
+
+**An authorization server on Workers.** `@cloudflare/workers-oauth-provider`'s `OAuthAuthorizationServer` can be the
+authorization server, in its own Worker with your `/authorize` page, listing the endpoint's URL in its `resources`.
+It exposes `validateToken(resource, token)` over a Service Binding, which both `authenticate` and the routes call
+with the endpoint's URL. Its `OAuthResourceServer` is the half honey serves here, so the app doesn't use it. The
+package's `examples/split-workers` shows the authorization server in full.
+
+**The standalone server** (`--http`) has no OAuth: it serves one local user on a loopback port with its own token, and
+calls the API with its own key, as the spec's advice for local servers says.
