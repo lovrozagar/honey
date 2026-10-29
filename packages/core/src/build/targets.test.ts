@@ -237,6 +237,13 @@ describe("a Worker's named exports (bit 21 h)", () => {
 		)
 	})
 
+	it("passes nothing on from an entry the build reports no exports for (an external module's are null)", async () => {
+		const built = createBuildPlugin({ target: "cloudflare" }, APP)
+		const external = { ...context([]), resolve: async () => ({ id: "/elsewhere/app.ts" }) }
+		const entry = (await built.load.call(external, "\0virtual:honey-build-entry")) as { code: string }
+		expect(entry.code.includes("export {")).toBe(false)
+	})
+
 	it("refuses an app entry the build cannot resolve", async () => {
 		const built = createBuildPlugin({ target: "cloudflare" }, APP)
 		await expect(built.load.call(context([], false), "\0virtual:honey-build-entry")).rejects.toThrow(
