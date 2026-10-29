@@ -17,7 +17,7 @@ namespace Honey.Driver;
 /// fields bind by their fixed names (contract 50 §2, claimed before any declared param): <c>lastEventId</c> and
 /// <c>reconnectToken</c> from the call, <c>protocols</c>, <c>maxReconnectAttempts</c> and <c>reconnectDelay</c> from
 /// the script; a bound value no parameter takes fails the run. A call header no param declares goes in
-/// <c>RequestOptions.Headers</c> (F6); the options also carry the call's timeout, the alt origin's base URL, and
+/// <c>RequestOptions.Headers</c> (F6); the options also carry the call's timeout, a named origin's base URL, and
 /// always a <c>RawResponse</c> to read. The method runs with <c>DoNotWrapExceptions</c>, so the SDK's own exception
 /// arrives, and a result is read only when the declared return type is generic (P5). A stream plan's open and reads
 /// are Stream.cs's.
@@ -58,7 +58,7 @@ internal static class Invoke
         }
         catch (Exception e) when (e is not DriverException)
         {
-            return Observe.Thrown(sdk, e, lens);
+            return Observe.Thrown(sdk, e, lens, raw);
         }
         return Observe.Returned(sdk, new Answer(method.ReturnType, result, raw), plan, lens);
     }
@@ -191,7 +191,7 @@ internal static class Invoke
         return RequestOptions(sdk, envelope, call, raw, extra);
     }
 
-    /// <summary>The call's timeout, its undeclared headers, the alt origin's base URL, and the raw response to fill.</summary>
+    /// <summary>The call's timeout, its undeclared headers, the base URL of the origin it names, and the raw response to fill.</summary>
     private static object RequestOptions(Sdk sdk, Envelope envelope, Call call, object raw, Dictionary<string, string> extra)
     {
         var options = sdk.Create("RequestOptions");
@@ -210,6 +210,12 @@ internal static class Invoke
                 break;
             case "alt":
                 Sdk.Set(options, "BaseUrl", envelope.Alt ?? throw new DriverException("the call's origin is alt, and the run has none"));
+                break;
+            case "drop":
+                Sdk.Set(options, "BaseUrl", envelope.Drop ?? throw new DriverException("the call's origin is drop, and the run has none"));
+                break;
+            case "refused":
+                Sdk.Set(options, "BaseUrl", envelope.Refused ?? throw new DriverException("the call's origin is refused, and the run has none"));
                 break;
             default:
                 throw new DriverException($"origin {call.Origin} is not one the driver knows");

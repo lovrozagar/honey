@@ -27,8 +27,9 @@ internal sealed record Outcome(JsonNode? Observed, JsonObject? Error = null, Jso
 /// binary answer is <c>bytes</c>, its size and SHA-256; <c>raw</c> when the call asks for it. An operation with no
 /// typed answer observes its raw body (JSON, else text, else null). A safe-mode <c>SdkResult</c> observes its data
 /// or its error. An <c>ApiStatusException</c> is <c>error</c> with its status, its <c>Key</c> and its body (JSON,
-/// else its text); an <c>ApiTimeoutException</c> is <c>timeout</c>. Unscripted, any other exception ends the run,
-/// named by its type. Under a script, a call's error is traced too (<c>via: "return"</c>, or <c>"result"</c> for a
+/// else its text); an <c>ApiTimeoutException</c> is <c>timeout</c>. Unscripted, an <c>ApiConnectionException</c> is
+/// <c>transport</c> (no answer, f2) and a <c>DecodeException</c> is <c>decode</c> with the filled raw response's
+/// status (bit 21 i0); any other exception ends the run, named by its type. Under a script, a call's error is traced too (<c>via: "return"</c>, or <c>"result"</c> for a
 /// safe-mode <c>SdkResult.Error</c>, with the result's summary), and one the grid has no outcome for (a cancel, a
 /// hook's, a decode, a connection or a config error) observes null. A stream call's reads are Stream.cs's.
 /// </summary>
@@ -56,16 +57,20 @@ internal static class Observe
     }
 
     /// <summary>
-    /// A call that threw <paramref name="error"/>: traced under a script; unscripted, a status error or a timeout as
-    /// the grid observes it, else a DriverException naming what the grid has no outcome for.
+    /// A call that threw <paramref name="error"/>: traced under a script; unscripted, a status error, a timeout, no
+    /// answer or an undecodable answer (its status read from <paramref name="raw"/>, the response the SDK filled before
+    /// decoding) as the grid observes it, else a DriverException naming what the grid has no outcome for.
     /// </summary>
-    public static Outcome Thrown(Sdk sdk, Exception error, Lens lens)
+    public static Outcome Thrown(Sdk sdk, Exception error, Lens lens, object? raw = null)
     {
         var seen = Graded(sdk, error, lens.Raw);
         if (lens.Scripted)
         {
             return new Outcome(seen, Traces.ErrorOf(sdk, error, "return", lens.Envelope));
         }
+        seen ??= NoAnswer(sdk, error) is { } failed ? new JsonObject { ["kind"] = failed }
+            : sdk.Is(error, "DecodeException") && raw is not null ? Undecodable(raw)
+            : null;
         return seen is null
             ? throw new DriverException($"the call threw {error.GetType().Name}, which the grid has no outcome for: {error.Message}")
             : new Outcome(seen);
@@ -76,6 +81,21 @@ internal static class Observe
         sdk.Is(error, "ApiStatusException") ? StatusOf(sdk, error, raw)
         : sdk.Is(error, "ApiTimeoutException") ? new JsonObject { ["kind"] = "timeout" }
         : null;
+
+    /// <summary>What failed with no answer as the grid observes it (f2): <c>timeout</c>, <c>transport</c>, else null.</summary>
+    public static string? NoAnswer(Sdk sdk, Exception error) =>
+        sdk.Is(error, "ApiTimeoutException") ? "timeout"
+        : sdk.Is(error, "ApiConnectionException") ? "transport"
+        : null;
+
+    /// <summary>A 2xx whose body did not decode: <c>decode</c> with the status the raw response holds, which a 2xx fills.</summary>
+    private static JsonObject Undecodable(object raw)
+    {
+        var status = Convert.ToInt32(Sdk.Get(raw, "Status"));
+        return status is >= 200 and < 300
+            ? new JsonObject { ["kind"] = "decode", ["status"] = status }
+            : throw new DriverException($"a DecodeException with a raw response of status {status}, not a 2xx");
+    }
 
     /// <summary>
     /// An <c>ApiStatusException</c> as the grid observes it: its raw response, or its status, its <c>Key</c> and its

@@ -242,7 +242,7 @@ describe.skipIf(!DOTNET)("the C# test driver: SSE, EventStream<T>", SLOW, () => 
 })
 
 describe.skipIf(!DOTNET)("the C# test driver: how an SSE call fails", SLOW, () => {
-	it("observes the events before a dropped connection, the stream's error traced and counted; unscripted, the run fails", async () => {
+	it("observes the events before a dropped connection, the stream's error traced and counted; unscripted, failed as transport", async () => {
 		const sdk = on("sse")
 		const dropped = sse([tick(1), tick(2), { waitMs: 50 }], "drop")
 		const { run } = await drive(sdk, [dropped], [ticks()], {})
@@ -257,11 +257,18 @@ describe.skipIf(!DOTNET)("the C# test driver: how an SSE call fails", SLOW, () =
 			observed: [{ events: [{ data: { n: 1 } }, { data: { n: 2 } }], kind: "events" }],
 			stream: { retry: [null, null], yields: 3 },
 		})
+		/* unscripted, the grid's stream/mid-drop (bit 21 i0): the events, then the no-answer failure (f2) */
 		const bare = await drive(sdk, [dropped], [ticks()])
-		expect({ status: bare.run.status, stderr: bare.run.stderr }).toEqual({
+		expect({ observed: bare.run.observed, status: bare.run.status }, bare.run.stderr).toEqual({
+			observed: [{ events: [{ data: { n: 1 } }, { data: { n: 2 } }], failed: "transport", kind: "events" }],
+			status: 0,
+		})
+		/* a drop before any event is no outcome the grid has: unscripted, the run fails */
+		const early = await drive(sdk, [sse([{ waitMs: 50 }], "drop")], [ticks()])
+		expect({ status: early.run.status, stderr: early.run.stderr }).toEqual({
 			status: 1,
 			stderr: expect.stringMatching(
-				/^driver: call 0 \(ticks\.stream\): the call ended in an error the grid has no outcome for: /,
+				/^driver: call 0 \(ticks\.stream\): the call ended in an error the grid has no outcome for: ApiConnectionException/,
 			),
 		})
 	})

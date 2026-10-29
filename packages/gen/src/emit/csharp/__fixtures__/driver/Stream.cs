@@ -15,7 +15,8 @@ internal sealed record StreamCall(Sdk Sdk, Plan Plan, Call Call, CallScript? Ent
 /// observes what the stream delivered: SSE <c>events</c>, WebSocket and realtime <c>frames</c>. An error a read or
 /// a send threw is traced via <c>"stream"</c> and ends the reads; a cancel (the method's token, the grid's
 /// <c>cancel</c>: no token reaches a read) is the stream's quiet end, its OCE traced with <c>canceled: true</c>.
-/// Unscripted, any other stream error fails the run. The driver never disposes what it observed: after
+/// Unscripted, an SSE stream that fails with no answer (f2) after its first event observes the events and how it
+/// <c>failed</c> (bit 21 i0); any other stream error fails the run. The driver never disposes what it observed: after
 /// <c>take</c> it leaves the enumeration (the SDK's own <c>break</c> path), and after an error it does nothing, so
 /// a release check tests the SDK; a WebSocket or realtime connection is then closed by <c>CloseAsync</c>, the API
 /// under test, its failure recorded as <c>closeError</c>.
@@ -72,9 +73,16 @@ internal static class Streams
         {
             return new Outcome(seen, Traces.ErrorOf(at.Sdk, failure, "stream", at.Lens.Envelope), Stream: trace);
         }
-        return failure is OperationCanceledException
-            ? new Outcome(seen, Stream: trace)
-            : throw new DriverException($"{Ungraded}{failure.GetType().Name}: {failure.Message}");
+        if (failure is OperationCanceledException)
+        {
+            return new Outcome(seen, Stream: trace);
+        }
+        if (seen["events"] is JsonArray { Count: > 0 } && Observe.NoAnswer(at.Sdk, failure) is { } failed)
+        {
+            seen["failed"] = failed;
+            return new Outcome(seen, Stream: trace);
+        }
+        throw new DriverException($"{Ungraded}{failure.GetType().Name}: {failure.Message}");
     }
 
     /// <summary>

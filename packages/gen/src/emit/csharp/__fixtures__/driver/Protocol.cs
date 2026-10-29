@@ -6,7 +6,7 @@ namespace Honey.Driver;
 
 /// <summary>
 /// The stdin envelope (driven.ts): the SDK to load, the grid cell, the emitter's call plans by operation, the
-/// origins, and the optional script. The records mirror the grid's <c>Setup</c> and <c>Call</c>
+/// origins (the primary as <c>base</c>; the alt, drop and refused ones a call may name), and the optional script. The records mirror the grid's <c>Setup</c> and <c>Call</c>
 /// (tests/integration/conformance/matrix.ts), the plan (sdk-plan.ts) and the script (protocol.ts), decoded
 /// strictly: a member the driver does not know fails the run before any call, so a new grid member is a red cell,
 /// never a silent pass.
@@ -17,6 +17,8 @@ internal sealed record Envelope(
     Dictionary<string, Plan> Plans,
     string Base,
     string? Alt = null,
+    string? Drop = null,
+    string? Refused = null,
     JsonNode? Script = null);
 
 /// <summary>The SDK's built dll, its root namespace and its client class.</summary>
