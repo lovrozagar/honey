@@ -51,7 +51,10 @@ export const SPAWNING_HELPERS = new Map([
 	["packages/gen/src/emit/java/__fixtures__/realtime.ts", ["consumed", "drivenRealtime"]],
 	["packages/gen/src/emit/mcp/__fixtures__/clients.ts", ["clientCheck", "clientSession", "hasNpm", "httpSession"]],
 	["packages/gen/src/emit/mcp/__fixtures__/http-server.ts", ["serving"]],
-	["packages/gen/src/emit/mcp/__fixtures__/python-client.ts", ["pythonOAuthSession", "pythonSession"]],
+	[
+		"packages/gen/src/emit/mcp/__fixtures__/python-client.ts",
+		["pythonHttpSession", "pythonOAuthSession", "pythonSession"],
+	],
 	["packages/gen/src/emit/mcp/__fixtures__/written.ts", ["exchange", "exchangeEach", "live", "typeErrors"]],
 	["packages/gen/src/emit/python/__fixtures__/compiled.ts", ["compiledPython"]],
 	["packages/gen/src/emit/python/__fixtures__/consumer.ts", ["checked", "consume"]],
