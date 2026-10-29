@@ -210,7 +210,7 @@ const DIGIT_GROUP: Json = {
 function resources(document: Json) {
 	const client = generateRustSdk(document).files["src/client.rs"] ?? ""
 	return {
-		accessors: [...client.matchAll(/pub fn (\S+)\(&self\) -> (\S+)<'_>/g)].map(([, fn, type]) => `${fn} -> ${type}`),
+		accessors: [...client.matchAll(/pub fn (\S+)\(&self\) -> (\S+)<'_, S>/g)].map(([, fn, type]) => `${fn} -> ${type}`),
 		structs: [...client.matchAll(/pub struct (\S+Resource\S*)</g)].map(([, type]) => type),
 	}
 }
@@ -428,9 +428,32 @@ describe("rustCallPlans", () => {
 	})
 
 	// v0: 2c4d54394e
-	it("plans a JSON answer for an op with error envelopes, whether errors throw or resolve as SdkResult", () => {
-		expect(
-			[true, false].map((throwOnError) => rustCallPlans(errorKeys, { throwOnError })["users.create"]?.response),
-		).toEqual(["json", "json"])
+	it("plans a JSON answer for an op with error envelopes: one plan, which both styles call", () => {
+		expect(rustCallPlans(errorKeys)["users.create"]?.response).toBe("json")
+	})
+
+	/* bit 21 i4 (shared/mirror.ts): `safe()` is the client's mirror, so a root member spelled so moves, and says so */
+	it("emits a root group or method spelled safe as safe_, noticed, and keeps a nested one", () => {
+		const none = { responses: { 204: { description: "none" } } }
+		const doc = {
+			info: { title: "Mirror", version: "1" },
+			openapi: "3.1.0",
+			paths: {
+				"/a/safe": { get: { ...none, operationId: "a.safe" } },
+				"/safe": { get: { ...none, operationId: "safe.get" } },
+			},
+		}
+		const { files, notices } = generateRustSdk(doc)
+		const client = files["src/client.rs"] ?? ""
+		expect({
+			accessors: resources(doc).accessors,
+			nested: client.includes("    pub fn safe(&self, _opts: &ASafeOpts) -> Call<(), S> {"),
+			notices,
+		}).toEqual({
+			accessors: ["a -> AResource", "safe_ -> SafeResource"],
+			nested: true,
+			notices: ['rust: the root group "safe" is emitted as "safe_": "safe" is the client\'s safe mirror'],
+		})
+		expect(generateRustSdk(FIXTURES.fixtures.document()).notices).toEqual([])
 	})
 })

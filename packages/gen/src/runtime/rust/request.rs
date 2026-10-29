@@ -159,22 +159,6 @@ impl RequestSpec {
         self.failed.take()
     }
 
-    /// A copy without the body, for a transport that sends a request of its own.
-    pub(crate) fn duplicate(&self) -> RequestSpec {
-        RequestSpec {
-            method: self.method.clone(),
-            template: self.template,
-            path: self.path.clone(),
-            params: self.params.clone(),
-            query: self.query.clone(),
-            headers: self.headers.clone(),
-            body: None,
-            content_type: None,
-            invalidates: self.invalidates,
-            failed: None,
-        }
-    }
-
     /// `METHOD /template`, the name a log entry gives the call.
     pub(crate) fn operation(&self) -> String {
         format!("{} {}", self.method, self.template)

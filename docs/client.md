@@ -13,7 +13,7 @@ honey-codegen generate --spec openapi.json --target ts --out sdk
 
 ## Errors and the safe mirror
 
-TypeScript, Python and Go today; the other SDKs as their phases land.
+TypeScript, Python, Go and Rust today; the other SDKs as their phases land.
 
 - **The normal call** answers its value and throws on any failure: an error status as its typed error
   (`NotFoundError` and so on, each a `ClientError`), and an undecodable or over-cap 2xx as a `DecodeError`.
@@ -82,6 +82,33 @@ func listing(ctx context.Context, client *sdk.Client) string {
 		return fmt.Sprintf("answered %d: %s", failed.StatusCode, failed.Key)
 	}
 	return r.Err.Error()
+}
+```
+
+In Rust, `client.safe()` is the same client in the `Safe` style: the same resources and methods (each generic over
+the client's style), each call resolving `Result<Answer<T>, Error>` where the normal one resolves `Result<T, Error>`.
+`Answer::Ok { data, response }` holds the data; `Answer::Err { error, response }` holds what the normal call returns
+as `Err` for that answer, a `SafeError::Api(ApiError)` for any error status (declared or not) or a
+`SafeError::Decode(DecodeError)` for a 2xx, or a declared header, that does not read, a 2xx past `max_response_bytes`
+included. Both arms carry the `RawResponse`. The outer `Err` is no answer alone. An event stream resolves once it
+opens (`Answer::Ok`'s data is the `EventStream`), its error status at the opening the `Answer::Err`; a WebSocket or
+realtime method is the same `Call` on both clients. `client.safe()` returns a client by value, so bind it
+(`let safe = client.safe();`) to keep a resource of it.
+
+```rust
+async fn listing(client: &Client) -> String {
+    match client.safe().get_api(&GetApiOpts::default()).await {
+        Ok(Answer::Ok { data, response }) => format!("answered {}: {data:?}", response.status),
+        Ok(Answer::Err {
+            error: SafeError::Api(failed),
+            response,
+        }) => format!("answered {}: {}", response.status, failed.message()),
+        Ok(Answer::Err {
+            error: SafeError::Decode(unreadable),
+            response,
+        }) => format!("answered {}, unreadable: {unreadable}", response.status),
+        Err(no_answer) => format!("no answer: {no_answer}"), // never sent, refused, timed out or canceled
+    }
 }
 ```
 

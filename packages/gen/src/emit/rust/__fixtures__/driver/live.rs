@@ -18,7 +18,7 @@ use crate::trace::rust_error;
 /// quietly. Then `close`, and the trace: the frames read, the settled resume cursor (`""` when
 /// unset), the proven transport and the read errors, with `close`'s error.
 pub async fn observe_live<E>(
-    p: Prepared<sdk::ResumableConnection<E>, ()>,
+    p: Prepared<sdk::ResumableConnection<E>, sdk::Throw, ()>,
     call: &Call,
 ) -> Result<Outcome, String>
 where

@@ -22,8 +22,11 @@ function runtimeIdentifiers(): string[] {
 		.flatMap(([, source]) => publicItems(source))
 }
 
-/* the crate-root types the emitter itself declares beside the runtime's: errors.ts's enum */
-const EMITTED: readonly string[] = ["ErrorKey"]
+/** The style parameter every resource and its methods' `Call` take (bit 21 i4): no type may be named it. */
+export const STYLE = "S"
+
+/* the crate-root types the emitter itself declares beside the runtime's (errors.ts's enum), and the style parameter */
+const EMITTED: readonly string[] = ["ErrorKey", STYLE]
 
 /** Names for one schema on its own: each as asked for, no cycles, refs left unresolved. */
 export function plainNames(): RustTypeNames {

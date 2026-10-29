@@ -37,10 +37,10 @@ const PUT = (size: number): Call => ({
 	route: route("PUT", "/files/{name}"),
 })
 
-/* both error modes: a binary or text answer has the same shape in SdkResult.data as in the return value */
+/* both styles: a binary or text answer has the same shape in client.safe()'s Answer::Ok as in the return value */
 const MODES = [
-	["throw", "http"],
-	["safe", "http-safe"],
+	["throw", false],
+	["safe", true],
 ] as const
 
 /** `size` bytes `i & 0xff`, as the driver sends and the recording server answers them. */
@@ -50,20 +50,20 @@ const sha256 = (bytes: Buffer | string) => createHash("sha256").update(bytes).di
 /** A Rust error as the trace records it: no source and the method's own Err unless given, any Debug text. */
 const plain = (entry: Partial<RustError>) => ({ debug: expect.any(String), source: false, via: "return", ...entry })
 
-/** The registry SDK `key` compiled with the driver, which must build. */
-function driven(key: "http" | "http-safe"): DrivenRustSdk {
-	const sdk = drivenRustSdk(key)
+/** The `http` SDK compiled with the driver, which must build. */
+function driven(): DrivenRustSdk {
+	const sdk = drivenRustSdk("http")
 	expect(sdk.built, sdk.stderr).toBe(true)
 	return sdk
 }
 
 type Options = { readonly script?: Script; readonly setup?: Setup }
 
-/** `calls` run by `key`'s driver on one client under `options` against a server answering `replies`. */
-async function drive(key: "http" | "http-safe", replies: readonly Reply[], calls: readonly Call[], o: Options = {}) {
-	const sdk = driven(key)
+/** `calls` run by the driver on one client (`client.safe()` when `safe`) under `options` against a server answering `replies`. */
+async function drive(safe: boolean, replies: readonly Reply[], calls: readonly Call[], o: Options = {}) {
+	const sdk = driven()
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup: o.setup ?? {} }, server, o.script)
+		const run = await sdk.runCalls({ calls, setup: o.setup ?? {} }, server, o.script, safe)
 		return { bodies: [...server.bodies], hops: [...server.hops], run }
 	})
 }
@@ -74,9 +74,9 @@ describe.skipIf(!RUST)("binary answers: Vec<u8>, never decoded as text or JSON, 
 	// v0: 63ad606050
 	it.each(MODES)(
 		"answers an octet-stream or pdf body as its bytes and asks for that media type (%s)",
-		async (_, key) => {
+		async (_, safe) => {
 			const replies = [octets(256, "application/octet-stream"), octets(4, "application/pdf")]
-			const { hops, run } = await drive(key, replies, [FILES_GET, DOCS_GET])
+			const { hops, run } = await drive(safe, replies, [FILES_GET, DOCS_GET])
 			expect({ accept: hops.map((h) => [h.url, h.headers.accept]), observed: run.observed }, run.stderr).toEqual({
 				accept: [
 					["/files/x", "application/octet-stream"],
@@ -95,7 +95,7 @@ describe.skipIf(!RUST)("binary answers: Vec<u8>, never decoded as text or JSON, 
 		"lets a per-call Accept header (.header) win over the declared media type",
 		async () => {
 			const call = { ...FILES_GET, headers: { accept: "*/*" } }
-			const { hops, run } = await drive("http", [octets(3, "application/octet-stream")], [call])
+			const { hops, run } = await drive(false, [octets(3, "application/octet-stream")], [call])
 			expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
 				accept: ["*/*"],
 				observed: [{ kind: "bytes", sha256: sha256(pattern(3)), size: 3, status: 200 }],
@@ -121,11 +121,11 @@ const UPLOADED = { contentType: "application/octet-stream", method: "PUT", url: 
 describe.skipIf(!RUST)("binary request bodies: in memory (sized) or one-shot (chunked)", () => {
 	it.each(MODES)(
 		"sends a Body under its declared media type: an in-memory one with its length, a stream chunked (%s)",
-		async (_, key) => {
+		async (_, safe) => {
 			const size = 65_536
 			const done: Reply = { json: { size }, status: 200 }
 			const script: Script = { calls: [null, { oneShotBody: true }] }
-			const { bodies, hops, run } = await drive(key, [done, done], [PUT(size), PUT(size)], { script })
+			const { bodies, hops, run } = await drive(safe, [done, done], [PUT(size), PUT(size)], { script })
 			const sent = { ...UPLOADED, authorization: undefined, sha256: sha256(pattern(size)), size }
 			expect(
 				{ observed: run.observed, same: bodies.map((b) => b.equals(pattern(size))), wire: hops.map(uploadOf) },
@@ -149,12 +149,12 @@ describe.skipIf(!RUST)("binary request bodies: in memory (sized) or one-shot (ch
 describe.skipIf(!RUST)("a binary body after a 401: an in-memory one sent again, a one-shot one never", () => {
 	it.each(MODES)(
 		"sends an in-memory body again with on_auth_expired's token after a 401; a one-shot one's 401 is the answer (%s)",
-		async (_, key) => {
+		async (_, safe) => {
 			const size = 4096
 			const script: Script = { calls: [null, { oneShotBody: true }], onAuthExpired: { tokens: ["new"] } }
 			const setup: Setup = { auth: { kind: "bearer", token: "old" } }
 			const replies: Reply[] = [{ status: 401 }, { json: { size }, status: 200 }, { status: 401 }]
-			const { bodies, hops, run } = await drive(key, replies, [PUT(size), PUT(size)], { script, setup })
+			const { bodies, hops, run } = await drive(safe, replies, [PUT(size), PUT(size)], { script, setup })
 			const sent = { ...UPLOADED, sha256: sha256(pattern(size)), size }
 			const sized = { ...sent, length: String(size), transferEncoding: undefined }
 			expect(
@@ -186,12 +186,12 @@ describe.skipIf(!RUST)("a binary body after a 401: an in-memory one sent again, 
 describe.skipIf(!RUST)("text bodies and answers: a String as sent, never JSON-decoded", () => {
 	it.each(MODES)(
 		"sends a &str body as text/plain, asks for text/plain, and answers the text as is (%s)",
-		async (_, key) => {
+		async (_, safe) => {
 			const replies: Reply[] = [
 				{ headers: { "content-type": "text/plain" }, status: 200, text: "hello" },
 				{ headers: { "content-type": "text/plain" }, status: 200, text: '"quoted"' },
 			]
-			const { bodies, hops, run } = await drive(key, replies, [NOTE("hello"), NOTE("bye")])
+			const { bodies, hops, run } = await drive(safe, replies, [NOTE("hello"), NOTE("bye")])
 			const wire = hops.map((h) => [h.method, h.url, h.body.contentType, h.headers.accept, h.body.size])
 			expect({ bodies: bodies.map(String), observed: run.observed, wire }, run.stderr).toEqual({
 				bodies: ["hello", "bye"],
@@ -215,14 +215,14 @@ const item = (headers: Record<string, string>): Reply => ({ headers, json: { id:
 describe.skipIf(!RUST)("typed response headers: <Op>Headers through FromHeaders", () => {
 	it.each(MODES)(
 		"reads the declared headers only, an absent optional one left out, an absent required one a Decode error (%s)",
-		async (_, key) => {
+		async (_, safe) => {
 			const replies = [
 				item({ "x-etag": "e1", "x-item-version": "3", "x-undeclared": "u" }),
 				item({ "x-item-version": "3" }),
 				item({ "x-etag": "e1" }),
 			]
 			const calls = [ITEMS_GET, ITEMS_GET, ITEMS_GET]
-			const { run } = await drive(key, replies, calls, { script: {} })
+			const { run } = await drive(safe, replies, calls, { script: {} })
 			const data = { id: "i1", name: "n" }
 			expect({ error: run.trace?.calls[2]?.error, observed: run.observed }, run.stderr).toEqual({
 				error: plain({ text: "decode: the X-Item-Version header is missing", variant: "Decode" }),

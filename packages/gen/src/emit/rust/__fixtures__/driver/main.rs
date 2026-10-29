@@ -6,10 +6,11 @@
 //! Stdin is one JSON object, the shared envelope:
 //!
 //!   { "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url,
-//!     "drop"?: url, "refused"?: url, "script"?: Script }
+//!     "drop"?: url, "refused"?: url, "script"?: Script, "safe"?: bool }
 //!
 //! `cell` is the grid's Cell (its other members are ignored); `plans` are the emitter's call plans
-//! (`rustCallPlans`). Every call of a cell runs in order on one client. Stdout is the grid's
+//! (`rustCallPlans`). Every call of a cell runs in order on one client, through `client.safe()` when
+//! `safe` is set (bit 21 i4), the same dispatch for both styles. Stdout is the grid's
 //! `Observed[]` JSON, one per call. Any failure, and any Call or outcome this driver cannot express,
 //! exits 1 with the reason on stderr: a red cell, never a silent pass.
 //!
@@ -173,7 +174,13 @@ async fn perform(
             "the call asks for the {origin:?} origin, and the input names none"
         ));
     }
-    let sent = dispatch::dispatch(client, call, input, d);
+    let safe = client.safe();
+    let sent: std::pin::Pin<Box<dyn std::future::Future<Output = Result<Outcome, String>> + '_>> =
+        if input.safe {
+            Box::pin(dispatch::dispatch(&safe, call, input, d))
+        } else {
+            Box::pin(dispatch::dispatch(client, call, input, d))
+        };
     if plan.stream.is_none() {
         return sent.await;
     }
@@ -214,6 +221,9 @@ fn config_of(input: &Input) -> Result<sdk::ClientConfig, String> {
     }
     if let Some(ms) = setup.timeout_ms {
         config.timeout = Some(Duration::from_millis(ms));
+    }
+    if let Some(cap) = setup.max_response_bytes {
+        config.max_response_bytes = cap;
     }
     Ok(config)
 }

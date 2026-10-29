@@ -1,7 +1,7 @@
 /**
  * The Rust SDK's errors (contract 19 §5.6, G6/G7): one `#[non_exhaustive]` `Error`, its boxed `Api(ApiError)` read
  * through accessors; `ErrorKind` by status (429 `RateLimit`); each API's `ErrorKey` (§3.4) and an owned `key()`
- * (Fc4); `SdkResult` with `is_ok()` and `response` (Fc5); `Error::Hook` (Fc2). Driven through the `errors` driver
+ * (Fc4); `client.safe()`'s `Answer` with its `response` (Fc5, bit 21 i4); `Error::Hook` (Fc2). Driven through the `errors` driver
  * (safe mode's driven legs are errors.safe.test.ts); consumers `errors` and `safe` (Fc8) and one compile-fail program.
  */
 import { describe, expect, it } from "vitest"
@@ -436,29 +436,31 @@ describe.skipIf(!RUST)("what the errors crate does not declare, checked by its c
 	}, 600_000)
 })
 
-/** The safe-mode consumer over `fixtures-safe`: error-keys users.create answered 400, then 201. */
+/** The safe consumer over `fixtures`: error-keys users.create on `client.safe()`, answered 400, then 201. */
 const SAFE = sections({
 	safe: `    let c = client(base)?;
     let b = serde_json::from_value(serde_json::json!({ "email": "a@x.test" })).expect("body");
     let o = Default::default();
-    let r: sdk::SdkResult<sdk::ErrorKeysUser> = c.error_keys().users().create(&b, &o).await?;
-    let e = r.error.as_ref().expect("the 400");
-    n.note(format!("{} {:?} {:?} {:?} {} {} {}", r.is_ok(), e.kind(), e.key(), e.envelope().message, r.status, r.response.status, r.data.is_none()));
-    let r: sdk::SdkResult<sdk::ErrorKeysUser> = c.error_keys().users().create(&b, &o).await?;
-    let id = r.data.as_ref().map_or("-", |u| u.id.as_str());
-    n.note(format!("{} {id} {} {} {} {}", r.is_ok(), r.status, r.error.is_none(), r.response.status, r.response.url.path()));`,
+    match c.safe().error_keys().users().create(&b, &o).await? {
+        sdk::Answer::Err { error: sdk::SafeError::Api(e), response } => n.note(format!("err {:?} {:?} {:?} {} {}", e.kind(), e.key(), e.envelope().message, e.status(), response.status)),
+        other => n.note(format!("unexpected {other:?}")),
+    }
+    match c.safe().error_keys().users().create(&b, &o).await? {
+        sdk::Answer::Ok { data, response } => n.note(format!("ok {} {} {}", data.id, response.status, response.url.path())),
+        other => n.note(format!("unexpected {other:?}")),
+    }`,
 })
 
-describe.skipIf(!RUST)("SdkResult from a consumer program (fixtures-safe)", () => {
+describe.skipIf(!RUST)("Answer from a consumer program (fixtures, client.safe())", () => {
 	// v0: d59d370556
 	// v0: 97f98d4e97
-	it("holds a 400 as error with its kind, key and envelope, a 201 as data, is_ok() and the raw response in both", async () => {
-		/* Fc5: v0's ok() is is_ok() (std's ok() is Option<T>), its response restored; G16: no SdkResult<T, E> */
+	it("holds a 400 as Answer::Err with its kind, key and envelope, a 201 as Answer::Ok, each with the raw response", async () => {
+		/* Fc5: v0's ok() is the Answer's arm (a match), its response on both arms; G16: no SdkResult<T, E> */
 		const user: Reply = { json: { email: "a@x.test", id: "u1" }, status: 201 }
-		const { run, wire } = await consumed("fixtures-safe", "safe", [{ json: TAKEN, status: 400 }, user], SAFE)
+		const { run, wire } = await consumed("fixtures", "safe", [{ json: TAKEN, status: 400 }, user], SAFE)
 		expect({ ...seen(run, "safe"), wire }, run.stderr).toEqual({
 			built: true,
-			out: ['false BadRequest Some(EmailTaken) Some("taken") 400 400 true', "true u1 201 true 201 /error-keys/users"],
+			out: ['err BadRequest Some(EmailTaken) Some("taken") 400 400', "ok u1 201 /error-keys/users"],
 			wire: ["POST /error-keys/users", "POST /error-keys/users"],
 		})
 	}, 600_000)

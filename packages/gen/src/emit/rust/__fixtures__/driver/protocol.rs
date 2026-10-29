@@ -24,6 +24,9 @@ pub struct Input {
     pub drop: Option<String>,
     pub refused: Option<String>,
     pub script: Option<Value>,
+    /// every call through `client.safe()`, its outcome read strictly (observe.rs `Settles`)
+    #[serde(default)]
+    pub safe: bool,
 }
 
 /// What the driver reads of a grid Cell; its calls are decoded strictly one by one.
@@ -54,6 +57,7 @@ pub struct Setup {
     pub headers: BTreeMap<String, String>,
     pub redirect: Option<String>,
     pub timeout_ms: Option<u64>,
+    pub max_response_bytes: Option<usize>,
 }
 
 /// The grid's Auth: a bearer token, or a credential under a header name.

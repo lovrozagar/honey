@@ -48,7 +48,7 @@ impl SseParser {
                     Err(e) => return (out, Some(e)),
                 }
             } else if self.line.len() >= MAX_LINE {
-                let e = Error::Decode("an event-stream line exceeds 1 MiB".into());
+                let e = Error::decode("an event-stream line exceeds 1 MiB");
                 return (out, Some(e));
             } else {
                 self.line.push(b);
@@ -73,7 +73,7 @@ impl SseParser {
         match field {
             "data" => {
                 if self.data.len() + value.len() + 1 > MAX_EVENT {
-                    return Err(Error::Decode("an event's data exceeds 8 MiB".into()));
+                    return Err(Error::decode("an event's data exceeds 8 MiB"));
                 }
                 if std::mem::replace(&mut self.has_data, true) {
                     self.data.push('\n');

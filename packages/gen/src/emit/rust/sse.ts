@@ -27,7 +27,7 @@ const SSE: StreamOpts = {
 }
 
 const DOC =
-	"Resolves once the stream is open: an error status is `Err(Error::Api)`. No timeout bounds the stream after that; `cancel_on` ends it quietly, and dropping it closes it."
+	"Resolves once the stream is open: an error status is the answer's error (`Err(Error::Api)`, on `client.safe()` an `Answer::Err`). No timeout bounds the stream after that; `cancel_on` ends it quietly, and dropping it closes it."
 
 /** The SSE operation `op`'s answer: its events as text, or JSON decoded into the event type. */
 export function sseAnswer(op: SdkOp, at: RustTypeContext): StreamAnswer {

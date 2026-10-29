@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,6 +16,7 @@ use crate::hooks::{HookState, OnAuthExpiredHook, OnRequestHook, OnResponseHook};
 use crate::invalidation::InvalidationConfig;
 use crate::log::OnLogHook;
 use crate::redirect::RedirectPolicy;
+use crate::result::{Safe, Throw};
 use crate::stale::StaleTracker;
 
 /// A regular call's timeout when `ClientConfig::timeout` is `None`.
@@ -127,13 +129,15 @@ pub(crate) struct Defaults {
     pub(crate) auth_prefix: &'static str,
 }
 
-/// The client: cheap to clone, one connection pool. A call borrows nothing from it.
+/// The client: cheap to clone, one connection pool. A call borrows nothing from it. `S` is how
+/// its calls settle: `Throw`, or `Safe` for `safe()`'s.
 #[derive(Clone)]
-pub struct Client {
+pub struct Client<S = Throw> {
     pub(crate) inner: Arc<Inner>,
+    style: PhantomData<S>,
 }
 
-impl fmt::Debug for Client {
+impl<S> fmt::Debug for Client<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Client")
             .field("base_url", &redacted(self.inner.base_url.as_str()))
@@ -188,6 +192,15 @@ fn base_of(base_url: &str, default: Option<&str>) -> Result<reqwest::Url, Error>
 }
 
 impl Client {
+    /// The safe mirror: the same resources and operations, each resolving `Result<Answer<T>, Error>`,
+    /// so an answer (an error status, a body that does not read) is `Ok` and `Err` is no answer alone.
+    pub fn safe(&self) -> Client<Safe> {
+        Client {
+            inner: Arc::clone(&self.inner),
+            style: PhantomData,
+        }
+    }
+
     /// The client for `config` under the API's `defaults`; a bad `base_url` or header is `Error::Config`.
     pub(crate) fn build(mut config: ClientConfig, defaults: Defaults) -> Result<Client, Error> {
         let base_url = base_of(&config.base_url, defaults.base_url)?;
@@ -235,6 +248,7 @@ impl Client {
         };
         Ok(Client {
             inner: Arc::new(inner),
+            style: PhantomData,
         })
     }
 }

@@ -1,8 +1,9 @@
 /**
  * An SSE operation in the Rust SDK (contract 20 §2.1, §5.1; the Go `sse.test.ts` analog), driven on the `sse`
- * registry document (documents-streams.ts): the method is a `Call<EventStream<T>[, <Op>Headers]>`, `T` from the
+ * registry document (documents-streams.ts): the method is a `Call<EventStream<T>, S[, <Op>Headers]>`, `T` from the
  * declared event schema, and the stream a `futures_util::Stream` of `Result<SseEvent<T>, Error>`; an error status
- * is `Err(Error::Api)` before any event, in either mode; the request carries `accept`, `Last-Event-ID` (none for
+ * is `Err(Error::Api)` before any event, on `client.safe()` an `Answer::Err` with its response (bit 21 i4); the
+ * request carries `accept`, `Last-Event-ID` (none for
  * an empty cursor), the merged headers, the declared params, the body and the token; a typed stream ends at an
  * event that does not decode. Once open no timeout bounds a stream, while `cancel_on` (Fd6, ruled the
  * alternative) and dropping it end it. The hooks and the log on the open are `sse.hooks.test.ts`; the parser
@@ -33,8 +34,6 @@ const pending = (id: string): Call => ({
 	params: { id },
 	route: route("GET", "/pending/{id}"),
 })
-/* fixtures-safe's v0 SSE op (documents.ts merges it under `/sse`): its stream in safe mode */
-const SAFE_EVENTS: Call = { operation: "sse.events.stream", route: route("GET", "/sse/events/stream") }
 const CHAT: Call = {
 	body: { kind: "json", value: { q: "hi" } },
 	operation: "chat.send",
@@ -52,21 +51,20 @@ const TICKED: Observed = { events: [{ data: { n: 1 } }], kind: "events" }
 const tick = (n: number) => `id: ${n}\nevent: tick\ndata: {"n":${n}}\n\n`
 const strings = (...data: string[]): Observed => ({ events: data.map((d) => ({ data: d })), kind: "events" })
 
-const sdks = new Map<"fixtures-safe" | "sse", DrivenRustSdk>()
-/** The `sse` SDK (or the safe-mode `fixtures-safe`) compiled with the driver, once: it must build. */
-function driven(key: "fixtures-safe" | "sse" = "sse"): DrivenRustSdk {
-	const sdk = sdks.get(key) ?? drivenRustSdk(key)
-	sdks.set(key, sdk)
-	expect({ built: sdk.built }, sdk.stderr).toEqual({ built: true })
-	return sdk
+let built: DrivenRustSdk | undefined
+/** The `sse` SDK compiled with the driver, once: it must build. */
+function driven(): DrivenRustSdk {
+	built ??= drivenRustSdk("sse")
+	expect({ built: built.built }, built.stderr).toEqual({ built: true })
+	return built
 }
 
-type Options = { readonly script?: Script; readonly setup?: Setup; readonly sdk?: DrivenRustSdk }
-/** `calls` run against a server answering `replies`: the run, hops and streams. */
+type Options = { readonly safe?: boolean; readonly script?: Script; readonly setup?: Setup }
+/** `calls` run (on `client.safe()` when `safe`) against a server answering `replies`: the run, hops and streams. */
 async function drive(replies: readonly Reply[], calls: readonly Call[], options: Options = {}) {
-	const sdk = options.sdk ?? driven()
+	const sdk = driven()
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup: options.setup ?? {} }, server, options.script)
+		const run = await sdk.runCalls({ calls, setup: options.setup ?? {} }, server, options.script, options.safe)
 		return { hops: [...server.hops], run, streams: [...server.streams] }
 	})
 }
@@ -99,7 +97,8 @@ const errorOf = (e: RustError | undefined) =>
  */
 const TYPED = sections({
 	typed: `    let c = client(base)?;
-    let call: sdk::Call<sdk::EventStream<sdk::Tick>, sdk::TicksStreamHeaders> = c.ticks().stream(&sdk::TicksStreamOpts::default());
+    let call: sdk::Call<sdk::EventStream<sdk::Tick>, sdk::Throw, sdk::TicksStreamHeaders> = c.ticks().stream(&sdk::TicksStreamOpts::default());
+    let _: sdk::Call<sdk::EventStream<sdk::Tick>, sdk::Safe, sdk::TicksStreamHeaders> = c.safe().ticks().stream(&sdk::TicksStreamOpts::default());
     let _: sdk::Call<sdk::EventStream<String>> = c.text().stream(&sdk::TextStreamOpts::default());
     let mut s: sdk::EventStream<sdk::Tick> = call.await?;
     let first: Option<Result<sdk::SseEvent<sdk::Tick>, sdk::Error>> = futures_util::StreamExt::next(&mut s).await;
@@ -115,11 +114,11 @@ const REFUSED = `fn no_ws_cursor() -> sdk::TicksStreamOpts {
     sdk::TicksStreamOpts { reconnect_token: None, ..Default::default() }
 }
 
-fn typed_is_not_text(c: &sdk::Client) -> sdk::Call<sdk::EventStream<String>, sdk::TicksStreamHeaders> {
+fn typed_is_not_text(c: &sdk::Client) -> sdk::Call<sdk::EventStream<String>, sdk::Throw, sdk::TicksStreamHeaders> {
     c.ticks().stream(&sdk::TicksStreamOpts::default())
 }`
 
-describe.skipIf(!RUST)("an SSE method: Call<EventStream<T>>, a Stream of Result<SseEvent<T>, Error>", () => {
+describe.skipIf(!RUST)("an SSE method: Call<EventStream<T>, S>, a Stream of Result<SseEvent<T>, Error>", () => {
 	// v0: fd79926b03
 	it(
 		"holds EventStream<Tick> with its typed headers and EventStream<String>, and reads one as a boxed Stream with its cursor",
@@ -177,7 +176,7 @@ describe.skipIf(!RUST)("an SSE method: Call<EventStream<T>>, a Stream of Result<
 	}, 600_000)
 })
 
-/** The two error statuses an open answers, and what each call observes and traces: the same in either mode. */
+/** The two error statuses an open answers, and what each call observes and traces on the client. */
 const FAILED_OPENS: Reply[] = [
 	{ json: { message: "nope" }, status: 404 },
 	{ json: { message: "boom" }, status: 500 },
@@ -211,30 +210,35 @@ const FAILED_OPENED = {
 	] satisfies Observed[],
 }
 
-describe.skipIf(!RUST)("an SSE open that fails: Err(Error::Api) before any event, in either mode", () => {
-	// v0: 9e9ae72622
-	it("resolves an error status to a typed Api error with no stream, never a stream's first item", async () => {
-		/* V0BUG: v0 yielded the error status as the stream's first item (codegen-rust.ts:715); v1's call is Err before any stream */
-		const opened = await drive(FAILED_OPENS, [ticks(), ticks()], { script: {} })
-		expect(failedOpens(opened), opened.run.stderr).toEqual(FAILED_OPENED)
-	}, 600_000)
+describe.skipIf(!RUST)(
+	"an SSE open that fails: Err(Error::Api) before any event, on client.safe() an Answer::Err",
+	() => {
+		// v0: 9e9ae72622
+		it("resolves an error status to a typed Api error with no stream, never a stream's first item", async () => {
+			/* V0BUG: v0 yielded the error status as the stream's first item (codegen-rust.ts:715); v1's call is Err before any stream */
+			const opened = await drive(FAILED_OPENS, [ticks(), ticks()], { script: {} })
+			expect(failedOpens(opened), opened.run.stderr).toEqual(FAILED_OPENED)
+		}, 600_000)
 
-	// v0: 9e9ae72622
-	it("resolves it the same in safe mode: a stream ignores throwOnError, its error via return, never a result", async () => {
-		const opened = await drive(FAILED_OPENS, [SAFE_EVENTS, SAFE_EVENTS], { script: {}, sdk: driven("fixtures-safe") })
-		expect(failedOpens(opened), opened.run.stderr).toEqual(FAILED_OPENED)
-	}, 600_000)
+		// v0: 9e9ae72622
+		it("answers it on client.safe() as an Answer::Err with its response (via result), never a stream or its Err", async () => {
+			/* bit 21 i4: the opening status is an answer; the driver proves the Answer's response is that answer's */
+			const opened = await drive(FAILED_OPENS, [ticks(), ticks()], { safe: true, script: {} })
+			const viaResult = FAILED_OPENED.calls.map((call) => ({ ...call, error: { ...call.error, via: "result" } }))
+			expect(failedOpens(opened), opened.run.stderr).toEqual({ ...FAILED_OPENED, calls: viaResult })
+		}, 600_000)
 
-	it("fails a bad path param before any request: null, a PathParam error via return, no hop", async () => {
-		const { hops, run } = await drive([], [pending("..")], { script: {} })
-		const call = run.trace?.calls[0]
-		expect(
-			{ hops: hops.length, observed: run.observed, stream: call?.stream, variant: call?.error?.variant },
-			run.stderr,
-		).toEqual({ hops: 0, observed: [null], stream: undefined, variant: "PathParam" })
-		expect(call?.error?.via).toBe("return")
-	}, 600_000)
-})
+		it("fails a bad path param before any request: null, a PathParam error via return, no hop", async () => {
+			const { hops, run } = await drive([], [pending("..")], { script: {} })
+			const call = run.trace?.calls[0]
+			expect(
+				{ hops: hops.length, observed: run.observed, stream: call?.stream, variant: call?.error?.variant },
+				run.stderr,
+			).toEqual({ hops: 0, observed: [null], stream: undefined, variant: "PathParam" })
+			expect(call?.error?.via).toBe("return")
+		}, 600_000)
+	},
+)
 
 describe.skipIf(!RUST)("an SSE request on the wire: accept and Last-Event-ID", () => {
 	// v0: 6e7d0244ad

@@ -26,13 +26,13 @@ pub struct How {
     pub headers: Option<ReadHeaders>,
 }
 
-/// A method's call with the grid call's options on it, and how its answer is observed.
-pub struct Prepared<T, H> {
-    pub call: sdk::Call<T, H>,
+/// A method's call (in either style) with the grid call's options on it, and how its answer is observed.
+pub struct Prepared<T, S, H> {
+    pub call: sdk::Call<T, S, H>,
     pub how: How,
 }
 
-impl<T, H> Prepared<T, H> {
+impl<T, S, H> Prepared<T, S, H> {
     /// The same call, its typed response headers read by `read`.
     pub fn reading(mut self, read: ReadHeaders) -> Self {
         self.how.headers = Some(read);
@@ -52,12 +52,12 @@ pub fn origin_of<'a>(call: &Call, input: &'a Input) -> Option<&'a String> {
 }
 
 /// `c` with `call`'s timeout, undeclared headers and origin, and `d`'s cancel, applied.
-pub fn apply<T, H>(
-    c: sdk::Call<T, H>,
+pub fn apply<T, S, H>(
+    c: sdk::Call<T, S, H>,
     call: &Call,
     input: &Input,
     d: &Directives,
-) -> Prepared<T, H> {
+) -> Prepared<T, S, H> {
     let plan = &input.plans[&call.operation];
     let mut c = c;
     if let Some(ms) = call.timeout_ms {

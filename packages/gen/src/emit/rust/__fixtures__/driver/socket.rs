@@ -36,7 +36,7 @@ fn recording(event: &'static str, runs: &Runs) -> impl FnMut(&[u8]) + Send + 'st
 /// to be read. The first send or read error is traced via "stream". The trace holds the frames read,
 /// every handler run (those `close` fires included), the server's close frame and `close`'s error.
 pub async fn observe_frames(
-    p: Prepared<sdk::TypedWebSocket, ()>,
+    p: Prepared<sdk::TypedWebSocket, sdk::Throw, ()>,
     call: &Call,
     d: &Directives,
 ) -> Result<Outcome, String> {

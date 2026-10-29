@@ -67,8 +67,11 @@ function filesOf(
 			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
 			return sdk.files
 		}
-		case "rust":
-			return generateRustSdk(document, options).files
+		case "rust": {
+			const sdk = generateRustSdk(document, options)
+			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)
+			return sdk.files
+		}
 		case "python": {
 			const sdk = generatePythonSdk(document, options)
 			for (const notice of sdk.notices) report(`honey-codegen: ${notice}\n`)

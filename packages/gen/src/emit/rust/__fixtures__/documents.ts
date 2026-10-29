@@ -46,9 +46,8 @@ function fixtures(): Readonly<Record<string, unknown>> {
 
 /** Every crate a default run compiles: at most 16 (G17; tests/structure/rust-toolchain.test.ts). */
 export const FIXTURES = {
-	/** 60586125be's (and Go's 4eba1d1639's) adversarial corpus, both modes: every hostile name a Rust identifier (phase f) */
+	/** 60586125be's (and Go's 4eba1d1639's) adversarial corpus: every hostile name a Rust identifier (phase f), on both clients */
 	adversarial: { document: adversarialCorpus },
-	"adversarial-safe": { document: adversarialCorpus, options: { throwOnError: false } },
 	/** the compile cache's self-test (Fb8): a dependency-free crate at the floor's `rust-version`, its lock as cargo writes it */
 	cache: {
 		files: {
@@ -70,10 +69,8 @@ export const FIXTURES = {
 	/** the declared error keys (G6/G7): colliding idents, an envelope's enum, `<Key>Data` schemas (contract 19 §4.3) */
 	errors: { document: errors },
 	fixtures: { document: fixtures },
-	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
 	/** the HTTP runtime's document (contract 19 §4.3): request build, auth, hooks, answers, stale marks, binary */
 	http: { document: http },
-	"http-safe": { document: http, options: { throwOnError: false } },
 	/** the header-rule paths Python, C# and Java add to `http` (bit 19 d1): a declared key, a map header and query */
 	keyed: { document: () => ({ info: { title: "Keyed", version: "1" }, openapi: "3.1.0", paths: httpExtraPaths() }) },
 	/** the realtime connections (contract 20 §4.3): a typed feed, and one declaring every stream field's name */

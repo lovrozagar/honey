@@ -12,6 +12,7 @@ use serde_json::Value;
 use crate::call::{Overrides, RawResponse};
 use crate::config::{Client, Inner};
 use crate::errors::{ApiError, Error};
+use crate::exchange::{Answer, send};
 use crate::request::{RequestSpec, cursor};
 
 /// The transport a realtime connection is open over.
@@ -160,12 +161,24 @@ impl Dial {
     pub(crate) async fn post(&self, url: &str, text: &str) -> Result<(), Error> {
         let (mut spec, ov) = self.spec("POST", url);
         spec.text(text, "application/json");
-        ok(crate::exchange::send(&self.inner, &mut spec, &ov).await?).map(drop)
+        ok(&self.inner, &mut spec, &ov).await.map(drop)
     }
 }
 
-/// A 2xx answer as it is; any other status as `Error::Api`.
-pub(crate) fn ok(raw: RawResponse) -> Result<RawResponse, Error> {
+/// `spec` sent for a dial: a 2xx answer as it is; any other status as `Error::Api`, and one past the
+/// cap as no answer (a reconnect's to retry).
+pub(crate) async fn ok(
+    inner: &Inner,
+    spec: &mut RequestSpec,
+    ov: &Overrides,
+) -> Result<RawResponse, Error> {
+    let Answer { raw, over, .. } = send(inner, spec, ov).await?;
+    if over {
+        let limit = inner.max_response_bytes;
+        return Err(Error::Transport(
+            format!("the answer exceeds {limit} bytes").into(),
+        ));
+    }
     if (200..300).contains(&raw.status) {
         return Ok(raw);
     }

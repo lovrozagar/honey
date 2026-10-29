@@ -90,7 +90,7 @@ impl<E: DeserializeOwned> ResumableConnection<E> {
         let (id, token) = payload_cursor(&value);
         advance(&mut self.opts, message.id.or(id), token);
         self.retry = message.retry.or(self.retry);
-        serde_json::from_value(value).map_err(|e| Error::Decode(e.to_string()))
+        serde_json::from_value(value).map_err(Error::decode)
     }
 
     /// The open transport failed or ended with `e`: drop it, and reconnect the whole chain next.
@@ -142,7 +142,7 @@ pub(crate) fn connect<E: DeserializeOwned + Send + 'static>(
         move |inner: Arc<Inner>, mut spec: RequestSpec, mut ov: Overrides| {
             Box::pin(async move {
                 if let Some(e) = spec.take_failure() {
-                    return Err(e);
+                    return Err(e.into());
                 }
                 let url = url_of(&inner, &spec, &ov)?;
                 /* the connection holds the signal: no dial ends on it behind the connection's back */

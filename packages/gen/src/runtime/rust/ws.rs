@@ -140,7 +140,7 @@ impl TypedWebSocket {
         &mut self,
         value: &T,
     ) -> Result<(), Error> {
-        let text = serde_json::to_string(value).map_err(|e| Error::Decode(e.to_string()))?;
+        let text = serde_json::to_string(value).map_err(Error::decode)?;
         self.send_text(text).await
     }
 
@@ -313,9 +313,9 @@ pub(crate) fn dial(protocols: Vec<String>) -> Run<TypedWebSocket> {
         move |inner: Arc<Inner>, mut spec: RequestSpec, ov: Overrides| {
             Box::pin(async move {
                 if let Some(e) = spec.take_failure() {
-                    return Err(e);
+                    return Err(e.into());
                 }
-                connect(&inner, &spec, &ov, &protocols).await
+                Ok(connect(&inner, &spec, &ov, &protocols).await?)
             })
         },
     )

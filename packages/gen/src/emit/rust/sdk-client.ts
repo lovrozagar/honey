@@ -1,16 +1,20 @@
 /**
  * client.rs's body (G1): `Client::new` (the API's first server as the default `base_url`, its auth scheme as
- * the default header), an accessor per top-level namespace of `IR.tree`, a `<Path>Resource<'a>` per nested
+ * the default header), an accessor per top-level namespace of `IR.tree`, a `<Path>Resource<'a, S>` per nested
  * namespace borrowing the client, every operation a method on the type of its namespace, and each method's
- * `<Op>Opts` and `<Op>Headers` after them in name order.
+ * `<Op>Opts` and `<Op>Headers` after them in name order. Every accessor and method is the client's style's
+ * (bit 21 i4): `Client<S>` and each resource take `S`, so `client.safe()` (the runtime's `Client<Safe>`) holds
+ * the very same tree, nothing emitted twice. A root member spelled `safe` is `safe_` (shared/mirror.ts), noticed.
  */
 import type { IR, IRNamespace } from "../../ir/model.ts"
 import { methodsOf, namespacesOf } from "../../ir/resource-tree.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { lineComment, rustString } from "../shared/escape.ts"
 import { compareCodeUnits, NameScope, rustTypeIdent, rustValueIdent } from "../shared/lang.ts"
+import { MIRROR, mirrorNotice } from "../shared/mirror.ts"
 import type { RustCallPlan } from "./sdk-plan.ts"
 import { type MethodEnv, type RustMethod, rustMethod } from "./sdk-method.ts"
+import { STYLE } from "./types-names.ts"
 
 /** A namespace as Rust: its type, its child namespaces by accessor, its methods. */
 type Resource = {
@@ -20,25 +24,34 @@ type Resource = {
 	readonly methods: readonly RustMethod[]
 }
 
-/** The method env, and the operations by id. */
-export type ClientEnv = MethodEnv & { readonly ops: ReadonlyMap<string, SdkOp> }
+/** The method env, the operations by id, and the notices the generation reports (a root member renamed for the mirror). */
+export type ClientEnv = MethodEnv & { readonly ops: ReadonlyMap<string, SdkOp>; readonly notices: string[] }
 
-/* the runtime's own associated functions on `Client`: no operation takes their name */
-const CLIENT_FNS = ["build", "new"]
+/* the runtime's own associated functions on `Client`, the mirror among them: no operation takes their name */
+const CLIENT_FNS = ["build", "new", MIRROR]
+
+/** A member's name in `scope`; at the root (`path` empty) one spelled like the mirror is `safe_` instead, and noticed. */
+function memberName(segment: string, path: readonly string[], scope: NameScope, env: ClientEnv): string {
+	const name = rustValueIdent(segment)
+	if (path.length > 0 || name !== MIRROR) return scope.claim(name)
+	const renamed = scope.claim(`${MIRROR}_`)
+	env.notices.push(mirrorNotice("rust", MIRROR, name, renamed) as string)
+	return renamed
+}
 
 /** `ns` at `path` as the type `type`: its child namespaces first, so a method never takes an accessor's name. */
 function resourceOf(ns: IRNamespace, path: readonly string[], type: string, env: ClientEnv): Resource {
 	const scope = new NameScope(path.length === 0 ? CLIENT_FNS : [])
 	const client = path.length === 0 ? "self" : "self.client"
 	const children = namespacesOf(ns).map(([segment, child]) => {
-		const accessor = scope.claim(rustValueIdent(segment))
+		const accessor = memberName(segment, path, scope, env)
 		const childPath = [...path, segment]
 		/* the type rule over the whole name: a leading digit gets its guard, and `self` stays `SelfResource` */
 		const childType = env.at.names.claim(rustTypeIdent([...childPath, "Resource"].join(".")))
 		return { accessor, node: resourceOf(child, childPath, childType, env) }
 	})
 	const methods = methodsOf(ns).map(([segment, op]) =>
-		rustMethod(env.ops.get(op.id) as SdkOp, scope.claim(rustValueIdent(segment)), client, env),
+		rustMethod(env.ops.get(op.id) as SdkOp, memberName(segment, path, scope, env), client, env),
 	)
 	return { children, methods, path, type }
 }
@@ -47,7 +60,7 @@ function resourceOf(ns: IRNamespace, path: readonly string[], type: string, env:
 function accessorBlocks(node: Resource, lifetime: string, client: string): string[][] {
 	return node.children.map(({ accessor, node: child }) => [
 		...lineComment(`The ${child.path.join(".")} operations.`, "///", "    "),
-		`    pub fn ${accessor}(&self) -> ${child.type}<${lifetime}> {`,
+		`    pub fn ${accessor}(&self) -> ${child.type}<${lifetime}, ${STYLE}> {`,
 		`        ${child.type} { client: ${client} }`,
 		"    }",
 	])
@@ -59,12 +72,15 @@ const members = (blocks: readonly (readonly string[])[]) => blocks.map((lines) =
 /** Each namespace below the client: its type, its accessors and methods, then its children's. */
 function resourceLines(node: Resource): string[] {
 	/* the lifetime is named only where an accessor hands it on */
-	const head = node.children.length > 0 ? `impl<'a> ${node.type}<'a> {` : `impl ${node.type}<'_> {`
+	const head =
+		node.children.length > 0
+			? `impl<'a, ${STYLE}: Style> ${node.type}<'a, ${STYLE}> {`
+			: `impl<${STYLE}: Style> ${node.type}<'_, ${STYLE}> {`
 	const own = [...accessorBlocks(node, "'a", "self.client"), ...node.methods.map((method) => method.lines)]
 	return [
 		...lineComment(`The ${node.path.join(".")} operations.`, "///"),
-		`pub struct ${node.type}<'a> {`,
-		"    client: &'a Client,",
+		`pub struct ${node.type}<'a, ${STYLE} = Throw> {`,
+		`    client: &'a Client<${STYLE}>,`,
 		"}",
 		"",
 		head,
@@ -113,11 +129,13 @@ export function clientDecls(ir: IR, env: ClientEnv): { readonly decls: string; r
 		.flatMap((method) => method.decls)
 		.sort(([a], [b]) => compareCodeUnits(a, b))
 		.map(([, decl]) => decl)
-	const own = [newClient(ir), ...accessorBlocks(root, "'_", "self"), ...root.methods.map((method) => method.lines)]
+	const own = [...accessorBlocks(root, "'_", "self"), ...root.methods.map((method) => method.lines)]
+	const styled = own.length === 0 ? [] : ["", `impl<${STYLE}: Style> Client<${STYLE}> {`, members(own), "}"]
 	const decls = [
 		"impl Client {",
-		members(own),
+		members([newClient(ir)]),
 		"}",
+		...styled,
 		...root.children.flatMap(({ node }) => ["", ...resourceLines(node)]),
 		...opts.flatMap((decl) => ["", decl]),
 	].join("\n")

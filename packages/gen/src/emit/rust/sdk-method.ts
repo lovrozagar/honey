@@ -1,10 +1,11 @@
 /**
  * One operation as a Rust method (G1, Fb1): `(&self, <path params as &str in path order>, <body>?, opts:
- * &<Op>Opts) -> Call<T[, <Op>Headers]>`. The method copies everything into the runtime's `RequestSpec` up
- * front (the body encoded at once) and hands it to `Call` with the run that reads its answer: JSON as its
- * type, none as `()`, text as `String`, binary as `Vec<u8>` (in safe mode each inside `SdkResult`); a stream
- * answers as sse.ts, ws.ts and realtime.ts say, in either mode. Spec text reaches the source only through the
- * shared escape layer.
+ * &<Op>Opts) -> Call<T, S[, <Op>Headers]>`, `S` the client's style (bit 21 i4: `Throw` on the normal client,
+ * `Safe` on `client.safe()`, one method for both). The method copies everything into the runtime's
+ * `RequestSpec` up front (the body encoded at once) and hands it to `Call` with the run that reads its answer:
+ * JSON as its type, none as `()`, text as `String`, binary as `Vec<u8>`; a stream answers as sse.ts, ws.ts and
+ * realtime.ts say, an SSE stream in its style, a WebSocket or realtime connection the same on both clients.
+ * Spec text reaches the source only through the shared escape layer.
  */
 import type { IRParam } from "../../ir/model.ts"
 import { mediaEssence, type SdkOp } from "../../ir/sdk-model.ts"
@@ -24,6 +25,7 @@ import {
 import { realtimeAnswer } from "./realtime.ts"
 import { sseAnswer } from "./sse.ts"
 import type { RustTypeContext } from "./types.ts"
+import { STYLE } from "./types-names.ts"
 import { wsAnswer } from "./ws.ts"
 
 /** One operation's method, its client.rs declarations by name (`<Op>Opts`, `<Op>Headers`), and its call plan less the accessors. */
@@ -33,8 +35,8 @@ export type RustMethod = {
 	readonly lines: readonly string[]
 }
 
-/** What every method of one SDK shares: the type context it hoists into, and the error mode. */
-export type MethodEnv = { readonly at: RustTypeContext; readonly throwOnError: boolean }
+/** What every method of one SDK shares: the type context it hoists into. */
+export type MethodEnv = { readonly at: RustTypeContext }
 
 /** How a method answers: a stream's answer, else the `Call`'s answer type and the run it is sent with. */
 type Answer = StreamAnswer | { readonly type: string; readonly run: string; readonly stream: null }
@@ -42,13 +44,13 @@ type Answer = StreamAnswer | { readonly type: string; readonly run: string; read
 /* the method's own locals: a path param never shadows one (it is claimed as `…2`) */
 const METHOD_LOCALS = ["body", "client", "form", "opts", "spec"]
 
-/** How a stream operation answers, in either error mode. */
+/** How a stream operation answers. */
 function streamAnswer(op: SdkOp, at: RustTypeContext): StreamAnswer {
 	if (op.stream === "sse") return sseAnswer(op, at)
 	return op.stream === "ws" ? wsAnswer() : realtimeAnswer(op, at)
 }
 
-/** How a method answers: a stream's way, else its answer's kind read in the SDK's error mode. */
+/** How a method answers: a stream's way, else its answer's kind read. */
 function answerOf(op: SdkOp, env: MethodEnv): Answer {
 	if (op.stream !== null) return streamAnswer(op, env.at)
 	const { kind, schema } = op.success
@@ -61,8 +63,13 @@ function answerOf(op: SdkOp, env: MethodEnv): Answer {
 					? ["()", "none"]
 					: [typeAt(schema, op.id, "Response", env.at), "json"]
 	const generic = decoder === "json" ? `::<${type}>` : ""
-	if (env.throwOnError) return { run: `crate::answer::${decoder}${generic}`, stream: null, type }
-	return { run: `crate::answer::safe_${decoder}${generic}`, stream: null, type: `SdkResult<${type}>` }
+	return { run: `crate::answer::${decoder}${generic}`, stream: null, type }
+}
+
+/** The method's `Call`: in the client's style but for a connection (the same on both clients), its headers last. */
+function callType(op: SdkOp, answer: Answer, headers: Parts["headers"]): string {
+	if (op.stream === "ws" || op.stream === "realtime") return `Call<${answer.type}>`
+	return `Call<${[answer.type, STYLE, ...(headers ? [headers.plan.type] : [])].join(", ")}>`
 }
 
 /** The operation's path params in the order the path holds them, whatever order they were declared in. */
@@ -116,7 +123,7 @@ function methodLines(parts: Parts, client: string, answer: Answer, body: RustBod
 	]
 	const bound = path.map(([param, local]) => `(${rustString(param.name)}, ${local})`).join(", ")
 	const statements = specLines(op, fields, answer, body?.lines ?? [])
-	const returns = headers ? `Call<${answer.type}, ${headers.plan.type}>` : `Call<${answer.type}>`
+	const returns = callType(op, answer, headers)
 	return [
 		...(params.length > 7 ? ["    #[allow(clippy::too_many_arguments)]"] : []),
 		...methodDoc(op, answer),

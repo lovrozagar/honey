@@ -144,7 +144,7 @@ describe("dispatchRs: an SSE and a WebSocket operation's arm", () => {
 })
 
 describe("dispatchRs: a realtime operation's arm, and the stream files dispatch.rs declares", () => {
-	it("drives a realtime connection through live::observe_live, every stream field set, in either error mode", () => {
+	it("drives a realtime connection through live::observe_live, every stream field set, in either style", () => {
 		const arm = [
 			'        "feed.live" => {',
 			"            let mut o = sdk::FeedLiveOpts::default();",
@@ -159,10 +159,8 @@ describe("dispatchRs: a realtime operation's arm, and the stream files dispatch.
 			"            live::observe_live(apply(c, call, input, d), call).await",
 			"        }\n",
 		].join("\n")
-		expect([dispatchRs(plansOf("realtime")), dispatchRs(plansOf("realtime"), false)]).toEqual([
-			expect.stringContaining(arm),
-			expect.stringContaining(arm),
-		])
+		/* one arm whichever client dispatch is sent (bit 21 i4): a connection is the same Call on client.safe() */
+		expect(dispatchRs(plansOf("realtime"))).toContain(arm)
 		expect(dispatchRs(plansOf("realtime"))).toContain(
 			'if let Some(v) = call.search("protocols") { o.protocols2 = Some(from(v)?); }',
 		)

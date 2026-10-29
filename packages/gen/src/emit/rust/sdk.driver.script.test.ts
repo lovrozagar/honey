@@ -3,7 +3,7 @@
  * unit test adds beside a grid cell, decoded strictly; `{observed, trace}` on stdout, the trace's errors read
  * through the SDK's accessors (`Trace<RustError>`); client config, hooks, refresh, log, cancel and sleep; the
  * `bytes` outcome's hand-written SHA-256 (Fc3) against node:crypto; binary bodies, the idempotency key and typed
- * response headers; and what the driver refuses. Driven against `http` and `http-safe`.
+ * response headers; and what the driver refuses. Driven against `http`, in both styles (bit 21 i4).
  */
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
@@ -77,21 +77,24 @@ const BODY_REPLIES: readonly Reply[] = [
 ]
 
 /** The registry SDK `key` compiled with the driver, which must build. */
-function driven(key: "http" | "http-safe"): DrivenRustSdk {
+function driven(key: "http"): DrivenRustSdk {
 	const sdk = drivenRustSdk(key)
 	expect(sdk.built, sdk.stderr).toBe(true)
 	return sdk
 }
 
-type Options = { readonly script?: Script; readonly setup?: Setup }
+type Options = { readonly safe?: boolean; readonly script?: Script; readonly setup?: Setup }
 
-/** `calls` run by `sdk` under `options` against a server answering `replies`: the run, the hops and the origin. */
+/** `calls` run by `sdk` under `options` (on `client.safe()` when `safe`) against a server answering `replies`: the run, the hops and the origin. */
 async function drive(sdk: DrivenRustSdk, replies: readonly Reply[], calls: readonly Call[], options: Options) {
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup: options.setup ?? {} }, server, options.script)
+		const run = await sdk.runCalls({ calls, setup: options.setup ?? {} }, server, options.script, options.safe)
 		return { hops: [...server.hops], run, url: server.url }
 	})
 }
+
+/** A 64-byte JSON answer of `status`, past a 10-byte cap. */
+const big = (status: number): Reply => ({ bytes: 64, headers: { "content-type": "application/json" }, status })
 
 /** A 307 to `to` on the `origin` listener. */
 const hop = (origin: "alt" | "primary", to: string): Reply => ({ redirect: { origin, path: to }, status: 307 })
@@ -197,13 +200,20 @@ describe.skipIf(!RUST)("the Rust test driver's script: client config", () => {
 		])
 	}, 600_000)
 
-	it("caps a buffered answer by maxResponseBytes: observed as transport, the SDK's Transport variant", async () => {
+	/* bit 21 i4 (the i1 carry-in): the status and headers arrived, so a body past the cap is an answer left unread */
+	it("caps a buffered answer by maxResponseBytes: a 2xx past it Error::Decode, an error status past it its Api with no body", async () => {
 		const script: Script = { config: { maxResponseBytes: 10 } }
-		const replies: Reply[] = [{ bytes: 64, headers: { "content-type": "application/json" }, status: 200 }]
-		const { run } = await drive(driven("http"), replies, [ECHO], { script })
-		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
-			error: plain({ source: true, text: "transport: the answer exceeds 10 bytes", variant: "Transport" }),
-			observed: [{ kind: "transport" }],
+		const { run } = await drive(driven("http"), [big(200), big(404)], [ECHO, ECHO], { script })
+		const [over, missing] = run.trace?.calls ?? []
+		expect(
+			{ errors: [over?.error, missing?.error?.variant], observed: run.observed, status: run.status },
+			run.stderr,
+		).toEqual({
+			errors: [plain({ text: "decode: the answer exceeds 10 bytes", variant: "Decode" }), "Api"],
+			observed: [
+				{ kind: "decode", status: 200 },
+				{ errorKey: null, kind: "error", status: 404 },
+			],
 			status: 0,
 		})
 	}, 600_000)
@@ -383,11 +393,11 @@ describe.skipIf(!RUST)("the Rust test driver's script: the bytes outcome", () =>
 })
 
 describe.skipIf(!RUST)("the Rust test driver's script: a call's Rust error", () => {
-	it("traces an error status through ApiError's accessors; safe mode's via result and SdkResult", async () => {
+	it("traces an error status through ApiError's accessors; client.safe()'s via result and its Answer", async () => {
 		const missing: Reply = { json: { error_key: "member.missing", message: "gone" }, status: 404 }
 		const [thrown, safe] = await Promise.all([
 			drive(driven("http"), [missing], [MEMBERS], { script: {} }),
-			drive(driven("http-safe"), [missing, FOUND], [MEMBERS, MEMBERS], { script: {} }),
+			drive(driven("http"), [missing, FOUND], [MEMBERS, MEMBERS], { safe: true, script: {} }),
 		])
 		const error = plain({
 			debug: expect.stringMatching(/^Api\(ApiError \{ status: 404, /),

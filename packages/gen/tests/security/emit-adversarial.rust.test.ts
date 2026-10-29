@@ -1,6 +1,6 @@
 /**
  * The Rust half of gen's adversarial suite (bit 13; split from emit-adversarial.test.ts at the 500 cap): the
- * shared adversarial corpus's SDK built and clippy-clean in both throwOnError modes, every hostile name a Rust
+ * shared adversarial corpus's SDK built and clippy-clean, both styles in its one crate (bit 21 i4), every hostile name a Rust
  * identifier and every value a literal, and checked under the floor toolchain; then the emitted Rust runtime's
  * three guards answered on the wire, on the `http` fixture's driven SDK (the one `http*.test.ts` builds): a
  * cross-origin redirect hop stripped, a path param escaped or refused, and every on_log entry and error text
@@ -44,26 +44,16 @@ describe.skipIf(!RUST)("gen adversarial: the Rust SDK emitter", () => {
 	// v0: 0e7f1d78fc
 	// v0: 2678a4695b
 	// v0: 923fa8ab43
-	it("builds clippy-clean in both throwOnError modes, every hostile name a Rust identifier and every value a literal", () => {
-		const modes = (["adversarial", "adversarial-safe"] as const).map((key) => {
-			const crate = compiledRust(key)
-			return { built: crate.built, clippy: crate.clippy(), key, stderr: crate.stderr }
-		})
+	it("builds clippy-clean, both styles in one crate, every hostile name a Rust identifier and every value a literal", () => {
+		const crate = compiledRust("adversarial")
 		expect(
 			[
-				modes.map(({ built, clippy, key }) => ({ built, clippy, key })),
+				{ built: crate.built, clippy: crate.clippy() },
 				({} as Record<string, unknown>).polluted,
 				({} as Record<string, unknown>).y,
 			],
-			modes.map((mode) => mode.stderr).join(""),
-		).toEqual([
-			[
-				{ built: true, clippy: [], key: "adversarial" },
-				{ built: true, clippy: [], key: "adversarial-safe" },
-			],
-			undefined,
-			undefined,
-		])
+			crate.stderr,
+		).toEqual([{ built: true, clippy: [] }, undefined, undefined])
 	}, 600_000)
 
 	it.skipIf(!FLOOR)(

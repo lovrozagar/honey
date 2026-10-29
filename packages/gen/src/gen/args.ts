@@ -29,7 +29,7 @@ const TARGETS = {
 	},
 	mcp: { envPrefix: "string", name: "string" },
 	python: { packageName: "string", version: "string" },
-	rust: { crateName: "string", throwOnError: "boolean", version: "string" },
+	rust: { crateName: "string", version: "string" },
 	ts: { name: "string", stem: "string" },
 } as const satisfies Record<string, Record<string, OptionKind>>
 

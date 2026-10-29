@@ -1,6 +1,6 @@
 //! What a scripted run prints beside the observed (emit/shared/__fixtures__/protocol.ts
-//! `Trace<RustError>`): each call's time, its error read through the SDK's accessors, a safe-mode
-//! `SdkResult`'s summary and a stream's trace; every hook run with what its context held; every
+//! `Trace<RustError>`): each call's time, its error read through the SDK's accessors,
+//! a safe call's `Answer` summary and a stream's trace; every hook run with what its context held; every
 //! `on_log` entry; and the `on_auth_expired` calls. The SDK may call a hook off the call's task, so
 //! the recorder is shared behind a mutex.
 
@@ -140,10 +140,10 @@ fn envelope_of(env: &sdk::ErrorEnvelope) -> Value {
     Value::Object(out)
 }
 
-/// A safe-mode `SdkResult` the method returned: whether it is ok, its status, whether it holds data,
-/// and whether it carries the response it was read from.
-pub fn result_trace<T>(r: &sdk::SdkResult<T>) -> Value {
-    json!({"data": r.data.is_some(), "ok": r.is_ok(), "response": r.response.status == r.status, "status": r.status})
+/// A safe call's `Answer`, once its response is proven its answer's (observe.rs): whether it is
+/// `Ok`, and its status.
+pub fn result_trace(ok: bool, status: u16) -> Value {
+    json!({"data": ok, "ok": ok, "response": true, "status": status})
 }
 
 /// What every hook run records of its context: its phase, its index among that phase's hooks, and

@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::call::RawResponse;
 use crate::config::Client;
 use crate::errors::Error;
-use crate::exchange::{send, url_of};
+use crate::exchange::url_of;
 use crate::transport::{
     Dial, Transport, TransportConn, TransportFuture, TransportKind, TransportMessage,
     TransportOpts, advance, ok, payload_cursor, with_cursor,
@@ -76,12 +76,11 @@ impl LongpollConn {
             let (mut spec, mut ov) = self.dial.spec("GET", &self.url);
             with_cursor(&mut spec, &self.cursor);
             ov.timeout = Some(POLL_TIMEOUT);
-            let raw = ok(send(&self.dial.inner, &mut spec, &ov).await?)?;
+            let raw = ok(&self.dial.inner, &mut spec, &ov).await?;
             if raw.status == 204 {
                 continue;
             }
-            let text =
-                String::from_utf8(raw.body.to_vec()).map_err(|e| Error::Decode(e.to_string()))?;
+            let text = String::from_utf8(raw.body.to_vec()).map_err(Error::decode)?;
             if let Ok(v) = serde_json::from_str(&text) {
                 let (id, token) = payload_cursor(&v);
                 advance(&mut self.cursor, id, token);

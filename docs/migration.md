@@ -163,6 +163,55 @@ func listing(ctx context.Context, client *sdk.Client) string {
 }
 ```
 
+## The Rust SDK's `throwOnError` is gone; its safe mode is `client.safe()`, answering an `Answer`
+
+The Rust generator has no `throwOnError` option (`--rust-throw-on-error` is an unknown option now): delete it. Every
+method resolves `Result<T, Error>`, as the default did; the safe mode is `client.safe()`, the same client whose calls
+resolve `Result<Answer<T>, Error>`:
+
+- `SdkResult` is gone, and with it `data: Option<T>`, `error: Option<ApiError>`, `status` and `is_ok()`. Match the
+  `Answer`: `Answer::Ok { data, response }`, or `Answer::Err { error, response }` with `error` a `SafeError::Api` or
+  `SafeError::Decode`. `r.status` is `response.status`. Naming `sdk::SdkResult`, or reading `.error`, `.status` or
+  `.is_ok()` on what a call resolves, fails `cargo check`.
+- An undecodable 2xx was the call's `Err(Error::Decode(..))` in safe mode; on `client.safe()` it is
+  `Answer::Err { error: SafeError::Decode(..), response }`. `Error::Decode` now holds a `DecodeError` (its `Display`
+  the text it held, `decode: …` unchanged on the `Error`), not a `String`: match `Error::Decode(e)` and read
+  `e.to_string()`.
+- A 2xx past `max_response_bytes` was `Error::Transport` ("the answer exceeds N bytes"); it is `Error::Decode` on the
+  client and `SafeError::Decode` on `client.safe()`. An error status past the cap is its `Error::Api`, its body empty.
+  A realtime transport's answer past the cap stays `Error::Transport`.
+- An event stream ignored the mode; on `client.safe()` it resolves `Answer::Ok` with the `EventStream`, an error
+  status at the opening its `Answer::Err`. A WebSocket or realtime method is the same `Call` on both clients.
+- `Client`, every `<Path>Resource` and `Call` take the style: `Client<S = Throw>`, `<Path>Resource<'a, S = Throw>`,
+  `Call<T, S = Throw, H = ()>`. Code naming `Call<T, H>` with typed headers names `Call<T, Throw, H>` now.
+- A root resource or method named `safe` is emitted as `safe_` (`safe()` is the mirror), and the generation names it
+  on stderr. A component named `S` (the style parameter) or like a new runtime type (`Answer`, `SafeError`,
+  `DecodeError`, `Style`, `Safe`, `Throw`) is emitted as `<Name>Model`, as every runtime-named one is.
+
+```text v0
+let r = client.users().get("u1", &Default::default()).await?; // generated with throwOnError false
+if !r.is_ok() {
+    println!("answered {} {:?}", r.status, r.error);
+}
+```
+
+```rust
+async fn listing(client: &Client) -> String {
+    match client.safe().get_api(&GetApiOpts::default()).await {
+        Ok(Answer::Ok { data, response }) => format!("answered {}: {data:?}", response.status),
+        Ok(Answer::Err {
+            error: SafeError::Api(failed),
+            response,
+        }) => format!("answered {}: {}", response.status, failed.message()),
+        Ok(Answer::Err {
+            error: SafeError::Decode(unreadable),
+            response,
+        }) => format!("answered {}, unreadable: {unreadable}", response.status),
+        Err(no_answer) => format!("no answer: {no_answer}"), // never sent, refused, timed out or canceled
+    }
+}
+```
+
 ## The TS SDK's realtime `token?` and `onAuthExpired?` are gone
 
 Neither was ever read. A connection's `headers` may be a function read on every dial, and the client's

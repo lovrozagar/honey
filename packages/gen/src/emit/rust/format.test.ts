@@ -1,7 +1,7 @@
 /**
  * The emitted crate through the rustfmt post-pass, the pinned build, clippy and the floor check (contract 18
  * §8.7). Every crate here is a registry entry (`FIXTURES`, Fb5): `fixtures` is a4673b6e42's nine v0 specs merged
- * into one document, `fixtures-safe` the same in safe mode. That the floor legs can fail at all is the canary's
+ * into one document, both styles in one crate (bit 21 i4). That the floor legs can fail at all is the canary's
  * to prove, and `sdk.driver.test.ts` ("the compile options: clippy, and the floor toolchain") proves it: 1.85.0
  * rejects `Vec::pop_if` with E0658, and clippy reports it under `incompatible_msrv`.
  */
@@ -79,21 +79,26 @@ describe("the emitted Rust SDK under the pinned toolchain", () => {
 
 	// v0: ade06d74b8
 	it.skipIf(!RUST)(
-		"builds the same crate in safe mode (throwOnError false) as emitted",
+		"builds one crate for both styles: Client's members and every resource in the client's style, as emitted",
 		() => {
-			const sdk = compiledRust("fixtures-safe")
+			const sdk = compiledRust("fixtures")
 			expect(sdk.built, sdk.stderr).toBe(true)
+			/* v0's safe-mode crate is client.safe() now: no resource or Client member outside `S: Style` but new */
+			const client = generateRustSdk(FIXTURES.fixtures.document()).files["src/client.rs"] ?? ""
+			const heads = [...client.matchAll(/^impl(?:<[^>]*>)? \w+(?:<[^>]*>)? \{$/gm)].map(([head]) => head)
+			expect({ plain: heads.filter((head) => !head.includes("S: Style")), styled: heads.length > 10 }).toEqual({
+				plain: ["impl Client {"],
+				styled: true,
+			})
 		},
 		600_000,
 	)
 
 	it.skipIf(!RUST)(
-		"is clippy clean under -D warnings, and -D clippy::incompatible_msrv holds both modes to the floor",
+		"is clippy clean under -D warnings, and -D clippy::incompatible_msrv holds both styles to the floor",
 		() => {
-			const sdks = { fixtures: compiledRust("fixtures"), "fixtures-safe": compiledRust("fixtures-safe") }
-			expect(
-				Object.fromEntries(Object.entries(sdks).map(([key, sdk]) => [key, sdk.built ? sdk.clippy() : sdk.stderr])),
-			).toEqual({ fixtures: [], "fixtures-safe": [] })
+			const sdk = compiledRust("fixtures")
+			expect(sdk.built ? sdk.clippy() : sdk.stderr).toEqual([])
 		},
 		600_000,
 	)

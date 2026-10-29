@@ -27,21 +27,25 @@ export type DriverRun = {
 
 /** The SDK compiled with the driver beside it. */
 export type DrivenRustSdk = RustCrate & {
-	/** run `cell` on one client aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name), under `script` when given */
+	/**
+	 * run `cell` on one client aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name),
+	 * under `script` when given, through `client.safe()` when `safe`
+	 */
 	runCalls(
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		script?: Script,
+		safe?: boolean,
 	): Promise<DriverRun & { readonly trace?: Trace<RustError> }>
 }
 
 /** The driver's sources by file name: the fixed ones, and `dispatch.rs` written from `plans`. */
-function driverSources(plans: Readonly<Record<string, RustCallPlan>>, throwOnError: boolean): Record<string, string> {
+function driverSources(plans: Readonly<Record<string, RustCallPlan>>): Record<string, string> {
 	const dir = join(import.meta.dirname, "driver")
 	const files = readdirSync(dir)
 		.filter((name) => name.endsWith(".rs"))
 		.map((name) => [name, readFileSync(join(dir, name), "utf8")] as const)
-	return Object.fromEntries([...files, ["dispatch.rs", dispatchRs(plans, throwOnError)]])
+	return Object.fromEntries([...files, ["dispatch.rs", dispatchRs(plans)]])
 }
 
 /** A driver run's stdout as the caller reads it: `Observed[]`, or `{observed, trace}` under a script. */
@@ -56,11 +60,10 @@ function parsed(stdout: string, scripted: boolean): { observed: unknown[]; trace
  */
 function drivenFixture(fixture: RustFixture): DrivenRustSdk {
 	const plans = "document" in fixture ? rustCallPlans(fixture.document(), fixture.options) : {}
-	const throwOnError = !("document" in fixture && fixture.options?.throwOnError === false)
-	const crate = compiledFixture(fixture, { programs: { driver: driverSources(plans, throwOnError) } })
+	const crate = compiledFixture(fixture, { programs: { driver: driverSources(plans) } })
 	return {
 		...crate,
-		runCalls: async (cell, origins, script) => {
+		runCalls: async (cell, origins, script, safe = false) => {
 			const input = {
 				alt: origins.alt,
 				base: origins.url,
@@ -68,6 +71,7 @@ function drivenFixture(fixture: RustFixture): DrivenRustSdk {
 				refused: origins.refused,
 				cell,
 				plans,
+				safe,
 				script,
 			}
 			const ran = await crate.exec("driver", JSON.stringify(input))

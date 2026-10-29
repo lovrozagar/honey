@@ -75,11 +75,11 @@ describe("generate's arguments (phase h)", () => {
 })
 
 /*
- * bit 21 i2 (python) and i3 (go): a client always throws and its safe mirror answers a Result, so the error-mode
- * option is gone
+ * bit 21 i2 (python), i3 (go) and i4 (rust): a client always throws and its safe mirror answers a Result, so the
+ * error-mode option is gone
  */
 describe("generate's removed options", () => {
-	it.each(["python", "go"])("refuses --%s-throw-on-error as the unknown option it now is", (target) => {
+	it.each(["python", "go", "rust"])("refuses --%s-throw-on-error as the unknown option it now is", (target) => {
 		const base = ["--spec", "s.json", "--out", "o", "--target", target]
 		const flags = [`--${target}-throw-on-error`, `--${target}-throw-on-error=false`]
 		expect(flags.map((flag) => refused([...base, flag]))).toEqual(

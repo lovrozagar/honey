@@ -1,6 +1,7 @@
 /**
  * The Rust SDK's limits on what it reads and sends (bit 19 b1), through the test driver: it asks for gzip and deflate
- * and decodes them, so a gzip bomb is refused on its decoded bytes by `max_response_bytes`, and a header the SDK cannot
+ * and decodes them, so a gzip bomb is refused on its decoded bytes by `max_response_bytes` (a 2xx past the cap is its
+ * `Error::Decode` since bit 21 i4: the answer arrived, its body unread), and a header the SDK cannot
  * send, a control character in its value or a name outside the token grammar, is `Error::Config` before anything goes
  * out, naming the header and never quoting its value.
  */
@@ -48,7 +49,7 @@ describe.skipIf(!RUST)(
 	"the Rust SDK's response cap counts decoded bytes, for every encoding it asks for (bit 19 b1)",
 	() => {
 		it.each(["gzip", "deflate"] as const)(
-			"refuses a %s bomb past a 1 MiB cap, having asked for exactly gzip and deflate",
+			"refuses a %s bomb past a 1 MiB cap as the 2xx's Error::Decode, having asked for exactly gzip and deflate",
 			async (coding) => {
 				const { hops, run } = await drive(driven(), [bomb(coding)], [ECHO], { config: { maxResponseBytes: MiB } })
 				expect(
@@ -56,8 +57,8 @@ describe.skipIf(!RUST)(
 					run.stderr,
 				).toEqual({
 					encoding: "gzip,deflate",
-					error: plain({ source: true, text: `transport: the answer exceeds ${MiB} bytes`, variant: "Transport" }),
-					observed: [{ kind: "transport" }],
+					error: plain({ text: `decode: the answer exceeds ${MiB} bytes`, variant: "Decode" }),
+					observed: [{ kind: "decode", status: 200 }],
 				})
 			},
 			600_000,

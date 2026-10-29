@@ -82,18 +82,17 @@ describe("dispatchRs: the driver's dispatch.rs, one match arm per call plan", ()
 		expect(dispatchRs({ [OP]: NOTES })).toContain(`${NOTES_ARM}\n`)
 	})
 
-	it("sets a required field bare, observes a safe-mode answer, a stream as in throw mode, and refuses a multipart body for good", () => {
-		const text = dispatchRs(
-			{
-				a: plan({ operation: "a", query: { format: "format" }, required: ["format"] }),
-				b: plan({ operation: "b", stream: "sse" }),
-				e: plan({ body: "multipart", operation: "e" }),
-			},
-			false,
-		)
+	it("sets a required field bare, reads either style through one generic dispatch, and refuses a multipart body for good", () => {
+		const text = dispatchRs({
+			a: plan({ operation: "a", query: { format: "format" }, required: ["format"] }),
+			b: plan({ operation: "b", stream: "sse" }),
+			e: plan({ body: "multipart", operation: "e" }),
+		})
 		expect(text).toContain('if let Some(v) = call.search("format") { o.format = from(v)?; }')
-		expect(text).toContain("observe_safe(apply(c, call, input, d)).await")
-		expect(text).not.toContain(" observe(")
+		/* bit 21 i4: main.rs sends the client or client.safe(); one build serves both styles */
+		expect(text).toContain("pub async fn dispatch<S: Settles>(client: &sdk::Client<S>, call: &Call,")
+		expect(text).toContain(" observe(apply(c, call, input, d)).await")
+		expect(text).not.toContain("observe_safe")
 		expect(text).toContain("crate::stream::observe_events(apply(c, call, input, d), call.take).await")
 		expect(text).not.toContain("refused(")
 		expect(text).toContain('"e" => Err("a multipart body is driven by a consumer program (FilePart)".into()),')

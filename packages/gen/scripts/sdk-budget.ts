@@ -63,7 +63,8 @@ export function v1GoSdkSurfaces(clientGo: string): Map<string, string> {
  * before rustfmt: its signature line without the indent and ` {`, then the `<Op>Opts` struct it takes with its
  * field rustdoc (the method's rustdoc, lint allows and the struct's own doc and derive excluded, as godoc is for
  * Go). Keyed `Type.method`. A method naming no Opts, or one the text never declares, throws: a missed block
- * never measures short.
+ * never measures short. Since bit 21 i4 the one signature is both styles' (`impl<S: Style>`, `Call<T, S>`): the
+ * normal client's and `client.safe()`'s, so it is the operation's whole surface (R-i5).
  */
 export function v1RustSdkSurfaces(clientRs: string): Map<string, string> {
 	const blocks = new Map<string, string>()
@@ -72,7 +73,7 @@ export function v1RustSdkSurfaces(clientRs: string): Map<string, string> {
 	const out = new Map<string, string>()
 	let type = ""
 	for (const line of clientRs.split("\n")) {
-		type = /^impl(?:<'a>)? (\w+)(?:<'[a_]>)? \{$/.exec(line)?.[1] ?? type
+		type = /^impl(?:<(?:'a, )?S: Style>)? (\w+)(?:<(?:'[a_], )?S>)? \{$/.exec(line)?.[1] ?? type
 		const name = /^ {4}pub fn ((?:r#)?\w+)\(&self.*\) -> Call<.*\{$/.exec(line)?.[1]
 		if (name === undefined) continue
 		const key = `${type}.${name}`

@@ -1,7 +1,8 @@
-// A Rust program against an SDK generated from the Kitchen example API: a client, a call and its typed error, an
-// event stream released by dropping it, and the async SDK called from blocking code. Built by the docs' tests.
-use sdk::{Client, ClientConfig, Error};
-use sdk::{GetApiEventsOpts, GetApiHealthOpts};
+// A Rust program against an SDK generated from the Kitchen example API: a client, a call and its typed error, the
+// same kind of call on the safe mirror answering an `Answer`, an event stream released by dropping it, and the async
+// SDK called from blocking code. Built by the docs' tests.
+use sdk::{Answer, Client, ClientConfig, Error, SafeError};
+use sdk::{GetApiEventsOpts, GetApiHealthOpts, GetApiOpts};
 
 fn new_client() -> Result<Client, Error> {
     Client::new(ClientConfig {
@@ -17,6 +18,21 @@ async fn check_health(client: &Client) -> Result<(), String> {
         Ok(()) => Ok(()),
         Err(Error::Api(failed)) => Err(format!("health check answered {}", failed.status())),
         Err(other) => Err(other.to_string()),
+    }
+}
+
+async fn listing(client: &Client) -> String {
+    match client.safe().get_api(&GetApiOpts::default()).await {
+        Ok(Answer::Ok { data, response }) => format!("answered {}: {data:?}", response.status),
+        Ok(Answer::Err {
+            error: SafeError::Api(failed),
+            response,
+        }) => format!("answered {}: {}", response.status, failed.message()),
+        Ok(Answer::Err {
+            error: SafeError::Decode(unreadable),
+            response,
+        }) => format!("answered {}, unreadable: {unreadable}", response.status),
+        Err(no_answer) => format!("no answer: {no_answer}"), // never sent, refused, timed out or canceled
     }
 }
 
@@ -48,5 +64,6 @@ fn main() {
     let client = new_client().expect("a valid config");
     println!("{:?}", health_blocking(&client));
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a runtime");
+    println!("{}", runtime.block_on(listing(&client)));
     println!("{:?}", runtime.block_on(first_events(&client, 2)).map_err(|error| error.to_string()));
 }

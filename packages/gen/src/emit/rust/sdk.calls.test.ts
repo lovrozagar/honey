@@ -3,8 +3,9 @@
  * calls every shape of method against the recording server, one section per behavior, and each test reads
  * its section's notes and the wire lines its calls sent. The method surface (G1: accessors from IR.tree,
  * path params as `&str` in path order, the typed body, then Opts), the owning `Call` builder (Fb1), the
- * crate-root re-exports, `Client::new`'s servers[0] default and `Error::Config`, and throwOnError's two
- * return shapes are each proven by a program that builds and runs, or by one that must not build.
+ * crate-root re-exports (the styles' types among them, bit 21 i4), and `Client::new`'s servers[0] default and
+ * `Error::Config` are each proven by a program that builds and runs, or by one that must not build. The two styles
+ * of one crate, and the removed safe mode refused, are errors.safe.test.ts's.
  */
 import { describe, expect, it } from "vitest"
 import { consume, once, sections, seen } from "./__fixtures__/consumer.ts"
@@ -111,7 +112,9 @@ const CALLS = sections({
     n.note(format!("{} {}", q.is_none(), items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>().join(",")));`,
 	exports: `    let _: fn(ClientConfig) -> Result<Client, Error> = Client::new;
     let _: Option<Call<sdk::User>> = None;
-    let _: Option<SdkResult<sdk::User>> = None;
+    let _: Option<(Answer<sdk::User>, SafeError, Call<sdk::User, Safe>, Call<sdk::User, Throw>)> = None;
+    fn styled<S: Style>(_: &Client<S>) {}
+    let _ = styled::<Safe>;
     n.note("imported");`,
 	new: `    n.note(format!("default {}", sdk::Client::new(sdk::ClientConfig::default()).is_ok()));
     let config = sdk::ClientConfig { base_url: "not a url?api_key=s3cret".into(), ..Default::default() };
@@ -151,7 +154,10 @@ const calls = once(() =>
 	served(
 		SENT.map(([, , reply]) => reply ?? OK),
 		async (server) => {
-			const imports = ["sdk::{Call, Client, ClientConfig, Error, SdkResult}", "std::future::IntoFuture"]
+			const imports = [
+				"sdk::{Answer, Call, Client, ClientConfig, Error, Safe, SafeError, Style, Throw}",
+				"std::future::IntoFuture",
+			]
 			const run = await consume("surface", "calls", { base: `${server.url}/v1`, imports, ...CALLS })
 			return { hops: server.hops.map(wire), run }
 		},
@@ -300,7 +306,7 @@ describe.skipIf(!RUST)("<Op>Opts and the crate root, called from a consumer prog
 
 	// v0: 9f0898fad1
 	it(
-		"re-exports Call, Client, ClientConfig, Error and SdkResult at the crate root",
+		"re-exports Call, Client, ClientConfig, Error and the styles' Answer, SafeError, Style, Safe and Throw at the crate root",
 		async () => {
 			const { observed, stderr } = await section("exports")
 			expect(observed, stderr).toEqual({ built: true, out: ["imported"], wire: [] })
@@ -398,75 +404,6 @@ describe.skipIf(!RUST)("Client::new: servers[0] by default, Error::Config withou
 				}),
 			})
 			expect(seen(run, "new"), run.stderr).toEqual({ built: true, out: ["config true", "absolute true"] })
-		},
-		CARGO,
-	)
-})
-
-/** An error-keys users.create twice, typed `result`: a 400 envelope, then the 201 user; `show` notes each. */
-const createTwice = (result: string, show: string) => `    let c = client(base)?;
-    for _ in 0..2 {
-        let body = serde_json::from_value(serde_json::json!({ "email": "a@x.test" })).expect("body");
-        let r: ${result} = c.error_keys().users().create(&body, &Default::default()).await;
-        ${show}
-    }`
-
-const ENVELOPE = {
-	error_key: "email_taken",
-	fields: {},
-	message: "taken",
-	status: 400,
-	status_key: "bad_request",
-	success: false,
-}
-
-/** The merged `fixtures` document's crate in `key`'s mode, with `fns` run once against the recording server. */
-const errorKeys = (key: "fixtures" | "fixtures-safe", fns: Readonly<Record<string, string>>) =>
-	served(
-		[
-			{ json: ENVELOPE, status: 400 },
-			{ json: { email: "a@x.test", id: "u1" }, status: 201 },
-		],
-		async (server) => {
-			const run = await consume(key, key === "fixtures" ? "thrown" : "safe", { base: server.url, ...sections(fns) })
-			return { hops: server.hops.map(wire), run }
-		},
-	)
-
-describe.skipIf(!RUST)("throwOnError, chosen at generation", () => {
-	// v0: 2c4d54394e
-	it(
-		"resolves Result<T, Error> by default, an error status as Error::Api; Result<SdkResult<T>, Error> with throwOnError false",
-		async () => {
-			const thrown = await errorKeys("fixtures", {
-				main: createTwice(
-					"Result<sdk::ErrorKeysUser, sdk::Error>",
-					`match r {
-            Ok(user) => n.note(format!("ok {}", user.id)),
-            Err(sdk::Error::Api(e)) => n.note(format!("api {}", e.status())),
-            Err(e) => return Err(e),
-        }`,
-				),
-			})
-			const safe = await errorKeys("fixtures-safe", {
-				main: createTwice(
-					"Result<sdk::SdkResult<sdk::ErrorKeysUser>, sdk::Error>",
-					`let r = r?;
-        match &r.error {
-            Some(e) => n.note(format!("error {}", e.status())),
-            None => n.note(format!("data {}", serde_json::to_string(&r.data).expect("data"))),
-        }`,
-				),
-			})
-			const create = 'POST /error-keys/users {"email":"a@x.test"}'
-			const sent = [create, create]
-			expect(
-				{ safe: { ...seen(safe.run), wire: safe.hops }, thrown: { ...seen(thrown.run), wire: thrown.hops } },
-				thrown.run.stderr + safe.run.stderr,
-			).toEqual({
-				safe: { built: true, out: ["error 400", 'data {"email":"a@x.test","id":"u1"}'], wire: sent },
-				thrown: { built: true, out: ["api 400", "ok u1"], wire: sent },
-			})
 		},
 		CARGO,
 	)

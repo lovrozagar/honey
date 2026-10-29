@@ -17,8 +17,8 @@ pub enum Error {
     Api(ApiError),
     /// The exchange failed without an answer: a refused connection, DNS, TLS, a broken or too large body.
     Transport(Box<dyn std::error::Error + Send + Sync>),
-    /// A 2xx answer that is not the declared type.
-    Decode(String),
+    /// A 2xx answer that is not the declared type, or past `max_response_bytes`.
+    Decode(DecodeError),
     /// The call's timeout lapsed.
     Timeout,
     /// The call's cancel signal completed first.
@@ -44,6 +44,11 @@ impl Error {
         }
     }
 
+    /// `Decode` with the text `m`.
+    pub(crate) fn decode(m: impl fmt::Display) -> Self {
+        Error::Decode(DecodeError(m.to_string()))
+    }
+
     /// A reqwest failure: a lapsed timeout is `Timeout`, any other `Transport` without its URL, so the
     /// text never carries a query credential.
     pub(crate) fn from_reqwest(e: reqwest::Error) -> Self {
@@ -60,7 +65,7 @@ impl fmt::Display for Error {
         match self {
             Error::Api(e) => e.fmt(f),
             Error::Transport(e) => write!(f, "transport: {e}"),
-            Error::Decode(m) => write!(f, "decode: {m}"),
+            Error::Decode(e) => write!(f, "decode: {e}"),
             Error::Timeout => f.write_str("the call timed out"),
             Error::Canceled => f.write_str("the call was canceled"),
             Error::AuthExpired(m) => write!(f, "on_auth_expired: {m}"),
@@ -80,6 +85,18 @@ impl std::error::Error for Error {
         }
     }
 }
+
+/// Why an answer is not the declared type, as its `Display` reads.
+#[derive(Debug, Clone)]
+pub struct DecodeError(pub(crate) String);
+
+impl fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for DecodeError {}
 
 /// An error status by its name: the eleven the TypeScript SDK names, any other `Other`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -175,7 +192,7 @@ impl ApiError {
 
     /// The body decoded as `T`, a declared key's own schema.
     pub fn decode_body<T: DeserializeOwned>(&self) -> Result<T, Error> {
-        serde_json::from_slice(&self.0.body).map_err(|e| Error::Decode(e.to_string()))
+        serde_json::from_slice(&self.0.body).map_err(Error::decode)
     }
 
     /// The response's headers.

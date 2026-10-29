@@ -4,7 +4,9 @@
 //! body and honey error key (`ApiError::key()`); a lapsed timeout as `timeout`. Every error is also
 //! traced (`trace::rust_error`); one the grid has no outcome for observes nothing, which fails an
 //! unscripted run and is `null` in a scripted one. A stream's events and frames are read in
-//! stream.rs, socket.rs and live.rs.
+//! stream.rs, socket.rs and live.rs. Either style is read through `Settles`: the safe one strictly,
+//! so an answer on its outer `Err`, or an `Answer::Err` whose response is not its answer's, fails
+//! the run.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -18,7 +20,7 @@ use crate::protocol::Observed;
 use crate::sha256::sha256_hex;
 use crate::trace::{result_trace, rust_error};
 
-/// One call's outcome: what the grid observes of it, its error as traced, a safe-mode result's
+/// One call's outcome: what the grid observes of it, its error as traced, a safe call's `Answer`
 /// summary, and a stream's trace.
 #[derive(Default)]
 pub struct Outcome {
@@ -28,36 +30,103 @@ pub struct Outcome {
     pub stream: Option<Value>,
 }
 
-/// A throw-mode answer: `T`, or an `Error`.
-pub async fn observe<T, H>(p: Prepared<T, H>) -> Result<Outcome, String>
-where
-    T: Serialize + Send + 'static,
-    H: 'static,
-{
-    let Prepared { call, how } = p;
-    match call.with_response().await {
-        Ok((answer, response)) => answered(answer, &response, &how),
-        Err(e) => failed(e, &how, "return"),
+/// How a call of either style ended: its answer and response; an error, with the response when a
+/// safe call answered it as an `Answer::Err`; and a safe call's `Answer` summary.
+pub enum Settled<T> {
+    Answered(T, sdk::RawResponse, Option<Value>),
+    Failed(sdk::Error, bool, Option<Value>),
+}
+
+/// Reads a call's `.with_response()` outcome in its style.
+pub trait Settles: sdk::Style {
+    fn settled<T>(out: Self::Out<(T, sdk::RawResponse)>) -> Result<Settled<T>, String>;
+}
+
+impl Settles for sdk::Throw {
+    fn settled<T>(out: Self::Out<(T, sdk::RawResponse)>) -> Result<Settled<T>, String> {
+        Ok(match out {
+            Ok((answer, response)) => Settled::Answered(answer, response, None),
+            Err(e) => Settled::Failed(e, false, None),
+        })
     }
 }
 
-/// A safe-mode answer: an `SdkResult<T>` holding the data or an error status, or an `Error`.
-pub async fn observe_safe<T, H>(p: Prepared<sdk::SdkResult<T>, H>) -> Result<Outcome, String>
+/// A safe call's outcome, strictly: an answer is never its outer `Err`, and the response an
+/// `Answer` carries is the one its call was answered with (the `on_response` hook's status, an
+/// error status's own).
+impl Settles for sdk::Safe {
+    fn settled<T>(out: Self::Out<(T, sdk::RawResponse)>) -> Result<Settled<T>, String> {
+        let answered = ANSWERED.load(Ordering::SeqCst);
+        match out {
+            Err(e @ (sdk::Error::Api(_) | sdk::Error::Decode(_))) => Err(format!(
+                "the safe call returned an API answer as its error: {e}"
+            )),
+            Err(e) => Ok(Settled::Failed(e, false, None)),
+            Ok(sdk::Answer::Ok {
+                data: (answer, raw),
+                response,
+            }) => {
+                if response.status != answered || raw.status != response.status {
+                    return Err(format!(
+                        "an Answer::Ok whose response ({}) is not its answer's ({answered})",
+                        response.status
+                    ));
+                }
+                Ok(Settled::Answered(
+                    answer,
+                    response,
+                    Some(result_trace(true, answered)),
+                ))
+            }
+            Ok(sdk::Answer::Err { error, response }) => {
+                let e = match error {
+                    sdk::SafeError::Api(api) if api.status() == response.status => {
+                        sdk::Error::Api(api)
+                    }
+                    sdk::SafeError::Decode(d) if (200..300).contains(&response.status) => {
+                        sdk::Error::Decode(d)
+                    }
+                    other => {
+                        return Err(format!(
+                            "an Answer::Err whose response ({}) is not its error's: {other:?}",
+                            response.status
+                        ));
+                    }
+                };
+                if response.status != answered {
+                    return Err(format!(
+                        "an Answer::Err whose response ({}) is not its answer's ({answered})",
+                        response.status
+                    ));
+                }
+                Ok(Settled::Failed(
+                    e,
+                    true,
+                    Some(result_trace(false, answered)),
+                ))
+            }
+        }
+    }
+}
+
+/// A call's answer in its style: the data, or an error (via "result" when a safe call answered it).
+pub async fn observe<T, S, H>(p: Prepared<T, S, H>) -> Result<Outcome, String>
 where
     T: Serialize + Send + 'static,
+    S: Settles,
     H: 'static,
 {
     let Prepared { call, how } = p;
-    let (result, response) = match call.with_response().await {
-        Ok(answered) => answered,
-        Err(e) => return failed(e, &how, "return"),
+    let (mut outcome, summary) = match S::settled(call.with_response().await)? {
+        Settled::Answered(answer, response, summary) => {
+            (answered(answer, &response, &how)?, summary)
+        }
+        Settled::Failed(e, result, summary) => (
+            failed(e, &how, if result { "result" } else { "return" })?,
+            summary,
+        ),
     };
-    let summary = result_trace(&result);
-    let mut outcome = match result.error {
-        Some(e) => failed(sdk::Error::Api(e), &how, "result")?,
-        None => answered(result.data, &response, &how)?,
-    };
-    outcome.result = Some(summary);
+    outcome.result = summary;
     Ok(outcome)
 }
 

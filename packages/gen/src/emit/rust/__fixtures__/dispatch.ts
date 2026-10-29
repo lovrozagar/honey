@@ -4,10 +4,11 @@
  * builds the `<Op>Opts` from the call's query and header params (and the script's idempotency key), calls the
  * method through its accessors with the path params, the body and the opts in signature order, and observes
  * the answer. Every type is inferred from the method's parameters and the Opts fields, so a plan names no Rust
- * type but the Opts and the `<Op>Headers` a typed-header arm reads through the real `FromHeaders`. A safe-mode
- * SDK answers `SdkResult<T>`, which only the mode tells apart from a `T`, so it is observed by `observe_safe`.
+ * type but the Opts and the `<Op>Headers` a typed-header arm reads through the real `FromHeaders`. The dispatch
+ * is generic over the client's style (bit 21 i4): main.rs sends it the client or `client.safe()`, and observe.rs's
+ * `Settles` reads either, one build for both.
  *
- * A stream ignores the mode (contract 20 §4.2): an SSE arm reads through `stream.rs`, a WebSocket arm through
+ * A stream (contract 20 §4.2): an SSE arm reads through `stream.rs` in its style, a WebSocket arm through
  * `socket.rs` and a realtime arm through `live.rs`, each setting the stream's own Opts fields (the resume
  * cursor from the call; the subprotocols and reconnect knobs from the script). `dispatch.rs` declares
  * `socket.rs` for any WebSocket or realtime plan and `live.rs` for any realtime plan (a `#[path]` resolves
@@ -42,12 +43,12 @@ const STREAM_OPTS: Readonly<Record<NonNullable<RustCallPlan["stream"]>, readonly
 	ws: [RECONNECT_TOKEN, PROTOCOLS],
 }
 
-/** How `plan`'s prepared call `prepared` is observed: by its stream's kind, else in the SDK's error mode. */
-function observed(plan: RustCallPlan, prepared: string, observe: string): string {
+/** How `plan`'s prepared call `prepared` is observed: by its stream's kind, else as an answer. */
+function observed(plan: RustCallPlan, prepared: string): string {
 	if (plan.stream === "sse") return `crate::stream::observe_events(${prepared}, call.take)`
 	if (plan.stream === "ws") return `socket::observe_frames(${prepared}, call, d)`
 	if (plan.stream === "realtime") return `live::observe_live(${prepared}, call)`
-	return `${observe}(${prepared})`
+	return `observe(${prepared})`
 }
 
 /** The statement setting Opts field `field` from the call's `source` param `name`: a bare `T` when required. */
@@ -70,8 +71,8 @@ function reader(headers: NonNullable<RustCallPlan["responseHeaders"]>): string[]
 	]
 }
 
-/** `plan`'s match arm, observing its answer with `observe`. */
-function arm(plan: RustCallPlan, observe: string): string[] {
+/** `plan`'s match arm. */
+function arm(plan: RustCallPlan): string[] {
 	if (plan.body === "multipart") return [`${ARM}${literal(plan.operation)} => Err(${literal(MULTIPART)}.into()),`]
 	const args = [
 		...plan.pathParams.map((name) => `&call.param(${literal(name)})?`),
@@ -91,7 +92,7 @@ function arm(plan: RustCallPlan, observe: string): string[] {
 		...(plan.body === null ? [`${BODY}call.no_body()?;`] : []),
 		`${BODY}let c = client.${method.join(".")};`,
 		...(plan.responseHeaders === null ? [] : reader(plan.responseHeaders)),
-		`${BODY}${observed(plan, prepared, observe)}.await`,
+		`${BODY}${observed(plan, prepared)}.await`,
 		`${ARM}}`,
 	]
 }
@@ -105,9 +106,8 @@ function modules(plans: readonly RustCallPlan[]): string[] {
 	]
 }
 
-/** `dispatch.rs` for `plans`, in operation order; `throwOnError: false` for a safe-mode SDK. */
-export function dispatchRs(plans: Readonly<Record<string, RustCallPlan>>, throwOnError = true): string {
-	const observe = throwOnError ? "observe" : "observe_safe"
+/** `dispatch.rs` for `plans`, in operation order. */
+export function dispatchRs(plans: Readonly<Record<string, RustCallPlan>>): string {
 	const sorted = Object.values(plans).sort((a, b) =>
 		a.operation < b.operation ? -1 : a.operation > b.operation ? 1 : 0,
 	)
@@ -120,14 +120,14 @@ export function dispatchRs(plans: Readonly<Record<string, RustCallPlan>>, throwO
 		"use std::collections::BTreeMap;",
 		"",
 		"use crate::apply::apply;",
-		`use crate::observe::{Outcome, ${observe}, put};`,
+		"use crate::observe::{Outcome, Settles, observe, put};",
 		"use crate::protocol::{Call, Input, from};",
 		"use crate::script::Directives;",
 		"",
-		"/// Sends `call` on `client` by its operation's plan under the script's directives `d`, and returns its outcome.",
-		"pub async fn dispatch(client: &sdk::Client, call: &Call, input: &Input, d: &Directives) -> Result<Outcome, String> {",
+		"/// Sends `call` on `client` (either style) by its operation's plan under the script's directives `d`, and returns its outcome.",
+		"pub async fn dispatch<S: Settles>(client: &sdk::Client<S>, call: &Call, input: &Input, d: &Directives) -> Result<Outcome, String> {",
 		"    match call.operation.as_str() {",
-		...sorted.flatMap((plan) => arm(plan, observe)),
+		...sorted.flatMap((plan) => arm(plan)),
 		'        other => Err(format!("no call plan names {other}")),',
 		"    }",
 		"}",

@@ -1,7 +1,8 @@
 //! A stream call's reads (contract 20 §4.2), the SSE half here; socket.rs and live.rs hold the
-//! WebSocket and realtime ones. Every stream opens through `.with_response()`: an error status at the
-//! open is the grid's `error` and a lapsed timeout its `timeout`, any other failure before a stream
-//! existed observes `null`, each traced via "return". Once open, the call observes what the stream
+//! WebSocket and realtime ones. Every stream opens through `.with_response()`, read in its style
+//! (observe.rs `Settles`): an error status at the open is the grid's `error` and a lapsed timeout its
+//! `timeout`, any other failure before a stream existed observes `null`, each traced via "return"
+//! (via "result" for a safe call's `Answer::Err`). Once open, the call observes what the stream
 //! delivered, and an error the stream yields is traced via "stream". A stream call runs under
 //! `STALL_AFTER` (main.rs): one that never ends fails the run instead of hanging it.
 
@@ -11,7 +12,7 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use crate::apply::Prepared;
-use crate::observe::{Outcome, failed, observed};
+use crate::observe::{Outcome, Settled, Settles, failed, observed};
 use crate::protocol::Observed;
 use crate::trace::rust_error;
 
@@ -36,18 +37,23 @@ pub fn streamed(
 /// driver does, so a stream that does not end after its error shows in `yields`. The trace holds
 /// the yields (events and errors), each event's `retry` (null when unset) and the typed headers
 /// that were sent.
-pub async fn observe_events<T, H>(
-    p: Prepared<sdk::EventStream<T>, H>,
+pub async fn observe_events<T, S, H>(
+    p: Prepared<sdk::EventStream<T>, S, H>,
     take: Option<u64>,
 ) -> Result<Outcome, String>
 where
     T: Serialize + Send + 'static,
+    S: Settles,
     H: 'static,
 {
     let Prepared { call, how } = p;
-    let (mut stream, response) = match call.with_response().await {
-        Ok(opened) => opened,
-        Err(e) => return failed(e, &how, "return"),
+    let (mut stream, response) = match S::settled(call.with_response().await)? {
+        Settled::Answered(opened, response, _) => (opened, response),
+        Settled::Failed(e, result, summary) => {
+            let mut outcome = failed(e, &how, if result { "result" } else { "return" })?;
+            outcome.result = summary;
+            return Ok(outcome);
+        }
     };
     let headers = match how.headers.map(|read| read(&response.headers)).transpose() {
         Ok(headers) => headers,

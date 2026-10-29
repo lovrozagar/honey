@@ -291,6 +291,12 @@ mod errors {
     pub enum Error {
         Decode(String),
     }
+
+    impl Error {
+        pub fn decode(m: impl std::fmt::Display) -> Self {
+            Error::Decode(m.to_string())
+        }
+    }
 }
 
 use errors::Error;
