@@ -1,0 +1,396 @@
+{
+	"builds": {
+		"bun 1.3": {
+			"compose×bun": {
+				"baseline": 18.14,
+				"byClass": {
+					"fast": 16.69,
+					"middle": 17.87,
+					"slow": 18.2
+				},
+				"catches": "+20%",
+				"ceiling": 21.74
+			},
+			"compose×cloudflare": {
+				"baseline": 18.34,
+				"byClass": {
+					"fast": 17.95,
+					"middle": 17.93,
+					"slow": 18.49
+				},
+				"catches": "+16%",
+				"ceiling": 21.36
+			},
+			"compose×node": {
+				"baseline": 18.41,
+				"byClass": {
+					"fast": 16.22,
+					"middle": 18.45,
+					"slow": 18.62
+				},
+				"catches": "+13%",
+				"ceiling": 20.85
+			},
+			"defaults×bun": {
+				"baseline": 17.66,
+				"byClass": {
+					"fast": 16.43,
+					"middle": 17.26,
+					"slow": 17.91
+				},
+				"catches": "+20%",
+				"ceiling": 21.18
+			},
+			"defaults×cloudflare": {
+				"baseline": 17.84,
+				"byClass": {
+					"fast": 17.41,
+					"middle": 17.3,
+					"slow": 17.97
+				},
+				"catches": "+18%",
+				"ceiling": 20.98
+			},
+			"defaults×node": {
+				"baseline": 17.41,
+				"byClass": {
+					"fast": 15.94,
+					"middle": 17.41,
+					"slow": 18.87
+				},
+				"catches": "+22%",
+				"ceiling": 21.3
+			},
+			"gateway×bun": {
+				"baseline": 17.75,
+				"byClass": {
+					"fast": 16.61,
+					"middle": 17.62,
+					"slow": 18.19
+				},
+				"catches": "+18%",
+				"ceiling": 20.93
+			},
+			"gateway×cloudflare": {
+				"baseline": 18.11,
+				"byClass": {
+					"fast": 17.16,
+					"middle": 17.83,
+					"slow": 18.38
+				},
+				"catches": "+18%",
+				"ceiling": 21.37
+			},
+			"gateway×node": {
+				"baseline": 18.17,
+				"byClass": {
+					"fast": 16.8,
+					"middle": 17.65,
+					"slow": 18.51
+				},
+				"catches": "+15%",
+				"ceiling": 20.92
+			},
+			"kitchen×bun": {
+				"baseline": 18.48,
+				"byClass": {
+					"fast": 16.72,
+					"middle": 18.44,
+					"slow": 18.69
+				},
+				"catches": "+17%",
+				"ceiling": 21.63
+			},
+			"kitchen×cloudflare": {
+				"baseline": 18.46,
+				"byClass": {
+					"fast": 17.65,
+					"middle": 18.43,
+					"slow": 18.69
+				},
+				"catches": "+20%",
+				"ceiling": 22.15
+			},
+			"kitchen×node": {
+				"baseline": 18.11,
+				"byClass": {
+					"fast": 16.16,
+					"middle": 18.2,
+					"slow": 18.57
+				},
+				"catches": "+14%",
+				"ceiling": 20.68
+			},
+			"mcp×bun": {
+				"baseline": 3.58,
+				"byClass": {
+					"fast": 3.44,
+					"middle": 3.6,
+					"slow": 3.58
+				},
+				"catches": "+16%",
+				"ceiling": 4.14
+			},
+			"mcp×cloudflare": {
+				"baseline": 3.64,
+				"byClass": {
+					"fast": 3.5,
+					"middle": 3.64,
+					"slow": 3.67
+				},
+				"catches": "+17%",
+				"ceiling": 4.25
+			},
+			"mcp×node": {
+				"baseline": 3.6,
+				"byClass": {
+					"fast": 3.31,
+					"middle": 3.61,
+					"slow": 3.61
+				},
+				"catches": "+18%",
+				"ceiling": 4.24
+			},
+			"surface×bun": {
+				"baseline": 20.02,
+				"byClass": {
+					"fast": 18.06,
+					"middle": 19.84,
+					"slow": 20.23
+				},
+				"catches": "+16%",
+				"ceiling": 23.3
+			},
+			"surface×cloudflare": {
+				"baseline": 20.07,
+				"byClass": {
+					"fast": 19.26,
+					"middle": 20.07,
+					"slow": 20.49
+				},
+				"catches": "+24%",
+				"ceiling": 24.81
+			},
+			"surface×node": {
+				"baseline": 19.94,
+				"byClass": {
+					"fast": 17.81,
+					"middle": 19.94,
+					"slow": 20.85
+				},
+				"catches": "+15%",
+				"ceiling": 23.03
+			}
+		},
+		"node 22": {
+			"compose×bun": {
+				"baseline": 25.63,
+				"byClass": {
+					"unclassified": 25.63
+				},
+				"catches": "+32%",
+				"ceiling": 33.92
+			},
+			"compose×cloudflare": {
+				"baseline": 25.71,
+				"byClass": {
+					"unclassified": 25.71
+				},
+				"catches": "+26%",
+				"ceiling": 32.37
+			},
+			"compose×node": {
+				"baseline": 32.09,
+				"byClass": {
+					"unclassified": 32.09
+				},
+				"catches": "+25%",
+				"ceiling": 40.04
+			},
+			"defaults×bun": {
+				"baseline": 25.6,
+				"byClass": {
+					"unclassified": 25.6
+				},
+				"catches": "+23%",
+				"ceiling": 31.38
+			},
+			"defaults×cloudflare": {
+				"baseline": 25.19,
+				"byClass": {
+					"unclassified": 25.19
+				},
+				"catches": "+24%",
+				"ceiling": 31.34
+			},
+			"defaults×node": {
+				"baseline": 25.53,
+				"byClass": {
+					"unclassified": 25.53
+				},
+				"catches": "+29%",
+				"ceiling": 33.02
+			},
+			"gateway×bun": {
+				"baseline": 25.76,
+				"byClass": {
+					"unclassified": 25.76
+				},
+				"catches": "+24%",
+				"ceiling": 32.03
+			},
+			"gateway×cloudflare": {
+				"baseline": 25.8,
+				"byClass": {
+					"unclassified": 25.8
+				},
+				"catches": "+24%",
+				"ceiling": 32.11
+			},
+			"gateway×node": {
+				"baseline": 26.03,
+				"byClass": {
+					"unclassified": 26.03
+				},
+				"catches": "+29%",
+				"ceiling": 33.55
+			},
+			"kitchen×bun": {
+				"baseline": 26.79,
+				"byClass": {
+					"unclassified": 26.79
+				},
+				"catches": "+23%",
+				"ceiling": 32.97
+			},
+			"kitchen×cloudflare": {
+				"baseline": 26.33,
+				"byClass": {
+					"unclassified": 26.33
+				},
+				"catches": "+25%",
+				"ceiling": 32.81
+			},
+			"kitchen×node": {
+				"baseline": 26.87,
+				"byClass": {
+					"unclassified": 26.87
+				},
+				"catches": "+32%",
+				"ceiling": 35.39
+			},
+			"mcp×bun": {
+				"baseline": 14.28,
+				"byClass": {
+					"unclassified": 14.28
+				},
+				"catches": "+22%",
+				"ceiling": 17.48
+			},
+			"mcp×cloudflare": {
+				"baseline": 14.17,
+				"byClass": {
+					"unclassified": 14.17
+				},
+				"catches": "+26%",
+				"ceiling": 17.79
+			},
+			"mcp×node": {
+				"baseline": 14.5,
+				"byClass": {
+					"unclassified": 14.5
+				},
+				"catches": "+26%",
+				"ceiling": 18.3
+			},
+			"surface×bun": {
+				"baseline": 27.37,
+				"byClass": {
+					"unclassified": 27.37
+				},
+				"catches": "+24%",
+				"ceiling": 34
+			},
+			"surface×cloudflare": {
+				"baseline": 26.8,
+				"byClass": {
+					"unclassified": 26.8
+				},
+				"catches": "+27%",
+				"ceiling": 34.09
+			},
+			"surface×node": {
+				"baseline": 27.39,
+				"byClass": {
+					"unclassified": 27.39
+				},
+				"catches": "+28%",
+				"ceiling": 35.12
+			}
+		},
+		"node 26": {
+			"compose×node": {
+				"baseline": 28.59,
+				"byClass": {
+					"unclassified": 28.59
+				},
+				"catches": "+18%",
+				"ceiling": 33.86
+			},
+			"defaults×node": {
+				"baseline": 23.6,
+				"byClass": {
+					"unclassified": 23.6
+				},
+				"catches": "+19%",
+				"ceiling": 28.16
+			},
+			"gateway×node": {
+				"baseline": 23.71,
+				"byClass": {
+					"unclassified": 23.71
+				},
+				"catches": "+18%",
+				"ceiling": 28.01
+			},
+			"kitchen×node": {
+				"baseline": 24.88,
+				"byClass": {
+					"unclassified": 24.88
+				},
+				"catches": "+19%",
+				"ceiling": 29.73
+			},
+			"mcp×node": {
+				"baseline": 13.63,
+				"byClass": {
+					"unclassified": 13.63
+				},
+				"catches": "+22%",
+				"ceiling": 16.68
+			},
+			"surface×node": {
+				"baseline": 25.45,
+				"byClass": {
+					"unclassified": 25.45
+				},
+				"catches": "+19%",
+				"ceiling": 30.39
+			}
+		}
+	},
+	"note": "Per runtime key (Bun by minor, Node by major) and e2e build cell: the cell's build time over a honey-free reference build's (packages/core/tests/e2e/build-gate.ts), from the RATIO build lines of the build and prod e2e jobs of CI runs 40765532974, 40767837287, 40770281097, 40771797742, 40773280998, 40799251632, 40800670263, 40801732111, 40803394859, 40804656951, 40806122245 (ci.yml dispatched with build_mode=record). Each job is classed fast, middle or slow by its own surface builds on bun, Node-only jobs unclassified; byClass is each class's median. baseline: the median of every job's ratio. ceiling: the worst plus a 10% margin (worst x 1.10). A ratio above its ceiling is REGRESSED. catches: ceiling / baseline. No retry: a red with honey unchanged is answered by a re-record (6+ runs spanning both runner classes, derived by derive-build-ceilings.ts), never a rerun. Derived --by-commit: a cell whose head-commit groups agree (over the runner classes both groups carry, each sample divided by the midpoint of the two groups' medians of its class, each group's median within the other's range) pools them; any other takes the newest commit's runs alone. Cause of v1's 14 Bun cells derived new-only between 7731b1f and 51fe6c3: not a cost (locally, 9 interleaved rounds each, surface×bun 15.02 vs 14.95 and surface×cloudflare 15.06 vs 15.11, paired 0.989 and 0.999) but the agreement rule: judged class by class, Bun's 1-4 samples a runner class gave ranges too narrow to hold one distribution (with no shift, 56% of ×bun and 79% of ×cloudflare cells shifted on these class layouts). v2 judges the classes both groups carry at once, each sample centred on the midpoint of the two groups' medians of its class (3% and 6% with no shift, 98-99% of a 10% shift caught). The 4 Bun ×node cells still new-only share only the slow class, 5 against 3 samples (46% shifted with no shift); each derives from 51fe6c3's 6 runs. Slow-only cells: none (every decided cell's Bun samples include a fast job).",
+	"runs": [
+		"40765532974",
+		"40767837287",
+		"40770281097",
+		"40771797742",
+		"40773280998",
+		"40799251632",
+		"40800670263",
+		"40801732111",
+		"40803394859",
+		"40804656951",
+		"40806122245"
+	]
+}
