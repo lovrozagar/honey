@@ -134,3 +134,30 @@ describe("the repository", () => {
 		expect(checkTree(parseRows(tsv), files, COMPLETE)).toEqual([])
 	})
 })
+
+/** gen's SDK-only grid rows, where bit 21 i2 staged the over-cap row's targets. */
+const SDK_ROWS = "packages/gen/tests/integration/conformance/features-sdk.ts"
+const OVER_CAP_FIX = "add the remaining SDKs to the over-cap row and delete OVER_CAP_SDKS"
+const source = () => readFileSync(join(REPO, SDK_ROWS), "utf8")
+
+/**
+ * What bit 21 still owes at `complete` of the staged over-cap list: nothing before it closes; once COMPLETE reaches 21,
+ * the fix while `text` (features-sdk.ts) still declares OVER_CAP_SDKS, so the list cannot outlive the bit.
+ */
+const overCapOwed = (complete: number, text: string) =>
+	complete >= 21 && /\bOVER_CAP_SDKS\b/.test(text) ? [OVER_CAP_FIX] : []
+
+describe("bit 21's staged over-cap list (i2)", () => {
+	it("names its fix once the bit closes while features-sdk.ts declares it, and nothing without it", () => {
+		const without = source().replaceAll("OVER_CAP_SDKS", "SDKS")
+		expect([overCapOwed(21, source()), overCapOwed(21, without), overCapOwed(20, source())]).toEqual([
+			[OVER_CAP_FIX],
+			[],
+			[],
+		])
+	})
+
+	it(`is gone before bit 21 closes (COMPLETE is ${COMPLETE})`, () => {
+		expect(overCapOwed(COMPLETE, source())).toEqual([])
+	})
+})
