@@ -1,7 +1,7 @@
 /**
  * The safe variant's coverage (bit 21 i0, R-i6 c): the response kinds come from the grid's own cells, a safe variant
- * runs one cell per kind, and an enabled language whose safe variant leaves a kind uncovered reds. No language is
- * enabled in i0, so the real leg holds vacuously; the synthetic legs prove it does not stay so once one is.
+ * runs one cell per kind, and an enabled language whose safe variant leaves a kind uncovered reds. i1 enables TS, so
+ * the real leg holds over it; the synthetic legs prove it reds for a language missing a kind.
  */
 import { describe, expect, it } from "vitest"
 import { SDKS } from "./features.ts"
@@ -86,9 +86,12 @@ describe("the safe selection", () => {
 })
 
 describe("every enabled language's safe variant covers every kind", () => {
-	/* i0 enables none: this holds vacuously until i1 enables TS, and every phase after adds its language */
-	it("holds for SAFE_ENABLED", () => {
+	/* i1 enables TS; every phase after adds its language */
+	it("holds for SAFE_ENABLED, TS among it with one cell per kind", () => {
 		expect(safeCoverageProblems(SAFE_ENABLED)).toEqual([])
+		const { cells, uncovered } = safeCellsFor("ts")
+		const kinds = new Set(cells.flatMap((cell) => cell.calls.map((_, i) => responseKindOf(cell, i))))
+		expect([SAFE_ENABLED.has("ts"), uncovered, kinds.size]).toEqual([true, [], responseKinds(cellsFor("ts")).size])
 	})
 
 	it("reds a synthetic enabled language missing a kind", () => {

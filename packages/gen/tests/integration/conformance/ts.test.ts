@@ -1,12 +1,23 @@
 /**
  * The TS target of the conformance grid: every `cellsFor("ts")` cell runs through the SDK
  * `generateSdk` emits from the spawned reference app's served document, driven in process, and
- * the app front (`createClient`) sends the reference request. Opt-in: `vitest run --mode harness`.
+ * the app front (`createClient`) sends the reference request. The safe variant (bit 21 i1) runs one cell per
+ * response kind through `client.safe`, and its compile leg type-checks every operation's safe call and both arms
+ * under tsc. Opt-in: `vitest run --mode harness`.
  */
+import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { homedir } from "node:os"
+import { dirname, join } from "node:path"
+import { afterAll, assert, beforeAll, describe, expect, it } from "vitest"
 import { emittedApp, emittedSdk } from "../../../src/emit/ts/__fixtures__/emitted.ts"
-import { type ReferenceApp, SPAWN_TIMEOUT, safeVariant, startReferenceApp, targetSuite } from "./harness.ts"
+import { generateSdk } from "../../../src/emit/ts/sdk.ts"
+import { memberTree } from "../../../src/emit/ts/service-map.ts"
+import { type OpenApiDocument, toIR } from "../../../src/ir/build.ts"
+import type { IRNamespace } from "../../../src/ir/model.ts"
+import { type ReferenceApp, SPAWN_TIMEOUT, startReferenceApp, targetSuite } from "./harness.ts"
 import {
 	type Call,
 	type Cell,
@@ -17,9 +28,13 @@ import {
 	type Observed,
 	type Setup,
 } from "./matrix.ts"
+import { SAFE } from "./safe.ts"
 
 type Input = Record<string, unknown>
-type Result = { data: unknown; error: unknown; headers?: Record<string, string>; status: number }
+/** A safe call's Result as the grid reads it. */
+type Result =
+	| { data: unknown; headers?: Record<string, string>; ok: true; response: Response }
+	| { error: unknown; ok: false; response: Response }
 type Event = { data: Json; event?: string; id?: string }
 type Socket = {
 	close(code?: number): void
@@ -28,12 +43,19 @@ type Socket = {
 }
 type Sdk = { dispose(): void } & Record<string, unknown>
 type SdkClass = new (config: Input) => Sdk
-/** A service map node, read for two facts: `empty`, an operation declaring no success body, and `realtime`. */
-type MapNode = { empty?: boolean; realtime?: boolean } & Record<string, unknown>
+/**
+ * A service map node, read for three facts: `empty`, an operation declaring no success body; `realtime`; and
+ * `headers`, the success answer's declared headers.
+ */
+type MapNode = { empty?: boolean; headers?: readonly string[]; realtime?: boolean } & Record<string, unknown>
 type App = Record<string, (path: string, input: Input) => Promise<unknown>>
 type ErrorClass = abstract new (...args: never[]) => Error
-/** The emitted SDK's error classes the grid tells apart: an error status, and no answer. */
-type Errors = { readonly APIConnectionError: ErrorClass; readonly ClientError: ErrorClass }
+/** The emitted SDK's error classes the grid tells apart: an error status, an undecodable 2xx, and no answer. */
+type Errors = {
+	readonly APIConnectionError: ErrorClass
+	readonly ClientError: ErrorClass
+	readonly DecodeError: ErrorClass
+}
 
 /** Each titled cell's v0 port, or the C5 case whose live leg it is: the suite names its `it` `<key> (<title>)`. */
 const V0_PORTS: Readonly<Record<string, string>> = {
@@ -80,33 +102,25 @@ function operationOf(sdk: Sdk, operation: string): (input: Input) => unknown {
 	return member as (input: Input) => unknown
 }
 
-/** Whether the operation is realtime, by the service map the SDK dispatches by. */
-function isRealtime(map: MapNode, operation: string): boolean {
+/** The operation's entry in the service map the SDK dispatches by. */
+function entryOf(map: MapNode, operation: string): MapNode | undefined {
 	let node: MapNode | undefined = map
 	for (const segment of operation.split(".")) node = node?.[segment] as MapNode | undefined
-	return node?.realtime === true
-}
-
-/** Whether the operation declares no success body, by the service map the SDK dispatches by. */
-function declaresNoBody(map: MapNode, operation: string): boolean {
-	let node: MapNode | undefined = map
-	for (const segment of operation.split(".")) node = node?.[segment] as MapNode | undefined
-	return node?.empty === true
+	return node
 }
 
 /**
  * The answer to an operation declaring no success body, its data null by type, as Go's driver
  * reads it: the raw response's body, JSON when it parses, else the text, null when empty.
  */
-async function untypedOf(response: Response): Promise<Observed> {
-	const text = await response.text()
+function untypedOf(text: string, status: number): Observed {
 	let data: Json = text.length === 0 ? null : text
 	try {
 		data = JSON.parse(text) as Json
 	} catch {
 		/* not JSON: the text itself, or null when empty */
 	}
-	return { data, kind: "data", status: response.status }
+	return { data, kind: "data", status }
 }
 
 /**
@@ -118,33 +132,28 @@ function noAnswerOf(e: unknown, errors: Errors): NoAnswer | null {
 	return e instanceof errors.APIConnectionError ? "transport" : null
 }
 
-/**
- * A ClientError on a 2xx status: the answer's body did not decode. TS has no decode class yet (bit 21 i1 adds
- * DecodeError), so the normal client's decode error is the ClientError parseBody throws, the 2xx status kept.
- */
-function isUndecodable(e: unknown, errors: Errors): e is Error & { status: number } {
-	const status = (e as { status?: unknown } | null)?.status
-	return e instanceof errors.ClientError && typeof status === "number" && Math.floor(status / 100) === 2
+/** An answer's error as the grid observes it: an undecodable 2xx's DecodeError, else an error by status and key. */
+function failureOf(error: unknown, errors: Errors): Observed {
+	const { body, status } = error as { body: Json; status: number }
+	if (error instanceof errors.DecodeError) return { kind: "decode", status }
+	const key = (body as { error_key?: unknown } | null)?.error_key
+	return { body, errorKey: typeof key === "string" ? key : null, kind: "error", status }
 }
 
-/**
- * A safe-mode result as the grid observes it: an error by status and key, bytes by digest, else data. An undecodable
- * 2xx, the ClientError the normal client throws, comes back in the safe result's error (response.ts finishRequest, the
- * decided divergence bit 21 i1 ends): observed as the normal client throws it.
- */
-function settled(result: Result, errors: Errors): Observed {
-	if (isUndecodable(result.error, errors)) return { kind: "decode", status: result.error.status }
-	if (result.error) {
-		const body = (result.error instanceof Error ? (result.error as { body?: unknown }).body : result.error) as Json
-		const key = (body as { error_key?: unknown } | null)?.error_key
-		return { body, errorKey: typeof key === "string" ? key : null, kind: "error", status: result.status }
+/** A 2xx's value as the grid observes it: bytes by digest, else data, with the declared headers it carries. */
+function valueOf(data: unknown, status: number, headers?: Record<string, string>): Observed {
+	if (data instanceof Uint8Array) {
+		const sha256 = createHash("sha256").update(data).digest("hex")
+		return { kind: "bytes", sha256, size: data.byteLength, status }
 	}
-	if (result.data instanceof Uint8Array) {
-		const sha256 = createHash("sha256").update(result.data).digest("hex")
-		return { kind: "bytes", sha256, size: result.data.byteLength, status: result.status }
-	}
-	const data: Observed = { data: result.data as Json, kind: "data", status: result.status }
-	return result.headers ? { ...data, headers: result.headers } : data
+	const value: Observed = { data: data as Json, kind: "data", status }
+	return headers ? { ...value, headers } : value
+}
+
+/** The headers `names` declares, by lower-case name, each one only when `response` carries it: the safe Ok's own. */
+function declaredOf(response: Response, names: readonly string[] | undefined): Record<string, string> | undefined {
+	if (names === undefined) return undefined
+	return Object.fromEntries(names.flatMap((name) => [response.headers.get(name) ?? []].flat().map((v) => [name, v])))
 }
 
 /**
@@ -233,83 +242,119 @@ async function liveOf(connection: Resumable, call: Call, connected?: Promise<unk
 	return frames
 }
 
-/** One call's answer, normalized: a raw response, a socket, a realtime connection, an event stream or a safe-mode result. */
-async function observe(answer: unknown, call: Call, errors: Errors, connected?: Promise<unknown>): Promise<Observed> {
+/** A connection's answer, normalized: a raw response, a socket, a realtime connection or an event stream; else null. */
+async function streamed(answer: unknown, call: Call, errors: Errors, connected?: Promise<unknown>) {
 	if (answer instanceof Response) {
 		const headers = Object.fromEntries(answer.headers)
-		return { body: await answer.text(), headers, kind: "raw", status: answer.status }
+		return { body: await answer.text(), headers, kind: "raw", status: answer.status } satisfies Observed
 	}
-	if (isSocket(answer)) return { frames: await framesOf(answer, call), kind: "frames" }
-	if (isResumable(answer)) return { frames: await liveOf(answer, call, connected), kind: "frames" }
+	if (isSocket(answer)) return { frames: await framesOf(answer, call), kind: "frames" } satisfies Observed
+	if (isResumable(answer)) return { frames: await liveOf(answer, call, connected), kind: "frames" } satisfies Observed
 	if (isStream(answer)) return eventsOf(answer, errors, call.take)
-	return settled(answer as Result, errors)
+	return null
 }
 
 /**
- * Send one call: a timeout or abort is `timeout`, APIConnectionError `transport`, a thrown ClientError (a stream's
- * non-2xx, the thrower's undecodable 2xx) an error or a decode; any other throw fails the cell.
+ * A safe call's Result, read strictly: both arms carry the answer's Response, an Err's its error's own; an Ok is its
+ * value at the response's status, an Err its failure. Anything else fails the cell's assertion.
  */
-async function attempt(
-	fire: () => unknown,
-	call: Call,
-	errors: Errors,
-	connected?: Promise<unknown>,
-): Promise<Observed> {
+async function resulted(result: Result, call: Call, errors: Errors, names?: readonly string[]): Promise<Observed> {
+	if (!(result.response instanceof Response)) assert.fail(`${call.operation}: a Result without its response`)
+	if (!result.ok) {
+		if ((result.error as { response?: unknown }).response !== result.response)
+			assert.fail(`${call.operation}: an Err whose response is not its error's`)
+		return failureOf(result.error, errors)
+	}
+	const status = result.response.status
+	const stream = await streamed(result.data, call, errors)
+	if (stream !== null) return stream
+	const headers = result.headers ?? (names === undefined ? undefined : {})
+	return valueOf(result.data, status, headers)
+}
+
+/** What a cell's calls go through: the service map, the client (normal or safe) and the SDK's error classes. */
+type Clients = {
+	readonly errors: Errors
+	readonly map: MapNode
+	readonly sdk: Sdk
+	/** the last response the client's onResponse hook saw: a normal call's status */
+	readonly last: () => Response | undefined
+	readonly safe: boolean
+}
+
+/**
+ * Send one call. No answer (a timeout or abort, APIConnectionError) is that kind in both styles. The normal style
+ * observes a value at the status its hook saw and a thrown answer as its failure; the safe style a Result, and a
+ * thrown API answer fails the cell, since a safe call never throws one. A connection (realtime or WebSocket) is the
+ * same object in both styles, its refusal thrown from it in both.
+ */
+async function attempt(fire: () => unknown, call: Call, clients: Clients, connected?: Promise<unknown>) {
+	const { errors } = clients
+	const names = entryOf(clients.map, call.operation)?.headers
 	try {
-		return await observe(await fire(), call, errors, connected)
+		const answer = await fire()
+		const stream = await streamed(answer, call, errors, connected)
+		if (stream !== null) return stream
+		if (clients.safe) return await resulted(answer as Result, call, errors, names)
+		const response = clients.last()
+		if (response === undefined) throw new Error(`${call.operation}: answered with no response seen`)
+		return valueOf(answer, response.status, declaredOf(response, names))
 	} catch (e) {
 		const failed = noAnswerOf(e, errors)
-		if (failed !== null) return { kind: failed }
-		const status = (e as { status?: unknown } | null)?.status
-		if (e instanceof errors.ClientError && typeof status === "number")
-			return settled({ data: null, error: e, status }, errors)
-		throw e
+		if (failed !== null) return { kind: failed } satisfies Observed
+		if (!(e instanceof errors.ClientError)) throw e
+		if (clients.safe && connected === undefined)
+			assert.fail(`${call.operation}: the safe call threw an API answer, ${e.name}: ${e.message}`)
+		return failureOf(e, errors)
 	}
 }
 
 /**
- * One call through `safe`; an operation declaring no success body goes `raw: true` through
- * `thrower` instead, so an error status still throws its ClientError and a 2xx is read untyped.
+ * One call through the runner's client; an operation declaring no success body goes `raw: true`, so an error status
+ * is still its failure and a 2xx is read untyped.
  */
-async function callOf(clients: Clients, call: Call, app: ReferenceApp) {
+async function callOf(clients: Clients, call: Call, app: ReferenceApp): Promise<Observed> {
 	const input = inputOf(call, app)
-	const { errors } = clients
+	const send = operationOf(clients.sdk, call.operation)
+	const entry = entryOf(clients.map, call.operation)
 	/* a realtime op opens one connection, whatever its body: its sends wait for the open */
-	if (isRealtime(clients.map, call.operation)) {
+	if (entry?.realtime === true) {
 		const connected = new Promise((resolve) => (input.onReconnected = resolve))
-		return attempt(() => operationOf(clients.safe, call.operation)(input), call, errors, connected)
+		return attempt(() => send(input), call, clients, connected)
 	}
-	if (call.raw || !declaresNoBody(clients.map, call.operation))
-		return attempt(() => operationOf(clients.safe, call.operation)(input), call, errors)
-	const send = async () =>
-		untypedOf((await operationOf(clients.thrower, call.operation)({ ...input, raw: true })) as Response)
-	return attempt(send, call, errors)
+	if (call.raw || entry?.empty !== true) return attempt(() => send(input), call, clients)
+	const answered = await attempt(() => send({ ...input, raw: true }), call, clients)
+	return answered.kind === "raw" ? untypedOf(answered.body as string, answered.status as number) : answered
 }
 
-/** What a cell's calls go through: the service map, both clients and the SDK's error classes. */
-type Clients = { readonly errors: Errors; readonly map: MapNode; readonly safe: Sdk; readonly thrower: Sdk }
-
-/** The TS runner: the emitted SDK class built once from the served document, one instance per mode per cell. */
-function tsRunner() {
+/**
+ * The TS runner: the emitted SDK class built once from the served document, one instance per cell, its calls the
+ * normal client's, or with `safe` its safe twin's (`client.safe`).
+ */
+function tsRunner(safe = false) {
 	let built: { ConformanceSDK: SdkClass; errors: Errors; map: MapNode } | undefined
 	return {
 		async prepare(app: ReferenceApp): Promise<void> {
 			const sdk = await emittedSdk(app.document, { name: "ConformanceSDK" })
-			const errors = { APIConnectionError: sdk.APIConnectionError, ClientError: sdk.ClientError } as Errors
+			const { APIConnectionError, ClientError, DecodeError } = sdk
+			const errors = { APIConnectionError, ClientError, DecodeError } as Errors
 			built = { ConformanceSDK: sdk.ConformanceSDK as SdkClass, errors, map: sdk.serviceMap as MapNode }
 		},
 		async run(cell: Cell, app: ReferenceApp): Promise<readonly Observed[]> {
 			if (!built) throw new Error("the TS runner ran a cell before prepare")
-			const config = configOf(app, cell.setup)
-			const safe = new built.ConformanceSDK(config)
-			const thrower = new built.ConformanceSDK({ ...config, throwOnError: true })
+			let last: Response | undefined
+			const seen = (ctx: { response: Response }) => {
+				last = ctx.response
+				return undefined
+			}
+			const client = new built.ConformanceSDK({ ...configOf(app, cell.setup), onResponse: [seen] })
 			const observed: Observed[] = []
 			try {
-				const clients = { errors: built.errors, map: built.map, safe, thrower }
+				const sdk = (safe ? client.safe : client) as Sdk
+				const clients = { errors: built.errors, last: () => last, map: built.map, safe, sdk }
 				for (const call of cell.calls) observed.push(await callOf(clients, call, app))
 			} finally {
-				safe.dispose()
-				thrower.dispose()
+				client.dispose()
 			}
 			return observed
 		},
@@ -319,7 +364,98 @@ function tsRunner() {
 }
 
 targetSuite(tsRunner())
-targetSuite(safeVariant(tsRunner(), "i1"))
+targetSuite({ ...tsRunner(true), variant: SAFE })
+
+/** How an operation is called: a REST call, an event stream, or a connection (realtime or WebSocket). */
+type Shape = "call" | "connection" | "stream"
+
+/** Each operation of `ns` by its member path, with its shape. */
+function operationsOf(ns: IRNamespace, prefix: readonly string[] = []): [path: string[], shape: Shape][] {
+	return [...ns.entries].flatMap(([key, entry]): [string[], Shape][] => {
+		if (entry.kind === "namespace") return operationsOf(entry.ns, [...prefix, key])
+		const { realtime, sse, websocket } = entry.op.extensions
+		const shape = realtime || websocket ? "connection" : sse ? "stream" : "call"
+		return [[[...prefix, key], shape]]
+	})
+}
+
+/**
+ * The safe compile leg's driver (R-i6 a): for every operation, its safe call with the normal call's own input, both
+ * arms read with the response on each, the Ok's data the normal call's value, the Err's error narrowed past
+ * DecodeError to its status; a REST call's raw twin's Ok the Response; a connection the very same on the twin.
+ */
+function safeDriver(stem: string, operations: readonly [string[], Shape][]): string {
+	const head = `import { ClientError, ConformanceSDK, DecodeError } from "./${stem}.index.gen.ts"
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
+declare function expectType<T extends true>(): void
+const client = new ConformanceSDK({ baseURL: "http://localhost" })
+`
+	const body = operations.map(([path, shape], i) => {
+		const at = path.map((key) => `[${JSON.stringify(key)}]`).join("")
+		if (shape === "connection") return `expectType<Equal<typeof client.safe${at}, typeof client${at}>>()`
+		const raw = `
+	const raw = await client.safe${at}({ ...args[0], raw: true })
+	if (raw.ok) expectType<Equal<typeof raw.data, Response>>()
+	else raw.error satisfies ClientError`
+		return `export async function op${i}(...args: Parameters<typeof client.safe${at}>) {
+	const r = await client.safe${at}(...args)
+	r.response satisfies Response
+	if (r.ok) expectType<Equal<typeof r.data, Awaited<ReturnType<typeof client${at}>>>>()
+	else if (r.error instanceof DecodeError) r.error.body satisfies string | null
+	else r.error satisfies ClientError & { status: number }${shape === "call" ? raw : ""}
+}`
+	})
+	return `${head}${body.join("\n")}\n`
+}
+
+/** tsc's diagnostics on `driver.ts` beside the emitted `files`, strict; a run with none that still failed throws. */
+function driverErrors(files: Readonly<Record<string, string>>, driver: string): string[] {
+	const root = join(process.env.HOME ?? homedir(), ".cache/honey-tmp/gen-ts-types")
+	mkdirSync(root, { recursive: true })
+	const dir = mkdtempSync(join(root, "safe-"))
+	const tsc = join(dirname(createRequire(import.meta.url).resolve("typescript/package.json")), "bin/tsc")
+	const compilerOptions = {
+		allowImportingTsExtensions: true,
+		lib: ["esnext", "dom"],
+		module: "esnext",
+		moduleResolution: "bundler",
+		noEmit: true,
+		skipLibCheck: true,
+		strict: true,
+		target: "esnext",
+		types: [],
+	}
+	for (const [name, text] of Object.entries({ ...files, "driver.ts": driver })) writeFileSync(join(dir, name), text)
+	writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions, include: ["*.ts"] }))
+	try {
+		execFileSync(process.execPath, [tsc, "-p", "tsconfig.json"], { cwd: dir, encoding: "utf8", timeout: 120_000 })
+		return []
+	} catch (error) {
+		/* a failed run without one diagnostic is tsc not running at all, never a clean check */
+		const lines = String((error as { stdout?: string }).stdout ?? "").split("\n")
+		if (!lines.some((line) => / error TS\d+:/.test(line))) throw error
+		return lines.filter((line) => / error TS\d+:/.test(line))
+	} finally {
+		rmSync(dir, { force: true, recursive: true })
+	}
+}
+
+describe("conformance × ts (safe): every operation's safe call compiles", () => {
+	let app: ReferenceApp | undefined
+	beforeAll(async () => {
+		app = await startReferenceApp()
+	}, SPAWN_TIMEOUT)
+	afterAll(() => app?.stop())
+
+	it("type-checks each operation's safe call, its raw twin and both arms over the served document's SDK", () => {
+		const document = (app as ReferenceApp).document
+		const operations = operationsOf(memberTree(toIR(document as OpenApiDocument, { deriveOperationIds: true }).tree))
+		const { files, stem } = generateSdk(document, { name: "ConformanceSDK" })
+		const count = (shape: Shape) => operations.filter(([, of]) => of === shape).length
+		expect([count("call") > 20, count("stream") > 0, count("connection") > 0]).toEqual([true, true, true])
+		expect(driverErrors(files, safeDriver(stem, operations))).toEqual([])
+	}, 120_000)
+})
 
 describe("conformance × ts titles", () => {
 	it("titles only cells the grid holds for ts", () => {
@@ -342,10 +478,13 @@ describe("app front", () => {
 		expect(cell?.calls).toHaveLength(1)
 		const [call] = (cell as Cell).calls as [Call]
 		const front = (await emittedApp()) as unknown as Errors & { createClient: (config: Input) => App }
-		const client = front.createClient(configOf(live, (cell as Cell).setup))
+		let last: Response | undefined
+		const seen = (ctx: { response: Response }) => void (last = ctx.response)
+		const client = front.createClient({ ...configOf(live, (cell as Cell).setup), onResponse: [seen] })
 		const method = call.route.method.toLowerCase()
 		const since = await live.mark()
-		const observed = await attempt(() => client[method]?.(call.route.path, inputOf(call, live)), call, front)
+		const clients = { errors: front, last: () => last, map: {}, safe: false, sdk: {} as Sdk }
+		const observed = await attempt(() => client[method]?.(call.route.path, inputOf(call, live)), call, clients)
 		expect(compareCell(cell as Cell, [observed], await live.wire(since))).toEqual([])
 	})
 })
