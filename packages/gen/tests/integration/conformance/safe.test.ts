@@ -19,7 +19,7 @@ import {
 const keysOf = (cells: readonly Cell[]) => cells.map((cell) => cell.key)
 
 describe("response kinds, derived from features.ts", () => {
-	it("are the grid's distinct answers, in grid order", () => {
+	it("are the grid's 16 distinct answers, in grid order", () => {
 		expect([...responseKinds(cellsFor("ts")).keys()]).toEqual([
 			"json",
 			"empty",
@@ -36,6 +36,7 @@ describe("response kinds, derived from features.ts", () => {
 			"transport",
 			"stream open error 403",
 			"events failed transport",
+			"text",
 		])
 	})
 
@@ -44,11 +45,14 @@ describe("response kinds, derived from features.ts", () => {
 		for (const sdk of SDKS) expect(kinds(sdk), sdk).toEqual(kinds("ts"))
 	})
 
-	it("follow a cell's expectation: a new answer is a new kind, with no list to edit", () => {
-		const [cell] = cellsFor("ts").filter((c) => c.key === "verbs/get") as [Cell]
-		const text = { ...cell, expect: [{ data: "ok", kind: "data", status: 200 }], key: "x/text" }
-		expect(responseKindOf(text, 0)).toBe("text")
-		expect([...responseKinds([...cellsFor("ts"), text]).keys()]).toContain("text")
+	it("follow the cells, with no list to edit: the text row is the text kind, and without it there is none", () => {
+		const kindsOf = (cells: readonly Cell[]) => [...responseKinds(cells).keys()]
+		expect(
+			responseKinds(cellsFor("ts"))
+				.get("text")
+				?.map((cell) => cell.key),
+		).toEqual(["text/plain"])
+		expect(kindsOf(cellsFor("ts").filter((cell) => cell.feature !== "text"))).not.toContain("text")
 	})
 
 	it("refuse an answer no SDK gives: a CLI's or an MCP read's", () => {
@@ -93,6 +97,11 @@ describe("every enabled language's safe variant covers every kind", () => {
 			"rust: no safe cell answers stream open error 403",
 			"rust: no safe cell answers events failed transport",
 		])
+	})
+
+	it("reds a synthetic enabled language whose safe variant lacks the text cell", () => {
+		const lacksOf = (target: string) => (target === "go" ? (cell: Cell) => cell.key === "text/plain" : undefined)
+		expect(safeCoverageProblems(new Set<Sdk>(["go"]), lacksOf)).toEqual(["go: no safe cell answers text"])
 	})
 
 	it("passes every SDK enabled with nothing lacked: the grid itself has a cell per kind", () => {

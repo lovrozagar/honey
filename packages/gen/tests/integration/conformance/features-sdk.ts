@@ -1,11 +1,11 @@
 /**
  * The SDK-only rows of the conformance grid (bit 21 i0): the answers no shared row had, each through the NORMAL client
- * of the six SDKs. An undecodable 2xx is the target's decode error: Python's DecodeError, Rust's Error::Decode, C#'s
+ * of the six SDKs, and a text answer no shared row had (F2). An undecodable 2xx is the target's decode error: Python's DecodeError, Rust's Error::Decode, C#'s
  * and Java's DecodeException. TS has no decode class yet (the ClientError parseBody throws, on the 2xx status; i1 adds
  * DecodeError) and Go no decode type (the wrapped decode error, no ClientError; i3 adds *DecodeError): each driver
  * reads its target's as it is today. Every expectation is what the reference app (core `conformance/app.ts`) answers.
  */
-import { call, error, events, hop } from "./cells.ts"
+import { call, data, error, events, hop } from "./cells.ts"
 import type { Feature, Scenario, Target } from "./matrix.ts"
 
 /** The SDK targets: the six generated clients, each with its normal (throwing) and safe styles (bit 21 i). */
@@ -47,6 +47,14 @@ const stream: Scenario[] = [
 	},
 ]
 
+/*
+ * a text/plain answer as the exact string (F2): `health`, the app's one text op, unmarked so no MCP tool, already in
+ * the CLI's index; no shared row answered text before
+ */
+const text: Scenario[] = [
+	{ calls: [call("health", "GET", "/v1/health")], expect: [data("ok")], id: "plain", wire: [hop("GET", "/v1/health")] },
+]
+
 /** Rows the six SDKs run. */
 const sdks = (id: string, asserted: string, scenarios: Scenario[]): Feature => ({
 	asserted,
@@ -64,4 +72,5 @@ export const SDK_ROWS: readonly Feature[] = [
 		"an error opening a stream is the typed error at open; a drop after events is the stream's own error",
 		stream,
 	),
+	sdks("text", "a text/plain answer is the exact string, never decoded as JSON", text),
 ]
