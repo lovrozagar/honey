@@ -141,11 +141,6 @@
 		},
 		"websockets": {
 			"bun 1.3": {
-				"message-10k": {
-					"baseline": 3.565,
-					"catches": "+35%",
-					"ceiling": 4.796
-				},
 				"realtime-fanout": {
 					"baseline": 1.695,
 					"catches": "+21%",
@@ -154,7 +149,9 @@
 				"realtime-inbound-10k": {
 					"baseline": 4.135,
 					"catches": "+49%",
-					"ceiling": 6.171
+					"ceiling": 6.171,
+					"reportOnly": true,
+					"reason": "report-only from bit 21 k-pass (ca5f1d5) until the k=3 re-record: its measurement changed (its own feed loop, 300 warm-up pairs before the first pass, each sample's connection closed after timing), so the ceiling recorded under the old measurement no longer applies to the new number. message-10k became message-100k, unbaselined until the same re-record."
 				},
 				"upgrade-1k": {
 					"baseline": 2.655,
