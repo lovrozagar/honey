@@ -3,114 +3,108 @@
 		"adapter": {
 			"node 26.12": {
 				"native-json": {
-					"baseline": 3.13,
-					"catches": "+19%",
-					"ceiling": 3.718,
-					"reportOnly": true,
-					"reason": "report-only from bit 21 i7 until the k-pass re-record: record dispatch 40913885826 at 530b637 read stacked-json 2.36 over its 2.354 ceiling with v1 unchanged (the same code read 1.62, 1.78 and 2.00 in three other runs; every adapter scenario was high in that run at once, so the run, not a scenario, shifted). The step's 15 samples span ~1.7 s, so one burst on the runner decides a run; judged again once each scenario's ratio is the median of k passes interleaved across scenarios, re-recorded over 6+ CI runs."
+					"baseline": 2.62,
+					"catches": "+33%",
+					"ceiling": 3.476
 				},
 				"post-1kib": {
-					"baseline": 4.61,
-					"catches": "+15%",
-					"ceiling": 5.302,
+					"baseline": 3.365,
+					"catches": "+28%",
+					"ceiling": 4.323,
 					"reportOnly": true,
-					"reason": "bimodal on CI: 2 runs at 2.38 and 2.41, 4 at 3.85–4.82; the ceiling 5.302 sits +120–123% over the fast mode, so a run landing there passes a slowdown of up to ~2.1×. Report-only until a re-record shows one mode."
+					"reason": "still bimodal on CI at k=3: 2 runs at 2.1 and 2.11, 4 at 2.91–3.93; the ceiling 4.323 sits +105–106% over the fast level, so a run landing there passes a ~2× slowdown. Report-only until its two levels are explained or a record shows one (as at bit 20 e3)."
 				},
 				"routed-json": {
-					"baseline": 1.57,
-					"catches": "+14%",
-					"ceiling": 1.793,
-					"reportOnly": true,
-					"reason": "report-only from bit 21 i7 until the k-pass re-record: record dispatch 40913885826 at 530b637 read stacked-json 2.36 over its 2.354 ceiling with v1 unchanged (the same code read 1.62, 1.78 and 2.00 in three other runs; every adapter scenario was high in that run at once, so the run, not a scenario, shifted). The step's 15 samples span ~1.7 s, so one burst on the runner decides a run; judged again once each scenario's ratio is the median of k passes interleaved across scenarios, re-recorded over 6+ CI runs."
+					"baseline": 1.44,
+					"catches": "+18%",
+					"ceiling": 1.694
 				},
 				"stacked-json": {
-					"baseline": 2.07,
-					"catches": "+14%",
-					"ceiling": 2.354,
-					"reportOnly": true,
-					"reason": "report-only from bit 21 i7 until the k-pass re-record: record dispatch 40913885826 at 530b637 read stacked-json 2.36 over its 2.354 ceiling with v1 unchanged (the same code read 1.62, 1.78 and 2.00 in three other runs; every adapter scenario was high in that run at once, so the run, not a scenario, shifted). The step's 15 samples span ~1.7 s, so one burst on the runner decides a run; judged again once each scenario's ratio is the median of k passes interleaved across scenarios, re-recorded over 6+ CI runs."
+					"baseline": 1.605,
+					"catches": "+27%",
+					"ceiling": 2.046
 				}
 			}
 		},
 		"finalize": {
 			"bun 1.3": {
 				"1000x10": {
-					"baseline": 2.34,
-					"catches": "+53%",
-					"ceiling": 3.575
+					"baseline": 2.425,
+					"catches": "+18%",
+					"ceiling": 2.871
 				},
 				"1000x100": {
-					"baseline": 0.715,
-					"catches": "+42%",
+					"baseline": 0.69,
+					"catches": "+47%",
 					"ceiling": 1.012
 				},
 				"100x10": {
-					"baseline": 2.575,
-					"catches": "+47%",
-					"ceiling": 3.773
+					"baseline": 2.63,
+					"catches": "+23%",
+					"ceiling": 3.245
 				},
 				"100x100": {
 					"baseline": 0.73,
-					"catches": "+49%",
-					"ceiling": 1.089
+					"catches": "+42%",
+					"ceiling": 1.034
 				},
 				"500x50": {
-					"baseline": 0.93,
-					"catches": "+29%",
-					"ceiling": 1.199
+					"baseline": 0.89,
+					"catches": "+38%",
+					"ceiling": 1.232
 				}
 			}
 		},
 		"hotpath": {
 			"bun 1.3": {
 				"body": {
-					"baseline": 1.845,
-					"catches": "+14%",
-					"ceiling": 2.112
+					"baseline": 1.83,
+					"catches": "+15%",
+					"ceiling": 2.101
 				},
 				"chain": {
 					"baseline": 1.89,
-					"catches": "+13%",
-					"ceiling": 2.145
+					"catches": "+14%",
+					"ceiling": 2.156
 				},
 				"large-response": {
-					"baseline": 1.015,
+					"baseline": 1.01,
 					"catches": "+11%",
 					"ceiling": 1.122
 				},
 				"many-routes": {
-					"baseline": 1.61,
-					"catches": "+13%",
-					"ceiling": 1.815
+					"baseline": 1.585,
+					"catches": "+12%",
+					"ceiling": 1.782
 				},
 				"mw-stack": {
-					"baseline": 2.02,
-					"catches": "+13%",
-					"ceiling": 2.288
+					"baseline": 1.98,
+					"catches": "+17%",
+					"ceiling": 2.31
 				},
 				"mw-sync": {
-					"baseline": 1.445,
-					"catches": "+12%",
-					"ceiling": 1.617
+					"baseline": 1.44,
+					"catches": "+13%",
+					"ceiling": 1.628
 				},
 				"not-found": {
-					"baseline": 7.595,
-					"catches": "+14%",
-					"ceiling": 8.668
+					"baseline": 7.305,
+					"catches": "+15%",
+					"ceiling": 8.393
 				},
 				"param": {
-					"baseline": 1.745,
+					"baseline": 1.74,
 					"catches": "+12%",
-					"ceiling": 1.958
+					"ceiling": 1.947
 				},
 				"scoped": {
-					"baseline": 1.74,
+					"baseline": 1.72,
 					"catches": "+14%",
-					"ceiling": 1.991
+					"ceiling": 1.969
 				},
 				"static": {
-					"baseline": 1.325,
-					"catches": "+13%",
+					"baseline": 1.335,
+					"catches": "+12%",
 					"ceiling": 1.496
 				}
 			}
@@ -118,62 +112,60 @@
 		"streaming": {
 			"bun 1.3": {
 				"cancel-release": {
-					"baseline": 6.69,
-					"catches": "+17%",
-					"ceiling": 7.81
+					"baseline": 6.0,
+					"catches": "+20%",
+					"ceiling": 7.183
 				},
 				"generate-10k": {
 					"baseline": 1.26,
-					"catches": "+15%",
-					"ceiling": 1.452
+					"catches": "+13%",
+					"ceiling": 1.43
 				},
 				"sse-1k": {
-					"baseline": 2.09,
-					"catches": "+18%",
-					"ceiling": 2.475
+					"baseline": 2.04,
+					"catches": "+19%",
+					"ceiling": 2.42
 				},
 				"stream-1mb": {
-					"baseline": 2.015,
-					"catches": "+47%",
-					"ceiling": 2.97
+					"baseline": 1.67,
+					"catches": "+21%",
+					"ceiling": 2.024
 				}
 			}
 		},
 		"websockets": {
 			"bun 1.3": {
+				"message-100k": {
+					"baseline": 8.605,
+					"catches": "+25%",
+					"ceiling": 10.725,
+					"reason": "gated across the raw twin's per-process JIT levels, not honey variance: on CI these 6 runs read 6.7–9.75 (1 low at 6.7, 5 at 8.09–9.75); locally the raw twin settles per process at ~223–243 µs (ratio 7.2–8.1) or ~340–365 µs (6.0–6.5) while v1 is steady. The ceiling, worst × 1.10, covers both levels."
+				},
 				"realtime-fanout": {
-					"baseline": 1.695,
-					"catches": "+21%",
-					"ceiling": 2.046
+					"baseline": 1.62,
+					"catches": "+14%",
+					"ceiling": 1.848
 				},
 				"realtime-inbound-10k": {
-					"baseline": 4.135,
-					"catches": "+49%",
-					"ceiling": 6.171,
-					"reportOnly": true,
-					"reason": "report-only from bit 21 k-pass (ca5f1d5) until the k=3 re-record: its measurement changed (its own feed loop, 300 warm-up pairs before the first pass, each sample's connection closed after timing), so the ceiling recorded under the old measurement no longer applies to the new number. message-10k became message-100k, unbaselined until the same re-record."
+					"baseline": 4.715,
+					"catches": "+37%",
+					"ceiling": 6.457
 				},
 				"upgrade-1k": {
-					"baseline": 2.655,
-					"catches": "+29%",
-					"ceiling": 3.432
+					"baseline": 2.445,
+					"catches": "+17%",
+					"ceiling": 2.849
 				}
 			}
 		}
 	},
-	"note": "Per bench, runtime minor and scenario: v1 cost / its raw twin's, from the RATIO lines of CI runs of ci.yml's hotpath job: 6 green runs at 95b6cd2 in record mode (push run 40635796971, dispatches 40637279965, 40638448479, 40639505880, 40640935318, 40642329012) and run 40645792418 at e92e73d, the first blocking run, red on websockets message-10k (4.36 over its 4.114 ceiling, v1 unchanged; the measurement byte-identical to the recording's), whose 23 lines join as evidence (adapter's step never ran there); push run 40648018748 at 3f3c22d (judged, green); and the re-record's 4 dispatches with bench_mode=record (40649639049, 40651282669, 40652790834, 40654595647): n=12, adapter n=11. Under BUN_VERSION 1.3.11 and, for adapter, Node 26.12.1. baseline: the median of the runs. ceiling: the worst CI run plus a 10% margin (worst × 1.10), since a handful of samples can understate the spread. A run whose median ratio is above its ceiling is REGRESSED. catches: ceiling ÷ baseline, so the gate catches a regression beyond +X% of the CI median. A reportOnly scenario is printed and never fails the run; its reason says why. No retry: a red with v1 unchanged is answered by a re-record, never a rerun. Re-record: run the job with BENCH_MODE=record, collect each step's RATIO lines over at least 6 runs, derive the same way, and commit the move with its reason.",
+	"note": "Per bench, runtime minor and scenario: v1 cost / its raw twin's, judged on the median of 3 pass medians, the passes interleaved across the bench's scenarios with each round held to at least 2.6 s (bit 21 k-pass, bench/src/gate.ts), from the RATIO lines of ci.yml's hotpath job in 6 bench_mode=record dispatches at 5f2942e (40960856149, 40964087520, 40965667478, 40967438246, 40969532154, 40970973762), none refused by the record run's pass-spread check (SPREAD_TOLERANCE 0.5). Under BUN_VERSION 1.3.11 and, for adapter, Node 26.12.1. baseline: the median of the runs. ceiling: the worst CI run plus a 10% margin (worst × 1.10), since a handful of samples can understate the spread. A run whose judged ratio is above its ceiling is REGRESSED. catches: ceiling ÷ baseline, so the gate catches a regression beyond +X% of the CI median. A reportOnly scenario is printed and never fails the run; its reason says why; a gated scenario's reason says what its ceiling covers. No retry: a red with v1 unchanged is answered by a re-record, never a rerun. Re-record: run the job with BENCH_MODE=record over at least 6 runs, derive the same way, and commit the move with its reason. Earlier records: bit 20 e3 (n=12 at 95b6cd2..3f3c22d, k=1).",
 	"runs": [
-		"40635796971",
-		"40637279965",
-		"40638448479",
-		"40639505880",
-		"40640935318",
-		"40642329012",
-		"40645792418",
-		"40648018748",
-		"40649639049",
-		"40651282669",
-		"40652790834",
-		"40654595647"
+		"40960856149",
+		"40964087520",
+		"40965667478",
+		"40967438246",
+		"40969532154",
+		"40970973762"
 	]
 }
