@@ -1,7 +1,7 @@
 /**
  * The grid's SDK-only rows (bit 21 i0, features-sdk.ts), in the default run: they reach the six SDKs and no other
  * target, so the CLI and the MCP server keep exactly their cells, and every SDK holds the same five; the over-cap row
- * (i2, go since i3, rust since i4) reaches OVER_CAP_SDKS alone, until i7 has it at all six.
+ * (i2, go since i3, rust since i4, csharp since i5) reaches OVER_CAP_SDKS alone, until i7 has it at all six.
  */
 import { describe, expect, it } from "vitest"
 import { OVER_CAP_SDKS, SDK_ROWS } from "./features-sdk.ts"
@@ -36,10 +36,10 @@ describe("the SDK-only rows", () => {
 
 	it("give every SDK the same five cells, OVER_CAP_SDKS the over-cap one too, and the CLI and the MCP server none", () => {
 		const capped = [...SDK_CELLS, "over-cap/over-cap-2xx"].sort()
-		expect(OVER_CAP_SDKS).toEqual(["ts", "python", "go", "rust"])
+		expect(OVER_CAP_SDKS).toEqual(["ts", "python", "go", "rust", "csharp"])
 		expect(Object.fromEntries(TARGETS.map((target) => [target, sdkCellsOf(target)]))).toEqual({
 			cli: [],
-			csharp: SDK_CELLS,
+			csharp: capped,
 			go: capped,
 			java: SDK_CELLS,
 			mcp: [],

@@ -1,7 +1,7 @@
 /**
  * The safe variant's coverage (bit 21 i0, R-i6 c): the response kinds come from the grid's own cells, a safe variant
  * runs one cell per kind, and an enabled language whose safe variant leaves a kind uncovered reds. i1 enables TS, i2 Python, i3
- * Go, i4 Rust, so the real leg holds over it; the synthetic legs prove it reds for a language missing a kind.
+ * Go, i4 Rust, i5 C#, so the real leg holds over it; the synthetic legs prove it reds for a language missing a kind.
  */
 import { describe, expect, it } from "vitest"
 import { SDKS } from "./features.ts"
@@ -92,8 +92,8 @@ describe("the safe selection", () => {
 })
 
 describe("every enabled language's safe variant covers every kind", () => {
-	/* i1 enables TS, i2 Python, i3 Go and i4 Rust; every phase after adds its language */
-	it.each(["ts", "python", "go", "rust"] as const)(
+	/* i1 enables TS, i2 Python, i3 Go, i4 Rust and i5 C#; i6 adds Java */
+	it.each(["ts", "python", "go", "rust", "csharp"] as const)(
 		"holds for SAFE_ENABLED, %s among it with one cell per kind",
 		(sdk) => {
 			expect(safeCoverageProblems(SAFE_ENABLED)).toEqual([])
