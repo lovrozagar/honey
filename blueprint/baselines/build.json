@@ -1,5 +1,379 @@
 {
-	"builds": {},
-	"note": "REPORT-ONLY from 1a41b73 for the k=3 re-record after CI 40877110861's single-build false red (defaults×cloudflare 2,949 ms vs siblings 2,472/2,501); re-enforced at the commit that records the k=3 ceilings. Every ceiling is removed, so run-build judges every cell through the judge's existing no-ceiling path (unbaselined: printed, never failing) and says so with this note; the hang guard (bun 8 s, node 13 s) still judges every build. The structure leg 'are recorded from CI for every cell before bit 21 closes' refuses this file at COMPLETE >= 21 (every cell missing), so the re-record is owed before bit 21 closes. Superseded ceilings: 42 cells from 11 k=1 record runs (40765532974, 40767837287, 40770281097, 40771797742, 40773280998, 40799251632, 40800670263, 40801732111, 40803394859, 40804656951, 40806122245). Re-record: dispatch ci.yml with build_mode=record on the k=3 code, then derive-build-ceilings.ts --by-commit; at that derive, check each cell's ratio against its reference ms (the H1 check).",
-	"runs": []
+	"builds": {
+		"bun 1.3": {
+			"compose×bun": {
+				"baseline": 18.58,
+				"byClass": {
+					"fast": 17.59,
+					"slow": 18.78
+				},
+				"catches": "+14%",
+				"ceiling": 21.12
+			},
+			"compose×cloudflare": {
+				"baseline": 18.13,
+				"byClass": {
+					"fast": 16.95,
+					"middle": 17.71,
+					"slow": 18.46
+				},
+				"catches": "+15%",
+				"ceiling": 20.82
+			},
+			"compose×node": {
+				"baseline": 17.55,
+				"byClass": {
+					"fast": 15.69,
+					"slow": 17.71
+				},
+				"catches": "+16%",
+				"ceiling": 20.44
+			},
+			"defaults×bun": {
+				"baseline": 18.09,
+				"byClass": {
+					"fast": 17.46,
+					"slow": 18.11
+				},
+				"catches": "+13%",
+				"ceiling": 20.45
+			},
+			"defaults×cloudflare": {
+				"baseline": 17.97,
+				"byClass": {
+					"fast": 16.85,
+					"middle": 17.85,
+					"slow": 18.12
+				},
+				"catches": "+15%",
+				"ceiling": 20.61
+			},
+			"defaults×node": {
+				"baseline": 17.14,
+				"byClass": {
+					"fast": 15.27,
+					"slow": 17.16
+				},
+				"catches": "+17%",
+				"ceiling": 19.98
+			},
+			"gateway×bun": {
+				"baseline": 17.99,
+				"byClass": {
+					"fast": 17.86,
+					"slow": 18.12
+				},
+				"catches": "+15%",
+				"ceiling": 20.71
+			},
+			"gateway×cloudflare": {
+				"baseline": 18.56,
+				"byClass": {
+					"fast": 17.3,
+					"middle": 18.49,
+					"slow": 18.7
+				},
+				"catches": "+15%",
+				"ceiling": 21.38
+			},
+			"gateway×node": {
+				"baseline": 17.45,
+				"byClass": {
+					"fast": 15.38,
+					"slow": 17.58
+				},
+				"catches": "+16%",
+				"ceiling": 20.16
+			},
+			"kitchen×bun": {
+				"baseline": 18.88,
+				"byClass": {
+					"fast": 17.92,
+					"slow": 18.91
+				},
+				"catches": "+20%",
+				"ceiling": 22.57
+			},
+			"kitchen×cloudflare": {
+				"baseline": 18.82,
+				"byClass": {
+					"fast": 18.02,
+					"middle": 18.82,
+					"slow": 18.85
+				},
+				"catches": "+14%",
+				"ceiling": 21.45
+			},
+			"kitchen×node": {
+				"baseline": 18.16,
+				"byClass": {
+					"fast": 16.09,
+					"slow": 18.2
+				},
+				"catches": "+14%",
+				"ceiling": 20.66
+			},
+			"mcp×bun": {
+				"baseline": 3.6,
+				"byClass": {
+					"fast": 3.54,
+					"slow": 3.61
+				},
+				"catches": "+15%",
+				"ceiling": 4.14
+			},
+			"mcp×cloudflare": {
+				"baseline": 3.69,
+				"byClass": {
+					"fast": 3.62,
+					"middle": 3.67,
+					"slow": 3.71
+				},
+				"catches": "+13%",
+				"ceiling": 4.18
+			},
+			"mcp×node": {
+				"baseline": 3.46,
+				"byClass": {
+					"fast": 3.15,
+					"slow": 3.51
+				},
+				"catches": "+14%",
+				"ceiling": 3.93
+			},
+			"surface×bun": {
+				"baseline": 20.32,
+				"byClass": {
+					"fast": 18.95,
+					"slow": 20.34
+				},
+				"catches": "+16%",
+				"ceiling": 23.58
+			},
+			"surface×cloudflare": {
+				"baseline": 20.45,
+				"byClass": {
+					"fast": 19.17,
+					"middle": 20.63,
+					"slow": 20.47
+				},
+				"catches": "+13%",
+				"ceiling": 23.11
+			},
+			"surface×node": {
+				"baseline": 19.55,
+				"byClass": {
+					"fast": 17.23,
+					"slow": 19.62
+				},
+				"catches": "+14%",
+				"ceiling": 22.26
+			}
+		},
+		"node 22": {
+			"compose×bun": {
+				"baseline": 25.52,
+				"byClass": {
+					"unclassified": 25.52
+				},
+				"catches": "+14%",
+				"ceiling": 28.97
+			},
+			"compose×cloudflare": {
+				"baseline": 25.66,
+				"byClass": {
+					"unclassified": 25.66
+				},
+				"catches": "+12%",
+				"ceiling": 28.74
+			},
+			"compose×node": {
+				"baseline": 26.41,
+				"byClass": {
+					"unclassified": 26.41
+				},
+				"catches": "+18%",
+				"ceiling": 31.12
+			},
+			"defaults×bun": {
+				"baseline": 25.27,
+				"byClass": {
+					"unclassified": 25.27
+				},
+				"catches": "+15%",
+				"ceiling": 29.05
+			},
+			"defaults×cloudflare": {
+				"baseline": 25.2,
+				"byClass": {
+					"unclassified": 25.2
+				},
+				"catches": "+13%",
+				"ceiling": 28.41
+			},
+			"defaults×node": {
+				"baseline": 25.48,
+				"byClass": {
+					"unclassified": 25.48
+				},
+				"catches": "+15%",
+				"ceiling": 29.32
+			},
+			"gateway×bun": {
+				"baseline": 26.23,
+				"byClass": {
+					"unclassified": 26.23
+				},
+				"catches": "+12%",
+				"ceiling": 29.44
+			},
+			"gateway×cloudflare": {
+				"baseline": 25.84,
+				"byClass": {
+					"unclassified": 25.84
+				},
+				"catches": "+12%",
+				"ceiling": 29.02
+			},
+			"gateway×node": {
+				"baseline": 26.05,
+				"byClass": {
+					"unclassified": 26.05
+				},
+				"catches": "+14%",
+				"ceiling": 29.59
+			},
+			"kitchen×bun": {
+				"baseline": 26.62,
+				"byClass": {
+					"unclassified": 26.62
+				},
+				"catches": "+16%",
+				"ceiling": 30.84
+			},
+			"kitchen×cloudflare": {
+				"baseline": 26.46,
+				"byClass": {
+					"unclassified": 26.46
+				},
+				"catches": "+13%",
+				"ceiling": 29.82
+			},
+			"kitchen×node": {
+				"baseline": 26.48,
+				"byClass": {
+					"unclassified": 26.48
+				},
+				"catches": "+15%",
+				"ceiling": 30.48
+			},
+			"mcp×bun": {
+				"baseline": 14.2,
+				"byClass": {
+					"unclassified": 14.2
+				},
+				"catches": "+15%",
+				"ceiling": 16.35
+			},
+			"mcp×cloudflare": {
+				"baseline": 14.22,
+				"byClass": {
+					"unclassified": 14.22
+				},
+				"catches": "+17%",
+				"ceiling": 16.7
+			},
+			"mcp×node": {
+				"baseline": 14.14,
+				"byClass": {
+					"unclassified": 14.14
+				},
+				"catches": "+16%",
+				"ceiling": 16.39
+			},
+			"surface×bun": {
+				"baseline": 27.31,
+				"byClass": {
+					"unclassified": 27.31
+				},
+				"catches": "+15%",
+				"ceiling": 31.47
+			},
+			"surface×cloudflare": {
+				"baseline": 26.95,
+				"byClass": {
+					"unclassified": 26.95
+				},
+				"catches": "+14%",
+				"ceiling": 30.6
+			},
+			"surface×node": {
+				"baseline": 28.05,
+				"byClass": {
+					"unclassified": 28.05
+				},
+				"catches": "+13%",
+				"ceiling": 31.58
+			}
+		},
+		"node 26": {
+			"compose×node": {
+				"baseline": 23.12,
+				"byClass": {
+					"unclassified": 23.12
+				},
+				"catches": "+19%",
+				"ceiling": 27.41
+			},
+			"defaults×node": {
+				"baseline": 23.55,
+				"byClass": {
+					"unclassified": 23.55
+				},
+				"catches": "+14%",
+				"ceiling": 26.76
+			},
+			"gateway×node": {
+				"baseline": 23.88,
+				"byClass": {
+					"unclassified": 23.88
+				},
+				"catches": "+12%",
+				"ceiling": 26.74
+			},
+			"kitchen×node": {
+				"baseline": 24.48,
+				"byClass": {
+					"unclassified": 24.48
+				},
+				"catches": "+14%",
+				"ceiling": 27.87
+			},
+			"mcp×node": {
+				"baseline": 13.71,
+				"byClass": {
+					"unclassified": 13.71
+				},
+				"catches": "+11%",
+				"ceiling": 15.18
+			},
+			"surface×node": {
+				"baseline": 25.16,
+				"byClass": {
+					"unclassified": 25.16
+				},
+				"catches": "+13%",
+				"ceiling": 28.31
+			}
+		}
+	},
+	"note": "Per runtime key (Bun by minor, Node by major) and e2e build cell: the cell's build time over a honey-free reference build's (packages/core/tests/e2e/build-gate.ts), from the RATIO build lines of the build and prod e2e jobs of CI runs 40889301648, 40891096140, 40893983504, 40908742095, 40911060071, 40913885826 (ci.yml dispatched with build_mode=record). Each job is classed fast, middle or slow by its own surface builds on bun, Node-only jobs unclassified; byClass is each class's median. baseline: the median of every job's ratio. ceiling: the worst plus a 10% margin (worst x 1.10). A ratio above its ceiling is REGRESSED. catches: ceiling / baseline. No retry: a red with honey unchanged is answered by a re-record (6+ runs spanning both runner classes, derived by derive-build-ceilings.ts), never a rerun. Each cell's ratio is the median of k=3 app builds over the median of 5 reference builds (1a41b73); the hang guard judges every build. Ceilings judge only on GitHub Actions (GITHUB_ACTIONS=true, bd13cba); elsewhere they print report-only, since a local reference builds ~80 ms against CI's 140-230. Derived plain (all six pooled): --by-commit refused 25 cells as n=3 per commit, but 30ed81e..530b637 changes nothing the e2e builds bundle (packages/core only lint/spawners.js; packages/gen's Java emitter and runtime, tests, and the CLI's option parser), and the two groups' runner mixes differ (30ed81e all slow, 530b637 one fast and five slow). Speed check (H1): over the 18 classed Bun jobs, raw surface time rises 64% fast to slow while the ratio rises 7%; byClass fast rests on 2 jobs. History: k=1 ceilings from 11 runs (425f0a4) went red once on a single slow build with honey unchanged (40877110861, defaults x cloudflare 21.21 over 20.98); report-only from 16ea742 for this re-record; re-enforced here.",
+	"runs": [
+		"40889301648",
+		"40891096140",
+		"40893983504",
+		"40908742095",
+		"40911060071",
+		"40913885826"
+	]
 }
