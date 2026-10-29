@@ -123,13 +123,13 @@ describe.skipIf(!JAVA)(
 
 describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectionException; 0 is none", SLOW, () => {
 	/* new: no decoded-byte cap exists in c1, and the driver refuses the maxResponseBytes script key */
-	it("512 on a 2,011-byte decoded answer sent as a few dozen bytes is ApiConnectionException, observed null", async () => {
+	it("512 on a 2,011-byte decoded answer sent as a few dozen bytes is ApiConnectionException, observed as transport", async () => {
 		const run = await served([answer(padded(2000), { gzip: true })], (server) =>
 			runOn(server.url, [ECHO], { script: { config: { maxResponseBytes: 512 } } }),
 		)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(512),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 		})
 	})
 
@@ -152,7 +152,7 @@ describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectio
 		const run = await served([reply], (server) => runOn(server.url, [ECHO]))
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(DEFAULT_CAP),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 		})
 	})
 
@@ -162,14 +162,14 @@ describe.skipIf(!JAVA)("R8: a decoded size over maxResponseBytes is ApiConnectio
 		const run = await served([reply], (server) => runOn(server.url, [ECHO], { jvmArgs: HEAP_64M }))
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(DEFAULT_CAP),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 		})
 	})
 })
 
 describe.skipIf(!JAVA)("bit 19 b1: a bomb for every encoding the SDK offers", SLOW, () => {
 	/* gzip's bombs are R8's legs; deflate, the other encoding offered, gets its own */
-	it("a deflate bomb (64 MiB streamed) past a 1 MiB cap is ApiConnectionException at the cap, observed null", async () => {
+	it("a deflate bomb (64 MiB streamed) past a 1 MiB cap is ApiConnectionException at the cap, observed as transport", async () => {
 		const reply: Reply = {
 			bytes: 64 * MIB,
 			deflate: true,
@@ -181,7 +181,7 @@ describe.skipIf(!JAVA)("bit 19 b1: a bomb for every encoding the SDK offers", SL
 		)
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
 			error: capped(MIB),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 		})
 	})
 })

@@ -97,11 +97,14 @@ const decoding = ({ hops, run }: Driven) => ({
 /** A run as the plain legs pin it: the urls hit, what was observed, the exit status. */
 const wire = ({ hops, run }: Driven) => ({ hops: hops.map((h) => h.url), observed: run.observed, status: run.status })
 
-/** A decoding run of a user and then a truncated body: the second call's DecodeException, nothing observed for it. */
+/** A 2xx that did not decode as the grid observes it (bit 21 i0): the DecodeException, its status the raw box's. */
+const UNDECODABLE = { kind: "decode", status: 200 }
+
+/** A decoding run of a user and then a truncated body: the second call's DecodeException, observed as undecodable. */
 const truncated = () => ({
 	calls: [{ error: undefined }, { error: UNDECODED }],
 	hops: ["/users/1", "/users/1"],
-	observed: [data({ id: "u1" }), null],
+	observed: [data({ id: "u1" }), UNDECODABLE],
 	status: 0,
 })
 
@@ -140,7 +143,7 @@ describe.skipIf(!JAVA)(
 					},
 				],
 				hops: ["/users/1", "/users/1"],
-				observed: [null, expect.objectContaining({ errorKey: null, kind: "error", status: 404 })],
+				observed: [UNDECODABLE, expect.objectContaining({ errorKey: null, kind: "error", status: 404 })],
 				status: 0,
 			})
 		})
@@ -198,7 +201,7 @@ describe.skipIf(!JAVA)("a refused connection is a transport error, never a statu
 				text: expect.any(String),
 				type: "ApiConnectionException",
 			}),
-			observed: [null],
+			observed: [{ kind: "transport" }],
 			status: 0,
 		})
 	})

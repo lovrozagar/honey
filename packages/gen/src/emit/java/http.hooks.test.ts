@@ -287,7 +287,7 @@ describe.skipIf(!JAVA)(
 				run.stderr,
 			).toEqual({
 				log: [start, failed(expect.stringContaining("ApiConnectionException: "))],
-				observed: [null],
+				observed: [{ kind: "transport" }],
 				secrets: [],
 				status: 0,
 			})

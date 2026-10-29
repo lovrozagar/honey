@@ -141,9 +141,13 @@ describe.skipIf(!JAVA)("the Java test driver: SSE, EventStream<T>", SLOW, () => 
 	})
 })
 
+/** Two ticks, then the connection dropped: the events delivered and the stream's no-answer failure. */
+const DROPPED = { events: [{ data: { n: 1 } }, { data: { n: 2 } }], failed: "transport", kind: "events" }
+
 describe.skipIf(!JAVA)("the Java test driver: how an SSE call fails", SLOW, () => {
 	/* new: C# sdk.driver.stream.test.ts:245 */
-	it("observes the events before a dropped connection, the stream's error traced and counted; unscripted, the run fails", async () => {
+	/* bit 21 i0: a drop is no answer (f2), so the grid observes it as the stream's own `failed`, scripted or not */
+	it("observes the events before a dropped connection and how it failed, the stream's error traced and counted, unscripted too", async () => {
 		const sdk = on()
 		const dropped = sse([tick(1), tick(2), { waitMs: 50 }], "drop")
 		const { run } = await drive(sdk, [dropped], [ticks()], {})
@@ -155,15 +159,13 @@ describe.skipIf(!JAVA)("the Java test driver: how an SSE call fails", SLOW, () =
 				type: "ApiConnectionException",
 				via: "stream",
 			}),
-			observed: [{ events: [{ data: { n: 1 } }, { data: { n: 2 } }], kind: "events" }],
+			observed: [DROPPED],
 			stream: { retry: [null, null], yields: 3 },
 		})
 		const bare = await drive(sdk, [dropped], [ticks()])
-		expect({ status: bare.run.status, stderr: bare.run.stderr }).toEqual({
-			status: 1,
-			stderr: expect.stringMatching(
-				/^driver: call 0 \(ticks\.stream\): the call ended in an error the grid has no outcome for: /,
-			),
+		expect({ observed: bare.run.observed, status: bare.run.status }, bare.run.stderr).toEqual({
+			observed: [DROPPED],
+			status: 0,
 		})
 	})
 

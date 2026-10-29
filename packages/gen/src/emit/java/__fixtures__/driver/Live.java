@@ -46,7 +46,7 @@ final class Live {
         "proven",
         proven == null ? null : proven.toString().replace("_", "").toLowerCase(Locale.ROOT));
     trace.set("realtime", realtime);
-    /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error or timeout */
+    /* a connection whose first read failed, refused before any frame, ends in its open's error: the grid's error, timeout or transport */
     JsonNode refused =
         read.isEmpty() && !errors.isEmpty()
             ? Observe.graded(at.run().sdk(), failure, at.raw(), at.ask())

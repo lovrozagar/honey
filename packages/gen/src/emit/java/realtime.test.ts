@@ -277,7 +277,12 @@ describe.skipIf(!JAVA)("the SSE and long-poll dials ride the exchange; the WebSo
 		const script: Script = { ...budget({ maxReconnectAttempts: 0 }), config: { maxResponseBytes: 64 } }
 		const capped = await drive([refused, unavailable, big], [live({ take: 1 })], { script })
 		const seen = [capped.run.observed, failure(capped), call(capped)?.stream?.realtime?.errors]
-		const want = [frames(), ["ApiConnectionException", undefined, "stream"], ["the answer exceeds 64 bytes"]]
+		/* refused before any frame with no answer: the connection's error, observed as transport (bit 21 i0) */
+		const want = [
+			[{ kind: "transport" }],
+			["ApiConnectionException", undefined, "stream"],
+			["the answer exceeds 64 bytes"],
+		]
 		expect(seen, capped.run.stderr).toEqual(want)
 	})
 })

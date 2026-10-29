@@ -15,7 +15,8 @@ import tools.jackson.databind.node.ObjectNode;
  * thread that opens and reads (the SDK's cancel). An error at the open is observed as any call's
  * (Observe.thrown, via "return"). Once open, the call observes the events the stream delivered: an
  * error a read threw is traced via "stream" and ends the reads; a cancel is the stream's quiet end,
- * traced with canceled true. Unscripted, any other stream error fails the run. After {@code take}
+ * traced with canceled true; a failure with no answer (a connection lost, a timeout) is observed as
+ * the events delivered and how it {@code failed}. Unscripted, any other stream error fails the run. After {@code take}
  * events the driver closes the stream, Java's try-with-resources (the SDK's own release path);
  * after an error, a cancel or the end it does nothing, so a release check tests the SDK.
  */
@@ -129,7 +130,14 @@ final class Streams {
     ObjectNode seen = Wire.object();
     seen.set("events", events);
     seen.put("kind", "events");
-    return streamed(at, seen, failure, trace);
+    String failed = failure == null ? null : Observe.noAnswer(at.run().sdk(), failure);
+    if (failed == null) {
+      return streamed(at, seen, failure, trace);
+    }
+    seen.put("failed", failed);
+    JsonNode error =
+        at.ask().scripted() ? Traces.error(at.run().sdk(), failure, "stream", at.ask().envelope()) : null;
+    return new Observe.Outcome(seen, error, null, trace);
   }
 
   /** An event as the grid observes it: its data (a string as it is), its event name and id only when set. */

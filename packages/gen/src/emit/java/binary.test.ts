@@ -250,6 +250,9 @@ const decodeError = (message: string) => ({
 	via: "return",
 })
 
+/** A 2xx that did not decode as the grid observes it (bit 21 i0): its status, read from the raw box. */
+const UNDECODABLE = { kind: "decode", status: 200 }
+
 /* new: the <Op>Headers holder is filled from a 2xx; a missing or unparsable required header is a DecodeException (as C#) */
 describe.skipIf(!JAVA)("typed response headers: <Op>Headers fills the declared headers (Fc7)", SLOW, () => {
 	it.each(MODES)(
@@ -273,8 +276,8 @@ describe.skipIf(!JAVA)("typed response headers: <Op>Headers fills the declared h
 				observed: [
 					{ data, headers: { "X-Etag": "e1", "X-Item-Version": "3" }, kind: "data", status: 200 },
 					{ data, headers: { "X-Item-Version": "3" }, kind: "data", status: 200 },
-					null,
-					null,
+					UNDECODABLE,
+					UNDECODABLE,
 				],
 			})
 		},

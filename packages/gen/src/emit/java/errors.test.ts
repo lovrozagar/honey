@@ -258,7 +258,15 @@ describe.skipIf(!JAVA)(
 			const observed = [run.observed, lost.observed]
 			expect({ hops, observed, path: path?.text, shapes }, run.stderr + lost.stderr).toEqual({
 				hops: 2,
-				observed: [[{ body: { message: "gone" }, errorKey: null, kind: "error", status: 404 }, null, null], [null]],
+				/* bit 21 i0: the undecodable 2xx and the refused connection are grid outcomes; a bad path param is none */
+				observed: [
+					[
+						{ body: { message: "gone" }, errorKey: null, kind: "error", status: 404 },
+						{ kind: "decode", status: 200 },
+						null,
+					],
+					[{ kind: "transport" }],
+				],
 				path: 'path param id: ".." is not a path segment',
 				shapes: [
 					[statusChain("NotFoundException"), 404, null],

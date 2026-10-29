@@ -143,7 +143,7 @@ describe.skipIf(!JAVA)("what fails at the handshake: the method throws, nothing 
 		const run = await driven().runCalls({ calls: [rooms()], setup: {} }, { url: REFUSED_URL }, { script: {} })
 		expect({ error: failed(run.trace?.calls[0]?.error), observed: run.observed }, run.stderr).toEqual({
 			error: { text: expect.stringMatching(/^GET \/rooms\/\{room\}: /), type: "ApiConnectionException", via: "return" },
-			observed: [null],
+			observed: [{ kind: "transport" }],
 		})
 	})
 })
@@ -197,7 +197,7 @@ describe.skipIf(!JAVA)("a 101 the JDK refuses: it fails closed, the subprotocol 
 		).toEqual({
 			error: handshake(),
 			hops: 1,
-			observed: [null],
+			observed: [{ kind: "transport" }],
 		})
 	})
 
@@ -209,7 +209,7 @@ describe.skipIf(!JAVA)("a 101 the JDK refuses: it fails closed, the subprotocol 
 		expect({ errors, hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 			errors: [handshake(), handshake()],
 			hops: 2,
-			observed: [null, null],
+			observed: [{ kind: "transport" }, { kind: "transport" }],
 		})
 	})
 
@@ -224,7 +224,7 @@ describe.skipIf(!JAVA)("a 101 the JDK refuses: it fails closed, the subprotocol 
 		const unoffered = handshake("the server chose subprotocol v9, which was not offered")
 		expect({ errors, observed: run.observed, offered }, run.stderr).toEqual({
 			errors: [unoffered, null, unoffered],
-			observed: [null, OPENED, null],
+			observed: [{ kind: "transport" }, OPENED, { kind: "transport" }],
 			offered: ["v1", undefined, undefined],
 		})
 	})

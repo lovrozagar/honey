@@ -11,7 +11,8 @@ import tools.jackson.databind.node.ObjectNode;
  * What a call observed (the grid's Observed, null when the grid has no outcome for it), its traced
  * error and a safe-mode result's summary. An answer is its data, its bytes' digest or its raw
  * response; an ApiException is an error with its key and its body; a timeout is {@code {kind:
- * timeout}}; any other failure has no outcome.
+ * timeout}}, an ApiConnectionException {@code {kind: transport}} and a DecodeException {@code {kind:
+ * decode}} with the raw box's status; any other failure has no outcome.
  */
 final class Observe {
   private Observe() {}
@@ -85,12 +86,27 @@ final class Observe {
     return new Outcome(seen, trace, null);
   }
 
-  /** A status error or a timeout as the grid observes it, else null. */
+  /**
+   * A status error, an answer that did not decode (its status the raw box's: DecodeException holds
+   * none) or no answer as the grid observes it, else null.
+   */
   static JsonNode graded(Sdk sdk, Throwable error, Object raw, Ask ask) {
     if (instanceOf(sdk, "ApiException", error)) {
       return errorOf(error, raw, ask);
     }
-    return instanceOf(sdk, "ApiTimeoutException", error) ? Wire.object().put("kind", "timeout") : null;
+    if (instanceOf(sdk, "DecodeException", error)) {
+      return Wire.object().put("kind", "decode").put("status", statusOf(Reflect.call(raw, "status")));
+    }
+    String failed = noAnswer(sdk, error);
+    return failed == null ? null : Wire.object().put("kind", failed);
+  }
+
+  /** A failure with no answer as the grid names it: {@code timeout} or {@code transport}, else null. */
+  static String noAnswer(Sdk sdk, Throwable error) {
+    if (instanceOf(sdk, "ApiTimeoutException", error)) {
+      return "timeout";
+    }
+    return instanceOf(sdk, "ApiConnectionException", error) ? "transport" : null;
   }
 
   private static boolean instanceOf(Sdk sdk, String simple, Object value) {

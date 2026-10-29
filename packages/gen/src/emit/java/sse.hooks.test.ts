@@ -334,7 +334,7 @@ describe.skipIf(!JAVA)(
 					start(PENDING),
 					logged(PENDING, "error", "error", { error: expect.stringMatching(/^ApiConnectionException: /) }),
 				],
-				observed: [null],
+				observed: [{ kind: "transport" }],
 				status: 0,
 			})
 			expect(leaked(run.trace?.log)).toEqual([])

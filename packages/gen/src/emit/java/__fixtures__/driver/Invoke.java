@@ -3,6 +3,7 @@ import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import tools.jackson.databind.JsonNode;
@@ -110,8 +111,11 @@ final class Invoke {
     }
   }
 
+  /** The origins a call may name beside the primary, each a member of the envelope. */
+  private static final Set<String> ORIGINS = Set.of("alt", "drop", "refused");
+
   /**
-   * The call's RequestOptions: its raw box, its timeout, its undeclared headers and its alt origin.
+   * The call's RequestOptions: its raw box, its timeout, its undeclared headers and its origin (alt, drop or refused).
    */
   private static Object options(Run run, JsonNode call, Object raw, Map<String, String> extra) {
     Object builder = Reflect.invokeStatic(run.sdk().type("RequestOptions"), "builder");
@@ -123,8 +127,16 @@ final class Invoke {
     if (!extra.isEmpty()) {
       Reflect.call(builder, "headers", new LinkedHashMap<>(extra));
     }
-    if ("alt".equals(Wire.text(call, "origin"))) {
-      Reflect.call(builder, "baseUrl", Wire.text(run.envelope(), "alt"));
+    String origin = Wire.text(call, "origin");
+    if (origin != null) {
+      if (!ORIGINS.contains(origin)) {
+        throw new DriverException("origin " + origin + " is not one the driver knows");
+      }
+      String url = Wire.text(run.envelope(), origin);
+      if (url == null) {
+        throw new DriverException("the call goes to the " + origin + " origin, and the envelope names none");
+      }
+      Reflect.call(builder, "baseUrl", url);
     }
     return Reflect.call(builder, "build");
   }
