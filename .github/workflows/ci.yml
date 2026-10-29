@@ -563,7 +563,10 @@ jobs:
   hotpath:
     name: hot-path benchmark
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # bit 21 k-pass: 3 interleaved passes and a 2.6 s round floor. At the slow runner class (3.9x local) the five
+    # steps take ~666 s and the rest ~22 s, 688 s x 1.5 = 17.2 min; the 30-run history's worst steps scaled the same
+    # way give 437 s x 1.5 = 10.9 min. The larger, rounded up.
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

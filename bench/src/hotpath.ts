@@ -5,8 +5,9 @@
  *
  *     bun bench/src/hotpath.ts   # judged against blueprint/baselines/bench.json
  *
- * Judged as the other four benches are (gate.ts): a scenario whose median ratio is above its
- * ceiling in bench.json, recorded from CI's own runs on the Bun it pins, is REGRESSED (exit 1).
+ * Judged as the other four benches are, on gate.ts's interleaved passes: a scenario whose median of
+ * pass medians is above its ceiling in bench.json, recorded from CI's own runs on the Bun it pins, is
+ * REGRESSED (exit 1).
  * A runtime minor without ceilings runs as a hint only. Until bit 20 e3 it was judged against
  * v0's ratios in blueprint/baselines/hotpath.json, kept frozen as v0's record (bun 1.4 only,
  * so under CI's bun 1.3 it never gated).
@@ -19,7 +20,7 @@ import { createMiddleware as createV1Middleware } from "../../packages/core/src/
 import { requestId as requestIdV1 } from "../../packages/core/src/middleware/request-id.ts"
 import { secureHeaders as secureHeadersV1 } from "../../packages/core/src/middleware/secure-headers.ts"
 import { honey as honeyV1 } from "../../packages/core/src/routing/app.ts"
-import { ceilingsOf, report, rowOf, runtime } from "./gate.ts"
+import { ceilingsOf, measure, passesOf, report, rowOf, runtime, samplingOf } from "./gate.ts"
 import { median } from "./significance.ts"
 
 const SAMPLES = Number(process.env.HOTPATH_SAMPLES ?? 15)
@@ -163,50 +164,35 @@ async function timePerOp(fetch: Fetch, make: Request | (() => Request), expectSt
 	return ((performance.now() - start) * 1e6) / ITERATIONS
 }
 
-type Measured = { honeyNs: number; rawNs: number; ratio: number; ratios: number[] }
-
 function targetFetch(): Fetch {
 	const app = buildV1App()
 	return (req) => app.fetch(req, {})
 }
 
-const RUNNABLE = Object.entries(SCENARIOS)
-
-async function measure(): Promise<Record<string, Measured>> {
-	const honeyFetch = targetFetch()
-	const raw = buildRaw()
-	const out: Record<string, Measured> = {}
-	for (const [name, sc] of RUNNABLE) {
+/* one in-process app per side for every scenario; gate.ts interleaves each sample of honey with one of raw, in passes */
+function scenariosOf(honeyFetch: Fetch, raw: Fetch) {
+	return Object.entries(SCENARIOS).map(([name, sc]) => {
 		const url = `http://bench.local${sc.path}`
 		const init: RequestInit = { body: sc.body, headers: sc.headers, method: sc.method }
 		const make: Request | (() => Request) = sc.fresh ? () => new Request(url, init) : new Request(url, init)
 		const status = sc.status ?? 200
-		/* warm both paths up so the JIT has settled before anything is recorded */
-		await timePerOp(honeyFetch, make, status)
-		await timePerOp(raw, make, status)
-		const ratios: number[] = []
-		const honeyNs: number[] = []
-		const rawNs: number[] = []
-		/* interleaved, so frequency scaling and noisy neighbors hit both sides alike */
-		for (let s = 0; s < SAMPLES; s++) {
-			const h = await timePerOp(honeyFetch, make, status)
-			const r = await timePerOp(raw, make, status)
-			honeyNs.push(h)
-			rawNs.push(r)
-			ratios.push(h / r)
-		}
-		out[name] = { honeyNs: median(honeyNs), rawNs: median(rawNs), ratio: median(ratios), ratios }
-	}
-	return out
+		return { name, raw: () => timePerOp(raw, make, status), v1: () => timePerOp(honeyFetch, make, status) }
+	})
 }
 
 const version = typeof Bun !== "undefined" ? Bun.version : process.version.slice(1)
-const results = await measure()
+const passes = passesOf(process.env)
+const { idleMs, measured } = await measure(scenariosOf(targetFetch(), buildRaw()), { passes, samples: SAMPLES })
 
 const own = ceilingsOf("hotpath")
-const rows = Object.entries(results).map(([name, r]) => ({
-	...rowOf(name, r.ratios, own?.[name]),
-	honey_ns: Math.round(r.honeyNs),
-	raw_ns: Math.round(r.rawNs),
+const rows = measured.map((m) => ({
+	...rowOf(m.name, m.passes, own?.[m.name]),
+	honey_ns: Math.round(median(m.v1)),
+	raw_ns: Math.round(median(m.raw)),
 }))
-report("hotpath", `hotpath v1 on ${runtime} (${version}), ${SAMPLES} samples`, rows, own !== undefined)
+report(
+	"hotpath",
+	`hotpath v1 on ${runtime} (${version}), ${samplingOf(passes, SAMPLES, idleMs)}`,
+	rows,
+	own !== undefined,
+)

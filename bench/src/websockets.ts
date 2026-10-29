@@ -3,7 +3,7 @@
  * through app.fetch in process with a fake adapter, so no socket or kernel time is measured:
  *
  * - upgrade-1k: 1000 handshakes to a ws route behind one chain middleware, Origin checked;
- * - message-10k: 10 000 messages into one connection whose onMessage echoes (lane, containment, send);
+ * - message-100k: 100 000 messages into one connection whose onMessage echoes (lane, containment, send);
  * - realtime-fanout: 100 joined connections, 1000 REST publishes, 100 000 frames out;
  * - realtime-inbound-10k: 10 000 JSON frames into one realtime connection (both lanes, parse, drain).
  *
@@ -13,6 +13,13 @@
  * sockets: an Origin-checked upgrade that opens one, an echo, one JSON frame per publish sent to
  * every joined socket, a JSON parse per inbound frame (gate.ts). Until bit 20 e it was gated
  * against v0.
+ *
+ * The two feeds reach steady state late (bit 21 k-pass): v1's per-frame cost kept falling for tens of
+ * millions of frames, and the echo twin, ~2 ns a frame, moved between JIT states pass to pass, so k=1's
+ * 15 samples of 10 000 frames sat inside a transient and k=3 read further into it (message-10k's pass
+ * medians 3.43, 6.16, 7.92 in one process). Each now runs STEADY throwaway pairs before its first pass
+ * (30 left them drifting, 300 held their pass medians within 0.07), and the echo times 100 000 frames
+ * a sample, where its runs agreed (6.3-6.9 against 7.9-10.5 at 10 000 frames).
  */
 import { createMiddleware } from "../../packages/core/src/middleware/middleware.ts"
 import { realtime } from "../../packages/core/src/realtime/realtime.ts"
@@ -24,12 +31,17 @@ import { gate } from "./gate.ts"
 /* the ws lane closes a connection 1008 past 1024 waiting messages, in both versions */
 const BATCH = 512
 const MESSAGES = 10_000
+/* frames per message-100k sample: the echo twin's ~2 ns a frame needs this many to time steadily */
+const ECHOES = 100_000
+/* throwaway v1 + raw pairs before a feed scenario's first pass, to reach steady state (the header says why) */
+const STEADY = 300
 const SUBSCRIBERS = 100
 const PUBLISHES = 1000
 
 type FetchApp = { fetch(request: Request, env: {}): Response | Promise<Response> }
 type Socket = { readonly raw: unknown }
 type Handler = {
+	onClose?(ctx: unknown, ws: Socket, code: number, reason: string): unknown
 	onMessage?(ctx: unknown, ws: Socket, data: string): unknown
 	onOpen?(ctx: unknown, ws: Socket): unknown
 }
@@ -176,19 +188,46 @@ async function connect(side: Side, path: string): Promise<Conn> {
 	return side.conns.at(-1) as Conn
 }
 
-/** Feed `MESSAGES` frames to `conn` in batches, each awaited through `done`. */
-async function feed(conn: Conn, frame: string, done: ReturnType<typeof counter>) {
+/**
+ * Closes a feed sample's connection and drops it from its side, outside the timed span: kept open, every earlier
+ * sample's connection stayed live on the v1 side, whose cost then rose pass over pass (message-100k's v1 ~1700 us a
+ * sample in pass 1, ~1900-2200 us by pass 3, with the raw twin flat).
+ */
+async function close(side: Side, conn: Conn): Promise<void> {
+	await conn.handler.onClose?.(undefined, conn.ws, 1000, "sample done")
+	side.conns.splice(side.conns.indexOf(conn), 1)
+}
+
+/*
+ * Each feed scenario has its own loop, twice the same text on purpose: one shared loop's call site saw all four
+ * handlers (two scenarios, two sides), and the echo twin's ~2 ns a frame then swung with whether the JIT inlined its
+ * handler there, which the other scenario's passes kept changing (message-100k's raw 229-1177 us a sample, its pass
+ * medians 3.58, 4.72, 10.47 in one run). Its own loop sees only its own two handlers, as it does run alone.
+ */
+
+/** Feed `ECHOES` frames to an echo connection in batches, each awaited through `done`. */
+async function feedEchoes(conn: Conn, done: ReturnType<typeof counter>) {
+	const start = done.value
+	for (let sent = 0; sent < ECHOES; sent += BATCH) {
+		const batch = Math.min(BATCH, ECHOES - sent)
+		for (let i = 0; i < batch; i++) conn.handler.onMessage?.(undefined, conn.ws, "m")
+		await done.reach(start + sent + batch)
+	}
+}
+
+/** Feed `MESSAGES` JSON frames to an inbound connection in batches, each awaited through `done`. */
+async function feedInbound(conn: Conn, done: ReturnType<typeof counter>) {
 	const start = done.value
 	for (let sent = 0; sent < MESSAGES; sent += BATCH) {
 		const batch = Math.min(BATCH, MESSAGES - sent)
-		for (let i = 0; i < batch; i++) conn.handler.onMessage?.(undefined, conn.ws, frame)
+		for (let i = 0; i < batch; i++) conn.handler.onMessage?.(undefined, conn.ws, '{"n":1}')
 		await done.reach(start + sent + batch)
 	}
 }
 
 const subscribers = new Map<Side, number>()
 
-const SCENARIOS: ReadonlyArray<{ name: string; run(side: Side): Promise<number> }> = [
+const SCENARIOS: ReadonlyArray<{ name: string; run(side: Side): Promise<number>; warmup?: number }> = [
 	{
 		name: "upgrade-1k",
 		run: async (side) => {
@@ -200,13 +239,16 @@ const SCENARIOS: ReadonlyArray<{ name: string; run(side: Side): Promise<number> 
 		},
 	},
 	{
-		name: "message-10k",
+		name: "message-100k",
 		run: async (side) => {
 			const conn = await connect(side, "/live")
 			const start = performance.now()
-			await feed(conn, "m", side.sent)
-			return (performance.now() - start) * 1000
+			await feedEchoes(conn, side.sent)
+			const us = (performance.now() - start) * 1000
+			await close(side, conn)
+			return us
 		},
+		warmup: STEADY,
 	},
 	{
 		name: "realtime-fanout",
@@ -225,15 +267,18 @@ const SCENARIOS: ReadonlyArray<{ name: string; run(side: Side): Promise<number> 
 		run: async (side) => {
 			const conn = await connect(side, "/in")
 			const start = performance.now()
-			await feed(conn, '{"n":1}', side.handled)
-			return (performance.now() - start) * 1000
+			await feedInbound(conn, side.handled)
+			const us = (performance.now() - start) * 1000
+			await close(side, conn)
+			return us
 		},
+		warmup: STEADY,
 	},
 ]
 
 await gate(
 	"websockets",
-	SCENARIOS.map(({ name, run }) => ({ name, raw: () => run(raw), v1: () => run(v1) })),
+	SCENARIOS.map(({ name, run, warmup }) => ({ name, raw: () => run(raw), v1: () => run(v1), warmup })),
 	{
 		samples: Number(process.env.WS_SAMPLES ?? 15),
 	},
