@@ -51,6 +51,26 @@ const LARGE: Reply = {
 const DECODE_BOUND_MS = 500
 const TIMEOUT_CHAIN = expect.stringMatching(/^(TimeoutException|CompletionException|CancellationException)$/)
 
+/** The causes a lapsed bound's timeout has: none in the decode, the JDK future's on the wire (`TIMEOUT_CHAIN`). */
+const PHASE_CAUSES: readonly (string | null)[] = [null, "TimeoutException"]
+
+/**
+ * A run's first error and its observed, the error's `inner` read as whether it is a phase's cause: in the decode the
+ * lapse has none, and on a slow runner the fetch is still on the wire, the JDK's TimeoutException its cause. Each
+ * phase's own cause is pinned where it is deterministic: the wire's by the two-hop legs, the decode's by each read
+ * loop's in-process leg.
+ */
+const phaseLapse = (run: {
+	readonly trace?: { readonly calls: readonly { readonly error?: JavaError }[] }
+	readonly observed?: unknown
+}) => {
+	const error = run.trace?.calls[0]?.error
+	return {
+		error: { ...error, inner: error !== undefined && PHASE_CAUSES.includes(error.inner) },
+		observed: run.observed,
+	}
+}
+
 /** The `http` SDK with the driver aimed at it: it must build. */
 function driven(): DrivenJavaSdk {
 	const sdk = drivenJavaSdk("http")
@@ -192,12 +212,13 @@ describe.skipIf(!JAVA)(
 			})
 		})
 
-		/* new: the decode runs under the one deadline (Exchange.cs:147 reads the body under the token): the fetch fits the
-		 * bound, the decode of a 500 MiB gzip answer does not, and the decode's read loop ends the call as ApiTimeoutException */
+		/* new: the decode runs under the one deadline (Exchange.cs:147). Which phase the bound passes in is a race on the
+		 * runner's speed (CI run 40896170572) that no fixture signal can order, so this holds what either phase does: the
+		 * timeout, no data (phaseLapse). Don't narrow it to one cause; each phase's is pinned by its deterministic leg. */
 		it("ends an answer whose decode outlasts the deadline as ApiTimeoutException, with no answer data", async () => {
 			const { run } = await drive([LARGE], [ECHO], { timeoutMs: DECODE_BOUND_MS }, { config: { maxResponseBytes: 0 } })
-			expect({ error: run.trace?.calls[0]?.error, observed: run.observed }, run.stderr).toEqual({
-				error: { ...lapsed(`GET /echo timed out after ${DECODE_BOUND_MS} ms`), inner: null },
+			expect(phaseLapse(run), run.stderr).toEqual({
+				error: { ...lapsed(`GET /echo timed out after ${DECODE_BOUND_MS} ms`), inner: true },
 				observed: [TIMED_OUT],
 			})
 		})
@@ -302,7 +323,8 @@ describe.skipIf(!JAVA)(
  * Each of Decode's two read loops checks the deadline (ruling iii), in-process in the SDK's package with a deadline
  * already lapsed, so neither leg rests on timing: the counting pass of an answer over its cap ends as the timeout, not
  * the cap's refusal, and the decoding pass (Decode.decoded, reached by reflection) throws the timeout instead of
- * answering. The served leg above holds the pair; these hold each loop's own check.
+ * answering, each with no cause (CI run 40896170572: the decode phase's lapse is the deadline's own timeout; only the
+ * wire's carries the JDK's TimeoutException). The served leg above holds the pair; these hold each loop's own check.
  */
 const DECODE_PROBE = `import java.io.ByteArrayOutputStream;
 import java.lang.reflect.InvocationTargetException;
@@ -336,10 +358,15 @@ final class DecodeProbe {
       body.call();
       return "answered";
     } catch (InvocationTargetException e) {
-      return e.getCause().getClass().getSimpleName() + ": " + e.getCause().getMessage();
+      return described(e.getCause());
     } catch (RuntimeException e) {
-      return e.getClass().getSimpleName() + ": " + e.getMessage();
+      return described(e);
     }
+  }
+
+  /* its class, its text and its cause: a decode's lapse has none, its own timeout, never a JDK one */
+  private static String described(Throwable e) {
+    return e.getClass().getSimpleName() + ": " + e.getMessage() + " cause=" + e.getCause();
   }
 
   private static HttpResponse<byte[]> gzipped(byte[] raw) {
@@ -370,7 +397,7 @@ final class DecodeProbe {
 
 describe.skipIf(!JAVA)("each of the decode's read loops checks the deadline, in-process (ruling iii)", SLOW, () => {
 	/* new: one leg per loop, each red with its own check removed (the served leg stays green on either alone) */
-	it("ends the counting pass and the decoding pass under a lapsed deadline as ApiTimeoutException", () => {
+	it("ends the counting pass and the decoding pass under a lapsed deadline as ApiTimeoutException, with no cause", () => {
 		const files = generateJavaSdk(FIXTURES.http.document()).files
 		const pkg = /^package ([\w.]+);/m.exec(files["src/main/java/ai/anyrow/Decode.java"] ?? "")?.[1]
 		const run = compiledJavaSdk(files).run(`${pkg}.DecodeProbe`, `package ${pkg};\n${DECODE_PROBE}`)
@@ -381,8 +408,8 @@ describe.skipIf(!JAVA)("each of the decode's read loops checks the deadline, in-
 			diagnostics: [],
 			status: 0,
 			stdout: [
-				"count ApiTimeoutException: GET /echo timed out after 0 ms",
-				"decoded ApiTimeoutException: GET /echo timed out after 0 ms",
+				"count ApiTimeoutException: GET /echo timed out after 0 ms cause=null",
+				"decoded ApiTimeoutException: GET /echo timed out after 0 ms cause=null",
 			],
 		})
 	})
