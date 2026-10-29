@@ -124,6 +124,23 @@ async function counted(base: string, child: { logs: () => string }, timeoutMs: n
 	throw new Error(`no counter at ${base}: ${last}\n${child.logs()}`)
 }
 
+/** What `path` of the Worker at `base` answers, polled until it answers 200 or `timeoutMs` passes: its status and text, or why not. */
+async function answered(base: string, path: string, timeoutMs: number): Promise<string> {
+	const deadline = Date.now() + timeoutMs
+	let last = "no answer"
+	while (Date.now() < deadline) {
+		try {
+			const res = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(1_000) })
+			last = `${res.status} ${await res.text()}`
+			if (res.status === 200) return last
+		} catch (err) {
+			last = err instanceof Error ? err.message : String(err)
+		}
+		await new Promise((r) => setTimeout(r, 80))
+	}
+	return last
+}
+
 /** What the served bundle answers: its health route and its document's version, title and health path. */
 async function served(base: string) {
 	const health = await fetch(`${base}/health`)
@@ -181,6 +198,32 @@ describe.sequential("the build plugin's bundles, served (bit 19 h2)", () => {
 			expect([await (await fetch(`${base}/count`)).text(), await (await fetch(`${base}/count`)).text()]).toEqual([
 				"2",
 				"3",
+			])
+		},
+		SPAWN_TIMEOUT,
+	)
+
+	it(
+		"cloudflare: an entry's plain values (an object, a string, a function) leave the Worker serving (bit 21 h)",
+		async (ctx) => {
+			if (!existsSync(WRANGLER)) ctx.skip("wrangler is not installed")
+			/* workerd refuses a module whose named export is no function or object: one string export stopped the Worker */
+			const outDir = await viteBuild("cloudflare", "tests/build/fixture/worker-values.ts", "cloudflare-values")
+			const wrangler = {
+				compatibility_date: "2026-01-20",
+				durable_objects: { bindings: [{ class_name: "Counter", name: "COUNTER" }] },
+				main: "index.js",
+				migrations: [{ new_sqlite_classes: ["Counter"], tag: "v1" }],
+				name: "honey-build-values-fixture",
+			}
+			writeFileSync(resolve(outDir, "wrangler.jsonc"), `${JSON.stringify(wrangler, null, 2)}\n`)
+			const port = String(PORTS.cloudflare)
+			const args = ["dev", "--ip", "127.0.0.1", "--port", port, "--inspector-port", "0", "--log-level", "error"]
+			start(WRANGLER, [...args, "--persist-to", resolve(outDir, "state")], { cwd: outDir })
+			const base = `http://127.0.0.1:${port}`
+			expect([await answered(base, "/config", 25_000), await answered(base, "/count", 5_000)]).toEqual([
+				"200 honey-build-values in eu",
+				"200 1",
 			])
 		},
 		SPAWN_TIMEOUT,

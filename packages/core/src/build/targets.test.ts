@@ -213,7 +213,7 @@ describe("a Worker's named exports (bit 21 h)", () => {
 	it("passes every named export of the app's entry through, beside honey's default fetch, the app itself not", async () => {
 		const entry = await workerOf(["app", "McpUploads", "Jobs", "with-dash"])
 		expect([
-			entry.includes('export { McpUploads, Jobs, "with-dash" } from "./src/app.ts"'),
+			entry.includes('export { named0 as McpUploads, named1 as Jobs, named2 as "with-dash" }'),
 			entry.includes("export default {"),
 			/\bexport \{[^}]*\bapp\b/.test(entry),
 		]).toEqual([true, true, false])
@@ -223,12 +223,22 @@ describe("a Worker's named exports (bit 21 h)", () => {
 		const entry = await workerOf(["default", "McpUploads"], { entry: "src/app.ts", export: "default" })
 		expect([
 			entry.includes('import app from "./src/app.ts"'),
-			entry.includes('export { McpUploads } from "./src/app.ts"'),
+			entry.includes("export { named0 as McpUploads }"),
 		]).toEqual([true, true])
 	})
 
 	it("adds no export line when the entry has none beside the app", async () => {
 		expect((await workerOf(["app"])).includes("export {")).toBe(false)
+	})
+
+	it("binds each passed export through the check a value must pass to be a Worker's entrypoint", async () => {
+		const entry = await workerOf(["app", "config", "with-dash"])
+		expect([
+			entry.includes('import * as entry from "./src/app.ts"'),
+			entry.includes('const named0 = entrypoint(entry["config"])'),
+			entry.includes('const named1 = entrypoint(entry["with-dash"])'),
+			entry.includes('typeof value === "function" || (typeof value === "object" && value !== null) ? value : {}'),
+		]).toEqual([true, true, true, true])
 	})
 
 	it("refuses an entry exporting a default beside its named app: a Worker's default is honey's fetch", async () => {

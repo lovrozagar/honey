@@ -3,7 +3,8 @@
  * from a virtual entry that imports it and starts it the way that target runs an app. Nothing is detected or
  * injected: v1 code-splits through plain dynamic import() (Q4, H23). Bit 21 h: a Worker's module also exports every
  * other named export of the app's entry (a Durable Object class, a WorkerEntrypoint, a Workflow), since a Worker's
- * bindings name classes its main module exports; its default stays honey's fetch.
+ * bindings name classes its main module exports; its default stays honey's fetch. A value workerd takes as no
+ * entrypoint (a string, a number) is exported as an inert empty object, so it never stops the Worker.
  */
 import { builtinModules } from "node:module"
 
@@ -51,9 +52,24 @@ function serverEntry(app: BuildApp, port: number): string {
 function workerEntry(app: BuildApp, _port: number, named: readonly string[]): string {
 	/* an export name need not be an identifier (`export { x as "a-b" }`) */
 	const names = named.map((name) => (/^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)))
+	/*
+	 * workerd loads a module only when its every named export is a function (a class among them) or an object: one
+	 * string, number, boolean, null or undefined stops the Worker (`not of type 'function or ExportedHandler'`). Only
+	 * the names are known here, so each value passes through as it is, or, being none of those, as an inert empty
+	 * object: an entrypoint with no handler, which keeps an entry's `export const VERSION = "1"` from stopping it.
+	 */
+	const passed =
+		named.length === 0
+			? []
+			: [
+					`import * as entry from "./${app.entry}"`,
+					'const entrypoint = (value) => (typeof value === "function" || (typeof value === "object" && value !== null) ? value : {})',
+					...named.map((name, at) => `const named${at} = entrypoint(entry[${JSON.stringify(name)}])`),
+					`export { ${names.map((name, at) => `named${at} as ${name}`).join(", ")} }`,
+				]
 	return [
 		importApp(app),
-		...(names.length > 0 ? [`export { ${names.join(", ")} } from "./${app.entry}"`] : []),
+		...passed,
 		"",
 		"export default {",
 		"  fetch: (req, env, ctx) => app.fetch(req, env, ctx),",
