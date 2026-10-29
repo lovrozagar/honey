@@ -21,8 +21,8 @@ type trace struct {
 	Transport   *transportTrace `json:"transport,omitempty"`
 }
 
-// callTrace is one call: its time, its error when it has one, a safe-mode SDKResult's summary, and
-// what a stream call recorded.
+// callTrace is one call: its time, its error when it has one, a Client.Safe() call's Result summary,
+// and what a stream call recorded.
 type callTrace struct {
 	ElapsedMs int64        `json:"elapsedMs"`
 	Error     *goError     `json:"error,omitempty"`
@@ -30,7 +30,7 @@ type callTrace struct {
 	Stream    *streamTrace `json:"stream,omitempty"`
 }
 
-// resultTrace is a safe-mode SDKResult the method returned without an error.
+// resultTrace is a Result a Client.Safe() method returned without an error; Status is its Response's.
 type resultTrace struct {
 	OK       bool `json:"ok"`
 	Status   int  `json:"status"`

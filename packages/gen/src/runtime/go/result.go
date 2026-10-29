@@ -5,46 +5,82 @@ package sdk
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"iter"
 	"net/http"
 )
 
-// SDKResult is what a safe-mode method returns: an error status lands in Err, and the second
-// return value is reserved for failures with no response (transport, timeout, decode).
-type SDKResult[T any] struct {
-	Data     *T
-	Err      APIError
-	Status   int
+// Result is a Client.Safe() method's answer. Ok: Data is the normal method's. Else Err is the
+// error it returns for the answer, an error status (*ClientError or its per-status type) or a
+// *DecodeError, and Data is the zero value. Response is the answer's. No answer (never sent, a
+// refused or dropped connection, a timeout, a cancel) is the method's error.
+type Result[T any] struct {
+	Data     T
+	Err      error
 	Response *http.Response
 }
 
-// OK reports whether the result carries no error status.
-func (r SDKResult[T]) OK() bool {
-	return r.Err == nil
+// Ok reports whether the call answered its data.
+func (r Result[T]) Ok() bool { return r.Err == nil }
+
+// DecodeError is a 2xx whose body did not decode, or ran past Config.MaxResponseBytes (Err is
+// then ErrResponseTooLarge, the Body empty).
+type DecodeError struct {
+	Response *http.Response
+	Err      error
 }
 
+func (e *DecodeError) Error() string { return "honey: decode response: " + e.Err.Error() }
+
+// Unwrap returns the parse error, or ErrResponseTooLarge.
+func (e *DecodeError) Unwrap() error { return e.Err }
+
 // decodeJSON decodes a JSON success body into a *T; an empty body gives the zero value.
-func decodeJSON[T any](body []byte) (*T, error) {
+func decodeJSON[T any](result *requestResult) (*T, error) {
 	var out T
-	if len(body) > 0 {
-		if err := json.Unmarshal(body, &out); err != nil {
-			return nil, fmt.Errorf("honey: decode response: %w", err)
+	if len(result.body) > 0 {
+		if err := json.Unmarshal(result.body, &out); err != nil {
+			return nil, &DecodeError{result.resp, err}
 		}
 	}
 	return &out, nil
 }
 
-// safeResult folds a call's outcome into an SDKResult: an error status becomes Err, any other
-// failure stays the second return value.
-func safeResult[T any](data *T, result *requestResult, err error) (SDKResult[T], error) {
-	if err == nil {
-		return SDKResult[T]{Data: data, Status: result.status, Response: withBody(result.resp, result.body)}, nil
-	}
+// safeCall is a Client.Safe() call: its response and, for a stream, whether it opened and how.
+type safeCall struct {
+	resp *http.Response
+	sent bool
+	err  error
+}
+
+// with is reqOpts reporting to s.
+func (s *safeCall) with(reqOpts []RequestOption) []RequestOption {
+	return append([]RequestOption{func(rc *requestConfig) { rc.safe = s }}, reqOpts...)
+}
+
+// safeOf is the Result of a normal method's return: an answer's error in Err, any other the error.
+func safeOf[T any](data T, err error, s *safeCall) (Result[T], error) {
 	var ce *ClientError
-	if !errors.As(err, &ce) {
-		return SDKResult[T]{}, err
+	var de *DecodeError
+	switch {
+	case err == nil:
+		return Result[T]{Data: data, Response: s.resp}, nil
+	case errors.As(err, &ce):
+		return Result[T]{Err: err, Response: ce.Response}, nil
+	case errors.As(err, &de):
+		return Result[T]{Err: err, Response: de.Response}, nil
 	}
-	var apiErr APIError
-	errors.As(err, &apiErr)
-	return SDKResult[T]{Err: apiErr, Status: ce.StatusCode, Response: ce.Response}, nil
+	return Result[T]{}, err
+}
+
+// safeOpen is the Result of a stream opened on the call (Data ranges once); one never sent
+// yields its error, the error.
+func safeOpen[T any](seq iter.Seq2[T, error], s *safeCall) (Result[iter.Seq2[T, error]], error) {
+	err := s.err
+	if !s.sent {
+		for _, failed := range seq {
+			err = failed
+			break
+		}
+	}
+	return safeOf(seq, err, s)
 }

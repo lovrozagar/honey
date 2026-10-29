@@ -27,22 +27,33 @@ export function v1SdkSurfaces(typesSource: string): Map<string, string> {
 
 /**
  * Each method of a v1 emitted Go `client.go` (bit 12, G13), as `generateGoSdk` writes it before
- * gofmt: its signature line without the ` {`, then the `<Op>Opts` struct it takes, what a reader of
- * the SDK takes in to call it once (godoc excluded, as JSDoc is for TS). Keyed `receiver.method`. A
- * signature naming an Opts struct the text never declares throws: a missed block never measures short.
+ * gofmt: its signature line without the ` {`, its `Client.Safe()` twin's field (bit 21 i3: the twin
+ * struct `Safe<Struct>` is named in its godoc, `// SafeX is X answering as Client.Safe() does`),
+ * then the `<Op>Opts` struct both take, what a reader of the SDK takes in to call it in either style
+ * (godoc excluded, as JSDoc is for TS). Keyed `receiver.method` by the normal receiver. A signature
+ * naming an Opts struct the text never declares, or a method without its twin, throws: a missed
+ * block never measures short.
  */
 export function v1GoSdkSurfaces(clientGo: string): Map<string, string> {
 	const blocks = new Map<string, string>()
 	for (const match of clientGo.matchAll(/^type (\w+Opts) struct \{\n(?:\t.*\n)*?\}$/gm))
 		blocks.set(match[1] as string, match[0])
+	const twins = new Map<string, string>()
+	const twinStructs =
+		/^\/\/ (\w+) is (\w+) answering as Client\.Safe\(\) does.*\ntype \1 struct \{\n((?:\t.*\n)*?)\}$/gm
+	for (const match of clientGo.matchAll(twinStructs))
+		for (const field of (match[3] as string).matchAll(/^\t(\w+) (?:Call|Conn|Stream)\d+\[.*$/gm))
+			twins.set(`${match[2]}.${field[1]}`, field[0].trim())
 	const out = new Map<string, string>()
 	for (const match of clientGo.matchAll(/^func \(r \*(\w+)\) (\w+)\(ctx context\.Context.*\{$/gm)) {
 		const key = `${match[1]}.${match[2]}`
 		const signature = match[0].slice(0, -" {".length)
+		const twin = twins.get(key)
+		if (twin === undefined) throw new Error(`${key} has no Client.Safe() twin`)
 		const opts = /\bopts \*(\w+Opts)\b/.exec(signature)?.[1]
 		const block = opts === undefined ? undefined : blocks.get(opts)
 		if (opts !== undefined && block === undefined) throw new Error(`${key} takes ${opts}, which is never declared`)
-		out.set(key, block === undefined ? signature : `${signature}\n${block}`)
+		out.set(key, [signature, twin, ...(block === undefined ? [] : [block])].join("\n"))
 	}
 	return out
 }

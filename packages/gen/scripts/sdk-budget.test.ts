@@ -86,20 +86,23 @@ describe("the TS SDK within its own budget (bit 21 i1, G13)", () => {
 })
 
 /*
- * G13 (bit 12): Go's own per-operation ceiling, not sdkCli's 234. Measured over the five e2e apps'
- * 72 operations in both throwOnError modes (144 surfaces, `v1GoSdkSurfaces` over the pre-gofmt
- * client.go): max 78 (surface, PutInAllByResourceId, safe mode), median 43; gofmt's field alignment
- * moves the max to 79. 78 + 20% headroom = 94. Each language holds its own ceiling, set from its
- * own measurement: Go's surface is a third of TS's, so the shared one would let it triple unseen.
- * An operation over it is fixed in the schema, never by raising the ceiling; revisit only for a
- * genuinely large, legitimate operation.
+ * G13 (bit 12, re-set bit 21 i3): Go's own per-operation ceiling, not sdkCli's 234. Measured over the five e2e apps'
+ * 71 operations (`v1GoSdkSurfaces` over the pre-gofmt client.go: each operation's signature, its Client.Safe() twin's
+ * field and the Opts block both take, as one surface, since both styles are always emitted): max 114 (surface,
+ * GetInParamsMembersByOrgIdAndMemberId: 58 the signature, 41 the twin's field, 15 the Opts), median 65, min 49, sum
+ * 4,764. A twin as a method restating the signature measured max 134, sum 6,002; the field over a generic
+ * Call<n>/Stream<n>/Conn<n> spells its types once. At 7d80509 the surface was one signature per throwOnError mode
+ * (142 surfaces): max 78 (surface, PutInAllByResourceId, safe mode), median 45, sum 6,515; its ceiling was 94.
+ * 114 + 20% headroom = 137. Each language holds its own ceiling, set from its own measurement. An
+ * operation over it is fixed in the schema, never by raising the ceiling; revisit only for a genuinely large,
+ * legitimate operation.
  */
-const GO_SDK_CEILING = 94
+const GO_SDK_CEILING = ceilingOf([114], 0.2)
 
 const GO_CLIENT = `package sdk
 
 // Get calls GET /a.
-func (r *Client) Get(ctx context.Context, opts *GetOpts, reqOpts ...RequestOption) (SDKResult[A], error) {
+func (r *Client) Get(ctx context.Context, opts *GetOpts, reqOpts ...RequestOption) (*A, error) {
 \treturn get(ctx)
 }
 
@@ -108,6 +111,17 @@ func (r *ItemsResource) Get(ctx context.Context, id string, reqOpts ...RequestOp
 }
 
 func (r *Client) helper(x int) {
+}
+
+// SafeClient is Client answering as Client.Safe() does: each method a field of its name.
+type SafeClient struct {
+\tGet Call2[context.Context, *GetOpts, *A]
+\tItems *SafeItemsResource
+}
+
+// SafeItemsResource is ItemsResource answering as Client.Safe() does: each method a field of its name.
+type SafeItemsResource struct {
+\tGet Call2[context.Context, string, struct{}]
 }
 
 // GetOpts holds the optional parameters of get.
@@ -121,47 +135,55 @@ type EmptyOpts struct {
 `
 
 describe("the v1 Go SDK within the budget (bit 12, G13)", () => {
-	it("reads each method's signature with its Opts block, keyed receiver.method", () => {
+	it("reads each method's signature, its Safe() twin's field and its Opts block as one surface, keyed receiver.method", () => {
 		expect(Object.fromEntries(v1GoSdkSurfaces(GO_CLIENT))).toEqual({
 			"Client.Get": [
-				"func (r *Client) Get(ctx context.Context, opts *GetOpts, reqOpts ...RequestOption) (SDKResult[A], error)",
+				"func (r *Client) Get(ctx context.Context, opts *GetOpts, reqOpts ...RequestOption) (*A, error)",
+				"Get Call2[context.Context, *GetOpts, *A]",
 				"type GetOpts struct {",
 				"\t// Limit caps the page.",
 				"\tLimit *int",
 				"}",
 			].join("\n"),
-			"ItemsResource.Get":
+			"ItemsResource.Get": [
 				"func (r *ItemsResource) Get(ctx context.Context, id string, reqOpts ...RequestOption) error",
+				"Get Call2[context.Context, string, struct{}]",
+			].join("\n"),
 		})
 	})
 
-	it("refuses a method whose Opts struct is never declared, so a missed block never measures short", () => {
-		const text = GO_CLIENT.replace("type GetOpts struct", "type OtherOpts struct")
-		expect(() => v1GoSdkSurfaces(text)).toThrow("Client.Get takes GetOpts, which is never declared")
+	it("refuses a method whose Opts struct is never declared, or that has no Safe() twin, so none measures short", () => {
+		const undeclared = GO_CLIENT.replace("type GetOpts struct", "type OtherOpts struct")
+		const untwinned = GO_CLIENT.replace(
+			"\tGet Call2[context.Context, string, struct{}]",
+			"\tGot Call2[context.Context, string, struct{}]",
+		)
+		expect(() => v1GoSdkSurfaces(undeclared)).toThrow("Client.Get takes GetOpts, which is never declared")
+		expect(() => v1GoSdkSurfaces(untwinned)).toThrow("ItemsResource.Get has no Client.Safe() twin")
 	})
 
-	it(`keeps every e2e app's Go operations within ${GO_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+	it(`keeps every e2e app's Go operations within ${GO_SDK_CEILING} tokens, each measured once for both styles`, () => {
 		const over: string[] = []
+		let surfaces = 0
 		for (const app of APPS) {
 			const spec = appSpec(app)
-			for (const throwOnError of [true, false]) {
-				const options = { modulePath: "example.com/budget", throwOnError }
-				const surfaces = v1GoSdkSurfaces(generateGoSdk(spec, options).files["client.go"] ?? "")
-				/* completeness: a surface the regex misses can never pass by going unmeasured */
-				const plans = Object.keys(goCallPlans(spec, options)).length
-				if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
-				for (const [key, text] of surfaces) {
-					const tokens = countTokens(text)
-					if (tokens > GO_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
-				}
+			const options = { modulePath: "example.com/budget" }
+			const measured = v1GoSdkSurfaces(generateGoSdk(spec, options).files["client.go"] ?? "")
+			/* completeness: a surface the regex misses can never pass by going unmeasured */
+			const plans = Object.keys(goCallPlans(spec, options)).length
+			if (measured.size !== plans) over.push(`${app}: ${measured.size} of ${plans} measured`)
+			for (const [key, text] of measured) {
+				surfaces++
+				const tokens = countTokens(text)
+				if (tokens > GO_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
 			}
 		}
-		expect(over).toEqual([])
+		expect({ ceiling: GO_SDK_CEILING, over, surfaces }).toEqual({ ceiling: 137, over: [], surfaces: 71 })
 	})
 })
 
 /*
- * G13 (bit 13): Rust's own per-operation ceiling, not sdkCli's 234 nor Go's 94. Measured over the five e2e
+ * G13 (bit 13): Rust's own per-operation ceiling, not sdkCli's 234 nor Go's 94 (137 since bit 21 i3). Measured over the five e2e
  * apps' 72 operations in both throwOnError modes (144 surfaces, `v1RustSdkSurfaces` over the pre-rustfmt
  * src/client.rs): max 80 (surface, put_in_all_by_resource_id, safe mode), median 37, min 26; rustfmt wraps
  * a long signature one parameter per line, which moves the max to 86 and the median to 39. 80 + 20% headroom
@@ -259,7 +281,7 @@ describe("the v1 Rust SDK within the budget (bit 13, G13)", () => {
 })
 
 /*
- * G13 (bit 14): Python's own per-operation ceiling, not sdkCli's 234 nor Go's 94 or Rust's 96. Bit 21 i2 (R-i5, the
+ * G13 (bit 14): Python's own per-operation ceiling, not sdkCli's 234 nor Go's 94 (137 since bit 21 i3) or Rust's 96. Bit 21 i2 (R-i5, the
  * G13 pattern): a surface is both styles, the AsyncSDK signature and its `client.safe` twin's one line
  * (`v1PythonSdkSurfaces` over the pre-format client.py). Measured over the five e2e apps' 71 operations (71
  * surfaces): max 75 (surface, AsyncSDK.put_in_all_by_resource_id), median 42, min 30 (compose,
@@ -348,7 +370,7 @@ describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
 })
 
 /*
- * G13 (bit 15): C#'s own per-operation ceiling, not sdkCli's 234 nor Go's 94, Rust's 96 or Python's 71 (90 since bit 21 i2). Measured over
+ * G13 (bit 15): C#'s own per-operation ceiling, not sdkCli's 234 nor Go's 94 (137 since bit 21 i3), Rust's 96 or Python's 71 (90 since bit 21 i2). Measured over
  * the five e2e apps' 72 operations in both throwOnError modes (144 surfaces, `v1CSharpSdkSurfaces` over the emitted
  * Client.cs): max 56 (surface, PutInAllByResourceId, safe mode), median 27, min 19. The emitter writes no formatter
  * pass, so the measured text is the shipped text. 56 + 20% headroom = 68. Each language holds its own ceiling, set
@@ -456,8 +478,15 @@ describe("runtimeBytes", () => {
  * transport_longpoll.go +291, transport_sse.go +213); the unreachable "no transports configured" error cut (-58).
  * Bit 19 k1, +261 B of doc only, to 95,916 B: sse.go +136 (a range's end, a break included, frees the connection),
  * ws.go +125 (the dial runs no OnRequest or OnResponse hook and no OnAuthExpired refresh).
+ * Bit 21 i3, +2,155 B to 98,071 B: the safe mirror and an over-cap answer. Dead code first: a scan for runtime
+ * definitions nothing references found only export.go's public Honey* seams (kept); SDKResult with OK (403) and
+ * safeResult (568) are cut. result.go +1,202 (Result with Ok 552, DecodeError 417, safeCall and with 356, safeOf 495,
+ * safeOpen 343, decodeJSON reading the requestResult; the cuts), stream.go +287 (a safe call's stream opened on the
+ * call), sse.go +312 (wireBody: a read failing mid-stream is a call's wrapped no-answer error, not a bare
+ * io.ErrUnexpectedEOF), request.go +266 (a body past the cap is an answer: requestResult.over, a 2xx's DecodeError
+ * after the stale settle), options.go +88 (the safe call's slot, deliver reporting to it).
  */
-const GO_RUNTIME_BYTES = 95_916
+const GO_RUNTIME_BYTES = 98_071
 
 describe("the Go runtime within its byte budget (bit 12, G14)", () => {
 	it(

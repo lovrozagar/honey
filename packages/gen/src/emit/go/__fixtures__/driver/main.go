@@ -6,10 +6,10 @@
 // Stdin is one JSON object, G11's envelope:
 //
 //	{ "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan }, "base": url, "alt"?: url,
-//	  "drop"?: url, "refused"?: url, "script"?: Script }
+//	  "drop"?: url, "refused"?: url, "script"?: Script, "safe"?: bool }
 //
 // cell is the grid's Cell as is (its other members are ignored); plans are the emitter's call plans
-// (goCallPlans). Every call of a cell runs in order on one client, so state a call leaves (a
+// (goCallPlans); safe sends each call through client.Safe() (bit 21 i3), its Result read strictly. Every call of a cell runs in order on one client, so state a call leaves (a
 // refreshed token, a stale mark) reaches the next: a multi-step script is a cell with more calls.
 // Stdout is the grid's Observed[] JSON, one per call. Any failure, and any Call or outcome this
 // driver cannot express, exits 1 with the reason on stderr: a red cell, never a silent pass.
@@ -48,6 +48,7 @@ type input struct {
 	Drop    string          `json:"drop"`
 	Refused string          `json:"refused"`
 	Script  json.RawMessage `json:"script"`
+	Safe    bool            `json:"safe"`
 }
 
 // cell holds what the driver reads of a grid Cell; the calls are decoded strictly one by one.
@@ -70,6 +71,8 @@ type setup struct {
 	Headers   map[string]string `json:"headers"`
 	Redirect  string            `json:"redirect"`
 	TimeoutMs *int64            `json:"timeoutMs"`
+
+	MaxResponseBytes *int64 `json:"maxResponseBytes"`
 }
 
 // plan is one method's call plan, in the emitter's names (emit/go/sdk-method.ts GoMethodCall).
@@ -183,6 +186,9 @@ func configOf(in input) (sdk.Config, error) {
 	}
 	if s.TimeoutMs != nil {
 		cfg.Timeout = time.Duration(*s.TimeoutMs) * time.Millisecond
+	}
+	if s.MaxResponseBytes != nil {
+		cfg.MaxResponseBytes = *s.MaxResponseBytes
 	}
 	return cfg, nil
 }

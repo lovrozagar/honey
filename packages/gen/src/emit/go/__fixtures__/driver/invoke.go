@@ -76,7 +76,7 @@ func (r *runner) perform(i int, c call) (any, error) {
 		return nil, errors.New("no call plan names this operation")
 	}
 	j := job{c: c, p: p, d: r.script.directivesOf(i)}
-	method, err := methodOf(r.client, p)
+	method, err := methodOf(r.client, p, r.in.Safe)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,9 @@ func (r *runner) perform(i int, c call) (any, error) {
 	var seen any
 	o := outcome{}
 	if p.Stream == nil {
-		o = outcomeOf(method.CallSlice(args))
+		if o, err = outcomeOf(method.CallSlice(args), r.in.Safe); err != nil {
+			return nil, err
+		}
 	} else if seen, o, err = r.stream(streamCall{j: j, ctx: ctx, method: method, args: args, target: target}); err != nil {
 		return nil, err
 	}
@@ -113,12 +115,18 @@ func (r *runner) perform(i int, c call) (any, error) {
 	if p.Stream != nil || !grid {
 		return seen, nil
 	}
+	if o.resp != nil {
+		resp = o.resp
+	}
 	return observedOf(j, o, resp, target)
 }
 
-// methodOf walks the plan's resource fields from client to the method.
-func methodOf(client *sdk.Client, p plan) (reflect.Value, error) {
+// methodOf walks the plan's resource fields from client, or from client.Safe() for safe, to the method.
+func methodOf(client *sdk.Client, p plan, safe bool) (reflect.Value, error) {
 	at := reflect.ValueOf(client)
+	if safe {
+		at = reflect.ValueOf(client.Safe())
+	}
 	for _, name := range p.Members {
 		field := at.Elem().FieldByName(name)
 		if !field.IsValid() {
@@ -127,6 +135,10 @@ func methodOf(client *sdk.Client, p plan) (reflect.Value, error) {
 		at = field
 	}
 	method := at.MethodByName(p.Method)
+	if safe {
+		/* a Client.Safe() twin is the field of the method's name, its normal method value under a wrapper */
+		method = at.Elem().FieldByName(p.Method)
+	}
 	if !method.IsValid() {
 		return reflect.Value{}, fmt.Errorf("%s has no method %s", at.Type(), p.Method)
 	}

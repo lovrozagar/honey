@@ -52,10 +52,17 @@ func (r releasing) Close() error {
 	return r.ReadCloser.Close()
 }
 
-// streamText yields the call's server-sent events with Data as sent.
+// streamText yields the call's server-sent events with Data as sent, opened when ranged (a
+// safe call's at once).
 func streamText(ctx context.Context, cfg Config, c *call, opts []RequestOption) iter.Seq2[SSEEvent[string], error] {
+	open := func() (*http.Response, error) { return openStream(ctx, cfg, c, opts) }
+	if s := newRequestConfig(cfg, opts).safe; s != nil {
+		resp, err := open()
+		s.sent, s.err = true, err
+		open = func() (*http.Response, error) { return resp, err }
+	}
 	return func(yield func(SSEEvent[string], error) bool) {
-		resp, err := openStream(ctx, cfg, c, opts)
+		resp, err := open()
 		if err != nil {
 			yield(SSEEvent[string]{}, err)
 			return
@@ -71,8 +78,9 @@ func streamText(ctx context.Context, cfg Config, c *call, opts []RequestOption) 
 // streamJSON yields the call's server-sent events with Data decoded from JSON into T. An event
 // that does not decode yields an error and ends the stream.
 func streamJSON[T any](ctx context.Context, cfg Config, c *call, opts []RequestOption) iter.Seq2[SSEEvent[T], error] {
+	text := streamText(ctx, cfg, c, opts)
 	return func(yield func(SSEEvent[T], error) bool) {
-		for raw, err := range streamText(ctx, cfg, c, opts) {
+		for raw, err := range text {
 			if err != nil {
 				yield(SSEEvent[T]{}, err)
 				return

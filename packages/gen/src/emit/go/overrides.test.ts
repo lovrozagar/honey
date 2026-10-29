@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk, inStyle } from "./__fixtures__/compiled.ts"
 import { check, once, seen } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
@@ -39,20 +39,19 @@ const ECHO: Call = { operation: "echo.get", route: { method: "GET", path: "/echo
 const ITEM_GET: Call = { operation: "items.get", params: { id: "i1" }, route: { method: "GET", path: "/items/{id}" } }
 const ECHOED = { data: {}, kind: "data", status: 200 }
 
-/* both error modes: a per-call option applies whatever the method returns */
+/* both styles: a per-call option applies whatever the method returns */
 const MODES = [
-	["throw", true],
-	["safe", false],
+	["normal", false],
+	["safe", true],
 ] as const
 
-const sdks = new Map<boolean, DrivenSdk>()
+let compiled: DrivenSdk | undefined
 
-/** The SDK for OVR in the given error mode, compiled with the driver once; it must build and vet clean. */
-function ovrSdk(throwOnError: boolean): DrivenSdk {
-	const sdk = sdks.get(throwOnError) ?? compiledSdk(OVR, { modulePath: MODULE, throwOnError })
-	sdks.set(throwOnError, sdk)
+/** The SDK for OVR compiled with the driver once (it must build and vet clean), calling in the `safe` style or not. */
+function ovrSdk(safe: boolean): DrivenSdk {
+	const sdk = (compiled ??= compiledSdk(OVR, { modulePath: MODULE }))
 	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	return sdk
+	return inStyle(sdk, safe)
 }
 
 /** `calls` run by `sdk` on one client under `setup` against a server answering `replies`. */

@@ -113,6 +113,56 @@ async def health(client: AsyncSDK) -> str:
             return f"answered {response.status}: {error}"
 ```
 
+## The Go SDK's `throwOnError` is gone; its safe mode is `client.Safe()`, answering a `Result`
+
+The Go generator has no `throwOnError` option (`--go-throw-on-error` is an unknown option now): delete it. Every
+method returns its answer or an error, as the default did; the safe mode is `client.Safe()`, which holds the same
+resources, each method a field of its name you call the same way:
+
+- `SDKResult` is gone. A safe method returns `(sdk.Result[T], error)`, `T` what the normal method returns (`*User`,
+  `[]byte`, `string`, `struct{}` for no body). `OK()` is `Ok()`, `r.Status` is `r.Response.StatusCode`, and `Data` is
+  the zero value on an Err. Naming `sdk.SDKResult`, or calling `.Status()` on `r.Err`, fails `go build`.
+- `Err` was an `APIError`; it is an `error` now, holding the error the normal method returns for that answer: reach
+  `*sdk.ClientError`, its per-status type or `*sdk.DecodeError` with `errors.As`. An undecodable 2xx was the second
+  return value in safe mode; it is the `Err` now, with its response. The normal method returns it as a
+  `*sdk.DecodeError` (its message unchanged, `honey: decode response: …`; `Unwrap` the parse error).
+- A 2xx past `MaxResponseBytes` was the transport error `honey: http do: …ErrResponseTooLarge`; it is a
+  `*sdk.DecodeError` in both styles, `errors.Is(err, sdk.ErrResponseTooLarge)` still true. An error status past the cap
+  returns its status error, its body empty.
+- An event stream that drops after it opened yielded a bare `io.ErrUnexpectedEOF`; it yields the wrapped
+  `honey: http do: unexpected EOF` a call's dropped body gives (`errors.Is(err, io.ErrUnexpectedEOF)` still true).
+- An event stream's safe twin opens the stream on the call: an error status at the opening is the `Err`, and `Data`
+  ranges the opened stream once. A WebSocket or realtime method is the same one on `client.Safe()`.
+- A root resource or method named `safe` is emitted as `Safe_` (`Safe` is the mirror), and the generation names it on
+  stderr.
+
+```text v0
+res, err := client.Users.Get(ctx, "u1", nil) // generated with throwOnError false
+if err == nil && !res.OK() {
+	fmt.Println("answered", res.Status, res.Err.Status())
+}
+```
+
+```go
+func listing(ctx context.Context, client *sdk.Client) string {
+	r, err := client.Safe().GetApi(ctx, nil)
+	if err != nil {
+		return fmt.Sprintf("no answer: %v", err) // never sent, refused, dropped, timed out or canceled
+	}
+	var unreadable *sdk.DecodeError
+	var failed *sdk.ClientError
+	switch {
+	case r.Ok():
+		return fmt.Sprintf("answered %d: %v", r.Response.StatusCode, r.Data)
+	case errors.As(r.Err, &unreadable):
+		return fmt.Sprintf("answered %d, unreadable: %v", r.Response.StatusCode, unreadable.Err)
+	case errors.As(r.Err, &failed):
+		return fmt.Sprintf("answered %d: %s", failed.StatusCode, failed.Key)
+	}
+	return r.Err.Error()
+}
+```
+
 ## The TS SDK's realtime `token?` and `onAuthExpired?` are gone
 
 Neither was ever read. A connection's `headers` may be a function read on every dial, and the client's

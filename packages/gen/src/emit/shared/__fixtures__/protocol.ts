@@ -121,7 +121,7 @@ export type GoError = {
 	readonly text: string
 	readonly tooLarge: boolean
 	readonly type: string
-	/** the method's error value, a safe-mode SDKResult.Err, or one a stream delivered (yielded, read, on Errors()) */
+	/** the method's error value, a Client.Safe() Result's Err, or one a stream delivered (yielded, read, on Errors()) */
 	readonly via: "result" | "return" | "stream"
 }
 
@@ -256,7 +256,7 @@ export type HookTrace = {
 	readonly url?: string
 }
 
-/** One call: its time, its error when it has one, a safe-mode SDKResult the method returned without one, and a stream's trace. */
+/** One call: its time, its error when it has one, a safe call's Result the method returned without one, and a stream's trace. */
 export type CallTrace<E = GoError> = {
 	readonly elapsedMs: number
 	/** every non-nil error, ClientErrors included */

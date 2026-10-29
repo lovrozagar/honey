@@ -155,15 +155,25 @@ const names = once(() =>
 	),
 )
 
-/** A consumer of users.create typed as returning `result`, noting `show` after a 404 and a 200. */
-const createUser = (result: string, show: string) => `	api := client("http://api.test")
-	var create func(context.Context, sdk.UserCreateInput, *sdk.UsersCreateOpts, ...sdk.RequestOption) (${result}, error) = api.Users.Create
+/**
+ * A consumer of users.create on `from` (`api` or `api.Safe()`) typed as returning `result`, noting `show` after a 404
+ * and a 200, in a block of its own; `notFound(err)` is errors.As to *sdk.NotFoundError.
+ */
+const createUser = (from: string, result: string, show: string) => `	{
+	api := client("http://api.test")
+	notFound := func(err error) bool {
+		var nf *sdk.NotFoundError
+		return errors.As(err, &nf)
+	}
+	_ = notFound
+	var create func(context.Context, sdk.UserCreateInput, *sdk.UsersCreateOpts, ...sdk.RequestOption) (${result}, error) = ${from}.Users.Create
 	replies["POST /users"] = reply{status: 404, body: \`{"message":"no"}\`}
 	res, err := create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil)
 	note(${show})
 	replies["POST /users"] = reply{status: 200, body: \`{"id":"u1","name":"Ada"}\`}
 	res, err = create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil)
-	note(${show})`
+	note(${show})
+	}`
 
 /** One users.create operation, no server; and the same API serving at a base path. */
 const USERS_DOC = document(
@@ -172,9 +182,8 @@ const USERS_DOC = document(
 )
 const SERVED = { ...USERS_DOC, servers: [{ url: "https://api.example.test/v1" }] }
 
-/** `doc`'s SDK as example.com/users, throwing by default. */
-const usersSdk = (doc: Json, throwOnError?: boolean) =>
-	generateGoSdk(doc, { modulePath: "example.com/users", throwOnError }).files
+/** `doc`'s SDK as example.com/users. */
+const usersSdk = (doc: Json) => generateGoSdk(doc, { modulePath: "example.com/users" }).files
 
 goDescribe("the Go SDK surface, called from a consumer program", () => {
 	// v0: 5333bd1243
@@ -226,27 +235,25 @@ goDescribe("the Go SDK surface, called from a consumer program", () => {
 	}, 600_000)
 })
 
-goDescribe("throwOnError, chosen at generation", () => {
+goDescribe("the safe mirror, Client.Safe() (bit 21 i3)", () => {
 	// v0: 4fd09131bd
-	it("returns (*T, error) by default and (SDKResult[T], error) with throwOnError false", () => {
-		const thrown = check(
+	it("answers (Result[T], error) where the normal call answers (T, error): an Err with its response, then Ok", () => {
+		const run = check(
 			usersSdk(USERS_DOC),
 			"example.com/users",
-			createUser("*sdk.User", 'res == nil, err != nil, res != nil && res.Name == "Ada"'),
+			`${createUser("api", "*sdk.User", 'res == nil, err != nil, res != nil && res.Name == "Ada"')}
+	section("safe")
+	${createUser("api.Safe()", "sdk.Result[*sdk.User]", "res.Ok(), res.Response.StatusCode, err == nil, res.Data != nil, notFound(res.Err)")}`,
+			["errors"],
 		)
-		const safe = check(
-			usersSdk(USERS_DOC, false),
-			"example.com/users",
-			createUser("sdk.SDKResult[sdk.User]", "res.OK(), res.Status, err == nil, res.Data != nil"),
-		)
-		expect({ safe: seen(safe), thrown: seen(thrown) }, thrown.stderr + safe.stderr).toEqual({
+		expect({ safe: seen(run, "safe"), thrown: seen(run) }, run.stderr).toEqual({
 			safe: {
 				built: true,
 				out: [
 					'POST http://api.test/users {"name":"Ada"}',
-					"false 404 true false",
+					"false 404 true false true",
 					'POST http://api.test/users {"name":"Ada"}',
-					"true 200 true true",
+					"true 200 true true false",
 				],
 				vet: [],
 			},
@@ -257,6 +264,63 @@ goDescribe("throwOnError, chosen at generation", () => {
 					"true true false",
 					'POST http://api.test/users {"name":"Ada"}',
 					"false false true",
+				],
+				vet: [],
+			},
+		})
+	}, 600_000)
+})
+
+goDescribe("the safe mirror: the removed safe mode (bit 21 i3, R-i4)", () => {
+	it("refuses the removed safe mode's pattern: SDKResult, Err as an APIError, its Status and OK", () => {
+		const run = check(
+			usersSdk(USERS_DOC),
+			"example.com/users",
+			`	res, _ := client("http://api.test").Safe().Users.Create(ctx, sdk.UserCreateInput{Name: "Ada"}, nil)
+	var old sdk.SDKResult[sdk.User]
+	note(res.Err.Status(), res.Status, res.OK(), old)`,
+		)
+		const refused = run.stderr.split("\n").filter((line) => line.startsWith("cmd/check/main.go"))
+		expect({ built: run.built, refused: refused.map((line) => line.replace(/^[^ ]* /, "")) }).toEqual({
+			built: false,
+			refused: [
+				"undefined: sdk.SDKResult",
+				"res.Err.Status undefined (type error has no field or method Status)",
+				"res.Status undefined (type sdk.Result[*sdk.User] has no field or method Status)",
+				"res.OK undefined (type sdk.Result[*sdk.User] has no field or method OK, but does have method Ok)",
+			],
+		})
+	}, 600_000)
+})
+
+goDescribe("the safe mirror's name (bit 21 i3)", () => {
+	it("emits a root group spelled Safe as Safe_, says so, and keeps a nested one", () => {
+		const doc = document(
+			{
+				"/safe/items": { get: op("safe.items", { ok: ref("User") }) },
+				"/users/safe": { get: op("users.safe", { ok: ref("User") }) },
+			},
+			USERS,
+		)
+		const { files, notices } = generateGoSdk(doc, { modulePath: "example.com/users" })
+		const run = check(
+			files,
+			"example.com/users",
+			`	api := client("http://api.test")
+	must(api.Safe_.Items(ctx, nil))
+	must(api.Users.Safe(ctx, nil))
+	_, err := api.Safe().Safe_.Items(ctx, nil)
+	note(err == nil)`,
+		)
+		expect({ notices, run: seen(run) }, run.stderr).toEqual({
+			notices: ['go: the root group "Safe" is emitted as "Safe_": "Safe" is the client\'s safe mirror'],
+			run: {
+				built: true,
+				out: [
+					"GET http://api.test/safe/items",
+					"GET http://api.test/users/safe",
+					"GET http://api.test/safe/items",
+					"true",
 				],
 				vet: [],
 			},

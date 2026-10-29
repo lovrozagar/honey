@@ -52,12 +52,13 @@ export type DriverRun = {
 export type DrivenSdk = Compiled & {
 	/**
 	 * run `cell` on one client aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name),
-	 * under `script` when given
+	 * under `script` when given, through `client.Safe()` when `safe`
 	 */
 	runCalls(
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
 		script?: Script,
+		safe?: boolean,
 	): Promise<DriverRun & { readonly trace?: Trace }>
 }
 
@@ -217,6 +218,12 @@ export function compiledSdk(document: Record<string, unknown>, options: GoSdkOpt
 	return drivenSdk(generateGoSdk(document, options).files, goCallPlans(document, options))
 }
 
+/** `sdk` sending every cell in one style: through `client.Safe()` when `safe` (bit 21 i3), else the normal client. */
+export const inStyle = (sdk: DrivenSdk, safe: boolean): DrivenSdk => ({
+	...sdk,
+	runCalls: (cell, origins, script) => sdk.runCalls(cell, origins, script, safe),
+})
+
 /**
  * An SDK module's `files` compiled with the test driver beside it, `runCalls` sending cells by
  * `plans`: for a test that drives files beside the emitted ones (a method of a shape the emitter
@@ -230,7 +237,7 @@ export function drivenSdk(
 	const compiled = compileGo(files, { main: driverSources(module, plans) })
 	return {
 		...compiled,
-		runCalls: async (cell, origins, script) => {
+		runCalls: async (cell, origins, script, safe) => {
 			const input = {
 				alt: origins.alt,
 				base: origins.url,
@@ -238,6 +245,7 @@ export function drivenSdk(
 				drop: origins.drop,
 				plans,
 				refused: origins.refused,
+				safe,
 				script,
 			}
 			const ran = await compiled.exec(JSON.stringify(input))

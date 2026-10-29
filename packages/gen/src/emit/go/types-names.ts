@@ -49,7 +49,7 @@ export function plainNames(): GoTypeNames {
  * them, a key always getting the name it got first; `cyclic` is every component on a by-value cycle.
  */
 export function irNames(ir: IR): GoTypeNames {
-	const scope = new NameScope([...runtimeIdentifiers(), "Client", "NewClient"])
+	const scope = new NameScope([...runtimeIdentifiers(), "Client", "NewClient", "SafeClient"])
 	const components = new Map<string, string>()
 	for (const name of Object.keys(ir.schemas).sort(compareCodeUnits)) {
 		const base = goExported(name)

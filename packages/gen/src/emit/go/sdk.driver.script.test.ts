@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk, inStyle } from "./__fixtures__/compiled.ts"
 import type { GoError, Script } from "../shared/__fixtures__/protocol.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served } from "../shared/__fixtures__/recording-server.ts"
@@ -56,11 +56,11 @@ const POST: Call = {
 const FOUND: Reply = { json: { id: "n1", text: "hi" }, status: 200 }
 const DATA = { data: { id: "n1", text: "hi" }, kind: "data", status: 200 }
 
-/** The SDK for SCRIPTED compiled with the driver, which must build and vet clean. */
-function scriptedSdk(throwOnError?: boolean): DrivenSdk {
-	const sdk = compiledSdk(SCRIPTED, { modulePath: "example.com/scripted", throwOnError })
+/** The SDK for SCRIPTED compiled with the driver (calling through `client.Safe()` when `safe`), which must build and vet clean. */
+function scriptedSdk(safe = false): DrivenSdk {
+	const sdk = compiledSdk(SCRIPTED, { modulePath: "example.com/scripted" })
 	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	return sdk
+	return inStyle(sdk, safe)
 }
 
 /** `calls` run by `sdk` under `script` against a server answering `replies`: the run, the hops and the origins. */
@@ -204,23 +204,41 @@ goDescribe("the Go test driver's script: client config", () => {
 			["response", "GET /orgs/o/notes/n1", false, []],
 		])
 	}, 600_000)
+})
 
-	it("caps a buffered body by maxResponseBytes: a non-grid error observed as null, tooLarge in the trace", async () => {
+goDescribe("the Go test driver's script: the response cap", () => {
+	/* bit 21 i3: the status and headers arrived, so a body past the cap is an answer left unread, never no answer */
+	it("caps a buffered body by maxResponseBytes: a 2xx past it a *DecodeError, an error status its status error unread", async () => {
 		const script: Script = { config: { maxResponseBytes: 8 } }
-		const replies: Reply[] = [{ bytes: 64, headers: { "content-type": "application/json" }, status: 200 }]
-		const { run } = await drive(scriptedSdk(), replies, [GET], { script })
-		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }).toEqual({
-			error: plain({
-				chain: ["*fmt.wrapError", "*errors.errorString"],
-				text: "honey: http do: honey: response body exceeds MaxResponseBytes",
-				tooLarge: true,
-				type: "*fmt.wrapError",
-			}),
-			observed: [null],
+		const json = { "content-type": "application/json" }
+		const replies: Reply[] = [
+			{ bytes: 64, headers: json, status: 200 },
+			{ bytes: 64, headers: json, status: 404 },
+		]
+		const { run } = await drive(scriptedSdk(), replies, [GET, GET], { script })
+		expect({ errors: run.trace?.calls.map((call) => call.error), observed: run.observed, status: run.status }).toEqual({
+			errors: [
+				plain({
+					chain: ["*sdk.DecodeError", "*errors.errorString"],
+					text: "honey: decode response: honey: response body exceeds MaxResponseBytes",
+					tooLarge: true,
+					type: "*sdk.DecodeError",
+				}),
+				{
+					...plain({ chain: ["*sdk.NotFoundError", "*sdk.ClientError"], text: "HTTP 404", type: "*sdk.NotFoundError" }),
+					status: 404,
+				},
+			],
+			observed: [
+				{ kind: "decode", status: 200 },
+				{ errorKey: null, kind: "error", status: 404 },
+			],
 			status: 0,
 		})
 	}, 600_000)
+})
 
+goDescribe("the Go test driver's script: a caller's HTTPClient", () => {
 	it("sends through a caller HTTPClient whose transport and CheckRedirect count, over both redirect origins", async () => {
 		const sdk = scriptedSdk()
 		const script: Script = { config: { httpClient: true } }
@@ -280,11 +298,11 @@ goDescribe("the Go test driver's script: per-call directives", () => {
 })
 
 goDescribe("the Go test driver's script: a call's Go error", () => {
-	it("traces an error status's Go types, status and keys; safe mode's via result and SDKResult", async () => {
+	it("traces an error status's Go types, status and keys; on Safe() via result, with its Result", async () => {
 		const invalid: Reply = { json: { error_key: "note.invalid", message: "bad" }, status: 422 }
 		const script: Script = { calls: [{ isKeys: ["note.invalid", "other"] }] }
 		const thrown = await drive(scriptedSdk(), [invalid], [GET], { script })
-		const safe = await drive(scriptedSdk(false), [invalid, FOUND], [GET, GET], { script })
+		const safe = await drive(scriptedSdk(true), [invalid, FOUND], [GET, GET], { script })
 		const error = {
 			...plain({
 				chain: ["*sdk.UnprocessableEntityError", "*sdk.ClientError"],
@@ -311,7 +329,7 @@ goDescribe("the Go test driver's script: a call's Go error", () => {
 		])
 	}, 600_000)
 
-	/* bit 21 i0: the undecodable body is observed as the grid's decode, its trace unchanged */
+	/* bit 21 i0: the undecodable body is observed as the grid's decode; i3: it is a *sdk.DecodeError */
 	it("traces a refused path param as *sdk.PathParamError, nothing sent, and an undecodable body as a decode", async () => {
 		const undecodable: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
 		const calls: Call[] = [{ ...GET, params: { id: "..", org: "o" } }, GET]
@@ -323,7 +341,7 @@ goDescribe("the Go test driver's script: a call's Go error", () => {
 			observed: run.observed,
 			refused: refused?.error,
 		}).toEqual({
-			decoded: [[], true],
+			decoded: [["*sdk.DecodeError"], true],
 			hops: ["/orgs/o/notes/n1"],
 			observed: [null, { kind: "decode", status: 200 }],
 			refused: plain({

@@ -47,15 +47,19 @@ export type GoMethodCall = {
 	readonly parts: readonly GoPart[] | null
 }
 
-/** One operation's method, its client.go declarations by name (`<Op>Opts`, `<Op>Headers`), and how a caller reaches it. */
+/**
+ * One operation's method, its client.go declarations by name (`<Op>Opts`, `<Op>Headers`), how a caller reaches it,
+ * and its `Client.Safe()` twin.
+ */
 export type GoMethod = {
 	readonly call: GoMethodCall
 	readonly decls: readonly (readonly [string, string])[]
 	readonly lines: readonly string[]
+	readonly twin: Twin
 }
 
-/** What every method of one SDK shares: the type context it hoists into, and the error mode. */
-export type MethodEnv = { readonly at: GoTypeContext; readonly throwOnError: boolean }
+/** What every method of one SDK shares: the type context it hoists into. */
+export type MethodEnv = { readonly at: GoTypeContext }
 
 /** Where a method lives: its receiver's type, and the expression reaching the `*Client` from it. */
 export type Receiver = { readonly type: string; readonly client: string }
@@ -88,7 +92,6 @@ const METHOD_LOCALS = [
 	"readerBody",
 	"reqOpts",
 	"result",
-	"safeResult",
 	"setHeaderValue",
 	"setIdempotencyKey",
 	"sseFail",
@@ -136,7 +139,7 @@ function answering(op: SdkOp, env: MethodEnv): { readonly shape: Shape; readonly
 	}
 	const schema = op.success.schema
 	const result = schema && goTypeOf(schema, { ...env.at, fieldName: "Response", parentName: op.id }).replace(/^\*/, "")
-	return { shape: shapeOf({ kind: op.success.kind, result, throwOnError: env.throwOnError }), stream: null }
+	return { shape: shapeOf({ kind: op.success.kind, result }), stream: null }
 }
 
 /** The statements expanding the path, and the expression the call sends as its path. */
@@ -179,6 +182,29 @@ function callMembers(op: SdkOp, path: PathLines, body: GoBody | undefined, clien
 	]
 }
 
+/**
+ * How a method's `Client.Safe()` twin answers, as the field of its name on the twin struct: `call` a `Result` of the
+ * answer, `none` one of `struct{}` (no body), `stream` one of the event stream opened on the call, `conn` the very
+ * method (a WebSocket or realtime connection). `params` are the types before `reqOpts`; `answer` is the `T` the field's
+ * type takes. The field is the normal method value under a generic wrapper (sdk-client.ts), so the one request path
+ * runs and the runtime moves only an answer (an error status, a `*DecodeError`) into `Err`.
+ */
+export type Twin = {
+	readonly kind: "call" | "conn" | "none" | "stream"
+	readonly params: readonly string[]
+	readonly answer: string
+}
+
+/** The twin of a method of `op` returning `returns`, taking `params` before its RequestOptions. */
+function twinOf(op: SdkOp, returns: string, params: readonly string[]): Twin {
+	const answered = returns.slice("(".length, -", error)".length)
+	if (op.stream === "ws" || op.stream === "realtime") return { answer: answered, kind: "conn", params }
+	if (op.stream === "sse")
+		return { answer: returns.slice("iter.Seq2[".length, -", error]".length), kind: "stream", params }
+	if (returns === "error") return { answer: "struct{}", kind: "none", params }
+	return { answer: answered, kind: "call", params }
+}
+
 /** The method of `op` named `name` on `receiver`, and its `<Op>Opts` and `<Op>Headers`. */
 export function goMethod(op: SdkOp, name: string, receiver: Receiver, env: MethodEnv): GoMethod {
 	const opts = env.at.names.claimConst(`${goExported(op.id)}Opts`)
@@ -218,5 +244,7 @@ export function goMethod(op: SdkOp, name: string, receiver: Receiver, env: Metho
 		responseHeaders: headers?.plan ?? null,
 		returns: shape.returns,
 	}
-	return { call, decls, lines }
+	const types = ["context.Context", ...pathLocals.map(() => "string"), ...(body ? [body.type] : []), `*${opts}`]
+	const twin = twinOf(op, shape.returns, types)
+	return { call, decls, lines, twin }
 }

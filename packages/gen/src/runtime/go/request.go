@@ -28,11 +28,13 @@ type call struct {
 	meta        *RequestMeta
 }
 
-// requestResult is a buffered answer: its body after the OnResponse hooks, and the response.
+// requestResult is a buffered answer: its body after the OnResponse hooks, the response, and
+// whether the body ran past the cap.
 type requestResult struct {
 	body   []byte
 	status int
 	resp   *http.Response
+	over   bool
 }
 
 // exchange is one call in flight: the client settings, this call's overrides and the call; a
@@ -44,11 +46,12 @@ type exchange struct {
 	stream bool
 }
 
-// ErrResponseTooLarge is returned when a buffered body exceeds Config.MaxResponseBytes.
+// ErrResponseTooLarge is a *DecodeError's cause when a 2xx body exceeds Config.MaxResponseBytes.
 var ErrResponseTooLarge = errors.New("honey: response body exceeds MaxResponseBytes")
 
 // doRequest sends c and buffers its answer (run), honoring the call's timeout and the stale
-// tracker. A ctx already done sends nothing: OnLog sees only its error.
+// tracker. A ctx already done sends nothing: OnLog sees only its error. A 2xx past the cap is a
+// *DecodeError.
 func doRequest(ctx context.Context, cfg Config, c *call, opts []RequestOption) (*requestResult, error) {
 	x := &exchange{cfg: cfg, rc: newRequestConfig(cfg, opts), c: c}
 	if ctx.Err() != nil {
@@ -67,6 +70,9 @@ func doRequest(ctx context.Context, cfg Config, c *call, opts []RequestOption) (
 		return nil, err
 	}
 	c.stale.settle(c)
+	if result.over {
+		return nil, &DecodeError{result.resp, ErrResponseTooLarge}
+	}
 	return result, nil
 }
 
@@ -117,7 +123,8 @@ func (x *exchange) sendWithAuth(ctx context.Context) (*requestResult, error) {
 
 // send sends once and runs the OnResponse hooks on the answer, its body read first so they may
 // replace it. A stream's 2xx body stays unread (the hooks see a nil Body, and one they set is
-// ignored); of an error body a stream reads at most 64 KiB, a failed read leaving it nil.
+// ignored); of an error body a stream reads at most 64 KiB, a failed read leaving it nil. A body
+// past the cap is nil.
 func (x *exchange) send(ctx context.Context, token string, retry bool) (*requestResult, error) {
 	req, err := x.newRequest(ctx, token, retry)
 	if err != nil {
@@ -136,10 +143,11 @@ func (x *exchange) send(ctx context.Context, token string, retry bool) (*request
 	if !unread {
 		body, err = readBody(resp.Body, limit)
 		resp.Body.Close()
-		if err != nil && !x.stream {
+		if err != nil && !x.stream && err != ErrResponseTooLarge {
 			return nil, wrapTransportError(ctx, err)
 		}
 	}
+	over := err == ErrResponseTooLarge
 	rc := &ResponseContext{Status: resp.StatusCode, Headers: resp.Header, Body: body, IsRetry: retry}
 	rc.Selector, rc.IsStale, rc.InvalidatedBy = x.c.meta.stale()
 	if err := runHooks("OnResponse", x.cfg.OnResponse, rc); err != nil {
@@ -149,7 +157,7 @@ func (x *exchange) send(ctx context.Context, token string, retry bool) (*request
 	if unread {
 		return &requestResult{status: resp.StatusCode, resp: resp}, nil
 	}
-	return &requestResult{body: rc.Body, status: resp.StatusCode, resp: withBody(resp, rc.Body)}, nil
+	return &requestResult{rc.Body, resp.StatusCode, withBody(resp, rc.Body), over}, nil
 }
 
 // newRequest builds the outgoing request after the OnRequest hooks ran.

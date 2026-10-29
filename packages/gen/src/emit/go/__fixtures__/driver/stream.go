@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	sdk "honey.test/driver/sdk"
@@ -126,9 +127,23 @@ func (r *runner) stream(s streamCall) (any, outcome, error) {
 
 // driveSSE ranges the method's iter.Seq2[SSEEvent[T], error] through a reflect.MakeFunc yield,
 // breaking after take events (absent: to the end). A yielded error is recorded and the yield
-// carries on, so an iterator that does not end after its error shows in yields.
+// carries on, so an iterator that does not end after its error shows in yields. A Client.Safe()
+// method's stream is its Result's Data (opened), or its Err the opening's error status.
 func driveSSE(s streamCall) streamed {
-	seq := s.method.CallSlice(s.args)[0]
+	out := s.method.CallSlice(s.args)
+	seq := out[0]
+	if len(out) == 2 {
+		o, err := outcomeOf(out, true)
+		switch {
+		case err != nil:
+			return streamed{err: err}
+		case o.err != nil && o.via == "return":
+			return openFailed(o.err)
+		case o.err != nil:
+			return streamed{seen: observedStream("events", nil, o.err), o: o}
+		}
+		seq = o.value
+	}
 	st := &streamTrace{}
 	events := []any{}
 	var failed, broken error
@@ -150,6 +165,9 @@ func driveSSE(s streamCall) streamed {
 	seq.Call([]reflect.Value{yield})
 	if broken != nil {
 		return streamed{err: broken}
+	}
+	if len(events) > 0 && noAnswerOf(failed) != "" && !strings.HasPrefix(failed.Error(), "honey: ") {
+		return streamed{err: fmt.Errorf("a stream's no-answer error the SDK did not wrap as a call's: %w", failed)}
 	}
 	if s.target != nil {
 		headers, err := headersOf(s.target, s.j.p.ResponseHeaders.Fields)

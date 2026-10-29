@@ -51,16 +51,20 @@ const MODULE = "example.com/errs"
 const GET: Call = { operation: "items.get", params: { id: "i1" }, route: { method: "GET", path: "/items/{id}" } }
 
 /** The SDK for ERR compiled with the driver, which must build and vet clean. */
-function errSdk(throwOnError?: boolean): DrivenSdk {
-	const sdk = compiledSdk(ERR, { modulePath: MODULE, throwOnError })
+function errSdk(): DrivenSdk {
+	const sdk = compiledSdk(ERR, { modulePath: MODULE })
 	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
 	return sdk
 }
 
-/** `calls` run by `sdk` (under `script`, when given) against a server answering `replies`: the run and the hops. */
-function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly Call[], script?: Script) {
+/**
+ * `calls` run by `sdk` (under `script`, when given; through `client.Safe()` when it says `safe`) against a server
+ * answering `replies`: the run and the hops.
+ */
+function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly Call[], script?: Script & { safe?: true }) {
+	const { safe, ...rest } = script ?? {}
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup: {} }, server, script)
+		const run = await sdk.runCalls({ calls, setup: {} }, server, script && rest, safe)
 		return { hops: [...server.hops], run }
 	})
 }
@@ -68,7 +72,7 @@ function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly Call[]
 /** The `*sdk.` entries of an error's chain: the only ones a test may pin. */
 const sdkTypes = (error: GoError | undefined) => error?.chain.filter((type) => type.startsWith("*sdk."))
 
-/** Where a safe-mode call's failure landed: its error's route, status, cancellation and `*sdk.` types, and its result. */
+/** Where a safe call's failure landed: its error's route, status, cancellation and `*sdk.` types, and its Result. */
 const landed = (call: Trace["calls"][number] | undefined) => {
 	const error = call?.error
 	return [error?.via, error?.status, error?.canceled, sdkTypes(error), call?.result]
@@ -79,8 +83,8 @@ const failed = (status: number) => ({ body: { message: "m" }, errorKey: null, ki
 const answer = (status: number): Reply => ({ json: { message: "m" }, status })
 
 /** ERR's SDK built and vetted with the consumer `body` (importing `imports` too) beside it, run when it builds. */
-function consumer(body: string, imports: readonly string[], throwOnError?: boolean): Run {
-	const { files } = generateGoSdk(ERR, { modulePath: MODULE, throwOnError })
+function consumer(body: string, imports: readonly string[]): Run {
+	const { files } = generateGoSdk(ERR, { modulePath: MODULE })
 	return check(files, MODULE, body, imports)
 }
 
@@ -226,13 +230,13 @@ goDescribe("a context that ends the call: plain context errors, never a ClientEr
 	}, 600_000)
 })
 
-goDescribe("safe mode: an error status in SDKResult.Err, every other failure the error return", () => {
+goDescribe("the safe mirror: an answer in Result.Err, every other failure the error return (bit 21 i3)", () => {
 	// v0: 390361417e
-	it("puts a 404 in the result beside its status and response, and a refused connection in the error return", async () => {
+	it("puts a 404 in the Result beside its response, and a refused connection in the error return", async () => {
 		/* v0's name ("never returns non-nil error") was false in v0 too: a failure with no response is the error return */
-		const sdk = errSdk(false)
-		const notFound = await drive(sdk, [answer(404)], [GET], {})
-		const refused = await sdk.runCalls({ calls: [GET], setup: {} }, { url: REFUSED_URL }, {})
+		const sdk = errSdk()
+		const notFound = await drive(sdk, [answer(404)], [GET], { safe: true })
+		const refused = await sdk.runCalls({ calls: [GET], setup: {} }, { url: REFUSED_URL }, {}, true)
 		const [found] = notFound.run.trace?.calls ?? []
 		const [lost] = refused.trace?.calls ?? []
 		expect({
@@ -253,43 +257,69 @@ goDescribe("safe mode: an error status in SDKResult.Err, every other failure the
 		})
 	}, 600_000)
 
+	it("puts a status with no per-status type (418) in the Result as the base *ClientError, its response beside it", async () => {
+		const { run } = await drive(errSdk(), [answer(418)], [GET], { safe: true })
+		const [teapot] = run.trace?.calls ?? []
+		expect({ landed: landed(teapot), observed: run.observed }).toEqual({
+			landed: ["result", 418, false, ["*sdk.ClientError"], { data: false, ok: false, response: true, status: 418 }],
+			observed: [failed(418)],
+		})
+	}, 600_000)
+})
+
+goDescribe("the safe mirror's Result, from a consumer program (bit 21 i3)", () => {
 	// v0: 8fbcc82ca1
-	it("returns SDKResult[T]: OK, Data, Status, Err and Response for a 200 and a 404", () => {
+	it("returns Result[*T]: Ok, Data, Err and Response for a 200, a 404 and an undecodable 200, Data nil on an Err", () => {
 		const run = consumer(
 			`	api := client("http://api.test")
 	replies["GET /items/i1"] = reply{status: 200, body: \`{"id":"i1","name":"one"}\`}
-	res, err := api.Items.Get(ctx, "i1", nil)
-	var _ sdk.SDKResult[sdk.Item] = res
-	note(res.OK(), res.Data.Id, res.Status, res.Err == nil, res.Response.StatusCode, err == nil)
+	res, err := api.Safe().Items.Get(ctx, "i1", nil)
+	var _ sdk.Result[*sdk.Item] = res
+	var _ *error = &res.Err
+	note(res.Ok(), res.Data.Id, res.Err == nil, res.Response.StatusCode, err == nil)
 	replies["GET /items/i2"] = reply{status: 404, body: \`{"message":"no"}\`}
-	res, err = api.Items.Get(ctx, "i2", nil)
+	res, err = api.Safe().Items.Get(ctx, "i2", nil)
 	var nf *sdk.NotFoundError
-	note(res.OK(), res.Data == nil, res.Status, res.Err.Status(), errors.As(res.Err, &nf), nf.Message, err == nil)`,
+	note(res.Ok(), res.Data == nil, res.Response.StatusCode, errors.As(res.Err, &nf), nf.Message, nf.Response == res.Response, err == nil)
+	replies["GET /items/i3"] = reply{status: 200, body: \`{"id":\`}
+	res, err = api.Safe().Items.Get(ctx, "i3", nil)
+	var de *sdk.DecodeError
+	var syntax *json.SyntaxError
+	body, _ := io.ReadAll(res.Response.Body)
+	note(res.Ok(), res.Data == nil, errors.As(res.Err, &de), de.Response == res.Response, errors.As(res.Err, &syntax), string(body), err == nil)
+	_, err = api.Items.Get(ctx, "i3", nil)
+	note(errors.As(err, &de), err.Error())`,
 			["errors"],
-			false,
 		)
 		expect(seen(run), run.stderr).toEqual({
 			built: true,
 			out: [
 				"GET http://api.test/items/i1",
-				"true i1 200 true 200 true",
+				"true i1 true 200 true",
 				"GET http://api.test/items/i2",
-				"false true 404 404 true no true",
+				"false true 404 true no true true",
+				"GET http://api.test/items/i3",
+				'false true true true true {"id": true',
+				"GET http://api.test/items/i3",
+				"true honey: decode response: unexpected end of JSON input",
 			],
 			vet: [],
 		})
 	}, 600_000)
 })
 
-goDescribe("safe mode: a failure without an error status is the error return, never a result", () => {
-	/* ported from csharp/errors.safe.test.ts:78: every other failure is the error return, never a result */
-	it("keeps an undecodable 2xx, a timeout, a cancel and a hook throw out of the result, each the error return", async () => {
-		const sdk = errSdk(false)
+goDescribe("the safe mirror: a failure with no answer is the error return, never a Result (bit 21 i3)", () => {
+	/* ported from csharp/errors.safe.test.ts:78; an undecodable 2xx is an answer since bit 21 i3 (R-i1), its Err */
+	it("puts an undecodable 2xx in the Result, and a timeout, a cancel and a hook throw in the error return", async () => {
+		const sdk = errSdk()
 		const torn: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
 		const late: Reply = { delayMs: 2000, json: { id: "i1", name: "one" }, status: 200 }
 		const calls = [GET, { ...GET, timeoutMs: 300 }, GET]
-		const { hops, run } = await drive(sdk, [torn, late], calls, { calls: [null, null, { cancel: "before" }] })
-		const hooked = await drive(sdk, [], [GET], { hooks: { request: [{ fail: "boom" }] } })
+		const { hops, run } = await drive(sdk, [torn, late], calls, {
+			calls: [null, null, { cancel: "before" }],
+			safe: true,
+		})
+		const hooked = await drive(sdk, [], [GET], { hooks: { request: [{ fail: "boom" }] }, safe: true })
 		const traces = [run, hooked.run].flatMap((r) => r.trace?.calls ?? [])
 		const deadline = run.trace?.calls[1]?.error?.deadline
 		expect({
@@ -301,12 +331,12 @@ goDescribe("safe mode: a failure without an error status is the error return, ne
 			deadline: true,
 			hops: [2, 0],
 			landed: [
-				["return", undefined, false, [], undefined],
+				["result", undefined, false, ["*sdk.DecodeError"], { data: false, ok: false, response: true, status: 200 }],
 				["return", undefined, false, [], undefined],
 				["return", undefined, true, [], undefined],
 				["return", undefined, false, [], undefined],
 			],
-			/* bit 21 i0: the undecodable 2xx's error return is the grid's decode; the cancel and the hook throw none */
+			/* the undecodable 2xx's Err is the grid's decode; the cancel and the hook throw none */
 			observed: [[{ kind: "decode", status: 200 }, { kind: "timeout" }, null], [null]],
 		})
 	}, 600_000)

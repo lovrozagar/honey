@@ -251,20 +251,22 @@ describe("the generate report (bit 18 phase d)", () => {
 	)
 })
 
-/* bit 21 i1 (ts) and i2 (python): each target's file the SDK always writes */
-const WRITTEN = { python: "/src/honey_sdk/client.py", ts: ".types.gen.ts" } as const
+/* bit 21 i1 (ts), i2 (python) and i3 (go): each target's file the SDK always writes, and its spelling of the mirror */
+const WRITTEN = { go: "/client.go", python: "/src/honey_sdk/client.py", ts: ".types.gen.ts" } as const
+const SPELLED = { go: ["Safe", "Safe_"], python: ["safe", "safe_"], ts: ["safe", "safe_"] } as const
 
-describe("the generate report: the safe mirror (bit 21 i1, i2)", () => {
-	it.each(["ts", "python"] as const)(
+describe("the generate report: the safe mirror (bit 21 i1, i2, i3)", () => {
+	it.each(["ts", "python", "go"] as const)(
 		"names on stderr a %s root group renamed off the safe mirror, and still writes the SDK",
 		{ timeout: SPAWN_TIMEOUT },
 		async (target) => {
 			const get = { get: { operationId: "safe.get", responses: { 204: { description: "none" } } } }
 			const { out, spec } = specDir({ ...(shop() as Record<string, unknown>), paths: { "/safe": get } })
 			const ran = await run(["generate", "--spec", spec, "--target", target, "--out", out])
+			const [mirror, renamed] = SPELLED[target]
 			expect([ran.status, ran.err, filesUnder(out).some((file) => file.endsWith(WRITTEN[target]))]).toEqual([
 				0,
-				`honey-codegen: ${target}: the root group "safe" is emitted as "safe_": "safe" is the client's safe mirror\n`,
+				`honey-codegen: ${target}: the root group "${mirror}" is emitted as "${renamed}": "${mirror}" is the client's safe mirror\n`,
 				true,
 			])
 		},

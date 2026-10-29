@@ -17,49 +17,95 @@ import (
 	sdk "honey.test/driver/sdk"
 )
 
-// outcome is what a method returned: its answer (*T, []byte, string, a safe-mode Data pointer, or
-// none), its error and where that came from ("return", "result", or "stream" for one a stream
-// delivered), a safe-mode SDKResult's summary, and a stream call's trace.
+// outcome is what a method returned: its answer (*T, []byte, string, a Result's Data, or none), its
+// error and where that came from ("return", "result" for a Result's Err, or "stream" for one a
+// stream delivered), a Result's summary and its Response, and a stream call's trace.
 type outcome struct {
 	value  reflect.Value
 	err    error
 	via    string
 	result *resultTrace
+	resp   *http.Response
 	stream *streamTrace
 }
 
-// outcomeOf splits a method's return values: the last is its error; a safe-mode SDKResult[T] the
-// method returned without one carries the answer, its error status in Err.
-func outcomeOf(out []reflect.Value) outcome {
+// outcomeOf splits a method's return values: the last is its error; a Client.Safe() method's
+// Result[T] carries the answer, its error in Err. Breaking the safe style fails the run: a safe call
+// returning an API answer as its error or no Result, a Result off its contract (resultOf), a
+// normal call answering a Result.
+func outcomeOf(out []reflect.Value, safe bool) (outcome, error) {
 	failed, _ := out[len(out)-1].Interface().(error)
 	o := outcome{err: failed, via: "return"}
-	if len(out) == 1 {
-		return o
+	result := len(out) == 2 && isResult(out[0].Type())
+	switch {
+	case result != safe && safe:
+		return o, fmt.Errorf("the safe call answered %s, not a Result", out[0].Type())
+	case result != safe:
+		return o, fmt.Errorf("a normal call answered a %s", out[0].Type())
+	case safe && isAnswer(failed):
+		return o, fmt.Errorf("the safe call returned an API answer as its error, %T: %w", failed, failed)
+	case len(out) == 1:
+		return o, nil
+	case !result:
+		o.value = out[0]
+		return o, nil
+	case failed != nil:
+		return o, nil
 	}
-	value := out[0]
-	if !isResult(value.Type()) {
-		o.value = value
-		return o
-	}
-	if failed != nil {
-		return o
-	}
-	o.value = value.FieldByName("Data")
-	o.result = &resultTrace{
-		OK:       value.MethodByName("OK").Call(nil)[0].Bool(),
-		Status:   int(value.FieldByName("Status").Int()),
-		Data:     !o.value.IsNil(),
-		Response: !value.FieldByName("Response").IsNil(),
-	}
-	if apiErr := value.FieldByName("Err"); !apiErr.IsNil() {
-		o.err, o.via = apiErr.Interface().(error), "result"
-	}
-	return o
+	return resultOf(out[0], o)
 }
 
-// isResult reports whether t is a safe-mode SDKResult[T].
+// resultOf reads a Result into o: Ok's Data, or Err's error (via "result"), and its Response. A
+// Result without its response, an Err holding no answer, or one whose response is not its error's
+// fails the run.
+func resultOf(value reflect.Value, o outcome) (outcome, error) {
+	o.resp, _ = value.FieldByName("Response").Interface().(*http.Response)
+	if o.resp == nil {
+		return o, errors.New("a Result without its response")
+	}
+	data := value.FieldByName("Data")
+	o.result = &resultTrace{
+		OK:       value.MethodByName("Ok").Call(nil)[0].Bool(),
+		Status:   o.resp.StatusCode,
+		Data:     !data.IsZero(),
+		Response: true,
+	}
+	failed, _ := value.FieldByName("Err").Interface().(error)
+	switch {
+	case failed == nil:
+		o.value = data
+		return o, nil
+	case !isAnswer(failed):
+		return o, fmt.Errorf("an Err holding no answer, %T: %w", failed, failed)
+	case answerResponse(failed) != o.resp:
+		return o, errors.New("an Err whose response is not its error's")
+	}
+	o.err, o.via = failed, "result"
+	return o, nil
+}
+
+// isResult reports whether t is a Client.Safe() method's Result[T].
 func isResult(t reflect.Type) bool {
-	return t.Kind() == reflect.Struct && strings.HasPrefix(t.Name(), "SDKResult[")
+	return t.Kind() == reflect.Struct && strings.HasPrefix(t.Name(), "Result[")
+}
+
+// isAnswer reports whether err is an answer the safe style moves into Err: an error status or a
+// *DecodeError.
+func isAnswer(err error) bool {
+	var ce *sdk.ClientError
+	var de *sdk.DecodeError
+	return errors.As(err, &ce) || errors.As(err, &de)
+}
+
+// answerResponse is the response an answer's error holds.
+func answerResponse(err error) *http.Response {
+	var ce *sdk.ClientError
+	if errors.As(err, &ce) {
+		return ce.Response
+	}
+	var de *sdk.DecodeError
+	errors.As(err, &de)
+	return de.Response
 }
 
 // gridError reports whether err is an outcome the grid observes: an error status, no answer (a
@@ -72,7 +118,8 @@ func gridError(err error, stream bool) bool {
 
 // noAnswerOf is how err failed with no answer, as the grid names it: "timeout" for a lapsed
 // deadline; "transport" for a connection refused or lost, the *net.OpError a dial or read failed
-// with or the io.ErrUnexpectedEOF net/http reads from a body cut mid-answer; "" for any other.
+// with or the io.ErrUnexpectedEOF net/http reads from a body cut mid-answer (an event stream's
+// wrapped as a call's, driveSSE holds); "" for any other.
 func noAnswerOf(err error) string {
 	var op *net.OpError
 	switch {
@@ -84,14 +131,11 @@ func noAnswerOf(err error) string {
 	return ""
 }
 
-// isUndecodable reports whether err is a 2xx body that did not decode. The SDK has no decode
-// type yet (bit 21 i3 adds *DecodeError): decodeJSON wraps encoding/json's own error, a
-// *json.SyntaxError or *json.UnmarshalTypeError, with no *ClientError around it.
+// isUndecodable reports whether err is a 2xx answer whose body did not decode or ran past the cap:
+// a *sdk.DecodeError.
 func isUndecodable(err error) bool {
-	var ce *sdk.ClientError
-	var syntax *json.SyntaxError
-	var typed *json.UnmarshalTypeError
-	return !errors.As(err, &ce) && (errors.As(err, &syntax) || errors.As(err, &typed))
+	var de *sdk.DecodeError
+	return errors.As(err, &de)
 }
 
 // observedOf normalizes a call's outcome to the grid's Observed: no answer (a timeout or

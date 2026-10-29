@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Observed, Setup } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk, inStyle } from "./__fixtures__/compiled.ts"
 import type { GoError, HookTrace, Script } from "../shared/__fixtures__/protocol.ts"
 import { consume } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
@@ -64,14 +64,13 @@ const SSE: Json = {
 	security: [{ bearer: [] }],
 }
 
-const sdks = new Map<boolean, DrivenSdk>()
+let compiled: DrivenSdk | undefined
 
-/** The SSE SDK compiled with the driver (safe mode for `throwOnError: false`), which must build and vet clean. */
-function sseSdk(throwOnError = true): DrivenSdk {
-	const sdk = sdks.get(throwOnError) ?? compiledSdk(SSE, { modulePath: MODULE, throwOnError })
-	sdks.set(throwOnError, sdk)
+/** The SSE SDK compiled with the driver once (it must build and vet clean), calling through `client.Safe()` when `safe`. */
+function sseSdk(safe = false): DrivenSdk {
+	const sdk = (compiled ??= compiledSdk(SSE, { modulePath: MODULE }))
 	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	return sdk
+	return inStyle(sdk, safe)
 }
 
 const route = (method: string, path: string) => ({ method, path })
@@ -117,14 +116,15 @@ type Options = { readonly script?: Script; readonly setup?: Setup }
 const sdkTypes = (error: GoError | undefined) => error?.chain.filter((type) => type.startsWith("*sdk."))
 
 /**
- * A consumer that holds both stream methods in their declared types (compiling is the assertion),
+ * A consumer that holds both stream methods and a safe twin in their declared types (compiling is the assertion),
  * then ranges a held typed stream with `LastEventID: ""` under a ctx nothing cancels, breaking out
  * after the first event, then opens the text stream: its answer waits until the first stream's client
  * left (gone.ts), so only the iterator, not the exit, can have closed the body.
  */
 const CONSUMER = `	var typed iter.Seq2[sdk.SSEEvent[sdk.Tick], error] = client(input.Base).Ticks.Stream(ctx, nil)
 	var plain iter.Seq2[sdk.SSEEvent[string], error] = client(input.Base).Text.Stream(ctx, nil)
-	_, _ = typed, plain
+	var safeTyped func(context.Context, *sdk.TicksStreamOpts, ...sdk.RequestOption) (sdk.Result[iter.Seq2[sdk.SSEEvent[sdk.Tick], error]], error) = client(input.Base).Safe().Ticks.Stream
+	_, _, _ = typed, plain, safeTyped
 	live := sdk.NewClient(sdk.Config{BaseURL: input.Base})
 	for ev, err := range live.Ticks.Stream(ctx, &sdk.TicksStreamOpts{LastEventID: ""}) {
 		note(ev.Data.N, ev.ID, err)
@@ -138,30 +138,28 @@ const CONSUMER = `	var typed iter.Seq2[sdk.SSEEvent[sdk.Tick], error] = client(i
 goDescribe("an SSE method: iter.Seq2[SSEEvent[T], error], T from the declared event schema", () => {
 	// v0: b857f94d20
 	// v0: 31d78e3aa4
-	it("compiles as iter.Seq2[SSEEvent[Tick]] and [string] in both modes; an empty LastEventID sends none; a break closes the body", async () => {
-		for (const throwOnError of [true, false]) {
-			const files = generateGoSdk(SSE, { modulePath: MODULE, throwOnError }).files
-			const next = gone(sse(["data: z\n\n"]))
-			const { hops, ran } = await served([HELD, next.reply], async (server) => {
-				const running = consume(files, MODULE, { base: server.url, body: CONSUMER, imports: ["iter"] })
-				return { ran: await running, hops: [...server.hops] }
-			})
-			expect({ built: ran.built, out: ran.out?.main, vet: ran.vet }, ran.stderr).toEqual({
-				built: true,
-				out: ["1 7 <nil>", "z <nil>"],
-				vet: [],
-			})
-			expect({
-				hops: hops.map((hop) => [hop.headers.accept, hop.headers["last-event-id"]]),
-				released: next.released(),
-			}).toEqual({
-				hops: [
-					["text/event-stream", undefined],
-					["text/event-stream", undefined],
-				],
-				released: true,
-			})
-		}
+	it("compiles as iter.Seq2[SSEEvent[Tick]] and [string], a Result of each on Safe(); an empty LastEventID sends none; a break closes the body", async () => {
+		const files = generateGoSdk(SSE, { modulePath: MODULE }).files
+		const next = gone(sse(["data: z\n\n"]))
+		const { hops, ran } = await served([HELD, next.reply], async (server) => {
+			const running = consume(files, MODULE, { base: server.url, body: CONSUMER, imports: ["iter"] })
+			return { ran: await running, hops: [...server.hops] }
+		})
+		expect({ built: ran.built, out: ran.out?.main, vet: ran.vet }, ran.stderr).toEqual({
+			built: true,
+			out: ["1 7 <nil>", "z <nil>"],
+			vet: [],
+		})
+		expect({
+			hops: hops.map((hop) => [hop.headers.accept, hop.headers["last-event-id"]]),
+			released: next.released(),
+		}).toEqual({
+			hops: [
+				["text/event-stream", undefined],
+				["text/event-stream", undefined],
+			],
+			released: true,
+		})
 	}, 600_000)
 
 	// v0: b857f94d20
@@ -250,22 +248,24 @@ goDescribe("an SSE request on the wire: the operation's method, params, body and
 
 goDescribe("an SSE open that fails", () => {
 	// v0: 0ccba24aa9
-	it("yields one typed error and ends on an error status before any event, in throw and safe mode alike", async () => {
+	it("yields one typed error and ends on an error status before any event; on Safe() the opening's Err", async () => {
 		const replies = [
 			{ json: { message: "nope" }, status: 404 },
 			{ json: { message: "boom" }, status: 500 },
 		]
-		for (const throwOnError of [true, false]) {
-			const { hops, run } = await drive(sseSdk(throwOnError), replies, [ticks(), ticks()], { script: {} })
+		for (const safe of [false, true]) {
+			const { hops, run } = await drive(sseSdk(safe), replies, [ticks(), ticks()], { script: {} })
 			expect(run.observed, run.stderr).toEqual([
 				{ body: { message: "nope" }, errorKey: null, kind: "error", status: 404 },
 				{ body: { message: "boom" }, errorKey: null, kind: "error", status: 500 },
 			] satisfies Observed[])
 			const calls = run.trace?.calls.map(({ error, stream }) => ({ sdk: sdkTypes(error), stream, via: error?.via }))
+			/* the normal stream yields it; the safe twin opened on the call and answers it as the Result's Err */
+			const [stream, via] = safe ? [undefined, "result"] : [{ yields: 1 }, "stream"]
 			expect({ calls, hops: hops.length }).toEqual({
 				calls: [
-					{ sdk: ["*sdk.NotFoundError", "*sdk.ClientError"], stream: { yields: 1 }, via: "stream" },
-					{ sdk: ["*sdk.InternalServerError", "*sdk.ClientError"], stream: { yields: 1 }, via: "stream" },
+					{ sdk: ["*sdk.NotFoundError", "*sdk.ClientError"], stream, via },
+					{ sdk: ["*sdk.InternalServerError", "*sdk.ClientError"], stream, via },
 				],
 				hops: 2,
 			})

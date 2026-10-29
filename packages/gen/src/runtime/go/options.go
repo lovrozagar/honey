@@ -23,6 +23,7 @@ type requestConfig struct {
 	headers  map[string]string
 	response **http.Response
 	target   headerTarget
+	safe     *safeCall
 }
 
 // headerTarget is implemented by the generated <Operation>Headers structs.
@@ -72,10 +73,13 @@ func newRequestConfig(cfg Config, opts []RequestOption) requestConfig {
 	return rc
 }
 
-// deliver hands the response to WithResponseInto and, on success, to WithHeadersInto.
+// deliver hands the response to WithResponseInto and a safe call, a 2xx to WithHeadersInto.
 func (rc *requestConfig) deliver(resp *http.Response, body []byte) {
 	if rc.response != nil {
 		*rc.response = withBody(resp, body)
+	}
+	if rc.safe != nil {
+		rc.safe.resp = withBody(resp, body)
 	}
 	if rc.target != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		rc.target.setFrom(resp.Header)

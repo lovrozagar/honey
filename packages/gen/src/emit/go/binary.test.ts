@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk, inStyle } from "./__fixtures__/compiled.ts"
 import type { Script } from "../shared/__fixtures__/protocol.ts"
 import { check, once, seen } from "./__fixtures__/consumer.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
@@ -90,24 +90,23 @@ const PUT = (size: number): Call => ({
 	route: route("PUT", "/files/{name}"),
 })
 
-/* both error modes: a binary or text answer has the same shape in Data as in the return value */
+/* both styles: a binary or text answer has the same shape in a Result's Data as in the return value */
 const MODES = [
-	["throw", true],
-	["safe", false],
+	["normal", false],
+	["safe", true],
 ] as const
 
 /** `size` bytes `i & 0xff`, as the driver sends and the recording server answers them. */
 const pattern = (size: number) => Buffer.from(Array.from({ length: size }, (_, i) => i & 0xff))
 const sha256 = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex")
 
-const sdks = new Map<boolean, DrivenSdk>()
+let compiled: DrivenSdk | undefined
 
-/** The SDK for BIN in the given error mode, compiled with the driver once; it must build and vet clean. */
-function binSdk(throwOnError: boolean): DrivenSdk {
-	const sdk = sdks.get(throwOnError) ?? compiledSdk(BIN, { modulePath: MODULE, throwOnError })
-	sdks.set(throwOnError, sdk)
+/** The SDK for BIN compiled with the driver once (it must build and vet clean), calling in the `safe` style or not. */
+function binSdk(safe: boolean): DrivenSdk {
+	const sdk = (compiled ??= compiledSdk(BIN, { modulePath: MODULE }))
 	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	return sdk
+	return inStyle(sdk, safe)
 }
 
 /** `calls` run by `sdk` on one client (under `script` when given) against a server answering `replies`. */
@@ -118,7 +117,7 @@ async function drive(sdk: DrivenSdk, replies: readonly Reply[], calls: readonly 
 	})
 }
 
-/** A consumer of BIN's throw-mode SDK running `body`. */
+/** A consumer of BIN's SDK running `body`. */
 const consumerOf = (body: string) => once(() => check(generateGoSdk(BIN, { modulePath: MODULE }).files, MODULE, body))
 
 const octets = (size: number, type: string): Reply => ({ bytes: size, headers: { "content-type": type }, status: 200 })
@@ -146,7 +145,7 @@ goDescribe("binary responses: []byte, never JSON-decoded, Accept the declared me
 
 	it("a per-call Accept header wins over the declared media type", async () => {
 		const call = { ...FILES_GET, headers: { accept: "*/*" } }
-		const { hops, run } = await drive(binSdk(true), [octets(3, "application/octet-stream")], [call])
+		const { hops, run } = await drive(binSdk(false), [octets(3, "application/octet-stream")], [call])
 		expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
 			accept: ["*/*"],
 			observed: [{ kind: "bytes", sha256: sha256(pattern(3)), size: 3, status: 200 }],

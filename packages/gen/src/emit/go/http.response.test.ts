@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Call, Setup } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, type DrivenSdk } from "./__fixtures__/compiled.ts"
+import { compiledSdk, type DrivenSdk, inStyle } from "./__fixtures__/compiled.ts"
 import type { GoError, Script, Trace } from "../shared/__fixtures__/protocol.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type Reply, served, type Json as WireJson } from "../shared/__fixtures__/recording-server.ts"
@@ -79,9 +79,9 @@ const TEXT = get("text.get", "/text")
 const found = (json: WireJson): Reply => ({ json, status: 200 })
 const data = (json: unknown) => ({ data: json, kind: "data", status: 200 })
 
-/** The SDK for RESP compiled with the driver (safe mode for `throwOnError: false`), which must build and vet clean. */
-function respSdk(throwOnError?: boolean): DrivenSdk {
-	const sdk = compiledSdk(RESP, { modulePath: "example.com/responses", throwOnError })
+/** The SDK for RESP compiled with the driver (calling through `client.Safe()` when `safe`), which must build and vet clean. */
+function respSdk(safe = false): DrivenSdk {
+	const sdk = inStyle(compiledSdk(RESP, { modulePath: "example.com/responses" }), safe)
 	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
 	return sdk
 }
@@ -99,7 +99,7 @@ type Driven = Awaited<ReturnType<typeof drive>>
 /** The `*sdk.` entries of an error's chain: the only ones a test may pin. */
 const sdkTypes = (error: GoError | undefined) => error?.chain.filter((type) => type.startsWith("*sdk."))
 
-/** A traced call as these tests pin it: its error's flags, `*sdk.` types, text and origin, and its SDKResult. */
+/** A traced call as these tests pin it: its error's flags, `*sdk.` types, text and origin, and its Result. */
 const traced = ({ error, result }: Trace["calls"][number]) => ({
 	error: error && {
 		canceled: error.canceled,
@@ -129,32 +129,35 @@ const answered = ({ hops, run }: Driven) => ({
 
 goDescribe("a JSON answer decodes into the operation's type; an undecodable one is the method's error", () => {
 	// v0: 41d76e99ed
-	it("returns the decoded item, and a truncated JSON body as a decode error in both modes, never as SDKResult.Err", async () => {
+	it("returns the decoded item, and a truncated JSON body as a *DecodeError: the error, or on Safe() the Err (bit 21 i3)", async () => {
 		const truncated: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
 		const replies = [found({ id: "i1", name: "one" }), truncated]
 		const driven = (sdk: DrivenSdk) => drive(sdk, replies, [ITEM, ITEM], { script: {} })
-		const [thrown, safe] = await Promise.all([driven(respSdk()), driven(respSdk(false))])
-		/* F5: v0 put an undecodable 2xx into result.Err as a 2xx StatusError; v1 returns it as the error value */
-		const undecoded = {
+		const [thrown, safe] = await Promise.all([driven(respSdk()), driven(respSdk(true))])
+		/* F5: v0 put an undecodable 2xx into result.Err as a 2xx StatusError; v1 returns a *DecodeError, an answer (R-i1) */
+		const undecoded = (via: string, result: Trace["calls"][number]["result"]) => ({
 			error: {
 				canceled: false,
 				deadline: false,
-				sdk: [],
+				sdk: ["*sdk.DecodeError"],
 				text: expect.stringMatching(/^honey: decode response: /),
-				via: "return",
+				via,
 			},
-			result: undefined,
-		}
-		const expected = (first: Trace["calls"][number]["result"]) => ({
-			calls: [{ error: undefined, result: first }, undecoded],
+			result,
+		})
+		const expected = (first: Trace["calls"][number]["result"], second: ReturnType<typeof undecoded>) => ({
+			calls: [{ error: undefined, result: first }, second],
 			hops: ["/items/i1", "/items/i1"],
 			/* bit 21 i0: the grid observes the error return as its decode, the 2xx status kept */
 			observed: [data({ id: "i1", name: "one" }), { kind: "decode", status: 200 }],
 			status: 0,
 		})
 		expect({ safe: decoding(safe), thrown: decoding(thrown) }).toEqual({
-			safe: expected({ data: true, ok: true, response: true, status: 200 }),
-			thrown: expected(undefined),
+			safe: expected(
+				{ data: true, ok: true, response: true, status: 200 },
+				undecoded("result", { data: false, ok: false, response: true, status: 200 }),
+			),
+			thrown: expected(undefined, undecoded("return", undefined)),
 		})
 	}, 600_000)
 })
@@ -186,11 +189,11 @@ goDescribe("a decoded answer keeps every member the wire sent", () => {
 
 goDescribe("a text answer is the body as a string, asked for by its media type", () => {
 	// v0: 53cfea9cfa
-	it("returns a text/plain body verbatim, never JSON-decoded, and sends accept: text/plain, in both modes", async () => {
+	it("returns a text/plain body verbatim, never JSON-decoded, and sends accept: text/plain, in both styles", async () => {
 		const reply: Reply = { headers: { "content-type": "text/plain" }, status: 200, text: '{"a":1}' }
 		const driven = (sdk: DrivenSdk) => drive(sdk, [reply], [TEXT])
-		const [thrown, safe] = await Promise.all([driven(respSdk()), driven(respSdk(false))])
-		/* F1: the method returns (string, error), v0's (*string, error) modernized; safe mode SDKResult[string] */
+		const [thrown, safe] = await Promise.all([driven(respSdk()), driven(respSdk(true))])
+		/* F1: the method returns (string, error), v0's (*string, error) modernized; its safe twin Result[string] */
 		const expected = { accept: ["text/plain"], observed: [data('{"a":1}')], status: 0, stderr: "" }
 		expect({ safe: answered(safe), thrown: answered(thrown) }).toEqual({ safe: expected, thrown: expected })
 	}, 600_000)

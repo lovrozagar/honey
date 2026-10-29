@@ -18,7 +18,7 @@ const TARGETS = {
 		throwOnError: "boolean",
 		version: "string",
 	},
-	go: { modulePath: "string", throwOnError: "boolean" },
+	go: { modulePath: "string" },
 	java: {
 		artifactId: "string",
 		clientName: "string",

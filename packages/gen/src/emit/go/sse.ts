@@ -2,8 +2,9 @@
  * A server-sent-events operation as a Go method (G12): it returns `iter.Seq2[SSEEvent[T], error]`,
  * `T` the type of the declared event schema (`string` when the events are untyped), and opens the
  * stream when ranged. `<Op>Opts.LastEventID` resumes it as the Last-Event-ID header, which also
- * carries a declared Last-Event-ID header param (Fd3). A stream ignores `throwOnError`: an error
- * status is its error value in either mode.
+ * carries a declared Last-Event-ID header param (Fd3). An error status at the opening is the
+ * stream's error value; its `Client.Safe()` twin opens the stream on the call and answers that
+ * status as its Result's Err (bit 21 i3).
  */
 import type { SdkOp } from "../../ir/sdk-model.ts"
 import { type GoStream, sendArgs } from "./sdk-answer.ts"

@@ -46,7 +46,7 @@ func parseSSEStream(ctx context.Context, resp *http.Response) iter.Seq2[SSEEvent
 			yield(SSEEvent[string]{}, raiseForStatus(resp, body))
 			return
 		}
-		for ev, err := range parseSSE(resp.Body) {
+		for ev, err := range parseSSE(wireBody{ctx, resp.Body}) {
 			if ctx.Err() != nil {
 				return
 			}
@@ -55,6 +55,20 @@ func parseSSEStream(ctx context.Context, resp *http.Response) iter.Seq2[SSEEvent
 			}
 		}
 	}
+}
+
+// wireBody is a body whose failed read is a call's no-answer error.
+type wireBody struct {
+	ctx context.Context
+	io.Reader
+}
+
+func (b wireBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if err != nil && err != io.EOF {
+		err = wrapTransportError(b.ctx, err)
+	}
+	return n, err
 }
 
 // sseState is the parser's event under construction and its sticky fields.

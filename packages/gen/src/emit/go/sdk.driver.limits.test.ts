@@ -1,6 +1,7 @@
 /**
  * The Go SDK's limits on what it reads and sends (bit 19 b1), through the test driver: a gzip bomb is refused on its
- * decoded bytes (net/http decodes, the MaxResponseBytes cap counts what it decodes to), and a header the SDK cannot
+ * decoded bytes (net/http decodes, the MaxResponseBytes cap counts what it decodes to; a *DecodeError since bit 21
+ * i3), and a header the SDK cannot
  * send, a control character in its value or a name outside the token grammar, is refused before anything goes out,
  * the error naming the header and never quoting its value.
  */
@@ -80,13 +81,14 @@ describe.skipIf(!GO)(
 				run.stderr,
 			).toEqual({
 				encoding: "gzip",
+				/* bit 21 i3: the status and headers arrived, so the 2xx past the cap is a *DecodeError, an answer */
 				error: plain({
-					chain: ["*fmt.wrapError", "*errors.errorString"],
-					text: "honey: http do: honey: response body exceeds MaxResponseBytes",
+					chain: ["*sdk.DecodeError", "*errors.errorString"],
+					text: "honey: decode response: honey: response body exceeds MaxResponseBytes",
 					tooLarge: true,
-					type: "*fmt.wrapError",
+					type: "*sdk.DecodeError",
 				}),
-				observed: [null],
+				observed: [{ kind: "decode", status: 200 }],
 			})
 		}, 600_000)
 	},

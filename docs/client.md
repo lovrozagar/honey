@@ -13,7 +13,7 @@ honey-codegen generate --spec openapi.json --target ts --out sdk
 
 ## Errors and the safe mirror
 
-TypeScript and Python today; the other SDKs as their phases land.
+TypeScript, Python and Go today; the other SDKs as their phases land.
 
 - **The normal call** answers its value and throws on any failure: an error status as its typed error
   (`NotFoundError` and so on, each a `ClientError`), and an undecodable or over-cap 2xx as a `DecodeError`.
@@ -54,6 +54,35 @@ async def health(client: AsyncSDK) -> str:
             return f"answered {response.status}, unreadable: {unreadable}"
         case Err(error, response):
             return f"answered {response.status}: {error}"
+```
+
+In Go, `client.Safe()` holds the same resources, each method a field of its name (a `Call<n>`, `Stream<n>` or
+`Conn<n>` over the normal method value) returning `(sdk.Result[T], error)` where the normal method returns
+`(T, error)` (`sdk.Result[struct{}]` for one that answers no body). `Ok()` reports the data;
+otherwise `Err` (an `error`) is what the normal method returns for that answer, a `*ClientError` or its per-status
+type, or a `*DecodeError` (its `Err` the parse error, or `ErrResponseTooLarge` past `MaxResponseBytes`): read it with
+`errors.As`. `Data` is the zero value on an Err. `Response` is the answer's on both. The method's own `error` is for no
+answer alone. An event stream's twin opens it on the call (`Data` ranges once), and a WebSocket or realtime method is
+the same one.
+
+```go
+func listing(ctx context.Context, client *sdk.Client) string {
+	r, err := client.Safe().GetApi(ctx, nil)
+	if err != nil {
+		return fmt.Sprintf("no answer: %v", err) // never sent, refused, dropped, timed out or canceled
+	}
+	var unreadable *sdk.DecodeError
+	var failed *sdk.ClientError
+	switch {
+	case r.Ok():
+		return fmt.Sprintf("answered %d: %v", r.Response.StatusCode, r.Data)
+	case errors.As(r.Err, &unreadable):
+		return fmt.Sprintf("answered %d, unreadable: %v", r.Response.StatusCode, unreadable.Err)
+	case errors.As(r.Err, &failed):
+		return fmt.Sprintf("answered %d: %s", failed.StatusCode, failed.Key)
+	}
+	return r.Err.Error()
+}
 ```
 
 ## Reference

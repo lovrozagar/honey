@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
 import type { Call, Observed, WireHop } from "../../../tests/integration/conformance/matrix.ts"
-import { compiledSdk, compileGo, type DrivenSdk, type DriverRun } from "./__fixtures__/compiled.ts"
+import { compiledSdk, compileGo, type DrivenSdk, type DriverRun, inStyle } from "./__fixtures__/compiled.ts"
 import { withGo } from "./__fixtures__/go-env.ts"
 import { type RecordingServer, type Reply, served } from "../shared/__fixtures__/recording-server.ts"
 import { generateGoSdk, goCallPlans } from "./sdk.ts"
@@ -66,11 +66,11 @@ const CREATED_URL = "/orgs/a%2Fb%20c/members/m%3F1/notes?tag=x%26y+z"
 /** A run's outcome as a test asserts it: the exit status and what it observed. */
 const outcome = (run: DriverRun) => ({ observed: run.observed, status: run.status })
 
-/** The SDK for NOTES compiled with the driver, which must build and vet clean. */
-function notesSdk(throwOnError?: boolean): DrivenSdk {
-	const sdk = compiledSdk(NOTES, { modulePath: "example.com/notes", throwOnError })
+/** The SDK for NOTES compiled with the driver (calling through `client.Safe()` when `safe`), which must build and vet clean. */
+function notesSdk(safe = false): DrivenSdk {
+	const sdk = compiledSdk(NOTES, { modulePath: "example.com/notes" })
 	expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
-	return sdk
+	return inStyle(sdk, safe)
 }
 
 /** CREATE as the primary listener of `server` receives it, under the bearer token and the tenant header. */
@@ -164,9 +164,9 @@ goDescribe("the Go test driver: the compiled SDK called by its call plan, (*T, e
 	}, 600_000)
 })
 
-goDescribe("the Go test driver: the compiled SDK called by its call plan, safe mode (SDKResult[T])", () => {
+goDescribe("the Go test driver: the compiled SDK called by its call plan, on Safe() (Result[T], bit 21 i3)", () => {
 	it("observes an error status as error with a null key, sent to the alt origin, then data on the client's own", async () => {
-		const sdk = notesSdk(false)
+		const sdk = notesSdk(true)
 		const replies: Reply[] = [
 			{ json: { message: "no such member" }, status: 404 },
 			{ json: { id: "n2", text: "hi" }, status: 200 },
@@ -190,7 +190,29 @@ goDescribe("the Go test driver: the compiled SDK called by its call plan, safe m
 	}, 600_000)
 })
 
-goDescribe("the Go test driver: timeouts and the raw response, the grid's outcomes in either mode", () => {
+goDescribe("the safe mirror: each Ok holds its own answer (bit 21 i3)", () => {
+	/* the grid runs each cell in a process of its own: two Ok answers on one client are this leg's to hold apart */
+	it("answers each call's own data and response on one client, never an earlier call's", async () => {
+		const sdk = notesSdk(true)
+		const replies: Reply[] = [
+			{ headers: { "x-n": "1" }, json: { id: "n1", text: "one" }, status: 200 },
+			{ headers: { "x-n": "2" }, json: { id: "n2", text: "two" }, status: 201 },
+		]
+		const calls: Call[] = [{ ...CREATE, raw: true }, { ...CREATE, raw: true }, CREATE, CREATE]
+		const run = await served([...replies, ...replies], (server) => sdk.runCalls({ calls }, server))
+		expect(outcome(run), run.stderr).toEqual({
+			observed: [
+				raw(200, '{"id":"n1","text":"one"}', { "content-type": "application/json", "x-n": "1" }),
+				raw(201, '{"id":"n2","text":"two"}', { "content-type": "application/json", "x-n": "2" }),
+				{ data: { id: "n1", text: "one" }, kind: "data", status: 200 },
+				{ data: { id: "n2", text: "two" }, kind: "data", status: 201 },
+			],
+			status: 0,
+		})
+	}, 600_000)
+})
+
+goDescribe("the Go test driver: timeouts and the raw response, the grid's outcomes in either style", () => {
 	it("observes a lapsed client or call timeout as timeout, a late answer never awaited", async () => {
 		const sdk = notesSdk()
 		const replies: Reply[] = [
@@ -211,7 +233,7 @@ goDescribe("the Go test driver: timeouts and the raw response, the grid's outcom
 		expect(Date.now() - started).toBeLessThan(4000)
 	}, 600_000)
 
-	it("observes raw: true as the stored response, on success and on an error status, in both modes", async () => {
+	it("observes raw: true as the stored response (a Result's on Safe()), on success and on an error status, in both styles", async () => {
 		const replies: Reply[] = [
 			{ headers: { "x-extra": "e" }, json: { id: "n1", text: "hi" }, status: 200 },
 			{ text: "plain failure", status: 404 },
@@ -220,7 +242,7 @@ goDescribe("the Go test driver: timeouts and the raw response, the grid's outcom
 			raw(200, '{"id":"n1","text":"hi"}', { "content-type": "application/json", "x-extra": "e" }),
 			raw(404, "plain failure", {}),
 		]
-		for (const sdk of [notesSdk(), notesSdk(false)]) {
+		for (const sdk of [notesSdk(), notesSdk(true)]) {
 			const calls: Call[] = [
 				{ ...CREATE, raw: true },
 				{ ...CREATE, raw: true },
@@ -246,13 +268,14 @@ const MOVED: Json = {
 }
 
 goDescribe("the Go test driver: a success the document does not type (an error-only op)", () => {
-	it("observes the body WithResponseInto stored: its JSON, its text, null when empty, in both modes", async () => {
+	it("observes the body WithResponseInto stored (a Result's Response on Safe()): its JSON, its text, null when empty, in both styles", async () => {
 		expect(goCallPlans(MOVED)["moved.get"]?.response).toBe("none")
 		const replies: Reply[] = [{ json: { a: 1 }, status: 200 }, { status: 200 }, { status: 200, text: "t" }]
 		const call: Call = { operation: "moved.get", route: { method: "GET", path: "/moved" } }
-		for (const throwOnError of [true, false]) {
-			const sdk = compiledSdk(MOVED, { modulePath: "example.com/moved", throwOnError })
-			expect({ built: sdk.built, vet: sdk.vet }, sdk.stderr).toEqual({ built: true, vet: [] })
+		const moved = compiledSdk(MOVED, { modulePath: "example.com/moved" })
+		expect({ built: moved.built, vet: moved.vet }, moved.stderr).toEqual({ built: true, vet: [] })
+		for (const safe of [false, true]) {
+			const sdk = inStyle(moved, safe)
 			const run = await served(replies, (server) => sdk.runCalls({ calls: [call, call, call] }, server))
 			expect(outcome(run), run.stderr).toEqual({
 				observed: [

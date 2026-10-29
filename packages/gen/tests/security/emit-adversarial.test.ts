@@ -379,26 +379,12 @@ describe.skipIf(!GO)("gen adversarial: the Go SDK emitter", () => {
 	// v0: ffd0718d44
 	// v0: a7ec0b37c2
 	// v0: 58d8c8d5a2
-	it("vets clean in both throwOnError modes, every hostile name a Go identifier and every value a literal", () => {
-		const modes = [true, false].map((throwOnError) => ({
-			go: compileGo(generateGoSdk(adversarialCorpus(), { modulePath: "example.com/adversarial", throwOnError }).files),
-			throwOnError,
-		}))
+	it("vets clean with its safe mirror, every hostile name a Go identifier and every value a literal", () => {
+		const go = compileGo(generateGoSdk(adversarialCorpus(), { modulePath: "example.com/adversarial" }).files)
 		expect(
-			[
-				modes.map(({ go, throwOnError }) => ({ built: go.built, throwOnError, vet: go.vet })),
-				({} as Record<string, unknown>).polluted,
-				({} as Record<string, unknown>).y,
-			],
-			modes.map(({ go }) => go.stderr).join(""),
-		).toEqual([
-			[
-				{ built: true, throwOnError: true, vet: [] },
-				{ built: true, throwOnError: false, vet: [] },
-			],
-			undefined,
-			undefined,
-		])
+			[{ built: go.built, vet: go.vet }, ({} as Record<string, unknown>).polluted, ({} as Record<string, unknown>).y],
+			go.stderr,
+		).toEqual([{ built: true, vet: [] }, undefined, undefined])
 	}, 600_000)
 })
 

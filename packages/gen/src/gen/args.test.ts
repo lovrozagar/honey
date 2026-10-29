@@ -26,7 +26,7 @@ describe("generate's arguments (phase h)", () => {
 			refused([...base, "--target", "ts", "stray"]),
 			refused([...base, "--target", "kotlin"]),
 			refused([...base, "--target", "ts", "--rust-crate-name", "x"]),
-			refused([...base, "--target", "go", "--go-throw-on-error=maybe"]),
+			refused([...base, "--target", "java", "--java-throw-on-error=maybe"]),
 			refused(["--out", "o", "--target", "ts"]),
 			refused(["--spec", "s.json", "--target", "ts"]),
 			refused(["--spec", "s.json", "--out", "o"]),
@@ -38,7 +38,7 @@ describe("generate's arguments (phase h)", () => {
 			'unexpected argument "stray"',
 			'--target "kotlin": want one of cli, csharp, go, java, mcp, python, rust, ts',
 			"options for rust, which no --target names",
-			'--go-throw-on-error takes true or false, not "maybe"',
+			'--java-throw-on-error takes true or false, not "maybe"',
 			"--spec or --app is required",
 			"--out is required",
 			"--target is required",
@@ -56,15 +56,17 @@ describe("generate's arguments (phase h)", () => {
 			"--target=cli",
 			"--target",
 			"go",
-			"--go-throw-on-error=false",
+			"--target",
+			"java",
+			"--java-throw-on-error=false",
 			"--cli-binary-name",
 			"shop",
 			"--watch",
 		])
-		expect([run.spec, run.out, run.targets, run.options.go, run.options.cli, run.watch]).toEqual([
+		expect([run.spec, run.out, run.targets, run.options.java, run.options.cli, run.watch]).toEqual([
 			"s.json",
 			"o",
-			["go", "cli"],
+			["go", "cli", "java"],
 			{ throwOnError: false },
 			{ binaryName: "shop" },
 			true,
@@ -72,13 +74,16 @@ describe("generate's arguments (phase h)", () => {
 	})
 })
 
-/* bit 21 i2: a Python client always raises and `client.safe` answers a Result, so the error-mode option is gone */
+/*
+ * bit 21 i2 (python) and i3 (go): a client always throws and its safe mirror answers a Result, so the error-mode
+ * option is gone
+ */
 describe("generate's removed options", () => {
-	it("refuses --python-throw-on-error as the unknown option it now is", () => {
-		const base = ["--spec", "s.json", "--out", "o", "--target", "python"]
-		const flags = ["--python-throw-on-error", "--python-throw-on-error=false"]
+	it.each(["python", "go"])("refuses --%s-throw-on-error as the unknown option it now is", (target) => {
+		const base = ["--spec", "s.json", "--out", "o", "--target", target]
+		const flags = [`--${target}-throw-on-error`, `--${target}-throw-on-error=false`]
 		expect(flags.map((flag) => refused([...base, flag]))).toEqual(
-			flags.map(() => "unknown option --python-throw-on-error"),
+			flags.map(() => `unknown option --${target}-throw-on-error`),
 		)
 	})
 })
