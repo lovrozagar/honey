@@ -18,10 +18,9 @@ import { sseStream } from "./sse.ts"
 import type { PyTypeContext } from "./types.ts"
 import { wsStream } from "./ws.ts"
 
-/** What every method of one SDK shares: the client module's type context, the error mode, what it imports. */
+/** What every method of one SDK shares: the client module's type context, what it imports. */
 export type MethodEnv = {
 	readonly at: PyTypeContext & { readonly declTyping: Set<string> }
-	readonly throwOnError: boolean
 	readonly constants: NameScope
 	/** the `collections.abc` and runtime names client.py imports */
 	readonly imports: Set<string>
@@ -208,17 +207,16 @@ function methodLines(parts: Parts, async: boolean, env: MethodEnv, shadowed: Rea
 	]
 	return [
 		`    ${async ? "async " : ""}def ${parts.name}(${params.join(", ")}) -> ${qualified(answer.returns, shadowed, env)}:`,
-		...methodDoc(op, env.throwOnError, op.stream === null ? [] : STREAMS[op.stream].doc),
+		...methodDoc(op, op.stream === null ? [] : STREAMS[op.stream].doc),
 		`        return ${async ? "await " : ""}self._t.${answer.run}(${args.join(", ")})`,
 	]
 }
 
 /** The runtime and `collections.abc` names `op`'s methods spell. */
-function noteImports(op: SdkOp, answer: Answer, env: MethodEnv): void {
+function noteImports(op: SdkOp, env: MethodEnv): void {
 	const names = { realtime: "ResumableConnection", sse: "EventStream", ws: "TypedWebSocket" }
 	if (op.stream !== null) env.imports.add(names[op.stream])
 	if (op.stream === "ws" || op.stream === "realtime") env.imports.add("Sequence")
-	if (answer.run === "result") env.imports.add("SDKResult")
 }
 
 /** The method of `op` named `name`: its constant, its sync method (none for a stream), its async one, its plan. */
@@ -229,7 +227,7 @@ export function pyMethod(op: SdkOp, name: string, env: MethodEnv): PyMethod {
 	const answer = op.stream === null ? answerOf(op, env) : STREAMS[op.stream].answer(op, env)
 	const constant = env.constants.claim(`_${pyIdentifier(op.id).toUpperCase()}`)
 	const parts: Parts = { answer, constant, headers: responseHeaders(op, env), keywords, name, op, path }
-	noteImports(op, answer, env)
+	noteImports(op, env)
 	env.imports.add("Operation").add("RequestOptions")
 	const by = (where: Keyword["where"]) =>
 		Object.fromEntries(keywords.filter((k) => k.where === where).map(({ ident, param }) => [param.name, ident]))

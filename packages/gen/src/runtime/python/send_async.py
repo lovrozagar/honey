@@ -9,13 +9,13 @@ import httpx2
 
 from .auth import refresh_async
 from .config import ClientConfig, Defaults
-from .errors import APIConnectionError, APIStatusError, APITimeoutError, HoneyError
+from .errors import APIConnectionError, APITimeoutError, HoneyError
 from .events import EventStream, raced
 from .exchange import CallArgs, ClientCore, Exchange, HttpAnswer, failure
 from .hooks import RequestContext, refuse_hooks, run_async
 from .operation import Operation
 from .redirect import Hop, cross
-from .result import SDKResult
+from .result import ANSWERS, Err, Ok, Result
 
 T = TypeVar("T")
 
@@ -32,13 +32,13 @@ class AsyncTransport(ClientCore):
         x = Exchange(self, op, args)
         return cast("T", x.decoded((await self.run(x))[0]))
 
-    async def result(self, op: Operation[T], **args: Unpack[CallArgs]) -> SDKResult[T]:
+    async def result(self, op: Operation[T], **args: Unpack[CallArgs]) -> Result[T]:
         x = Exchange(self, op, args)
         answer, _ = await self.run(x)
         try:
-            return SDKResult(cast("T", x.decoded(answer)), None, x.raw.status, x.raw)
-        except APIStatusError as error:
-            return SDKResult(None, error, x.raw.status, x.raw)
+            return Ok(cast("T", x.decoded(answer)), x.raw)
+        except ANSWERS as error:
+            return Err(error, x.raw)
 
     async def sse(
         self,
@@ -47,6 +47,18 @@ class AsyncTransport(ClientCore):
         last_event_id: str | None = None,
         **args: Unpack[CallArgs],
     ) -> EventStream[T]:
+        r = await self.safe_sse(op, last_event_id=last_event_id, **args)
+        if isinstance(r, Err):
+            raise r.error
+        return r.data
+
+    async def safe_sse(
+        self,
+        op: Operation[T],
+        *,
+        last_event_id: str | None = None,
+        **args: Unpack[CallArgs],
+    ) -> Result[EventStream[T]]:
         resume = {"Last-Event-ID": last_event_id or None}
         x = Exchange(
             self,
@@ -54,11 +66,18 @@ class AsyncTransport(ClientCore):
             {**args, "headers": {**(args.get("headers") or {}), **resume}},
             stream=True,
         )
-        return EventStream(
-            await self.opened(x),
-            decode=op.answer == "json",
-            shape=op.shape,
-            cancel=x.options.get("cancel"),
+        try:
+            live = await self.opened(x)
+        except ANSWERS as error:
+            return Err(error, x.raw)
+        return Ok(
+            EventStream(
+                live,
+                decode=op.answer == "json",
+                shape=op.shape,
+                cancel=x.options.get("cancel"),
+            ),
+            x.raw,
         )
 
     async def opened(self, x: Exchange) -> httpx2.Response:
@@ -115,7 +134,7 @@ class AsyncTransport(ClientCore):
                 await live.aclose()
             raise
         return HttpAnswer(
-            response.status, response.headers, response.body, answer.url
+            response.status, response.headers, response.body, answer.url, answer.over
         ), live
 
     async def send(self, x: Exchange, hop: Hop) -> tuple[HttpAnswer, LiveResponse]:
@@ -129,6 +148,7 @@ class AsyncTransport(ClientCore):
             timeout=timeout,
         )
         chunks: list[bytes] = []
+        over = False
         try:
             sending = self.http.send(
                 request, stream=True, follow_redirects=False, **cross(request, hop)
@@ -145,7 +165,8 @@ class AsyncTransport(ClientCore):
                 ), response
             try:
                 async for chunk in response.aiter_bytes():
-                    x.read(chunks, chunk)
+                    if over := x.read(chunks, chunk):
+                        break
                     x.check()
             finally:
                 await response.aclose()
@@ -156,7 +177,11 @@ class AsyncTransport(ClientCore):
                 f"the request failed: {type(error).__name__}"
             ) from error
         return HttpAnswer(
-            response.status_code, response.headers, b"".join(chunks), str(response.url)
+            response.status_code,
+            response.headers,
+            b"" if over else b"".join(chunks),
+            str(response.url),
+            over,
         ), None
 
     async def aclose(self) -> None:

@@ -2,7 +2,7 @@
  * The emitted Python package through the ruff post-pass and Fb9's rule list, byte-compiled and imported under the
  * pinned interpreter and under PY_FLOOR at the dependency floors (G10.2, Fb11), and mypy under Fb10's flags
  * (contract 28 §7.4). Every package here is a registry entry (`FIXTURES`, Fb14): `fixtures` is v0's Python specs
- * and the realtime ones merged into one document, `fixtures-safe` the same in safe mode. That the floor and mypy
+ * and the realtime ones merged into one document, its client holding both styles (bit 21 i2). That the floor and mypy
  * legs can fail at all is the canary's to prove: 3.11 has no `itertools.batched`.
  */
 import { readdirSync, readFileSync } from "node:fs"
@@ -26,8 +26,8 @@ import { SPAWN_TIMEOUT } from "../../gen/__fixtures__/spawn-timeout.ts"
 const PY = withPython()
 const FLOOR = withPython(PY_FLOOR)
 
-/** Both throw modes of the merged fixtures. */
-const MODES = ["fixtures", "fixtures-safe"] as const
+/** The merged fixtures: one client holds both styles, the normal methods and their `safe` mirror (bit 21 i2). */
+const MODES = ["fixtures"] as const
 type Mode = (typeof MODES)[number]
 
 /** `key`'s package, as emitted. */
@@ -45,7 +45,7 @@ describe("the emitted Python package through the ruff pass", () => {
 
 	// v0: 97a65d64db
 	it.skipIf(!PY)(
-		"leaves ruff format --check and the Fb9 rule list nothing to report after the pass, both modes, zero noqa",
+		"leaves ruff format --check and the Fb9 rule list nothing to report after the pass, both styles, zero noqa",
 		async () => {
 			/* V0BUG: v0 pushed a blanket `# ruff: noqa: E501` into client.py and types.py (codegen-python.ts:222,835) */
 			const results = await Promise.all(
@@ -181,15 +181,15 @@ describe("the emitted Python package under the pinned interpreter and PY_FLOOR",
 
 describe.skipIf(!PY)("the emitted Python package under mypy", () => {
 	// v0: 3105a53d79
-	it("is clean under mypy --strict at 3.11 with Fb10's codes on every gated SDK, both modes", () => {
-		const keys = ["fixtures", "fixtures-safe", "types", "surface"] as const
+	it("is clean under mypy --strict at 3.11 with Fb10's codes on every gated SDK, both styles", () => {
+		const keys = ["fixtures", "types", "surface"] as const
 		const findings = Object.fromEntries(
 			keys.map((key) => {
 				const sdk = compiledPython(key)
 				return [key, sdk.imported ? sdk.mypy() : [sdk.stderr]]
 			}),
 		)
-		expect(findings).toEqual({ fixtures: [], "fixtures-safe": [], surface: [], types: [] })
+		expect(findings).toEqual({ fixtures: [], surface: [], types: [] })
 		/* the leg can fail: --python-version 3.11 rejects a 3.12 stdlib name the pinned interpreter has */
 		expect(compiledPython("canary").mypy().join("\n")).toContain('Module "itertools" has no attribute "batched"')
 	}, 300_000)

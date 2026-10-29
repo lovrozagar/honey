@@ -102,7 +102,7 @@ async def each(look):
 def walk(node, path):
     out = []
     for name in dir(node):
-        if name.startswith("_") or (path == "" and name in ("aclose", "close", "is_stale")):
+        if name.startswith("_") or (path == "" and name in ("aclose", "close", "is_stale", "safe")):
             continue
         value = getattr(node, name)
         if inspect.ismethod(value):
@@ -138,7 +138,9 @@ const ROW_EXPORTS = [
 	"ClientConfig",
 	"RequestOptions",
 	"RawResponse",
-	"SDKResult",
+	"Ok",
+	"Err",
+	"Result",
 	"HoneyError",
 	"APIStatusError",
 	...STATUS_ERRORS,
@@ -189,6 +191,7 @@ note(issubclass(sdk.NotFoundError, sdk.APIStatusError))`,
 note(trees[0])
 note([sorted(set(trees[1]) - set(trees[0])), sorted(set(trees[0]) - set(trees[1]))])
 note(await each(lambda c: len([p for p in walk(c, "") if inspect.iscoroutinefunction(at(c, p))])))
+note(await each(lambda c: walk(c.safe, "") == walk(c, "")))
 note(await both(lambda c: c.blobs.upload(b"\\x00\\x01")))`,
 	exports: `${IMPORT}note([e.__name__ for e in (${STATUS_ERRORS.join(", ")}) if not issubclass(e, APIStatusError)])
 note(issubclass(APIStatusError, HoneyError))
@@ -418,12 +421,12 @@ const SYNC_TREE = [
 describe.skipIf(!PY)("the two clients: one resource tree, one package root", () => {
 	// v0: b4ef22c560
 	it(
-		"gives SDK AsyncSDK's tree less exactly the stream ops, binary uploads included, every AsyncSDK method a coroutine function and no SDK one",
+		"gives SDK AsyncSDK's tree less exactly the stream ops, binary uploads included, every AsyncSDK method a coroutine function and no SDK one, each client's safe mirror (bit 21 i2) the same tree",
 		async () => {
 			/* V0BUG: v0's isSyncCapable (codegen-python.ts:636-638) left binary-request ops off SDK (contract 28 §9.1) */
 			const { observed, stderr } = await section("tree")
 			expect(observed, stderr).toEqual({
-				out: [dumps(SYNC_TREE), dumps([["events.stream", "ticks.stream"], []]), "[0, 22]", pair(null)],
+				out: [dumps(SYNC_TREE), dumps([["events.stream", "ticks.stream"], []]), "[0, 22]", pair(true), pair(null)],
 				ran: true,
 				wire: sent("tree"),
 			})

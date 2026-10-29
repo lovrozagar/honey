@@ -85,7 +85,6 @@ function fixtures(): Readonly<Record<string, unknown>> {
 export const FIXTURES = {
 	/** e8f9ebeb5f's (and Go's 4eba1d1639's, Rust's 60586125be's) adversarial corpus, both modes (phase f) */
 	adversarial: { document: adversarialCorpus },
-	"adversarial-safe": { document: adversarialCorpus, options: { throwOnError: false } },
 	/** the gate cache's self-test (Fb8): a dependency-free package */
 	cache: {
 		files: {
@@ -106,10 +105,8 @@ export const FIXTURES = {
 	docs: { document: docsDocument },
 	errors: { document: errors },
 	fixtures: { document: fixtures },
-	"fixtures-safe": { document: fixtures, options: { throwOnError: false } },
 	/** the HTTP runtime's document (contract 29 §4.3): bit 13's `http` and three Python-only paths, both modes */
 	http: { document: pythonHttp },
-	"http-safe": { document: pythonHttp, options: { throwOnError: false } },
 	/** the resumable connections (contract 34 Fd6): bit 13's `realtime` document, shared */
 	realtime: { document: streams.realtime },
 	/** a relative first server: `SDK()` needs an absolute `base_url` (R7) */

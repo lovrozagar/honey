@@ -36,8 +36,6 @@ const pending = (id: string): Call => ({
 	params: { id },
 	route: route("GET", "/pending/{id}"),
 })
-/* fixtures-safe's v0 SSE op (documents.ts merges python/sse.json under `/sse`): its stream in safe mode */
-const SAFE_EVENTS: Call = { operation: "sse.events.stream", route: route("GET", "/sse/events/stream") }
 const CHAT: Call = {
 	body: { kind: "json", value: { q: "hi" } },
 	operation: "chat.send",
@@ -55,20 +53,22 @@ const TICKED: Observed = { events: [{ data: { n: 1 } }], kind: "events" }
 const tick = (n: number) => `id: ${n}\nevent: tick\ndata: {"n":${n}}\n\n`
 const strings = (...data: string[]): Observed => ({ events: data.map((d) => ({ data: d })), kind: "events" })
 
-/** The registry SDK `key` with the driver aimed at it, which must import. */
-function driven(key: "fixtures-safe" | "sse" = "sse"): DrivenPythonSdk {
-	const sdk = drivenPythonSdk(key)
+/** The registry SDK `sse` with the driver aimed at it, which must import. */
+function driven(): DrivenPythonSdk {
+	const sdk = drivenPythonSdk("sse")
 	expect(sdk.imported, sdk.stderr).toBe(true)
 	return sdk
 }
 
-type Options = { readonly script?: Script; readonly setup?: Setup; readonly sdk?: DrivenPythonSdk }
+/** `safe`: through the client's `safe` mirror (bit 21 i2) */
+type Options = { readonly safe?: boolean; readonly script?: Script; readonly setup?: Setup }
 /** `calls` run on `AsyncSDK` against a server answering `replies`: the run, hops and streams. */
 async function drive(replies: readonly Reply[], calls: readonly Call[], options: Options = {}) {
-	const sdk = options.sdk ?? driven()
+	const sdk = driven()
 	return served(replies, async (server) => {
 		const cell = { calls, setup: options.setup ?? {} }
-		const run = await sdk.runCalls(cell, { url: server.url }, { client: "async", script: options.script })
+		const how = { client: "async" as const, safe: options.safe, script: options.script }
+		const run = await sdk.runCalls(cell, { url: server.url }, how)
 		return { hops: [...server.hops], run, streams: [...server.streams] }
 	})
 }
@@ -272,7 +272,7 @@ const FAILED_OPENED = {
 	] satisfies Observed[],
 }
 
-describe.skipIf(!PY)("an SSE open that fails: its status class raised before any event, in either mode", SLOW, () => {
+describe.skipIf(!PY)("an SSE open that fails: its status class before any event, raised or the safe Err", SLOW, () => {
 	// v0: ff9fbb8384
 	it("raises an error status's APIStatusError subclass from the await, never as a stream's first event", async () => {
 		/* V0BUG: v0's _open_stream ran on_request only (_runtime.py:813-815, survey 8); v1's open is the shared exchange (sse.hooks.test.ts) */
@@ -280,10 +280,12 @@ describe.skipIf(!PY)("an SSE open that fails: its status class raised before any
 		expect(failedOpens(opened), opened.run.stderr).toEqual(FAILED_OPENED)
 	})
 
+	/* bit 21 i2: an error status at the opening is an answer, so client.safe's stream answers it as the Err */
 	// v0: ff9fbb8384
-	it("raises it the same in safe mode: a stream ignores throwOnError, its error via return, never a result", async () => {
-		const opened = await drive(FAILED_OPENS, [SAFE_EVENTS, SAFE_EVENTS], { script: {}, sdk: driven("fixtures-safe") })
-		expect(failedOpens(opened), opened.run.stderr).toEqual(FAILED_OPENED)
+	it("answers it as the Err on client.safe: the same error, via result, never a stream", async () => {
+		const opened = await drive(FAILED_OPENS, [ticks(), ticks()], { safe: true, script: {} })
+		const viaResult = FAILED_OPENED.calls.map((call) => ({ ...call, error: { ...call.error, via: "result" } }))
+		expect(failedOpens(opened), opened.run.stderr).toEqual({ ...FAILED_OPENED, calls: viaResult })
 	})
 
 	it("fails a bad path param before any request: null, a PathParamError via return, no hop", async () => {

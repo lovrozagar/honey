@@ -146,8 +146,8 @@ function docstrings(document: Json, name: string, options?: PythonSdkOptions): s
 }
 
 /** Each `Raises:` block in client.py: the heading and the three status lines after it. */
-const raisesBlocks = (throwOnError: boolean) => {
-	const lines = (generatePythonSdk(RAISES, { throwOnError }).files["src/honey_sdk/client.py"] ?? "").split("\n")
+const raisesBlocks = () => {
+	const lines = (generatePythonSdk(RAISES).files["src/honey_sdk/client.py"] ?? "").split("\n")
 	return lines.flatMap((line, at) => (line.trim() === "Raises:" ? [lines.slice(at, at + 4)] : []))
 }
 
@@ -283,14 +283,68 @@ describe("generatePythonSdk: method docstrings", () => {
 	})
 
 	// v0: 86d18c33ee
-	it("lists Raises: with each declared error status's class in throw mode, APIStatusError for one without, and none in safe mode", () => {
+	it("lists Raises: with each declared error status's class, APIStatusError for one without, on both clients", () => {
 		const block = [
 			"        Raises:",
 			"            NotFoundError: HTTP 404",
 			"            ConflictError: HTTP 409",
 			"            APIStatusError: HTTP 418",
 		]
-		expect({ safe: raisesBlocks(false), thrown: raisesBlocks(true) }).toEqual({ safe: [], thrown: [block, block] })
+		expect(raisesBlocks()).toEqual([block, block])
+	})
+})
+
+/** Each operation of `document` by id: its accessors, then its method. */
+const accessors = (document: Json) =>
+	Object.fromEntries(Object.values(pythonCallPlans(document)).map((p) => [p.operation, [...p.accessors, p.method]]))
+
+/** A document of `paths`, each a GET with no answer body, by operationId. */
+const opsDoc = (paths: Readonly<Record<string, string>>): Json => ({
+	info: { title: "Mirror", version: "1" },
+	openapi: "3.1.0",
+	paths: Object.fromEntries(
+		Object.entries(paths).map(([path, operationId]) => [
+			path,
+			{ get: { operationId, responses: { 204: { description: "done" } } } },
+		]),
+	),
+})
+
+describe("generatePythonSdk: the safe mirror (bit 21 i2)", () => {
+	it("twins each class, one line per operation reading the normal class's method, a connection as it is", () => {
+		const lines = (generatePythonSdk(FIXTURES.fixtures.document()).files["src/honey_sdk/client.py"] ?? "").split("\n")
+		const twin = (cls: string, method: string) => {
+			const at = lines.indexOf(`class ${cls}:`)
+			const end = lines.findIndex((line, i) => i > at && line.startsWith("class "))
+			return lines.slice(at, end < 0 ? undefined : end).find((line) => line.startsWith(`    ${method} = `))
+		}
+		expect({
+			async: twin("AsyncSafeCrudUsersResource", "get"),
+			connection: twin("AsyncSafeRealtimeRealtimeResource", "connect"),
+			root: lines.filter((line) => /^ {8}self\.safe = /.test(line)),
+			stream: twin("AsyncSafeSseEventsResource", "stream"),
+			sync: twin("SafeCrudUsersResource", "get"),
+		}).toEqual({
+			async: "    get = Safe.of(AsyncCrudUsersResource.get)",
+			connection: "    connect = Safe.keep(AsyncRealtimeRealtimeResource.connect)",
+			root: ["        self.safe = SafeSDK(Safe(self._t))", "        self.safe = AsyncSafeSDK(Safe(self._t))"],
+			stream: "    stream = Safe.of(AsyncSseEventsResource.stream)",
+			sync: "    get = Safe.of_sync(CrudUsersResource.get)",
+		})
+	})
+
+	it("names a root member renamed off the safe mirror, never silently; nothing for a nested one or any other", () => {
+		const clashing = opsDoc({ "/a": "safe.get", "/b": "safe.list" })
+		const inner = generatePythonSdk(opsDoc({ "/a": "users.safe", "/s": "state.get" }))
+		expect({
+			clashing: generatePythonSdk(clashing).notices,
+			nested: inner.notices,
+			paths: accessors(clashing),
+		}).toEqual({
+			clashing: ['python: the root group "safe" is emitted as "safe_": "safe" is the client\'s safe mirror'],
+			nested: [],
+			paths: { "safe.get": ["safe_", "get"], "safe.list": ["safe_", "list"] },
+		})
 	})
 })
 

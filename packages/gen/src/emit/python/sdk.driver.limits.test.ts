@@ -64,16 +64,27 @@ describe.skipIf(!PY)(
 				).toEqual({
 					encoding: "gzip, deflate, zstd",
 					error: plain({
-						chain: ["APIConnectionError", "HoneyError"],
-						text: `the answer exceeds ${MiB} bytes`,
-						type: "APIConnectionError",
+						chain: ["DecodeError", "HoneyError"],
+						text: `HTTP 200: the body exceeds ${MiB} bytes`,
+						type: "DecodeError",
 					}),
-					observed: [{ kind: "transport" }],
+					observed: [{ kind: "decode", status: 200 }],
 				})
 			},
 		)
 	},
 )
+
+describe.skipIf(!PY)("an error status past the cap is its status error, its body unread (bit 21 i2)", SLOW, () => {
+	it.each(CLIENTS)("%s: a 404 past a 10-byte cap is NotFoundError with no body", async (client) => {
+		const replies: Reply[] = [{ json: { error_key: "gone", message: "x".repeat(64) }, status: 404 }]
+		const { run } = await drive(client, replies, [ECHO], { config: { maxResponseBytes: 10 } })
+		expect({ error: run.trace?.calls[0]?.error?.type, observed: run.observed }, run.stderr).toEqual({
+			error: "NotFoundError",
+			observed: [{ errorKey: null, kind: "error", status: 404 }],
+		})
+	})
+})
 
 describe.skipIf(!PY)(
 	"a header the Python SDK cannot send: ConfigError by name, its value never quoted, nothing sent (bit 19 b1)",

@@ -50,7 +50,8 @@ const { generatePythonSdk } = (await import(
 	resolve(REPO, "packages/gen/src/emit/python/sdk.ts")
 )) as typeof import("../../src/emit/python/sdk.ts")
 
-const CORPUS = ["adversarial", "adversarial-safe"] as const
+/* one client holds both styles, the normal methods and their `safe` mirror (bit 21 i2) */
+const CORPUS = ["adversarial"] as const
 
 /** The corpus package `key` as the emitter writes it. */
 function emitted(key: (typeof CORPUS)[number]): Readonly<Record<string, string>> {

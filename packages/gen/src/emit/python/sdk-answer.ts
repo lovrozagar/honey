@@ -1,9 +1,9 @@
 /**
  * What a method takes and answers beyond its params (G3, G4, G5): its body's type by kind, its return type
- * and the transport call it makes in either error mode, the JSON kind its answer (or a typed stream's event) must
+ * and the transport call it makes, the JSON kind its answer (or a typed stream's event) must
  * have, and its `<Op>Headers` TypedDict, hoisted beside the types, with how the runtime reads each header and
  * whether it must arrive (Fc5). A streaming operation answers as its `PyStream` says (`sse.ts`, `ws.ts`,
- * `realtime.ts`), in either error mode.
+ * `realtime.ts`).
  */
 import type { IRParam, IRResponse, IRSchema } from "../../ir/model.ts"
 import type { SdkOp } from "../../ir/sdk-model.ts"
@@ -47,7 +47,7 @@ export type PyStream = {
 export const eventType = (op: SdkOp, env: MethodEnv, fallback: string) =>
 	op.events === undefined ? fallback : typeAt(op, "Event", op.events, env)
 
-/** The answer of a plain operation `op`: its decoded success, inside `SDKResult` in safe mode. */
+/** The answer of a plain operation `op`: its decoded success (`client.safe`'s twin wraps it in a `Result`). */
 export function answerOf(op: SdkOp, env: MethodEnv): Answer {
 	const { kind, schema } = op.success
 	const type =
@@ -58,9 +58,7 @@ export function answerOf(op: SdkOp, env: MethodEnv): Answer {
 				: schema === undefined
 					? "None"
 					: typeAt(op, "Response", schema, env)
-	return env.throwOnError
-		? { returns: type, run: "call", type }
-		: { returns: `SDKResult[${type}]`, run: "result", type }
+	return { returns: type, run: "call", type }
 }
 
 /** The JSON kind a success body, or a typed SSE or realtime event (Fd5), must have, when its schema pins one. */

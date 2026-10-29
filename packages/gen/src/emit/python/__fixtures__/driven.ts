@@ -25,11 +25,14 @@ export type DriverRun = {
 
 /** The SDK with the driver aimed at it: under a script, the trace records each error as a `PythonError`. */
 export type DrivenPythonSdk = PythonSdk & {
-	/** run `cell` on one client ("async" or "sync") aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins a call may name), under `script` when given */
+	/**
+	 * run `cell` on one client ("async" or "sync") aimed at `origins.url` (`alt`, `drop`, `refused`: the other origins
+	 * a call may name), under `script` when given, through the client's `safe` mirror when `safe` (bit 21 i2)
+	 */
 	runCalls(
 		cell: DriverCell,
 		origins: { readonly alt?: string; readonly drop?: string; readonly refused?: string; readonly url: string },
-		run: { readonly client: "async" | "sync"; readonly script?: Script },
+		run: { readonly client: "async" | "sync"; readonly safe?: boolean; readonly script?: Script },
 	): Promise<DriverRun & { readonly trace?: Trace<PythonError> }>
 }
 
@@ -61,6 +64,7 @@ function drivenFixture(fixture: PythonFixture, options: GateOptions): DrivenPyth
 				cell,
 				client: run.client,
 				plans,
+				safe: run.safe,
 				script: run.script,
 			}
 			const input = { ...envelope, sdk: { package: sdk.package, root: sdk.root } }

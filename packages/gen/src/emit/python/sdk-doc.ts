@@ -1,6 +1,6 @@
 /**
  * A method's docstring: the operation's summary, a blank line, its description, a stream's own lines (how it
- * opens and ends), then in throw mode a `Raises:` line per declared error status, ascending, naming the class the
+ * opens and ends), then a `Raises:` line per declared error status, ascending, naming the class the
  * runtime raises for it. Spec text goes through `pyDocLines`, so a quote or backslash in it stays inert; a
  * stream's lines are the emitter's own, as they are. No docstring without any of the four.
  */
@@ -23,10 +23,8 @@ const STATUS_ERRORS: Readonly<Record<number, string>> = {
 }
 
 /** The docstring of `op`'s method at 8 spaces, `stream` its stream's own lines, or none. */
-export function methodDoc(op: SdkOp, throwOnError: boolean, stream: readonly string[]): string[] {
-	const raises = throwOnError
-		? op.errorStatuses.map((s) => `    ${STATUS_ERRORS[s] ?? "APIStatusError"}: HTTP ${s}`)
-		: []
+export function methodDoc(op: SdkOp, stream: readonly string[]): string[] {
+	const raises = op.errorStatuses.map((s) => `    ${STATUS_ERRORS[s] ?? "APIStatusError"}: HTTP ${s}`)
 	const spec = [op.summary.trim(), op.description.trim()].filter((part) => part !== "")
 	const parts = [
 		...spec.map(pyDocLines),

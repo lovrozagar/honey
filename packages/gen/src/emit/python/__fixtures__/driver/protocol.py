@@ -32,6 +32,7 @@ class Setup(TypedDict, total=False):
     headers: dict[str, str]
     redirect: Literal["follow", "same-origin"]
     timeoutMs: int
+    maxResponseBytes: int
 
 
 class Route(TypedDict):
@@ -316,4 +317,5 @@ class Envelope(TypedDict):
     alt: NotRequired[str]
     drop: NotRequired[str]
     refused: NotRequired[str]
+    safe: NotRequired[bool]
     script: NotRequired[Script]

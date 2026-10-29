@@ -217,7 +217,9 @@ async def open_socket(
             if answer.status_code != 101:
                 chunks: list[bytes] = []
                 async for chunk in answer.aiter_bytes():
-                    x.read(chunks, chunk)
+                    if x.read(chunks, chunk):
+                        chunks.clear()
+                        break
                 raw.body = b"".join(chunks)
                 raise status_error(
                     answer.status_code, answer.headers, raw.body, x.core.keys

@@ -251,17 +251,20 @@ describe("the generate report (bit 18 phase d)", () => {
 	)
 })
 
-describe("the generate report: the safe mirror (bit 21 i1)", () => {
-	it(
-		"names on stderr a TS root group renamed off the safe mirror, and still writes the SDK",
+/* bit 21 i1 (ts) and i2 (python): each target's file the SDK always writes */
+const WRITTEN = { python: "/src/honey_sdk/client.py", ts: ".types.gen.ts" } as const
+
+describe("the generate report: the safe mirror (bit 21 i1, i2)", () => {
+	it.each(["ts", "python"] as const)(
+		"names on stderr a %s root group renamed off the safe mirror, and still writes the SDK",
 		{ timeout: SPAWN_TIMEOUT },
-		async () => {
+		async (target) => {
 			const get = { get: { operationId: "safe.get", responses: { 204: { description: "none" } } } }
 			const { out, spec } = specDir({ ...(shop() as Record<string, unknown>), paths: { "/safe": get } })
-			const ran = await run(["generate", "--spec", spec, "--target", "ts", "--out", out])
-			expect([ran.status, ran.err, filesUnder(out).some((file) => file.endsWith(".types.gen.ts"))]).toEqual([
+			const ran = await run(["generate", "--spec", spec, "--target", target, "--out", out])
+			expect([ran.status, ran.err, filesUnder(out).some((file) => file.endsWith(WRITTEN[target]))]).toEqual([
 				0,
-				'honey-codegen: ts: the root group "safe" is emitted as "safe_": "safe" is the client\'s safe mirror\n',
+				`honey-codegen: ${target}: the root group "safe" is emitted as "safe_": "safe" is the client's safe mirror\n`,
 				true,
 			])
 		},

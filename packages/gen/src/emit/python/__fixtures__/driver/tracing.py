@@ -1,6 +1,6 @@
 """What a scripted run prints beside the observed (emit/shared/__fixtures__/protocol.ts
 ``Trace<PythonError>``): each call's time, its error read through the exception's attributes, a
-safe-mode ``SDKResult``'s summary and a stream call's ``StreamTrace``; every hook run with what its
+safe call's ``Ok`` or ``Err`` summary and a stream call's ``StreamTrace``; every hook run with what its
 context held; every ``on_log`` entry; and the ``on_auth_expired`` calls. Every hook, the refresher
 and the logger here are plain functions; script.py makes them coroutine functions for ``AsyncSDK``.
 """
@@ -114,14 +114,15 @@ def envelope_of(envelope: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def result_trace(result: Any) -> ResultTrace:
-    """A safe-mode ``SDKResult``: whether it holds data, whether it is ok, whether its response
-    carries its status, and its status."""
+def result_trace(result: Any, module: Any) -> ResultTrace:
+    """A safe call's ``Ok`` or ``Err``: whether it holds data (an ``Ok`` whose data is not None),
+    whether it is ok, whether its response is a ``RawResponse``, and that response's status."""
+    ok = isinstance(result, module.Ok)
     return {
-        "data": result.data is not None,
-        "ok": result.error is None,
-        "response": result.response.status == result.status,
-        "status": result.status,
+        "data": ok and result.data is not None,
+        "ok": ok,
+        "response": isinstance(result.response, module.RawResponse),
+        "status": result.response.status,
     }
 
 

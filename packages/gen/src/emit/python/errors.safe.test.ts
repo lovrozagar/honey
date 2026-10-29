@@ -1,8 +1,10 @@
 /**
- * The Python SDK's safe mode (contract 29 §5.8, G21): an error status lands in `SDKResult.error` beside its
- * `status` (v0's, restored; H4) and the `RawResponse`, and every other failure (no answer, a timeout, a cancel, an
- * undecodable 2xx) still raises. Driven through the `http-safe` driver on `AsyncSDK` and `SDK` with one expectation
- * (G17), and a `safe` consumer program on both clients.
+ * The Python SDK's safe mirror (bit 21 i2; contract 29 §5.8, G21): `client.safe.<group>.<op>` answers `Ok(data,
+ * response)` or `Err(error, response)`. The Err holds the error the normal call raises for an answer: an error
+ * status (its status error, the body at `.body`), or a 2xx that does not decode or is past the size cap
+ * (`DecodeError`, R-i1); its response is the call's `RawResponse`. Every failure with no answer (a timeout, a cancel,
+ * a refused connection) still raises (f2). Driven through the `http` driver's `safe` mirror on `AsyncSDK` and `SDK`
+ * with one expectation (G17), and a `safe` consumer program narrowing with `match` on both clients.
  */
 import { describe, expect, it } from "vitest"
 import type { Call } from "../../../tests/integration/conformance/matrix.ts"
@@ -26,33 +28,33 @@ const MEMBERS: Call = {
 }
 const USER: Call = { operation: "users.get", params: { id: "1" }, route: { method: "GET", path: "/users/{id}" } }
 
-/** The `http-safe` SDK with the driver aimed at it (it must import), on `client`. */
-function on(client: Client): { readonly client: Client; readonly sdk: DrivenPythonSdk } {
-	const sdk = drivenPythonSdk("http-safe")
+/** The `http` SDK with the driver aimed at it (it must import). */
+function driven(): DrivenPythonSdk {
+	const sdk = drivenPythonSdk("http")
 	expect(sdk.imported, sdk.stderr).toBe(true)
-	return { client, sdk }
+	return sdk
 }
 
-/** `calls` on `client` under `script` against a server answering `replies`: the run and the hops. */
+/** `calls` through `client`'s safe mirror under `script` against a server answering `replies`: the run and the hops. */
 function drive(client: Client, replies: readonly Reply[], calls: readonly Call[], script: Script = {}) {
 	return served(replies, async (server) => {
-		const run = await on(client).sdk.runCalls({ calls, setup: {} }, { url: server.url }, { client, script })
+		const run = await driven().runCalls({ calls, setup: {} }, { url: server.url }, { client, safe: true, script })
 		return { hops: [...server.hops], run }
 	})
 }
 
-/** `calls` on `client` against an origin that refuses every connection. */
+/** `calls` through `client`'s safe mirror against an origin that refuses every connection. */
 async function refused(client: Client, calls: readonly Call[]) {
-	return on(client).sdk.runCalls({ calls, setup: {} }, { url: REFUSED_URL }, { client, script: {} })
+	return driven().runCalls({ calls, setup: {} }, { url: REFUSED_URL }, { client, safe: true, script: {} })
 }
 
 type Traced = Trace<PythonError>["calls"][number]
-/** Where a safe-mode call's failure landed: its route, class and status, and its result's summary. */
+/** Where a safe call's failure landed: its route, class and status, and its result's summary. */
 const landed = (call: Traced | undefined) => [call?.error?.via, call?.error?.type, call?.error?.status, call?.result]
-/** A safe-mode result holding an error status. */
-const missed = (status: number) => ({ data: false, ok: false, response: true, status })
+/** An Err, its response on `status`. */
+const err = (status: number) => ({ data: false, ok: false, response: true, status })
 
-/** A 404 keyed `member.missing` as the trace reads it from a safe-mode result: the server's key, no member. */
+/** A 404 keyed `member.missing` as the trace reads it from an Err: the server's key, no member. */
 const MISSING = {
 	cause: null,
 	chain: ["NotFoundError", "APIStatusError", "HoneyError"],
@@ -66,17 +68,18 @@ const MISSING = {
 	via: "result",
 }
 
-describe.skipIf(!PY)("safe mode: an error status in SDKResult.error, every other failure raised", SLOW, () => {
+describe.skipIf(!PY)("client.safe: an answer in the Err, every failure with no answer raised", SLOW, () => {
 	// v0: 0eb688f708
 	it.each(CLIENTS)(
-		"%s: puts a 404 in the result beside its status and response; an undecodable 2xx, a timeout, a cancel and a refused connection raise",
+		"%s: a 404, an undecodable 2xx and one past the cap are each an Err with its response; a timeout, a cancel and a refused connection raise",
 		async (client) => {
 			/* G3/G21: v0's response: httpx.Response is RawResponse; its status is kept (H4) */
 			const torn: Reply = { headers: { "content-type": "application/json" }, status: 200, text: '{"id":' }
+			const big: Reply = { json: { id: "u", name: "x".repeat(64) }, status: 200 }
 			const late: Reply = { delayMs: 2000, json: { id: "u", name: "n" }, status: 200 }
-			const replies: Reply[] = [{ json: { message: "m" }, status: 404 }, torn, late]
-			const calls = [MEMBERS, USER, { ...MEMBERS, timeoutMs: 300 }, MEMBERS]
-			const script: Script = { calls: [null, null, null, { cancel: "before" }] }
+			const replies: Reply[] = [{ json: { message: "m" }, status: 404 }, torn, big, late]
+			const calls = [MEMBERS, USER, USER, { ...MEMBERS, timeoutMs: 300 }, MEMBERS]
+			const script: Script = { calls: [null, null, null, null, { cancel: "before" }], config: { maxResponseBytes: 32 } }
 			const { hops, run } = await drive(client, replies, calls, script)
 			const lost = await refused(client, [MEMBERS])
 			expect(
@@ -87,10 +90,11 @@ describe.skipIf(!PY)("safe mode: an error status in SDKResult.error, every other
 				},
 				run.stderr + lost.stderr,
 			).toEqual({
-				hops: 3,
+				hops: 4,
 				landed: [
-					["result", "NotFoundError", 404, missed(404)],
-					["return", "DecodeError", undefined, undefined],
+					["result", "NotFoundError", 404, err(404)],
+					["result", "DecodeError", undefined, err(200)],
+					["result", "DecodeError", undefined, err(200)],
 					["return", "APITimeoutError", undefined, undefined],
 					["return", "CanceledError", undefined, undefined],
 					["return", "APIConnectionError", undefined, undefined],
@@ -98,6 +102,7 @@ describe.skipIf(!PY)("safe mode: an error status in SDKResult.error, every other
 				observed: [
 					[
 						{ body: { message: "m" }, errorKey: null, kind: "error", status: 404 },
+						{ kind: "decode", status: 200 },
 						{ kind: "decode", status: 200 },
 						{ kind: "timeout" },
 						null,
@@ -107,63 +112,82 @@ describe.skipIf(!PY)("safe mode: an error status in SDKResult.error, every other
 			})
 		},
 	)
-
-	it.each(CLIENTS)(
-		"%s: reads the server's key in a safe-mode result, no member for an API that declares none",
-		async (client) => {
-			/* http declares no keys: the declared-member path is errors.test.ts's, shared by both modes */
-			const missing: Reply = { json: { error_key: "member.missing", message: "gone" }, status: 404 }
-			const { run } = await drive(client, [missing], [MEMBERS])
-			const call = run.trace?.calls[0]
-			expect({ error: call?.error, result: call?.result }, run.stderr).toEqual({ error: MISSING, result: missed(404) })
-		},
-	)
 })
 
-/** The `safe` consumer: users.get answered 404 then 201, on `SDK` and then on `AsyncSDK`. */
+describe.skipIf(!PY)("client.safe: what an Ok and an Err hold", SLOW, () => {
+	it.each(CLIENTS)("%s: each Ok holds its own answer's data, never an earlier call's", async (client) => {
+		const users = [
+			{ id: "u1", name: "a" },
+			{ id: "u2", name: "b" },
+		]
+		const { run } = await drive(
+			client,
+			users.map((json) => ({ json, status: 200 })),
+			[USER, USER],
+		)
+		expect(run.observed, run.stderr).toEqual(users.map((data) => ({ data, kind: "data", status: 200 })))
+	})
+
+	it.each(CLIENTS)("%s: reads the server's key in an Err, no member for an API that declares none", async (client) => {
+		/* http declares no keys: the declared-member path is errors.test.ts's, shared by both styles */
+		const missing: Reply = { json: { error_key: "member.missing", message: "gone" }, status: 404 }
+		const { run } = await drive(client, [missing], [MEMBERS])
+		const call = run.trace?.calls[0]
+		expect({ error: call?.error, result: call?.result }, run.stderr).toEqual({ error: MISSING, result: err(404) })
+	})
+})
+
+/** The `safe` consumer: users.get answered 404, 201, then an undecodable 200, on `SDK` and then on `AsyncSDK`. */
 const SAFE = `section("safe")
 
 
 def summary(r):
-    return f"{isinstance(r, sdk.SDKResult)} {r.status} {r.data is None} {isinstance(r.error, sdk.NotFoundError)} {isinstance(r.response, sdk.RawResponse)} {r.response.status}"
-
-
-def found(r):
-    return f"{r.data['id'] if r.data else None} {r.error is None} {r.status} {r.response.status}"
+    match r:
+        case sdk.Ok(data, response):
+            return f"ok {data['id']} {response.status}"
+        case sdk.Err(sdk.NotFoundError() as e, response):
+            return f"404 {e.status} {e.body!r} {response.status} {response.body == e.body}"
+        case sdk.Err(sdk.DecodeError() as e, response):
+            return f"decode {e} {response.status}"
+    return f"unmatched {r!r}"
 
 
 c = client()
-note(summary(c.users.get("missing")))
-note(found(c.users.get("u1")))
+for name in ("missing", "u1", "torn"):
+    note(summary(c.safe.users.get(name)))
 c.close()
 a = aclient()
-note(summary(await a.users.get("missing")))
-note(found(await a.users.get("u1")))
+for name in ("missing", "u1", "torn"):
+    note(summary(await a.safe.users.get(name)))
 await a.aclose()`
 
 const SAFE_REPLIES: readonly Reply[] = [
 	{ json: { message: "not found" }, status: 404 },
 	{ json: { id: "u1" }, status: 201 },
-	{ json: { message: "not found" }, status: 404 },
-	{ json: { id: "u1" }, status: 201 },
+	{ headers: { "content-type": "application/json" }, status: 200, text: "{" },
 ]
 
 const safeRun = once(() =>
-	served(SAFE_REPLIES, async (server) => {
-		const run = await consume("http-safe", "safe", { base: server.url, body: SAFE })
+	served([...SAFE_REPLIES, ...SAFE_REPLIES], async (server) => {
+		const run = await consume("http", "safe", { base: server.url, body: SAFE })
 		return { run, wire: server.hops.map((h) => `${h.method} ${h.url}`) }
 	}),
 )
 
-describe.skipIf(!PY)("SDKResult from a consumer program (http-safe)", SLOW, () => {
+describe.skipIf(!PY)("Ok and Err from a consumer program, narrowed by match", SLOW, () => {
 	// v0: 0eb688f708
-	it("holds a 404 as error with its status and RawResponse, a 201 as data, on SDK and AsyncSDK", async () => {
+	it("matches a 404's NotFoundError with its body and response, a 201's data, an undecodable 200's DecodeError, on SDK and AsyncSDK", async () => {
 		const { run, wire } = await safeRun()
-		const answered = ["True 404 True True True 404", "u1 True 201 201"]
+		const answered = [
+			`404 404 b'{"message":"not found"}' 404 True`,
+			"ok u1 201",
+			"decode HTTP 200: the body is not JSON 200",
+		]
+		const sent = ["GET /users/missing", "GET /users/u1", "GET /users/torn"]
 		expect({ ...seen(run, "safe"), wire }, run.stderr).toEqual({
 			out: [...answered, ...answered],
 			ran: true,
-			wire: ["GET /users/missing", "GET /users/u1", "GET /users/missing", "GET /users/u1"],
+			wire: [...sent, ...sent],
 		})
 	})
 })

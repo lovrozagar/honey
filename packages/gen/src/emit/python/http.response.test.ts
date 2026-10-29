@@ -1,9 +1,9 @@
 /**
  * The HTTP runtime's answers (contract 29 §5.5, Rust's `http.response.test.ts` analog): a JSON answer decoded
  * into the operation's type, and an undecodable 2xx (truncated, or nested past the parser's depth) as the
- * method's own `DecodeError` in both modes, never a safe-mode `SDKResult.error` (F5); every member the wire sent
- * kept; a text answer as the body verbatim; and a call ended by its timeout, a cancel or a refused connection,
- * none of them an `APIStatusError`. Driven against `http` and `http-safe` (documents-http.ts), every leg on
+ * method's own `DecodeError`, which `client.safe` answers as an `Err` (bit 21 i2, R-i1: it is an answer); every member
+ * the wire sent kept; a text answer as the body verbatim; and a call ended by its timeout, a cancel or a refused
+ * connection, none of them an `APIStatusError`. Driven against `http` and its `safe` mirror (documents-http.ts), every leg on
  * `AsyncSDK` and `SDK` with one expectation (G17) but the cancel's bound, client-specific by design (G22).
  */
 import { describe, expect, it } from "vitest"
@@ -51,29 +51,28 @@ const UNDECODED = plain({
 	type: "DecodeError",
 })
 
-type Key = "http" | "http-safe"
-
-/** The registry SDK `key` with the driver aimed at it: it must import. */
-function driven(key: Key): DrivenPythonSdk {
-	const sdk = drivenPythonSdk(key)
+/** The registry SDK `http` with the driver aimed at it: it must import. */
+function driven(): DrivenPythonSdk {
+	const sdk = drivenPythonSdk("http")
 	expect(sdk.imported, sdk.stderr).toBe(true)
 	return sdk
 }
 
-type Options = { readonly key?: Key; readonly script?: Script; readonly setup?: Setup }
+/** `safe`: through the client's `safe` mirror (bit 21 i2) */
+type Options = { readonly safe?: boolean; readonly script?: Script; readonly setup?: Setup }
 
 /** `calls` run on `client` under `options` against a server answering `replies`: the run and the hops. */
 async function drive(client: Client, replies: readonly Reply[], calls: readonly Call[], options: Options = {}) {
-	const sdk = driven(options.key ?? "http")
+	const sdk = driven()
 	return served(replies, async (server) => {
 		const cell = { calls, setup: options.setup ?? {} }
-		const run = await sdk.runCalls(cell, { url: server.url }, { client, script: options.script })
+		const run = await sdk.runCalls(cell, { url: server.url }, { client, safe: options.safe, script: options.script })
 		return { hops: [...server.hops], run }
 	})
 }
 type Driven = Awaited<ReturnType<typeof drive>>
 
-/** A traced call as these tests pin it: its error and its SDKResult, without the time. */
+/** A traced call as these tests pin it: its error and its Result, without the time. */
 const traced = ({ error, result }: Trace<PythonError>["calls"][number]) => ({ error, result })
 
 /** A decoding run: each call traced, the urls hit, what was observed, the exit status. */
@@ -95,12 +94,17 @@ const answered = ({ hops, run }: Driven) => ({
 	stderr: run.stderr.trim(),
 })
 
-/** The decoding run of a user and then a truncated body, the first call's SDKResult `first`. */
-const truncated = (first: Trace<PythonError>["calls"][number]["result"]) => ({
-	calls: [
-		{ error: undefined, result: first },
-		{ error: UNDECODED, result: undefined },
-	],
+/** The decoding run of a user and then a truncated body: the normal call's raise, or the safe call's Ok then Err. */
+const truncated = (safe: boolean) => ({
+	calls: safe
+		? [
+				{ error: undefined, result: { data: true, ok: true, response: true, status: 200 } },
+				{ error: { ...UNDECODED, via: "result" }, result: { data: false, ok: false, response: true, status: 200 } },
+			]
+		: [
+				{ error: undefined, result: undefined },
+				{ error: UNDECODED, result: undefined },
+			],
 	hops: ["/users/1", "/users/1"],
 	observed: [data({ id: "u1" }), { kind: "decode", status: 200 }],
 	status: 0,
@@ -111,18 +115,21 @@ describe.skipIf(!PY)(
 	SLOW,
 	() => {
 		/* V0BUG: v0's _parse_body returned None for an undecodable JSON 2xx (_runtime.py:469-471, survey V0BUG 6),
-		 * and v0 drove AsyncSDK alone; v1 raises DecodeError from the method in safe mode too, never inside the
-		 * SDKResult (F5), on both clients */
+		 * and v0 drove AsyncSDK alone; v1 raises DecodeError from the method on both clients, and the safe call
+		 * answers it as an Err with its response (bit 21 i2, R-i1; bit 19 F5 had it raised in safe mode too) */
 		// v0: 2ebe2ae717
-		it.each(CLIENTS)("%s: the decoded user, then a truncated body as DecodeError in both modes", async (client) => {
-			const replies = [found({ id: "u1" }), claimed('{"id":')]
-			const run = (key: Key) => drive(client, replies, [USER, USER], { key, script: {} })
-			const [thrown, safe] = await Promise.all([run("http"), run("http-safe")])
-			expect({ safe: decoding(safe), thrown: decoding(thrown) }, thrown.run.stderr + safe.run.stderr).toEqual({
-				safe: truncated({ data: true, ok: true, response: true, status: 200 }),
-				thrown: truncated(undefined),
-			})
-		})
+		it.each(CLIENTS)(
+			"%s: the decoded user, then a truncated body: DecodeError raised, or the safe Err",
+			async (client) => {
+				const replies = [found({ id: "u1" }), claimed('{"id":')]
+				const run = (safe: boolean) => drive(client, replies, [USER, USER], { safe, script: {} })
+				const [thrown, safe] = await Promise.all([run(false), run(true)])
+				expect({ safe: decoding(safe), thrown: decoding(thrown) }, thrown.run.stderr + safe.run.stderr).toEqual({
+					safe: truncated(true),
+					thrown: truncated(false),
+				})
+			},
+		)
 
 		it.each(CLIENTS)(
 			"%s: a 2xx nested past the parser's depth is DecodeError, never RecursionError",
@@ -158,11 +165,11 @@ describe.skipIf(!PY)("a decoded answer keeps every member the wire sent", SLOW, 
 
 describe.skipIf(!PY)("a text answer is the body as a str, asked for by its media type", SLOW, () => {
 	it.each(CLIENTS)(
-		"%s: a text/plain body verbatim, never JSON-decoded, accept text/plain, both modes",
+		"%s: a text/plain body verbatim, never JSON-decoded, accept text/plain, both styles",
 		async (client) => {
 			const reply: Reply = { headers: { "content-type": "text/plain" }, status: 200, text: '{"a":1}' }
-			const run = (key: Key) => drive(client, [reply], [TEXT], { key })
-			const [thrown, safe] = await Promise.all([run("http"), run("http-safe")])
+			const run = (safe: boolean) => drive(client, [reply], [TEXT], { safe })
+			const [thrown, safe] = await Promise.all([run(false), run(true)])
 			const expected = { accept: ["text/plain"], observed: [data('{"a":1}')], status: 0, stderr: "" }
 			expect({ safe: answered(safe), thrown: answered(thrown) }).toEqual({ safe: expected, thrown: expected })
 		},
@@ -233,7 +240,7 @@ describe.skipIf(!PY)("a call ends when its time is up or it is canceled, never a
 describe.skipIf(!PY)("a refused connection is a transport error, never CanceledError", SLOW, () => {
 	it.each(CLIENTS)("%s: APIConnectionError caused by httpx2's ConnectError, with no status", async (client) => {
 		const closed = REFUSED_URL
-		const run = await driven("http").runCalls({ calls: [USER], setup: {} }, { url: closed }, { client, script: {} })
+		const run = await driven().runCalls({ calls: [USER], setup: {} }, { url: closed }, { client, script: {} })
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			error: plain({
 				cause: "ConnectError",

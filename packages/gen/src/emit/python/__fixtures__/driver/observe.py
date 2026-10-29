@@ -2,13 +2,17 @@
 
 A result is ``data`` with the raw response's status (and the typed response headers when the plan
 declares them), the bytes' size and SHA-256 for a binary answer, or ``raw`` when the call asks for
-it; a safe-mode ``SDKResult`` observes its data or its error. An operation with no typed answer
+it; a ``client.safe`` call's ``Ok`` observes its data and its ``Err`` its error. An operation with no typed answer
 observes its raw body as data: JSON, else text, else null. ``APIStatusError`` is ``error`` with
 its status, its key (``str(e.key)``) and its body's JSON, ``APITimeoutError`` is ``timeout``, any
 other ``APIConnectionError`` (no answer, f2) is ``transport``, and ``DecodeError`` on a 2xx (the
 status the call's ``RawResponse`` holds) is ``decode``. Unscripted, any other error is a DriverError. Under a script, a call's error is traced too
-(``via: "return"``, or ``"result"`` for a safe-mode ``SDKResult.error``, with the result's summary),
+(``via: "return"``, or ``"result"`` for an ``Err``'s error, with the result's summary),
 and an error the grid has no outcome for observes null.
+
+A safe call is read strictly (bit 21 i2): it answers ``Ok`` or ``Err``, never raising an answer (an error status, a
+``DecodeError``), and its response is the call's own ``RawResponse``, an ``Err``'s on its error's status. Any other
+reading is a DriverError, a red cell, script or none; a normal call answering a ``Result`` is one too.
 """
 
 from __future__ import annotations
@@ -34,13 +38,14 @@ from tracing import python_error, result_trace
 
 @dataclass(frozen=True)
 class Lens:
-    """How one call is observed: the SDK's module, whether the call asks for the raw response, and
-    whether a script traces it, asking for an ``APIStatusError``'s envelope."""
+    """How one call is observed: the SDK's module, whether the call asks for the raw response,
+    whether a script traces it, asking for an ``APIStatusError``'s envelope, and whether it is a safe call."""
 
     module: Any
     raw: bool
     scripted: bool
     envelope: bool
+    safe: bool = False
 
 
 @dataclass(frozen=True)
@@ -166,9 +171,18 @@ def grid_outcome(error: BaseException, lens: Lens, status: int = 0) -> Observed 
     return None
 
 
+def answer(error: BaseException, lens: Lens) -> bool:
+    """Whether ``error`` is an API answer: an error status, or a 2xx that does not decode."""
+    return isinstance(error, (lens.module.APIStatusError, lens.module.DecodeError))
+
+
 def raised(error: BaseException, lens: Lens, status: int = 0) -> Outcome:
     """A call that raised ``error`` (``status``: its ``RawResponse``'s): traced under a script;
-    unscripted, a grid outcome or a DriverError."""
+    unscripted, a grid outcome or a DriverError. A safe call raising an answer is a DriverError."""
+    if lens.safe and answer(error, lens):
+        raise DriverError(
+            f"the safe call raised an API answer, {type(error).__name__}: {error}"
+        )
     seen = grid_outcome(error, lens, status)
     if lens.scripted:
         return Outcome(seen, python_error(error, "return", lens.envelope))
@@ -179,15 +193,46 @@ def raised(error: BaseException, lens: Lens, status: int = 0) -> Outcome:
     return Outcome(seen)
 
 
+def checked(result: Any, raw: Any, lens: Lens) -> Any:
+    """A safe call's ``result``, read strictly: an ``Ok`` or an ``Err`` holding the call's own
+    ``RawResponse``, an ``Err``'s on its error's status; else a DriverError. A normal call's,
+    which must be no ``Result``."""
+    module = lens.module
+    is_result = isinstance(result, (module.Ok, module.Err))
+    if not lens.safe:
+        if is_result:
+            raise DriverError("the normal call answered a Result")
+        return result
+    if not is_result:
+        raise DriverError(f"the safe call answered no Result: {type(result).__name__}")
+    if result.response is not raw:
+        raise DriverError("a Result without its response")
+    error = getattr(result, "error", None)
+    if isinstance(error, module.APIStatusError) and error.status != raw.status:
+        raise DriverError("an Err whose response is not its error's")
+    if isinstance(result, module.Err) and not answer(error, lens):
+        raise DriverError(f"an Err holding no API answer: {error!r}")
+    return result
+
+
+def err_observed(result: Any, lens: Lens) -> Observed:
+    """An ``Err`` as the grid observes it: its status error, or a ``DecodeError`` on its 2xx."""
+    seen = grid_outcome(result.error, lens, result.response.status)
+    if seen is None:
+        raise DriverError(f"an Err the grid has no outcome for: {result.error!r}")
+    return seen
+
+
 def returned(result: Any, prepared: Prepared, plan: Plan, lens: Lens) -> Outcome:
-    """``result`` as observed: a safe-mode ``SDKResult`` by its error or data (summarized under a
-    script), anything else as data."""
-    if not isinstance(result, lens.module.SDKResult):
+    """``result`` as observed: a safe call's ``Ok`` by its data and ``Err`` by its error (each
+    summarized under a script), anything else as data."""
+    result = checked(result, prepared.raw, lens)
+    if not lens.safe:
         return Outcome(answered(result, prepared, plan, lens.raw))
-    summary = result_trace(result) if lens.scripted else None
-    if result.error is None:
+    summary = result_trace(result, lens.module) if lens.scripted else None
+    if isinstance(result, lens.module.Ok):
         return Outcome(answered(result.data, prepared, plan, lens.raw), None, summary)
     error = (
         python_error(result.error, "result", lens.envelope) if lens.scripted else None
     )
-    return Outcome(status_observed(result.error, lens.raw), error, summary)
+    return Outcome(err_observed(result, lens), error, summary)

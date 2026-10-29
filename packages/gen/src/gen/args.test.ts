@@ -71,3 +71,14 @@ describe("generate's arguments (phase h)", () => {
 		])
 	})
 })
+
+/* bit 21 i2: a Python client always raises and `client.safe` answers a Result, so the error-mode option is gone */
+describe("generate's removed options", () => {
+	it("refuses --python-throw-on-error as the unknown option it now is", () => {
+		const base = ["--spec", "s.json", "--out", "o", "--target", "python"]
+		const flags = ["--python-throw-on-error", "--python-throw-on-error=false"]
+		expect(flags.map((flag) => refused([...base, flag]))).toEqual(
+			flags.map(() => "unknown option --python-throw-on-error"),
+		)
+	})
+})

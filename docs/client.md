@@ -13,7 +13,7 @@ honey-codegen generate --spec openapi.json --target ts --out sdk
 
 ## Errors and the safe mirror
 
-TypeScript today; the other SDKs as their phases land.
+TypeScript and Python today; the other SDKs as their phases land.
 
 - **The normal call** answers its value and throws on any failure: an error status as its typed error
   (`NotFoundError` and so on, each a `ClientError`), and an undecodable or over-cap 2xx as a `DecodeError`.
@@ -37,6 +37,23 @@ if (result.ok) console.log(result.data, result.response.status)
 else if (result.error instanceof DecodeError) console.error("unreadable answer", result.error.body)
 else if (result.error.status === 404) console.error("no such organization", result.error.body)
 else console.error("answered", result.error.status)
+```
+
+In Python, `client.safe` (on `SDK` and `AsyncSDK` alike) answers `Ok(data, response)` or `Err(error, response)`,
+frozen dataclasses to narrow with `match` or `isinstance`. `Err.error` is the instance the normal call raises: an
+`APIStatusError` (its subclass by status, the body at `.body`) or a `DecodeError`, and `response` is the call's
+`RawResponse`. A 2xx past `max_response_bytes` is a `DecodeError`; an error status past it keeps its status error,
+its body unread. What has no answer raises in both styles, as in TS.
+
+```python
+async def health(client: AsyncSDK) -> str:
+    match await client.safe.get_api_health():
+        case Ok(data, response):
+            return f"answered {response.status}: {data}"
+        case Err(DecodeError() as unreadable, response):
+            return f"answered {response.status}, unreadable: {unreadable}"
+        case Err(error, response):
+            return f"answered {response.status}: {error}"
 ```
 
 ## Reference

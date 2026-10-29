@@ -3,8 +3,8 @@
  * test adds beside a grid cell, decoded strictly; `{observed, trace}` on stdout, the trace's errors read through the
  * exception's attributes (`Trace<PythonError>`); client config, hooks, refresh, log, cancel, a task's cancellation
  * and sleep; the `bytes` outcome's SHA-256 (Python's `hashlib`) against node:crypto; binary bodies, the idempotency
- * key and typed response headers; and what the driver refuses. Driven against `http` and `http-safe`, every leg on
- * `AsyncSDK` and `SDK` with one expectation (the G17 drift check) unless it is marked client-specific.
+ * key and typed response headers; and what the driver refuses. Driven against `http` and its `safe` mirror (bit 21 i2),
+ * every leg on `AsyncSDK` and `SDK` with one expectation (the G17 drift check) unless it is marked client-specific.
  */
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "vitest"
@@ -54,14 +54,14 @@ const ORDER: Call = {
 const ITEM: Call = { operation: "items.get", params: { id: "i1" }, route: { method: "GET", path: "/items/{id}" } }
 const ITEM_JSON = { id: "i1", name: "n" }
 
-/** The SDK to drive and the client to drive it on. */
-type On = { readonly client: Client; readonly sdk: DrivenPythonSdk }
+/** The SDK to drive, the client to drive it on, and whether through its `safe` mirror. */
+type On = { readonly client: Client; readonly safe: boolean; readonly sdk: DrivenPythonSdk }
 
-/** The registry SDK `key` with the driver aimed at it (it must import), on `client`. */
-function on(client: Client, key: "http" | "http-safe" = "http"): On {
-	const sdk = drivenPythonSdk(key)
+/** The registry SDK `http` with the driver aimed at it (it must import), on `client`, its `safe` mirror when `safe`. */
+function on(client: Client, safe = false): On {
+	const sdk = drivenPythonSdk("http")
 	expect(sdk.imported, sdk.stderr).toBe(true)
-	return { client, sdk }
+	return { client, safe, sdk }
 }
 
 type Options = { readonly script?: Script; readonly setup?: Setup }
@@ -71,7 +71,7 @@ async function drive(at: On, replies: readonly Reply[], calls: readonly Call[], 
 	return served(replies, async (server) => {
 		const cell = { calls, setup: options.setup ?? {} }
 		const origins = { alt: server.alt, url: server.url }
-		const run = await at.sdk.runCalls(cell, origins, { client: at.client, script: options.script })
+		const run = await at.sdk.runCalls(cell, origins, { client: at.client, safe: at.safe, script: options.script })
 		return { hops: [...server.hops], run, url: server.url }
 	})
 }
@@ -170,17 +170,17 @@ describe.skipIf(!PY)("the Python test driver's script: client config", SLOW, () 
 		])
 	})
 
-	it.each(CLIENTS)("%s: maxResponseBytes caps an answer: observed as no answer (transport), traced", async (client) => {
+	it.each(CLIENTS)("%s: maxResponseBytes caps a 2xx: a DecodeError on its status (i2), traced", async (client) => {
 		const script: Script = { config: { maxResponseBytes: 10 } }
 		const replies: Reply[] = [{ bytes: 64, headers: { "content-type": "application/json" }, status: 200 }]
 		const { run } = await drive(on(client), replies, [ECHO], { script })
 		expect({ error: run.trace?.calls[0]?.error, observed: run.observed, status: run.status }, run.stderr).toEqual({
 			error: plain({
-				chain: ["APIConnectionError", "HoneyError"],
-				text: "the answer exceeds 10 bytes",
-				type: "APIConnectionError",
+				chain: ["DecodeError", "HoneyError"],
+				text: "HTTP 200: the body exceeds 10 bytes",
+				type: "DecodeError",
 			}),
-			observed: [{ kind: "transport" }],
+			observed: [{ kind: "decode", status: 200 }],
 			status: 0,
 		})
 	})
@@ -396,9 +396,9 @@ const MISSING_ERROR = plain({
 const MISSING_SEEN = { body: MISSING.json, errorKey: "member.missing", kind: "error", status: 404 }
 
 describe.skipIf(!PY)("the Python test driver's script: a call's Python error", SLOW, () => {
-	it.each(CLIENTS)("%s: an error status through its attributes; safe mode's via result", async (client) => {
+	it.each(CLIENTS)("%s: an error status through its attributes; the safe Err's via result", async (client) => {
 		const thrown = await drive(on(client), [MISSING], [MEMBERS], { script: {} })
-		const safe = await drive(on(client, "http-safe"), [MISSING, FOUND], [MEMBERS, MEMBERS], { script: {} })
+		const safe = await drive(on(client, true), [MISSING, FOUND], [MEMBERS, MEMBERS], { script: {} })
 		const stderr = thrown.run.stderr + safe.run.stderr
 		expect({ safe: safe.run.trace?.calls, thrown: thrown.run.trace?.calls }, stderr).toEqual({
 			safe: [

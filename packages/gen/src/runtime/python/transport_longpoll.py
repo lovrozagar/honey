@@ -3,6 +3,7 @@
 polls again); a send is a POST."""
 
 from .config import RawResponse
+from .errors import APIConnectionError
 from .transport import (
     Dial,
     TransportConn,
@@ -26,6 +27,8 @@ class LongpollConn:
             answer, _ = await self.dial.core.run(x)
             if x.failure is not None:
                 raise x.failure
+            if answer.over:
+                raise APIConnectionError(f"the answer exceeds {x.limit()} bytes")
             if answer.status != 204:
                 return TransportMessage(answer.body.decode("utf-8", "replace"))
         return None

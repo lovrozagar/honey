@@ -2,7 +2,7 @@
  * Per-call overrides through the one keyword-only `options: RequestOptions` (contract 29 §5.9; G3): `headers` over
  * `ClientConfig.headers` for that call alone, `timeout` in place of the client's (zero: none), `base_url` to
  * another origin, and the `raw` box, filled with the answer as it arrived on success and on error. Driven in both
- * error modes on `http` and `http-safe`, every leg on `AsyncSDK` and `SDK` with one expectation (the G17 drift
+ * styles on `http` and its `safe` mirror (bit 21 i2), every leg on `AsyncSDK` and `SDK` with one expectation (the G17 drift
  * check); the raw box after a redirect is a consumer program, and the missing `headers=` keyword a mypy check.
  */
 import { describe, expect, it } from "vitest"
@@ -22,32 +22,31 @@ const ITEM: Call = { operation: "items.get", params: { id: "i1" }, route: { meth
 const OK: Reply = { json: { ok: true }, status: 200 }
 const OK_DATA = { data: { ok: true }, kind: "data", status: 200 }
 
-type Key = "http" | "http-safe"
-type On = { readonly client: Client; readonly key: Key }
+type On = { readonly client: Client; readonly safe: boolean }
 type Client = "async" | "sync"
 
-/* both error modes on both clients: a per-call override applies whatever the method returns, on either client */
+/* both styles on both clients: a per-call override applies whatever the method returns, on either client */
 const GRID = (["async", "sync"] as const).flatMap((client) =>
 	(
 		[
-			["throw", "http"],
-			["safe", "http-safe"],
+			["throw", false],
+			["safe", true],
 		] as const
-	).map(([mode, key]) => [mode, client, key] as const),
+	).map(([mode, safe]) => [mode, client, safe] as const),
 )
 
-/** The registry SDK `key` with the driver aimed at it, which must import. */
-function driven(key: Key): DrivenPythonSdk {
-	const sdk = drivenPythonSdk(key)
+/** The registry SDK `http` with the driver aimed at it, which must import. */
+function driven(): DrivenPythonSdk {
+	const sdk = drivenPythonSdk("http")
 	expect(sdk.imported, sdk.stderr).toBe(true)
 	return sdk
 }
 
-/** `calls` run by `key`'s driver on `client` under `setup` against a server answering `replies`, with the hops. */
-async function drive({ client, key }: On, replies: readonly Reply[], calls: readonly Call[], setup: Setup = {}) {
-	const sdk = driven(key)
+/** `calls` run by the driver on `client` (its `safe` mirror when `safe`) under `setup` against `replies`, with the hops. */
+async function drive({ client, safe }: On, replies: readonly Reply[], calls: readonly Call[], setup: Setup = {}) {
+	const sdk = driven()
 	return served(replies, async (server) => {
-		const run = await sdk.runCalls({ calls, setup }, { alt: server.alt, url: server.url }, { client })
+		const run = await sdk.runCalls({ calls, setup }, { alt: server.alt, url: server.url }, { client, safe })
 		return { hops: [...server.hops], run }
 	})
 }
@@ -57,10 +56,10 @@ describe.skipIf(!PY)("a per-call header (options['headers']) over the client's h
 	// v0: f2020cd056
 	it.each(GRID)(
 		"wins over the config's same name for that call only, every other config header inherited (%s, %s)",
-		async (_, client, key) => {
+		async (_, client, safe) => {
 			const setup: Setup = { headers: { "X-Keep": "k", "X-Trace": "d" } }
 			const calls = [{ ...ECHO, headers: { "x-trace": "a" } }, ECHO]
-			const { hops, run } = await drive({ client, key }, [OK, OK], calls, setup)
+			const { hops, run } = await drive({ client, safe }, [OK, OK], calls, setup)
 			expect(
 				{ headers: hops.map((h) => [h.headers["x-trace"], h.headers["x-keep"]]), observed: run.observed },
 				run.stderr,
@@ -78,9 +77,9 @@ describe.skipIf(!PY)("a per-call header (options['headers']) over the client's h
 describe.skipIf(!PY)("a per-call timeout (options['timeout']) in place of the client's", SLOW, () => {
 	/* G3 as ruled: v0's timeout= keyword becomes options["timeout"] */
 	// v0: 585607242b
-	it.each(GRID)("ends the call as a timeout when it is shorter than the config's (%s, %s)", async (_, client, key) => {
+	it.each(GRID)("ends the call as a timeout when it is shorter than the config's (%s, %s)", async (_, client, safe) => {
 		const slow: Reply = { ...OK, delayMs: 2000 }
-		const { hops, run } = await drive({ client, key }, [slow], [{ ...ECHO, timeoutMs: 300 }], { timeoutMs: 10_000 })
+		const { hops, run } = await drive({ client, safe }, [slow], [{ ...ECHO, timeoutMs: 300 }], { timeoutMs: 10_000 })
 		expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 			hops: 1,
 			observed: [{ kind: "timeout" }],
@@ -90,10 +89,10 @@ describe.skipIf(!PY)("a per-call timeout (options['timeout']) in place of the cl
 	// v0: 585607242b
 	it.each(GRID)(
 		"removes the config's bound for that call only when zero, the client untouched (%s, %s)",
-		async (_, client, key) => {
+		async (_, client, safe) => {
 			const slow: Reply = { ...OK, delayMs: 1000 }
 			const calls = [{ ...ECHO, timeoutMs: 0 }, ECHO]
-			const { hops, run } = await drive({ client, key }, [slow, slow], calls, { timeoutMs: 300 })
+			const { hops, run } = await drive({ client, safe }, [slow, slow], calls, { timeoutMs: 300 })
 			expect({ hops: hops.length, observed: run.observed }, run.stderr).toEqual({
 				hops: 2,
 				observed: [OK_DATA, { kind: "timeout" }],
@@ -103,27 +102,30 @@ describe.skipIf(!PY)("a per-call timeout (options['timeout']) in place of the cl
 })
 
 describe.skipIf(!PY)("a per-call base URL (options['base_url'])", SLOW, () => {
-	it.each(GRID)("sends that call to the other origin and the next to the config's (%s, %s)", async (_, client, key) => {
-		const { hops, run } = await drive({ client, key }, [OK, OK], [{ ...ECHO, origin: "alt" }, ECHO])
-		expect({ hops: hops.map((h) => [h.origin, h.url]), observed: run.observed }, run.stderr).toEqual({
-			hops: [
-				["alt", "/echo"],
-				["primary", "/echo"],
-			],
-			observed: [OK_DATA, OK_DATA],
-		})
-	})
+	it.each(GRID)(
+		"sends that call to the other origin and the next to the config's (%s, %s)",
+		async (_, client, safe) => {
+			const { hops, run } = await drive({ client, safe }, [OK, OK], [{ ...ECHO, origin: "alt" }, ECHO])
+			expect({ hops: hops.map((h) => [h.origin, h.url]), observed: run.observed }, run.stderr).toEqual({
+				hops: [
+					["alt", "/echo"],
+					["primary", "/echo"],
+				],
+				observed: [OK_DATA, OK_DATA],
+			})
+		},
+	)
 })
 
 describe.skipIf(!PY)("the raw box (options['raw']): the answer as it arrived, on success and on error", SLOW, () => {
-	it.each(GRID)("keeps a 200's status, every header and the body as sent (%s, %s)", async (_, client, key) => {
+	it.each(GRID)("keeps a 200's status, every header and the body as sent (%s, %s)", async (_, client, safe) => {
 		/* items.get declares X-Item-Version as required, so a well-formed 200 carries it (Fc5) */
 		const reply: Reply = {
 			headers: { "x-item-version": "3", "x-total": "3" },
 			json: { id: "i1", name: "n" },
 			status: 200,
 		}
-		const { hops, run } = await drive({ client, key }, [reply], [{ ...ITEM, raw: true }])
+		const { hops, run } = await drive({ client, safe }, [reply], [{ ...ITEM, raw: true }])
 		expect({ hops: hops.map((h) => h.url), observed: run.observed }, run.stderr).toEqual({
 			hops: ["/items/i1"],
 			observed: [
@@ -141,9 +143,9 @@ describe.skipIf(!PY)("the raw box (options['raw']): the answer as it arrived, on
 		})
 	})
 
-	it.each(GRID)("keeps an error status's response and its body too (%s, %s)", async (_, client, key) => {
+	it.each(GRID)("keeps an error status's response and its body too (%s, %s)", async (_, client, safe) => {
 		const reply: Reply = { headers: { "x-total": "0" }, json: { message: "gone" }, status: 404 }
-		const { run } = await drive({ client, key }, [reply], [{ ...ITEM, raw: true }])
+		const { run } = await drive({ client, safe }, [reply], [{ ...ITEM, raw: true }])
 		expect(run.observed, run.stderr).toEqual([
 			{
 				body: '{"message":"gone"}',
@@ -156,8 +158,8 @@ describe.skipIf(!PY)("the raw box (options['raw']): the answer as it arrived, on
 })
 
 /**
- * A safe-mode consumer per client: `hop.get` through a same-origin 302 to `/echo` with a raw box, then `echo.get`
- * answered 404 with another; each box read beside the `SDKResult` it came with.
+ * A safe consumer per client: `c.safe.hop.get` through a same-origin 302 to `/echo` with a raw box, then
+ * `c.safe.echo.get` answered 404 with another; each box read beside the `Ok` or `Err` it came with (bit 21 i2).
  */
 const RAW = (["sync", "async"] as const)
 	.map((client) => {
@@ -166,12 +168,14 @@ const RAW = (["sync", "async"] as const)
 		return `section("${client}")
 c = ${make}
 raw = sdk.RawResponse()
-r = ${call}c.hop.get(options={"raw": raw})
+r = ${call}c.safe.hop.get(options={"raw": raw})
+assert isinstance(r, sdk.Ok)
 kind = {k.lower(): v for k, v in raw.headers.items()}.get("content-type")
 note([raw.status, raw.url.endswith("/echo"), json.loads(raw.body), kind, r.response is raw, r.data])
 gone = sdk.RawResponse()
-e = ${call}c.echo.get(options={"raw": gone})
-note([gone.status, json.loads(gone.body), e.response is gone, type(e.error).__name__, e.data])`
+e = ${call}c.safe.echo.get(options={"raw": gone})
+assert isinstance(e, sdk.Err)
+note([gone.status, json.loads(gone.body), e.response is gone, type(e.error).__name__, e.error.status])`
 	})
 	.join("\n")
 
@@ -185,16 +189,16 @@ const RAW_REPLIES: readonly Reply[] = [
 /** The `raw` program run once on both clients against RAW_REPLIES twice, with the hops it sent. */
 const raw = once(() =>
 	served([...RAW_REPLIES, ...RAW_REPLIES], async (server) => {
-		const run = await consume("http-safe", "raw", { base: server.url, body: RAW })
+		const run = await consume("http", "raw", { base: server.url, body: RAW })
 		return { hops: server.hops.map((h) => `${h.origin} ${h.method} ${h.url}`), run }
 	}),
 )
 
 describe.skipIf(!PY)("RawResponse: the answer's status, headers, body and the URL it came from", SLOW, () => {
-	it("is the last hop's after a redirect, the same box the SDKResult holds; an error status fills it too", async () => {
+	it("is the last hop's after a redirect, the same box the Ok holds; an error status fills the Err's too", async () => {
 		const { hops, run } = await raw()
 		const landed = [200, true, { ok: true }, "application/json", true, { ok: true }]
-		const failed = [404, { message: "gone" }, true, "NotFoundError", null]
+		const failed = [404, { message: "gone" }, true, "NotFoundError", 404]
 		const sent = ["primary GET /hop", "primary GET /echo", "primary GET /echo"]
 		const read = (section: string) => ({
 			...seen(run, section),

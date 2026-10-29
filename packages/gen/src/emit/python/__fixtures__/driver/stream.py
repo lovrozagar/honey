@@ -6,7 +6,9 @@ and realtime frames, and an error the stream raised is traced via "stream"; SSE 
 answer (a drop, a timeout) after the first observe it as ``failed`` (f2). Unscripted, an error the
 grid has no outcome for (one a stream raised among them) fails the run, and an exception outside the
 SDK's ``HoneyError`` propagates, as on a unary call. ``bounded`` fails a stream call that has not
-ended after ``STALL_AFTER`` seconds instead of hanging the run.
+ended after ``STALL_AFTER`` seconds instead of hanging the run. Under ``safe`` (bit 21 i2) an SSE call answers a
+``Result``, read as observe.py reads one: its ``Ok`` the stream, read as above; its ``Err`` the opening's error. A
+connection (WebSocket, realtime) is the same method on the mirror, opened and read as above.
 """
 
 from __future__ import annotations
@@ -17,7 +19,16 @@ from collections.abc import Callable, Coroutine
 from typing import Any, Literal
 
 from invoke import Prepared
-from observe import Lens, Outcome, grid_outcome, no_answer, typed_headers
+from observe import (
+    Lens,
+    Outcome,
+    checked,
+    err_observed,
+    grid_outcome,
+    no_answer,
+    raised,
+    typed_headers,
+)
 from protocol import (
     Call,
     CallScript,
@@ -29,7 +40,7 @@ from protocol import (
     WsMessage,
     WsScript,
 )
-from tracing import python_error
+from tracing import python_error, result_trace
 
 STALL_AFTER = 10
 UNGRADED = "the call ended in an error the grid has no outcome for: "
@@ -79,13 +90,24 @@ async def observe(
     prepared: Prepared, call: Call, directives: CallScript, lens: Lens
 ) -> Outcome:
     """``call``'s stream opened by its method, then read by its kind."""
+    kind = prepared.plan["stream"]
     try:
         opened = await prepared.method(*prepared.args, **prepared.kwargs)
     except Exception as error:
         if outside(error, lens):
             raise
+        if lens.safe and kind == "sse":
+            raised(error, lens)
         return unopened(error, lens)
-    kind = prepared.plan["stream"]
+    if lens.safe and kind == "sse":
+        result = checked(opened, prepared.raw, lens)
+        if isinstance(result, lens.module.Err):
+            if not lens.scripted:
+                return Outcome(err_observed(result, lens))
+            error = python_error(result.error, "result", lens.envelope)
+            summary = result_trace(result, lens.module)
+            return Outcome(err_observed(result, lens), error, summary)
+        opened = result.data
     if kind == "sse":
         return await events(opened, prepared, call.get("take"), lens)
     if kind == "ws":

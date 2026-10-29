@@ -259,15 +259,16 @@ describe("the v1 Rust SDK within the budget (bit 13, G13)", () => {
 })
 
 /*
- * G13 (bit 14): Python's own per-operation ceiling, not sdkCli's 234 nor Go's 94 or Rust's 96. Measured over the
- * five e2e apps' 72 operations in both throwOnError modes (144 surfaces, `v1PythonSdkSurfaces` over the pre-format
- * client.py): max 59 (surface, AsyncSDK.put_in_all_by_resource_id, safe mode), median 26, min 18
- * (compose, AsyncSDK.get_account); ruff's format pass wraps a long signature one parameter per line, which moves
- * the max to 70 and the median to 30. 59 + 20% headroom = 71. Each language holds its own ceiling, set from its
- * own measurement. An operation over it is fixed in the schema, never by raising the ceiling; revisit only for a
- * genuinely large, legitimate operation.
+ * G13 (bit 14): Python's own per-operation ceiling, not sdkCli's 234 nor Go's 94 or Rust's 96. Bit 21 i2 (R-i5, the
+ * G13 pattern): a surface is both styles, the AsyncSDK signature and its `client.safe` twin's one line
+ * (`v1PythonSdkSurfaces` over the pre-format client.py). Measured over the five e2e apps' 71 operations (71
+ * surfaces): max 75 (surface, AsyncSDK.put_in_all_by_resource_id), median 42, min 30 (compose,
+ * AsyncSDK.get_account), sum 3,005. At 758e89d the surface was one signature per throwOnError mode (142 surfaces,
+ * max 59 there in safe mode, sum 4,148), so its ceiling of 71 (59 + 20%) measured another text and is replaced:
+ * 75 + 20% headroom = 90. Each language holds its own ceiling, set from its own measurement. An operation over it is
+ * fixed in the schema, never by raising the ceiling; revisit only for a genuinely large, legitimate operation.
  */
-const PYTHON_SDK_CEILING = ceilingOf([59], 0.2)
+const PYTHON_SDK_CEILING = ceilingOf([75], 0.2)
 
 const PY_CLIENT = `class UsersResource:
     def get(self, id: str, *, options: RequestOptions | None = None) -> User:
@@ -292,15 +293,33 @@ class AsyncSDK:
 
     async def list(self, *, limit: int | None = None, options: RequestOptions | None = None) -> _builtins.list[User]:
         return await self._core.call(spec)
+
+
+class SafeUsersResource:
+    get = Safe.of_sync(UsersResource.get)
+
+
+class AsyncSafeUsersResource:
+    get = Safe.of(AsyncUsersResource.get)
+
+
+class AsyncSafeSDK:
+    list = Safe.of(AsyncSDK.list)
 `
 
 describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
-	it("reads each async operation's signature line, keyed class.method, never the sync twin or a lifecycle method", () => {
+	it("reads each async operation's signature line with its client.safe twin, keyed class.method, never the sync twin or a lifecycle method", () => {
 		expect(Object.fromEntries(v1PythonSdkSurfaces(PY_CLIENT))).toEqual({
 			"AsyncSDK.list":
-				"async def list(self, *, limit: int | None = None, options: RequestOptions | None = None) -> _builtins.list[User]",
-			"AsyncUsersResource.get": "async def get(self, id: str, *, options: RequestOptions | None = None) -> User",
+				"async def list(self, *, limit: int | None = None, options: RequestOptions | None = None) -> _builtins.list[User]\nlist = Safe.of(AsyncSDK.list)",
+			"AsyncUsersResource.get":
+				"async def get(self, id: str, *, options: RequestOptions | None = None) -> User\nget = Safe.of(AsyncUsersResource.get)",
 		})
+	})
+
+	it("refuses an operation without its client.safe twin, so a dropped twin never measures short", () => {
+		const untwinned = PY_CLIENT.replace("    list = Safe.of(AsyncSDK.list)\n", "")
+		expect(() => v1PythonSdkSurfaces(untwinned)).toThrow("AsyncSDK.list has no client.safe twin")
 	})
 
 	it("refuses a signature that spans lines, so a formatted client never measures short", () => {
@@ -311,28 +330,25 @@ describe("the v1 Python SDK within the budget (bit 14, G13)", () => {
 		expect(() => v1PythonSdkSurfaces(wrapped)).toThrow("AsyncUsersResource.get spans lines")
 	})
 
-	it(`keeps every e2e app's Python operations within ${PYTHON_SDK_CEILING} tokens, in both throwOnError modes`, () => {
+	it(`keeps every e2e app's Python operations within ${PYTHON_SDK_CEILING} tokens, both styles together`, () => {
 		const over: string[] = []
 		for (const app of APPS) {
 			const spec = appSpec(app)
-			for (const throwOnError of [true, false]) {
-				const files = generatePythonSdk(spec, { throwOnError }).files
-				const surfaces = v1PythonSdkSurfaces(files["src/honey_sdk/client.py"] ?? "")
-				/* completeness: a surface the regex misses can never pass by going unmeasured */
-				const plans = Object.keys(pythonCallPlans(spec, { throwOnError })).length
-				if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
-				for (const [key, text] of surfaces) {
-					const tokens = countTokens(text)
-					if (tokens > PYTHON_SDK_CEILING) over.push(`${app}/${key}${throwOnError ? "" : " (safe)"}: ${tokens}`)
-				}
+			const surfaces = v1PythonSdkSurfaces(generatePythonSdk(spec).files["src/honey_sdk/client.py"] ?? "")
+			/* completeness: a surface the regex misses can never pass by going unmeasured */
+			const plans = Object.keys(pythonCallPlans(spec)).length
+			if (surfaces.size !== plans) over.push(`${app}: ${surfaces.size} of ${plans} measured`)
+			for (const [key, text] of surfaces) {
+				const tokens = countTokens(text)
+				if (tokens > PYTHON_SDK_CEILING) over.push(`${app}/${key}: ${tokens}`)
 			}
 		}
-		expect(over).toEqual([])
+		expect({ ceiling: PYTHON_SDK_CEILING, over }).toEqual({ ceiling: 90, over: [] })
 	})
 })
 
 /*
- * G13 (bit 15): C#'s own per-operation ceiling, not sdkCli's 234 nor Go's 94, Rust's 96 or Python's 71. Measured over
+ * G13 (bit 15): C#'s own per-operation ceiling, not sdkCli's 234 nor Go's 94, Rust's 96 or Python's 71 (90 since bit 21 i2). Measured over
  * the five e2e apps' 72 operations in both throwOnError modes (144 surfaces, `v1CSharpSdkSurfaces` over the emitted
  * Client.cs): max 56 (surface, PutInAllByResourceId, safe mode), median 27, min 19. The emitter writes no formatter
  * pass, so the measured text is the shipped text. 56 + 20% headroom = 68. Each language holds its own ceiling, set
@@ -504,8 +520,17 @@ describe("the Rust runtime within its byte budget (bit 13, G14)", () => {
  * dropped stream only when collected), ws.py +138 (the dial runs no hook and no on_auth_expired refresh).
  * Then +106 B of doc only, to 88,782 B: ws.py +106 (`async with` or `close()` frees a socket's connection, a dropped
  * socket only when collected).
+ * Bit 21 i2, +2,182 B to 90,964 B: the safe mirror's Result and plumbing, and the over-cap answer. Dead code first: a
+ * scan for runtime definitions nothing references found only `proven_transport` (public, kept); SDKResult (493 B) is
+ * cut. result.py +1,155 (Ok, Err, the Result alias, ANSWERS, and `Safe`: the view mapping call and sse to their safe
+ * twins, `of`/`of_sync`/`keep` typing a twin, 1,648 B in all); send_async.py +594 (safe_sse: an error status or an
+ * undecodable header at a stream's opening is its Err, sse raising it; result's Ok/Err; the over-cap flag through
+ * send and attempt); send_sync.py +106 (result's Ok/Err; the over-cap flag); exchange.py +105 (HttpAnswer.over,
+ * limit(), decoded's over-cap DecodeError, read's no-answer raise cut); transport_longpoll.py +149 (a poll past the
+ * cap stays no answer: mid-stream, f2); ws.py +73 (a refusal's body past the cap is left unread, its status error
+ * kept).
  */
-const PYTHON_RUNTIME_BYTES = 88_782
+const PYTHON_RUNTIME_BYTES = 90_964
 
 describe("the Python runtime within its byte budget (bit 14, G14)", () => {
 	it(

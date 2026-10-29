@@ -82,18 +82,28 @@ export function v1RustSdkSurfaces(clientRs: string): Map<string, string> {
  * last; `__init__`, `aclose` and the context-manager methods do not. Excluded: the sync twin (token-equal), the
  * docstring, and the `<Op>Headers` and TypedDict bodies (as Go and Rust exclude body types). Keyed
  * `Class.method`. An `async def` that does not close on its own line throws: a wrapped signature never measures
- * short.
+ * short. Since bit 21 i2 each surface is both styles (R-i5): the signature, a newline, then its `client.safe` twin's
+ * one line (`get = Safe.of(AsyncX.get)`, a connection's `connect = Safe.keep(AsyncX.connect)`); an operation with no twin
+ * throws, so a mirror that drops one never measures short either.
  */
 export function v1PythonSdkSurfaces(clientPy: string): Map<string, string> {
 	const out = new Map<string, string>()
+	const twins = new Map<string, string>()
 	let type = ""
 	for (const line of clientPy.split("\n")) {
 		type = /^class (\w+)(?:\(.*\))?:$/.exec(line)?.[1] ?? type
+		const twinned = /^ {4}\w+ = Safe\.\w+\((\w+\.\w+)\)$/.exec(line)?.[1]
+		if (twinned !== undefined) twins.set(twinned, line.trim())
 		const name = /^ {4}async def (\w+)\(/.exec(line)?.[1]
 		if (name === undefined) continue
 		const key = `${type}.${name}`
 		if (!/\) -> .+:$/.test(line)) throw new Error(`${key} spans lines`)
 		if (/\boptions: RequestOptions \| None = None\) -> /.test(line)) out.set(key, line.trim().slice(0, -":".length))
+	}
+	for (const [key, signature] of out) {
+		const twin = twins.get(key)
+		if (twin === undefined) throw new Error(`${key} has no client.safe twin`)
+		out.set(key, `${signature}\n${twin}`)
 	}
 	return out
 }

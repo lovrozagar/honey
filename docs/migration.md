@@ -77,6 +77,42 @@ if (!result.ok) {
 } else console.log(result.data)
 ```
 
+## The Python SDK's `throwOnError` is gone; its safe mode is `client.safe`, answering `Ok` or `Err`
+
+The Python generator has no `throwOnError` option (`--python-throw-on-error` is an unknown option now): delete it.
+Every client raises, as the default did; the safe mode is `client.safe` on `SDK` and `AsyncSDK`, which holds the same
+calls:
+
+- `SDKResult` is gone. A safe call answers `Ok(data, response)` or `Err(error, response)`: replace `r.error` checks
+  with `match r` (`case Ok(data): …` / `case Err(error): …`) or `isinstance(r, Err)`, and `r.status` with
+  `r.response.status`. Reading `.data` or `.error` off a normal call, or naming `SDKResult`, fails `mypy --strict`.
+- `Err.error` is the error the normal call raises: an `APIStatusError` by status, or a `DecodeError`. An undecodable
+  2xx raised `DecodeError` in safe mode before; it is an `Err` now, with its response.
+- A 2xx past `max_response_bytes` was `APIConnectionError` (no answer); it is a `DecodeError` in both styles, raised
+  or the `Err`. An error status past the cap raises its status error, its body empty.
+- An event stream's safe call answers once it opens: `Ok`'s data is the `EventStream`, an error status at the opening
+  the `Err`. A WebSocket or realtime operation is the same connection on `client.safe`.
+- A root resource named `safe` is reached as `safe_`, and the generation names it on stderr.
+
+```text v0
+r = client.users.get("u1")   # generated with throwOnError false
+if r.error is not None:
+    print("answered", r.status)
+else:
+    print(r.data)
+```
+
+```python
+async def health(client: AsyncSDK) -> str:
+    match await client.safe.get_api_health():
+        case Ok(data, response):
+            return f"answered {response.status}: {data}"
+        case Err(DecodeError() as unreadable, response):
+            return f"answered {response.status}, unreadable: {unreadable}"
+        case Err(error, response):
+            return f"answered {response.status}: {error}"
+```
+
 ## The TS SDK's realtime `token?` and `onAuthExpired?` are gone
 
 Neither was ever read. A connection's `headers` may be a function read on every dial, and the client's

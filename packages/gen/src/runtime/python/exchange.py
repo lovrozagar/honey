@@ -21,7 +21,6 @@ from .config import (
     parse_base,
 )
 from .errors import (
-    APIConnectionError,
     APIStatusError,
     APITimeoutError,
     CanceledError,
@@ -67,6 +66,7 @@ class HttpAnswer:
     headers: Mapping[str, str]
     body: bytes
     url: str
+    over: bool = False
 
 
 class ClientCore:
@@ -193,11 +193,12 @@ class Exchange:
         self.hops += nxt is not None
         return nxt
 
-    def read(self, chunks: list[bytes], chunk: bytes) -> None:
+    def limit(self) -> int:
+        return 64 << 10 if self.stream else self.core.config.max_response_bytes
+
+    def read(self, chunks: list[bytes], chunk: bytes) -> bool:
         chunks.append(chunk)
-        limit = 64 << 10 if self.stream else self.core.config.max_response_bytes
-        if limit and sum(map(len, chunks)) > limit:
-            raise APIConnectionError(f"the answer exceeds {limit} bytes")
+        return 0 < self.limit() < sum(map(len, chunks))
 
     def response(self, answer: HttpAnswer, is_retry: bool) -> ResponseContext:
         m = self.meta
@@ -240,6 +241,10 @@ class Exchange:
     def decoded(self, answer: HttpAnswer) -> object:
         if self.failure is not None:
             raise self.failure
+        if answer.over:
+            raise DecodeError(
+                f"HTTP {answer.status}: the body exceeds {self.limit()} bytes"
+            )
         self.fill(answer)
         if self.op.answer in ("none", "binary", "text"):
             return {"none": None, "binary": answer.body}.get(

@@ -4,7 +4,7 @@
  * a text answer is a `str` as sent. A binary body goes out under its declared type, sized when it is bytes and
  * chunked when it is an iterable, and only bytes are sent again on a 401; a multipart file is a `FilePart` held in
  * memory and sent again too, and an empty map is no part. Declared response headers fill `headers_into` typed,
- * and a missing required one is a `DecodeError`. Driven in both error modes on `http` and `http-safe`, every leg
+ * and a missing required one is a `DecodeError`. Driven in both styles on `http` (its `safe` mirror, bit 21 i2), every leg
  * on `AsyncSDK` and `SDK` with one expectation (the G17 drift check); the answer types and multipart bodies are
  * consumer programs, the types mypy checks.
  */
@@ -23,18 +23,17 @@ const PY = withPython()
 const SLOW = { timeout: 600_000 }
 const CLIENTS = ["async", "sync"] as const
 
-type Key = "http" | "http-safe"
-type On = { readonly client: Client; readonly key: Key }
+type On = { readonly client: Client; readonly safe: boolean }
 type Client = (typeof CLIENTS)[number]
 
-/* both error modes on both clients: a binary or text answer has the same shape in SDKResult.data as returned */
+/* both styles on both clients: a binary or text answer has the same shape in Ok.data as returned */
 const GRID = CLIENTS.flatMap((client) =>
 	(
 		[
-			["throw", "http"],
-			["safe", "http-safe"],
+			["throw", false],
+			["safe", true],
 		] as const
-	).map(([mode, key]) => [mode, client, key] as const),
+	).map(([mode, safe]) => [mode, client, safe] as const),
 )
 
 const route = (method: string, path: string) => ({ method, path })
@@ -61,23 +60,25 @@ const sha256 = (bytes: Buffer | string) => createHash("sha256").update(bytes).di
 
 /** A Python error as the trace records it: no cause and the method's own raise unless given, any repr. */
 const plain = (entry: Partial<PythonError>) => ({ cause: null, repr: expect.any(String), via: "return", ...entry })
-const decodeError = (text: string) => plain({ chain: ["DecodeError", "HoneyError"], text, type: "DecodeError" })
+/** A DecodeError as traced: raised by the normal call, or the safe call's `Err` (`via: "result"`). */
+const decodeError = (text: string, safe = false) =>
+	plain({ chain: ["DecodeError", "HoneyError"], text, type: "DecodeError", via: safe ? "result" : "return" })
 
-/** The registry SDK `key` with the driver aimed at it, which must import. */
-function driven(key: Key): DrivenPythonSdk {
-	const sdk = drivenPythonSdk(key)
+/** The registry SDK `http` with the driver aimed at it, which must import. */
+function driven(): DrivenPythonSdk {
+	const sdk = drivenPythonSdk("http")
 	expect(sdk.imported, sdk.stderr).toBe(true)
 	return sdk
 }
 
 type Options = { readonly script?: Script; readonly setup?: Setup }
 
-/** `calls` run by `key`'s driver on `client` under `o` against a server answering `replies`, with what it got. */
-async function drive({ client, key }: On, replies: readonly Reply[], calls: readonly Call[], o: Options = {}) {
-	const sdk = driven(key)
+/** `calls` run by the driver on `client` (its `safe` mirror when `safe`) under `o` against a server answering `replies`. */
+async function drive({ client, safe }: On, replies: readonly Reply[], calls: readonly Call[], o: Options = {}) {
+	const sdk = driven()
 	return served(replies, async (server) => {
 		const cell = { calls, setup: o.setup ?? {} }
-		const run = await sdk.runCalls(cell, { alt: server.alt, url: server.url }, { client, script: o.script })
+		const run = await sdk.runCalls(cell, { alt: server.alt, url: server.url }, { client, safe, script: o.script })
 		return { bodies: [...server.bodies], hops: [...server.hops], run }
 	})
 }
@@ -91,9 +92,9 @@ describe.skipIf(!PY)("binary answers: bytes, never decoded, Accept the declared 
 	// v0: 63ad606050
 	it.each(GRID)(
 		"answers an octet-stream or pdf body as its bytes and asks for that media type (%s, %s)",
-		async (_, client, key) => {
+		async (_, client, safe) => {
 			const replies = [octets(256, "application/octet-stream"), octets(4, "application/pdf")]
-			const { hops, run } = await drive({ client, key }, replies, [FILES_GET, DOCS_GET])
+			const { hops, run } = await drive({ client, safe }, replies, [FILES_GET, DOCS_GET])
 			expect({ accept: hops.map((h) => [h.url, h.headers.accept]), observed: run.observed }, run.stderr).toEqual({
 				accept: [
 					["/files/x", "application/octet-stream"],
@@ -106,7 +107,7 @@ describe.skipIf(!PY)("binary answers: bytes, never decoded, Accept the declared 
 
 	it.each(CLIENTS)("%s: lets a per-call Accept (options['headers']) win over the declared media type", async (c) => {
 		const call = { ...FILES_GET, headers: { accept: "*/*" } }
-		const { hops, run } = await drive({ client: c, key: "http" }, [octets(3, "application/octet-stream")], [call])
+		const { hops, run } = await drive({ client: c, safe: false }, [octets(3, "application/octet-stream")], [call])
 		expect({ accept: hops.map((h) => h.headers.accept), observed: run.observed }, run.stderr).toEqual({
 			accept: ["*/*"],
 			observed: [bytesOf(3)],
@@ -116,7 +117,7 @@ describe.skipIf(!PY)("binary answers: bytes, never decoded, Accept the declared 
 	it.each(CLIENTS)("%s: keeps the declared media type over a ClientConfig.headers Accept", async (c) => {
 		const setup: Setup = { headers: { Accept: "application/json" } }
 		const { hops, run } = await drive(
-			{ client: c, key: "http" },
+			{ client: c, safe: false },
 			[octets(3, "application/octet-stream")],
 			[FILES_GET],
 			{ setup },
@@ -135,9 +136,9 @@ describe.skipIf(!PY)("text bodies and answers: a str as sent, never JSON-decoded
 	// v0: 63ad606050
 	it.each(GRID)(
 		"answers text/plain as the string, sends a str body as text/plain and asks for text/plain (%s, %s)",
-		async (_, client, key) => {
+		async (_, client, safe) => {
 			const replies = [text('{"a":1}'), text("hello"), text('"quoted"')]
-			const { bodies, hops, run } = await drive({ client, key }, replies, [TEXT_GET, NOTE("hello"), NOTE("bye")])
+			const { bodies, hops, run } = await drive({ client, safe }, replies, [TEXT_GET, NOTE("hello"), NOTE("bye")])
 			const wire = hops.map((h) => [h.method, h.url, h.body.contentType, h.headers.accept, h.body.size])
 			expect({ bodies: bodies.map(String), observed: run.observed, wire }, run.stderr).toEqual({
 				bodies: ["", "hello", "bye"],
@@ -172,11 +173,11 @@ const UPLOADED = { contentType: "application/octet-stream", method: "PUT", url: 
 describe.skipIf(!PY)("binary request bodies: bytes (sized) or an iterable (chunked), only bytes resent", SLOW, () => {
 	it.each(GRID)(
 		"sends bytes with their length and a one-shot iterable chunked, under the declared media type (%s, %s)",
-		async (_, client, key) => {
+		async (_, client, safe) => {
 			const size = 65_536
 			const done: Reply = { json: { size }, status: 200 }
 			const script: Script = { calls: [null, { oneShotBody: true }] }
-			const { bodies, hops, run } = await drive({ client, key }, [done, done], [PUT(size), PUT(size)], { script })
+			const { bodies, hops, run } = await drive({ client, safe }, [done, done], [PUT(size), PUT(size)], { script })
 			const sent = { ...UPLOADED, authorization: undefined, sha256: sha256(pattern(size)), size }
 			expect(
 				{ observed: run.observed, same: bodies.map((b) => b.equals(pattern(size))), wire: hops.map(uploadOf) },
@@ -197,12 +198,12 @@ describe.skipIf(!PY)("binary request bodies: bytes (sized) or an iterable (chunk
 
 	it.each(GRID)(
 		"sends bytes again with on_auth_expired's token after a 401; a one-shot iterable's 401 is the answer (%s, %s)",
-		async (_, client, key) => {
+		async (_, client, safe) => {
 			const size = 4096
 			const script: Script = { calls: [null, { oneShotBody: true }], onAuthExpired: { tokens: ["new"] } }
 			const setup: Setup = { auth: { kind: "bearer", token: "old" } }
 			const replies: Reply[] = [{ status: 401 }, { json: { size }, status: 200 }, { status: 401 }]
-			const { bodies, hops, run } = await drive({ client, key }, replies, [PUT(size), PUT(size)], { script, setup })
+			const { bodies, hops, run } = await drive({ client, safe }, replies, [PUT(size), PUT(size)], { script, setup })
 			const sent = { ...UPLOADED, sha256: sha256(pattern(size)), size }
 			const sized = { ...sent, length: String(size), transferEncoding: undefined }
 			expect(
@@ -236,7 +237,7 @@ const item = (headers: Record<string, string>): Reply => ({ headers, json: { id:
 describe.skipIf(!PY)("typed response headers: headers_into fills <Op>Headers (G5)", SLOW, () => {
 	it.each(GRID)(
 		"fills the declared headers only, an absent optional one left out; a missing or unparsable required one is a DecodeError (%s, %s)",
-		async (_, client, key) => {
+		async (_, client, safe) => {
 			const replies = [
 				item({ "x-etag": "e1", "x-item-version": "3", "x-undeclared": "u" }),
 				item({ "x-item-version": "3" }),
@@ -244,14 +245,14 @@ describe.skipIf(!PY)("typed response headers: headers_into fills <Op>Headers (G5
 				item({ "x-item-version": "x" }),
 			]
 			const calls = [ITEMS_GET, ITEMS_GET, ITEMS_GET, ITEMS_GET]
-			const { run } = await drive({ client, key }, replies, calls, { script: {} })
+			const { run } = await drive({ client, safe }, replies, calls, { script: {} })
 			const data = { id: "i1", name: "n" }
 			expect({ errors: run.trace?.calls.map((c) => c.error), observed: run.observed }, run.stderr).toEqual({
 				errors: [
 					undefined,
 					undefined,
-					decodeError("the X-Item-Version header is missing"),
-					decodeError("the X-Item-Version header is not a valid integer"),
+					decodeError("the X-Item-Version header is missing", safe),
+					decodeError("the X-Item-Version header is not a valid integer", safe),
 				],
 				observed: [
 					{ data, headers: { "x-etag": "e1", "x-item-version": "3" }, kind: "data", status: 200 },

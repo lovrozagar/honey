@@ -7,12 +7,12 @@ import httpx2
 
 from .auth import refresh_sync
 from .config import ClientConfig, Defaults
-from .errors import APIConnectionError, APIStatusError, APITimeoutError, HoneyError
+from .errors import APIConnectionError, APITimeoutError, HoneyError
 from .exchange import CallArgs, ClientCore, Exchange, HttpAnswer
 from .hooks import refuse_hooks, run_sync
 from .operation import Operation
 from .redirect import Hop, cross
-from .result import SDKResult
+from .result import ANSWERS, Err, Ok, Result
 
 T = TypeVar("T")
 
@@ -27,13 +27,13 @@ class SyncTransport(ClientCore):
         x = Exchange(self, op, args)
         return cast("T", x.decoded(self.run(x)))
 
-    def result(self, op: Operation[T], **args: Unpack[CallArgs]) -> SDKResult[T]:
+    def result(self, op: Operation[T], **args: Unpack[CallArgs]) -> Result[T]:
         x = Exchange(self, op, args)
         answer = self.run(x)
         try:
-            return SDKResult(cast("T", x.decoded(answer)), None, x.raw.status, x.raw)
-        except APIStatusError as error:
-            return SDKResult(None, error, x.raw.status, x.raw)
+            return Ok(cast("T", x.decoded(answer)), x.raw)
+        except ANSWERS as error:
+            return Err(error, x.raw)
 
     def run(self, x: Exchange) -> HttpAnswer:
         x.log.started()
@@ -61,7 +61,9 @@ class SyncTransport(ClientCore):
             hop = nxt
         response = x.response(answer, is_retry)
         run_sync(self.config.on_response_sync, response)
-        return HttpAnswer(response.status, response.headers, response.body, answer.url)
+        return HttpAnswer(
+            response.status, response.headers, response.body, answer.url, answer.over
+        )
 
     def send(self, x: Exchange, hop: Hop) -> HttpAnswer:
         request = self.http.build_request(
@@ -72,13 +74,15 @@ class SyncTransport(ClientCore):
             timeout=x.check(),
         )
         chunks: list[bytes] = []
+        over = False
         try:
             response = self.http.send(
                 request, stream=True, follow_redirects=False, **cross(request, hop)
             )
             try:
                 for chunk in response.iter_bytes():
-                    x.read(chunks, chunk)
+                    if over := x.read(chunks, chunk):
+                        break
                     x.check()
             finally:
                 response.close()
@@ -89,7 +93,11 @@ class SyncTransport(ClientCore):
                 f"the request failed: {type(error).__name__}"
             ) from error
         return HttpAnswer(
-            response.status_code, response.headers, b"".join(chunks), str(response.url)
+            response.status_code,
+            response.headers,
+            b"" if over else b"".join(chunks),
+            str(response.url),
+            over,
         )
 
     def close(self) -> None:

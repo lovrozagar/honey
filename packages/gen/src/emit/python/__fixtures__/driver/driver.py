@@ -5,11 +5,12 @@ Stdin is one JSON object, the shared envelope:
 
   { "sdk": { "root": dir, "package": name }, "client": "async" | "sync",
     "cell": { "setup"?: Setup, "calls": Call[] }, "plans": { <operationId>: plan },
-    "base": url, "alt"?: url, "script"?: Script }
+    "base": url, "alt"?: url, "safe"?: bool, "script"?: Script }
 
 ``cell`` is the grid's Cell; ``plans`` are the emitter's call plans (``pythonCallPlans``), which
 invoke.py walks with ``getattr``. Every call of a cell runs in order on one client, ``SDK`` or
-``AsyncSDK`` by ``client``, aimed at ``base``. Stdout is the grid's ``Observed[]`` JSON, one per call.
+``AsyncSDK`` by ``client``, aimed at ``base``; under ``safe`` (bit 21 i2) through the client's ``safe`` mirror, its
+``Ok`` or ``Err`` read strictly (observe.py). Stdout is the grid's ``Observed[]`` JSON, one per call.
 Any failure, and any call or outcome this driver cannot express, exits 1 with the reason on stderr:
 a red cell, never a silent pass.
 
@@ -82,6 +83,8 @@ def config_fields(envelope: Envelope) -> dict[str, Any]:
         fields["redirect"] = redirect
     if "timeoutMs" in setup:
         fields["timeout"] = setup["timeoutMs"] / 1000
+    if "maxResponseBytes" in setup:
+        fields["max_response_bytes"] = setup["maxResponseBytes"]
     return fields
 
 
@@ -103,7 +106,12 @@ class Runner:
         """How call ``call`` is observed."""
         scripted = self.script is not None
         envelope = bool(directives.get("envelope"))
-        return Lens(self.target.module, bool(call.get("raw")), scripted, envelope)
+        safe = bool(self.target.envelope.get("safe"))
+        return Lens(self.target.module, bool(call.get("raw")), scripted, envelope, safe)
+
+    def root(self, client: Any) -> Any:
+        """Where the calls are walked from: the client, or its ``safe`` mirror."""
+        return client.safe if self.target.envelope.get("safe") else client
 
     def plan(self, call: Call) -> Any:
         return self.target.envelope["plans"][call["operation"]]
@@ -113,7 +121,7 @@ def sync_call(
     client: Any, runner: Runner, call: Call, directives: CallScript
 ) -> Outcome:
     """``call`` sent on ``SDK`` and observed."""
-    prepared = prepare(client, runner.target, call, directives)
+    prepared = prepare(runner.root(client), runner.target, call, directives)
     lens = runner.lens(call, directives)
     try:
         result = prepared.method(*prepared.args, **prepared.kwargs)
@@ -146,7 +154,7 @@ async def async_call(
 ) -> Outcome:
     """``call`` sent on ``AsyncSDK`` as its own task, cancelled under ``taskCancel``, and observed;
     a stream call's open and reads in that task, under ``bounded``."""
-    prepared = prepare(client, runner.target, call, directives)
+    prepared = prepare(runner.root(client), runner.target, call, directives)
     lens = runner.lens(call, directives)
     cancel = directives.get("taskCancel")
     if prepared.plan["stream"] is not None:
